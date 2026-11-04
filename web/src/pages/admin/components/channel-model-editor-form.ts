@@ -1,6 +1,7 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import type { FormInstance } from "antd";
 import { defaultModelCapabilityConfig, normalizeLegacyImageResolutionConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { declaredChannelDefaults, declaredProtocolForCapability } from "@/lib/channel-model-catalog";
 import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets";
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
@@ -40,9 +41,16 @@ export function editorSectionForField(name: (string | number)[]): EditorSection 
     return name[0] === "priceTiers" ? "pricing" : name[0] === "capabilityConfig" ? "capabilities" : "identity";
 }
 
-export function initialChannelModelValues(item: ChannelModel | null, protocols: ModelProtocolDefinition[]): ChannelModelFormValues {
-    const capability = item?.capability || "text";
-    const protocol = item ? item.protocol : protocols.find((p) => p.capability === capability && p.enabled !== false)?.value;
+export function initialChannelModelValues(item: ChannelModel | null, protocols: ModelProtocolDefinition[], channelBaseUrl = ""): ChannelModelFormValues {
+    // 新增模型时默认能力 / 协议改读已安装插件声明（capabilities / baseUrl），
+    // 读不到声明（没装插件，或渠道地址对应多个能力）才用作者原来的第一个可启用协议。
+    const declared = item ? {} : declaredChannelDefaults(protocols, channelBaseUrl);
+    const capability = item?.capability || declared.capability || "text";
+    const protocol =
+        (item ? item.protocol : undefined) ||
+        (declared.capability === capability ? declared.protocol : undefined) ||
+        declaredProtocolForCapability(protocols, capability, channelBaseUrl) ||
+        protocols.find((p) => p.capability === capability && p.enabled !== false)?.value;
     const upstreamModel = item?.providerModelKey || item?.modelKey || "";
     const rawCapabilityConfig = item?.capabilityConfig || defaultModelCapabilityConfig(protocol, upstreamModel);
     let capabilityConfig =

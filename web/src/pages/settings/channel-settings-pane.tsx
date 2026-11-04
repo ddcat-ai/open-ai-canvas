@@ -9,6 +9,7 @@ import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/chann
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { translate } from "@/i18n";
 import { mergeFetchedChannelModelCosts } from "@/lib/channel-model-catalog";
+import type { ModelProtocolDefinition } from "@/lib/model-protocols";
 import { fetchChannelModels } from "@/services/api/image";
 import {
     createModelChannel,
@@ -24,11 +25,13 @@ import { Select } from "@/components/ui/base/select";
 
 type UserChannelConnection = "openai" | "gemini";
 type ChannelSettingsPaneProps = {
+    /** 已安装插件目录（index.tsx 统一取一次传进来），用于默认协议与 auth.secretField 校验。 */
+    declaredProtocols: ModelProtocolDefinition[];
     onOpenModels: () => void;
     onOpenRunningHub?: () => void;
 };
 
-export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelSettingsPaneProps) {
+export function ChannelSettingsPane({ declaredProtocols, onOpenModels, onOpenRunningHub }: ChannelSettingsPaneProps) {
     const { t } = useTranslation();
     const { message } = App.useApp();
     const config = useConfigStore((state) => state.config);
@@ -90,7 +93,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
     };
 
     const refreshChannelModels = async (channel: ModelChannel) => {
-        const connectionError = channelConnectionError(channel);
+        const connectionError = channelConnectionError(channel, declaredProtocols);
         if (connectionError) {
             message.error(t("account.settings.channelError", { name: channel.name || t("account.settings.channels.current"), error: connectionError }));
             return;
@@ -110,7 +113,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                 return;
             }
             updateChannels(
-                latestConfig.channels.map((item) => (item.id === channel.id ? { ...item, models: result.models, modelCosts: mergeFetchedChannelModelCosts(item, result.catalog) } : item)),
+                latestConfig.channels.map((item) => (item.id === channel.id ? { ...item, models: result.models, modelCosts: mergeFetchedChannelModelCosts(item, result.catalog, declaredProtocols) } : item)),
                 latestConfig,
             );
             message.success(t("account.settings.channels.modelsUpdated", { name: latestChannel.name || t("account.settings.channels.current") }));
@@ -122,10 +125,10 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
     };
 
     const refreshAllModels = async () => {
-        const runnable = userChannels.filter((channel) => !channelConnectionError(channel));
-        const skipped = userChannels.filter((channel) => channelConnectionError(channel));
+        const runnable = userChannels.filter((channel) => !channelConnectionError(channel, declaredProtocols));
+        const skipped = userChannels.filter((channel) => channelConnectionError(channel, declaredProtocols));
         if (!runnable.length) {
-            const detail = skipped.map((channel) => t("account.settings.channelError", { name: channel.name || t("account.settings.channels.unnamed"), error: channelConnectionError(channel) })).join(t("account.settings.channels.separator"));
+            const detail = skipped.map((channel) => t("account.settings.channelError", { name: channel.name || t("account.settings.channels.unnamed"), error: channelConnectionError(channel, declaredProtocols) })).join(t("account.settings.channels.separator"));
             message.error(detail || t("account.settings.channels.nothingToFetch"));
             return;
         }
@@ -156,7 +159,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                 updateChannels(
                     latestConfig.channels.map((channel) => {
                         const fetched = resultMap.get(channel.id);
-                        return fetched ? { ...channel, models: fetched.models, modelCosts: mergeFetchedChannelModelCosts(channel, fetched.catalog) } : channel;
+                        return fetched ? { ...channel, models: fetched.models, modelCosts: mergeFetchedChannelModelCosts(channel, fetched.catalog, declaredProtocols) } : channel;
                     }),
                     latestConfig,
                 );
@@ -165,7 +168,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
             const warnings = [
                 ...failed.map((item) => t("account.settings.channelError", { name: item.channel.name || t("account.settings.channels.unnamed"), error: item.error || t("account.settings.channels.noModelsReturned") })),
                 ...stale.map((item) => t("account.settings.channelError", { name: item.channel.name || t("account.settings.channels.unnamed"), error: t("account.settings.channels.staleIgnored") })),
-                ...skipped.map((channel) => t("account.settings.channelError", { name: channel.name || t("account.settings.channels.unnamed"), error: channelConnectionError(channel) })),
+                ...skipped.map((channel) => t("account.settings.channelError", { name: channel.name || t("account.settings.channels.unnamed"), error: channelConnectionError(channel, declaredProtocols) })),
             ];
             if (warnings.length) message.warning(t("account.settings.channels.bulkWarnings", { warnings: warnings.join(t("account.settings.channels.separator")) }));
         } catch (error) {
@@ -216,7 +219,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                                         <h3 id={`channel-${channel.id}-title`} className="truncate text-sm font-semibold">{channel.name || t("account.settings.channels.unnamed")}</h3>
                                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-foreground/55">
                                             {t("account.settings.channels.summary", { protocol: channelProtocolLabel(channel), count: channel.models.length })}
-                                            <ChannelStatus channel={channel} />
+                                            <ChannelStatus channel={channel} declaredProtocols={declaredProtocols} />
                                         </div>
                                     </div>
                                     <div className="flex w-full justify-end gap-2 sm:w-auto sm:shrink-0">
@@ -293,17 +296,18 @@ function WorkflowChannelEntry({ icon, title, description, status, ready, onOpen 
     );
 }
 
-export function channelValidationError(channel: ModelChannel) {
-    return channelConnectionError(channel) || validateChannelHeaders(channel.headers) || (!channel.models.length ? translate("account.settings.channels.needModel") : "");
+export function channelValidationError(channel: ModelChannel, declaredProtocols: ModelProtocolDefinition[]) {
+    return channelConnectionError(channel, declaredProtocols) || validateChannelHeaders(channel.headers) || (!channel.models.length ? translate("account.settings.channels.needModel") : "");
 }
 
-export function isChannelReady(channel: ModelChannel) {
-    return !channelValidationError(channel);
+// 目录由调用方显式传入（settings/index.tsx 取一次），不在这里读全局状态。
+export function isChannelReady(channel: ModelChannel, declaredProtocols: ModelProtocolDefinition[]) {
+    return !channelValidationError(channel, declaredProtocols);
 }
 
-export function focusInvalidChannelField(channel: ModelChannel) {
-    const baseUrlError = channelConnectionError({ ...channel, apiKey: "valid", secretKey: "valid" });
-    const field = baseUrlError ? "base-url" : !channel.apiKey.trim() ? "api-key" : requiresSecretKey(channel) && !channel.secretKey?.trim() ? "secret-key" : "models";
+export function focusInvalidChannelField(channel: ModelChannel, declaredProtocols: ModelProtocolDefinition[]) {
+    const baseUrlError = channelConnectionError({ ...channel, apiKey: "valid", secretKey: "valid" }, declaredProtocols);
+    const field = baseUrlError ? "base-url" : !channel.apiKey.trim() ? "api-key" : requiresSecretKey(channel, declaredProtocols) && !channel.secretKey?.trim() ? "secret-key" : "models";
     requestAnimationFrame(() => {
         const element = document.getElementById(`channel-${channel.id}-${field}`);
         element?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -311,9 +315,9 @@ export function focusInvalidChannelField(channel: ModelChannel) {
     });
 }
 
-function ChannelStatus({ channel }: { channel: ModelChannel }) {
+function ChannelStatus({ channel, declaredProtocols }: { channel: ModelChannel; declaredProtocols: ModelProtocolDefinition[] }) {
     const { t } = useTranslation();
-    const error = channelValidationError(channel);
+    const error = channelValidationError(channel, declaredProtocols);
     return (
         <span className={`settings-channel-status ${error ? "is-warning" : "is-ready"}`}>
             <i aria-hidden="true" />
@@ -350,7 +354,7 @@ function channelConnectionMode(channel: ModelChannel): UserChannelConnection {
     return channel.apiFormat === "gemini" ? "gemini" : "openai";
 }
 
-function channelConnectionError(channel: ModelChannel) {
+function channelConnectionError(channel: ModelChannel, declaredProtocols: ModelProtocolDefinition[]) {
     const baseUrl = channel.baseUrl.trim();
     if (!baseUrl) return translate("account.settings.channels.baseUrlRequired");
     try {
@@ -360,7 +364,7 @@ function channelConnectionError(channel: ModelChannel) {
         return translate("account.settings.channels.baseUrlInvalid");
     }
     if (!channel.apiKey.trim()) return translate("account.settings.channels.apiKeyRequired");
-    if (requiresSecretKey(channel) && !channel.secretKey?.trim()) return translate("account.settings.channels.secretKeyRequired");
+    if (requiresSecretKey(channel, declaredProtocols) && !channel.secretKey?.trim()) return translate("account.settings.channels.secretKeyRequired");
     return "";
 }
 
@@ -378,6 +382,19 @@ function isKnownDefaultBaseUrl(value: string) {
     return [defaultBaseUrlForApiFormat("openai"), defaultBaseUrlForApiFormat("gemini")].some((candidate) => candidate.replace(/\/+$/, "") === normalized);
 }
 
-function requiresSecretKey(channel: ModelChannel) {
-    return channel.modelCosts?.some((item) => item.protocol?.startsWith("volcengine-jimeng-")) === true;
+// 是否必填第二把密钥先读插件声明的 auth.secretField（provider 声明了 secretField 就要求），
+// 目录由调用方显式传入；目录里没有该协议声明时走下面的内置兜底。
+function requiresSecretKey(channel: ModelChannel, declaredProtocols: ModelProtocolDefinition[]) {
+    return (
+        channel.modelCosts?.some((item) => {
+            const protocol = item.protocol?.trim();
+            if (!protocol) return false;
+            const declared = declaredProtocols.find((definition) => definition.value === protocol);
+            if (declared) return Boolean(declared.auth?.secretField?.trim());
+            // 目录里没有这个协议的声明（还没加载完 / 请求失败 / 没装插件）时，
+            // 保留作者原来的即梦前缀兜底，与后端 protocolRequiresSecretKey 保持一致；
+            // 有声明时一律以声明为准，不再看协议名。
+            return protocol.startsWith("volcengine-jimeng-");
+        }) === true
+    );
 }

@@ -288,7 +288,8 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	if taskInput.Mode != "image" && taskInput.Mode != "video" && taskInput.Mode != "audio" {
 		return nil
 	}
-	if isWorkflowProviderInterface(taskInput.Config.InterfaceType) {
+	// 工作流插件按插件 manifest 的 contributes.workflows 声明识别，不再只认 RunningHub 协议名。
+	if s.isWorkflowProviderInterfaceDeclared(taskInput.Config.InterfaceType) {
 		if err := validateWorkflowProviderPromptLength(taskInput); err != nil {
 			return err
 		}
@@ -383,7 +384,8 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 // 自定义渠道只在请求附带了文字能力配置时判断，未附带时不推断。
 // 视频识别默认关闭：管理员在模型能力里勾选「支持视频识别」（maxVideos > 0）后才放行参考视频。
 func (s *Service) validateTextTaskReferences(input canvasGenerationInput) error {
-	if (len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0) || isWorkflowProviderInterface(input.Config.InterfaceType) {
+	// 文字任务的参考图校验同样按插件声明的工作流能力跳过。
+	if (len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0) || s.isWorkflowProviderInterfaceDeclared(input.Config.InterfaceType) {
 		return nil
 	}
 	channelID := strings.TrimSpace(input.Config.ChannelID)

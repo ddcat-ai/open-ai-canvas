@@ -63,7 +63,12 @@ func (s *Service) applyGenerationStyleProfile(userID string, taskProjectID strin
 	// 执行计划是前端为即时预览生成的派生数据。平台模型入队后可能改选真实供应线路，
 	// 因此后端必须以最终模型重新编译，不能要求用户手动“刷新配置”来同步内部路由。
 	plan, _ := decodeStyleExecutionPlan(input.Metadata["styleExecutionPlan"])
-	stylePrompt, expectedStatus, warnings := resolveGenerationStyleExecution(profile, input.Config.Model, firstNonEmpty(input.Config.InterfaceType, input.Config.APIFormat))
+	// 画风资产兼容性按模型声明的能力（能力 / 协议 / promptFamily）判断，不再只比模型名。
+	declaration := styleModelDeclaration{Capability: normalizeCapability(input.Mode), Protocol: firstNonEmpty(input.Config.InterfaceType, input.Config.APIFormat)}
+	if capabilityConfig := input.Config.CapabilityConfig; capabilityConfig != nil {
+		declaration.PromptFamily = capabilityConfig.PromptFamily
+	}
+	stylePrompt, expectedStatus, warnings := resolveGenerationStyleExecutionForModel(profile, declaration, input.Config.Model)
 	input.Prompt = reconcileGenerationStylePrompt(input.Prompt, plan.Prompt, stylePrompt)
 	if expectedStatus == "blocked" {
 		return fmt.Errorf("当前图片模型无法完整执行项目画风：%s。请切换图片模型，或在项目设置中停用对应画风资产", strings.Join(warnings, "；"))
@@ -149,7 +154,18 @@ func decodeStyleExecutionPlan(value interface{}) (styleExecutionPlanDocument, er
 	return plan, nil
 }
 
+// styleModelDeclaration 是当前生成模型声明的能力，画风资产可以按能力而不是模型名匹配。
+type styleModelDeclaration struct {
+	Capability   string
+	Protocol     string
+	PromptFamily string
+}
+
 func resolveGenerationStyleExecution(profile styleProfileDocument, generationModel string, interfaceType string) (string, string, []string) {
+	return resolveGenerationStyleExecutionForModel(profile, styleModelDeclaration{Protocol: interfaceType}, generationModel)
+}
+
+func resolveGenerationStyleExecutionForModel(profile styleProfileDocument, declaration styleModelDeclaration, generationModel string) (string, string, []string) {
 	fragments := []string{strings.TrimSpace(profile.Prompt)}
 	if negative := strings.TrimSpace(profile.NegativePrompt); negative != "" {
 		fragments = append(fragments, "【全局负面 Prompt】\n"+negative)
@@ -167,7 +183,7 @@ func resolveGenerationStyleExecution(profile styleProfileDocument, generationMod
 			warnings = append(warnings, asset.Title+"："+reason)
 			continue
 		}
-		if len(asset.BaseModels) > 0 && !styleAssetSupportsModel(asset.BaseModels, generationModel) {
+		if len(asset.BaseModels) > 0 && !styleAssetSupportsDeclaration(asset.BaseModels, generationModel, declaration) {
 			warnings = append(warnings, asset.Title+"：仅兼容 "+strings.Join(asset.BaseModels, "、"))
 			continue
 		}
@@ -178,7 +194,7 @@ func resolveGenerationStyleExecution(profile styleProfileDocument, generationMod
 		case "reference":
 			warnings = append(warnings, asset.Title+"：项目参考图自动注入适配器尚未启用")
 		case "lora":
-			warnings = append(warnings, asset.Title+"：当前 "+firstNonEmpty(interfaceType, "图片")+" 协议未启用 LoRA 适配器")
+			warnings = append(warnings, asset.Title+"：当前 "+firstNonEmpty(declaration.Protocol, "图片")+" 协议未启用 LoRA 适配器")
 		}
 	}
 	normalizedFragments := nonEmptyStyleProfileStrings(fragments)
@@ -193,9 +209,27 @@ func resolveGenerationStyleExecution(profile styleProfileDocument, generationMod
 }
 
 func styleAssetSupportsModel(baseModels []string, generationModel string) bool {
+	return styleAssetSupportsDeclaration(baseModels, generationModel, styleModelDeclaration{})
+}
+
+// styleAssetSupportsDeclaration 先按模型名匹配（作者原有行为），再按模型声明的能力匹配：
+// 资产声明里写能力（image / video / text）、协议名或 promptFamily 时，同样表示兼容。
+func styleAssetSupportsDeclaration(baseModels []string, generationModel string, declaration styleModelDeclaration) bool {
+	candidates := make([]string, 0, 3)
+	for _, value := range []string{declaration.Capability, declaration.Protocol, declaration.PromptFamily} {
+		if strings.TrimSpace(value) != "" {
+			candidates = append(candidates, value)
+		}
+	}
 	for _, baseModel := range baseModels {
-		if strings.EqualFold(strings.TrimSpace(baseModel), strings.TrimSpace(generationModel)) {
+		baseModel = strings.TrimSpace(baseModel)
+		if strings.EqualFold(baseModel, strings.TrimSpace(generationModel)) {
 			return true
+		}
+		for _, candidate := range candidates {
+			if strings.EqualFold(baseModel, strings.TrimSpace(candidate)) {
+				return true
+			}
 		}
 	}
 	return false

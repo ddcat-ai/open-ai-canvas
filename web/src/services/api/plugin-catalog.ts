@@ -15,6 +15,8 @@ type PluginProviderCatalogItem = {
     enabled: boolean;
     unavailableReason?: string;
     baseUrl?: string;
+    // 插件目录只下发 auth 的 type / field / secretField（声明第二把密钥的字段名）。
+    auth?: { type?: string; field?: string; secretField?: string };
     parameters?: Array<{
         name: string;
         type: string;
@@ -50,6 +52,7 @@ function toProviderDefinition(item: PluginProviderCatalogItem): ModelProtocolDef
         media: `${item.vendor} · ${item.version}`,
         enabled: item.enabled && !item.unavailableReason,
         baseUrl: item.baseUrl,
+        ...(item.auth ? { auth: item.auth } : {}),
         parameters: item.parameters || [],
         imageParameters: item.imageParameters,
         workflows: item.workflows || [],

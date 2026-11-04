@@ -9,6 +9,7 @@ import { ModelProtocolBrowser } from "@/components/model-protocol-browser";
 import { testChannelModelConnection } from "@/lib/model-connection-test";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { type ModelCapabilityChoice } from "@/components/model-protocol-picker";
+import { declaredCapabilityConfig, declaredChannelDefaults, declaredProtocolForCapability } from "@/lib/channel-model-catalog";
 import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolCapability, modelProtocolDefinition, type ModelProtocol, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
@@ -37,15 +38,17 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
     if (!channel.models.length) return null;
 
     const updateCost = (model: string, patch: Partial<ModelCost>) => {
-        const defaultProtocol = defaultProtocolForModel(model, availableProtocols);
-        const defaultCap = modelProtocolCapability(defaultProtocol, availableProtocols) || inferCapabilityFromModel(model);
+        // 默认能力 / 默认协议改读已安装插件声明（capabilities / baseUrl），不再先按模型名猜。
+        const defaultCap = resolveDeclaredCapability(model, availableProtocols, channel.baseUrl);
+        const defaultProtocol = defaultProtocolForModel(model, availableProtocols, channel.baseUrl);
         const current = channel.modelCosts?.find((item) => item.model === model) || {
             model,
             capability: defaultCap,
             protocol: defaultProtocol,
             billingMode: "fixed_request" as const,
             unitPriceMicrocredits: 0,
-            capabilityConfig: defaultModelCapabilityConfig(defaultProtocol, model),
+            // 能力配置优先套用插件声明（imageParameters / workflows）。
+            capabilityConfig: declaredCapabilityConfig(defaultModelCapabilityConfig(defaultProtocol, model), { capability: defaultCap, model, protocol: defaultProtocol, protocols: availableProtocols }),
         };
         const next = [...(channel.modelCosts || []).filter((item) => item.model !== model), { ...current, ...patch, model }];
         onChange(next.filter((item) => channel.models.includes(item.model)));
@@ -64,9 +67,9 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
     };
 
     const activeModelCost = activeModel ? channel.modelCosts?.find((item) => item.model === activeModel) : undefined;
-    const inferredProtocol = activeModel ? defaultProtocolForModel(activeModel, availableProtocols) : "";
+    const inferredProtocol = activeModel ? defaultProtocolForModel(activeModel, availableProtocols, channel.baseUrl) : "";
     const activeProtocol = activeModelCost?.protocol || inferredProtocol;
-    const activeCapability = activeModelCost?.capability || modelProtocolCapability(activeProtocol, availableProtocols) || (activeModel ? inferCapabilityFromModel(activeModel) : "text");
+    const activeCapability = activeModelCost?.capability || modelProtocolCapability(activeProtocol, availableProtocols) || (activeModel ? resolveDeclaredCapability(activeModel, availableProtocols, channel.baseUrl) : "text");
 
     return (
         <div className="mt-4">
@@ -81,8 +84,8 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                 {channel.models.map((rawModel) => {
                     const model = modelOptionName(rawModel);
                     const cost = channel.modelCosts?.find((item) => item.model === model);
-                    const protocol = cost?.protocol || defaultProtocolForModel(model, availableProtocols);
-                    const capability = cost?.capability || modelProtocolCapability(protocol, availableProtocols) || inferCapabilityFromModel(model);
+                    const protocol = cost?.protocol || defaultProtocolForModel(model, availableProtocols, channel.baseUrl);
+                    const capability = cost?.capability || modelProtocolCapability(protocol, availableProtocols) || resolveDeclaredCapability(model, availableProtocols, channel.baseUrl);
                     const displayName = cost?.displayName?.trim() || model;
                     return (
                         <div key={model} className="flex min-w-0 items-center gap-3 rounded-md bg-surface-active px-3 py-2 transition-colors hover:bg-surface-hover">
@@ -145,13 +148,17 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                     options={[{ label: t("account.settings.modelConfig.capabilities.text"), value: "text" }, { label: t("account.settings.modelConfig.capabilities.image"), value: "image" }, { label: t("account.settings.modelConfig.capabilities.video"), value: "video" }, { label: t("account.settings.modelConfig.capabilities.audio"), value: "audio" }]}
                                     value={activeCapability}
                                     onChange={(nextCapability) => {
-                                        const nextProtocol = availableProtocols.find((item) => item.value === activeProtocol && item.capability === nextCapability)?.value || availableProtocols.find((item) => item.capability === nextCapability && item.enabled !== false)?.value || defaultProtocolForCapability(nextCapability, availableProtocols);
+                                        const nextProtocol = availableProtocols.find((item) => item.value === activeProtocol && item.capability === nextCapability)?.value || defaultProtocolForCapability(nextCapability, availableProtocols, channel.baseUrl);
                                         updateCost(activeModel, {
                                             protocol: nextProtocol,
                                             capability: nextCapability,
                                             billingMode: "fixed_request",
                                             unitPriceMicrocredits: 0,
-                                            capabilityConfig: nextCapability === "text" || nextCapability === "image" || nextCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
+                                            // 能力配置优先套用插件声明（imageParameters / workflows）。
+                                            capabilityConfig:
+                                                nextCapability === "text" || nextCapability === "image" || nextCapability === "video"
+                                                    ? declaredCapabilityConfig(defaultModelCapabilityConfig(nextProtocol, activeModel), { capability: nextCapability, model: activeModel, protocol: nextProtocol, protocols: availableProtocols })
+                                                    : undefined,
                                         });
                                     }}
                                 />
@@ -168,7 +175,11 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
                                         protocol: nextProtocol,
                                         billingMode: "fixed_request",
                                         unitPriceMicrocredits: 0,
-                                        capabilityConfig: activeCapability === "text" || activeCapability === "image" || activeCapability === "video" ? defaultModelCapabilityConfig(nextProtocol, activeModel) : undefined,
+                                        // 能力配置优先套用插件声明（imageParameters / workflows）。
+                                        capabilityConfig:
+                                            activeCapability === "text" || activeCapability === "image" || activeCapability === "video"
+                                                ? declaredCapabilityConfig(defaultModelCapabilityConfig(nextProtocol, activeModel), { capability: activeCapability, model: activeModel, protocol: nextProtocol, protocols: availableProtocols })
+                                                : undefined,
                                     })}
                                 />
                             </section>
@@ -197,6 +208,13 @@ export function ChannelModelSettings({ channel, onChange }: { channel: ModelChan
     );
 }
 
+// 默认能力先读插件声明（渠道地址对应的 providers[].capabilities），
+// 读不到声明时才走作者原来的模型名启发式（作者内置实现保留）。
+export function resolveDeclaredCapability(model: string, availableProtocols: ModelProtocolDefinition[] = [], baseUrl = ""): ModelCapabilityChoice {
+    return declaredChannelDefaults(availableProtocols, baseUrl).capability || inferCapabilityFromModel(model);
+}
+
+// 保留作者原来的模型名启发式，仅在没有插件声明时兜底。
 function inferCapabilityFromModel(model: string): ModelCapabilityChoice {
     const lower = model.toLowerCase();
     if (
@@ -242,7 +260,11 @@ function inferCapabilityFromModel(model: string): ModelCapabilityChoice {
     return "text";
 }
 
-function defaultProtocolForCapability(capability: ModelCapabilityChoice, availableProtocols: ModelProtocolDefinition[]): ModelProtocol {
+function defaultProtocolForCapability(capability: ModelCapabilityChoice, availableProtocols: ModelProtocolDefinition[] = [], baseUrl = ""): ModelProtocol {
+    // 插件声明了该能力下的协议且地址与渠道一致就直接用插件声明，不再先查写死的协议名表。
+    const declaredProtocol = declaredProtocolForCapability(availableProtocols, capability, baseUrl);
+    if (declaredProtocol) return declaredProtocol;
+    // 以下为作者原来的内置模板：没装插件、或插件都没声明这个地址时使用。
     const standardProtocols: Record<string, string[]> = {
         text: ["chat-completion", "openai-response"],
         image: ["openai-image"],
@@ -266,9 +288,9 @@ function defaultProtocolForCapability(capability: ModelCapabilityChoice, availab
     return fallbackMap[capability] || "chat-completion";
 }
 
-function defaultProtocolForModel(model: string, availableProtocols: ModelProtocolDefinition[] = []): ModelProtocol {
-    const capability = inferCapabilityFromModel(model);
-    return defaultProtocolForCapability(capability, availableProtocols);
+export function defaultProtocolForModel(model: string, availableProtocols: ModelProtocolDefinition[] = [], baseUrl = ""): ModelProtocol {
+    const capability = resolveDeclaredCapability(model, availableProtocols, baseUrl);
+    return defaultProtocolForCapability(capability, availableProtocols, baseUrl);
 }
 
 function capabilityLabel(value: ModelCost["capability"]) {

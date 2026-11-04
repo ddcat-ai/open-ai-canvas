@@ -194,6 +194,9 @@ func (s *Service) providerCancellationInput(task *model.Task) (canvasGenerationI
 	return input, nil
 }
 
+// supportsProviderCancellation 只覆盖作者内置的手写取消实现（Gemini Veo 与火山方舟视频）。
+// 这里不再是“按协议名判断能不能取消”的通用判断；声明式插件的取消能力由
+// declarativeCancellationAdapter 按 manifest（detachedPolling + cancel + poll）决定，且优先于本名单。
 func supportsProviderCancellation(interfaceType string) bool {
 	return interfaceType == string(model.ChannelInterfaceGeminiVeo) || model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(interfaceType))
 }
@@ -220,42 +223,43 @@ func (s *Service) declarativeCancellationAdapter(ctx context.Context, interfaceT
 }
 
 func (s *Service) cancelProviderTask(ctx context.Context, input canvasGenerationInput, providerRequestID string) error {
+	// 先看插件声明的 cancel，没声明才回落到作者内置的 Veo / 方舟手写取消实现。
+	if pluginCtx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType); ok {
+		request := protocolRequestFromInput(input)
+		spec, err := adapter.BuildCancel(pluginCtx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: providerRequestID})
+		if err != nil {
+			return err
+		}
+		_, err = executeProtocolRequest(pluginCtx, input.Config, spec)
+		return err
+	}
 	if supportsProviderCancellation(input.Config.InterfaceType) {
 		return cancelProviderTask(ctx, input.Config, providerRequestID)
 	}
-	ctx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
-	if !ok {
-		return errors.New("当前上游协议不支持取消")
-	}
-	request := protocolRequestFromInput(input)
-	spec, err := adapter.BuildCancel(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: providerRequestID})
-	if err != nil {
-		return err
-	}
-	_, err = executeProtocolRequest(ctx, input.Config, spec)
-	return err
+	return errors.New("当前上游协议不支持取消")
 }
 
 func (s *Service) queryProviderCancellation(ctx context.Context, input canvasGenerationInput, providerRequestID string) (providerCancellationOutcome, string, error) {
-	if supportsProviderCancellation(input.Config.InterfaceType) {
-		return queryProviderCancellation(ctx, input.Config, providerRequestID)
-	}
-	ctx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
-	if !ok {
+	// 先看插件声明的 poll 状态映射，没声明才回落到作者内置的 Veo / 方舟对账实现。
+	pluginCtx, adapter, pluginOK := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
+	if !pluginOK {
+		if supportsProviderCancellation(input.Config.InterfaceType) {
+			return queryProviderCancellation(ctx, input.Config, providerRequestID)
+		}
 		return "", "", errors.New("当前上游协议不支持取消状态查询")
 	}
 	// 只读状态，不下载结果：取消确认前上游已完成的视频按“已完成”结算，不再入库。
 	request := protocolRequestFromInput(input)
 	pollContext := protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: providerRequestID}
-	spec, err := adapter.BuildPoll(ctx, pollContext)
+	spec, err := adapter.BuildPoll(pluginCtx, pollContext)
 	if err != nil {
 		return "", "", err
 	}
-	body, err := executeProtocolRequest(ctx, input.Config, spec)
+	body, err := executeProtocolRequest(pluginCtx, input.Config, spec)
 	if err != nil {
 		return "", "", err
 	}
-	state, err := adapter.ParsePoll(ctx, pollContext, body)
+	state, err := adapter.ParsePoll(pluginCtx, pollContext, body)
 	if err != nil {
 		return "", "", err
 	}

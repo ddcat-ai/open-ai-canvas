@@ -1,5 +1,7 @@
 import { defaultModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
-import { modelProtocolCapability, protocolForModelCatalog, type ModelProtocol } from "@/lib/model-protocols";
+import { resolveImageParameters } from "@/lib/image-parameters";
+import { modelProtocolCapability, protocolForModelCatalog, type ModelProtocol, type ModelProtocolDefinition, type ProtocolCapability } from "@/lib/model-protocols";
+import { findProtocolWorkflow, resolveWorkflowVideoScreenSpec, workflowVideoScreenSpec } from "@/lib/video-screen-specs";
 import type { ModelChannel } from "@/stores/use-config-store";
 
 export type ChannelModelCatalogOption = { value: string; label?: string };
@@ -25,6 +27,58 @@ export type ChannelModelCatalogItem = {
 };
 
 type ChannelModelCost = NonNullable<ModelChannel["modelCosts"]>[number];
+
+// 默认能力 / 默认协议 / 默认地址改读已安装插件的声明（capabilities / baseUrl），
+// 作者的写死模板只在读不到插件声明时使用（没装插件，或插件没声明该地址/能力）。
+export type DeclaredChannelDefaults = { capability?: ProtocolCapability; protocol?: ModelProtocol; baseUrl?: string };
+
+function normalizeDeclaredBaseUrl(value: string | undefined) {
+    return (value || "").trim().replace(/\/+$/u, "");
+}
+
+function installedProtocolDeclarations(protocols: readonly ModelProtocolDefinition[] | undefined) {
+    return (protocols || []).filter((item) => item.enabled !== false && Boolean(item.value));
+}
+
+/** 声明地址与渠道地址一致的已安装插件协议；地址为空或无匹配时返回空。 */
+export function declaredProtocolsForAddress(protocols: readonly ModelProtocolDefinition[] | undefined, baseUrl: string) {
+    const wanted = normalizeDeclaredBaseUrl(baseUrl);
+    if (!wanted) return [];
+    return installedProtocolDeclarations(protocols).filter((item) => normalizeDeclaredBaseUrl(item.baseUrl) === wanted);
+}
+
+/** 按插件声明的 capabilities 取该能力下的默认协议，地址与渠道一致者优先。 */
+export function declaredProtocolForCapability(protocols: readonly ModelProtocolDefinition[] | undefined, capability: ProtocolCapability | undefined, baseUrl = ""): ModelProtocol | undefined {
+    if (!capability) return undefined;
+    return declaredProtocolsForAddress(protocols, baseUrl).find((item) => item.capability === capability)?.value;
+}
+
+/** 渠道地址对应的插件声明：能力唯一时才给出默认能力/协议，否则留空交给调用方的作者内置逻辑。 */
+export function declaredChannelDefaults(protocols: readonly ModelProtocolDefinition[] | undefined, baseUrl = ""): DeclaredChannelDefaults {
+    const declared = declaredProtocolsForAddress(protocols, baseUrl);
+    const capabilities = Array.from(new Set(declared.map((item) => item.capability)));
+    if (capabilities.length !== 1) return {};
+    const capability = capabilities[0]!;
+    const protocol = declared.find((item) => item.capability === capability)?.value;
+    const address = normalizeDeclaredBaseUrl(declared[0]?.baseUrl);
+    return { capability, ...(protocol ? { protocol } : {}), ...(address ? { baseUrl: address } : {}) };
+}
+
+/** 能力配置优先套用插件声明（imageParameters / workflows）；插件没声明时保持作者按协议名生成的默认画像。 */
+export function declaredCapabilityConfig(config: ModelCapabilityConfig, options: { capability: ProtocolCapability; model?: string; protocol?: ModelProtocol; protocols?: readonly ModelProtocolDefinition[] }): ModelCapabilityConfig {
+    const definition = options.protocols?.find((item) => item.value === options.protocol);
+    if (!definition) return config;
+    const model = (options.model || "").trim();
+    if (options.capability === "image" && definition.imageParameters?.length && config.image) {
+        return { ...config, image: resolveImageParameters(config.image, definition.imageParameters, model) };
+    }
+    if (options.capability === "video" && config.video && definition.workflows?.length) {
+        const workflow = findProtocolWorkflow(definition.workflows, options.protocol, model);
+        // 工作流没声明分辨率档时不覆盖现有档位，避免把手工配置冲掉。
+        if (workflow && workflowVideoScreenSpec(workflow).resolutions.length) return { ...config, video: resolveWorkflowVideoScreenSpec(config.video, workflow) };
+    }
+    return config;
+}
 
 export function sanitizeChannelModelCatalogItem(value: unknown): ChannelModelCatalogItem | null {
     if (!value || typeof value !== "object") return null;
@@ -61,7 +115,7 @@ export function sanitizeChannelModelCatalogItem(value: unknown): ChannelModelCat
     });
 }
 
-export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: ChannelModelCatalogItem[]): ChannelModelCost[] {
+export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: ChannelModelCatalogItem[], declaredProtocols: readonly ModelProtocolDefinition[] = []): ChannelModelCost[] {
     const existingByModel = new Map((channel.modelCosts || []).map((cost) => [cost.model, cost]));
     const next: ChannelModelCost[] = [];
     for (const item of catalog) {
@@ -89,7 +143,8 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
         }
 
         const capability = inferredCapability || modelProtocolCapability(channel.interfaceType);
-        const protocol = inferredProtocol || protocolTemplateForNewCatalogModel(capability, channel.interfaceType);
+        // 新模型的默认协议改读已安装插件声明，读不到才用作者写死的协议模板。
+        const protocol = inferredProtocol || declaredProtocolForCapability(declaredProtocols, capability, channel.baseUrl) || protocolTemplateForNewCatalogModel(capability, channel.interfaceType);
         if (!protocol || !capability) continue;
         const capabilityConfig = capability === "image" || capability === "video" ? catalogCapabilityConfig(item, protocol, capability, undefined, true) : undefined;
         next.push({
@@ -105,6 +160,8 @@ export function mergeFetchedChannelModelCosts(channel: ModelChannel, catalog: Ch
     return next;
 }
 
+// 作者的写死协议模板：只在读不到插件声明（没装插件 / 插件没声明该能力）时使用。
+// 有插件声明时优先用 providers[].capabilities，见 declaredProtocolForCapability。
 function protocolTemplateForNewCatalogModel(capability: ChannelModelCost["capability"] | undefined, channelProtocol: ModelProtocol | undefined): ModelProtocol | undefined {
     if (!capability) return channelProtocol;
     if (modelProtocolCapability(channelProtocol) === capability) return channelProtocol;

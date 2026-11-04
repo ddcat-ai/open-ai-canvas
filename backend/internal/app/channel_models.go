@@ -178,7 +178,8 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if conflict != nil && conflict.ID != strings.TrimSpace(id) {
 		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
 	}
-	if capability == "text" || capability == "image" || capability == "video" {
+	// 音频能力也有能力合同（capabilityConfig.audio），保存时不再被排除。
+	if capabilitySupportsConfig(capability) {
 		validated, validateErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
 		if validateErr != nil {
 			return nil, validateErr
@@ -236,19 +237,25 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		item.PriceCurrency = model.PriceCurrencyCredits
 	}
 	s.applyChannelModelPriceTierSummary(item, tiers)
-	if capability == "text" || capability == "image" || capability == "video" {
+	if capabilitySupportsConfig(capability) {
 		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
 		if normalizeErr != nil {
 			return nil, normalizeErr
 		}
-		encoded, encodeErr := json.Marshal(capabilityConfig)
-		if encodeErr != nil {
-			return nil, encodeErr
+		if capabilityConfig == nil {
+			// 没有声明任何能力合同（如未配置 audio 的音频模型）时不写空 JSON，保持原行为。
+			item.CapabilityConfigJSON = ""
+			item.CapabilityVersion = 0
+		} else {
+			encoded, encodeErr := json.Marshal(capabilityConfig)
+			if encodeErr != nil {
+				return nil, encodeErr
+			}
+			if item.CapabilityConfigJSON != string(encoded) {
+				item.CapabilityVersion++
+			}
+			item.CapabilityConfigJSON = string(encoded)
 		}
-		if item.CapabilityConfigJSON != string(encoded) {
-			item.CapabilityVersion++
-		}
-		item.CapabilityConfigJSON = string(encoded)
 	} else {
 		item.CapabilityConfigJSON = ""
 		item.CapabilityVersion = 0
@@ -279,7 +286,15 @@ func normalizeChannelModelContract(channel *model.ModelChannel, req ChannelModel
 }
 
 func (s *Service) normalizeChannelModelContract(channel *model.ModelChannel, req ChannelModelRequest) (string, string, string, model.ChannelInterfaceType, error) {
-	return normalizeChannelModelContractWithRegistry(s.protocolRegistry(), channel, req)
+	modelKey, providerModelKey, capability, protocol, err := normalizeChannelModelContractWithRegistry(s.protocolRegistry(), channel, req)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	// 是否需要第二把密钥读插件声明的 auth.secretField，没装插件时保留作者的即梦内置判断。
+	if s.protocolRequiresSecretKey(string(protocol)) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
+		return "", "", "", "", BadAuthRequest("当前协议需要先在渠道中配置 Access Key 和 Secret Key")
+	}
+	return modelKey, providerModelKey, capability, protocol, nil
 }
 
 func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, channel *model.ModelChannel, req ChannelModelRequest) (string, string, string, model.ChannelInterfaceType, error) {
@@ -303,10 +318,23 @@ func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, chan
 	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != capability {
 		return "", "", "", "", BadAuthRequest("模型能力与请求协议不匹配")
 	}
+	// 这里保留作者原有的即梦协议判断，供没有 Service 的调用方使用；
+	// 读插件声明 auth.secretField 的判断在 (*Service).normalizeChannelModelContract 里。
 	if (protocol == model.ChannelInterfaceVolcengineJiMengImage || protocol == model.ChannelInterfaceVolcengineJiMengVideo) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
 		return "", "", "", "", BadAuthRequest("即梦官方协议需要先在渠道中配置 Access Key 和 Secret Key")
 	}
 	return modelKey, providerModelKey, capability, protocol, nil
+}
+
+// capabilitySupportsConfig 判断该能力是否有可编辑的能力合同落库。
+// 音频能力补上 capabilityConfig.audio 后，保存路径需要把它一起归一化并保存。
+func capabilitySupportsConfig(capability string) bool {
+	switch normalizeCapability(capability) {
+	case "text", "image", "video", "audio":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) DeleteAdminChannelModel(actor *model.User, channelID string, id string) error {

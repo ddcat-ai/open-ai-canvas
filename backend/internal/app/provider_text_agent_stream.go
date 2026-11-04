@@ -118,6 +118,8 @@ func (p *streamingAgentParser) consumeFrame(frame string) {
 		p.err = err
 		return
 	}
+	// p.protocol 存的是从插件 create 路径推出来的 wire（chat-completion / responses / claude-api），
+	// 不再是插件协议 ID；插件声明 chat 格式时也按 chat 事件解析。
 	switch p.protocol {
 	case "responses":
 		p.consumeResponsesEvent(eventName, payload)
@@ -273,6 +275,7 @@ func (p *streamingAgentParser) result() (map[string]interface{}, error) {
 		return nil, p.err
 	}
 	if p.completed != nil {
+		// 完整响应也按推出来的 wire 解析（responses → output，claude → content，其余 choices）。
 		result, err := parseAgentToolPayload(p.completed, p.protocol)
 		if err != nil {
 			return nil, err

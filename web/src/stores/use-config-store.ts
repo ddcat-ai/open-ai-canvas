@@ -100,6 +100,9 @@ export type ModelChannel = {
         icon?: string;
         capability: ModelCapability;
         protocol?: ModelProtocol;
+        // requestFormat 是后端从插件声明的 create 路径推出来的文字请求格式
+        // （chat-completion / responses / claude-api）；未声明时为 undefined。
+        requestFormat?: TextRequestFormat;
         pricePolicy?: "channel" | "unified";
         billingMode: "fixed_request" | "per_second" | "token";
         unitPriceMicrocredits: number;
@@ -121,6 +124,9 @@ export type ModelChannel = {
         modelKey?: string;
     }>;
 };
+
+/** 后端从插件声明的 create 路径推出的文字请求格式（chat / responses / claude）。 */
+export type TextRequestFormat = "chat-completion" | "responses" | "claude-api";
 
 export type AiConfig = {
     channelMode: "remote";
@@ -328,7 +334,9 @@ export function filterModelsByCapability(models: string[], capability?: ModelCap
         // 配置能力层：用户显式标记的 capability
         const configuredCapability = costEntry?.capability;
         if (configuredCapability) return configuredCapability === capability;
-        // 模型名启发式：最后回退
+        // 模型名启发式：最后回退。
+        // 上面三层（协议 / 渠道接口 / 模型显式能力）已覆盖声明式插件（插件自定义协议），
+        // 名字判断只在模型完全没有任何声明时才走到，保持作者原行为。
         return modelMatchesCapability(model, capability);
     });
 }
@@ -546,8 +554,12 @@ export function channelConnectionSignature(channel: ModelChannel) {
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const model = modelOptionName(value || config.model);
-    const modelProtocol = channel.modelCosts?.find((item) => item.model === model)?.protocol;
+    const costEntry = channel.modelCosts?.find((item) => item.model === model);
+    const modelProtocol = costEntry?.protocol;
     const interfaceType = modelProtocol || channel.interfaceType;
+    // 文字请求格式先读后端随模型目录下发的 requestFormat（由插件声明的 create 路径推出），
+    // 读不到才按作者内置协议 ID 判断。声明式插件（插件自定义协议）不再因为协议名不认识而被当成 responses。
+    const requestFormat = normalizedTextRequestFormat(costEntry?.requestFormat) || textRequestFormatForInterface(interfaceType);
     return {
         ...config,
         model,
@@ -555,10 +567,41 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
         apiKey: channel.apiKey,
         secretKey: channel.secretKey,
         headers: channel.headers,
-        apiFormat: interfaceType ? (interfaceType === "gemini-veo" || interfaceType === "gemini-image" ? ("gemini" as const) : interfaceType === "claude-api" ? ("claude" as const) : ("openai" as const)) : channel.apiFormat,
+        apiFormat: requestFormat
+            ? textRequestFormatApiFormat(requestFormat)
+            : interfaceType
+              ? interfaceType === "gemini-veo" || interfaceType === "gemini-image"
+                  ? ("gemini" as const)
+                  : interfaceType === "claude-api"
+                    ? ("claude" as const)
+                    : ("openai" as const)
+              : channel.apiFormat,
         interfaceType,
+        requestFormat,
         channelId: channel.scope === "system" ? channel.id : "",
     };
+}
+
+function normalizedTextRequestFormat(value: unknown): TextRequestFormat | undefined {
+    if (value === "chat-completion" || value === "responses" || value === "claude-api") return value;
+    return undefined;
+}
+
+/** textRequestFormatForInterface 是作者内置协议 ID 到文字请求格式的映射（内置实现，不是新增兜底）。 */
+function textRequestFormatForInterface(interfaceType?: ChannelInterfaceType): TextRequestFormat | undefined {
+    if (interfaceType === "chat-completion") return "chat-completion";
+    if (interfaceType === "openai-response") return "responses";
+    if (interfaceType === "claude-api") return "claude-api";
+    return undefined;
+}
+
+function textRequestFormatApiFormat(requestFormat: TextRequestFormat): ApiCallFormat {
+    return requestFormat === "claude-api" ? "claude" : "openai";
+}
+
+/** resolvedTextWire 供文字请求选端点：优先后端下发的 requestFormat，读不到才用作者内置协议名判断。 */
+export function resolvedTextWire(config: { requestFormat?: TextRequestFormat; interfaceType?: ChannelInterfaceType }): TextRequestFormat | undefined {
+    return normalizedTextRequestFormat(config.requestFormat) || textRequestFormatForInterface(config.interfaceType);
 }
 
 function normalizeChannels(config: AiConfig, ensureDefault = true) {

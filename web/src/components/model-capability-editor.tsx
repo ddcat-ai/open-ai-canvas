@@ -20,7 +20,7 @@ import {
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
 import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
-import { cleanVideoScreenSpecValues, findProtocolWorkflow, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
+import { cleanVideoScreenSpecValues, findProtocolWorkflow, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec, workflowVideoScreenSpec } from "@/lib/video-screen-specs";
 import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
 import { Select } from "@/components/ui/base/select";
 
@@ -63,14 +63,17 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     }
     const workflow = findProtocolWorkflow(workflows, protocol, model);
     const storedProfile = normalizeModelCapabilityConfig(value || defaultModelCapabilityConfig(protocol, model)).video!;
-    const autoDL = protocol === "autodl-comfyui";
-    const profile = autoDL ? resolveWorkflowVideoScreenSpec(storedProfile, workflow) : storedProfile;
+    // 画面规格改读插件声明的工作流参数（contributes.workflows[].parameters），
+    // 不再按协议名 `autodl-comfyui` 判断；工作流没声明分辨率档时保持已有档位。
+    const workflowSpec = workflow && workflowVideoScreenSpec(workflow).resolutions.length ? workflow : undefined;
+    const autoDL = Boolean(workflowSpec);
+    const profile = autoDL ? resolveWorkflowVideoScreenSpec(storedProfile, workflowSpec) : storedProfile;
     const update = (patch: Partial<VideoCapabilityConfig>) => onChange?.({ version: 1, video: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<VideoCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateDuration = (patch: Partial<VideoCapabilityConfig["duration"]>) => update({ duration: { ...profile.duration, ...patch } });
     const durationValues = (profile.duration.values || []).join(",");
     const resolutionOptions = Array.from(new Set([...VIDEO_RESOLUTION_CAPABILITY_OPTIONS, ...profile.resolutions]));
-    const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
+    const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflowSpec} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
     // 视频处理模型（画质增强等）：帧率策略与源视频时长上限；生成模型不显示。
     const processing = profile.processing;
     const processingFields = processing ? (

@@ -1,5 +1,4 @@
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
-import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import type { CanvasVideoEditOperation } from "@/types/canvas";
 import { resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 
@@ -47,8 +46,10 @@ export function videoReferenceSegmentError(config: AiConfig, durationMs: number)
     if (maxSeconds > 0 && durationMs > maxSeconds * 1000) {
         return `截取片段不能超过当前模型参考视频上限（${maxSeconds} 秒）`;
     }
-    if (isSeedanceVideoConfig(config) && durationMs < 2000) {
-        return "Seedance 参考视频单段至少 2 秒，请扩大截取范围";
+    // 参考视频最短时长改读模型能力字段，不再按 Seedance 模型名写死 2 秒
+    const minSeconds = videoProfile?.references.minVideoDurationSeconds || 0;
+    if (minSeconds > 0 && durationMs < minSeconds * 1000) {
+        return `参考视频单段至少 ${minSeconds} 秒，请扩大截取范围`;
     }
     return "";
 }

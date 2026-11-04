@@ -174,6 +174,9 @@ export type PublicChannelModel = {
     icon: string;
     capability: string;
     protocol?: string;
+    // requestFormat 是后端从插件声明的 create 路径推出来的文字请求格式（chat-completion / responses / claude-api）。
+    // 前端文字请求按它选端点，不再按协议名猜。
+    requestFormat?: "chat-completion" | "responses" | "claude-api";
     capabilityConfig?: Record<string, any>;
     priceTiers: PublicChannelModelPriceTier[];
     pricingMode: string;

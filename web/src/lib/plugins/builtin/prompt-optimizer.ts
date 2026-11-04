@@ -1,4 +1,6 @@
 import { registerPlugin } from "../plugin-registry";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { useConfigStore } from "@/stores/use-config-store";
 import type {
     PluginManifest,
     PluginTextContentPart,
@@ -106,8 +108,42 @@ function containsAny(value: string, keywords: string[]) {
     return keywords.some((keyword) => value.includes(keyword));
 }
 
-function resolveModelAdaptationProfile(input: PromptOptimizationInput): ModelAdaptationProfile {
-    const model = `${input.targetModel || ""} ${input.targetProtocol || ""}`.toLowerCase();
+/**
+ * 模型能力声明的 promptFamily → 作者现有策略分支的关键词，
+ * 只为复用已有策略文案，不再靠模型名猜模型族。值留空表示直接用通用画像。
+ */
+const promptFamilyKeywords: Record<string, string> = {
+    "gemini-image": "gemini",
+    "openai-image": "gpt-image",
+    "grok-image": "grok-image",
+    "seedream-image": "seedream",
+    "flux-image": "flux",
+    "stable-diffusion-image": "sdxl",
+    "midjourney-image": "midjourney",
+    "design-image": "ideogram",
+    "seedance-video": "seedance",
+    "veo-video": "veo",
+    "kling-video": "kling",
+    "general-video-family": "wan",
+    "generic-image": "",
+    "generic-video": "",
+};
+
+/** 读目标模型能力里的 promptFamily；未声明时返回空串。 */
+function declaredPromptFamily(input: PromptOptimizationInput) {
+    const model = String(input.targetModel || "").trim();
+    if (!model) return "";
+    const family = modelCapabilityConfigFor(useConfigStore.getState().config, model).promptFamily;
+    return String(family || "")
+        .trim()
+        .toLowerCase();
+}
+
+export function resolveModelAdaptationProfile(input: PromptOptimizationInput): ModelAdaptationProfile {
+    // 先读模型能力声明的 promptFamily；读不到才回退作者原来的模型名关键词推断
+    const family = declaredPromptFamily(input);
+    const declaredKeyword = family ? (promptFamilyKeywords[family] ?? "") : undefined;
+    const model = `${declaredKeyword ?? `${input.targetModel || ""} ${input.targetProtocol || ""}`}`.toLowerCase();
     if (input.generationMode === "image") {
         if (containsAny(model, ["gemini", "imagen", "nano-banana", "nanobanana"])) {
             return {
@@ -229,6 +265,8 @@ function buildUserMessage(input: PromptOptimizationInput, modelProfile: ModelAda
         `目标类型：${input.generationMode === "image" ? "图片" : "视频"}`,
         `目标生成模型：${input.targetModel?.trim() || "未指定"}`,
         `目标接口协议：${input.targetProtocol?.trim() || "未指定"}`,
+        // 能力声明的模型族直接告诉文本模型，不再让它从模型名猜
+        ...(declaredPromptFamily(input) ? [`目标模型族：${declaredPromptFamily(input)}`] : []),
         "",
         "用户原始提示词：",
         input.prompt.trim() || "（用户还没有写出具体提示词，请从参考上下文中提炼一个可执行版本）",

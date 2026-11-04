@@ -237,6 +237,28 @@ export function emotionGenerationSize(region: CanvasEmotionEditRegion) {
     return "1024x1024";
 }
 
+/**
+ * 表情编辑的请求尺寸按模型能力选：能力声明用比例（size.parameter=aspect_ratio）时
+ * 传最接近的比例字符串，不传像素；其余模型保持作者原来的像素尺寸（OpenAI Images 的 size 语义）。
+ */
+export function emotionGenerationSizeForProfile(region: CanvasEmotionEditRegion, profile?: { size: { parameter: string; values: string[] } }) {
+    const pixelSize = emotionGenerationSize(region);
+    if (!profile || profile.size.parameter !== "aspect_ratio" || !profile.size.values.length) return pixelSize;
+    const target = region.width / Math.max(1, region.height);
+    let nearest = "";
+    let distance = Number.POSITIVE_INFINITY;
+    for (const value of profile.size.values) {
+        const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(value);
+        if (!match) continue;
+        const next = Math.abs(Number(match[1]) / Number(match[2]) - target);
+        if (next < distance) {
+            distance = next;
+            nearest = value;
+        }
+    }
+    return nearest || pixelSize;
+}
+
 // 模型只负责局部重绘；最终结果始终以源图为底，仅在羽化人脸蒙版内混合生成像素。
 export async function compositeEmotionImage(sourceDataUrl: string, generatedDataUrl: string, region: CanvasEmotionEditRegion, faceBox: CanvasFaceBox) {
     const [source, generated] = await Promise.all([loadImageBitmap(sourceDataUrl), loadImageBitmap(generatedDataUrl)]);

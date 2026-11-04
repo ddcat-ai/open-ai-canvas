@@ -21,7 +21,7 @@ export async function createVideoGenerationsTask(deps: VideoProviderDeps, config
         Promise.all(videoReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
         Promise.all(audioReferences.map((item) => resolveVideoGenerationsUrl(item.url, item.storageKey))),
     ]);
-    const resolution = newAPIVideoResolutionRequest(profile, config.vquality, modelOptionName(model));
+    const resolution = newAPIVideoResolutionRequest(profile, config.vquality);
     const payload = {
         model: modelOptionName(model),
         prompt: prompt.trim(),
@@ -60,8 +60,8 @@ export async function pollVideoGenerationsTask(deps: VideoProviderDeps, task: Vi
     }
 }
 
-function newAPIVideoResolutionRequest(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, value: string, model: string) {
-    if (model.trim().toLowerCase() === "grok-video-1.5-1080p") return "1080p";
+function newAPIVideoResolutionRequest(profile: NonNullable<ReturnType<typeof modelCapabilityConfigFor>["video"]>, value: string) {
+    // 分辨率一律按模型能力声明的档位归一，不再对单个模型名硬编码 1080p
     return videoResolutionRequest(profile, value);
 }
 

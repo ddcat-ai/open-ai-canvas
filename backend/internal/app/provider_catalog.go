@@ -184,7 +184,8 @@ func (s *Service) catalogModelProtocol(entry providercatalog.Model) (string, str
 	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != entry.Capability {
 		return "", "模型能力与协议不匹配"
 	}
-	if model.ChannelInterfaceType(protocolID) == model.ChannelInterfaceVolcengineJiMengImage || model.ChannelInterfaceType(protocolID) == model.ChannelInterfaceVolcengineJiMengVideo {
+	// 是否需要第二把密钥按插件声明的 auth.secretField 判断，不再只认即梦协议名。
+	if s.protocolRequiresSecretKey(protocolID) {
 		return "", "该协议需要 AK/SK，请使用自定义配置"
 	}
 	return protocolID, ""

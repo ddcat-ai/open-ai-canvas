@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { Input, InputNumber, Radio } from "antd";
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
-import { audioFormatOptionsForConfig, audioSpeedLabel, audioVoiceOptionsForConfig, isDoubaoAudioConfig, normalizeAudioFormatForConfig, normalizeAudioSpeedValue, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
+import { audioFormatOptionsForConfig, audioProviderNotesVisible, audioReferenceLimitsForConfig, audioSpeedLabel, audioVoiceIsFreeform, audioVoiceOptionsForConfig, isDoubaoAudioConfig, normalizeAudioFormatForConfig, normalizeAudioSpeedValue, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CanvasAudioSettingKey } from "@/components/canvas/canvas-audio-settings-popover";
@@ -10,7 +10,11 @@ type AudioSettingsPanelProps = { config: AiConfig; onConfigChange: (key: CanvasA
 
 export function AudioSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[var(--panel-width-compact)] space-y-4" }: AudioSettingsPanelProps) {
     const listId = useId();
+    // 音色/格式/参考素材容量改读模型能力声明，未声明时保持作者豆包/OpenAI 原有写法
+    const freeform = audioVoiceIsFreeform(config);
     const doubao = isDoubaoAudioConfig(config);
+    const providerNotes = audioProviderNotesVisible(config);
+    const referenceLimits = audioReferenceLimitsForConfig(config);
     const voice = normalizeAudioVoiceForConfig(config, config.audioVoice);
     const voices = audioVoiceOptionsForConfig(config);
     const currentVoice = voices.some((item) => item.value === voice) ? voices : [{ value: voice, label: voice || "不指定音色" }, ...voices];
@@ -26,12 +30,14 @@ export function AudioSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     <legend className="mb-2 text-xs" style={{ color: theme.node.muted }}>
                         音色
                     </legend>
-                    {doubao ? (
+                    {freeform ? (
                         <>
-                            <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
-                                无参考素材时按提示词生成；可连接最多 3 段音频或 1 张图片，图片与音频不能混用。
-                            </p>
-                            <Input aria-label="豆包音色 ID" value={voice} allowClear placeholder="留空按提示词生成，或输入可用的音色 ID" onChange={(event) => selectVoice(event.target.value.trim())} />
+                            {referenceLimits.maxAudios > 0 ? (
+                                <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
+                                    无参考素材时按提示词生成；可连接最多 {referenceLimits.maxAudios} 段音频或 {referenceLimits.maxImages} 张图片，图片与音频不能混用。
+                                </p>
+                            ) : null}
+                            <Input aria-label={doubao ? "豆包音色 ID" : "渠道音色 ID（自由填写）"} value={voice} allowClear placeholder="留空按提示词生成，或输入可用的音色 ID" onChange={(event) => selectVoice(event.target.value.trim())} />
                             <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
                                 仅填写当前模型已开通的音色或复刻音色 ID；不自动套用旧版音色列表。图片参考模式不使用此音色。
                             </p>
@@ -72,9 +78,9 @@ export function AudioSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             if (value !== null) onConfigChange("audioSpeed", normalizeAudioSpeedValue(String(value)));
                         }}
                     />
-                    {doubao ? <p className="text-xs leading-5" style={{ color: theme.node.muted }}>1x 为正常语速。情绪克制、低声不等于慢速；提示词也不要重复要求放慢或拖长尾音。</p> : null}
+                    {freeform ? <p className="text-xs leading-5" style={{ color: theme.node.muted }}>1x 为正常语速。情绪克制、低声不等于慢速；提示词也不要重复要求放慢或拖长尾音。</p> : null}
                 </fieldset>
-                {doubao ? (
+                {providerNotes ? (
                     <details className="space-y-2 text-xs" style={{ color: theme.node.muted }}>
                         <summary className="cursor-pointer">豆包提示词写法</summary>
                         <p className="leading-5">在节点的提示词输入框中写声音要求和台词，不是在这里填写。以下为写法建议，效果需试听确认。</p>

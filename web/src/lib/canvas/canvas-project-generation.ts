@@ -6,7 +6,6 @@ import { resolveMediaUrl, resolveVideoMediaUrl } from "@/services/file-storage";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
-import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
@@ -573,8 +572,11 @@ function applyWorkflowParameterValues(fields: WorkflowFieldMapping[] | undefined
 }
 
 export function supportsVideoReferenceAudio(config: AiConfig) {
+    // 能不能带参考音频改读模型能力（references.maxAudios），不再按 Seedance 模型名判断
+    if ((modelCapabilityConfigFor(config, config.model).video?.references.maxAudios || 0) > 0) return true;
+    // 作者内置的 NewAPI 视频协议（未装插件时的内置实现）保留原有分支，不作为通用兜底。
     const interfaceType = resolveModelRequestConfig(config, config.model).interfaceType;
-    return interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2" || isSeedanceVideoConfig(config);
+    return interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2";
 }
 
 export function resetInterruptedGeneration(nodes: CanvasNodeData[]) {

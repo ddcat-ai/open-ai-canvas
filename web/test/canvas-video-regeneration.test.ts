@@ -4,12 +4,14 @@ import { listVideoReferenceModels, validateVideoSegmentBatch, videoReferenceOper
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { defaultConfig, type AiConfig, type ModelChannel } from "../src/stores/use-config-store";
 
-function supportedVideoConfig(overrides: { model?: string; maxVideos?: number; maxVideoDurationSeconds?: number; operations?: string[]; baseUrl?: string } = {}): AiConfig {
+function supportedVideoConfig(overrides: { model?: string; maxVideos?: number; maxVideoDurationSeconds?: number; minVideoDurationSeconds?: number; operations?: string[]; baseUrl?: string } = {}): AiConfig {
     const model = overrides.model || "seedance-1.0-pro";
     const capability = defaultModelCapabilityConfig("newapi-channel-2", model);
     if (capability.video) {
         capability.video.references.maxVideos = overrides.maxVideos ?? 3;
         capability.video.references.maxVideoDurationSeconds = overrides.maxVideoDurationSeconds ?? 15;
+        // 只有显式传值时才覆盖最短时长，未传时保留协议默认画像（newapi-channel-2 默认 2 秒）
+        if (overrides.minVideoDurationSeconds !== undefined) capability.video.references.minVideoDurationSeconds = overrides.minVideoDurationSeconds;
         capability.video.operations = overrides.operations ?? ["text_to_video", "image_to_video", "extend"];
     }
     const channel: ModelChannel = {
@@ -98,9 +100,16 @@ describe("videoReferenceSegmentError", () => {
         expect(videoReferenceSegmentError(config, 16000)).toContain("不能超过当前模型参考视频上限（15 秒）");
     });
 
+    // 最短参考视频时长改为读 capabilityConfig.video.references.minVideoDurationSeconds（默认画像：
+    // volcengine-ark-* / newapi-channel-1/2 为 2 秒），不再按 Seedance 模型名写死 2 秒；作者原断言保持不变。
     test("Seedance 单段少于 2 秒时返回提示", () => {
         const config = supportedVideoConfig({ model: "seedance-1.0-pro" });
         expect(videoReferenceSegmentError(config, 1500)).toContain("至少 2 秒");
+    });
+
+    test("能力显式声明最短时长为 0 时不设下限", () => {
+        const config = supportedVideoConfig({ model: "seedance-1.0-pro", minVideoDurationSeconds: 0 });
+        expect(videoReferenceSegmentError(config, 1500)).toBe("");
     });
 
     test("合法片段时长无错误", () => {

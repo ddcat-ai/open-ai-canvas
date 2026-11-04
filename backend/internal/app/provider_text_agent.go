@@ -112,23 +112,19 @@ func agentStepOutputLimit(input canvasGenerationInput) int {
 
 // applyAgentOutputLimit 按协议写入输出上限字段名：Claude 与 Chat Completions 用 max_tokens，
 // Responses 用 max_output_tokens。
-func applyAgentOutputLimit(body map[string]interface{}, limit int, protocol string) {
+func applyAgentOutputLimit(body map[string]interface{}, limit int, wire string) {
 	if limit <= 0 {
 		return
 	}
-	field := "max_tokens"
-	if protocol == "responses" {
-		field = "max_output_tokens"
-	}
-	applyTextOutputLimit(body, limit, field)
+	// 字段名按推出来的 wire 取，不再只看协议 ID。
+	applyTextOutputLimit(body, limit, protocol.TextOutputLimitField(protocol.TextWire(wire)))
 }
 
 func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, adapter protocol.AgentAdapter) (map[string]interface{}, error) {
-	wire := input.Config.InterfaceType
-	if wire == string(model.ChannelInterfaceOpenAIResponse) {
-		wire = "responses"
-	}
-	knownWire := wire == "chat-completion" || wire == "responses" || wire == "claude-api"
+	// Agent 请求体加工与流式解析的开关改为看推出来的 wire（插件声明的 create 路径），
+	// 不再只认作者内置的三个协议 ID。
+	wire := textWireForConfig(ctx, input.Config)
+	knownWire := wire != protocol.TextWireUnknown
 	if input.TextOptions.Thinking && !knownWire {
 		return nil, errors.New("当前声明式 Agent 渠道尚不支持思考模式，请关闭思考模式或切换内置协议渠道")
 	}
@@ -150,18 +146,18 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		if body == nil {
 			return nil, errors.New("声明式 Agent 请求体必须是 JSON 对象")
 		}
-		applyTextThinking(body, input, wire)
-		applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
-		normalizeAgentToolChoice(body, input, wire)
+		applyTextThinking(body, input, string(wire))
+		applyAgentOutputLimit(body, agentStepOutputLimit(input), string(wire))
+		normalizeAgentToolChoice(body, input, string(wire))
 		spec.Body = body
 		if input.StreamText {
 			body["stream"] = true
-			if wire == "chat-completion" {
+			if protocol.TextWireRequiresChatStreamUsage(wire) {
 				if err := ensureChatCompletionStreamUsage(body); err != nil {
 					return nil, err
 				}
 			}
-			parser := newStreamingAgentParser(wire, input.OnTextDelta)
+			parser := newStreamingAgentParser(string(wire), input.OnTextDelta)
 			parser.emitReasoning = input.OnReasoningDelta
 			data, mime, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume)
 			if err != nil {
@@ -175,7 +171,7 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 			if err := json.Unmarshal(data, &payload); err != nil {
 				return nil, fmt.Errorf("Agent 接口返回格式无效：%w", err)
 			}
-			return parseAgentToolPayload(payload, wire)
+			return parseAgentToolPayload(payload, string(wire))
 		}
 	}
 	body, err := executeDeclarativeAgentWithGeminiCache(ctx, input, spec)
@@ -219,7 +215,9 @@ func executeDeclarativeAgentWithGeminiCache(ctx context.Context, input canvasGen
 	}
 	executeSpec := baseSpec
 	cacheUsed := false
-	if input.Config.InterfaceType == officialGeminiAgentInterface {
+	// 显式缓存是否可用改看插件声明（Gemini 原生 generateContent 形状）。
+	cachedContentDeclared := geminiCachedContentDeclared(ctx, input.Config.InterfaceType)
+	if cachedContentDeclared {
 		prepared, used, prepareErr := prepareOfficialGeminiAgentCache(ctx, input, baseSpec)
 		if prepareErr != nil {
 			log.Printf("gemini agent prompt cache unavailable: model=%s reason=%s", safeProviderModel(input.Config.Model), safeProviderLogError(prepareErr))
@@ -228,7 +226,7 @@ func executeDeclarativeAgentWithGeminiCache(ctx context.Context, input canvasGen
 		}
 	}
 	body, err := executeProtocolRequest(ctx, input.Config, executeSpec)
-	if err == nil || input.Config.InterfaceType != officialGeminiAgentInterface || !cacheUsed || !geminiRequestUsesCachedContent(executeSpec) || !isGeminiCachedContentNotFound(err, stringValue(protocolBodyObject(executeSpec.Body)["cachedContent"])) {
+	if err == nil || !cachedContentDeclared || !cacheUsed || !geminiRequestUsesCachedContent(executeSpec) || !isGeminiCachedContentNotFound(err, stringValue(protocolBodyObject(executeSpec.Body)["cachedContent"])) {
 		return body, err
 	}
 

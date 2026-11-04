@@ -65,16 +65,20 @@ type PublicChannelCatalog struct {
 
 // PublicChannelModel 公开的渠道模型信息（脱敏）
 type PublicChannelModel struct {
-	ID               string                        `json:"id"`
-	ModelKey         string                        `json:"modelKey"`
-	ChannelLabel     string                        `json:"channelLabel"`
-	Tags             []model.ChannelModelTag       `json:"tags"`
-	Description      string                        `json:"description"`
-	DisplayName      string                        `json:"displayName"`
-	SortOrder        int                           `json:"sortOrder"`
-	Icon             string                        `json:"icon"`
-	Capability       string                        `json:"capability"`
-	Protocol         model.ChannelInterfaceType    `json:"protocol"`
+	ID           string                     `json:"id"`
+	ModelKey     string                     `json:"modelKey"`
+	ChannelLabel string                     `json:"channelLabel"`
+	Tags         []model.ChannelModelTag    `json:"tags"`
+	Description  string                     `json:"description"`
+	DisplayName  string                     `json:"displayName"`
+	SortOrder    int                        `json:"sortOrder"`
+	Icon         string                     `json:"icon"`
+	Capability   string                     `json:"capability"`
+	Protocol     model.ChannelInterfaceType `json:"protocol"`
+	// RequestFormat 是宿主从插件声明的 create 路径推出来的文字请求格式
+	// （chat-completion / responses / claude-api）；空值表示插件未声明或不是文字接口。
+	// 前端文字/工具调用按这个字段选端点，不再按协议名猜。
+	RequestFormat    string                        `json:"requestFormat,omitempty"`
 	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
 	DefaultOptions   map[string]any                `json:"defaultOptions,omitempty"`
 	PriceTiers       []PublicChannelModelPriceTier `json:"priceTiers"`
@@ -257,16 +261,18 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	}
 
 	return PublicChannelModel{
-		ID:               cm.ID,
-		ModelKey:         cm.ModelKey,
-		ChannelLabel:     firstNonEmpty(cm.ChannelLabel, cm.ProviderModelKey, cm.ModelKey),
-		Tags:             cm.Tags,
-		Description:      cm.Description,
-		DisplayName:      cm.DisplayName,
-		SortOrder:        cm.SortOrder,
-		Icon:             cm.Icon,
-		Capability:       cm.Capability,
-		Protocol:         cm.Protocol,
+		ID:           cm.ID,
+		ModelKey:     cm.ModelKey,
+		ChannelLabel: firstNonEmpty(cm.ChannelLabel, cm.ProviderModelKey, cm.ModelKey),
+		Tags:         cm.Tags,
+		Description:  cm.Description,
+		DisplayName:  cm.DisplayName,
+		SortOrder:    cm.SortOrder,
+		Icon:         cm.Icon,
+		Capability:   cm.Capability,
+		Protocol:     cm.Protocol,
+		// 随模型目录下发从插件 create 路径推出的文字请求格式，前端不再按协议名猜。
+		RequestFormat:    string(s.declaredTextRequestFormat(string(cm.Protocol))),
 		CapabilityConfig: capabilityConfig,
 		DefaultOptions:   defaultOptions,
 		PriceTiers:       publicTiers,

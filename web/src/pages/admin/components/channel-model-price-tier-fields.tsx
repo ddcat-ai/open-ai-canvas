@@ -45,7 +45,8 @@ export function PriceTierFields({
     const staleTierUpstream = matchMode === "default" && tierUpstream && modelUpstream && tierUpstream !== modelUpstream ? tierUpstream : "";
     const video = capabilityConfig?.video;
     const image = capabilityConfig?.image;
-    const resolutionOptions = Array.from(new Set([...(video?.resolutions || []), ...(protocol === "autodl-comfyui" ? video?.fixedScreenSpec?.resolutions || [] : [])]));
+    // 工作流声明的分辨率档改读能力配置里由插件 workflows 写入的 fixedScreenSpec，不再按协议名 autodl-comfyui 判断。
+    const resolutionOptions = Array.from(new Set([...(video?.resolutions || []), ...(video?.fixedScreenSpec?.resolutions || [])]));
     const tokenEnabled = modelProtocolSupportsTokenBilling(capability, protocol);
     const isVideo = capability === "video";
     const isAudio = capability === "audio";

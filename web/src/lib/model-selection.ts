@@ -1,3 +1,4 @@
+import { audioCapabilityForConfig } from "@/lib/audio-generation";
 import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { imageParameterRequest, imageParameterDefaults, imageParameterAccepts } from "./image-parameters";
@@ -35,10 +36,13 @@ export type ModelReferenceLimits = {
 };
 
 /**
- * 普通音频模型只接受文本或音色 ID。豆包音频生成可以连接最多 3 段参考音频，
- * 或 1 张参考图片，两者不能同时使用。
+ * 普通音频模型只接受文本或音色 ID。参考素材容量优先读模型能力声明，
+ * 未声明时沿用作者内置豆包音频合同（最多 3 段参考音频，或 1 张参考图片，两者不能同时使用）。
  */
 export function audioReferenceCapacity(config: AiConfig, model: string) {
+    // 参考音频容量改读 capabilityConfig.audio.references，不再只按豆包协议判断
+    const declared = audioCapabilityForConfig(config, model)?.references;
+    if (declared) return declared.maxAudios || 0;
     return audioProtocol(config, model) === "doubao-streaming-tts" ? 3 : 0;
 }
 
@@ -53,7 +57,8 @@ export function audioModelForConnection(config: AiConfig, explicit = "") {
     const selected = String(explicit || "").trim();
     if (selected) return selected;
     if (String(config.audioModel || "").trim()) return config.audioModel;
-    return (config.audioModels || []).find((item) => isDoubaoAudioModel(config, item)) || "";
+    // 默认音频模型先找声明了音频能力的模型，再回退作者内置豆包音频
+    return (config.audioModels || []).find((item) => audioCapabilityForConfig(config, item)?.references || isDoubaoAudioModel(config, item)) || "";
 }
 
 /**
@@ -161,6 +166,15 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
     }
 
     if (isDoubaoAudioModel(config, model)) return doubaoAudioInputError(input);
+    // 音频参考素材容量与类型改读模型能力声明
+    const declaredLimits = audioCapabilityForConfig(config, model)?.references;
+    if (declaredLimits) {
+        if (input.characterCount > 1) return "角色配音一次只能引用一个角色卡";
+        if (input.videoCount > 0) return "音频生成不能连接参考视频";
+        if (input.imageCount > (declaredLimits.maxImages || 0)) return declaredLimits.maxImages > 0 ? `最多连接 ${declaredLimits.maxImages} 张参考图片` : "音频模型不能连接参考图片";
+        if (input.audioCount > (declaredLimits.maxAudios || 0)) return declaredLimits.maxAudios > 0 ? `当前音频模型最多支持 ${declaredLimits.maxAudios} 个参考音频` : "当前音频模型不支持参考音频";
+        return "";
+    }
     if (input.imageCount > 0 || input.videoCount > 0) return "音频模型不能连接参考图片或参考视频";
     if (input.characterCount > 1) return "角色配音一次只能引用一个角色卡";
     const maxAudios = audioReferenceCapacity(config, model);

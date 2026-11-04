@@ -364,18 +364,30 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	capability := "text"
 	var channelModel *model.ChannelModel
 	if !(c.Request.Method == http.MethodGet && path == "/models") {
-		if c.Request.Method == http.MethodGet && systemMiniMaxTaskPath.MatchString(path) && modelName == "" {
-			supported, supportErr := svc.SystemChannelHasProtocol(channel.ID, model.ChannelInterfaceMiniMaxVideo)
-			if supportErr != nil {
-				failService(c, supportErr)
+		// 不带 model 的 GET 轮询路径改为按插件声明的 poll/cancel/result 判定；
+		// 作者内置的 MiniMax 视频协议分支保留给未装插件的渠道。
+		if c.Request.Method == http.MethodGet && modelName == "" {
+			// 声明命中但协议是作者内置实现时视为没命中，继续走作者原分支
+			// （内置协议的系统代理行为必须与 HEAD 一致）。
+			if declaredProtocol, declaredCapability, ok := svc.SystemChannelDeclaredOperationProtocol(channel.ID, path); ok && !isBuiltinProxyProtocol(declaredProtocol) {
+				protocol = declaredProtocol
+				capability = declaredCapability
+			} else if systemMiniMaxTaskPath.MatchString(path) {
+				supported, supportErr := svc.SystemChannelHasProtocol(channel.ID, model.ChannelInterfaceMiniMaxVideo)
+				if supportErr != nil {
+					failService(c, supportErr)
+					return
+				}
+				if !supported {
+					fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权 MiniMax 视频协议"))
+					return
+				}
+				protocol = model.ChannelInterfaceMiniMaxVideo
+				capability = "video"
+			} else {
+				fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权该模型或模型协议尚未配置"))
 				return
 			}
-			if !supported {
-				fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权 MiniMax 视频协议"))
-				return
-			}
-			protocol = model.ChannelInterfaceMiniMaxVideo
-			capability = "video"
 		} else {
 			var modelErr error
 			channelModel, modelErr = svc.SystemChannelModel(channel.ID, modelName)
@@ -391,7 +403,9 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		fail(c, http.StatusForbidden, err)
 		return
 	}
-	if channelModel != nil && channelModel.BillingMode == "token" && protocol == model.ChannelInterfaceChatCompletion {
+	// 补 include_usage 改为看插件声明的请求格式（作者内置 chat-completion 照旧），
+	// token 计费的插件文字模型才能拿到上游用量结算。
+	if channelModel != nil && channelModel.BillingMode == "token" && (protocol == model.ChannelInterfaceChatCompletion || svc.ProtocolRequestsChatStreamUsage(string(protocol))) {
 		body, err = service.EnsureChatCompletionStreamUsageRequest(body)
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
@@ -403,6 +417,8 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	for _, key := range []string{"key", "api_key", "access_token", "token"} {
 		query.Del(key)
 	}
+	// 版本前缀仍由 create/poll 路径自带的版本决定（ChannelAPIURLForProtocol 先看路径前缀），
+	// 声明式插件的地址不在前端拼，不靠协议名选 /v1 或 /v1beta。
 	target := service.ChannelAPIURLForProtocol(channel.BaseURL, path, protocol)
 	if encodedQuery := query.Encode(); encodedQuery != "" {
 		target += "?" + encodedQuery
@@ -456,13 +472,23 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	}
 	service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
 	service.ApplyDefaultOutboundHeaders(upstreamReq)
-	if protocol == model.ChannelInterfaceGeminiVeo || protocol == model.ChannelInterfaceGeminiImage {
-		upstreamReq.Header.Set("x-goog-api-key", channel.APIKey)
-	} else if protocol == model.ChannelInterfaceClaudeAPI {
-		upstreamReq.Header.Set("x-api-key", channel.APIKey)
-		upstreamReq.Header.Set("anthropic-version", "2023-06-01")
-	} else {
-		upstreamReq.Header.Set("Authorization", "Bearer "+channel.APIKey)
+	// 出站鉴权头由插件声明决定，直接复用声明式协议同一套鉴权实现；
+	// 没装插件、或插件声明的是签名 / query 鉴权时，才走作者原来的 Gemini / Claude / Bearer 分支。
+	declaredAuth, declaredAuthErr := svc.ApplyDeclaredProtocolAuthHeaders(upstreamReq, string(protocol), channel.APIKey, channel.SecretKey)
+	if declaredAuthErr != nil {
+		refundSystemProxyBilling(svc, billingOrderID, "系统渠道鉴权头构造失败")
+		fail(c, http.StatusBadRequest, declaredAuthErr)
+		return
+	}
+	if !declaredAuth {
+		if protocol == model.ChannelInterfaceGeminiVeo || protocol == model.ChannelInterfaceGeminiImage {
+			upstreamReq.Header.Set("x-goog-api-key", channel.APIKey)
+		} else if protocol == model.ChannelInterfaceClaudeAPI {
+			upstreamReq.Header.Set("x-api-key", channel.APIKey)
+			upstreamReq.Header.Set("anthropic-version", "2023-06-01")
+		} else {
+			upstreamReq.Header.Set("Authorization", "Bearer "+channel.APIKey)
+		}
 	}
 
 	status := model.ApiCallStatusSucceeded

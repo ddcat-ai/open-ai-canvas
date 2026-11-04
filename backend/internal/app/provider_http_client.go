@@ -565,6 +565,8 @@ func ChannelAPIURL(baseURL string, path string) string {
 
 // ChannelAPIURLForProtocol 把协议默认版本收敛在传输边界：Gemini 默认 v1beta，
 // OpenAI 兼容协议默认 v1；baseURL 或 path 中显式出现的版本始终优先。
+// 声明式插件的地址版本完全由插件声明的 create/poll 路径决定（apiURLWithDefaultPrefix
+// 先看路径里的版本前缀），这里两个协议名分支只服务作者手写内置实现。
 func ChannelAPIURLForProtocol(baseURL string, path string, interfaceType model.ChannelInterfaceType) string {
 	if interfaceType == model.ChannelInterfaceAgnesVideo && strings.HasPrefix(strings.TrimSpace(path), "/agnesapi") {
 		base, err := url.Parse(strings.TrimSpace(baseURL))
@@ -577,6 +579,8 @@ func ChannelAPIURLForProtocol(baseURL string, path string, interfaceType model.C
 			return base.String()
 		}
 	}
+	// 插件声明的路径自带版本前缀（如 /v1beta/models/...:generateContent），
+	// 会在 apiURLWithDefaultPrefix 里优先命中；这里只给没有版本前缀的作者内置协议垫默认值。
 	defaultPrefix := "/v1"
 	if interfaceType == model.ChannelInterfaceGeminiVeo || interfaceType == model.ChannelInterfaceGeminiImage {
 		defaultPrefix = "/v1beta"
@@ -696,4 +700,27 @@ func mediaBytes(media providerMedia) ([]byte, string, error) {
 		return nil, "", err
 	}
 	return raw, normalizedMediaMimeType(defaultString(mimeType, media.Type), raw), nil
+}
+
+// TrimChannelAPIVersionPrefix 去掉路径开头的一层渠道版本前缀（/api/plan/v3、/api/v3、/api/v1、
+// /v1beta、/v1、/v2、/v3）。前缀列表只保留 channelAPIPrefixes 这一份。
+// 系统代理收到的请求路径不带版本前缀，插件声明的 create/poll 路径通常带；
+// 比对声明路径与请求路径前先各自去一层前缀，避免把 /chat/completions 判成不在白名单。
+func TrimChannelAPIVersionPrefix(value string) string {
+	path := strings.TrimSpace(value)
+	if path == "" {
+		return ""
+	}
+	prefix := requestAPIPathPrefix(path)
+	if prefix == "" {
+		return path
+	}
+	trimmed := strings.TrimPrefix(path, prefix)
+	if trimmed == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		trimmed = "/" + trimmed
+	}
+	return trimmed
 }

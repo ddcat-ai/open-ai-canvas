@@ -227,6 +227,8 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     icon: model.icon || "",
                     capability: model.capability as ModelCapability,
                     protocol: model.protocol as any,
+                    // 后端随模型目录下发的文字请求格式透传到 modelCosts，供 resolveModelRequestConfig 使用。
+                    ...(model.requestFormat ? { requestFormat: model.requestFormat } : {}),
                     pricePolicy: "channel" as const,
                     billingMode: billingMode as any,
                     unitPriceMicrocredits: unitPrice,

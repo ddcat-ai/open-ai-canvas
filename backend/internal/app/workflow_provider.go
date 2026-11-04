@@ -32,6 +32,16 @@ func isWorkflowProviderInterface(value string) bool {
 	return isRunningHubInterface(value)
 }
 
+// isWorkflowProviderInterfaceDeclared 按插件 manifest 的 contributes.workflows 声明判断是否工作流插件，
+// 没装声明式工作流插件时才回到作者内置的 RunningHub 协议名。
+// 工作流判定不再只认 RunningHub 协议名。
+func (s *Service) isWorkflowProviderInterfaceDeclared(value string) bool {
+	if _, ok := s.workflowPluginIDForInterfaceDeclared(value); ok {
+		return true
+	}
+	return isWorkflowProviderInterface(value)
+}
+
 func validateWorkflowProviderConfig(mode string, config providerConfig) error {
 	if mode != "image" && mode != "video" && mode != "audio" {
 		return fmt.Errorf("工作流协议暂不支持%s生成", mode)

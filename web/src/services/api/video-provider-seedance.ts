@@ -1,6 +1,6 @@
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { isVolcengineArkVideoProtocol } from "@/lib/model-protocols";
-import { boolConfig, buildSeedancePromptText, isArkPlanBaseUrl, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
+import { boolConfig, buildSeedancePromptText, isArkPlanBaseUrl, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceVideoReferenceError, SEEDANCE_REFERENCE_LIMITS } from "@/lib/seedance-video";
 import { getResourceInputURL } from "@/services/api/resources";
 import { getMediaBlob } from "@/services/file-storage";
 import { imageToDataUrl } from "@/services/image-storage";
@@ -14,7 +14,8 @@ import type { VideoProviderDeps } from "./video-provider-deps";
 import { hasExplicitVideoFrames, resolveVideoImageReferences } from "./video-reference-roles";
 
 export function isSeedanceConfig(config: ResolvedAiConfig) {
-    return isVolcengineArkVideoProtocol(config.interfaceType) || isSeedanceVideoConfig(config);
+    // 按协议判定是否使用作者内置 Seedance 实现，不再按模型名判断（插件渠道走插件声明）
+    return isVolcengineArkVideoProtocol(config.interfaceType);
 }
 
 export async function createSeedanceTask(deps: VideoProviderDeps, config: ResolvedAiConfig, model: string, prompt: string, references: ReferenceImage[], videoReferences: ReferenceVideo[], audioReferences: ReferenceAudio[], options?: RequestOptions): Promise<VideoGenerationTask> {

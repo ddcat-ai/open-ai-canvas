@@ -14,6 +14,7 @@ import (
 
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 var sseFrameBoundaryPattern = regexp.MustCompile(`\r?\n\r?\n`)
@@ -99,6 +100,10 @@ type providerConfig struct {
 	RunningHubUseWallet   bool                   `json:"runningHubUseWallet"`
 	RunningHubWalletKey   string                 `json:"runningHubWalletApiKey"`
 	RunningHubUploadKey   string                 `json:"runningHubUploadApiKey"`
+	// RequestFormat 是宿主从插件声明的 create 路径推出来的文字请求格式（chat-completion / responses / claude-api）。
+	// 运行时推出来，不落库、不随任务输入回写；空值表示插件未声明或本次不是文字请求。
+	// 文字链路的格式判断从协议 ID 改为读这个声明推导结果。
+	RequestFormat string `json:"-"`
 }
 
 const providerHTTPTimeout = 5 * time.Minute
@@ -189,6 +194,8 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		input.OnTextDelta = textPublisher.Publish
 		defer textPublisher.Close()
 	}
+	// 工作流协议仍按作者内置协议名分流（未装插件的内置实现）；
+	// 改成读 contributes.workflows[].providerId 还要同步改 workflow_plugins.go，不在本次范围内。
 	if isWorkflowProviderInterface(input.Config.InterfaceType) {
 		if err := s.RequireWorkflowPluginForInterface(input.Config.InterfaceType); err != nil {
 			return nil, err
@@ -212,6 +219,8 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 			return nil, err
 		}
 	}
+	// apiFormat 已改为按插件声明的鉴权方式推导（channelAPIFormatForProtocol），
+	// 这里只看推导结果：声明了 Gemini 鉴权的声明式插件已装适配器就能通过。
 	if input.Config.APIFormat == "gemini" && input.Config.InterfaceType != string(model.ChannelInterfaceGeminiVeo) && input.Config.InterfaceType != string(model.ChannelInterfaceGeminiImage) {
 		_, hasDeclarativeAgent := agentProtocolAdapterForContext(ctx, input.Config.InterfaceType)
 		if input.AgentRequests == nil || !hasDeclarativeAgent {
@@ -224,7 +233,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if err := s.validateGenerationInterface(input.Mode, input.Config.InterfaceType); err != nil {
 		return nil, err
 	}
-	if isVolcengineJiMengProtocol(input.Config.InterfaceType) && strings.TrimSpace(input.Config.SecretKey) == "" {
+	if s.needsSecondCredential(input.Config.InterfaceType) && strings.TrimSpace(input.Config.SecretKey) == "" {
 		return nil, errors.New("即梦官方 API 缺少 Secret Key")
 	}
 	if input.Mode == "image" {
@@ -296,11 +305,14 @@ type providerMediaHydrationPolicy struct {
 }
 
 func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGenerationInput) providerMediaHydrationPolicy {
-	policy := providerMediaHydrationPolicy{preferURL: providerPrefersMediaURLs(input.Config.InterfaceType, input)}
-	switch strings.TrimSpace(input.Config.InterfaceType) {
-	case string(model.ChannelInterfaceNewAPIVideo), string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2), string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo), string(model.ChannelInterfaceMiniMaxVideo):
-		policy.requireURL = true
-		policy.preferURL = true
+	policy := providerMediaHydrationPolicy{preferURL: providerPrefersMediaURLs(ctx, input)}
+	// 协议名白名单只服务于未装插件的作者内置实现；装了声明式插件就只看插件声明。
+	if _, declarative := protocolAdapterForContext(ctx, input.Config.InterfaceType); !declarative {
+		switch strings.TrimSpace(input.Config.InterfaceType) {
+		case string(model.ChannelInterfaceNewAPIVideo), string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2), string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo), string(model.ChannelInterfaceMiniMaxVideo):
+			policy.requireURL = true
+			policy.preferURL = true
+		}
 	}
 	if adapter, ok := protocolAdapterForContext(ctx, input.Config.InterfaceType); ok && adapter.Metadata().RequiresPublicMediaURLs {
 		policy.requireURL = true
@@ -315,12 +327,12 @@ func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGeneration
 
 // providerPrefersMediaURLs 只列出明确接受远程 URL 的协议。
 // 需要 multipart/原始字节的协议继续走字节路径，不能为了减少下载而擅自改变请求合同。
-func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput) bool {
+func providerPrefersMediaURLs(ctx context.Context, input canvasGenerationInput) bool {
 	if input.Mask != nil {
 		// OpenAI 图片编辑等 multipart 请求需要真实文件字节，遮罩场景不能改发 URL。
 		return false
 	}
-	switch strings.TrimSpace(interfaceType) {
+	switch strings.TrimSpace(input.Config.InterfaceType) {
 	case string(model.ChannelInterfaceChatCompletion), string(model.ChannelInterfaceOpenAIResponse), string(model.ChannelInterfaceClaudeAPI),
 		string(model.ChannelInterfaceGrokImage), string(model.ChannelInterfaceVolcengineArkImage), string(model.ChannelInterfaceVolcengineArkAgentPlanImage),
 		string(model.ChannelInterfaceXAIVideo), string(model.ChannelInterfaceNovitaVideo),
@@ -329,6 +341,11 @@ func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput)
 		string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo),
 		string(model.ChannelInterfaceDoubaoStreamingTTS):
 		return true
+	}
+	// 按模型名猜素材策略只保留给没装插件的作者内置实现；
+	// 装了声明式插件时由插件声明的 requiresPublicMediaUrls 决定（上面已有该分支）。
+	if _, declarative := protocolAdapterForContext(ctx, input.Config.InterfaceType); declarative {
+		return false
 	}
 	if isGrokVideoConfig(input.Config) || isSeedanceVideoConfig(input.Config) || isArkPlanVideoConfig(input.Config) {
 		return true
@@ -342,6 +359,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		return providerConfig{}, err
 	}
 	config.Headers = headers
+	// 这条只服务作者内置 RunningHub 实现；声明式插件的地址完全由插件声明的 baseUrl/create.path 决定。
 	if isRunningHubInterface(config.InterfaceType) && strings.TrimSpace(config.BaseURL) == "" {
 		config.BaseURL = "https://www.runninghub.cn"
 	}
@@ -353,6 +371,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		if _, err := ValidateOutboundURL(config.BaseURL); err != nil {
 			return providerConfig{}, err
 		}
+		config.RequestFormat = string(s.declaredTextRequestFormat(config.InterfaceType))
 		return config, nil
 	}
 	channel, err := s.SystemChannel(channelID)
@@ -410,7 +429,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		return providerConfig{}, errors.New("系统渠道模型标识不一致")
 	}
 	config.InterfaceType = string(channelModel.Protocol)
-	config.APIFormat = channelAPIFormatForProtocol(channel.APIFormat, channelModel.Protocol)
+	config.APIFormat = s.channelAPIFormatForProtocol(channel.APIFormat, channelModel.Protocol)
 	config.BaseURL = channel.BaseURL
 	config.APIKey = channel.APIKey
 	config.SecretKey = channel.SecretKey
@@ -421,11 +440,246 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	config.ChannelModelKey = modelKey
 	config.ProviderModelKey = providerModelKey
 	config.Model = firstNonEmpty(providerModelKey, channelModel.ProviderModelKey, modelKey)
+	config.RequestFormat = string(s.declaredTextRequestFormat(config.InterfaceType))
 	return config, nil
+}
+
+// declaredTextRequestFormat 从已安装插件声明的 create 路径推出文字请求格式。
+// 未安装插件（作者手写内置实现）返回空，由调用方保留作者原来的协议 ID 分支。
+// 文字与 Agent 链路的格式判断统一走这里，不再散落协议名字比较。
+func (s *Service) declaredTextRequestFormat(interfaceType string) protocol.TextWire {
+	adapter, ok := s.protocolRegistry().Resolve(strings.TrimSpace(interfaceType))
+	if !ok {
+		return protocol.TextWireUnknown
+	}
+	return protocol.TextWireForCreatePath(adapter.Metadata().Create)
 }
 
 // channelAPIFormatForProtocol 以模型协议而不是客户端缓存决定鉴权和请求封装格式。
 // 同一系统渠道可以挂载不同协议的模型，因此渠道级 APIFormat 只能作为协议缺失时的兼容值。
+//
+// 声明式插件先读插件声明的 auth.type；未装插件时才走作者内置协议判断。
+func (s *Service) channelAPIFormatForProtocol(channelDefault string, protocol model.ChannelInterfaceType) string {
+	if format, ok := declaredAuthAPIFormat(s.declaredProviderAuth(string(protocol))); ok {
+		return format
+	}
+	return channelAPIFormatForProtocol(channelDefault, protocol)
+}
+
+// DeclaredProtocolOperations 描述插件为某个协议声明的操作（create/poll/cancel/result）。
+// 系统代理的路径白名单改为读这份声明，不再只认作者内置协议名。
+// 鉴权方式由 declaredProviderAuth 单独取，不在这里重复携带。
+type DeclaredProtocolOperations struct {
+	// Declared 为 false 表示没装该协议的插件，调用方保留作者内置分支。
+	Declared bool
+	// 各操作都是 "METHOD /path" 形式，模板段（{{taskId}} / {model}）按单段通配匹配。
+	Create string
+	Poll   string
+	Cancel string
+	Result string
+}
+
+// DeclaredProtocolOperations 返回已启用插件对该协议声明的操作路径与鉴权方式。
+func (s *Service) DeclaredProtocolOperations(protocolID string) DeclaredProtocolOperations {
+	protocolID = strings.TrimSpace(protocolID)
+	if protocolID == "" {
+		return DeclaredProtocolOperations{}
+	}
+	for _, plugin := range s.Plugins() {
+		if plugin.Status != "enabled" {
+			continue
+		}
+		for _, provider := range plugin.Manifest.Contributes.Providers {
+			if strings.TrimSpace(provider.ID) != protocolID {
+				continue
+			}
+			operations := DeclaredProtocolOperations{
+				Declared: true,
+				Create:   operationSummary(provider.Create),
+			}
+			if provider.Poll != nil {
+				operations.Poll = operationSummary(*provider.Poll)
+			}
+			if provider.Cancel != nil {
+				operations.Cancel = operationSummary(*provider.Cancel)
+			}
+			if provider.Result != nil {
+				operations.Result = operationSummary(*provider.Result)
+			}
+			return operations
+		}
+	}
+	return DeclaredProtocolOperations{}
+}
+
+// DeclaredOperationMatch 是声明操作匹配的唯一实现：返回命中的是否为 create 以及是否命中。
+// 声明路径与请求路径比对前各去掉一层渠道版本前缀（前端发给系统代理的路径不带 /v1 等前缀）。
+func DeclaredOperationMatch(operations DeclaredProtocolOperations, method string, requestPath string) (create bool, matched bool) {
+	if !operations.Declared {
+		return false, false
+	}
+	for _, entry := range []struct {
+		summary  string
+		isCreate bool
+	}{
+		{operations.Create, true},
+		{operations.Poll, false},
+		{operations.Cancel, false},
+		{operations.Result, false},
+	} {
+		if declaredOperationMatches(entry.summary, method, requestPath) {
+			return entry.isCreate, true
+		}
+	}
+	return false, false
+}
+
+// DeclaredProxyOperationMatch 供系统代理使用：判定该协议是否为声明式插件、命中的是否为 create、是否命中。
+// declared=false 表示没装该协议的插件，调用方保留作者原来的内置分支。
+// handler 不再自己写一份路径匹配，统一走这里。
+func (s *Service) DeclaredProxyOperationMatch(protocolID string, method string, requestPath string) (declared bool, create bool, matched bool) {
+	operations := s.DeclaredProtocolOperations(protocolID)
+	if !operations.Declared {
+		return false, false, false
+	}
+	create, matched = DeclaredOperationMatch(operations, method, requestPath)
+	return true, create, matched
+}
+
+func declaredOperationMatches(declared string, method string, requestPath string) bool {
+	declaredMethod, declaredPath := splitDeclaredOperation(declared)
+	if declaredPath == "" {
+		return false
+	}
+	if method = strings.TrimSpace(method); method != "" && declaredMethod != "" && !strings.EqualFold(method, declaredMethod) {
+		return false
+	}
+	return declaredPathMatches(declaredPath, requestPath)
+}
+
+func splitDeclaredOperation(declared string) (string, string) {
+	declared = strings.TrimSpace(declared)
+	if declared == "" {
+		return "", ""
+	}
+	if index := strings.IndexAny(declared, " \t"); index >= 0 {
+		return declared[:index], strings.TrimSpace(declared[index+1:])
+	}
+	return "", declared
+}
+
+func declaredPathMatches(declared string, requestPath string) bool {
+	declared = strings.TrimSpace(declared)
+	if declared == "" {
+		return false
+	}
+	if _, path := splitDeclaredOperation(declared); path != "" {
+		declared = path
+	}
+	if index := strings.IndexAny(declared, "?#"); index >= 0 {
+		declared = declared[:index]
+	}
+	requestPath = strings.TrimSpace(requestPath)
+	if index := strings.IndexAny(requestPath, "?#"); index >= 0 {
+		requestPath = requestPath[:index]
+	}
+	// 系统代理收到的路径不带版本前缀，插件声明的路径通常带，比对前各自去一层前缀。
+	declared = TrimChannelAPIVersionPrefix(declared)
+	requestPath = TrimChannelAPIVersionPrefix(requestPath)
+	declaredSegments := strings.Split(strings.Trim(declared, "/"), "/")
+	requestSegments := strings.Split(strings.Trim(requestPath, "/"), "/")
+	if len(declaredSegments) != len(requestSegments) {
+		return false
+	}
+	for index, segment := range declaredSegments {
+		if strings.ContainsAny(segment, "{}") {
+			if requestSegments[index] == "" {
+				return false
+			}
+			continue
+		}
+		if segment != requestSegments[index] {
+			return false
+		}
+	}
+	return true
+}
+
+// SystemChannelDeclaredOperationProtocol 在请求不带 model 时按插件声明的
+// poll/cancel/result 路径判定渠道协议（不只看 MiniMax 视频这一个内置协议）。
+func (s *Service) SystemChannelDeclaredOperationProtocol(channelID string, requestPath string) (model.ChannelInterfaceType, string, bool) {
+	items, err := s.repo.ChannelModels(channelID, false)
+	if err != nil {
+		return "", "", false
+	}
+	for _, item := range items {
+		if !item.Enabled || item.Protocol == "" {
+			continue
+		}
+		operations := s.DeclaredProtocolOperations(string(item.Protocol))
+		if !operations.Declared {
+			continue
+		}
+		for _, declared := range []string{operations.Poll, operations.Cancel, operations.Result} {
+			if declaredPathMatches(declared, requestPath) {
+				return item.Protocol, item.Capability, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+// ProtocolRequestsChatStreamUsage 判定该协议的流式请求是否要用 stream_options.include_usage 索取用量。
+// 改看插件声明的 create 路径，token 计费的文字模型才能拿到用量。
+func (s *Service) ProtocolRequestsChatStreamUsage(protocolID string) bool {
+	return s.declaredTextRequestFormat(protocolID) == protocol.TextWireChatCompletion
+}
+
+// declaredProviderAuth 返回已安装插件为该协议声明的鉴权方式。
+// needsSecondCredential 判定该协议是否必需第二凭证：插件声明了 auth.secretField 就要，
+// 未装插件时保留作者内置的即梦协议判断。
+func (s *Service) needsSecondCredential(interfaceType string) bool {
+	if auth, ok := s.declaredProviderAuth(interfaceType); ok {
+		return strings.TrimSpace(auth.SecretField) != ""
+	}
+	return isVolcengineJiMengProtocol(interfaceType)
+}
+func (s *Service) declaredProviderAuth(protocolID string) (protocol.ManifestAuth, bool) {
+	protocolID = strings.TrimSpace(protocolID)
+	if protocolID == "" {
+		return protocol.ManifestAuth{}, false
+	}
+	for _, plugin := range s.Plugins() {
+		if plugin.Status != "enabled" {
+			continue
+		}
+		for _, provider := range plugin.Manifest.Contributes.Providers {
+			if strings.TrimSpace(provider.ID) == protocolID {
+				return provider.Auth, true
+			}
+		}
+	}
+	return protocol.ManifestAuth{}, false
+}
+
+// declaredAuthAPIFormat 把插件声明的鉴权方式折成宿主的上游封装格式（openai / gemini / claude）。
+func declaredAuthAPIFormat(auth protocol.ManifestAuth, declared bool) (string, bool) {
+	if !declared {
+		return "", false
+	}
+	switch strings.ToLower(strings.TrimSpace(auth.Type)) {
+	case "google-api-key", "gemini":
+		return "gemini", true
+	case "anthropic":
+		return "claude", true
+	case "":
+		return "", false
+	default:
+		return "openai", true
+	}
+}
+
+// channelAPIFormatForProtocol 是未装插件时的内置实现：按作者内置协议名决定封装格式。
 func channelAPIFormatForProtocol(channelDefault string, protocol model.ChannelInterfaceType) string {
 	switch protocol {
 	case model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceGeminiImage:

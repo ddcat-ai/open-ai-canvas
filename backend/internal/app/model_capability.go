@@ -16,6 +16,34 @@ type ModelCapabilityConfig struct {
 	Text    *TextCapabilityConfig  `json:"text,omitempty"`
 	Image   *ImageCapabilityConfig `json:"image,omitempty"`
 	Video   *VideoCapabilityConfig `json:"video,omitempty"`
+	// 补上音频能力段，字段名与 JSON 名跟 web/src/lib/model-capabilities.ts 的 audio 完全一致；
+	// 未声明时保持 nil，序列化结果里不出现 audio。
+	Audio *AudioCapabilityConfig `json:"audio,omitempty"`
+	// PromptFamily 声明该模型使用的提示词写法家族（如 seedance / veo / kling / gpt-image）。
+	// 提示词优化按模型声明选模板，不再靠模型名子串命中。空值表示未声明。
+	PromptFamily string `json:"promptFamily,omitempty"`
+}
+
+// AudioCapabilityConfig 是音频模型的能力声明，与前端 audio 段同名同形。
+// 后端此前没有该字段，渠道模型保存时 audio 会被 JSON 解码丢掉。
+type AudioCapabilityConfig struct {
+	References    AudioReferenceConfig    `json:"references"`
+	Voices        []AudioCapabilityOption `json:"voices,omitempty"`
+	Formats       []AudioCapabilityOption `json:"formats,omitempty"`
+	VoiceInput    string                  `json:"voiceInput,omitempty"`
+	ProviderNotes bool                    `json:"providerNotes,omitempty"`
+}
+
+// AudioReferenceConfig 是音频模型可连接的参考素材上限。
+type AudioReferenceConfig struct {
+	MaxAudios int `json:"maxAudios"`
+	MaxImages int `json:"maxImages"`
+}
+
+// AudioCapabilityOption 是音色 / 输出格式的值域项。
+type AudioCapabilityOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
 }
 
 type TextCapabilityConfig struct {
@@ -146,6 +174,8 @@ type VideoReferenceConfig struct {
 	MaxVideos        int   `json:"maxVideos"`
 	MaxVideoBytes    int64 `json:"maxVideoBytes"`
 	MaxVideoDuration int   `json:"maxVideoDurationSeconds"`
+	// 参考片段的最短时长改由模型能力声明（0 表示不限）。
+	MinVideoDuration int   `json:"minVideoDurationSeconds"`
 	MaxAudios        int   `json:"maxAudios"`
 	MaxAudioBytes    int64 `json:"maxAudioBytes"`
 	MaxAudioDuration int   `json:"maxAudioDurationSeconds"`
@@ -170,6 +200,43 @@ type VideoBooleanConfig struct {
 	Default   bool `json:"default"`
 }
 
+// normalizeAudioCapabilityConfig 只做最小清理：去首尾空格、丢弃空值项、负数归零。
+// 不加任何默认值；未声明 audio 时返回 nil，序列化结果里就不会出现 audio。
+// 音频能力按声明原样保存，不做猜测。
+func normalizeAudioCapabilityConfig(input *AudioCapabilityConfig) *AudioCapabilityConfig {
+	if input == nil {
+		return nil
+	}
+	return &AudioCapabilityConfig{
+		References: AudioReferenceConfig{
+			MaxAudios: max(input.References.MaxAudios, 0),
+			MaxImages: max(input.References.MaxImages, 0),
+		},
+		Voices:        normalizeAudioCapabilityOptions(input.Voices),
+		Formats:       normalizeAudioCapabilityOptions(input.Formats),
+		VoiceInput:    strings.TrimSpace(input.VoiceInput),
+		ProviderNotes: input.ProviderNotes,
+	}
+}
+
+func normalizeAudioCapabilityOptions(items []AudioCapabilityOption) []AudioCapabilityOption {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]AudioCapabilityOption, 0, len(items))
+	for _, item := range items {
+		value := strings.TrimSpace(item.Value)
+		if value == "" {
+			continue
+		}
+		result = append(result, AudioCapabilityOption{Value: value, Label: strings.TrimSpace(item.Label)})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
 func DecodeModelCapabilityConfig(raw string) (*ModelCapabilityConfig, error) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, nil
@@ -188,10 +255,9 @@ func normalizedChannelModelCapability(channelModel *model.ChannelModel, registri
 		return nil, errors.New("渠道模型为空")
 	}
 	capability := normalizeCapability(channelModel.Capability)
-	if capability == "audio" {
-		return nil, nil
-	}
-	if capability != "text" && capability != "image" && capability != "video" {
+	// 音频模型现在可以声明 capabilityConfig.audio，读路径按同一套归一化恢复；
+	// 未声明时归一化仍返回 nil，与作者原来的“音频无能力合同”行为一致。
+	if capability != "text" && capability != "image" && capability != "video" && capability != "audio" {
 		return nil, fmt.Errorf("不支持的渠道模型能力：%s", channelModel.Capability)
 	}
 	config, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
@@ -210,6 +276,21 @@ func NormalizeModelCapabilityConfig(capability string, protocol string, input *M
 }
 
 func NormalizeModelCapabilityConfigForModel(capability string, protocol string, modelName string, input *ModelCapabilityConfig, registries ...*protocolcontract.Registry) (*ModelCapabilityConfig, error) {
+	// promptFamily 与 audio 是模型级声明，任何能力的归一化都要原样带出，不能被丢掉。
+	var promptFamily string
+	var audio *AudioCapabilityConfig
+	if input != nil {
+		promptFamily = strings.TrimSpace(input.PromptFamily)
+		audio = normalizeAudioCapabilityConfig(input.Audio)
+	}
+	if capability == "audio" {
+		// 音频模型此前直接返回 nil，保存时能力配置会被清空。
+		// 没有任何声明时仍返回 nil，保持作者原来的“音频无能力合同”行为。
+		if audio == nil && promptFamily == "" {
+			return nil, nil
+		}
+		return &ModelCapabilityConfig{Version: 1, Audio: audio, PromptFamily: promptFamily}, nil
+	}
 	if capability != "text" && capability != "image" && capability != "video" {
 		return nil, nil
 	}
@@ -228,7 +309,7 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		if text.MaxOutputTokens == 0 {
 			text.MaxOutputTokens = 16384
 		}
-		value := &ModelCapabilityConfig{Version: 1, Text: &text}
+		value := &ModelCapabilityConfig{Version: 1, Text: &text, Audio: audio, PromptFamily: promptFamily}
 		if err := validateTextCapabilityConfig(value.Text); err != nil {
 			return nil, err
 		}
@@ -252,14 +333,15 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 				return nil, err
 			}
 		} else {
-			normalizeLegacyImageResolutionConfig(protocol, input.Image)
-			input.Image.ResolutionUsesQuality = strings.TrimSpace(protocol) == string(model.ChannelInterfaceGeminiImage)
+			normalizeLegacyImageResolutionConfig(protocol, input.Image, registries...)
+			// 分辨率是否复用 quality 字段先看插件声明的分辨率档，而非只认协议名。
+			input.Image.ResolutionUsesQuality = imageResolutionRidesQualityField(protocol, input.Image, registries...)
 		}
 		// 旧配置缺换算表时按声明的档位与比例补齐后再校验，保存即把旧线路归一化成当前形态。
 		if input.Image.Parameters == nil {
 			fillMissingImageSizePresets(input.Image, protocol)
 		}
-		value := &ModelCapabilityConfig{Version: 1, Image: input.Image}
+		value := &ModelCapabilityConfig{Version: 1, Image: input.Image, Audio: audio, PromptFamily: promptFamily}
 		if err := validateImageCapabilityConfig(value.Image); err != nil {
 			return nil, err
 		}
@@ -276,7 +358,7 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 			return nil, err
 		}
 	}
-	value := &ModelCapabilityConfig{Version: 1, Video: video}
+	value := &ModelCapabilityConfig{Version: 1, Video: video, Audio: audio, PromptFamily: promptFamily}
 	if err := validateVideoCapabilityConfig(value.Video); err != nil {
 		return nil, err
 	}
@@ -286,11 +368,11 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 // normalizeLegacyImageResolutionConfig projects legacy values only for protocols whose
 // shipped contracts prove that these exact quality values represented resolution tiers.
 // The projection is in-memory; persisted capabilities and historical task inputs are untouched.
-func normalizeLegacyImageResolutionConfig(protocol string, image *ImageCapabilityConfig) {
+func normalizeLegacyImageResolutionConfig(protocol string, image *ImageCapabilityConfig, registries ...*protocolcontract.Registry) {
 	if image == nil || image.Resolution.Supported || !image.Quality.Supported {
 		return
 	}
-	allowed := legacyImageResolutionTiers(protocol)
+	allowed := legacyImageResolutionTiers(protocol, registries...)
 	if len(allowed) == 0 {
 		return
 	}
@@ -310,11 +392,35 @@ func normalizeLegacyImageResolutionConfig(protocol string, image *ImageCapabilit
 	image.Quality = ImageQualityConfig{Supported: false, Values: []string{}, Default: "auto"}
 }
 
-func legacyImageResolutionProtocol(protocol string) bool {
-	return len(legacyImageResolutionTiers(protocol)) > 0
+func legacyImageResolutionProtocol(protocol string, registries ...*protocolcontract.Registry) bool {
+	return len(legacyImageResolutionTiers(protocol, registries...)) > 0
 }
 
-func legacyImageResolutionTiers(protocol string) map[string]bool {
+// imageResolutionRidesQualityField 判定该线路的 quality 字段实际承载分辨率档。
+// 先读插件声明的分辨率档（quality 取值全在档位声明内），
+// 插件未声明时保留作者的 Gemini 图片内置判断。
+func imageResolutionRidesQualityField(protocol string, image *ImageCapabilityConfig, registries ...*protocolcontract.Registry) bool {
+	if strings.TrimSpace(protocol) == string(model.ChannelInterfaceGeminiImage) {
+		return true
+	}
+	tiers := pluginDeclaredImageResolutionTiers(protocol, registries...)
+	if len(tiers) == 0 || image == nil || !image.Quality.Supported || len(image.Quality.Values) == 0 {
+		return false
+	}
+	for _, value := range image.Quality.Values {
+		if !tiers[strings.ToLower(strings.TrimSpace(value))] {
+			return false
+		}
+	}
+	return true
+}
+
+func legacyImageResolutionTiers(protocol string, registries ...*protocolcontract.Registry) map[string]bool {
+	// 旧线路的 quality→分辨率投影改为先读插件声明的分辨率参数档；
+	// 未安装声明式插件时保留作者按协议名写死的内置名单。
+	if tiers := pluginDeclaredImageResolutionTiers(protocol, registries...); len(tiers) > 0 {
+		return tiers
+	}
 	switch strings.TrimSpace(protocol) {
 	case string(model.ChannelInterfaceGrokImage):
 		return map[string]bool{"1k": true, "2k": true}
@@ -327,13 +433,59 @@ func legacyImageResolutionTiers(protocol string) map[string]bool {
 	}
 }
 
+// pluginDeclaredImageResolutionTiers 读出插件 imageParameters 里 binding=resolution 的取值档位。
+// 没有任何声明时返回 nil，调用方据此回到作者原有的内置行为。
+func pluginDeclaredImageResolutionTiers(protocol string, registries ...*protocolcontract.Registry) map[string]bool {
+	id := strings.TrimSpace(protocol)
+	if id == "" {
+		return nil
+	}
+	var registry *protocolcontract.Registry
+	if len(registries) > 0 {
+		registry = registries[0]
+	}
+	if registry == nil {
+		registry = loadOfficialFallbackRegistry()
+	}
+	if registry == nil {
+		return nil
+	}
+	adapter, ok := registry.Resolve(id)
+	if !ok {
+		return nil
+	}
+	tiers := map[string]bool{}
+	for _, parameter := range adapter.Metadata().ImageParameters {
+		if parameter.Binding != "resolution" || !parameter.IsEnabled() {
+			continue
+		}
+		for _, value := range parameter.Values {
+			text, ok := value.(string)
+			if !ok {
+				continue
+			}
+			if text = strings.ToLower(strings.TrimSpace(text)); text != "" {
+				tiers[text] = true
+			}
+		}
+	}
+	if len(tiers) == 0 {
+		return nil
+	}
+	return tiers
+}
+
 // normalizeLegacyImageResolutionRequest adapts only old request fields for the same
 // proven protocols. Other plugins retain their own quality semantics.
 func normalizeLegacyImageResolutionRequest(protocol string, capability *ModelCapabilityConfig, config map[string]any) string {
 	if capability == nil || capability.Image == nil || !capability.Image.Resolution.Supported || capability.Image.Quality.Supported {
 		return ""
 	}
-	imageResolutionProtocol := strings.TrimSpace(protocol) == string(model.ChannelInterfaceGrokImage) || strings.TrimSpace(protocol) == "agnes-image" || strings.Contains(strings.TrimSpace(protocol), "seedream")
+	// 参数合同已声明分辨率参数时不走旧字段改写，保持一致的能力驱动。
+	if capability.Image.Parameters != nil && len(capability.Image.Parameters) > 0 {
+		return ""
+	}
+	imageResolutionProtocol := legacyImageResolutionProtocol(protocol)
 	if !imageResolutionProtocol {
 		return ""
 	}

@@ -596,7 +596,8 @@ func (s *Service) resolveSystemChannelModelSelection(access *userGroupAccess, in
 	if err != nil {
 		return input, InvalidModelSelection("指定的模型能力配置无效，请联系管理员")
 	}
-	if legacyImageResolutionProtocol(string(channelModel.Protocol)) && capabilityConfig != nil && capabilityConfig.Image != nil && capabilityConfig.Image.Resolution.Supported {
+	// 旧 quality 值校验只对没有参数合同的旧线路生效；带 imageParameters 的插件按参数合同处理。
+	if legacyImageResolutionProtocol(string(channelModel.Protocol)) && capabilityConfig != nil && capabilityConfig.Image != nil && capabilityConfig.Image.Parameters == nil && capabilityConfig.Image.Resolution.Supported {
 		legacyQuality := strings.ToLower(strings.TrimSpace(metadataString(nextConfig, "quality")))
 		if legacyQuality != "" && legacyQuality != "<nil>" && legacyQuality != "auto" && legacyQuality != "any" && !containsCapabilityString(capabilityConfig.Image.Resolution.Values, legacyQuality) {
 			return input, ModelCapabilityNotSupported("所选模型不支持当前图片分辨率：" + legacyQuality)
@@ -722,7 +723,8 @@ func (s *Service) resolveSystemChannelModelSelection(access *userGroupAccess, in
 	nextConfig["priceTierId"] = priceTier.ID
 	nextConfig["providerModelKey"] = firstNonEmpty(priceTier.ProviderModelKey, channelModel.ProviderModelKey, channelModel.ModelKey)
 	nextConfig["interfaceType"] = string(channelModel.Protocol)
-	nextConfig["apiFormat"] = channelAPIFormatForProtocol(channel.APIFormat, channelModel.Protocol)
+	// apiFormat 改为按插件声明的 auth.type 推导（渠道缓存只作为未装插件时的兼容值）。
+	nextConfig["apiFormat"] = s.channelAPIFormatForProtocol(channel.APIFormat, channelModel.Protocol)
 	return input, nil
 }
 

@@ -3,16 +3,18 @@ package service
 import "yingce/backend/internal/app"
 
 var (
-	ErrPlaybackNotReady                        = app.ErrPlaybackNotReady
-	ErrNotBuiltinSkill                         = app.ErrNotBuiltinSkill
-	AllowedPrivateUpstreamHost                 = app.AllowedPrivateUpstreamHost
-	AppearanceAssetMaxBytes                    = app.AppearanceAssetMaxBytes
-	ApplyDefaultOutboundHeaders                = app.ApplyDefaultOutboundHeaders
-	ApplyOutboundHeaders                       = app.ApplyOutboundHeaders
-	BadAuthRequest                             = app.BadAuthRequest
-	CapabilitySpecFromModelCapabilityConfig    = app.CapabilitySpecFromModelCapabilityConfig
-	ChannelAPIURL                              = app.ChannelAPIURL
-	ChannelAPIURLForProtocol                   = app.ChannelAPIURLForProtocol
+	ErrPlaybackNotReady                     = app.ErrPlaybackNotReady
+	ErrNotBuiltinSkill                      = app.ErrNotBuiltinSkill
+	AllowedPrivateUpstreamHost              = app.AllowedPrivateUpstreamHost
+	AppearanceAssetMaxBytes                 = app.AppearanceAssetMaxBytes
+	ApplyDefaultOutboundHeaders             = app.ApplyDefaultOutboundHeaders
+	ApplyOutboundHeaders                    = app.ApplyOutboundHeaders
+	BadAuthRequest                          = app.BadAuthRequest
+	CapabilitySpecFromModelCapabilityConfig = app.CapabilitySpecFromModelCapabilityConfig
+	ChannelAPIURL                           = app.ChannelAPIURL
+	ChannelAPIURLForProtocol                = app.ChannelAPIURLForProtocol
+	// 系统代理比对插件声明路径前需要去掉一层版本前缀，复用 app 包的前缀表。
+	TrimChannelAPIVersionPrefix                = app.TrimChannelAPIVersionPrefix
 	ChannelSlotFailureDetails                  = app.ChannelSlotFailureDetails
 	ComputePriceConfigured                     = app.ComputePriceConfigured
 	ComputeTierPriceConfigured                 = app.ComputeTierPriceConfigured

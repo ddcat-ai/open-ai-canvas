@@ -28,14 +28,41 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 	return runLegacyTextTask(ctx, input)
 }
 
+// 文字请求格式从插件已声明的 create 路径推出（作者内置协议 ID 照旧映射），
+// 不再只认 chat-completion / openai-response / claude-api 三个协议名。
+func textWireForConfig(ctx context.Context, config providerConfig) protocol.TextWire {
+	switch strings.TrimSpace(config.InterfaceType) {
+	case string(model.ChannelInterfaceChatCompletion):
+		return protocol.TextWireChatCompletion
+	case string(model.ChannelInterfaceOpenAIResponse):
+		return protocol.TextWireResponses
+	case string(model.ChannelInterfaceClaudeAPI):
+		return protocol.TextWireClaudeAPI
+	}
+	if wire := protocol.TextWire(strings.TrimSpace(config.RequestFormat)); wire != protocol.TextWireUnknown {
+		return wire
+	}
+	// 未经过 resolveProviderConfig 的调用（单测、直连）再查一次插件声明。
+	if adapter, ok := protocolAdapterForContext(ctx, config.InterfaceType); ok {
+		return protocol.TextWireForCreatePath(adapter.Metadata().Create)
+	}
+	return protocol.TextWireUnknown
+}
+
 // Known text protocols keep the plugin's request mapping and host transport,
 // while sharing the SSE parser used by text generation and Agent requests.
 func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, *protocol.Result, error) {
-	wire := input.Config.InterfaceType
-	if wire == string(model.ChannelInterfaceOpenAIResponse) {
-		wire = "responses"
+	// wire 由插件声明的 create 路径推出；已知 wire 时宿主按 wire 补思考参数与输出上限，
+	// 和 Agent 路径一致，不再因为协议 ID 不是作者内置名字而整段跳过。
+	wire := textWireForConfig(ctx, input.Config)
+	if input.Mode == "text" && wire != protocol.TextWireUnknown {
+		if body := protocolBodyObject(spec.Body); body != nil {
+			applyTextThinking(body, input, string(wire))
+			applyAgentOutputLimit(body, agentStepOutputLimit(input), string(wire))
+			spec.Body = body
+		}
 	}
-	if input.Mode != "text" || !input.StreamText || (wire != "chat-completion" && wire != "responses" && wire != "claude-api") {
+	if input.Mode != "text" || !input.StreamText || wire == protocol.TextWireUnknown {
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
 	}
@@ -44,13 +71,13 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 		return nil, nil, errors.New("声明式流式文本请求体必须是 JSON 对象")
 	}
 	body["stream"] = true
-	if wire == "chat-completion" {
+	if protocol.TextWireRequiresChatStreamUsage(wire) {
 		if err := ensureChatCompletionStreamUsage(body); err != nil {
 			return nil, nil, err
 		}
 	}
 	spec.Body = body
-	parser := newStreamingAgentParser(wire, input.OnTextDelta)
+	parser := newStreamingAgentParser(string(wire), input.OnTextDelta)
 	parser.emitReasoning = input.OnReasoningDelta
 	data, mimeType, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume)
 	if err != nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") {
@@ -155,6 +182,8 @@ func runClaudeTextTask(ctx context.Context, input canvasGenerationInput) (map[st
 	return providerTextTaskResult(result), nil
 }
 
+// 入参是推出来的文字格式（wire），不再要求协议 ID 恰好叫作者内置名字；
+// 插件声明的 create 路径是 chat / responses / claude 时同样写对应思考字段。
 func applyTextThinking(body map[string]interface{}, input canvasGenerationInput, protocol string) {
 	if !input.TextOptions.Thinking {
 		return
@@ -173,6 +202,8 @@ func applyTextThinking(body map[string]interface{}, input canvasGenerationInput,
 // so an explicit "auto" only reduces compatibility. Reasoning endpoints also
 // disagree on forced choices. Normalize before the first network request while
 // preserving required/named choices for non-reasoning structured tasks.
+//
+// 入参同样是推出来的 wire，插件声明 chat 格式时也走这条归一化。
 func normalizeAgentToolChoice(body map[string]interface{}, input canvasGenerationInput, protocol string) {
 	if protocol == "chat-completion" && (input.TextOptions.Thinking || isAutoAgentToolChoice(body["tool_choice"])) {
 		delete(body, "tool_choice")

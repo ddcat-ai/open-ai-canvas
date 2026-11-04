@@ -29,6 +29,16 @@ type PluginProviderCatalogItem struct {
 	Parameters        []protocol.Parameter        `json:"parameters,omitempty"`
 	ImageParameters   []protocol.ImageParameter   `json:"imageParameters,omitempty"`
 	Workflows         []protocol.ManifestWorkflow `json:"workflows,omitempty"`
+	Auth              *PluginProviderAuthInfo     `json:"auth,omitempty"`
+}
+
+// 前端要按插件声明判断第二把密钥（auth.secretField），
+// 所以目录只投影 auth 的类型与两个字段名；auth 的 header/prefix/query/
+// service/region 等其它属性与任何密钥值都不下发。
+type PluginProviderAuthInfo struct {
+	Type        string `json:"type,omitempty"`
+	Field       string `json:"field,omitempty"`
+	SecretField string `json:"secretField,omitempty"`
 }
 
 // PluginProviderCatalog projects provider and workflow contributions from the
@@ -42,7 +52,7 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 			if !containsPluginSurface(provider.Scopes, wantScope) || (wantCapability != "" && !containsPluginCapability(provider.Capabilities, wantCapability)) {
 				continue
 			}
-			item := PluginProviderCatalogItem{ID: provider.ID, Version: plugin.Manifest.Version, Name: provider.Label, Vendor: plugin.Manifest.Author, Categories: provider.Capabilities, Scopes: provider.Scopes, BaseURL: provider.BaseURL, Enabled: plugin.Status == "enabled", UnavailableReason: plugin.Error, Parameters: provider.Parameters, Workflows: workflowsForProvider(plugin.Manifest.Contributes.Workflows, provider.ID)}
+			item := PluginProviderCatalogItem{ID: provider.ID, Version: plugin.Manifest.Version, Name: provider.Label, Vendor: plugin.Manifest.Author, Categories: provider.Capabilities, Scopes: provider.Scopes, BaseURL: provider.BaseURL, Enabled: plugin.Status == "enabled", UnavailableReason: plugin.Error, Parameters: provider.Parameters, Workflows: workflowsForProvider(plugin.Manifest.Contributes.Workflows, provider.ID), Auth: pluginProviderAuthInfo(provider.Auth)}
 			item.Create, item.Poll, item.ContentType = operationSummary(provider.Create), operationSummaryPtr(provider.Poll), provider.Create.ContentType
 			item.ImageParameters = provider.ImageParameters
 			item.Kind = provider.Kind
@@ -62,6 +72,13 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 
 func canonicalProviderAdapter(registry *protocol.Registry, id string) (protocol.Adapter, bool) {
 	return registry.Resolve(id)
+}
+
+func pluginProviderAuthInfo(auth protocol.ManifestAuth) *PluginProviderAuthInfo {
+	if strings.TrimSpace(auth.Type) == "" && strings.TrimSpace(auth.Field) == "" && strings.TrimSpace(auth.SecretField) == "" {
+		return nil
+	}
+	return &PluginProviderAuthInfo{Type: auth.Type, Field: auth.Field, SecretField: auth.SecretField}
 }
 
 func containsPluginSurface(items []protocol.Surface, want protocol.Surface) bool {

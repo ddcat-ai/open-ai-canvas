@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 // The browser sends one protocol-neutral conversation. Only the selected
@@ -66,7 +67,9 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 			return nil, errors.New("画布 Agent 工具定义缺少名称")
 		}
 	}
-	if err := validateCanonicalAgentHistory(source, config.InterfaceType == string(model.ChannelInterfaceOpenAIResponse)); err != nil {
+	// 是否强制工具调用带 function_call item id 改为看插件声明的请求格式（见 agentRequestUsesFunctionCallItemID），
+	// 不再只凭协议 ID 是否等于 openai-response。
+	if err := validateCanonicalAgentHistory(source, agentRequestUsesFunctionCallItemID(config, declarative)); err != nil {
 		return nil, err
 	}
 	switch choice := source.ToolChoice.(type) {
@@ -124,6 +127,15 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 		result.ChatCompletion = canonicalAgentChatBody(&request, false)
 	}
 	return result, nil
+}
+
+// Agent 请求形状改读插件声明的请求格式（RequestFormat 由 resolveProviderConfig 从 create 路径推出）；
+// 没有声明时（未装插件的内置实现）保留作者原来的 openai-response 判断。
+func agentRequestUsesFunctionCallItemID(config providerConfig, declarative bool) bool {
+	if format := strings.TrimSpace(config.RequestFormat); format != "" {
+		return protocol.TextWire(format) == protocol.TextWireResponses
+	}
+	return !declarative && config.InterfaceType == string(model.ChannelInterfaceOpenAIResponse)
 }
 
 func canonicalAgentChatBody(source *canonicalAgentRequest, claude bool) map[string]interface{} {

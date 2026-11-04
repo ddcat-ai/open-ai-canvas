@@ -1,4 +1,5 @@
 import { doubaoAudioVoiceOptions, doubaoDefaultAudioVoice } from "@/lib/doubao-audio-voices";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { resolveModelRequestConfig } from "@/stores/use-config-store";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -83,22 +84,54 @@ export const doubaoAudioFormatOptions = [
     { value: "pcm", label: "PCM" },
 ];
 
-export function isDoubaoAudioConfig(config: AiConfig) {
-    return resolveModelRequestConfig(config, config.model || config.audioModel).interfaceType === "doubao-streaming-tts";
+export function isDoubaoAudioConfig(config: AiConfig, model = config.model || config.audioModel) {
+    return resolveModelRequestConfig(config, model).interfaceType === "doubao-streaming-tts";
+}
+
+/**
+ * 音色/格式/参考素材容量优先读模型能力声明（插件 parameters 落成的 capabilityConfig.audio），
+ * 未声明时才回退作者内置的音频协议写法（豆包 / OpenAI）。
+ */
+export function audioCapabilityForConfig(config: AiConfig, model = config.model || config.audioModel) {
+    return modelCapabilityConfigFor(config, model).audio;
 }
 
 export function audioVoiceOptionsForConfig(config: AiConfig) {
+    const declared = audioCapabilityForConfig(config)?.voices;
+    if (declared?.length) return declared;
     return isDoubaoAudioConfig(config) ? doubaoAudioVoiceOptions : openAIAudioVoiceOptions;
 }
 
 export function audioFormatOptionsForConfig(config: AiConfig) {
+    const declared = audioCapabilityForConfig(config)?.formats;
+    if (declared?.length) return declared;
     return isDoubaoAudioConfig(config) ? doubaoAudioFormatOptions : openAIAudioFormatOptions;
+}
+
+/** 音色是否走渠道自由输入（复刻音色 ID）而非固定下拉。 */
+export function audioVoiceIsFreeform(config: AiConfig) {
+    const declared = audioCapabilityForConfig(config)?.voiceInput;
+    if (declared) return declared === "free";
+    return isDoubaoAudioConfig(config);
+}
+
+/** 是否展示渠道专属的提示词/语速写法说明。 */
+export function audioProviderNotesVisible(config: AiConfig) {
+    const declared = audioCapabilityForConfig(config)?.providerNotes;
+    return declared ?? isDoubaoAudioConfig(config);
+}
+
+/** 可连接的参考音频/参考图片上限；未声明时回退内置豆包音频合同。 */
+export function audioReferenceLimitsForConfig(config: AiConfig) {
+    const declared = audioCapabilityForConfig(config)?.references;
+    if (declared) return { maxAudios: declared.maxAudios || 0, maxImages: declared.maxImages || 0 };
+    return isDoubaoAudioConfig(config) ? { maxAudios: 3, maxImages: 1 } : { maxAudios: 0, maxImages: 0 };
 }
 
 export function normalizeAudioVoiceForConfig(config: AiConfig, value: string) {
     const options = audioVoiceOptionsForConfig(config);
     const normalized = String(value || "").trim();
-    if (isDoubaoAudioConfig(config)) {
+    if (audioVoiceIsFreeform(config)) {
         if (!normalized || normalized === "alloy") return "";
         return normalized;
     }

@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/volcengine/volc-sdk-golang/base"
+
+	"yingce/backend/internal/protocol"
 )
 
 const (
@@ -37,6 +39,36 @@ type jiMengResponse struct {
 
 func isVolcengineJiMengProtocol(protocol string) bool {
 	return protocol == "volcengine-jimeng-image" || protocol == "volcengine-jimeng-video"
+}
+
+// protocolRequiresSecretKey 判断该协议是否需要第二把密钥（AK/SK）。
+// 先读插件 manifest 已声明的 auth.secretField；未安装声明式插件时才用作者的即梦内置实现。
+func (s *Service) protocolRequiresSecretKey(interfaceType string) bool {
+	if provider, ok := s.pluginProviderDeclaration(interfaceType); ok {
+		return strings.TrimSpace(provider.Auth.SecretField) != ""
+	}
+	return isVolcengineJiMengProtocol(interfaceType)
+}
+
+// pluginProviderDeclaration 返回该协议在已加载插件 manifest 里的 provider 声明。
+func (s *Service) pluginProviderDeclaration(interfaceType string) (protocol.ManifestProvider, bool) {
+	id := strings.TrimSpace(interfaceType)
+	if id == "" || s == nil {
+		return protocol.ManifestProvider{}, false
+	}
+	for _, plugin := range s.Plugins() {
+		// 与 DeclaredProtocolOperations 语义一致，跳过停用/不可用的插件，
+		// 避免同一份 manifest 在不同判断里得出两套结论。
+		if plugin.Status != "enabled" {
+			continue
+		}
+		for _, provider := range plugin.Manifest.Contributes.Providers {
+			if strings.TrimSpace(provider.ID) == id {
+				return provider, true
+			}
+		}
+	}
+	return protocol.ManifestProvider{}, false
 }
 
 func runVolcengineJiMengImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {

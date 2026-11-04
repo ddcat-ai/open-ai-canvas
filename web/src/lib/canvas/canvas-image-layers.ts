@@ -1,5 +1,6 @@
 import { configuredModelMatchesCapability, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
-import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { parseImageParameters, type ImageParameter } from "@/lib/image-parameters";
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 
 export const LAYER_DECOMPOSITION_PROTOCOL = "image-tools-layer-decomposition";
@@ -42,7 +43,11 @@ export function parseImageLayerGeneration(value: unknown, index: number): ImageL
 
 export function imageLayerGenerationConfig(config: AiConfig, generation: ImageLayerGeneration, index: number): AiConfig {
     const validated = parseImageLayerGeneration(generation, index);
-    return { ...config, count: "1", transparentBackground: validated.background === "transparent" ? "true" : "false" };
+    const transparent = validated.background === "transparent";
+    // 透明底按插件参数绑定（binding=transparentBackground）传；同名宿主控件由 config.transparentBackground 带入
+    const parameter = imageLayerBackgroundParameter(modelCapabilityConfigFor(config, config.model).image);
+    const parameters = parameter && parameter.name !== "transparentBackground" ? { imageParameters: JSON.stringify({ ...parseImageParameters(config.imageParameters), [parameter.name]: imageLayerBackgroundValue(parameter, transparent) }) } : {};
+    return { ...config, count: "1", transparentBackground: transparent ? "true" : "false", ...parameters };
 }
 
 export function experimentalLayerPrompt(generation: ImageLayerGeneration, bbox?: [number, number, number, number]) {
@@ -53,10 +58,27 @@ export function experimentalLayerPrompt(generation: ImageLayerGeneration, bbox?:
     return `本次仅输出一张独立图层。${contract}\n本层任务：${generation.prompt}${bbox ? `\n本层定位区域 <bbox>${bbox.join(" ")}</bbox>。` : ""}\n${IMAGE_LAYER_REGION_INSTRUCTIONS}保持参考图完整画布尺寸、原始位置、比例和细节，不扩图、不裁切、不居中重排。输出 PNG，不要拼版、文字标注或绘制棋盘格。`;
 }
 
+/** 插件声明里绑定透明底的参数（binding 或同名宿主控件）。 */
+function imageLayerBackgroundParameter(profile: ImageCapabilityConfig | undefined) {
+    const parameter = (profile?.parameters || []).find((item) => item.enabled !== false && (item.binding === "transparentBackground" || item.name === "transparentBackground"));
+    if (!parameter) return undefined;
+    // 能力位或插件显式绑定任一成立，即视为声明支持透明底
+    return profile?.transparentBackground.supported || parameter.binding === "transparentBackground" ? parameter : undefined;
+}
+
+function imageLayerBackgroundValue(parameter: ImageParameter, transparent: boolean) {
+    if (parameter.type === "boolean") return transparent;
+    return transparent ? "true" : "false";
+}
+
 /** OpenAI Images 的 false 默认可能仍是 auto；拆层底图明确请求 opaque。 */
 export function imageLayerProviderMetadata(config: AiConfig, index: number) {
     const protocol = resolveModelRequestConfig(config, config.model).interfaceType;
-    return protocol === "openai-image" ? { providerOptions: { [protocol]: { background: index === 0 ? "opaque" : "transparent" } } } : {};
+    // 作者内置 openai-image 的行为保持不变：仍由 providerOptions.background 控制透明底。
+    if (protocol === "openai-image") return { providerOptions: { [protocol]: { background: index === 0 ? "opaque" : "transparent" } } };
+    // 声明式插件模型改读能力声明的透明底参数绑定，不再只给 openai-image 写 providerOptions
+    if (!imageLayerBackgroundParameter(modelCapabilityConfigFor(config, config.model).image)) return {};
+    return { transparentBackground: index === 0 ? "false" : "true" };
 }
 
 export function experimentalLayerSignature(root: CanvasNodeData, nodes: CanvasNodeData[]) {

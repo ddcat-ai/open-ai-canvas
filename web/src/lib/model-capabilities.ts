@@ -34,9 +34,35 @@ export {
 
 export type ModelCapabilityConfig = {
     version: number;
+    /**
+     * 插件/目录声明的模型族，供「提示词按模型适配」等按族处理的逻辑读取，
+     * 取值如 gemini-image / openai-image / grok-image / seedream-image / flux-image /
+     * stable-diffusion-image / midjourney-image / design-image / seedance-video / veo-video /
+     * kling-video / general-video-family / generic-image / generic-video。
+     * 未声明时前端才回落到作者原有的模型名关键词判断。
+     */
+    promptFamily?: string;
     text?: TextCapabilityConfig;
     image?: ImageCapabilityConfig;
     video?: VideoCapabilityConfig;
+    /** 音频模型能力；未声明时沿用作者内置音频协议（豆包 / OpenAI）的写法。 */
+    audio?: AudioCapabilityConfig;
+};
+
+/** 音频参数值域，与作者内置音色/格式表同结构。 */
+export type AudioCapabilityOption = { value: string; label: string };
+
+export type AudioCapabilityConfig = {
+    /** 可连接的参考素材上限；声明后替代「按内置音频协议推断容量」的写法。 */
+    references: { maxAudios: number; maxImages: number };
+    /** 渠道音色值域；省略时按内置协议取表。 */
+    voices?: AudioCapabilityOption[];
+    /** 输出格式值域；省略时按内置协议取表。 */
+    formats?: AudioCapabilityOption[];
+    /** 音色输入方式：free 为渠道自由填写（复刻音色 ID），list 为固定下拉。 */
+    voiceInput?: "free" | "list";
+    /** 面板是否展示渠道专属的提示词/语速写法说明。 */
+    providerNotes?: boolean;
 };
 
 export type TextCapabilityConfig = {
@@ -108,6 +134,11 @@ export type VideoCapabilityConfig = {
         maxVideos: number;
         maxVideoBytes: number;
         maxVideoDurationSeconds: number;
+        /**
+         * 单段参考视频最短秒数；未声明（或 0）表示不限。
+         * 作者原来把「至少 2 秒」写死在 Seedance 的模型名前缀判断里。
+         */
+        minVideoDurationSeconds?: number;
         maxAudios: number;
         maxAudioBytes: number;
         maxAudioDurationSeconds: number;
@@ -481,6 +512,8 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.resolutions = ["720p", "1080p"];
     }
     if (protocol === "volcengine-ark-video" || protocol === "volcengine-ark-agent-plan-video" || protocol === "newapi-channel-1" || protocol === "newapi-channel-2") {
+        // 这几个协议默认要求单段参考视频至少 2 秒；原来写死在 Seedance 模型名判断里，改成能力字段后需要在默认画像里补回来（只按协议，不按模型名）
+        video.references.minVideoDurationSeconds = 2;
         video.references.maxVideos = 3;
         video.references.maxAudios = 3;
         video.references.maxVideoBytes = 200 * 1024 * 1024;

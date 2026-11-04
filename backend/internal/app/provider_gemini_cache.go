@@ -58,7 +58,9 @@ func prepareOfficialGeminiAgentCacheMode(ctx context.Context, input canvasGenera
 	if err != nil {
 		return spec, false, err
 	}
-	if strings.TrimSpace(input.Config.InterfaceType) != officialGeminiAgentInterface {
+	// 显式缓存改为看插件声明（create 指向 Gemini 原生 generateContent），
+	// 不再只认作者内置的 gemini-generate-content 协议 ID；走 chat 格式的 Gemini 插件不开启缓存。
+	if !geminiCachedContentDeclared(ctx, input.Config.InterfaceType) {
 		return baseSpec, false, nil
 	}
 	body := protocolBodyObject(baseSpec.Body)
@@ -74,7 +76,7 @@ func prepareOfficialGeminiAgentCacheMode(ctx context.Context, input canvasGenera
 	}
 	// Explicit caching has a provider-defined minimum context size. Do not
 	// manufacture a cache request for a small prefix that Gemini will reject.
-	if estimateGeminiCacheTokens(stableBytes) < geminiAgentCacheMinimumTokens(input.Config.Model) {
+	if estimateGeminiCacheTokens(stableBytes) < geminiAgentCacheMinimumTokens(input) {
 		return baseSpec, false, nil
 	}
 
@@ -236,6 +238,20 @@ func (s *Service) releaseGeminiCacheLock(cacheKey string, lock *geminiCacheKeyLo
 	}
 }
 
+// geminiCachedContentDeclared 判定该协议是否声明了 Gemini 原生 generateContent 形状，
+// 只有原生形状才能用 CachedContent 前缀缓存。
+// 改读插件声明的 create 路径，不再只认作者内置协议 ID。
+func geminiCachedContentDeclared(ctx context.Context, interfaceType string) bool {
+	if strings.TrimSpace(interfaceType) == officialGeminiAgentInterface {
+		return true
+	}
+	adapter, ok := protocolAdapterForContext(ctx, interfaceType)
+	if !ok {
+		return false
+	}
+	return strings.Contains(strings.ToLower(adapter.Metadata().Create), ":generatecontent")
+}
+
 func geminiCacheUsable(cache *model.CloudAgentGeminiCache) bool {
 	return cache != nil && validateGeminiCachedContentName(cache.ResourceName) == nil && cache.ExpireTime.After(time.Now().Add(30*time.Second))
 }
@@ -338,11 +354,17 @@ func cloneProtocolRequestSpec(spec protocol.RequestSpec) (protocol.RequestSpec, 
 	return cloned, nil
 }
 
-func geminiAgentCacheMinimumTokens(modelName string) int {
+// geminiAgentCacheMinimumTokens 取显式缓存的最少上下文 token 数。
+// 只有作者内置 Gemini 协议才按模型名区分门槛；插件声明的 Gemini 协议
+// 没有该字段，一律用保守值 4096（缓存开小会被上游拒，跳过缓存是安全的）。
+func geminiAgentCacheMinimumTokens(input canvasGenerationInput) int {
 	// Keep the gate conservative for unknown model revisions. Skipping an
 	// explicit cache is safe; creating one below Google's model-specific
 	// minimum makes the whole upstream request fail before generation starts.
-	lower := strings.ToLower(strings.TrimSpace(modelName))
+	if strings.TrimSpace(input.Config.InterfaceType) != officialGeminiAgentInterface {
+		return 4096
+	}
+	lower := strings.ToLower(strings.TrimSpace(input.Config.Model))
 	if strings.Contains(lower, "gemini-2.5") {
 		return 2048
 	}

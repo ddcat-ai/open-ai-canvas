@@ -8,6 +8,8 @@ import { LanguageOptionGrid } from "@/components/layout/language-menu";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
 import { refreshSystemChannels } from "@/lib/user-session";
+import type { ModelProtocolDefinition } from "@/lib/model-protocols";
+import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
 import { defaultConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelSettingsPane, channelValidationError, focusInvalidChannelField, isChannelReady } from "./channel-settings-pane";
@@ -58,6 +60,9 @@ export default function SettingsPage() {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
+    // 渠道校验（是否必填 Secret Key）要读插件声明的 auth.secretField；
+    // 这里统一取一次插件目录，显式传给渠道校验与个人渠道面板，不依赖用户是否打开过「个人渠道」分栏。
+    const [declaredProtocols, setDeclaredProtocols] = useState<ModelProtocolDefinition[]>([]);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
     const visibleConfigSections = useMemo(() => (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
         .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled), [customChannelsEnabled, runningHubPluginEnabled]);
@@ -83,6 +88,22 @@ export default function SettingsPage() {
         };
     }, [message, t, userId]);
 
+    useEffect(() => {
+        if (!userId) return;
+        let cancelled = false;
+        void fetchPluginProviderCatalog("user.custom-channel")
+            .then((items) => {
+                if (!cancelled) setDeclaredProtocols(items);
+            })
+            .catch(() => {
+                // 目录不可用时按「没装插件」处理：默认协议回到作者模板，也不额外要求 Secret Key。
+                if (!cancelled) setDeclaredProtocols([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [userId]);
+
     const selectSection = (section: ConfigSectionKey) => {
         if (section === "runninghub" && !runningHubPluginEnabled) return;
         setActiveTab(section);
@@ -92,15 +113,15 @@ export default function SettingsPage() {
     };
 
     const finishConfig = () => {
-        const invalidChannel = customChannelsEnabled ? userChannels.find((channel) => channelValidationError(channel)) : undefined;
+        const invalidChannel = customChannelsEnabled ? userChannels.find((channel) => channelValidationError(channel, declaredProtocols)) : undefined;
         if (invalidChannel) {
             selectSection("channels");
-            message.warning(t("account.settings.channelError", { name: invalidChannel.name || t("account.settings.channels.unnamed"), error: channelValidationError(invalidChannel) }));
-            focusInvalidChannelField(invalidChannel);
+            message.warning(t("account.settings.channelError", { name: invalidChannel.name || t("account.settings.channels.unnamed"), error: channelValidationError(invalidChannel, declaredProtocols) }));
+            focusInvalidChannelField(invalidChannel, declaredProtocols);
             return;
         }
         const workflowReady = Boolean(runningHubPluginEnabled && config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim());
-        if (!effectiveConfig.channels.some(isChannelReady) && !workflowReady) {
+        if (!effectiveConfig.channels.some((channel) => isChannelReady(channel, declaredProtocols)) && !workflowReady) {
             selectSection(customChannelsEnabled ? "channels" : "models");
             message.error(customChannelsEnabled ? (shouldPromptContinue ? t("account.settings.needChannel") : t("account.settings.noChannel")) : t("account.settings.noSystemModel"));
             return;
@@ -111,7 +132,7 @@ export default function SettingsPage() {
 
     const panes: Record<ConfigSectionKey, ReactNode> = {
         profile: <SettingsPane><ProfilePane key={userId} /></SettingsPane>,
-        channels: <SettingsPane><ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
+        channels: <SettingsPane><ChannelSettingsPane declaredProtocols={declaredProtocols} onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} /></SettingsPane>,
         models: (
             <SettingsPane>
                 <div className="settings-pane-header">

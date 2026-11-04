@@ -8,6 +8,8 @@ import { ModelIcon } from "@/components/model-picker";
 import { ModelProtocolBrowser } from "@/components/model-protocol-browser";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+// 保存 / 测试时的默认能力配置要套用插件声明（imageParameters / workflows）。
+import { declaredCapabilityConfig } from "@/lib/channel-model-catalog";
 import type { ModelProtocolDefinition } from "@/lib/model-protocols";
 import { createAdminChannelModel, testAdminChannelModel, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
@@ -54,7 +56,7 @@ export function ChannelModelEditor({
     const displayNameOptions = [...new Set(["未分类", ...references.channels.flatMap((item) => item.modelDisplayNames ?? [])])].sort((a, b) => a.localeCompare(b, "zh-CN")).map((value) => ({ value }));
     const [groupSearch, setGroupSearch] = useState("");
     const [form] = Form.useForm<FormValues>();
-    const [initialValues] = useState(() => draftValues ?? initialChannelModelValues(editing, protocols));
+    const [initialValues] = useState(() => draftValues ?? initialChannelModelValues(editing, protocols, channel.baseUrl));
     const previousUpstream = useRef(normalizeUpstreamModelKey(initialValues.providerModelKey || initialValues.modelKey));
     const [activeSection, setActiveSection] = useState<EditorSection>("identity");
     const [saving, setSaving] = useState(false);
@@ -130,7 +132,14 @@ export function ChannelModelEditor({
         if (!values) return;
         const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
         const capabilityConfig =
-            values.capability === "text" || values.capability === "image" || values.capability === "video" ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)) : undefined;
+            values.capability === "text" || values.capability === "image" || values.capability === "video"
+                ? declaredCapabilityConfig(normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)), {
+                      capability: values.capability,
+                      model: upstreamModel,
+                      protocol: values.protocol,
+                      protocols,
+                  })
+                : undefined;
         busyRef.current = true;
         setSaving(true);
         try {
@@ -172,7 +181,14 @@ export function ChannelModelEditor({
         if (!values) return;
         const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
         const capabilityConfig =
-            values.capability === "text" || values.capability === "image" || values.capability === "video" ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)) : undefined;
+            values.capability === "text" || values.capability === "image" || values.capability === "video"
+                ? declaredCapabilityConfig(normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)), {
+                      capability: values.capability,
+                      model: upstreamModel,
+                      protocol: values.protocol,
+                      protocols,
+                  })
+                : undefined;
         busyRef.current = true;
         setTesting(true);
         try {
