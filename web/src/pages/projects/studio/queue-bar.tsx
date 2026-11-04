@@ -90,9 +90,15 @@ export function QueueBar({ projectId, summary, retrying, onRetry, onJump }: { pr
                                     {job.label}
                                     {job.status === "running" && job.providerStage ? <span className="text-foreground/50"> · {job.providerStage}</span> : null}
                                 </span>
-                                <span className="drama-job-error" title={job.error}>
-                                    {job.error && (job.status === "failed" || job.status === "queued") ? job.error : ""}
-                                </span>
+                                {job.error && (job.status === "failed" || job.status === "queued") ? (
+                                    <span className="drama-job-error" title={job.error}>
+                                        {job.error}
+                                    </span>
+                                ) : (
+                                    <span className="drama-job-error is-wait" title={job.status === "queued" ? job.wait : undefined}>
+                                        {job.status === "queued" ? job.wait || "" : ""}
+                                    </span>
+                                )}
                                 <span className="drama-job-time">{formatJobTime(job.finishedAt || job.startedAt || job.createdAt)}</span>
                                 <span className="drama-job-cost">{job.costMicrocredits ? `${formatCredits(job.costMicrocredits)} 积分` : ""}</span>
                                 <ChevronRight className="drama-job-chevron size-3.5" />

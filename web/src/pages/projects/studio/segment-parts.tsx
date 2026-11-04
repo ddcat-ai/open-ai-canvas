@@ -25,6 +25,8 @@ export function segmentState(segment: DramaSegment): { tone: SegmentTone; label:
     if (segment.promptStatus === "failed") return { tone: "failed", label: "提示词撰写失败" };
     // 视频已入库但尾帧等后处理失败：视频本身可看，重试只重新处理已有视频。
     if (segment.videoStatus === "failed") return segment.videoReprocessable ? { tone: "failed", label: "视频后处理失败" } : { tone: "failed", label: "视频生成失败" };
+    // 撰写作业已排队但还没提交（同时生成数或账号上限已满）：显示真实原因，不冒充“撰写中”。
+    if (writing && segment.promptJob?.status === "queued" && segment.promptJob.wait) return { tone: "blocked", label: videoWaitLabel(segment.promptJob.wait), detail: segment.promptJob.wait };
     if (writing) return { tone: "busy", label: "撰写提示词中" };
     if (segment.promptStatus === "none") return { tone: "idle", label: "待撰写提示词" };
     if (segment.promptStatus === "stale" && !segment.custom) return { tone: "stale", label: "提示词已过期" };

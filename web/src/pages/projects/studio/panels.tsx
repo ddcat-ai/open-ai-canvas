@@ -839,7 +839,7 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                 {continuity !== (current.videoContinuity || "tail_frame") ? <p className="drama-cfg-note">已写好的段视频提示词按原方式撰写，切换后可在剧情段里重新撰写；已提交的视频会做完。</p> : null}
                             </section>
                             <section className="drama-cfg-card">
-                                <SettingsTitle title="同时生成数" detail="受账号并发上限约束" />
+                                <SettingsTitle title="同时生成数" detail="文字、参考图、段视频分别计算，受账号并发上限约束" />
                                 <div className="drama-tabs drama-cfg-seg" role="radiogroup" aria-label="同时生成数">
                                     {CONCURRENCY.map((value) => (
                                         <button key={value} type="button" role="radio" className="drama-tab" aria-checked={settings.concurrency === value} onClick={() => setSettings({ ...settings, concurrency: value })}>

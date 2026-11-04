@@ -93,6 +93,7 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 					if err := w.processClaimedTask(task, globalSlot); err != nil {
 						_ = s.log(task.UserID, task.ID, "error", "后台任务处理失败", err.Error())
 					}
+					s.wakeDramaAfterTask(task.ID, task.InputJSON)
 				})
 				if !started {
 					<-slots

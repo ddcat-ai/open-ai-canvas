@@ -105,6 +105,11 @@ func newDramaTestService(t *testing.T) (*Service, *fakeDramaBackend) {
 	svc.dramaTailFrameHook = func(userID, resourceID string) (string, error) {
 		return fake.resource(userID, "image", "image/png"), nil
 	}
+	// 尾帧抽取在生产里走后台 worker；测试同步执行，固定轮数的调度断言不受 goroutine 时序影响。
+	svc.dramaBackgroundRunner = func(fn func()) bool {
+		fn()
+		return true
+	}
 	video := dramaVideoFixture()
 	raw, _ := json.Marshal(&ModelCapabilityConfig{Version: 1, Video: &video})
 	if err := db.Create(&model.ChannelModel{ID: "drama-video", ChannelID: "ch", ModelKey: "video", Capability: "video", Protocol: model.ChannelInterfaceVolcengineArkVideo, Enabled: true, CapabilityConfigJSON: string(raw)}).Error; err != nil {

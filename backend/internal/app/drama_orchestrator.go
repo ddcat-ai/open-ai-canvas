@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +47,22 @@ func (s *Service) wakeDramaScheduler() {
 	select {
 	case dramaWakeChannel() <- struct{}{}:
 	default:
+	}
+}
+
+// wakeDramaAfterTask 在短剧任务进入终态后立即唤醒调度，回写结果和派发下一步不用等下一个轮询周期。
+// 只看短剧提交的任务；分离式回查中的任务每 15 秒执行一次但仍未结束，不唤醒。
+func (s *Service) wakeDramaAfterTask(taskID string, inputJSON string) {
+	if !strings.Contains(inputJSON, `"drama_production"`) {
+		return
+	}
+	task, err := s.repo.Task(taskID)
+	if err != nil {
+		return
+	}
+	switch task.Status {
+	case model.TaskStatusSucceeded, model.TaskStatusFailed, model.TaskStatusCancelled:
+		s.wakeDramaScheduler()
 	}
 }
 
@@ -101,8 +116,9 @@ type dramaRun struct {
 	casts      []model.DramaCast
 	castByID   map[string]*model.DramaCast
 	active     map[string]bool
-	running    int
-	newJobs    []model.DramaJob
+	// running 是各并发池（见 dramaDispatchPool）正在运行的作业数。
+	running map[string]int
+	newJobs []model.DramaJob
 	// imageSizes 缓存本轮调度中“期望画幅 → 模型尺寸参数”的换算，避免每张参考图重复读取能力合同。
 	imageSizes map[string]dramaImageRequest
 }
@@ -173,6 +189,7 @@ func (r *dramaRun) syncJobs() error {
 		return err
 	}
 	r.active = map[string]bool{}
+	r.running = map[string]int{}
 	for i := range jobs {
 		job := &jobs[i]
 		if job.Status == model.DramaJobRunning {
@@ -182,9 +199,10 @@ func (r *dramaRun) syncJobs() error {
 					return err
 				}
 				// 任务或账单暂时读不到、或订单还没结算：本作业保持运行、下一轮再读，不按失败或 0 花费落账。
-				// 不中断本轮，前面已回写的作业花费随本轮进度一起保存。等待结算是正常过程，不记告警。
+				// 不中断本轮，前面已回写的作业花费随本轮进度一起保存。等待结算与后台抽尾帧是正常过程，不记告警。
 				var pending *dramaPendingBilling
-				if !errors.As(deferred.err, &pending) {
+				var tail *dramaPendingTail
+				if !errors.As(deferred.err, &pending) && !errors.As(deferred.err, &tail) {
 					slog.Warn("drama job sync deferred", "project", r.project.ID, "job", job.ID, "error", deferred.err)
 				}
 			}
@@ -192,7 +210,7 @@ func (r *dramaRun) syncJobs() error {
 		if job.Status == model.DramaJobQueued || job.Status == model.DramaJobRunning {
 			r.active[dramaJobKey(job.Kind, job.EpisodeID, job.ShotID, job.CastID)] = true
 			if job.Status == model.DramaJobRunning {
-				r.running++
+				r.running[dramaDispatchPool(job.Kind)]++
 			}
 		}
 	}
@@ -388,10 +406,6 @@ func (r *dramaRun) enqueue(kind, episodeID, shotID, castID string, priority int,
 	return true
 }
 
-func episodePriority(base int, number int) int {
-	return base*10000 - min(number, 9999)
-}
-
 type dramaPlanPayload struct {
 	Start int `json:"start"`
 	End   int `json:"end"`
@@ -401,7 +415,7 @@ type dramaPlanPayload struct {
 func (r *dramaRun) plan() error {
 	p := r.production
 	if p.Stage == model.DramaStageBible {
-		r.enqueue(model.DramaJobBible, "", "", "", 100*10000, "建立作品圣经：角色、场景与风格", nil)
+		r.enqueue(model.DramaJobBible, "", "", "", dramaPriorityBible, "建立作品圣经：角色、场景与风格", nil)
 		return nil
 	}
 	chapters, err := r.s.repo.DramaChapterSummaries(r.project.ID)
@@ -422,7 +436,7 @@ func (r *dramaRun) plan() error {
 				runes += chapters[end].WordCount
 				end++
 			}
-			r.enqueue(model.DramaJobPlan, "", "", "", 90*10000, fmt.Sprintf("分集规划：第 %d-%d 章", p.PlanCursor+1, end), dramaPlanPayload{Start: p.PlanCursor, End: end})
+			r.enqueue(model.DramaJobPlan, "", "", "", dramaPriorityPlan, fmt.Sprintf("分集规划：第 %d-%d 章", p.PlanCursor+1, end), dramaPlanPayload{Start: p.PlanCursor, End: end})
 		}
 	}
 	for i := range r.casts {
@@ -430,7 +444,7 @@ func (r *dramaRun) plan() error {
 		// "" 表示从未请求，只有放行后才自动生成；queued 是用户明确请求（重做、重试或按集放行）。
 		requested := cast.ImageStatus == model.DramaMediaQueued || (cast.ImageStatus == "" && r.assetsReleased())
 		if requested && !cast.Locked {
-			r.enqueue(model.DramaJobCastImage, "", "", cast.ID, 80*10000-cast.Position, "参考图："+cast.Name, nil)
+			r.enqueue(model.DramaJobCastImage, "", "", cast.ID, castImagePriority(cast.Position), "参考图："+cast.Name, nil)
 		}
 	}
 	episodes, err := r.s.repo.DramaEpisodes(r.project.ID)
@@ -474,7 +488,7 @@ func (r *dramaRun) plan() error {
 	}
 	for _, segment := range segments {
 		number := numberByEpisode[segment.EpisodeID]
-		r.enqueue(model.DramaJobSegmentPrompt, segment.EpisodeID, segment.ID, "", episodePriority(55, number)-segment.SegmentIndex, fmt.Sprintf("第 %d 集第 %d 段 视频提示词", number, segment.SegmentIndex+1), nil)
+		r.enqueue(model.DramaJobSegmentPrompt, segment.EpisodeID, segment.ID, "", segmentPriority(dramaRankPrompt, number, segment.SegmentIndex), fmt.Sprintf("第 %d 集第 %d 段 视频提示词", number, segment.SegmentIndex+1), nil)
 		allDone = false
 	}
 	if allDone {
@@ -511,18 +525,26 @@ func (r *dramaRun) advanceEpisode(e *model.DramaEpisode, loadedStage string) err
 	if err != nil {
 		return err
 	}
-	// 从画布采用的视频可能只写入了视频（Agent 在事务内采用不做存储 IO），尾帧在这里补抽；每集每轮最多一段。
+	// 从画布采用的视频可能只写入了视频（Agent 在事务内采用不做存储 IO），尾帧在后台补抽，不阻塞调度循环；
+	// 补抽结果按段版本写回，完成后唤醒调度，下一段在下一轮拿到首帧。
+	started := false
 	for _, segment := range segments {
 		if segment.VideoStatus != model.DramaMediaReady || segment.VideoResourceID == "" || segment.TailFrameResourceID != "" {
 			continue
 		}
-		if err := r.s.backfillDramaSegmentTail(r.project.UserID, segment); err != nil {
-			return err
-		}
+		s, userID, segment := r.s, r.project.UserID, segment
+		started = s.startDramaTail(segment.VideoResourceID, func() error {
+			if err := s.backfillDramaSegmentTail(userID, segment); err != nil {
+				slog.Warn("drama tail backfill failed", "project", segment.ProjectID, "segment", segment.ID, "error", err)
+			}
+			return nil
+		}) || started
+	}
+	if started {
+		// 后台执行器可能已同步跑完（测试），按最新状态推进本集。
 		if segments, err = r.s.repo.DramaSegments(e.ID); err != nil {
 			return err
 		}
-		break
 	}
 	switch e.Stage {
 	case model.DramaEpisodeScript:
@@ -537,7 +559,7 @@ func (r *dramaRun) advanceEpisode(e *model.DramaEpisode, loadedStage string) err
 			// 分镜已直接写入（阶段与版本由 ApplyDramaScript 更新）或已记录错误，本轮不再回写阶段。
 			return nil
 		}
-		r.enqueue(model.DramaJobScript, e.ID, "", "", episodePriority(60, e.Number), label+" 剧本与分镜", nil)
+		r.enqueue(model.DramaJobScript, e.ID, "", "", episodePriority(dramaRankScript, e.Number), label+" 剧本与分镜", nil)
 	case model.DramaEpisodePrompts:
 		ready := len(segments) > 0
 		for _, seg := range segments {
@@ -567,7 +589,7 @@ func (r *dramaRun) advanceEpisode(e *model.DramaEpisode, loadedStage string) err
 		}
 	case model.DramaEpisodeRender:
 		if e.Error == "" {
-			r.enqueue(model.DramaJobRender, e.ID, "", "", episodePriority(70, e.Number), label+" 合成成片", nil)
+			r.enqueue(model.DramaJobRender, e.ID, "", "", episodePriority(dramaRankRender, e.Number), label+" 合成成片", nil)
 		}
 	case model.DramaEpisodeDone:
 		if e.FinalStale {
@@ -609,7 +631,7 @@ func (r *dramaRun) enqueueSegmentVideos(e *model.DramaEpisode, segments []model.
 			shots = loaded
 		}
 		if dramaVideoWaitReason(r.settings, r.production, e, segments, i, shots, r.castLookup) == "" {
-			r.enqueue(model.DramaJobSegmentVideo, e.ID, seg.ID, "", episodePriority(40, e.Number), fmt.Sprintf("第 %d 集 第 %d 段视频", e.Number, seg.SegmentIndex+1), nil)
+			r.enqueue(model.DramaJobSegmentVideo, e.ID, seg.ID, "", segmentPriority(dramaRankVideo, e.Number, seg.SegmentIndex), fmt.Sprintf("第 %d 集 第 %d 段视频", e.Number, seg.SegmentIndex+1), nil)
 		}
 		return false, nil
 	}
@@ -638,7 +660,7 @@ func (r *dramaRun) enqueueParallelSegmentVideos(e *model.DramaEpisode, segments 
 			shots = loaded
 		}
 		if dramaVideoWaitReason(r.settings, r.production, e, segments, i, shots, r.castLookup) == "" {
-			r.enqueue(model.DramaJobSegmentVideo, e.ID, seg.ID, "", episodePriority(40, e.Number), fmt.Sprintf("第 %d 集 第 %d 段视频", e.Number, seg.SegmentIndex+1), nil)
+			r.enqueue(model.DramaJobSegmentVideo, e.ID, seg.ID, "", segmentPriority(dramaRankVideo, e.Number, seg.SegmentIndex), fmt.Sprintf("第 %d 集 第 %d 段视频", e.Number, seg.SegmentIndex+1), nil)
 		}
 	}
 	return ready, nil
@@ -652,14 +674,14 @@ func (r *dramaRun) castLookup(id string) (model.DramaCast, bool) {
 	return *cast, true
 }
 
-// dispatch 按优先级把排队工作提交为生成任务，受项目并发、账号并发与预算约束。
+// dispatch 按优先级把排队工作提交为生成任务，受各并发池的同时生成数、账号并发与预算约束。
+// 挡住提交的条件与 dramaDispatchWaits 同源，详情页和队列显示的等待原因就是这里的判断。
 func (r *dramaRun) dispatch() error {
 	queued, err := r.s.repo.DramaJobsByStatus(r.project.ID, model.DramaJobQueued)
 	if err != nil {
 		return err
 	}
-	sort.SliceStable(queued, func(i, j int) bool { return queued[i].Priority > queued[j].Priority })
-	capacity := r.settings.Concurrency - r.running
+	sortDramaJobsForDispatch(queued)
 	// 预算按订单口径保守判断：流水线与画布精修的实收加上所有未结算订单的冻结额。每轮只汇总一次，
 	// 本轮新提交任务的冻结额逐项累加；同时把流水线实收回写到 spent_microcredits 缓存。
 	var committed int64
@@ -673,14 +695,15 @@ func (r *dramaRun) dispatch() error {
 		r.production.SpentMicrocredits = totals.PipelineChargedMicrocredits
 	}
 	for i := range queued {
-		if capacity <= 0 {
-			return nil
+		job := &queued[i]
+		pool := dramaDispatchPool(job.Kind)
+		if r.running[pool] >= r.settings.Concurrency {
+			continue
 		}
 		if budgeted && committed >= r.production.BudgetMicrocredits {
 			r.production.Status, r.production.PauseReason = model.DramaStatusPaused, dramaBudgetPauseReason
 			return nil
 		}
-		job := &queued[i]
 		task, skip, err := r.submit(job)
 		if errors.Is(err, repository.ErrDramaJobChanged) {
 			// 派发期间作业被取消或重试：任务与计费预留已随绑定一起回滚，按最新状态在下一轮处理。
@@ -719,7 +742,7 @@ func (r *dramaRun) dispatch() error {
 		if err := r.markRunning(job); err != nil {
 			return err
 		}
-		capacity--
+		r.running[pool]++
 		if budgeted && task.BillingOrderID != "" {
 			order, err := r.s.repo.BillingOrder(task.BillingOrderID)
 			if err != nil {

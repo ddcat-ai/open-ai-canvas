@@ -258,6 +258,8 @@ export type DramaJob = {
     updatedAt: string;
     /** 生成中任务的上游进度文案（如“候车 · 前面 3 条”），上游已接收任务时才有。 */
     providerStage?: string;
+    /** 排队作业还没提交的原因（作品暂停、账号同时任务已满、本类同时生成数已满）；下一轮就会提交时为空。 */
+    wait?: string;
 };
 
 export type DramaJobTask = {

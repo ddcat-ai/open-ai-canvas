@@ -885,6 +885,15 @@ func (r *Repository) UpdateDramaSegmentRevision(id string, revision int64, field
 	return result.RowsAffected > 0, result.Error
 }
 
+// SetDramaSegmentTail 写入后台抽好的尾帧：只在段版本未变、段视频仍是抽取的那一条且尚无尾帧时生效，
+// 迟到的旧视频尾帧不会落到新视频上。
+func (r *Repository) SetDramaSegmentTail(id string, revision int64, videoResourceID string, tailResourceID string) (bool, error) {
+	result := r.db.Model(&model.DramaSegment{}).
+		Where("id = ? AND revision = ? AND video_resource_id = ? AND tail_frame_resource_id = ''", id, revision, videoResourceID).
+		Updates(map[string]any{"tail_frame_resource_id": tailResourceID, "updated_at": time.Now()})
+	return result.RowsAffected > 0, result.Error
+}
+
 func markLaterSegmentsStale(tx *gorm.DB, episodeID string, index int) error {
 	// Queued descendants remain requested, but receive a new revision and wait for the new tail.
 	// The new revision also voids running prompt jobs, so those segments go back to pending instead of staying "running".

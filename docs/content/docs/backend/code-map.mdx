@@ -19,7 +19,7 @@ description: 从产品功能快速定位主要代码入口
 ## 短剧自动制作
 
 - 纯逻辑：`backend/internal/production/`（作品圣经、分集与剧本提示词 `prompts.go`，模型输出解析 `parse.go`，分镜规则与时长 `storyboard.go` / `timing.go`，按视频模型上限切剧情段 `SegmentShotsForVideo`，段提示词素材稿 `segment_prompt.go` 与撰写要求 `segment_writer.go`，参考图方案 `assets.go`，用户分镜表直接导入 `storyboard_import.go`，原文台词逐句核对 `dialogue_check.go`）。
-- 调度循环：`backend/internal/app/drama_orchestrator.go`（同步任务结果 → 推导工作 → 按优先级派发，租约保证单项目单循环；成片时间线由各段视频拼接）；剧情段视频请求的组装、提交、回写与最后一帧抽取在 `drama_segment_video.go`（`prepareDramaSegment` 同时供预览与提交使用）。
+- 调度循环：`backend/internal/app/drama_orchestrator.go`（同步任务结果 → 推导工作 → 按优先级派发，租约保证单项目单循环；成片时间线由各段视频拼接；短剧任务进入终态后 `wakeDramaAfterTask` 立即唤醒调度）；派发并发池（文字 / 参考图 / 段视频 / 成片各按“同时生成数”计算）、先集号后类型的优先级与排队原因 `dramaDispatchWaits` 在 `drama_dispatch.go`；段视频尾帧在调度循环外后台抽取，按视频资源去重并用租约防跨实例重复，见 `drama_tail_worker.go`；剧情段视频请求的组装、提交、回写与最后一帧抽取在 `drama_segment_video.go`（`prepareDramaSegment` 同时供预览与提交使用）。
 - 服务与用户操作：`app/drama_service.go`（创建、摘要、单集详情与剧情段视图）、`drama_actions.go`（审阅、镜头编辑、段提示词与段视频、设定重做、放行）、`drama_editing.go`（逐集追加、原文与素材类型修改、插入 / 删除镜头、上传并锁定参考图、台词核对）、`drama_models.go`（模型目录、视频能力 `dramaVideoProfile`、报价预估）；类型在 `drama_types.go`。
 - 持久化：`model/models_drama.go`、`repository/repository_drama.go`（调度与用户写入均为列级条件更新）；迁移 v61–v67、v71、v73 在 `database/migrations.go`。HTTP：`handler/drama_routes.go`。
 - 渲染：`app/timeline_render_plan.go` / `task_render.go` 用 ffmpeg 合成，保留段视频自带的声音；按片段宽高比选择裁切或补黑边（`renderSegmentFit`），写入 AIGC 隐式标识（`renderAIGCLabel`）。媒体探测唯一入口 `app/media_probe.go`（宽高、时长、容器标签），存量视频尺寸修复在 `app/media_dimension_repair.go` 与 `repository/media_dimension_repair.go`。

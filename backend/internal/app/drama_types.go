@@ -442,6 +442,8 @@ type DramaJobView struct {
 	UpdatedAt        string `json:"updatedAt"`
 	// ProviderStage 是生成中任务的上游进度文案（如“候车 · 前面 3 条”），只在上游已接收任务时给出。
 	ProviderStage string `json:"providerStage,omitempty"`
+	// Wait 是排队作业还没提交的原因（作品暂停、账号同时任务已满、本池同时生成数已满）；下一轮就会提交时为空。
+	Wait string `json:"wait,omitempty"`
 }
 
 // DramaJobAttempt 是工作的一次提交记录；status 为任务状态，或 rejected（提交时被准入拒绝）。

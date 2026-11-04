@@ -621,7 +621,7 @@ func dramaJobTaskView(task *model.Task, labels map[string]string) *DramaJobTaskV
 }
 
 func (s *Service) DramaJobs(userID string, projectID string, limit int) ([]DramaJobView, error) {
-	project, _, err := s.dramaForUser(userID, projectID)
+	project, productionRow, err := s.dramaForUser(userID, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -637,6 +637,13 @@ func (s *Service) DramaJobs(userID string, projectID string, limit int) ([]Drama
 		views = append(views, dramaJobView(job))
 	}
 	if err := s.attachDramaProviderStages(project.UserID, views); err != nil {
+		return nil, err
+	}
+	waiting := make([]*DramaJobView, len(views))
+	for i := range views {
+		waiting[i] = &views[i]
+	}
+	if err := s.fillDramaJobWaits(productionRow, waiting...); err != nil {
 		return nil, err
 	}
 	return views, nil
@@ -777,12 +784,28 @@ func (s *Service) fillDramaSegmentViews(projectID string, p *model.DramaProducti
 		cast, ok := castByID[id]
 		return cast, ok
 	}
+	// 排队作业的等待原因一次算好：本集作业、剧本作业与各段的提示词、视频作业。
+	waiting := []*DramaJobView{detail.ScriptJob}
+	for i := range detail.Jobs {
+		waiting = append(waiting, &detail.Jobs[i])
+	}
+	for i := range detail.Segments {
+		waiting = append(waiting, detail.Segments[i].PromptJob, detail.Segments[i].VideoJob)
+	}
+	if err := s.fillDramaJobWaits(p, waiting...); err != nil {
+		return err
+	}
 	for i := range detail.Segments {
 		view := &detail.Segments[i]
 		if view.VideoStatus != model.DramaMediaQueued || i >= len(rows) {
 			continue
 		}
-		if job := view.VideoJob; job != nil && (job.Status == model.DramaJobQueued || job.Status == model.DramaJobRunning) {
+		if job := view.VideoJob; job != nil && job.Status == model.DramaJobRunning {
+			continue
+		}
+		// 作业已排队、还没提交：原因是作品暂停、账号或本池同时生成数已满；下一轮就会提交时为空，显示“排队提交中”。
+		if job := view.VideoJob; job != nil && job.Status == model.DramaJobQueued {
+			view.VideoWait = job.Wait
 			continue
 		}
 		view.VideoWait = firstNonEmpty(dramaVideoWaitReason(settings, p, &detail.Episode, rows, i, detail.Shots, lookup), "排队中，等待调度提交")
