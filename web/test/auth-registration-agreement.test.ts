@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 describe("注册服务协议", () => {
     test("确认密码后展示协议入口，默认未同意且保留注册限流", () => {
         const source = readFileSync(resolve(import.meta.dir, "../src/pages/auth/register.tsx"), "utf8");
-        const passwordIndex = source.indexOf('label="确认密码"');
+        const passwordIndex = source.indexOf('label={t("auth.register.confirmPassword")}');
         const agreementIndex = source.indexOf("Checkbox checked={agreementAccepted}");
         const submitIndex = source.indexOf('htmlType="submit"');
 
@@ -25,7 +25,7 @@ describe("注册服务协议", () => {
 
         expect(page).toContain("acceptedTerms: agreementAccepted");
         expect(page).toContain("agreementAccepted ? linuxDOLoginURL(next, true) : undefined");
-        expect(page).toContain("message.warning(`请先同意${agreementTitle}`)");
+        expect(page).toContain('message.warning(t("auth.register.agreeFirst", { title: agreementTitle }))');
         expect(login).toContain("linuxDOLoginURL(next)");
         expect(api).toContain("acceptedTerms: boolean");
         expect(api).toContain("acceptedTerms?: boolean");
@@ -39,8 +39,10 @@ describe("注册服务协议", () => {
         expect(page).toContain("settings?.agreementContent");
         expect(page).toContain("title={agreementTitle}");
         expect(page).toContain("agreementParagraphs.map");
-        // 条款留空时的占位提示；断言关键词而非整句，允许后续补充指引文案。
-        expect(page).toContain("服务协议内容待补充");
+        // 条款留空时的占位提示；断言关键词而非整句，允许后续补充指引文案。中文源文案在 zh-CN 目录。
+        const zhCatalog = readFileSync(resolve(import.meta.dir, "../src/i18n/messages/zh-CN.ts"), "utf8");
+        expect(page).toContain('t("auth.register.agreementEmpty")');
+        expect(zhCatalog).toContain("服务协议内容待补充");
     });
 
     test("读取设置失败时不猜协议标题，改为提示并允许重新读取", () => {
@@ -49,7 +51,9 @@ describe("注册服务协议", () => {
         // 失败必须留下状态位，不能静默降级成品牌名拼接的协议名。
         expect(page).toContain("[settingsFailed, setSettingsFailed] = useState(false)");
         expect(page).toContain("setSettingsFailed(true)");
-        expect(page).toContain("读取注册设置失败，暂时无法确认服务协议名称与条款。");
+        const zhCatalog = readFileSync(resolve(import.meta.dir, "../src/i18n/messages/zh-CN.ts"), "utf8");
+        expect(page).toContain('t("auth.register.settingsFailed")');
+        expect(zhCatalog).toContain("读取注册设置失败，暂时无法确认服务协议名称与条款。");
         expect(page).toContain("setSettingsReloadKey((value) => value + 1)");
         // 协议入口只在拿到设置后渲染，读不到配置就不展示协议名。
         expect(page).toContain("{settings ? (");

@@ -1,5 +1,8 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 
+import { translate } from "@/i18n";
+import { localizedApiErrorMessage } from "@/services/api/error-codes";
+
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
 
 export type BackendEnvelope<T> = {
@@ -51,7 +54,7 @@ export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; st
         const response = await promise;
         if (response.status === 304 && options.allowNotModified) return { notModified: true } as T;
         if (response.data.code !== 0) {
-            throw new ApiError(response.data.msg || "请求失败", {
+            throw new ApiError(localizedApiErrorMessage(response.data.reason, response.data.msg || translate("errors.requestFailed")), {
                 status: response.status,
                 code: response.data.code,
                 reason: response.data.reason,
@@ -71,15 +74,16 @@ function unwrapTransportError(error: unknown): never {
         throw error;
     }
     if (axios.isCancel(error) || (axios.isAxiosError(error) && error.code === axios.AxiosError.ERR_CANCELED)) {
-        throw new DOMException("请求已取消", "AbortError");
+        throw new DOMException(translate("errors.canceled"), "AbortError");
     }
     if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) {
         const status = error.response?.status;
         const code = error.response?.data?.code;
-        throw new ApiError(error.response?.data?.msg || transportFailureMessage(status, error.message), {
+        const reason = error.response?.data?.reason;
+        throw new ApiError(localizedApiErrorMessage(reason, error.response?.data?.msg || transportFailureMessage(status, error.message)), {
             status,
             code,
-            reason: error.response?.data?.reason,
+            reason,
             details: error.response?.data?.details,
             // 没有 response 的 AxiosError 代表请求没有拿到 HTTP 响应（断网、连接重置、DNS、超时等）。
             // 这类错误不能靠 status 判断，但对保存来说通常是暂时性的，应交给上层有限退避重试。
@@ -94,13 +98,13 @@ function unwrapTransportError(error: unknown): never {
 function transportFailureMessage(status?: number, fallback?: string) {
     switch (status) {
         case 502:
-            return "后端服务暂时不可用，请稍后重试";
+            return translate("errors.badGateway");
         case 503:
-            return "服务暂时不可用，请稍后重试";
+            return translate("errors.unavailable");
         case 504:
-            return "服务响应超时，请稍后重试";
+            return translate("errors.timeout");
         default:
-            return fallback || "请求失败";
+            return fallback || translate("errors.requestFailed");
     }
 }
 

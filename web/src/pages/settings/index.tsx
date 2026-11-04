@@ -3,6 +3,8 @@ import { SettingsRow } from "@/components/ui/product/settings-row";
 import { ArrowLeft, Boxes, Bug, Cloud, Inbox, MessageSquareText, RadioTower, SlidersHorizontal, UserRound, Workflow, BookMarked } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
+import { LanguageSelect } from "@/components/layout/language-select";
 
 import { UserOSSSettingsForm } from "@/components/layout/user-oss-settings-form";
 import { refreshSystemChannels } from "@/lib/user-session";
@@ -40,6 +42,7 @@ export function isConfigSection(value: string | null): value is ConfigSectionKey
 
 export default function SettingsPage() {
     const { message } = App.useApp();
+    const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedSection = searchParams.get("section");
@@ -126,18 +129,25 @@ export default function SettingsPage() {
             <SettingsPane>
                 <div className="settings-pane-header">
                     <div className="min-w-0">
-                        <h2>生成偏好</h2>
-                        <p>设置新建生成任务时使用的初始值，节点内仍可单独覆盖。</p>
+                        <h2>{t("settings.preferences.title")}</h2>
+                        <p>{t("settings.preferences.description")}</p>
                     </div>
                 </div>
                 <div className="settings-section">
                     <section className="settings-preference-block">
                         <div className="settings-preference-heading">
-                            <h3>画布生成</h3>
-                            <p>用于新建图片生成任务，节点内仍可单独覆盖。</p>
+                            <h3>{t("settings.preferences.interface")}</h3>
+                            <p>{t("settings.preferences.interfaceDescription")}</p>
+                        </div>
+                        <SettingsRow label={t("language.label")} description={i18n.language === "zh-CN" ? undefined : t("language.pending")} control={<LanguageSelect className="w-full" size="md" />} controlClassName="w-[200px]" />
+                    </section>
+                    <section className="settings-preference-block">
+                        <div className="settings-preference-heading">
+                            <h3>{t("settings.preferences.canvas")}</h3>
+                            <p>{t("settings.preferences.canvasDescription")}</p>
                         </div>
                         <SettingsRow
-                            label="默认生图张数"
+                            label={t("settings.preferences.imageCount")}
                             control={
                                 <InputNumber
                                     min={1}
@@ -184,14 +194,14 @@ export default function SettingsPage() {
             {shouldPromptContinue ? (
                 <div className="settings-topbar shrink-0">
                     <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                        <Button icon={<ArrowLeft className="size-4" />} onClick={() => navigate(-1)}>返回创作</Button>
-                        <Button type="primary" onClick={finishConfig}>保存并返回</Button>
+                        <Button icon={<ArrowLeft className="size-4" />} onClick={() => navigate(-1)}>{t("settings.back")}</Button>
+                        <Button type="primary" onClick={finishConfig}>{t("settings.saveAndBack")}</Button>
                     </div>
                 </div>
             ) : null}
             <div className="settings-library-frame flex min-h-0 flex-1 flex-col md:flex-row">
                 <aside className="settings-nav-panel w-full shrink-0 md:w-[200px]">
-                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:p-2" aria-label="配置分类">
+                    <nav className="thin-scrollbar flex gap-1 overflow-x-auto p-2 md:block md:space-y-1 md:p-2" aria-label={t("settings.nav")}>
                         {visibleConfigSections.map((item) => {
                             const selected = item.key === activeTab;
                             return (
@@ -204,8 +214,8 @@ export default function SettingsPage() {
                                 >
                                     <span className={`shrink-0 md:mt-0.5 ${selected ? "text-[var(--workspace-accent)]" : ""}`}>{item.icon}</span>
                                     <span className="min-w-0">
-                                        <span className="block whitespace-nowrap text-sm font-medium">{item.label}</span>
-                                        <span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{item.description}</span>
+                                        <span className="block whitespace-nowrap text-sm font-medium">{t(`settings.sections.${item.key}.label`)}</span>
+                                        <span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{t(`settings.sections.${item.key}.description`)}</span>
                                     </span>
                                 </button>
                             );

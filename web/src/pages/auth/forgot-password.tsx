@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState, type ReactNode } from "react";
 import { App, Button, Input } from "antd";
 import { ArrowLeft, ArrowRight, LockKeyhole, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { getAuthSettings, resetPassword, sendPasswordResetEmailCode } from "@/services/api/auth";
 
@@ -11,6 +12,7 @@ export default function ForgotPasswordPage() {
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const { message } = App.useApp();
+    const { t } = useTranslation();
     const [stage, setStage] = useState<RecoveryStage>("request");
     const [email, setEmail] = useState("");
     const [emailCode, setEmailCode] = useState("");
@@ -42,7 +44,7 @@ export default function ForgotPasswordPage() {
     const sendCode = async (advance: boolean) => {
         const normalizedEmail = email.trim();
         if (!normalizedEmail) {
-            message.warning("请先输入邮箱");
+            message.warning(t("auth.recovery.needEmail"));
             return;
         }
         setSendingCode(true);
@@ -51,9 +53,9 @@ export default function ForgotPasswordPage() {
             setEmail(normalizedEmail);
             setCountdown(60);
             if (advance) setStage("reset");
-            message.success("如果该邮箱已绑定可找回的账号，验证码将发送到邮箱");
+            message.success(t("auth.recovery.sent"));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "发送验证码失败");
+            message.error(error instanceof Error ? error.message : t("auth.recovery.sendFailed"));
         } finally {
             setSendingCode(false);
         }
@@ -67,16 +69,16 @@ export default function ForgotPasswordPage() {
     const submitReset = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (password !== confirmPassword) {
-            message.error("两次输入的密码不一致");
+            message.error(t("auth.recovery.mismatch"));
             return;
         }
         setSubmitting(true);
         try {
             await resetPassword({ email: email.trim(), emailCode, password });
-            message.success("密码已重置，请使用新密码登录");
+            message.success(t("auth.recovery.success"));
             navigate(loginURL, { replace: true });
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "密码重置失败");
+            message.error(error instanceof Error ? error.message : t("auth.recovery.failed"));
         } finally {
             setSubmitting(false);
         }
@@ -93,15 +95,15 @@ export default function ForgotPasswordPage() {
     if (stage === "request") {
         return (
             <form onSubmit={requestCode} className="space-y-5">
-                {emailEnabled === false ? <Notice icon={<TriangleAlert className="size-3.5" />}>管理员尚未启用密码找回，请联系管理员处理。</Notice> : null}
-                <AuthField label="账号邮箱" htmlFor="recovery-email">
+                {emailEnabled === false ? <Notice icon={<TriangleAlert className="size-3.5" />}>{t("auth.recovery.disabled")}</Notice> : null}
+                <AuthField label={t("auth.recovery.email")} htmlFor="recovery-email">
                     <Input
                         id="recovery-email"
                         size="large"
                         prefix={<Mail className="auth-scene-icon size-4" />}
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
-                        placeholder="请输入绑定邮箱"
+                        placeholder={t("auth.recovery.emailPlaceholder")}
                         autoComplete="email"
                         inputMode="email"
                         required
@@ -109,24 +111,24 @@ export default function ForgotPasswordPage() {
                     />
                 </AuthField>
                 <Button type="primary" htmlType="submit" size="large" block loading={sendingCode} disabled={emailEnabled === false} icon={<ArrowRight className="size-4" />} iconPlacement="end">
-                    发送验证码
+                    {t("auth.recovery.send")}
                 </Button>
-                <BackToLogin to={loginURL} />
+                <BackToLogin to={loginURL} label={t("auth.recovery.back")} />
             </form>
         );
     }
 
     return (
         <form onSubmit={submitReset} className="space-y-4">
-            <AuthField label="账号邮箱" htmlFor="recovery-email-confirm">
+            <AuthField label={t("auth.recovery.email")} htmlFor="recovery-email-confirm">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                     <Input id="recovery-email-confirm" size="large" prefix={<Mail className="auth-scene-icon size-4" />} value={email} readOnly autoComplete="email" />
                     <Button htmlType="button" size="large" onClick={editEmail}>
-                        修改邮箱
+                        {t("auth.recovery.editEmail")}
                     </Button>
                 </div>
             </AuthField>
-            <AuthField label="邮箱验证码" htmlFor="recovery-code">
+            <AuthField label={t("auth.recovery.code")} htmlFor="recovery-code">
                 <div className="grid grid-cols-[minmax(0,1fr)_116px] gap-2">
                     <Input
                         id="recovery-code"
@@ -134,38 +136,38 @@ export default function ForgotPasswordPage() {
                         prefix={<ShieldCheck className="auth-scene-icon size-4" />}
                         value={emailCode}
                         onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                        placeholder="6 位验证码"
+                        placeholder={t("auth.recovery.codePlaceholder")}
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         required
                     />
                     <Button htmlType="button" size="large" loading={sendingCode} disabled={countdown > 0} onClick={() => void sendCode(false)}>
-                        {countdown > 0 ? `${countdown}s` : "重新发送"}
+                        {countdown > 0 ? `${countdown}s` : t("auth.recovery.resend")}
                     </Button>
                 </div>
             </AuthField>
             <div className="grid gap-4 sm:grid-cols-2">
-                <AuthField label="新密码" htmlFor="recovery-password">
+                <AuthField label={t("auth.recovery.newPassword")} htmlFor="recovery-password">
                     <Input.Password
                         id="recovery-password"
                         size="large"
                         prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
-                        placeholder="至少 8 位"
+                        placeholder={t("auth.recovery.passwordPlaceholder")}
                         autoComplete="new-password"
                         minLength={8}
                         required
                     />
                 </AuthField>
-                <AuthField label="确认密码" htmlFor="recovery-confirm-password">
+                <AuthField label={t("auth.recovery.confirmPassword")} htmlFor="recovery-confirm-password">
                     <Input.Password
                         id="recovery-confirm-password"
                         size="large"
                         prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={confirmPassword}
                         onChange={(event) => setConfirmPassword(event.target.value)}
-                        placeholder="再次输入密码"
+                        placeholder={t("auth.recovery.confirmPlaceholder")}
                         autoComplete="new-password"
                         minLength={8}
                         required
@@ -173,9 +175,9 @@ export default function ForgotPasswordPage() {
                 </AuthField>
             </div>
             <Button type="primary" htmlType="submit" size="large" block loading={submitting} icon={<ArrowRight className="size-4" />} iconPlacement="end">
-                重置密码
+                {t("auth.recovery.submit")}
             </Button>
-            <BackToLogin to={loginURL} />
+            <BackToLogin to={loginURL} label={t("auth.recovery.back")} />
         </form>
     );
 }
@@ -191,12 +193,12 @@ function AuthField({ label, htmlFor, children }: { label: string; htmlFor: strin
     );
 }
 
-function BackToLogin({ to }: { to: string }) {
+function BackToLogin({ to, label }: { to: string; label: string }) {
     return (
         <div className="text-center">
             <Link to={to} className="auth-scene-link inline-flex min-h-8 items-center gap-2 rounded-sm text-xs transition-colors">
                 <ArrowLeft className="size-3.5" />
-                返回登录
+                {label}
             </Link>
         </div>
     );

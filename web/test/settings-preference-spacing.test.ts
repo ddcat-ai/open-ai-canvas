@@ -9,7 +9,7 @@ test("settings page drops the page header copy and audio preference blocks", () 
     expect(source).not.toContain("音频默认值");
     expect(source).not.toContain("音频指令");
     expect(source).not.toContain("默认音频指令");
-    expect(source).toContain("默认生图张数");
+    expect(source).toContain('t("settings.preferences.imageCount")');
     expect(source).toContain("settings-preference-heading");
 });
 

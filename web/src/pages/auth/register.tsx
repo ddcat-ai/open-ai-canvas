@@ -2,12 +2,13 @@ import { type FormEvent, useEffect, useRef, useState, type ReactNode } from "rea
 import { App, Button, Checkbox, Divider, Input, Modal, Segmented } from "antd";
 import { ArrowRight, FileText, Info, LockKeyhole, Mail, TriangleAlert, UserRound } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useTranslation } from "react-i18next";
 
 import { getAuthSession, getAuthSettings, linuxDOLoginURL, register } from "@/services/api/auth";
 import { LinuxDOIcon } from "./auth-scene";
 import { ApiError } from "@/services/api/request";
 import { VerificationFields } from "@/components/auth/verification-fields";
-import { emptyVerification, methodLabels, verificationMethods, type VerificationMethod } from "@/services/api/verification";
+import { emptyVerification, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 type AuthSettings = Awaited<ReturnType<typeof getAuthSettings>>;
@@ -18,7 +19,8 @@ export default function RegisterPage() {
     const navigate = useNavigate();
     const [params] = useSearchParams();
     const { message } = App.useApp();
-    const brandName = useAppearanceStore((state) => state.appearance.brandName) || "平台";
+    const { t } = useTranslation();
+    const brandName = useAppearanceStore((state) => state.appearance.brandName) || t("auth.register.platform");
     const [settings, setSettings] = useState<AuthSettings | null>(null);
     const [username, setUsername] = useState("");
     const [email, setEmail] = useState("");
@@ -46,7 +48,7 @@ export default function RegisterPage() {
     // 且只在确认拿到设置（settings 非空）后回退；接口失败时不猜标题，避免展示
     // 与后台真实配置不符的协议名。
     // 标题统一去掉书号后由页面补《》，避免后台已填《》时出现双书名号。
-    const agreementTitle = ((settings?.agreementTitle || "").trim() || `${brandName}服务协议`).replace(/^《|》$/g, "");
+    const agreementTitle = ((settings?.agreementTitle || "").trim() || t("auth.register.defaultAgreement", { brand: brandName })).replace(/^《|》$/g, "");
     const agreementContent = (settings?.agreementContent || "").trim();
     const agreementParagraphs = agreementContent ? agreementContent.split(/\n\s*\n/) : [];
 
@@ -60,7 +62,7 @@ export default function RegisterPage() {
                 // 这里必须留下失败态：协议标题只能来自后台配置，读不到时不能用品牌名
                 // 顶替，否则用户看到的是一个后台并不存在的协议名称。
                 setSettingsFailed(true);
-                message.error(error instanceof Error ? error.message : "读取注册设置失败");
+                message.error(error instanceof Error ? error.message : t("auth.register.settingsLoadFailed"));
             });
         return () => {
             cancelled = true;
@@ -71,27 +73,27 @@ export default function RegisterPage() {
         event.preventDefault();
         if (registering.current || registerCountdown > 0) return;
         if (!agreementAccepted) {
-            message.warning(`请先同意${agreementTitle}`);
+            message.warning(t("auth.register.agreeFirst", { title: agreementTitle }));
             return;
         }
         if (password !== confirmPassword) {
-            message.error("两次输入的密码不一致");
+            message.error(t("auth.register.mismatch"));
             return;
         }
         registering.current = true;
         setSubmitting(true);
         try {
-            if (!settings?.firstUser && !verification.ticket) throw new Error("请先获取本次注册验证码");
+            if (!settings?.firstUser && !verification.ticket) throw new Error(t("auth.register.needCode"));
             await register({ username, ...(settings?.firstUser ? { email } : verification), displayName, password, acceptedTerms: agreementAccepted, ...(referralCode ? { referralCode } : {}) });
             window.sessionStorage.removeItem(REFERRAL_CODE_STORAGE_KEY);
             const { applyUserSession } = await import("@/lib/user-session");
             await applyUserSession(await getAuthSession());
             if (!settings?.firstUser) window.sessionStorage.setItem("yingce:model-setup-guide", "1");
-            message.success(settings?.firstUser ? "管理员账号已创建" : "注册成功");
+            message.success(settings?.firstUser ? t("auth.register.adminCreated") : t("auth.register.success"));
             navigate(next, { replace: true });
         } catch (error) {
             if (error instanceof ApiError && error.status === 429) setRegisterCountdown(Math.max(1, Math.ceil((error.retryAfterMs ?? 60000) / 1000)));
-            message.error(error instanceof Error ? error.message : "注册失败");
+            message.error(error instanceof Error ? error.message : t("auth.register.failed"));
         } finally {
             registering.current = false;
             setSubmitting(false);
@@ -113,65 +115,65 @@ export default function RegisterPage() {
         <form onSubmit={submit} className="space-y-4">
             {settings?.firstUser ? (
                 <Notice icon={<Info className="size-3.5" />} tone="blue">
-                    首个账号自动成为管理员，邮箱验证码暂不要求。
+                    {t("auth.register.firstUser")}
                 </Notice>
             ) : null}
             {registrationClosed ? (
                 <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
-                    当前已关闭普通注册，请联系管理员创建账号。
+                    {t("auth.register.closed")}
                 </Notice>
             ) : null}
             {verificationUnavailable ? (
                 <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
-                    当前没有可用的注册验证方式，请联系管理员检查短信及邮件配置。
+                    {t("auth.register.noMethod")}
                 </Notice>
             ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
-                <AuthField label="用户名">
-                    <Input size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="3-32 位字符" autoComplete="username" required disabled={disabled} />
+                <AuthField label={t("auth.register.username")}>
+                    <Input size="large" prefix={<UserRound className="auth-scene-icon size-4" />} value={username} onChange={(event) => setUsername(event.target.value)} placeholder={t("auth.register.usernamePlaceholder")} autoComplete="username" required disabled={disabled} />
                 </AuthField>
-                <AuthField label="显示名称">
-                    <Input size="large" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="不填则使用用户名" disabled={disabled} />
+                <AuthField label={t("auth.register.displayName")}>
+                    <Input size="large" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={t("auth.register.displayNamePlaceholder")} disabled={disabled} />
                 </AuthField>
             </div>
 
-            {settings?.firstUser ? <AuthField label="邮箱（可选）">
+            {settings?.firstUser ? <AuthField label={t("auth.register.emailOptional")}>
                 <Input
                     size="large"
                     prefix={<Mail className="auth-scene-icon size-4" />}
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="用于登录与安全验证"
+                    placeholder={t("auth.register.emailPlaceholder")}
                     autoComplete="email"
                     required={!settings?.firstUser}
                     disabled={disabled}
                 />
             </AuthField> : <>
-                {methods.length > 1 && <Segmented block aria-label="注册验证方式" options={methods.map((value) => ({ value, label: methodLabels[value] }))} value={method} disabled={submitting} onChange={(value) => { setMethod(value as VerificationMethod); setVerification({ ...emptyVerification }); }} />}
+                {methods.length > 1 && <Segmented block aria-label={t("auth.register.method")} options={methods.map((value) => ({ value, label: t(`auth.methods.${value}`) }))} value={method} disabled={submitting} onChange={(value) => { setMethod(value as VerificationMethod); setVerification({ ...emptyVerification }); }} />}
                 {methods.length > 0 && <VerificationFields key={method} purpose="register" method={method} value={verification} onChange={setVerification} disabled={disabled || submitting} />}
             </>}
 
             <div className="grid gap-4 sm:grid-cols-2">
-                <AuthField label="密码">
+                <AuthField label={t("auth.register.password")}>
                     <Input.Password
                         size="large"
                         prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
-                        placeholder="至少 8 位"
+                        placeholder={t("auth.register.passwordPlaceholder")}
                         autoComplete="new-password"
                         required
                         disabled={disabled}
                     />
                 </AuthField>
-                <AuthField label="确认密码">
+                <AuthField label={t("auth.register.confirmPassword")}>
                     <Input.Password
                         size="large"
                         prefix={<LockKeyhole className="auth-scene-icon size-4" />}
                         value={confirmPassword}
                         onChange={(event) => setConfirmPassword(event.target.value)}
-                        placeholder="再次输入密码"
+                        placeholder={t("auth.register.confirmPlaceholder")}
                         autoComplete="new-password"
                         required
                         disabled={disabled}
@@ -182,9 +184,9 @@ export default function RegisterPage() {
             {settingsFailed ? (
                 <Notice icon={<TriangleAlert className="size-3.5" />} tone="amber">
                     <span>
-                        读取注册设置失败，暂时无法确认服务协议名称与条款。
+                        {t("auth.register.settingsFailed")}
                         <button type="button" className="auth-scene-link ml-1 transition" onClick={() => setSettingsReloadKey((value) => value + 1)}>
-                            重新读取
+                            {t("auth.register.reload")}
                         </button>
                     </span>
                 </Notice>
@@ -193,7 +195,7 @@ export default function RegisterPage() {
             {settings ? (
                 <div className="auth-agreement-row" data-accepted={agreementAccepted ? "true" : "false"}>
                     <Checkbox checked={agreementAccepted} onChange={(event) => setAgreementAccepted(event.target.checked)}>
-                        <span className="auth-agreement-label">我已阅读并同意</span>
+                        <span className="auth-agreement-label">{t("auth.register.agree")}</span>
                     </Checkbox>
                     <button type="button" className="auth-agreement-link" onClick={() => setAgreementOpen(true)}>
                         《{agreementTitle}》
@@ -202,15 +204,15 @@ export default function RegisterPage() {
             ) : null}
 
             <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={disabled || registerCountdown > 0 || !agreementAccepted} icon={<ArrowRight className="size-4" />} iconPlacement="end">
-                {registerCountdown > 0 ? `${registerCountdown} 秒后可重试` : "创建账号"}
+                {registerCountdown > 0 ? t("auth.register.retryIn", { seconds: registerCountdown }) : t("auth.register.submit")}
             </Button>
             {settings?.linuxdoEnabled && !settings.smsAndEmailRegistration ? (
                 <>
                     <Divider plain className="auth-scene-divider">
-                        或
+                        {t("common.or")}
                     </Divider>
                     <Button size="large" block disabled={!agreementAccepted} icon={<LinuxDOIcon />} href={agreementAccepted ? linuxDOLoginURL(next, true) : undefined}>
-                        使用 Linux.do 注册 / 登录
+                        {t("auth.register.linuxdo")}
                     </Button>
                 </>
             ) : null}
@@ -225,7 +227,7 @@ export default function RegisterPage() {
                 {agreementParagraphs.length === 0 ? (
                     <div className="auth-agreement-empty">
                         <FileText className="size-3.5 shrink-0" aria-hidden />
-                        服务协议内容待补充，请联系管理员在后台「登录与注册」中完善。
+                        {t("auth.register.agreementEmpty")}
                     </div>
                 ) : (
                     <div className="auth-agreement-body">
@@ -244,7 +246,7 @@ export default function RegisterPage() {
                 )}
                 <p className="auth-agreement-meta">
                     <LockKeyhole className="size-3 shrink-0" aria-hidden />
-                    继续注册即表示你已阅读并接受本协议全部条款。
+                    {t("auth.register.agreementMeta")}
                 </p>
             </Modal>
         </form>

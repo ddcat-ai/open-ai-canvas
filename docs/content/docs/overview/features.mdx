@@ -550,6 +550,12 @@ SEO 标题、描述、可选关键词会投影到浏览器 metadata、Open Graph
 - `web/src/pages/canvas/use-canvas-node-operations.ts`：候选节点筛选、流程/网格布局选择和位置提交。
 - `web/src/lib/canvas/canvas-layout.ts`：媒体泳道、拓扑流程、网格、行列排列和对齐算法。
 
+## 界面多语言
+
+界面支持简体中文、English、Français、Deutsch、日本語、한국어。首次访问按浏览器语言选择，之后在登录页右上角、顶栏账户菜单或「设置 → 偏好设置 → 界面语言」切换，选择保存在本设备（`localStorage` 的 `yingce:locale`），不同步到服务端。antd 组件、日期选择器（dayjs）、`<html lang>`、相对时间和金额数字格式随语言切换。
+
+当前已翻译登录 / 注册 / 找回密码、工作区侧栏与顶栏、账户菜单、命令面板和设置页导航与偏好设置；其余页面会逐步迁移，未翻译的内容暂时显示中文。非中文界面下，后端返回的明确错误原因（未登录、无权限、限流、额度与容量不足、服务不可用等）按 `reason` 显示本地化文案，其余错误保留后端原文。法语、德语、日语、韩语为机器翻译初稿，需要母语者审校。实现见 `web/src/i18n/`。
+
 ## 方舟真人素材库
 
 管理员在「方舟素材库」设置中选择站点（火山引擎中国站或 BytePlus 海外站），手动填写 Region（控制面为 `ark.<region>.volcengineapi.com` 或 `ark.<region>.byteplusapi.com`），并配置 IAM AK/SK 与 ProjectName；开放「真人素材库」并填写回调地址后，用户可在素材库页点击「真人素材」自助建库。管理员只管控制面凭据与项目，不参与用户的认证。

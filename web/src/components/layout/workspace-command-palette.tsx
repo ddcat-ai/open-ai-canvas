@@ -8,6 +8,7 @@ import { Kbd } from "@/components/ui/base/kbd";
 import { cn } from "@/lib/utils";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { useUserStore } from "@/stores/use-user-store";
+import { useTranslation } from "react-i18next";
 
 type PaletteEntry = {
     id: string;
@@ -24,14 +25,14 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
     const [query, setQuery] = useState("");
     const [highlight, setHighlight] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
-
+    const { t, i18n } = useTranslation();
     const entries = useMemo<PaletteEntry[]>(() => {
         const toolEntry = (slug: string, to?: string): PaletteEntry => {
             const tool = navigationTools.find((item) => item.slug === slug);
-            return { id: slug, title: tool?.label ?? slug, icon: tool?.icon ?? Home, to };
+            return { id: slug, title: tool ? t(tool.labelKey) : slug, icon: tool?.icon ?? Home, to };
         };
         return [
-            { id: "home", title: "首页", icon: Home, to: "/" },
+            { id: "home", title: t("shell.palette.home"), icon: Home, to: "/" },
             ...(features.shortDramaEnabled ? [toolEntry("projects", "/projects")] : []),
             toolEntry("canvas", "/canvas"),
             ...(features.taskCenterEnabled ? [toolEntry("tasks", "/tasks")] : []),
@@ -40,9 +41,9 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
             ...(features.creditsEnabled ? [{ ...toolEntry("wallet"), run: () => openWorkspaceWallet() }] : []),
             toolEntry("settings", "/settings"),
             // 与 ⌘/Ctrl+J 相同：打开平台 Agent 面板。
-            { id: "agent", title: "打开 Agent（⌘/Ctrl+J）", icon: Bot, run: () => useGlobalAgentStore.getState().openAgent() },
+            { id: "agent", title: t("shell.palette.agent"), icon: Bot, run: () => useGlobalAgentStore.getState().openAgent() },
         ];
-    }, [features]);
+    }, [features, t, i18n.language]);
 
     const filtered = useMemo(() => {
         const keyword = query.trim().toLowerCase();
@@ -106,11 +107,17 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
                 <div className="p-3 pb-2">
                     <div className="flex h-10 items-center gap-2 rounded-[var(--r-md)] border border-[var(--workspace-border)] bg-foreground/5 px-3 transition-colors hover:border-[var(--workspace-border-strong)] focus-within:border-[var(--workspace-border-strong)] focus-within:bg-foreground/[.06]">
                         <Search className="size-4 shrink-0 text-foreground/45" strokeWidth={1.6} />
-                        <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-[var(--fs-body)] outline-none placeholder:text-foreground/45" placeholder="搜索页面或操作…" />
+                        <input
+                            ref={inputRef}
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            className="min-w-0 flex-1 bg-transparent text-[var(--fs-body)] outline-none placeholder:text-foreground/45"
+                            placeholder={t("shell.palette.placeholder")}
+                        />
                         <Kbd onClick={onClose} className="hidden shrink-0 cursor-pointer transition-colors hover:bg-surface-hover hover:text-foreground sm:inline-flex">
                             ⌘K
                         </Kbd>
-                        <button type="button" onClick={onClose} className="ml-0.5 shrink-0 rounded-md p-1 text-foreground/50 transition-colors hover:bg-surface-hover hover:text-foreground" aria-label="关闭搜索">
+                        <button type="button" onClick={onClose} className="ml-0.5 shrink-0 rounded-md p-1 text-foreground/50 transition-colors hover:bg-surface-hover hover:text-foreground" aria-label={t("shell.palette.close")}>
                             <X className="size-4" strokeWidth={1.6} />
                         </button>
                     </div>
@@ -139,7 +146,7 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
                     ) : (
                         <div className="flex flex-col items-center justify-center py-8">
                             <Command className="mb-2 size-6 text-foreground/30" strokeWidth={1.5} />
-                            <p className="text-[var(--fs-caption)] font-medium text-foreground/55">未找到「{query}」相关页面</p>
+                            <p className="text-[var(--fs-caption)] font-medium text-foreground/55">{t("shell.palette.empty", { query })}</p>
                         </div>
                     )}
                 </div>
