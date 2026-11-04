@@ -4,7 +4,6 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ---
 
 # 待测试
-
 ## 登录注册：重构页面，后台可选弹窗或独立页面
 - 已实现：登录、注册、找回密码改为共用面板（`web/src/components/auth/`）：标题为「欢迎来到」加品牌名，手机号 / 邮箱验证码 / 密码以下划线标签切换（验证码方式排在密码前），手机号固定 +86 前缀，验证码输入与「获取验证码」按钮分开，底部「还没有账号？立即注册」与登录协议说明。独立页面保留外观设置里的品牌影片；弹窗左侧为品牌、登录页主标题与四项能力卡片，860px 以下只显示表单。
 - 已实现：后台「登录与注册」新增「4. 登录与注册的打开方式」，切换即保存，默认弹窗；保存在 `system_settings.registration.loginMode`，`/auth/settings` 公开下发。弹窗模式下侧栏、顶栏、分享页的登录入口在当前页弹出，登录后留在原页；未登录访问受保护页面回首页并弹出，登录后进入原地址；直达 `/login`、`/register`、`/forgot-password` 改为弹窗。独立页面模式保持跳转 `/login?next=`。首页创作输入框始终弹窗，原 `creation-login-dialog.tsx`（仅密码登录）已删除。
@@ -159,6 +158,11 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [ ] 使用真实 Bucket 只填 Region、Bucket、Access Key ID 与 Secret Access Key，测试连接并保存，确认 Endpoint 为 `https://tos-s3-<region>.volces.com`；错误 Secret 提示鉴权失败。
 - [ ] 上传图片、视频与音频后预览、下载、删除；浏览器直连源站需在 Bucket 配置 CORS（站点来源、GET/HEAD 与 Range）。公开 CDN 域名按 `cdnAuthMode=public` 读取。
 
+## 短剧：视频模型不可用时制作台崩溃
+- 问题：作品选用的视频模型解析失败（模型或渠道被删除 / 停用、能力声明缺少时长或生成方式）时，`prepareDramaSegment` 返回零值请求，集详情里每段的 `request.references` / `request.audioReferences` 为 `null`，制作台渲染参考图时报 `Cannot read properties of null (reading 'map')`，整页进入路由错误页。
+- 已修复：失败路径也返回空数组，段卡片照常显示，并在段上提示 `Warning`（如“所选模型不可用”）。
+- 本地验证：用本机数据库副本把一部作品的视频模型改为不存在的逻辑模型，修复前两集共 13 个剧情段的 `references` 与 `audioReferences` 全为 `null`，修复后没有 `null`，`Warning` 为“所选模型不可用”；`go test ./internal/app -run Drama` 通过。未做浏览器验收。
+- [ ] 把短剧作品的视频模型对应渠道停用后打开制作台，页面正常显示，剧情段提示模型不可用；在制作设置里换成可用视频模型后提示消失、可正常生成。
 ## 短剧：任务绑定与花费持久化（#933）
 
 - 已实现：沿用任务准入，任务、计费预留和短剧作业绑定在同一事务提交后才唤醒执行队列；覆盖文本、图片、视频、提示词精简续任务与本地时间线渲染。
