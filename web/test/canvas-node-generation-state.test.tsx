@@ -4,12 +4,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { CanvasNode } from "../src/components/canvas/canvas-node";
 import { canvasNodeCanResyncTask } from "../src/lib/canvas/canvas-task-state";
+import { subscribeTaskTicker } from "../src/lib/canvas/task-ticker";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
 const noop = () => {};
 const createdAt = () => new Date(Date.now() - 103_000).toISOString();
+// 服务端渲染读取的是共享时钟的快照，只有被订阅时才会走动；整套测试里该模块可能早已加载，
+// 渲染前先让它走一下，否则“已用时”会按模块加载时刻计算，测试结果取决于前面跑了多久。
+const refreshTaskTicker = () => subscribeTaskTicker(() => {})();
 
 function renderNode(metadata: CanvasNodeData["metadata"], type: CanvasNodeData["type"] = CanvasNodeType.Image) {
+    refreshTaskTicker();
     return renderToStaticMarkup(
         <CanvasNode
             data={{ id: "node", type, title: "去掉水印", position: { x: 0, y: 0 }, width: 240, height: 420, metadata }}
