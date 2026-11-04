@@ -99,14 +99,14 @@ func (s *Service) AdminPaymentOrdersCSV(ctx context.Context, actor *model.User, 
 	if err := checkPaymentExportSize(len(orders)); err != nil {
 		return nil, err
 	}
-	rows := [][]string{{"订单ID", "商户订单号", "渠道交易号", "用户ID", "用户名", "显示名称", "邮箱", "商品名称", "支付渠道", "金额（元）", "币种", "积分", "订单状态", "渠道状态", "创建时间（北京时间）", "支付时间（北京时间）", "入账时间（北京时间）", "关闭时间（北京时间）"}}
+	rows := [][]string{{"订单ID", "商户订单号", "渠道交易号", "用户ID", "用户名", "显示名称", "邮箱", "商品名称", "支付渠道", "金额（元）", "币种", "积分", "订单状态", "渠道状态", "创建时间（北京时间）", "支付时间（北京时间）", "入账时间（北京时间）", "关闭时间（北京时间）", "支付方式", "实收金额", "实收币种", "汇率（1 USD 兑 CNY）"}}
 	for _, order := range orders {
 		user := users[order.UserID]
 		trade := ""
 		if order.ProviderTradeNo != nil {
 			trade = *order.ProviderTradeNo
 		}
-		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.DisplayName, user.Email, order.ProductName, s.paymentExportProviderName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt)})
+		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.DisplayName, user.Email, order.ProductName, s.paymentExportProviderName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt), order.PaymentMethod, paymentDecimal(order.ChargeAmountFen, 2, false), order.ChargeCurrency, formatPaymentRate(order.ExchangeRateMicros)})
 	}
 	return paymentCSV(rows)
 }

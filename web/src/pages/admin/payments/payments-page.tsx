@@ -74,6 +74,13 @@ type ProductFormValues = {
     saleEndAt?: Dayjs;
 };
 
+function splitConfigList(value?: string) {
+    return (value || "")
+        .split(/[,，\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
 const paymentOrderStatus: Record<string, { label: string; tone: "neutral" | "success" | "warning" | "error" | "info" }> = {
     created: { label: "创建中", tone: "info" },
     pending: { label: "待支付", tone: "warning" },
@@ -99,7 +106,9 @@ export default function AdminPaymentsPage() {
     const [providers, setProviders] = useState<AdminPaymentProvider[]>([]);
     const [products, setProducts] = useState<TopupProduct[]>([]);
     const [loading, setLoading] = useState(true);
-    const [defaultCurrency, setDefaultCurrency] = useState<PaymentCurrency>("CNY");
+    const [defaultCurrency, setDefaultCurrency] = useState<PaymentCurrency>("USD");
+    const [usdCnyRate, setUsdCnyRate] = useState("");
+    const [rateDraft, setRateDraft] = useState("");
     const [currencySaving, setCurrencySaving] = useState(false);
 
     const [providerDrawer, setProviderDrawer] = useState<AdminPaymentProvider>();
@@ -179,6 +188,8 @@ export default function AdminPaymentsPage() {
             setProviders(providerResult.providers);
             setProducts(productResult.products);
             setDefaultCurrency(settingsResult.settings.defaultCurrency);
+            setUsdCnyRate(settingsResult.settings.usdCnyRate || "");
+            setRateDraft(settingsResult.settings.usdCnyRate || "");
             setBillProviderId((current) => current || providerResult.providers.find((item) => item.configured)?.id || providerResult.providers[0]?.id || "");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取支付配置失败");
@@ -340,20 +351,32 @@ export default function AdminPaymentsPage() {
         }
     };
 
-    const saveDefaultCurrency = async (currency: PaymentCurrency) => {
-        const previous = defaultCurrency;
-        setDefaultCurrency(currency);
+    // 充值设置整体保存：默认货币与汇率一起提交，避免只改一项时清空另一项。
+    const savePaymentSettings = async (next: { defaultCurrency: PaymentCurrency; usdCnyRate: string }, successText: string) => {
+        const previous = { defaultCurrency, usdCnyRate };
+        setDefaultCurrency(next.defaultCurrency);
         setCurrencySaving(true);
         try {
-            const result = await updateAdminPaymentSettings({ defaultCurrency: currency });
+            const result = await updateAdminPaymentSettings(next);
             setDefaultCurrency(result.settings.defaultCurrency);
-            message.success(`默认充值货币已切换为 ${result.settings.defaultCurrency}`);
+            setUsdCnyRate(result.settings.usdCnyRate || "");
+            setRateDraft(result.settings.usdCnyRate || "");
+            message.success(successText);
         } catch (error) {
-            setDefaultCurrency(previous);
-            message.error(error instanceof Error ? error.message : "保存默认充值货币失败");
+            setDefaultCurrency(previous.defaultCurrency);
+            setRateDraft(previous.usdCnyRate);
+            message.error(error instanceof Error ? error.message : "保存充值设置失败");
         } finally {
             setCurrencySaving(false);
         }
+    };
+
+    const saveDefaultCurrency = (currency: PaymentCurrency) => savePaymentSettings({ defaultCurrency: currency, usdCnyRate }, `默认充值货币已切换为 ${currency}`);
+
+    const saveUsdCnyRate = () => {
+        const rate = rateDraft.trim();
+        if (rate === usdCnyRate) return;
+        void savePaymentSettings({ defaultCurrency, usdCnyRate: rate }, rate ? `汇率已更新为 1 USD = ${rate} CNY` : "已清除汇率，跨币种渠道将不可下单");
     };
 
     const queryOrder = async (order: PaymentOrder) => {
@@ -609,6 +632,11 @@ export default function AdminPaymentsPage() {
             render: (_, order) => (
                 <div>
                     <div className="font-medium tabular-nums">{formatPaymentAmount(order.amountFen, order.currency)}</div>
+                    {order.chargeCurrency && order.chargeCurrency !== order.currency ? (
+                        <div className="text-xs tabular-nums text-foreground/60" title={order.exchangeRate ? `1 USD = ${order.exchangeRate} CNY` : undefined}>
+                            实收 {formatPaymentAmount(order.chargeAmountFen, order.chargeCurrency)}
+                        </div>
+                    ) : null}
                     <div className="text-xs text-foreground/45">{paymentOrderGrantLabel(order)}</div>
                 </div>
             ),
@@ -723,6 +751,20 @@ export default function AdminPaymentsPage() {
                                             ]}
                                             onChange={(value) => void saveDefaultCurrency(value as PaymentCurrency)}
                                         />
+                                        <span className="ml-3 text-foreground/65">1 USD =</span>
+                                        <Input
+                                            className="w-28"
+                                            aria-label="USD/CNY 汇率"
+                                            inputMode="decimal"
+                                            value={rateDraft}
+                                            disabled={currencySaving}
+                                            placeholder="未配置"
+                                            title="商品货币与支付渠道结算货币不同时，按此汇率换算实收金额并写入订单；留空则跨币种渠道不可下单。已创建订单不受影响。"
+                                            onChange={(event) => setRateDraft(event.target.value)}
+                                            onBlur={saveUsdCnyRate}
+                                            onPressEnter={saveUsdCnyRate}
+                                        />
+                                        <span className="text-foreground/65">CNY</span>
                                     </label>
                                 }
                                 trailing={
@@ -932,8 +974,13 @@ export default function AdminPaymentsPage() {
                                 ),
                             },
                             { key: "product", label: "商品", children: selectedOrder.productName },
-                            { key: "channel", label: "支付渠道", children: providerNames[selectedOrder.providerId] || selectedOrder.providerId },
+                            { key: "channel", label: "支付渠道", children: `${providerNames[selectedOrder.providerId] || selectedOrder.providerId}${selectedOrder.paymentMethod ? ` · ${selectedOrder.paymentMethod}` : ""}` },
                             { key: "amount", label: "金额 / 权益", children: `${formatPaymentAmount(selectedOrder.amountFen, selectedOrder.currency)} / ${paymentOrderGrantLabel(selectedOrder)}` },
+                            {
+                                key: "charge",
+                                label: "实收金额",
+                                children: `${formatPaymentAmount(selectedOrder.chargeAmountFen, selectedOrder.chargeCurrency || selectedOrder.currency)}${selectedOrder.exchangeRate ? `（1 USD = ${selectedOrder.exchangeRate} CNY）` : ""}`,
+                            },
                             { key: "status", label: "状态", children: paymentOrderStatus[selectedOrder.status]?.label || selectedOrder.status },
                             ...(
                                 [
@@ -979,11 +1026,35 @@ export default function AdminPaymentsPage() {
                             const secretReady = Boolean(providerDrawer.secretConfigured[field.name]);
                             const rules = field.required && !secretReady ? [{ required: true, message: `请输入${field.label || field.name}` }] : undefined;
                             const placeholder = field.secret && secretReady ? configuredSecretText : field.description || undefined;
+                            const options = (field.values || []).map((value) => ({ value, label: value }));
+                            if (field.type === "multiselect") {
+                                // 多选值以逗号分隔字符串保存；允许输入清单外的值（如易支付自定义通道 bank:网银）。
+                                return (
+                                    <Form.Item
+                                        key={field.name}
+                                        name={["values", field.name]}
+                                        label={field.label || field.name}
+                                        extra={field.description}
+                                        rules={rules}
+                                        getValueProps={(value: string | undefined) => ({ value: splitConfigList(value) })}
+                                        normalize={(value: string[] | undefined) =>
+                                            (value || [])
+                                                .map((item) => item.trim())
+                                                .filter(Boolean)
+                                                .join(",")
+                                        }
+                                    >
+                                        <Select mode="tags" options={options} tokenSeparators={[",", "，"]} placeholder={placeholder} />
+                                    </Form.Item>
+                                );
+                            }
                             const input =
                                 field.type === "textarea" ? (
                                     <Input.TextArea autoSize={{ minRows: 4, maxRows: 10 }} placeholder={placeholder} autoComplete="off" />
                                 ) : field.type === "password" || field.secret ? (
                                     <Input.Password placeholder={placeholder} autoComplete="new-password" />
+                                ) : options.length ? (
+                                    <Select options={options} placeholder={placeholder} />
                                 ) : (
                                     <Input placeholder={placeholder} />
                                 );

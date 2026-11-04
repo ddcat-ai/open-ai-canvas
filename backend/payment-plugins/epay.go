@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	epayPluginVersion = "1.0.9"
+	epayPluginVersion = "1.1.0"
 	epayQRLifetime    = 10 * time.Minute
 	maxEpayResponse   = 2 << 20
 )
@@ -71,6 +71,24 @@ func (p *EpayProvider) ValidateConfig(config Config) error {
 	if _, err := epayGateway(config); err != nil {
 		return err
 	}
+	switch strings.TrimSpace(config["submitMode"]) {
+	case "", "api":
+	case "submit":
+		if version != "0" {
+			return errors.New("易支付 submit.php 跳转只支持 V1/MD5（version=0）")
+		}
+		if epayCheckoutMode(config) == "qr_code" {
+			return errors.New("易支付 submit.php 跳转只能使用 redirect 收银方式")
+		}
+	default:
+		return errors.New("易支付下单方式 submitMode 必须是 api 或 submit")
+	}
+	if _, err := epaySettlementCurrency(config); err != nil {
+		return err
+	}
+	if _, err := epayPayTypes(config); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -78,14 +96,30 @@ func (p *EpayProvider) CreateOrder(ctx context.Context, config Config, request C
 	if err := p.ValidateConfig(config); err != nil {
 		return Checkout{}, err
 	}
-	if request.AmountFen <= 0 || request.Currency != "CNY" || strings.TrimSpace(request.MerchantOrderNo) == "" || strings.TrimSpace(request.NotifyURL) == "" {
+	currency, _ := epaySettlementCurrency(config)
+	if request.AmountFen <= 0 || request.Currency != currency || strings.TrimSpace(request.MerchantOrderNo) == "" || strings.TrimSpace(request.NotifyURL) == "" {
 		return Checkout{}, errors.New("易支付下单参数无效")
+	}
+	payType, err := epayRequestPayType(config, request.Method)
+	if err != nil {
+		return Checkout{}, err
+	}
+	expiresAt := request.ExpiresAt
+	if expiresAt.IsZero() {
+		expiresAt = p.now().Add(epayQRLifetime)
+	}
+	if strings.TrimSpace(config["submitMode"]) == "submit" {
+		value, err := epaySubmitURL(config, request, payType)
+		if err != nil {
+			return Checkout{}, err
+		}
+		return Checkout{Mode: "redirect", Value: value, ExpiresAt: expiresAt}, nil
 	}
 
 	params := map[string]string{
 		"pid":          strings.TrimSpace(config["pid"]),
 		"name":         epayTitle(request.Description, request.MerchantOrderNo),
-		"type":         epayPayType(config),
+		"type":         payType,
 		"money":        formatEpayAmount(request.AmountFen),
 		"out_trade_no": request.MerchantOrderNo,
 		"notify_url":   request.NotifyURL,
@@ -147,12 +181,34 @@ func (p *EpayProvider) CreateOrder(ctx context.Context, config Config, request C
 	if !isEpayURL(value) {
 		return Checkout{}, &ProviderError{Code: "epay_invalid_checkout", Message: "易支付未返回有效的支付地址"}
 	}
-
-	expiresAt := request.ExpiresAt
-	if expiresAt.IsZero() {
-		expiresAt = p.now().Add(epayQRLifetime)
-	}
 	return Checkout{Mode: mode, Value: value, ExpiresAt: expiresAt}, nil
+}
+
+// epaySubmitURL 生成浏览器直接跳转的 submit.php 地址（GET 方式页面跳转支付）。
+// 签名只覆盖网关文档要求的参数，商户密钥不进入地址；网关在买家浏览器中按 UA 选择支付页，因此不传 device。
+func epaySubmitURL(config Config, request CreateRequest, payType string) (string, error) {
+	base, err := epayGateway(config)
+	if err != nil {
+		return "", err
+	}
+	params := map[string]string{
+		"pid":          strings.TrimSpace(config["pid"]),
+		"type":         payType,
+		"out_trade_no": request.MerchantOrderNo,
+		"notify_url":   request.NotifyURL,
+		"return_url":   request.ReturnURL,
+		"name":         epayTitle(request.Description, request.MerchantOrderNo),
+		"money":        formatEpayAmount(request.AmountFen),
+	}
+	query := url.Values{}
+	for key, value := range params {
+		if value != "" {
+			query.Set(key, value)
+		}
+	}
+	query.Set("sign", epayMD5Sign(params, config["key"]))
+	query.Set("sign_type", "MD5")
+	return strings.TrimRight(base, "/") + "/submit.php?" + query.Encode(), nil
 }
 
 func (p *EpayProvider) QueryOrder(ctx context.Context, config Config, request QueryRequest) (Result, error) {
@@ -187,7 +243,8 @@ func (p *EpayProvider) QueryOrder(ctx context.Context, config Config, request Qu
 	if response["pid"] != "" && response["pid"] != strings.TrimSpace(config["pid"]) {
 		return Result{}, errors.New("易支付查单商户号不匹配")
 	}
-	return epayResult(response, request.MerchantOrderNo)
+	currency, _ := epaySettlementCurrency(config)
+	return epayResult(response, request.MerchantOrderNo, currency)
 }
 
 func (p *EpayProvider) CloseOrder(ctx context.Context, config Config, request CloseRequest) (Result, error) {
@@ -272,11 +329,12 @@ func (p *EpayProvider) VerifyNotification(_ context.Context, config Config, _ ht
 		return Notification{}, errors.New("易支付成功通知缺少支付流水号")
 	}
 	eventID := firstNonEmpty(values["notify_id"], providerTradeNo, values["out_trade_no"]+":"+status)
+	currency, _ := epaySettlementCurrency(config)
 	return Notification{
 		EventID: eventID,
 		Result: Result{
 			MerchantOrderNo: values["out_trade_no"], ProviderTradeNo: providerTradeNo,
-			ProviderStatus: status, AmountFen: amount, Currency: "CNY",
+			ProviderStatus: status, AmountFen: amount, Currency: currency,
 			Paid: true, PaidAt: parseEpayTime(firstNonEmpty(values["endtime"], values["gmt_payment"])),
 		},
 	}, nil
@@ -379,12 +437,78 @@ func epayCheckoutMode(config Config) string {
 	return "redirect"
 }
 
-func epayPayType(config Config) string {
-	payType := strings.TrimSpace(config["payType"])
-	if payType == "" {
-		return "alipay"
+// epaySettlementCurrency 是网关实际收款货币。money 参数本身不带币种，由网关按自己的结算货币解释；
+// 宿主读取同名配置换算实收金额，插件只接受与之一致的订单货币。
+func epaySettlementCurrency(config Config) (string, error) {
+	switch strings.ToUpper(strings.TrimSpace(config["settlementCurrency"])) {
+	case "", "CNY":
+		return "CNY", nil
+	case "USD":
+		return "USD", nil
+	default:
+		return "", errors.New("易支付结算货币 settlementCurrency 必须是 CNY 或 USD")
 	}
-	return payType
+}
+
+// epayPayTypes 解析已启用的支付方式：payTypes 为逗号分隔的 type 或 type:名称；
+// 旧配置只有单个 payType 时沿用它，两者都为空时默认 alipay。
+func epayPayTypes(config Config) ([]string, error) {
+	raw := strings.NewReplacer("\n", ",", "\r", ",", "，", ",").Replace(config["payTypes"])
+	types := make([]string, 0)
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		id, _, _ := strings.Cut(entry, ":")
+		id = strings.ToLower(strings.TrimSpace(id))
+		if !validEpayPayType(id) {
+			return nil, fmt.Errorf("易支付支付方式 %q 无效", entry)
+		}
+		types = append(types, id)
+	}
+	if len(types) > 0 {
+		return types, nil
+	}
+	if legacy := strings.ToLower(strings.TrimSpace(config["payType"])); legacy != "" {
+		if !validEpayPayType(legacy) {
+			return nil, fmt.Errorf("易支付支付方式 %q 无效", legacy)
+		}
+		return []string{legacy}, nil
+	}
+	return []string{"alipay"}, nil
+}
+
+// epayRequestPayType 返回本次下单的 type 参数。宿主传入的方式必须是已启用的方式之一，
+// 防止绕过管理员配置；未传方式时使用第一个启用的方式。
+func epayRequestPayType(config Config, method string) (string, error) {
+	types, err := epayPayTypes(config)
+	if err != nil {
+		return "", err
+	}
+	method = strings.ToLower(strings.TrimSpace(method))
+	if method == "" {
+		return types[0], nil
+	}
+	for _, item := range types {
+		if item == method {
+			return method, nil
+		}
+	}
+	return "", &ProviderError{Code: "epay_method_disabled", Message: "易支付未启用所选支付方式"}
+}
+
+func validEpayPayType(value string) bool {
+	if len(value) == 0 || len(value) > 32 {
+		return false
+	}
+	for index, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || (index > 0 && (char == '-' || char == '_')) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // mapi 是服务端下单，网关看不到买家的浏览器，只能靠 device 决定给什么支付页。
@@ -446,7 +570,7 @@ func epaySafetyEquals(actual, expected string) bool {
 	return actual != "" && len(actual) == len(expected) && subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
-func epayResult(response epayResponse, expectedOrderNo string) (Result, error) {
+func epayResult(response epayResponse, expectedOrderNo, currency string) (Result, error) {
 	status := epayString(response["status"])
 	if status == "" && response["trade_status"] != "" {
 		status = response["trade_status"]
@@ -470,7 +594,7 @@ func epayResult(response epayResponse, expectedOrderNo string) (Result, error) {
 	return Result{
 		MerchantOrderNo: response["out_trade_no"],
 		ProviderTradeNo: providerTradeNo,
-		ProviderStatus:  status, AmountFen: amount, Currency: "CNY",
+		ProviderStatus:  status, AmountFen: amount, Currency: currency,
 		Paid: status == "1" || status == "TRADE_SUCCESS", Closed: status == "TRADE_CLOSED",
 		PaidAt: parseEpayTime(firstNonEmpty(epayString(response["endtime"]), epayString(response["gmt_payment"]))),
 	}, nil

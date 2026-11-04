@@ -32,7 +32,7 @@ description: 影策后端核心持久化表与状态边界
 | `user_group_channels` | 分组可使用的系统渠道，主键 `(group_id, channel_id)` | `all_channels=true` 时不读取本表；与分组同事务整体替换 |
 | `users.user_group` | 用户所属分组编码，带索引 | 空串属于 `default`；分组不存在时目录、报价和下单失败关闭，不回退默认分组 |
 | `channel_models.price_currency` | 价格档售价单位：`credits`（默认，售价即微积分）、`USD`、`CNY`（售价为百万分之一货币单位） | 成本价 `cost_*` 始终以微积分计 |
-| `topup_products.currency` | 充值商品售价货币 `CNY`（默认）/ `USD`；`amount_fen` 统一表示该货币最小单位 | 支付订单 `currency` 取自商品；默认充值货币保存在 `system_settings` 的 `payment_settings` 键 |
+| `topup_products.currency` | 充值商品售价货币 `CNY` / `USD`；`amount_fen` 统一表示该货币最小单位 | 列默认值保持 `CNY`（Schema 75 用它归类升级前的旧商品）；新建商品总是显式写入货币，未传时取默认充值货币。支付订单 `currency` 取自商品；默认充值货币（缺省 `USD`）和 USD/CNY 汇率 `usdCnyRate` 保存在 `system_settings` 的 `payment_settings` 键 |
 | `billing_orders.user_group` / `price_currency` / `currency_rate_microcredits` | 下单时的分组、计价货币与兑换比例快照 | 单价字段已是换算后的微积分，`multiplier_basis_points` 为全局积分倍率 × 分组倍率 × 模型倍率；结算只读快照 |
 
 扣费 = 价格档售价（货币计价时 × 兑换比例 ÷ 10⁶，向上取整）× 合成倍率。模型级覆盖项按渠道模型标识匹配（统一价前台模型按前台模型编码），倍率为 0 时沿用分组倍率，兑换比例为 0 时沿用分组比例。管理员账号可见全部系统渠道，价格仍按其所属分组计算。用户自定义渠道不受分组约束。
@@ -408,7 +408,7 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 | --- | --- | --- |
 | `topup_products` | 保存服务端维护的充值商品、金额，以及积分或存储空间权益 | 客户端只能提交商品 ID；金额和权益由 service 读取，不能由请求覆盖 |
 | `payment_provider_configs` | 保存支付插件某个渠道配置的不可变版本 | `provider_id + version` 唯一；密钥只保存加密密文；`plugin_id` / `plugin_version` 记录配置对应的插件版本 |
-| `payment_orders` | 保存充值订单、幂等键、渠道交易号、权益快照和入账状态 | 创建订单时固定 `plugin_id`、`plugin_version`、配置 ID 与配置版本；回调、查单、关单必须使用同一运行时版本 |
+| `payment_orders` | 保存充值订单、幂等键、渠道交易号、权益快照、实收金额与货币、汇率快照、支付方式和入账状态 | 创建订单时固定 `plugin_id`、`plugin_version`、配置 ID 与配置版本；回调、查单、关单必须使用同一运行时版本，并以 `charge_amount_fen` / `charge_currency` 校验渠道凭据 |
 | `payment_notifications` | 保存已验签的支付通知收件箱 | 以渠道事件 ID 幂等；只保存用于异步入账的标准化证据，重复通知不会重复发放积分 |
 | `payment_reconciliation_runs` / `payment_reconciliation_items` | 保存渠道账单下载和对账结果 | 账单只能作为发现线索，金额、币种和交易号仍需由插件查单确认；历史订单继续绑定原插件版本 |
 
@@ -497,6 +497,8 @@ Schema 32 为 `channel_models` 新增 `tags`（TEXT、NOT NULL、默认 `'[]'`�
 - SQLite → PostgreSQL 迁移包含上述两表。首次启动前备份测试数据；回退旧代码不能视为数据库降级，应使用备份恢复，不手工重写迁移记录。
 
 ## 可选技能策展
+
+迁移 80 `payment_order_charge_method` 为 `payment_orders` 增加 `charge_amount_fen`、`charge_currency`（渠道实收金额与结算货币）、`exchange_rate_micros`（跨币种下单时的 1 USD 兑 CNY × 10⁶ 快照，同币种为 0）和 `payment_method`（渠道内支付方式，如易支付 `alipay` / `wxpay`），并把旧订单的实收金额与货币回填为商品金额与货币。回调、查单与对账按实收快照校验，修改汇率不影响已创建订单。
 
 电商 Agent 的迁移 79 新增八张电商项目、知识与 Agent 执行表及知识域索引，详见 [电商 Agent 与知识库](./ecommerce-agent)。上游既有迁移编号与校验值保持不变。
 

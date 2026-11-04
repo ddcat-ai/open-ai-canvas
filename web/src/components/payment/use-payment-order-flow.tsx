@@ -57,11 +57,11 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
         idempotencyKey.current = "";
     };
 
-    const start = async (productId: string, providerId: string) => {
+    const start = async (productId: string, providerId: string, method?: string) => {
         setCreating(true);
         try {
             if (!idempotencyKey.current) idempotencyKey.current = createClientUUID();
-            const result = await createPaymentOrder({ productId, providerId, idempotencyKey: idempotencyKey.current });
+            const result = await createPaymentOrder({ productId, providerId, ...(method ? { method } : {}), idempotencyKey: idempotencyKey.current });
             idempotencyKey.current = "";
             setOrder(result.order);
             await settle(result.order);
@@ -153,6 +153,12 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
                         <CreditCard />
                     </span>
                     <strong>{formatPaymentAmount(order.amountFen, order.currency)}</strong>
+                    {order.chargeCurrency && order.chargeCurrency !== order.currency ? (
+                        <span>
+                            实付 {formatPaymentAmount(order.chargeAmountFen, order.chargeCurrency)}
+                            {order.exchangeRate ? `（1 USD = ${order.exchangeRate} CNY）` : ""}
+                        </span>
+                    ) : null}
                     <p>
                         {order.productName} · {paymentOrderGrantLabel(order)}
                     </p>

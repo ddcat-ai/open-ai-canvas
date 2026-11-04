@@ -1,11 +1,13 @@
 import { Button, Skeleton } from "antd";
-import { Check, CircleAlert, Coins, CreditCard, FolderOpen, HardDrive } from "lucide-react";
+import { Check, CircleAlert, Coins, FolderOpen, HardDrive } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 
+import { PaymentBrandIcon } from "@/components/payment-brand-icons";
 import { formatCredits } from "@/constant/credits";
 import { accountStorageMeter, accountStorageStateMessage, formatStorageCapacity, formatStorageDate, formatStorageDuration } from "@/lib/account-storage-usage";
+import { estimatePaymentCharge, type PaymentOption } from "@/lib/payment-options";
 import { cn } from "@/lib/utils";
-import { formatPaymentAmount, type PaymentProvider, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
+import { formatPaymentAmount, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import type { AccountFileStorageUsage } from "@/services/api/resources";
 import { storageGrantActive, type UserStorageGrant } from "@/services/api/storage-grants";
 
@@ -140,13 +142,14 @@ function StorageSummary({ usage, grants, onCleanAssets }: { usage?: AccountFileS
 export function WalletTopupPanel({
     loading,
     products,
-    providers,
+    paymentOptions,
+    usdCnyRate,
     focusKind,
     focusToken,
     selectedProduct,
     onSelectProduct,
-    selectedProviderId,
-    onSelectProvider,
+    selectedOptionKey,
+    onSelectOption,
     creating,
     onPay,
     storageUsage,
@@ -155,14 +158,17 @@ export function WalletTopupPanel({
 }: {
     loading: boolean;
     products: TopupProduct[];
-    providers: PaymentProvider[];
+    /** 渠道展开后的支付入口，易支付等聚合渠道的每种支付方式各一个。 */
+    paymentOptions: PaymentOption[];
+    /** 1 USD 兑换的 CNY，用于预估跨币种渠道的实付金额。 */
+    usdCnyRate?: string;
     /** 从容量入口进入时滚动到对应分组；focusToken 变化时重新定位。 */
     focusKind?: TopupProductKind;
     focusToken?: number;
     selectedProduct?: TopupProduct;
     onSelectProduct: (id: string) => void;
-    selectedProviderId: string;
-    onSelectProvider: (id: string) => void;
+    selectedOptionKey: string;
+    onSelectOption: (key: string) => void;
     creating: boolean;
     onPay: () => void;
     storageUsage?: AccountFileStorageUsage;
@@ -198,6 +204,11 @@ export function WalletTopupPanel({
     const kinds = (["credits", "storage"] as const).filter((kind) => byKind[kind].length || kind === "storage");
     const selectedKind = selectedProduct ? KIND_META[selectedProduct.kind] : null;
     const SelectedIcon = selectedKind?.icon;
+    const selectedOption = paymentOptions.find((option) => option.key === selectedOptionKey);
+    const chargeFor = (option: PaymentOption) => (selectedProduct ? estimatePaymentCharge(selectedProduct.amountFen, selectedProduct.currency, option.settlementCurrency, usdCnyRate) : null);
+    const selectedCharge = selectedOption ? chargeFor(selectedOption) : null;
+    const showConvertedCharge = Boolean(selectedProduct && selectedCharge && selectedCharge.currency !== selectedProduct.currency);
+    const selectedOptionPayable = Boolean(selectedOption && (!selectedProduct || selectedCharge));
 
     return (
         <div className="workspace-wallet-content wallet-topup">
@@ -224,25 +235,41 @@ export function WalletTopupPanel({
                                         {selectedProduct.kind === "storage" ? ` · ${formatStorageDuration(selectedProduct.storageDurationDays)}` : ""}
                                     </small>
                                 </span>
-                                <b>{formatPaymentAmount(selectedProduct.amountFen, selectedProduct.currency)}</b>
+                                <b className="wallet-topup-checkout-price">
+                                    {formatPaymentAmount(selectedProduct.amountFen, selectedProduct.currency)}
+                                    {showConvertedCharge && selectedCharge ? <small title={`按 1 USD = ${usdCnyRate} CNY 换算，以支付页金额为准`}>约付 {formatPaymentAmount(selectedCharge.amountFen, selectedCharge.currency)}</small> : null}
+                                </b>
                             </>
                         ) : (
                             <span className="wallet-topup-checkout-hint">选择一个套餐</span>
                         )}
                     </div>
-                    {providers.length ? (
+                    {paymentOptions.length ? (
                         <div className="workspace-wallet-providers" role="radiogroup" aria-label="支付方式">
-                            {providers.map((provider) => (
-                                <button key={provider.id} type="button" role="radio" aria-checked={selectedProviderId === provider.id} className={selectedProviderId === provider.id ? "is-selected" : ""} onClick={() => onSelectProvider(provider.id)}>
-                                    <CreditCard />
-                                    {provider.name}
-                                </button>
-                            ))}
+                            {paymentOptions.map((option) => {
+                                // 渠道结算货币与商品不同且未配置汇率时无法换算，入口禁用并说明原因。
+                                const unavailable = Boolean(selectedProduct && !chargeFor(option));
+                                return (
+                                    <button
+                                        key={option.key}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selectedOptionKey === option.key}
+                                        className={selectedOptionKey === option.key ? "is-selected" : ""}
+                                        disabled={unavailable}
+                                        title={unavailable ? `该支付方式以 ${option.settlementCurrency} 收款，暂不支持购买 ${selectedProduct?.currency} 套餐` : option.name}
+                                        onClick={() => onSelectOption(option.key)}
+                                    >
+                                        <PaymentBrandIcon providerId={option.providerId} icon={option.icon} compact />
+                                        {option.name}
+                                    </button>
+                                );
+                            })}
                         </div>
                     ) : (
                         <span className="wallet-topup-checkout-hint">暂无可用支付渠道，请联系管理员</span>
                     )}
-                    <Button type="primary" size="large" loading={creating} disabled={!selectedProduct || !selectedProduct.canPurchase || !providers.length || !selectedProviderId} onClick={onPay}>
+                    <Button type="primary" size="large" loading={creating} disabled={!selectedProduct || !selectedProduct.canPurchase || !selectedOptionPayable} onClick={onPay}>
                         立即支付
                     </Button>
                 </footer>

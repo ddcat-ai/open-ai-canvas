@@ -33,6 +33,16 @@ type PaymentProviderView struct {
 	PluginEnabled     bool   `json:"pluginEnabled"`
 	Configured        bool   `json:"configured"`
 	CloseAfterMinutes int    `json:"closeAfterMinutes"`
+	// SettlementCurrency 和 Methods 只在用户端渠道列表中返回。
+	SettlementCurrency string              `json:"settlementCurrency,omitempty"`
+	Methods            []PaymentMethodView `json:"methods,omitempty"`
+}
+
+// PaymentMethodView 是渠道内可选的支付方式，例如易支付的支付宝、微信支付。
+type PaymentMethodView struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Icon string `json:"icon,omitempty"`
 }
 
 type AdminPaymentProviderView struct {
@@ -73,8 +83,10 @@ type TopupProductRequest struct {
 }
 
 type CreatePaymentOrderRequest struct {
-	ProductID      string `json:"productId"`
-	ProviderID     string `json:"providerId"`
+	ProductID  string `json:"productId"`
+	ProviderID string `json:"providerId"`
+	// Method 是渠道内的支付方式 ID；渠道只启用一种方式时可留空。
+	Method         string `json:"method"`
 	IdempotencyKey string `json:"idempotencyKey"`
 }
 
@@ -93,8 +105,12 @@ type PaymentOrderView struct {
 	ProductName         string                   `json:"productName"`
 	ProductKind         model.TopupProductKind   `json:"productKind"`
 	ProviderID          string                   `json:"providerId"`
+	PaymentMethod       string                   `json:"paymentMethod,omitempty"`
 	AmountFen           int64                    `json:"amountFen"`
 	Currency            string                   `json:"currency"`
+	ChargeAmountFen     int64                    `json:"chargeAmountFen"`
+	ChargeCurrency      string                   `json:"chargeCurrency"`
+	ExchangeRate        string                   `json:"exchangeRate,omitempty"`
 	CreditsMicrocredits int64                    `json:"creditsMicrocredits"`
 	StorageBytes        int64                    `json:"storageBytes,omitempty"`
 	StorageDurationDays int                      `json:"storageDurationDays,omitempty"`
@@ -142,8 +158,10 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	}
 	productID := strings.TrimSpace(request.ProductID)
 	providerID := strings.TrimSpace(request.ProviderID)
+	requestedMethod := strings.ToLower(strings.TrimSpace(request.Method))
 	if existing, err := s.repo.PaymentOrderByIdempotency(actor.ID, idempotencyKey); err == nil {
-		if existing.ProductID != productID || existing.ProviderID != providerID {
+		// 留空方式由服务端自动选定，重试时不视为冲突；显式换了方式则必须换幂等键。
+		if existing.ProductID != productID || existing.ProviderID != providerID || (requestedMethod != "" && existing.PaymentMethod != requestedMethod) {
 			return nil, NewAppError(http.StatusConflict, "支付幂等标识已用于不同的商品或支付渠道")
 		}
 		result := paymentOrderView(*existing)
@@ -172,6 +190,30 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	if !view.Enabled || !view.Configured || config == nil {
 		return nil, Forbidden("支付渠道未启用或尚未配置")
 	}
+	values, err := s.decryptPaymentConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	options, err := s.paymentProviderOptions(provider.Descriptor().ID, values)
+	if err != nil {
+		return nil, err
+	}
+	method, err := resolvePaymentMethod(options.Methods, requestedMethod)
+	if err != nil {
+		return nil, err
+	}
+	// 商品行总有货币（列默认 CNY），这里的兜底与列默认值一致。
+	productCurrency := firstNonEmpty(product.Currency, model.PriceCurrencyCNY)
+	rateMicros := int64(0)
+	if productCurrency != options.SettlementCurrency {
+		if rateMicros, err = s.paymentRateMicros(); err != nil {
+			return nil, err
+		}
+	}
+	chargeAmount, appliedRate, err := convertPaymentAmount(product.AmountFen, productCurrency, options.SettlementCurrency, rateMicros)
+	if err != nil {
+		return nil, err
+	}
 	activeCount, err := s.repo.ActivePaymentOrderCount(actor.ID)
 	if err != nil {
 		return nil, err
@@ -185,7 +227,8 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		ProductID: product.ID, ProductName: product.Name, ProductKind: topupProductKind(product.Kind),
 		StorageBytes: product.StorageBytes, StorageDurationDays: product.StorageDurationDays, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
-		AmountFen: product.AmountFen, Currency: firstNonEmpty(product.Currency, model.PriceCurrencyCNY), CreditsMicrocredits: product.CreditsMicrocredits,
+		AmountFen: product.AmountFen, Currency: productCurrency, CreditsMicrocredits: product.CreditsMicrocredits,
+		ChargeAmountFen: chargeAmount, ChargeCurrency: options.SettlementCurrency, ExchangeRateMicros: appliedRate, PaymentMethod: method,
 		Status: model.PaymentOrderCreated, CheckoutMode: provider.Descriptor().CheckoutMode,
 		ExpiresAt: now.Add(time.Duration(config.CloseAfterMinutes) * time.Minute),
 	}
@@ -200,18 +243,7 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		view := paymentOrderView(*order)
 		return &view, nil
 	}
-	values, err := s.decryptPaymentConfig(config)
-	if err != nil {
-		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
-		return nil, err
-	}
-	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
-	checkout, err := provider.CreateOrder(ctx, values, payment.CreateRequest{
-		MerchantOrderNo: order.MerchantOrderNo, Description: product.Name, AmountFen: order.AmountFen,
-		Currency: order.Currency, ExpiresAt: order.ExpiresAt,
-		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(config.ID),
-		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
-	})
+	checkout, err := provider.CreateOrder(ctx, values, paymentCreateRequest(order, product.Name, values, config.ID))
 	if err != nil {
 		_ = s.repo.SetPaymentOrderCreateFailure(order.ID, safePaymentError(err))
 		return nil, WrapAppError(http.StatusBadGateway, "支付渠道下单失败，请稍后重试", err)
@@ -226,6 +258,40 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	}
 	result := paymentOrderView(*order)
 	return &result, nil
+}
+
+// resolvePaymentMethod 校验用户选择的支付方式属于渠道当前启用的方式。只有一种方式时自动选中；
+// 渠道没有声明方式时必须留空，由插件使用自己的默认方式。
+func resolvePaymentMethod(methods []PaymentMethodView, requested string) (string, error) {
+	if len(methods) == 0 {
+		if requested != "" {
+			return "", BadAuthRequest("该支付渠道不支持选择支付方式")
+		}
+		return "", nil
+	}
+	if requested == "" {
+		if len(methods) == 1 {
+			return methods[0].ID, nil
+		}
+		return "", BadAuthRequest("请选择支付方式")
+	}
+	for _, method := range methods {
+		if method.ID == requested {
+			return requested, nil
+		}
+	}
+	return "", BadAuthRequest("所选支付方式不可用，请刷新后重试")
+}
+
+// paymentCreateRequest 按订单快照组装渠道下单请求；首次下单与重建收银台共用，保证金额、货币和方式不漂移。
+func paymentCreateRequest(order *model.PaymentOrder, description string, values payment.Config, configID string) payment.CreateRequest {
+	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
+	return payment.CreateRequest{
+		MerchantOrderNo: order.MerchantOrderNo, Description: description, AmountFen: order.ChargeAmountFen,
+		Currency: order.ChargeCurrency, Method: order.PaymentMethod, ExpiresAt: order.ExpiresAt,
+		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(configID),
+		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
+	}
 }
 
 func (s *Service) PaymentOrder(actor *model.User, id string) (*PaymentOrderView, error) {
@@ -289,13 +355,7 @@ func (s *Service) RefreshPaymentCheckout(ctx context.Context, actor *model.User,
 	} else if !errors.Is(queryErr, payment.ErrOrderNotFound) {
 		return nil, WrapAppError(http.StatusBadGateway, "刷新支付收银台前查单失败，请稍后重试", queryErr)
 	}
-	baseURL := strings.TrimRight(values["publicBaseUrl"], "/")
-	checkout, err := provider.CreateOrder(ctx, values, payment.CreateRequest{
-		MerchantOrderNo: order.MerchantOrderNo, Description: order.ProductName, AmountFen: order.AmountFen,
-		Currency: order.Currency, ExpiresAt: order.ExpiresAt,
-		NotifyURL: baseURL + "/api/payments/notify/" + url.PathEscape(order.ProviderID) + "/" + url.PathEscape(config.ID),
-		ReturnURL: baseURL + "/api/payments/return/" + url.PathEscape(order.ProviderID) + "?orderId=" + url.QueryEscape(order.ID),
-	})
+	checkout, err := provider.CreateOrder(ctx, values, paymentCreateRequest(order, order.ProductName, values, config.ID))
 	if err != nil {
 		return nil, WrapAppError(http.StatusBadGateway, "刷新支付收银台失败，请稍后重试", err)
 	}
@@ -510,7 +570,7 @@ func (s *Service) applyPaymentResult(providerID string, result payment.Result) (
 		return nil, err
 	}
 	if result.Paid {
-		if result.AmountFen != order.AmountFen || result.Currency != order.Currency {
+		if result.AmountFen != order.ChargeAmountFen || result.Currency != order.ChargeCurrency {
 			return nil, repository.ErrPaymentEvidenceMismatch
 		}
 		completed, granted, err := s.repo.CompletePaymentOrder(providerID, result.MerchantOrderNo, repository.PaymentEvidence{
@@ -578,7 +638,8 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 	return PaymentOrderView{
 		ID: order.ID, UserID: order.UserID, MerchantOrderNo: order.MerchantOrderNo, ProductID: order.ProductID, ProductName: order.ProductName,
 		ProductKind: topupProductKind(order.ProductKind), StorageBytes: order.StorageBytes, StorageDurationDays: order.StorageDurationDays,
-		ProviderID: order.ProviderID, AmountFen: order.AmountFen, Currency: order.Currency,
+		ProviderID: order.ProviderID, PaymentMethod: order.PaymentMethod, AmountFen: order.AmountFen, Currency: order.Currency,
+		ChargeAmountFen: order.ChargeAmountFen, ChargeCurrency: order.ChargeCurrency, ExchangeRate: formatPaymentRate(order.ExchangeRateMicros),
 		CreditsMicrocredits: order.CreditsMicrocredits, Status: order.Status, ProviderStatus: order.ProviderStatus,
 		ProviderTradeNo: providerTradeNo, Checkout: checkout, ExpiresAt: order.ExpiresAt,
 		ProviderPaidAt: order.ProviderPaidAt, CreditedAt: order.CreditedAt, ClosedAt: order.ClosedAt,

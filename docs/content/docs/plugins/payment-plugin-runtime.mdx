@@ -48,6 +48,14 @@ Manifest 的支付贡献声明 `runtime.backend` 为 `rpc` 或 `wasm`，并通�
 
 `create_order` 的 `Checkout.value` 随 `mode` 含义不同：`qr_code` 可以是待编码载荷（如微信支付 `weixin://...`），也可以是渠道已经画好的二维码图片 URL（如虎皮椒 `url_qrcode`，形如 `https://api.xunhupay.com/qrcode.png`）。钱包识别图片 URL 后直接展示，不会把图片地址再编码成新的二维码。`redirect` 由宿主包装成 `/api/payments/orders/:id/checkout` 跳转。扫码区固定白底深色码点，避免暗色主题反色后难扫。
 
+`create_order` 的请求中，`AmountFen` / `Currency` 是渠道实收金额与结算货币，`Method` 是用户选中的渠道内支付方式（可选字段，旧插件忽略即可）。
+
+### 支付方式与结算货币
+
+渠道内有多种支付方式时（如易支付的支付宝、微信支付），在 `paymentProviders[].methods` 声明目录（`id`、`label`、可选 `icon` 品牌键，如 `brand:alipay`），并用 `methodsField` 指向保存已启用方式的配置字段。配置值为逗号分隔的方式 ID，可写成 `id:名称` 增加目录外的方式；ID 只能是 1–32 位小写字母、数字、`-` 或 `_`。宿主把已启用方式返回给钱包逐个展示，校验用户选择后通过 `Method` 传给插件；配置值为空时不展示方式，由插件使用默认方式。未声明 `methodsField` 时目录中的方式全部启用。
+
+宿主读取渠道配置中的 `settlementCurrency`（`CNY` / `USD`，缺省 `CNY`）作为结算货币。商品货币不同时，宿主按充值设置中的 USD/CNY 汇率换算实收金额并写入订单快照；插件只需按收到的金额与货币下单，并在 `Result` / `Notification` 中返回实际结算货币。宿主以实收金额校验回调、查单与对账。
+
 请求固定带有 `version: "yingce.payment/v1"`。插件不得访问宿主数据库，不得自行入账积分。宿主目前控制进程工作目录、环境变量、标准输出大小和 30 秒超时；支付宝、微信实现还会在插件内部校验网关和账单下载域名。通用插件的操作系统级沙箱、签名校验和网络白名单尚未启用，不应直接运行不受信任的支付插件。
 
 ## 原生包的平台边界

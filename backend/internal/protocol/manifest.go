@@ -425,8 +425,48 @@ func validatePaymentProviderContributions(manifest Manifest) error {
 				return fmt.Errorf("payment provider contribution %q has invalid notification response status", provider.ID)
 			}
 		}
+		methods := make(map[string]struct{}, len(provider.Methods))
+		for _, method := range provider.Methods {
+			if !ValidPaymentMethodID(method.ID) || strings.TrimSpace(method.Label) == "" {
+				return fmt.Errorf("payment provider contribution %q has invalid method %q", provider.ID, method.ID)
+			}
+			if _, exists := methods[method.ID]; exists {
+				return fmt.Errorf("payment provider contribution %q has duplicate method %q", provider.ID, method.ID)
+			}
+			methods[method.ID] = struct{}{}
+		}
+		if field := strings.TrimSpace(provider.MethodsField); field != "" && !manifestHasConfigField(manifest, field) {
+			return fmt.Errorf("payment provider contribution %q methods field %q is not a configuration field", provider.ID, field)
+		}
 	}
 	return nil
+}
+
+// ValidPaymentMethodID 限定支付方式 ID 为 1-32 位小写字母、数字、- 或 _，且以字母或数字开头；
+// 该值会原样作为渠道下单参数，宿主据此拒绝任意字符串。
+func ValidPaymentMethodID(value string) bool {
+	if len(value) == 0 || len(value) > 32 {
+		return false
+	}
+	for index, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			continue
+		}
+		if index > 0 && (char == '-' || char == '_') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func manifestHasConfigField(manifest Manifest, name string) bool {
+	for _, field := range manifest.Configuration.Fields {
+		if field.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeManifest(manifest *Manifest) error {

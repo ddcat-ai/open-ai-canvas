@@ -10,6 +10,17 @@ export type PaymentProvider = {
     pluginEnabled: boolean;
     configured: boolean;
     closeAfterMinutes: number;
+    /** 渠道实际收款货币；商品货币不同时后端按汇率换算实收金额。仅用户端列表返回。 */
+    settlementCurrency?: PaymentCurrency;
+    /** 渠道内已启用的支付方式（如易支付的支付宝、微信支付）；为空表示不需要选择。 */
+    methods?: PaymentMethod[];
+};
+
+export type PaymentMethod = {
+    id: string;
+    name: string;
+    /** 品牌图标键，例如 brand:alipay。 */
+    icon?: string;
 };
 
 export type TopupSaleStrategy = "unlimited" | "periodic" | "inventory" | "timed";
@@ -55,8 +66,14 @@ export type PaymentOrder = {
     productName: string;
     productKind: TopupProductKind;
     providerId: string;
+    paymentMethod?: string;
+    /** 商品售价快照。 */
     amountFen: number;
     currency: "CNY" | string;
+    /** 向渠道实际收取的金额与货币；跨币种时由 exchangeRate（1 USD 兑换的 CNY）换算。 */
+    chargeAmountFen: number;
+    chargeCurrency: string;
+    exchangeRate?: string;
     creditsMicrocredits: number;
     storageBytes?: number;
     storageDurationDays?: number;
@@ -79,12 +96,14 @@ export type PaymentOrder = {
 
 export type PaymentConfigField = {
     name: string;
-    type: "string" | "password" | "textarea" | "url" | string;
+    type: "string" | "password" | "textarea" | "url" | "multiselect" | string;
     label?: string;
     required?: boolean;
     secret?: boolean;
     default?: unknown;
     description?: string;
+    /** 可选值：string 字段渲染为单选，multiselect 字段渲染为可输入自定义值的多选（逗号分隔保存）。 */
+    values?: string[];
 };
 
 export type AdminPaymentProvider = PaymentProvider & {
@@ -105,7 +124,7 @@ export function listTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/payments/products");
 }
 
-export function createPaymentOrder(input: { productId: string; providerId: string; idempotencyKey: string }) {
+export function createPaymentOrder(input: { productId: string; providerId: string; method?: string; idempotencyKey: string }) {
     return http.post<{ order: PaymentOrder }>("/payments/orders", input);
 }
 
@@ -134,7 +153,8 @@ export function updateAdminPaymentProvider(id: string, input: { enabled: boolean
 }
 
 export type PaymentCurrency = "CNY" | "USD";
-export type PaymentSettings = { defaultCurrency: PaymentCurrency };
+/** usdCnyRate 是 1 USD 兑换的 CNY（十进制字符串），为空表示未配置，跨币种渠道不可下单。 */
+export type PaymentSettings = { defaultCurrency: PaymentCurrency; usdCnyRate: string };
 
 export function getPaymentSettings() {
     return http.get<{ settings: PaymentSettings }>("/payments/settings");

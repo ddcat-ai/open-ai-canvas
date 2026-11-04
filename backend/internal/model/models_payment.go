@@ -57,6 +57,8 @@ type TopupProduct struct {
 	Kind        TopupProductKind `json:"kind" gorm:"size:24;not null;default:credits;index"`
 	AmountFen   int64            `json:"amountFen" gorm:"index"`
 	// Currency 是售价货币；AmountFen 统一表示该货币的最小单位（分 / 美分）。
+	// 列默认值保持 CNY：Schema 75 用它把升级前的旧商品归为人民币。新建商品总是显式写入货币
+	// （为空时取后台默认充值货币，默认 USD），不依赖列默认值。
 	Currency            string `json:"currency" gorm:"size:8;not null;default:CNY"`
 	CreditsMicrocredits int64  `json:"creditsMicrocredits"`
 	// StorageBytes / StorageDurationDays 只对 storage 商品有效；天数为 0 表示永久扩容。
@@ -96,38 +98,45 @@ type PaymentProviderConfig struct {
 }
 
 type PaymentOrder struct {
-	ID                    string             `json:"id" gorm:"primaryKey;size:36"`
-	UserID                string             `json:"userId" gorm:"size:36;index;uniqueIndex:idx_payment_user_idempotency,priority:1"`
-	IdempotencyKey        string             `json:"idempotencyKey" gorm:"size:120;uniqueIndex:idx_payment_user_idempotency,priority:2"`
-	MerchantOrderNo       string             `json:"merchantOrderNo" gorm:"size:32;uniqueIndex"`
-	ProductID             string             `json:"productId" gorm:"size:36;index"`
-	ProductName           string             `json:"productName" gorm:"size:120"`
-	ProductKind           TopupProductKind   `json:"productKind" gorm:"size:24;not null;default:credits"`
-	StorageBytes          int64              `json:"storageBytes" gorm:"not null;default:0"`
-	StorageDurationDays   int                `json:"storageDurationDays" gorm:"not null;default:0"`
-	StockReserved         bool               `json:"-" gorm:"not null;default:false"`
-	ProviderID            string             `json:"providerId" gorm:"size:80;index;uniqueIndex:idx_payment_provider_trade,priority:1"`
-	PluginID              string             `json:"pluginId" gorm:"size:120;index"`
-	PluginVersion         string             `json:"pluginVersion" gorm:"size:40"`
-	ProviderConfigID      string             `json:"providerConfigId" gorm:"size:36;index"`
-	ProviderConfigVersion int64              `json:"providerConfigVersion"`
-	AmountFen             int64              `json:"amountFen"`
-	Currency              string             `json:"currency" gorm:"size:8"`
-	CreditsMicrocredits   int64              `json:"creditsMicrocredits"`
-	Status                PaymentOrderStatus `json:"status" gorm:"size:24;index;index:idx_payment_order_status_expiry,priority:1"`
-	ProviderTradeNo       *string            `json:"providerTradeNo,omitempty" gorm:"size:96;uniqueIndex:idx_payment_provider_trade,priority:2"`
-	ProviderStatus        string             `json:"providerStatus,omitempty" gorm:"size:40;index"`
-	CheckoutMode          string             `json:"checkoutMode,omitempty" gorm:"size:24"`
-	CheckoutValue         string             `json:"-" gorm:"type:text"`
-	CheckoutExpiresAt     *time.Time         `json:"checkoutExpiresAt,omitempty"`
-	ExpiresAt             time.Time          `json:"expiresAt" gorm:"index:idx_payment_order_status_expiry,priority:2"`
-	ProviderPaidAt        *time.Time         `json:"providerPaidAt,omitempty" gorm:"index"`
-	CreditedAt            *time.Time         `json:"creditedAt,omitempty" gorm:"index"`
-	ClosedAt              *time.Time         `json:"closedAt,omitempty" gorm:"index"`
-	LastQueriedAt         *time.Time         `json:"lastQueriedAt,omitempty"`
-	LastError             string             `json:"lastError,omitempty" gorm:"size:1000"`
-	CreatedAt             time.Time          `json:"createdAt" gorm:"index"`
-	UpdatedAt             time.Time          `json:"updatedAt"`
+	ID                    string           `json:"id" gorm:"primaryKey;size:36"`
+	UserID                string           `json:"userId" gorm:"size:36;index;uniqueIndex:idx_payment_user_idempotency,priority:1"`
+	IdempotencyKey        string           `json:"idempotencyKey" gorm:"size:120;uniqueIndex:idx_payment_user_idempotency,priority:2"`
+	MerchantOrderNo       string           `json:"merchantOrderNo" gorm:"size:32;uniqueIndex"`
+	ProductID             string           `json:"productId" gorm:"size:36;index"`
+	ProductName           string           `json:"productName" gorm:"size:120"`
+	ProductKind           TopupProductKind `json:"productKind" gorm:"size:24;not null;default:credits"`
+	StorageBytes          int64            `json:"storageBytes" gorm:"not null;default:0"`
+	StorageDurationDays   int              `json:"storageDurationDays" gorm:"not null;default:0"`
+	StockReserved         bool             `json:"-" gorm:"not null;default:false"`
+	ProviderID            string           `json:"providerId" gorm:"size:80;index;uniqueIndex:idx_payment_provider_trade,priority:1"`
+	PluginID              string           `json:"pluginId" gorm:"size:120;index"`
+	PluginVersion         string           `json:"pluginVersion" gorm:"size:40"`
+	ProviderConfigID      string           `json:"providerConfigId" gorm:"size:36;index"`
+	ProviderConfigVersion int64            `json:"providerConfigVersion"`
+	AmountFen             int64            `json:"amountFen"`
+	Currency              string           `json:"currency" gorm:"size:8"`
+	// ChargeAmountFen / ChargeCurrency 是下单时向渠道实际收取的金额快照。渠道结算货币与商品货币不同时
+	// 按 ExchangeRateMicros（1 USD 兑换的 CNY × 1e6）换算；同币种时与 AmountFen / Currency 相同。
+	// 回调、查单和对账都按实收金额校验，汇率调整不影响已创建的订单。
+	ChargeAmountFen     int64              `json:"chargeAmountFen" gorm:"not null;default:0"`
+	ChargeCurrency      string             `json:"chargeCurrency" gorm:"size:8;not null;default:''"`
+	ExchangeRateMicros  int64              `json:"exchangeRateMicros" gorm:"not null;default:0"`
+	PaymentMethod       string             `json:"paymentMethod" gorm:"size:40;not null;default:''"`
+	CreditsMicrocredits int64              `json:"creditsMicrocredits"`
+	Status              PaymentOrderStatus `json:"status" gorm:"size:24;index;index:idx_payment_order_status_expiry,priority:1"`
+	ProviderTradeNo     *string            `json:"providerTradeNo,omitempty" gorm:"size:96;uniqueIndex:idx_payment_provider_trade,priority:2"`
+	ProviderStatus      string             `json:"providerStatus,omitempty" gorm:"size:40;index"`
+	CheckoutMode        string             `json:"checkoutMode,omitempty" gorm:"size:24"`
+	CheckoutValue       string             `json:"-" gorm:"type:text"`
+	CheckoutExpiresAt   *time.Time         `json:"checkoutExpiresAt,omitempty"`
+	ExpiresAt           time.Time          `json:"expiresAt" gorm:"index:idx_payment_order_status_expiry,priority:2"`
+	ProviderPaidAt      *time.Time         `json:"providerPaidAt,omitempty" gorm:"index"`
+	CreditedAt          *time.Time         `json:"creditedAt,omitempty" gorm:"index"`
+	ClosedAt            *time.Time         `json:"closedAt,omitempty" gorm:"index"`
+	LastQueriedAt       *time.Time         `json:"lastQueriedAt,omitempty"`
+	LastError           string             `json:"lastError,omitempty" gorm:"size:1000"`
+	CreatedAt           time.Time          `json:"createdAt" gorm:"index"`
+	UpdatedAt           time.Time          `json:"updatedAt"`
 }
 
 // PaymentNotification is a durable, verified inbox. NormalizedJSON contains

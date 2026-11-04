@@ -374,7 +374,9 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 
 渠道模型创建与更新增加 `priceCurrency`：`credits`（默认）/ `USD` / `CNY`。省略时更新保留原值、新建为 `credits`。货币计价时价格档售价字段表示百万分之一货币单位，例如 `unitPriceMicrocredits: 40000` 表示每次 0.04 USD；成本价仍是微积分。渠道导出文件携带 `priceCurrency`。
 
-充值商品增加 `currency`（`CNY` / `USD`），`amountFen` 表示该货币最小单位（分 / 美分）；新建未传 `currency` 时使用默认充值货币，更新未传时保留原值。支付订单 `currency` 取自商品，支付插件按该货币下单和校验。默认充值货币接口：`GET /api/payments/settings`（登录用户）、`GET/PUT /api/admin/payments/settings`（`{ defaultCurrency: "CNY" | "USD" }`）；用户端 `/payments/products` 把默认货币的商品排在前面，切换默认货币不改写已有商品价格。
+充值商品增加 `currency`（`CNY` / `USD`），`amountFen` 表示该货币最小单位（分 / 美分）；新建未传 `currency` 时使用默认充值货币，更新未传时保留原值。支付订单 `currency` 取自商品。充值设置接口：`GET /api/payments/settings`（登录用户）、`GET/PUT /api/admin/payments/settings`（`{ defaultCurrency: "CNY" | "USD", usdCnyRate: string }`，PUT 整体替换）；`defaultCurrency` 未设置时为 `USD`，`usdCnyRate` 为 1 USD 兑换的 CNY（最多 6 位小数，0–10000，空串表示未配置）。用户端 `/payments/products` 把默认货币的商品排在前面，切换默认货币不改写已有商品价格。
+
+每个支付渠道有结算货币：渠道配置的 `settlementCurrency`（易支付可选 `CNY` / `USD`），其余官方渠道为 `CNY`。商品货币与结算货币不同时，下单按 `usdCnyRate` 换算并四舍五入到分；未配置汇率时返回 400，不创建订单。`GET /api/payments/providers` 的每个渠道返回 `settlementCurrency` 和 `methods`（`[{ id, name, icon }]`，渠道内已启用的支付方式，来自插件清单 `methods` / `methodsField` 与渠道配置）。`POST /api/payments/orders` 增加可选 `method`：渠道有多种方式时必填且必须是已启用方式，只有一种时可省略，渠道没有方式时必须省略；同一幂等键换用其他方式返回 409。订单视图增加 `paymentMethod`、`chargeAmountFen`、`chargeCurrency` 和 `exchangeRate`（跨币种时的汇率字符串）；回调、查单和对账按实收金额与货币校验。
 
 ## 管理员积分成本
 
@@ -563,7 +565,7 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 后台支付订单列表展示用户身份，点击名称打开用户详情；订单详情提供完整订单号、渠道交易号、用户 ID 和各阶段时间。同步支付状态与关闭订单位于更多菜单，关闭订单仍需确认。
 
-官方易支付插件 `official-payment-epay` 通过既有支付接口接入，不新增业务路由。管理员必须显式填写可信支付网关；V1 支持 MD5 下单、查单与通知验签，未付款订单的关单仅关闭本地记录。V2 目前只支持 RSA 下单和通知验签，不支持查单、刷新收银台及自动关单；相应操作返回明确失败，不能按“订单已关闭”处理。启用前需在实际网关验收回调和到账，不能用插件安装成功代替支付链路验收。
+官方易支付插件 `official-payment-epay` 通过既有支付接口接入，不新增业务路由。管理员必须显式填写可信支付网关；V1 支持 MD5 下单、查单与通知验签，未付款订单的关单仅关闭本地记录。V1 下单方式 `submitMode` 可选 `api`（服务端调用 `mapi.php`）或 `submit`（生成签名的 `submit.php` 地址，经 `/api/payments/orders/:id/checkout` 302 让浏览器跳转到网关收银台，地址不含商户密钥）。`payTypes` 可启用多种支付方式，用户在充值面板逐个选择。V2 目前只支持 RSA 下单和通知验签，不支持查单、刷新收银台及自动关单；相应操作返回明确失败，不能按“订单已关闭”处理。启用前需在实际网关验收回调和到账，不能用插件安装成功代替支付链路验收。
 
 ### 支付对账筛选及 CSV 导出
 
@@ -573,7 +575,7 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 | 接口 | 参数与内容 |
 | --- | --- |
-| `GET /api/admin/payments/orders/export.csv` | 与订单列表相同的筛选；完整订单号、渠道交易号、用户身份、商品、渠道、金额、币种、积分、订单/渠道状态及各阶段时间 |
+| `GET /api/admin/payments/orders/export.csv` | 与订单列表相同的筛选；完整订单号、渠道交易号、用户身份、商品、渠道、金额、币种、积分、订单/渠道状态、各阶段时间，以及支付方式、实收金额、实收币种和汇率（追加在末尾） |
 | `GET /api/admin/payments/reconciliations/export.csv` | 与对账列表相同的筛选；每日执行状态、总笔数、一致/补发/异常笔数、失败原因、发起人 ID 或系统、开始/完成时间 |
 | `GET /api/admin/payments/reconciliations/:id/items/export.csv` | `result`；单次对账的完整交易明细及对账开始/完成时间，便于区分同日重跑结果 |
 

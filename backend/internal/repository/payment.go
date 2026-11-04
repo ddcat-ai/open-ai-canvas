@@ -295,7 +295,8 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, "provider_id = ? AND merchant_order_no = ?", providerID, merchantOrderNo).Error; err != nil {
 			return err
 		}
-		if order.AmountFen != evidence.AmountFen || order.Currency != evidence.Currency || strings.TrimSpace(evidence.ProviderTradeNo) == "" {
+		// 渠道凭据只证明实收金额；商品金额可能经过汇率换算，不能拿来比对。
+		if order.ChargeAmountFen != evidence.AmountFen || order.ChargeCurrency != evidence.Currency || strings.TrimSpace(evidence.ProviderTradeNo) == "" {
 			return ErrPaymentEvidenceMismatch
 		}
 		storageOrder := order.ProductKind == model.TopupProductKindStorage

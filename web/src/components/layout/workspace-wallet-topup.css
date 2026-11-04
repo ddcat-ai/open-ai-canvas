@@ -389,8 +389,23 @@
     font-size: 12px;
 }
 
+/* 跨币种实付预估：售价下方的小字，与售价右对齐。 */
+.wallet-topup-checkout-summary b.wallet-topup-checkout-price {
+    display: grid;
+    justify-items: end;
+}
+
+.wallet-topup-checkout-summary b.wallet-topup-checkout-price small {
+    font-weight: 400;
+}
+
 .wallet-topup-checkout .workspace-wallet-providers {
     flex: 0 1 auto;
+}
+
+.wallet-topup-checkout .workspace-wallet-providers button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 /* 头部：积分余额与存储容量两张摘要卡。 */

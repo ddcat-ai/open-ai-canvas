@@ -11,7 +11,8 @@ import { formatCredits } from "@/constant/credits";
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { accountFileStorageUsageQueryKey, accountStorageMeter } from "@/lib/account-storage-usage";
 import { generationErrorMessage } from "@/lib/generation-error";
-import { listPaymentProviders, listTopupProducts, type PaymentOrder, type PaymentProvider, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
+import { estimatePaymentCharge, paymentOptionsFromProviders, type PaymentOption } from "@/lib/payment-options";
+import { getPaymentSettings, listPaymentProviders, listTopupProducts, type PaymentOrder, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import { listMyStorageGrants } from "@/services/api/storage-grants";
 import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
 import { cn } from "@/lib/utils";
@@ -101,10 +102,11 @@ export function WorkspaceWalletModal({
     const [walletError, setWalletError] = useState("");
     const [page, setPage] = useState(1);
     const [products, setProducts] = useState<TopupProduct[]>([]);
-    const [providers, setProviders] = useState<PaymentProvider[]>([]);
+    const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
+    const [usdCnyRate, setUsdCnyRate] = useState("");
     const [paymentsLoading, setPaymentsLoading] = useState(false);
     const [selectedProductId, setSelectedProductId] = useState("");
-    const [selectedProviderId, setSelectedProviderId] = useState("");
+    const [selectedOptionKey, setSelectedOptionKey] = useState("");
     const [code, setCode] = useState("");
     const [redeeming, setRedeeming] = useState(false);
     const requestSequence = useRef(0);
@@ -113,7 +115,7 @@ export function WorkspaceWalletModal({
     const storageMeter = accountStorageMeter(storageQuery.data);
 
     const selectedProduct = useMemo(() => products.find((item) => item.id === selectedProductId), [products, selectedProductId]);
-    const selectedProvider = useMemo(() => providers.find((item) => item.id === selectedProviderId), [providers, selectedProviderId]);
+    const selectedOption = useMemo(() => paymentOptions.find((item) => item.key === selectedOptionKey), [paymentOptions, selectedOptionKey]);
     const activeTab: WalletModalTab = creditsEnabled ? tab : "topup";
 
     const reloadWallet = async (targetPage = page) => {
@@ -138,18 +140,20 @@ export function WorkspaceWalletModal({
         setPage(1);
         void reloadWallet(1);
         setPaymentsLoading(true);
-        Promise.all([listTopupProducts(), listPaymentProviders()])
-            .then(([productResult, providerResult]) => {
+        Promise.all([listTopupProducts(), listPaymentProviders(), getPaymentSettings()])
+            .then(([productResult, providerResult, settingsResult]) => {
                 const enabledProducts = productResult.products.filter((item) => item.enabled);
                 const usableProviders = providerResult.providers.filter((item) => item.enabled && item.pluginEnabled && item.configured);
+                const options = paymentOptionsFromProviders(usableProviders);
                 setProducts(enabledProducts);
-                setProviders(usableProviders);
+                setPaymentOptions(options);
+                setUsdCnyRate(settingsResult.settings.usdCnyRate || "");
                 // 从容量入口进入时优先选中存储空间套餐。
                 const preferred = enabledProducts.filter((item) => !initialCategory || initialCategory === "all" || item.kind === initialCategory);
                 setSelectedProductId((current) =>
                     current && enabledProducts.some((item) => item.id === current) && !initialCategory ? current : preferred.find((item) => item.canPurchase)?.id || enabledProducts.find((item) => item.canPurchase)?.id || "",
                 );
-                setSelectedProviderId((current) => current || usableProviders[0]?.id || "");
+                setSelectedOptionKey((current) => (current && options.some((item) => item.key === current) ? current : options[0]?.key || ""));
             })
             .catch((error) => message.error(error instanceof Error ? error.message : "读取充值配置失败"))
             .finally(() => setPaymentsLoading(false));
@@ -178,7 +182,16 @@ export function WorkspaceWalletModal({
 
     useEffect(() => {
         payment.resetIdempotency();
-    }, [selectedProductId, selectedProviderId]);
+    }, [selectedProductId, selectedOptionKey]);
+
+    // 换了套餐后，当前支付入口可能因币种无法换算而不可用，改选第一个可用入口。
+    useEffect(() => {
+        if (!selectedProduct || !paymentOptions.length) return;
+        const payable = (option: PaymentOption) => Boolean(estimatePaymentCharge(selectedProduct.amountFen, selectedProduct.currency, option.settlementCurrency, usdCnyRate));
+        if (selectedOption && payable(selectedOption)) return;
+        const next = paymentOptions.find(payable);
+        if (next) setSelectedOptionKey(next.key);
+    }, [selectedProduct, paymentOptions, selectedOption, usdCnyRate]);
 
     useEffect(() => {
         if (!open || !pendingPaymentOrderId) return;
@@ -205,7 +218,7 @@ export function WorkspaceWalletModal({
     };
 
     const startPayment = async () => {
-        if (!selectedProduct || !selectedProvider) {
+        if (!selectedProduct || !selectedOption) {
             message.error("请选择套餐和支付方式");
             return;
         }
@@ -213,7 +226,7 @@ export function WorkspaceWalletModal({
             message.error("该套餐当前不可购买，请刷新后重试");
             return;
         }
-        await payment.start(selectedProduct.id, selectedProvider.id);
+        await payment.start(selectedProduct.id, selectedOption.providerId, selectedOption.method);
     };
 
     // 定位到某类套餐：滚动到分组，并在当前选中项不属于该类时改选该类第一个可买套餐。
@@ -292,13 +305,14 @@ export function WorkspaceWalletModal({
                         <WalletTopupPanel
                             loading={paymentsLoading}
                             products={products}
-                            providers={providers}
+                            paymentOptions={paymentOptions}
+                            usdCnyRate={usdCnyRate}
                             focusKind={focusKind}
                             focusToken={focusToken}
                             selectedProduct={selectedProduct}
                             onSelectProduct={setSelectedProductId}
-                            selectedProviderId={selectedProviderId}
-                            onSelectProvider={setSelectedProviderId}
+                            selectedOptionKey={selectedOptionKey}
+                            onSelectOption={setSelectedOptionKey}
                             creating={payment.creating}
                             onPay={() => void startPayment()}
                             storageUsage={storageQuery.data}
