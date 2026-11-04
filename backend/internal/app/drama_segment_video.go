@@ -426,7 +426,7 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 		if len(audios) > 0 {
 			input["referenceAudios"] = audios
 		}
-		task, err := r.createTaskWith(segmentVideoChoice(*segment, r.settings.Models.Video), "video", request.Operation, prompt, input)
+		task, err := r.createTaskWith(job, segmentVideoChoice(*segment, r.settings.Models.Video), "video", request.Operation, prompt, input)
 		return task, false, err
 	}
 	return nil, false, errors.New("剧情段没有对应分镜")

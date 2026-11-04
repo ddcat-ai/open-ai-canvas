@@ -385,6 +385,40 @@ func (r *Repository) SaveDramaJob(job *model.DramaJob) error {
 	return r.db.Save(job).Error
 }
 
+// RecordDramaJobCost 按 attempts_json 乐观锁写入本次任务的去重记录与作业花费：结算后先落库再应用结果，
+// 中断恢复时已记录的任务不会再记一次。作品花费按订单汇总（DramaBillingTotals），这里不改 drama_productions。
+func (r *Repository) RecordDramaJobCost(job *model.DramaJob, previousAttempts string) error {
+	result := r.db.Model(&model.DramaJob{}).
+		Where("id = ? AND project_id = ? AND task_id = ? AND COALESCE(attempts_json, '') = ?", job.ID, job.ProjectID, job.TaskID, previousAttempts).
+		Updates(map[string]any{"attempts_json": job.AttemptsJSON, "cost_microcredits": job.CostMicrocredits, "updated_at": time.Now()})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrDramaJobChanged
+	}
+	return nil
+}
+
+// ErrDramaJobChanged 表示作业在读取后已被取消、重试或绑定到其他任务，本次写入作废。
+var ErrDramaJobChanged = errors.New("短剧作业已变化，请重新读取")
+
+// BindDramaJobTask 只在作业仍是派发前读到的状态与任务时写入新的绑定（整行写回），
+// 防止用户在派发期间取消或重试后被覆盖回运行中，或复活已删除的作业。
+func (r *Repository) BindDramaJobTask(job *model.DramaJob, expectedStatus, expectedTaskID string) error {
+	job.UpdatedAt = time.Now()
+	result := r.db.Model(job).
+		Where("project_id = ? AND status = ? AND COALESCE(task_id, '') = ?", job.ProjectID, expectedStatus, expectedTaskID).
+		Select("*").Omit("id", "project_id", "created_at").Updates(job)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrDramaJobChanged
+	}
+	return nil
+}
+
 // CancelDramaJobs 取消尚未派发的排队工作；已提交的任务由任务中心各自收尾。
 func (r *Repository) CancelQueuedDramaJobs(projectID string, filter func(*gorm.DB) *gorm.DB) error {
 	query := r.db.Model(&model.DramaJob{}).Where("project_id = ? AND status = ?", projectID, model.DramaJobQueued)

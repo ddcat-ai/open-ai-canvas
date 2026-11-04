@@ -243,8 +243,9 @@ func (s *Service) CreateTimelineTranscriptionTask(userID string, req TimelineTra
 // Timeline 为前端 TimelineProject 快照（v2：tracks/clips 平铺）。
 // 片段通过 directMedia.storageKey=resource:<id> 引用后端资源。
 type TimelineRenderCreateRequest struct {
-	ProjectID string        `json:"projectId"`
-	Timeline  renderProject `json:"timeline"`
+	prepareOnly bool
+	ProjectID   string        `json:"projectId"`
+	Timeline    renderProject `json:"timeline"`
 }
 
 type timelineRenderInput struct {
@@ -281,6 +282,9 @@ func (s *Service) CreateTimelineRenderTask(userID string, req TimelineRenderCrea
 		Type: model.TaskTypeTimelineRender, Status: model.TaskStatusQueued,
 		Stage: "等待队列调度", Progress: 5, Prompt: "时间线渲染",
 		Provider: "local", Model: "ffmpeg", InputJSON: string(inputJSON),
+	}
+	if req.prepareOnly {
+		return &task, nil
 	}
 	if err := s.createTaskWithinStorageQuota(&task, nil, policy); err != nil {
 		if errors.Is(err, repository.ErrActiveTaskLimit) {
