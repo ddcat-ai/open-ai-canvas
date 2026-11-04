@@ -128,6 +128,7 @@ func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) 
 		root.InputTokens = log.InputTokens
 		root.OutputTokens = log.OutputTokens
 		root.CachedTokens = log.CachedTokens
+		root.CacheWriteTokens = log.CacheWriteTokens
 	}
 	return true, s.repo.Save(root)
 }

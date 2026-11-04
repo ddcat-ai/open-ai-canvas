@@ -35,6 +35,26 @@ func TestTokenUsageAmountUsesExactArithmetic(t *testing.T) {
 			want:  22_500_000_000_000,
 		},
 		{
+			// InputTokens 含缓存命中和缓存写入，两者都从普通输入中扣出后按各自单价计费。
+			name: "text bills cache writes at their own price",
+			order: model.BillingOrder{
+				Capability: "text", MultiplierBasisPoints: 10_000,
+				InputTokenPriceMicrocredits: 1_000_000, OutputTokenPriceMicrocredits: 2_000_000,
+				CachedTokenPriceMicrocredits: 100_000, CacheWriteTokenPriceMicrocredits: 1_250_000,
+			},
+			usage: BillingUsage{InputTokens: 3_000_000, OutputTokens: 1_000_000, CachedTokens: 1_000_000, CacheWriteTokens: 1_000_000},
+			want:  4_350_000,
+		},
+		{
+			name: "default zero cache write price leaves writes uncharged",
+			order: model.BillingOrder{
+				Capability: "text", MultiplierBasisPoints: 10_000,
+				InputTokenPriceMicrocredits: 1_000_000, OutputTokenPriceMicrocredits: 2_000_000, CachedTokenPriceMicrocredits: 100_000,
+			},
+			usage: BillingUsage{InputTokens: 3_000_000, OutputTokens: 1_000_000, CachedTokens: 1_000_000, CacheWriteTokens: 1_000_000},
+			want:  3_100_000,
+		},
+		{
 			name: "round once after all text charges",
 			order: model.BillingOrder{
 				Capability: "text", MultiplierBasisPoints: 10_000,
@@ -73,6 +93,11 @@ func TestTokenUsageAmountRejectsInvalidArithmetic(t *testing.T) {
 			name:  "negative unused text cache price",
 			order: model.BillingOrder{Capability: "text", MultiplierBasisPoints: 10_000, CachedTokenPriceMicrocredits: -1},
 			usage: BillingUsage{OutputTokens: 1},
+		},
+		{
+			name:  "negative cache write usage",
+			order: model.BillingOrder{Capability: "text", MultiplierBasisPoints: 10_000, CacheWriteTokenPriceMicrocredits: 1},
+			usage: BillingUsage{OutputTokens: 1, CacheWriteTokens: -1},
 		},
 		{
 			name:  "zero multiplier",

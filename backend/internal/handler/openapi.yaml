@@ -2390,7 +2390,7 @@ paths:
                             prices:
                               type: object
                               additionalProperties: false
-                              description: 按次/秒仅unit字段；文本Token为输入、输出、缓存；视频Token仅输出。必须完整提交对应字段。
+                              description: 按次/秒仅unit字段；文本Token为输入、输出、缓存命中、缓存写入；视频Token仅输出。必须完整提交对应字段。
                               properties:
                                 unitPriceMicrocredits:
                                   {
@@ -2414,6 +2414,13 @@ paths:
                                     maximum: 1000000000000,
                                   }
                                 cachedTokenPriceMicrocredits:
+                                  {
+                                    type: integer,
+                                    format: int64,
+                                    minimum: 0,
+                                    maximum: 1000000000000,
+                                  }
+                                cacheWriteTokenPriceMicrocredits:
                                   {
                                     type: integer,
                                     format: int64,

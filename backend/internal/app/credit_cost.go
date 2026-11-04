@@ -6,7 +6,7 @@ import (
 )
 
 func validateCreditCostPricing(capability, billingMode string, cost model.CreditCostPricing) error {
-	for _, price := range []int64{cost.UnitPriceMicrocredits, cost.InputTokenPriceMicrocredits, cost.OutputTokenPriceMicrocredits, cost.CachedTokenPriceMicrocredits} {
+	for _, price := range []int64{cost.UnitPriceMicrocredits, cost.InputTokenPriceMicrocredits, cost.OutputTokenPriceMicrocredits, cost.CachedTokenPriceMicrocredits, cost.CacheWriteTokenPriceMicrocredits} {
 		if price < 0 || price > 1_000_000_000_000 {
 			return BadAuthRequest("积分成本价必须在 0 到 1000000 积分之间")
 		}
@@ -17,7 +17,7 @@ func validateCreditCostPricing(capability, billingMode string, cost model.Credit
 	if billingMode != "token" {
 		capability = ""
 	}
-	return validateTokenPrices(capability, cost.InputTokenPriceMicrocredits, cost.OutputTokenPriceMicrocredits, cost.CachedTokenPriceMicrocredits)
+	return validateTokenPrices(capability, cost.InputTokenPriceMicrocredits, cost.OutputTokenPriceMicrocredits, cost.CachedTokenPriceMicrocredits, cost.CacheWriteTokenPriceMicrocredits)
 }
 
 func snapshotCreditCost(order *model.BillingOrder, tier *model.ChannelModelPriceTier, quantity int64, estimate tokenBillingEstimate) {
@@ -48,17 +48,18 @@ func billingCreditCost(order model.BillingOrder) (*int64, error) {
 	case "fixed_request", "per_second":
 		amount, err = creditAmount(cost.UnitPriceMicrocredits, order.CostQuantity, 10_000)
 	case "token":
-		input, output, cached := order.InputTokens, order.OutputTokens, order.CachedTokens
+		input, output, cached, cacheWrite := order.InputTokens, order.OutputTokens, order.CachedTokens, order.CacheWriteTokens
 		if !order.UsageAvailable {
 			if order.Capability != "video" || order.CostVideoFormulaTokens <= 0 {
 				return nil, nil
 			}
-			input, cached, output = 0, 0, order.CostVideoFormulaTokens
+			input, cached, cacheWrite, output = 0, 0, 0, order.CostVideoFormulaTokens
 		}
 		amount, err = kernel.TokenBillingAmount(10_000,
-			kernel.TokenBillingTerm{Tokens: max(0, input-cached), PriceMicrocredits: cost.InputTokenPriceMicrocredits},
+			kernel.TokenBillingTerm{Tokens: max(0, input-cached-cacheWrite), PriceMicrocredits: cost.InputTokenPriceMicrocredits},
 			kernel.TokenBillingTerm{Tokens: output, PriceMicrocredits: cost.OutputTokenPriceMicrocredits},
 			kernel.TokenBillingTerm{Tokens: cached, PriceMicrocredits: cost.CachedTokenPriceMicrocredits},
+			kernel.TokenBillingTerm{Tokens: cacheWrite, PriceMicrocredits: cost.CacheWriteTokenPriceMicrocredits},
 		)
 	default:
 		return nil, nil

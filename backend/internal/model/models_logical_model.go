@@ -24,13 +24,14 @@ type LogicalModel struct {
 	ActiveRevisionID string `json:"activeRevisionId" gorm:"size:36;index"`
 	// SourceChannelModelID 标识这个前台目录项由哪个系统渠道模型投影而来。
 	// 管理员不再重复维护能力和价格，渠道模型保存时会创建新的前台 revision。
-	SourceChannelModelID    string `json:"sourceChannelModelId,omitempty" gorm:"size:36;index"`
-	PricePolicy             string `json:"pricePolicy" gorm:"size:24;default:unified"`
-	BillingMode             string `json:"billingMode" gorm:"size:32"`
-	UnitPriceMicrocredits   int64  `json:"unitPriceMicrocredits"`
-	InputPriceMicrocredits  int64  `json:"inputPriceMicrocredits"`
-	OutputPriceMicrocredits int64  `json:"outputPriceMicrocredits"`
-	CachedPriceMicrocredits int64  `json:"cachedPriceMicrocredits"`
+	SourceChannelModelID        string `json:"sourceChannelModelId,omitempty" gorm:"size:36;index"`
+	PricePolicy                 string `json:"pricePolicy" gorm:"size:24;default:unified"`
+	BillingMode                 string `json:"billingMode" gorm:"size:32"`
+	UnitPriceMicrocredits       int64  `json:"unitPriceMicrocredits"`
+	InputPriceMicrocredits      int64  `json:"inputPriceMicrocredits"`
+	OutputPriceMicrocredits     int64  `json:"outputPriceMicrocredits"`
+	CachedPriceMicrocredits     int64  `json:"cachedPriceMicrocredits"`
+	CacheWritePriceMicrocredits int64  `json:"cacheWritePriceMicrocredits" gorm:"not null;default:0"`
 	// LegacyModelIDsJSON 用于创作端把已保存的旧 SKU 选择无缝映射到新的模型家族。
 	// 这只是目录兼容信息，任务、路由尝试和账单仍固定引用其创建时的 ID 快照。
 	LegacyModelIDsJSON string `json:"-" gorm:"type:text"`

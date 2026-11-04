@@ -105,7 +105,7 @@ func TestVideoTokenPricesUseOutputOnlyAndSharedBounds(t *testing.T) {
 			{name: "hidden cached price", output: 16_000_000, cached: 1},
 		} {
 			t.Run(string(protocol)+"/"+test.name, func(t *testing.T) {
-				if got := ValidateChannelModelPrice("token", "video", protocol, 0, test.input, test.output, test.cached); got != test.valid {
+				if got := ValidateChannelModelPrice("token", "video", protocol, 0, test.input, test.output, test.cached, 0); got != test.valid {
 					t.Fatalf("price validity = %v, want %v", got, test.valid)
 				}
 				for _, configured := range []bool{true, false} {

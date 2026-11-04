@@ -110,6 +110,7 @@ func applyChannelModelTierPrices(tier *model.ChannelModelPriceTier, capability s
 		if capability != "video" {
 			fields["inputTokenPriceMicrocredits"] = &tier.InputTokenPriceMicrocredits
 			fields["cachedTokenPriceMicrocredits"] = &tier.CachedTokenPriceMicrocredits
+			fields["cacheWriteTokenPriceMicrocredits"] = &tier.CacheWriteTokenPriceMicrocredits
 		}
 	}
 	if len(prices) != len(fields) {
@@ -125,6 +126,6 @@ func applyChannelModelTierPrices(tier *model.ChannelModelPriceTier, capability s
 	return validateChannelModelTierPricing(capability, protocol, tier.BillingMode, ChannelModelPriceTierRequest{
 		CostPricing: tier.CostPricing, UnitPriceMicrocredits: tier.UnitPriceMicrocredits,
 		InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits,
-		CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,
+		CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
 	})
 }

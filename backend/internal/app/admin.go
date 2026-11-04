@@ -132,20 +132,21 @@ type PublicModelChannel struct {
 }
 
 type PublicChannelModelPrice struct {
-	Model                        string                     `json:"model"`
-	DisplayName                  string                     `json:"displayName"`
-	ChannelLabel                 string                     `json:"channelLabel"`
-	Tags                         []model.ChannelModelTag    `json:"tags"`
-	Description                  string                     `json:"description"`
-	Icon                         string                     `json:"icon"`
-	Capability                   string                     `json:"capability"`
-	Protocol                     model.ChannelInterfaceType `json:"protocol"`
-	BillingMode                  string                     `json:"billingMode"`
-	UnitPriceMicrocredits        int64                      `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits  int64                      `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64                      `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64                      `json:"cachedTokenPriceMicrocredits"`
-	CapabilityConfig             *ModelCapabilityConfig     `json:"capabilityConfig,omitempty"`
+	Model                            string                     `json:"model"`
+	DisplayName                      string                     `json:"displayName"`
+	ChannelLabel                     string                     `json:"channelLabel"`
+	Tags                             []model.ChannelModelTag    `json:"tags"`
+	Description                      string                     `json:"description"`
+	Icon                             string                     `json:"icon"`
+	Capability                       string                     `json:"capability"`
+	Protocol                         model.ChannelInterfaceType `json:"protocol"`
+	BillingMode                      string                     `json:"billingMode"`
+	UnitPriceMicrocredits            int64                      `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits      int64                      `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits     int64                      `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits     int64                      `json:"cachedTokenPriceMicrocredits"`
+	CacheWriteTokenPriceMicrocredits int64                      `json:"cacheWriteTokenPriceMicrocredits"`
+	CapabilityConfig                 *ModelCapabilityConfig     `json:"capabilityConfig,omitempty"`
 }
 
 func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.ModelChannel, error) {
@@ -251,7 +252,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 					capabilityConfig = normalized
 				}
 			}
-			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, ChannelLabel: item.ChannelLabel, Tags: item.Tags, Description: item.Description, Icon: item.Icon, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits, CapabilityConfig: capabilityConfig})
+			modelCosts = append(modelCosts, PublicChannelModelPrice{Model: item.ModelKey, DisplayName: item.DisplayName, ChannelLabel: item.ChannelLabel, Tags: item.Tags, Description: item.Description, Icon: item.Icon, Capability: item.Capability, Protocol: item.Protocol, BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: item.CacheWriteTokenPriceMicrocredits, CapabilityConfig: capabilityConfig})
 		}
 	}
 	if len(models) == 0 {

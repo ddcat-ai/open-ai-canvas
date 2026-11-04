@@ -4,14 +4,14 @@ import "yingce/backend/internal/model"
 
 const maxChannelModelTokenPriceMicrocredits = int64(1_000_000) * CreditScale
 
-func validateTokenPrices(capability string, inputPrice, outputPrice, cachedPrice int64) error {
-	if inputPrice < 0 || outputPrice < 0 || cachedPrice < 0 {
+func validateTokenPrices(capability string, inputPrice, outputPrice, cachedPrice, cacheWritePrice int64) error {
+	if inputPrice < 0 || outputPrice < 0 || cachedPrice < 0 || cacheWritePrice < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
 	}
-	if capability == "video" && (inputPrice != 0 || cachedPrice != 0) {
+	if capability == "video" && (inputPrice != 0 || cachedPrice != 0 || cacheWritePrice != 0) {
 		return BadAuthRequest("视频 Token 仅按视频用量计费，输入和缓存 Token 价格必须为 0")
 	}
-	if inputPrice > maxChannelModelTokenPriceMicrocredits || outputPrice > maxChannelModelTokenPriceMicrocredits || cachedPrice > maxChannelModelTokenPriceMicrocredits {
+	if inputPrice > maxChannelModelTokenPriceMicrocredits || outputPrice > maxChannelModelTokenPriceMicrocredits || cachedPrice > maxChannelModelTokenPriceMicrocredits || cacheWritePrice > maxChannelModelTokenPriceMicrocredits {
 		return BadAuthRequest("Token 每百万用量价格不能超过 1,000,000 积分")
 	}
 	return nil
@@ -19,7 +19,7 @@ func validateTokenPrices(capability string, inputPrice, outputPrice, cachedPrice
 
 // ValidateChannelModelPrice 校验渠道模型价格配置的有效性
 // 根据 billingMode 检查必要的价格字段是否已配置
-func ValidateChannelModelPrice(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {
+func ValidateChannelModelPrice(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice, cacheWritePrice int64) bool {
 	switch billingMode {
 	case "fixed_request":
 		// 固定价格模式：0 表示免费，负数无效。
@@ -28,7 +28,7 @@ func ValidateChannelModelPrice(billingMode string, capability string, protocol m
 		// 按秒计费：0 表示免费，负数无效。
 		return unitPrice >= 0
 	case "token":
-		if validateTokenPrices(capability, inputPrice, outputPrice, cachedPrice) != nil {
+		if validateTokenPrices(capability, inputPrice, outputPrice, cachedPrice, cacheWritePrice) != nil {
 			return false
 		}
 		if capability == "video" {
@@ -49,13 +49,13 @@ func ValidatePriceTierPrice(tier *model.ChannelModelPriceTier, capability string
 	if tier == nil {
 		return false
 	}
-	return ValidateChannelModelPrice(tier.BillingMode, capability, protocol, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits)
+	return ValidateChannelModelPrice(tier.BillingMode, capability, protocol, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits, tier.CacheWriteTokenPriceMicrocredits)
 }
 
 // ComputePriceConfigured 根据价格内容计算 PriceConfigured 标志
 // 不再允许手动设置 PriceConfigured，必须由价格字段派生
-func ComputePriceConfigured(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {
-	return ValidateChannelModelPrice(billingMode, capability, protocol, unitPrice, inputPrice, outputPrice, cachedPrice)
+func ComputePriceConfigured(billingMode string, capability string, protocol model.ChannelInterfaceType, unitPrice, inputPrice, outputPrice, cachedPrice, cacheWritePrice int64) bool {
+	return ValidateChannelModelPrice(billingMode, capability, protocol, unitPrice, inputPrice, outputPrice, cachedPrice, cacheWritePrice)
 }
 
 // ComputeTierPriceConfigured 计算价格档的 PriceConfigured 标志
@@ -63,7 +63,7 @@ func ComputeTierPriceConfigured(tier *model.ChannelModelPriceTier, capability st
 	if tier == nil {
 		return false
 	}
-	return ComputePriceConfigured(tier.BillingMode, capability, protocol, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits)
+	return ComputePriceConfigured(tier.BillingMode, capability, protocol, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits, tier.CacheWriteTokenPriceMicrocredits)
 }
 
 // HasValidPrice 检查渠道模型是否有有效价格
@@ -84,15 +84,15 @@ func HasValidPrice(channelModel *model.ChannelModel) bool {
 	}
 
 	// 否则检查模型级别的价格
-	return channelModel.PriceConfigured && ValidateChannelModelPrice(channelModel.BillingMode, channelModel.Capability, channelModel.Protocol, channelModel.UnitPriceMicrocredits, channelModel.InputTokenPriceMicrocredits, channelModel.OutputTokenPriceMicrocredits, channelModel.CachedTokenPriceMicrocredits)
+	return channelModel.PriceConfigured && ValidateChannelModelPrice(channelModel.BillingMode, channelModel.Capability, channelModel.Protocol, channelModel.UnitPriceMicrocredits, channelModel.InputTokenPriceMicrocredits, channelModel.OutputTokenPriceMicrocredits, channelModel.CachedTokenPriceMicrocredits, channelModel.CacheWriteTokenPriceMicrocredits)
 }
 
 // ValidateLogicalModelPrice 校验前台模型的价格配置
-func ValidateLogicalModelPrice(pricePolicy string, billingMode string, unitPrice, inputPrice, outputPrice, cachedPrice int64) bool {
+func ValidateLogicalModelPrice(pricePolicy string, billingMode string, unitPrice, inputPrice, outputPrice, cachedPrice, cacheWritePrice int64) bool {
 	if pricePolicy == "channel" {
 		// 跟随渠道价格，不需要校验前台价格
 		return true
 	}
 	// 统一定价模式，按 billingMode 校验
-	return ValidateChannelModelPrice(billingMode, "", "", unitPrice, inputPrice, outputPrice, cachedPrice)
+	return ValidateChannelModelPrice(billingMode, "", "", unitPrice, inputPrice, outputPrice, cachedPrice, cacheWritePrice)
 }

@@ -109,7 +109,8 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 			Resolution: "*", VideoSeconds: 0, ProviderModelKey: fallbackProviderModelKey,
 			BillingMode: req.BillingMode, UnitPriceMicrocredits: req.UnitPriceMicrocredits,
 			InputTokenPriceMicrocredits: req.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: req.OutputTokenPriceMicrocredits,
-			CachedTokenPriceMicrocredits: req.CachedTokenPriceMicrocredits, PriceConfigured: req.PriceConfigured, Enabled: &enabled,
+			CachedTokenPriceMicrocredits: req.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: req.CacheWriteTokenPriceMicrocredits,
+			PriceConfigured: req.PriceConfigured, Enabled: &enabled,
 		}}
 	}
 	result := make([]model.ChannelModelPriceTier, 0, len(inputs))
@@ -144,22 +145,23 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		}
 		enabled := input.Enabled == nil || *input.Enabled
 		result = append(result, model.ChannelModelPriceTier{
-			CostPricing:                  input.CostPricing,
-			ID:                           id,
-			SelectorKey:                  key,
-			SelectorJSON:                 key,
-			Selector:                     selector,
-			Resolution:                   resolution,
-			VideoSeconds:                 videoSeconds,
-			ProviderModelKey:             strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(input.ProviderModelKey, fallbackProviderModelKey)), "models/"),
-			BillingMode:                  billingMode,
-			UnitPriceMicrocredits:        input.UnitPriceMicrocredits,
-			InputTokenPriceMicrocredits:  input.InputTokenPriceMicrocredits,
-			OutputTokenPriceMicrocredits: input.OutputTokenPriceMicrocredits,
-			CachedTokenPriceMicrocredits: input.CachedTokenPriceMicrocredits,
-			PriceConfigured:              input.PriceConfigured,
-			Enabled:                      enabled,
-			PriceVersion:                 1,
+			CostPricing:                      input.CostPricing,
+			ID:                               id,
+			SelectorKey:                      key,
+			SelectorJSON:                     key,
+			Selector:                         selector,
+			Resolution:                       resolution,
+			VideoSeconds:                     videoSeconds,
+			ProviderModelKey:                 strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(input.ProviderModelKey, fallbackProviderModelKey)), "models/"),
+			BillingMode:                      billingMode,
+			UnitPriceMicrocredits:            input.UnitPriceMicrocredits,
+			InputTokenPriceMicrocredits:      input.InputTokenPriceMicrocredits,
+			OutputTokenPriceMicrocredits:     input.OutputTokenPriceMicrocredits,
+			CachedTokenPriceMicrocredits:     input.CachedTokenPriceMicrocredits,
+			CacheWriteTokenPriceMicrocredits: input.CacheWriteTokenPriceMicrocredits,
+			PriceConfigured:                  input.PriceConfigured,
+			Enabled:                          enabled,
+			PriceVersion:                     1,
 		})
 	}
 	return result, nil
@@ -319,13 +321,13 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
 		return BadAuthRequest("Token 计费仅支持文本和视频模型")
 	}
-	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 {
+	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 || input.CacheWriteTokenPriceMicrocredits < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
 	}
 	if billingMode == "token" {
-		return validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits)
+		return validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits, input.CacheWriteTokenPriceMicrocredits)
 	}
-	return validateTokenPrices("", input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits)
+	return validateTokenPrices("", input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits, input.CacheWriteTokenPriceMicrocredits)
 }
 
 func normalizeChannelModelTierResolution(raw string) string {
@@ -344,6 +346,7 @@ func (s *Service) applyChannelModelPriceTierSummary(item *model.ChannelModel, ti
 	item.InputTokenPriceMicrocredits = 0
 	item.OutputTokenPriceMicrocredits = 0
 	item.CachedTokenPriceMicrocredits = 0
+	item.CacheWriteTokenPriceMicrocredits = 0
 	var summary *model.ChannelModelPriceTier
 	for index := range tiers {
 		tier := &tiers[index]
@@ -362,4 +365,5 @@ func (s *Service) applyChannelModelPriceTierSummary(item *model.ChannelModel, ti
 	item.InputTokenPriceMicrocredits = summary.InputTokenPriceMicrocredits
 	item.OutputTokenPriceMicrocredits = summary.OutputTokenPriceMicrocredits
 	item.CachedTokenPriceMicrocredits = summary.CachedTokenPriceMicrocredits
+	item.CacheWriteTokenPriceMicrocredits = summary.CacheWriteTokenPriceMicrocredits
 }

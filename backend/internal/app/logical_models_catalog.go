@@ -79,6 +79,7 @@ func (s *Service) groupLogicalModel(policy CreditPolicy, access *userGroupAccess
 				tiers[index].InputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Input, pricing.MultiplierBPS)
 				tiers[index].OutputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Output, pricing.MultiplierBPS)
 				tiers[index].CachedTokenPriceMicrocredits = effectiveCatalogPrice(prices.Cached, pricing.MultiplierBPS)
+				tiers[index].CacheWriteTokenPriceMicrocredits = effectiveCatalogPrice(prices.CacheWrite, pricing.MultiplierBPS)
 			}
 			if skip {
 				continue
@@ -102,6 +103,7 @@ func (s *Service) groupLogicalModel(policy CreditPolicy, access *userGroupAccess
 		item.InputPriceMicrocredits = effectiveCatalogPrice(item.InputPriceMicrocredits, pricing.MultiplierBPS)
 		item.OutputPriceMicrocredits = effectiveCatalogPrice(item.OutputPriceMicrocredits, pricing.MultiplierBPS)
 		item.CachedPriceMicrocredits = effectiveCatalogPrice(item.CachedPriceMicrocredits, pricing.MultiplierBPS)
+		item.CacheWritePriceMicrocredits = effectiveCatalogPrice(item.CacheWritePriceMicrocredits, pricing.MultiplierBPS)
 		cached.Model = item
 	}
 	return cached, true, nil
@@ -131,11 +133,12 @@ func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogical
 		Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder,
 		PricePolicy: item.PricePolicy, PricingMode: pricingMode, DisplayPrice: displayPrice,
 		PriceLabel: priceLabel, BillingMode: item.BillingMode,
-		UnitPriceMicrocredits:   item.UnitPriceMicrocredits,
-		InputPriceMicrocredits:  item.InputPriceMicrocredits,
-		OutputPriceMicrocredits: item.OutputPriceMicrocredits,
-		CachedPriceMicrocredits: item.CachedPriceMicrocredits,
-		PriceTiers:              priceTiers, LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON),
+		UnitPriceMicrocredits:       item.UnitPriceMicrocredits,
+		InputPriceMicrocredits:      item.InputPriceMicrocredits,
+		OutputPriceMicrocredits:     item.OutputPriceMicrocredits,
+		CachedPriceMicrocredits:     item.CachedPriceMicrocredits,
+		CacheWritePriceMicrocredits: item.CacheWritePriceMicrocredits,
+		PriceTiers:                  priceTiers, LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON),
 		CapabilitySpec: productSpec, CapabilityProfiles: profiles,
 		DefaultOptions: cached.Defaults, Available: available,
 	}
@@ -166,12 +169,12 @@ func publicLogicalModelPriceTiers(cached cachedLogicalModel) []PublicLogicalMode
 			if selectorErr != nil {
 				continue
 			}
-			key := fmt.Sprintf("%s:%s:%d:%d:%d:%d", selectorKey, tier.BillingMode, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits)
+			key := fmt.Sprintf("%s:%s:%d:%d:%d:%d:%d", selectorKey, tier.BillingMode, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits, tier.CacheWriteTokenPriceMicrocredits)
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
-			result = append(result, PublicLogicalModelPriceTier{Selector: selector, Resolution: normalizeChannelModelTierResolution(tier.Resolution), VideoSeconds: tier.VideoSeconds, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits})
+			result = append(result, PublicLogicalModelPriceTier{Selector: selector, Resolution: normalizeChannelModelTierResolution(tier.Resolution), VideoSeconds: tier.VideoSeconds, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits})
 		}
 	}
 	return result

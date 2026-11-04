@@ -303,6 +303,7 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 		updates["cost_input_token_price_microcredits"] = cost.CostPricing.InputTokenPriceMicrocredits
 		updates["cost_output_token_price_microcredits"] = cost.CostPricing.OutputTokenPriceMicrocredits
 		updates["cost_cached_token_price_microcredits"] = cost.CostPricing.CachedTokenPriceMicrocredits
+		updates["cost_cache_write_token_price_microcredits"] = cost.CostPricing.CacheWriteTokenPriceMicrocredits
 		updates["cost_billing_mode"] = cost.CostBillingMode
 		updates["cost_quantity"] = cost.CostQuantity
 		updates["cost_video_formula_tokens"] = cost.CostVideoFormulaTokens
@@ -373,6 +374,7 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 			updates["input_token_price_microcredits"] = replacement.InputTokenPriceMicrocredits
 			updates["output_token_price_microcredits"] = replacement.OutputTokenPriceMicrocredits
 			updates["cached_token_price_microcredits"] = replacement.CachedTokenPriceMicrocredits
+			updates["cache_write_token_price_microcredits"] = replacement.CacheWriteTokenPriceMicrocredits
 		}
 		billingUpdated := tx.Model(&model.BillingOrder{}).
 			Where("id = ? AND task_id = ? AND status IN ?", billingOrderID, taskID, []model.BillingStatus{model.BillingStatusReserved, model.BillingStatusRunning}).
@@ -395,22 +397,23 @@ func (r *Repository) SaveLogicalModelBundle(item *model.LogicalModel, revision *
 			}
 		} else {
 			result := tx.Model(&model.LogicalModel{}).Where("id = ?", item.ID).Updates(map[string]any{
-				"code":                      item.Code,
-				"name":                      item.Name,
-				"icon":                      item.Icon,
-				"description":               item.Description,
-				"capability":                item.Capability,
-				"enabled":                   item.Enabled,
-				"sort_order":                item.SortOrder,
-				"source_channel_model_id":   item.SourceChannelModelID,
-				"price_policy":              item.PricePolicy,
-				"billing_mode":              item.BillingMode,
-				"unit_price_microcredits":   item.UnitPriceMicrocredits,
-				"input_price_microcredits":  item.InputPriceMicrocredits,
-				"output_price_microcredits": item.OutputPriceMicrocredits,
-				"cached_price_microcredits": item.CachedPriceMicrocredits,
-				"legacy_model_ids_json":     item.LegacyModelIDsJSON,
-				"updated_at":                item.UpdatedAt,
+				"code":                           item.Code,
+				"name":                           item.Name,
+				"icon":                           item.Icon,
+				"description":                    item.Description,
+				"capability":                     item.Capability,
+				"enabled":                        item.Enabled,
+				"sort_order":                     item.SortOrder,
+				"source_channel_model_id":        item.SourceChannelModelID,
+				"price_policy":                   item.PricePolicy,
+				"billing_mode":                   item.BillingMode,
+				"unit_price_microcredits":        item.UnitPriceMicrocredits,
+				"input_price_microcredits":       item.InputPriceMicrocredits,
+				"output_price_microcredits":      item.OutputPriceMicrocredits,
+				"cached_price_microcredits":      item.CachedPriceMicrocredits,
+				"cache_write_price_microcredits": item.CacheWritePriceMicrocredits,
+				"legacy_model_ids_json":          item.LegacyModelIDsJSON,
+				"updated_at":                     item.UpdatedAt,
 			})
 			if result.Error != nil {
 				return result.Error

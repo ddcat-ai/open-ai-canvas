@@ -5,6 +5,20 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 文本 Token 缓存写入价（Schema 82）
+
+版本 82 `token_cache_write_price` 只补列，全部为 `NOT NULL DEFAULT 0`，旧价格档和旧账单的结算结果不变：
+
+| 表 / 列 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `channel_models.cache_write_token_price_microcredits` / `channel_model_price_tiers.cache_write_token_price_microcredits` | 文本 Token 售价的缓存写入单价（每百万 Token 微积分） | 默认 0 表示缓存写入不单独收费；视频 Token 必须为 0；上限与其他 Token 单价相同 |
+| `channel_model_price_tiers.cost_cache_write_token_price_microcredits` | 管理员成本价的缓存写入单价 | 只用于成本核算，不进入用户目录 |
+| `logical_models.cache_write_price_microcredits` | 统一定价前台模型的缓存写入单价 | 跟随渠道价格时为 0 |
+| `billing_orders.cache_write_token_price_microcredits` / `cost_cache_write_token_price_microcredits` | 下单时的售价与成本价快照 | 结算只读快照，不反查当前价格 |
+| `billing_orders.cache_write_tokens` / `api_call_logs.cache_write_tokens` | 本次写入提示词缓存的输入 Token | 已计入 `input_tokens`；结算时普通输入 = `input_tokens - cached_tokens - cache_write_tokens` |
+
+调用日志把各协议 usage 归一为同一口径：`input_tokens` 含缓存命中和缓存写入。Anthropic 原生 usage 的 `input_tokens` 不含 `cache_read_input_tokens` 与 `cache_creation_input_tokens`，写日志时补齐为总输入；百炼与 OpenRouter 的缓存写入分别读 `prompt_tokens_details.cache_creation_input_tokens` 和 `cache_write_tokens`。Token 预授权按输入价与缓存写入价中较高者估算全部输入 Token。
+
 ## Agent 记忆文件列补齐（Schema 77）
 
 版本 77 `agent_memory_document_columns` 只做补列：确保 `agent_memory_documents.next_entry_seq` 与 `agent_memory_document_revisions.call_id` 存在，并把空值回填为 `0` / 空串。开发期的早期构建执行 v76 时这两列还没加入模型，v76 已记为完成、校验和不能再改，缺列会让创建 Agent 轮次时读取记忆文件失败（`no column named next_entry_seq`）。新库由 v76 一次建全，v77 是空操作；不改写既有记忆内容。

@@ -206,7 +206,8 @@ func (r *Repository) attachChannelModelPriceTiers(items []*model.ChannelModel) e
 				ProviderModelKey: item.ProviderModelKey, BillingMode: item.BillingMode,
 				UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits,
 				OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits,
-				PriceConfigured: item.PriceConfigured, Enabled: item.Enabled, PriceVersion: item.PriceVersion,
+				CacheWriteTokenPriceMicrocredits: item.CacheWriteTokenPriceMicrocredits,
+				PriceConfigured:                  item.PriceConfigured, Enabled: item.Enabled, PriceVersion: item.PriceVersion,
 			}}
 		}
 	}

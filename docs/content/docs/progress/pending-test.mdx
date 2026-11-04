@@ -5,6 +5,16 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 文本模型定价：缓存写入价（Schema 82）
+
+- 已实现：系统渠道模型的文本 Token 价格档新增「缓存写入」售价与成本价（每百万 Token），默认 0 表示缓存写入不单独收费；原「缓存」改名「缓存命中」。统一调价、渠道导入导出、公开目录和前台统一定价都带上该字段；视频 Token 必须为 0。
+- 结算：调用日志与账单新增 `cache_write_tokens`。`input_tokens` 统一为含缓存命中和缓存写入的总输入，结算按“普通输入 + 缓存命中 + 缓存写入 + 输出”分别计价。预授权按输入价与缓存写入价中较高者估算输入 Token。
+- 口径修正：Anthropic 原生 usage 的 `input_tokens` 不含缓存，此前按“输入 − 缓存命中”结算会少收；现在补齐为总输入，并读取流式 `message_start` 里的输入用量（此前流式只记录输出）。Claude 原生接口的扣费会因此上升到正确值。百炼读 `prompt_tokens_details.cache_creation_input_tokens`，OpenRouter 读 `cache_write_tokens`；其他网关把 `cache_creation_input_tokens` 放在 `prompt_tokens` 旁时口径不一致，保持原样不拆分。
+- 本地验证：`go test ./...`、迁移测试、usage 归一与结算算术单测；`bun run typecheck`、`bun run lint`、价格档相关前端测试。未连接真实模型，未做浏览器验收。
+- [ ] 后台编辑文本模型价格档：Token 计费下出现「缓存命中」「缓存写入」两项（售价与成本价），保存后回显；视频 Token 不显示该项；统一调价弹窗多出「缓存写入」一列。
+- [ ] 为 Claude（Anthropic Messages）模型设置缓存写入价，连续两次发送同一长系统提示词：第一次请求日志显示缓存写入、账单按写入价计费；第二次显示缓存命中并按命中价计费。
+- [ ] 旧价格档（未设置缓存写入价）结算金额与升级前一致；PostgreSQL 升级到 Schema 82 后 `migrate-schema verify` 通过。
+
 ## 官方插件：即梦成功码、Novita 任务结果、NewAPI 失败原因
 
 - 问题：官方即梦图片 / 视频插件用 `errorPaths: ["code"]` 判失败，火山视觉 OpenAPI 的成功码 `code=10000` 被当成失败，提交成功后任务立即显示“声明式协议任务失败：Success”。官方 Novita 插件读取顶层 `status` / `video_url`，Novita 实际返回 `task.status`（`TASK_STATUS_*`）、`task.reason` 与 `videos[].video_url`，任务停在 pending 直到超时。官方 NewAPI 两个视频插件不读 `data.fail_reason`，失败只显示“上游返回失败状态”。

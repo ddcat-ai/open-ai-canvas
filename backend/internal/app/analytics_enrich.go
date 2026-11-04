@@ -103,30 +103,15 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 	}
 	arkVideo := log.Capability == "video" && strings.Contains(log.Path, "/contents/generations/tasks")
 	usage, _ := payload["usage"].(map[string]any)
+	// Anthropic 流式把输入与缓存用量放在 message_start.message.usage，message_delta 只补输出。
+	if message, ok := payload["message"].(map[string]any); ok && usage == nil {
+		usage, _ = message["usage"].(map[string]any)
+	}
 	if log.Capability == "video" {
-		log.InputTokens, log.CachedTokens = 0, 0
+		log.InputTokens, log.CachedTokens, log.CacheWriteTokens = 0, 0, 0
 		log.OutputTokens, log.UsageAvailable = videoCompletionTokens(payload, arkVideo)
 	} else if usage != nil {
-		inputTokens, inputAvailable := firstInt64Value(usage, "input_tokens", "prompt_tokens")
-		outputTokens, outputAvailable := firstInt64Value(usage, "output_tokens", "completion_tokens")
-		if inputAvailable {
-			log.InputTokens = inputTokens
-		}
-		if outputAvailable {
-			log.OutputTokens = outputTokens
-		}
-		if inputAvailable || outputAvailable {
-			log.UsageAvailable = true
-		}
-		if details, ok := usage["input_tokens_details"].(map[string]any); ok {
-			log.CachedTokens = firstInt64(details, "cached_tokens", "cache_read_input_tokens")
-		}
-		if details, ok := usage["prompt_tokens_details"].(map[string]any); ok && log.CachedTokens == 0 {
-			log.CachedTokens = firstInt64(details, "cached_tokens", "cache_read_input_tokens")
-		}
-		if log.CachedTokens == 0 {
-			log.CachedTokens = firstInt64(usage, "cached_tokens", "cache_read_input_tokens", "prompt_cache_hit_tokens")
-		}
+		applyTextTokenUsage(log, usage)
 	}
 	if usageMetadata, ok := payload["usageMetadata"].(map[string]any); ok && log.Capability != "video" {
 		inputTokens, inputAvailable := firstInt64Value(usageMetadata, "promptTokenCount")
@@ -160,6 +145,51 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		} else if images, ok := payload["images"].([]any); ok {
 			log.MediaCount = len(images)
 		}
+	}
+}
+
+// applyTextTokenUsage 把各协议的文本 usage 归一为：InputTokens 含缓存命中和缓存写入，
+// CachedTokens 是缓存命中，CacheWriteTokens 是缓存写入。结算按 InputTokens - CachedTokens - CacheWriteTokens 计普通输入。
+//
+// OpenAI 兼容协议的 prompt_tokens / input_tokens 已包含缓存；百炼和 OpenRouter 的缓存写入分别在
+// prompt_tokens_details.cache_creation_input_tokens 与 cache_write_tokens。Anthropic 原生 usage 的
+// input_tokens 不含 cache_read_input_tokens 和 cache_creation_input_tokens，这里补齐成总输入。
+func applyTextTokenUsage(log *model.ApiCallLog, usage map[string]any) {
+	inputTokens, inputAvailable := firstInt64Value(usage, "input_tokens", "prompt_tokens")
+	outputTokens, outputAvailable := firstInt64Value(usage, "output_tokens", "completion_tokens")
+	if outputAvailable {
+		log.OutputTokens = outputTokens
+	}
+	if inputAvailable || outputAvailable {
+		log.UsageAvailable = true
+	}
+	inputDetails, hasInputDetails := usage["input_tokens_details"].(map[string]any)
+	promptDetails, hasPromptDetails := usage["prompt_tokens_details"].(map[string]any)
+	if hasInputDetails {
+		log.CachedTokens = firstInt64(inputDetails, "cached_tokens", "cache_read_input_tokens")
+	}
+	if hasPromptDetails && log.CachedTokens == 0 {
+		log.CachedTokens = firstInt64(promptDetails, "cached_tokens", "cache_read_input_tokens")
+	}
+	if log.CachedTokens == 0 {
+		log.CachedTokens = firstInt64(usage, "cached_tokens", "cache_read_input_tokens", "prompt_cache_hit_tokens")
+	}
+	for _, details := range []map[string]any{inputDetails, promptDetails} {
+		if written, ok := firstInt64Value(details, "cache_creation_input_tokens", "cache_write_tokens"); ok {
+			log.CacheWriteTokens = written
+		}
+	}
+	_, hasPromptTokens := usage["prompt_tokens"]
+	written, hasWrite := firstInt64Value(usage, "cache_creation_input_tokens")
+	read, hasRead := firstInt64Value(usage, "cache_read_input_tokens")
+	// 只有带 Anthropic 缓存字段、且没有 OpenAI prompt_tokens / input_tokens_details 的 usage 才按“不含缓存”补齐，
+	// LiteLLM 等网关把 cache_creation_input_tokens 放在 prompt_tokens 旁时是否已计入并不一致，保持原口径。
+	if inputAvailable && !hasPromptTokens && !hasInputDetails && (hasWrite || hasRead) {
+		log.CachedTokens, log.CacheWriteTokens = read, written
+		inputTokens += read + written
+	}
+	if inputAvailable {
+		log.InputTokens = inputTokens
 	}
 }
 
