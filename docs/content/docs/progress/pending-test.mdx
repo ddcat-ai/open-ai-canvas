@@ -4,6 +4,16 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ---
 
 # 待测试
+## 画布视频「提取音频」输出真实 MP3（#937）
+
+- 问题：提取音频沿用视频裁切的输出名 `segment-output.mp4` 且没有 `-f`，FFmpeg 按扩展名选了 MP4 容器，产物是 `ftyp isom` 里装 MP3 音轨（退出码 0）；前端只把 Blob 标成 `audio/mpeg`。上传后服务端按内容识别为 `video/mp4`、kind=video，对象名却是 `.mp3`；把它当参考音频交给只收 wav / mp3 的模型（如 Wan）会被拒。
+- 已实现：提取写到独立的 `segment-audio-output.mp3`，用 `-f mp3` 明确容器；返回前核对字节是 MP3（ID3 头或 Layer III 帧同步），不是就报错、不上传；返回 `audio/mpeg`。视频裁切仍输出 `segment-output.mp4`。
+- 已验证：`canvas-video-segment-args.test.ts` 通过；在前端里用打包的 ffmpeg.wasm 处理一段 3 秒测试视频，新产物以 `49 44 33`（ID3）开头，同一 ffmpeg.wasm 跑旧参数则以 `ftyp isom` 开头；服务端上传识别分别为 `audio/mpeg` / audio 与 `video/mp4` / video。未在真实画布完整走提取、上传和视频生成。
+- 已修复（合并时补充）：视频没有音轨时提示「这段视频没有音轨」，不再误报为内核不支持 MP3 编码，也不再用另一个编码器重试一次。
+- 修复前已经提取的音频资源仍是 MP4 内容，需要重新提取。
+- [ ] 真实画布：对无声视频「提取音频」提示没有音轨。
+- [ ] 真实画布：对有声视频「提取音频」，新音频节点能播放、资源为 `audio/mpeg`；作为参考音频提交给 Wan 等只收 wav / mp3 的模型不再报格式错误。
+
 
 ## 故事板与已有自建工具编号冲突（#957）
 
