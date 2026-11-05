@@ -53,6 +53,7 @@ func (r execRunner) Run(ctx context.Context, name string, args, environment []st
 }
 
 type persistedState struct {
+	ProtectionError string    `json:"protectionError,omitempty"`
 	LatestRelease   *Release  `json:"latestRelease,omitempty"`
 	LastBackup      *Backup   `json:"lastBackup,omitempty"`
 	RollbackVersion string    `json:"rollbackVersion,omitempty"`
@@ -147,6 +148,10 @@ func (m *Manager) Check(ctx context.Context) (Status, error) {
 		return m.snapshotLocked(), err
 	}
 	m.state.LatestRelease = release
+	m.state.ProtectionError = ""
+	if err := m.deploymentProtection(true); err != nil {
+		m.state.ProtectionError = err.Error()
+	}
 	current, currentErr := m.currentVersion()
 	if currentErr != nil {
 		m.state.Operation.Phase = PhaseFailed
@@ -186,6 +191,12 @@ func (m *Manager) StartUpdate(targetVersion string) (Status, error) {
 	if CompareVersions(current, targetVersion) >= 0 {
 		return m.snapshotLocked(), errors.New("目标版本必须高于当前版本")
 	}
+	if err := m.deploymentProtection(true); err != nil {
+		m.state.ProtectionError = err.Error()
+		_ = m.saveStateLocked()
+		return m.snapshotLocked(), err
+	}
+	m.state.ProtectionError = ""
 	now := time.Now().UTC()
 	m.state.Operation = Operation{
 		ID:            randomID(),
@@ -209,6 +220,12 @@ func (m *Manager) StartRollback(reason string) (Status, error) {
 	if m.state.RollbackVersion == "" || m.state.LastBackup == nil {
 		return m.snapshotLocked(), errors.New("没有可用的回退版本或已校验备份")
 	}
+	if err := m.deploymentProtection(true); err != nil {
+		m.state.ProtectionError = err.Error()
+		_ = m.saveStateLocked()
+		return m.snapshotLocked(), err
+	}
+	m.state.ProtectionError = ""
 	current, err := m.currentVersion()
 	if err != nil {
 		return m.snapshotLocked(), err
@@ -261,6 +278,11 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		return
 	}
 
+	// Recheck after downloads; deployment may have changed while images were being pulled.
+	if err := m.deploymentProtection(true); err != nil {
+		m.failWithoutRollback(PhaseFailed, err)
+		return
+	}
 	m.setPhase(PhaseDraining, "停止 Web、Backend 与 Agent，等待后台任务优雅退出")
 	if err := m.compose(m.composePath(), fromVersion, m.config.StepTimeout, nil, "stop", "web", "backend", "yingce-agent"); err != nil {
 		m.failBeforeMigration(err, fromVersion)
@@ -301,6 +323,14 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 	}
 	if err := replaceFile(nextCompose, m.composePath(), 0o600); err != nil {
 		_ = setEnvValue(m.envPath(), "CANVAS_IMAGE_TAG", strings.TrimPrefix(fromVersion, "v"))
+		m.failWithRollback(err, fromVersion, backup)
+		return
+	}
+	digest, err := composeDigest(m.composePath())
+	if err == nil {
+		err = setEnvValue(m.envPath(), "CANVAS_RELEASE_COMPOSE_SHA256", digest)
+	}
+	if err != nil {
 		m.failWithRollback(err, fromVersion, backup)
 		return
 	}
@@ -453,6 +483,13 @@ func (m *Manager) checks(current string, currentErr error) []Check {
 		{Key: "images", Label: "目标镜像", Status: "pending", Detail: "拉取后校验仓库摘要", Blocking: true},
 		{Key: "migration", Label: "数据库迁移", Status: "pending", Detail: "在旧服务完全停止后执行", Blocking: true},
 	}
+	protection := Check{Key: "deployment_protection", Label: "定制部署保护", Status: "passed", Detail: "发行来源与编排已核验；执行前还会检查实际运行镜像", Blocking: true}
+	if err := m.deploymentProtection(false); err != nil {
+		protection.Status, protection.Detail = "failed", err.Error()
+	} else if m.state.ProtectionError != "" {
+		protection.Status, protection.Detail = "failed", m.state.ProtectionError
+	}
+	items = append(items, protection)
 	if currentErr != nil {
 		items[1].Status = "failed"
 		items[1].Detail = currentErr.Error()

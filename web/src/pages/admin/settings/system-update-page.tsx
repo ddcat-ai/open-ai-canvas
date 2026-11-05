@@ -37,23 +37,26 @@ export default function SystemUpdatePage() {
     const [loadError, setLoadError] = useState("");
     const mountedRef = useRef(true);
 
-    const load = useCallback(async (initial = false) => {
-        if (initial) setLoading(true);
-        try {
-            const next = await getSystemUpdateStatus();
-            if (!mountedRef.current) return;
-            setStatus(next);
-            setLoadError("");
-            setReconnecting(false);
-        } catch (error) {
-            if (!mountedRef.current) return;
-            const errorMessage = error instanceof Error ? error.message : "读取系统更新状态失败";
-            setLoadError(errorMessage);
-            if (status && activePhases.has(status.operation.phase)) setReconnecting(true);
-        } finally {
-            if (mountedRef.current && initial) setLoading(false);
-        }
-    }, [status]);
+    const load = useCallback(
+        async (initial = false) => {
+            if (initial) setLoading(true);
+            try {
+                const next = await getSystemUpdateStatus();
+                if (!mountedRef.current) return;
+                setStatus(next);
+                setLoadError("");
+                setReconnecting(false);
+            } catch (error) {
+                if (!mountedRef.current) return;
+                const errorMessage = error instanceof Error ? error.message : "读取系统更新状态失败";
+                setLoadError(errorMessage);
+                if (status && activePhases.has(status.operation.phase)) setReconnecting(true);
+            } finally {
+                if (mountedRef.current && initial) setLoading(false);
+            }
+        },
+        [status],
+    );
 
     useEffect(() => {
         mountedRef.current = true;
@@ -108,6 +111,7 @@ export default function SystemUpdatePage() {
                     message.success("更新任务已启动，页面会自动重连并显示进度");
                 } catch (error) {
                     message.error(error instanceof Error ? error.message : "无法开始更新");
+                    await load(false);
                     throw error;
                 } finally {
                     setStarting(false);
@@ -146,7 +150,9 @@ export default function SystemUpdatePage() {
     if (loading) {
         return (
             <AdminPageFrame title="系统更新" description="检查发布版本，并在备份、迁移和健康验证保护下完成在线更新。" scroll>
-                <div className="admin-settings-stack admin-system-update"><Skeleton active paragraph={{ rows: 12 }} /></div>
+                <div className="admin-settings-stack admin-system-update">
+                    <Skeleton active paragraph={{ rows: 12 }} />
+                </div>
             </AdminPageFrame>
         );
     }
@@ -166,11 +172,13 @@ export default function SystemUpdatePage() {
                 {loadError && !status ? <UpdateAlert tone="error" title="无法读取更新状态" detail={loadError} /> : null}
                 {!status?.supported ? <UpdateAlert tone="warning" title="当前部署不支持后台在线更新" detail="请先在服务器安装 Host Updater，并重建 backend 容器挂载 Unix Socket。此状态下不会执行任何更新操作。" /> : null}
                 {reconnecting ? <UpdateAlert tone="warning" title="服务正在切换，等待重新连接" detail="更新器运行在宿主机，后台页面暂时断线不会中止更新。连接恢复后会继续显示最终结果。" /> : null}
-                {status?.operation.phase === "manual_intervention" ? <UpdateAlert
-                    tone="error"
-                    title={status.operation.rollbackError ? "自动回退未完成，需要人工介入" : "应用已更新，Host Updater 需要人工处理"}
-                    detail={status.operation.rollbackError || status.operation.error || "请检查 Host Updater 和容器日志。"}
-                /> : null}
+                {status?.operation.phase === "manual_intervention" ? (
+                    <UpdateAlert
+                        tone="error"
+                        title={status.operation.rollbackError ? "自动回退未完成，需要人工介入" : "应用已更新，Host Updater 需要人工处理"}
+                        detail={status.operation.rollbackError || status.operation.error || "请检查 Host Updater 和容器日志。"}
+                    />
+                ) : null}
 
                 <div className="admin-system-update-grid">
                     <SettingsSectionCard
@@ -211,22 +219,38 @@ export default function SystemUpdatePage() {
                                 </p>
                             ) : null}
                             <dl className="admin-system-update-facts">
-                                <dt>部署方式</dt><dd>{status?.deployment || "未知"}</dd>
-                                <dt>发布时间</dt><dd>{formatDate(status?.latestRelease?.publishedAt)}</dd>
-                                <dt>代码仓库</dt><dd>{status?.repository || "ddcat-ai/open-ai-canvas"}</dd>
+                                <dt>部署方式</dt>
+                                <dd>{status?.deployment || "未知"}</dd>
+                                <dt>发布时间</dt>
+                                <dd>{formatDate(status?.latestRelease?.publishedAt)}</dd>
+                                <dt>代码仓库</dt>
+                                <dd>{status?.repository || "ddcat-ai/open-ai-canvas"}</dd>
                             </dl>
                             {status?.latestRelease ? (
                                 <div className="admin-system-update-notes">
-                                    <div className="flex items-center justify-between gap-3"><h3>更新日志</h3><a href={status.latestRelease.url} target="_blank" rel="noreferrer">查看 Release <ExternalLink className="size-3" /></a></div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h3>更新日志</h3>
+                                        <a href={status.latestRelease.url} target="_blank" rel="noreferrer">
+                                            查看 Release <ExternalLink className="size-3" />
+                                        </a>
+                                    </div>
                                     <pre>{status.latestRelease.body || "本版本未填写更新日志。"}</pre>
                                 </div>
                             ) : null}
                         </div>
                     </SettingsSectionCard>
 
-                    <SettingsSectionCard layout="stacked" icon={<ShieldCheck className="size-4" />} title="更新前检查" description="所有阻断项通过后才允许切换服务。" status={{ label: status?.connected ? "更新器已连接" : "更新器未连接", color: status?.connected ? "success" : "error" }}>
+                    <SettingsSectionCard
+                        layout="stacked"
+                        icon={<ShieldCheck className="size-4" />}
+                        title="更新前检查"
+                        description="所有阻断项通过后才允许切换服务。"
+                        status={{ label: status?.connected ? "更新器已连接" : "更新器未连接", color: status?.connected ? "success" : "error" }}
+                    >
                         <div className="admin-system-update-checks">
-                            {(status?.checks || []).map((check) => <UpdateCheckRow key={check.key} check={check} />)}
+                            {(status?.checks || []).map((check) => (
+                                <UpdateCheckRow key={check.key} check={check} />
+                            ))}
                         </div>
                     </SettingsSectionCard>
                 </div>
@@ -237,10 +261,19 @@ export default function SystemUpdatePage() {
                         {(status?.operation.logs || []).length ? (
                             <ol>
                                 {status?.operation.logs.map((entry, index) => (
-                                    <li key={`${entry.at}-${index}`}><span className="admin-system-update-dot" data-active={index === status.operation.logs.length - 1} /><div><strong>{phaseLabels[entry.phase]}</strong><p>{entry.message}</p></div><time>{formatTime(entry.at)}</time></li>
+                                    <li key={`${entry.at}-${index}`}>
+                                        <span className="admin-system-update-dot" data-active={index === status.operation.logs.length - 1} />
+                                        <div>
+                                            <strong>{phaseLabels[entry.phase]}</strong>
+                                            <p>{entry.message}</p>
+                                        </div>
+                                        <time>{formatTime(entry.at)}</time>
+                                    </li>
                                 ))}
                             </ol>
-                        ) : <p className="admin-system-update-empty">检查更新后，这里会显示完整操作记录。</p>}
+                        ) : (
+                            <p className="admin-system-update-empty">检查更新后，这里会显示完整操作记录。</p>
+                        )}
                     </div>
                 </SettingsSectionCard>
 
@@ -253,12 +286,29 @@ export default function SystemUpdatePage() {
                     footer={
                         <>
                             <span className="text-xs text-foreground/50">人工回退同样会执行停服、数据库恢复、旧镜像启动和健康验证。</span>
-                            <Button danger icon={<RotateCcw className="size-4" />} disabled={!status?.rollbackVersion || operationActive || !status?.connected} onClick={requestRollback}>回退到上一版本</Button>
+                            <Button danger icon={<RotateCcw className="size-4" />} disabled={!status?.rollbackVersion || operationActive || !status?.connected} onClick={requestRollback}>
+                                回退到上一版本
+                            </Button>
                         </>
                     }
                 >
                     <div className="admin-system-update-backup">
-                        {status?.lastBackup ? <dl><dt>备份编号</dt><dd>{status.lastBackup.id}</dd><dt>来源版本</dt><dd>{status.lastBackup.version}</dd><dt>创建时间</dt><dd>{formatDate(status.lastBackup.createdAt)}</dd><dt>文件大小</dt><dd>{formatBytes(status.lastBackup.size)}</dd><dt>SHA-256</dt><dd className="admin-monospace">{status.lastBackup.checksum}</dd></dl> : <p>首次开始更新时会自动创建数据库与数据目录 ZIP；备份失败将直接中止更新。</p>}
+                        {status?.lastBackup ? (
+                            <dl>
+                                <dt>备份编号</dt>
+                                <dd>{status.lastBackup.id}</dd>
+                                <dt>来源版本</dt>
+                                <dd>{status.lastBackup.version}</dd>
+                                <dt>创建时间</dt>
+                                <dd>{formatDate(status.lastBackup.createdAt)}</dd>
+                                <dt>文件大小</dt>
+                                <dd>{formatBytes(status.lastBackup.size)}</dd>
+                                <dt>SHA-256</dt>
+                                <dd className="admin-monospace">{status.lastBackup.checksum}</dd>
+                            </dl>
+                        ) : (
+                            <p>首次开始更新时会自动创建数据库与数据目录 ZIP；备份失败将直接中止更新。</p>
+                        )}
                     </div>
                 </SettingsSectionCard>
             </div>
@@ -273,11 +323,28 @@ function PhaseBadge({ phase }: { phase: UpdatePhase }) {
 
 function UpdateCheckRow({ check }: { check: SystemUpdateStatus["checks"][number] }) {
     const Icon = check.status === "passed" ? BadgeCheck : check.status === "failed" ? AlertTriangle : Circle;
-    return <div className="admin-system-update-check-row" data-status={check.status}><Icon className="size-4" /><div><strong>{check.label}</strong><p>{check.detail || "等待执行"}</p></div><span>{check.status === "passed" ? "通过" : check.status === "failed" ? "失败" : "待执行"}</span></div>;
+    return (
+        <div className="admin-system-update-check-row" data-status={check.status}>
+            <Icon className="size-4" />
+            <div>
+                <strong>{check.label}</strong>
+                <p>{check.detail || "等待执行"}</p>
+            </div>
+            <span>{check.status === "passed" ? "通过" : check.status === "failed" ? "失败" : "待执行"}</span>
+        </div>
+    );
 }
 
 function UpdateAlert({ tone, title, detail, compact = false }: { tone: "warning" | "error"; title: string; detail: string; compact?: boolean }) {
-    return <div className={`admin-system-update-alert${compact ? " is-compact" : ""}`} data-tone={tone} role="alert"><AlertTriangle className="size-4" /><div><strong>{title}</strong><p>{detail}</p></div></div>;
+    return (
+        <div className={`admin-system-update-alert${compact ? " is-compact" : ""}`} data-tone={tone} role="alert">
+            <AlertTriangle className="size-4" />
+            <div>
+                <strong>{title}</strong>
+                <p>{detail}</p>
+            </div>
+        </div>
+    );
 }
 
 function formatDate(value?: string) {

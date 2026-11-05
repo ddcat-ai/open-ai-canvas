@@ -20,6 +20,7 @@ docs/content/docs/plugins/*
 docs/content/docs/backend/*
 !docs/content/docs/backend/skill-curation.mdx
 !docs/content/docs/backend/task-runtime-stability.mdx
+!docs/content/docs/backend/custom-release-updates.mdx
 !docs/content/docs/backend/agent-prompt-policy.mdx
 !docs/content/docs/backend/canvas-agent-appearance.mdx
 !docs/content/docs/backend/update-announcements.mdx

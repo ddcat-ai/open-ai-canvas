@@ -86,6 +86,10 @@ prepare_environment() {
     cd "$INSTALL_DIR"
 
     if [[ -f .env ]]; then
+        grep -qx 'CANVAS_UPDATE_POLICY=managed' .env || fail "现有部署为手动维护或来源未确认；为保护自定义修复，拒绝覆盖安装。请先备份并按定制发行迁移流程核验。"
+        local recorded_compose_hash
+        recorded_compose_hash="$(sed -n 's/^CANVAS_RELEASE_COMPOSE_SHA256=//p' .env | tail -n 1)"
+        [[ -f "$COMPOSE_FILE" && "$recorded_compose_hash" == "$(sha256sum "$COMPOSE_FILE" | awk '{print $1}')" ]] || fail "现有 Compose 已修改或缺少来源校验值，拒绝覆盖"
         grep -Eq '^POSTGRES_PASSWORD=.+$' .env || fail "现有 .env 缺少 POSTGRES_PASSWORD"
         grep -Eq '^DATABASE_URL=.+$' .env || fail "现有 .env 缺少 DATABASE_URL"
 
@@ -208,6 +212,14 @@ start_services() {
     set_env_value .env CANVAS_BACKEND_IMAGE "$backend_digest"
     set_env_value .env CANVAS_WEB_IMAGE "$web_digest"
     set_env_value .env CANVAS_YINGCE_AGENT_IMAGE "$agent_digest"
+    # Only the matching official release template is automatically enrolled. Custom sources stay manual.
+    local update_policy=manual
+    if [[ "$IMAGE_REPOSITORY" == ghcr.io/ddcat-ai/open-ai-canvas && "$REPOSITORY_REF" == "v${CANVAS_IMAGE_TAG}" && "$COMPOSE_URL" == "https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/v${CANVAS_IMAGE_TAG}/${COMPOSE_FILE}" ]]; then
+        update_policy=managed
+    fi
+    set_env_value .env CANVAS_UPDATE_POLICY "$update_policy"
+    set_env_value .env CANVAS_RELEASE_REPOSITORY "ddcat-ai/open-ai-canvas"
+    set_env_value .env CANVAS_RELEASE_COMPOSE_SHA256 "$(sha256sum "$COMPOSE_FILE" | awk '{print $1}')"
     docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout 600
 }
 

@@ -117,6 +117,9 @@ func (m *Manager) prepareTargetCompose(targetVersion string) (string, error) {
 }
 
 func (m *Manager) preflight(composePath, targetVersion string) error {
+	if err := m.deploymentProtection(true); err != nil {
+		return err
+	}
 	if _, err := os.Stat(m.composePath()); err != nil {
 		return fmt.Errorf("读取当前 Compose：%w", err)
 	}

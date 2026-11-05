@@ -13,6 +13,8 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 
 ## 安全更新顺序
 
+执行更新和人工回退前先核验定制部署保护：`manual`、缺少来源记录、跨发行仓库、Compose 改动、实际镜像不匹配或容器程序改动均拒绝覆盖。旧部署缺少记录时也不会自动放行。配置、迁移和自有发行流程见 [定制版本与更新保护](./custom-release-updates)。保护依赖新版 Host Updater 二进制，不能仅靠更新业务应用生效。
+
 1. 从 GitHub Releases 读取包含预览版在内的最高语义版本，并与 `.env` 中固定的 `CANVAS_IMAGE_TAG` 比较。`sha-*` 这类非正式镜像标签一律视为低于正式 Release，避免把 `vsha-5509b17` 字典序比较成比 `v1.5.0` 更新。
 2. 下载目标版本的 `docker-compose.deploy.yml`，执行 `docker compose config --quiet`，检查部署文件、磁盘空间和当前版本。当前标签不是 `vX.Y.Z` 或 `vX.Y.Z.N` 时，健康检查只确认服务就绪，不要求构建号和镜像标签逐字相同。
 3. 拉取目标 backend/web/yingce-agent 镜像并要求存在仓库 `sha256` 摘要；下载期间旧服务继续运行，准备失败在停服前中止。
@@ -49,7 +51,7 @@ GHCR 镜像部署必须把 `CANVAS_IMAGE_TAG` 固定到具体 Release，并把 `
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh \
-  | sudo env CANVAS_IMAGE_TAG=v1.5.7.1 bash
+  | sudo env CANVAS_IMAGE_TAG=v1.5.7.1 REPOSITORY_REF=v1.5.7.1 bash
 ```
 
 已有部署只安装更新器时，先确认 `.env` 已包含两个 `@sha256:...` 镜像引用，再执行：
