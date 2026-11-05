@@ -5,6 +5,13 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 电商 Agent：「拼成长图」混入之前几轮的作品
+
+- 问题：本轮交付区的「拼成长图」和「导出全部」共用同一份导出列表，列表由 `commerceCanvasImages` 生成，包含 `previousImages`。继续做下一组后，本轮 5 张会和上一轮 5 张拼成 10 张的长图。
+- 已修复：没勾选作品时，「拼成长图」只拼本轮 `plan.images` 中已完成的图片；勾选了作品时仍按勾选拼。可拼的图片不足 2 张时不显示按钮。「导出全部 N 张」不变，仍导出全部轮次。
+- 本地验证：`tsc --noEmit` 无错误，`index.tsx` Prettier 通过。未在浏览器里验收。
+- [ ] 浏览器：同一项目做完第二组后点「拼成长图」，长图只含本轮的张数；勾选几张（可跨轮）后再拼，长图只含勾选的图片。
+
 ## 电商 Agent：点「开始创作」报「商品分析未完成：Unexpected token … is not valid JSON」
 
 - 问题：「开始创作」先提交 `creative-directions` 文本任务，前端只发一句“分析真实商品，并推荐四套完整视觉风格。”，依赖后端把它换成四套方向的 JSON 合同，并在完成后把结果整理成 `{recommendationId, directions}`。这两步原先只在 `AI_MODE` 为 `live` / `mock` 时执行；`docker-compose.deploy.yml` 不向 backend 传 `AI_MODE`，线上默认 `disabled`，识图模型只收到那一句，回了 Markdown。任务照常成功并扣费，前端 `JSON.parse` 失败。「跳过选方向」的策划提示词由前端自带 JSON 要求，不受影响。
