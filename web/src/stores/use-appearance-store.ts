@@ -3,7 +3,9 @@ import { DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
 import { DEFAULT_UPDATE_ANNOUNCEMENT, normalizeUpdateAnnouncement } from "@/lib/update-announcement";
 
 import type { PublicAppearance } from "@/services/api/appearance";
+import { composeDocumentTitle } from "@/lib/document-title";
 import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
+import { useDocumentTitleStore } from "@/stores/use-document-title-store";
 
 export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     updates: DEFAULT_UPDATE_ANNOUNCEMENT,
@@ -47,6 +49,18 @@ export const useAppearanceStore = create<AppearanceStore>((set) => ({
     resolved: false,
     setAppearance: (appearance) => set({ appearance, resolved: true }),
 }));
+
+/** 标签页标题 =（后台提醒）+ 页面名称 + 品牌；没有页面名称时用 SEO 标题。 */
+function documentTitleFor(appearance: PublicAppearance) {
+    const { pageTitle, attentionCount, attentionLabel } = useDocumentTitleStore.getState();
+    return composeDocumentTitle({ pageTitle, brandName: appearance.brandName, seoTitle: appearance.seoTitle, attentionCount, attentionLabel });
+}
+
+// 页面名称或后台提醒变化时只改标题；外观解析前保持首屏的中性标题。
+useDocumentTitleStore.subscribe(() => {
+    if (typeof document === "undefined" || !useAppearanceStore.getState().resolved) return;
+    document.title = documentTitleFor(useAppearanceStore.getState().appearance);
+});
 
 export function normalizePublicAppearance(value?: Partial<PublicAppearance> | null): PublicAppearance {
     const brandName = String(value?.brandName || "").trim();
@@ -113,7 +127,7 @@ export function commitPublicAppearance(value?: Partial<PublicAppearance> | null)
 
 export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocument: Document | undefined = typeof document === "undefined" ? undefined : document) {
     if (!targetDocument) return;
-    targetDocument.title = appearance.seoTitle || appearance.brandName;
+    targetDocument.title = documentTitleFor(appearance);
     setMeta(targetDocument, "name", "description", appearance.seoDescription);
     setMeta(targetDocument, "name", "keywords", appearance.seoKeywords);
     setMeta(targetDocument, "property", "og:title", appearance.seoTitle || appearance.brandName);

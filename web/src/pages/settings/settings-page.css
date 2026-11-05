@@ -1,0 +1,14 @@
+/* 设置导航分组：桌面端按「账户与通用 / 创作 / 渠道与存储 / 帮助与反馈」分组，窄屏仍是一行横向滚动。 */
+@media (min-width: 768px) {
+    .settings-nav-group + .settings-nav-group {
+        margin-top: var(--space-3);
+    }
+}
+
+.settings-nav-group-label {
+    margin: var(--space-2) var(--space-4) var(--space-1);
+    color: var(--user-ink-soft, color-mix(in srgb, var(--foreground) 52%, transparent));
+    font-size: var(--fs-label);
+    font-weight: 500;
+    letter-spacing: var(--ls-caps, 0.04em);
+}

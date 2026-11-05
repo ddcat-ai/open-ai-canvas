@@ -2,6 +2,7 @@ import { http } from "./request";
 import type { CanvasOperation } from "@/lib/canvas/canvas-operation-contract";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CreateTaskInput, GenerationTask } from "./task-center";
+import { observeGenerationTaskStatus } from "@/services/generation-completion-tracker";
 
 export type CreationStatus = "idle" | "running" | "waiting_answer" | "waiting_proposal" | "waiting_canvas" | "waiting_payment" | "waiting_task" | "paused" | "completed" | "cancelled";
 export type CreationGuard = { executionEpoch: number; owner: string };
@@ -35,6 +36,7 @@ export const creationRuns = {
     approve: (id: string, input: CreationGuard & { submissionIds: string[] }, signal?: AbortSignal) => http.post<{ submissions: CreationSubmission[] }>(`${path(id)}/submissions/approve`, input, { signal }),
     refreshQuote: (id: string, input: CreationGuard & { submissionId: string }, signal?: AbortSignal) => http.post<CreationSubmission>(`${path(id)}/submissions/refresh`, input, { signal }),
     execute: (id: string, input: CreationGuard & { submissionId: string }, signal?: AbortSignal) => http.post<GenerationTask>(`${path(id)}/execute`, input, { signal }).then((task) => {
+        observeGenerationTaskStatus(task);
         if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("wallet:updated"));
         return task;
     }),

@@ -1,0 +1,148 @@
+/* 生成完成通知：成功圆圈弹入、对勾描绘、外圈扩散一次；缩略图稍后浮现。只消费状态色与动效 token。 */
+.generation-success-mark {
+    position: relative;
+    display: inline-grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    color: var(--status-success);
+}
+
+.generation-success-mark svg {
+    width: 24px;
+    height: 24px;
+    overflow: visible;
+}
+
+.generation-success-mark circle {
+    fill: color-mix(in srgb, var(--status-success) 14%, transparent);
+    stroke: currentColor;
+    stroke-width: 1.6;
+    transform-origin: center;
+    animation: generation-success-pop var(--motion-dur-slow) var(--motion-ease-overshoot) both;
+}
+
+.generation-success-mark path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: generation-success-check var(--motion-dur-slow) var(--motion-ease-out) 180ms forwards;
+}
+
+.generation-success-mark::after {
+    position: absolute;
+    inset: 0;
+    border: 2px solid color-mix(in srgb, var(--status-success) 45%, transparent);
+    border-radius: var(--r-full);
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    animation: generation-success-ring 720ms var(--motion-ease-out) 220ms;
+}
+
+.generation-success-notice-body {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.generation-success-notice-thumb {
+    width: 44px;
+    height: 44px;
+    flex: none;
+    border-radius: var(--r-md);
+    background: var(--surface-card);
+    object-fit: cover;
+    animation: generation-success-thumb var(--motion-dur-slow) var(--motion-ease-out) 120ms both;
+}
+
+.generation-success-notice-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+}
+
+.generation-success-notice-copy strong,
+.generation-success-notice-copy span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.generation-success-notice-copy strong {
+    color: var(--foreground);
+    font-weight: 500;
+}
+
+.generation-success-notice-copy span {
+    color: var(--muted-foreground);
+}
+
+@keyframes generation-success-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.4);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes generation-success-check {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes generation-success-ring {
+    0% {
+        opacity: 0.9;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.9);
+    }
+}
+
+@keyframes generation-success-thumb {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .generation-success-mark circle,
+    .generation-success-mark path,
+    .generation-success-mark::after,
+    .generation-success-notice-thumb {
+        animation: none;
+    }
+    .generation-success-mark path {
+        stroke-dashoffset: 0;
+    }
+}
+
+.no-motion .generation-success-mark circle,
+.no-motion .generation-success-mark path,
+.no-motion .generation-success-mark::after,
+.no-motion .generation-success-notice-thumb {
+    animation: none;
+}
+
+.no-motion .generation-success-mark path {
+    stroke-dashoffset: 0;
+}
