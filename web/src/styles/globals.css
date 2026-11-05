@@ -18961,59 +18961,39 @@ html:not(.dark) .creation-custom-value {
     outline-offset: 1px;
 }
 
-.creation-history-drawer,
-.creation-history-drawer-root {
-    --creation-history-bg: #111316;
-    --creation-history-surface: #1a1d22;
-    --creation-history-hover: #20242a;
-    --creation-history-text: #f1f3f4;
-    --creation-history-muted: #858c96;
-    --creation-history-faint: #555c66;
-    --creation-history-line: rgba(255, 255, 255, 0.09);
-    --creation-history-accent: var(--workspace-accent);
-}
-
-html:not(.dark) .creation-history-drawer,
-html:not(.dark) .creation-history-drawer-root {
-    --creation-history-bg: #f8f8f6;
-    --creation-history-surface: #ffffff;
-    --creation-history-hover: #f0f1ee;
-    --creation-history-text: #202328;
-    --creation-history-muted: #747c85;
-    --creation-history-faint: #b0b6bc;
-    --creation-history-line: rgba(28, 32, 37, 0.11);
-    --creation-history-accent: #1688a3;
-}
-
-.creation-history-drawer.ant-drawer-content,
-.creation-history-drawer .ant-drawer-content,
-.creation-history-drawer-root .ant-drawer-content {
-    background: var(--creation-history-bg);
-    color: var(--creation-history-text);
+/* 创作页历史对话抽屉：表面、文字、描边全部取用户工作台 token，与侧栏、首页输入卡同一套黑白层级，
+   不再自带偏蓝的暗色和青色强调色。抽屉底色由 antd 画（--ant-color-bg-elevated，与其他产品抽屉一致），
+   吸顶分组标题读同一个变量遮住滚过的行。左边线统一：标题、搜索框、分组名、行图标都从 20px 开始。 */
+.creation-history-drawer {
+    --creation-history-bg: var(--ant-color-bg-elevated, var(--color-surface));
+    color: var(--user-ink);
 }
 .creation-history-drawer .ant-drawer-header {
-    min-height: 68px;
+    min-height: 60px;
     border-bottom: 0;
-    padding: 16px 16px 16px 20px;
+    padding: 16px 12px 8px 20px;
 }
 .creation-history-drawer .ant-drawer-title {
-    color: var(--creation-history-text);
+    color: var(--user-ink);
 }
 .creation-history-drawer .ant-drawer-close {
     display: grid;
     width: 32px;
     height: 32px;
     place-items: center;
-    margin-inline-end: 8px;
-    border-radius: var(--r-sm);
-    color: var(--creation-history-muted);
+    margin: 0;
+    border-radius: var(--user-radius-button);
+    color: var(--user-ink-muted);
+    transition:
+        background-color var(--user-motion),
+        color var(--user-motion);
 }
 .creation-history-drawer .ant-drawer-close:hover {
-    background: var(--creation-history-hover);
-    color: var(--creation-history-text);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
 }
 .creation-history-drawer .ant-drawer-close:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--creation-history-accent) 66%, transparent);
+    outline: 2px solid var(--control-focus-ring);
     outline-offset: 1px;
 }
 .creation-history-drawer .ant-drawer-body {
@@ -19027,61 +19007,44 @@ html:not(.dark) .creation-history-drawer-root {
     gap: 8px;
 }
 .creation-history-title > span {
-    font-size: var(--fs-title);
+    font-size: 16px;
     font-weight: 600;
-    letter-spacing: 0;
+    line-height: 1.4;
 }
 .creation-history-title small {
-    color: var(--creation-history-muted);
-    font-size: var(--fs-label);
-    font-weight: 500;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
 }
 
 .creation-history-content {
     min-height: 100%;
-    padding: 16px 16px 20px;
+    padding: 4px 12px 20px;
 }
-.creation-history-search {
+/* 搜索与新建同一行：antd Input / Button 走工作台统一的 34px 控件规格，这里只管布局。 */
+.creation-history-toolbar {
     display: flex;
-    height: 38px;
     align-items: center;
     gap: 8px;
-    margin: 0 2px 12px;
-    border: 1px solid var(--creation-history-line);
-    border-radius: var(--r-sm);
-    background: var(--creation-history-surface);
-    padding: 0 12px;
-    color: var(--creation-history-muted);
-    transition:
-        border-color 150ms ease,
-        background-color 150ms ease;
+    padding: 0 8px 8px;
 }
-.creation-history-search:focus-within {
-    border-color: color-mix(in srgb, var(--creation-history-accent) 58%, var(--creation-history-line));
-    background: var(--creation-history-hover);
-}
-.creation-history-search svg {
-    width: 15px;
-    height: 15px;
-    flex: 0 0 auto;
-}
-.creation-history-search input {
-    width: 100%;
+.creation-history-toolbar .creation-history-search {
     min-width: 0;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--creation-history-text);
-    font: inherit;
-    font-size: var(--fs-label);
+    flex: 1 1 auto;
 }
-.creation-history-search input::placeholder {
-    color: var(--creation-history-muted);
+.creation-history-toolbar .creation-history-search .ant-input-prefix svg {
+    width: 16px;
+    height: 16px;
+    color: var(--user-ink-soft);
+}
+.creation-history-toolbar > .ant-btn {
+    flex: 0 0 auto;
 }
 
 .creation-history-list {
     display: grid;
-    gap: var(--space-1);
+    gap: 2px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -19090,53 +19053,81 @@ html:not(.dark) .creation-history-drawer-root {
     position: relative;
     min-width: 0;
 }
+.creation-history-group-head {
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    padding: 16px 8px 4px;
+    background: var(--creation-history-bg);
+}
+.creation-history-group-head:first-child {
+    padding-top: 8px;
+}
+.creation-history-group-head h4 {
+    margin: 0;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* 行状态只换表面：悬停 --user-surface-muted，当前对话 --user-surface-hover，不用强调色。 */
 .creation-history-row {
     position: relative;
     display: flex;
     min-width: 0;
     align-items: center;
-    border-radius: var(--r-sm);
-    transition: background-color 150ms ease;
+    border-radius: var(--user-radius-control);
+    transition: background-color var(--user-motion);
 }
-.creation-history-row:hover {
-    background: var(--creation-history-hover);
+.creation-history-row:hover,
+.creation-history-row.is-menu-open {
+    background: var(--user-surface-muted);
+}
+.creation-history-list > li.is-active .creation-history-row {
+    background: var(--user-surface-hover);
 }
 .creation-history-row .creation-history-item-main {
     display: flex;
     min-width: 0;
     flex: 1;
-    flex-direction: row;
     align-items: center;
     justify-content: flex-start;
     gap: 12px;
     border: 0;
-    border-radius: var(--r-sm);
+    border-radius: inherit;
     background: transparent;
-    padding: 8px 64px 8px 12px;
-    color: var(--creation-history-text);
+    padding: 10px 72px 10px 8px;
+    color: var(--user-ink);
     text-align: left;
-}
-.creation-history-row .creation-history-item-main:hover {
-    background: transparent;
+    cursor: pointer;
 }
 .creation-history-row .creation-history-item-main:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--creation-history-accent) 68%, transparent);
+    outline: 2px solid var(--control-focus-ring);
     outline-offset: -2px;
 }
-.creation-history-list > li.is-active .creation-history-row {
-    background: color-mix(in srgb, var(--creation-history-accent) 9%, var(--creation-history-surface));
+/* 模式图标用细线方框，任何行底色上都看得清；当前对话加深描边和图标。 */
+.creation-history-item-icon {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-button);
+    color: var(--user-ink-muted);
+    transition:
+        border-color var(--user-motion),
+        color var(--user-motion);
 }
-.creation-history-list > li.is-active .creation-history-row:hover {
-    background: color-mix(in srgb, var(--creation-history-accent) 14%, var(--creation-history-surface));
+.creation-history-item-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 1.8;
 }
-.creation-history-item-heading {
-    width: 100%;
-    overflow: hidden;
-    font-size: var(--fs-label);
-    font-weight: 600;
-    line-height: 1.35;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.creation-history-list > li.is-active .creation-history-item-icon {
+    border-color: var(--user-border-strong);
+    color: var(--user-ink);
 }
 .creation-history-item-text {
     display: flex;
@@ -19145,46 +19136,39 @@ html:not(.dark) .creation-history-drawer-root {
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
-    gap: 4px;
+    gap: 2px;
 }
-.creation-history-item-icon {
-    display: grid;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    place-items: center;
-    border-radius: 99px;
-    background: color-mix(in srgb, var(--creation-history-accent) 16%, transparent);
-    color: var(--creation-history-accent);
-    transition:
-        background-color 150ms ease,
-        color 150ms ease;
-}
-.creation-history-item-icon svg {
-    width: 16px;
-    height: 16px;
-}
-.creation-history-list > li.is-active .creation-history-item-icon {
-    background: color-mix(in srgb, var(--creation-history-accent) 24%, transparent);
-    color: var(--creation-history-accent);
+.creation-history-item-heading {
+    width: 100%;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .creation-history-snippet {
     display: flex;
     width: 100%;
     min-width: 0;
     align-items: baseline;
-    gap: 8px;
+    gap: 4px;
     overflow: hidden;
-    color: color-mix(in srgb, var(--creation-history-muted) 88%, transparent);
-    font-size: var(--fs-micro);
-    line-height: 1.45;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    line-height: 1.4;
 }
 .creation-history-snippet em {
     flex: 0 0 auto;
-    color: color-mix(in srgb, var(--creation-history-muted) 80%, transparent);
-    font-size: var(--fs-micro);
+    color: var(--user-ink-muted);
     font-style: normal;
-    font-weight: 600;
+    font-weight: 500;
+}
+.creation-history-snippet em::after {
+    content: "·";
+    margin-left: 4px;
+    color: var(--user-ink-soft);
+    font-weight: 400;
 }
 .creation-history-snippet span {
     min-width: 0;
@@ -19196,41 +19180,44 @@ html:not(.dark) .creation-history-drawer-root {
     position: absolute;
     z-index: 1;
     top: 50%;
-    right: 8px;
+    right: 12px;
     display: flex;
-    height: 26px;
     align-items: center;
-    color: var(--creation-history-muted);
-    font-size: var(--fs-micro);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
     font-variant-numeric: tabular-nums;
-    line-height: 1.3;
+    line-height: 1.4;
     white-space: nowrap;
     pointer-events: none;
     transform: translateY(-50%);
-    transition: opacity 150ms ease;
+    transition: opacity var(--user-motion);
 }
+/* 更多按钮只在悬停 / 聚焦 / 菜单打开时出现，与时间互换位置。
+   workspace-product.css 会给浮层里的纯图标按钮加悬停底色（!important），这里用同一表面层级接住。 */
 .creation-history-more {
     position: absolute;
     z-index: 2;
     top: 50%;
     right: 8px;
     display: grid;
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     place-items: center;
     border: 0;
-    border-radius: var(--r-sm);
+    border-radius: var(--user-radius-button);
     background: transparent;
-    color: var(--creation-history-muted);
+    color: var(--user-ink-muted);
     opacity: 0;
     transform: translateY(-50%);
     cursor: pointer;
     transition:
-        background-color 150ms ease,
-        color 150ms ease,
-        opacity 150ms ease;
+        background-color var(--user-motion),
+        color var(--user-motion),
+        opacity var(--user-motion);
 }
-.creation-history-row:hover .creation-history-time-slot {
+.creation-history-row:hover .creation-history-time-slot,
+.creation-history-row:focus-within .creation-history-time-slot,
+.creation-history-row.is-menu-open .creation-history-time-slot {
     opacity: 0;
 }
 .creation-history-row:hover .creation-history-more,
@@ -19239,13 +19226,12 @@ html:not(.dark) .creation-history-drawer-root {
 .creation-history-more:focus-visible {
     opacity: 1;
 }
-.creation-history-more:hover,
-.creation-history-more.is-open {
-    background: var(--creation-history-hover);
-    color: var(--creation-history-text);
+.creation-history-drawer .creation-history-row button.creation-history-more:is(:hover, .is-open) {
+    background: var(--user-surface-hover) !important;
+    color: var(--user-ink) !important;
 }
 .creation-history-more:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--creation-history-accent) 66%, transparent);
+    outline: 2px solid var(--control-focus-ring);
     outline-offset: 1px;
 }
 .creation-history-more svg {
@@ -19254,36 +19240,36 @@ html:not(.dark) .creation-history-drawer-root {
 }
 .creation-history-rename {
     display: flex;
-    min-height: 52px;
+    min-height: 54px;
     align-items: center;
-    border-radius: var(--r-sm);
-    background: var(--creation-history-hover);
+    border-radius: var(--user-radius-control);
+    background: var(--user-surface-muted);
     padding: 0 8px;
 }
 .creation-history-rename-input {
     width: 100%;
     border: 0;
-    border-radius: var(--r-sm);
+    border-radius: var(--user-radius-button);
     background: transparent;
-    padding: 8px 8px;
-    color: var(--creation-history-text);
+    padding: 8px;
+    color: var(--user-ink);
     font: inherit;
-    font-size: var(--fs-label);
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
 }
 .creation-history-rename-input::selection {
-    background: color-mix(in srgb, var(--creation-history-accent) 32%, transparent);
+    background: color-mix(in srgb, var(--user-ink) 18%, transparent);
 }
 .creation-history-rename-input:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--creation-history-accent) 60%, transparent);
+    outline: 2px solid var(--control-focus-ring);
     outline-offset: 0;
 }
 .creation-history-empty {
     display: grid;
     min-height: 180px;
     place-items: center;
-    color: var(--creation-history-muted);
-    font-size: var(--fs-label);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
 }
 .creation-history-menu-overlay .ant-dropdown-menu {
     border-radius: var(--r-md);
@@ -19299,23 +19285,35 @@ html:not(.dark) .creation-history-drawer-root {
     align-items: center;
     justify-content: center;
 }
-.creation-history-menu-overlay .ant-dropdown-menu-item-icon svg {
+/* antd v6 把 ant-dropdown-menu-item-icon 直接加在 svg 上，旧版是外层 span，两种都要命中。 */
+.creation-history-menu-overlay :is(.ant-dropdown-menu-item-icon svg, svg.ant-dropdown-menu-item-icon) {
     display: block;
     width: 14px;
     height: 14px;
 }
+/* 触屏没有悬停：更多按钮常显，时间挪到它左边，两者不再叠在一起。 */
 @media (pointer: coarse) {
+    .creation-history-row .creation-history-item-main {
+        padding-right: 112px;
+    }
     .creation-history-more {
         opacity: 1;
     }
-    .creation-history-row:hover .creation-history-time-slot {
+    .creation-history-time-slot {
+        right: 44px;
+    }
+    .creation-history-row:hover .creation-history-time-slot,
+    .creation-history-row:focus-within .creation-history-time-slot,
+    .creation-history-row.is-menu-open .creation-history-time-slot {
         opacity: 1;
     }
 }
 @media (prefers-reduced-motion: reduce) {
     .creation-history-row,
+    .creation-history-item-icon,
     .creation-history-more,
-    .creation-history-time-slot {
+    .creation-history-time-slot,
+    .creation-history-drawer .ant-drawer-close {
         transition: none;
     }
 }
@@ -19338,14 +19336,10 @@ html:not(.dark) .creation-history-drawer-root {
         max-width: 100vw;
     }
     .creation-history-drawer .ant-drawer-header {
-        min-height: 62px;
-        padding: 16px 16px 12px 16px;
-    }
-    .creation-history-title > span {
-        font-size: var(--fs-heading-lg);
+        padding: 12px 8px 8px 16px;
     }
     .creation-history-content {
-        padding: 12px 12px 16px;
+        padding: 4px 8px 16px;
     }
 }
 
@@ -24930,90 +24924,6 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     }
 }
 
-/* —— 创建页历史抽屉：新建置顶卡 + 时间分组（吸收 boardui agent-chat-history）—— */
-.creation-history-new {
-    display: flex;
-    width: calc(100% - 4px);
-    align-items: center;
-    gap: 12px;
-    margin: 0 2px 12px;
-    border: 1px dashed color-mix(in srgb, var(--creation-history-accent) 46%, var(--creation-history-line));
-    border-radius: var(--r-md);
-    background: color-mix(in srgb, var(--creation-history-accent) 6%, transparent);
-    padding: 12px 12px;
-    color: var(--creation-history-text);
-    text-align: left;
-    cursor: pointer;
-    transition:
-        background-color 150ms ease,
-        border-color 150ms ease,
-        transform 150ms ease;
-}
-.creation-history-new:hover {
-    border-color: color-mix(in srgb, var(--creation-history-accent) 74%, var(--creation-history-line));
-    background: color-mix(in srgb, var(--creation-history-accent) 10%, transparent);
-}
-.creation-history-new:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--creation-history-accent) 70%, transparent);
-    outline-offset: 1px;
-}
-.creation-history-new-icon {
-    display: grid;
-    width: 34px;
-    height: 34px;
-    flex: 0 0 auto;
-    place-items: center;
-    border-radius: 99px;
-    background: color-mix(in srgb, var(--creation-history-accent) 16%, transparent);
-    color: var(--creation-history-accent);
-}
-.creation-history-new-icon svg {
-    width: 16px;
-    height: 16px;
-}
-.creation-history-new-copy {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 1px;
-}
-.creation-history-new-copy strong {
-    font-size: var(--fs-label);
-    font-weight: 600;
-}
-.creation-history-new-copy small {
-    overflow: hidden;
-    color: var(--creation-history-muted);
-    font-size: var(--fs-micro);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.creation-history-group-head {
-    position: sticky;
-    z-index: 1;
-    top: 0;
-    margin-top: 4px;
-    padding: 8px 4px 4px;
-    background: linear-gradient(to bottom, var(--creation-history-bg) 78%, transparent);
-}
-.creation-history-group-head h4 {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    margin: 0;
-    color: var(--creation-history-muted);
-    font-size: var(--fs-micro);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-}
-.creation-history-group-head h4::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--creation-history-line);
-    transform: translateY(-2px);
-}
-
 /* ===== 2026-09 user workspace alignment =====
    这一组规则只作用于真实用户端壳层和首页，后台与画布编辑器保持原有职责和交互。
    几何基准：侧栏 200px、顶部 56px、导航行 40px、首页内容最大宽度 1180px。 */
@@ -28652,9 +28562,6 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
 .app-user-workspace .creation-home .creation-thread-composer .creation-mode-tabs {
     transform: none;
     margin-bottom: 0;
-}
-.app-user-workspace .creation-history-drawer .ant-drawer-body {
-    background: var(--user-bg);
 }
 
 @media (max-width: 720px) {

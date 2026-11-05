@@ -134,7 +134,6 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         searchPlaceholder: "대화 제목 또는 내용 검색",
         searchLabel: "대화 기록 검색",
         new: "새 창작",
-        newHint: "새 창작 대화 시작",
         listLabel: "대화 기록, 최근 업데이트 순",
         renameLabel: "대화 이름 바꾸기",
         notStarted: "아직 창작을 시작하지 않았습니다",

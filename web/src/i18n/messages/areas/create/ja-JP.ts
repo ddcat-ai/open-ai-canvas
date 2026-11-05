@@ -134,7 +134,6 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         searchPlaceholder: "タイトルや内容を検索",
         searchLabel: "履歴を検索",
         new: "新規作成",
-        newHint: "新しい作成の会話を始める",
         listLabel: "会話履歴（更新日時の新しい順）",
         renameLabel: "会話の名前を変更",
         notStarted: "まだ何も作成していません",

@@ -4,7 +4,7 @@ import { conversationTimeFormatter, type CreationConversation, type CreationMess
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { App, Dropdown } from "antd";
+import { App, Button, Dropdown, Input } from "antd";
 import { displayCreationPrompt } from "./creation-references";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { Clapperboard, Download, Image as ImageIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, Search, Trash2, X, Orbit } from "lucide-react";
@@ -127,7 +127,7 @@ export function CreationHistoryDrawer({
             onClose={onClose}
             placement="right"
             size="min(440px, 100vw)"
-            closeIcon={<X className="size-4" />}
+            closable={{ placement: "end", closeIcon: <X className="size-4" /> }}
             className="creation-history-drawer"
             rootClassName="creation-history-drawer-root"
             title={
@@ -138,20 +138,20 @@ export function CreationHistoryDrawer({
             }
         >
             <div className="creation-history-content">
-                <label className="creation-history-search">
-                    <Search aria-hidden="true" />
-                    <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder={t("create.history.searchPlaceholder")} aria-label={t("create.history.searchLabel")} />
-                </label>
-
-                <button type="button" className="creation-history-new" onClick={onNew}>
-                    <span className="creation-history-new-icon">
-                        <Plus />
-                    </span>
-                    <span className="creation-history-new-copy">
-                        <strong>{t("create.history.new")}</strong>
-                        <small>{t("create.history.newHint")}</small>
-                    </span>
-                </button>
+                <div className="creation-history-toolbar">
+                    <Input
+                        className="creation-history-search"
+                        prefix={<Search aria-hidden="true" />}
+                        allowClear
+                        value={keyword}
+                        onChange={(event) => setKeyword(event.target.value)}
+                        placeholder={t("create.history.searchPlaceholder")}
+                        aria-label={t("create.history.searchLabel")}
+                    />
+                    <Button icon={<Plus />} onClick={onNew}>
+                        {t("create.history.new")}
+                    </Button>
+                </div>
                 {visibleConversations.length ? (
                     <ul className="creation-history-list" aria-label={t("create.history.listLabel")}>
                         {visibleConversations.flatMap((conversation, index) => {

@@ -132,7 +132,6 @@ export const zhCN = {
         searchPlaceholder: "搜索对话标题或内容",
         searchLabel: "搜索历史对话",
         new: "新建创作",
-        newHint: "开启一个新的创作对话",
         listLabel: "历史对话，按更新时间倒序排列",
         renameLabel: "重命名对话标题",
         notStarted: "还没有开始创作",

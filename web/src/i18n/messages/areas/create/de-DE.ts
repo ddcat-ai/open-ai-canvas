@@ -134,7 +134,6 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         searchPlaceholder: "Titel oder Inhalt durchsuchen",
         searchLabel: "Verlauf durchsuchen",
         new: "Neue Kreation",
-        newHint: "Neue kreative Unterhaltung beginnen",
         listLabel: "Unterhaltungsverlauf, zuletzt aktualisierte zuerst",
         renameLabel: "Unterhaltung umbenennen",
         notStarted: "Noch nichts erstellt",

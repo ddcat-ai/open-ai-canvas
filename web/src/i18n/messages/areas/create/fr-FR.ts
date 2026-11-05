@@ -134,7 +134,6 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
         searchPlaceholder: "Rechercher un titre ou un contenu",
         searchLabel: "Rechercher dans l'historique",
         new: "Nouvelle création",
-        newHint: "Démarrer une nouvelle conversation créative",
         listLabel: "Historique des conversations, de la plus récente à la plus ancienne",
         renameLabel: "Renommer la conversation",
         notStarted: "Rien de créé pour l'instant",
