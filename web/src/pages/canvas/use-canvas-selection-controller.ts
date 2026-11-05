@@ -150,6 +150,9 @@ export function useCanvasSelectionController({
     const handleNodeMouseDown = useCallback((event: ReactMouseEvent | ReactPointerEvent, nodeId: string) => {
         event.stopPropagation();
         if (event.button !== 0) return;
+        // 下拉菜单、弹层等经 React Portal 渲染，事件沿组件树冒泡到节点外壳，但 DOM 不在节点内。
+        // 不能把它当成节点拖动：拖动预览会改写样式并让锚定弹层提前关闭，菜单项点击随之失效。
+        if (event.target instanceof Node && event.currentTarget instanceof Node && !event.currentTarget.contains(event.target)) return;
         // 子组件的 pointerdown 停止冒泡不会阻止随后独立派发的 mousedown。
         // 编辑、控件操作和表内滚动均不能启动节点选择/拖动，也不能暂停历史记录。
         if (event.target instanceof Element && event.target.closest('input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"]), [role="textbox"], [data-canvas-no-drag]')) return;
