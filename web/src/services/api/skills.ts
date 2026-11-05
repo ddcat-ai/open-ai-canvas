@@ -1,7 +1,6 @@
 import { ApiError, http, apiBaseURL, compactApiParams, serializeApiParams, type ApiParams } from "@/services/api/request";
 import { getActiveUserScope } from "@/lib/user-scope";
 
-
 let addedSkillsRequest: { scope: string; promise: Promise<{ skills: Skill[] }> } | null = null;
 let addedSkillsCache: { scope: string; value: { skills: Skill[] }; expiresAt: number } | null = null;
 let addedSkillsCacheVersion = 0;
@@ -97,7 +96,6 @@ export type SkillRecommendationInstallResult = {
 };
 
 export type SkillCategory = { value: string; label: string; count?: number };
-
 
 export type SkillLibraryCategory = {
     id: string;
@@ -212,12 +210,10 @@ export type InstallGitHubSkillInput = {
     autoUpdate?: boolean;
 };
 
-
 export function listSkills(input: ListSkillsInput = {}) {
     const params = serializeApiParams(compactApiParams(input as ApiParams));
     return http.get<SkillList>(`/skills?${params.toString()}`);
 }
-
 
 export function listSkillLibraryCategories(scope: "mine" | "created" = "mine") {
     return http.get<SkillLibraryCategoryList>("/skills/library-categories", { params: { scope } });
@@ -319,7 +315,8 @@ function normalizeAddedSkillReference(skill: AddedSkillReference): Skill {
     };
 }
 
-function invalidateAddedSkillsCache() {
+/** 技能写入后清空已加入技能缓存并通知页面刷新；后台技能管理同样需要调用。 */
+export function invalidateAddedSkillsCache() {
     addedSkillsCacheVersion += 1;
     addedSkillsCache = null;
     addedSkillsRequest = null;
@@ -357,10 +354,7 @@ export function getSkillBundle(id: string) {
     return http.get<{ bundle: SkillPackageBundle }>(`/skills/${encodeURIComponent(id)}/bundle`);
 }
 
-export type SkillFileOperationInput =
-    | { op: "write"; path: string; content: string }
-    | { op: "rename"; path: string; to: string }
-    | { op: "delete"; path: string };
+export type SkillFileOperationInput = { op: "write"; path: string; content: string } | { op: "rename"; path: string; to: string } | { op: "delete"; path: string };
 
 export type SaveSkillFilesInput = {
     /** 编辑开始时的 versionId；服务端版本已前进时返回 409 skill_version_conflict。 */
@@ -425,7 +419,5 @@ export function listSkillRecommendations(signal?: AbortSignal) {
 
 /** 安装某个行业的推荐技能；skillIds 为空时安装该行业全部推荐。 */
 export function installSkillRecommendations(industryId: string, skillIds: string[] = []) {
-    return http
-        .post<SkillRecommendationInstallResult>(`/skills/recommendations/${encodeURIComponent(industryId)}/install`, { skillIds })
-        .finally(invalidateAddedSkillsCache);
+    return http.post<SkillRecommendationInstallResult>(`/skills/recommendations/${encodeURIComponent(industryId)}/install`, { skillIds }).finally(invalidateAddedSkillsCache);
 }

@@ -35,12 +35,26 @@ import {
     type WorkbenchEntry,
 } from "@/lib/skills/skill-workbench-model";
 import { SkillMarkdown } from "@/pages/skills/skill-detail-drawer";
-import { SkillEditorDrawer } from "@/pages/skills/skill-editor-drawer";
+import { SkillEditorDrawer, type SkillInfoInput } from "@/pages/skills/skill-editor-drawer";
 import { SkillCodeEditor, type SkillCodeEditorHandle } from "@/pages/skills/workbench/skill-code-editor";
 import { SkillQuickOpen } from "@/pages/skills/workbench/skill-quick-open";
 import { SkillWorkbenchExplorer, fileIconFor, type ExplorerInput } from "@/pages/skills/workbench/skill-workbench-explorer";
 import { ApiError } from "@/services/api/request";
-import { SKILL_VERSION_CONFLICT_REASON, addSkill, getSkill, getSkillFile, listSkillFiles, saveSkillFiles, skillFileRawURL, syncSkill, type Skill, type SkillPackageFile } from "@/services/api/skills";
+import {
+    SKILL_VERSION_CONFLICT_REASON,
+    addSkill,
+    getSkill,
+    getSkillFile,
+    listSkillFiles,
+    saveSkillFiles,
+    skillFileRawURL,
+    syncSkill,
+    type SaveSkillFilesInput,
+    type SaveSkillFilesResult,
+    type Skill,
+    type SkillPackageFile,
+    type SkillPackageFileContent,
+} from "@/services/api/skills";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
 import "./skill-workbench.css";
@@ -104,8 +118,31 @@ function errorMessage(error: unknown, fallback: string) {
     return error instanceof Error && error.message ? error.message : fallback;
 }
 
+/** 工作台读写技能文件的接口；用户端走作者接口，后台走管理员接口。 */
+export type SkillWorkbenchApi = {
+    getSkill: (id: string) => Promise<{ skill: Skill }>;
+    listFiles: (id: string) => Promise<{ files: SkillPackageFile[] }>;
+    getFile: (id: string, path: string) => Promise<{ file: SkillPackageFileContent }>;
+    saveFiles: (id: string, input: SaveSkillFilesInput) => Promise<SaveSkillFilesResult>;
+    rawURL: (id: string, path: string) => string;
+};
+
+export type SkillWorkbenchProps = {
+    skillId: string;
+    api: SkillWorkbenchApi;
+    back: { to: string; label: string };
+    /** 后台模式：可编辑所有非 GitHub 技能的内容和全部技能的基本信息；没有加入、同步等用户动作。 */
+    admin?: { saveInfo: (skillId: string, input: SkillInfoInput) => Promise<{ skill: Skill }> };
+};
+
+const userWorkbenchApi: SkillWorkbenchApi = { getSkill, listFiles: listSkillFiles, getFile: getSkillFile, saveFiles: saveSkillFiles, rawURL: skillFileRawURL };
+
 export default function SkillWorkbenchPage() {
     const { skillId = "" } = useParams();
+    return <SkillWorkbench skillId={skillId} api={userWorkbenchApi} back={{ to: "/skills", label: "技能库" }} />;
+}
+
+export function SkillWorkbench({ skillId, api, back, admin }: SkillWorkbenchProps) {
     const navigate = useNavigate();
     const { message, modal } = App.useApp();
     const theme = useActiveTheme();
@@ -143,7 +180,8 @@ export default function SkillWorkbenchPage() {
     const [quickOpen, setQuickOpen] = useState(false);
     const [infoOpen, setInfoOpen] = useState(false);
 
-    const readOnly = !skill || !skill.isOwner || skill.sourceType === "github";
+    const readOnly = !skill || skill.sourceType === "github" || (!admin && !skill.isOwner);
+    const canEditInfo = Boolean(skill && (admin || skill.isOwner));
 
     // ---------- 加载 ----------
     useEffect(() => {
@@ -151,7 +189,7 @@ export default function SkillWorkbenchPage() {
         const generation = ++generationRef.current;
         setLoading(true);
         setLoadError("");
-        Promise.all([getSkill(skillId), listSkillFiles(skillId)])
+        Promise.all([api.getSkill(skillId), api.listFiles(skillId)])
             .then(([detail, list]) => {
                 if (generation !== generationRef.current) return;
                 const files = new Map(list.files.map((file) => [file.path, file]));
@@ -181,7 +219,7 @@ export default function SkillWorkbenchPage() {
             .finally(() => {
                 if (generation === generationRef.current) setLoading(false);
             });
-    }, [skillId, reloadKey]);
+    }, [api, skillId, reloadKey]);
 
     useEffect(() => {
         if (!skillId || loading) return;
@@ -253,7 +291,7 @@ export default function SkillWorkbenchPage() {
             }
             const generation = generationRef.current;
             setFileStates((current) => new Map(current).set(origin, { status: "loading" }));
-            getSkillFile(skill.skillId, origin)
+            api.getFile(skill.skillId, origin)
                 .then((result) => {
                     if (generation !== generationRef.current) return;
                     if (result.file.binary) {
@@ -272,7 +310,7 @@ export default function SkillWorkbenchPage() {
                     setFileStates((current) => new Map(current).set(origin, { status: "error", message: errorMessage(error, "文件读取失败") }));
                 });
         },
-        [baseContents, baseFiles, entryByPath, fileStates, skill],
+        [api, baseContents, baseFiles, entryByPath, fileStates, skill],
     );
 
     useEffect(() => {
@@ -480,7 +518,7 @@ export default function SkillWorkbenchPage() {
         }
         setSaving(true);
         try {
-            const result = await saveSkillFiles(skill.skillId, { baseVersionId, operations });
+            const result = await api.saveFiles(skill.skillId, { baseVersionId, operations });
             const nextContents = new Map<string, string>();
             const nextStates = new Map<string, FileState>();
             for (const entry of entries) {
@@ -652,15 +690,15 @@ export default function SkillWorkbenchPage() {
     }
 
     const breadcrumbs = activePath ? activePath.split("/") : [];
-    const rawURL = activeOrigin ? skillFileRawURL(skill.skillId, activeOrigin) : "";
+    const rawURL = activeOrigin ? api.rawURL(skill.skillId, activeOrigin) : "";
     const statusText = readOnly ? "只读" : saving ? "正在保存…" : pendingCount ? `${pendingCount} 处未保存修改` : "已保存";
 
     return (
         <WorkspacePage fluid scroll={false} className="skill-wb-page">
             <div className="skill-wb" style={{ "--skill-wb-explorer-width": `${layout.width}px` } as CSSProperties} data-explorer={explorerOpen ? "open" : "closed"}>
                 <header className="skill-wb-header">
-                    <Button type="text" className="skill-wb-back" icon={<ArrowLeft className="size-4" />} onClick={() => navigate("/skills")}>
-                        技能库
+                    <Button type="text" className="skill-wb-back" icon={<ArrowLeft className="size-4" />} onClick={() => navigate(back.to)}>
+                        {back.label}
                     </Button>
                     <span className="skill-wb-header-divider" aria-hidden="true" />
                     <button type="button" className="skill-wb-icon-button" aria-label={explorerOpen ? "隐藏资源管理器" : "显示资源管理器"} aria-pressed={explorerOpen} title={`资源管理器 (${modKey}+B)`} onClick={() => setExplorerOpen((value) => !value)}>
@@ -670,6 +708,7 @@ export default function SkillWorkbenchPage() {
                         <h1>{skill.skillName}</h1>
                         <span className="skill-wb-chip">v{skill.version || "1"}</span>
                         <span className="skill-wb-chip">{sourceLabel(skill.sourceType)}</span>
+                        {skill.status !== 1 ? <span className="skill-wb-chip is-readonly">已下架</span> : null}
                         {readOnly ? (
                             <span className="skill-wb-chip is-readonly">
                                 <Lock className="size-3" aria-hidden="true" />
@@ -682,7 +721,7 @@ export default function SkillWorkbenchPage() {
                             <span>快速打开</span>
                             <Kbd>{modKey} P</Kbd>
                         </Button>
-                        {skill.isOwner ? (
+                        {canEditInfo ? (
                             <Button icon={<Info className="size-4" />} onClick={() => setInfoOpen(true)}>
                                 技能信息
                             </Button>
@@ -703,7 +742,9 @@ export default function SkillWorkbenchPage() {
                 {readOnly ? (
                     <div className="skill-wb-notice" role="note">
                         <Lock className="size-4 shrink-0" aria-hidden="true" />
-                        {skill.isOwner && skill.sourceType === "github" ? (
+                        {admin ? (
+                            <span>GitHub 技能以仓库内容为准，后台只能浏览文件；名称、简介等基本信息可在“技能信息”中修改。</span>
+                        ) : skill.isOwner && skill.sourceType === "github" ? (
                             <>
                                 <span>GitHub 技能以仓库内容为准，这里仅供浏览。请在仓库修改后执行同步。</span>
                                 <Button size="small" loading={syncing} icon={<RefreshCw className="size-3.5" />} onClick={() => void synchronize()}>
@@ -722,6 +763,11 @@ export default function SkillWorkbenchPage() {
                                 ) : null}
                             </>
                         )}
+                    </div>
+                ) : admin && skill.sourceType === "builtin" ? (
+                    <div className="skill-wb-notice" role="note">
+                        <Info className="size-4 shrink-0" aria-hidden="true" />
+                        <span>这是内置技能。保存后会生成新版本，系统升级时不再用内置文件包覆盖这里的内容。</span>
                     </div>
                 ) : null}
 
@@ -986,10 +1032,11 @@ export default function SkillWorkbenchPage() {
                     requestAnimationFrame(() => editorRef.current?.focus());
                 }}
             />
-            {skill.isOwner ? (
+            {canEditInfo ? (
                 <SkillEditorDrawer
                     open={infoOpen}
                     skill={skill}
+                    admin={admin ? { save: admin.saveInfo } : undefined}
                     onClose={() => setInfoOpen(false)}
                     onSaved={(next) => {
                         setInfoOpen(false);
