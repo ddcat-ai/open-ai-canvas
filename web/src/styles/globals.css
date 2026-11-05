@@ -28241,7 +28241,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
 
 .app-user-workspace .creation-empty-composer {
     width: 100% !important;
-    margin: 0 0 20px !important;
+    margin: 0 !important;
 }
 .app-user-workspace .creation-composer-shell {
     width: 100%;
@@ -28337,8 +28337,9 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     border-radius: var(--button-radius);
 }
 
+/* 首页输入框嵌在 CreationModeCard 的内容面里，顶边贴着页签，底部圆角由 .creation-mode-panel 裁切。 */
 .app-user-workspace .creation-launchpad .creation-chat-composer {
-    border-radius: 16px !important;
+    border-radius: 0 !important;
 }
 .app-user-workspace .creation-launchpad .creation-chat-composer.is-empty .creation-chat-writing-surface {
     min-height: 96px !important;

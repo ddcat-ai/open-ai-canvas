@@ -71,7 +71,32 @@
     background: currentColor;
     opacity: .55;
 }
-.creation-agent-entry { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 16px 24px; padding: 28px; margin-bottom: 20px; border-radius: var(--user-radius-card); background: var(--user-surface); animation: product-card-enter var(--product-enter) var(--product-ease) backwards; }
+/* 首页创作卡：文件夹页签贴在卡片顶部。轨道是 --user-surface-muted，选中页签与内容面同为 --user-surface，
+   两侧 S 形翼片把页签平滑落到内容面上；首尾页签的外侧翼片被轨道圆角裁掉，正好贴齐卡片边缘。
+   外框是 HoverBorderGradient 的 1px 描边，所以轨道和内容面的圆角都比卡片小 1px。 */
+.creation-mode-card {
+    --creation-mode-card-radius: var(--user-radius-card);
+    --creation-mode-inner-radius: calc(var(--creation-mode-card-radius) - 1px);
+    --creation-mode-rail-height: 48px;
+    --creation-mode-wing: 30px;
+    border-radius: var(--creation-mode-card-radius);
+    background: transparent;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--user-ink) 8%, transparent);
+}
+.dark .creation-mode-card { box-shadow: 0 1px 2px color-mix(in srgb, rgba(0, 0, 0, .28) 50%, transparent), 0 6px 16px rgba(0, 0, 0, .28); }
+.creation-mode-card-inner { display: flex; flex-direction: column; min-width: 0; }
+.creation-mode-folder { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(var(--creation-mode-count), minmax(0, 1fr)); height: var(--creation-mode-rail-height); overflow: hidden; border-radius: var(--creation-mode-inner-radius) var(--creation-mode-inner-radius) 0 0; background: var(--user-surface-muted); }
+.creation-mode-folder-tab { position: absolute; z-index: 0; top: 0; bottom: 0; background: var(--user-surface); pointer-events: none; }
+.creation-mode-folder-wing { position: absolute; top: 0; width: var(--creation-mode-wing); height: 100%; fill: var(--user-surface); }
+.creation-mode-folder-wing.is-start { right: calc(100% - 1px); }
+.creation-mode-folder-wing.is-end { left: calc(100% - 1px); transform: scaleX(-1); }
+.creation-mode-folder-button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--button-gap); min-width: 0; height: 100%; padding: 0 12px; border: 0; background: transparent; color: var(--user-ink-muted); font-size: 14px; font-weight: var(--button-font-weight); white-space: nowrap; cursor: pointer; transition: color var(--user-motion); }
+.creation-mode-folder-button > svg { flex: 0 0 auto; width: var(--button-icon-size); height: var(--button-icon-size); stroke-width: var(--button-icon-stroke); color: currentColor; }
+.creation-mode-folder-button[aria-pressed="true"], .creation-mode-folder-button:hover { color: var(--user-ink); }
+/* 轨道裁切了溢出，焦点环画在页签内侧。 */
+.creation-mode-folder-button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: -6px; border-radius: var(--user-radius-control); }
+.creation-mode-panel { overflow: hidden; border-radius: 0 0 var(--creation-mode-inner-radius) var(--creation-mode-inner-radius); }
+.creation-agent-entry { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 16px 24px; padding: 28px; background: var(--user-surface); animation: product-card-enter var(--product-enter) var(--product-ease) backwards; }
 .creation-agent-orb { grid-row: span 2; }
 .creation-agent-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .14em; color: var(--user-accent); }
 .creation-agent-copy h2 { margin: 4px 0 8px; font-size: 22px; font-weight: 600; color: var(--user-ink); }
@@ -109,6 +134,8 @@
 .creation-inspiration-footer a { color: var(--user-accent); }
 @media (max-width: 620px) {
     .creation-mode-button { padding-inline: 8px; font-size: 12px; gap: 8px; }
+    .creation-mode-card { --creation-mode-rail-height: 44px; --creation-mode-wing: 20px; }
+    .creation-mode-folder-button { padding-inline: 4px; gap: 4px; font-size: 12px; }
     .creation-agent-entry { grid-template-columns: 1fr; padding: 20px; gap: 12px; }
     .creation-agent-orb { display: none; }
     .creation-agent-copy h2 { font-size: 16px; }
@@ -164,7 +191,8 @@
     color: var(--button-ghost-hover-fg);
 }
 @media (prefers-reduced-motion: reduce) {
-    .creation-mode-button:active { transform: none; }
+    .creation-mode-button:active, .creation-mode-folder-button:active { transform: none; }
+    .creation-mode-folder-button { transition: none; }
     .creation-agent-entry { animation: none; }
     .app-user-workspace .creation-chat-composer,
     .app-user-workspace .creation-chat-control,
