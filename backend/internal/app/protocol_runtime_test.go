@@ -384,6 +384,51 @@ func TestDeclarativeProtocolRuntimeExecutesCreatePollAndDownload(t *testing.T) {
 	}
 }
 
+func TestDeclarativeProtocolWaitsForLateCompletedResult(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	adapter, err := protocol.LoadManifest([]byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"test-declarative-late-result","version":"1.0.0","name":"Test Declarative Late Result","author":"Test","documentation":"# Test",
+		"contributes":{"providers":[{"id":"test-declarative-late-result","label":"Test Declarative Late Result","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks"},"poll":{"method":"GET","path":"/tasks/{{taskId}}"},"response":{"taskIdPaths":["id"],"statusPaths":["status"],"resultPaths":["video_url"],"resultKind":"video"}}]}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pollCalls := 0
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/tasks":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"task-late-result","status":"completed","video_url":""}`))
+		case "/v1/tasks/task-late-result":
+			pollCalls++
+			w.Header().Set("Content-Type", "application/json")
+			if pollCalls == 1 {
+				_, _ = w.Write([]byte(`{"id":"task-late-result","status":"completed","video_url":""}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"id":"task-late-result","status":"completed","video_url":"` + server.URL + `/media.mp4"}`))
+		case "/media.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("video"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	result, err := runProtocolAdapterTaskWithPolicy(context.Background(), canvasGenerationInput{
+		Mode: "video", Config: providerConfig{BaseURL: server.URL + "/v1", InterfaceType: "test-declarative-late-result"},
+	}, adapter, fastVideoPollPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["mode"] != "video" || pollCalls != 2 {
+		t.Fatalf("result = %#v, poll calls = %d", result, pollCalls)
+	}
+}
+
 func TestDeclarativeProtocolPollingPolicyOnlyChangesVideoBehavior(t *testing.T) {
 	video := declarativeProtocolPollPolicy("video")
 	if video.InitialDelay != defaultVideoPollInterval || !video.RetryTransient {

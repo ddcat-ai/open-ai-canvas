@@ -105,7 +105,7 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		if created.Status == protocol.StatusFailed || created.Status == protocol.StatusCancelled {
 			return nil, protocolTaskFailure(ctx, created.Status, created.Message, taskID)
 		}
-		if created.Status == protocol.StatusSucceeded {
+		if created.Status == protocol.StatusSucceeded && (protocolResultReady(input.Mode, created.Result, adapter) || taskID == "" || adapter.Metadata().Poll == "") {
 			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result, policy)
 		}
 		if taskID == "" {
@@ -141,6 +141,12 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		}
 		switch state.Status {
 		case protocol.StatusSucceeded:
+			if !protocolResultReady(input.Mode, state.Result, adapter) {
+				if detached {
+					return videoPollOutcome{}, detachedProtocolPending(taskID, state.Stage, state.QueueAhead)
+				}
+				return videoPollOutcome{}, nil
+			}
 			result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, policy)
 			return videoPollOutcome{Done: err == nil, Result: result}, err
 		case protocol.StatusFailed, protocol.StatusCancelled:
