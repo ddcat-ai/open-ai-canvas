@@ -40,6 +40,10 @@ func (s *Service) terminateStuckCloudAgent(run *model.CloudAgentExecution) bool 
 }
 
 func (s *Service) cloudAgentHasLiveWork(run *model.CloudAgentExecution, state *cloudAgentRuntime) bool {
+	if cloudAgentMediaBatchActive(state) {
+		// 批次执行器还在提交或等待结果；它停了的话，恢复扫描会按持久化状态重新挂上。
+		return true
+	}
 	for _, taskID := range []string{state.ActiveTaskID, state.MediaTaskID, state.StoryboardTaskID} {
 		if taskID == "" {
 			continue

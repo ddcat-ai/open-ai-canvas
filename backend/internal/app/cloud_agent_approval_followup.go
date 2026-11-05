@@ -24,10 +24,10 @@ func cloudAgentApprovalFollowUpKey(runID, approvalID string) string {
 	return runID + ":" + approvalID
 }
 
-// cloudAgentApprovedCallPending 判断审批已批准，但被批准的调用还没执行、也还没提交媒体任务。
-// approvalID 为空时匹配当前任意审批。
+// cloudAgentApprovedCallPending 判断审批已批准，但被批准的调用还没执行、也还没提交媒体任务
+// 或启动批量生成。approvalID 为空时匹配当前任意审批。
 func cloudAgentApprovedCallPending(run *model.CloudAgentExecution, state *cloudAgentRuntime, approvalID string) bool {
-	if run == nil || state == nil || state.Approval == nil || state.Approval.Decision != "approve" || state.MediaTaskID != "" {
+	if run == nil || state == nil || state.Approval == nil || state.Approval.Decision != "approve" || state.MediaTaskID != "" || cloudAgentMediaBatchActive(state) {
 		return false
 	}
 	if approvalID != "" && state.Approval.ID != approvalID {
@@ -105,6 +105,7 @@ func (s *Service) continueApprovedCloudAgentCall(userID, id, approvalID string) 
 	// executor, then give the durable result back to Pi; Go never asks a model
 	// what to do next.
 	var mediaTaskID string
+	batchActive := false
 	for attempt := 0; attempt < 8; attempt++ {
 		if attempt > 0 {
 			time.Sleep(time.Duration(attempt) * 20 * time.Millisecond)
@@ -126,11 +127,17 @@ func (s *Service) continueApprovedCloudAgentCall(userID, id, approvalID string) 
 				return err
 			}
 			mediaTaskID = state.MediaTaskID
+			batchActive = cloudAgentMediaBatchActive(&state)
 			break
 		}
 		if attempt == 7 {
 			return err
 		}
+	}
+	if batchActive {
+		// 批次可能要跑几十分钟：审批请求立即返回，提交、回写与恢复都由后台执行器完成。
+		s.startCloudAgentMediaBatchRunner(userID, id)
+		return nil
 	}
 	if mediaTaskID == "" {
 		// 提交前失败可能记录在重读后的状态上（见 enqueueCloudAgentTask 的回滚分支），

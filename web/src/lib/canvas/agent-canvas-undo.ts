@@ -2,7 +2,7 @@ export type AgentCanvasUndoTarget = { runId: string; canvasId: string; stepId: s
 export type AgentCanvasUndoState = { status: "pending" | "done" | "error"; error?: string };
 
 const CANVAS_HASH = /^[a-f\d]{64}$/iu;
-const FULL_CANVAS_HASH_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_create_character", "previs_scene_create", "previs_apply_patch"]);
+const FULL_CANVAS_HASH_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_build_board", "canvas_create_character", "previs_scene_create", "previs_apply_patch"]);
 
 function record(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};

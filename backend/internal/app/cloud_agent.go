@@ -64,6 +64,9 @@ type CloudAgentRequest struct {
 const cloudAgentMaxStepsLimit = 9999
 const cloudAgentMaxConfirmationRounds = 2
 
+// cloudAgentAskUserMaxFields 让长流程开工前的问卷一次问完，不必拆成多轮确认。
+const cloudAgentAskUserMaxFields = 16
+
 func cloudAgentStepLimit(req CloudAgentRequest) int {
 	if req.Budget.MaxSteps > 0 {
 		return min(req.Budget.MaxSteps, cloudAgentMaxStepsLimit)

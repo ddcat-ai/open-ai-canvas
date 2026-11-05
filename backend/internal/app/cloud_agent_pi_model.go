@@ -214,6 +214,10 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if run.Status == "waiting_approval" && state.Approval != nil {
 			return nil, false, errCloudAgentAwaitingApproval
 		}
+		// 批次在后台执行时同理：结束后由执行器写入回执并用恢复提示词续跑。
+		if cloudAgentMediaBatchActive(&state) {
+			return nil, false, errCloudAgentAwaitingApproval
+		}
 		if cloudAgentStepBudgetExhausted(&state) {
 			// 最终回答之后的插话续步会在这里撞上限；若确实停在最终回答边界，
 			// 按完成收尾而不是把整轮判失败（见 settleCloudAgentPiFinalAnswer）。

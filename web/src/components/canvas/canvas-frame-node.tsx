@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { agentNodeEntranceDelay } from "@/lib/canvas/agent-canvas-entrance";
 import { ChevronDown, ChevronRight, Video } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -155,16 +156,21 @@ export const CanvasFrameNode = React.memo(function CanvasFrameNode({
     const active = isSelected || isDropTarget;
     const linkedFolder = Boolean(data.metadata?.folder?.assetFolderId);
     const fullDetail = renderLOD === "full" || hovered || editing;
+    const [entranceDelay] = useState(() => agentNodeEntranceDelay(data.id));
+    // Agent 搭看板时按幕给背板着色；只认语义色名，具体颜色由主题样式决定。
+    const frameColor = data.metadata?.frame?.color;
 
     return (
         <div
             data-node-id={data.id}
             data-node-lod={fullDetail ? "full" : renderLOD}
+            data-agent-enter={entranceDelay === null ? undefined : "true"}
+            data-frame-color={frameColor || undefined}
             role={folder && collapsed ? "group" : undefined}
             tabIndex={folder && collapsed ? 0 : undefined}
             aria-label={folder && collapsed ? t("canvasB.frameNode.folderAriaLabel", { title: data.title, count: childNodes.length }) : undefined}
             className={`absolute z-0 select-none${folder && collapsed ? " canvas-folder-node" : ""} ${dragOffset ? "cursor-grabbing" : "cursor-default"}`}
-            style={{ transform: `translate(${data.position.x + (dragOffset?.x || 0)}px, ${data.position.y + (dragOffset?.y || 0)}px)`, width: data.width, height: data.height, contain: "layout style" }}
+            style={{ transform: `translate(${data.position.x + (dragOffset?.x || 0)}px, ${data.position.y + (dragOffset?.y || 0)}px)`, width: data.width, height: data.height, contain: "layout style", ...(entranceDelay === null ? {} : { "--agent-enter-delay": `${entranceDelay}ms` }) } as CSSProperties}
             onMouseDown={(event) => onMouseDown(event, data.id)}
             onDoubleClick={(event) => {
                 if (!collapsed || (event.target instanceof Element && event.target.closest("button,input"))) return;

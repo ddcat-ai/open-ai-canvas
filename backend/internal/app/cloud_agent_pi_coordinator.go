@@ -242,6 +242,11 @@ func (s *Service) recoverCloudAgentPiRunners() {
 				s.startApprovedCloudAgentMediaWaiter(run.UserID, run.ID, state.MediaTaskID)
 				continue
 			}
+			// 批次执行器同理：按持久化的批次状态重新挂上，不另起模型步骤。
+			if decodeErr == nil && cloudAgentMediaBatchActive(&state) {
+				s.startCloudAgentMediaBatchRunner(run.UserID, run.ID)
+				continue
+			}
 			s.startCloudAgentPi(run.UserID, run.ID)
 		}
 
@@ -419,7 +424,7 @@ func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool
 	if sessionJSONL == "" || state == nil || state.PiAssistantResponses == 0 {
 		return false
 	}
-	if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
+	if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil || cloudAgentMediaBatchActive(state) {
 		return false
 	}
 	lines := strings.Split(strings.TrimRight(sessionJSONL, "\n"), "\n")
@@ -472,7 +477,7 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
 		}
 
 		// 检查是否有未完成的任务
-		if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
+		if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil || cloudAgentMediaBatchActive(&state) {
 			return nil
 		}
 

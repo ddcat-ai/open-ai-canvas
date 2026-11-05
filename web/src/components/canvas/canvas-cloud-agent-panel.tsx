@@ -23,6 +23,8 @@ import { useAssetStore } from "@/stores/use-asset-store";
 import { saveAs } from "file-saver";
 import { buildAgentDebugExport } from "@/lib/canvas/agent-debug-export";
 import { agentPlanVisible, latestAgentPlanItems, latestAgentPlanTerminal, pendingAgentQuestion } from "@/lib/canvas/cloud-agent-plan";
+import { latestAgentMediaBatch } from "@/lib/canvas/cloud-agent-media-batch";
+import { AgentMediaBatchBar } from "./canvas-cloud-agent-media-batch-bar";
 import { emptyAgentContextUsage, presentAgentContextUsage, reduceAgentContextUsage, type AgentContextUsage } from "@/lib/canvas/agent-context-usage";
 import { nanoid } from "nanoid";
 
@@ -176,6 +178,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     const references = useGlobalAgentStore((state) => state.canvas?.references ?? EMPTY_REFERENCES);
     const prefillRequest = useGlobalAgentStore((state) => state.canvas?.prefillRequest ?? null);
     const onFocusNode = useGlobalAgentStore((state) => state.canvas?.onFocusNode);
+    const insertAgentMarkdown = useGlobalAgentStore((state) => state.canvas?.insertAgentMarkdown);
     const open = useGlobalAgentStore((state) => state.open);
     const onOpen = useGlobalAgentStore((state) => state.openAgent);
     const onCollapse = useGlobalAgentStore((state) => state.closeAgent);
@@ -284,6 +287,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     const planItems = useMemo(() => latestAgentPlanItems(messages), [messages]);
     const planTerminal = useMemo(() => latestAgentPlanTerminal(messages), [messages]);
     const planVisible = agentPlanVisible(planItems);
+    const mediaBatch = useMemo(() => latestAgentMediaBatch(messages), [messages]);
     const pendingQuestion = useMemo(() => pendingAgentQuestion(messages), [messages]);
     const [scenePresets, setScenePresets] = useState<SkillPreset[]>([]);
     const [presetApplyingId, setPresetApplyingId] = useState("");
@@ -2639,6 +2643,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                             onToggle={() => setPlanMinimized((value) => !value)}
                                         />
                                     ) : null}
+                                    {mediaBatch && mediaBatch.phase !== "approval" ? <AgentMediaBatchBar batch={mediaBatch} theme={theme} onFocusNode={onFocusNode} /> : null}
                                     {historyHydrated && !messages.some((message) => message.role === "user" || message.role === "assistant") && !run ? (
                                         <AgentSceneCapsules
                                             buckets={sceneBuckets}
@@ -2649,7 +2654,15 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                             onPickSkill={(skill) => void applySingleSkill(skill)}
                                         />
                                     ) : null}
-                                    {pendingQuestion ? <AgentQuestionBar question={pendingQuestion} theme={theme} disabled={otherAgentRunning || approvalSubmitting || connectionStatus !== "connected"} onAnswer={(label) => void submit(label)} /> : null}
+                                    {pendingQuestion ? (
+                                        <AgentQuestionBar
+                                            question={pendingQuestion}
+                                            theme={theme}
+                                            disabled={otherAgentRunning || approvalSubmitting || connectionStatus !== "connected"}
+                                            onAnswer={(label) => void submit(label)}
+                                            onRecordDecision={insertAgentMarkdown ? (record) => insertAgentMarkdown(record.markdown, record.title) : undefined}
+                                        />
+                                    ) : null}
                                     {historyHydrated && !pendingHydrated ? (
                                         <div className="flex items-center gap-2 px-5 py-2 text-xs" role="status">
                                             <span>提交记录尚未确认，输入保留；画布可继续编辑。</span>

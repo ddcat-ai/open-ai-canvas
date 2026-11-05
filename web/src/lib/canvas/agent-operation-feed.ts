@@ -19,6 +19,7 @@ export type AgentFeedRecord = {
     detail?: unknown;
     planItems?: readonly unknown[];
     question?: unknown;
+    mediaBatch?: unknown;
 };
 
 export type AgentFeedSegment<T> = { kind: "operations"; key: string; items: T[] } | { kind: "reasoning"; key: string; items: T[] } | { kind: "message"; key: string; item: T };
@@ -34,7 +35,8 @@ function record(value: unknown): Record<string, unknown> {
  */
 export function isAgentCarrierRecord(item: AgentFeedRecord): boolean {
     if (item.role === "user" || item.text || item.title) return false;
-    return Boolean(item.planItems?.length) || Boolean(item.question);
+    // 批量生成进度同理：由输入区上方的批次进度条渲染。
+    return Boolean(item.planItems?.length) || Boolean(item.question) || Boolean(item.mediaBatch);
 }
 
 /** 等用户确认的工具调用（审批卡）必须留在消息流里，不能被折进"操作记录"里藏起来。 */

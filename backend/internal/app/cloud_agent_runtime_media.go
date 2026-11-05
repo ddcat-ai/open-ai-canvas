@@ -432,6 +432,9 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 	if run.Status != "waiting_approval" || state.Approval == nil || state.Approval.ID != approvalID {
 		return creationConflict("审批不存在或已过期")
 	}
+	if settings != nil && state.MediaBatch != nil && state.MediaBatch.ID == approvalID {
+		return BadAuthRequest("批量生成的模型与规格在申请时统一确定，不能在审批卡里逐条修改；需要调整请暂不执行，让 Agent 重新申请")
+	}
 	// 批准后的收尾由本请求负责，先登记再落库：决定一落库运行就是 running，Pi 会话据登记
 	// 让出执行权，不会抢在收尾前用原始提示词另起一轮。同一审批的并发请求只有一个能登记，
 	// 其余只记录决定。见 cloud_agent_approval_followup.go。
@@ -504,6 +507,10 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 				current.Status = "rejected"
 				current.FailureMessage = ""
 				state.Approval = nil
+				if state.MediaBatch != nil && state.MediaBatch.ID == approvalID {
+					// 被拒绝的批次从未提交任务；草稿节点保留在画布上，批次状态直接丢弃。
+					state.MediaBatch = nil
+				}
 				cloudAgentDropInterjections(id, rejectionEndText, &state)
 				state.event(id, "approval_decided", map[string]any{
 					"approvalId": approvalID,

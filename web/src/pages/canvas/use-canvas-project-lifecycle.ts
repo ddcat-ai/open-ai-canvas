@@ -1,4 +1,5 @@
 import { translate } from "@/i18n";
+import { markAgentCanvasEntrance } from "@/lib/canvas/agent-canvas-entrance";
 import { agentCanvasFocusTargets, type AgentCanvasFocus } from "@/lib/canvas/agent-canvas-focus";
 import { mergeAgentCanvasEditor } from "@/lib/canvas/agent-canvas-patch";
 import { rebaseCanvasLocalEdits } from "@/lib/canvas/canvas-sync-rebase";
@@ -286,6 +287,13 @@ export function useCanvasProjectLifecycle({
                     const baseline = previous ? mergeAgentCanvasEditor(previous, project, observed.nodes, observed.connections) : project;
                     observedContentRef.current = { ...observed, nodes: baseline.nodes, connections: baseline.connections };
                 }
+                // 在新节点第一次渲染之前登记入场顺序，节点挂载时直接带着错开的延迟出现。
+                const knownNodeIds = new Set(nodesRef.current.map((node) => node.id));
+                const knownConnectionIds = new Set(connectionsRef.current.map((connection) => connection.id));
+                markAgentCanvasEntrance(
+                    merged.nodes.filter((node) => !knownNodeIds.has(node.id)).map((node) => node.id),
+                    merged.connections.filter((connection) => !knownConnectionIds.has(connection.id)).map((connection) => connection.id),
+                );
                 nodesRef.current = merged.nodes;
                 connectionsRef.current = merged.connections;
                 setNodes(merged.nodes);

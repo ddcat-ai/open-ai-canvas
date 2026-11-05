@@ -29,6 +29,10 @@
   "canvas_apply_ops",
   "canvas_arrange_nodes",
   "generate_media",
+  "generate_media_batch",
+  "media_batch_control",
+  "canvas_build_board",
+  "canvas_preflight",
   "drama_get_context",
   "drama_adopt_canvas_media"
 ]

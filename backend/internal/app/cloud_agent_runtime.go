@@ -138,14 +138,16 @@ type cloudAgentRuntime struct {
 	ActiveTaskID       string                                `json:"activeTaskId"`
 	ActiveTextDraft    string                                `json:"activeTextDraft,omitempty"`
 	MediaTaskID        string                                `json:"mediaTaskId,omitempty"`
-	TaskIDs            []string                              `json:"taskIds"`
-	Step               int                                   `json:"step"`
-	Generations        int                                   `json:"generations"`
-	VideoSeconds       int                                   `json:"videoSeconds"`
-	Calls              []cloudAgentCall                      `json:"calls"`
-	CallIndex          int                                   `json:"callIndex"`
-	ToolRepairs        map[string]cloudAgentToolRepair       `json:"toolRepairs,omitempty"`
-	Approval           *cloudAgentApproval                   `json:"approval,omitempty"`
+	// MediaBatch 是 generate_media_batch 的批次状态；与 MediaTaskID 互斥（见 validateCloudAgentMediaBatch）。
+	MediaBatch   *cloudAgentMediaBatch           `json:"mediaBatch,omitempty"`
+	TaskIDs      []string                        `json:"taskIds"`
+	Step         int                             `json:"step"`
+	Generations  int                             `json:"generations"`
+	VideoSeconds int                             `json:"videoSeconds"`
+	Calls        []cloudAgentCall                `json:"calls"`
+	CallIndex    int                             `json:"callIndex"`
+	ToolRepairs  map[string]cloudAgentToolRepair `json:"toolRepairs,omitempty"`
+	Approval     *cloudAgentApproval             `json:"approval,omitempty"`
 	// AutoPreparedMedia is the durable admission checkpoint for permissionMode=auto.
 	// It prevents a worker restart between dry admission and billed submission from
 	// re-running admission or creating the draft node a second time.

@@ -30,6 +30,8 @@ export type AgentCanvasContext = {
     insertAgentFiles?: (files: File[], onError?: (nodeId: string, details: string) => void) => string[];
     /** 长文本放成画布文本节点，返回节点 ID。 */
     insertAgentText?: (text: string, title: string) => string;
+    /** 问卷的「决策确认单」等需要排版的内容放成 Markdown 节点，返回节点 ID。 */
+    insertAgentMarkdown?: (markdown: string, title: string) => string;
     /** 从素材库选中的内容放到画布，返回新节点（一个素材可能生成多个节点）。 */
     insertAgentAssets?: (payloads: InsertAssetPayload[]) => Promise<AgentInsertedNode[]>;
     /** 从素材托盘拖进 Agent 面板的图片放到画布，返回节点 ID。 */

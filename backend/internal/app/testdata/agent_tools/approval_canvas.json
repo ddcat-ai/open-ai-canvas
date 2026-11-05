@@ -72,7 +72,7 @@
   },
   {
     "function": {
-      "description": "创作目标仍有未解决且会实质改变结果的选择时才调用。本轮只问一次：单项用 options，多项相关偏好用 fields 合并为可编辑紧凑表单，并给出推荐值；模型等低频项可选并默认自动推荐。用户已明确方向、授权自主决定或说“按推荐/直接开始”时不问；不要把无依据的猜测当作安全默认。本轮就此收尾，用户提交后自动续轮；服务端最多允许 2 轮确认。",
+      "description": "创作目标仍有未解决且会实质改变结果的选择时才调用。本轮只问一次：单项用 options，多项相关偏好用 fields 合并为可编辑紧凑表单（最多16项，可用 section 分组，一次问完），并给出推荐值；长流程开工前的问卷设 recordDecision=true，用户提交后画布会生成「决策确认单」；模型等低频项可选并默认自动推荐。用户已明确方向、授权自主决定或说“按推荐/直接开始”时不问；不要把无依据的猜测当作安全默认。本轮就此收尾，用户提交后自动续轮；服务端最多允许 2 轮确认。",
       "name": "ask_user",
       "parameters": {
         "additionalProperties": false,
@@ -143,6 +143,10 @@
                 "required": {
                   "type": "boolean"
                 },
+                "section": {
+                  "description": "可选：分组名，如 画面、节奏、交付",
+                  "type": "string"
+                },
                 "title": {
                   "description": "字段显示名称",
                   "type": "string"
@@ -166,7 +170,7 @@
               ],
               "type": "object"
             },
-            "maxItems": 6,
+            "maxItems": 16,
             "minItems": 1,
             "type": "array"
           },
@@ -205,6 +209,10 @@
           "questionId": {
             "description": "可选的稳定问题标识",
             "type": "string"
+          },
+          "recordDecision": {
+            "description": "true=用户提交后在画布生成「决策确认单」Markdown 节点，后续步骤以它为准",
+            "type": "boolean"
           },
           "round": {
             "description": "可选确认轮次；服务端以持久化轮次为准",
@@ -2102,6 +2110,407 @@
           "mode",
           "prompt",
           "referenceNodeIds"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "一次审批批量生成同一模式的占位节点：items 传节点ID，提示词与参考连线取自节点。一张审批卡列明细、合计积分、并发与重试额度；批准后后台并发提交、逐条回写，结束后回执交回你。先用相同参数调 canvas_preflight；视频依赖关键帧时先跑关键帧批次。 模型：logicalModelId 或 channelId+channelModelKey，互斥且完整，不传 null/空白。generate_media 可继承草稿或本轮同条件唯一候选，多候选不代选。",
+      "name": "generate_media_batch",
+      "parameters": {
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "channelId": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "channelId"
+                  ]
+                },
+                {
+                  "properties": {
+                    "channelModelKey": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "channelModelKey"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "logicalModelId": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "logicalModelId"
+            ]
+          },
+          {
+            "not": {
+              "properties": {
+                "logicalModelId": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "logicalModelId"
+              ]
+            },
+            "properties": {
+              "channelId": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "channelModelKey": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "channelId",
+              "channelModelKey"
+            ]
+          }
+        ],
+        "properties": {
+          "canary": {
+            "description": "先试跑第1条，回执后用 media_batch_control 放行",
+            "type": "boolean"
+          },
+          "channelId": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "channelModelKey": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "concurrency": {
+            "description": "默认3，受账号同时任务上限约束",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "durationSeconds": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "imageResolution": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "durationSeconds": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "nodeId": {
+                  "description": "空闲占位节点ID",
+                  "type": "string"
+                },
+                "prompt": {
+                  "description": "可选：覆盖节点提示词",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "nodeId"
+              ],
+              "type": "object"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "type": "array"
+          },
+          "logicalModelId": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "maxRetriesPerItem": {
+            "description": "默认1",
+            "maximum": 2,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "audio",
+              "image",
+              "video"
+            ],
+            "type": "string"
+          },
+          "quality": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "size": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "videoGenerateAudio": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "items"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "在已批准的批次额度内操作，不再审批：continue 放行试跑后的其余条目；retry 重跑已结束条目（可改 prompt，规格不变，成功条目在旁新建节点）；cancel 取消未提交条目；status 查看进度。",
+      "name": "media_batch_control",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "continue",
+              "retry",
+              "cancel",
+              "status"
+            ],
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "nodeId": {
+                  "description": "条目节点ID",
+                  "type": "string"
+                },
+                "prompt": {
+                  "description": "可选：新提示词",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "maxItems": 40,
+            "type": "array"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "按分镜一次搭好制作看板：总控说明、资产三列（人物/场景/道具占位）、每行关键帧与视频占位、按幕着色的背板，以及资产→关键帧、行→关键帧/视频、关键帧→视频首帧连线。只建占位不收费；提示词取行的 imageGenerationPrompt/videoMotionPrompt，缺省 plotDescription。",
+      "name": "canvas_build_board",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "acts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "description": "幕名",
+                  "type": "string"
+                },
+                "rowIds": {
+                  "items": {
+                    "description": "rowId",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "label",
+                "rowIds"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "type": "array"
+          },
+          "assets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "category": {
+                  "enum": [
+                    "character",
+                    "environment",
+                    "prop"
+                  ],
+                  "type": "string"
+                },
+                "id": {
+                  "description": "新节点ID",
+                  "type": "string"
+                },
+                "prompt": {
+                  "description": "资产图提示词",
+                  "type": "string"
+                },
+                "rowIds": {
+                  "items": {
+                    "description": "用到它的 rowId",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                "title": {
+                  "description": "资产名",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "category",
+                "title",
+                "prompt"
+              ],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "keyframes": {
+            "description": "默认 true",
+            "type": "boolean"
+          },
+          "overview": {
+            "description": "可选：总控 Markdown",
+            "type": "string"
+          },
+          "snapshotHash": {
+            "description": "最近一次画布读取的 snapshotHash",
+            "type": "string"
+          },
+          "storyboardNodeId": {
+            "description": "分镜脚本节点ID",
+            "type": "string"
+          },
+          "videos": {
+            "description": "默认 true",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "snapshotHash",
+          "storyboardNodeId"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "批量生成前只读体检，参数同 generate_media_batch：检查节点能否提交、提示词、参考就绪与 @标签；带模型时再做无扣费准入，核对能力、报价和剩余预算。返回失败/警告数与逐条问题。",
+      "name": "canvas_preflight",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "channelId": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "channelModelKey": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "durationSeconds": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "imageResolution": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "durationSeconds": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "nodeId": {
+                  "description": "空闲占位节点ID",
+                  "type": "string"
+                },
+                "prompt": {
+                  "description": "可选：覆盖节点提示词",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "nodeId"
+              ],
+              "type": "object"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "type": "array"
+          },
+          "logicalModelId": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "audio",
+              "image",
+              "video"
+            ],
+            "type": "string"
+          },
+          "quality": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "size": {
+            "description": "同 generate_media",
+            "type": "string"
+          },
+          "videoGenerateAudio": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mode",
+          "items"
         ],
         "type": "object"
       }

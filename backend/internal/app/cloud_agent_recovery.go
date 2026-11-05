@@ -72,6 +72,41 @@ func (s *Service) finishCloudAgentCleanup(ctx context.Context, run *model.CloudA
 			}
 		}
 	}
+	if decodeErr == nil && state.MediaBatch != nil {
+		// 批次条目与单个媒体任务同一规则：已进入上游的继续生成并回写，其余在途任务取消。
+		for _, item := range state.MediaBatch.Items {
+			id := item.taskID()
+			if item.Status != cloudAgentMediaBatchItemSubmitted || id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			task, err := s.repo.TaskForUser(run.UserID, id)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if s.cloudAgentMediaContinuesAfterStop(run, task) || cloudAgentTaskTerminal(task.Status) {
+				continue
+			}
+			source := model.TaskCancellationParentFailed
+			if run.Status == "cancelled" {
+				source = model.TaskCancellationParentCancelled
+			}
+			if _, err = s.taskLifecycle().cancelTaskWithIntent(ctx, run.UserID, id, model.TaskCancellationIntent{Source: source}); err != nil {
+				latest, readErr := s.repo.TaskForUser(run.UserID, id)
+				if readErr != nil || !cloudAgentTaskTerminal(latest.Status) {
+					return err
+				}
+			}
+		}
+		if state.MediaBatch.inFlight() > 0 || state.MediaBatch.active() {
+			// 批次执行器把在途条目的最终状态回写画布后，会再次进入这里完成收尾。
+			s.startCloudAgentMediaBatchRunner(run.UserID, run.ID)
+			return nil
+		}
+	}
 	if awaitingMedia {
 		return nil
 	}

@@ -5003,3 +5003,15 @@ SQLite 与 HTTP recorder 已验证；PostgreSQL 16／17、前端构建及浏览�
 - 已验证：`go test ./... -count=1 -timeout=20m`、`go vet ./...`、`go build ./...`、前端 2716 项测试、`bun run lint`、`bun run build` 通过；数据库与API迁移测试包含SQLite。四篇修改后的MDX逐篇编译及OpenAPI引用解析通过。
 - 环境阻塞：文档站 `bun run types:check` 在 MDX 扫描前失败，当前忽略的 `docs/node_modules/fdir/dist/index.mjs` 调用了 `Dirent.isPrevisy()`（Node Dirent 无此方法）；为避免改依赖，本轮未继续修补 node_modules。
 - [ ] 真实模型/收费生成与多次运行pass^k、provider缓存命中率、PostgreSQL 58迁移、浏览器记忆提案与历史撤销尚未人工验收。
+
+## Agent 批量生成、制作看板与画布生长感
+
+- 已实现：`generate_media_batch` 一次审批同一模式最多 40 个占位节点，后台执行器按并发提交、逐条回写；每次提交重新准入，规格哈希一致、报价不高于批准单价、本轮预算强校验。`canary` 先试跑第 1 条；`media_batch_control` 在批准额度内放行、重试（失败节点重置草稿，成功节点在旁新建兄弟节点）、取消、查看进度；批次期间 Pi 会话暂停，重启按持久化状态恢复，停止本轮时未提交条目取消。
+- 已实现：`canvas_preflight` 只读体检（节点可提交、提示词、参考就绪、@标签，带模型时无扣费准入、报价与预算）；`canvas_build_board` 按分镜一次搭总控、资产三列、每行关键帧/视频占位、按幕着色背板与全部连线，重复调用只补缺失内容，整次可撤销。
+- 已实现：`ask_user` 表单放宽到 16 个字段并支持 `section` 分组，`recordDecision` 时提交问卷会在画布新建「决策确认单」Markdown 节点并把 `decisionNodeId` 带回 Agent。
+- 已实现：审批卡展示批量明细与合计；输入区上方新增批量进度条（每格一个条目，点格子定位节点）；Agent 新建节点按创建顺序错开入场、新连线淡入（尊重减少动态效果）；缩放控件旁新增节点/连线计数与「镜头跟随 Agent」开关（本机记忆）；背板支持语义色。
+- 已验证：`go build ./internal/...`、`go vet ./internal/app/`、`go test ./internal/agent/...`、`go test ./internal/app/`（含新增批量/体检/看板测试与更新后的工具 golden，schema 预算调整为 45000 字节）通过；前端 `bun run typecheck` 与 37 个 Agent/画布相关测试文件（241 项）通过。
+- [ ] 真实浏览器与真实模型验收：一次批准 20+ 条图片和视频批次，确认并发上限、逐条回写、进度条、停止本轮后的续生成与收尾、进程重启恢复、报价过期后的重新准入；试跑失败后 `retry`、成功条目重跑生成兄弟节点。
+- [ ] 真实浏览器验收看板：39 镜头分镜一次搭建的布局、背板配色（明暗主题）、入场动画与连线淡入、超过 128KiB 增量时退化为刷新后的显示；HUD 计数、跟随开关关闭后只轻闪不移镜头。
+- [ ] 真实浏览器验收问卷：16 项分组表单的滚动与键盘操作、决策确认单节点的位置与内容、`decisionNodeId` 传回后 Agent 是否以它为准。
+- [ ] 推送前需按 AGENTS.md 运行 `bun scripts/verify-before-push.mjs`（含格式检查、lint、全量前端测试与后端分片测试），本轮未运行。

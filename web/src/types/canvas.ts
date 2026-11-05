@@ -22,6 +22,8 @@ export type ViewportTransform = {
     k: number;
 };
 
+export type CanvasFrameColor = "blue" | "green" | "violet" | "amber" | "rose" | "teal" | "slate";
+
 export enum CanvasNodeType {
     Image = "image",
     Text = "text",
@@ -601,6 +603,8 @@ export type CanvasNodeMetadata = {
         collapsed: boolean;
         expandedWidth: number;
         expandedHeight: number;
+        /** 语义色名（如 Agent 搭看板时按幕着色），具体颜色由主题样式映射。 */
+        color?: CanvasFrameColor;
     };
     folder?: {
         style: CanvasFolderStyle;

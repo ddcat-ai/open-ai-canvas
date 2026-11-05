@@ -34,3 +34,109 @@
         opacity: 0.85;
     }
 }
+
+/* Agent 新建节点入场：按创建顺序错开淡入、轻微放大上浮。
+   只动 opacity 与独立的 scale/translate 属性，不覆盖节点定位用的 transform。 */
+[data-node-id][data-agent-enter="true"] {
+    animation: canvas-agent-node-enter 420ms var(--motion-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+    animation-delay: var(--agent-enter-delay, 0ms);
+}
+
+@keyframes canvas-agent-node-enter {
+    from {
+        opacity: 0;
+        scale: 0.92;
+        translate: 0 12px;
+    }
+    to {
+        opacity: 1;
+        scale: 1;
+        translate: 0 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-node-id][data-agent-enter="true"] {
+        animation: none;
+    }
+}
+
+/* 背板语义色：Agent 搭看板时按幕着色。色值只在这里定义一次，背板只引用色名。 */
+[data-frame-color] {
+    --canvas-frame-tint-blue: oklch(0.62 0.15 252);
+    --canvas-frame-tint-green: oklch(0.64 0.13 152);
+    --canvas-frame-tint-violet: oklch(0.6 0.16 295);
+    --canvas-frame-tint-amber: oklch(0.72 0.14 75);
+    --canvas-frame-tint-rose: oklch(0.63 0.16 12);
+    --canvas-frame-tint-teal: oklch(0.64 0.11 195);
+    --canvas-frame-tint-slate: oklch(0.6 0.02 260);
+}
+
+[data-frame-color="blue"] {
+    --canvas-frame-tint: var(--canvas-frame-tint-blue);
+}
+[data-frame-color="green"] {
+    --canvas-frame-tint: var(--canvas-frame-tint-green);
+}
+[data-frame-color="violet"] {
+    --canvas-frame-tint: var(--canvas-frame-tint-violet);
+}
+[data-frame-color="amber"] {
+    --canvas-frame-tint: var(--canvas-frame-tint-amber);
+}
+[data-frame-color="rose"] {
+    --canvas-frame-tint: var(--canvas-frame-tint-rose);
+}
+[data-frame-color="teal"] {
+    --canvas-frame-tint: var(--canvas-frame-tint-teal);
+}
+[data-frame-color="slate"] {
+    --canvas-frame-tint: var(--canvas-frame-tint-slate);
+}
+
+[data-node-id][data-frame-color]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: calc(var(--radius) * 2);
+    border: 1.5px solid color-mix(in srgb, var(--canvas-frame-tint) 60%, transparent);
+    background: color-mix(in srgb, var(--canvas-frame-tint) 8%, transparent);
+    pointer-events: none;
+}
+
+/* 画布规模 HUD：缩放控件旁的节点/连线计数与镜头跟随开关。 */
+.canvas-agent-hud {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8, 8px);
+    height: 32px;
+    padding: 0 var(--space-8, 8px) 0 var(--space-12, 12px);
+    border: 1px solid;
+    border-radius: var(--dock-radius, 999px);
+    font-size: var(--fs-label, 12px);
+    font-variant-numeric: tabular-nums;
+    backdrop-filter: blur(16px);
+    pointer-events: auto;
+    white-space: nowrap;
+}
+
+.canvas-agent-hud-follow {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: var(--r-sm, 6px);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.canvas-agent-hud-follow:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.canvas-agent-hud-follow:focus-visible {
+    outline: 2px solid var(--ring, currentColor);
+    outline-offset: 1px;
+}

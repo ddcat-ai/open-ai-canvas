@@ -25,6 +25,8 @@ function agentFocusEditingInside(container: HTMLElement) {
 
 type UseCanvasViewportControllerOptions = {
     agentFocus: AgentCanvasFocus | null;
+    /** false 时 Agent 改动只轻闪节点，不移动镜头（HUD 上的"镜头跟随 Agent"开关）。 */
+    agentFollowCamera?: boolean;
     containerRef: { current: HTMLDivElement | null };
     size: CanvasViewportSize;
     viewportRef: { current: ViewportTransform };
@@ -40,6 +42,7 @@ type UseCanvasViewportControllerOptions = {
 
 export function useCanvasViewportController({
     agentFocus,
+    agentFollowCamera = true,
     containerRef,
     size,
     viewportRef,
@@ -82,6 +85,8 @@ export function useCanvasViewportController({
     const lastUserViewportInputRef = useRef(0);
     const handledAgentFocusRef = useRef<AgentCanvasFocus | null>(null);
     const pendingAgentFocusRef = useRef<{ nodeIds: Set<string>; created: boolean } | null>(null);
+    const agentFollowCameraRef = useRef(agentFollowCamera);
+    agentFollowCameraRef.current = agentFollowCamera;
     const agentFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pulseTimersRef = useRef(new Map<HTMLElement, ReturnType<typeof setTimeout>>());
 
@@ -115,7 +120,7 @@ export function useCanvasViewportController({
         const targets = nodes.filter((node) => pending.nodeIds.has(node.id) && !isHiddenBatchChild(node, nodes) && !isNodeHiddenByCollapsedFrame(node, nodes));
         if (!targets.length) return;
         const userBusy = container.dataset.canvasNodeDragging === "true" || performance.now() - lastUserViewportInputRef.current < AGENT_FOCUS_USER_IDLE_MS || agentFocusEditingInside(container);
-        if (userBusy) {
+        if (userBusy || !agentFollowCameraRef.current) {
             pulseAgentNodes(targets);
             return;
         }

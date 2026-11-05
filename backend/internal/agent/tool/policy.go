@@ -133,6 +133,10 @@ const (
 	CanvasApplyOps         = "canvas_apply_ops"
 	CanvasArrangeNodes     = "canvas_arrange_nodes"
 	GenerateMedia          = "generate_media"
+	GenerateMediaBatch     = "generate_media_batch"
+	MediaBatchControl      = "media_batch_control"
+	CanvasBuildBoard       = "canvas_build_board"
+	CanvasPreflight        = "canvas_preflight"
 	DramaGetContext        = "drama_get_context"
 	DramaAdoptCanvasMedia  = "drama_adopt_canvas_media"
 )
@@ -186,6 +190,12 @@ func policies() []Policy {
 		{Name: CanvasApplyOps, Kind: KindWrite, RequiresCanvas: true},
 		{Name: CanvasArrangeNodes, Kind: KindWrite, RequiresCanvas: true},
 		{Name: GenerateMedia, Kind: KindMedia, RequiresCanvas: true},
+		// 批量生成一次审批覆盖多条收费任务；批准后的放行、重试与取消由 media_batch_control
+		// 在已批准的明细和额度内执行，本身不再产生新的收费授权，因此归为会话控制类。
+		{Name: GenerateMediaBatch, Kind: KindMedia, RequiresCanvas: true},
+		{Name: MediaBatchControl, Kind: KindControl, RequiresCanvas: true, RequiresWriteMode: true},
+		{Name: CanvasBuildBoard, Kind: KindWrite, RequiresCanvas: true},
+		{Name: CanvasPreflight, Kind: KindRead, RequiresCanvas: true, RequiresWriteMode: true, OutsideTransaction: true},
 		{Name: DramaGetContext, Kind: KindRead, RequiresCanvas: true, RequiresDrama: true, OutsideTransaction: true},
 		{Name: DramaAdoptCanvasMedia, Kind: KindWrite, RequiresCanvas: true, RequiresDrama: true, AlwaysApprove: true},
 	}

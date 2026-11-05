@@ -246,6 +246,9 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 			return errors.New("Agent runtime media task is not attached to current call")
 		}
 	}
+	if err := validateCloudAgentMediaBatch(state); err != nil {
+		return err
+	}
 	if state.AutoPreparedMedia != nil {
 		if state.AutoPreparedCallHash == "" || state.CallIndex < 0 || state.CallIndex >= len(state.Calls) {
 			return errors.New("Agent runtime auto media preparation is invalid")

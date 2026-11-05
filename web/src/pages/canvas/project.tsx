@@ -79,6 +79,8 @@ import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-c
 import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { getProject, listCharacters, type ProjectAsset } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
+import { CanvasAgentHud } from "@/components/canvas/canvas-agent-hud";
+import { persistCanvasAgentCameraFollow, readCanvasAgentCameraFollow } from "@/lib/canvas/canvas-agent-camera-follow";
 import { CanvasShareModal } from "@/components/canvas/canvas-share-modal";
 import { CanvasScriptEditor, CanvasScriptNodeContent } from "@/components/canvas/canvas-script-node";
 import { StoryboardAssetPickerModal } from "@/components/canvas/storyboard-asset-picker-modal";
@@ -283,6 +285,7 @@ function CanvasViewportPage() {
     const [showImageInfo, setShowImageInfo] = useState(false);
     const [canvasTool, setCanvasTool] = useState<CanvasToolMode>("box-select");
     const [hideNodeConnections, setHideNodeConnections] = useState(readCanvasHideNodeConnections);
+    const [agentFollowCamera, setAgentFollowCamera] = useState(readCanvasAgentCameraFollow);
     const [projectLoaded, setProjectLoaded] = useState(false);
     useLayoutEffect(() => {
         if (!projectLoaded) return;
@@ -340,6 +343,10 @@ function CanvasViewportPage() {
     useEffect(() => {
         persistCanvasHideNodeConnections(hideNodeConnections);
     }, [hideNodeConnections]);
+
+    useEffect(() => {
+        persistCanvasAgentCameraFollow(agentFollowCamera);
+    }, [agentFollowCamera]);
 
     useEffect(() => {
         didInitialCenterRef.current = false;
@@ -696,6 +703,7 @@ function CanvasViewportPage() {
         zoomToActualSize,
     } = useCanvasViewportController({
         agentFocus,
+        agentFollowCamera,
         containerRef,
         size,
         viewportRef,
@@ -2770,6 +2778,14 @@ function CanvasViewportPage() {
         },
         [getCanvasCenter, setNodes],
     );
+    const insertAgentMarkdown = useCallback(
+        (markdown: string, title: string) => {
+            const node = { ...createCanvasNode(CanvasNodeType.Markdown, getCanvasCenter(), { content: markdown, status: "success" }), title, width: 420, height: 360 };
+            setNodes((current) => [...current, node]);
+            return node.id;
+        },
+        [getCanvasCenter, setNodes],
+    );
     const insertAgentAssets = useCallback(
         async (payloads: InsertAssetPayload[]): Promise<AgentInsertedNode[]> =>
             (await handleAssetsInsert(payloads)).map((node) => ({
@@ -2813,6 +2829,7 @@ function CanvasViewportPage() {
             onFocusNode: handleAgentFocusNode,
             insertAgentFiles,
             insertAgentText,
+            insertAgentMarkdown,
             insertAgentAssets,
             insertAgentImageAsset,
             discardAgentNodes,
@@ -2830,6 +2847,7 @@ function CanvasViewportPage() {
         publishAgentCanvas,
         insertAgentFiles,
         insertAgentText,
+        insertAgentMarkdown,
         insertAgentAssets,
         insertAgentImageAsset,
         discardAgentNodes,
@@ -3373,6 +3391,7 @@ function CanvasViewportPage() {
                                         onToggleMiniMap={() => setIsMiniMapOpen((value) => !value)}
                                         onOpenShortcuts={() => setShortcutRequestNonce((value) => value + 1)}
                                     />
+                                    {!dramaCanvas ? <CanvasAgentHud nodeCount={nodes.length} connectionCount={connections.length} followAgent={agentFollowCamera} onFollowAgentChange={setAgentFollowCamera} /> : null}
                                 </CanvasOverlayLayerContainer>
                             ) : null}
 

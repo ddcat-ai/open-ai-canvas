@@ -823,6 +823,67 @@
     background: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-material-solid, var(--background)));
 }
 
+.agent-media-batch-bar {
+    border: 0;
+    background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 4%, transparent));
+}
+
+.agent-media-batch-progress {
+    transition: width var(--duration-normal, 200ms) ease-out;
+}
+
+/* 一格一个条目：40 条以内一眼看清哪些在跑、哪些失败。 */
+.agent-media-batch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14px, 1fr));
+    gap: 4px;
+}
+
+.agent-media-batch-cell {
+    height: 10px;
+    border: 0;
+    border-radius: 3px;
+    padding: 0;
+    cursor: pointer;
+    transition:
+        background-color var(--duration-normal, 200ms) ease-out,
+        transform var(--duration-fast, 120ms) ease-out;
+}
+
+.agent-media-batch-cell:disabled {
+    cursor: default;
+}
+
+.agent-media-batch-cell:hover:not(:disabled) {
+    transform: scaleY(1.4);
+}
+
+.agent-media-batch-cell:focus-visible {
+    outline: 2px solid var(--ring, currentColor);
+    outline-offset: 1px;
+}
+
+.agent-media-batch-cell[data-status="submitted"] {
+    animation: agent-media-batch-running 1.4s ease-in-out infinite;
+}
+
+@keyframes agent-media-batch-running {
+    50% {
+        opacity: 0.45;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-media-batch-progress,
+    .agent-media-batch-cell {
+        transition: none;
+    }
+
+    .agent-media-batch-cell[data-status="submitted"] {
+        animation: none;
+    }
+}
+
 .agent-plan-bar {
     border: 0;
     background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 4%, transparent));
@@ -963,6 +1024,24 @@
 .agent-question-form {
     max-height: min(340px, 42vh);
     overflow-y: auto;
+}
+
+/* 长问卷（最多 16 项）在面板内滚动，不把输入框挤出可视区。 */
+.agent-question-form .agent-question-fields {
+    max-height: min(52vh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.agent-question-section {
+    margin-top: 4px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    opacity: 0.7;
+}
+
+.agent-question-section:first-child {
+    margin-top: 0;
 }
 
 .agent-question-fields {

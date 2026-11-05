@@ -6,6 +6,7 @@ import { CanvasConnectionDrafts } from "./canvas-connection-drafts";
 import { useCanvasNodeResizeMotion } from "./canvas-node-resize-motion";
 import type { CanvasNodeResizeMotion } from "@/lib/canvas/canvas-node-resize-motion";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
+import { agentConnectionEntranceDelay, prefersReducedMotion } from "@/lib/canvas/agent-canvas-entrance";
 import { batchCellAnchor, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
@@ -220,6 +221,22 @@ function createOverlayScene(host: HTMLDivElement): OverlayScene {
     return { leafer, world, host, selection, selectionBounds, guides, dragPreview: null };
 }
 
+const AGENT_CONNECTION_FADE_MS = 360;
+
+/** Agent 刚建的连线在两端节点入场后淡入；之后的路径同步会照常写回常规透明度。 */
+function fadeInAgentConnection(path: Path, delay: number) {
+    const target = typeof path.opacity === "number" ? path.opacity : 0.8;
+    path.opacity = 0;
+    const start = performance.now() + delay;
+    const step = (time: number) => {
+        if (!path.parent) return;
+        const progress = Math.min(1, Math.max(0, (time - start) / AGENT_CONNECTION_FADE_MS));
+        path.opacity = target * progress;
+        if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+}
+
 function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLayerProps) {
     const nextIds = new Set(props.displayConnections.map(({ connection }) => connection.id));
     for (const [connectionId, entry] of scene.connectionEntries) {
@@ -233,11 +250,13 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
     for (const { connection, from, to } of props.displayConnections) {
         const signature = connectionSceneSignature(connection, from, to, props);
         let entry = scene.connectionEntries.get(connection.id);
+        let entranceDelay: number | null = null;
         if (!entry) {
             const path = new Path({ hittable: false });
             scene.connections.add(path);
             entry = { path, connection, from, to, resizeMotion: scene.resizeMotion, signature: "" };
             scene.connectionEntries.set(connection.id, entry);
+            entranceDelay = agentConnectionEntranceDelay(connection.id);
         }
         entry.connection = connection;
         entry.from = from;
@@ -246,6 +265,7 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
             syncConnectionPath(entry, props, scene.dragPreview, previewIds);
             entry.signature = signature;
         }
+        if (entranceDelay !== null && !prefersReducedMotion()) fadeInAgentConnection(entry.path, entranceDelay);
         for (const nodeId of [from.id, to.id]) {
             const connectionIds = scene.connectionIdsByNodeId.get(nodeId) || new Set<string>();
             connectionIds.add(connection.id);
