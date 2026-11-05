@@ -5,6 +5,34 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 灵感上新
+
+后端每 6 小时从 GitHub 拉取 YouMind 提示词库（两个 `README_zh.md`）和 awesome-seedance（`data/cases.json`、`data/case-taxonomy.json`），经出站 SSRF 客户端下载，只收正文已是中文的条目。上次有来源失败时 1 小时后重试；多实例部署通过协调器锁只让一个实例同步。服务器访问 GitHub 需要正常 DNS，必要时配置 `HTTPS_PROXY`。数据表见 [后端数据库](/docs/backend/backend-database)。
+
+| 接口 | 入参与结果 |
+| --- | --- |
+| `GET /api/public/inspirations/feed` | 匿名可读，按 IP 每分钟 120 次。返回 `data={enabled,entries,categories,syncedAt?}`；`entries` 按首次收录时间倒序，最多 3000 条，每条带 `addedAt`（首次收录）与可选的 `publishedAt`；`categories` 为来源 → 分类码 → 中文名。关闭时 `enabled=false` 且 `entries` 为空。结果在进程内缓存 5 分钟 |
+| `GET /api/admin/settings/inspiration-feed` | 管理员。返回 `data.status={enabled,intervalHours,lastAttemptAt?,lastSuccessAt?,nextSyncAt?,lastError?,trigger?,sources[],total,bySource}`，`sources[]` 为 `{sourceId,upstream,accepted,created,updated,error?}` |
+| `PATCH /api/admin/settings/inspiration-feed` | 管理员。`{ enabled: boolean }`，缺少 `enabled` 返回 400；写入审计，返回最新 `status` |
+| `POST /api/admin/settings/inspiration-feed/sync` | 管理员。立即同步，与请求解绑，最长约 8 分钟；部分来源失败返回 200 并在 `lastError`、`sources[].error` 说明；全部失败返回 502；已关闭或已有同步在进行返回 409。写入审计 |
+
+## 姿势库
+
+所有接口使用登录 Cookie 和标准业务信封。`/api/admin/pose-library/*` 由 service 校验管理员权限（匿名 401、普通用户 403），写入记录管理员审计。用户接口只返回 `enabled=true` 且图片已同步（`status=ready`）的条目；管理员还能预览停用条目。数据表与导入流程见 [后端数据库](/docs/backend/backend-database) 和 [姿势库](/docs/canvas/pose-library)。
+
+| 接口 | 入参与结果 |
+| --- | --- |
+| `GET /api/pose-library/poses` | `keyword`、`system`、`category`、`angle`、`page`、`pageSize`（默认 24，最大 60）。按姿势分组分页，返回 `data={poses,total,page,pageSize,facets}`（不含来源署名，来源只在后台接口返回）；每个姿势带全部可用视角 `items[{id,angle,width,height,version}]`，`facets` 的体系/分类/视角计数为姿势数（体系计数不受筛选影响，分类随体系收窄，视角随体系和分类收窄） |
+| `GET /api/pose-library/items/:id/thumb`、`/image` | 读取本站数据目录里的缩略图 / 原图，`Cache-Control: private, max-age=604800`；地址带 `?v=<version>`，重新同步后地址随之变化 |
+| `POST /api/pose-library/use` | `{ ids: string[] }`，1–16 个条目 ID。把原图复制成当前用户的资源（走普通上传的 MIME 探测、每日上传额度与容量），返回 `data={items:[{itemId,name,angle,category,resource}]}`，顺序与请求一致；同一用户对同一张图重复选用复用已有资源（幂等键为条目 ID + 原图 SHA-256）。限流沿用 `resourceImportPerMinute` |
+| `GET /api/admin/pose-library/items` | `keyword`、`source`、`system`、`status`（`pending/ready/failed`）、`page`、`pageSize`（默认 50，最大 100）；返回条目、`stats{total,ready,pending,failed,disabled}`、来源列表和按体系汇总 |
+| `POST /api/admin/pose-library/import` | multipart：`file`（JSON，最大 16 MiB）、`baseUrl`（图片来源根地址）、`systems`（JSON 字符串数组，必填，只导入列出的体系）。接受 ai-pose-gallery-zh 的 `data/pose-zh.json` 或 `format=yingce-pose-library` 通用包；按 `来源 + 外部 ID` 新增或更新，新条目为 `pending`。`baseUrl` 经出站 SSRF 校验，私网、本机地址返回 400 |
+| `POST /api/admin/pose-library/sync` | `{ limit?, retryFailed? }`，每批默认 12、最多 40 条，单批约 40 秒预算。服务端经出站客户端下载原图与缩略图（缺缩略图时由原图生成），只接受 JPEG/PNG/WebP、单张 20 MiB、8192×8192 以内；返回本批 `processed/succeeded/failed/failures` 与最新 `stats`。`retryFailed=true` 先把失败条目放回待同步，管理页只在第一批传入 |
+| `POST /api/admin/pose-library/items` | multipart：`file`（图片，最大 20 MiB）、`name`、`system`、`category`、`angle`、`code`。新增来源为 `custom` 的自建姿势，编号相同的图合并为同一姿势的不同视角 |
+| `PATCH /api/admin/pose-library/items/:id` | 可选 `name`、`system`、`category`、`angle`、`code`、`enabled` |
+| `DELETE /api/admin/pose-library/items/:id` | 删除条目及其图片目录 |
+| `POST /api/admin/pose-library/bulk` | `{ action: "enable"\|"disable"\|"delete", ids?: string[] }` 或 `{ action, sourceKey?, system }`；不指定条目时必须给体系，避免误删全库。返回 `data={affected}` |
+
 ## 注册与签到积分策略
 
 `GET /api/admin/settings/credits` 和 `PATCH /api/admin/settings/credits` 均要求管理员，返回 `data={policy}`。PATCH 提交完整策略：`signupBonusMicrocredits`、`checkinBonusMicrocredits`、`defaultMultiplierBasisPoints`、`modelMultiplierBasisPoints`；停止赠送只将前两项设为 0，保留倍率。金额为微积分（1000000 = 1 积分），倍率为万分比（10000 = 1 倍）。
@@ -339,6 +367,8 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 `GET /model-catalog` 固定返回 `source=system`，直接查询所有启用系统渠道下的渠道模型，目录数据在 `channels[].models[]`，`models` 固定为空数组。不受逻辑模型开关影响，不反查逻辑模型或供应线路。每项的 `modelKey` 是调用标识，`displayName` 是一级分组展示名（未设置时归入 `未分类`），`icon` 是模型图标键，`channelLabel` 是二级渠道展示名。后台渠道模型创建与更新请求使用相同的 `channelLabel` 字段；服务端去除首尾空白后限制为 80 字，空值或与上游模型 ID 相同的值表示不固化该名称，读取时回退到上游模型 ID（默认与上游 ID 保持一致，上游改名时自动跟随）。
 
+文本模型额外返回 `textWire`（`chat-completion` / `responses` / `claude-api`），由协议插件的 `create.path` 识别，不看协议 ID；识别不出时省略。浏览器直连系统代理的提示词优化、编辑器助手和美术点评按它选择 `/chat/completions`、`/responses` 或 `/messages`。`GET /plugins/catalog` 的 provider 同样返回 `textWire`，并在插件 `auth.secretField` 指向 Secret Key 时返回 `requiresSecretKey: true`。系统渠道代理只放行内置合同或插件声明的 POST 路径，出站鉴权按插件 `auth` 声明写，详见 [统一插件运行时](/docs/backend/protocol-plugins)。
+
 渠道模型创建、更新、管理列表、公开目录和会话模型价格信息均使用 `description` 表达模型描述。服务端去除首尾空白后限制为 500 字，允许空字符串清除描述；无管理员权限或超长内容拒绝保存。创作端二级选项常驻展示该字段，不依赖悬浮 Tooltip；未填写的系统模型不按名称生成宣传文案。
 
 以上模型接口同时使用 `tags: [{ text, color }]` 传递有序展示标签，例如 `[{"text":"限时特价","color":"purple"},{"text":"官方1折","color":"gold"}]`。最多 5 个，文字去除首尾空白后为 1–12 字且不可重复；颜色仅接受 `purple`、`blue`、`green`、`gold`、`orange`、`pink`。创建/更新由管理员操作，非法标签拒绝整个保存；提交 `tags: []`（或省略字段）清空标签。用户模型选择器在对应二级渠道项中常驻展示，标签不参与路由、价格计算或权限判断。
@@ -385,6 +415,8 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考
 每个支付渠道有结算货币：渠道配置的 `settlementCurrency`（易支付可选 `CNY` / `USD`），其余官方渠道为 `CNY`。商品货币与结算货币不同时，下单按 `usdCnyRate` 换算并四舍五入到分；未配置汇率时返回 400，不创建订单。`GET /api/payments/providers` 的每个渠道返回 `settlementCurrency` 和 `methods`（`[{ id, name, icon }]`，渠道内已启用的支付方式，来自插件清单 `methods` / `methodsField` 与渠道配置）。`POST /api/payments/orders` 增加可选 `method`：渠道有多种方式时必填且必须是已启用方式，只有一种时可省略，渠道没有方式时必须省略；同一幂等键换用其他方式返回 409。订单视图增加 `paymentMethod`、`chargeAmountFen`、`chargeCurrency` 和 `exchangeRate`（跨币种时的汇率字符串）；回调、查单和对账按实收金额与货币校验。
 
 ## 管理员积分成本
+
+同一组接口的 `priceTiers[]` 还接受 `tokenPriceRulesEnabled` 与 `tokenPriceRules`（分时与上下文价格，只用于文本 Token 档）。每条规则为 `{ enabled, weekdays: number[] (1–7), start: "HH:MM", end: "HH:MM" | "24:00", minInputTokens, maxInputTokens (0 不限), inputTokenPriceMicrocredits, outputTokenPriceMicrocredits, cachedTokenPriceMicrocredits, cacheWriteTokenPriceMicrocredits }`，单价单位与价格档售价相同。时段按任务创建时的东八区时间锁定，上下文区间按上游真实输入 Token（含缓存）判定，按顺序取首条命中，未命中用价格档基础单价。非文本 Token 档提交非空规则、开始不早于结束、区间上限不大于下限、超过 48 条时返回 400。`GET /model-catalog` 的系统渠道价格档在启用时返回 `tokenPriceRules`（只含参与计费的规则，单价已按分组换算），报价接口按当前时段与估算输入 Token 选档。账单 `tokenPriceRule` 为结算命中的规则序号，0 为基础价。
 
 `GET/POST /admin/channels/:id/models` 与 `PATCH /admin/channels/:id/models/:modelId` 的 `priceTiers[]` 增加 `costPricing`：`configured`、`unitPriceMicrocredits`、`inputTokenPriceMicrocredits`、`outputTokenPriceMicrocredits`、`cachedTokenPriceMicrocredits`、`cacheWriteTokenPriceMicrocredits`。成本沿用该价格档的计费方式；按次/秒使用单位价，文本 Token 按输入/输出/缓存命中/缓存写入分别定价（缓存写入默认 0），视频 Token 只使用输出价。价格档售价同样新增 `cacheWriteTokenPriceMicrocredits`，公开模型目录随价格档返回。价格为整数微积分，范围为 0 到 1000000000000；`configured=false` 表示未配置，`true` 且价格为 0 表示显式零成本。
 
@@ -565,26 +597,50 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 模型任务失败的 `run_failed` 事件保留 `taskId`，并提供安全分类 `reason`：`model_connection_reset`、`model_request_timeout`、`model_connection_refused` 或 `model_task_failed`。`text` 不透传原始上游错误，避免泄露地址和凭证；前端用事件类型而非摘要关键词判断工具成功 / 失败。失败不会触发自动付费重试。
 
-## 方舟真人素材库
+## 方舟素材库
 
-管理员配置 `GET/PATCH /api/admin/settings/ark-private-assets` 增加 `site`（`volcengine` / `byteplus`，决定控制面 `ark.<region>.volcengineapi.com` 或 `ark.<region>.byteplusapi.com`）、`portraitEnabled`（开放用户级真人素材库，与可信素材自动同步 `enabled` 相互独立）和 `callbackBaseUrl`（站点公网根地址，空时使用 `CANVAS_PUBLIC_BASE_URL`）。更换站点、Region、ProjectName 或 AccessKey 会使已登记的真人素材组标记为不可用（`available=false`）。
+所有素材组都建在平台配置的方舟账号下，分三类：`real` 真人人像（本人 H5 活体认证生成）、`virtual` 虚拟人像（直接建组）、`ip` 版权 IP（只能由管理员创建并授权）。`scope=user` 为用户自建、只属于本人；`scope=platform` 为管理员创建，按授权（全部用户或指定用户）只读使用。
 
-以下接口除回调外都要求登录，归属在 service 校验；调用方舟控制面的写接口按 `ResourceImportPerMinute` 限流：
+管理员配置 `GET/PATCH /api/admin/settings/ark-private-assets`：`site`（`volcengine` / `byteplus`，决定控制面 `ark.<region>.volcengineapi.com` 或 `ark.<region>.byteplusapi.com`）、`enabled`（可信素材自动同步，与素材组相互独立）、`realEnabled` / `virtualEnabled`（开放用户自建真人 / 虚拟素材组）、`realGroupLimit` / `virtualGroupLimit`（每人上限 1–200，真人包含认证中的会话）、`billingEnabled` 与 `realGroupPriceMicrocredits` / `virtualGroupPriceMicrocredits`（按组一次性收费，0–10¹² 微积分）、`realReviewRequired` / `virtualReviewRequired`（用户上传先经平台审核）、`realAuthorizationDays`（真人授权有效期 1–3650 天，从认证完成起算）和 `callbackBaseUrl`（站点公网根地址，空时使用 `CANVAS_PUBLIC_BASE_URL`）。上限与天数传 0 表示保持原值。保存写入管理员审计 `ark_private_assets.update`。更换站点、Region、ProjectName 或 AccessKey 会使已有素材组标记为不可用（`available=false`）。
+
+收费走 `billing_orders`（场景 `ark_asset_group`）：真人在发起认证时冻结、认证成功后扣除，失败、过期或取消退回；虚拟在 `CreateAssetGroup` 成功后扣除，失败退回。平台积分功能关闭或平台素材组不收费，删除素材组不退款。后台 worker 每 30 秒结束过期会话、退回滞留冻结并刷新方舟审核中的素材。
+
+以下接口除回调外都要求登录，归属在 service 校验；调用方舟控制面的写接口限流：
 
 | 接口 | 说明 |
 | --- | --- |
-| `GET /api/ark-portraits` | `{ enabled, site, groups, sessions }`；未开放时 `enabled=false`。`groups[].assets[]` 含 `arkAssetId`、`status`（`processing` / `active` / `failed`）与资源尺寸，列表顺带刷新少量审核中的素材 |
-| `POST /api/ark-portraits/sessions` | `{ name, lang }` 调用 `CreateVisualValidateSession`，返回 `session.h5Link`（按 `lang` 设置 `lng=zh/en/zh-Hant`，只在本次响应返回，不落库）。每账号每小时最多 20 次、最多 50 位真人 |
-| `POST /api/ark-portraits/sessions/:id/check` | 回调未到达时主动用 `GetVisualValidateResult` 换取素材组；未完成返回 409 |
-| `GET /api/ark-portraits/callback/:state` | H5 认证页完成后的回调，无需登录，凭一次性 `state` 识别会话；`resultCode=10000` 时换取 GroupId 并登记到发起人名下，然后 302 到 `/assets?arkPortrait=verified|failed|expired|pending|invalid` |
-| `POST /api/ark-portraits/groups` | 管理员登记控制台扫码授权得到的 `group-…`（先 `GetAssetGroup` 校验为 LivenessFace） |
-| `PATCH /api/ark-portraits/groups/:id` | 修改本地显示名称 |
-| `DELETE /api/ark-portraits/groups/:id` | 先 `DeleteAssetGroup`，成功后删除本地组与素材记录 |
-| `POST /api/ark-portraits/groups/:id/assets` | `{ resourceId, name }`，资源须属于当前用户且已就绪，按 MIME 以 `Image` / `Video` / `Audio` 调用 `CreateAsset` |
-| `POST /api/ark-portraits/assets/:id/refresh` | `GetAsset` 刷新审核状态 |
-| `DELETE /api/ark-portraits/assets/:id` | 先 `DeleteAsset`，成功后删除本地记录 |
+| `GET /api/ark-portraits` | `{ enabled, site, config, usage, groups, sessions }`；未开放时 `enabled=false`。`config` 为生效中的开放、上限、价格、审核与有效期；`groups` 含自建组和授权给本人的平台组（`owned`、`expiresAt`、`expiryStatus`），`groups[].assets[]` 含 `status`（`pending_review` / `rejected` / `processing` / `active` / `failed`）、`arkAssetId`、`libraryAssetId`、`inLibrary` |
+| `POST /api/ark-portraits/sessions` | `{ name, lang }` 冻结真人建组费用后调用 `CreateVisualValidateSession`，返回 `session.h5Link`（只在本次响应返回，不落库）与 `reservedMicrocredits` |
+| `GET /api/ark-portraits/sessions/:id` | 只读本地会话状态，供电脑端每 3 秒轮询；不调用方舟 |
+| `POST /api/ark-portraits/sessions/:id/check` | 回调未到达时用 `GetVisualValidateResult` 换取素材组；未完成返回 409 |
+| `POST /api/ark-portraits/sessions/:id/cancel` | 结束等待中的会话并退回冻结费用 |
+| `GET /api/ark-portraits/callback/:state` | H5 认证完成后的回调，无需登录，凭一次性 `state` 识别会话；成功时扣费并建组，然后 302 到公开结果页 `/ark-portrait/result?status=verified|failed|expired|cancelled|pending|invalid`（管理员发起的附 `&scope=platform`） |
+| `POST /api/ark-portraits/groups` | `{ kind: "virtual", name, description }` 新建虚拟素材组（先冻结、成功后扣费） |
+| `PATCH /api/ark-portraits/groups/:id` | `{ name, description }` 修改自建组 |
+| `DELETE /api/ark-portraits/groups/:id` | 先 `DeleteAssetGroup`，成功后删除本地组与素材，并取消素材库中对应图片的认证 |
+| `POST /api/ark-portraits/groups/:id/assets` | `{ resourceId, name, libraryAssetId? }` 向自建组上传图片（≤30MB）。需审核时为 `pending_review`，否则直接 `CreateAsset`。`libraryAssetId` 表示从素材库提交认证：须为本人已上传到云端的同一资源，已在审核中或同一文件已通过时拒绝 |
+| `POST /api/ark-portraits/assets/:id/refresh` | `GetAsset` 刷新方舟审核状态 |
+| `DELETE /api/ark-portraits/assets/:id` | 先 `DeleteAsset`，成功后删除本地记录并取消素材库认证 |
+| `POST /api/ark-portraits/assets/:id/library` | 把已通过的图片加入素材库「方舟认证」分类，返回 `{ assetId }`；平台素材复制成本人资源 |
+| `GET /api/ark-portraits/assets/:id/file` | 素材预览；上传者、被授权用户与管理员可访问 |
 
-生成任务的参考图、视频和音频中出现 `asset://<id>` 且该 ID 登记在其他用户的真人素材下时返回 403；未登记的 ID（方舟公共数字人等）不受限制。
+自建组的图片通过方舟审核后，服务端直接写入素材库：从素材库提交的图片原地移入 `ark` 分类（`previousCategory` 记录原分类），组内直接上传的图片新建素材 `ark-<素材ID>`。素材 payload 带 `arkAssetId` 与 `arkCertification`（`kind`、`scope`、`portraitAssetId`、`groupId`、`groupName`、`arkGroupId`、`certifiedAt`、`expiresAt`、`previousCategory`）。`ark` 分类只能由服务端写入，`PUT` 素材时客户端不能把其他分类改成 `ark`。
+
+管理员接口（service 校验管理员权限）：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/admin/ark-portraits/groups` | `kind`、`scope`、`expiry`（`valid` / `expiring` / `expired`）、`keyword`、分页；返回 `items`、`stats`（各类型数量、30 天内到期、已过期）、`pendingReview` 与管理员进行中的真人认证 |
+| `POST /api/admin/ark-portraits/groups` | `{ kind, name, description, groupId?, grantAll, grantUserIds }`；`groupId` 为空时在方舟新建（虚拟 / 版权 IP），非空时登记控制台已有的组（真人须为 LivenessFace） |
+| `GET` / `PATCH` / `DELETE /api/admin/ark-portraits/groups/:id` | 详情含全部素材与上传者；`PATCH` 可改名称、说明、平台组授权（`grantAll`、`grantUserIds`）和真人组 `expiresAt` |
+| `POST /api/admin/ark-portraits/groups/:id/assets` | 向平台组上传图片，免审核直接提交方舟 |
+| `DELETE /api/admin/ark-portraits/assets/:id` | 删除任一素材 |
+| `POST /api/admin/ark-portraits/sessions` | 为平台真人素材组发起 H5 认证，不收费 |
+| `GET /api/admin/ark-portraits/reviews` | `status=pending_review|rejected` 的用户上传 |
+| `POST /api/admin/ark-portraits/reviews/approve` | `{ ids }` 逐条 `CreateAsset`；失败的保持待审核，在 `failed[]` 返回原因 |
+| `POST /api/admin/ark-portraits/reviews/reject` | `{ ids, reason }` 驳回，原因展示给用户 |
+
+生成任务的参考图、视频和音频中出现 `asset://<id>` 时：属于他人自建组、未授权的平台组或已过期真人组的 ID 返回 403；未登记的 ID（方舟公共数字人等）不受限制。
 
 ## 管理员支付订单
 
@@ -711,6 +767,7 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 | 409 | 409 | `skill_version_conflict` | `PUT /skills/:id/files` 的 `baseVersionId` 已不是当前版本；`details.currentVersionId` 为最新版本，客户端需重新加载后再编辑 |
 | 400 | 400 | `drama_budget_exhausted` | 关联短剧的精修画布上创建生成任务时，作品已达到预算上限（预算含画布精修花费）；在短剧设置里提高预算后再生成 |
 | 409 | 409 | `drama_segment_changed` | 把画布视频采用为剧情段视频时，段版本与 `expectedRevision` 不符或刚被并发修改；刷新单集详情后重新采用 |
+| 409 | 409 | `drama_episode_confirm_required` | `DELETE /dramas/:id/episodes/:episodeId` 删除的集生成过视频，`confirm` 缺失或与“第 N 集”不一致；`details.confirmText` 是当前应输入的文字，用户输入后带上重新提交 |
 | 409 | 409 | `agent_interjection_run_finished` | 插话时本轮已结束；客户端把这条留在本机队列，作为下一轮发送 |
 | 409 | 409 | `agent_interjection_already_delivered` | 撤回插话时它已送达模型或本轮已结束，不能撤回 |
 | 409 | 409 | `agent_run_state_busy` | 插话或撤回时 Agent 运行状态被并发写入，多次重读仍冲突；`retryable: true`，可用同一 `messageId` 原样重试 |
@@ -862,7 +919,8 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 | `GET /dramas/:id/jobs?limit` | 最近的调度工作（类型、状态、错误、实际花费、重试次数、入队/开始/结束时间） |
 | `GET /dramas/:id/jobs/:jobId` | 单项工作详情：历次提交（最新在前），每次含任务状态、模型、请求参数白名单（尺寸、时长、是否同步生成声音等，不含渠道配置）、提示词、错误、花费与产出资源；只限作品所有者 |
 | `GET /dramas/:id/episodes/:episodeId` | 单集详情：镜头脚本、剧情段、改编来源章节、进行中的工作与 `scriptJob`。有镜头且原文章节不与其他集共用时附 `dialogueCheck`（`sourceLines` 原文台词句数、`missingCount`、`missing` 最多 30 句没有逐字出现在镜头台词里的原文台词；只比较文字与数字，按标点拆到多个镜头不算缺失）。每个剧情段含 `videoPrompt`（生效内容，手动改写优先）、`generated`、`custom`、`promptStatus`、`videoStatus`、`videoResourceId`、`tailFrameResourceId`、`videoModel`、`promptJob` / `videoJob`，以及 `request`：生成本段视频时实际发送的生成方式 `operation`、秒数、模型上限、作品画幅 `aspectRatio` 与实际画面参数（`size` 或 `resolution`，见“剧情段视频画面”）、是否同步生成声音 `generateAudio`、首帧（`firstFrameResourceId`，上一段未生成时 `firstFramePending=true`）、参考图列表（编号、类型、名称、资源、是否随请求发送）、追加在提示词开头的 `header` 与限制说明 `warning`（模型不支持参考图生视频、退到文生视频时写明“只按文字设定”；给不出作品画幅时写明原因）；与提交时同一函数计算 |
-| `POST /dramas/:id/episodes` | 逐集追加 `{ title, text, sourceFormat }`：原文直接成为末尾新的一集（≤ 1.2 万字），不影响已有集；仍有章节等待分集规划时返回 400。已完成的作品回到制作中，暂停中的保持暂停。返回新集详情 |
+| `POST /dramas/:id/episodes` | 新增一集 `{ title, text, sourceFormat, anchorEpisodeId?, position? }`：原文直接成为新的一集（≤ 1.2 万字），已有集的内容不受影响。不传 `anchorEpisodeId` 时追加到末尾；传了按 `position`（`before` / `after`）插到那一集之前或之后，后续集号顺延，新原文插到锚点集章节的前后，之后的章节与造型默认适用章节号一起后移。标题留空时取“第 N 集”，集号顺延时仍是默认标题的集与以“第 N 集”开头的作业标签一起改号。仍有章节等待分集规划、`position` 无效时返回 400，锚点集不存在返回 404。插入期间持有调度循环的作品租约，最多等 10 秒，拿不到返回 409。已完成的作品回到制作中，暂停中的保持暂停。返回新集详情 |
+| `DELETE /dramas/:id/episodes/:episodeId?confirm` | 删除一集：镜头、剧情段、段视频与成片的版本记录和本集调度作业一并删除，后续集号前移一位（默认标题与作业标签同步改号）；只属于这一集的章节退回预留状态（原文保留，可在原著目录重新加入制作），规划游标按已加入制作的章节数重算。本集生成过视频（成片、当前段视频、段视频或成片的历史版本、成功的段视频或合成作业）时 `confirm` 必须是“第 N 集”（不计空白），缺少或不一致返回 409 `drama_episode_confirm_required`，`details.confirmText` 是当前应输入的文字。仍有已提交的生成任务在进行时返回 409；作品只剩这一集或仍有章节在分集规划时返回 400。删除期间持有调度租约，规则同插入。返回 `{ deleted: true }` |
 | `PATCH /dramas/:id/episodes/:episodeId` | `{ title?, sourceFormat? }` 修改集标题或素材类型；素材类型在下次重新改编时生效，不递增集版本 |
 | `POST /dramas/:id/episodes/:episodeId/approve` · `/rescript` | 确认本集提示词（样片模式下确认第 1 集样片）/ 重新改编本集 |
 | `POST /dramas/:id/episodes/:episodeId/segments/prompts` | `{ segments: number[] }` 让文本模型（重新）撰写这些剧情段的完整视频提示词，正在撰写的段跳过；返回 `{ queued }` |
@@ -885,6 +943,10 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 | `GET /dramas/:id/chapters` | 原著目录 `{ chapters }`：全部章节（含预留章节）的 `id`、`title`、`position`、`wordCount`，`reserved=true` 表示尚未加入制作，`episodeNumber` 是使用这一章的第一集；不含原文。摘要里的 `production.chapterCount` / `wordCount` 只统计已加入制作的章节，`reservedChapterCount` / `reservedWordCount` 统计预留章节 |
 | `POST /dramas/:id/chapters/produce` | `{ chapterIds, chaptersPerEpisode? }` 把预留章节加入制作：按章节顺序每 1–12 章建成一集（不传沿用作品的按章分集设置，没有则每章一集；不相邻的章节不合并），集号接在现有分集之后，规划游标推到已加入制作的章节数，返回 `{ episodeIds }`。章节已在制作中、单章超过 1.2 万字、合并后单集超过 4 万字或仍有章节在分集规划时返回 400。已完成的作品回到制作中，暂停中的保持暂停；新章节里出现的角色、道具与场景在写剧本时即时建档 |
 | `GET /dramas/:id/chapters/:chapterId` · `PATCH …` | 读取单章原文 / 修改原文 `{ title?, text? }`（不能超过 1.2 万字与原字数中的较大值）；已写好的剧本不自动重写，需再调用 `rescript` |
+| `POST /dramas/:id/episodes/:episodeId/jianying-draft` | 导出剪映专业版草稿，表单字段 `draftRoot`（用户本机剪映草稿目录的绝对路径，macOS 或 Windows 格式，≤ 400 字）与 `captions=1`（附带台词字幕轨）。校验通过后流式返回 ZIP（`application/zip`，`zip.Store`），校验失败返回标准业务信封。包内唯一顶层目录即草稿文件夹，含 `draft_content.json` 与内容相同的 `draft_info.json`、`draft_meta_info.json`、`materials/` 下按段顺序排列的段视频、首段尾帧转成的 `draft_cover.jpg`、`台词字幕.srt` 与 `导入说明.txt`。素材按 `draftRoot/草稿名/materials/…` 写成绝对路径，解压到该目录后剪映可直接打开；主轨按段视频实际时长首尾相接，字幕按镜头时长占比估算。只导出 ready 或 stale 且有视频资源的段，其余写进导入说明；一个都没有时返回 400。 |
+| `POST /dramas/:id/asset-package` | 打包资产：表单字段 `episodeId`（可重复，最多 500，只能是已拆出分镜的集）、`media=1`（设定参考图、角色声音样本、段视频与成片）、`prompts=1`（`设定/设定提示词.md` 与每集 `提示词.md`，并写入清单的提示词字段），两者至少一项。全剧设定总会打包。根目录 `资产清单.json` 的 `format` 为 `yingce.drama-asset-package`、`version` 为 1，记录作品名与画幅、设定（类型、名称、别名、外观、简介、造型名、文件路径、参考图提示词）、所选各集的剧情段（段号、标题、秒数、视频路径、生效提示词）与镜头。合计超过 8 GB 返回 400。导入在浏览器完成：读取清单与图片后调用现有的设定参考图、设定、镜头与剧情段接口写入当前作品，不新增导入接口。 |
+
+两个导出接口只读取已有资源，账号超出存储容量进入只读时仍可调用；`draftRoot` 走表单 POST，不进入访问日志的 URL。
 | `DELETE /dramas/:id` | 删除作品与全部制作记录 |
 
 编排由后端调度循环推进，浏览器只提交意图；制作台目前按 3 秒轮询摘要和当前集详情，没有新增 SSE，也不需要调整代理缓冲配置。模型选择只接受逻辑模型或系统渠道模型；浏览器自定义渠道密钥无法驱动无人值守流水线。

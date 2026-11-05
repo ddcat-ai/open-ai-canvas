@@ -20,15 +20,23 @@ description: 从产品功能快速定位主要代码入口
 
 - 纯逻辑：`backend/internal/production/`（作品圣经、分集与剧本提示词 `prompts.go`，模型输出解析 `parse.go`，分镜规则与时长 `storyboard.go` / `timing.go`，按视频模型上限切剧情段 `SegmentShotsForVideo`，段提示词素材稿 `segment_prompt.go` 与撰写要求 `segment_writer.go`，参考图方案 `assets.go`，用户分镜表直接导入 `storyboard_import.go`，原文台词逐句核对 `dialogue_check.go`）。
 - 调度循环：`backend/internal/app/drama_orchestrator.go`（同步任务结果 → 推导工作 → 按优先级派发，租约保证单项目单循环；成片时间线由各段视频拼接；短剧任务进入终态后 `wakeDramaAfterTask` 立即唤醒调度）；派发并发池（文字 / 参考图 / 段视频 / 成片各按“同时生成数”计算）、先集号后类型的优先级与排队原因 `dramaDispatchWaits` 在 `drama_dispatch.go`；段视频尾帧在调度循环外后台抽取，按视频资源去重并用租约防跨实例重复，见 `drama_tail_worker.go`；剧情段视频请求的组装、提交、回写与最后一帧抽取在 `drama_segment_video.go`（`prepareDramaSegment` 同时供预览与提交使用）。
-- 服务与用户操作：`app/drama_service.go`（创建、摘要、单集详情与剧情段视图）、`drama_actions.go`（审阅、镜头编辑、段提示词与段视频、设定重做、放行）、`drama_editing.go`（逐集追加、原文与素材类型修改、插入 / 删除镜头、上传并锁定参考图、台词核对）、`drama_models.go`（模型目录、视频能力 `dramaVideoProfile`、报价预估）；类型在 `drama_types.go`。
+- 服务与用户操作：`app/drama_service.go`（创建、摘要、单集详情与剧情段视图）、`drama_actions.go`（审阅、镜头编辑、段提示词与段视频、设定重做、放行）、`drama_editing.go`（逐集追加、插到某一集前后与删除集（持有调度租约，集号平移在 `repository_drama.go` 的 `shiftDramaEpisodeNumbers`）、原文与素材类型修改、插入 / 删除镜头、上传并锁定参考图、台词核对）、`drama_models.go`（模型目录、视频能力 `dramaVideoProfile`、报价预估）；类型在 `drama_types.go`。
 - 持久化：`model/models_drama.go`、`repository/repository_drama.go`（调度与用户写入均为列级条件更新）；迁移 v61–v67、v71、v73 在 `database/migrations.go`。HTTP：`handler/drama_routes.go`。
 - 渲染：`app/timeline_render_plan.go` / `task_render.go` 用 ffmpeg 合成，保留段视频自带的声音；按片段宽高比选择裁切或补黑边（`renderSegmentFit`），写入 AIGC 隐式标识（`renderAIGCLabel`）。媒体探测唯一入口 `app/media_probe.go`（宽高、时长、容器标签），存量视频尺寸修复在 `app/media_dimension_repair.go` 与 `repository/media_dimension_repair.go`。
 - 花费口径：`repository/drama_billing.go`（按计费订单汇总流水线与画布的实收、冻结额）、`app/drama_billing.go`（订单拆分与结算等待）；前端任务计费文案 `web/src/lib/generation-task-billing.ts`。
 - 浏览器精剪导出：`web/src/lib/timeline/timeline-to-ffmpeg.ts`（片段适配与来源标识参数）、`timeline-export-spec.ts`（导出规格预设）、`timeline-export-runner.ts`（执行步骤、字幕回退与警告）、`timeline-build.ts`（来源范围 `buildTimelineForScope`）。
 - 前端：`web/src/services/api/drama.ts`；`pages/projects/index.tsx`（作品列表）、`create.tsx`（上传与预估）、`detail.tsx`（制作台）。制作台子组件在 `pages/projects/studio/`：`storyboard.tsx`（剧情段卡片）、`segment-dialog.tsx`（剧情段弹窗：段视频、生成依据、镜头脚本与完整视频提示词）、`segment-parts.tsx`（状态、视频与生成依据共用组件）、`panels.tsx`（设定、待处理、制作设置）、`final-view.tsx`、`script-view.tsx`、`job-detail.tsx`；样式 `drama.css`。模型选择复用通用 `ModelPicker`（`drama-model-picker.tsx`、`lib/drama/model-choice.ts`）。
 - 回归：`internal/production/production_test.go`、`app/drama_orchestrator_test.go`、`app/drama_storyboard_test.go`、`app/drama_assets_test.go`、`web/src/lib/drama/*.test.ts`。
+- 导出与导入：剪映草稿 JSON 的纯生成在 `backend/internal/jianying/draft.go`；单集草稿、资产包清单与流式 ZIP 在 `app/drama_export.go`，路由在 `handler/drama_routes.go`（`streamDramaArchive`）。前端下载 `web/src/services/drama-export.ts`（隐藏表单提交到 iframe），导入的计划与写入 `services/drama-asset-import.ts`，按中央目录随机读取 ZIP `lib/zip-entries.ts`；弹窗在 `pages/projects/studio/asset-transfer.tsx`。
 - 精修画布（后端）：`app/drama_canvas.go`（作品的精修画布、投送媒体的素材登记、版本记录与来源、段视频采用与尾帧补抽、画布花费计入预算 `dramaTotalSpent`、画布任务预算闸门 `ensureDramaCanvasBudget`）、`repository/repository_drama_canvas.go`（画布花费汇总、段视频采用事务、短剧持有资源的引用 `DramaResourceReferences`）；尾帧抽取与视频时长读取在 `drama_segment_video.go`（`saveDramaTailFrame`、`inspectDramaVideo`）。Agent 工具 `drama_get_context` / `drama_adopt_canvas_media` 在 `app/cloud_agent_drama.go`，只在 `Scope.Drama`（运行画布关联短剧）时暴露。
 - 精修画布（前端）：投送的纯函数在 `web/src/lib/canvas/drama-canvas-projection.ts`（节点、段框、时间线、过期判断、分镜转短剧原文），副作用在 `web/src/services/drama-canvas.ts`（找到或新建精修画布、跳转参数、素材登记、分镜画布关联到新短剧）；画布页编排 `pages/canvas/use-canvas-drama.ts`，侧栏 `components/canvas/canvas-drama-sidebar.tsx`，采用弹窗 `components/canvas/canvas-drama-adopt-modal.tsx`。查询键 `lib/drama/drama-query-keys.ts` 与文案 `lib/drama/drama-format.ts` 由制作台和画布共用；制作台入口 `studio/use-studio.ts` 的 `useOpenDramaCanvas`，版本记录 `studio/take-list.tsx`。
+
+## 方舟素材库
+
+- 服务：`backend/internal/app/ark_portraits.go`（概览、H5 认证会话与回调、生成时 `asset://` 引用校验）、`ark_portrait_groups.go`（建组、上传、删除、加入素材库）、`ark_portrait_library.go`（审核通过后写入素材库 `ark` 分类、取消认证、平台素材复制成用户资源）、`ark_portrait_admin.go`（管理员素材组、授权、审核）、`ark_portrait_worker.go`（过期会话、滞留冻结、方舟审核刷新）、`settings_ark_assets.go`（开放范围、上限、收费、审核、有效期）。
+- 持久化与计费：`repository/ark_portrait.go`（会话冻结、建组扣费 / 退款、授权、审核队列、素材库 payload 改写）；Schema 86 在 `database/migrations.go`。HTTP：`handler/ark_portraits.go`。
+- 前端：API `web/src/services/api/ark-portraits.ts`，派生规则 `lib/ark-assets.ts`，上传 `services/ark-asset-upload.ts`，素材库同步 `hooks/use-ark-library-reconcile.ts`；设置页 `pages/settings/ark-assets-pane.tsx`、`ark-group-create.tsx`、`ark-group-detail.tsx`；结果页 `pages/ark-portrait-result.tsx`；素材库认证弹窗 `pages/assets/ark-certify-modal.tsx`；画布标识在 `components/canvas/canvas-node.tsx`，引用改写在 `canvas-node-generation.ts`；管理端 `pages/admin/settings/ark-private-assets-settings-page.tsx` 与 `ark-assets/`。
+- 回归：`backend/internal/app/ark_portraits_test.go`、`web/test/admin-ui-regressions.test.ts`。
 
 ## 画布实时会话
 
@@ -44,6 +52,14 @@ description: 从产品功能快速定位主要代码入口
 - 管理员查询：`app/admin_login_logs.go` → `service/aliases_login_logs.go` → `handler/admin_login_log_routes.go`。
 - 前端：`web/src/services/api/login-logs.ts`、`pages/admin/login-logs/`；菜单和懒加载接入 `admin-shell.tsx`、`router.tsx`。
 - 回归：auth/handler/database 的 `login_logs*_test.go`，前端 `web/test/login-log-device.test.ts`。
+
+## 插件声明驱动的宿主行为
+
+- 声明投影：`backend/internal/protocol/textwire.go`（按 create / agent 路径识别文本线格式）；`manifest.go` 的 `normalizeManifestForProvider` 把 `TextWire`、`AgentWire`、`Auth` 写进 `Metadata`。
+- 文本任务：`app/text_wire.go`（读取声明的线格式、`stream_options` 被拒后重试、目录 `textWire`），调用方是 `provider_text.go` 的 `executeProtocolCreateRequest` 和 `provider_text_agent.go` 的 `runDeclarativeAgentTask`。
+- 系统代理：`app/system_proxy_protocol.go`（声明路径白名单、按 `auth` 写出站鉴权）→ `handler/auth.go` 的 `proxySystemRequestPath`、`handler/security.go` 的 `authorizeSystemProxy`。
+- Secret Key 与续查：`app/provider_protocol_auth.go` 的 `protocolAuthUsesSecretKey`；`app/task_worker.go` 的 `videoProviderSupportsTaskResume`。
+- 前端：`web/src/services/api/text-wire.ts`（文本请求路径）、`web/src/hooks/use-user-protocol-catalog.ts`（设置页 Secret Key 校验）。
 
 ## 可美 KM Seedream
 
@@ -105,8 +121,10 @@ description: 从产品功能快速定位主要代码入口
 | 登录注册 | `web/src/pages/auth/` | `stores/use-user-store.ts`、`services/api/auth.ts`、后端 `internal/auth/` |
 | 积分与计费 | `web/src/components/layout/workspace-wallet-modal.tsx`、`pages/admin/components/platform-finance-panel.tsx` | `services/api/wallet.ts`、`services/api/payments.ts`、后端 `internal/app/finance.go`、`internal/app/payment.go`、`payment-plugins/`、`plugin-packages/official-payment-*` |
 | 推广中心 | `web/src/pages/referral/`、`pages/admin/referral/referral-admin-page.tsx`、`pages/admin/users/users-drawer.tsx`（推广人开关） | `services/api/referral.ts`、后端 `internal/handler/referral.go`、`internal/app/referral.go`（设置、资格、绑定、返佣）、`internal/repository/referral.go` |
+| 分时与上下文 Token 价格 | `web/src/pages/admin/components/channel-model-token-rules.tsx` | 表单换算 `channel-model-price-tier-form.ts`、校验 `channel-model-editor-form.ts`；后端规则结构与时段 / 区间匹配 `model/token_price_rules.go`，保存校验 `app/channel_models_pricing.go`（`normalizeTokenPriceRules`），下单快照 `app/finance.go`（`tokenPriceRuleSnapshot`），结算选档 `repository/finance_billing.go`（`tokenUsageAmount`），目录展示 `app/model_catalog.go` 与 `web/src/lib/model-pricing.ts` |
 | 视频 Token 报价与结算 | `web/src/pages/admin/components/channel-model-price-tier-fields.tsx`、`web/src/components/model-picker.tsx` | `lib/model-pricing.ts`、`services/api/logical-models.ts`；后端 `app/video_token_billing.go` 管像素与时长估算，`app/logical_model_quote.go` 复用准入与价格规则，`app/analytics.go` 提取可信用量，`repository/finance.go` 按订单快照退补差额 |
-| 任务中心 | `web/src/pages/tasks/` | `services/api/task-center.ts`、`services/api/task-text-stream.ts` |
+| 任务中心（创作历史） | `web/src/pages/tasks/` | 页面编排 `index.tsx`；列表行 `task-list-row.tsx`、网格卡 `task-grid-card.tsx`、详情弹窗 `task-detail-modal.tsx`、状态与积分等共用件 `task-shared.tsx`；样式 `tasks-page.css`；接口 `services/api/task-center.ts`、`services/api/task-text-stream.ts` |
+| 画布姿势库 | `web/src/components/canvas/canvas-pose-library-modal.tsx`（弹窗）、`pages/admin/pose-library/pose-library-page.tsx`（后台导入 / 同步 / 管理） | 接口 `services/api/pose-library.ts`；入口 `lib/canvas/tool-registry/definitions/{main-toolbar-tools,add-node-menu-tools}.tsx`，插入走 `pages/canvas/use-canvas-upload.ts` 的 `handleAssetsInsert`；后端 `internal/poselibrary/`（导入解析 `importer.go`、图片同步 `sync.go`、文件落盘 `files.go`、目录 `catalog.go`、后台维护 `admin.go`）、`app/pose_library_bridge.go`（选用时复制为用户资源，复用 `resource_store.go` 的 `storeFetchedResource`）、`repository/pose_library.go`、`handler/pose_library.go` |
 | 图片 / 视频生成（`/toolbox/image`、`/toolbox/video`） | `web/src/pages/workbench/image-workbench-page.tsx` | 页面编排状态、批量提交与轮询；`workbench-composer.tsx` 创作面板分区；`workbench-gallery.tsx` 按批次的作品画廊；`workbench-viewer.tsx` 大图预览；`workbench-scene-library.tsx` 场景库；`workbench-asset-picker.tsx` 素材库选图；纯函数 `workbench-batches.ts`（拆分任务、按批次归组、解析产物）与 `workbench-presets.ts`（画幅用途、灵感词、场景细分）；样式 `workbench.css`；接口 `services/api/workbench.ts`；后端 `internal/workbench/tasks.go`（任务校验与批次字段）、`internal/app/workbench_bridge.go`、`internal/app/task_output.go`（列表 `clientContext.batchId`） |
 | 产品模型与渠道选择 | `web/src/components/model-picker.tsx`、`pages/admin/components/channel-model-editor.tsx` | `lib/model-picker-groups.ts` 只构建跨渠道展示分组；`lib/user-session.ts` 透传渠道展示名；`components/model-logo.tsx` 按需加载原色图标；后端 `app/channel_models.go` 校验写入，`app/model_catalog.go` 发布目录，schema v24 增加 `channel_label` |
 | 系统渠道规格利润率与批量调价 | `web/src/pages/admin/components/channel-model-manager.tsx`、`channel-model-reprice-dialog.tsx` | 弹窗按模型分组展示多规格、重新计算与逐项编辑；`channel-model-cost-summary.tsx` 展示价格，`channel-model-pricing.ts` 精确四舍五入并组装最终售价；后端 `handler/finance.go` 接收批量请求，`app/channel_model_pricing.go` 校验权限、最终价格及快照版本，`repository/channel_model_pricing.go` 事务保存及版本冲突检测 |
@@ -210,6 +228,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | `canvas` | 画布公开分享、媒体引用守卫、用户画布/素材库同步 | **已抽出**：`internal/canvas` |
 | `assets` | 资源 URL/引用解析、流式交付类型 | **部分抽出**：`internal/assets`；OSS/配额/转码仍在 `app` |
 | `agentcontext` | Agent 上下文检查点的编码、解析与压缩提示词（provider 中立，不含触发与调度） | **已抽出**：`internal/agentcontext`；触发、暂停与恢复在 `app/cloud_agent_context_compaction.go` |
+| `poselibrary` | 站点姿势库：导入解析、图片同步与本地文件、用户目录、后台维护 | **新建**：`internal/poselibrary`；`app/pose_library_bridge.go` 注入管理员校验与审计，并负责选用时复制为用户资源 |
 
 组合根原则：`service.New`（委托 `app.New`）组装各域服务；coordinator 不得再持有整个 `*Service` 回灌域包。
 
@@ -267,10 +286,11 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 
 - `web/src/pages/create/creation-inspiration-tunnel.tsx`、`creation-inspiration-tunnel.css`：纵深画廊的排布、随机取样、封面就绪门控与样式。
 - `web/src/pages/inspirations/`：灵感页（`index.tsx`）、详情弹窗、编辑弹窗与 `inspirations.css`。
-- `web/src/lib/inspirations/catalog.ts`、`resolve.ts`、`source-revisions.ts`：来源登记表、条目类型与解析、原创条目、上游版本号。
+- `web/src/lib/inspirations/catalog.ts`、`resolve.ts`、`source-revisions.ts`、`daily-order.ts`：来源登记表、条目类型与解析、原创条目、上游版本号、灵感大厅的每日推荐顺序。
 - `web/src/services/inspiration-catalog.ts`：全量目录与画廊池的运行时加载、内存缓存与失败退回。
 - `web/src/stores/use-inspiration-store.ts`：自建／覆盖／隐藏／收藏的本地持久化与导入导出。
 - `web/scripts/import-inspirations.mjs`：外部来源同步、等距抽取、缩略图生成与画廊池落盘；产物在 `web/public/inspirations/` 与 `web/public/inspiration-thumbs/`。
+- 灵感上新：`backend/internal/inspirations/`（`sources.go` 上游解析，与导入脚本同一套 ID 规则；`sync.go` 定时与手动同步；`feed.go` 公开接口与后台状态）、`app/inspiration_feed_bridge.go`、`handler/inspiration_feed.go`、`repository/inspiration_feed.go`；前端 `services/api/inspiration-feed.ts`、`services/inspiration-catalog.ts`（合并去重）、`pages/admin/components/inspiration-feed-row.tsx`（功能开放页的开关与立即同步）。
 
 ## 画布外观
 
