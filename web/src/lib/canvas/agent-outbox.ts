@@ -234,7 +234,7 @@ export function agentOutboxDispatchBlocker(outbox: AgentOutbox, ctx: AgentOutbox
 }
 
 export type AgentOutboxInterjectContext = {
-    run: RunState | null;
+    run: (RunState & { canvasId?: string }) | null;
     connected: boolean;
     stopping: boolean;
     canvasBusy: boolean;
@@ -242,9 +242,11 @@ export type AgentOutboxInterjectContext = {
 };
 
 /** 这一条现在能不能插进当前轮；返回不能的原因，用于按钮提示。 */
-export function agentOutboxInterjectBlocker(item: Pick<AgentOutboxItem, "text" | "status" | "requiresVision">, ctx: AgentOutboxInterjectContext): string | null {
+export function agentOutboxInterjectBlocker(item: Pick<AgentOutboxItem, "text" | "status" | "requiresVision"> & { canvasId?: string }, ctx: AgentOutboxInterjectContext): string | null {
     if (ctx.stopping) return "正在停止本轮";
     if (!agentRunAcceptsInterjection(ctx.run)) return "本轮已结束，可作为下一轮发送";
+    // 在画布 B 写的消息不能插进画布 A 正在运行的这一轮，否则会改动另一个画布（#881）。
+    if (item.canvasId && ctx.run?.canvasId && item.canvasId !== ctx.run.canvasId) return "这条写在另一个画布上，不能插进原画布正在运行的这一轮；回到原画布插话，或等本轮结束后在此页面发送";
     if (ctx.canvasBusy) return "画布上有别的 Agent 在运行";
     if (!ctx.connected) return "连接断开，恢复后才能插话";
     if (ctx.requestPending) return "上一条提交结果待确认";
