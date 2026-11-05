@@ -14,7 +14,7 @@ import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-res
 import { resolveImageRequestSize } from "@/services/api/image-validation";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
-import { buildEmotionImageArtifacts, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
+import { buildEmotionImageArtifacts, emotionGenerationSizeFor, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan, supportsEmotionEdit } from "@/lib/canvas/canvas-emotion";
 import {
     buildAudioGenerationMetadata,
     buildGenerationConfig,
@@ -46,7 +46,7 @@ import { skillRuntime, type SkillRuntimeMetadata } from "@/services/skill-runtim
 import { queryGenerationTask, recoverGenerationTaskMedia, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { resolveImageUrl } from "@/services/image-storage";
 import { loadPromptMentionedAssets } from "@/services/user-data-sync";
-import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import type { Asset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
 
@@ -341,8 +341,8 @@ export function useCanvasGenerationRetry({
             }
             const generationType = savedImageMetadata?.generationType;
             const isEmotionRetry = Boolean(node.metadata?.emotionEdit);
-            if (isEmotionRetry && resolveModelRequestConfig(generationConfig, generationConfig.model).interfaceType !== "openai-image") {
-                message.error(translate("canvasPage.retry.expressionNeedsMask"));
+            if (isEmotionRetry && !supportsEmotionEdit(modelCapabilityConfigFor(generationConfig, generationConfig.model).image!.references)) {
+                message.error(translate("canvasPage.retry.expressionNeedsReferenceImages"));
                 return;
             }
             const useReferenceImages = isEmotionRetry ? false : context?.characterReferences.length ? true : generationType ? generationType === "edit" : Boolean(context?.referenceImages.length);
@@ -491,7 +491,8 @@ export function useCanvasGenerationRetry({
                     const sourceDataUrl = await resolveImageUrl(emotionSource.metadata.storageKey, emotionSource.metadata.content, { cacheMiss: true });
                     if (!sourceDataUrl) throw new Error(translate("canvasPage.retry.emotionSourceUnreadable"));
                     const artifacts = await buildEmotionImageArtifacts(sourceDataUrl, emotionEdit.faceBox, emotionSource.metadata.naturalWidth || 0, emotionSource.metadata.naturalHeight || 0);
-                    const emotionConfig = { ...generationConfig, size: emotionGenerationSize(artifacts.editRegion), quality: !generationConfig.quality || generationConfig.quality === "auto" ? "high" : generationConfig.quality };
+                    const emotionSize = emotionGenerationSizeFor(modelCapabilityConfigFor(generationConfig, generationConfig.model).image!.size, artifacts.editRegion);
+                    const emotionConfig = { ...generationConfig, size: emotionSize, quality: !generationConfig.quality || generationConfig.quality === "auto" ? "high" : generationConfig.quality };
                     const imageProfile = modelCapabilityConfigFor(emotionConfig, emotionConfig.model).image!;
                     const editPlan = resolveEmotionEditPlan(imageProfile.references.maskSupported);
                     const sourceReference = sourceNodeReferenceImages(emotionSource)[0];

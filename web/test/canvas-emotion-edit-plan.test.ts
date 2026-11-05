@@ -1,9 +1,25 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildEmotionPrompt, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "../src/lib/canvas/canvas-emotion";
+import { buildEmotionPrompt, emotionGenerationSizeFor, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan, supportsEmotionEdit } from "../src/lib/canvas/canvas-emotion";
+import { defaultImageCapabilityConfig } from "../src/lib/model-capabilities";
 
 const faceBox = { id: "face-1", x: 120, y: 80, width: 160, height: 180, source: "detected" as const };
 const editRegion = { x: 40, y: 20, width: 320, height: 360 };
+const wideRegion = { x: 0, y: 0, width: 600, height: 400 };
+
+describe("emotion edit model capability", () => {
+    test("requires two reference images instead of the OpenAI Images protocol", () => {
+        expect(supportsEmotionEdit(defaultImageCapabilityConfig("openai-image").references)).toBe(true);
+        expect(supportsEmotionEdit(defaultImageCapabilityConfig("volcengine-ark-image").references)).toBe(true);
+        expect(supportsEmotionEdit(defaultImageCapabilityConfig("grok-image").references)).toBe(false);
+    });
+
+    test("sends pixel sizes only to models that accept them", () => {
+        expect(emotionGenerationSizeFor(defaultImageCapabilityConfig("openai-image").size, wideRegion)).toBe("1536x1024");
+        expect(emotionGenerationSizeFor(defaultImageCapabilityConfig("gemini-image").size, wideRegion)).toBe("3:2");
+        expect(emotionGenerationSizeFor({ parameter: "aspect_ratio", values: ["1:1", "16:9"], allowCustom: false, default: "1:1" }, wideRegion)).toBe("1:1");
+    });
+});
 
 describe("emotion edit provider plan", () => {
     test("keeps provider mask when the selected image model supports it", () => {

@@ -491,9 +491,18 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.Parameters = provider.Parameters
 	manifest.Metadata.ImageParameters = provider.ImageParameters
 	manifest.Metadata.Create = operationSummary(provider.Create)
+	manifest.Metadata.Agent = operationSummaryPtr(provider.Agent)
 	manifest.Metadata.Poll = operationSummaryPtr(provider.Poll)
 	manifest.Metadata.Cancel = operationSummaryPtr(provider.Cancel)
 	manifest.Metadata.ContentType = provider.Create.ContentType
+	manifest.Metadata.TextWire, manifest.Metadata.AgentWire = "", ""
+	if hasCapability(provider.Capabilities, CapabilityText) {
+		manifest.Metadata.TextWire = TextWireForPath(provider.Create.Path)
+		if provider.Agent != nil {
+			manifest.Metadata.AgentWire = TextWireForPath(provider.Agent.Path)
+		}
+	}
+	manifest.Metadata.Auth = provider.Auth
 	manifest.Metadata.RequiresPublicMediaURLs = provider.RequiresPublicMediaURLs
 	manifest.Metadata.DetachedPolling = provider.DetachedPolling
 	manifest.Metadata.IdempotentCreate = provider.IdempotentCreate

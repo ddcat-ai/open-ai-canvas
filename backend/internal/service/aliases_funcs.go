@@ -56,6 +56,8 @@ var (
 	RateLimited                                = app.RateLimited
 	ReasonForStatus                            = app.ReasonForStatus
 	SanitizeAPICallPayload                     = app.SanitizeAPICallPayload
+	StreamUsageOptionRejectedResponse          = app.StreamUsageOptionRejectedResponse
+	SystemProxyChatCompletionPath              = app.SystemProxyChatCompletionPath
 	Unauthorized                               = app.Unauthorized
 	ValidateCapabilitySpec                     = app.ValidateCapabilitySpec
 	ValidateChannelModelPrice                  = app.ValidateChannelModelPrice

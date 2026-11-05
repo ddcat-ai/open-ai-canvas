@@ -38,7 +38,7 @@ import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution
 import { buildGenerationConfig, buildImageGenerationMetadata, nodeReferenceImage, isGenerationCanceled, runBackendCanvasGenerationTask, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { canvasImageNodeDimensions } from "@/lib/canvas/canvas-reference-image-size";
 import { fitImageNodeSize, fitNodeSize, preserveImageNodeSize, VIDEO_NODE_MAX_SIZE } from "@/lib/canvas/canvas-node-size";
-import { compositeEmotionImage, emotionGenerationSize, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan } from "@/lib/canvas/canvas-emotion";
+import { compositeEmotionImage, emotionGenerationSizeFor, emotionProviderMask, normalizeEmotionPromptForProvider, resolveEmotionEditPlan, supportsEmotionEdit } from "@/lib/canvas/canvas-emotion";
 import { DEFAULT_PORTRAIT_TEXTURE_SETTINGS } from "@/lib/canvas/canvas-portrait-texture";
 import { IMAGE_PROMPT_REVERSE } from "@/lib/prompts";
 import { createPortraitTextureNode, createNineGridNode } from "@/lib/canvas/canvas-image-source";
@@ -73,7 +73,7 @@ function normalizeRegionEditQuality(quality: string | undefined, size: string | 
     const pixels = Number(match[1]) * Number(match[2]);
     return pixels <= 2_000_000 ? "1k" : pixels <= 4_300_000 ? "2k" : pixels <= 8_294_400 ? "4k" : quality || "auto";
 }
-import { defaultConfig, resolveModelRequestConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ContextMenuState } from "@/types/canvas";
 import type { StartCanvasUploadStatus } from "./use-canvas-upload";
 import { translate } from "@/i18n";
@@ -1636,14 +1636,15 @@ export function useCanvasMediaTools({
     const generateEmotionNode = useCallback(async (node: CanvasNodeData, payload: CanvasImageEmotionPayload) => {
         if (!node.metadata?.content) return;
         const baseConfig = buildGenerationConfig(effectiveConfig, node, "image");
-        const providerSize = emotionGenerationSize(payload.editRegion);
+        // 是否可用、发不发蒙版、尺寸怎么写都看模型能力声明，不再限定 OpenAI Images 协议。
+        const imageProfile = modelCapabilityConfigFor(baseConfig, baseConfig.model).image!;
+        const providerSize = emotionGenerationSizeFor(imageProfile.size, payload.editRegion);
         const generationConfig = { ...baseConfig, count: "1", size: providerSize, quality: !baseConfig.quality || baseConfig.quality === "auto" ? "high" : baseConfig.quality };
         if (!isAiConfigReady(generationConfig, generationConfig.model)) { navigateToSettings({ continueCreation: true }); return; }
-        if (resolveModelRequestConfig(generationConfig, generationConfig.model).interfaceType !== "openai-image") {
-            message.error(translate("canvasPage.mediaTools.expressionNeedsOpenAi"));
+        if (!supportsEmotionEdit(imageProfile.references)) {
+            message.error(translate("canvasPage.mediaTools.expressionNeedsReferenceImages"));
             return;
         }
-        const imageProfile = modelCapabilityConfigFor(generationConfig, generationConfig.model).image!;
         const editPlan = resolveEmotionEditPlan(imageProfile.references.maskSupported);
         const source = nodeReferenceImage(node);
         if (!source) return;

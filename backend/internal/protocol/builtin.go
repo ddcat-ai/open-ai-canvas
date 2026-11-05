@@ -109,7 +109,11 @@ func allSurfaces() []Surface {
 }
 
 func metadata(id, name, vendor string, capability Capability, create, poll, contentType string) Metadata {
-	return Metadata{ID: id, Version: "1.0.0", Name: name, Vendor: vendor, Categories: []Capability{capability}, Scopes: allSurfaces(), Create: create, Poll: poll, ContentType: contentType, Enabled: true, Installable: true}
+	info := Metadata{ID: id, Version: "1.0.0", Name: name, Vendor: vendor, Categories: []Capability{capability}, Scopes: allSurfaces(), Create: create, Poll: poll, ContentType: contentType, Enabled: true, Installable: true}
+	if capability == CapabilityText {
+		info.TextWire = TextWireForOperation(create)
+	}
+	return info
 }
 
 func mediaParams() []Parameter {
@@ -336,6 +340,8 @@ func arkVideosAdapter() Adapter {
 func jimengVideosAdapter() Adapter {
 	info := metadata("volcengine-jimeng-video", "即梦官方视频", "Volcengine Jimeng", CapabilityVideo, "POST CVSync2AsyncSubmitTask", "POST CVSync2AsyncGetResult", "application/json + AK/SK signature")
 	info.Parameters = videoParams()
+	// 与官方插件同一鉴权声明：宿主据此要求渠道同时配置 Access Key 和 Secret Key。
+	info.Auth = ManifestAuth{Type: "volcengine-v4", Field: "apiKey", SecretField: "secretKey", Service: "cv", Region: "cn-north-1"}
 	return videoAdapterWithPoll(info, func(r GenerationRequest) (RequestSpec, error) {
 		body := map[string]any{"req_key": r.Model, "prompt": r.Prompt}
 		if len(r.Images) > 0 {

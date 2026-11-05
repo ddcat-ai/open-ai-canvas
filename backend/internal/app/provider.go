@@ -224,8 +224,8 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if err := s.validateGenerationInterface(input.Mode, input.Config.InterfaceType); err != nil {
 		return nil, err
 	}
-	if isVolcengineJiMengProtocol(input.Config.InterfaceType) && strings.TrimSpace(input.Config.SecretKey) == "" {
-		return nil, errors.New("即梦官方 API 缺少 Secret Key")
+	if adapter, ok := protocolAdapterForContext(ctx, input.Config.InterfaceType); ok && protocolAuthUsesSecretKey(adapter.Metadata().Auth) && strings.TrimSpace(input.Config.SecretKey) == "" {
+		return nil, fmt.Errorf("%s 协议缺少 Secret Key，请在渠道中配置后重试", adapter.Metadata().Name)
 	}
 	if input.Mode == "image" {
 		if err := s.validateResolvedImageCapability(&input); err != nil {

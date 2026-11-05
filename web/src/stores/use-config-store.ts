@@ -4,7 +4,7 @@ import type { ModelTag } from "@/lib/model-tags";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { nanoid } from "nanoid";
-import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol } from "@/lib/model-protocols";
+import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol, type TextWire } from "@/lib/model-protocols";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
@@ -100,6 +100,8 @@ export type ModelChannel = {
         icon?: string;
         capability: ModelCapability;
         protocol?: ModelProtocol;
+        /** 仅系统渠道：模型目录按插件 create 路径识别的文本请求格式。 */
+        textWire?: TextWire;
         pricePolicy?: "channel" | "unified";
         billingMode: "fixed_request" | "per_second" | "token";
         unitPriceMicrocredits: number;
@@ -546,7 +548,8 @@ export function channelConnectionSignature(channel: ModelChannel) {
 export function resolveModelRequestConfig(config: AiConfig, value: string) {
     const channel = resolveModelChannel(config, value);
     const model = modelOptionName(value || config.model);
-    const modelProtocol = channel.modelCosts?.find((item) => item.model === model)?.protocol;
+    const modelCost = channel.modelCosts?.find((item) => item.model === model);
+    const modelProtocol = modelCost?.protocol;
     const interfaceType = modelProtocol || channel.interfaceType;
     return {
         ...config,
@@ -557,6 +560,7 @@ export function resolveModelRequestConfig(config: AiConfig, value: string) {
         headers: channel.headers,
         apiFormat: interfaceType ? (interfaceType === "gemini-veo" || interfaceType === "gemini-image" ? ("gemini" as const) : interfaceType === "claude-api" ? ("claude" as const) : ("openai" as const)) : channel.apiFormat,
         interfaceType,
+        textWire: modelCost?.textWire,
         channelId: channel.scope === "system" ? channel.id : "",
     };
 }

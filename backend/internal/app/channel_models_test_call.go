@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,12 +47,6 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		"video": "A static gray circle on a white background.",
 		"audio": "Model test.",
 	}[capability]
-	videoSeconds := "6"
-	videoSecondsValue := 6
-	if protocol == model.ChannelInterfaceVolcengineJiMengVideo {
-		videoSeconds = "5"
-		videoSecondsValue = 5
-	}
 	imageSize, imageQuality := "", ""
 	var imageProfile *ImageCapabilityConfig
 	videoRatio, videoResolution := videoTestDefaults(nil)
@@ -74,6 +69,8 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		videoProfile = profile.Video
 		videoRatio, videoResolution = videoTestDefaults(videoProfile)
 	}
+	videoSecondsValue := videoTestSeconds(videoProfile)
+	videoSeconds := strconv.Itoa(videoSecondsValue)
 	input := canvasGenerationInput{
 		Mode:   capability,
 		Prompt: prompt,
@@ -166,6 +163,15 @@ func videoTestDefaults(profile *VideoCapabilityConfig) (string, string) {
 		resolution = "720"
 	}
 	return ratio, resolution
+}
+
+// videoTestSeconds 取模型能力声明的默认时长（保存时已校验它属于时长范围或固定档位），
+// 避免固定 6 秒落在 5/10 秒这类档位之外造成测试假失败；画像缺失时才用 6 秒。
+func videoTestSeconds(profile *VideoCapabilityConfig) int {
+	if profile != nil && profile.Duration.Default > 0 {
+		return profile.Duration.Default
+	}
+	return 6
 }
 
 func imageTestDefaults(profile *ImageCapabilityConfig) (string, string) {

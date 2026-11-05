@@ -488,7 +488,8 @@ func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string
 		return false
 	}
 	if isVideoTaskType(task.Type) || input.Mode == "video" {
-		return resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+		// 总等待时长与分离式回查共用上限，上游丢单时不会无限回查。
+		return s.videoProviderSupportsTaskResume(resolved.InterfaceType) && (task.StartedAt == nil || time.Since(*task.StartedAt) < detachedProviderTaskMaxAge)
 	}
 	if input.Mode != "image" && !strings.HasPrefix(task.Type, "canvas_image") {
 		return false
@@ -515,8 +516,25 @@ func (s *Service) imageProviderSupportsTaskResume(interfaceType string) bool {
 	if isVolcengineJiMengProtocol(interfaceType) || isRunningHubInterface(interfaceType) {
 		return true
 	}
-	metadata, ok := s.protocolMetadata(interfaceType)
+	return s.protocolSupportsTaskResume(interfaceType)
+}
+
+// protocolSupportsTaskResume 判断协议是否声明了按上游任务 ID 回查的 poll 操作。
+func (s *Service) protocolSupportsTaskResume(interfaceType string) bool {
+	metadata, ok := s.protocolMetadata(strings.TrimSpace(interfaceType))
 	return ok && strings.TrimSpace(metadata.Poll) != ""
+}
+
+// videoProviderSupportsTaskResume 决定视频任务超过单次执行时限后能否继续回查原任务。
+// 声明式插件带着上游任务 ID 恢复时只走 poll、不会再次 create（见 runProtocolAdapterTaskWithPolicy），
+// 所以声明了 poll 即可续查；手写协议只保留已核实只读回查的 NewAPI Channel 2。
+func (s *Service) videoProviderSupportsTaskResume(interfaceType string) bool {
+	interfaceType = strings.TrimSpace(interfaceType)
+	metadata, ok := s.protocolMetadata(interfaceType)
+	if ok && metadata.Execution == "declarative" && strings.TrimSpace(metadata.Poll) != "" {
+		return true
+	}
+	return interfaceType == string(model.ChannelInterfaceNewAPIChannel2)
 }
 
 func newAPIChannel2TaskSyncExpired(task model.Task, err error, now time.Time) bool {

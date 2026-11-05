@@ -21,11 +21,21 @@ func postStreamingAgent(ctx context.Context, config providerConfig, path string,
 			return nil, err
 		}
 	}
-	parser := newStreamingAgentParser(protocol, onDelta)
-	if len(onReasoning) > 0 {
-		parser.emitReasoning = onReasoning[0]
+	newParser := func() *streamingAgentParser {
+		parser := newStreamingAgentParser(protocol, onDelta)
+		if len(onReasoning) > 0 {
+			parser.emitReasoning = onReasoning[0]
+		}
+		return parser
 	}
+	parser := newParser()
 	data, mimeType, err := postStreamingBinary(ctx, config, path, body, parser.consume)
+	if err != nil && protocol == "chat-completion" && streamUsageOptionRejected(err) {
+		// 宿主补的 stream_options 被严格 schema 的上游拒收：去掉后重试一次，见 streamUsageOptionRejected。
+		delete(body, "stream_options")
+		parser = newParser()
+		data, mimeType, err = postStreamingBinary(ctx, config, path, body, parser.consume)
+	}
 	if err != nil {
 		return nil, err
 	}

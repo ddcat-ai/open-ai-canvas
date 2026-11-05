@@ -28,31 +28,39 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 	return runLegacyTextTask(ctx, input)
 }
 
-// Known text protocols keep the plugin's request mapping and host transport,
-// while sharing the SSE parser used by text generation and Agent requests.
+// Text plugins whose declared create path speaks a host-known wire keep the
+// plugin's request mapping and host transport, while sharing the thinking
+// parameters and SSE parser used by built-in text generation and Agent requests.
 func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, *protocol.Result, error) {
-	wire := input.Config.InterfaceType
-	if wire == string(model.ChannelInterfaceOpenAIResponse) {
-		wire = "responses"
+	wire := ""
+	if input.Mode == "text" {
+		wire = declaredTextWire(ctx, input.Config.InterfaceType)
 	}
-	if input.Mode != "text" || !input.StreamText || (wire != "chat-completion" && wire != "responses" && wire != "claude-api") {
+	if wire == "" || (!input.StreamText && !input.TextOptions.Thinking) {
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
 	}
 	body := protocolBodyObject(spec.Body)
 	if body == nil {
-		return nil, nil, errors.New("声明式流式文本请求体必须是 JSON 对象")
+		return nil, nil, errors.New("声明式文本请求体必须是 JSON 对象")
+	}
+	applyTextThinking(body, input, wire)
+	spec.Body = body
+	if !input.StreamText {
+		data, err := executeProtocolRequest(ctx, input.Config, spec)
+		return data, nil, err
 	}
 	body["stream"] = true
-	if wire == "chat-completion" {
+	if wire == protocol.TextWireChatCompletion {
 		if err := ensureChatCompletionStreamUsage(body); err != nil {
 			return nil, nil, err
 		}
 	}
-	spec.Body = body
-	parser := newStreamingAgentParser(wire, input.OnTextDelta)
-	parser.emitReasoning = input.OnReasoningDelta
-	data, mimeType, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume)
+	data, mimeType, parser, err := executeTextWireStream(ctx, input.Config, spec, body, wire, func() *streamingAgentParser {
+		parser := newStreamingAgentParser(wire, input.OnTextDelta)
+		parser.emitReasoning = input.OnReasoningDelta
+		return parser
+	})
 	if err != nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") {
 		return data, nil, err
 	}

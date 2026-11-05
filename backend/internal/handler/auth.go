@@ -387,17 +387,25 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 			capability = channelModel.Capability
 		}
 	}
-	if err := authorizeSystemProxy(channel, protocol, c.Request.Method, path, c.GetHeader("Content-Type"), body); err != nil {
+	var declaredPaths []string
+	if protocol != "" {
+		declaredPaths = svc.SystemProxyDeclaredPostPaths(protocol)
+	}
+	if err := authorizeSystemProxy(channel, protocol, declaredPaths, c.Request.Method, path, c.GetHeader("Content-Type"), body); err != nil {
 		fail(c, http.StatusForbidden, err)
 		return
 	}
-	if channelModel != nil && channelModel.BillingMode == "token" && protocol == model.ChannelInterfaceChatCompletion {
+	// 按 Token 计费的 Chat Completions 流式请求需要上游最后返回 usage 块；是否属于 Chat Completions
+	// 看实际转发的路径，不看协议 ID，插件协议（deepseek-chat 等）同样能拿到用量结算。
+	clientBody := body
+	if channelModel != nil && channelModel.BillingMode == "token" && service.SystemProxyChatCompletionPath(path) {
 		body, err = service.EnsureChatCompletionStreamUsageRequest(body)
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
 	}
+	streamUsageInjected := !bytes.Equal(clientBody, body)
 	billingOrderID := ""
 	query := c.Request.URL.Query()
 	for _, key := range []string{"key", "api_key", "access_token", "token"} {
@@ -442,33 +450,48 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 			}
 		}
 	}
-	upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, validatedTarget.String(), bytes.NewReader(body))
+	newUpstreamRequest := func(payload []byte) (*http.Request, error) {
+		upstreamReq, err := http.NewRequestWithContext(c.Request.Context(), c.Request.Method, validatedTarget.String(), bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		if contentType := c.GetHeader("Content-Type"); contentType != "" {
+			upstreamReq.Header.Set("Content-Type", contentType)
+		}
+		if accept := c.GetHeader("Accept"); accept != "" {
+			upstreamReq.Header.Set("Accept", accept)
+		}
+		service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
+		service.ApplyDefaultOutboundHeaders(upstreamReq)
+		// 鉴权按插件声明写（bearer / header / anthropic / google-api-key / 签名等），未声明时沿用内置写法。
+		if err := svc.ApplySystemProxyAuth(upstreamReq, channel, protocol); err != nil {
+			return nil, err
+		}
+		return upstreamReq, nil
+	}
+	upstreamReq, err := newUpstreamRequest(body)
 	if err != nil {
 		refundSystemProxyBilling(svc, billingOrderID, "系统渠道请求构造失败")
 		fail(c, http.StatusBadRequest, err)
 		return
 	}
-	if contentType := c.GetHeader("Content-Type"); contentType != "" {
-		upstreamReq.Header.Set("Content-Type", contentType)
-	}
-	if accept := c.GetHeader("Accept"); accept != "" {
-		upstreamReq.Header.Set("Accept", accept)
-	}
-	service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
-	service.ApplyDefaultOutboundHeaders(upstreamReq)
-	if protocol == model.ChannelInterfaceGeminiVeo || protocol == model.ChannelInterfaceGeminiImage {
-		upstreamReq.Header.Set("x-goog-api-key", channel.APIKey)
-	} else if protocol == model.ChannelInterfaceClaudeAPI {
-		upstreamReq.Header.Set("x-api-key", channel.APIKey)
-		upstreamReq.Header.Set("anthropic-version", "2023-06-01")
-	} else {
-		upstreamReq.Header.Set("Authorization", "Bearer "+channel.APIKey)
-	}
 
 	status := model.ApiCallStatusSucceeded
 	statusCode := 0
 	errorText := ""
-	resp, err := svc.OutboundHTTPClientForChannel(35*time.Minute, validatedTarget, channel.ProxyURL).Do(upstreamReq)
+	responseLimit := policy.Request.SystemRelayResponseMB << 20
+	client := svc.OutboundHTTPClientForChannel(35*time.Minute, validatedTarget, channel.ProxyURL)
+	resp, err := client.Do(upstreamReq)
+	if err == nil && streamUsageInjected {
+		resp, err = resendIfStreamUsageRejected(resp, responseLimit, func() (*http.Response, error) {
+			body = clientBody
+			retryReq, buildErr := newUpstreamRequest(body)
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			return client.Do(retryReq)
+		})
+	}
 	if err != nil {
 		status = model.ApiCallStatusFailed
 		errorText = err.Error()
@@ -482,7 +505,6 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		status = model.ApiCallStatusFailed
 	}
-	responseLimit := policy.Request.SystemRelayResponseMB << 20
 	streamed := isSystemProxyEventStream(resp)
 	var responseBody []byte
 	var readErr error
@@ -528,6 +550,22 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	}
 	copySystemProxyResponseHeaders(c, resp)
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), responseBody)
+}
+
+// resendIfStreamUsageRejected 处理严格 schema 上游（如 Mistral）拒收宿主补上的 stream_options：
+// 400/422 且错误里点名该字段时，按浏览器原始请求体重发一次。被拒的请求没有进入生成，不会重复计费；
+// 其他响应原样交回，错误体已读出的部分会放回 Body，后续读取和日志不受影响。
+func resendIfStreamUsageRejected(resp *http.Response, limit int64, resend func() (*http.Response, error)) (*http.Response, error) {
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusUnprocessableEntity {
+		return resp, nil
+	}
+	data, readErr := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	_ = resp.Body.Close()
+	if readErr == nil && service.StreamUsageOptionRejectedResponse(resp.StatusCode, data) {
+		return resend()
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(data))
+	return resp, nil
 }
 
 func refundSystemProxyBilling(svc *service.Service, billingOrderID string, reason string) {
