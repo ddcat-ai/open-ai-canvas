@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -8,13 +9,24 @@ import (
 	"yingce/backend/internal/model"
 )
 
+// Directions tasks read the saved project draft before the model check in
+// every AI_MODE, so the check is only reached with a valid draft.
+func saveEcommerceDirectionsDraft(t *testing.T, db *gorm.DB, project *model.EcommerceProject) {
+	t.Helper()
+	encoded, _ := json.Marshal(EcommerceDraft{ProductName: "蓝色耳机", Platform: "taobao", Language: "zh-CN", Count: 3, ImageType: "main", Ratio: "1:1"})
+	if err := db.Model(project).Update("draft_json", string(encoded)).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestEcommerceAgentTaskRejectsStalePlanningModel(t *testing.T) {
 	t.Setenv("AI_MODE", "disabled")
-	svc, _, _, _ := ecommerceCreationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
 	project, err := svc.CreateEcommerceProject("user")
 	if err != nil {
 		t.Fatal(err)
 	}
+	saveEcommerceDirectionsDraft(t, db, project)
 	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ecommerceAgentSettingKey, ValueJSON: `{"logicalModelId":"admin-selected-model"}`}); err != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +118,7 @@ func TestEcommerceStageSettingDrivesAgentModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	saveEcommerceDirectionsDraft(t, db, project)
 	if _, err := svc.UpdateEcommerceOrchestrationSetting(admin, stageModelSetting()); err != nil {
 		t.Fatal(err)
 	}

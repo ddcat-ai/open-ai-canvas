@@ -5,6 +5,15 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 电商 Agent：点「开始创作」报「商品分析未完成：Unexpected token … is not valid JSON」
+
+- 问题：「开始创作」先提交 `creative-directions` 文本任务，前端只发一句“分析真实商品，并推荐四套完整视觉风格。”，依赖后端把它换成四套方向的 JSON 合同，并在完成后把结果整理成 `{recommendationId, directions}`。这两步原先只在 `AI_MODE` 为 `live` / `mock` 时执行；`docker-compose.deploy.yml` 不向 backend 传 `AI_MODE`，线上默认 `disabled`，识图模型只收到那一句，回了 Markdown。任务照常成功并扣费，前端 `JSON.parse` 失败。「跳过选方向」的策划提示词由前端自带 JSON 要求，不受影响。
+- 已修复：`prepareEcommerceWorkbenchTask` 处理 `creative-directions` 时不再看 `AI_MODE`，始终改写提示词、写入 `ecommerceAgentAdapter`，完成后校验并保存四套方向。模型仍返回非 JSON 时任务失败，提示“分析模型返回的内容不是有效 JSON（可能被截断），请重试或更换模型”。`planning`、`product-understanding` 和 `POST /api/ecommerce/creative-directions` 不变。
+- 本地验证：临时测试（未保留）在 `AI_MODE` 为空时经 `CreateTask` 和 `processTask` 跑完整方向任务：修复前任务提示词仍是前端那一句，与线上一致；修复后上游收到 JSON 合同，返回 JSON 时得到推荐 ID 和 4 套方向，返回 Markdown 时任务失败并给出上述提示；任务接口返回的 `metadata.ecommerceDraft` 是服务端草稿，带 `references`、`skus` 数组，前端能恢复快照。`ecommerce_agent_setting_test.go` 的两个用例补了有效项目草稿，因为方向任务现在会先读草稿再查模型。`go test ./internal/app -run 'Ecommerce|Commerce'`、`go test ./internal/handler -run 'Ecommerce|Commerce'`、gofmt 通过。未连接真实渠道，未做浏览器验收。
+- [ ] 部署后（不设置 `AI_MODE`）：电商页上传商品图，点「开始创作」后弹出四套风格；该任务 `GET /api/tasks/:id` 的 `prompt` 是服务端长提示词，不再是那一句。
+- [ ] 选定一套风格后自动策划并出图，成品风格与所选方向一致；「跳过选方向」与修复前一致。
+- 已知边界：不设置 `AI_MODE` 时，选定方向后的策划仍走旧工作台路径：所选方向的名称、说明、标签和知识约束由前端写进策划提示词，服务端不注入完整 visualSystem，也不做张数一致等严格校验。
+
 ## 生成完成提醒、标签页标题与设置页分组
 
 - 问题：生成成功没有任何反馈，页面在后台或已离开画布时更不知道何时完成；浏览器标签页始终只显示品牌名；设置页 11 个分类平铺，主题只能在顶栏切换。

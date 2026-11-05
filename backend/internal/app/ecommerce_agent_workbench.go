@@ -492,7 +492,11 @@ func (s *Service) prepareEcommerceWorkbenchTask(userID string, input map[string]
 		return prompt, nil
 	}
 	stage := stringValue(metadata["stage"])
-	if !ecommerceWorkbenchEnabled() {
+	// The workbench sends directions as a one-line request and reads back
+	// {recommendationId, directions}; only this adapter writes that contract.
+	// The task runs on its own routed model and charge, so AI_MODE (the
+	// standalone Agent provider switch) must not turn it off.
+	if !ecommerceWorkbenchEnabled() && stage != "creative-directions" {
 		if stage != "planning" {
 			return prompt, nil
 		}
