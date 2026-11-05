@@ -436,7 +436,8 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
     },
     ark: {
         title: "Bibliothèque Ark",
-        description: "Les groupes de ressources sont hébergés dans le compte Ark de la plateforme. Les images approuvées rejoignent automatiquement la catégorie « Certifié Ark » de votre bibliothèque et sont référencées directement lors d'une génération avec un modèle vidéo Ark sur le canevas.",
+        description:
+            "Les groupes de ressources sont hébergés dans le compte Ark de la plateforme. Les images approuvées rejoignent automatiquement la catégorie « Certifié Ark » de votre bibliothèque et sont référencées directement lors d'une génération avec un modèle vidéo Ark sur le canevas.",
         loading: "Chargement de la bibliothèque Ark…",
         loadFailed: "Impossible de charger la bibliothèque Ark",
         retry: "Recharger",
@@ -543,7 +544,8 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
             delete: "Supprimer le groupe",
             deleteLabel: "Supprimer le groupe {{name}}",
             deleteTitle: "Supprimer ce groupe ?",
-            deleteContent: "Le groupe et toutes ses ressources seront aussi supprimés dans Ark. Les images certifiées de votre bibliothèque perdent leur certification et retrouvent leur catégorie d'origine. Les frais déjà payés ne sont pas remboursés et la suppression est définitive.",
+            deleteContent:
+                "Le groupe et toutes ses ressources seront aussi supprimés dans Ark. Les images certifiées de votre bibliothèque perdent leur certification et retrouvent leur catégorie d'origine. Les frais déjà payés ne sont pas remboursés et la suppression est définitive.",
             deleted: "Groupe supprimé",
             unavailable: "L'administrateur a changé le site, la région ou le projet Ark : ce groupe est indisponible.",
             expired: "L'autorisation de ce groupe de personne réelle a expiré. Il ne peut plus servir aux imports ni aux générations avant une nouvelle vérification.",

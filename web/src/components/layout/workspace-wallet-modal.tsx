@@ -433,16 +433,16 @@ function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
     const title = arkGroup
         ? t("account.wallet.ledger.arkAssetGroup")
         : entry.type === "consume"
-            ? t("account.wallet.ledger.consume")
-            : entry.type === "refund"
-              ? t("account.wallet.ledger.refund")
-              : entry.type === "payment_topup"
-                ? t("account.wallet.ledger.paymentTopup")
-                : entry.type === "redeem"
-                  ? t("account.wallet.ledger.redeem")
-                  : entry.type === "referral_commission"
-                    ? t("account.wallet.ledger.referral")
-                    : note || t("account.wallet.ledger.adjust");
+          ? t("account.wallet.ledger.consume")
+          : entry.type === "refund"
+            ? t("account.wallet.ledger.refund")
+            : entry.type === "payment_topup"
+              ? t("account.wallet.ledger.paymentTopup")
+              : entry.type === "redeem"
+                ? t("account.wallet.ledger.redeem")
+                : entry.type === "referral_commission"
+                  ? t("account.wallet.ledger.referral")
+                  : note || t("account.wallet.ledger.adjust");
     return (
         <article className="workspace-wallet-ledger-row">
             <span className={cn("workspace-wallet-ledger-icon", positive ? "is-income" : "is-consume")}>{positive ? <Coins /> : <CreditCard />}</span>

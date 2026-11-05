@@ -436,7 +436,8 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
     },
     ark: {
         title: "Ark-Assetbibliothek",
-        description: "Asset-Gruppen liegen im Ark-Konto der Plattform. Freigegebene Bilder landen automatisch in der Kategorie „Ark-zertifiziert“ deiner Bibliothek und werden bei der Generierung mit einem Ark-Videomodell auf der Leinwand direkt referenziert.",
+        description:
+            "Asset-Gruppen liegen im Ark-Konto der Plattform. Freigegebene Bilder landen automatisch in der Kategorie „Ark-zertifiziert“ deiner Bibliothek und werden bei der Generierung mit einem Ark-Videomodell auf der Leinwand direkt referenziert.",
         loading: "Ark-Assetbibliothek wird geladen …",
         loadFailed: "Die Ark-Assetbibliothek konnte nicht geladen werden",
         retry: "Neu laden",
@@ -543,7 +544,8 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
             delete: "Gruppe löschen",
             deleteLabel: "Gruppe {{name}} löschen",
             deleteTitle: "Diese Gruppe löschen?",
-            deleteContent: "Dadurch werden auch die Gruppe und alle ihre Assets in Ark gelöscht. Zertifizierte Bilder in deiner Bibliothek verlieren die Zertifizierung und kehren in ihre ursprüngliche Kategorie zurück. Bereits gezahlte Gebühren werden nicht erstattet; das Löschen ist endgültig.",
+            deleteContent:
+                "Dadurch werden auch die Gruppe und alle ihre Assets in Ark gelöscht. Zertifizierte Bilder in deiner Bibliothek verlieren die Zertifizierung und kehren in ihre ursprüngliche Kategorie zurück. Bereits gezahlte Gebühren werden nicht erstattet; das Löschen ist endgültig.",
             deleted: "Gruppe gelöscht",
             unavailable: "Der Administrator hat Ark-Site, Region oder Projekt geändert. Diese Gruppe ist daher nicht verfügbar.",
             expired: "Die Autorisierung dieser Gruppe ist abgelaufen. Sie kann erst nach erneuter Verifizierung wieder für Uploads oder Generierungen genutzt werden.",
