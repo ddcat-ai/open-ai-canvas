@@ -5,6 +5,13 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 画布 Agent：审批等待中的模型请求不再按失败处理（#721）
+
+- 问题：运行进入 `waiting_approval` 后，Pi 运行时仍可能再发一次 `/model`。后端拒绝该请求并返回 422，运行时把它当作执行错误，发出 `runtime_error`、以退出码 1 结束并丢掉最终会话快照。
+- 已修复：协调器把 `errCloudAgentAwaitingApproval` 转成内部 `{ "pause": true, "reason": "awaiting_approval" }`；运行时收到后停止本轮并照常保存快照。该请求不建任务、不计费、不改审批；其他模型错误仍返回 422。backend 与 yingce-agent 需一起部署。实现来自 PR #732，测试按当前 main 的持久化暂停判断调整。
+- 本地验证：`go test ./internal/app -run 'AwaitingApproval|ApprovalPause'`、`node --test agent-runtime.approval.test.mjs` 通过。未连接真实模型。
+- [ ] 审批模式下让 Agent 连续调用需审批的工具，等待期间面板保持「等待审批」，批准后继续执行，不出现「Agent 执行中断」。
+
 ## 画布视频合并：音画时长一致（#724）
 
 - 问题：合并先走 concat demuxer + `-c copy`，各段音频采样率不同（如 44.1kHz 与 32kHz）时命令仍返回 0，成片音轨与画面时长不一致，播放提前结束。
