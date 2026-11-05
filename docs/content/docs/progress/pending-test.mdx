@@ -5,6 +5,14 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## 支付插件：RPC 保留业务错误，微信不存在订单可关单（#836）
+
+- 问题：插件把包装了 `ErrOrderNotFound` 的错误序列化成通用 `provider_error`，宿主重建的 `ProviderError` 不再匹配 `errors.Is`。微信查单返回 `ORDER_NOT_EXIST` 时，后台「关闭订单」提示“关单前查单失败”，自动关单也失败，订单一直待支付。`ErrOrderNotPaid`、`ErrTradeBillNotFound` 同样丢失。
+- 已修复：RPC 新增业务错误码 `order_not_found`、`order_not_paid`、`trade_bill_not_found`，插件按 `errors.Is` 写出，宿主按错误码恢复对应错误；不匹配错误文案。五个官方支付插件已按六个平台重新编译并打包。实现来自 PR #837，测试夹具按当前订单的实收金额字段补齐。
+- 本地验证：`go test ./internal/payment ./payment-plugins/...`、`go test ./internal/app -run PaymentClose` 通过；`verify-payment-packages.sh --all linux amd64` 通过。双架构容器冒烟由 CI 执行。未连接真实商户。
+- [ ] 微信 Native 渠道：商户侧不存在的待支付订单在后台「关闭订单」后变为已关闭；复查发现已付款的订单正常入账。
+- [ ] 网络失败或验签失败时订单仍保持待支付。
+
 ## 画布 Agent：审批等待中的模型请求不再按失败处理（#721）
 
 - 问题：运行进入 `waiting_approval` 后，Pi 运行时仍可能再发一次 `/model`。后端拒绝该请求并返回 422，运行时把它当作执行错误，发出 `runtime_error`、以退出码 1 结束并丢掉最终会话快照。

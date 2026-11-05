@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	paymentsdk "yingce/backend/payment-sdk"
 )
 
 const rpcVersion = "yingce.payment/v1"
@@ -83,7 +86,15 @@ func RunRPC(provider Provider, input io.Reader, output io.Writer) error {
 	}
 	if err != nil {
 		response := rpcResponse{Code: "provider_error", Message: err.Error()}
-		if providerErr, ok := err.(*ProviderError); ok && strings.TrimSpace(providerErr.Code) != "" {
+		var providerErr *ProviderError
+		switch {
+		case errors.Is(err, ErrOrderNotFound):
+			response.Code = paymentsdk.RPCCodeOrderNotFound
+		case errors.Is(err, ErrOrderNotPaid):
+			response.Code = paymentsdk.RPCCodeOrderNotPaid
+		case errors.Is(err, ErrTradeBillNotFound):
+			response.Code = paymentsdk.RPCCodeTradeBillNotFound
+		case errors.As(err, &providerErr) && strings.TrimSpace(providerErr.Code) != "":
 			response.Code = providerErr.Code
 		}
 		return writeRPC(output, response)

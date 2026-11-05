@@ -13,6 +13,12 @@ var (
 	ErrTradeBillNotFound = errors.New("payment provider trade bill not found")
 )
 
+const (
+	RPCCodeOrderNotFound     = "order_not_found"
+	RPCCodeOrderNotPaid      = "order_not_paid"
+	RPCCodeTradeBillNotFound = "trade_bill_not_found"
+)
+
 type Config map[string]string
 
 type Descriptor struct {
