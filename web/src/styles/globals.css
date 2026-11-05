@@ -25044,30 +25044,36 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     background: #f7f7f8;
 }
 
+/* 品牌行与下方导航同一网格：12px 侧栏内边距 + 8px 行内边距，Logo 方块与导航图标框同为 28px、同一条左边线，
+   字标起点与导航文字对齐。折叠态只留 Logo，居中。 */
 .app-user-workspace .app-workspace-sidebar-brand-row {
     display: flex;
-    min-height: 54px;
+    min-height: 56px;
     align-items: center;
-    gap: 2px;
-    padding: 8px 8px 0;
+    padding: 8px 12px 0;
 }
 
 .app-user-workspace .app-workspace-sidebar-brand-button {
     display: flex;
     min-width: 0;
-    min-height: 38px;
+    min-height: var(--workspace-reference-row);
     flex: 1 1 auto;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 0 8px;
     transition: background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.app-user-workspace .app-workspace-sidebar-brand-row.is-collapsed .app-workspace-sidebar-brand-button {
+    justify-content: center;
+    padding: 0;
+}
+
 .app-user-workspace .app-workspace-sidebar-brand-button:hover,
 .app-user-workspace .app-workspace-sidebar-brand-button:focus-visible {
-    background: rgba(62, 62, 68, 0.055);
+    background: color-mix(in srgb, var(--user-ink) 5%, transparent);
 }
 
 .app-user-workspace .app-workspace-sidebar-collapse-button {
@@ -25131,15 +25137,32 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     display: none;
 }
 
+/* 自定义 Logo：中性浅底 + 细线承托任意配色。内置字形：墨色实底反白，明暗主题自动反相。
+   后台关闭「Logo 外框」时，BrandLogoFrame 的行内样式清掉底色与圆角，这里不能用 !important 压过它。 */
 .app-user-workspace .app-workspace-brand-mark {
     width: 28px;
     height: 28px;
+    flex: 0 0 28px;
     border-radius: 8px;
-    background: transparent;
+    border: 1px solid var(--user-border);
+    background: var(--user-surface);
     box-shadow: none;
-    color: var(--user-accent) !important;
-    border: 1px solid color-mix(in srgb, var(--user-accent) 28%, transparent);
-    background: color-mix(in srgb, var(--user-accent) 8%, transparent);
+    color: var(--user-ink);
+}
+
+.app-user-workspace .app-workspace-brand-mark.is-builtin {
+    border-color: transparent;
+    background: var(--user-ink);
+    color: var(--user-surface);
+}
+
+.app-user-workspace .app-workspace-brand-glyph {
+    display: block;
+    width: 18px;
+    height: 18px;
+    background: currentColor;
+    mask: url("/logo.svg") center / contain no-repeat;
+    -webkit-mask: url("/logo.svg") center / contain no-repeat;
 }
 
 .app-user-workspace .app-workspace-nav-link {
@@ -25201,10 +25224,14 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     border-top: 1px solid rgba(0, 0, 0, 0.055);
 }
 
+/* 字标单行：品牌名用正文墨色，不再叠一行「创作工作台」副标题；中文字标略放字距，避免 600 字重挤成一团。 */
 .app-user-workspace .app-workspace-brand-wordmark {
-    font-size: 14px;
+    min-width: 0;
+    color: var(--user-ink);
+    font-size: 15px;
     font-weight: 600;
-    letter-spacing: -0.03em;
+    line-height: 1;
+    letter-spacing: 0.04em;
 }
 
 .app-user-workspace .app-workspace-topbar {
