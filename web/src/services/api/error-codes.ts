@@ -20,6 +20,7 @@ export const API_ERROR_REASONS = [
     "storage_read_only",
     "drama_budget_exhausted",
     "drama_segment_changed",
+    "drama_episode_confirm_required",
     "agent_interjection_run_finished",
     "agent_interjection_already_delivered",
     "agent_run_state_busy",

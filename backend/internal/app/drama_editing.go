@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -14,9 +16,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// 逐集追加、原文与镜头编辑、上传锁定参考图。修改只把受影响的下游标记过期，不会自动花钱重做媒体。
+// 逐集追加、插入与删除集、原文与镜头编辑、上传锁定参考图。修改只把受影响的下游标记过期，不会自动花钱重做媒体。
 
-// AddDramaEpisode 在作品末尾追加一集：这段原文直接成为新的一集，调度循环为它写剧本，前面的集不受影响。
+// AddDramaEpisode 新增一集：这段原文直接成为新的一集，调度循环为它写剧本，已有各集的内容不受影响。
+// 不指定锚点时追加到末尾；指定时插到那一集之前或之后，后续集号顺延。
 func (s *Service) AddDramaEpisode(userID, projectID string, req AddDramaEpisodeRequest) (DramaEpisodeDetail, error) {
 	project, productionRow, err := s.dramaForUser(userID, projectID)
 	if err != nil {
@@ -34,20 +37,26 @@ func (s *Service) AddDramaEpisode(userID, projectID string, req AddDramaEpisodeR
 	if utf8.RuneCountInString(title) > 60 {
 		return DramaEpisodeDetail{}, BadAuthRequest("集标题不能超过 60 字")
 	}
-	if title == "" {
-		// 默认标题只用于展示；真实集号在事务内分配。
-		last, err := s.repo.MaxDramaEpisodeNumber(project.ID)
-		if err != nil {
-			return DramaEpisodeDetail{}, err
+	var placement *repository.DramaEpisodePlacement
+	if anchorID := strings.TrimSpace(req.AnchorEpisodeID); anchorID != "" {
+		if req.Position != "before" && req.Position != "after" {
+			return DramaEpisodeDetail{}, BadAuthRequest("请选择插入到这一集之前还是之后")
 		}
-		title = fmt.Sprintf("第 %d 集", last+1)
+		placement = &repository.DramaEpisodePlacement{AnchorEpisodeID: anchorID, Before: req.Position == "before"}
 	}
+	// 标题留空时由事务按最终集号取默认标题。
 	now := time.Now()
 	chapter := model.ProjectUnit{ID: newID(), ProjectID: project.ID, Kind: model.ProjectUnitKindChapter, Title: title, SourceText: text, WordCount: runes, Status: model.ProjectUnitStatusReady, CreatedAt: now, UpdatedAt: now}
 	episode := newDramaChapterEpisode(project.ID, 0, chapter, production.NormalizeSourceFormat(req.SourceFormat), now)
-	if err := s.repo.AppendDramaEpisodeSource(project.ID, &chapter, &episode); err != nil {
-		if errors.Is(err, repository.ErrDramaPlanPending) {
+	if err := s.addDramaEpisodeSource(project.ID, &chapter, &episode, placement); err != nil {
+		switch {
+		case errors.Is(err, repository.ErrDramaPlanPending):
+			if placement != nil {
+				return DramaEpisodeDetail{}, BadAuthRequest("前面的章节还在分集规划，完成后再插入新的一集")
+			}
 			return DramaEpisodeDetail{}, BadAuthRequest("前面的章节还在分集规划，完成后再追加新的一集")
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return DramaEpisodeDetail{}, NewAppError(http.StatusNotFound, "要插入位置旁的那一集不存在或已删除，请刷新后重试")
 		}
 		return DramaEpisodeDetail{}, err
 	}
@@ -56,6 +65,119 @@ func (s *Service) AddDramaEpisode(userID, projectID string, req AddDramaEpisodeR
 		return DramaEpisodeDetail{}, err
 	}
 	return s.DramaEpisodeDetail(userID, projectID, episode.ID)
+}
+
+// addDramaEpisodeSource 写入新集；插入会给后续集改号，期间持有调度租约，不让一轮调度拿着旧集号派发作业或写标签。
+func (s *Service) addDramaEpisodeSource(projectID string, chapter *model.ProjectUnit, episode *model.DramaEpisode, placement *repository.DramaEpisodePlacement) error {
+	if placement == nil {
+		return s.repo.AddDramaEpisodeSource(projectID, chapter, episode, nil)
+	}
+	release, err := s.lockDramaSchedule(projectID)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return s.repo.AddDramaEpisodeSource(projectID, chapter, episode, placement)
+}
+
+// DeleteDramaEpisode 删除一集：剧本、分镜、剧情段、段视频与成片的版本和调度作业一并删除，后续集号前移一位；
+// 只属于这一集的原文退回原著目录的预留章节，之后可以重新加入制作。
+// 这一集生成过视频时 confirm 必须是“第 N 集”（不计空白），否则返回 409 drama_episode_confirm_required。
+func (s *Service) DeleteDramaEpisode(userID, projectID, episodeID, confirm string) error {
+	project, _, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return err
+	}
+	release, err := s.lockDramaSchedule(project.ID)
+	if err != nil {
+		return err
+	}
+	err = s.deleteDramaEpisode(project.ID, strings.TrimSpace(episodeID), confirm)
+	release()
+	if err != nil {
+		return err
+	}
+	// 删掉的可能是最后一集未完成的，交给调度循环重新判断作品是否全部完成。
+	s.wakeDramaScheduler()
+	return nil
+}
+
+func (s *Service) deleteDramaEpisode(projectID, episodeID, confirm string) error {
+	episode, err := s.repo.DramaEpisode(projectID, episodeID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return NewAppError(http.StatusNotFound, "这一集不存在或已删除，请刷新后重试")
+	}
+	if err != nil {
+		return err
+	}
+	want := model.DramaEpisodeDefaultTitle(episode.Number)
+	confirmed := false
+	if confirm = strings.TrimSpace(confirm); confirm != "" {
+		// 集号可能刚因插入或删除变动：确认文字必须对上当前集号，对不上要求重新确认，不按旧集号删除。
+		if strings.Join(strings.Fields(confirm), "") != strings.Join(strings.Fields(want), "") {
+			return dramaEpisodeConfirmError(want, fmt.Sprintf("确认文字不一致，请输入“%s”", want))
+		}
+		confirmed = true
+	}
+	episodes, err := s.repo.DramaEpisodes(projectID)
+	if err != nil {
+		return err
+	}
+	shared := map[string]bool{}
+	for _, other := range episodes {
+		if other.ID == episode.ID {
+			continue
+		}
+		for _, id := range decodeStringList(other.ChapterIDsJSON) {
+			shared[id] = true
+		}
+	}
+	release := []string{}
+	for _, id := range decodeStringList(episode.ChapterIDsJSON) {
+		if !shared[id] {
+			release = append(release, id)
+		}
+	}
+	err = s.repo.DeleteDramaEpisode(projectID, episode.ID, release, confirmed)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		return NewAppError(http.StatusNotFound, "这一集不存在或已删除，请刷新后重试")
+	case errors.Is(err, repository.ErrDramaPlanPending):
+		return BadAuthRequest("前面的章节还在分集规划，完成后再删除")
+	case errors.Is(err, repository.ErrDramaLastEpisode):
+		return BadAuthRequest("作品至少保留一集；不再需要这部作品时，可以在作品列表里删除整部作品")
+	case errors.Is(err, repository.ErrDramaEpisodeBusy):
+		return NewAppError(http.StatusConflict, "本集还有已提交的生成任务在进行，等它们完成后再删除；暂停制作不会中断已提交的任务")
+	case errors.Is(err, repository.ErrDramaEpisodeConfirmRequired):
+		return dramaEpisodeConfirmError(want, fmt.Sprintf("%s生成过分镜视频，删除后视频与成片无法恢复；请输入“%s”确认删除", want, want))
+	}
+	return err
+}
+
+func dramaEpisodeConfirmError(confirmText, message string) *AppError {
+	err := NewAppError(http.StatusConflict, message)
+	err.Reason = ReasonDramaEpisodeConfirmRequired
+	err.Details = map[string]any{"confirmText": confirmText}
+	return err
+}
+
+// dramaScheduleLockWait 是插入、删除集等待调度循环让出作品租约的上限；一轮调度通常在秒级内结束。
+const dramaScheduleLockWait = 10 * time.Second
+
+// lockDramaSchedule 取得与调度循环相同的作品租约，结构性修改期间不会有一轮调度基于旧的集列表派发或回写。
+func (s *Service) lockDramaSchedule(projectID string) (func(), error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dramaScheduleLockWait)
+	defer cancel()
+	release, err := s.coordinator.AcquireWithWait(ctx, "drama:"+projectID, 1, dramaLeaseTTL)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return nil, NewAppError(http.StatusConflict, "调度正在处理这部作品，请稍后再试")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return release, nil
 }
 
 // DramaChapterOutline 返回原著目录：全部章节（含导入时未选中的预留章节）的标题、字数、是否已加入制作，以及使用它的第一集。

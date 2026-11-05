@@ -10,7 +10,7 @@ import { addDramaEpisode, getDramaChapter, updateDramaChapter, updateDramaEpisod
 
 import { formatCount, SOURCE_FORMAT_LABEL, SourceFormatPicker } from "../drama-shared";
 
-// 逐集制作：在作品末尾追加一集，或修改某一集的原文与素材类型。原文修改后需要重新改编才会重写剧本。
+// 逐集制作：在作品末尾追加一集、插到某一集前后，或修改某一集的原文与素材类型。原文修改后需要重新改编才会重写剧本。
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const TEXT_FILE = /\.(txt|md|markdown|csv|tsv)$/i;
@@ -146,10 +146,14 @@ function SourceComposer({
     );
 }
 
+/** 插入位置：放到锚点集之前或之后，新集取得的集号就是 nextNumber，后续各集顺延。 */
+export type EpisodePlacement = { anchorId: string; anchorNumber: number; position: "before" | "after" };
+
 export function AddEpisodeModal({
     open,
     projectId,
     nextNumber,
+    placement,
     defaultFormat,
     blockedReason,
     onClose,
@@ -158,6 +162,8 @@ export function AddEpisodeModal({
     open: boolean;
     projectId: string;
     nextNumber: number;
+    /** 不传时追加到末尾。 */
+    placement?: EpisodePlacement;
     defaultFormat: DramaSourceFormat;
     blockedReason?: string;
     onClose: () => void;
@@ -175,18 +181,18 @@ export function AddEpisodeModal({
     }, [defaultFormat, open]);
     const chars = sourceChars(text);
     const add = useMutation({
-        mutationFn: () => addDramaEpisode(projectId, { title: title.trim(), text, sourceFormat: format }),
+        mutationFn: () => addDramaEpisode(projectId, { title: title.trim(), text, sourceFormat: format, ...(placement ? { anchorEpisodeId: placement.anchorId, position: placement.position } : {}) }),
         onSuccess: (detail) => {
-            message.success(`已添加第 ${detail.episode.number} 集，开始${format === "novel" ? "改编" : "拆镜"}`);
+            message.success(`已${placement ? "插入" : "添加"}第 ${detail.episode.number} 集，开始${format === "novel" ? "改编" : "拆镜"}`);
             onAdded(detail.episode.id);
         },
-        onError: (error) => message.error(error instanceof Error ? error.message : "添加失败"),
+        onError: (error) => message.error(error instanceof Error ? error.message : placement ? "插入失败" : "添加失败"),
     });
     return (
         <SourceComposer
             open={open}
-            title={`添加第 ${nextNumber} 集`}
-            subtitle="一次只放这一集的内容，前面已做好的集不会受影响"
+            title={placement ? `在第 ${placement.anchorNumber} 集${placement.position === "before" ? "前" : "后"}插入一集` : `添加第 ${nextNumber} 集`}
+            subtitle={placement ? `新的一集成为第 ${nextNumber} 集，后面各集集号顺延；已做好的集内容不受影响` : "一次只放这一集的内容，前面已做好的集不会受影响"}
             format={format}
             onFormat={setFormat}
             text={text}
@@ -215,7 +221,7 @@ export function AddEpisodeModal({
                     <span className="flex-1" />
                     <Button onClick={onClose}>取消</Button>
                     <Button type="primary" loading={add.isPending} disabled={Boolean(blockedReason) || !chars || chars > EPISODE_SOURCE_CHARS} onClick={() => add.mutate()}>
-                        {format === "storyboard" ? "导入这一集" : "添加并开始拆镜"}
+                        {format === "storyboard" ? "导入这一集" : placement ? "插入并开始拆镜" : "添加并开始拆镜"}
                     </Button>
                 </>
             }

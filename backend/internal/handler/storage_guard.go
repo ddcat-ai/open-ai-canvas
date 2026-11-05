@@ -41,8 +41,11 @@ var storageReadOnlyExemptRoutes = map[string]struct{}{
 	"/tasks/:id/text-replay-complete": {},
 	"/agent/runs/:id/cancel":          {},
 	"/dramas/:id/pause":               {},
-	"/creation-runs/:id/release":      {},
-	"/creation-runs/:id/heartbeat":    {},
+	// 导出只读取已有资源，超容量只读时仍允许用户把作品带走。
+	"/dramas/:id/episodes/:episodeId/jianying-draft": {},
+	"/dramas/:id/asset-package":                      {},
+	"/creation-runs/:id/release":                     {},
+	"/creation-runs/:id/heartbeat":                   {},
 }
 
 func storageReadOnlyExempt(method, fullPath string) bool {

@@ -1,7 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Dropdown } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { BookOpenText, Grid3x3, List, Plus, Search, X } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, BookOpenText, Grid3x3, List, MoreHorizontal, Plus, Search, Trash2, X } from "lucide-react";
 
 import type { DramaEpisodeRow } from "@/services/api/drama";
 
@@ -26,6 +27,27 @@ function matchesFilter(episode: DramaEpisodeRow, filter: Filter) {
     return true;
 }
 
+/** 列表行右上角的更多操作：在本集前后插入新的一集、删除本集。悬停、聚焦或当前集时显示，触屏常显。 */
+function EpisodeMenu({ episode, onInsert, onDelete }: { episode: DramaEpisodeRow; onInsert?: (episode: DramaEpisodeRow, position: "before" | "after") => void; onDelete?: (episode: DramaEpisodeRow) => void }) {
+    const items = [
+        ...(onInsert
+            ? [
+                  { key: "before", icon: <ArrowUpToLine className="size-3.5" />, label: "在前面插入一集", onClick: () => onInsert(episode, "before") },
+                  { key: "after", icon: <ArrowDownToLine className="size-3.5" />, label: "在后面插入一集", onClick: () => onInsert(episode, "after") },
+              ]
+            : []),
+        ...(onInsert && onDelete ? [{ type: "divider" as const }] : []),
+        ...(onDelete ? [{ key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除本集", onClick: () => onDelete(episode) }] : []),
+    ];
+    return (
+        <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items }}>
+            <button type="button" className="drama-ep-more" aria-label={`第 ${episode.number} 集更多操作`}>
+                <MoreHorizontal className="size-4" />
+            </button>
+        </Dropdown>
+    );
+}
+
 export function EpisodeRail({
     episodes,
     currentId,
@@ -33,6 +55,8 @@ export function EpisodeRail({
     reservedChapters = 0,
     onSelect,
     onAdd,
+    onInsert,
+    onDelete,
     onPickChapters,
 }: {
     episodes: DramaEpisodeRow[];
@@ -42,6 +66,9 @@ export function EpisodeRail({
     reservedChapters?: number;
     onSelect: (id: string) => void;
     onAdd: () => void;
+    /** 在某一集前或后插入新的一集；不传时列表行不显示插入入口。 */
+    onInsert?: (episode: DramaEpisodeRow, position: "before" | "after") => void;
+    onDelete?: (episode: DramaEpisodeRow) => void;
     onPickChapters?: () => void;
 }) {
     const nextNumber = (episodes[episodes.length - 1]?.number || 0) + 1;
@@ -170,7 +197,11 @@ export function EpisodeRail({
                                 const episode = visible[item.index];
                                 const tone = episodeTone(episode);
                                 return (
-                                    <div key={episode.id} className="absolute left-0 top-0 w-full pb-[2px]" style={{ height: item.size, transform: `translateY(${item.start}px)` }}>
+                                    <div
+                                        key={episode.id}
+                                        className={`absolute left-0 top-0 w-full pb-[2px] ${onInsert || onDelete ? "drama-ep-row" : ""} ${episode.id === currentId ? "is-current" : ""}`}
+                                        style={{ height: item.size, transform: `translateY(${item.start}px)` }}
+                                    >
                                         <button type="button" className={`drama-ep is-${tone}`} aria-current={episode.id === currentId} onClick={() => onSelect(episode.id)}>
                                             <span className="drama-ep-num">{String(episode.number).padStart(episodes.length >= 100 ? 3 : 2, "0")}</span>
                                             <span className="min-w-0">
@@ -183,6 +214,7 @@ export function EpisodeRail({
                                                 </span>
                                             </span>
                                         </button>
+                                        {onInsert || onDelete ? <EpisodeMenu episode={episode} onInsert={onInsert} onDelete={onDelete} /> : null}
                                     </div>
                                 );
                             })}

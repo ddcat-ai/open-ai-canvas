@@ -24,4 +24,7 @@ type (
 	SetDramaCastImageRequest      = app.SetDramaCastImageRequest
 	AdoptDramaSegmentVideoRequest = app.AdoptDramaSegmentVideoRequest
 	DramaCanvasAssetsRequest      = app.DramaCanvasAssetsRequest
+	DramaArchive                  = app.DramaArchive
+	DramaJianyingDraftRequest     = app.DramaJianyingDraftRequest
+	DramaAssetPackageRequest      = app.DramaAssetPackageRequest
 )

@@ -65,7 +65,13 @@ export type DramaStoryboardSettings = {
     segmentMaxSeconds: number;
     /** 镜头节奏五档，从快到慢；缺省为快节奏。 */
     pacing: DramaPacing;
-    dialogue: "dense" | "standard" | "sparse";
+    /** 对白密度三档预设或自定义；自定义时按下面四项计算镜头时长并写进提示词。 */
+    dialogue: DramaDialogue;
+    /** 自定义对白：语速（字/秒）、平均每隔多少秒一句、单句字数上限、台词后的气口（毫秒）。切回预设档也保留。 */
+    speechRate?: number;
+    lineSeconds?: number;
+    lineMaxRunes?: number;
+    linePauseMs?: number;
     transition: "auto" | "cut" | "fadeblack" | "fadewhite";
     transitionMs: number;
     /** 表演强度 1–10（1 内敛、5 自然、10 夸张外放）；只改变剧本与段视频提示词的写法。 */
@@ -75,6 +81,7 @@ export type DramaStoryboardSettings = {
 };
 
 export type DramaPacing = "rapid" | "fast" | "standard" | "relaxed" | "slow";
+export type DramaDialogue = "dense" | "standard" | "sparse" | "custom";
 
 /** 用户技能库里的一个技能文件，作为文字步骤（资产提取、分镜拆分、视频提示词）的写作方法。 */
 export type DramaSkillRef = { skillId: string; skillName: string; path: string };
@@ -152,8 +159,8 @@ export type DramaProductionView = {
     reservedWordCount: number;
 };
 
-/** 按剧情段统计的单集进度。 */
-export type DramaEpisodeStats = { segments: number; promptReady: number; videoReady: number; failed: number };
+/** 按剧情段统计的单集进度；videoGenerated 是持有视频的段数（含已过期的旧视频）。 */
+export type DramaEpisodeStats = { segments: number; promptReady: number; videoReady: number; videoGenerated: number; failed: number };
 
 export type DramaEpisodeRow = {
     id: string;
@@ -550,9 +557,17 @@ export function renameDramaEpisode(projectId: string, episodeId: string, title: 
     return updateDramaEpisode(projectId, episodeId, { title });
 }
 
-/** 在作品末尾追加一集：原文直接成为新的一集，单集最多 1.2 万字。 */
-export function addDramaEpisode(projectId: string, input: { title: string; text: string; sourceFormat: DramaSourceFormat }) {
+/** 新增一集：原文直接成为新的一集，单集最多 1.2 万字。不传 anchorEpisodeId 时追加到末尾，传了插到那一集之前或之后，后续集号顺延。 */
+export function addDramaEpisode(projectId: string, input: { title: string; text: string; sourceFormat: DramaSourceFormat; anchorEpisodeId?: string; position?: "before" | "after" }) {
     return http.post<DramaEpisodeDetail>(`${base(projectId)}/episodes`, input, { timeout: 60_000 });
+}
+
+/**
+ * 删除一集，后续集号前移一位，只属于这一集的原文退回原著目录。生成过视频时 confirm 必须是“第 N 集”，
+ * 否则返回 reason=drama_episode_confirm_required，details.confirmText 是当前应输入的文字。
+ */
+export function deleteDramaEpisode(projectId: string, episodeId: string, confirm?: string) {
+    return http.delete<{ deleted: boolean }>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}`, { params: compactApiParams({ confirm }) });
 }
 
 /** 修改原文；已写好的剧本不会自动重写，需要再点重新改编。 */
@@ -682,8 +697,8 @@ export function releaseDramaMedia(projectId: string, target: "assets" | "episode
 
 // ===== 精修画布 =====
 
-/** 服务端稳定原因：预算已用完（含画布精修），以及采用时剧情段刚被修改。 */
-export const DRAMA_ERROR_REASON = { budgetExhausted: "drama_budget_exhausted", segmentChanged: "drama_segment_changed" } as const;
+/** 服务端稳定原因：预算已用完（含画布精修）、采用时剧情段刚被修改，以及删除生成过视频的集需要输入确认。 */
+export const DRAMA_ERROR_REASON = { budgetExhausted: "drama_budget_exhausted", segmentChanged: "drama_segment_changed", episodeConfirmRequired: "drama_episode_confirm_required" } as const;
 
 export type DramaTakeKind = "cast" | "video" | "final";
 /** pipeline 流水线生成；upload 制作台上传；canvas 从精修画布采用。 */

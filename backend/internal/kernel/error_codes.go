@@ -45,6 +45,8 @@ const (
 	ReasonDramaBudgetExhausted ErrorReason = "drama_budget_exhausted"
 	// 采用到剧情段时段版本已变（调度或其他页面刚改过），客户端需刷新后重新确认。
 	ReasonDramaSegmentChanged ErrorReason = "drama_segment_changed"
+	// 删除的集生成过视频：客户端需让用户输入“第 N 集”，带 confirm 重新提交。
+	ReasonDramaEpisodeConfirmRequired ErrorReason = "drama_episode_confirm_required"
 	// 插话时本轮已经结束：客户端把这条留在本机队列，作为下一轮发送。
 	ReasonAgentInterjectionRunFinished ErrorReason = "agent_interjection_run_finished"
 	// 撤回时插话已送达模型或已结束，不能再撤回。

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { App, Button } from "antd";
-import { ArrowLeft, Brush, CheckCheck, Clapperboard, Film, Inbox, Pause, Pencil, Play, ScrollText, Settings2, UsersRound } from "lucide-react";
+import { App, Button, Dropdown } from "antd";
+import { ArrowLeft, Brush, CheckCheck, Clapperboard, FileDown, FileUp, Film, Inbox, Package, Pause, Pencil, Play, ScrollText, Settings2, UsersRound } from "lucide-react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { WorkspacePage } from "@/components/layout/workspace-page";
@@ -24,6 +24,7 @@ import {
     updateDramaSegmentReferences,
     writeDramaSegmentPrompts,
     updateDramaShot,
+    type DramaEpisodeRow,
     type DramaInboxItem,
     type DramaJob,
     type DramaModelChoice,
@@ -34,8 +35,10 @@ import {
 
 import { formatCount, formatDuration, sourceFormatOf, StagePips, STAGE_LABEL, STATUS_LABEL } from "./drama-shared";
 import { CastPanel, InboxPanel, SettingsPanel } from "./studio/panels";
+import { EpisodeDeleteModal } from "./studio/episode-delete-modal";
 import { EpisodeRail } from "./studio/episode-rail";
-import { AddEpisodeModal } from "./studio/episode-source";
+import { AddEpisodeModal, type EpisodePlacement } from "./studio/episode-source";
+import { AssetImportModal, AssetPackageModal } from "./studio/asset-transfer";
 import { ChapterPickerModal } from "./studio/chapter-picker";
 import { FinalView } from "./studio/final-view";
 import { StudioGenesis } from "./studio/genesis";
@@ -50,6 +53,12 @@ import "./drama.css";
 type Tab = "board" | "script" | "final";
 type StudioView = "production" | "cast" | "inbox" | "settings";
 
+// 提示条在单行里会截断说明，正文同时放进悬停提示。
+const AWAITING_MEDIA_BANNER = {
+    title: "剧本与视频提示词已就绪，还没有生成视频",
+    text: "先看看剧情、镜头拆分、设定和各段视频提示词是否合适；可以改台词、动作、外观或直接改提示词，确认后再生成本集的参考图与段视频。",
+};
+
 export default function DramaStudioPage() {
     const { projectId = "", episodeId: routeEpisodeId = "" } = useParams();
     const navigate = useNavigate();
@@ -61,7 +70,11 @@ export default function DramaStudioPage() {
     const castFocus = searchParams.get("cast") || "";
     const [renaming, setRenaming] = useState(false);
     const [adding, setAdding] = useState(false);
+    // 有值时“添加一集”弹窗插到这一集前后，否则追加到末尾。
+    const [placement, setPlacement] = useState<EpisodePlacement>();
+    const [deleting, setDeleting] = useState<DramaEpisodeRow | null>(null);
     const [pickingChapters, setPickingChapters] = useState(false);
+    const [assetDialog, setAssetDialog] = useState<"export" | "import" | null>(null);
     // 窄屏只显示一栏：集列表与制作区用分段切换（宽屏两栏并排，不受影响）。
     const [mobilePane, setMobilePane] = useState<"episodes" | "production">("production");
     const invalidate = useDramaInvalidate(projectId);
@@ -304,6 +317,9 @@ export default function DramaStudioPage() {
     const aspectRatio = production.settings.aspectRatio;
     const sampleReview = production.settings.reviewMode === "sample" && !production.sampleApproved && detail?.episode.number === 1 && detail.episode.stage === "done" && !detail.episode.finalStale;
     const reviewing = sampleReview || (production.settings.reviewMode === "every" && detail?.episode.stage === "review");
+    const reviewBanner = sampleReview
+        ? { title: "第 1 集样片已完成，确认画风与角色形象", text: "在成片页看样片；满意后确认，其余各集会全自动跑完。" }
+        : { title: "本集视频提示词已就绪，等待你的确认", text: "核对各段提示词与参考图，可改镜头脚本或直接改提示词；确认后按剧情段顺序生成视频。" };
     // 手动模式下流水线可能在“运行”却无事可做：明确告诉用户在等他放行。
     const waitingForMedia = awaitingCount > 0 && !(summary.jobCounts.running || summary.jobCounts.queued) && production.status === "running";
     // 本集还没有镜头时按真实状态说明：失败、暂停、未开始、排队都不能显示成“正在编写”。
@@ -388,6 +404,20 @@ export default function DramaStudioPage() {
                     </nav>
                     {/* 窄屏只保留图标（全部生成保留集数），文字由 aria-label 与 title 提供。 */}
                     <div className="drama-topbar-actions">
+                        <Dropdown
+                            trigger={["click"]}
+                            placement="bottomRight"
+                            menu={{
+                                items: [
+                                    { key: "export", icon: <FileDown className="size-3.5" />, label: "一键打包全部资产", onClick: () => setAssetDialog("export") },
+                                    { key: "import", icon: <FileUp className="size-3.5" />, label: "导入资产包", onClick: () => setAssetDialog("import") },
+                                ],
+                            }}
+                        >
+                            <Button icon={<Package className="size-4" />} aria-label="资产包" title="打包导出设定、视频与提示词，或把资产包套用到本作品">
+                                <span className="drama-topbar-action-label">资产包</span>
+                            </Button>
+                        </Dropdown>
                         <Button icon={<Brush className="size-4" />} loading={canvas.opening === "canvas"} onClick={() => void canvas.open()} aria-label="精修画布" title="打开这部短剧的精修画布：投送设定、剧情段或成片，精修后采用回短剧">
                             <span className="drama-topbar-action-label">精修画布</span>
                         </Button>
@@ -468,7 +498,15 @@ export default function DramaStudioPage() {
                                 selectEpisode(id);
                                 setMobilePane("production");
                             }}
-                            onAdd={() => setAdding(true)}
+                            onAdd={() => {
+                                setPlacement(undefined);
+                                setAdding(true);
+                            }}
+                            onInsert={(episode, position) => {
+                                setPlacement({ anchorId: episode.id, anchorNumber: episode.number, position });
+                                setAdding(true);
+                            }}
+                            onDelete={setDeleting}
                             onPickChapters={() => setPickingChapters(true)}
                         />
                         <main className="drama-main">
@@ -555,9 +593,9 @@ export default function DramaStudioPage() {
                                 {episodeRow?.awaitingMedia ? (
                                     <div className="drama-banner is-ready">
                                         <Clapperboard className="size-5 shrink-0 text-[var(--workspace-accent)]" />
-                                        <div className="drama-banner-text">
-                                            <strong>剧本与视频提示词已就绪，还没有生成视频</strong>
-                                            <span>先看看剧情、镜头拆分、设定和各段视频提示词是否合适；可以改台词、动作、外观或直接改提示词，确认后再生成本集的参考图与段视频。</span>
+                                        <div className="drama-banner-text" title={`${AWAITING_MEDIA_BANNER.title}\n${AWAITING_MEDIA_BANNER.text}`}>
+                                            <strong>{AWAITING_MEDIA_BANNER.title}</strong>
+                                            <span>{AWAITING_MEDIA_BANNER.text}</span>
                                         </div>
                                         <div className="flex shrink-0 gap-2">
                                             {tab !== "script" ? <Button onClick={() => setParams({ tab: "script" })}>看剧本与原文</Button> : null}
@@ -575,9 +613,9 @@ export default function DramaStudioPage() {
                                 {reviewing ? (
                                     <div className="drama-banner is-info">
                                         <CheckCheck className="size-5 shrink-0 text-[var(--workspace-accent)]" />
-                                        <div className="drama-banner-text">
-                                            <strong>{sampleReview ? "第 1 集样片已完成，确认画风与角色形象" : "本集视频提示词已就绪，等待你的确认"}</strong>
-                                            <span>{sampleReview ? "在成片页看样片；满意后确认，其余各集会全自动跑完。" : "核对各段提示词与参考图，可改镜头脚本或直接改提示词；确认后按剧情段顺序生成视频。"}</span>
+                                        <div className="drama-banner-text" title={`${reviewBanner.title}\n${reviewBanner.text}`}>
+                                            <strong>{reviewBanner.title}</strong>
+                                            <span>{reviewBanner.text}</span>
                                         </div>
                                         <Button type="primary" loading={approve.isPending} onClick={() => approve.mutate()}>
                                             {sampleReview ? "确认样片，继续全剧" : "确认，生成视频"}
@@ -645,6 +683,7 @@ export default function DramaStudioPage() {
                                     />
                                 ) : (
                                     <FinalView
+                                        projectId={projectId}
                                         title={summary.project.name}
                                         detail={detail}
                                         aspectRatio={aspectRatio}
@@ -687,14 +726,29 @@ export default function DramaStudioPage() {
                 <AddEpisodeModal
                     open={adding}
                     projectId={projectId}
-                    nextNumber={(episodes[episodes.length - 1]?.number || 0) + 1}
-                    defaultFormat={sourceFormatOf(episodes[episodes.length - 1]?.sourceFormat)}
-                    blockedReason={production.planDone ? undefined : "前面的章节还在分集规划，完成后才能追加新的一集。"}
+                    nextNumber={placement ? placement.anchorNumber + (placement.position === "after" ? 1 : 0) : (episodes[episodes.length - 1]?.number || 0) + 1}
+                    placement={placement}
+                    defaultFormat={sourceFormatOf((placement ? episodes.find((episode) => episode.id === placement.anchorId) : episodes[episodes.length - 1])?.sourceFormat)}
+                    blockedReason={production.planDone ? undefined : `前面的章节还在分集规划，完成后才能${placement ? "插入" : "追加"}新的一集。`}
                     onClose={() => setAdding(false)}
                     onAdded={(id) => {
                         setAdding(false);
-                        invalidate(id);
+                        invalidate(id, { renumbered: Boolean(placement) });
                         selectEpisode(id);
+                    }}
+                />
+                <EpisodeDeleteModal
+                    projectId={projectId}
+                    episode={deleting}
+                    blockedReason={!production.planDone ? "前面的章节还在分集规划，完成后才能删除。" : episodes.length <= 1 ? "作品至少保留一集；不再需要这部作品时，可以在作品列表里删除整部作品。" : undefined}
+                    onClose={() => setDeleting(null)}
+                    onDeleted={(id) => {
+                        setDeleting(null);
+                        // 删掉当前集时停在原位置的下一集，没有下一集时回到上一集。
+                        const index = episodes.findIndex((episode) => episode.id === id);
+                        const neighbor = episodes[index + 1] || episodes[index - 1];
+                        if (id === episodeId && neighbor) selectEpisode(neighbor.id);
+                        invalidate(undefined, { renumbered: true, removedEpisodeId: id });
                     }}
                 />
                 {pickingChapters ? (
@@ -711,6 +765,8 @@ export default function DramaStudioPage() {
                         }}
                     />
                 ) : null}
+                {assetDialog === "export" ? <AssetPackageModal open projectId={projectId} episodes={episodes} onClose={() => setAssetDialog(null)} /> : null}
+                {assetDialog === "import" ? <AssetImportModal open projectId={projectId} onClose={() => setAssetDialog(null)} /> : null}
             </div>
         </WorkspacePage>
     );

@@ -36,6 +36,7 @@ const (
 	ReasonStorageReadOnly              = kernel.ReasonStorageReadOnly
 	ReasonDramaBudget                  = kernel.ReasonDramaBudgetExhausted
 	ReasonDramaSegmentChanged          = kernel.ReasonDramaSegmentChanged
+	ReasonDramaEpisodeConfirmRequired  = kernel.ReasonDramaEpisodeConfirmRequired
 	ReasonAgentInterjectionRunFinished = kernel.ReasonAgentInterjectionRunFinished
 	ReasonAgentInterjectionDelivered   = kernel.ReasonAgentInterjectionDelivered
 	ReasonAgentRunStateBusy            = kernel.ReasonAgentRunStateBusy

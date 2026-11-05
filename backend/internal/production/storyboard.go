@@ -22,6 +22,19 @@ const (
 	DialogueDense    = "dense"
 	DialogueStandard = "standard"
 	DialogueSparse   = "sparse"
+	// DialogueCustom 由用户设定语速、每句间隔、单句字数与气口，流水线团队按统一口径控制全剧节奏。
+	DialogueCustom = "custom"
+
+	// DefaultCharsPerSecond 是三档预设共用的语速（每秒字数）。自定义对白的可设范围见下面几项。
+	DefaultCharsPerSecond = 4.5
+	MinCharsPerSecond     = 2.0
+	MaxCharsPerSecond     = 8.0
+	MinLineSeconds        = 1.5
+	MaxLineSeconds        = 20.0
+	MinLineRuneLimit      = 4
+	MaxLineRuneLimit      = 40
+	MinLinePauseMs        = 100
+	MaxLinePauseMs        = 2000
 
 	TransitionAuto  = "auto"
 	TransitionCut   = "cut"
@@ -56,8 +69,14 @@ type StoryboardSettings struct {
 	SegmentMaxSeconds int    `json:"segmentMaxSeconds"`
 	Pacing            string `json:"pacing"`
 	Dialogue          string `json:"dialogue"`
-	Transition        string `json:"transition"`
-	TransitionMs      int    `json:"transitionMs"`
+	// 自定义对白参数只在 Dialogue 为 custom 时生效，切回预设档也保留，来回切换不丢值：
+	// SpeechRate 语速（每秒字数）、LineSeconds 平均每隔多少秒一句、LineMaxRunes 单句字数上限、LinePauseMs 台词后的气口。
+	SpeechRate   float64 `json:"speechRate,omitempty"`
+	LineSeconds  float64 `json:"lineSeconds,omitempty"`
+	LineMaxRunes int     `json:"lineMaxRunes,omitempty"`
+	LinePauseMs  int     `json:"linePauseMs,omitempty"`
+	Transition   string  `json:"transition"`
+	TransitionMs int     `json:"transitionMs"`
 	// Performance 是表演强度 1–10（1 内敛、5 自然、10 夸张外放）。
 	Performance int `json:"performance"`
 	// CameraMotion 是运镜动感 1–10（1 静态、5 有动机的运镜、10 强烈冲击）。
@@ -114,10 +133,16 @@ func (s StoryboardSettings) Normalized() StoryboardSettings {
 		s.Pacing = PacingFast
 	}
 	switch s.Dialogue {
-	case DialogueDense, DialogueSparse:
+	case DialogueDense, DialogueSparse, DialogueCustom:
 	default:
 		s.Dialogue = DialogueStandard
 	}
+	// 自定义参数填了就夹到可设范围；自定义档缺项时按标准档补齐，预设档下未填的保持未填。
+	custom, base := s.Dialogue == DialogueCustom, dialogueRules[DialogueStandard]
+	s.SpeechRate = normalizedDialogueFloat(s.SpeechRate, base.charsPerSecond, MinCharsPerSecond, MaxCharsPerSecond, custom)
+	s.LineSeconds = normalizedDialogueFloat(s.LineSeconds, base.lineSeconds, MinLineSeconds, MaxLineSeconds, custom)
+	s.LineMaxRunes = normalizedDialogueInt(s.LineMaxRunes, base.maxRunes, MinLineRuneLimit, MaxLineRuneLimit, custom)
+	s.LinePauseMs = normalizedDialogueInt(s.LinePauseMs, int(base.pauseMs), MinLinePauseMs, MaxLinePauseMs, custom)
 	switch s.Transition {
 	case TransitionCut, TransitionBlack, TransitionWhite:
 	default:
@@ -137,6 +162,27 @@ func normalizedDirectionLevel(level, fallback int) int {
 		return fallback
 	}
 	return clampInt(level, MinDirectionLevel, MaxDirectionLevel)
+}
+
+// normalizedDialogueFloat 夹到范围并保留一位小数；未填时自定义档用 fallback，否则保持 0。
+func normalizedDialogueFloat(value, fallback, low, high float64, fill bool) float64 {
+	if !(value > 0) {
+		if !fill {
+			return 0
+		}
+		value = fallback
+	}
+	return math.Round(max(low, min(high, value))*10) / 10
+}
+
+func normalizedDialogueInt(value, fallback, low, high int, fill bool) int {
+	if value <= 0 {
+		if !fill {
+			return 0
+		}
+		value = fallback
+	}
+	return clampInt(value, low, high)
 }
 
 // SegmentLimits 把剧情段规则与视频模型单次可生成的时长合成实际约束：任何模式都不超过模型上限，
@@ -192,36 +238,42 @@ func (s StoryboardSettings) AverageShotSeconds() float64 {
 	return pacingRules[s.Normalized().Pacing].average
 }
 
+// dialogueRule 是一档对白密度：语速、平均每句间隔、单句字数上限与台词后的气口。
+// 一个镜头只放一句台词，镜头时长至少要能说完它，所以预设档让最长的一句恰好在间隔内说完：
+// 密集 12 字按每秒 4.5 字约 2.7 秒，加 0.3 秒气口正好 3 秒。对白密集时气口缩短，让下一句尽快接上。
+type dialogueRule struct {
+	charsPerSecond float64
+	lineSeconds    float64
+	maxRunes       int
+	pauseMs        int64
+}
+
+var dialogueRules = map[string]dialogueRule{
+	DialogueDense:    {DefaultCharsPerSecond, 3, 12, 300},
+	DialogueStandard: {DefaultCharsPerSecond, 4.5, 16, DialoguePadMs},
+	DialogueSparse:   {DefaultCharsPerSecond, 7, 20, DialoguePadMs},
+}
+
+// dialogue 返回生效的对白参数：预设档取固定值，自定义档取用户设定。
+func (s StoryboardSettings) dialogue() dialogueRule {
+	s = s.Normalized()
+	if s.Dialogue != DialogueCustom {
+		return dialogueRules[s.Dialogue]
+	}
+	return dialogueRule{s.SpeechRate, s.LineSeconds, s.LineMaxRunes, int64(s.LinePauseMs)}
+}
+
+// CharsPerSecond 是计算台词时长的语速（每秒字数）。
+func (s StoryboardSettings) CharsPerSecond() float64 { return s.dialogue().charsPerSecond }
+
 // LineEverySeconds 是对白密度：平均每隔多少秒至少一句台词或旁白。
-func (s StoryboardSettings) LineEverySeconds() float64 {
-	switch s.Normalized().Dialogue {
-	case DialogueDense:
-		return 3
-	case DialogueSparse:
-		return 7
-	}
-	return 4.5
-}
+func (s StoryboardSettings) LineEverySeconds() float64 { return s.dialogue().lineSeconds }
 
-// MaxLineRunes 是一句台词的字数上限。一个镜头只承载一句台词，镜头时长至少要能说完它，
-// 所以“每 N 秒一句”只有在单句足够短时才成立：密集 12 字约 3 秒说完。
-func (s StoryboardSettings) MaxLineRunes() int {
-	switch s.Normalized().Dialogue {
-	case DialogueDense:
-		return 12
-	case DialogueSparse:
-		return 20
-	}
-	return 16
-}
+// MaxLineRunes 是一句台词的字数上限，更长的台词在原文标点处拆到连续镜头。
+func (s StoryboardSettings) MaxLineRunes() int { return s.dialogue().maxRunes }
 
-// DialoguePauseMs 是台词说完后保留的气口，计入镜头时长；对白密集时缩短，让下一句尽快接上。
-func (s StoryboardSettings) DialoguePauseMs() int64 {
-	if s.Normalized().Dialogue == DialogueDense {
-		return 300
-	}
-	return DialoguePadMs
-}
+// DialoguePauseMs 是台词说完后保留的气口，计入镜头时长。
+func (s StoryboardSettings) DialoguePauseMs() int64 { return s.dialogue().pauseMs }
 
 // ShotTarget 按单集时长与平均镜头长度估算镜头数，供剧本提示词与预估使用。
 func (s StoryboardSettings) ShotTarget(episodeSeconds int) int {
@@ -258,7 +310,8 @@ func (s StoryboardSettings) SpokenMs(dialogue string) int64 {
 	if dialogue = strings.TrimSpace(dialogue); dialogue == "" {
 		return 0
 	}
-	return int64(float64(len([]rune(dialogue)))/charsPerSecond*1000) + s.DialoguePauseMs()
+	rule := s.dialogue()
+	return int64(float64(len([]rune(dialogue)))/rule.charsPerSecond*1000) + rule.pauseMs
 }
 
 func (s StoryboardSettings) fitDialogue(target int64, dialogue string) int64 {
@@ -290,7 +343,12 @@ func NormalizeTransition(value string) string {
 	return TransitionCut
 }
 
-var dialogueLabels = map[string]string{DialogueDense: "对白密集", DialogueStandard: "对白标准", DialogueSparse: "对白克制"}
+var dialogueLabels = map[string]string{DialogueDense: "对白密集", DialogueStandard: "对白标准", DialogueSparse: "对白克制", DialogueCustom: "自定义"}
+
+// formatDecimal 把秒数、语速写成最多两位小数且去掉末尾 0 的文本，例如 4.5、3、0.25。
+func formatDecimal(value float64) string {
+	return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", value), "0"), ".")
+}
 
 // directionBand 把 1–10 档归到五个描述段：1–2、3–4、5–6、7–8、9–10。
 func directionBand(level int) int {
@@ -352,9 +410,9 @@ func (s StoryboardSettings) PromptRules(episodeSeconds int, segment SegmentLimit
 		fmt.Fprintf(&b, "剧情段：按剧情节拍切段（%s），在场景切换或冲突转折处断开，单段不超过 %d 秒；每段应有 3–6 个镜头和完整的小冲突，不要用一个长镜头撑满一段。\n", unit, segment.MaxMs/1000)
 	}
 	// 密度只是节奏参考：台词必须来自原文，原文对白不足时宁可少，不能为凑数编造或改写。
-	fmt.Fprintf(&b, "对白密度（%s）：短剧靠台词推动，尽量每 %.0f 秒有一句台词或旁白（参考全集 %d 句）；台词与旁白只能逐字取自原文，原文对白不足时宁可少也不要编造，用动作与反应镜头承接；无台词镜头要有明确的动作或反应。\n", dialogueLabels[s.Dialogue], s.LineEverySeconds(), s.LineTarget(episodeSeconds))
+	fmt.Fprintf(&b, "对白密度（%s）：短剧靠台词推动，尽量每 %s 秒有一句台词或旁白（参考全集 %d 句）；台词与旁白只能逐字取自原文，原文对白不足时宁可少也不要编造，用动作与反应镜头承接；无台词镜头要有明确的动作或反应。\n", dialogueLabels[s.Dialogue], formatDecimal(s.LineEverySeconds()), s.LineTarget(episodeSeconds))
 	// 每个镜头只放一句台词，镜头时长 = 说完台词 + 气口；长句只能按标点拆到连续镜头，不能改字。
-	fmt.Fprintf(&b, "单镜台词不超过 %d 字，更长的台词在原文标点处拆到连续镜头，不改动字词；对手戏用正反打来回切。有台词的镜头时长按每秒 %.1f 个字说完再留 %.1f 秒气口计算。\n", s.MaxLineRunes(), charsPerSecond, float64(s.DialoguePauseMs())/1000)
+	fmt.Fprintf(&b, "单镜台词不超过 %d 字，更长的台词在原文标点处拆到连续镜头，不改动字词；对手戏用正反打来回切。有台词的镜头时长按每秒 %s 个字说完再留 %s 秒气口计算。\n", s.MaxLineRunes(), formatDecimal(s.CharsPerSecond()), formatDecimal(float64(s.DialoguePauseMs())/1000))
 	fmt.Fprintf(&b, "表演：%saction 与 videoPrompt 写清本镜人物的表情、眼神与肢体反应，说话的人写出语气，不说话的人也要有反应。\n", PerformanceRule(s.Performance))
 	fmt.Fprintf(&b, "运镜：%s%s。\n", CameraMotionRule(s.CameraMotion), cameraScriptHints[directionBand(s.CameraMotion)])
 	switch s.Transition {

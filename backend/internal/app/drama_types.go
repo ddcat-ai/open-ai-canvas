@@ -274,11 +274,14 @@ type ProduceDramaChaptersResult struct {
 	EpisodeIDs []string `json:"episodeIds"`
 }
 
-// AddDramaEpisodeRequest 在作品末尾追加一集：原文直接成为这一集，不经过分集规划。
+// AddDramaEpisodeRequest 新增一集：原文直接成为这一集，不经过分集规划。AnchorEpisodeID 为空时追加到末尾；
+// 否则按 Position（before / after）插到这一集之前或之后，后续集号顺延。
 type AddDramaEpisodeRequest struct {
-	Title        string `json:"title"`
-	Text         string `json:"text"`
-	SourceFormat string `json:"sourceFormat"`
+	Title           string `json:"title"`
+	Text            string `json:"text"`
+	SourceFormat    string `json:"sourceFormat"`
+	AnchorEpisodeID string `json:"anchorEpisodeId"`
+	Position        string `json:"position"`
 }
 
 // UpdateDramaChapterRequest 修改原文；已写好的剧本不会自动重写，需要用户点重新改编。
@@ -382,11 +385,13 @@ type DramaProductionView struct {
 }
 
 // DramaEpisodeStats 按剧情段统计进度：视频提示词写好几段、视频生成几段、失败几段。
+// VideoGenerated 是当前持有视频的段数（含已过期的旧视频），删除本集前据此要求输入确认。
 type DramaEpisodeStats struct {
-	Segments    int64 `json:"segments"`
-	PromptReady int64 `json:"promptReady"`
-	VideoReady  int64 `json:"videoReady"`
-	Failed      int64 `json:"failed"`
+	Segments       int64 `json:"segments"`
+	PromptReady    int64 `json:"promptReady"`
+	VideoReady     int64 `json:"videoReady"`
+	VideoGenerated int64 `json:"videoGenerated"`
+	Failed         int64 `json:"failed"`
 }
 
 type DramaEpisodeRow struct {

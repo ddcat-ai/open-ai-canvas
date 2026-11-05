@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // 短剧自动制作域：章节（ProjectUnit kind=chapter）只承载小说原文，
 // 集（DramaEpisode）是剧本、分镜和后续产物的唯一基石。
@@ -136,6 +139,11 @@ type DramaEpisode struct {
 	Revision        int64     `json:"revision"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+// DramaEpisodeDefaultTitle 是没有填写标题时的集标题；插入或删除集导致集号顺延时，仍是默认标题的集随新集号改名。
+func DramaEpisodeDefaultTitle(number int) string {
+	return fmt.Sprintf("第 %d 集", number)
 }
 
 // DramaShot 保存镜头脚本，作为剧情段视频提示词的素材。

@@ -1,5 +1,5 @@
 // 分镜规则与单集时长的纯函数：与后端 production/storyboard.go 同一套默认值与夹取规则。
-import type { DramaPacing, DramaSegmentMode, DramaStoryboardSettings, DramaTransition } from "@/services/api/drama";
+import type { DramaDialogue, DramaPacing, DramaSegmentMode, DramaStoryboardSettings, DramaTransition } from "@/services/api/drama";
 
 export const MIN_SEGMENT_SECONDS = 4;
 export const MAX_SEGMENT_SECONDS = 60;
@@ -37,6 +37,22 @@ function directionLevel(value: unknown, fallback: number) {
 
 export const EPISODE_PRESETS = [60, 90, 120, 180, 300, 600];
 
+/** 一档对白：语速（字/秒）、平均每隔多少秒一句、单句字数上限、台词后的气口（毫秒）。 */
+export type DialogueRule = { speechRate: number; lineSeconds: number; lineMaxRunes: number; linePauseMs: number };
+/** 三档预设，与后端 production.dialogueRules 一致：语速都是每秒 4.5 字，最长一句恰好在间隔内说完。 */
+export const DIALOGUE_PRESETS: Record<Exclude<DramaDialogue, "custom">, DialogueRule> = {
+    dense: { speechRate: 4.5, lineSeconds: 3, lineMaxRunes: 12, linePauseMs: 300 },
+    standard: { speechRate: 4.5, lineSeconds: 4.5, lineMaxRunes: 16, linePauseMs: 500 },
+    sparse: { speechRate: 4.5, lineSeconds: 7, lineMaxRunes: 20, linePauseMs: 500 },
+};
+/** 自定义对白的可设范围，与后端 Min/Max 常量一致。 */
+export const DIALOGUE_LIMITS: Record<keyof DialogueRule, { min: number; max: number }> = {
+    speechRate: { min: 2, max: 8 },
+    lineSeconds: { min: 1.5, max: 20 },
+    lineMaxRunes: { min: 4, max: 40 },
+    linePauseMs: { min: 100, max: 2000 },
+};
+
 export const TRANSITION_LABEL: Record<DramaTransition, string> = { cut: "硬切", fadeblack: "黑场过渡", fadewhite: "闪白" };
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
@@ -46,13 +62,25 @@ export function normalizeStoryboard(input?: Partial<DramaStoryboardSettings>): D
     const seconds = (raw: number, fallback: number) => clamp(Math.round(raw || fallback), MIN_SEGMENT_SECONDS, MAX_SEGMENT_SECONDS);
     const low = seconds(value.segmentMinSeconds, DEFAULT_STORYBOARD.segmentMinSeconds);
     const high = seconds(value.segmentMaxSeconds, DEFAULT_STORYBOARD.segmentMaxSeconds);
+    const dialogue: DramaDialogue = (["dense", "sparse", "custom"] as DramaDialogue[]).includes(value.dialogue) ? value.dialogue : "standard";
+    // 自定义参数填了就夹到范围；自定义档缺项按标准档补齐，预设档下未填的保持未填（与后端 Normalized 一致）。
+    const param = (key: keyof DialogueRule, round: (n: number) => number) => {
+        const raw = Number(value[key]);
+        if (!(raw > 0)) return dialogue === "custom" ? DIALOGUE_PRESETS.standard[key] : undefined;
+        return round(clamp(raw, DIALOGUE_LIMITS[key].min, DIALOGUE_LIMITS[key].max));
+    };
+    const tenth = (n: number) => Math.round(n * 10) / 10;
     return {
         segmentMode: (["fixed", "range"] as DramaSegmentMode[]).includes(value.segmentMode) ? value.segmentMode : "auto",
         segmentSeconds: seconds(value.segmentSeconds, DEFAULT_STORYBOARD.segmentSeconds),
         segmentMinSeconds: Math.min(low, high),
         segmentMaxSeconds: Math.max(low, high),
         pacing: PACING_ORDER.includes(value.pacing) ? value.pacing : "fast",
-        dialogue: ["dense", "sparse"].includes(value.dialogue) ? value.dialogue : "standard",
+        dialogue,
+        speechRate: param("speechRate", tenth),
+        lineSeconds: param("lineSeconds", tenth),
+        lineMaxRunes: param("lineMaxRunes", Math.round),
+        linePauseMs: param("linePauseMs", Math.round),
         transition: ["cut", "fadeblack", "fadewhite"].includes(value.transition) ? value.transition : "auto",
         transitionMs: clamp(Math.round(value.transitionMs || MIN_TRANSITION_MS), MIN_TRANSITION_MS, 1500),
         performance: directionLevel(value.performance, DEFAULT_STORYBOARD.performance),
@@ -64,10 +92,21 @@ export function averageShotSeconds(settings: DramaStoryboardSettings) {
     return PACING_AVERAGE_SECONDS[normalizeStoryboard(settings).pacing];
 }
 
+/** 生效的对白参数：预设档取固定值，自定义档取用户设定。 */
+export function dialogueRule(settings: DramaStoryboardSettings): DialogueRule {
+    const rules = normalizeStoryboard(settings);
+    if (rules.dialogue !== "custom") return DIALOGUE_PRESETS[rules.dialogue];
+    return { speechRate: rules.speechRate!, lineSeconds: rules.lineSeconds!, lineMaxRunes: rules.lineMaxRunes!, linePauseMs: rules.linePauseMs! };
+}
+
+/** 说完最长一句（含气口）要多少秒；长于每句间隔时，实际台词会比设定稀。 */
+export function longestLineSeconds(rule: DialogueRule) {
+    return Math.round((rule.lineMaxRunes / rule.speechRate + rule.linePauseMs / 1000) * 10) / 10;
+}
+
 /** 对白密度：平均每隔多少秒至少一句台词或旁白。 */
 export function lineEverySeconds(settings: DramaStoryboardSettings) {
-    const { dialogue } = normalizeStoryboard(settings);
-    return dialogue === "dense" ? 3 : dialogue === "sparse" ? 7 : 4.5;
+    return dialogueRule(settings).lineSeconds;
 }
 
 export type SegmentLimits = { mode: DramaSegmentMode; min: number; max: number };

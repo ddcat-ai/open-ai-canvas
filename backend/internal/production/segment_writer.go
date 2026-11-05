@@ -70,8 +70,8 @@ func SegmentWriterPrompt(in SegmentPromptInput, draft string, previousEnding str
 焦段 + 景别，运镜方式（方向、速度与动机）。
 起—止：按 2–3 秒切成时间片，逐片写清动作、面部表情变化（眼神、眉、嘴角、呼吸）、肢体反应与镜头运动。
 角色名（此刻的情绪 + 说话方式，例如压低声音咬着字、声音发颤、冷笑着拖长尾音）：“台词”
-台词前写说话人开口前的表情反应，说完写听者的反应；台词后“留%s秒气口”已计入时长，开口前的情绪停顿也要落在本镜头时长内，台词不能溢出镜头。每个镜头写动作音或环境音。
-`, in.Index+1, secondsText(total), firstNonEmpty(in.AspectRatio, "9:16"), firstNonEmpty(in.Style, "写实电影感"), firstNonEmpty(in.Language, "中文"), len(in.Shots), firstFrameRule(in), in.pauseText())
+台词前写说话人开口前的表情反应，说完写听者的反应；%s台词后“留%s秒气口”已计入时长，开口前的情绪停顿也要落在本镜头时长内，台词不能溢出镜头。每个镜头写动作音或环境音。
+`, in.Index+1, secondsText(total), firstNonEmpty(in.AspectRatio, "9:16"), firstNonEmpty(in.Style, "写实电影感"), firstNonEmpty(in.Language, "中文"), len(in.Shots), firstFrameRule(in), in.speechRateClause(), in.pauseText())
 	// 尾帧续接时末尾只收势不凝固：整段凝固会在成片的每个段落衔接处留下静止画面。并行出片时下一段不取本段尾帧，不需要收势。
 	if in.Index < in.Count-1 && !in.Independent {
 		fmt.Fprintf(&b, "最后一个镜头的末0.5秒动作收住、镜头停稳，写清此刻每个人物的位置、朝向和情绪状态，作为第%d段的接续起点；人物保留呼吸、眨眼等细微动态，不要写“全场凝固”“完全静止”“硬定格”。\n", in.Index+2)

@@ -2,6 +2,7 @@ package production
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -45,6 +46,8 @@ type SegmentPromptInput struct {
 	Independent bool
 	// PauseMs 是台词后的气口，已计入镜头时长；为 0 时按默认值。
 	PauseMs int64
+	// CharsPerSecond 是计算镜头时长用的语速；自定义语速时写进提示词，让视频模型按这个快慢说，台词才不会溢出镜头。
+	CharsPerSecond float64
 	// Performance / CameraMotion 是作品的表演强度与运镜动感 1–10（见 StoryboardSettings），0 按默认档。
 	Performance  int
 	CameraMotion int
@@ -58,7 +61,23 @@ func (in SegmentPromptInput) pauseText() string {
 	if pause <= 0 {
 		pause = DialoguePadMs
 	}
-	return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", float64(pause)/1000), "0"), ".")
+	return formatDecimal(float64(pause) / 1000)
+}
+
+// speechRateClause 是撰写说明里的语速要求；默认语速时为空。
+func (in SegmentPromptInput) speechRateClause() string {
+	if rate := in.speechRateText(); rate != "" {
+		return "台词" + rate + "，每句的时长按这个语速计算；"
+	}
+	return ""
+}
+
+// speechRateText 是写进提示词的语速，例如“语速约每秒6字”；默认语速不写，未自定义的作品提示词保持原样。
+func (in SegmentPromptInput) speechRateText() string {
+	if in.CharsPerSecond <= 0 || math.Abs(in.CharsPerSecond-DefaultCharsPerSecond) < 0.05 {
+		return ""
+	}
+	return "语速约每秒" + formatDecimal(in.CharsPerSecond) + "字"
 }
 
 var shotLens = map[string]string{"特写": "85mm", "近景": "50mm", "中景": "35mm", "全景": "24mm", "远景": "16mm"}
@@ -286,8 +305,14 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 				speaker = "旁白（画外音）"
 			}
 			fmt.Fprintf(&b, "%s：“%s”\n", speaker, dialogue)
-			if shot.DurationMs >= 2000 {
+			rate := in.speechRateText()
+			switch {
+			case shot.DurationMs >= 2000 && rate != "":
+				fmt.Fprintf(&b, "台词%s，说完留%s秒气口。\n", rate, in.pauseText())
+			case shot.DurationMs >= 2000:
 				fmt.Fprintf(&b, "台词说完留%s秒气口。\n", in.pauseText())
+			case rate != "":
+				fmt.Fprintf(&b, "台词%s。\n", rate)
 			}
 		} else {
 			b.WriteString("无台词。\n")

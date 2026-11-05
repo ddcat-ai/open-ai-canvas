@@ -15,7 +15,8 @@ import type { EpisodeEmpty } from "./storyboard";
 
 function storyboardSummary(value: DramaStoryboardSettings) {
     const rules = normalizeStoryboard(value);
-    const duration = `${PACING_LABEL[rules.pacing]}（平均 ${averageShotSeconds(rules)} 秒/镜）· 对白${{ dense: "密集", standard: "标准", sparse: "克制" }[rules.dialogue]} · 剧情段${{ auto: "智能切分", fixed: `固定 ${rules.segmentSeconds} 秒`, range: `${rules.segmentMinSeconds}–${rules.segmentMaxSeconds} 秒` }[rules.segmentMode]}`;
+    const dialogue = rules.dialogue === "custom" ? `自定义（每秒 ${rules.speechRate} 字，每 ${rules.lineSeconds} 秒一句）` : { dense: "密集", standard: "标准", sparse: "克制" }[rules.dialogue];
+    const duration = `${PACING_LABEL[rules.pacing]}（平均 ${averageShotSeconds(rules)} 秒/镜）· 对白${dialogue} · 剧情段${{ auto: "智能切分", fixed: `固定 ${rules.segmentSeconds} 秒`, range: `${rules.segmentMinSeconds}–${rules.segmentMaxSeconds} 秒` }[rules.segmentMode]}`;
     const transition = rules.transition === "auto" ? "转场智能" : `转场统一${TRANSITION_LABEL[rules.transition]}`;
     return `${duration} · ${transition}`;
 }

@@ -8,10 +8,9 @@ import (
 )
 
 const (
-	MinShotMs      int64 = 1500
-	DialoguePadMs  int64 = 500
-	DefaultShotMs  int64 = 3000
-	charsPerSecond       = 4.5
+	MinShotMs     int64 = 1500
+	DialoguePadMs int64 = 500
+	DefaultShotMs int64 = 3000
 )
 
 // ShotDurationMs 按默认分镜规则计算镜头长度；作品内请使用 Settings.Storyboard.ShotMs。

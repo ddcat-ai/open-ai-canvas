@@ -50,15 +50,21 @@ export function useDramaCast(projectId: string, active: boolean) {
     return { ...query, cast: query.data?.cast || [], byId };
 }
 
+/**
+ * renumbered=true 用于插入或删除集：后续各集集号都变了，全部单集详情一起失效。
+ * removedEpisodeId 是刚删除的集，先移出缓存，避免仍挂着的旧查询被重新请求成 404。
+ */
 export function useDramaInvalidate(projectId: string) {
     const queryClient = useQueryClient();
-    return (episodeId?: string) => {
+    return (episodeId?: string, options: { renumbered?: boolean; removedEpisodeId?: string } = {}) => {
+        if (options.removedEpisodeId) queryClient.removeQueries({ queryKey: dramaKeys.episode(projectId, options.removedEpisodeId), exact: true });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.summary(projectId), exact: true });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.cast(projectId) });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.jobs(projectId) });
         void queryClient.invalidateQueries({ queryKey: ["drama", projectId, "takes"] });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.chapters(projectId) });
-        if (episodeId) void queryClient.invalidateQueries({ queryKey: dramaKeys.episode(projectId, episodeId) });
+        if (options.renumbered) void queryClient.invalidateQueries({ queryKey: dramaKeys.episodes(projectId) });
+        else if (episodeId) void queryClient.invalidateQueries({ queryKey: dramaKeys.episode(projectId, episodeId) });
     };
 }
 
