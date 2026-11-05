@@ -12,7 +12,7 @@ import (
 )
 
 func TestTokenUsageAmountSettlesArkVideoCompletionTokens(t *testing.T) {
-	amount, err := tokenUsageAmount(model.BillingOrder{
+	amount, _, err := tokenUsageAmount(model.BillingOrder{
 		Capability:                   "video",
 		OutputTokenPriceMicrocredits: 16_000_000,
 		MultiplierBasisPoints:        10_000,
@@ -49,7 +49,7 @@ func TestBillingUsageReadsAsyncVideoPollUsage(t *testing.T) {
 }
 
 func TestTokenUsageAmountRejectsVideoWithoutOutputUsage(t *testing.T) {
-	_, err := tokenUsageAmount(model.BillingOrder{Capability: "video", OutputTokenPriceMicrocredits: 16_000_000, MultiplierBasisPoints: 10_000}, &BillingUsage{})
+	_, _, err := tokenUsageAmount(model.BillingOrder{Capability: "video", OutputTokenPriceMicrocredits: 16_000_000, MultiplierBasisPoints: 10_000}, &BillingUsage{})
 	if !errors.Is(err, ErrBillingUsageUnavailable) {
 		t.Fatalf("tokenUsageAmount() error = %v", err)
 	}

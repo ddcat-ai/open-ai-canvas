@@ -171,7 +171,12 @@ func cloudAgentQuoteHash(order *model.BillingOrder) string {
 	if order == nil {
 		return creationHash(nil)
 	}
-	return creationHash(map[string]any{"amount": order.AmountMicrocredits, "billingMode": order.BillingMode, "priceVersion": order.PriceVersion, "priceTierId": order.PriceTierID, "priceTierVersion": order.PriceTierVersion, "quantity": order.Quantity, "unitPrice": order.UnitPriceMicrocredits, "inputTokenPrice": order.InputTokenPriceMicrocredits, "outputTokenPrice": order.OutputTokenPriceMicrocredits, "cachedTokenPrice": order.CachedTokenPriceMicrocredits, "multiplier": order.MultiplierBasisPoints})
+	quote := map[string]any{"amount": order.AmountMicrocredits, "billingMode": order.BillingMode, "priceVersion": order.PriceVersion, "priceTierId": order.PriceTierID, "priceTierVersion": order.PriceTierVersion, "quantity": order.Quantity, "unitPrice": order.UnitPriceMicrocredits, "inputTokenPrice": order.InputTokenPriceMicrocredits, "outputTokenPrice": order.OutputTokenPriceMicrocredits, "cachedTokenPrice": order.CachedTokenPriceMicrocredits, "multiplier": order.MultiplierBasisPoints}
+	// 分时规则只在存在时参与哈希：跨时段后候选单价变化会让审批失效，没有规则的旧报价哈希保持不变。
+	if order.TokenPriceRulesJSON != "" {
+		quote["tokenPriceRules"] = order.TokenPriceRulesJSON
+	}
+	return creationHash(quote)
 }
 
 func prepareCloudAgentMediaApproval(repo *repository.Repository, userID string, doc map[string]any, plan *cloudAgentMediaPlan, request CreateTaskRequest, task *model.Task, order *model.BillingOrder) (*cloudAgentPreparedMedia, error) {

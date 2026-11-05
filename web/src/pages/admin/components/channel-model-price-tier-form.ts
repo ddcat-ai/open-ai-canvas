@@ -1,9 +1,95 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
-import type { ChannelModel, ChannelModelPriceTier } from "@/services/api/wallet";
+import type { ChannelModel, ChannelModelPriceTier, TokenPriceRule } from "@/services/api/wallet";
 
 export type PriceTierMatchMode = "default" | "advanced";
+
+/** 分时与上下文规则的表单值；价格单位与所在价格档的售价单位一致（积分或 USD/CNY）。 */
+export type TokenPriceRuleFormValues = {
+    enabled: boolean;
+    weekdays: number[];
+    start: string;
+    end: string;
+    minInputTokens: number;
+    /** 留空表示不限上限。 */
+    maxInputTokens?: number | null;
+    inputTokenPrice: number;
+    outputTokenPrice: number;
+    cachedTokenPrice: number;
+    cacheWriteTokenPrice: number;
+};
+
+export const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+
+export function defaultTokenPriceRule(base?: Pick<PriceTierFormValues, "inputTokenPrice" | "outputTokenPrice" | "cachedTokenPrice" | "cacheWriteTokenPrice">): TokenPriceRuleFormValues {
+    return {
+        enabled: true,
+        weekdays: [...ALL_WEEKDAYS],
+        start: "00:00",
+        end: "24:00",
+        minInputTokens: 0,
+        maxInputTokens: null,
+        inputTokenPrice: base?.inputTokenPrice ?? 0,
+        outputTokenPrice: base?.outputTokenPrice ?? 0,
+        cachedTokenPrice: base?.cachedTokenPrice ?? 0,
+        cacheWriteTokenPrice: base?.cacheWriteTokenPrice ?? 0,
+    };
+}
+
+function tokenPriceRuleToForm(rule: TokenPriceRule): TokenPriceRuleFormValues {
+    return {
+        enabled: rule.enabled,
+        weekdays: [...(rule.weekdays || [])],
+        start: rule.start,
+        end: rule.end,
+        minInputTokens: rule.minInputTokens || 0,
+        maxInputTokens: rule.maxInputTokens > 0 ? rule.maxInputTokens : null,
+        inputTokenPrice: rule.inputTokenPriceMicrocredits / 1_000_000,
+        outputTokenPrice: rule.outputTokenPriceMicrocredits / 1_000_000,
+        cachedTokenPrice: rule.cachedTokenPriceMicrocredits / 1_000_000,
+        cacheWriteTokenPrice: (rule.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
+    };
+}
+
+function tokenPriceRulePayload(rule: TokenPriceRuleFormValues): TokenPriceRule {
+    return {
+        enabled: rule.enabled !== false,
+        weekdays: [...rule.weekdays].sort((a, b) => a - b),
+        start: rule.start.trim(),
+        end: rule.end.trim(),
+        minInputTokens: Math.max(0, Math.floor(rule.minInputTokens || 0)),
+        maxInputTokens: rule.maxInputTokens ? Math.floor(rule.maxInputTokens) : 0,
+        inputTokenPriceMicrocredits: Math.round((rule.inputTokenPrice || 0) * 1_000_000),
+        outputTokenPriceMicrocredits: Math.round((rule.outputTokenPrice || 0) * 1_000_000),
+        cachedTokenPriceMicrocredits: Math.round((rule.cachedTokenPrice || 0) * 1_000_000),
+        cacheWriteTokenPriceMicrocredits: Math.round((rule.cacheWriteTokenPrice || 0) * 1_000_000),
+    };
+}
+
+/** HH:MM → 当天分钟数；allowEndOfDay 时接受 24:00。格式不合法返回 null，与后端口径一致。 */
+export function tokenRuleClockMinutes(value: string | undefined, allowEndOfDay = false): number | null {
+    const match = /^(\d{2}):(\d{2})$/.exec(String(value || "").trim());
+    if (!match) return null;
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (minute > 59) return null;
+    const total = hour * 60 + minute;
+    if (total > 1440 || (total === 1440 && !allowEndOfDay)) return null;
+    return total;
+}
+
+/** 当前上海时间命中时段的规则下标（不判断上下文区间），用于编辑界面提示。 */
+export function tokenRulesMatchingNow(rules: TokenPriceRuleFormValues[] | undefined, now = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Shanghai", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+    const weekday = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[parts.find((part) => part.type === "weekday")?.value || ""] || 0;
+    const minute = Number(parts.find((part) => part.type === "hour")?.value) * 60 + Number(parts.find((part) => part.type === "minute")?.value);
+    return (rules || []).flatMap((rule, index) => {
+        const start = tokenRuleClockMinutes(rule?.start);
+        const end = tokenRuleClockMinutes(rule?.end, true);
+        return rule?.enabled !== false && start !== null && end !== null && rule.weekdays?.includes(weekday) && minute >= start && minute < end ? [index] : [];
+    });
+}
 
 // 与后端保存口径一致：上游键比较前剥掉一次 models/ 前缀，避免极旧存量行误报差异。
 export function normalizeUpstreamModelKey(value: unknown): string {
@@ -39,6 +125,9 @@ export type PriceTierFormValues = {
     costOutputTokenPrice: number;
     costCachedTokenPrice: number;
     costCacheWriteTokenPrice: number;
+    /** 文本 Token 档的分时与上下文价格。 */
+    tokenRulesEnabled: boolean;
+    tokenRules: TokenPriceRuleFormValues[];
     priceConfigured: boolean;
     enabled: boolean;
 };
@@ -68,6 +157,8 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         costOutputTokenPrice: 0,
         costCachedTokenPrice: 0,
         costCacheWriteTokenPrice: 0,
+        tokenRulesEnabled: false,
+        tokenRules: [],
         priceConfigured: true,
         enabled: true,
     };
@@ -111,6 +202,8 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
         costOutputTokenPrice: (tier.costPricing?.outputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costCachedTokenPrice: (tier.costPricing?.cachedTokenPriceMicrocredits ?? 0) / 1_000_000,
         costCacheWriteTokenPrice: (tier.costPricing?.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
+        tokenRulesEnabled: tier.tokenPriceRulesEnabled === true,
+        tokenRules: (tier.tokenPriceRules || []).map(tokenPriceRuleToForm),
         priceConfigured: tier.priceConfigured,
         enabled: tier.enabled,
     };
@@ -174,7 +267,11 @@ export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice,
 
 export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string, capabilityConfig?: ModelCapabilityConfig) {
     const videoTokens = capability === "video" && tier.billingMode === "token";
+    // 规则只属于文本 Token 档；切换能力或计费方式后不提交残留规则，后端也会拒绝。
+    const tokenRules = capability === "text" && tier.billingMode === "token" ? (tier.tokenRules || []).map(tokenPriceRulePayload) : [];
     return {
+        tokenPriceRulesEnabled: tokenRules.length > 0 && tier.tokenRulesEnabled === true,
+        tokenPriceRules: tokenRules,
         selector: skuSelectorFromForm(capability, tier, capabilityConfig),
         resolution: priceTierResolutionFromForm(capability, tier),
         videoSeconds: priceTierVideoSecondsFromForm(capability, tier),

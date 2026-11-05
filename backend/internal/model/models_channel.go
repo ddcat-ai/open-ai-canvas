@@ -99,12 +99,16 @@ type ChannelModelPriceTier struct {
 	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
 	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits" gorm:"not null;default:0"`
-	PriceConfigured                  bool              `json:"priceConfigured" gorm:"index"`
-	Enabled                          bool              `json:"enabled" gorm:"index"`
-	PriceVersion                     int64             `json:"priceVersion"`
-	CreatedAt                        time.Time         `json:"createdAt"`
-	UpdatedAt                        time.Time         `json:"updatedAt"`
-	DeletedAt                        gorm.DeletedAt    `json:"-" gorm:"index"`
+	// TokenPriceRulesEnabled 打开后，文本 Token 档按 TokenPriceRules 的分时与上下文单价计费；
+	// 关闭时规则保留但不参与报价和结算。
+	TokenPriceRulesEnabled bool             `json:"tokenPriceRulesEnabled" gorm:"not null;default:false"`
+	TokenPriceRules        []TokenPriceRule `json:"tokenPriceRules" gorm:"serializer:json;type:text;not null;default:'[]'"`
+	PriceConfigured        bool             `json:"priceConfigured" gorm:"index"`
+	Enabled                bool             `json:"enabled" gorm:"index"`
+	PriceVersion           int64            `json:"priceVersion"`
+	CreatedAt              time.Time        `json:"createdAt"`
+	UpdatedAt              time.Time        `json:"updatedAt"`
+	DeletedAt              gorm.DeletedAt   `json:"-" gorm:"index"`
 }
 
 type ApiCallLog struct {

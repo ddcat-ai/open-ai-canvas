@@ -75,6 +75,7 @@ type PublicChannelModel struct {
 	Icon             string                        `json:"icon"`
 	Capability       string                        `json:"capability"`
 	Protocol         model.ChannelInterfaceType    `json:"protocol"`
+	TextWire         string                        `json:"textWire,omitempty"`
 	CapabilityConfig map[string]any                `json:"capabilityConfig,omitempty"`
 	DefaultOptions   map[string]any                `json:"defaultOptions,omitempty"`
 	PriceTiers       []PublicChannelModelPriceTier `json:"priceTiers"`
@@ -97,6 +98,8 @@ type PublicChannelModelPriceTier struct {
 	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
 	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
+	// TokenPriceRules 是启用中的分时与上下文规则（东八区），单价与基础价同样已换算为当前分组实扣微积分。
+	TokenPriceRules []model.TokenPriceRule `json:"tokenPriceRules,omitempty"`
 }
 
 // ModelCatalog 的创作端目录始终来自系统渠道模型，不反查逻辑模型或路由。
@@ -231,6 +234,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 			OutputTokenPriceMicrocredits:     tier.OutputTokenPriceMicrocredits,
 			CachedTokenPriceMicrocredits:     tier.CachedTokenPriceMicrocredits,
 			CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
+			TokenPriceRules:                  publicTokenPriceRules(cm.Capability, tier),
 		})
 	}
 
@@ -267,6 +271,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		Icon:             cm.Icon,
 		Capability:       cm.Capability,
 		Protocol:         cm.Protocol,
+		TextWire:         s.textModelWire(cm.Capability, cm.Protocol),
 		CapabilityConfig: capabilityConfig,
 		DefaultOptions:   defaultOptions,
 		PriceTiers:       publicTiers,
@@ -295,9 +300,41 @@ func (s *Service) applyGroupCatalogPricing(policy CreditPolicy, access *userGrou
 		tier.OutputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Output, pricing.MultiplierBPS)
 		tier.CachedTokenPriceMicrocredits = effectiveCatalogPrice(prices.Cached, pricing.MultiplierBPS)
 		tier.CacheWriteTokenPriceMicrocredits = effectiveCatalogPrice(prices.CacheWrite, pricing.MultiplierBPS)
+		for ruleIndex := range tier.TokenPriceRules {
+			rule := &tier.TokenPriceRules[ruleIndex]
+			_, rulePrices, ruleErr := groupTierPricesWithPolicy(policy, access, cm, &model.ChannelModelPriceTier{
+				InputTokenPriceMicrocredits: rule.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: rule.OutputTokenPriceMicrocredits,
+				CachedTokenPriceMicrocredits: rule.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: rule.CacheWriteTokenPriceMicrocredits,
+			}, cm.ModelKey)
+			if ruleErr != nil {
+				return ruleErr
+			}
+			rule.InputTokenPriceMicrocredits = effectiveCatalogPrice(rulePrices.Input, pricing.MultiplierBPS)
+			rule.OutputTokenPriceMicrocredits = effectiveCatalogPrice(rulePrices.Output, pricing.MultiplierBPS)
+			rule.CachedTokenPriceMicrocredits = effectiveCatalogPrice(rulePrices.Cached, pricing.MultiplierBPS)
+			rule.CacheWriteTokenPriceMicrocredits = effectiveCatalogPrice(rulePrices.CacheWrite, pricing.MultiplierBPS)
+		}
 	}
 	publicModel.PricingMode, publicModel.DisplayPrice, publicModel.PriceLabel = computeChannelModelPriceDisplay(cm, publicModel.PriceTiers)
 	return nil
+}
+
+// publicTokenPriceRules 只发布会参与计费的规则副本，避免后续换算改写仓储快照。
+func publicTokenPriceRules(capability string, tier model.ChannelModelPriceTier) []model.TokenPriceRule {
+	if capability != "text" || tier.BillingMode != "token" || !tier.TokenPriceRulesEnabled {
+		return nil
+	}
+	rules := make([]model.TokenPriceRule, 0, len(tier.TokenPriceRules))
+	for _, rule := range tier.TokenPriceRules {
+		if rule.Enabled {
+			rule.Weekdays = append([]int(nil), rule.Weekdays...)
+			rules = append(rules, rule)
+		}
+	}
+	if len(rules) == 0 {
+		return nil
+	}
+	return rules
 }
 
 // effectiveCatalogPrice 是展示用单价：价格 × 倍率并向上取整。实际扣费在数量相乘后再取整，误差不超过 1 微积分。

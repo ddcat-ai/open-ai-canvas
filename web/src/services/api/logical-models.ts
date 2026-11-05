@@ -1,6 +1,7 @@
 import { http } from "@/services/api/request";
 import type { ModelTag } from "@/lib/model-tags";
 import type { ImageResolutionOption } from "@/lib/image-resolution-tiers";
+import type { TokenPriceRule } from "@/services/api/wallet";
 
 export type InputConstraint = { min: number; max: number };
 export type OptionConstraint = { values?: unknown[]; min?: number; max?: number; step?: number };
@@ -60,6 +61,8 @@ export type PublicLogicalModelPriceTier = {
     outputTokenPriceMicrocredits: number;
     cachedTokenPriceMicrocredits: number;
     cacheWriteTokenPriceMicrocredits?: number;
+    /** 仅系统渠道直连的文本 Token 档：启用中的分时与上下文规则，单价已换算为当前分组实扣积分。 */
+    tokenPriceRules?: TokenPriceRule[];
 };
 
 export type AdminLogicalRoute = {
@@ -174,6 +177,8 @@ export type PublicChannelModel = {
     icon: string;
     capability: string;
     protocol?: string;
+    /** 文本模型协议按插件 create 路径识别出的请求格式；插件自定义接口时缺省。 */
+    textWire?: string;
     capabilityConfig?: Record<string, any>;
     priceTiers: PublicChannelModelPriceTier[];
     pricingMode: string;
@@ -211,6 +216,7 @@ export type PublicChannelModelPriceTier = {
     outputTokenPriceMicrocredits: number;
     cachedTokenPriceMicrocredits: number;
     cacheWriteTokenPriceMicrocredits?: number;
+    tokenPriceRules?: TokenPriceRule[];
 };
 
 export type ModelCatalogResponse = {

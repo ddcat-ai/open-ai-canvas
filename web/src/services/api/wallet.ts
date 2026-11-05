@@ -94,11 +94,36 @@ export type ChannelModelPriceTier = {
     outputTokenPriceMicrocredits: number;
     cachedTokenPriceMicrocredits: number;
     cacheWriteTokenPriceMicrocredits: number;
+    /** 文本 Token 档的分时与上下文价格开关；关闭时规则保留但不参与计费。 */
+    tokenPriceRulesEnabled?: boolean;
+    tokenPriceRules?: TokenPriceRule[] | null;
     priceConfigured: boolean;
     enabled: boolean;
     priceVersion: number;
     createdAt: string;
     updatedAt: string;
+};
+
+/**
+ * 分时与上下文 Token 规则：时段按任务创建时的上海时间判定，上下文按上游真实输入 Token 判定；
+ * 按顺序取首条命中，全部未命中时使用价格档的基础 Token 单价。
+ */
+export type TokenPriceRule = {
+    enabled: boolean;
+    /** 1 = 周一 … 7 = 周日。 */
+    weekdays: number[];
+    /** HH:MM，含。 */
+    start: string;
+    /** HH:MM，不含；24:00 表示当天结束。 */
+    end: string;
+    /** 输入上下文下限（含）。 */
+    minInputTokens: number;
+    /** 输入上下文上限（不含），0 表示不限。 */
+    maxInputTokens: number;
+    inputTokenPriceMicrocredits: number;
+    outputTokenPriceMicrocredits: number;
+    cachedTokenPriceMicrocredits: number;
+    cacheWriteTokenPriceMicrocredits: number;
 };
 
 export type CreditCostPricing = {

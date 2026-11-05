@@ -299,7 +299,7 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			if reserved <= 0 {
 				reserved = order.AmountMicrocredits
 			}
-			actual, err := tokenUsageAmount(order, usage)
+			actual, priceRule, err := tokenUsageAmount(order, usage)
 			if err != nil {
 				return err
 			}
@@ -332,7 +332,7 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			updates := map[string]any{"status": model.BillingStatusSettled, "settled_at": &now, "updated_at": now,
 				"actual_amount_microcredits": actual, "refunded_amount_microcredits": refund,
 				"input_tokens": usage.InputTokens, "output_tokens": usage.OutputTokens, "cached_tokens": usage.CachedTokens, "cache_write_tokens": usage.CacheWriteTokens,
-				"usage_available": usageSource == billingUsageSourceProvider, "usage_source": usageSource}
+				"usage_available": usageSource == billingUsageSourceProvider, "usage_source": usageSource, "token_price_rule": priceRule}
 			if providerRequestID != "" {
 				updates["provider_request_id"] = providerRequestID
 			}
@@ -344,6 +344,13 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 				consumeNote = "Token 实际用量超过 Agent 报价，已按本轮硬上限结算"
 			} else if supplement > 0 {
 				consumeNote = "Token 实际用量超过预授权，已补扣差额"
+			}
+			if priceRule > 0 {
+				ruleNote := fmt.Sprintf("按分时与上下文价格第 %d 条结算", priceRule)
+				if consumeNote != "" {
+					ruleNote += "；" + consumeNote
+				}
+				consumeNote = ruleNote
 			}
 			if usageSource == billingUsageSourceVideoFormula {
 				consumeNote = strings.TrimSpace("按提交时的视频 Token 公式快照结算；" + consumeNote)
@@ -548,6 +555,7 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 		actual := order.AmountMicrocredits
 		var usage *BillingUsage
 		var usageSource string
+		priceRule := 0
 		if order.BillingMode == "token" {
 			if zeroPricedTokenOrder(order) {
 				actual = 0
@@ -557,7 +565,7 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 				if err != nil {
 					return err
 				}
-				actual, err = tokenUsageAmount(order, usage)
+				actual, priceRule, err = tokenUsageAmount(order, usage)
 				if err != nil {
 					return err
 				}
@@ -609,6 +617,7 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			orderUpdates["cache_write_tokens"] = usage.CacheWriteTokens
 			orderUpdates["usage_available"] = usageSource == billingUsageSourceProvider
 			orderUpdates["usage_source"] = usageSource
+			orderUpdates["token_price_rule"] = priceRule
 		}
 		orderUpdate := tx.Model(&model.BillingOrder{}).
 			Where("id = ? AND status = ?", order.ID, model.BillingStatusRefunded).
@@ -645,11 +654,24 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 }
 
 func zeroPricedTokenOrder(order model.BillingOrder) bool {
-	return order.BillingMode == "token" &&
-		order.InputTokenPriceMicrocredits == 0 &&
-		order.OutputTokenPriceMicrocredits == 0 &&
-		order.CachedTokenPriceMicrocredits == 0 &&
-		order.CacheWriteTokenPriceMicrocredits == 0
+	if order.BillingMode != "token" ||
+		order.InputTokenPriceMicrocredits != 0 ||
+		order.OutputTokenPriceMicrocredits != 0 ||
+		order.CachedTokenPriceMicrocredits != 0 ||
+		order.CacheWriteTokenPriceMicrocredits != 0 {
+		return false
+	}
+	// 基础价为 0 但分时规则有价时仍需读取 usage 结算；快照损坏交给结算路径报错。
+	rules, err := order.BillingTokenPriceRules()
+	if err != nil {
+		return false
+	}
+	for _, rule := range rules {
+		if rule.Input != 0 || rule.Output != 0 || rule.Cached != 0 || rule.CacheWrite != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *Repository) RefundBillingOrder(id string, errorText string) error {
@@ -705,31 +727,37 @@ func (r *Repository) RefundBillingOrder(id string, errorText string) error {
 	})
 }
 
-func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, error) {
+// tokenUsageAmount 返回实际费用与命中的分时规则序号（0 表示基础价）。上下文档位按 usage.InputTokens
+// 判定，它包含缓存命中与缓存写入，与上游计费口径的“输入上下文”一致。
+func tokenUsageAmount(order model.BillingOrder, usage *BillingUsage) (int64, int, error) {
 	if usage == nil {
-		return 0, ErrBillingUsageUnavailable
+		return 0, 0, ErrBillingUsageUnavailable
 	}
 	if usage.InputTokens < 0 || usage.OutputTokens < 0 || usage.CachedTokens < 0 || usage.CacheWriteTokens < 0 {
-		return 0, errors.New("invalid token usage amount")
+		return 0, 0, errors.New("invalid token usage amount")
 	}
 	if order.Capability == "video" && usage.OutputTokens <= 0 {
-		return 0, ErrBillingUsageUnavailable
+		return 0, 0, ErrBillingUsageUnavailable
+	}
+	prices, rule, err := order.TokenPrices(usage.InputTokens)
+	if err != nil {
+		return 0, 0, err
 	}
 	terms := []kernel.TokenBillingTerm{
-		{Tokens: usage.OutputTokens, PriceMicrocredits: order.OutputTokenPriceMicrocredits},
+		{Tokens: usage.OutputTokens, PriceMicrocredits: prices.Output},
 	}
 	// 视频 Token 总用量已由供应商 completion_tokens 表达，不再叠加文本输入和缓存费用。
 	if order.Capability != "video" {
 		input := max(usage.InputTokens-usage.CachedTokens-usage.CacheWriteTokens, 0)
 		terms = append(terms,
-			kernel.TokenBillingTerm{Tokens: input, PriceMicrocredits: order.InputTokenPriceMicrocredits},
-			kernel.TokenBillingTerm{Tokens: usage.CachedTokens, PriceMicrocredits: order.CachedTokenPriceMicrocredits},
-			kernel.TokenBillingTerm{Tokens: usage.CacheWriteTokens, PriceMicrocredits: order.CacheWriteTokenPriceMicrocredits},
+			kernel.TokenBillingTerm{Tokens: input, PriceMicrocredits: prices.Input},
+			kernel.TokenBillingTerm{Tokens: usage.CachedTokens, PriceMicrocredits: prices.Cached},
+			kernel.TokenBillingTerm{Tokens: usage.CacheWriteTokens, PriceMicrocredits: prices.CacheWrite},
 		)
 	}
 	amount, err := kernel.TokenBillingAmount(order.MultiplierBasisPoints, terms...)
 	if err != nil {
-		return 0, errors.New("invalid token usage amount")
+		return 0, 0, errors.New("invalid token usage amount")
 	}
-	return amount, nil
+	return amount, rule, nil
 }

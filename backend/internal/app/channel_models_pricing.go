@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -139,6 +140,10 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		if err := validateChannelModelTierPricing(capability, protocol, billingMode, input); err != nil {
 			return nil, err
 		}
+		rules, rulesErr := normalizeTokenPriceRules(capability, billingMode, input.TokenPriceRulesEnabled, input.TokenPriceRules)
+		if rulesErr != nil {
+			return nil, rulesErr
+		}
 		id, idErr := s.repo.NextPrefixedID("PTIER")
 		if idErr != nil {
 			return nil, idErr
@@ -159,9 +164,77 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 			OutputTokenPriceMicrocredits:     input.OutputTokenPriceMicrocredits,
 			CachedTokenPriceMicrocredits:     input.CachedTokenPriceMicrocredits,
 			CacheWriteTokenPriceMicrocredits: input.CacheWriteTokenPriceMicrocredits,
+			TokenPriceRulesEnabled:           input.TokenPriceRulesEnabled && len(rules) > 0,
+			TokenPriceRules:                  rules,
 			PriceConfigured:                  input.PriceConfigured,
 			Enabled:                          enabled,
 			PriceVersion:                     1,
+		})
+	}
+	return result, nil
+}
+
+// normalizeTokenPriceRules 校验并规范化分时与上下文规则。规则只对文本 Token 档有意义；
+// 其他计费方式提交非空规则时直接拒绝，避免管理员误以为规则已生效。
+func normalizeTokenPriceRules(capability string, billingMode string, enabled bool, inputs []model.TokenPriceRule) ([]model.TokenPriceRule, error) {
+	if len(inputs) == 0 {
+		if enabled {
+			return nil, BadAuthRequest("启用分时与上下文价格时至少需要一条规则")
+		}
+		return []model.TokenPriceRule{}, nil
+	}
+	if capability != "text" || billingMode != "token" {
+		return nil, BadAuthRequest("分时与上下文价格仅支持文本模型的 Token 计费")
+	}
+	if len(inputs) > model.MaxTokenPriceRules {
+		return nil, BadAuthRequest(fmt.Sprintf("每个价格档最多配置 %d 条分时与上下文规则", model.MaxTokenPriceRules))
+	}
+	result := make([]model.TokenPriceRule, 0, len(inputs))
+	for index, input := range inputs {
+		fail := func(text string) error {
+			return BadAuthRequest(fmt.Sprintf("分时规则 %d：%s", index+1, text))
+		}
+		days := make([]int, 0, 7)
+		seen := map[int]bool{}
+		for _, day := range input.Weekdays {
+			if day < 1 || day > 7 {
+				return nil, fail("星期只能是周一到周日")
+			}
+			if !seen[day] {
+				seen[day] = true
+				days = append(days, day)
+			}
+		}
+		if len(days) == 0 {
+			return nil, fail("请至少选择一天")
+		}
+		sort.Ints(days)
+		start, err := model.ParseTokenPriceClock(input.Start, false)
+		if err != nil {
+			return nil, fail("开始时间必须是 00:00 到 23:59")
+		}
+		end, err := model.ParseTokenPriceClock(input.End, true)
+		if err != nil {
+			return nil, fail("结束时间必须是 00:01 到 24:00")
+		}
+		if start >= end {
+			return nil, fail("结束时间必须晚于开始时间；跨零点请拆成两条规则")
+		}
+		if input.MinInputTokens < 0 || input.MaxInputTokens < 0 {
+			return nil, fail("输入上下文 Token 不能小于 0")
+		}
+		if input.MaxInputTokens > 0 && input.MaxInputTokens <= input.MinInputTokens {
+			return nil, fail("输入上下文上限必须大于下限")
+		}
+		if err := validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits, input.CacheWriteTokenPriceMicrocredits); err != nil {
+			return nil, fail(err.Error())
+		}
+		result = append(result, model.TokenPriceRule{
+			Enabled: input.Enabled, Weekdays: days,
+			Start: fmt.Sprintf("%02d:%02d", start/60, start%60), End: fmt.Sprintf("%02d:%02d", end/60, end%60),
+			MinInputTokens: input.MinInputTokens, MaxInputTokens: input.MaxInputTokens,
+			InputTokenPriceMicrocredits: input.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: input.OutputTokenPriceMicrocredits,
+			CachedTokenPriceMicrocredits: input.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: input.CacheWriteTokenPriceMicrocredits,
 		})
 	}
 	return result, nil

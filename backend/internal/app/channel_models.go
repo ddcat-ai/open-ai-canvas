@@ -54,8 +54,11 @@ type ChannelModelPriceTierRequest struct {
 	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
 	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
-	PriceConfigured                  bool              `json:"priceConfigured"`
-	Enabled                          *bool             `json:"enabled"`
+	// TokenPriceRules 只用于文本 Token 档：按东八区时段与真实输入 Token 区间覆盖基础单价。
+	TokenPriceRulesEnabled bool                   `json:"tokenPriceRulesEnabled"`
+	TokenPriceRules        []model.TokenPriceRule `json:"tokenPriceRules"`
+	PriceConfigured        bool                   `json:"priceConfigured"`
+	Enabled                *bool                  `json:"enabled"`
 }
 
 // AdminChannelModelFetchResult 是管理员从上游拉目录后的汇总：models 为去重后的标识，added 为本次新建条数。
@@ -303,8 +306,8 @@ func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, chan
 	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != capability {
 		return "", "", "", "", BadAuthRequest("模型能力与请求协议不匹配")
 	}
-	if (protocol == model.ChannelInterfaceVolcengineJiMengImage || protocol == model.ChannelInterfaceVolcengineJiMengVideo) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
-		return "", "", "", "", BadAuthRequest("即梦官方协议需要先在渠道中配置 Access Key 和 Secret Key")
+	if protocolAuthUsesSecretKey(adapter.Metadata().Auth) && (strings.TrimSpace(channel.APIKey) == "" || strings.TrimSpace(channel.SecretKey) == "") {
+		return "", "", "", "", BadAuthRequest(adapter.Metadata().Name + " 协议需要先在渠道中配置 API Key 和 Secret Key")
 	}
 	return modelKey, providerModelKey, capability, protocol, nil
 }

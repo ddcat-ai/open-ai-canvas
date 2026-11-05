@@ -619,6 +619,12 @@ func (s *Service) newBillingOrder(userID string, taskID string, idempotencyKey s
 }
 
 func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate, priceTierID string, intents ...ModelRequestIntent) (*model.BillingOrder, error) {
+	return s.newBillingOrderWithPriceTierAt(time.Now(), userID, taskID, idempotencyKey, channelID, modelKey, capability, scene, requestedQuantity, tokenEstimate, priceTierID, intents...)
+}
+
+// newBillingOrderWithPriceTierAt 用 pricedAt 判定分时 Token 规则的时段；新订单传当前时间，
+// 同一任务换供应线路时传原订单的创建时间，保证时段在任务创建时锁定。
+func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID string, taskID string, idempotencyKey string, channelID string, modelKey string, capability string, scene string, requestedQuantity int64, tokenEstimate tokenBillingEstimate, priceTierID string, intents ...ModelRequestIntent) (*model.BillingOrder, error) {
 	item, err := s.repo.ChannelModelByKey(channelID, modelKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, BadAuthRequest("当前模型暂时不可用，请重新选择")
@@ -678,8 +684,18 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		return nil, err
 	}
 	multiplierBPS := pricing.MultiplierBPS
+	var tokenRules []model.BillingTokenPriceRule
 	if tier.BillingMode == "token" {
-		amount, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: prices.Input, OutputTokenPriceMicrocredits: prices.Output, CachedTokenPriceMicrocredits: prices.Cached, CacheWriteTokenPriceMicrocredits: prices.CacheWrite}, tokenEstimate, multiplierBPS)
+		// 时段在此锁定：pricedAt 的东八区时间决定哪些规则可用，结算只再按真实输入 Token 选档。
+		tokenRules, err = tokenPriceRuleSnapshot(pricing, item.Capability, tier, pricedAt)
+		if err != nil {
+			return nil, err
+		}
+		holdPrices := prices
+		if rule, ok := model.MatchBillingTokenPriceRule(tokenRules, tokenEstimate.InputTokens); ok {
+			holdPrices = tierCreditPrices{Input: rule.Input, Output: rule.Output, Cached: rule.Cached, CacheWrite: rule.CacheWrite}
+		}
+		amount, err = tokenEstimateAmount(&model.ChannelModel{InputTokenPriceMicrocredits: holdPrices.Input, OutputTokenPriceMicrocredits: holdPrices.Output, CachedTokenPriceMicrocredits: holdPrices.Cached, CacheWriteTokenPriceMicrocredits: holdPrices.CacheWrite}, tokenEstimate, multiplierBPS)
 	} else {
 		amount, err = creditAmount(prices.Unit, quantity, multiplierBPS)
 	}
@@ -701,8 +717,43 @@ func (s *Service) newBillingOrderWithPriceTier(userID string, taskID string, ide
 		VideoFormulaTokens: videoFormulaTokens,
 		Status:             model.BillingStatusReserved,
 	}
+	if order.TokenPriceRulesJSON, err = model.EncodeBillingTokenPriceRules(tokenRules); err != nil {
+		return nil, err
+	}
 	snapshotCreditCost(order, tier, requestedQuantity, tokenEstimate)
 	return order, nil
+}
+
+// tokenPriceRuleSnapshot 选出 at 所在东八区时段内启用的分时与上下文规则，并按与基础价相同的
+// 分组货币换算转成微积分，作为订单结算候选。只有文本 Token 档会产生候选。
+func tokenPriceRuleSnapshot(pricing groupPricing, capability string, tier *model.ChannelModelPriceTier, at time.Time) ([]model.BillingTokenPriceRule, error) {
+	if tier == nil || capability != "text" || tier.BillingMode != "token" || !tier.TokenPriceRulesEnabled {
+		return nil, nil
+	}
+	var result []model.BillingTokenPriceRule
+	for index, rule := range tier.TokenPriceRules {
+		if !rule.Enabled || !rule.MatchesTime(at) {
+			continue
+		}
+		candidate := model.BillingTokenPriceRule{Rule: index + 1, MinInputTokens: rule.MinInputTokens, MaxInputTokens: rule.MaxInputTokens}
+		for _, pair := range []struct {
+			source int64
+			target *int64
+		}{
+			{rule.InputTokenPriceMicrocredits, &candidate.Input},
+			{rule.OutputTokenPriceMicrocredits, &candidate.Output},
+			{rule.CachedTokenPriceMicrocredits, &candidate.Cached},
+			{rule.CacheWriteTokenPriceMicrocredits, &candidate.CacheWrite},
+		} {
+			converted, err := pricing.convertPrice(pair.source)
+			if err != nil {
+				return nil, err
+			}
+			*pair.target = converted
+		}
+		result = append(result, candidate)
+	}
+	return result, nil
 }
 
 // tierCreditPrices 是换算为微积分后的价格档单价。

@@ -70,7 +70,7 @@ func TestTokenUsageAmountUsesExactArithmetic(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			amount, err := tokenUsageAmount(test.order, &test.usage)
+			amount, _, err := tokenUsageAmount(test.order, &test.usage)
 			if err != nil || amount != test.want {
 				t.Fatalf("tokenUsageAmount() = %d, %v; want %d", amount, err, test.want)
 			}
@@ -111,7 +111,7 @@ func TestTokenUsageAmountRejectsInvalidArithmetic(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if amount, err := tokenUsageAmount(test.order, &test.usage); amount != 0 || err == nil {
+			if amount, _, err := tokenUsageAmount(test.order, &test.usage); amount != 0 || err == nil {
 				t.Fatalf("invalid usage billed %d, %v", amount, err)
 			}
 		})
