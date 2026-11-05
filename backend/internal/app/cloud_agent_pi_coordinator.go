@@ -273,6 +273,14 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		return fmt.Errorf("decode state: %w", err)
 	}
 
+	// 已批准的调用还没执行：只能由审批收尾执行一次，执行后它会带着结果恢复运行。
+	// 这里开一轮模型会用原始提示词重跑用户请求，并和收尾争写检查点（见
+	// cloud_agent_approval_followup.go）。决定请求还在处理时只退出，否则接手收尾。
+	if cloudAgentApprovedCallPending(run, &runtimeState, "") {
+		s.startCloudAgentApprovalFollowUp(userID, runID, runtimeState.Approval.ID)
+		return nil
+	}
+
 	// 2. 解析输入
 	input := map[string]any{}
 	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {

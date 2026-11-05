@@ -432,6 +432,16 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 	if run.Status != "waiting_approval" || state.Approval == nil || state.Approval.ID != approvalID {
 		return creationConflict("审批不存在或已过期")
 	}
+	// 批准后的收尾由本请求负责，先登记再落库：决定一落库运行就是 running，Pi 会话据登记
+	// 让出执行权，不会抢在收尾前用原始提示词另起一轮。同一审批的并发请求只有一个能登记，
+	// 其余只记录决定。见 cloud_agent_approval_followup.go。
+	followUp := false
+	if decision == "approve" {
+		key := cloudAgentApprovalFollowUpKey(id, approvalID)
+		if followUp = s.claimCloudAgentApprovalFollowUp(key); followUp {
+			defer s.releaseCloudAgentApprovalFollowUp(key)
+		}
+	}
 	// 只在记录审批决定的这次写入期间持锁：随后的工具执行（advanceCloudAgentTool）
 	// 会自己获取 storageMu，持锁到函数返回会造成自锁。旧 Pi 会话退出前仍可能
 	// 写入最后一个事件，因此审批决定采用重读后 CAS 重试。
@@ -448,7 +458,9 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 			}
 			if previous, ok := state.Decisions[approvalID]; ok {
 				if previous == decision && (settings == nil || state.DecisionSettings[approvalID] == creationHash(settings)) {
-					return nil
+					// 并发的同一决定已经先落库：决定不再重写，收尾仍由登记方完成。
+					err = nil
+					break
 				}
 				return cloudAgentDecisionConflict(previous)
 			}
@@ -518,52 +530,10 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 			break
 		}
 	}
-	if err != nil || decision != "approve" {
+	if err != nil || decision != "approve" || !followUp {
 		return err
 	}
-	// Approval only releases the paused tool. Execute it once in the Go business
-	// executor, then give the durable result back to Pi; Go never asks a model
-	// what to do next.
-	var mediaTaskID string
-	for attempt := 0; attempt < 8; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(attempt) * 20 * time.Millisecond)
-		}
-		latest, err := s.repo.CloudAgent(userID, id)
-		if err != nil {
-			return err
-		}
-		state, err = cloudAgentDecode(latest)
-		if err != nil {
-			return err
-		}
-		err = s.advanceCloudAgentTool(latest, &state)
-		if !errors.Is(err, repository.ErrCreationConflict) {
-			if err != nil {
-				return err
-			}
-			mediaTaskID = state.MediaTaskID
-			break
-		}
-		if attempt == 7 {
-			return err
-		}
-	}
-	if mediaTaskID == "" {
-		// 提交前失败可能记录在重读后的状态上（见 enqueueCloudAgentTask 的回滚分支），
-		// 恢复提示必须基于最新历史，否则会把同批上一个工具的结果当成本次审批的回执。
-		latest, err := s.repo.CloudAgent(userID, id)
-		if err != nil {
-			return err
-		}
-		if state, err = cloudAgentDecode(latest); err != nil {
-			return err
-		}
-		return s.resumeCloudAgentAfterApproval(userID, id, &state)
-	}
-	// 媒体生成可能要几分钟：审批请求立即返回，等待与回写在后台完成后再恢复运行。
-	s.startApprovedCloudAgentMediaWaiter(userID, id, mediaTaskID)
-	return nil
+	return s.continueApprovedCloudAgentCall(userID, id, approvalID)
 }
 
 func (s *Service) finishApprovedCloudAgentMedia(ctx context.Context, userID, id, mediaTaskID string) error {

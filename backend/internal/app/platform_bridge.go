@@ -157,6 +157,8 @@ func (s *Service) Close() error {
 	if s == nil {
 		return nil
 	}
+	// 收尾可能拉起 Pi 会话或媒体等待，先等它结束，再统一取消会话和等待。
+	s.closeCloudAgentApprovalFollowUps()
 	s.closeCloudAgentPiRunners()
 	s.closeApprovedCloudAgentMediaWaiters()
 	if s.coordinator == nil {
