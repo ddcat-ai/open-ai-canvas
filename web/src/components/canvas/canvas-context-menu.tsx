@@ -3,7 +3,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowLeft, AtSign, Check, ChevronRight, CircleCheckBig, Clapperboard, Clipboard, CloudUpload, Copy, Download, FolderOpen, FolderPlus, History, Image as ImageIcon, Layers3, LayoutTemplate, Link2, Maximize2, PanelTop, Pencil, Plus, Redo2, Tags, Trash2, Undo2, Upload, UserRound } from "lucide-react";
 
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
-import { ASSET_CATEGORY_OPTIONS } from "@/lib/asset-category";
+import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -18,7 +18,7 @@ import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type Canvas
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
-const assetCategoryOptions: Array<{ value: CanvasAssetCategory; label: string }> = ASSET_CATEGORY_OPTIONS;
+const assetCategoryOptions: Array<{ value: CanvasAssetCategory; label: string }> = ASSET_ASSIGNABLE_CATEGORY_OPTIONS;
 
 type CanvasNodeContextMenuProps = {
     menu: ContextMenuState;
@@ -37,6 +37,7 @@ type CanvasNodeContextMenuProps = {
     onUpload: () => void;
     onOpenAssets: () => void;
     onOpenProjectCharacters: () => void;
+    onOpenPoseLibrary?: () => void;
     onUndo: () => void;
     onRedo: () => void;
     onPaste: () => void;
@@ -85,6 +86,7 @@ export function CanvasNodeContextMenu({
     onUpload,
     onOpenAssets,
     onOpenProjectCharacters,
+    onOpenPoseLibrary,
     onUndo,
     onRedo,
     onPaste,
@@ -314,6 +316,7 @@ export function CanvasNodeContextMenu({
                         onUpload={() => runAction(onUpload)}
                         onOpenAssets={() => runAction(onOpenAssets)}
                         onOpenProjectCharacters={() => runAction(onOpenProjectCharacters)}
+                        onOpenPoseLibrary={onOpenPoseLibrary ? () => runAction(onOpenPoseLibrary) : undefined}
                     />
                 ) : null}
             </AnimatePresence>
@@ -321,7 +324,7 @@ export function CanvasNodeContextMenu({
     );
 }
 
-function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, onAddNode, onAddFolder, onChooseStyle, onOpenPrevis, onUpload, onOpenAssets, onOpenProjectCharacters }: { parentPosition: { left: number; top: number }; workspaceMode: CanvasWorkspaceMode; isProjectLinked: boolean; onAddNode: (type: CanvasNodeTypeId) => void; onAddFolder: () => void; onChooseStyle: () => void; onOpenPrevis: () => void; onUpload: () => void; onOpenAssets: () => void; onOpenProjectCharacters: () => void }) {
+function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, onAddNode, onAddFolder, onChooseStyle, onOpenPrevis, onUpload, onOpenAssets, onOpenProjectCharacters, onOpenPoseLibrary }: { parentPosition: { left: number; top: number }; workspaceMode: CanvasWorkspaceMode; isProjectLinked: boolean; onAddNode: (type: CanvasNodeTypeId) => void; onAddFolder: () => void; onChooseStyle: () => void; onOpenPrevis: () => void; onUpload: () => void; onOpenAssets: () => void; onOpenProjectCharacters: () => void; onOpenPoseLibrary?: () => void }) {
     const theme = canvasThemes[useActiveTheme()];
     const installations = usePluginStore((state) => state.installations);
     const pluginStates = usePluginStore((state) => state.pluginStates);
@@ -346,6 +349,7 @@ function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, on
             onUpload,
             onOpenMyAssets: onOpenAssets,
             onOpenProjectCharacters,
+            onOpenPoseLibrary,
         },
     };
     const commands: CanvasCreateCommand[] = resolveAddNodeMenuCommands(createContext).map((command) => ({

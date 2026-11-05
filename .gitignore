@@ -30,6 +30,10 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/video-token-billing.mdx
 !docs/content/docs/backend/credit-rewards.mdx
 !docs/content/docs/backend/creative-agent-runtime.mdx
+# Keep the pose library operator guide versioned without unignoring generated docs.
+!docs/content/docs/canvas/
+docs/content/docs/canvas/*
+!docs/content/docs/canvas/pose-library.mdx
 # Keep the creative Agent design versioned without unignoring generated docs.
 !docs/content/docs/overview/
 docs/content/docs/overview/*

@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, Layers3, Palette, UploadCloud, UserRound, Workflow } from "lucide-react";
+import { Folder, FolderOpen, Layers3, Palette, PersonStanding, UploadCloud, UserRound, Workflow } from "lucide-react";
 
 import { getNodeIcon, getNodeLabel } from "@/lib/canvas/node-registry";
 import { registerAddNodeMenuCommands, type AddNodeMenuCommand } from "@/lib/canvas/tool-registry";
@@ -31,6 +31,7 @@ export const addNodeMenuCommands: AddNodeMenuCommand[] = [
     // 导入资源
     { id: "upload", label: "上传文件", icon: <UploadCloud />, section: "resource", defaultOrder: 10, run: (ctx) => ctx.handlers.onUpload() },
     { id: "assets", label: "素材库", icon: <FolderOpen />, section: "resource", defaultOrder: 30, applicable: (ctx) => !ctx.isProjectLinked, run: (ctx) => ctx.handlers.onOpenMyAssets() },
+    { id: "pose-library", label: "姿势库", icon: <PersonStanding />, section: "resource", defaultOrder: 35, applicable: (ctx) => Boolean(ctx.handlers.onOpenPoseLibrary), run: (ctx) => ctx.handlers.onOpenPoseLibrary?.() },
 ];
 
 registerAddNodeMenuCommands(addNodeMenuCommands);

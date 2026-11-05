@@ -1,4 +1,4 @@
-import { PanelsTopLeft, Eraser, FolderOpen, Hand, MousePointer2, Palette, Plus, Redo2, Settings2, Trash2, Undo2 } from "lucide-react";
+import { PanelsTopLeft, Eraser, FolderOpen, Hand, MousePointer2, Palette, PersonStanding, Plus, Redo2, Settings2, Trash2, Undo2 } from "lucide-react";
 
 import { registerToolbarTools, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import type { CanvasToolMode } from "@/types/canvas";
@@ -69,6 +69,17 @@ export const mainToolbarTools: ToolDefinition[] = [
         defaultOrder: 60,
         applicable: (ctx) => !ctx.isProjectLinked,
         run: (ctx) => ctx.handlers.onOpenMyAssets(),
+    },
+    {
+        id: "tool-pose-library",
+        toolbar: "main",
+        category: "resource",
+        label: "姿势库",
+        icon: <PersonStanding />,
+        defaultVisible: true,
+        defaultOrder: 62,
+        applicable: (ctx) => Boolean(ctx.handlers.onOpenPoseLibrary),
+        run: (ctx) => ctx.handlers.onOpenPoseLibrary?.(),
     },
     {
         id: "tool-style",

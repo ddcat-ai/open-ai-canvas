@@ -45,6 +45,7 @@ import { CanvasDramaAdoptModal } from "@/components/canvas/canvas-drama-adopt-mo
 import { canvasStoryboardToDramaSource } from "@/lib/canvas/drama-canvas-projection";
 import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asset-modal";
 import { CanvasCharacterLibraryModal } from "@/components/canvas/canvas-character-library-modal";
+import { CanvasPoseLibraryModal } from "@/components/canvas/canvas-pose-library-modal";
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { WorkspaceState } from "@/components/layout/workspace-state";
@@ -305,6 +306,8 @@ function CanvasViewportPage() {
     const [characterLibraryPosition, setCharacterLibraryPosition] = useState<Position | undefined>();
     const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null);
     const [stylePickerOpen, setStylePickerOpen] = useState(false);
+    // 姿势库：null 表示未打开，position 为右键菜单落点，缺省插到视口中心。
+    const [poseLibraryRequest, setPoseLibraryRequest] = useState<{ position?: Position } | null>(null);
     // 新建预演台镜头必须先选模板：null 表示未在选择中，undefined position 表示用画布中心。
     const [previsTemplateRequest, setPrevisTemplateRequest] = useState<{ position?: Position } | null>(null);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
@@ -827,6 +830,10 @@ function CanvasViewportPage() {
     const openCharacterLibrary = useCallback((position?: Position) => {
         setCharacterLibraryPosition(position);
         setCharacterLibraryOpen(true);
+        setContextMenu(null);
+    }, []);
+    const openPoseLibrary = useCallback((position?: Position) => {
+        setPoseLibraryRequest({ position });
         setContextMenu(null);
     }, []);
     const selectedCharacterImage = nodes.find((node) => selectedNodeIds.has(node.id) && node.type === CanvasNodeType.Image && resourceIdFromStorageKey(node.metadata?.storageKey));
@@ -2594,6 +2601,7 @@ function CanvasViewportPage() {
             onUpload: () => handleUploadRequest(),
             onOpenMyAssets: () => openCanvasAssetLibrary(),
             onOpenProjectCharacters: () => openCharacterLibrary(),
+            onOpenPoseLibrary: () => openPoseLibrary(),
         },
     });
     const emptyStateKind = resolveCanvasEmptyStateKind({
@@ -3141,6 +3149,7 @@ function CanvasViewportPage() {
                                                 openCanvasAssetLibrary();
                                             }}
                                             onOpenProjectCharacters={() => openCharacterLibrary()}
+                                            onOpenPoseLibrary={() => openPoseLibrary()}
                                             compact={dramaCanvas}
                                         />
                                     ) : null}
@@ -3363,7 +3372,6 @@ function CanvasViewportPage() {
                                         isMiniMapOpen={isMiniMapOpen}
                                         onToggleMiniMap={() => setIsMiniMapOpen((value) => !value)}
                                         onOpenShortcuts={() => setShortcutRequestNonce((value) => value + 1)}
-                                        bare={dramaCanvas}
                                     />
                                 </CanvasOverlayLayerContainer>
                             ) : null}
@@ -3386,6 +3394,7 @@ function CanvasViewportPage() {
                                 onUpload={(nodeId, position) => handleUploadRequest(nodeId, position)}
                                 onOpenAssets={openCanvasAssetLibrary}
                                 onOpenProjectCharacters={(position) => openCharacterLibrary(position)}
+                                onOpenPoseLibrary={(position) => openPoseLibrary(position)}
                                 onUndo={undoCanvas}
                                 onRedo={redoCanvas}
                                 onPaste={pasteAtPosition}
@@ -3751,6 +3760,7 @@ function CanvasViewportPage() {
                             <BatchGenerationSettingsDialog open={batchGenDialogOpen} config={batchGenDialogConfig} rowCount={batchGenDialogRowCount} concurrency={batchGenDialogConcurrency} onClose={closeBatchGenDialog} onConfirm={confirmBatchGenDialog} />
 
                             <AssetPickerModal open={assetPickerOpen} multiple={assetInsertScope === "canvas"} onInsert={handleLibraryAssetsInsert} onClose={closeAssetPicker} />
+                            <CanvasPoseLibraryModal open={Boolean(poseLibraryRequest)} onClose={() => setPoseLibraryRequest(null)} onInsert={(payloads) => handleAssetsInsert(payloads, poseLibraryRequest?.position)} />
                             <CanvasCharacterLibraryModal
                                 open={characterLibraryOpen}
                                 imageResourceId={resourceIdFromStorageKey(selectedCharacterImage?.metadata?.storageKey) || undefined}

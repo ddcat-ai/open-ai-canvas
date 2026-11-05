@@ -21,6 +21,7 @@ type CanvasProjectContextMenuProps = {
     onUpload: (nodeId: string | undefined, position: Position) => void;
     onOpenAssets: (position: Position) => void;
     onOpenProjectCharacters: (position: Position) => void;
+    onOpenPoseLibrary?: (position: Position) => void;
     onUndo: () => void;
     onRedo: () => void;
     onPaste: (position: Position) => void;
@@ -78,6 +79,7 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
             onUpload={() => props.onUpload(menu.type === "node" ? menu.nodeId : undefined, menuPosition())}
             onOpenAssets={() => props.onOpenAssets(menuPosition())}
             onOpenProjectCharacters={() => props.onOpenProjectCharacters(menuPosition())}
+            onOpenPoseLibrary={props.onOpenPoseLibrary ? () => props.onOpenPoseLibrary?.(menuPosition()) : undefined}
             onUndo={props.onUndo}
             onRedo={props.onRedo}
             onPaste={() => props.onPaste(menuPosition())}
