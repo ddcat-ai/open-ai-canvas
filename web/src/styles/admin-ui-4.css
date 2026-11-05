@@ -1558,7 +1558,8 @@
 }
 
 .admin-channel-modal .ant-modal-body {
-    max-height: min(70vh, 620px);
+    /* 视口高度减去上下 24px 留白与约 124px 的标题栏、底栏，只让正文滚动。 */
+    max-height: min(620px, calc(100dvh - 172px));
     overflow-y: auto;
 }
 

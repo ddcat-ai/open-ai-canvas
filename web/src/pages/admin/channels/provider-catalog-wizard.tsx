@@ -150,7 +150,7 @@ export function ProviderCatalogWizard({ open, onClose, onCustom, onInstalled }: 
     const stepIndex = stepLabels.findIndex((item) => item.key === step);
 
     return (
-        <AdminModal flush open={open} width={1080} onCancel={() => !installing && onClose()} footer={null} title={null} rootClassName="pcw-root" mask={{ closable: !installing }}>
+        <AdminModal flush centered open={open} width={1080} onCancel={() => !installing && onClose()} footer={null} title={null} rootClassName="pcw-root" mask={{ closable: !installing }}>
             <div className="pcw">
                 <header className="pcw-header">
                     <div className="pcw-title-row">

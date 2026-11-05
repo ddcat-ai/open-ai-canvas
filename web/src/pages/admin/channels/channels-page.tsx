@@ -500,6 +500,7 @@ export default function ChannelsPage() {
                 title={editingChannel ? "编辑系统渠道" : "新增系统渠道"}
                 open={drawerOpen}
                 width={760}
+                centered
                 onCancel={closeDrawer}
                 mask={{ closable: !saving }}
                 destroyOnHidden
