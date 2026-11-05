@@ -29,6 +29,12 @@ func (s *Service) mediaTaskProject(task *model.Task) (string, error) {
 	}
 	project, err := s.repo.ProjectForUser(task.UserID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// 电商任务的 projectId 是电商项目 ID：作品只进素材库，不挂业务项目素材库。
+		if _, ecommerceErr := s.repo.EcommerceProject(task.UserID, id); ecommerceErr == nil {
+			return "", nil
+		} else if !errors.Is(ecommerceErr, gorm.ErrRecordNotFound) {
+			return "", ecommerceErr
+		}
 		return "", NotFound("任务所属画布或项目已不存在")
 	}
 	if err != nil {
