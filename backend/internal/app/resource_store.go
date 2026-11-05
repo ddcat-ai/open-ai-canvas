@@ -282,6 +282,15 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 	return s.storeResourceWithWriter(userID, kind, fileName, mimeType, size, width, height, durationMs, body, uploadKey, forceLocal, s.storeResourceObject, reservationIDs...)
 }
 
+// Preserve the storage boundary so callers can distinguish upload failures from database failures.
+type resourceObjectWriteError struct {
+	provider string
+	err      error
+}
+
+func (e *resourceObjectWriteError) Error() string { return e.err.Error() }
+func (e *resourceObjectWriteError) Unwrap() error { return e.err }
+
 func (s *Service) storeResourceWithWriter(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string, forceLocal bool, writeObject func(*model.Resource, string, io.Reader) (string, error), reservationIDs ...string) (*model.Resource, bool, error) {
 	reservationID := ""
 	if len(reservationIDs) > 0 {
@@ -341,6 +350,7 @@ func (s *Service) storeResourceWithWriter(userID string, kind string, fileName s
 	etag, err = writeObject(&resource, fileName, body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
+		err = &resourceObjectWriteError{provider: resource.Provider, err: err}
 		resource.Status = model.ResourceStatusFailed
 		resource.Error = err.Error()
 		if saveErr := s.repo.SaveResource(&resource); saveErr != nil {

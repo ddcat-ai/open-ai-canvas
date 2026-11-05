@@ -128,6 +128,9 @@ func TestTimelineRenderFailsFastWhenSourceUnreadable(t *testing.T) {
 	if stored.Status != model.TaskStatusFailed {
 		t.Fatalf("status = %q, want failed", stored.Status)
 	}
+	if stored.Stage != "准备合成素材失败" {
+		t.Fatalf("stage = %q, want source preparation failure", stored.Stage)
+	}
 	if !strings.Contains(stored.Error, "时间线引用的媒体") {
 		t.Fatalf("error = %q, want mention of 无法读取时间线引用的媒体", stored.Error)
 	}
