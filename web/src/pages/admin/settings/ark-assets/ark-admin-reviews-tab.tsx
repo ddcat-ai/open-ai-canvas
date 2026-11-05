@@ -171,7 +171,7 @@ export function ArkAdminReviewsTab() {
                 }}
                 empty={<AdminTableEmpty title={status === "pending_review" ? "没有待审核的上传" : "没有已驳回的上传"} description={status === "pending_review" ? "用户向自建素材组上传的图片需要审核时会出现在这里，通过后才提交方舟。" : undefined} />}
                 footer={
-                    data ? (
+                    data && (data.total > pageSize || page > 1) ? (
                         <PaginationBar
                             current={page}
                             pageSize={pageSize}
