@@ -406,3 +406,31 @@ html:not(.dark) .app-product-overlays .creation-control-popover-surface {
 .creation-home .creation-chat-mention-container {
     min-height: 0 !important;
 }
+
+
+/* 创作输入框拖入文件：悬停时整框提示「松开添加为参考内容」，松开走与粘贴同一上传管线。 */
+.creation-composer-drop-zone {
+    position: relative;
+}
+
+.creation-composer-drop-zone[data-external-drag="true"] {
+    outline: 2px dashed var(--workspace-accent, #7c6cff);
+    outline-offset: 4px;
+    border-radius: 20px;
+}
+
+.creation-composer-drop-zone[data-external-drag="true"]::after {
+    content: "松开以添加为参考内容";
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--workspace-accent, #7c6cff) 14%, transparent);
+    color: var(--creation-text, #f5f5f5);
+    font-size: 14px;
+    font-weight: 500;
+    pointer-events: none;
+}
