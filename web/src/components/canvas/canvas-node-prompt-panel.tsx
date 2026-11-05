@@ -626,6 +626,8 @@ export function CanvasNodePromptPanel({
                         references={textareaReferences}
                         onSelectReference={onAddReference ? (reference) => onAddReference(node.id, reference) : undefined}
                         includeAssetLibrary
+                        // 节点生成器引用素材最多：菜单够宽时多列显示素材，右侧放大预览当前选中项。
+                        mentionMenuWidth={640}
                         onChange={updatePrompt}
                         autoLinkEnabled={autoLinkEnabled}
                         onReferenceFilesDrop={onReplaceReferenceFiles ? (reference, files) => onReplaceReferenceFiles(node.id, reference, files) : undefined}

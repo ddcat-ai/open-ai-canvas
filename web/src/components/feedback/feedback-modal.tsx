@@ -1,19 +1,72 @@
-import { useEffect, useState, useCallback, useRef, type ClipboardEvent } from "react";
+import { useEffect, useState, useCallback, useRef, type ClipboardEvent, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { App, Button, Checkbox, Input, Modal, Radio, Tag, Image as AntImage, Segmented } from "antd";
-import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { AlertCircle, Archive, Bug, CheckCircle2, Clock, Inbox, Lightbulb, MessageSquare, Paperclip, Play, Plus, RefreshCw, Send, Trash2, UploadCloud, X } from "lucide-react";
+import { App, Button, Checkbox, Input, Tag, Image as AntImage, Segmented } from "antd";
+import type { TextAreaRef } from "antd/es/input/TextArea";
+import { Archive, Bug, CheckCircle2, Clock, Inbox, Info, Lightbulb, ListChecks, MessageSquare, MessageSquarePlus, MousePointerClick, Paperclip, Play, RefreshCw, Send, UploadCloud, X, type LucideIcon } from "lucide-react";
 
+import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
+import { AppModal } from "@/components/ui/product/app-modal";
 import { submitFeedback, getMyFeedbacks, uploadFeedbackAttachment, type FeedbackItem, type FeedbackType, type FeedbackAttachment } from "@/services/api/feedback";
 import { useUserStore } from "@/stores/use-user-store";
 import { currentLocale } from "@/i18n";
 import { cn } from "@/lib/utils";
+
+import "./feedback-modal.css";
 
 interface FeedbackModalProps {
     open: boolean;
     onClose: () => void;
     initialTab?: "submit" | "inbox";
 }
+
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+
+type FeedbackTypeOption = {
+    value: FeedbackType;
+    icon: LucideIcon;
+    labelKey: string;
+    hintKey: string;
+    /** 选中类型后展示的「写清楚这几点」清单和一键套用的模板。 */
+    guide: { titleKey: string; itemKeys: string[]; templateKey: string };
+    titlePlaceholderKey: string;
+};
+
+const FEEDBACK_TYPES: FeedbackTypeOption[] = [
+    {
+        value: "bug",
+        icon: Bug,
+        labelKey: "account.feedback.types.bug",
+        hintKey: "account.feedback.types.bugHint",
+        guide: { titleKey: "account.feedback.guide.bug.title", itemKeys: ["where", "steps", "result", "frequency"].map((key) => `account.feedback.guide.bug.${key}`), templateKey: "account.feedback.guide.bug.template" },
+        titlePlaceholderKey: "account.feedback.titlePlaceholderBug",
+    },
+    {
+        value: "feature",
+        icon: Lightbulb,
+        labelKey: "account.feedback.types.feature",
+        hintKey: "account.feedback.types.featureHint",
+        guide: { titleKey: "account.feedback.guide.feature.title", itemKeys: ["scene", "expect", "current", "priority"].map((key) => `account.feedback.guide.feature.${key}`), templateKey: "account.feedback.guide.feature.template" },
+        titlePlaceholderKey: "account.feedback.titlePlaceholderFeature",
+    },
+    {
+        value: "improvement",
+        icon: MousePointerClick,
+        labelKey: "account.feedback.types.improvement",
+        hintKey: "account.feedback.types.improvementHint",
+        guide: { titleKey: "account.feedback.guide.improvement.title", itemKeys: ["where", "problem", "expect"].map((key) => `account.feedback.guide.improvement.${key}`), templateKey: "account.feedback.guide.improvement.template" },
+        titlePlaceholderKey: "account.feedback.titlePlaceholderImprovement",
+    },
+    {
+        value: "other",
+        icon: MessageSquare,
+        labelKey: "account.feedback.types.otherOpinion",
+        hintKey: "account.feedback.types.otherHint",
+        guide: { titleKey: "account.feedback.guide.other.title", itemKeys: ["content", "related"].map((key) => `account.feedback.guide.other.${key}`), templateKey: "account.feedback.guide.other.template" },
+        titlePlaceholderKey: "account.feedback.titlePlaceholderOther",
+    },
+];
 
 export function FeedbackModal({ open, onClose, initialTab = "submit" }: FeedbackModalProps) {
     const { t } = useTranslation();
@@ -33,22 +86,23 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
     const [includeEnv, setIncludeEnv] = useState(true);
     const [attachments, setAttachments] = useState<FeedbackAttachment[]>([]);
     const [uploading, setUploading] = useState(false);
+    const [dragging, setDragging] = useState(false);
 
     // Video preview modal
     const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
 
-    // File input ref
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const contentRef = useRef<TextAreaRef>(null);
+    const wasOpenRef = useRef(false);
 
-    // Sync initialTab when modal opens
+    // 每次打开时切到调用方指定的页签；联系方式只在打开那一刻预填账号邮箱，用户清空后不再被填回。
     useEffect(() => {
-        if (open) {
-            setActiveTab(initialTab);
-            if (!contact && user) {
-                setContact(user.email || user.username || "");
-            }
-        }
-    }, [open, initialTab, user, contact]);
+        const opening = open && !wasOpenRef.current;
+        wasOpenRef.current = open;
+        if (!opening) return;
+        setActiveTab(initialTab);
+        if (user?.email) setContact((current) => current || user.email || "");
+    }, [open, initialTab, user]);
 
     // Fetch user inbox
     const fetchInbox = useCallback(async () => {
@@ -70,7 +124,7 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
         }
     }, [open, activeTab, fetchInbox]);
 
-    // Collect environment info
+    // 诊断信息只记录页面路径，不带查询参数和锚点：分享链接、邀请码等可能放在 URL 里。
     const getEnvironmentInfo = () => {
         if (typeof window === "undefined") return "{}";
         return JSON.stringify({
@@ -79,40 +133,38 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
             language: navigator.language,
             screen: `${window.screen.width}x${window.screen.height}`,
             viewport: `${window.innerWidth}x${window.innerHeight}`,
-            currentUrl: window.location.href,
+            currentUrl: `${window.location.origin}${window.location.pathname}`,
             pathname: window.location.pathname,
             timestamp: new Date().toISOString(),
         });
     };
 
-    // Handle file upload
     const handleUploadFiles = async (files: FileList | File[]) => {
         const fileList = Array.from(files);
         if (!fileList.length) return;
 
-        if (attachments.length + fileList.length > 5) {
+        if (attachments.length + fileList.length > MAX_ATTACHMENTS) {
             message.warning(t("account.feedback.maxAttachments"));
             return;
         }
 
         setUploading(true);
         try {
+            let added = 0;
             for (const file of fileList) {
-                if (file.size > 50 * 1024 * 1024) {
+                if (file.size > MAX_ATTACHMENT_BYTES) {
                     message.error(t("account.feedback.fileTooLarge", { name: file.name }));
                     continue;
                 }
-                const isImage = file.type.startsWith("image/");
-                const isVideo = file.type.startsWith("video/");
-                if (!isImage && !isVideo) {
+                if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
                     message.error(t("account.feedback.fileUnsupported", { name: file.name }));
                     continue;
                 }
-
                 const res = await uploadFeedbackAttachment(file);
                 setAttachments((prev) => [...prev, res]);
+                added += 1;
             }
-            message.success(t("account.feedback.attachmentAdded"));
+            if (added) message.success(t("account.feedback.attachmentAdded"));
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("account.feedback.attachmentFailed"));
         } finally {
@@ -123,17 +175,14 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
         }
     };
 
-    // Handle paste event (support pasting screenshots directly!)
+    // 在弹窗任意位置粘贴截图都会作为附件上传。
     const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
-        const items = e.clipboardData.items;
+        if (activeTab !== "submit") return;
         const pastedFiles: File[] = [];
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].type.startsWith("image/")) {
-                const file = items[i].getAsFile();
-                if (file) {
-                    pastedFiles.push(file);
-                }
-            }
+        for (const item of Array.from(e.clipboardData.items)) {
+            if (!item.type.startsWith("image/")) continue;
+            const file = item.getAsFile();
+            if (file) pastedFiles.push(file);
         }
         if (pastedFiles.length > 0) {
             e.preventDefault();
@@ -141,8 +190,25 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
         }
     };
 
+    const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        setDragging(false);
+        if (event.dataTransfer.files.length) void handleUploadFiles(event.dataTransfer.files);
+    };
+
     const removeAttachment = (id: string) => {
         setAttachments((prev) => prev.filter((a) => a.id !== id));
+    };
+
+    const currentType = FEEDBACK_TYPES.find((item) => item.value === type) || FEEDBACK_TYPES[0];
+
+    // 内容为空或仍是某个未改动的模板时直接替换；已经写了内容就把模板接在后面，不覆盖用户的文字。
+    const applyTemplate = () => {
+        const template = t(currentType.guide.templateKey);
+        const current = content.trim();
+        const untouched = !current || FEEDBACK_TYPES.some((item) => t(item.guide.templateKey).trim() === current);
+        setContent(untouched ? template : `${content.trimEnd()}\n\n${template}`);
+        window.requestAnimationFrame(() => contentRef.current?.focus({ cursor: "end" }));
     };
 
     const handleSubmit = async () => {
@@ -167,11 +233,10 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
             });
 
             message.success(t("account.feedback.submitted"));
-            // Reset form
             setTitle("");
             setContent("");
             setAttachments([]);
-            // Switch to inbox tab to see the submitted item
+            // 提交后切到「我的反馈」，用户能马上看到刚提交的记录。
             setActiveTab("inbox");
             void fetchInbox();
         } catch (error) {
@@ -187,217 +252,175 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
     const archivedFeedbacks = myFeedbacks.filter((item) => item.archived);
     const displayedFeedbacks = inboxFilter === "active" ? activeFeedbacks : archivedFeedbacks;
     const countWithReply = activeFeedbacks.filter((f) => Boolean(f.adminReply)).length;
+    const inboxCount = activeFeedbacks.length > 0 ? activeFeedbacks.length : archivedFeedbacks.length;
+    const isBug = type === "bug";
 
     return (
-        <Modal
-            open={open}
-            onCancel={onClose}
-            footer={null}
-            width={680}
-            style={{ maxWidth: "calc(100vw - 20px)", top: 20, margin: "0 auto" }}
-            destroyOnClose={false}
-            title={null}
-            closable={false}
-            className="feedback-dialog-modal p-0"
-            styles={{
-                body: { padding: 0, overflow: "hidden" },
-            }}
-        >
-            <div className="flex flex-col max-h-[85vh] text-foreground" onPaste={handlePaste}>
-                {/* Header with Navigation Tabs */}
-                <div className="flex items-center justify-between border-b border-border/60 px-4 py-2 sm:px-5 sm:py-4 bg-muted/20">
-                    <div className="inline-flex items-center gap-1 rounded-xl bg-muted/40 p-1 border border-border/40 min-w-0">
-                        <button
-                            id="feedback-tab-submit"
-                            type="button"
-                            onClick={() => setActiveTab("submit")}
-                            className={cn(
-                                "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-[color,background-color,border-color,box-shadow] duration-150 whitespace-nowrap shrink-0",
-                                activeTab === "submit" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border border-transparent",
-                            )}
-                        >
-                            <Plus className="size-3.5 shrink-0" />
-                            <span>{t("account.feedback.tabSubmit")}</span>
-                        </button>
-                        <button
-                            id="feedback-tab-inbox"
-                            type="button"
-                            onClick={() => setActiveTab("inbox")}
-                            className={cn(
-                                "flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-[color,background-color,border-color,box-shadow] duration-150 relative whitespace-nowrap shrink-0",
-                                activeTab === "inbox" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border border-transparent",
-                            )}
-                        >
-                            <Inbox className="size-3.5 shrink-0" />
-                            <span>
-                                <span className="hidden sm:inline">{t("account.feedback.tabInbox")}</span>
-                                <span className="sm:hidden">{t("account.feedback.tabInboxShort")}</span>
-                            </span>
-                            {myFeedbacks.length > 0 ? (
-                                <span className={cn("px-2 py-0.2 rounded-full text-[var(--fs-label)] font-semibold leading-tight shrink-0", activeTab === "inbox" ? "bg-blue-500/25 text-blue-600 dark:text-blue-300" : "bg-muted text-muted-foreground")}>
-                                    {activeFeedbacks.length > 0 ? activeFeedbacks.length : archivedFeedbacks.length}
-                                </span>
-                            ) : null}
-                            {countWithReply > 0 && activeTab !== "inbox" ? <span className="absolute -top-1 -right-1 size-2 rounded-full bg-blue-500 animate-pulse" /> : null}
-                        </button>
+        <AppModal open={open} onCancel={onClose} footer={null} title={null} closable={false} centered destroyOnHidden={false} width="min(720px, calc(100vw - 24px))" rootClassName="feedback-modal-root" className="feedback-modal" flush>
+            <div className="feedback-shell" onPaste={handlePaste}>
+                <header className="feedback-header">
+                    <span className="feedback-header-icon" aria-hidden="true">
+                        <MessageSquarePlus />
+                    </span>
+                    <div className="feedback-header-copy">
+                        <h2>{t("account.feedback.heading")}</h2>
+                        <p>{t("account.feedback.subtitle")}</p>
                     </div>
-
-                    <button type="button" onClick={onClose} className="rounded-lg p-2 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors shrink-0 ml-1" aria-label={t("common.close")}>
-                        <X className="size-4" />
+                    <SegmentedControl
+                        size="sm"
+                        className="feedback-tabs"
+                        ariaLabel={t("account.feedback.heading")}
+                        value={activeTab}
+                        onChange={setActiveTab}
+                        options={[
+                            { value: "submit", label: t("account.feedback.tabSubmit") },
+                            {
+                                value: "inbox",
+                                label: (
+                                    <span className="feedback-tab-label">
+                                        {t("account.feedback.tabInboxShort")}
+                                        {myFeedbacks.length > 0 ? <span className="feedback-tab-count">{inboxCount}</span> : null}
+                                        {countWithReply > 0 && activeTab !== "inbox" ? <span className="feedback-tab-dot" aria-hidden="true" /> : null}
+                                    </span>
+                                ),
+                            },
+                        ]}
+                    />
+                    <button type="button" onClick={onClose} className="feedback-close" aria-label={t("common.close")}>
+                        <X />
                     </button>
-                </div>
+                </header>
 
-                {/* Body Content */}
-                <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 flex-1 min-h-0 space-y-4">
+                <div className="feedback-body">
                     {activeTab === "submit" ? (
-                        <div className="space-y-4">
-                            {/* Feedback Type Selector */}
-                            <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-2">{t("account.feedback.type")}</label>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {[
-                                        { value: "bug", label: t("account.feedback.types.bug"), icon: Bug, desc: t("account.feedback.types.bugHint") },
-                                        { value: "feature", label: t("account.feedback.types.feature"), icon: Lightbulb, desc: t("account.feedback.types.featureHint") },
-                                        { value: "improvement", label: t("account.feedback.types.improvement"), icon: Lightbulb, desc: t("account.feedback.types.improvementHint") },
-                                        { value: "other", label: t("account.feedback.types.otherOpinion"), icon: MessageSquare, desc: t("account.feedback.types.otherHint") },
-                                    ].map((item) => {
+                        <div className="feedback-form">
+                            <section className="feedback-field">
+                                <span className="feedback-label" id="feedback-type-label">
+                                    {t("account.feedback.type")}
+                                </span>
+                                <div className="feedback-types" role="radiogroup" aria-labelledby="feedback-type-label">
+                                    {FEEDBACK_TYPES.map((item) => {
                                         const Icon = item.icon;
                                         const selected = type === item.value;
                                         return (
-                                            <button
-                                                key={item.value}
-                                                type="button"
-                                                onClick={() => setType(item.value as FeedbackType)}
-                                                className={cn(
-                                                    "flex flex-col items-start p-2 sm:p-2 rounded-xl border text-left transition-[color,background-color,border-color,box-shadow] duration-150",
-                                                    selected ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary/40" : "border-border/60 bg-muted/20 hover:border-border text-muted-foreground hover:text-foreground",
-                                                )}
-                                            >
-                                                <div className="flex items-center gap-2 font-medium text-xs mb-1">
-                                                    <Icon className={cn("size-3.5 shrink-0", selected ? "text-primary" : "text-muted-foreground")} />
-                                                    <span className={selected ? "text-primary font-semibold" : ""}>{item.label}</span>
-                                                </div>
-                                                <span className="text-[var(--fs-label)] sm:text-[var(--fs-label)] text-muted-foreground/75 leading-tight">{item.desc}</span>
+                                            <button key={item.value} type="button" role="radio" aria-checked={selected} className="feedback-type" onClick={() => setType(item.value)}>
+                                                <span className="feedback-type-icon" aria-hidden="true">
+                                                    <Icon />
+                                                </span>
+                                                <span className="feedback-type-copy">
+                                                    <strong>{t(item.labelKey)}</strong>
+                                                    <span>{t(item.hintKey)}</span>
+                                                </span>
                                             </button>
                                         );
                                     })}
                                 </div>
-                            </div>
+                            </section>
 
-                            {/* Title */}
-                            <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-2">
-                                    {t("account.feedback.titleLabel")} <span className="text-red-500">*</span>
-                                </label>
-                                <Input
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    placeholder={type === "bug" ? t("account.feedback.titlePlaceholderBug") : type === "feature" ? t("account.feedback.titlePlaceholderFeature") : t("account.feedback.titlePlaceholder")}
-                                    maxLength={200}
-                                    className="rounded-lg h-9 text-xs"
-                                />
-                            </div>
-
-                            {/* Detailed Content */}
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-xs font-medium text-muted-foreground">
-                                        {t("account.feedback.contentLabel")} <span className="text-red-500">*</span>
-                                    </label>
-                                    <span className="hidden sm:inline text-[var(--fs-label)] text-muted-foreground/60">{t("account.feedback.pasteHint")}</span>
+                            {/* 按类型告诉用户要写哪些信息；模板一键填进详细说明。 */}
+                            <section className="feedback-guide" aria-live="polite">
+                                <div className="feedback-guide-head">
+                                    <ListChecks aria-hidden="true" />
+                                    <strong>{t(currentType.guide.titleKey)}</strong>
+                                    <button type="button" className="feedback-guide-action" onClick={applyTemplate}>
+                                        {t("account.feedback.guide.useTemplate")}
+                                    </button>
                                 </div>
+                                <ol className="feedback-guide-list">
+                                    {currentType.guide.itemKeys.map((key) => (
+                                        <li key={key}>{t(key)}</li>
+                                    ))}
+                                </ol>
+                            </section>
+
+                            <label className="feedback-field">
+                                <span className="feedback-label">
+                                    {t("account.feedback.titleLabel")}
+                                    <em aria-hidden="true">*</em>
+                                </span>
+                                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t(currentType.titlePlaceholderKey)} maxLength={200} aria-required="true" />
+                            </label>
+
+                            <label className="feedback-field">
+                                <span className="feedback-label">
+                                    {t("account.feedback.contentLabel")}
+                                    <em aria-hidden="true">*</em>
+                                </span>
                                 <Input.TextArea
+                                    ref={contentRef}
                                     value={content}
                                     onChange={(e) => setContent(e.target.value)}
-                                    rows={4}
-                                    placeholder={type === "bug" ? t("account.feedback.contentPlaceholderBug") : t("account.feedback.contentPlaceholder")}
+                                    autoSize={{ minRows: 5, maxRows: 12 }}
+                                    placeholder={isBug ? t("account.feedback.contentPlaceholderBug") : t("account.feedback.contentPlaceholder")}
                                     maxLength={10000}
-                                    className="rounded-lg py-2 text-xs"
+                                    aria-required="true"
                                 />
-                            </div>
+                            </label>
 
-                            {/* Attachment Uploader */}
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs font-medium text-muted-foreground">{t("account.feedback.attachments", { count: attachments.length, max: 5 })}</label>
-                                    <span className="text-[var(--fs-label)] sm:text-[var(--fs-label)] text-muted-foreground/60">{t("account.feedback.maxFileSize")}</span>
-                                </div>
-
+                            <section className="feedback-field">
+                                <span className="feedback-label">
+                                    {t("account.feedback.attachments", { count: attachments.length, max: MAX_ATTACHMENTS })}
+                                    <span className="feedback-label-note">{isBug ? t("account.feedback.attachmentHintBug") : t("account.feedback.attachmentHint")}</span>
+                                </span>
                                 <input
                                     ref={fileInputRef}
                                     type="file"
                                     multiple
                                     accept="image/*,video/*"
-                                    className="hidden"
+                                    hidden
                                     onChange={(e) => {
                                         if (e.target.files) void handleUploadFiles(e.target.files);
                                     }}
                                 />
-
-                                {/* Attachment list */}
-                                {attachments.length > 0 ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
-                                        {attachments.map((att) => (
-                                            <div key={att.id} className="group relative flex items-center gap-2 rounded-lg border border-border/80 bg-muted/30 p-2 overflow-hidden">
-                                                {att.type === "image" ? (
-                                                    <div className="size-10 rounded shrink-0 overflow-hidden bg-black/40 flex items-center justify-center">
-                                                        <AntImage src={att.url} alt={att.name} className="size-10 object-cover" preview={{ mask: t("account.feedback.preview") }} />
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPreviewVideoUrl(att.url)}
-                                                        className="size-10 rounded shrink-0 bg-black/60 flex items-center justify-center text-primary hover:bg-black/80 transition-colors"
-                                                        title={t("account.feedback.previewVideo")}
-                                                    >
-                                                        <Play className="size-4 fill-current ml-0.5" />
-                                                    </button>
-                                                )}
-
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="truncate text-xs font-medium leading-tight" title={att.name}>
-                                                        {att.name}
-                                                    </p>
-                                                    <p className="text-[var(--fs-label)] text-muted-foreground/70 mt-0.5">
-                                                        {(att.size / (1024 * 1024)).toFixed(1)} MB · {att.type === "video" ? t("account.feedback.video") : t("account.feedback.image")}
-                                                    </p>
-                                                </div>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeAttachment(att.id)}
-                                                    className="size-6 rounded flex items-center justify-center text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors shrink-0"
-                                                    title={t("account.feedback.removeAttachment")}
-                                                >
-                                                    <X className="size-3.5" />
+                                <div className="feedback-attachments">
+                                    {attachments.map((att) => (
+                                        <div key={att.id} className="feedback-attachment" title={att.name}>
+                                            {att.type === "image" ? (
+                                                <AntImage src={att.url} alt={att.name} rootClassName="feedback-attachment-media" preview={{ mask: t("account.feedback.preview") }} />
+                                            ) : (
+                                                <button type="button" className="feedback-attachment-media is-video" onClick={() => setPreviewVideoUrl(att.url)} aria-label={t("account.feedback.previewVideo")}>
+                                                    <Play aria-hidden="true" />
                                                 </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : null}
+                                            )}
+                                            <span className="feedback-attachment-size">{(att.size / (1024 * 1024)).toFixed(1)} MB</span>
+                                            <button type="button" className="feedback-attachment-remove" onClick={() => removeAttachment(att.id)} aria-label={t("account.feedback.removeAttachment")} title={t("account.feedback.removeAttachment")}>
+                                                <X aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {attachments.length < MAX_ATTACHMENTS ? (
+                                        <button
+                                            type="button"
+                                            className="feedback-dropzone"
+                                            data-dragging={dragging || undefined}
+                                            data-compact={attachments.length > 0 || undefined}
+                                            disabled={uploading}
+                                            aria-busy={uploading}
+                                            onClick={() => fileInputRef.current?.click()}
+                                            onDragOver={(event) => {
+                                                event.preventDefault();
+                                                setDragging(true);
+                                            }}
+                                            onDragLeave={() => setDragging(false)}
+                                            onDrop={handleDrop}
+                                        >
+                                            <UploadCloud aria-hidden="true" />
+                                            <span className="feedback-dropzone-copy">
+                                                <strong>{uploading ? t("account.feedback.uploading") : t("account.feedback.uploadHint")}</strong>
+                                                <span>{t("account.feedback.maxFileSize")}</span>
+                                            </span>
+                                        </button>
+                                    ) : null}
+                                </div>
+                            </section>
 
-                                {/* Upload button dropzone */}
-                                {attachments.length < 5 ? (
-                                    <button
-                                        type="button"
-                                        disabled={uploading}
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className={cn(
-                                            "w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-border/80 bg-muted/10 hover:bg-muted/25 hover:border-primary/50 text-xs text-muted-foreground transition-[color,background-color,border-color,opacity] duration-150",
-                                            uploading && "opacity-60 cursor-not-allowed",
-                                        )}
-                                    >
-                                        <UploadCloud className="size-4 text-primary shrink-0" />
-                                        <span className="text-center">{uploading ? t("account.feedback.uploading") : t("account.feedback.uploadHint")}</span>
-                                    </button>
-                                ) : null}
-                            </div>
-
-                            {/* Contact Info */}
-                            <div>
-                                <label className="block text-xs font-medium text-muted-foreground mb-2">{t("account.feedback.contact")}</label>
-                                <Input value={contact} onChange={(e) => setContact(e.target.value)} placeholder={t("account.feedback.contactPlaceholder")} className="rounded-lg h-9 text-xs" />
-                            </div>
+                            <label className="feedback-field">
+                                <span className="feedback-label">
+                                    {t("account.feedback.contact")}
+                                    <span className="feedback-label-note">{t("account.feedback.contactHelp")}</span>
+                                </span>
+                                <Input value={contact} onChange={(e) => setContact(e.target.value)} placeholder={t("account.feedback.contactPlaceholder")} maxLength={200} />
+                            </label>
                         </div>
                     ) : (
                         /* Inbox View */
@@ -461,34 +484,36 @@ export function FeedbackModal({ open, onClose, initialTab = "submit" }: Feedback
                     )}
                 </div>
 
-                {/* Fixed Footer for Submit Tab */}
                 {activeTab === "submit" ? (
-                    <div className="border-t border-border/60 px-4 py-3 sm:px-6 sm:py-4 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
-                            <Checkbox checked={includeEnv} onChange={(e) => setIncludeEnv(e.target.checked)} />
-                            <span>{t("account.feedback.includeEnv")}</span>
-                        </label>
-                        <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
-                            <Button onClick={onClose} className="flex-1 sm:flex-none">
-                                {t("common.cancel")}
-                            </Button>
-                            <Button id="feedback-submit-btn" type="primary" loading={submitting || uploading} onClick={handleSubmit} icon={<Send className="size-3.5" />} className="flex-1 sm:flex-none font-medium">
+                    <footer className="feedback-footer">
+                        <div className="feedback-env">
+                            <Checkbox checked={includeEnv} onChange={(e) => setIncludeEnv(e.target.checked)}>
+                                {t("account.feedback.includeEnv")}
+                            </Checkbox>
+                            <Tooltip title={t("account.feedback.envHelp")}>
+                                <button type="button" className="feedback-env-info" aria-label={t("account.feedback.envHelp")}>
+                                    <Info aria-hidden="true" />
+                                </button>
+                            </Tooltip>
+                        </div>
+                        <div className="feedback-actions">
+                            <Button onClick={onClose}>{t("common.cancel")}</Button>
+                            <Button type="primary" loading={submitting} disabled={uploading} onClick={() => void handleSubmit()} icon={<Send className="size-3.5" />}>
                                 {t("account.feedback.submit")}
                             </Button>
                         </div>
-                    </div>
+                    </footer>
                 ) : null}
             </div>
 
-            {/* Video Preview Modal */}
             {previewVideoUrl ? (
-                <Modal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} destroyOnClose title={t("account.feedback.videoPreview")}>
+                <AppModal open={Boolean(previewVideoUrl)} onCancel={() => setPreviewVideoUrl(null)} footer={null} width={720} title={t("account.feedback.videoPreview")}>
                     <div className="py-2">
                         <video src={previewVideoUrl} controls autoPlay className="w-full max-h-[60vh] rounded-lg bg-black" />
                     </div>
-                </Modal>
+                </AppModal>
             ) : null}
-        </Modal>
+        </AppModal>
     );
 }
 

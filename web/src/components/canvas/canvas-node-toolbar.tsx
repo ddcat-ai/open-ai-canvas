@@ -7,7 +7,7 @@ import { Camera, Check, ChevronDown, ChevronRight, Ellipsis, Grid3x3, Palette, P
 
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import { avoidCanvasNodePanels, canvasNodePanelBounds, canvasOverlayBounds, canvasToolbarLayoutLevel, observeCanvasOverlayBounds, subscribeCanvasNodePanelBounds } from "@/lib/canvas/canvas-overlay-layout";
-import { ASSET_CATEGORY_OPTIONS } from "@/lib/asset-category";
+import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveNodeToolbarPlacement, resolveToolbarTools, type NodeToolbarGroup, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
@@ -83,7 +83,7 @@ type CanvasNodeToolbarProps = {
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
-const assetCategoryOptions: Array<{ value: CanvasAssetCategory; label: string }> = ASSET_CATEGORY_OPTIONS;
+const assetCategoryOptions: Array<{ value: CanvasAssetCategory; label: string }> = ASSET_ASSIGNABLE_CATEGORY_OPTIONS;
 
 type ToolbarTool = {
     section?: string;

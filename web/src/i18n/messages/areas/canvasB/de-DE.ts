@@ -273,6 +273,10 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         fileCount: " · {{count}} Dateien",
         autoLinkLabel: "{{label}} referenzieren",
         autoLinkText: "„{{query}}“ referenzieren → @{{label}}",
+        previewHint: "Mit der Maus darauf zeigen oder mit den Pfeiltasten auswählen, um hier eine große Vorschau zu sehen",
+        keyHint: "Pfeiltasten zum Auswählen · Enter zum Bestätigen · Esc zum Schließen",
+        keyHintBack: "Pfeiltasten zum Auswählen · Enter zum Bestätigen · Esc zum Zurückgehen",
+        folderCount: "{{count}} Einträge",
     },
     miniMap: {
         label: "Canvas-Minikarte",

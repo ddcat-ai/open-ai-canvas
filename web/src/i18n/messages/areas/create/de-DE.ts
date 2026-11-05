@@ -196,6 +196,9 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         regenerateContent: "Die Seite hat das Ergebnis vielleicht nur nicht rechtzeitig erhalten. Versuche zuerst „Ergebnis erneut abrufen“. Neu generieren startet eine neue Aufgabe und wird erneut berechnet.",
         regenerateConfirm: "Trotzdem neu generieren",
         regenerateCancel: "Jetzt nicht",
+        regenerateUncertainTitle: "Die Abrechnung der letzten Anfrage ist noch unklar",
+        regenerateUncertainContent:
+            "Das Upstream-Gateway hat das Zeitlimit überschritten. Die ursprüngliche Anfrage läuft möglicherweise noch und wurde eventuell schon berechnet. Prüfe zuerst, ob sie berechnet wurde oder ein Bild erzeugt hat. Neu generieren startet eine neue Aufgabe und wird erneut berechnet.",
         quickEditLabel: "Prompt schnell bearbeiten",
         quickEditPlaceholder: "Beschreibe deine Idee weiter…",
         expandComposer: "Vollständigen Editor öffnen",

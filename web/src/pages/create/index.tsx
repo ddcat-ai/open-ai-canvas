@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
+import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { imageParameterRequest, normalizeImageParameters } from "@/lib/image-parameters";
 import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -1156,16 +1157,18 @@ export default function CreatePage() {
         }
     };
 
-    // 作品可能已经生成（页面只是没拿到结果，或仍在重连）时，重新生成会提交新任务并再次扣费，先确认。
+    // 作品可能已经生成（页面只是没拿到结果，或仍在重连），或上游超时后费用不确定时，重新生成会提交新任务并再次扣费，先确认。
     const regenerateMessage = (item: CreationMessage, index: number) => {
-        if (!creationMessageNeedsResultSync(item) && !(item.syncInterrupted && (item.status === "pending" || item.status === "streaming"))) {
+        const resultMayExist = creationMessageNeedsResultSync(item) || Boolean(item.syncInterrupted && (item.status === "pending" || item.status === "streaming"));
+        const costUncertain = item.status === "error" && isGenerationCostUncertainError(item.error);
+        if (!resultMayExist && !costUncertain) {
             void retryFailedMessage(item, index);
             return;
         }
         modal.confirm({
             className: "workspace-modal workspace-modal-compact",
-            title: t("create.page.regenerateTitle"),
-            content: t("create.page.regenerateContent"),
+            title: t(resultMayExist ? "create.page.regenerateTitle" : "create.page.regenerateUncertainTitle"),
+            content: t(resultMayExist ? "create.page.regenerateContent" : "create.page.regenerateUncertainContent"),
             okText: t("create.page.regenerateConfirm"),
             cancelText: t("create.page.regenerateCancel"),
             onOk: () => retryFailedMessage(item, index),

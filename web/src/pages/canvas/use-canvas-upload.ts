@@ -954,8 +954,8 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
     );
 
     const handleAssetsInsert = useCallback(
-        async (payloads: InsertAssetPayload[]): Promise<CanvasNodeData[]> => {
-            const origin = assetInsertPositionRef.current || getCanvasCenter();
+        async (payloads: InsertAssetPayload[], position?: Position): Promise<CanvasNodeData[]> => {
+            const origin = position || assetInsertPositionRef.current || getCanvasCenter();
             return insertAssetPayloads(payloads, origin, translate("canvasPage.upload.assetsInserted", { count: payloads.length }), translate("canvasPage.upload.assetsInsertFailed"));
         },
         [getCanvasCenter, insertAssetPayloads],

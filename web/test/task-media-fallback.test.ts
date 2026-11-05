@@ -20,11 +20,16 @@ describe("media fallback", () => {
         const list = source("../src/pages/tasks/task-list-row.tsx");
         const grid = source("../src/pages/tasks/task-grid-card.tsx");
         const page = source("../src/pages/tasks/index.tsx");
+        const detail = source("../src/pages/tasks/task-detail-modal.tsx");
 
         expect(list).toContain("<MediaPreview");
         expect(list).toContain("disabled={previewUnavailable}");
         expect(grid).toContain("<MediaPreview");
-        expect(page.match(/<MediaPreview/g)).toHaveLength(2);
+        // 放大预览留在页面；详情弹窗的结果大图和缩略图各用一次。
+        expect(page.match(/<MediaPreview/g)).toHaveLength(1);
+        expect(page).toContain('fallbackClassName="task-center-preview-unavailable"');
+        expect(detail.match(/<MediaPreview/g)).toHaveLength(2);
+        expect(detail).toContain('fallbackClassName="task-detail-stage-unavailable"');
     });
 
     test("uses the fallback in admin log thumbnails and enlarged previews", () => {
@@ -41,7 +46,9 @@ describe("task cancellation policy", () => {
         const list = source("../src/pages/tasks/task-list-row.tsx");
         const grid = source("../src/pages/tasks/task-grid-card.tsx");
         const page = source("../src/pages/tasks/index.tsx");
+        const detail = source("../src/pages/tasks/task-detail-modal.tsx");
 
+        expect(detail).not.toContain("cancelGenerationTask");
         expect(list).not.toContain("isTaskCancellable");
         expect(list).not.toContain("取消任务");
         expect(grid).not.toContain("isTaskCancellable");

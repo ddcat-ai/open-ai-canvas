@@ -273,6 +273,10 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
         fileCount: " · {{count}} fichiers",
         autoLinkLabel: "Référencer {{label}}",
         autoLinkText: "Référencer « {{query}} » → @{{label}}",
+        previewHint: "Survolez ou utilisez les flèches pour afficher un grand aperçu ici",
+        keyHint: "Flèches pour choisir · Entrée pour valider · Échap pour fermer",
+        keyHintBack: "Flèches pour choisir · Entrée pour valider · Échap pour revenir",
+        folderCount: "{{count}} éléments",
     },
     miniMap: {
         label: "Mini-carte du canevas",

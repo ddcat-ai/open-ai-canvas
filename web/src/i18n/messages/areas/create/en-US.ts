@@ -196,6 +196,8 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         regenerateContent: 'The page may simply have missed the result. Try "Fetch result again" first. Regenerating submits a new task and charges again.',
         regenerateConfirm: "Regenerate anyway",
         regenerateCancel: "Not now",
+        regenerateUncertainTitle: "The last request's charge is still uncertain",
+        regenerateUncertainContent: "The upstream gateway timed out, so the original request may still be running and may already be charged. Check whether it was charged or produced an image first. Regenerating submits a new task and charges again.",
         quickEditLabel: "Quick edit prompt",
         quickEditPlaceholder: "Keep describing your idea…",
         expandComposer: "Expand the full composer",

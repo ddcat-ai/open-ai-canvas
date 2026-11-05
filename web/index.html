@@ -25,38 +25,50 @@
             #root:empty {
                 min-height: 100vh;
             }
+            /* 启动信号是 FullScreenLoader 里 .loading-signal 的镜像：同尺寸、同位置、同节奏，
+               并按同一 performance.now() 时钟对齐相位（见 body 内脚本），React 接管时扫光原地继续。
+               只用中性墨色，首屏保持品牌中性；改动时与 globals.css 的 .loading-signal 一起改。 */
             #root:empty::before {
+                --boot-signal-ink: rgba(23, 23, 23, 0.8);
                 content: "";
                 position: fixed;
                 left: 50%;
                 top: 50%;
-                width: 12px;
-                height: 12px;
-                margin: -6px 0 0 -6px;
-                background: rgba(255, 255, 255, 0.84);
+                width: 112px;
+                height: 2px;
+                margin: -1px 0 0 -56px;
                 border-radius: 999px;
-                box-shadow: 0 0 0 7px rgba(255, 255, 255, 0.08);
-                animation: appearance-bootstrap-pulse 1.8s ease-in-out infinite;
+                background:
+                    linear-gradient(90deg, transparent, var(--boot-signal-ink) 25%, var(--boot-signal-ink) 75%, transparent) -66.667% 0 / 40% 100% no-repeat,
+                    rgba(16, 16, 20, 0.1);
+                animation: boot-signal-sweep 1500ms cubic-bezier(0.35, 0.05, 0.65, 0.95) calc(-1 * var(--boot-signal-clock, 0ms)) infinite;
             }
-            #root:empty::after {
-                content: "";
-                position: fixed;
-                left: 50%;
-                top: 50%;
-                width: 82px;
-                height: 82px;
-                margin: -42px 0 0 -42px;
-                border: 1px solid rgba(255, 255, 255, 0.14);
-                border-right-color: transparent;
-                border-radius: 999px;
-                animation: appearance-bootstrap-orbit 2.8s linear infinite;
+            html.dark #root:empty::before {
+                --boot-signal-ink: rgba(245, 245, 245, 0.8);
+                background-color: rgba(244, 244, 246, 0.1);
             }
-            @keyframes appearance-bootstrap-pulse { 0%, 100% { opacity: .62; transform: scale(.82); } 50% { opacity: 1; transform: scale(1.08); } }
-            @keyframes appearance-bootstrap-orbit { to { transform: rotate(360deg); } }
+            @keyframes boot-signal-sweep {
+                from {
+                    background-position: -66.667% 0;
+                }
+                to {
+                    background-position: 166.667% 0;
+                }
+            }
+            @keyframes boot-signal-breathe {
+                0%,
+                100% {
+                    opacity: 0.35;
+                }
+                50% {
+                    opacity: 1;
+                }
+            }
             @media (prefers-reduced-motion: reduce) {
-                #root:empty::before,
-                #root:empty::after {
-                    animation: none;
+                #root:empty::before {
+                    background-position: 50% 0;
+                    animation-name: boot-signal-breathe;
+                    animation-timing-function: ease-in-out;
                 }
             }
         </style>
@@ -71,6 +83,10 @@
     </head>
     <body class="bg-background text-foreground antialiased">
         <div id="root"></div>
+        <script>
+            // 放在 #root 之后：外链样式加载完、首帧绘制前才执行，启动信号从这一刻对齐 performance.now()。
+            document.getElementById("root").style.setProperty("--boot-signal-clock", performance.now() + "ms");
+        </script>
         <script type="module" src="/src/main.tsx"></script>
     </body>
 </html>

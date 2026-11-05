@@ -114,16 +114,15 @@ describe("workspace route loading", () => {
         expect(announcements).toContain('lazy(() => import("@/components/ui/aceternity/announcement-timeline-modal")');
     });
 
-    test("uses a quiet workspace skeleton for initial hydration", () => {
+    test("uses a quiet brand loader for initial hydration", () => {
         const loader = source("../src/components/ui/aceternity/full-screen-loader.tsx");
         const css = source("../src/styles/globals.css");
 
-        expect(loader).toContain("full-screen-loader-scene");
-        expect(loader).toContain("full-screen-loader-guide");
+        expect(loader).toContain("full-screen-loader-mark");
         expect(loader).toContain("LoadingSignal");
         expect(loader).not.toContain("YINGCE STUDIO");
         expect(loader).not.toContain("loading-cue");
-        expect(css).toContain("@keyframes loading-signal-spin");
+        expect(css).toContain("@keyframes loading-signal-sweep");
         expect(css).toContain("@media (prefers-reduced-motion: reduce)");
         expect(css).not.toContain("@keyframes loading-cue-pulse");
     });

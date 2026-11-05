@@ -272,6 +272,10 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         fileCount: " · {{count}} ファイル",
         autoLinkLabel: "{{label}} を参照",
         autoLinkText: "「{{query}}」を参照 → @{{label}}",
+        previewHint: "ホバーするか矢印キーで選ぶと、ここに大きく表示されます",
+        keyHint: "矢印キーで選択 · Enter で確定 · Esc で閉じる",
+        keyHintBack: "矢印キーで選択 · Enter で確定 · Esc で戻る",
+        folderCount: "{{count}} 件",
     },
     miniMap: {
         label: "キャンバスのミニマップ",

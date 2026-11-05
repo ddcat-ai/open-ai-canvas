@@ -1,8 +1,9 @@
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
-import { App, Button, Drawer, Form, Input, Modal, Typography } from "antd";
+import { App, Button, Form, Input } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
-import { Bug, LayoutGrid, List, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { AppModal } from "@/components/ui/product/app-modal";
+import { LayoutGrid, List, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
@@ -10,24 +11,38 @@ import { currentLocale, translate } from "@/i18n";
 
 import { MediaPreview } from "@/components/media-preview";
 import { PageHeader, PaginationBar, WorkspacePage } from "@/components/layout/workspace-page";
-import { WorkspaceState } from "@/components/layout/workspace-state";
-import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
-import { formatTaskKind, generationTaskStatusLabel, mediaDeliverySummary, operationOptions, statusLabel } from "@/lib/generation-task-display";
+import { WorkspaceNoResultsState, WorkspaceState } from "@/components/layout/workspace-state";
+import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
+import { formatTaskKind, operationOptions } from "@/lib/generation-task-display";
 import { buildVideoOperationPrompt } from "@/lib/prompts";
 import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
-import { createGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryFailedVideoProviderTask, queryGenerationTask, retryGenerationTask, recoverGenerationTaskMedia, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import {
+    createGenerationTask,
+    listGenerationTasks,
+    listTaskLogs,
+    queryFailedVideoProviderTask,
+    queryGenerationTask,
+    retryGenerationTask,
+    recoverGenerationTaskMedia,
+    type CreateTaskInput,
+    type GenerationTask,
+    type TaskLog,
+} from "@/services/api/task-center";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { resolveModelRequestConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { listProjects, type ProjectSummary } from "@/services/api/projects";
+import { TaskDetailModal } from "./task-detail-modal";
 import { TaskGridCard } from "./task-grid-card";
 import { TaskGroupHeader, type TaskGroup } from "./task-group-header";
 import { TaskListRow } from "./task-list-row";
-import { formatModelName, getTaskCanvasContext, isTaskFailed, providerCancelStatusLabel, taskMediaKind } from "./task-shared";
+import { formatModelName, getTaskCanvasContext, isTaskFailed, taskMediaKind } from "./task-shared";
 import { TaskStatusFilterBar, type TaskStatusFilter } from "./task-status-filter";
 import { Select } from "@/components/ui/base/select";
+
+import "./tasks-page.css";
 
 type TaskKindFilter = "all" | "text" | "image" | "video";
 type TaskViewMode = "list" | "grid";
@@ -59,7 +74,7 @@ function taskStatusFilter(value: string | null): TaskStatusFilter {
 }
 
 export default function TasksPage() {
-    const { message, modal } = App.useApp();
+    const { message } = App.useApp();
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -100,25 +115,35 @@ export default function TasksPage() {
     const tasksRef = useRef<GenerationTask[]>([]);
     const canvasById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
     const domainProjectNameById = useMemo(() => new Map(domainProjects.map((item) => [item.project.id, item.project.name])), [domainProjects]);
-    const projectOptions = useMemo(() => projects.map((project) => {
-        const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
-        return { label: projectName ? `${project.title || t("library.tasks.shared.untitledCanvas")} · ${projectName}` : project.title || t("library.tasks.shared.untitledCanvas"), value: project.id };
-    }), [domainProjectNameById, projects, t]);
+    const projectOptions = useMemo(
+        () =>
+            projects.map((project) => {
+                const projectName = project.projectId ? domainProjectNameById.get(project.projectId) : "";
+                return { label: projectName ? `${project.title || t("library.tasks.shared.untitledCanvas")} · ${projectName}` : project.title || t("library.tasks.shared.untitledCanvas"), value: project.id };
+            }),
+        [domainProjectNameById, projects, t],
+    );
     const modelOptions = useMemo(() => Array.from(new Set(tasks.map((task) => formatModelName(effectiveConfig, task)).filter(Boolean))).sort((left, right) => left.localeCompare(right, currentLocale())), [effectiveConfig, tasks]);
-    const filteredTasks = useMemo(() => tasks.filter((task) => {
-        if (statusFilter === "all") return true;
-        if (statusFilter === "active") return task.status === "queued" || task.status === "running";
-        if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
-        if (statusFilter === "succeeded") return task.status === "succeeded";
-        return false;
-    }).filter((task) => {
-        if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
-        if (kindFilter !== "all" && taskMediaKind(task) !== kindFilter) return false;
-        if (modelFilter !== "all" && formatModelName(effectiveConfig, task) !== modelFilter) return false;
-        const query = keyword.trim().toLowerCase();
-        const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
-        return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
-    }), [canvasById, domainProjectNameById, effectiveConfig, keyword, kindFilter, modelFilter, projectFilter, statusFilter, tasks]);
+    const filteredTasks = useMemo(
+        () =>
+            tasks
+                .filter((task) => {
+                    if (statusFilter === "all") return true;
+                    if (statusFilter === "active") return task.status === "queued" || task.status === "running";
+                    if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
+                    if (statusFilter === "succeeded") return task.status === "succeeded";
+                    return false;
+                })
+                .filter((task) => {
+                    if (projectFilter !== "all" && task.projectId !== projectFilter) return false;
+                    if (kindFilter !== "all" && taskMediaKind(task) !== kindFilter) return false;
+                    if (modelFilter !== "all" && formatModelName(effectiveConfig, task) !== modelFilter) return false;
+                    const query = keyword.trim().toLowerCase();
+                    const context = getTaskCanvasContext(task, canvasById, domainProjectNameById);
+                    return !query || `${task.prompt} ${task.model || ""} ${formatTaskKind(task)} ${context.canvasName} ${context.projectName}`.toLowerCase().includes(query);
+                }),
+        [canvasById, domainProjectNameById, effectiveConfig, keyword, kindFilter, modelFilter, projectFilter, statusFilter, tasks],
+    );
     const visibleTasks = useMemo(() => filteredTasks.slice((page - 1) * pageSize, page * pageSize), [filteredTasks, page, pageSize]);
     const taskStats = useMemo(() => {
         let today = 0;
@@ -138,10 +163,7 @@ export default function TasksPage() {
         return { total: tasks.length, today, active, succeeded, failed };
     }, [tasks]);
     const groupingActive = viewMode === "list" && groupEnabled;
-    const visibleTaskGroups = useMemo(
-        () => (groupingActive ? groupTasksByCanvas(filteredTasks, canvasById, domainProjectNameById) : []),
-        [canvasById, domainProjectNameById, filteredTasks, groupingActive],
-    );
+    const visibleTaskGroups = useMemo(() => (groupingActive ? groupTasksByCanvas(filteredTasks, canvasById, domainProjectNameById) : []), [canvasById, domainProjectNameById, filteredTasks, groupingActive]);
 
     const changeViewMode = (mode: TaskViewMode) => {
         setViewMode(mode);
@@ -181,15 +203,7 @@ export default function TasksPage() {
         />
     );
 
-    const renderTaskGridCard = (task: GenerationTask) => (
-        <TaskGridCard
-            key={task.id}
-            task={task}
-            actingId={actingId}
-            onOpen={() => void openTaskDetail(task)}
-            onRetry={() => void runAction(task.id)}
-        />
-    );
+    const renderTaskGridCard = (task: GenerationTask) => <TaskGridCard key={task.id} task={task} effectiveConfig={effectiveConfig} actingId={actingId} onOpen={() => void openTaskDetail(task)} onRetry={() => void runAction(task.id)} />;
 
     useEffect(() => {
         if (!shortDramaEnabled) {
@@ -239,20 +253,23 @@ export default function TasksPage() {
         );
     }, []);
 
-    const loadTasks = useCallback(async (showLoading = false) => {
-        if (showLoading) setLoading(true);
-        try {
-            const next = await listGenerationTasks();
-            setTasks((current) => reconcileTaskSummaries(current, next));
-            void syncCompletedCanvasTasks(next);
-            return next;
-        } catch (error) {
-            if (showLoading) message.error(error instanceof Error ? error.message : t("library.tasks.page.loadFailed"));
-            return undefined;
-        } finally {
-            if (showLoading) setLoading(false);
-        }
-    }, [message, syncCompletedCanvasTasks, t]);
+    const loadTasks = useCallback(
+        async (showLoading = false) => {
+            if (showLoading) setLoading(true);
+            try {
+                const next = await listGenerationTasks();
+                setTasks((current) => reconcileTaskSummaries(current, next));
+                void syncCompletedCanvasTasks(next);
+                return next;
+            } catch (error) {
+                if (showLoading) message.error(error instanceof Error ? error.message : t("library.tasks.page.loadFailed"));
+                return undefined;
+            } finally {
+                if (showLoading) setLoading(false);
+            }
+        },
+        [message, syncCompletedCanvasTasks, t],
+    );
 
     const openTaskDetail = useCallback(
         async (task: GenerationTask) => {
@@ -307,9 +324,7 @@ export default function TasksPage() {
         try {
             const currentTask = await queryGenerationTask(id);
             const savingMedia = Boolean(currentTask.mediaStage);
-            const next = currentTask.status === "queued" || currentTask.status === "running" || currentTask.status === "succeeded"
-                ? currentTask
-                : savingMedia ? await recoverGenerationTaskMedia(id) : await retryGenerationTask(id);
+            const next = currentTask.status === "queued" || currentTask.status === "running" || currentTask.status === "succeeded" ? currentTask : savingMedia ? await recoverGenerationTaskMedia(id) : await retryGenerationTask(id);
             setTasks((items) => items.map((item) => (item.id === id ? next : item)));
             setDetailTask((current) => (current?.id === id ? { ...current, ...next } : current));
             setStatusFilter("active");
@@ -364,7 +379,7 @@ export default function TasksPage() {
                     prompt: values.prompt,
                     provider: values.operation === "compare_versions" ? "internal-agent" : "openai-compatible",
                     model: values.operation === "compare_versions" ? "version-router" : requestConfig.model,
-					...(values.operation !== "compare_versions" && logicalModelIDForConfig(requestConfig) ? { logicalModelId: logicalModelIDForConfig(requestConfig) } : {}),
+                    ...(values.operation !== "compare_versions" && logicalModelIDForConfig(requestConfig) ? { logicalModelId: logicalModelIDForConfig(requestConfig) } : {}),
                     input: {
                         source: "tasks-page",
                         mode: values.operation === "compare_versions" ? "workflow" : "video",
@@ -387,89 +402,167 @@ export default function TasksPage() {
         }
     };
 
+    const detailContext = detailTask ? getTaskCanvasContext(detailTask, canvasById, domainProjectNameById) : null;
+    // 搜索或筛选（不含状态）把已有任务全部过滤掉时显示「无结果」，而不是「还没有任务」。
+    const searchOrFilterActive = Boolean(keyword.trim() || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all");
+    const filtersActive = searchOrFilterActive || statusFilter !== "all";
+    const resetFilters = () => {
+        setKeyword("");
+        setProjectFilter("all");
+        setKindFilter("all");
+        setModelFilter("all");
+        setStatusFilter("all");
+        setPage(1);
+    };
+    const renderTaskList = (items: GenerationTask[]) => (
+        <div className="task-center-list" data-billing={creditsEnabled || undefined}>
+            {items.map(renderTaskRow)}
+        </div>
+    );
+
     return (
         <>
-            <WorkspacePage grid className="library-page task-library-page">
+            <WorkspacePage grid className="library-page task-center-page">
                 <div className="studio-band">
                     <PageHeader
                         title={t("library.tasks.page.title")}
                         description={t("library.tasks.page.description")}
-                        meta={<span className="app-projects-header-meta">{t("library.tasks.page.taskCount", { count: taskStats.total })}</span>}
+                        meta={
+                            <span className="app-projects-header-meta">
+                                {t("library.tasks.page.taskCount", { count: taskStats.total })} · {t("library.tasks.filter.today")} {taskStats.today}
+                            </span>
+                        }
                         actions={
                             <Button type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
                                 {t("library.tasks.page.newTask")}
                             </Button>
                         }
                     />
-                    <CollectionToolbar
-                        active={Boolean(keyword || projectFilter !== "all" || kindFilter !== "all" || modelFilter !== "all" || statusFilter !== "all")}
-                        onReset={() => { setKeyword(""); setProjectFilter("all"); setKindFilter("all"); setModelFilter("all"); setStatusFilter("all"); setPage(1); }}
-                        trailing={(
-                            <div className="flex flex-wrap items-center gap-2">
-                                {viewMode === "list" ? (
-                                    <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-foreground/55">
-                                        <Switch size="sm" checked={groupEnabled} onChange={changeGroupEnabled} />
-                                        <span>{t("library.tasks.page.groupByCanvas")}</span>
-                                    </label>
-                                ) : null}
-                                <div className="task-view-switch">
-                                    <SegmentedControl<TaskViewMode>
-                                        ariaLabel={t("library.tasks.page.viewMode")}
-                                        size="sm"
-                                        value={viewMode}
-                                        options={[
-                                            { value: "list", icon: <List className="size-3.5" />, title: t("library.tasks.page.listView") },
-                                            { value: "grid", icon: <LayoutGrid className="size-3.5" />, title: t("library.tasks.page.gridView") },
-                                        ]}
-                                        onChange={changeViewMode}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    >
-                        <TaskStatusFilterBar stats={taskStats} value={statusFilter} onChange={(value) => { setStatusFilter(value); setPage(1); }} />
-                        <Input id="task-search" name="taskSearch" allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder={t("library.tasks.page.searchPlaceholder")} onChange={(event) => { setKeyword(event.target.value); setPage(1); }} />
-                        <Select className="w-full sm:w-48" value={projectFilter} onChange={(value) => { setProjectFilter(value); setPage(1); }} options={[{ label: t("library.tasks.page.allCanvases"), value: "all" }, ...projectOptions]} />
-                        <Select className="w-full sm:w-32" value={kindFilter} onChange={(value) => { setKindFilter(value as TaskKindFilter); setPage(1); }} options={[{ label: t("library.tasks.page.allKinds"), value: "all" }, { label: t("library.tasks.page.kindText"), value: "text" }, { label: t("library.tasks.page.kindImage"), value: "image" }, { label: t("library.tasks.page.kindVideo"), value: "video" }]} />
-                        <Select className="w-full sm:w-44" value={modelFilter} onChange={(value) => { setModelFilter(value); setPage(1); }} options={[{ label: t("library.tasks.page.allModels"), value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]} />
+                    {/* 第一行：状态切换和视图；第二行：搜索与筛选。分两行排，窄屏不会把控件挤成一团。 */}
+                    <div className="task-center-statusbar">
+                        <TaskStatusFilterBar
+                            stats={taskStats}
+                            value={statusFilter}
+                            onChange={(value) => {
+                                setStatusFilter(value);
+                                setPage(1);
+                            }}
+                        />
+                        <div className="task-center-view-controls">
+                            {viewMode === "list" ? (
+                                <label className="task-center-group-toggle">
+                                    <Switch size="sm" checked={groupEnabled} onChange={changeGroupEnabled} />
+                                    <span>{t("library.tasks.page.groupByCanvas")}</span>
+                                </label>
+                            ) : null}
+                            <SegmentedControl<TaskViewMode>
+                                ariaLabel={t("library.tasks.page.viewMode")}
+                                size="sm"
+                                value={viewMode}
+                                options={[
+                                    { value: "list", icon: <List className="size-3.5" />, title: t("library.tasks.page.listView") },
+                                    { value: "grid", icon: <LayoutGrid className="size-3.5" />, title: t("library.tasks.page.gridView") },
+                                ]}
+                                onChange={changeViewMode}
+                            />
+                        </div>
+                    </div>
+                    <CollectionToolbar active={filtersActive} onReset={resetFilters}>
+                        <Input
+                            id="task-search"
+                            name="taskSearch"
+                            allowClear
+                            className="app-list-search task-center-search"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder={t("library.tasks.page.searchPlaceholder")}
+                            onChange={(event) => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                        />
+                        <Select
+                            className="task-center-filter is-wide"
+                            value={projectFilter}
+                            onChange={(value) => {
+                                setProjectFilter(value);
+                                setPage(1);
+                            }}
+                            options={[{ label: t("library.tasks.page.allCanvases"), value: "all" }, ...projectOptions]}
+                        />
+                        <Select
+                            className="task-center-filter"
+                            value={kindFilter}
+                            onChange={(value) => {
+                                setKindFilter(value as TaskKindFilter);
+                                setPage(1);
+                            }}
+                            options={[
+                                { label: t("library.tasks.page.allKinds"), value: "all" },
+                                { label: t("library.tasks.page.kindText"), value: "text" },
+                                { label: t("library.tasks.page.kindImage"), value: "image" },
+                                { label: t("library.tasks.page.kindVideo"), value: "video" },
+                            ]}
+                        />
+                        <Select
+                            className="task-center-filter is-wide"
+                            value={modelFilter}
+                            onChange={(value) => {
+                                setModelFilter(value);
+                                setPage(1);
+                            }}
+                            options={[{ label: t("library.tasks.page.allModels"), value: "all" }, ...modelOptions.map((model) => ({ label: model, value: model }))]}
+                        />
                     </CollectionToolbar>
                 </div>
 
-                <div className="collection-content task-collection-content">
-                    {loading && !tasks.length ? <div className="library-loading-grid" aria-label={t("library.tasks.page.loading")}>{Array.from({ length: 8 }, (_, index) => <div key={index} className="library-skeleton" />)}</div> : null}
-                    {!loading || tasks.length ? (
-                        visibleTasks.length ? (
-                            viewMode === "grid" ? (
-                                <div className="task-grid-view">
-                                    {visibleTasks.map(renderTaskGridCard)}
-                                </div>
-                            ) : groupingActive ? (
-                                <div className="task-group-list">
-                                    {visibleTaskGroups.map((group) => (
-                                        <section key={group.key} className="task-group">
-                                            <TaskGroupHeader group={group} retrying={retryingGroup === group.key} onRetryFailed={() => void retryGroupTasks(group.key, group.tasks)} />
-                                            <div className="task-record-list">
-                                                {group.tasks.map(renderTaskRow)}
-                                            </div>
-                                        </section>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="task-record-list">{visibleTasks.map(renderTaskRow)}</div>
-                            )
+                <div className="collection-content task-center-content">
+                    {loading && !tasks.length ? (
+                        <TaskCenterSkeleton viewMode={viewMode} label={t("library.tasks.page.loading")} />
+                    ) : visibleTasks.length ? (
+                        viewMode === "grid" ? (
+                            <div className="task-center-grid">{visibleTasks.map(renderTaskGridCard)}</div>
+                        ) : groupingActive ? (
+                            <div className="task-center-groups">
+                                {visibleTaskGroups.map((group) => (
+                                    <section key={group.key} className="task-center-group">
+                                        <TaskGroupHeader group={group} retrying={retryingGroup === group.key} onRetryFailed={() => void retryGroupTasks(group.key, group.tasks)} />
+                                        {renderTaskList(group.tasks)}
+                                    </section>
+                                ))}
+                            </div>
                         ) : (
-                            <WorkspaceState
-                                compact
-                                title={taskEmptyState(statusFilter).title}
-                                description={taskEmptyState(statusFilter).description}
-                                action={<Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>{t("library.tasks.page.newTask")}</Button>}
-                            />
+                            renderTaskList(visibleTasks)
                         )
+                    ) : tasks.length && searchOrFilterActive ? (
+                        <WorkspaceNoResultsState compact query={keyword} onClear={resetFilters} />
+                    ) : (
+                        <WorkspaceState
+                            compact
+                            title={taskEmptyState(statusFilter).title}
+                            description={taskEmptyState(statusFilter).description}
+                            action={
+                                <Button className="library-primary-action" type="primary" icon={<Plus className="size-3.5" />} onClick={() => setCreateOpen(true)}>
+                                    {t("library.tasks.page.newTask")}
+                                </Button>
+                            }
+                        />
+                    )}
+                    {!groupingActive ? (
+                        <PaginationBar
+                            current={page}
+                            pageSize={pageSize}
+                            total={filteredTasks.length}
+                            pageSizeOptions={[20, 50, 100]}
+                            onChange={(nextPage, nextPageSize) => {
+                                setPage(nextPageSize !== pageSize ? 1 : nextPage);
+                                setPageSize(nextPageSize);
+                            }}
+                        />
                     ) : null}
-                    {!groupingActive ? <PaginationBar current={page} pageSize={pageSize} total={filteredTasks.length} pageSizeOptions={[20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPage(nextPageSize !== pageSize ? 1 : nextPage); setPageSize(nextPageSize); }} /> : null}
                 </div>
             </WorkspacePage>
-            <Modal className="library-modal" title={t("library.tasks.create.title")} open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText={t("library.tasks.create.submit")}>
+            <AppModal className="library-modal" title={t("library.tasks.create.title")} open={createOpen} onCancel={() => setCreateOpen(false)} onOk={submitTask} confirmLoading={creating} okText={t("library.tasks.create.submit")} destroyOnHidden={false}>
                 <Form form={form} layout="vertical" initialValues={{ operation: "text_to_video" }}>
                     <Form.Item name="operation" label={t("library.tasks.create.operation")} rules={[{ required: true, message: t("library.tasks.create.operationRequired") }]}>
                         <Select options={operationOptions} />
@@ -484,52 +577,30 @@ export default function TasksPage() {
                         <Input placeholder={t("library.tasks.create.modelPlaceholder")} />
                     </Form.Item>
                 </Form>
-            </Modal>
-            <Drawer className="library-drawer" title={t("library.tasks.detail.title")} open={Boolean(detailTask)} onClose={() => setDetailTask(null)} size="large" destroyOnHidden>
-                {detailTask ? (
-                    <div className="space-y-5">
-                        <div className="task-detail-facts grid text-sm sm:grid-cols-2">
-                            <InfoItem label={t("library.tasks.detail.status")} value={generationTaskStatusLabel(detailTask)} />
-                            {detailTask.mediaStage ? <InfoItem label={t("library.tasks.detail.delivery")} value={mediaDeliverySummary(detailTask.status, detailTask.mediaStage)} /> : null}
-                            <InfoItem label={t("library.tasks.detail.canvas")} value={getTaskCanvasContext(detailTask, canvasById, domainProjectNameById).canvasName} />
-                            <InfoItem label={t("library.tasks.detail.kind")} value={formatTaskKind(detailTask)} />
-                            <InfoItem label={t("library.tasks.detail.model")} value={formatModelName(effectiveConfig, detailTask)} />
-                            <InfoItem label={t("library.tasks.detail.attempts")} value={t("library.tasks.detail.attemptValue", { count: detailTask.attempts || 1 })} />
-                            <InfoItem label={t("library.tasks.detail.createdAt")} value={formatDate(detailTask.createdAt)} />
-                            <InfoItem label={t("library.tasks.detail.startedAt")} value={formatDate(detailTask.startedAt)} />
-                            <InfoItem label={t("library.tasks.detail.completedAt")} value={formatDate(detailTask.completedAt)} />
-                            <InfoItem label={t("library.tasks.detail.duration")} value={formatTaskDuration(detailTask)} />
-                            {detailTask.providerCancelStatus ? <InfoItem label={t("library.tasks.detail.providerCancel")} value={providerCancelStatusLabel(detailTask)} /> : null}
-                            {detailTask.providerCancelRequestedAt ? <InfoItem label={t("library.tasks.detail.cancelRequestedAt")} value={formatDate(detailTask.providerCancelRequestedAt)} /> : null}
-                        </div>
-                        <div className="flex flex-wrap justify-end gap-2">
-                            {detailTask.canRecoverMedia ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void runAction(detailTask.id)}>{t("library.tasks.row.retrySave")}</Button> : null}
-                            {canQueryProviderTask(detailTask) ? <Button icon={<RefreshCw className="size-4" />} loading={actingId === detailTask.id} onClick={() => void queryProviderTask(detailTask)}>{t("library.tasks.detail.queryProvider")}</Button> : null}
-                            {isTaskFailed(detailTask) ? <Button icon={<Bug className="size-4" />} onClick={() => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(detailTask.id)}${detailTask.projectId ? `&projectId=${encodeURIComponent(detailTask.projectId)}` : ""}`)}>{t("library.tasks.detail.exportDiagnostics")}</Button> : null}
-                        </div>
-                        {detailTask.error ? <pre className="task-detail-error max-h-28 overflow-auto whitespace-pre-wrap px-3 py-2 text-xs">{generationErrorMessage(detailTask.error)}</pre> : null}
-                        <TaskResultMedia value={detailTask.resultJson} taskType={detailTask.type} />
-                        <DetailBlock title={t("library.tasks.detail.prompt")} value={detailLoading ? t("library.tasks.detail.loading") : detailTask.prompt || t("library.tasks.detail.none")} tall />
-                        <TaskParameters inputJson={detailLoading ? undefined : detailTask.inputJson} />
-                        <DetailBlock title={t("library.tasks.detail.result")} value={detailLoading ? t("library.tasks.detail.loading") : formatTaskJson(detailTask.resultJson)} />
-                        <div>
-                            <Typography.Text strong>{t("library.tasks.detail.logs")}</Typography.Text>
-                            <div className="mt-2 max-h-60 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100">
-                                {logsLoading ? t("library.tasks.detail.logsLoading") : taskLogs.length ? taskLogs.map((log) => `[${new Date(log.createdAt).toLocaleString(currentLocale())}] ${log.level.toUpperCase()} ${formatTaskLog(log)}`).join("\n\n") : t("library.tasks.detail.noLogs")}
-                            </div>
-                        </div>
-                    </div>
-                ) : null}
-            </Drawer>
-            <Modal
+            </AppModal>
+            <TaskDetailModal
+                task={detailTask}
+                loading={detailLoading}
+                logs={taskLogs}
+                logsLoading={logsLoading}
+                actingId={actingId}
+                canvasName={detailContext ? (detailContext.projectName ? `${detailContext.canvasName} · ${detailContext.projectName}` : detailContext.canvasName) : ""}
+                modelName={detailTask ? formatModelName(effectiveConfig, detailTask) : ""}
+                creditsEnabled={creditsEnabled}
+                onClose={() => setDetailTask(null)}
+                onRetry={(task) => void runAction(task.id)}
+                onQueryProvider={(task) => void queryProviderTask(task)}
+                onExportDiagnostics={(task) => navigate(`/settings?section=diagnostics&taskId=${encodeURIComponent(task.id)}${task.projectId ? `&projectId=${encodeURIComponent(task.projectId)}` : ""}`)}
+                onPreviewMedia={setMediaPreview}
+            />
+            <AppModal
                 title={<span className="block truncate pr-8">{mediaPreview?.title || t("library.tasks.detail.previewTitle")}</span>}
                 open={Boolean(mediaPreview)}
                 onCancel={() => setMediaPreview(null)}
                 footer={null}
                 centered
                 width="min(1040px, calc(100vw - 32px))"
-                destroyOnHidden
-                className="library-modal task-media-preview-modal"
+                className="library-modal task-center-preview-modal"
             >
                 {mediaPreview ? (
                     <MediaPreview
@@ -538,16 +609,44 @@ export default function TasksPage() {
                         alt={mediaPreview.title}
                         controls={mediaPreview.kind === "video"}
                         className="max-h-[76vh] w-full bg-black object-contain"
-                        fallbackClassName="task-media-preview-unavailable"
+                        fallbackClassName="task-center-preview-unavailable"
                     />
                 ) : null}
-            </Modal>
+            </AppModal>
         </>
     );
 }
 
-function canQueryProviderTask(task: GenerationTask) {
-    return task.status === "failed" && !task.mediaStage && (task.type.startsWith("canvas_video") || task.type.startsWith("video_")) && Boolean(task.providerRequestId);
+/** 首次读取的占位：列表模式给行骨架，网格模式给卡片骨架，切换后形状一致不跳。 */
+function TaskCenterSkeleton({ viewMode, label }: { viewMode: TaskViewMode; label: string }) {
+    if (viewMode === "grid") {
+        return (
+            <div className="task-center-grid" aria-busy="true" aria-label={label}>
+                {Array.from({ length: 8 }, (_, index) => (
+                    <div key={index} className="task-center-card is-skeleton" aria-hidden="true">
+                        <div className="task-center-card-media" />
+                        <div className="task-center-card-body">
+                            <span className="task-center-skeleton-line" />
+                            <span className="task-center-skeleton-line is-sm" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+    return (
+        <div className="task-center-list" aria-busy="true" aria-label={label}>
+            {Array.from({ length: 6 }, (_, index) => (
+                <div key={index} className="task-center-row is-skeleton" aria-hidden="true">
+                    <span className="task-center-thumb" />
+                    <div className="task-center-row-main">
+                        <span className="task-center-skeleton-line" />
+                        <span className="task-center-skeleton-line is-sm" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
 }
 
 function reconcileTaskSummaries(current: GenerationTask[], next: GenerationTask[]) {
@@ -556,66 +655,20 @@ function reconcileTaskSummaries(current: GenerationTask[], next: GenerationTask[
     let changed = false;
     const reconciled = next.map((task) => {
         const previous = currentById.get(task.id);
-        if (previous?.updatedAt === task.updatedAt && previous.previewUrl === task.previewUrl && previous.previewPosterUrl === task.previewPosterUrl && previous.billing?.status === task.billing?.status && previous.billing?.amountMicrocredits === task.billing?.amountMicrocredits && previous.billing?.chargedMicrocredits === task.billing?.chargedMicrocredits && previous.billing?.refundedMicrocredits === task.billing?.refundedMicrocredits) return previous;
+        if (
+            previous?.updatedAt === task.updatedAt &&
+            previous.previewUrl === task.previewUrl &&
+            previous.previewPosterUrl === task.previewPosterUrl &&
+            previous.billing?.status === task.billing?.status &&
+            previous.billing?.amountMicrocredits === task.billing?.amountMicrocredits &&
+            previous.billing?.chargedMicrocredits === task.billing?.chargedMicrocredits &&
+            previous.billing?.refundedMicrocredits === task.billing?.refundedMicrocredits
+        )
+            return previous;
         changed = true;
         return task;
     });
     return changed ? reconciled : current;
-}
-
-function TaskResultMedia({ value, taskType }: { value?: string; taskType: string }) {
-    const { t } = useTranslation();
-    const urls = resultMediaUrls(value);
-    if (!urls.length) return null;
-    return (
-        <div>
-            <Typography.Text strong>{t("library.tasks.detail.generated")}</Typography.Text>
-            <div className="mt-2 grid max-h-[360px] grid-cols-2 gap-2 overflow-auto rounded-lg bg-stone-950 p-2 md:grid-cols-3">
-                {urls.map((url, index) => {
-                    const isVideo = isVideoResult(url, taskType);
-                    return (
-                        <MediaPreview
-                            key={`${url}-${index}`}
-                            src={url}
-                            kind={isVideo ? "video" : "image"}
-                            alt={t("library.tasks.detail.generatedItem", { index: index + 1 })}
-                            controls={isVideo}
-                            className={isVideo ? "task-result-media is-video" : "task-result-media"}
-                            fallbackClassName={isVideo ? "task-result-media is-video" : "task-result-media"}
-                        />
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-function resultMediaUrls(value?: string) {
-    if (!value) return [];
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(value);
-    } catch {
-        parsed = value;
-    }
-    const urls: string[] = [];
-    const visit = (item: unknown, key = "") => {
-        if (typeof item === "string") {
-            const isInlineMedia = /^(data:image\/|data:video\/)/.test(item);
-            const isMediaPath = /\.(png|jpe?g|webp|gif|avif|mp4|webm|mov)(?:$|\?)/i.test(item);
-            const isNamedMediaUrl = /^(https?:|blob:)/.test(item) && /(url|image|video|result|output|media)/i.test(key);
-            if ((isInlineMedia || isMediaPath || isNamedMediaUrl) && !urls.includes(item)) urls.push(item);
-            return;
-        }
-        if (Array.isArray(item)) return item.forEach((value) => visit(value, key));
-        if (item && typeof item === "object") Object.entries(item).forEach(([field, value]) => visit(value, field));
-    };
-    visit(parsed);
-    return urls.slice(0, 12);
-}
-
-function isVideoResult(value: string, taskType: string) {
-    return value.startsWith("data:video/") || /\.(mp4|webm|mov)(?:$|\?)/i.test(value) || taskType.includes("video");
 }
 
 function groupTasksByCanvas(tasks: GenerationTask[], canvasById: Map<string, { title: string; projectId?: string }>, projectNameById: Map<string, string>): TaskGroup[] {
@@ -640,136 +693,4 @@ function taskEmptyState(status: TaskStatusFilter) {
     if (status === "active") return { title: translate("library.tasks.empty.activeTitle"), description: translate("library.tasks.empty.activeDescription") };
     if (status === "succeeded") return { title: translate("library.tasks.empty.succeededTitle"), description: translate("library.tasks.empty.succeededDescription") };
     return { title: translate("library.tasks.empty.failedTitle"), description: translate("library.tasks.empty.failedDescription") };
-}
-
-function formatDate(value?: string) {
-    if (!value) return "-";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString(currentLocale());
-}
-
-function formatTaskDuration(task: GenerationTask) {
-    if (!task.createdAt) return "-";
-    const start = new Date(task.startedAt || task.createdAt).getTime();
-    const end = task.completedAt ? new Date(task.completedAt).getTime() : task.status === "queued" || task.status === "running" ? Date.now() : Number.NaN;
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "-";
-    const totalSeconds = Math.max(0, Math.floor((end - start) / 1000));
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return minutes ? translate("library.tasks.detail.durationMinutes", { minutes, seconds }) : translate("library.tasks.detail.durationSeconds", { seconds });
-}
-
-function InfoItem({ label, value, wrap = false }: { label: string; value: string; wrap?: boolean }) {
-    return (
-        <div className="task-detail-fact min-w-0 px-3 py-2">
-            <Typography.Text type="secondary" className="block text-xs">
-                {label}
-            </Typography.Text>
-            <Typography.Text className={`block text-sm ${wrap ? "whitespace-pre-wrap break-words" : "truncate"}`} title={value}>
-                {value}
-            </Typography.Text>
-        </div>
-    );
-}
-
-function DetailBlock({ title, value, tall = false }: { title: string; value: string; tall?: boolean }) {
-    return (
-        <div>
-            <Typography.Text strong>{title}</Typography.Text>
-            <pre className={`mt-2 overflow-auto rounded-md bg-slate-950 p-3 text-xs leading-5 text-slate-100 ${tall ? "h-40 whitespace-pre-wrap break-words" : "max-h-60"}`}>{value}</pre>
-        </div>
-    );
-}
-
-function TaskParameters({ inputJson }: { inputJson?: string }) {
-    const { t } = useTranslation();
-    const fields = taskParameterFields(inputJson);
-    return (
-        <div>
-            <Typography.Text strong>{t("library.tasks.params.title")}</Typography.Text>
-            {fields.length ? (
-                <div className="task-detail-facts mt-2 grid text-sm sm:grid-cols-2">
-                    {fields.map((field) => <InfoItem key={field.label} label={field.label} value={field.value} wrap />)}
-                </div>
-            ) : (
-                <div className="mt-2 rounded-md bg-foreground/[.04] px-3 py-3 text-sm text-foreground/50">{t("library.tasks.params.empty")}</div>
-            )}
-        </div>
-    );
-}
-
-function taskParameterFields(inputJson?: string) {
-    const input = parseTaskInput(inputJson);
-    if (!input) return [];
-    const config = asRecord(input.config);
-    const fields: Array<{ label: string; value: string }> = [];
-    const add = (label: string, value: unknown) => {
-        const text = formatParameterValue(value);
-        if (text) fields.push({ label, value: text });
-    };
-
-    add(translate("library.tasks.params.mode"), input.mode);
-    add(translate("library.tasks.params.size"), config.size);
-    add(translate("library.tasks.params.resolution"), config.vquality || config.quality);
-    add(translate("library.tasks.params.duration"), config.videoSeconds === undefined ? undefined : translate("library.tasks.params.seconds", { seconds: config.videoSeconds }));
-    add(translate("library.tasks.params.count"), config.count);
-    add(translate("library.tasks.params.audio"), booleanParameter(config.videoGenerateAudio));
-    add(translate("library.tasks.params.watermark"), booleanParameter(config.videoWatermark));
-    add(translate("library.tasks.params.voice"), config.audioVoice);
-    add(translate("library.tasks.params.audioFormat"), config.audioFormat);
-    add(translate("library.tasks.params.audioSpeed"), config.audioSpeed);
-
-    add(translate("library.tasks.params.referenceImages"), formatReferenceList(input.referenceImages, translate("library.tasks.params.imageItem")));
-    add(translate("library.tasks.params.referenceVideos"), formatReferenceList(input.referenceVideos, translate("library.tasks.params.videoItem")));
-    add(translate("library.tasks.params.referenceAudios"), formatReferenceList(input.referenceAudios, translate("library.tasks.params.audioItem")));
-    add(translate("library.tasks.params.mask"), formatReferenceList(input.mask ? [input.mask] : [], translate("library.tasks.params.maskItem")));
-    return fields;
-}
-
-function parseTaskInput(value?: string): Record<string, unknown> | null {
-    if (!value) return null;
-    try {
-        const parsed: unknown = JSON.parse(value);
-        return asRecord(parsed);
-    } catch {
-        return null;
-    }
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function formatParameterValue(value: unknown) {
-    if (value === undefined || value === null || value === "") return "";
-    if (typeof value === "string") return value;
-    if (typeof value === "number" || typeof value === "boolean") return String(value);
-    return "";
-}
-
-function booleanParameter(value: unknown) {
-    if (value === true || value === "true") return translate("library.tasks.params.yes");
-    if (value === false || value === "false") return translate("library.tasks.params.no");
-    return undefined;
-}
-
-function formatReferenceList(value: unknown, kind: string) {
-    if (!Array.isArray(value) || !value.length) return translate("library.tasks.detail.none");
-    return value.map((item, index) => {
-        const reference = asRecord(item);
-        const name = typeof reference.name === "string" && reference.name.trim() && !/^https?:|^data:|^blob:/i.test(reference.name) ? reference.name.trim() : translate("library.tasks.params.numberedItem", { kind, index: index + 1 });
-        const dimensions = typeof reference.width === "number" && typeof reference.height === "number" ? `${reference.width}×${reference.height}` : "";
-        const duration = typeof reference.durationMs === "number" && reference.durationMs > 0 ? `${Math.round(reference.durationMs / 100) / 10}s` : "";
-        const details = [dimensions, duration].filter(Boolean).join(translate("library.tasks.params.detailSeparator"));
-        return details ? translate("library.tasks.params.itemWithDetails", { name, details }) : name;
-    }).join(translate("library.tasks.params.listSeparator"));
-}
-
-function formatTaskJson(value?: string) {
-    if (!value) return translate("library.tasks.detail.none");
-    try {
-        return JSON.stringify(JSON.parse(value), null, 2);
-    } catch {
-        return value;
-    }
 }

@@ -1,0 +1,588 @@
+/* 意见反馈弹窗：类型卡片、按类型的填写指引、附件和底栏。颜色和圆角都取主题 token，明暗主题自动适配。 */
+.feedback-shell {
+    display: flex;
+    flex-direction: column;
+    max-height: min(860px, calc(100dvh - 32px));
+    color: var(--text-primary);
+}
+
+/* ---- 顶栏 ---- */
+.feedback-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border);
+}
+
+.feedback-header-icon {
+    display: grid;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+.feedback-header-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.feedback-header-copy {
+    flex: 1;
+    min-width: 0;
+}
+
+.feedback-header-copy h2 {
+    margin: 0;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.feedback-header-copy p {
+    margin: 2px 0 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: 1.4;
+}
+
+.feedback-tabs {
+    flex: none;
+}
+
+.feedback-tab-label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.feedback-tab-count {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 10%, transparent);
+    font-size: var(--fs-label);
+    line-height: 16px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 有新的官方答复时在「我的反馈」上提示一个点。 */
+.feedback-tab-dot {
+    position: absolute;
+    top: -2px;
+    right: -7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+}
+
+.feedback-close {
+    display: grid;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.feedback-close:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.feedback-close svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ---- 主体 ---- */
+.feedback-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-5);
+}
+
+.feedback-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.feedback-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.feedback-label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px var(--space-1);
+    color: var(--text-primary);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+
+.feedback-label em {
+    color: var(--destructive);
+    font-style: normal;
+}
+
+.feedback-label-note {
+    margin-left: auto;
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+}
+
+/* ---- 反馈类型 ---- */
+.feedback-types {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.feedback-type {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.feedback-type:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.feedback-type[aria-checked="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+.feedback-type-icon {
+    display: grid;
+    flex: none;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.feedback-type-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+.feedback-type-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.feedback-type-copy strong {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.feedback-type[aria-checked="true"] .feedback-type-copy strong {
+    color: inherit;
+}
+
+.feedback-type-copy span {
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+    line-height: 1.35;
+}
+
+/* ---- 填写指引：随类型切换，模板一键填入详细说明 ---- */
+.feedback-guide {
+    margin-top: calc(-1 * var(--space-2));
+    padding: var(--space-3) var(--space-4);
+    border-radius: 12px;
+    background: var(--library-surface);
+}
+
+.feedback-guide-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-ui);
+}
+
+.feedback-guide-head svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+.feedback-guide-head strong {
+    min-width: 0;
+    font-weight: 600;
+}
+
+.feedback-guide-action {
+    flex: none;
+    height: 26px;
+    margin-left: auto;
+    padding: 0 10px;
+    border: 1px solid var(--input);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.feedback-guide-action:hover {
+    border-color: var(--text-tertiary);
+    background: var(--surface-hover);
+}
+
+.feedback-guide-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px var(--space-4);
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: feedback-guide;
+}
+
+.feedback-guide-list li {
+    position: relative;
+    padding-left: 24px;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: 18px;
+    counter-increment: feedback-guide;
+}
+
+.feedback-guide-list li::before {
+    content: counter(feedback-guide);
+    position: absolute;
+    top: 1px;
+    left: 0;
+    display: grid;
+    width: 16px;
+    height: 16px;
+    place-items: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 9%, transparent);
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    line-height: 16px;
+}
+
+/* ---- 附件 ---- */
+.feedback-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.feedback-attachment {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 88px;
+}
+
+.feedback-attachment-media,
+.feedback-attachment-media.ant-image {
+    display: block;
+    width: 88px;
+    height: 66px;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    background: var(--library-cover-surface);
+}
+
+.feedback-attachment-media .ant-image-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.feedback-attachment-media.is-video {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.feedback-attachment-media.is-video svg {
+    width: 18px;
+    height: 18px;
+}
+
+.feedback-attachment-size {
+    color: var(--text-tertiary);
+    font-size: var(--fs-label);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.feedback-attachment-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 2;
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-neutral-900) 72%, transparent);
+    color: var(--color-neutral-0);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.feedback-attachment-remove svg {
+    width: 12px;
+    height: 12px;
+}
+
+.feedback-attachment:hover .feedback-attachment-remove,
+.feedback-attachment:focus-within .feedback-attachment-remove {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .feedback-attachment-remove {
+        opacity: 1;
+    }
+}
+
+.feedback-dropzone {
+    display: flex;
+    flex: 1 1 100%;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    min-height: 72px;
+    padding: var(--space-3) var(--space-4);
+    border: 1px dashed var(--input);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.feedback-dropzone[data-compact] {
+    flex: 1 1 200px;
+    min-height: 66px;
+}
+
+.feedback-dropzone:hover:not(:disabled),
+.feedback-dropzone[data-dragging] {
+    border-color: var(--text-tertiary);
+    background: var(--surface-hover);
+}
+
+.feedback-dropzone:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+
+.feedback-dropzone > svg {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    color: var(--text-tertiary);
+}
+
+.feedback-dropzone-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.feedback-dropzone-copy strong {
+    color: var(--text-primary);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+
+.feedback-dropzone-copy span {
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+}
+
+/* ---- 底栏 ---- */
+.feedback-footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid var(--border);
+}
+
+.feedback-env {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.feedback-env .ant-checkbox-wrapper {
+    color: var(--text-secondary);
+    font-size: var(--fs-ui);
+}
+
+.feedback-env-info {
+    display: grid;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: help;
+}
+
+.feedback-env-info:hover {
+    color: var(--text-primary);
+}
+
+.feedback-env-info svg {
+    width: 14px;
+    height: 14px;
+}
+
+.feedback-actions {
+    display: flex;
+    flex: none;
+    gap: var(--space-2);
+}
+
+/* ---- 焦点 ---- */
+.feedback-close:focus-visible,
+.feedback-type:focus-visible,
+.feedback-guide-action:focus-visible,
+.feedback-dropzone:focus-visible,
+.feedback-attachment-media.is-video:focus-visible,
+.feedback-attachment-remove:focus-visible,
+.feedback-env-info:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+
+/* ---- 窄屏 ---- */
+@media (max-width: 640px) {
+    /* 第一行：图标 + 标题 + 关闭；页签换到第二行，与标题左对齐。 */
+    .feedback-header {
+        flex-wrap: wrap;
+        row-gap: var(--space-2);
+        padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+    }
+
+    .feedback-header-copy {
+        flex-basis: calc(100% - 92px);
+    }
+
+    .feedback-header-copy p {
+        display: none;
+    }
+
+    .feedback-tabs {
+        order: 3;
+        margin-left: 48px;
+    }
+
+    .feedback-body {
+        padding: var(--space-4);
+    }
+
+    .feedback-types {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .feedback-guide-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .feedback-label-note {
+        flex-basis: 100%;
+        margin-left: 0;
+    }
+
+    .feedback-footer {
+        flex-wrap: wrap;
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .feedback-actions {
+        flex: 1 1 100%;
+        justify-content: flex-end;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .feedback-close,
+    .feedback-type,
+    .feedback-guide-action,
+    .feedback-attachment-remove,
+    .feedback-dropzone {
+        transition: none;
+    }
+}

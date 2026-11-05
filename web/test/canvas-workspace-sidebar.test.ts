@@ -124,7 +124,7 @@ test("editor rail and expanded panel share one restrained glass surface without 
     expect(styles).toContain("border-radius: var(--r-2xl)");
     expect(styles).not.toContain("border-radius: calc(var(--radius) * 3.5)");
     expect(page).toContain('workspaceOpen ? "canvas-workspace-expanded" : ""');
-    // 短剧精修画布的无底板工具条（.is-bare，文件末尾）是唯一允许关闭模糊的规则；轨道与展开面板仍保持玻璃材质。
-    expect(styles.split(".canvas-floating-dock.is-bare")[0]).not.toContain("backdrop-filter: none");
+    // 轨道与展开面板保持玻璃材质；无底板的视图控制条样式在 canvas-zoom-controls.css，不在这里关闭模糊。
+    expect(styles).not.toContain("backdrop-filter: none");
     expect(styles).not.toContain("box-shadow: none");
 });

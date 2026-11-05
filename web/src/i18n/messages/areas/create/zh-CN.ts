@@ -194,6 +194,8 @@ export const zhCN = {
         regenerateContent: "页面只是没有及时拿到结果，建议先点「重新获取结果」。重新生成会提交新任务并再次扣费。",
         regenerateConfirm: "仍要重新生成",
         regenerateCancel: "先不",
+        regenerateUncertainTitle: "上一次请求的费用还不确定",
+        regenerateUncertainContent: "上游网关超时，原请求可能仍在执行并已产生费用。建议先核对上一次是否已扣费或出图。重新生成会提交新任务并再次扣费。",
         quickEditLabel: "快捷编辑提示词",
         quickEditPlaceholder: "继续描述你的创作想法…",
         expandComposer: "展开完整创作区",

@@ -1,0 +1,21 @@
+/* 画布视图控制条：无底板，与画布融为一体；图标用正文色加一层投影，在点阵、节点和图片上仍清晰。
+   通用 .canvas-floating-dock 底板写在 globals.css 的 @layer utilities 且带 !important，
+   行内样式和不分层规则都压不过，所以放进同一层、用更高特异性覆盖。 */
+@layer utilities {
+    .canvas-floating-dock.is-bare {
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        padding-inline: 0;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .canvas-floating-dock.is-bare .aceternity-dock-command svg {
+        filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--background) 85%, transparent));
+    }
+
+    .canvas-floating-dock.is-bare .aceternity-dock-separator {
+        opacity: 0.5;
+    }
+}

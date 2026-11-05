@@ -196,6 +196,9 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
         regenerateContent: "La page n'a peut-être simplement pas reçu le résultat. Essayez d'abord « Récupérer le résultat ». Régénérer soumet une nouvelle tâche et facture à nouveau.",
         regenerateConfirm: "Régénérer quand même",
         regenerateCancel: "Pas maintenant",
+        regenerateUncertainTitle: "La facturation de la dernière requête est encore incertaine",
+        regenerateUncertainContent:
+            "La passerelle amont a expiré : la requête d'origine est peut-être toujours en cours et déjà facturée. Vérifiez d'abord si elle a été facturée ou a produit une image. Régénérer soumet une nouvelle tâche et facture à nouveau.",
         quickEditLabel: "Modifier rapidement le prompt",
         quickEditPlaceholder: "Continuez à décrire votre idée…",
         expandComposer: "Ouvrir l'éditeur complet",

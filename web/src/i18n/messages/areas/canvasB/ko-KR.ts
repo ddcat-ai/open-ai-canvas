@@ -272,6 +272,10 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         fileCount: " · 파일 {{count}}개",
         autoLinkLabel: "{{label}} 참조",
         autoLinkText: "「{{query}}」 참조 → @{{label}}",
+        previewHint: "마우스를 올리거나 방향키로 선택하면 여기에서 크게 볼 수 있습니다",
+        keyHint: "방향키로 선택 · Enter로 확인 · Esc로 닫기",
+        keyHintBack: "방향키로 선택 · Enter로 확인 · Esc로 돌아가기",
+        folderCount: "{{count}}개",
     },
     miniMap: {
         label: "캔버스 미니맵",

@@ -11,6 +11,7 @@ import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
 import { WorkingDots } from "@/components/ai/working-indicator";
 import { UserAvatar } from "@/components/layout/user-avatar";
 import { generationErrorMessage } from "@/lib/generation-error";
+import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { generationPhaseHint, generationPhaseLabel, generationPhaseStep, generationTaskPhase, generationTaskSavingState, generationTaskShowsProgress, type GenerationPhase } from "@/lib/generation-task-display";
 import { useTaskElapsed } from "@/hooks/use-task-elapsed";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
@@ -154,7 +155,8 @@ function creationMessageState(item: CreationMessage): { tone: CreationMessageSta
     if (item.status === "cancelled") return { tone: "cancelled", label: "已停止" };
     if (item.status === "error") {
         if (creationMessageNeedsResultSync(item)) return { tone: "sync", label: "结果待同步" };
-        return item.mediaRecoverable ? { tone: "sync", label: "保存未完成" } : { tone: "error", label: "生成失败" };
+        if (item.mediaRecoverable) return { tone: "sync", label: "保存未完成" };
+        return isGenerationCostUncertainError(item.error) ? { tone: "sync", label: "费用待核对" } : { tone: "error", label: "生成失败" };
     }
     return null;
 }
@@ -559,8 +561,9 @@ function creationPendingSpecs(item: CreationMessage) {
 }
 
 /**
- * 失败卡片按“下一步该做什么”分三类：
- * 作品可能已生成（页面没拿到结果）→ 重新获取；作品已生成但保存失败 → 重新保存；后端确认失败 → 重新生成。
+ * 失败卡片按“下一步该做什么”分四类：
+ * 作品可能已生成（页面没拿到结果）→ 重新获取；作品已生成但保存失败 → 重新保存；
+ * 上游网关超时等费用不确定的失败 → 先核对再决定；后端确认失败 → 重新生成。
  */
 function CreationMediaFailure({ item, refreshing, onRefresh, onRecoverMedia, onRetry }: { item: CreationMessage; refreshing: boolean; onRefresh: () => void; onRecoverMedia: () => void; onRetry: () => void }) {
     const reason = generationErrorMessage(item.error || "生成失败");
@@ -617,6 +620,24 @@ function CreationMediaFailure({ item, refreshing, onRefresh, onRecoverMedia, onR
                             重新生成
                         </CreationNoticeButton>
                     </>
+                }
+            />
+        );
+    }
+    // 524 这类失败是同步请求被网关截断：上游可能仍在出图并计费，原任务也没有可回查的上游任务 ID。
+    // 不能像普通失败一样把“重新生成”放在主按钮，否则一次超时会被点成两笔费用。
+    if (isGenerationCostUncertainError(item.error)) {
+        return (
+            <CreationMediaNotice
+                tone="warning"
+                icon={AlertTriangle}
+                title="上游超时，费用待核对"
+                description="这次请求可能仍在上游执行并产生费用。使用平台积分时，冻结的积分会保留到核对完成后再结算或退回；重新生成会提交新任务并再次计费。"
+                detail={reason ? `原因：${reason}` : undefined}
+                actions={
+                    <CreationNoticeButton icon={RotateCcw} onClick={onRetry}>
+                        重新生成
+                    </CreationNoticeButton>
                 }
             />
         );

@@ -1,0 +1,960 @@
+/* 素材选择弹窗：创作页、自由画布、项目画布、工作台和角色库共用。
+   叠在封面上的角标用深色墨层，不随主题反色：封面可能是任意照片，深底白字在明暗主题下都可读。 */
+.asset-library-picker-modal {
+    --asset-picker-ink: color-mix(in srgb, var(--color-neutral-900) 72%, transparent);
+    --asset-picker-paper: var(--color-neutral-0);
+    --asset-picker-radius-card: 14px;
+    --asset-picker-radius-media: 10px;
+    --asset-picker-side-width: 200px;
+    margin: 0 auto !important;
+}
+
+.workspace-modal.workspace-modal-wide.asset-library-picker-modal {
+    width: min(1180px, calc(100vw - 32px)) !important;
+}
+
+.asset-library-picker-modal .ant-modal-close {
+    top: 18px;
+    right: 16px;
+}
+
+.asset-picker-shell {
+    display: flex;
+    flex-direction: column;
+    height: min(800px, calc(100dvh - 48px));
+    min-height: min(520px, calc(100dvh - 48px));
+    color: var(--text-primary);
+    overscroll-behavior: contain;
+}
+
+/* ---- 顶栏 ---- */
+.asset-picker-toolbar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 64px var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border);
+}
+
+.asset-picker-heading-icon {
+    display: grid;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+.asset-picker-heading-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.asset-picker-heading {
+    min-width: 0;
+}
+
+.asset-picker-heading-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.asset-picker-heading-copy > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: 1.3;
+}
+
+/* 不设百分比 max-width：列方向 flex 子项按 fit-content 自动收窄，百分比会让标题在求内容宽度时被压成省略号。 */
+.asset-picker-title-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 24px;
+    margin-left: -6px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.asset-picker-title-trigger:hover,
+.asset-picker-title-trigger[aria-expanded="true"] {
+    background: var(--surface-hover);
+}
+
+.asset-picker-title-trigger strong {
+    overflow: hidden;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-picker-title-trigger svg {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: var(--text-tertiary);
+    transition: transform 0.15s ease;
+}
+
+.asset-picker-title-trigger[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+}
+
+.asset-picker-search {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    width: min(320px, 40%);
+    height: 36px;
+    margin-left: auto;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--input);
+    border-radius: var(--radius-md);
+    background: transparent;
+    transition: border-color 0.15s ease;
+}
+
+.asset-picker-search:hover {
+    border-color: color-mix(in srgb, var(--foreground) 24%, transparent);
+}
+
+.asset-picker-search:focus-within {
+    border-color: var(--ring);
+}
+
+.asset-picker-search svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--text-tertiary);
+}
+
+.asset-picker-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: var(--fs-ui);
+}
+
+.asset-picker-search input::placeholder {
+    color: var(--text-tertiary);
+}
+
+/* 标题即数据源切换（本地 / 插件）。菜单渲染在 body 下，不能依赖弹窗内的变量。 */
+.asset-picker-source-dropdown .ant-dropdown-menu {
+    width: 160px !important;
+    min-width: 0 !important;
+    padding: 4px !important;
+}
+
+.asset-picker-source-dropdown .ant-dropdown-menu-item {
+    min-height: 32px;
+    padding: 4px 8px !important;
+    border-radius: var(--r-sm) !important;
+    font-size: var(--fs-ui);
+    line-height: 20px;
+}
+
+.asset-picker-source-dropdown .ant-dropdown-menu-item-icon {
+    width: 15px;
+    height: 15px;
+    margin-inline-end: 8px !important;
+}
+
+.asset-picker-source-menu-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.asset-picker-source-menu-label em {
+    color: color-mix(in srgb, currentColor 58%, transparent);
+    font-size: var(--fs-label);
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- 主体：左侧筛选 + 右侧网格 ---- */
+.asset-picker-body {
+    display: grid;
+    flex: 1;
+    grid-template-columns: var(--asset-picker-side-width) minmax(0, 1fr);
+    min-height: 0;
+}
+
+.asset-picker-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-4) var(--space-3);
+    border-right: 1px solid var(--border);
+}
+
+.asset-picker-nav-label {
+    padding: 0 var(--space-3) 6px;
+    color: var(--text-tertiary);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+.asset-picker-nav-label:not(:first-child) {
+    margin-top: var(--space-4);
+}
+
+.asset-picker-categories .assets-filter-item {
+    flex: none;
+    width: 100%;
+    height: 32px;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--fs-ui);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.asset-picker-categories .assets-filter-item:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.asset-picker-categories .assets-filter-item.is-active {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    font-weight: 500;
+}
+
+.asset-picker-categories .assets-filter-item.is-active:hover {
+    background: var(--control-selected-hover-bg);
+}
+
+.asset-picker-categories .assets-filter-count {
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: var(--fs-label);
+}
+
+.asset-picker-categories .assets-filter-item.is-active .assets-filter-count {
+    background: transparent;
+    color: inherit;
+    opacity: 0.7;
+}
+
+/* 回收站沉到侧栏底部；列表很长时跟在分类后面，用分隔线隔开。 */
+.asset-picker-recycle {
+    margin-top: auto;
+    padding-top: var(--space-4);
+}
+
+.asset-picker-recycle::before {
+    content: "";
+    display: block;
+    height: 1px;
+    margin: 0 var(--space-3) var(--space-3);
+    background: var(--border);
+}
+
+.asset-picker-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.asset-picker-grid-wrap {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+.asset-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+    align-content: start;
+    gap: var(--space-3);
+    transition: opacity 0.2s ease;
+}
+
+.asset-picker-grid[data-refreshing] {
+    opacity: 0.55;
+}
+
+.asset-picker-main .asset-picker-pagination {
+    flex: none;
+    margin-top: 0;
+    padding: var(--space-2) var(--space-5);
+    border-top: 1px solid var(--border);
+}
+
+/* ---- 素材卡片 ---- */
+.asset-library-picker-modal .asset-picker-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: 6px;
+    border-radius: var(--asset-picker-radius-card);
+    background: var(--library-surface);
+    box-shadow: none;
+    transition:
+        background-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.asset-library-picker-modal .asset-picker-card:hover,
+.asset-library-picker-modal .asset-picker-card:focus-within {
+    background: var(--library-surface-hover);
+}
+
+.asset-library-picker-modal .asset-picker-card.is-selected {
+    background: var(--library-surface-hover);
+    box-shadow: inset 0 0 0 1px var(--library-selected-stroke);
+}
+
+.asset-library-picker-modal .asset-picker-card > .asset-picker-card-action {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--asset-picker-radius-media);
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.asset-picker-card-action:disabled {
+    cursor: not-allowed;
+}
+
+.asset-picker-card-action:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+
+.asset-picker-card-media {
+    position: relative;
+    /* 自成层叠上下文：封面内部的 z-index 不会盖过角标和勾选。 */
+    isolation: isolate;
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: var(--asset-picker-radius-media);
+    background: var(--library-cover-surface);
+}
+
+.asset-picker-card-media > img,
+.asset-picker-card-media > video,
+.asset-picker-card-media > .cached-resource-image-shell {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+}
+
+.asset-picker-card-media > img,
+.asset-picker-card-media > video,
+.asset-picker-card-media > .cached-resource-image-shell > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.asset-picker-card-media > img,
+.asset-picker-card-media > .cached-resource-image-shell > img {
+    transition: opacity 0.28s ease;
+}
+
+.asset-picker-card-media > img.is-contain,
+.asset-picker-card-media > .cached-resource-image-shell > img.is-contain {
+    padding: 6px;
+    object-fit: contain;
+}
+
+/* ---- 加载：扫光铺在封面下层，图片到达后在其上淡入；占位图标出现时关闭扫光 ---- */
+.asset-picker-card-media::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: none;
+    background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--foreground) 7%, transparent) 50%, transparent 80%);
+    transform: translateX(-100%);
+    animation: asset-picker-shimmer 1.4s ease-in-out infinite;
+}
+
+.asset-picker-card-media[data-state="loading"]::before {
+    display: block;
+}
+
+.asset-picker-card-media:has(> .asset-picker-card-fallback)::before {
+    display: none;
+}
+
+.asset-picker-card-media[data-state="loading"] > img,
+.asset-picker-card-media[data-state="loading"] > .cached-resource-image-shell > img {
+    opacity: 0;
+}
+
+.asset-picker-card-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    background: var(--library-cover-surface);
+    color: var(--text-tertiary);
+}
+
+.asset-picker-card-fallback svg {
+    width: 24px;
+    height: 24px;
+}
+
+@keyframes asset-picker-shimmer {
+    to {
+        transform: translateX(100%);
+    }
+}
+
+.asset-picker-card-kind {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100% - 48px);
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--asset-picker-ink);
+    color: var(--asset-picker-paper);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    line-height: 1;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+}
+
+.asset-picker-card-kind svg {
+    flex: none;
+    width: 11px;
+    height: 11px;
+}
+
+.asset-picker-card-kind span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-picker-card-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border: 1.5px solid color-mix(in srgb, var(--asset-picker-paper) 90%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-neutral-900) 30%, transparent);
+    color: transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 0.15s ease,
+        background-color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.asset-picker-card-check svg {
+    width: 12px;
+    height: 12px;
+}
+
+.asset-picker-card:hover .asset-picker-card-check,
+.asset-picker-card:focus-within .asset-picker-card-check,
+.asset-picker-card.is-selected .asset-picker-card-check {
+    opacity: 1;
+}
+
+.asset-picker-card.is-selected .asset-picker-card-check {
+    border-color: transparent;
+    background: var(--control-check-bg);
+    color: var(--control-check-fg);
+}
+
+/* 不可选：封面压一层卡片底色，原因文字留在最上层保持可读。 */
+.asset-picker-card.is-disabled .asset-picker-card-media::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: color-mix(in srgb, var(--library-surface) 55%, transparent);
+}
+
+.asset-picker-card.is-disabled .asset-picker-card-check {
+    display: none;
+}
+
+.asset-picker-card.is-disabled .asset-picker-card-copy {
+    opacity: 0.55;
+}
+
+.asset-picker-card-lock {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    z-index: 3;
+    max-width: calc(100% - 16px);
+    overflow: hidden;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--asset-picker-ink);
+    color: var(--asset-picker-paper);
+    font-size: var(--fs-label);
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-picker-card-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 4px 2px;
+}
+
+.asset-picker-card-copy strong,
+.asset-picker-card-copy > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-picker-card-copy strong {
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.asset-picker-card-copy > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: 1.4;
+}
+
+/* 试听按钮层与封面同位同尺寸，按钮不嵌套在选择按钮里。 */
+.asset-picker-card-overlay {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    left: 6px;
+    z-index: 3;
+    aspect-ratio: 4 / 3;
+    pointer-events: none;
+}
+
+.asset-picker-card.is-skeleton {
+    pointer-events: none;
+}
+
+.asset-picker-card.is-skeleton .asset-picker-card-copy {
+    gap: var(--space-2);
+    padding-top: 3px;
+}
+
+.asset-picker-skeleton-line {
+    display: block;
+    width: 68%;
+    height: 12px;
+    border-radius: 4px;
+    background: var(--skeleton-surface);
+}
+
+.asset-picker-skeleton-line.is-sm {
+    width: 42%;
+    height: 10px;
+}
+
+/* ---- 空态 ---- */
+.asset-picker-empty {
+    display: grid;
+    flex: 1;
+    align-content: center;
+    justify-items: center;
+    gap: var(--space-2);
+    min-height: 260px;
+    padding: var(--space-6);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    text-align: center;
+}
+
+.asset-picker-empty > svg {
+    width: 32px;
+    height: 32px;
+    margin-bottom: var(--space-1);
+    color: var(--text-tertiary);
+}
+
+.asset-picker-empty strong {
+    color: var(--text-primary);
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+
+.asset-picker-empty > span {
+    max-width: 360px;
+    line-height: 1.5;
+}
+
+.asset-picker-empty .ant-btn {
+    margin-top: var(--space-2);
+}
+
+/* ---- 底栏：上传 + 已选托盘 + 操作 ---- */
+.asset-picker-footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 64px;
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid var(--border);
+}
+
+.asset-picker-upload {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    max-width: 280px;
+    min-height: 40px;
+    padding: 4px var(--space-3);
+    border: 1px dashed var(--input);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.asset-picker-upload:hover:not(:disabled) {
+    border-color: var(--text-tertiary);
+    background: var(--surface-hover);
+}
+
+.asset-picker-upload:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+
+.asset-picker-upload > svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--text-secondary);
+}
+
+.asset-picker-upload > span {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.asset-picker-upload strong {
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+
+.asset-picker-upload small {
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font-size: var(--fs-label);
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-picker-tray {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 40px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.asset-picker-tray-item {
+    position: relative;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--library-cover-surface);
+    cursor: pointer;
+}
+
+.asset-picker-tray-item:disabled {
+    cursor: default;
+}
+
+.asset-picker-tray-item > img,
+.asset-picker-tray-item > .cached-resource-image-shell > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.asset-picker-tray-fallback {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    color: var(--text-tertiary);
+}
+
+.asset-picker-tray-fallback svg {
+    width: 16px;
+    height: 16px;
+}
+
+.asset-picker-tray-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 2;
+    display: grid;
+    width: 16px;
+    height: 16px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--asset-picker-ink);
+    color: var(--asset-picker-paper);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.asset-picker-tray-remove svg {
+    width: 10px;
+    height: 10px;
+    stroke-width: 2.5;
+}
+
+.asset-picker-tray-item:hover:not(:disabled) .asset-picker-tray-remove,
+.asset-picker-tray-item:focus-visible .asset-picker-tray-remove {
+    opacity: 1;
+}
+
+.asset-picker-footer-note {
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-picker-count {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    font-variant-numeric: tabular-nums;
+}
+
+.asset-picker-footer-error {
+    max-width: 240px;
+    color: var(--destructive);
+    font-size: var(--fs-caption);
+    line-height: 1.45;
+}
+
+.asset-picker-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.asset-picker-actions .ant-btn {
+    box-shadow: none;
+}
+
+.asset-picker-actions svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ---- 焦点 ---- */
+.asset-picker-title-trigger:focus-visible,
+.asset-picker-categories .assets-filter-item:focus-visible,
+.asset-picker-upload:focus-visible,
+.asset-picker-tray-item:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+
+/* ---- 窄屏：筛选改为横向滚动胶囊，底栏换行 ---- */
+@media (max-width: 760px) {
+    .asset-picker-shell {
+        height: calc(100dvh - 32px);
+        min-height: 0;
+    }
+
+    .asset-picker-toolbar {
+        flex-wrap: wrap;
+        padding: var(--space-3) 56px var(--space-3) var(--space-4);
+    }
+
+    .asset-picker-search {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .asset-picker-body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .asset-picker-categories {
+        flex-direction: row;
+        gap: 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: var(--space-2) var(--space-4);
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        scrollbar-width: none;
+    }
+
+    .asset-picker-nav-label {
+        display: none;
+    }
+
+    .asset-picker-categories .assets-filter-item {
+        width: auto;
+        height: 30px;
+        border-radius: 999px;
+        background: var(--library-surface);
+    }
+
+    .asset-picker-recycle {
+        display: flex;
+        flex: none;
+        margin-top: 0;
+        padding-top: 0;
+    }
+
+    .asset-picker-recycle::before {
+        display: none;
+    }
+
+    .asset-picker-grid-wrap {
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .asset-picker-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-2);
+    }
+
+    .asset-picker-main .asset-picker-pagination {
+        padding-inline: var(--space-4);
+    }
+
+    .asset-picker-footer {
+        flex-wrap: wrap;
+        gap: var(--space-2) var(--space-3);
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .asset-picker-upload {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+    .asset-picker-count {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .asset-picker-card-media::before {
+        animation: none;
+        transform: none;
+        background: var(--skeleton-surface);
+    }
+
+    .asset-picker-card-media > img,
+    .asset-picker-card-media > .cached-resource-image-shell > img,
+    .asset-picker-grid,
+    .asset-library-picker-modal .asset-picker-card,
+    .asset-picker-card-check,
+    .asset-picker-title-trigger,
+    .asset-picker-title-trigger svg,
+    .asset-picker-search,
+    .asset-picker-categories .assets-filter-item,
+    .asset-picker-upload,
+    .asset-picker-tray-remove {
+        transition: none;
+    }
+}

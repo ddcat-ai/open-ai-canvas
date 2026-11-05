@@ -196,6 +196,8 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         regenerateContent: "페이지가 결과를 제때 받지 못했을 수 있습니다. 먼저 「결과 다시 가져오기」를 눌러 보세요. 다시 생성하면 새 작업이 제출되고 다시 과금됩니다.",
         regenerateConfirm: "그래도 다시 생성",
         regenerateCancel: "나중에",
+        regenerateUncertainTitle: "이전 요청의 과금 상태가 아직 확정되지 않았습니다",
+        regenerateUncertainContent: "업스트림 게이트웨이 시간이 초과되어 원래 요청이 아직 실행 중이고 이미 과금되었을 수 있습니다. 먼저 과금 여부와 이미지 생성 여부를 확인하세요. 다시 생성하면 새 작업이 제출되고 다시 과금됩니다.",
         quickEditLabel: "프롬프트 빠른 편집",
         quickEditPlaceholder: "창작 아이디어를 계속 설명하세요…",
         expandComposer: "전체 창작 영역 펼치기",

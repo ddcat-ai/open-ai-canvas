@@ -580,6 +580,8 @@ export type CanvasNodeMetadata = {
     mediaConversion?: MediaConversionNodeState;
     /** 用户手动拉伸过尺寸；图片按真实比例自动适配时避让它。 */
     manualSize?: boolean;
+    /** 用户手动改过节点名称；原位重新生成时保留，不再换成提示词摘要。 */
+    manualTitle?: boolean;
     storyboard?: StoryboardData;
     storyboardShotDuration?: StoryboardShotDuration;
     storyboardShotCount?: StoryboardShotCount;

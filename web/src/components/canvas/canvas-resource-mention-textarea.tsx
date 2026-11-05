@@ -10,7 +10,7 @@ import { buildAssetMentionReferences, canvasResourceMentionToken, findCanvasReso
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useResolvedCanvasResourceReferences } from "./use-resolved-canvas-resource-references";
 import { InlineReferencePreview, referencePreviewUrl, syncInlineMentionPreviews } from "./canvas-mention-chips";
-import { MentionMenu, clamp, mentionCaretRect } from "./canvas-mention-menu";
+import { MentionMenu, clamp, mentionCaretRect, type MentionMenuKeyboard } from "./canvas-mention-menu";
 import { MentionHoverPreview, useMentionHoverPreview } from "./canvas-mention-hover-preview";
 import {
     editableMentionTokenEndingAt,
@@ -129,7 +129,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const pendingScrollTopRef = useRef<number | null>(null);
     const lastRenderedValueRef = useRef("");
     const [mention, setMention] = useState<MentionState | null>(null);
-    const [activeIndex, setActiveIndex] = useState(-1);
+    const mentionKeyboardRef = useRef<MentionMenuKeyboard | null>(null);
     const [autoLinkCursor, setAutoLinkCursor] = useState<number | null>(null);
     const autoLinkSuggestionRef = useRef<HTMLButtonElement | null>(null);
     const [autoLinkPosition, setAutoLinkPosition] = useState<{ left: number; top: number } | null>(null);
@@ -143,12 +143,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const mentionCanvasReferences = useMemo(() => canvasReferences.filter((item) => item.kind !== "tool"), [canvasReferences]);
     const activeMentionCanvasReferences = useMemo(() => mentionCanvasReferences.filter((item) => item.active), [mentionCanvasReferences]);
     const availableReferences = useMemo(() => [...(onSelectReference ? mentionCanvasReferences : activeMentionCanvasReferences), ...assetReferences], [onSelectReference, mentionCanvasReferences, activeMentionCanvasReferences, assetReferences]);
-    const candidates = useMemo(() => {
-        if (!mention) return [];
-        const query = mention.query.trim().toLowerCase();
-        if (!query) return onSelectReference ? mentionCanvasReferences : activeMentionCanvasReferences;
-        return availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(query));
-    }, [onSelectReference, mentionCanvasReferences, activeMentionCanvasReferences, availableReferences, mention]);
+    // 只在有查询词时使用；空查询时菜单按连线节点、技能和素材库分类分组展示。
+    const mentionQuery = mention?.query.trim().toLowerCase() || "";
+    const filteredReferences = useMemo(
+        () => (mentionQuery ? availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(mentionQuery)) : []),
+        [availableReferences, mentionQuery],
+    );
     const activeReferences = useMemo(() => {
         if (!highlightLabels) return [];
         return [...activeCanvasReferences, ...assetReferences.filter((item) => value.includes(canvasResourceMentionToken(item)))];
@@ -333,9 +333,16 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         };
     });
 
-    const closeMention = () => {
-        setMention(null);
-        setActiveIndex(-1);
+    const closeMention = () => setMention(null);
+
+    // 菜单打开时方向键、Enter/Tab、Esc 先交给菜单，按它当前显示的候选处理；输入法组字期间不拦截。
+    // 菜单处理过的按键不再冒泡：弹窗在 window 上监听 Esc，放大编辑里返回上一层或关菜单时不能把弹窗一起关掉。
+    const handleMentionKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+        if (!mention || event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229) return false;
+        if (!mentionKeyboardRef.current?.handleKeyDown(event)) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
     };
 
     const syncMention = (nextValue: string, cursor: number) => {
@@ -349,10 +356,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         }
         const nextMention = { start: match.index, end: cursor, query: match[1] };
         const isSameMention = mention?.start === nextMention.start && mention.end === nextMention.end && mention.query === nextMention.query;
-        if (!isSameMention) {
-            setMention(nextMention);
-            setActiveIndex(-1);
-        }
+        if (!isSameMention) setMention(nextMention);
     };
 
     const insertReference = (reference: CanvasResourceReference) => {
@@ -466,14 +470,16 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const menu =
         !readOnly && mention && availableReferences.length && menuAnchor ? (
             <MentionMenu
+                // 换到另一个 @ 时重置分类和高亮。
+                key={mention.start}
                 anchor={menuAnchor}
                 connectedReferences={activeMentionCanvasReferences}
                 assetReferences={assetReferences}
-                filteredReferences={candidates}
+                filteredReferences={filteredReferences}
                 query={mention.query}
                 cursorOffset={mention.end}
-                activeReferenceId={activeIndex >= 0 ? candidates[Math.min(activeIndex, candidates.length - 1)]?.id : undefined}
                 preferredWidth={mentionMenuWidth}
+                keyboardRef={mentionKeyboardRef}
                 onQueryChange={(query) => setMention((current) => (current ? { ...current, query } : current))}
                 onClose={closeMention}
                 onSelect={insertReference}
@@ -588,28 +594,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                             insertAutoLink(autoLinkMatch);
                             return;
                         }
-                        if (mention && candidates.length) {
-                            if (event.key === "ArrowDown") {
-                                event.preventDefault();
-                                setActiveIndex((index) => (index < 0 ? 0 : (index + 1) % candidates.length));
-                                return;
-                            }
-                            if (event.key === "ArrowUp") {
-                                event.preventDefault();
-                                setActiveIndex((index) => (index < 0 ? candidates.length - 1 : (index - 1 + candidates.length) % candidates.length));
-                                return;
-                            }
-                            if (event.key === "Enter" || event.key === "Tab") {
-                                event.preventDefault();
-                                insertReference(candidates[activeIndex < 0 ? 0 : Math.min(activeIndex, candidates.length - 1)]);
-                                return;
-                            }
-                            if (event.key === "Escape") {
-                                event.preventDefault();
-                                closeMention();
-                                return;
-                            }
-                        }
+                        if (handleMentionKeyDown(event)) return;
                         if (event.key === "Enter") {
                             event.preventDefault();
                             const shouldSubmit = shouldSubmitOnEnter(event, sendOnEnter);
@@ -745,28 +730,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         insertAutoLink(autoLinkMatch);
                         return;
                     }
-                    if (mention && candidates.length) {
-                        if (event.key === "ArrowDown") {
-                            event.preventDefault();
-                            setActiveIndex((index) => (index < 0 ? 0 : (index + 1) % candidates.length));
-                            return;
-                        }
-                        if (event.key === "ArrowUp") {
-                            event.preventDefault();
-                            setActiveIndex((index) => (index < 0 ? candidates.length - 1 : (index - 1 + candidates.length) % candidates.length));
-                            return;
-                        }
-                        if (event.key === "Enter") {
-                            event.preventDefault();
-                            insertReference(candidates[activeIndex < 0 ? 0 : Math.min(activeIndex, candidates.length - 1)]);
-                            return;
-                        }
-                        if (event.key === "Escape") {
-                            event.preventDefault();
-                            closeMention();
-                            return;
-                        }
-                    }
+                    if (handleMentionKeyDown(event)) return;
                     const shouldSubmit = shouldSubmitOnEnter(event, sendOnEnter);
                     if (shouldSubmit && onSubmit) {
                         event.preventDefault();

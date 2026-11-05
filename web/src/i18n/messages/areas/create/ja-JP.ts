@@ -196,6 +196,8 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         regenerateContent: "ページが結果を受け取れていないだけかもしれません。まず「結果を再取得」をお試しください。再生成すると新しいタスクが送信され、再度課金されます。",
         regenerateConfirm: "それでも再生成",
         regenerateCancel: "やめておく",
+        regenerateUncertainTitle: "前回のリクエストの課金状況がまだ確定していません",
+        regenerateUncertainContent: "上流ゲートウェイがタイムアウトしました。元のリクエストはまだ実行中で、すでに課金されている可能性があります。まず課金や画像生成の有無を確認してください。再生成すると新しいタスクが送信され、再度課金されます。",
         quickEditLabel: "プロンプトをクイック編集",
         quickEditPlaceholder: "アイデアの説明を続ける…",
         expandComposer: "作成エリアを全体表示",

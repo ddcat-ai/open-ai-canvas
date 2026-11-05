@@ -95,7 +95,8 @@ export function useCanvasNodeEditor({
     const handleNodeTitleChange = useCallback((nodeId: string, title: string) => {
         const node = nodesRef.current.find((node) => node.id === nodeId);
         if (!node || node.metadata?.locked || node.title === title || !canvasEditLeases.input(canvasId, nodeId)) return;
-        setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, title } : node)));
+        // 标记为用户命名：之后原位重新生成沿用这个名称，不再用提示词开头覆盖。标题逐字输入时 metadata 只换一次引用。
+        setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, title, metadata: node.metadata?.manualTitle ? node.metadata : { ...node.metadata, manualTitle: true } } : node)));
     }, [canvasId, nodesRef, setNodes]);
 
     const handleFolderStyleChange = useCallback((nodeId: string, style: CanvasFolderStyle) => {

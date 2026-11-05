@@ -273,6 +273,10 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         fileCount: " · {{count}} files",
         autoLinkLabel: "Reference {{label}}",
         autoLinkText: 'Reference "{{query}}" → @{{label}}',
+        previewHint: "Hover or use the arrow keys to see a larger preview here",
+        keyHint: "Arrow keys to move · Enter to confirm · Esc to close",
+        keyHintBack: "Arrow keys to move · Enter to confirm · Esc to go back",
+        folderCount: "{{count}} items",
     },
     miniMap: {
         label: "Canvas minimap",

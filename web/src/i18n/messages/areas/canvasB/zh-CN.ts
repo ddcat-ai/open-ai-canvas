@@ -270,6 +270,10 @@ export const zhCN = {
         fileCount: " · {{count}} 文件",
         autoLinkLabel: "引用{{label}}",
         autoLinkText: "引用「{{query}}」→ @{{label}}",
+        previewHint: "悬停或用方向键选中，在这里看大图",
+        keyHint: "方向键选择 · Enter 确认 · Esc 关闭",
+        keyHintBack: "方向键选择 · Enter 确认 · Esc 返回",
+        folderCount: "{{count}} 项",
     },
     miniMap: {
         label: "画布小地图",

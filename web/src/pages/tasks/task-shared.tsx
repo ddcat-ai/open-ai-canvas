@@ -1,9 +1,9 @@
-import { Coins } from "lucide-react";
+import { Coins, FileText, Image as ImageIcon, Video, type LucideIcon } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
 import { taskBillingDisplay, taskBillingLabel } from "@/lib/generation-task-billing";
-import { mediaDeliverySummary } from "@/lib/generation-task-display";
-import type { GenerationTask, TaskStatus } from "@/services/api/task-center";
+import { generationTaskStatusLabel, mediaDeliverySummary } from "@/lib/generation-task-display";
+import type { GenerationTask } from "@/services/api/task-center";
 import { modelDisplayName, type AiConfig } from "@/stores/use-config-store";
 import { RelativeTime } from "@/components/ui/product/relative-time";
 import { translate } from "@/i18n";
@@ -39,12 +39,33 @@ export function providerCancelStatusLabel(task: GenerationTask) {
     return task.billing?.status === "refunded" ? translate("library.tasks.cancel.beforeUpstream") : translate("library.tasks.cancel.cancelled");
 }
 
-export function statusDotClassName(status: TaskStatus) {
-    if (status === "succeeded") return "task-record-dot is-success";
-    if (status === "running") return "task-record-dot is-active is-pulsing";
-    if (status === "queued") return "task-record-dot is-queued";
-    if (status === "failed") return "task-record-dot is-failed";
-    return "task-record-dot is-idle";
+export function isTaskActive(task: GenerationTask) {
+    return task.status === "queued" || task.status === "running";
+}
+
+/** 内容审核失败的任务按原输入重试仍会失败，界面上不提供自动重试。 */
+export function isTaskRetryBlocked(task: GenerationTask) {
+    return task.errorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(task.error);
+}
+
+export type TaskTone = "running" | "queued" | "success" | "failed" | "cancelled";
+
+export function taskTone(task: GenerationTask): TaskTone {
+    if (task.status === "running") return "running";
+    if (task.status === "queued") return "queued";
+    if (task.status === "succeeded") return "success";
+    if (task.status === "cancelled") return "cancelled";
+    return "failed";
+}
+
+/** 状态胶囊：圆点 + 文案，颜色由 data-tone 决定，运行中圆点会呼吸。 */
+export function TaskStatusPill({ task, className = "" }: { task: GenerationTask; className?: string }) {
+    return (
+        <span className={`task-center-status ${className}`} data-tone={taskTone(task)}>
+            <i aria-hidden="true" />
+            {generationTaskStatusLabel(task)}
+        </span>
+    );
 }
 
 export function taskMediaKind(task: GenerationTask): "text" | "image" | "video" {
@@ -54,22 +75,27 @@ export function taskMediaKind(task: GenerationTask): "text" | "image" | "video" 
     return "text";
 }
 
+export function taskKindIcon(task: GenerationTask): LucideIcon {
+    const kind = taskMediaKind(task);
+    return kind === "video" ? Video : kind === "image" ? ImageIcon : FileText;
+}
+
 export function TaskDate({ value }: { value?: string }) {
-    if (!value || !Number.isFinite(Date.parse(value))) return <span className="text-xs text-foreground/38">-</span>;
-    return <RelativeTime className="task-record-date-value" value={value} />;
+    if (!value || !Number.isFinite(Date.parse(value))) return <span className="task-center-muted">-</span>;
+    return <RelativeTime value={value} />;
 }
 
 export function TaskBilling({ billing }: { billing?: GenerationTask["billing"] }) {
-    if (!billing) return <span className="task-record-billing-empty text-xs text-foreground/30">-</span>;
+    if (!billing) return <span className="task-center-muted">-</span>;
     const display = taskBillingDisplay(billing);
     return (
-        <div className={`task-record-billing ${display.tone === "uncertain" ? "is-uncertain" : ""}`} title={taskBillingLabel(billing)}>
-            <Coins className="size-4" />
+        <span className="task-center-billing" data-tone={display.tone} title={taskBillingLabel(billing)}>
+            <Coins aria-hidden="true" />
             <span>
                 <strong>{display.amount}</strong>
                 <small>{display.refundNote ? `${display.note} · ${display.refundNote}` : display.note}</small>
             </span>
-        </div>
+        </span>
     );
 }
 

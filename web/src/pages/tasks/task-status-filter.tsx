@@ -15,22 +15,22 @@ export function TaskStatusFilterBar({ stats, value, onChange }: { stats: TaskSta
     ] satisfies Array<{ value: TaskStatusFilter; label: string; count: number }>;
 
     return (
-        <div className="task-status-filter">
-            <span className="task-status-today">{t("library.tasks.filter.today")} <strong>{stats.today}</strong></span>
-            <SegmentedControl<TaskStatusFilter>
-                size="sm"
-                value={value}
-                options={options.map((option) => ({
-                    value: option.value,
-                    label: (
-                        <>
-                            <span>{option.label}</span>
-                            <span className="app-segmented-count">{option.count}</span>
-                        </>
-                    ),
-                }))}
-                onChange={onChange}
-            />
-        </div>
+        <SegmentedControl<TaskStatusFilter>
+            className="task-center-status-filter"
+            ariaLabel={t("library.tasks.detail.status")}
+            value={value}
+            options={options.map((option) => ({
+                value: option.value,
+                label: (
+                    <>
+                        <span>{option.label}</span>
+                        <span className="app-segmented-count" data-tone={option.value === "failed" && option.count > 0 ? "failed" : option.value === "active" && option.count > 0 ? "active" : undefined}>
+                            {option.count}
+                        </span>
+                    </>
+                ),
+            }))}
+            onChange={onChange}
+        />
     );
 }

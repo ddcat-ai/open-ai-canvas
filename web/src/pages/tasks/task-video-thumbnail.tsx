@@ -16,13 +16,15 @@ export function TaskVideoThumbnail({ src }: { src: string }) {
         const capture = () => {
             if (started || controller.signal.aborted) return;
             started = true;
-            void captureVideoPoster(src, { signal: controller.signal, maxWidth: 400 }).then((result) => {
-                if (controller.signal.aborted || !result.poster) return;
-                objectUrl = URL.createObjectURL(result.poster);
-                setPoster({ source: src, url: objectUrl });
-            }).catch((error) => {
-                if (!controller.signal.aborted) console.warn("任务视频首帧提取失败", error instanceof Error ? error.name : "UnknownError");
-            });
+            void captureVideoPoster(src, { signal: controller.signal, maxWidth: 400 })
+                .then((result) => {
+                    if (controller.signal.aborted || !result.poster) return;
+                    objectUrl = URL.createObjectURL(result.poster);
+                    setPoster({ source: src, url: objectUrl });
+                })
+                .catch((error) => {
+                    if (!controller.signal.aborted) console.warn("任务视频首帧提取失败", error instanceof Error ? error.name : "UnknownError");
+                });
         };
         const observer = new IntersectionObserver((entries) => {
             if (entries.some((entry) => entry.isIntersecting)) {
@@ -37,7 +39,16 @@ export function TaskVideoThumbnail({ src }: { src: string }) {
             if (objectUrl) URL.revokeObjectURL(objectUrl);
         };
     }, [src]);
-    return <span ref={container} className="block h-full w-full">
-        {poster?.source === src ? <MediaPreview src={poster.url} kind="image" className="h-full w-full object-cover" /> : <span className="task-video-poster-placeholder"><Video /><small>{t("library.tasks.row.videoPreview")}</small></span>}
-    </span>;
+    return (
+        <span ref={container} className="task-center-video-thumb">
+            {poster?.source === src ? (
+                <MediaPreview src={poster.url} kind="image" />
+            ) : (
+                <span className="task-center-video-placeholder">
+                    <Video aria-hidden="true" />
+                    <small>{t("library.tasks.row.videoPreview")}</small>
+                </span>
+            )}
+        </span>
+    );
 }
