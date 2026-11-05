@@ -33,7 +33,7 @@ func (r *Repository) AddSkillVersion(skill *model.Skill, version *model.SkillVer
 				return err
 			}
 		}
-		return tx.Save(skill).Error
+		return tx.Omit(skillStatusColumn).Save(skill).Error
 	})
 }
 
@@ -57,7 +57,7 @@ func (r *Repository) AddSkillVersionIfCurrent(skill *model.Skill, version *model
 				return err
 			}
 		}
-		if err := tx.Save(skill).Error; err != nil {
+		if err := tx.Omit(skillStatusColumn).Save(skill).Error; err != nil {
 			return err
 		}
 		applied = true
@@ -92,6 +92,9 @@ func (r *Repository) AutoUpdatingGitHubSkills() ([]model.Skill, error) {
 	return skills, err
 }
 
+// skillStatusColumn 只由 UpdateSkillStatus 修改：同步、编辑等整行保存可能持有下架前读出的旧行，不能把下架改回上架。
+const skillStatusColumn = "status"
+
 func (r *Repository) SaveSkill(skill *model.Skill) error {
-	return r.db.Save(skill).Error
+	return r.db.Omit(skillStatusColumn).Save(skill).Error
 }

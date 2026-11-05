@@ -746,7 +746,7 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 
 ## 技能包文件 API
 
-以下接口需要登录。读取接口沿用技能可见性（私有技能仅作者可读）；写入只允许作者。
+以下接口需要登录。读取接口沿用技能可见性（私有技能仅作者可读）；写入只允许作者。管理员通过 `/api/admin/skills/:id/...` 读写任意技能，见“管理员技能管理”。
 
 | 方法 | 路径 | 行为 |
 | --- | --- | --- |
@@ -774,6 +774,30 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 - `SKILL.md` 变化时同步 `skills.instruction`；frontmatter 的 `metadata.version` 作为版本号，缺省时使用时间戳。单文件 Markdown 技能编辑后包含多个文件时 `sourceType` 变为 `zip`，避免技能信息抽屉以 instruction 重建整包时丢失附属文件。
 - GitHub 技能返回 409 `failed_precondition`，请在仓库修改后同步。内容与当前版本完全相同时返回 `changed=false`，不生成新版本。
 - 成功响应 `data={ skill, files, changed }`；单个操作校验失败返回 400，`details.operationIndex` 指向出错的操作。
+
+## 管理员技能管理
+
+以下接口需要管理员权限（service 层 `RequireAdmin`），可访问全部技能，包括私有和已下架的技能。写操作成功后写入管理员审计事件（`skill.update_info`、`skill.enable`、`skill.disable`、`skill.delete`、`skill.edit_files`）。
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/api/admin/skills?keyword=&status=&sourceType=&tag=&page=&pageSize=` | 按最近更新排序的分页列表。`status` 为 `enabled` / `disabled`；`sourceType` 为 `builtin` / `markdown`（含旧数据空来源）/ `zip` / `github`；`keyword` 匹配 ID、名称、简介、作者、所有者昵称和用户名、GitHub 地址。`pageSize` 默认 20、最大 100。返回 `{ skills, total, page, pageSize, categories }` |
+| GET | `/api/admin/skills/:id` | `{ skill }` |
+| PUT | `/api/admin/skills/:id` | 修改基本信息 `{ skillName, description, tag, markdownUrl, showcaseMedia, extraInfo }`，校验规则与作者编辑相同；`markdownUrl` 与原值相同时不按外链校验（内置技能保存的是包内相对路径）。不改正文、不重建文件包、不改公开状态。写入 `admin_info_edited_at` |
+| PATCH | `/api/admin/skills/:id/status` | `{ enabled: boolean }` 上架或下架，返回 `{ skill }`；不刷新 `updated_at` |
+| DELETE | `/api/admin/skills/:id` | 永久删除技能、全部版本、文件索引、策展归类和用户加入 / 收藏关系，并删除文件包目录。内置技能同时写入 tombstone，启动同步不再重建 |
+| GET | `/api/admin/skills/:id/files` | 文件清单，同作者接口 |
+| GET | `/api/admin/skills/:id/file?path=` | 单个文件，同作者接口 |
+| GET | `/api/admin/skills/:id/file/raw?path=` | 原始字节，响应头同作者接口 |
+| PUT | `/api/admin/skills/:id/files` | 请求、校验、乐观锁和错误与 `PUT /api/skills/:id/files` 相同；GitHub 技能同样返回 409 `failed_precondition`。生成新版本时写入 `admin_content_edited_at` |
+
+后台条目在技能字段之外增加 `enabled`、`contentEditable`（GitHub 技能为 `false`）、`adminInfoEditedAt`、`adminContentEditedAt`。`skills.status` 为 `1` 表示上架，`0` 表示下架。下架的技能对所有用户接口都按不存在处理，包括作者本人：技能广场、我的技能、`/api/skills/added`、Agent 目录和技能文件读取都看不到它；数据、版本和用户关系保留，重新上架后恢复。
+
+管理员修改会影响后续同步：
+
+- 内置技能：`admin_info_edited_at` 非空时，启动同步不再覆盖名称、简介、分类、`markdownUrl`、展示媒体和补充信息；`admin_content_edited_at` 非空时不再用内置文件包生成新版本，也不覆盖 `instruction`。启动同步从不修改 `status`，下架的内置技能重启后仍是下架。
+- GitHub 技能：`admin_info_edited_at` 非空时，同步发现新提交仍会更新文件内容，但保留后台填写的名称和简介。
+- 同步、编辑等整行保存都不写 `status`，上下架只经 `PATCH /api/admin/skills/:id/status` 修改。
 
 ## 画布工具 API
 

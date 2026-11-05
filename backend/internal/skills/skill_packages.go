@@ -288,8 +288,11 @@ func (s *Service) syncGitHubSkillWithContext(ctx context.Context, skill *model.S
 		skill.SyncError = ""
 		return s.repo.SaveSkill(skill)
 	}
-	skill.Name = archive.Metadata.Name
-	skill.Description = archive.Metadata.Description
+	// 管理员改过基本信息后，以后台填写的名称和简介为准；文件内容仍以仓库为准。
+	if skill.AdminInfoEditedAt == nil {
+		skill.Name = archive.Metadata.Name
+		skill.Description = archive.Metadata.Description
+	}
 	skill.Instruction = string(archive.Files["SKILL.md"])
 	if err := s.addSkillArchiveVersion(skill, archive, "github", canonicalURL, resolvedRef, spec.Subdir, commit, skill.AutoUpdate); err != nil {
 		skill.SyncStatus = "failed"

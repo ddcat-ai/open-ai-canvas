@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 82
+const CurrentSchemaVersion int64 = 83
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -282,6 +282,23 @@ var schemaMigrations = []migration{
 		return tx.AutoMigrate(&model.ArkPortraitSession{}, &model.ArkPortraitGroup{}, &model.ArkPortraitAsset{})
 	}},
 	{version: 82, name: "token_cache_write_price", checksum: "sha256:token-cache-write-price-v82-20261105", apply: migrateTokenCacheWritePrice},
+	{version: 83, name: "skill_admin_edits", checksum: "sha256:skill-admin-edits-v83-20261105", apply: migrateSkillAdminEdits},
+}
+
+// migrateSkillAdminEdits 为技能增加管理员修改时间。旧技能两列为空，内置技能启动同步和 GitHub 同步行为不变。
+func migrateSkillAdminEdits(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.Skill{}) {
+		return nil
+	}
+	for _, column := range []string{"admin_info_edited_at", "admin_content_edited_at"} {
+		if tx.Migrator().HasColumn(&model.Skill{}, column) {
+			continue
+		}
+		if err := tx.Migrator().AddColumn(&model.Skill{}, column); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // migrateTokenCacheWritePrice 为文本 Token 定价增加缓存写入单价，为调用日志和账单增加缓存写入用量。

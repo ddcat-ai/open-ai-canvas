@@ -158,8 +158,12 @@ type Skill struct {
 	ExtraInfo         string     `json:"extraInfo" gorm:"type:text"`
 	InitialLikeCount  int64      `json:"initialLikeCount"`
 	InitialAddedCount int64      `json:"initialAddedCount"`
-	CreatedAt         time.Time  `json:"createdAt" gorm:"index"`
-	UpdatedAt         time.Time  `json:"updatedAt" gorm:"index"`
+	// AdminInfoEditedAt / AdminContentEditedAt 记录管理员最近一次修改基本信息 / 文件内容的时间（Schema 83）。
+	// 内置技能启动同步不再覆盖管理员改过的部分；GitHub 同步在 AdminInfoEditedAt 非空时保留名称和简介。
+	AdminInfoEditedAt    *time.Time `json:"adminInfoEditedAt"`
+	AdminContentEditedAt *time.Time `json:"adminContentEditedAt"`
+	CreatedAt            time.Time  `json:"createdAt" gorm:"index"`
+	UpdatedAt            time.Time  `json:"updatedAt" gorm:"index"`
 }
 
 type SkillVersion struct {

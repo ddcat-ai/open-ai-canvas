@@ -43,6 +43,7 @@ func RegisterCanvasAPI(api *gin.RouterGroup, svc *service.Service) {
 	RegisterEcommerceAgentRoutes(api, svc)
 	RegisterRunningHubRoutes(api, svc)
 	RegisterSkillRoutes(api, svc)
+	RegisterAdminSkillRoutes(api, svc)
 	RegisterToolRoutes(api, svc)
 	RegisterUserDataRoutes(api, svc)
 	RegisterCanvasRealtimeRoutes(api, svc)

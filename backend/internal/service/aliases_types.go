@@ -308,6 +308,11 @@ type (
 	RuntimeResourcePolicy                  = app.RuntimeResourcePolicy
 	RuntimeTaskPolicy                      = app.RuntimeTaskPolicy
 	Service                                = app.Service
+	AdminSkillListRequest                  = app.AdminSkillListRequest
+	AdminSkillItem                         = app.AdminSkillItem
+	AdminSkillList                         = app.AdminSkillList
+	AdminSkillInfoRequest                  = app.AdminSkillInfoRequest
+	AdminSkillPackageEditResult            = app.AdminSkillPackageEditResult
 	ShotRevisionInput                      = app.ShotRevisionInput
 	SkillCategory                          = app.SkillCategory
 	SkillLibraryCategory                   = app.SkillLibraryCategory

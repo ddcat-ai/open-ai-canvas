@@ -5,6 +5,17 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 技能管理员修改记录（Schema 83）
+
+版本 83 `skill_admin_edits` 为 `skills` 增加两个可空时间列，旧技能均为空，同步行为不变：
+
+| 列 | 含义 |
+| --- | --- |
+| `admin_info_edited_at` | 管理员最近一次修改基本信息的时间。非空时内置技能启动同步不覆盖名称、简介、分类、`markdown_url`、`showcase_media_json`、`extra_info`；GitHub 同步保留名称和简介 |
+| `admin_content_edited_at` | 管理员最近一次在后台保存文件并生成新版本的时间。非空时内置技能启动同步不再用内置文件包生成新版本，也不覆盖 `instruction` |
+
+`skills.status` 为 `1` 表示上架、`0` 表示下架，只由后台上下架接口修改；内置技能启动同步和整行保存都不写该列。
+
 ## 文本 Token 缓存写入价（Schema 82）
 
 版本 82 `token_cache_write_price` 只补列，全部为 `NOT NULL DEFAULT 0`，旧价格档和旧账单的结算结果不变：
@@ -359,7 +370,7 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 | `skill_library_categories` | 保存个人技能库分类和管理员创建的平台分类 | personal 分类按用户隔离；platform 分类对所有用户可见；分类名在用户可见范围内唯一，删除分类只清除归类引用 |
 | `user_skill_states` | 保存用户的加入、收藏、安装版本、自动更新选择、该用户对技能的技能库分类，以及 Agent 使用方式和读取次数 | `library_category_id` 属于用户技能库元数据，不修改 `skills.tag` 等技能广场共享分类；`agent_mode`、`agent_use_count`、`agent_last_used_at` 见 Schema 76；技能正文读取仍经过公开性和归属校验 |
 
-技能库分类由 schema migration 39 创建/扩展；内置技能删除记录由 schema migration 40 创建。删除分类时在事务内清空对应 `user_skill_states.library_category_id` 后删除分类记录，不会级联删除任何技能。删除内置技能时写入 tombstone，后续启动同步会跳过该技能。
+技能库分类由 schema migration 39 创建/扩展；内置技能删除记录由 schema migration 40 创建。删除分类时在事务内清空对应 `user_skill_states.library_category_id` 后删除分类记录，不会级联删除任何技能。删除内置技能时写入 tombstone，后续启动同步会跳过该技能。管理员修改记录与上架状态见 Schema 83。
 
 规范化技能包保存在后端数据目录的 `skill-packages/<skill-id>/<version-id>.zip`，数据库只保存索引和版本指针。上传 ZIP 时强制校验 `SKILL.md`、路径越界、软链接、重复路径、文件数量和解压大小；GitHub 技能保存公开仓库、分支、子目录和提交 SHA，后台每 6 小时检查一次开启自动更新的技能，并记录最近检查、同步时间及失败状态。
 

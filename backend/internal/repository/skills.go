@@ -112,16 +112,17 @@ func (r *Repository) Skills(filter SkillListFilter) ([]model.Skill, int64, error
 }
 
 // 内置技能使用稳定的外部技能 ID 幂等更新，用户加入和收藏关系保留在独立状态表中。
-func (r *Repository) UpsertBuiltinSkills(skills []model.Skill) error {
+// columns 是冲突时覆盖的列，由调用方按管理员是否改过该技能决定；status 不应出现在其中，下架状态只由管理员修改。
+func (r *Repository) UpsertBuiltinSkills(skills []model.Skill, columns []string) error {
 	if len(skills) == 0 {
 		return errors.New("builtin skills are empty")
 	}
+	if len(columns) == 0 {
+		return r.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(&skills).Error
+	}
 	return r.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"owner_id", "author_name", "author_avatar_url", "name", "description", "instruction", "status", "source", "tag", "sort_weight", "is_private",
-			"markdown_url", "showcase_media_json", "extra_info", "initial_like_count", "initial_added_count", "created_at", "updated_at",
-		}),
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns(columns),
 	}).Create(&skills).Error
 }
 
@@ -131,6 +132,77 @@ func (r *Repository) Skill(id string) (*model.Skill, error) {
 		return nil, err
 	}
 	return &skill, nil
+}
+
+// SkillAnyStatus 读取技能而不过滤上架状态，只给管理员入口和内置技能同步使用。
+func (r *Repository) SkillAnyStatus(id string) (*model.Skill, error) {
+	var skill model.Skill
+	if err := r.db.First(&skill, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &skill, nil
+}
+
+func (r *Repository) SkillsByIDsAnyStatus(ids []string) ([]model.Skill, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var skills []model.Skill
+	err := r.db.Where("id IN ?", ids).Find(&skills).Error
+	return skills, err
+}
+
+type AdminSkillListFilter struct {
+	Keyword    string
+	Status     string
+	SourceType string
+	Tag        string
+	Limit      int
+	Offset     int
+}
+
+// AdminSkills 列出全部技能（含私有和已下架），按最近更新排序。
+func (r *Repository) AdminSkills(filter AdminSkillListFilter) ([]model.Skill, int64, error) {
+	query := r.db.Model(&model.Skill{})
+	switch filter.Status {
+	case "enabled":
+		query = query.Where("skills.status = ?", 1)
+	case "disabled":
+		query = query.Where("COALESCE(skills.status, 0) <> ?", 1)
+	}
+	switch filter.SourceType {
+	case "":
+	case "markdown":
+		query = query.Where("skills.source_type IN ?", []string{"markdown", ""})
+	default:
+		query = query.Where("skills.source_type = ?", filter.SourceType)
+	}
+	if filter.Tag != "" {
+		query = query.Where("skills.tag = ?", filter.Tag)
+	}
+	if filter.Keyword != "" {
+		pattern := "%" + strings.ToLower(filter.Keyword) + "%"
+		query = query.Joins("LEFT JOIN users skill_owners ON skill_owners.id = skills.owner_id").
+			Where("skills.id = ? OR lower(skills.name) LIKE ? OR lower(skills.description) LIKE ? OR lower(skills.author_name) LIKE ? OR lower(skill_owners.display_name) LIKE ? OR lower(skill_owners.username) LIKE ? OR lower(skills.source_url) LIKE ?",
+				filter.Keyword, pattern, pattern, pattern, pattern, pattern, pattern)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var skills []model.Skill
+	err := query.Select("skills.*").Order("skills.updated_at desc, skills.id asc").Limit(filter.Limit).Offset(filter.Offset).Find(&skills).Error
+	return skills, total, err
+}
+
+// UpdateSkillStatus 只改上架状态，不刷新 updated_at，避免下架 / 上架改变技能广场的“最近更新”排序。
+func (r *Repository) UpdateSkillStatus(id string, status int) error {
+	return r.db.Model(&model.Skill{}).Where("id = ?", id).UpdateColumn("status", status).Error
+}
+
+// UpdateSkillFields 按列更新技能行，避免整行保存覆盖并发写入的状态或版本字段。
+func (r *Repository) UpdateSkillFields(id string, fields map[string]any) error {
+	return r.db.Model(&model.Skill{}).Where("id = ?", id).Updates(fields).Error
 }
 
 func (r *Repository) CreateSkill(skill *model.Skill, ownerState *model.UserSkillState) error {
