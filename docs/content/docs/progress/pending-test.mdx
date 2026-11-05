@@ -5,6 +5,14 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## OpenAI Images 协议：有参考图时用 multipart 编辑（#951）
+
+- 问题：官方 `openai-images` 插件有参考图时以 JSON 调用 `/v1/images/edits`，图片放在 `images[].image_url`。LiteLLM 等网关的编辑接口只接受 multipart 文件字段 `image` / `image[]`，返回 400。
+- 已修复：插件 2.2.0 在有参考图或蒙版时改用 `multipart/form-data`：单张参考图用 `image`，多张用 `image[]`，蒙版用 `mask`；无参考图仍走 JSON generations。图片按字节上传，不要求公网媒体地址。生成器 `generate-catalog.mjs` 同步了文件声明。思路与测试来自 PR #905，单张字段名改为 `image` 以兼容只收单文件的上游。
+- 本地验证：`go test ./internal/protocol`、`go test ./internal/app -run 'LocalReference|OpenAIImage'` 通过。未连接真实 OpenAI 或 LiteLLM。
+- [ ] OpenAI 官方渠道：单张、多张参考图编辑与带蒙版编辑都成功出图。
+- [ ] LiteLLM 代理的 OpenAI Images 渠道：参考图编辑不再返回 `Unsupported content type`。
+
 ## 支付插件：RPC 保留业务错误，微信不存在订单可关单（#836）
 
 - 问题：插件把包装了 `ErrOrderNotFound` 的错误序列化成通用 `provider_error`，宿主重建的 `ProviderError` 不再匹配 `errors.Is`。微信查单返回 `ORDER_NOT_EXIST` 时，后台「关闭订单」提示“关单前查单失败”，自动关单也失败，订单一直待支付。`ErrOrderNotPaid`、`ErrTradeBillNotFound` 同样丢失。

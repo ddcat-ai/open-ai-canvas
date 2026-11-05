@@ -262,24 +262,22 @@ for (const [id, name, vendor, baseUrl] of [
 
 add({
   id: "openai-images", providerId: "openai-image", name: "OpenAI Images", vendor: "OpenAI", capability: "image",
-  baseUrl: "https://api.openai.com", auth: bearer, params: imageParams, requiresPublicMediaUrls: true,
-  notes: "无参考图走 JSON generations；有参考图或蒙版走 JSON edits，并按官方 images 数组传入多张 image_url。quality 的 1k/2k/4k 映射为 OpenAI low/medium/high。",
+  baseUrl: "https://api.openai.com", auth: bearer, params: imageParams,
+  notes: "无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。quality 的 1k/2k/4k 映射为 OpenAI low/medium/high。",
   create: {
     method: "POST",
     path: "/v1/images/generations",
     pathTemplate: conditional(gt(len(ref("request.images")), 0), "/v1/images/edits", "/v1/images/generations"),
     contentType: "application/json",
+    contentTypeTemplate: conditional(gt(len(ref("request.images")), 0), "multipart/form-data", "application/json"),
+    files: [
+      { name: "image", source: conditional(eq(len(filter(ref("request.images"), "media", ne(ref("media.role"), "mask"))), 1), filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask"))), filename: "image.png" },
+      { name: "image[]", source: conditional(gt(len(filter(ref("request.images"), "media", ne(ref("media.role"), "mask"))), 1), filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask"))) },
+      { name: "mask", source: first(filter(sorted(ref("request.images")), "media", eq(ref("media.role"), "mask"))), filename: "mask.png" }
+    ],
     body: {
       model: ref("request.model"),
       prompt: ref("request.prompt"),
-      images: omit(conditional(gt(len(ref("request.images")), 0), map(
-        filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask")),
-        "media",
-        { image_url: ref("media.value") }
-      ))),
-      mask: omit(conditional(gt(len(filter(ref("request.images"), "media", eq(ref("media.role"), "mask"))), 0), {
-        image_url: first(map(filter(sorted(ref("request.images")), "media", eq(ref("media.role"), "mask")), "media", ref("media.value")))
-      })),
       n: omit(conditional(gt(ref("request.imageCount"), 0), ref("request.imageCount"), 1)),
       size: omit(conditional({ $in: [lower(trim(ref("request.aspectRatio"))), ["", "auto"]] }, null, ref("request.aspectRatio"))),
       quality: omit({
