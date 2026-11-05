@@ -328,6 +328,25 @@ func TestSegmentShotsForVideoRebalancesShortTrailingSegment(t *testing.T) {
 	}
 }
 
+func TestEnforceAssetRatioRemovesConflictingDirections(t *testing.T) {
+	prompt := "真人实拍质感，竖屏构图主体突出。横版构图，主体完整。9:16竖屏构图，冷灰蓝色调；16:9画幅比例。"
+	result := EnforceAssetRatio(prompt, "16:9")
+	for _, unwanted := range []string{"竖屏构图", "横版构图", "9:16竖屏", "16:9画幅"} {
+		if strings.Contains(result, unwanted) {
+			t.Fatalf("conflicting directive %q survived: %s", unwanted, result)
+		}
+	}
+	for _, wanted := range []string{"真人实拍质感", "主体突出", "主体完整", "冷灰蓝色调", "最终输出画幅必须为 16:9，横版，宽度大于高度"} {
+		if !strings.Contains(result, wanted) {
+			t.Fatalf("required content %q missing: %s", wanted, result)
+		}
+	}
+	portrait := EnforceAssetRatio("横屏构图，人物完整。", "9:16")
+	if strings.Contains(portrait, "横屏构图") || !strings.Contains(portrait, "9:16，竖版，高度大于宽度") {
+		t.Fatalf("portrait ratio was not enforced: %s", portrait)
+	}
+}
+
 func TestSegmentWriterUsesSkill(t *testing.T) {
 	in := SegmentPromptInput{Index: 0, Count: 2, Shots: []SegmentShot{{DurationMs: 5000, Dialogue: "醒了"}}}
 	plain := SegmentWriterPrompt(in, "素材", "", nil)
