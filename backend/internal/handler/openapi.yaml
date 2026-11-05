@@ -31,6 +31,10 @@ tags:
     description: 用户反馈与管理员收件箱
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
+  - name: inspirations
+    description: 灵感大厅上新（定时同步的上游中文提示词）
+  - name: pose-library
+    description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
   /admin/ecommerce/skills/install:
     post:
@@ -643,6 +647,186 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
+  /pose-library/poses:
+    get:
+      tags: [pose-library]
+      summary: 按姿势分组浏览已启用且已同步的姿势
+      parameters:
+        - { in: query, name: keyword, schema: { type: string } }
+        - { in: query, name: system, schema: { type: string } }
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: angle, schema: { type: string } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: pageSize, schema: { type: integer, minimum: 1, maximum: 60, default: 24 } }
+      responses:
+        "200": { description: "data 含 poses（每个姿势带 items 视角列表）、total、page、pageSize、facets（systems/categories/angles 计数）；不含来源署名" }
+        "401": { $ref: "#/components/responses/Error" }
+  /pose-library/items/{id}/thumb:
+    get:
+      tags: [pose-library]
+      summary: 读取姿势缩略图（本站数据目录）
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: query, name: v, schema: { type: integer }, description: 同步版本号，仅用于缓存失效 }
+      responses:
+        "200": { description: 图片字节，Cache-Control private max-age=604800 }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /pose-library/items/{id}/image:
+    get:
+      tags: [pose-library]
+      summary: 读取姿势原图（本站数据目录）
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: query, name: v, schema: { type: integer } }
+      responses:
+        "200": { description: 图片字节 }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /pose-library/use:
+    post:
+      tags: [pose-library]
+      summary: 把选中的姿势原图复制成当前用户的资源
+      description: 1–16 个条目，按普通上传计入用户每日上传额度与容量；同一用户同一张图重复选用复用已有资源。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, minItems: 1, maxItems: 16, items: { type: string } }
+      responses:
+        "200": { description: "data.items 为 [{itemId,name,angle,category,resource}]，顺序与请求一致" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /admin/pose-library/items:
+    get:
+      tags: [pose-library, admin]
+      summary: 姿势库条目、同步统计、来源与按体系汇总（管理员）
+      parameters:
+        - { in: query, name: keyword, schema: { type: string } }
+        - { in: query, name: source, schema: { type: string } }
+        - { in: query, name: system, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string, enum: [pending, ready, failed] } }
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: pageSize, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200": { description: "data 含 items、total、page、pageSize、stats、sources、systems" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [pose-library, admin]
+      summary: 上传一张自建姿势图（管理员）
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, name]
+              properties:
+                file: { type: string, format: binary, description: JPEG/PNG/WebP，最大 20 MiB }
+                name: { type: string }
+                system: { type: string }
+                category: { type: string }
+                angle: { type: string }
+                code: { type: string, description: 编号相同的图合并为同一姿势的不同视角 }
+      responses:
+        "200": { description: data.item 为新条目 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/pose-library/import:
+    post:
+      tags: [pose-library, admin]
+      summary: 导入 ai-pose-gallery-zh 的 pose-zh.json 或 yingce-pose-library 姿势包（管理员）
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, systems]
+              properties:
+                file: { type: string, format: binary, description: JSON，最大 16 MiB }
+                baseUrl: { type: string, description: 图片来源根地址，相对路径拼在其后 }
+                systems: { type: string, description: JSON 字符串数组，只导入列出的体系 }
+      responses:
+        "200": { description: "data 含 source、format、total、created、updated、skipped、invalid、systems" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/pose-library/sync:
+    post:
+      tags: [pose-library, admin]
+      summary: 下载一批待同步条目的图片到本站数据目录（管理员）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit: { type: integer, minimum: 1, maximum: 40, default: 12 }
+                retryFailed: { type: boolean, description: 先把失败条目放回待同步，只在一轮的第一批传入 }
+      responses:
+        "200": { description: "data 含 processed、succeeded、failed、failures、stats" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/pose-library/items/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    patch:
+      tags: [pose-library, admin]
+      summary: 修改姿势条目（管理员）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                system: { type: string }
+                category: { type: string }
+                angle: { type: string }
+                code: { type: string }
+                enabled: { type: boolean }
+      responses:
+        "200": { description: data.item 为更新后的条目 }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [pose-library, admin]
+      summary: 删除姿势条目及其图片（管理员）
+      responses:
+        "200": { description: "data={ok:true}" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /admin/pose-library/bulk:
+    post:
+      tags: [pose-library, admin]
+      summary: 按条目或体系批量启用、停用、删除、重新同步（管理员）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [enable, disable, delete, resync] }
+                ids: { type: array, maxItems: 1000, items: { type: string } }
+                sourceKey: { type: string }
+                system: { type: string, description: 不传 ids 时必填 }
+      responses:
+        "200": { description: "data={affected}" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /admin/settings/appearance/live2d:
     post:
@@ -1209,6 +1393,10 @@ paths:
                                     type: string
                                     maxLength: 80
                                     default: ""
+                                  textWire:
+                                    type: string
+                                    enum: [chat-completion, responses, claude-api]
+                                    description: 仅文本模型。按协议插件的 create.path 识别的请求格式，浏览器据此选择系统代理路径；识别不出时省略。
                                   tags:
                                     type: array
                                     maxItems: 5
@@ -1479,6 +1667,53 @@ paths:
           description: 信封 data 仅包含 welcomeEnabled 布尔值，默认 true；Cache-Control 为 no-store
         "500":
           description: 配置读取失败
+  /public/inspirations/feed:
+    get:
+      tags: [inspirations]
+      security: []
+      summary: 读取灵感上新条目（匿名可读）
+      description: 后端定时从 YouMind、awesome-seedance 同步的中文条目，按首次收录时间倒序，最多 3000 条；进程内缓存 5 分钟。按 IP 每分钟 120 次。
+      responses:
+        "200": { description: "data={enabled,entries[{id,title,description,image,mode,prompt,category?,tags?,sourceId,credit?,sourceUrl?,addedAt,publishedAt?}],categories{来源:{分类码:名称}},syncedAt?}；enabled=false 时 entries 为空" }
+        "429": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/settings/inspiration-feed:
+    get:
+      tags: [inspirations, admin]
+      summary: 灵感上新状态（管理员）
+      responses:
+        "200": { description: "data.status={enabled,intervalHours,lastAttemptAt?,lastSuccessAt?,nextSyncAt?,lastError?,trigger?,sources[{sourceId,upstream,accepted,created,updated,error?}],total,bySource}" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [inspirations, admin]
+      summary: 开启或关闭灵感上新（管理员）
+      description: 关闭后停止同步，公开接口不再返回已收录条目；写入管理员审计。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200": { description: data.status 为最新状态 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/settings/inspiration-feed/sync:
+    post:
+      tags: [inspirations, admin]
+      summary: 立即同步灵感上新（管理员）
+      description: 同步与请求解绑，最长约 8 分钟；部分来源失败仍返回 200，失败原因在 status.lastError 与 sources[].error。
+      responses:
+        "200": { description: data.status 为同步后的状态 }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { description: 上新已关闭，或另一实例/请求正在同步 }
+        "502": { description: 全部来源都同步失败 }
   /agent/capabilities:
     get:
       tags: [agent]

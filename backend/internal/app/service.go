@@ -13,10 +13,12 @@ import (
 
 	"yingce/backend/internal/auth"
 	"yingce/backend/internal/canvas"
+	"yingce/backend/internal/inspirations"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/payment"
 	"yingce/backend/internal/platform"
+	"yingce/backend/internal/poselibrary"
 	"yingce/backend/internal/prompts"
 	"yingce/backend/internal/providercatalog"
 	"yingce/backend/internal/repository"
@@ -85,6 +87,8 @@ type Service struct {
 	canvas                   *canvas.Service
 	canvasRealtime           *canvas.RealtimeHub
 	workbench                *workbench.Service
+	poseLibrary              *poselibrary.Service
+	inspirationFeed          *inspirations.Service
 	piRunnerMu               sync.Mutex
 	piRunnerWg               sync.WaitGroup
 	piRunners                map[string]context.CancelFunc
@@ -101,6 +105,10 @@ type Service struct {
 	approvedMediaWg          sync.WaitGroup
 	approvedMediaWaiters     map[string]context.CancelFunc
 	approvedMediaClosed      bool
+	approvalFollowUpMu       sync.Mutex
+	approvalFollowUpWg       sync.WaitGroup
+	approvalFollowUps        map[string]struct{} // 正在执行批准后收尾的审批（runID:approvalID），见 cloud_agent_approval_followup.go
+	approvalFollowUpClosed   bool
 	providerCatalogOnce      sync.Once
 	providerCatalog          *providercatalog.Source
 	userGroups               userGroupState
@@ -176,6 +184,8 @@ func newService(repo *repository.Repository, dataDir string) *Service {
 	service.canvas = canvas.New(service.repo, canvasHost{svc: service})
 	service.canvasRealtime = canvasRealtime
 	service.workbench = workbench.New(service.repo, workbenchAdminGate{svc: service}, workbenchAdminGate{svc: service})
+	service.poseLibrary = poselibrary.New(service.repo, service.dataDir, poseLibraryAdminGate{svc: service})
+	service.inspirationFeed = inspirations.New(service.repo, inspirationFeedAdminGate{svc: service}, service.inspirationFeedLock, service.runWorkerLoop)
 	service.platform = platform.New(service.repo, coordinator, platformHost{svc: service})
 	return service
 }
@@ -201,7 +211,9 @@ func (s *Service) StartWorker() {
 	s.startEcommerceSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
 	s.startBillingAutoRefundWorker()
+	s.startArkPortraitWorker()
 	s.startDramaScheduler()
+	s.startInspirationFeedWorker()
 	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)
