@@ -12,14 +12,19 @@ describe("Agent window layout", () => {
     it("restores the saved size and position", () => {
         expect(restoreAgentPanelLayout(JSON.stringify(start), viewport)).toEqual(start);
     });
-    it("starts within the visible viewport instead of an invisible 840px height", () => {
+    it("fills the height below the top bar by default", () => {
         const layout = restoreAgentPanelLayout(null, { width: 1024, height: 650 });
-        expect(layout.height).toBe(626);
-        expect(layout.top).toBe(12);
+        expect(layout.height).toBe(566);
+        expect(layout.top).toBe(72);
+    });
+    it("keeps the minimum readable height on very short viewports", () => {
+        const layout = restoreAgentPanelLayout(null, { width: 1024, height: 480 });
+        expect(layout.height).toBe(420);
+        expect(layout.top + layout.height).toBe(468);
     });
     it("offers a compact reset without altering a saved window until requested", () => {
         expect(restoreAgentPanelLayout(JSON.stringify(start), viewport)).toEqual(start);
-        expect(defaultAgentPanelLayout(viewport)).toEqual({ left: 848, top: 148, width: 420, height: 640 });
+        expect(defaultAgentPanelLayout(viewport)).toEqual({ left: 848, top: 72, width: 420, height: 716 });
     });
     it("keeps the bottom/right anchor when resizing from top/left", () => {
         const layout = changeAgentPanelLayout(start, "northwest", -120, 60, viewport);
