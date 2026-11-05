@@ -229,9 +229,9 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
                             key={id}
                             type="button"
                             tabIndex={-1}
-                            className={`creation-tunnel-card ${depth === 0 ? "is-active" : ""} ${readyIds.has(id) ? "is-ready" : ""}`}
+                            className={`creation-tunnel-card ${depth === 0 ? "is-active" : ""} ${depth > 0 && depth <= MAX_DEPTH ? "is-selectable" : ""} ${readyIds.has(id) ? "is-ready" : ""}`}
                             style={style}
-                            onClick={() => onStartPrompt(inspiration.mode, fillablePrompt(inspiration))}
+                            onClick={() => (relative === 0 ? onStartPrompt(inspiration.mode, fillablePrompt(inspiration)) : step(relative))}
                         >
                             <img
                                 src={inspiration.image}
