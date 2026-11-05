@@ -101,6 +101,11 @@ type (
 	AppearanceSkinModeTokens               = app.AppearanceSkinModeTokens
 	AppearanceSkinTheme                    = app.AppearanceSkinTheme
 	AppearanceSkinTokens                   = app.AppearanceSkinTokens
+	AdminArkGroupCreateRequest             = app.AdminArkGroupCreateRequest
+	AdminArkGroupQuery                     = app.AdminArkGroupQuery
+	AdminArkGroupUpdateRequest             = app.AdminArkGroupUpdateRequest
+	ArkAssetUploadInput                    = app.ArkAssetUploadInput
+	ArkGroupInput                          = app.ArkGroupInput
 	ArkPrivateAssetSettingRequest          = app.ArkPrivateAssetSettingRequest
 	ArkPrivateAssetSyncResult              = app.ArkPrivateAssetSyncResult
 	AssetCandidateInput                    = app.AssetCandidateInput

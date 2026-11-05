@@ -18,6 +18,7 @@ import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import type { ModelReferenceLimits } from "@/lib/model-selection";
 import type { Asset } from "@/stores/use-asset-store";
+import { arkAssetMatchesImage } from "@/lib/ark-assets";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 
 export type CharacterGenerationReference = {
@@ -391,8 +392,10 @@ function withArkAssetReferenceInputs(inputs: NodeGenerationInput[], nodes: Canva
     return inputs.map((input) => {
         if (input.type !== "image" || !input.image || input.image.arkAssetId) return input;
         const boundAssetId = nodeById.get(input.nodeId)?.metadata?.assetId;
-        const arkAssetId = boundAssetId ? assetById.get(boundAssetId)?.arkAssetId : undefined;
-        return arkAssetId ? { ...input, image: { ...input.image, arkAssetId } } : input;
+        const asset = boundAssetId ? assetById.get(boundAssetId) : undefined;
+        // 节点换过图片后，方舟素材 ID 不再对应当前参考图，按普通图片上传。
+        if (!asset?.arkAssetId || !arkAssetMatchesImage(asset, input.image.storageKey)) return input;
+        return { ...input, image: { ...input.image, arkAssetId: asset.arkAssetId } };
     });
 }
 

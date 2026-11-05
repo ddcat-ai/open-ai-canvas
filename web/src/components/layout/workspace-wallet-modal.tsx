@@ -427,9 +427,12 @@ export function WorkspaceWalletModal({
 function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
     const { t } = useTranslation();
     const positive = entry.amountMicrocredits > 0;
-    const note = entry.note ? generationErrorMessage(entry.note) : "";
-    const title =
-        entry.type === "consume"
+    // 方舟素材组费用不是模型调用：标题按场景显示，说明只展示组名或退回原因。
+    const arkGroup = entry.scene === "ark_asset_group";
+    const note = entry.note ? (arkGroup ? entry.note : generationErrorMessage(entry.note)) : "";
+    const title = arkGroup
+        ? t("account.wallet.ledger.arkAssetGroup")
+        : entry.type === "consume"
             ? t("account.wallet.ledger.consume")
             : entry.type === "refund"
               ? t("account.wallet.ledger.refund")
@@ -445,7 +448,7 @@ function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
             <span className={cn("workspace-wallet-ledger-icon", positive ? "is-income" : "is-consume")}>{positive ? <Coins /> : <CreditCard />}</span>
             <div>
                 <strong>{title}</strong>
-                <span>{[entry.scene, entry.model, note].filter(Boolean).join(" · ") || t("account.wallet.ledger.change")}</span>
+                <span>{(arkGroup ? [note] : [entry.scene, entry.model, note]).filter(Boolean).join(" · ") || t("account.wallet.ledger.change")}</span>
             </div>
             <time>{new Date(entry.createdAt).toLocaleString(currentLocale(), { hour12: false })}</time>
             <b className={positive ? "is-income" : "is-consume"}>

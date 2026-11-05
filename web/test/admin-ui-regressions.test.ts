@@ -241,8 +241,10 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(arkSource).toContain('title="2. 是否启用可信素材同步"');
     expect(arkSource).toContain("{prerequisitesReady || draftEnabled ? (");
     expect(arkSource).toContain('aria-label="启用可信素材同步，保存修改后生效"');
-    expect(arkSource).toContain('title="3. 是否开放真人素材库"');
+    expect(arkSource).toContain('title="3. 开放用户素材组"');
     expect(arkSource).toContain('aria-label="开放真人素材库，保存修改后生效"');
+    expect(arkSource).toContain('aria-label="开放虚拟素材组，保存修改后生效"');
+    expect(arkSource).toContain('title="4. 素材组收费"');
 
     expect(interceptionSource).toContain('title="1. 是否替换用户可见的上游错误"');
     expect(interceptionSource).toContain('title="2. 配置替换规则与优先级"');

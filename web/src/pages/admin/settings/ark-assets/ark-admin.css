@@ -1,0 +1,173 @@
+/* 管理端方舟素材库：素材组详情、审核缩略图与平台真人认证面板。只取 --admin-* token。 */
+.admin-ark-tabs-body {
+    min-width: 0;
+}
+.admin-ark-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.admin-ark-detail-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    margin: 0;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-divider);
+}
+.admin-ark-detail-facts > div {
+    min-width: 0;
+    padding: 10px 14px;
+    background: var(--admin-layer-1);
+}
+.admin-ark-detail-facts dt {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+}
+.admin-ark-detail-facts dd {
+    overflow: hidden;
+    margin: 2px 0 0;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-ark-detail-facts dd button,
+.admin-ark-tile-body button {
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-ark-detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid var(--admin-divider);
+}
+.admin-ark-detail-section h3 {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+.admin-ark-detail-section small,
+.admin-ark-field small {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+.admin-ark-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.admin-ark-field > span {
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+}
+.admin-ark-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.admin-ark-tile {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    gap: 10px;
+    padding: 8px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+}
+.admin-ark-tile img,
+.admin-ark-review-thumb img {
+    width: 56px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--admin-divider);
+}
+.admin-ark-tile-body {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+}
+.admin-ark-tile-body strong {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-ark-tile-body .is-error {
+    color: var(--admin-status-error);
+    overflow-wrap: anywhere;
+}
+.admin-ark-review-thumb {
+    display: inline-flex;
+    flex-shrink: 0;
+}
+.admin-ark-review-thumb img {
+    width: 40px;
+    height: 52px;
+}
+.admin-ark-empty {
+    padding: 24px 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    text-align: center;
+}
+.admin-ark-session {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 8px 0;
+}
+.admin-ark-session-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 10px;
+}
+.admin-ark-session-copy strong {
+    color: var(--admin-text-primary);
+    font-size: 16px;
+    font-weight: 600;
+}
+.admin-ark-session-copy p {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.admin-ark-number-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0 16px;
+}
+@media (max-width: 720px) {
+    .admin-ark-session {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .admin-ark-detail-facts,
+    .admin-ark-number-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

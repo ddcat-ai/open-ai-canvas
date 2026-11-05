@@ -1,8 +1,14 @@
 // 素材库的批量操作条、空态、筛选组、详情抽屉与图片放大。
 
 import { Button, Drawer, Tag } from "antd";
-import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Mic, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Mic, Plus, RotateCcw, ShieldCheck, Trash2, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
+import { StatusBadge } from "@/components/ui/base/badges";
+import { useCopyText } from "@/hooks/use-copy-text";
+import { currentLocale } from "@/i18n";
+import { arkAssetStatusTone, arkCertificationBadgeKey, arkCertificationExpired, formatArkDate, type ArkLibraryProgress } from "@/lib/ark-assets";
+import { cn } from "@/lib/utils";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { formatBytes } from "@/lib/image-utils";
@@ -131,6 +137,7 @@ export function AssetFilterGroup({
     options,
     value,
     counts,
+    icons,
     onChange,
     className = "",
 }: {
@@ -138,6 +145,8 @@ export function AssetFilterGroup({
     options: Array<{ label: string; value: string }>;
     value: string;
     counts: Map<string, number>;
+    /** 选项图标，按 option.value 取；缺省的选项只显示文字。 */
+    icons?: Partial<Record<string, LucideIcon>>;
     onChange: (value: string) => void;
     className?: string;
 }) {
@@ -147,9 +156,17 @@ export function AssetFilterGroup({
             <div className="collection-filter-options">
                 {options.map((option) => {
                     const active = value === option.value;
+                    const Icon = icons?.[option.value];
                     return (
                         <button key={option.value} type="button" aria-pressed={active} className={`assets-filter-item ${active ? "is-active" : ""}`} onClick={() => onChange(option.value)}>
-                            <span className="assets-filter-item-label">{option.label}</span>
+                            {Icon ? (
+                                <span className="assets-filter-item-label flex items-center gap-2">
+                                    <Icon aria-hidden className="size-3.5 shrink-0" />
+                                    <span className="truncate">{option.label}</span>
+                                </span>
+                            ) : (
+                                <span className="assets-filter-item-label">{option.label}</span>
+                            )}
                             <span className="assets-filter-count">{counts.get(option.value) || 0}</span>
                         </button>
                     );
@@ -228,7 +245,20 @@ function CharacterArchive({ asset }: { asset: Extract<LibraryAsset, { kind: "ent
     );
 }
 
-export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAsset | null; onClose: () => void; onCopy: (asset: LibraryAsset) => void; onDownload: (asset: LibraryAsset) => void }) {
+export function AssetDrawer({
+    asset,
+    onClose,
+    onCopy,
+    onDownload,
+    ark,
+}: {
+    asset: LibraryAsset | null;
+    onClose: () => void;
+    onCopy: (asset: LibraryAsset) => void;
+    onDownload: (asset: LibraryAsset) => void;
+    /** 方舟素材库已开放时传入：认证进度与提交、管理入口。 */
+    ark?: { progress?: ArkLibraryProgress; onCertify: (asset: Extract<LibraryAsset, { kind: "image" }>) => void; onManage: () => void };
+}) {
     const audio = asset?.kind === "audio" ? asset : null;
     const sampleRate = useAudioSampleRate(audio?.data.storageKey, audio?.data.url || "");
     const facts = asset ? assetArchiveFacts(asset, sampleRate) : [];
@@ -284,13 +314,14 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
                                 {tag}
                             </Tag>
                         ))}
-                        {asset.arkAssetId ? (
+                        {asset.arkAssetId && !ark ? (
                             <Tag className="m-0" color="geekblue" title="火山方舟素材 ID，生成视频时可直接 asset:// 引用">
                                 方舟 {asset.arkAssetId}
                             </Tag>
                         ) : null}
                         <StorageTag asset={asset} />
                     </div>
+                    {ark && (asset.kind === "image" || asset.arkAssetId) ? <ArkArchiveSection asset={asset} progress={ark.progress} onCertify={ark.onCertify} onManage={ark.onManage} /> : null}
                     <div className="asset-archive-facts">
                         {facts.map((fact) => (
                             <div key={fact.label} className="asset-archive-fact">
@@ -327,6 +358,89 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
                 </div>
             ) : null}
         </Drawer>
+    );
+}
+
+/** 素材档案里的方舟认证：已认证时列出认证类型、素材组、方舟素材 ID 与授权期限；未认证的图片可以直接提交认证。 */
+function ArkArchiveSection({ asset, progress, onCertify, onManage }: { asset: LibraryAsset; progress?: ArkLibraryProgress; onCertify: (asset: Extract<LibraryAsset, { kind: "image" }>) => void; onManage: () => void }) {
+    const { t } = useTranslation();
+    const copyText = useCopyText();
+    const certification = asset.arkCertification;
+    const pending = !certification && (progress?.status === "pending_review" || progress?.status === "processing");
+    const failed = !certification && (progress?.status === "rejected" || progress?.status === "failed");
+    const expired = arkCertificationExpired(certification);
+    return (
+        <section className="asset-archive-section" aria-label={t("library.ark.detail.title")}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="asset-archive-section-title !mb-0 flex items-center gap-1.5">
+                    <ShieldCheck aria-hidden className="size-3.5" />
+                    {t("library.ark.detail.title")}
+                </span>
+                {certification ? (
+                    <StatusBadge size="sm" tone={expired ? "warning" : "success"} label={t(arkCertificationBadgeKey(certification))} />
+                ) : progress && (pending || failed) ? (
+                    <StatusBadge size="sm" tone={arkAssetStatusTone(progress.status)} label={t(`library.ark.badge.${progress.status}`)} />
+                ) : (
+                    <StatusBadge size="sm" tone="neutral" label={t("library.ark.detail.uncertified")} />
+                )}
+            </div>
+            {certification ? (
+                <>
+                    <div className="asset-archive-facts">
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.kind")}</span>
+                            <span className="asset-archive-fact-value">{t(`library.ark.kinds.${certification.kind}`)}</span>
+                        </div>
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.group")}</span>
+                            <span className="asset-archive-fact-value" title={certification.groupName}>
+                                {certification.groupName || "-"}
+                            </span>
+                        </div>
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.arkAssetId")}</span>
+                            {asset.arkAssetId ? (
+                                <button type="button" className="asset-archive-fact-value w-full text-left font-mono hover:text-foreground" title={asset.arkAssetId} onClick={() => copyText(asset.arkAssetId || "")}>
+                                    {asset.arkAssetId}
+                                </button>
+                            ) : (
+                                <span className="asset-archive-fact-value">-</span>
+                            )}
+                        </div>
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.expiresAt")}</span>
+                            <span className={cn("asset-archive-fact-value", expired && "!text-status-warning")}>{certification.expiresAt ? formatArkDate(certification.expiresAt, currentLocale()) : t("library.ark.detail.noExpiry")}</span>
+                        </div>
+                    </div>
+                    <p className="asset-archive-section-body mt-3">{t("library.ark.detail.hint")}</p>
+                </>
+            ) : (
+                <div className="space-y-1">
+                    {progress && (pending || failed) ? (
+                        <p className="asset-archive-section-body">
+                            {t("library.ark.detail.group")}：{progress.groupName}
+                        </p>
+                    ) : null}
+                    {failed && progress?.error ? <p className="asset-archive-section-body text-status-error">{t("library.ark.detail.reason", { reason: progress.error })}</p> : null}
+                    {asset.arkAssetId ? (
+                        <p className="asset-archive-section-body">
+                            {t("library.ark.detail.manualId")} <span className="font-mono">{asset.arkAssetId}</span>
+                        </p>
+                    ) : null}
+                    {!progress || (!pending && !failed) ? <p className="asset-archive-section-body">{t("library.ark.detail.hint")}</p> : null}
+                </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+                {!certification && !pending && asset.kind === "image" ? (
+                    <Button size="small" icon={<ShieldCheck className="size-3.5" />} onClick={() => onCertify(asset)}>
+                        {t("library.ark.detail.certify")}
+                    </Button>
+                ) : null}
+                <Button size="small" type="text" onClick={onManage}>
+                    {t("library.ark.detail.manage")}
+                </Button>
+            </div>
+        </section>
     );
 }
 

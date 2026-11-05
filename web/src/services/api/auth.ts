@@ -326,9 +326,20 @@ export type AdminOSSSetting = {
 };
 
 export type AdminArkPrivateAssetSetting = {
+    /** Seedance 可信参考素材自动同步。 */
     enabled: boolean;
-    /** 开放用户级真人认证素材库，与可信素材自动同步相互独立。 */
-    portraitEnabled: boolean;
+    /** 开放用户自建真人 / 虚拟素材组，与可信素材自动同步相互独立。 */
+    realEnabled: boolean;
+    virtualEnabled: boolean;
+    realGroupLimit: number;
+    virtualGroupLimit: number;
+    /** 按组一次性收费；平台积分功能关闭时不生效。 */
+    billingEnabled: boolean;
+    realGroupPriceMicrocredits: number;
+    virtualGroupPriceMicrocredits: number;
+    realReviewRequired: boolean;
+    virtualReviewRequired: boolean;
+    realAuthorizationDays: number;
     /** 方舟站点：火山引擎或 BytePlus 海外站，决定控制面域名。 */
     site: "volcengine" | "byteplus";
     /** 真人认证回调使用的站点公网根地址；为空时后端使用 CANVAS_PUBLIC_BASE_URL。 */

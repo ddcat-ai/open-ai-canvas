@@ -3,11 +3,11 @@
 import { formatBytes } from "@/lib/image-utils";
 import { audioAverageBitrateKbps, formatAudioSampleRate, imageResolutionTierLabel, isLosslessAudioMimeType, mediaAspectRatioLabel, mediaFormatLabel, videoResolutionTierLabel } from "@/lib/media-spec";
 import { characterAssetSummary } from "@/components/assets/asset-rich-cover";
-import { assetCategoryLabel } from "@/lib/asset-category";
+import { assetCategoryLabel, type AssetCategory } from "@/lib/asset-category";
 import { type AssetKind } from "@/stores/use-asset-store";
 import { type AssetGridDensity, parseAssetGridDensity } from "./asset-grid-density";
 import { type Asset } from "@/stores/use-asset-store";
-import { type LucideIcon, FileText, Image as ImageIcon, Clapperboard, AudioLines, Box, UserRound } from "lucide-react";
+import { type LucideIcon, FileText, Image as ImageIcon, Clapperboard, AudioLines, Box, UserRound, Mountain, Package, Layers, Shapes, ShieldCheck } from "lucide-react";
 
 export type LibraryAsset = Asset;
 
@@ -20,6 +20,16 @@ export const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
     audio: AudioLines,
     model: Box,
     entity: UserRound,
+};
+
+/** 业务分类图标；方舟认证用盾牌，与素材卡片、画布节点上的认证标识一致。 */
+export const assetCategoryIcons: Record<AssetCategory, LucideIcon> = {
+    character: UserRound,
+    environment: Mountain,
+    prop: Package,
+    material: Layers,
+    other: Shapes,
+    ark: ShieldCheck,
 };
 
 /**

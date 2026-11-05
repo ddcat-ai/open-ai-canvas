@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StatusBadge } from "@/components/ui/base/badges";
 import { FileImage, UploadCloud, X } from "lucide-react";
 
-import { ASSET_CATEGORY_OPTIONS, type AssetCategory } from "@/lib/asset-category";
+import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS, type AssetCategory } from "@/lib/asset-category";
 import { uploadImage } from "@/services/image-storage";
 import { localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
@@ -93,7 +93,7 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
     return <Modal className="library-modal library-batch-upload-modal" title={t("library.assets.batch.title")} open={open} onCancel={close} footer={null} destroyOnHidden>
         <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
-                <label className="text-xs font-medium text-foreground/65">{t("library.assets.batch.category")}<Select className="mt-1 w-full" value={category} options={ASSET_CATEGORY_OPTIONS} onChange={(value) => setCategory(value)} /></label>
+                <label className="text-xs font-medium text-foreground/65">{t("library.assets.batch.category")}<Select className="mt-1 w-full" value={category} options={ASSET_ASSIGNABLE_CATEGORY_OPTIONS} onChange={(value) => setCategory(value)} /></label>
                 <label className="text-xs font-medium text-foreground/65">{t("library.assets.batch.folder")}<Select className="mt-1 w-full" value={folderId} options={folderOptions} onChange={setFolderId} /></label>
                 <label className="text-xs font-medium text-foreground/65">{t("library.assets.batch.tags")}<Select mode="tags" className="mt-1 w-full" value={tags} tokenSeparators={[",", "，"]} onChange={setTags} placeholder={t("library.assets.batch.tagsPlaceholder")} /></label>
             </div>

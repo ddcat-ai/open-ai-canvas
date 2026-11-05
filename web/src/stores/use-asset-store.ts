@@ -43,6 +43,21 @@ export type NewAsset =
     | Omit<ModelAsset, "id" | "createdAt" | "updatedAt">
     | Omit<EntityAsset, "id" | "createdAt" | "updatedAt">;
 
+export type ArkCertificationKind = "real" | "virtual" | "ip";
+
+/** 方舟素材组审核通过后由服务端写入；previousCategory 是认证前的业务分类，取消认证时据此恢复。 */
+export type ArkCertification = {
+    kind: ArkCertificationKind;
+    scope?: "user" | "platform";
+    portraitAssetId?: string;
+    groupId?: string;
+    groupName?: string;
+    arkGroupId?: string;
+    certifiedAt?: string;
+    expiresAt?: string;
+    previousCategory?: AssetCategory;
+};
+
 type AssetBase<T extends AssetKind> = {
     id: string;
     kind: T;
@@ -55,8 +70,9 @@ type AssetBase<T extends AssetKind> = {
     primaryVersionId?: string;
     source?: string;
     note?: string;
+    /** 方舟素材 ID：认证通过时由服务端写入，也可手填方舟预置虚拟人像等外部 ID。 */
     arkAssetId?: string;
-    portraitCertified?: boolean;
+    arkCertification?: ArkCertification;
     createdAt: string;
     updatedAt: string;
     metadata?: Record<string, unknown>;

@@ -1,11 +1,16 @@
-// 方舟私域真人人像素材库：管理员只配置 IAM 凭据、站点、Region 和 ProjectName，
-// 用户各自完成 H5 真人认证，每次认证得到一个只属于自己的 LivenessFace 素材组，
-// 再向组内上传同一人的素材，审核通过后以 asset://<id> 在视频生成中引用。
+// 方舟素材库：真人 / 虚拟 / 版权 IP 三类素材组，全部建在管理员配置的平台方舟账号下。
+//   - 真人：本人完成 H5 活体认证后由方舟生成 LivenessFace 素材组，带授权到期时间。
+//   - 虚拟：直接创建 AIGC 素材组。
+//   - 版权 IP：只能由管理员创建或登记，再授权给用户只读使用。
+//
+// 用户自建的组（scope=user）只属于本人；管理员建的平台组（scope=platform）按「全部用户 / 指定用户」授权。
+// 用户上传的素材按配置先经平台审核，管理员通过后才提交方舟；方舟审核通过后写入素材库「方舟认证」分类。
 //
 // 安全边界：
 //   - 回调地址只带一次性随机 state，不带登录态；BytedToken 加密保存且只在服务端换取 GroupId。
-//   - 组与素材按用户隔离；任务引用他人已登记的真人素材 ID 时拒绝执行（validateArkPortraitReferences）。
-//   - 手动绑定控制台创建的素材组只允许管理员操作，避免普通用户认领同账号下他人的组。
+//   - 任务引用他人个人组、未授权平台组或已过期真人组的素材 ID 时拒绝执行（validateArkPortraitReferences）。
+//   - 登记方舟控制台已有的素材组只允许管理员操作，避免普通用户认领同账号下他人的组。
+//   - 用户自建素材组的费用先冻结后结算：真人认证成功、虚拟组创建成功才扣费，失败、过期或取消自动退回。
 
 package app
 
@@ -22,10 +27,23 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 const (
+	arkGroupKindReal    = "real"
+	arkGroupKindVirtual = "virtual"
+	arkGroupKindIP      = "ip"
+
+	arkGroupScopeUser     = "user"
+	arkGroupScopePlatform = "platform"
+
+	arkGroupSourceLiveness = "liveness"
+	arkGroupSourceCreated  = "created"
+	arkGroupSourceManual   = "manual"
+
 	arkPortraitGroupType          = "LivenessFace"
 	arkPortraitSessionTTL         = 30 * time.Minute
 	arkPortraitSuccessCode        = "10000"
@@ -33,13 +51,16 @@ const (
 	arkPortraitSessionVerified    = "verified"
 	arkPortraitSessionFailed      = "failed"
 	arkPortraitSessionExpired     = "expired"
+	arkPortraitSessionCancelled   = "cancelled"
+	arkPortraitAssetPendingReview = "pending_review"
+	arkPortraitAssetRejected      = "rejected"
 	arkPortraitAssetProcessing    = "processing"
 	arkPortraitAssetActive        = "active"
 	arkPortraitAssetFailed        = "failed"
 	maxArkPortraitSessionsPerHour = 20
-	maxArkPortraitGroupsPerUser   = 50
 	maxArkPortraitAssetsPerGroup  = 200
-	maxArkPortraitRefreshPerList  = 10
+	arkPortraitExpiringWindow     = 30 * 24 * time.Hour
+	arkPortraitResultPath         = "/ark-portrait/result"
 )
 
 var (
@@ -47,61 +68,110 @@ var (
 	arkPortraitStatePattern   = regexp.MustCompile(`^[A-Za-z0-9_-]{16,64}$`)
 )
 
+type ArkAssetConfigView struct {
+	RealEnabled                   bool  `json:"realEnabled"`
+	VirtualEnabled                bool  `json:"virtualEnabled"`
+	RealGroupLimit                int   `json:"realGroupLimit"`
+	VirtualGroupLimit             int   `json:"virtualGroupLimit"`
+	BillingEnabled                bool  `json:"billingEnabled"`
+	RealGroupPriceMicrocredits    int64 `json:"realGroupPriceMicrocredits"`
+	VirtualGroupPriceMicrocredits int64 `json:"virtualGroupPriceMicrocredits"`
+	RealReviewRequired            bool  `json:"realReviewRequired"`
+	VirtualReviewRequired         bool  `json:"virtualReviewRequired"`
+	RealAuthorizationDays         int   `json:"realAuthorizationDays"`
+}
+
+type ArkAssetUsageView struct {
+	Real    int64 `json:"real"`
+	Virtual int64 `json:"virtual"`
+}
+
 type ArkPortraitOverview struct {
 	Enabled  bool                     `json:"enabled"`
 	Site     string                   `json:"site,omitempty"`
+	Config   ArkAssetConfigView       `json:"config"`
+	Usage    ArkAssetUsageView        `json:"usage"`
 	Groups   []ArkPortraitGroupView   `json:"groups"`
 	Sessions []ArkPortraitSessionView `json:"sessions"`
 }
 
+type ArkUserSummary struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+}
+
 type ArkPortraitGroupView struct {
-	ID        string                 `json:"id"`
-	Name      string                 `json:"name"`
-	GroupID   string                 `json:"groupId"`
-	Source    string                 `json:"source"`
-	Available bool                   `json:"available"`
-	CreatedAt time.Time              `json:"createdAt"`
-	Assets    []ArkPortraitAssetView `json:"assets"`
+	ID           string                 `json:"id"`
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description"`
+	Kind         string                 `json:"kind"`
+	Scope        string                 `json:"scope"`
+	Source       string                 `json:"source"`
+	GroupID      string                 `json:"groupId"`
+	Owned        bool                   `json:"owned"`
+	Available    bool                   `json:"available"`
+	AuthorizedAt *time.Time             `json:"authorizedAt,omitempty"`
+	ExpiresAt    *time.Time             `json:"expiresAt,omitempty"`
+	ExpiryStatus string                 `json:"expiryStatus"`
+	CreatedAt    time.Time              `json:"createdAt"`
+	Assets       []ArkPortraitAssetView `json:"assets"`
+	// 以下字段只在管理员接口返回。
+	Owner       *ArkUserSummary  `json:"owner,omitempty"`
+	GrantAll    bool             `json:"grantAll"`
+	GrantUsers  []ArkUserSummary `json:"grantUsers,omitempty"`
+	AssetCounts map[string]int64 `json:"assetCounts,omitempty"`
+}
+
+type ArkPortraitGroupRef struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Kind  string `json:"kind"`
+	Scope string `json:"scope"`
 }
 
 type ArkPortraitAssetView struct {
-	ID         string `json:"id"`
-	GroupID    string `json:"groupId"`
-	ResourceID string `json:"resourceId"`
-	ArkAssetID string `json:"arkAssetId"`
-	AssetType  string `json:"assetType"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	Error      string `json:"error,omitempty"`
-	// 资源元数据供前端把已通过的素材加入素材库；资源被删除后为零值。
-	MimeType  string    `json:"mimeType,omitempty"`
-	Width     int       `json:"width,omitempty"`
-	Height    int       `json:"height,omitempty"`
-	Bytes     int64     `json:"bytes,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID             string     `json:"id"`
+	GroupID        string     `json:"groupId"`
+	ResourceID     string     `json:"resourceId"`
+	ArkAssetID     string     `json:"arkAssetId"`
+	AssetType      string     `json:"assetType"`
+	Name           string     `json:"name"`
+	Status         string     `json:"status"`
+	Error          string     `json:"error,omitempty"`
+	LibraryAssetID string     `json:"libraryAssetId,omitempty"`
+	InLibrary      bool       `json:"inLibrary"`
+	MimeType       string     `json:"mimeType,omitempty"`
+	Width          int        `json:"width,omitempty"`
+	Height         int        `json:"height,omitempty"`
+	Bytes          int64      `json:"bytes,omitempty"`
+	ReviewedAt     *time.Time `json:"reviewedAt,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	// 管理员审核队列附带上传者与所属素材组。
+	Uploader *ArkUserSummary      `json:"uploader,omitempty"`
+	Group    *ArkPortraitGroupRef `json:"group,omitempty"`
 }
 
 type ArkPortraitSessionView struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	H5Link    string    `json:"h5Link,omitempty"`
-	GroupID   string    `json:"groupId,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	ID                   string    `json:"id"`
+	Name                 string    `json:"name"`
+	Scope                string    `json:"scope"`
+	Status               string    `json:"status"`
+	H5Link               string    `json:"h5Link,omitempty"`
+	GroupID              string    `json:"groupId,omitempty"`
+	Error                string    `json:"error,omitempty"`
+	ReservedMicrocredits int64     `json:"reservedMicrocredits"`
+	ExpiresAt            time.Time `json:"expiresAt"`
 }
 
-// arkPortraitSetting 读取可用于真人素材库的方舟配置；未开放或缺少凭据时返回明确错误。
-func (s *Service) arkPortraitSetting() (arkPrivateAssetSettingValue, error) {
+// arkCredentialSetting 读取凭据完整的方舟配置；所有调用方舟控制面的操作都从这里取配置。
+func (s *Service) arkCredentialSetting() (arkPrivateAssetSettingValue, error) {
 	_, setting, err := s.readArkPrivateAssetSetting()
 	if err != nil {
 		return setting, err
 	}
-	if !setting.PortraitEnabled {
-		return setting, Forbidden("管理员尚未开放方舟真人素材库")
-	}
-	if setting.Region == "" || setting.ProjectName == "" || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
-		return setting, BadAuthRequest("方舟真人素材库尚未配置完整，请联系管理员填写 Region、ProjectName 与 IAM AK/SK")
+	if !setting.credentialsReady() {
+		return setting, BadAuthRequest("方舟素材库尚未配置完整，请联系管理员填写 Region、ProjectName 与 IAM AK/SK")
 	}
 	return setting, nil
 }
@@ -110,45 +180,206 @@ func arkPortraitGroupAvailable(group model.ArkPortraitGroup, setting arkPrivateA
 	return group.Site == setting.Site && group.Region == setting.Region && group.ProjectName == setting.ProjectName
 }
 
+func arkGroupExpired(group model.ArkPortraitGroup, now time.Time) bool {
+	return group.ExpiresAt != nil && !group.ExpiresAt.After(now)
+}
+
+func arkGroupExpiryStatus(group model.ArkPortraitGroup, now time.Time) string {
+	switch {
+	case group.ExpiresAt == nil:
+		return "none"
+	case !group.ExpiresAt.After(now):
+		return "expired"
+	case group.ExpiresAt.Before(now.Add(arkPortraitExpiringWindow)):
+		return "expiring"
+	default:
+		return "valid"
+	}
+}
+
+func arkGroupKindLabel(kind string) string {
+	switch kind {
+	case arkGroupKindVirtual:
+		return "虚拟人像"
+	case arkGroupKindIP:
+		return "版权 IP"
+	default:
+		return "真人人像"
+	}
+}
+
+func validArkGroupKind(kind string) bool {
+	return kind == arkGroupKindReal || kind == arkGroupKindVirtual || kind == arkGroupKindIP
+}
+
+// arkGroupCharge 返回用户自建该类素材组要支付的积分；平台积分功能关闭或未开启收费时为 0。
+func (s *Service) arkGroupCharge(setting arkPrivateAssetSettingValue, kind string) (int64, error) {
+	price := setting.groupPrice(kind)
+	if price <= 0 {
+		return 0, nil
+	}
+	enabled, err := s.FeatureEnabled(FeatureCredits)
+	if err != nil {
+		return 0, err
+	}
+	if !enabled {
+		return 0, nil
+	}
+	return price, nil
+}
+
+func (s *Service) arkAssetConfigView(setting arkPrivateAssetSettingValue) (ArkAssetConfigView, error) {
+	billing := false
+	if setting.BillingEnabled {
+		enabled, err := s.FeatureEnabled(FeatureCredits)
+		if err != nil {
+			return ArkAssetConfigView{}, err
+		}
+		billing = enabled
+	}
+	return ArkAssetConfigView{
+		RealEnabled: setting.RealEnabled, VirtualEnabled: setting.VirtualEnabled,
+		RealGroupLimit: setting.RealGroupLimit, VirtualGroupLimit: setting.VirtualGroupLimit,
+		BillingEnabled: billing, RealGroupPriceMicrocredits: setting.RealGroupPriceMicrocredits, VirtualGroupPriceMicrocredits: setting.VirtualGroupPriceMicrocredits,
+		RealReviewRequired: setting.RealReviewRequired, VirtualReviewRequired: setting.VirtualReviewRequired,
+		RealAuthorizationDays: setting.RealAuthorizationDays,
+	}, nil
+}
+
+func arkGroupBillingOrder(userID string, key string, kind string, amount int64) *model.BillingOrder {
+	return &model.BillingOrder{
+		ID: newID(), UserID: userID, IdempotencyKey: "ark-group:" + key,
+		Model: "方舟" + strings.ReplaceAll(arkGroupKindLabel(kind), " ", "") + "素材组", Capability: "ark_asset", Scene: model.BillingSceneArkAssetGroup,
+		BillingMode: "fixed_request", UnitPriceMicrocredits: amount, MultiplierBasisPoints: 10000, Quantity: 1,
+		AmountMicrocredits: amount, ReservedAmountMicrocredits: amount, Status: model.BillingStatusReserved,
+	}
+}
+
+func arkGroupSettleNote(kind string, name string) string {
+	return arkGroupKindLabel(kind) + " · " + name
+}
+
+func insufficientArkCredits(amount int64) error {
+	return BadAuthRequest(fmt.Sprintf("积分不足：创建该素材组需要 %s 积分，请充值后重试", formatArkCredits(amount)))
+}
+
+func formatArkCredits(amount int64) string {
+	whole := amount / CreditScale
+	fraction := amount % CreditScale
+	if fraction == 0 {
+		return fmt.Sprintf("%d", whole)
+	}
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%d.%06d", whole, fraction), "0"), ".")
+}
+
 func (s *Service) ArkPortraitOverview(ctx context.Context, actor *model.User) (*ArkPortraitOverview, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	setting, err := s.arkPortraitSetting()
+	_, setting, err := s.readArkPrivateAssetSetting()
 	if err != nil {
-		var appErr *AppError
-		if errors.As(err, &appErr) {
-			return &ArkPortraitOverview{Enabled: false, Groups: []ArkPortraitGroupView{}, Sessions: []ArkPortraitSessionView{}}, nil
+		return nil, err
+	}
+	config, err := s.arkAssetConfigView(setting)
+	if err != nil {
+		return nil, err
+	}
+	overview := &ArkPortraitOverview{Config: config, Groups: []ArkPortraitGroupView{}, Sessions: []ArkPortraitSessionView{}}
+	if !setting.credentialsReady() {
+		return overview, nil
+	}
+	own, err := s.repo.ArkPortraitUserGroups(actor.ID)
+	if err != nil {
+		return nil, err
+	}
+	granted, err := s.repo.ArkPortraitGrantedGroups(actor.ID)
+	if err != nil {
+		return nil, err
+	}
+	overview.Enabled = setting.RealEnabled || setting.VirtualEnabled || len(own) > 0 || len(granted) > 0
+	if !overview.Enabled {
+		return overview, nil
+	}
+	overview.Site = setting.Site
+	now := time.Now()
+	views, err := s.arkGroupViewsForUser(actor.ID, own, granted, setting, now)
+	if err != nil {
+		return nil, err
+	}
+	overview.Groups = views
+	for _, group := range own {
+		if group.Kind == arkGroupKindVirtual {
+			overview.Usage.Virtual++
+		} else if group.Kind == arkGroupKindReal {
+			overview.Usage.Real++
 		}
-		return nil, err
 	}
-	groups, err := s.repo.ArkPortraitGroups(actor.ID)
+	activeSessions, err := s.repo.CountActiveArkPortraitUserSessions(actor.ID, now)
 	if err != nil {
 		return nil, err
 	}
-	assets, err := s.repo.ArkPortraitAssets(actor.ID)
+	overview.Usage.Real += activeSessions
+	pending, err := s.repo.PendingArkPortraitSessions(actor.ID, arkGroupScopeUser, now, 10)
 	if err != nil {
 		return nil, err
 	}
-	groupByID := make(map[string]model.ArkPortraitGroup, len(groups))
-	for _, group := range groups {
-		groupByID[group.ID] = group
+	overview.Sessions, err = s.arkSessionViews(pending)
+	if err != nil {
+		return nil, err
 	}
-	refreshed := 0
-	for index := range assets {
-		group, ok := groupByID[assets[index].GroupID]
-		if !ok || assets[index].Status != arkPortraitAssetProcessing || refreshed >= maxArkPortraitRefreshPerList || !arkPortraitGroupAvailable(group, setting) {
-			continue
+	return overview, nil
+}
+
+// arkGroupViewsForUser 组装用户可见的素材组：自建组返回全部状态的素材，授权组只返回已通过的素材。
+func (s *Service) arkGroupViewsForUser(userID string, own []model.ArkPortraitGroup, granted []model.ArkPortraitGroup, setting arkPrivateAssetSettingValue, now time.Time) ([]ArkPortraitGroupView, error) {
+	ownIDs := make([]string, 0, len(own))
+	for _, group := range own {
+		ownIDs = append(ownIDs, group.ID)
+	}
+	grantedIDs := make([]string, 0, len(granted))
+	for _, group := range granted {
+		grantedIDs = append(grantedIDs, group.ID)
+	}
+	ownAssets, err := s.repo.ArkPortraitAssetsForGroups(ownIDs, nil)
+	if err != nil {
+		return nil, err
+	}
+	grantedAssets, err := s.repo.ArkPortraitAssetsForGroups(grantedIDs, []string{arkPortraitAssetActive})
+	if err != nil {
+		return nil, err
+	}
+	all := append(append([]model.ArkPortraitAsset{}, ownAssets...), grantedAssets...)
+	assetViews, err := s.arkAssetViewsForUser(userID, all)
+	if err != nil {
+		return nil, err
+	}
+	byGroup := make(map[string][]ArkPortraitAssetView, len(own)+len(granted))
+	for _, view := range assetViews {
+		byGroup[view.GroupID] = append(byGroup[view.GroupID], view)
+	}
+	views := make([]ArkPortraitGroupView, 0, len(own)+len(granted))
+	for _, group := range append(append([]model.ArkPortraitGroup{}, own...), granted...) {
+		view := arkPortraitGroupView(group, setting, now)
+		view.Owned = group.Scope == arkGroupScopeUser && group.UserID == userID
+		if items := byGroup[group.ID]; items != nil {
+			view.Assets = items
 		}
-		refreshed++
-		// 列表顺带刷新少量处理中的素材；单条失败不影响列表，用户可稍后再刷新。
-		_ = s.refreshArkPortraitAssetStatus(ctx, setting, &assets[index])
+		views = append(views, view)
 	}
+	return views, nil
+}
+
+// arkAssetViewsForUser 附带资源尺寸，并标记各素材是否已在当前用户的素材库中。
+func (s *Service) arkAssetViewsForUser(userID string, assets []model.ArkPortraitAsset) ([]ArkPortraitAssetView, error) {
 	resourceIDs := make([]string, 0, len(assets))
+	libraryIDs := make([]string, 0, len(assets))
 	for _, asset := range assets {
 		resourceIDs = append(resourceIDs, asset.ResourceID)
+		if id := arkLibraryAssetIDForUser(asset, userID); id != "" {
+			libraryIDs = append(libraryIDs, id)
+		}
 	}
-	resources, err := s.repo.ResourcesForUserIDs(actor.ID, resourceIDs)
+	resources, err := s.repo.ResourcesByIDs(resourceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -156,116 +387,185 @@ func (s *Service) ArkPortraitOverview(ctx context.Context, actor *model.User) (*
 	for _, resource := range resources {
 		resourceByID[resource.ID] = resource
 	}
-	views := make([]ArkPortraitGroupView, 0, len(groups))
-	assetsByGroup := make(map[string][]ArkPortraitAssetView, len(groups))
+	libraryAssets, err := s.repo.AssetsForUserIDs(userID, libraryIDs)
+	if err != nil {
+		return nil, err
+	}
+	inLibrary := make(map[string]bool, len(libraryAssets))
+	for _, asset := range libraryAssets {
+		if asset.Status != model.AssetVersionStatusArchived {
+			inLibrary[asset.ID] = true
+		}
+	}
+	views := make([]ArkPortraitAssetView, 0, len(assets))
 	for _, asset := range assets {
 		view := arkPortraitAssetView(asset)
 		if resource, ok := resourceByID[asset.ResourceID]; ok {
 			view.MimeType, view.Width, view.Height, view.Bytes = resource.MimeType, resource.Width, resource.Height, resource.Size
 		}
-		assetsByGroup[asset.GroupID] = append(assetsByGroup[asset.GroupID], view)
-	}
-	for _, group := range groups {
-		view := arkPortraitGroupView(group, setting)
-		if items := assetsByGroup[group.ID]; items != nil {
-			view.Assets = items
+		libraryID := arkLibraryAssetIDForUser(asset, userID)
+		if inLibrary[libraryID] {
+			view.LibraryAssetID = libraryID
+			view.InLibrary = true
+		} else if asset.UserID == userID {
+			view.LibraryAssetID = asset.LibraryAssetID
 		}
 		views = append(views, view)
 	}
-	pending, err := s.repo.PendingArkPortraitSessions(actor.ID, time.Now(), 10)
+	return views, nil
+}
+
+func (s *Service) arkSessionViews(sessions []model.ArkPortraitSession) ([]ArkPortraitSessionView, error) {
+	orderIDs := make([]string, 0, len(sessions))
+	for _, session := range sessions {
+		if session.BillingOrderID != "" {
+			orderIDs = append(orderIDs, session.BillingOrderID)
+		}
+	}
+	orders, err := s.repo.BillingOrdersByIDs(orderIDs)
 	if err != nil {
 		return nil, err
 	}
-	sessions := make([]ArkPortraitSessionView, 0, len(pending))
-	for _, session := range pending {
-		sessions = append(sessions, arkPortraitSessionView(session))
+	views := make([]ArkPortraitSessionView, 0, len(sessions))
+	for _, session := range sessions {
+		view := arkPortraitSessionView(session)
+		if order, ok := orders[session.BillingOrderID]; ok && order.Status == model.BillingStatusReserved {
+			view.ReservedMicrocredits = order.AmountMicrocredits
+		}
+		views = append(views, view)
 	}
-	return &ArkPortraitOverview{Enabled: true, Site: setting.Site, Groups: views, Sessions: sessions}, nil
+	return views, nil
 }
 
-// CreateArkPortraitSession 生成 H5 真人认证链接。lang 为界面语言，映射到 H5 支持的 zh / en / zh-Hant。
+// CreateArkPortraitSession 为用户自建真人素材组生成 H5 认证链接。lang 为界面语言，映射到 H5 支持的 zh / en / zh-Hant。
 func (s *Service) CreateArkPortraitSession(ctx context.Context, actor *model.User, name, lang string) (*ArkPortraitSessionView, error) {
+	return s.createArkPortraitSession(ctx, actor, name, "", lang, arkGroupScopeUser)
+}
+
+func (s *Service) createArkPortraitSession(ctx context.Context, actor *model.User, name, description, lang, scope string) (*ArkPortraitSessionView, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	name = strings.TrimSpace(name)
+	name, description = strings.TrimSpace(name), strings.TrimSpace(description)
 	if name == "" || len([]rune(name)) > 40 {
 		return nil, BadAuthRequest("请填写 1-40 个字的真人名称，便于区分不同素材组")
 	}
-	setting, err := s.arkPortraitSetting()
+	if len([]rune(description)) > 200 {
+		return nil, BadAuthRequest("素材组说明最多 200 个字")
+	}
+	setting, err := s.arkCredentialSetting()
 	if err != nil {
 		return nil, err
+	}
+	if scope == arkGroupScopeUser && !setting.RealEnabled {
+		return nil, Forbidden("管理员尚未开放真人素材组")
 	}
 	callbackBase, err := arkPortraitCallbackBase(setting)
 	if err != nil {
 		return nil, err
 	}
-	recent, err := s.repo.CountRecentArkPortraitSessions(actor.ID, time.Now().Add(-time.Hour))
+	now := time.Now()
+	recent, err := s.repo.CountRecentArkPortraitSessions(actor.ID, now.Add(-time.Hour))
 	if err != nil {
 		return nil, err
 	}
 	if recent >= maxArkPortraitSessionsPerHour {
 		return nil, RateLimited("真人认证发起过于频繁，请一小时后再试")
 	}
-	groups, err := s.repo.ArkPortraitGroups(actor.ID)
-	if err != nil {
-		return nil, err
+	var order *model.BillingOrder
+	session := &model.ArkPortraitSession{
+		ID: newID(), UserID: actor.ID, Scope: scope, State: randomToken(), Name: name, Description: description,
+		Site: setting.Site, Region: setting.Region, ProjectName: setting.ProjectName,
+		Status: arkPortraitSessionPending, ExpiresAt: now.Add(arkPortraitSessionTTL),
 	}
-	if len(groups) >= maxArkPortraitGroupsPerUser {
-		return nil, BadAuthRequest(fmt.Sprintf("每个账号最多登记 %d 位真人", maxArkPortraitGroupsPerUser))
-	}
-	state := randomToken()
-	if !arkPortraitStatePattern.MatchString(state) {
+	if !arkPortraitStatePattern.MatchString(session.State) {
 		return nil, errors.New("生成真人认证凭据失败")
 	}
+	if scope == arkGroupScopeUser {
+		groups, err := s.repo.CountArkPortraitUserGroups(actor.ID, arkGroupKindReal)
+		if err != nil {
+			return nil, err
+		}
+		sessions, err := s.repo.CountActiveArkPortraitUserSessions(actor.ID, now)
+		if err != nil {
+			return nil, err
+		}
+		if groups+sessions >= int64(setting.RealGroupLimit) {
+			return nil, BadAuthRequest(fmt.Sprintf("每个账号最多创建 %d 个真人素材组（含认证中的会话）", setting.RealGroupLimit))
+		}
+		price, err := s.arkGroupCharge(setting, arkGroupKindReal)
+		if err != nil {
+			return nil, err
+		}
+		if price > 0 {
+			order = arkGroupBillingOrder(actor.ID, "session:"+session.ID, arkGroupKindReal, price)
+			session.BillingOrderID = order.ID
+		}
+	}
+	// 先登记会话并冻结费用，再调用方舟；方舟失败时退回冻结积分并把会话标记失败。
+	if err := s.repo.CreateArkPortraitSessionWithReservation(session, order); err != nil {
+		if errors.Is(err, repository.ErrInsufficientCredits) && order != nil {
+			return nil, insufficientArkCredits(order.AmountMicrocredits)
+		}
+		return nil, err
+	}
+	fail := func(message string, cause error) (*ArkPortraitSessionView, error) {
+		if _, finishErr := s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionFailed, "", message, "发起真人认证失败，冻结积分已退回"); finishErr != nil {
+			return nil, errors.Join(cause, finishErr)
+		}
+		return nil, WrapAppError(http.StatusBadGateway, message, cause)
+	}
 	response, err := callArkPrivateAssetAPI(ctx, setting, "CreateVisualValidateSession", map[string]interface{}{
-		"CallbackURL": callbackBase + "/api/ark-portraits/callback/" + state,
+		"CallbackURL": callbackBase + "/api/ark-portraits/callback/" + session.State,
 		"ProjectName": setting.ProjectName,
 	})
 	if err != nil {
-		return nil, WrapAppError(http.StatusBadGateway, "发起方舟真人认证失败："+safeArkPortraitError(err), err)
+		return fail("发起方舟真人认证失败："+safeArkPortraitError(err), err)
 	}
 	bytedToken := arkPrivateAssetResponseField(response, "BytedToken")
-	h5Link, err := arkPortraitH5Link(arkPrivateAssetResponseField(response, "H5Link"), lang)
-	if bytedToken == "" || err != nil {
-		return nil, NewAppError(http.StatusBadGateway, "方舟未返回有效的真人认证链接")
+	h5Link, linkErr := arkPortraitH5Link(arkPrivateAssetResponseField(response, "H5Link"), lang)
+	if bytedToken == "" || linkErr != nil {
+		return fail("方舟未返回有效的真人认证链接", errors.New("invalid visual validate session"))
 	}
 	tokenCipher, err := s.encryptSettingSecret(bytedToken)
 	if err != nil {
-		return nil, err
+		return fail("保存真人认证凭据失败", err)
 	}
-	now := time.Now()
-	session := &model.ArkPortraitSession{
-		ID: newID(), UserID: actor.ID, State: state, Name: name,
-		Site: setting.Site, Region: setting.Region, ProjectName: setting.ProjectName,
-		BytedTokenCipher: tokenCipher, Status: arkPortraitSessionPending, ExpiresAt: now.Add(arkPortraitSessionTTL),
-	}
-	if err := s.repo.CreateArkPortraitSession(session); err != nil {
-		return nil, err
+	if err := s.repo.SetArkPortraitSessionToken(session.ID, tokenCipher); err != nil {
+		return fail("保存真人认证凭据失败", err)
 	}
 	view := arkPortraitSessionView(*session)
+	if order != nil {
+		view.ReservedMicrocredits = order.AmountMicrocredits
+	}
 	// H5 链接内含方舟签发的临时凭据，只在发起时返回给本人，不落库。
 	view.H5Link = h5Link
 	return &view, nil
 }
 
-// HandleArkPortraitCallback 处理 H5 认证页完成后的跳转（无登录态），返回应重定向到的站内地址。
+// HandleArkPortraitCallback 处理 H5 认证页完成后的跳转（无登录态，多在手机上打开），返回结果页地址。
 func (s *Service) HandleArkPortraitCallback(ctx context.Context, state string, query url.Values) string {
-	const page = "/assets?arkPortrait="
+	result := func(status string, scope string) string {
+		target := arkPortraitResultPath + "?status=" + url.QueryEscape(status)
+		if scope == arkGroupScopePlatform {
+			target += "&scope=platform"
+		}
+		return target
+	}
 	state = strings.TrimSpace(state)
 	if !arkPortraitStatePattern.MatchString(state) {
-		return page + "invalid"
+		return result("invalid", "")
 	}
 	session, err := s.repo.ArkPortraitSessionByState(state)
 	if err != nil {
-		return page + "invalid"
+		return result("invalid", "")
 	}
 	if session.Status != arkPortraitSessionPending {
-		return page + session.Status
+		return result(session.Status, session.Scope)
 	}
 	if !session.ExpiresAt.After(time.Now()) {
-		_, _ = s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionExpired, "", "", "认证会话已过期")
-		return page + arkPortraitSessionExpired
+		s.expireArkPortraitSession(session.ID)
+		return result(arkPortraitSessionExpired, session.Scope)
 	}
 	resultCode := strings.TrimSpace(query.Get("resultCode"))
 	if resultCode != arkPortraitSuccessCode {
@@ -273,24 +573,72 @@ func (s *Service) HandleArkPortraitCallback(ctx context.Context, state string, q
 		if sub := strings.TrimSpace(query.Get("algorithmBaseRespCode")); sub != "" {
 			detail += "，algorithmBaseRespCode=" + truncateRunes(sub, 20)
 		}
-		_, _ = s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionFailed, truncateRunes(resultCode, 40), "", detail+"），请重新发起认证")
-		return page + arkPortraitSessionFailed
+		_, _ = s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionFailed, truncateRunes(resultCode, 40), detail+"），请重新发起认证", "真人认证未通过，冻结积分已退回")
+		return result(arkPortraitSessionFailed, session.Scope)
 	}
 	if token := strings.TrimSpace(query.Get("bytedToken")); token != "" {
 		stored, err := s.decryptSettingSecret(session.BytedTokenCipher)
 		if err != nil || subtle.ConstantTimeCompare([]byte(stored), []byte(token)) != 1 {
-			return page + "invalid"
+			return result("invalid", "")
 		}
 	}
 	if _, err := s.completeArkPortraitSession(ctx, session); err != nil {
-		// 保持 pending，用户回到页面后可点击“我已完成认证”重试换取素材组。
-		return page + "pending"
+		// 保持 pending，用户回到电脑端可点击“我已完成认证”重试换取素材组。
+		return result(arkPortraitSessionPending, session.Scope)
 	}
-	return page + arkPortraitSessionVerified
+	return result(arkPortraitSessionVerified, session.Scope)
+}
+
+// ArkPortraitSessionStatus 只读取本地会话状态，供电脑端轮询回调结果；不调用方舟。
+func (s *Service) ArkPortraitSessionStatus(actor *model.User, id string) (*ArkPortraitSessionView, error) {
+	session, err := s.arkPortraitSessionForUser(actor, id)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status == arkPortraitSessionPending && !session.ExpiresAt.After(time.Now()) {
+		s.expireArkPortraitSession(session.ID)
+		if session, err = s.repo.ArkPortraitSessionForUser(actor.ID, session.ID); err != nil {
+			return nil, err
+		}
+	}
+	views, err := s.arkSessionViews([]model.ArkPortraitSession{*session})
+	if err != nil {
+		return nil, err
+	}
+	return &views[0], nil
 }
 
 // CheckArkPortraitSession 是回调未到达（例如在手机上完成认证）时的主动查询入口。
 func (s *Service) CheckArkPortraitSession(ctx context.Context, actor *model.User, id string) (*ArkPortraitSessionView, error) {
+	session, err := s.arkPortraitSessionForUser(actor, id)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status == arkPortraitSessionPending && !session.ExpiresAt.After(time.Now()) {
+		s.expireArkPortraitSession(session.ID)
+	} else if session.Status == arkPortraitSessionPending {
+		if _, err := s.completeArkPortraitSession(ctx, session); err != nil {
+			return nil, err
+		}
+	}
+	return s.ArkPortraitSessionStatus(actor, session.ID)
+}
+
+// CancelArkPortraitSession 结束仍在等待的认证会话并退回冻结的素材组费用。
+func (s *Service) CancelArkPortraitSession(actor *model.User, id string) (*ArkPortraitSessionView, error) {
+	session, err := s.arkPortraitSessionForUser(actor, id)
+	if err != nil {
+		return nil, err
+	}
+	if session.Status == arkPortraitSessionPending {
+		if _, err := s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionCancelled, "", "已取消真人认证", "已取消真人认证，冻结积分已退回"); err != nil {
+			return nil, err
+		}
+	}
+	return s.ArkPortraitSessionStatus(actor, session.ID)
+}
+
+func (s *Service) arkPortraitSessionForUser(actor *model.User, id string) (*model.ArkPortraitSession, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
@@ -298,28 +646,15 @@ func (s *Service) CheckArkPortraitSession(ctx context.Context, actor *model.User
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, NotFound("认证会话不存在")
 	}
-	if err != nil {
-		return nil, err
-	}
-	if session.Status == arkPortraitSessionPending && !session.ExpiresAt.After(time.Now()) {
-		_, _ = s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionExpired, "", "", "认证会话已过期")
-		session.Status = arkPortraitSessionExpired
-	}
-	if session.Status == arkPortraitSessionPending {
-		if _, err := s.completeArkPortraitSession(ctx, session); err != nil {
-			return nil, err
-		}
-		session, err = s.repo.ArkPortraitSessionForUser(actor.ID, session.ID)
-		if err != nil {
-			return nil, err
-		}
-	}
-	view := arkPortraitSessionView(*session)
-	return &view, nil
+	return session, err
+}
+
+func (s *Service) expireArkPortraitSession(id string) {
+	_, _ = s.repo.FinishArkPortraitSession(id, arkPortraitSessionExpired, "", "认证会话已过期", "真人认证未在有效期内完成，冻结积分已退回")
 }
 
 func (s *Service) completeArkPortraitSession(ctx context.Context, session *model.ArkPortraitSession) (*model.ArkPortraitGroup, error) {
-	setting, err := s.arkPortraitSetting()
+	setting, err := s.arkCredentialSetting()
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +664,9 @@ func (s *Service) completeArkPortraitSession(ctx context.Context, session *model
 	token, err := s.decryptSettingSecret(session.BytedTokenCipher)
 	if err != nil {
 		return nil, err
+	}
+	if token == "" {
+		return nil, NewAppError(http.StatusConflict, "认证会话尚未就绪，请重新发起真人认证")
 	}
 	response, err := callArkPrivateAssetAPI(ctx, setting, "GetVisualValidateResult", map[string]interface{}{
 		"BytedToken":  token,
@@ -341,235 +679,27 @@ func (s *Service) completeArkPortraitSession(ctx context.Context, session *model
 	if !arkPortraitGroupIDPattern.MatchString(groupID) {
 		return nil, NewAppError(http.StatusBadGateway, "方舟未返回有效的真人素材组 ID")
 	}
-	group, err := s.registerArkPortraitGroup(session.UserID, session.Name, groupID, "liveness", setting)
-	if err != nil {
-		return nil, err
+	now := time.Now()
+	expiresAt := now.Add(time.Duration(setting.RealAuthorizationDays) * 24 * time.Hour)
+	group := &model.ArkPortraitGroup{
+		ID: newID(), UserID: session.UserID, Kind: arkGroupKindReal, Scope: firstNonEmpty(session.Scope, arkGroupScopeUser),
+		Name: session.Name, Description: session.Description, Site: setting.Site, Region: setting.Region, ProjectName: setting.ProjectName,
+		GroupID: groupID, Source: arkGroupSourceLiveness, AuthorizedAt: &now, ExpiresAt: &expiresAt, BillingOrderID: session.BillingOrderID,
 	}
-	if _, err := s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionVerified, arkPortraitSuccessCode, groupID, ""); err != nil {
-		return nil, err
-	}
-	return group, nil
-}
-
-func (s *Service) registerArkPortraitGroup(userID, name, groupID, source string, setting arkPrivateAssetSettingValue) (*model.ArkPortraitGroup, error) {
-	group, created, err := s.repo.CreateArkPortraitGroup(&model.ArkPortraitGroup{
-		ID: newID(), UserID: userID, Name: name, Site: setting.Site, Region: setting.Region,
-		ProjectName: setting.ProjectName, GroupID: groupID, Source: source,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if !created && group.UserID != userID {
+	registered, err := s.repo.CompleteArkPortraitSession(session.ID, group, arkGroupSettleNote(arkGroupKindReal, session.Name))
+	if errors.Is(err, repository.ErrArkPortraitGroupTaken) {
+		_, _ = s.repo.FinishArkPortraitSession(session.ID, arkPortraitSessionFailed, arkPortraitSuccessCode, "该真人素材组已被其他账号登记", "真人素材组已被其他账号登记，冻结积分已退回")
 		return nil, NewAppError(http.StatusConflict, "该真人素材组已被其他账号登记")
 	}
-	return group, nil
+	if errors.Is(err, repository.ErrArkPortraitSessionClosed) {
+		return nil, NewAppError(http.StatusConflict, "认证会话已结束，请重新发起真人认证")
+	}
+	return registered, err
 }
 
-// BindArkPortraitGroup 登记在方舟控制台通过扫码授权创建的真人素材组（BytePlus 等未开放 H5 接口时使用）。
-func (s *Service) BindArkPortraitGroup(ctx context.Context, actor *model.User, name, groupID string) (*ArkPortraitGroupView, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return nil, err
-	}
-	name, groupID = strings.TrimSpace(name), strings.TrimSpace(groupID)
-	if name == "" || len([]rune(name)) > 40 {
-		return nil, BadAuthRequest("请填写 1-40 个字的真人名称")
-	}
-	if !arkPortraitGroupIDPattern.MatchString(groupID) {
-		return nil, BadAuthRequest("请填写 group- 开头的方舟素材组 ID")
-	}
-	setting, err := s.arkPortraitSetting()
-	if err != nil {
-		return nil, err
-	}
-	response, err := callArkPrivateAssetAPI(ctx, setting, "GetAssetGroup", map[string]interface{}{"Id": groupID, "ProjectName": setting.ProjectName})
-	if err != nil {
-		return nil, BadAuthRequest("读取方舟素材组失败：" + safeArkPortraitError(err))
-	}
-	if groupType := arkPrivateAssetResponseField(response, "GroupType"); groupType != "" && !strings.EqualFold(groupType, arkPortraitGroupType) {
-		return nil, BadAuthRequest("该素材组不是真人人像（LivenessFace）素材组")
-	}
-	group, err := s.registerArkPortraitGroup(actor.ID, name, groupID, "manual", setting)
-	if err != nil {
-		return nil, err
-	}
-	view := arkPortraitGroupView(*group, setting)
-	return &view, nil
-}
-
-func (s *Service) RenameArkPortraitGroup(actor *model.User, id, name string) (*ArkPortraitGroupView, error) {
-	if actor == nil {
-		return nil, Unauthorized("请先登录")
-	}
-	name = strings.TrimSpace(name)
-	if name == "" || len([]rune(name)) > 40 {
-		return nil, BadAuthRequest("请填写 1-40 个字的真人名称")
-	}
-	group, err := s.arkPortraitGroupForUser(actor.ID, id)
-	if err != nil {
-		return nil, err
-	}
-	group.Name = name
-	if err := s.repo.SaveArkPortraitGroup(group); err != nil {
-		return nil, err
-	}
-	_, setting, err := s.readArkPrivateAssetSetting()
-	if err != nil {
-		return nil, err
-	}
-	view := arkPortraitGroupView(*group, setting)
-	return &view, nil
-}
-
-// DeleteArkPortraitGroup 先删除方舟侧素材组（受方舟授权状态限制，可能失败），成功后才删除本地记录。
-func (s *Service) DeleteArkPortraitGroup(ctx context.Context, actor *model.User, id string) error {
-	if actor == nil {
-		return Unauthorized("请先登录")
-	}
-	group, err := s.arkPortraitGroupForUser(actor.ID, id)
-	if err != nil {
-		return err
-	}
-	setting, err := s.arkPortraitSetting()
-	if err != nil {
-		return err
-	}
-	if arkPortraitGroupAvailable(*group, setting) {
-		if _, err := callArkPrivateAssetAPI(ctx, setting, "DeleteAssetGroup", map[string]interface{}{"Id": group.GroupID, "ProjectName": group.ProjectName}); err != nil && !arkPortraitNotFound(err) {
-			return BadAuthRequest("删除方舟真人素材组失败：" + safeArkPortraitError(err))
-		}
-	}
-	return s.repo.DeleteArkPortraitGroup(actor.ID, group.ID)
-}
-
-// CreateArkPortraitAsset 把用户自己的已上传资源加入真人素材组；方舟比对面部一致性通过后才可用于生成。
-func (s *Service) CreateArkPortraitAsset(ctx context.Context, actor *model.User, groupID, resourceID, name string) (*ArkPortraitAssetView, error) {
-	if actor == nil {
-		return nil, Unauthorized("请先登录")
-	}
-	group, err := s.arkPortraitGroupForUser(actor.ID, groupID)
-	if err != nil {
-		return nil, err
-	}
-	setting, err := s.arkPortraitSetting()
-	if err != nil {
-		return nil, err
-	}
-	if !arkPortraitGroupAvailable(*group, setting) {
-		return nil, NewAppError(http.StatusConflict, "管理员已更换方舟站点、Region 或项目，该真人素材组已不可用")
-	}
-	count, err := s.repo.CountArkPortraitGroupAssets(group.ID)
-	if err != nil {
-		return nil, err
-	}
-	if count >= maxArkPortraitAssetsPerGroup {
-		return nil, BadAuthRequest(fmt.Sprintf("每位真人最多上传 %d 份素材", maxArkPortraitAssetsPerGroup))
-	}
-	resource, err := s.Resource(actor.ID, strings.TrimSpace(resourceID))
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, NotFound("素材文件不存在或无权访问")
-	}
-	if err != nil {
-		return nil, err
-	}
-	if resource.Status != model.ResourceStatusReady {
-		return nil, BadAuthRequest("素材文件尚未上传完成")
-	}
-	assetType := arkPortraitAssetType(resource.MimeType)
-	if assetType == "" {
-		return nil, BadAuthRequest("真人素材只支持图片、视频或音频文件")
-	}
-	name = truncateRunes(firstNonEmpty(strings.TrimSpace(name), "portrait-"+resource.ID), 120)
-	resourceURL, err := s.providerResourceURL(resource, time.Now().Add(time.Hour))
-	if err != nil {
-		return nil, fmt.Errorf("生成素材临时地址失败：%w", err)
-	}
-	response, err := callArkPrivateAssetAPI(ctx, setting, "CreateAsset", map[string]interface{}{
-		"GroupId":     group.GroupID,
-		"URL":         resourceURL,
-		"AssetType":   assetType,
-		"Name":        name,
-		"ProjectName": group.ProjectName,
-	})
-	if err != nil {
-		return nil, BadAuthRequest("上传真人素材失败：" + safeArkPortraitError(err))
-	}
-	arkAssetID := arkPrivateAssetResponseField(response, "Id", "AssetId", "ID")
-	if !strings.HasPrefix(arkAssetID, "asset-") {
-		return nil, NewAppError(http.StatusBadGateway, "方舟未返回有效的素材 ID")
-	}
-	asset := &model.ArkPortraitAsset{
-		ID: newID(), UserID: actor.ID, GroupID: group.ID, ResourceID: resource.ID, ArkAssetID: arkAssetID,
-		AssetType: assetType, Name: name, Status: arkPortraitAssetProcessing,
-	}
-	if err := s.repo.CreateArkPortraitAsset(asset); err != nil {
-		return nil, err
-	}
-	view := arkPortraitAssetView(*asset)
-	view.MimeType, view.Width, view.Height, view.Bytes = resource.MimeType, resource.Width, resource.Height, resource.Size
-	return &view, nil
-}
-
-func (s *Service) RefreshArkPortraitAsset(ctx context.Context, actor *model.User, id string) (*ArkPortraitAssetView, error) {
-	if actor == nil {
-		return nil, Unauthorized("请先登录")
-	}
-	asset, group, err := s.arkPortraitAssetForUser(actor.ID, id)
-	if err != nil {
-		return nil, err
-	}
-	setting, err := s.arkPortraitSetting()
-	if err != nil {
-		return nil, err
-	}
-	if !arkPortraitGroupAvailable(*group, setting) {
-		return nil, NewAppError(http.StatusConflict, "管理员已更换方舟站点、Region 或项目，该真人素材组已不可用")
-	}
-	if err := s.refreshArkPortraitAssetStatus(ctx, setting, asset); err != nil {
-		return nil, BadAuthRequest("查询方舟素材状态失败：" + safeArkPortraitError(err))
-	}
-	view := arkPortraitAssetView(*asset)
-	return &view, nil
-}
-
-func (s *Service) DeleteArkPortraitAsset(ctx context.Context, actor *model.User, id string) error {
-	if actor == nil {
-		return Unauthorized("请先登录")
-	}
-	asset, group, err := s.arkPortraitAssetForUser(actor.ID, id)
-	if err != nil {
-		return err
-	}
-	setting, err := s.arkPortraitSetting()
-	if err != nil {
-		return err
-	}
-	if arkPortraitGroupAvailable(*group, setting) {
-		if _, err := callArkPrivateAssetAPI(ctx, setting, "DeleteAsset", map[string]interface{}{"Id": asset.ArkAssetID, "ProjectName": group.ProjectName}); err != nil && !arkPortraitNotFound(err) {
-			return BadAuthRequest("删除方舟真人素材失败：" + safeArkPortraitError(err))
-		}
-	}
-	return s.repo.DeleteArkPortraitAsset(actor.ID, asset.ID)
-}
-
-func (s *Service) refreshArkPortraitAssetStatus(ctx context.Context, setting arkPrivateAssetSettingValue, asset *model.ArkPortraitAsset) error {
-	response, err := callArkPrivateAssetAPI(ctx, setting, "GetAsset", map[string]interface{}{"Id": asset.ArkAssetID, "ProjectName": setting.ProjectName})
-	if err != nil {
-		return err
-	}
-	switch strings.ToLower(arkPrivateAssetResponseField(response, "Status", "status")) {
-	case "active":
-		asset.Status, asset.Error = arkPortraitAssetActive, ""
-	case "failed":
-		asset.Status = arkPortraitAssetFailed
-		asset.Error = truncateRunes(defaultString(arkPrivateAssetResponseField(response, "ErrorMessage", "Message", "message"), "素材未通过方舟面部一致性校验，请上传本人清晰的正面素材"), 1000)
-	default:
-		return nil
-	}
-	return s.repo.SaveArkPortraitAsset(asset)
-}
-
-// validateArkPortraitReferences 拒绝引用他人登记的真人素材：真人素材组都在管理员的同一方舟账号下，
-// 仅靠方舟侧无法区分本系统内的用户。未登记的素材 ID（公共数字人或其他来源）不受限制。
+// validateArkPortraitReferences 校验生成任务引用的方舟素材 ID：素材组都在平台的同一方舟账号下，
+// 仅靠方舟侧无法区分本系统内的用户。他人个人组、未授权的平台组和已过期的真人组都拒绝；
+// 未登记的素材 ID（方舟公共虚拟人像或其他来源）不受限制。
 func (s *Service) validateArkPortraitReferences(userID string, input *canvasGenerationInput) error {
 	if input == nil {
 		return nil
@@ -585,41 +715,52 @@ func (s *Service) validateArkPortraitReferences(userID string, input *canvasGene
 	if len(ids) == 0 {
 		return nil
 	}
-	owners, err := s.repo.ArkPortraitAssetOwners(ids)
+	rows, err := s.repo.ArkPortraitAssetAccessRows(ids)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	platformGroupIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.Scope == arkGroupScopePlatform && !row.GrantAll && row.GroupUserID != userID {
+			platformGroupIDs = append(platformGroupIDs, row.GroupID)
+		}
+	}
+	granted, err := s.repo.ArkPortraitGrantedGroupIDs(userID, platformGroupIDs)
 	if err != nil {
 		return err
 	}
+	rowsByAsset := make(map[string][]repository.ArkPortraitAssetAccess, len(rows))
+	for _, row := range rows {
+		rowsByAsset[row.ArkAssetID] = append(rowsByAsset[row.ArkAssetID], row)
+	}
+	now := time.Now()
 	for _, id := range ids {
-		for _, owner := range owners[id] {
-			if owner != userID {
-				return Forbidden("参考素材包含其他账号的真人素材，不能用于生成")
-			}
+		candidates := rowsByAsset[id]
+		if len(candidates) == 0 {
+			continue
 		}
+		allowed, expired := false, false
+		for _, row := range candidates {
+			permitted := (row.Scope != arkGroupScopePlatform && row.GroupUserID == userID) ||
+				(row.Scope == arkGroupScopePlatform && (row.GrantAll || row.GroupUserID == userID || granted[row.GroupID]))
+			if !permitted {
+				continue
+			}
+			if row.ExpiresAt != nil && !row.ExpiresAt.After(now) {
+				expired = true
+				continue
+			}
+			allowed = true
+		}
+		if allowed {
+			continue
+		}
+		if expired {
+			return Forbidden("参考素材所在的真人素材组授权已过期，请重新认证后再生成")
+		}
+		return Forbidden("参考素材包含未授权给你的方舟素材，不能用于生成")
 	}
 	return nil
-}
-
-func (s *Service) arkPortraitGroupForUser(userID, id string) (*model.ArkPortraitGroup, error) {
-	group, err := s.repo.ArkPortraitGroupForUser(userID, strings.TrimSpace(id))
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, NotFound("真人素材组不存在")
-	}
-	return group, err
-}
-
-func (s *Service) arkPortraitAssetForUser(userID, id string) (*model.ArkPortraitAsset, *model.ArkPortraitGroup, error) {
-	asset, err := s.repo.ArkPortraitAssetForUser(userID, strings.TrimSpace(id))
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil, NotFound("真人素材不存在")
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	group, err := s.arkPortraitGroupForUser(userID, asset.GroupID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return asset, group, nil
 }
 
 func arkPortraitCallbackBase(setting arkPrivateAssetSettingValue) (string, error) {
@@ -688,23 +829,27 @@ func safeArkPortraitError(err error) string {
 	return truncateRunes(strings.TrimSpace(message), 300)
 }
 
-func arkPortraitGroupView(group model.ArkPortraitGroup, setting arkPrivateAssetSettingValue) ArkPortraitGroupView {
+func arkPortraitGroupView(group model.ArkPortraitGroup, setting arkPrivateAssetSettingValue, now time.Time) ArkPortraitGroupView {
 	return ArkPortraitGroupView{
-		ID: group.ID, Name: group.Name, GroupID: group.GroupID, Source: group.Source,
-		Available: arkPortraitGroupAvailable(group, setting), CreatedAt: group.CreatedAt, Assets: []ArkPortraitAssetView{},
+		ID: group.ID, Name: group.Name, Description: group.Description, Kind: firstNonEmpty(group.Kind, arkGroupKindReal),
+		Scope: firstNonEmpty(group.Scope, arkGroupScopeUser), Source: group.Source, GroupID: group.GroupID,
+		Available: arkPortraitGroupAvailable(group, setting), AuthorizedAt: group.AuthorizedAt, ExpiresAt: group.ExpiresAt,
+		ExpiryStatus: arkGroupExpiryStatus(group, now), CreatedAt: group.CreatedAt, GrantAll: group.GrantAll,
+		Assets: []ArkPortraitAssetView{},
 	}
 }
 
 func arkPortraitAssetView(asset model.ArkPortraitAsset) ArkPortraitAssetView {
 	return ArkPortraitAssetView{
 		ID: asset.ID, GroupID: asset.GroupID, ResourceID: asset.ResourceID, ArkAssetID: asset.ArkAssetID,
-		AssetType: asset.AssetType, Name: asset.Name, Status: asset.Status, Error: asset.Error, CreatedAt: asset.CreatedAt,
+		AssetType: asset.AssetType, Name: asset.Name, Status: asset.Status, Error: asset.Error,
+		ReviewedAt: asset.ReviewedAt, CreatedAt: asset.CreatedAt,
 	}
 }
 
 func arkPortraitSessionView(session model.ArkPortraitSession) ArkPortraitSessionView {
 	return ArkPortraitSessionView{
-		ID: session.ID, Name: session.Name, Status: session.Status, GroupID: session.GroupID,
-		Error: session.Error, ExpiresAt: session.ExpiresAt,
+		ID: session.ID, Name: session.Name, Scope: firstNonEmpty(session.Scope, arkGroupScopeUser), Status: session.Status,
+		GroupID: session.GroupID, Error: session.Error, ExpiresAt: session.ExpiresAt,
 	}
 }

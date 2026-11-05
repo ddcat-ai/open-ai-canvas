@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, BookOpenCheck, Check, ChevronRight, Clapperboard, Copy, Download, History, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, RotateCcw, ScanSearch, Settings2, Star, Trash2, Type, UserRound, Video } from "lucide-react";
+import { AlertCircle, BookOpenCheck, Check, ChevronRight, Clapperboard, Copy, Download, History, Image as ImageIcon, Lock, Maximize2, Music2, Pencil, RefreshCw, RotateCcw, ScanSearch, Settings2, ShieldAlert, ShieldCheck, Star, Trash2, Type, UserRound, Video } from "lucide-react";
+import { translate } from "@/i18n";
+import { arkAssetMatchesImage, arkCertificationBadgeKey, arkCertificationExpired } from "@/lib/ark-assets";
+import { useAssetStore } from "@/stores/use-asset-store";
 
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { CanvasImageLayerControls } from "./canvas-image-layer-controls";
@@ -362,6 +365,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 {showChrome && showStatusTrack ? (
                     <div className="absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 max-w-[calc(100%-24px)]">
                         {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} theme={theme} /> : null}
+                        {data.type === CanvasNodeType.Image && hasImageContent && data.metadata?.assetId ? <ArkCertificationBadge assetId={data.metadata.assetId} storageKey={data.metadata.storageKey} /> : null}
                         {hasMediaContent && !readOnly ? <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} /> : null}
                         {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
                         {data.metadata?.imageLayerGroup && !readOnly ? <CanvasImageLayerControls node={data} /> : null}
@@ -480,6 +484,21 @@ function ResourceLabelBadge({ reference, theme }: { reference: CanvasResourceRef
     return (
         <span className="pointer-events-none min-w-0 max-w-28 truncate rounded-md px-2 py-1 text-[var(--fs-tiny)] font-medium leading-none" style={{ background: reference.active ? theme.accent.primary : "rgba(0,0,0,.35)", color: reference.active ? theme.accent.onPrimary : "#ffffff", opacity: reference.active ? 1 : 0.75 }} title={reference.title || reference.label}>
             {reference.label}
+        </span>
+    );
+}
+
+/** 图片节点绑定的素材库图片已通过方舟认证时显示【方舟真人认证】等标识；节点换过图片后认证不再对应，标识随之消失。 */
+function ArkCertificationBadge({ assetId, storageKey }: { assetId: string; storageKey?: string }) {
+    const asset = useAssetStore((state) => state.assets.find((item) => item.id === assetId));
+    const certification = asset?.arkCertification;
+    if (!asset || asset.kind !== "image" || !certification || !asset.arkAssetId || !arkAssetMatchesImage(asset, storageKey)) return null;
+    const expired = arkCertificationExpired(certification);
+    const title = `${translate("library.ark.canvas.tooltip", { group: certification.groupName || "", id: asset.arkAssetId })}\n${translate("library.ark.canvas.usage")}`;
+    return (
+        <span className="pointer-events-auto inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[var(--fs-tiny)] font-medium leading-none" style={{ background: "rgba(0,0,0,.55)", color: "#ffffff" }} title={title}>
+            {expired ? <ShieldAlert aria-hidden className="size-3" style={{ color: "var(--status-warning)" }} /> : <ShieldCheck aria-hidden className="size-3" style={{ color: "var(--status-success)" }} />}
+            {translate(arkCertificationBadgeKey(certification))}
         </span>
     );
 }

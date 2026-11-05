@@ -3,7 +3,7 @@ package model
 import "strings"
 
 // NormalizeAssetCategory keeps persisted and synced assets inside the current
-// five-category contract while preserving the intended meaning of legacy data.
+// category contract while preserving the intended meaning of legacy data.
 func NormalizeAssetCategory(value AssetCategory, kind string) AssetCategory {
 	switch strings.ToLower(strings.TrimSpace(string(value))) {
 	case string(AssetCategoryCharacter):
@@ -16,6 +16,8 @@ func NormalizeAssetCategory(value AssetCategory, kind string) AssetCategory {
 		return AssetCategoryMaterial
 	case string(AssetCategoryOther):
 		return AssetCategoryOther
+	case string(AssetCategoryArk):
+		return AssetCategoryArk
 	}
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "entity":

@@ -1,5 +1,5 @@
-import type { Asset, AssetKind, AssetStatus, AudioAsset, EntityAsset, ImageAsset, ModelAsset, TextAsset, VideoAsset } from "@/stores/use-asset-store";
-import { parseAssetCategory } from "@/lib/asset-category";
+import type { ArkCertification, ArkCertificationKind, Asset, AssetKind, AssetStatus, AudioAsset, EntityAsset, ImageAsset, ModelAsset, TextAsset, VideoAsset } from "@/stores/use-asset-store";
+import { normalizeAssetCategory, parseAssetCategory } from "@/lib/asset-category";
 
 const ASSET_KINDS: readonly AssetKind[] = ["text", "image", "video", "audio", "model", "entity"];
 const ASSET_STATUSES: readonly AssetStatus[] = ["draft", "review", "confirmed", "archived"];
@@ -25,7 +25,7 @@ export function parseAssetRecord(value: unknown): Asset {
     const source = optionalString(value, "source");
     const note = optionalString(value, "note");
     const arkAssetId = optionalTrimmedString(value, "arkAssetId");
-    const portraitCertified = optionalBoolean(value, "portraitCertified");
+    const arkCertification = parseArkCertification(value.arkCertification);
     const metadata = optionalRecord(value.metadata, "metadata");
     const category = value.category === undefined ? undefined : parseAssetCategory(value.category);
     const data = requireRecord(value.data, "data");
@@ -43,7 +43,7 @@ export function parseAssetRecord(value: unknown): Asset {
         ...(source !== undefined ? { source } : {}),
         ...(note !== undefined ? { note } : {}),
         ...(arkAssetId ? { arkAssetId } : {}),
-        ...(portraitCertified !== undefined ? { portraitCertified } : {}),
+        ...(arkCertification ? { arkCertification } : {}),
         ...(metadata ? { metadata } : {}),
     };
 
@@ -122,6 +122,30 @@ export function parseAssetRecordList(values: unknown): Asset[] {
             throw new Error(`素材 ${id} 合同无效：${error instanceof Error ? error.message : String(error)}`);
         }
     });
+}
+
+const ARK_CERTIFICATION_KINDS: readonly ArkCertificationKind[] = ["real", "virtual", "ip"];
+
+/**
+ * 方舟认证只由服务端写入，属于展示与引用提示，不承载权限（生成时服务端按素材组归属与授权复核）。
+ * 结构不完整时整体忽略，不能伪造认证类型。
+ */
+function parseArkCertification(value: unknown): ArkCertification | undefined {
+    if (!isRecord(value) || !ARK_CERTIFICATION_KINDS.includes(value.kind as ArkCertificationKind)) return undefined;
+    const text = (key: string) => (typeof value[key] === "string" && (value[key] as string).trim() ? (value[key] as string).trim() : undefined);
+    const scope = value.scope === "user" || value.scope === "platform" ? value.scope : undefined;
+    const previousCategory = text("previousCategory");
+    return {
+        kind: value.kind as ArkCertificationKind,
+        ...(scope ? { scope } : {}),
+        ...(text("portraitAssetId") ? { portraitAssetId: text("portraitAssetId") } : {}),
+        ...(text("groupId") ? { groupId: text("groupId") } : {}),
+        ...(text("groupName") ? { groupName: text("groupName") } : {}),
+        ...(text("arkGroupId") ? { arkGroupId: text("arkGroupId") } : {}),
+        ...(text("certifiedAt") ? { certifiedAt: text("certifiedAt") } : {}),
+        ...(text("expiresAt") ? { expiresAt: text("expiresAt") } : {}),
+        ...(previousCategory ? { previousCategory: normalizeAssetCategory(previousCategory) } : {}),
+    };
 }
 
 function requireMediaLocator(primary: string, storageKey: string | undefined, label: string, primaryKey: string) {

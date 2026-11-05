@@ -134,8 +134,8 @@ func (s *Service) LinkProjectAsset(userID string, projectID string, req LinkProj
 	if category == "" {
 		category = asset.Category
 	}
-	if !validAssetCategory(category) {
-		return ProjectAssetSummary{}, BadAuthRequest("不支持的资产业务分类")
+	if err := assignableAssetCategory(category, asset.Category); err != nil {
+		return ProjectAssetSummary{}, err
 	}
 	folderID, err := s.resolveProjectAssetFolderID(projectID, req.FolderID)
 	if err != nil {
@@ -317,8 +317,8 @@ func (s *Service) UpdateProjectAsset(userID string, projectID string, assetID st
 	}
 	if req.Category != nil {
 		category := model.AssetCategory(strings.TrimSpace(*req.Category))
-		if !validAssetCategory(category) {
-			return ProjectAssetSummary{}, BadAuthRequest("不支持的资产业务分类")
+		if err := assignableAssetCategory(category, asset.Category); err != nil {
+			return ProjectAssetSummary{}, err
 		}
 		asset.Category = category
 		asset.UpdatedAt = time.Now()
@@ -554,11 +554,23 @@ func containsString(values []string, target string) bool {
 
 func validAssetCategory(category model.AssetCategory) bool {
 	switch category {
-	case model.AssetCategoryCharacter, model.AssetCategoryEnvironment, model.AssetCategoryProp, model.AssetCategoryMaterial, model.AssetCategoryOther:
+	case model.AssetCategoryCharacter, model.AssetCategoryEnvironment, model.AssetCategoryProp, model.AssetCategoryMaterial, model.AssetCategoryOther, model.AssetCategoryArk:
 		return true
 	default:
 		return false
 	}
+}
+
+// assignableAssetCategory 校验用户请求的目标分类。方舟认证分类只由认证结果写入，
+// 已在该分类的素材可以保持原样，但不能把未认证素材手动改成方舟认证。
+func assignableAssetCategory(next model.AssetCategory, current model.AssetCategory) error {
+	if !validAssetCategory(next) {
+		return BadAuthRequest("不支持的资产业务分类")
+	}
+	if next == model.AssetCategoryArk && current != model.AssetCategoryArk {
+		return BadAuthRequest("方舟认证分类由认证结果自动设置，不能手动选择")
+	}
+	return nil
 }
 
 func (s *Service) projectAssetSummary(userID string, projectID string, asset *model.Asset) (ProjectAssetSummary, error) {

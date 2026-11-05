@@ -4,12 +4,14 @@
 
 import { Dropdown, type MenuProps } from "antd";
 import type { MouseEvent } from "react";
-import { AlertTriangle, AudioLines, Box, Copy, Download, FileText, FolderOpen, MoreHorizontal, PencilLine, Play, RotateCcw, Trash2 } from "lucide-react";
+import { AlertTriangle, AudioLines, Box, Clock3, Copy, Download, FileText, FolderOpen, MoreHorizontal, PencilLine, Play, RotateCcw, ShieldAlert, ShieldCheck, ShieldX, Trash2 } from "lucide-react";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { type AssetKind } from "@/stores/use-asset-store";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
 import { AudioPreviewBar, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
 import { useAudioSampleRate } from "@/hooks/use-audio-sample-rate";
+import { translate } from "@/i18n";
+import { arkCertificationBadgeKey, arkCertificationExpired, type ArkLibraryProgress } from "@/lib/ark-assets";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { type LibraryAsset, assetKindIcons } from "./asset-library-format";
 import { assetKindLabel, assetProjectLabel, assetSummary, assetSummaryDetail, formatAssetClock, formatAssetTime } from "./asset-library-format";
@@ -50,6 +52,7 @@ export function AssetCard({
     onDelete,
     folderOptions,
     onMoveToFolder,
+    arkProgress,
 }: {
     asset: LibraryAsset;
     selected: boolean;
@@ -66,6 +69,8 @@ export function AssetCard({
     onDelete: () => void;
     folderOptions: Array<{ label: string; value: string }>;
     onMoveToFolder: (folderId: string) => void;
+    /** 这张图片最近一次方舟认证提交；已认证的展示以素材自身的 arkCertification 为准。 */
+    arkProgress?: ArkLibraryProgress;
 }) {
     const summary = assetSummary(asset);
     const menuItems: MenuProps["items"] = isTrash
@@ -88,7 +93,7 @@ export function AssetCard({
     };
     return (
         <AssetLibraryCard selected={selected}>
-            <AssetCover asset={asset} selected={selected} isTrash={isTrash} onSelect={onSelect} onOpen={handleCardClick} menuItems={menuItems} />
+            <AssetCover asset={asset} selected={selected} isTrash={isTrash} onSelect={onSelect} onOpen={handleCardClick} menuItems={menuItems} arkProgress={arkProgress} />
             <button type="button" className="asset-collection-body block w-full px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={handleCardClick}>
                 <div className="flex min-w-0 items-center justify-between gap-2">
                     <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={asset.title}>
@@ -129,6 +134,7 @@ export function AssetCover({
     onSelect,
     onOpen,
     menuItems,
+    arkProgress,
 }: {
     asset: LibraryAsset;
     selected: boolean;
@@ -136,6 +142,7 @@ export function AssetCover({
     onSelect: (selected: boolean, range?: boolean) => void;
     onOpen: (event: MouseEvent<HTMLButtonElement>) => void;
     menuItems: MenuProps["items"];
+    arkProgress?: ArkLibraryProgress;
 }) {
     const kind = isKnownAssetKind(asset.kind) ? asset.kind : undefined;
     const KindIcon = kind ? assetKindIcons[kind] : FileText;
@@ -192,7 +199,7 @@ export function AssetCover({
                 ) : asset.kind === "entity" || visualMedia ? null : (
                     <span className="assets-cover-badge is-category">{assetCategoryLabel(asset.category)}</span>
                 )}
-                {asset.portraitCertified ? <span className="assets-cover-badge is-category">人像认证</span> : null}
+                {isTrash ? null : <ArkCoverBadge asset={asset} progress={arkProgress} />}
             </span>
             {clock ? <span className="assets-cover-clock">{clock}</span> : null}
             {audioPreview ? <AudioPreviewBar asset={asset} /> : null}
@@ -210,6 +217,29 @@ export function AssetCover({
                 </button>
             </Dropdown>
         </AssetLibraryCardMedia>
+    );
+}
+
+/** 方舟认证角标：已认证显示认证类型（授权过期单独标出）；认证进行中或未通过时显示进度。 */
+function ArkCoverBadge({ asset, progress }: { asset: LibraryAsset; progress?: ArkLibraryProgress }) {
+    const certification = asset.arkCertification;
+    if (certification) {
+        const expired = arkCertificationExpired(certification);
+        return (
+            <span className="assets-cover-badge is-ark" data-tone={expired ? "warning" : "success"}>
+                {expired ? <ShieldAlert aria-hidden /> : <ShieldCheck aria-hidden />}
+                {translate(arkCertificationBadgeKey(certification))}
+            </span>
+        );
+    }
+    if (!progress || progress.status === "active") return null;
+    const tone = progress.status === "processing" ? "loading" : progress.status === "pending_review" ? "warning" : "error";
+    const Icon = tone === "error" ? ShieldX : Clock3;
+    return (
+        <span className="assets-cover-badge is-ark" data-tone={tone}>
+            <Icon aria-hidden />
+            {translate(`library.ark.badge.${progress.status}`)}
+        </span>
     );
 }
 
