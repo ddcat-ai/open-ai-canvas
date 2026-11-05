@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"yingce/backend/internal/production"
 )
 
@@ -368,6 +370,17 @@ func (p dramaVideoProfile) continuityIssue(settings DramaSettings) string {
 	return ""
 }
 
+// dramaModelUnavailable 说明作品保存的模型为什么不能用、去哪里改。渠道模型被删除或停用后，
+// 流水线和制作台不能只显示数据库的 record not found。
+func dramaModelUnavailable(capability string, choice DramaModelChoice, reason string) error {
+	label := map[string]string{"text": "文本", "image": "图片", "video": "视频"}[capability]
+	message := fmt.Sprintf("%s模型「%s」%s，请在制作设置里改选", label, firstNonEmpty(choice.ModelKey, choice.LogicalModelID, choice.Label), reason)
+	if capability == "video" {
+		message += "；单独指定过视频模型的剧情段需重新选择"
+	}
+	return InvalidModelSelection(message)
+}
+
 func (s *Service) dramaVideoProfile(choice DramaModelChoice) (dramaVideoProfile, error) {
 	var capability *ModelCapabilityConfig
 	if choice.LogicalModelID != "" {
@@ -386,6 +399,9 @@ func (s *Service) dramaVideoProfile(choice DramaModelChoice) (dramaVideoProfile,
 		}
 	} else if choice.ChannelID != "" && choice.ModelKey != "" {
 		row, err := s.repo.ChannelModelByKey(choice.ChannelID, choice.ModelKey)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return dramaVideoProfile{}, dramaModelUnavailable("video", choice, "已下线或停用")
+		}
 		if err != nil {
 			return dramaVideoProfile{}, err
 		}

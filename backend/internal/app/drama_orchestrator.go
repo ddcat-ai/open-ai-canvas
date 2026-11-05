@@ -1431,7 +1431,11 @@ func (r *dramaRun) createTaskWith(job *model.DramaJob, choice DramaModelChoice, 
 	input["config"], input["mode"], input["prompt"] = config, capability, prompt
 	req := CreateTaskRequest{ProjectID: r.project.ID, Type: "canvas_" + capability, Operation: operation, Prompt: prompt, LogicalModelID: choice.LogicalModelID, Model: choice.ModelKey, Input: input}
 	task, err := r.s.submitDramaTask(r.project.UserID, req, job)
-
+	// 准入只说“指定的模型不存在”；作品里可能选了多个模型，点名是哪一个、去哪里改。
+	var modelErr *ModelError
+	if errors.As(err, &modelErr) && modelErr.ErrorCode == ErrCodeInvalidModelSelection {
+		return nil, dramaModelUnavailable(capability, choice, "不可用（"+modelErr.Error()+"）")
+	}
 	return task, err
 }
 

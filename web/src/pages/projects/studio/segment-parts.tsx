@@ -94,6 +94,8 @@ export function referenceMissingReason(segment: DramaSegment, cast: DramaCast | 
     if (cast?.imageStatus === "failed") return "参考图生成失败";
     if (mediaBusy(cast?.imageStatus || "")) return "参考图生成中";
     if (!cast?.imageResourceId || cast.imageStatus !== "ready") return "参考图未生成";
+    // 生成方式未确定：视频模型不可用或时长超限，本段暂不能生成，原因见本段提示。
+    if (!segment.request.operation) return "本段暂不能生成";
     if (segment.request.operation === "text_to_video") return "模型按文生视频生成，不收参考图";
     return segment.request.referenceLimited ? "超出每段参考图上限" : "超出模型参考图上限";
 }
