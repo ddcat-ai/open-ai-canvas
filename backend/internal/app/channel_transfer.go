@@ -112,10 +112,13 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 			ProviderModelKey: tier.ProviderModelKey, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits,
 			InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits,
 			CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
+			ReferenceVideoUnitPriceMicrocredits:        tier.ReferenceVideoUnitPriceMicrocredits,
+			ReferenceVideoOutputTokenPriceMicrocredits: tier.ReferenceVideoOutputTokenPriceMicrocredits,
 			PriceConfigured: tier.PriceConfigured, Enabled: &tierEnabled,
 		})
 	}
 	priceCurrency := firstNonEmpty(item.PriceCurrency, model.PriceCurrencyCredits)
+	referenceVideoBilling := item.ReferenceVideoBilling
 	return SystemChannelExportModel{
 		SortOrder: item.SortOrder,
 		ChannelModelRequest: ChannelModelRequest{
@@ -125,7 +128,7 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 			OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits,
 			CacheWriteTokenPriceMicrocredits: item.CacheWriteTokenPriceMicrocredits,
 			PriceConfigured:                  item.PriceConfigured, Enabled: &enabled, CapabilityConfig: capabilityConfig, PriceTiers: tiers,
-			PriceCurrency: &priceCurrency,
+			PriceCurrency: &priceCurrency, ReferenceVideoBilling: &referenceVideoBilling,
 		},
 	}, nil
 }

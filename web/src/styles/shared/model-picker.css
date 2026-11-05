@@ -698,6 +698,15 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     max-width: 100%;
 }
 
+/* 视频模型的参考视频计费标注，跟在价格后；沿用所在主题的文字色，弱化为次要信息。 */
+.canvas-model-picker-reference-billing {
+    margin-left: 6px;
+    font-size: var(--fs-tiny);
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0.68;
+}
+
 .canvas-model-picker-description {
     font-size: var(--fs-caption);
     min-height: 1.5em;

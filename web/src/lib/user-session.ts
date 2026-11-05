@@ -218,6 +218,8 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     cachedTokenPriceMicrocredits: tier.cachedTokenPriceMicrocredits || 0,
                     cacheWriteTokenPriceMicrocredits: tier.cacheWriteTokenPriceMicrocredits || 0,
                     ...(tier.tokenPriceRules?.length ? { tokenPriceRules: tier.tokenPriceRules } : {}),
+                    referenceVideoUnitPriceMicrocredits: tier.referenceVideoUnitPriceMicrocredits || 0,
+                    referenceVideoOutputTokenPriceMicrocredits: tier.referenceVideoOutputTokenPriceMicrocredits || 0,
                 }));
 
                 return {
@@ -244,6 +246,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     logicalPriceTiers,
                     availability: model.availability,
                     available: model.available,
+                    referenceVideoBilling: model.capability === "video" && model.referenceVideoBilling === true,
                 };
             }),
         };

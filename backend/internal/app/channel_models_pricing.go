@@ -150,25 +150,27 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		}
 		enabled := input.Enabled == nil || *input.Enabled
 		result = append(result, model.ChannelModelPriceTier{
-			CostPricing:                      input.CostPricing,
-			ID:                               id,
-			SelectorKey:                      key,
-			SelectorJSON:                     key,
-			Selector:                         selector,
-			Resolution:                       resolution,
-			VideoSeconds:                     videoSeconds,
-			ProviderModelKey:                 strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(input.ProviderModelKey, fallbackProviderModelKey)), "models/"),
-			BillingMode:                      billingMode,
-			UnitPriceMicrocredits:            input.UnitPriceMicrocredits,
-			InputTokenPriceMicrocredits:      input.InputTokenPriceMicrocredits,
-			OutputTokenPriceMicrocredits:     input.OutputTokenPriceMicrocredits,
-			CachedTokenPriceMicrocredits:     input.CachedTokenPriceMicrocredits,
-			CacheWriteTokenPriceMicrocredits: input.CacheWriteTokenPriceMicrocredits,
-			TokenPriceRulesEnabled:           input.TokenPriceRulesEnabled && len(rules) > 0,
-			TokenPriceRules:                  rules,
-			PriceConfigured:                  input.PriceConfigured,
-			Enabled:                          enabled,
-			PriceVersion:                     1,
+			CostPricing:                         input.CostPricing,
+			ID:                                  id,
+			SelectorKey:                         key,
+			SelectorJSON:                        key,
+			Selector:                            selector,
+			Resolution:                          resolution,
+			VideoSeconds:                        videoSeconds,
+			ProviderModelKey:                    strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(input.ProviderModelKey, fallbackProviderModelKey)), "models/"),
+			BillingMode:                         billingMode,
+			UnitPriceMicrocredits:               input.UnitPriceMicrocredits,
+			InputTokenPriceMicrocredits:         input.InputTokenPriceMicrocredits,
+			OutputTokenPriceMicrocredits:        input.OutputTokenPriceMicrocredits,
+			CachedTokenPriceMicrocredits:        input.CachedTokenPriceMicrocredits,
+			CacheWriteTokenPriceMicrocredits:    input.CacheWriteTokenPriceMicrocredits,
+			TokenPriceRulesEnabled:              input.TokenPriceRulesEnabled && len(rules) > 0,
+			TokenPriceRules:                     rules,
+			ReferenceVideoUnitPriceMicrocredits: input.ReferenceVideoUnitPriceMicrocredits,
+			ReferenceVideoOutputTokenPriceMicrocredits: input.ReferenceVideoOutputTokenPriceMicrocredits,
+			PriceConfigured: input.PriceConfigured,
+			Enabled:         enabled,
+			PriceVersion:    1,
 		})
 	}
 	return result, nil
@@ -394,8 +396,13 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
 		return BadAuthRequest("Token 计费仅支持文本和视频模型")
 	}
-	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 || input.CacheWriteTokenPriceMicrocredits < 0 {
+	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 || input.CacheWriteTokenPriceMicrocredits < 0 ||
+		input.ReferenceVideoUnitPriceMicrocredits < 0 || input.ReferenceVideoOutputTokenPriceMicrocredits < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
+	}
+	if capability != "video" && (input.ReferenceVideoUnitPriceMicrocredits != 0 || input.ReferenceVideoOutputTokenPriceMicrocredits != 0 ||
+		input.CostPricing.ReferenceVideoUnitPriceMicrocredits != 0 || input.CostPricing.ReferenceVideoOutputTokenPriceMicrocredits != 0) {
+		return BadAuthRequest("只有视频模型可以配置带参考视频的价格")
 	}
 	if billingMode == "token" {
 		return validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits, input.CacheWriteTokenPriceMicrocredits)
@@ -439,4 +446,35 @@ func (s *Service) applyChannelModelPriceTierSummary(item *model.ChannelModel, ti
 	item.OutputTokenPriceMicrocredits = summary.OutputTokenPriceMicrocredits
 	item.CachedTokenPriceMicrocredits = summary.CachedTokenPriceMicrocredits
 	item.CacheWriteTokenPriceMicrocredits = summary.CacheWriteTokenPriceMicrocredits
+}
+
+// validateReferenceVideoTierPrices 要求开启参考视频计费的模型为每个已启用的收费按秒 / Token 档
+// 配置带参考视频的价格，避免挂参考视频的请求按 0 价格结算。
+func validateReferenceVideoTierPrices(enabled bool, tiers []model.ChannelModelPriceTier) error {
+	if !enabled {
+		return nil
+	}
+	for _, tier := range tiers {
+		if !tier.Enabled || !tier.PriceConfigured {
+			continue
+		}
+		if tier.BillingMode == "per_second" && tier.UnitPriceMicrocredits > 0 && tier.ReferenceVideoUnitPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为按秒价格档配置带参考视频的每秒价格")
+		}
+		if tier.BillingMode == "token" && tier.OutputTokenPriceMicrocredits > 0 && tier.ReferenceVideoOutputTokenPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为 Token 价格档配置带参考视频的 Token 价格")
+		}
+		// 成本价同样分两套：配置了成本的档必须填写带参考视频成本价，否则挂参考视频的订单会记成 0 成本。
+		cost := tier.CostPricing
+		if !cost.Configured {
+			continue
+		}
+		if tier.BillingMode == "per_second" && cost.UnitPriceMicrocredits > 0 && cost.ReferenceVideoUnitPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为按秒价格档配置带参考视频的每秒成本价")
+		}
+		if tier.BillingMode == "token" && cost.OutputTokenPriceMicrocredits > 0 && cost.ReferenceVideoOutputTokenPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为 Token 价格档配置带参考视频的 Token 成本价")
+		}
+	}
+	return nil
 }

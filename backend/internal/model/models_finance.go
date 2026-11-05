@@ -83,19 +83,23 @@ type BillingOrder struct {
 	CachedTokens     int64 `json:"cachedTokens"`
 	CacheWriteTokens int64 `json:"cacheWriteTokens" gorm:"not null;default:0"`
 	// VideoFormulaTokens 固化提交时的视频公式用量，不含预授权余量；旧订单保持 0，不反推历史用量。
-	VideoFormulaTokens int64         `json:"videoFormulaTokens" gorm:"not null;default:0"`
-	UsageSource        string        `json:"usageSource,omitempty" gorm:"size:32;not null;default:''"`
-	UsageAvailable     bool          `json:"usageAvailable"`
-	Status             BillingStatus `json:"status" gorm:"index;size:24"`
-	ProviderRequestID  string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
-	Error              string        `json:"error,omitempty" gorm:"size:1000"`
-	ResolvedBy         string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
-	ResolutionNote     string        `json:"resolutionNote,omitempty" gorm:"size:500"`
-	StartedAt          *time.Time    `json:"startedAt"`
-	SettledAt          *time.Time    `json:"settledAt"`
-	RefundedAt         *time.Time    `json:"refundedAt"`
-	CreatedAt          time.Time     `json:"createdAt" gorm:"index"`
-	UpdatedAt          time.Time     `json:"updatedAt"`
+	VideoFormulaTokens int64 `json:"videoFormulaTokens" gorm:"not null;default:0"`
+	// ReferenceVideo* 固化提交时挂载的参考视频：数量、计入或记录的总毫秒数，以及是否按带参考视频价格计费。
+	ReferenceVideoCount  int           `json:"referenceVideoCount" gorm:"not null;default:0"`
+	ReferenceVideoMillis int64         `json:"referenceVideoMillis" gorm:"not null;default:0"`
+	ReferenceVideoBilled bool          `json:"referenceVideoBilled" gorm:"not null;default:false"`
+	UsageSource          string        `json:"usageSource,omitempty" gorm:"size:32;not null;default:''"`
+	UsageAvailable       bool          `json:"usageAvailable"`
+	Status               BillingStatus `json:"status" gorm:"index;size:24"`
+	ProviderRequestID    string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
+	Error                string        `json:"error,omitempty" gorm:"size:1000"`
+	ResolvedBy           string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
+	ResolutionNote       string        `json:"resolutionNote,omitempty" gorm:"size:500"`
+	StartedAt            *time.Time    `json:"startedAt"`
+	SettledAt            *time.Time    `json:"settledAt"`
+	RefundedAt           *time.Time    `json:"refundedAt"`
+	CreatedAt            time.Time     `json:"createdAt" gorm:"index"`
+	UpdatedAt            time.Time     `json:"updatedAt"`
 }
 
 type RedeemBatch struct {

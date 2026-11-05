@@ -23,6 +23,8 @@ export type ChannelModelFormValues = {
     priceTiers: PriceTierFormValues[];
     /** 售价单位；成本价始终以积分计。 */
     priceCurrency: PriceCurrency;
+    /** 仅视频模型：挂参考视频的请求是否按带参考视频价格另计费；新模型默认关闭。 */
+    referenceVideoBilling: boolean;
     enabled: boolean;
     capabilityConfig?: ModelCapabilityConfig;
 };
@@ -66,6 +68,7 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
         protocol,
         priceTiers: item ? (item.priceTiers?.length ? item.priceTiers.map((tier) => priceTierToForm(tier, capabilityConfig?.image, protocol)) : [legacyPriceTierToForm(item)]) : [defaultPriceTier()],
         priceCurrency: item?.priceCurrency || "credits",
+        referenceVideoBilling: capability === "video" && item?.referenceVideoBilling === true,
         enabled: item?.enabled ?? true,
         capabilityConfig,
     };
@@ -172,8 +175,9 @@ export function validateChannelModelProtocol(capability: string, protocol: strin
     }
 }
 
-export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, "capability" | "protocol" | "priceTiers" | "capabilityConfig">) {
+export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, "capability" | "protocol" | "priceTiers" | "capabilityConfig"> & { referenceVideoBilling?: boolean }) {
     const { capability, protocol, priceTiers } = values;
+    const referenceVideoBilling = capability === "video" && values.referenceVideoBilling === true;
     if (!priceTiers?.length) throw new Error("请至少配置一个价格档");
     if (priceTiers.filter((tier) => tier.matchMode === "default").length > 1) throw new Error("只能配置一个所有规格统一价格");
     const operations: Record<string, string[]> = {
@@ -203,9 +207,21 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
         }
         const prices = tier.billingMode !== "token" ? [tier.unitPrice] : capability === "video" ? [tier.outputTokenPrice] : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice, tier.cacheWriteTokenPrice ?? 0];
         if (prices.some((price) => typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 1_000_000)) fail("积分价格必须是 0 到 1000000 之间的有效数值");
+        if (referenceVideoBilling && tier.priceConfigured !== false && tier.enabled !== false && (tier.billingMode === "per_second" || tier.billingMode === "token")) {
+            const [base, reference] = tier.billingMode === "per_second" ? [tier.unitPrice, tier.referenceVideoUnitPrice] : [tier.outputTokenPrice, tier.referenceVideoOutputTokenPrice];
+            if (typeof reference !== "number" || !Number.isFinite(reference) || reference < 0 || reference > 1_000_000) fail("带参考视频的价格必须是 0 到 1000000 之间的有效数值");
+            // 与后端一致：基础价收费时带参考视频价不能为 0，避免挂参考视频反而免费。
+            if (base > 0 && reference === 0) fail("已开启参考视频计费，请填写带参考视频的价格");
+        }
         if (tier.costConfigured) {
             const costs = tier.billingMode !== "token" ? [tier.costUnitPrice] : capability === "video" ? [tier.costOutputTokenPrice] : [tier.costInputTokenPrice, tier.costOutputTokenPrice, tier.costCachedTokenPrice, tier.costCacheWriteTokenPrice ?? 0];
             if (costs.some((price) => typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 1_000_000)) fail("积分成本价必须是 0 到 1000000 之间的有效数值");
+            if (referenceVideoBilling && tier.priceConfigured !== false && tier.enabled !== false && (tier.billingMode === "per_second" || tier.billingMode === "token")) {
+                const [baseCost, referenceCost] = tier.billingMode === "per_second" ? [tier.costUnitPrice, tier.costReferenceVideoUnitPrice] : [tier.costOutputTokenPrice, tier.costReferenceVideoOutputTokenPrice];
+                if (typeof referenceCost !== "number" || !Number.isFinite(referenceCost) || referenceCost < 0 || referenceCost > 1_000_000) fail("带参考视频的成本价必须是 0 到 1000000 之间的有效数值");
+                // 与后端一致：基础成本价不为 0 时必须填写带参考视频成本价，避免挂参考视频的订单记成 0 成本。
+                if (baseCost > 0 && referenceCost === 0) fail("已开启参考视频计费，请填写带参考视频的成本价");
+            }
         }
         if (capability === "text" && tier.billingMode === "token") {
             try {

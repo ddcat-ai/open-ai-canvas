@@ -66,7 +66,37 @@ func reserveBillingOrder(tx *gorm.DB, order *model.BillingOrder) error {
 		Model:                      order.Model,
 		ChannelID:                  order.ChannelID,
 		Scene:                      order.Scene,
+		Note:                       referenceVideoLedgerNote(*order),
 	}).Error
+}
+
+// referenceVideoLedgerNote 在账单流水里写明参考视频秒数和计费状态；没有参考视频时为空。
+func referenceVideoLedgerNote(order model.BillingOrder) string {
+	if order.ReferenceVideoCount <= 0 {
+		return ""
+	}
+	status := "未计费"
+	if order.ReferenceVideoBilled {
+		status = "已计费"
+	}
+	if order.ReferenceVideoMillis <= 0 {
+		return fmt.Sprintf("参考视频 %d 个%s", order.ReferenceVideoCount, status)
+	}
+	seconds := fmt.Sprintf("%.1f", float64(order.ReferenceVideoMillis)/1000)
+	if order.ReferenceVideoMillis%1000 == 0 {
+		seconds = fmt.Sprintf("%d", order.ReferenceVideoMillis/1000)
+	}
+	return "参考视频 " + seconds + " 秒" + status
+}
+
+func joinLedgerNotes(notes ...string) string {
+	parts := make([]string, 0, len(notes))
+	for _, note := range notes {
+		if note = strings.TrimSpace(note); note != "" {
+			parts = append(parts, note)
+		}
+	}
+	return strings.Join(parts, "；")
 }
 
 func (r *Repository) BillingOrder(id string) (*model.BillingOrder, error) {
@@ -196,6 +226,11 @@ const (
 )
 
 func tokenSettlementUsage(db *gorm.DB, order model.BillingOrder) (*BillingUsage, string, error) {
+	// 参考视频不计费的视频订单：上游 usage 含参考视频用量，不能直接计费；
+	// 改用提交时只按生成时长固化的公式快照结算。
+	if order.Capability == "video" && order.ReferenceVideoCount > 0 && !order.ReferenceVideoBilled && order.VideoFormulaTokens > 0 {
+		return &BillingUsage{OutputTokens: order.VideoFormulaTokens}, billingUsageSourceVideoFormula, nil
+	}
 	usage, err := billingUsage(db, order.ID)
 	if err != nil && !errors.Is(err, ErrBillingUsageUnavailable) {
 		return nil, "", err
@@ -358,7 +393,7 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume,
 				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -supplement, ReservedDeltaMicrocredits: -reserved,
 				AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
-				BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: consumeNote}).Error; err != nil {
+				BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: joinLedgerNotes(consumeNote, referenceVideoLedgerNote(order))}).Error; err != nil {
 				return err
 			}
 			if refund > 0 {
@@ -386,6 +421,10 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 				return errors.New(mediaLabel + "实际时长不可用，无法按秒结算")
 			}
 			quantity = (*audioDurationMs + 999) / 1000
+			if order.Capability == "video" && order.ReferenceVideoBilled {
+				// 与预留一致：开启参考视频计费的按秒订单 = 输出秒数 + 后端实测的参考视频秒数。
+				quantity += (order.ReferenceVideoMillis + 999) / 1000
+			}
 			var err error
 			actual, err = audioBillingAmount(order.UnitPriceMicrocredits, quantity, order.MultiplierBasisPoints)
 			if err != nil {
@@ -434,6 +473,7 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			if supplement > 0 {
 				note += "，已补扣差额"
 			}
+			note = joinLedgerNotes(note, referenceVideoLedgerNote(order))
 			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume,
 				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -supplement, ReservedDeltaMicrocredits: -reserved,
 				AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
@@ -487,6 +527,7 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			Model:                      order.Model,
 			ChannelID:                  order.ChannelID,
 			Scene:                      order.Scene,
+			Note:                       referenceVideoLedgerNote(order),
 		}).Error
 	})
 	if err != nil && observedUsage != nil {

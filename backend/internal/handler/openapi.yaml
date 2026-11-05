@@ -3642,6 +3642,14 @@ components:
             size: "16:9"
             videoSeconds: 5
             videoGenerateAudio: true
+        referenceVideoDurationsMs:
+          type: array
+          description: 仅报价使用；按顺序给出参考视频时长（毫秒），长度必须等于 inputs.video。省略时按 15 秒上限预估。真实任务不读取该字段，按秒计费的参考视频时长由后端实测
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 3600000
     LogicalModelQuote:
       type: object
       required:
@@ -3668,6 +3676,30 @@ components:
           description: Token 计费为 true；优先有效上游 usage，视频无有效用量时按提交的公式快照结算，预留不构成费用上限
         videoTokenEstimate:
           $ref: "#/components/schemas/VideoTokenEstimate"
+        referenceVideo:
+          $ref: "#/components/schemas/QuoteReferenceVideo"
+    QuoteReferenceVideo:
+      type: object
+      description: 仅视频请求挂参考视频时返回，用于展示“生成 N 秒 + 参考视频 M 秒”的报价构成
+      required:
+        [count, billed, generatedSeconds, referenceSeconds, billedSeconds, estimated]
+      properties:
+        count: { type: integer, minimum: 1 }
+        billed:
+          type: boolean
+          description: true 表示模型开启参考视频计费，本次按带参考视频价格计入参考视频；false 表示参考视频不计费
+        generatedSeconds: { type: integer, format: int64, minimum: 0 }
+        referenceSeconds:
+          type: number
+          description: 参考视频总秒数；计费时为计入的秒数，不计费时为已知时长（未知为 0）
+        billedSeconds:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 按秒计费时计入数量的参考视频秒数（向上取整）；Token 计费为 0
+        estimated:
+          type: boolean
+          description: 参考视频时长未知，按 15 秒上限预估
     VideoTokenEstimate:
       type: object
       description: 仅视频 Token 报价返回；将火山公式用量和平台预留余量分开披露

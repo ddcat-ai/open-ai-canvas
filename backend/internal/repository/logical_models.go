@@ -304,6 +304,8 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 		updates["cost_output_token_price_microcredits"] = cost.CostPricing.OutputTokenPriceMicrocredits
 		updates["cost_cached_token_price_microcredits"] = cost.CostPricing.CachedTokenPriceMicrocredits
 		updates["cost_cache_write_token_price_microcredits"] = cost.CostPricing.CacheWriteTokenPriceMicrocredits
+		updates["cost_reference_video_unit_price_microcredits"] = cost.CostPricing.ReferenceVideoUnitPriceMicrocredits
+		updates["cost_reference_video_output_token_price_microcredits"] = cost.CostPricing.ReferenceVideoOutputTokenPriceMicrocredits
 		updates["cost_billing_mode"] = cost.CostBillingMode
 		updates["cost_quantity"] = cost.CostQuantity
 		updates["cost_video_formula_tokens"] = cost.CostVideoFormulaTokens

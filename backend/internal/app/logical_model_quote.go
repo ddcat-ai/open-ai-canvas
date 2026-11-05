@@ -15,6 +15,8 @@ type LogicalModelQuote struct {
 	AmountMicrocredits int64               `json:"amountMicrocredits"`
 	Estimated          bool                `json:"estimated"`
 	VideoTokenEstimate *VideoTokenEstimate `json:"videoTokenEstimate,omitempty"`
+	// ReferenceVideo 仅在视频请求挂了参考视频时返回。
+	ReferenceVideo *QuoteReferenceVideo `json:"referenceVideo,omitempty"`
 }
 
 type ChannelModelQuoteRequest struct {
@@ -62,13 +64,72 @@ func validateQuoteIntent(intent ModelRequestIntent) error {
 			return BadAuthRequest("报价参考素材数量必须为 0 到 128 的整数")
 		}
 	}
+	if durations := intent.ReferenceVideoDurationsMs; len(durations) > 0 {
+		if len(durations) != intent.Inputs["video"] {
+			return BadAuthRequest("参考视频时长数量必须与参考视频数量一致")
+		}
+		for _, duration := range durations {
+			if duration <= 0 || duration > maxQuoteReferenceVideoMillis {
+				return BadAuthRequest("参考视频时长必须为 1 毫秒到 1 小时之间的整数")
+			}
+		}
+	}
 	return nil
+}
+
+// maxQuoteReferenceVideoMillis 限制报价声明的单个参考视频时长，避免溢出；真实任务另行实测。
+const maxQuoteReferenceVideoMillis int64 = 3_600_000
+
+// QuoteReferenceVideo 是挂参考视频时的报价构成，供创作端写出“生成 5 秒 + 参考视频 8 秒”。
+type QuoteReferenceVideo struct {
+	Count int `json:"count"`
+	// Billed 为 true 表示参考视频按带参考视频价格计入本次费用。
+	Billed           bool    `json:"billed"`
+	GeneratedSeconds int64   `json:"generatedSeconds"`
+	ReferenceSeconds float64 `json:"referenceSeconds"`
+	// BilledSeconds 是按秒计费时计入数量的参考视频秒数（向上取整）；Token 计费为 0。
+	BilledSeconds int64 `json:"billedSeconds"`
+	// Estimated 表示参考视频时长未知，按 15 秒上限预估；提交后以后端实测或公式快照为准。
+	Estimated bool `json:"estimated"`
+}
+
+func quoteReferenceVideo(order *model.BillingOrder, estimate tokenBillingEstimate) *QuoteReferenceVideo {
+	references := estimate.ReferenceVideos
+	if order.Capability != "video" || references.Count == 0 {
+		return nil
+	}
+	detail := &QuoteReferenceVideo{Count: references.Count, Billed: order.ReferenceVideoBilled, ReferenceSeconds: float64(order.ReferenceVideoMillis) / 1000}
+	switch order.BillingMode {
+	case "per_second":
+		if order.ReferenceVideoBilled {
+			detail.BilledSeconds = (order.ReferenceVideoMillis + 999) / 1000
+			detail.Estimated = references.Measure == nil && !references.RecordedKnown
+		}
+		detail.GeneratedSeconds = order.Quantity - detail.BilledSeconds
+	case "token":
+		if estimate.Video != nil {
+			detail.GeneratedSeconds = estimate.Video.OutputSeconds
+			if order.ReferenceVideoBilled {
+				detail.ReferenceSeconds = estimate.Video.ReferenceSeconds
+				detail.Estimated = estimate.Video.ReferenceDurationEstimated
+			}
+		}
+	}
+	return detail
 }
 
 func quoteFromOrder(logicalModelID string, order *model.BillingOrder, estimate tokenBillingEstimate) *LogicalModelQuote {
 	quote := &LogicalModelQuote{LogicalModelID: logicalModelID, BillingMode: order.BillingMode, Quantity: order.Quantity, AmountMicrocredits: order.AmountMicrocredits, Estimated: order.BillingMode == "token"}
 	if order.BillingMode == "token" && order.Capability == "video" {
 		quote.VideoTokenEstimate = estimate.Video
+		if !order.ReferenceVideoBilled {
+			// 与账单一致：参考视频不计费的模型只按生成时长估算。
+			quote.VideoTokenEstimate = videoTokenEstimateWithoutReferences(estimate.Video)
+		}
+	}
+	quote.ReferenceVideo = quoteReferenceVideo(order, estimate)
+	if quote.ReferenceVideo != nil && quote.ReferenceVideo.Estimated {
+		quote.Estimated = true
 	}
 	return quote
 }
@@ -180,7 +241,13 @@ func quoteInput(intent ModelRequestIntent, modelKey string) map[string]any {
 	input := map[string]any{"mode": intent.Capability, "config": config}
 	for kind, key := range map[string]string{"image": "referenceImages", "video": "referenceVideos", "audio": "referenceAudios"} {
 		if count := intent.Inputs[kind]; count > 0 {
-			input[key] = make([]any, count)
+			references := make([]any, count)
+			if kind == "video" && len(intent.ReferenceVideoDurationsMs) == count {
+				for index, duration := range intent.ReferenceVideoDurationsMs {
+					references[index] = map[string]any{"durationMs": duration}
+				}
+			}
+			input[key] = references
 		}
 	}
 	return input

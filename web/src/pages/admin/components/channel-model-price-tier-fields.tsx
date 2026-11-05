@@ -51,6 +51,9 @@ export function PriceTierFields({
     const isAudio = capability === "audio";
     const isDurationPriced = isVideo || isAudio;
     const isImage = capability === "image";
+    const referenceVideoBillingValue = Form.useWatch("referenceVideoBilling", form);
+    const referenceVideoBilling = isVideo && referenceVideoBillingValue === true;
+    const referenceVideoPriced = referenceVideoBilling && (billingMode === "per_second" || billingMode === "token");
     return (
         <article className="admin-price-tier-card">
             <header className="admin-price-tier-card-header">
@@ -218,13 +221,29 @@ export function PriceTierFields({
                                 </Form.Item>
                             )}
                         </div>
+                        {referenceVideoPriced ? (
+                            <div className="admin-price-tier-billing-grid">
+                                <Form.Item
+                                    className="admin-price-tier-unit-price mb-0"
+                                    name={[index, billingMode === "token" ? "referenceVideoOutputTokenPrice" : "referenceVideoUnitPrice"]}
+                                    label={billingMode === "token" ? `带参考视频 ${priceUnit} / 百万视频 Token` : `带参考视频每秒售价（${priceUnit}）`}
+                                    tooltip={billingMode === "token" ? "挂参考视频的请求按含参考视频时长的 Token 用量乘以此价格；不挂参考视频仍用上方价格。" : "挂参考视频的请求按（生成秒数 + 后端实测参考视频秒数）乘以此价格；不挂参考视频仍用上方价格。"}
+                                    rules={[{ required: true, message: "请输入带参考视频的价格" }]}
+                                >
+                                    <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
+                                </Form.Item>
+                            </div>
+                        ) : null}
                         {isVideo && billingMode === "token" ? (
                             <div className="admin-price-tier-helper" role="note">
                                 <strong>视频 Token 计费</strong>
-                                <span>估算：宽 × 高 × 24 帧/秒 ×（输出时长 + 参考视频时长）÷ 1024；优先按上游有效用量结算，无用量时使用公式，授权预留 10% 会在结算后补扣或退回。</span>
+                                <span>
+                                    {referenceVideoBilling ? "估算：宽 × 高 × 24 帧/秒 ×（输出时长 + 参考视频时长）÷ 1024；挂参考视频时按带参考视频价格计费。" : "估算：宽 × 高 × 24 帧/秒 × 输出时长 ÷ 1024；参考视频不计费。"}
+                                    优先按上游有效用量结算，无用量时使用公式，授权预留 10% 会在结算后补扣或退回。
+                                </span>
                             </div>
                         ) : null}
-                        <CreditCostFields index={index} form={form} billingMode={billingMode} isVideo={isVideo} />
+                        <CreditCostFields index={index} form={form} billingMode={billingMode} isVideo={isVideo} referenceVideoBilling={referenceVideoBilling} />
                     </section>
                 </div>
                 {staleTierUpstream ? (
