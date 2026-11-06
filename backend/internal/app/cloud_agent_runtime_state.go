@@ -323,7 +323,7 @@ func validateCloudAgentPolicySnapshot(snapshot cloudAgentPolicySnapshot) error {
 	if snapshot.CapabilitySetVersion != cloudAgentCapabilitySetVersion {
 		return errors.New("Agent runtime capability contract is unsupported")
 	}
-	if snapshot.ReasoningMode != "off" && snapshot.ReasoningMode != "auto" && snapshot.ReasoningMode != "deep" {
+	if !validCloudAgentReasoningMode(snapshot.ReasoningMode) {
 		return errors.New("Agent runtime reasoning mode is invalid")
 	}
 	system, media, err := prompts.LoadAgentPolicies()
@@ -362,7 +362,7 @@ func validateCloudAgentPolicySnapshotStructure(snapshot cloudAgentPolicySnapshot
 	if snapshot.SystemPolicyVersion <= 0 || snapshot.MediaPolicyVersion <= 0 {
 		return errors.New("Agent runtime policy version is invalid")
 	}
-	if snapshot.ReasoningMode != "off" && snapshot.ReasoningMode != "auto" && snapshot.ReasoningMode != "deep" {
+	if !validCloudAgentReasoningMode(snapshot.ReasoningMode) {
 		return errors.New("Agent runtime reasoning mode is invalid")
 	}
 	for _, field := range []struct {

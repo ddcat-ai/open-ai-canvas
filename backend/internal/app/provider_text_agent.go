@@ -22,6 +22,19 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 	// 防止供应商请求体反向污染任务记录，也避免切换模型时复用错误协议。
 	if input.AgentRequests != nil && input.AgentRequests.Canonical != nil {
 		_, declarative := agentProtocolAdapterForContext(ctx, input.Config.InterfaceType)
+		wire := textThinkingWire(ctx, input.Config.InterfaceType, true)
+		if wire == protocol.TextWireClaude && claudeToolLoopMissingThinking(input.AgentRequests.Canonical) {
+			// 仅旧式预算思考要求工具续轮保留思考块；adaptive 可以合法跳过思考，不能据此降档。
+			config := effectiveTextThinkingConfig(input, wire)
+			if config != nil && config.Intensity.Kind == ThinkingIntensityBudget && thinkingLevelsContain(config.Levels, ThinkingLevelOff) {
+				input.TextOptions.ThinkingLevel = ThinkingLevelOff
+			}
+		}
+		if plan, err := resolveTextThinkingPlan(input, wire); err == nil {
+			// Omitted/auto uses the provider default and must keep same-wire reasoning;
+			// only a resolved explicit off disables passback.
+			input.AgentRequests.Canonical.PassReasoning = plan.Level != ThinkingLevelOff
+		}
 		requests, err := expandCanonicalAgentRequest(input.AgentRequests.Canonical, input.Config, declarative)
 		if err != nil {
 			return nil, err
@@ -56,9 +69,9 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 		body = claudeAgentBody(body)
 	}
 	body["model"] = input.Config.Model
-	applyTextThinking(body, input, protocol)
 	applyAgentOutputLimit(body, agentStepOutputLimit(input), protocol)
-	normalizeAgentToolChoice(body, input, protocol)
+	thinking := applyAgentThinking(body, input, protocol)
+	normalizeAgentToolChoice(body, thinking, protocol)
 	result, err := postAgentRequest(ctx, input, path, body, protocol)
 	if protocol == "chat-completion" && isAgentToolChoiceCompatibilityError(err) {
 		if !isAutoAgentToolChoice(body["tool_choice"]) {
@@ -118,6 +131,15 @@ func agentStepOutputLimit(input canvasGenerationInput) int {
 	return limit
 }
 
+// applyAgentThinking 写入 Agent 步的思考参数。输出上限要先写入，预算按它分配。
+func applyAgentThinking(body map[string]interface{}, input canvasGenerationInput, wire string) bool {
+	limit := agentStepOutputLimit(input)
+	if limit > 0 {
+		input.MaxOutputTokens = limit
+	}
+	return applyTextThinking(body, input, wire)
+}
+
 // applyAgentOutputLimit 按协议写入输出上限字段名：Claude 与 Chat Completions 用 max_tokens，
 // Responses 用 max_output_tokens。
 func applyAgentOutputLimit(body map[string]interface{}, limit int, protocol string) {
@@ -136,9 +158,6 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 	// 接口（如 Gemini generateContent）由插件自己映射，宿主不往里补思考参数。
 	wire := declaredAgentWire(ctx, input.Config.InterfaceType)
 	knownWire := wire != ""
-	if input.TextOptions.Thinking && !knownWire {
-		return nil, errors.New("当前 Agent 渠道的接口格式不支持思考模式，请关闭思考模式，或换用 Chat Completions、Responses、Messages 格式的渠道")
-	}
 	if input.AgentRequests == nil {
 		return nil, errors.New("画布 Agent 工具请求缺少协议参数")
 	}
@@ -157,9 +176,9 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		if body == nil {
 			return nil, errors.New("声明式 Agent 请求体必须是 JSON 对象")
 		}
-		applyTextThinking(body, input, wire)
 		applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
-		normalizeAgentToolChoice(body, input, wire)
+		thinking := applyAgentThinking(body, input, wire)
+		normalizeAgentToolChoice(body, thinking, wire)
 		spec.Body = body
 		if input.StreamText {
 			body["stream"] = true
@@ -185,6 +204,13 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 				return nil, fmt.Errorf("Agent 接口返回格式无效：%w", err)
 			}
 			return parseAgentToolPayload(payload, wire)
+		}
+	}
+	if thinkingWire := textThinkingWire(ctx, input.Config.InterfaceType, true); thinkingWire != "" {
+		// Gemini generateContent 等插件自定义线格式：请求体由插件映射，宿主只补思考参数。
+		if body := protocolBodyObject(spec.Body); body != nil {
+			applyAgentThinking(body, input, thinkingWire)
+			spec.Body = body
 		}
 	}
 	body, err := executeDeclarativeAgentWithGeminiCache(ctx, input, spec)
@@ -287,7 +313,9 @@ func claudeAgentBody(request map[string]interface{}) map[string]interface{} {
 				content = ""
 			}
 			if toolCalls, ok := message["tool_calls"].([]interface{}); ok && len(toolCalls) > 0 {
-				blocks := make([]interface{}, 0, len(toolCalls))
+				blocks := make([]interface{}, 0, len(toolCalls)+1)
+				// 思考块必须排在本轮内容最前面并原样带回签名，见 attachCanonicalAgentReasoning。
+				blocks = append(blocks, interfaceSlice(message["reasoning_blocks"])...)
 				for _, value := range toolCalls {
 					toolCall, _ := value.(map[string]interface{})
 					function, _ := toolCall["function"].(map[string]interface{})
@@ -419,11 +447,13 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 			calls = append(calls, call)
 		}
 		result["toolCalls"] = calls
+		markAgentReasoningWire(result, protocol)
 		return result, nil
 	}
 	if protocol == "claude-api" {
 		content := interfaceSlice(payload["content"])
 		calls := make([]interface{}, 0)
+		var blocks []interface{}
 		for _, value := range content {
 			item, _ := value.(map[string]interface{})
 			switch stringField(item, "type") {
@@ -431,6 +461,9 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 				result["text"] = result["text"].(string) + stringField(item, "text")
 			case "thinking":
 				result["reasoning"] = resultString(result, "reasoning") + firstNonEmptyString(stringField(item, "thinking"), stringField(item, "text"))
+				blocks = append(blocks, map[string]interface{}{"type": "thinking", "thinking": stringField(item, "thinking"), "signature": stringField(item, "signature")})
+			case "redacted_thinking":
+				blocks = append(blocks, map[string]interface{}{"type": "redacted_thinking", "data": stringField(item, "data")})
 			case "tool_use":
 				arguments, err := json.Marshal(item["input"])
 				if err != nil {
@@ -440,6 +473,10 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 			}
 		}
 		result["toolCalls"] = calls
+		if len(blocks) > 0 {
+			result["reasoningBlocks"] = blocks
+		}
+		markAgentReasoningWire(result, protocol)
 		if result["text"] == "" && len(calls) == 0 {
 			return nil, errors.New("Claude Agent 接口没有返回内容")
 		}
@@ -462,5 +499,6 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 		calls = append(calls, map[string]interface{}{"id": stringField(item, "id"), "type": "function", "function": map[string]interface{}{"name": stringField(function, "name"), "arguments": stringField(function, "arguments")}})
 	}
 	result["toolCalls"] = calls
+	markAgentReasoningWire(result, protocol)
 	return result, nil
 }

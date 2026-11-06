@@ -32,12 +32,17 @@ function emit(event, payload = {}) {
 
 function createMessage(model, result) {
   const content = [];
+  // 思考回传内容（签名、reasoning_content）由 Go 端打包，只经 thinkingSignature 往返，运行时不解读。
+  if (result.reasoningPassback) {
+    content.push({ type: "thinking", thinking: result.reasoning || "", thinkingSignature: result.reasoningPassback });
+  }
   if (result.text) content.push({ type: "text", text: result.text });
   for (const call of result.toolCalls ?? []) {
     content.push({
       type: "toolCall",
       id: call.id,
       ...(call.item_id ? { itemId: call.item_id } : {}),
+      ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}),
       name: call.name,
       arguments: call.arguments ?? {},
     });
@@ -119,6 +124,7 @@ async function run() {
       name: request.model.name || request.model.id,
       api,
       reasoning: Boolean(request.model.reasoning),
+      // 档位由 Go 按运行策略和模型能力决定；这里只声明支持思考，避免 SDK 按自身档位表裁剪。
       input: request.model.input?.length ? request.model.input : ["text", "image"],
       cost: request.model.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: Math.max(1, Number(request.model.contextWindow || 128000)),
@@ -175,13 +181,19 @@ async function run() {
             await session.steer(text);
           }
           const message = createMessage(model, result);
+          let contentIndex = 0;
+          const thinking = message.content.find((item) => item.type === "thinking");
+          if (thinking) {
+            partial.content.push(thinking);
+            contentIndex++;
+          }
           if (result.text) {
             partial.content.push({ type: "text", text: result.text });
-            stream.push({ type: "text_start", contentIndex: 0, partial });
-            stream.push({ type: "text_delta", contentIndex: 0, delta: result.text, partial });
-            stream.push({ type: "text_end", contentIndex: 0, content: result.text, partial });
+            stream.push({ type: "text_start", contentIndex, partial });
+            stream.push({ type: "text_delta", contentIndex, delta: result.text, partial });
+            stream.push({ type: "text_end", contentIndex, content: result.text, partial });
+            contentIndex++;
           }
-          let contentIndex = result.text ? 1 : 0;
           for (const call of result.toolCalls ?? []) {
             const toolCall = message.content.find((item) => item.type === "toolCall" && item.id === call.id);
             partial.content.push(toolCall);

@@ -37,7 +37,12 @@ func TestOrchestrationSettingSaveIsAdminOnlyAndRequiresImageModels(t *testing.T)
 		t.Fatal(err)
 	}
 	choice := EcommerceOrchestrationModel{ChannelModelID: "cm"}
-	setting := EcommerceOrchestrationSetting{Version: 1, Vision: EcommerceOrchestrationRole{Model: choice}, Marketing: EcommerceOrchestrationRole{Model: choice}, Director: EcommerceOrchestrationRole{Reuse: "marketing"}}
+	setting := EcommerceOrchestrationSetting{
+		Version:   1,
+		Vision:    EcommerceOrchestrationRole{Model: choice, ThinkingLevel: "high"},
+		Marketing: EcommerceOrchestrationRole{Model: choice, ThinkingLevel: "deep"},
+		Director:  EcommerceOrchestrationRole{Reuse: "marketing"},
+	}
 	if _, err := svc.UpdateEcommerceOrchestrationSetting(ordinary, setting); err == nil {
 		t.Fatal("ordinary user changed configuration")
 	}
@@ -80,7 +85,16 @@ func TestOrchestrationSettingSaveIsAdminOnlyAndRequiresImageModels(t *testing.T)
 	if _, err := svc.UpdateEcommerceOrchestrationSetting(admin, setting); err == nil {
 		t.Fatal("duplicate fallback accepted")
 	}
-	if _, err := svc.EcommerceAgentSetting(); err != nil {
-		t.Fatalf("legacy setting affected: %v", err)
+	resolved, err := svc.EcommerceAgentSetting()
+	if err != nil {
+		t.Fatalf("stage setting affected: %v", err)
+	}
+	if resolved.ThinkingLevel != "deep" || resolved.VisionThinkingLevel != "high" {
+		t.Fatalf("stage thinking settings were not resolved: %+v", resolved)
+	}
+	invalidThinking := setting
+	invalidThinking.Vision.ThinkingLevel = "ultra"
+	if _, err := svc.UpdateEcommerceOrchestrationSetting(admin, invalidThinking); err == nil {
+		t.Fatal("invalid stage thinking level accepted")
 	}
 }

@@ -66,6 +66,17 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 			} else if !ecommerceTaskUsesModel(setting.visionRef(), req.LogicalModelID, normalizedInput) {
 				return nil, InvalidModelSelection("电商 Agent 识图模型已由管理员更新，请刷新页面后重试")
 			}
+			// 工作台走通用任务队列，阶段思考意图同模型一样由后台配置决定，不能信任客户端覆盖。
+			thinking := setting.VisionThinkingLevel
+			if stage == "planning" {
+				thinking = setting.ThinkingLevel
+			}
+			options, _ := normalizedInput["textOptions"].(map[string]any)
+			if options == nil {
+				options = map[string]any{}
+			}
+			options["thinkingLevel"] = defaultString(strings.TrimSpace(thinking), ThinkingIntentAuto)
+			normalizedInput["textOptions"] = options
 		}
 	}
 	// 视频处理（kind=processing）以源视频为主体，不要求 prompt；提示词由服务端生成，

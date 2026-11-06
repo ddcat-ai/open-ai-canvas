@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, App, Button, Typography } from "antd";
+import { Alert, App, Button, Select, Typography } from "antd";
 import { ArrowUpRight, RefreshCw, X } from "lucide-react";
 import { useNavigate } from "react-router";
 import { ModelPicker } from "@/components/model-picker";
 import { getModelCatalog } from "@/services/api/logical-models";
 import { getCommerceOrchestrationSetting, updateCommerceOrchestrationSetting, type CommerceOrchestrationRole, type CommerceOrchestrationSetting } from "@/services/api/ecommerce-knowledge";
 import type { AiConfig } from "@/stores/use-config-store";
+import { THINKING_REQUEST_OPTIONS, type ThinkingRequest } from "@/lib/text-thinking";
 import { commerceStageChannelModelId, commerceStageModelConfig, commerceStageModelCounts, commerceStageModelValue, commerceVisionDisabledReason } from "./ecommerce-model-catalog";
 import "./ecommerce-stage-models.css";
 
@@ -15,7 +16,7 @@ const stages = [
     { key: "planning", label: "整套策划", hint: "按选定方向写卖点文案、逐张分镜和生图提示词" },
 ] as const;
 type StageKey = (typeof stages)[number]["key"];
-type StageChoice = { model: string; fallback: string };
+type StageChoice = { model: string; fallback: string; thinkingLevel: ThinkingRequest };
 type StageDraft = Record<StageKey, StageChoice>;
 /** 已保存但当前目录里找不到的模型（下架、停用或是旧的智能路由），需要管理员重新选择。 */
 type StageMissing = Partial<Record<StageKey, boolean>>;
@@ -36,7 +37,7 @@ function draftFromSetting(config: AiConfig, saved: CommerceOrchestrationSetting)
         const role = roles[key];
         const model = commerceStageModelValue(config, role.model.channelModelId);
         const fallback = commerceStageModelValue(config, role.fallback.channelModelId);
-        draft[key] = { model, fallback };
+        draft[key] = { model, fallback, thinkingLevel: role.thinkingLevel || "auto" };
         missing[key] = (filled(role) && !model) || Boolean((role.fallback.channelModelId || role.fallback.logicalModelId) && !fallback);
     }
     return { draft, missing };
@@ -45,7 +46,7 @@ function draftFromSetting(config: AiConfig, saved: CommerceOrchestrationSetting)
 function roleFromChoice(config: AiConfig, choice: StageChoice): CommerceOrchestrationRole {
     const model = commerceStageChannelModelId(config, choice.model);
     const fallback = commerceStageChannelModelId(config, choice.fallback);
-    return { model: model ? { channelModelId: model } : {}, fallback: fallback ? { channelModelId: fallback } : {} };
+    return { model: model ? { channelModelId: model } : {}, fallback: fallback ? { channelModelId: fallback } : {}, thinkingLevel: choice.thinkingLevel || "auto" };
 }
 
 /** 电商 Agent 的文本阶段模型：所有用户的电商页都用这里的配置，前台不展示也不能更改。 */
@@ -124,7 +125,7 @@ export function EcommerceStageModels({ embedded = false, onSaved }: { embedded?:
                 <div>
                     {embedded ? null : <Typography.Text strong>电商 Agent 阶段模型</Typography.Text>}
                     <Typography.Paragraph type="secondary">
-                        两个阶段都要读商品图，只有开启了识图的文本模型可选，列表里的「图×N」是该模型最多能读的图片数。主模型不可用时自动改用备用模型。
+                        两个阶段都要读商品图，只有开启了识图的文本模型可选，列表里的「图×N」是该模型最多能读的图片数。主模型不可用时自动改用备用模型。思考等级表示阶段意图，按实际使用模型的能力归一；备用模型沿用同一意图。「模型默认」不强制提高等级。
                         {config ? ` 当前目录 ${counts.text} 个文本模型，其中 ${counts.vision} 个已开启识图。` : ""}
                     </Typography.Paragraph>
                 </div>
@@ -181,6 +182,9 @@ export function EcommerceStageModels({ embedded = false, onSaved }: { embedded?:
                                     onChange={(fallback) => update(stage.key, { fallback })}
                                 />
                                 {draft[stage.key].fallback ? <Button size="small" type="text" icon={<X size={14} />} aria-label={`清除${stage.label}备用模型`} onClick={() => update(stage.key, { fallback: "" })} /> : null}
+                            </div>
+                            <div className="ecommerce-stage-models-picker">
+                                <Select className="w-full" aria-label={`${stage.label}思考等级`} value={draft[stage.key].thinkingLevel} options={THINKING_REQUEST_OPTIONS} onChange={(thinkingLevel) => update(stage.key, { thinkingLevel })} />
                             </div>
                         </li>
                     ))}

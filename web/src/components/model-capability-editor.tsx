@@ -5,6 +5,19 @@ import { Switch } from "@/components/ui/base/switch";
 import { Checkbox } from "@/components/ui/base/checkbox";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import type { ReactNode } from "react";
+import {
+    THINKING_LEVELS,
+    THINKING_LEVEL_LABELS,
+    THINKING_PRESETS,
+    thinkingLevelsFor,
+    thinkingPresetConfig,
+    withThinkingLevels,
+    type TextThinkingConfig,
+    type ThinkingLevel,
+    type ThinkingMode,
+    type ThinkingSwitchKind,
+    type ThinkingIntensityKind,
+} from "@/lib/text-thinking";
 
 import {
     DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS,
@@ -462,6 +475,7 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
                         onChange={(streaming) => update({ streaming })}
                     />
                 </CapabilityGroup>
+                <TextThinkingEditor value={profile.thinking} disabled={Boolean(disabled)} onChange={(thinking) => update({ thinking })} />
             </div>
         );
     }
@@ -744,6 +758,171 @@ function ImageCapabilityEditor({ value, onChange, protocol, model, imageParamete
                 <NumberField label="提示词最大字符数" value={profile.references.promptMaxChars} min={1} disabled={disabled} onChange={(promptMaxChars) => updateReferences({ promptMaxChars: promptMaxChars || 1 })} />
             </CapabilityGroup>
         </div>
+    );
+}
+
+const thinkingModeOptions: Array<{ label: string; value: ThinkingMode }> = [
+    { label: "不支持", value: "none" },
+    { label: "开关", value: "toggle" },
+    { label: "分档", value: "levels" },
+    { label: "必须思考", value: "always" },
+];
+
+const thinkingSwitchOptions: Array<{ label: string; value: ThinkingSwitchKind }> = [
+    { label: "不能关闭（不写开关）", value: "none" },
+    { label: "关闭时省略思考字段", value: "omit" },
+    { label: "effort = none", value: "effort-none" },
+    { label: "enable_thinking = true / false", value: "enable-flag" },
+    { label: "thinking.type = 开启值 / disabled", value: "thinking-type" },
+    { label: "预算 = 0", value: "budget-zero" },
+];
+const thinkingIntensityOptions: Array<{ label: string; value: ThinkingIntensityKind }> = [
+    { label: "只发开关（不发强度）", value: "none" },
+    { label: "effort 枚举", value: "effort" },
+    { label: "Token 预算", value: "budget" },
+    { label: "Gemini thinkingLevel", value: "gemini-level" },
+    { label: "模型名后缀", value: "model-suffix" },
+];
+const thinkingIntensityFields = {
+    effort: ["reasoning_effort", "reasoning.effort", "output_config.effort"],
+    budget: ["thinking_budget", "reasoning.max_tokens", "thinking.budget_tokens", "generationConfig.thinkingConfig.thinkingBudget"],
+};
+
+// 预设只是起点；管理员可按真实型号修改档位、开关、上游取值和预算。
+// 保存时后端按接口格式校验，预设展开后的完整配置随模型保存。
+function TextThinkingEditor({ value, disabled, onChange }: { value?: TextThinkingConfig; disabled: boolean; onChange: (value: TextThinkingConfig | undefined) => void }) {
+    const preset = THINKING_PRESETS.find((item) => item.id === value?.preset);
+    const levels = value ? thinkingLevelsFor(value) : [];
+    const enabledLevels = value?.mode === "always" ? THINKING_LEVELS.filter((level) => level !== "off") : THINKING_LEVELS;
+    const setLevels = (next: ThinkingLevel[]) => {
+        if (!value) return;
+        onChange(withThinkingLevels(value, next));
+    };
+    return (
+        <CapabilityGroup title="思考等级" description="未配置时沿用旧的开关行为（开启 = 标准档，Gemini 与插件自定义接口不发送思考参数）。">
+            <Field label="预设">
+                <Select
+                    className="w-full"
+                    allowClear
+                    placeholder="未配置（沿用旧行为）"
+                    disabled={disabled}
+                    value={value?.preset || (value ? "custom" : undefined)}
+                    options={[...THINKING_PRESETS.map((item) => ({ label: item.label, value: item.id })), { label: "自定义", value: "custom" }]}
+                    onChange={(id?: string) =>
+                        onChange(!id ? undefined : id === "custom" ? { ...(value || { mode: "levels", levels: ["off", "low", "medium", "high"], switch: { kind: "omit" }, intensity: { kind: "effort" } }), preset: undefined } : thinkingPresetConfig(id))
+                    }
+                />
+            </Field>
+            {preset ? <p className="text-[var(--fs-tiny)] leading-5 text-foreground/45">{preset.hint}</p> : null}
+            {value ? (
+                <>
+                    <Field label="思考模式">
+                        <SegmentedControl
+                            block
+                            disabled={disabled}
+                            value={value.mode}
+                            options={thinkingModeOptions}
+                            onChange={(mode) => {
+                                const next = withThinkingLevels(value, mode === "always" ? levels.filter((level) => level !== "off") : levels);
+                                onChange({ ...next, mode: mode as ThinkingMode, switch: mode === "always" && next.switch.kind === "omit" ? { kind: "none" } : next.switch });
+                            }}
+                        />
+                    </Field>
+                    {value.mode !== "none" ? (
+                        <>
+                            <Field label="支持的档位">
+                                <Select
+                                    mode="multiple"
+                                    className="w-full"
+                                    disabled={disabled}
+                                    value={levels}
+                                    options={enabledLevels.map((level) => ({ label: THINKING_LEVEL_LABELS[level], value: level }))}
+                                    onChange={(next: ThinkingLevel[]) => setLevels(next)}
+                                />
+                            </Field>
+                            <Field label="默认档位">
+                                <Select
+                                    className="w-full"
+                                    disabled={disabled}
+                                    value={value.default || ""}
+                                    options={[{ label: "不发送（交给上游默认）", value: "" }, ...levels.map((level) => ({ label: THINKING_LEVEL_LABELS[level], value: level }))]}
+                                    onChange={(next: ThinkingLevel | "") => onChange({ ...value, default: next })}
+                                />
+                            </Field>
+                            <details className="space-y-3">
+                                <summary className="cursor-pointer text-xs text-foreground/60">高级协议映射</summary>
+                                <p className="text-[var(--fs-tiny)] leading-5 text-foreground/45">按上游实际能力配置，保存时校验协议字段。仅配置该型号支持的档位；第三方渠道不保证支持整个系列的参数。</p>
+                                <Field label="开关写法">
+                                    <Select className="w-full" disabled={disabled} value={value.switch.kind} options={thinkingSwitchOptions} onChange={(kind: ThinkingSwitchKind) => onChange({ ...value, switch: { kind } })} />
+                                </Field>
+                                {value.switch.kind === "thinking-type" ? (
+                                    <Field label="开启时 thinking.type">
+                                        <Select
+                                            className="w-full"
+                                            disabled={disabled}
+                                            value={value.switch.onValue || "enabled"}
+                                            options={["enabled", "auto", "adaptive"].map((item) => ({ label: item, value: item }))}
+                                            onChange={(onValue: string) => onChange({ ...value, switch: { ...value.switch, onValue } })}
+                                        />
+                                    </Field>
+                                ) : null}
+                                <Field label="强度写法">
+                                    <Select className="w-full" disabled={disabled} value={value.intensity.kind} options={thinkingIntensityOptions} onChange={(kind: ThinkingIntensityKind) => onChange({ ...value, intensity: { kind } })} />
+                                </Field>
+                                {value.intensity.kind === "effort" || value.intensity.kind === "budget" ? (
+                                    <Field label="写入字段">
+                                        <Select
+                                            className="w-full"
+                                            disabled={disabled}
+                                            value={value.intensity.field || ""}
+                                            options={[{ label: "按接口格式自动选择", value: "" }, ...thinkingIntensityFields[value.intensity.kind].map((field) => ({ label: field, value: field }))]}
+                                            onChange={(field: string) => onChange({ ...value, intensity: { ...value.intensity, field } })}
+                                        />
+                                    </Field>
+                                ) : null}
+                                {value.intensity.kind === "none"
+                                    ? null
+                                    : levels
+                                          .filter((level) => level !== "off")
+                                          .map((level) => (
+                                              <Field key={level} label={`${THINKING_LEVEL_LABELS[level]} · ${value.intensity.kind === "budget" ? "Token 预算" : value.intensity.kind === "model-suffix" ? "模型名后缀" : "上游取值"}`}>
+                                                  {value.intensity.kind === "budget" ? (
+                                                      <InputNumber
+                                                          className="w-full"
+                                                          disabled={disabled}
+                                                          min={1024}
+                                                          precision={0}
+                                                          placeholder="留空按本次输出上限比例计算"
+                                                          value={value.intensity.budgets?.[level]}
+                                                          onChange={(budget: number | null) => {
+                                                              const budgets = { ...value.intensity.budgets };
+                                                              if (budget === null) delete budgets[level];
+                                                              else budgets[level] = budget;
+                                                              onChange({ ...value, intensity: { ...value.intensity, budgets } });
+                                                          }}
+                                                      />
+                                                  ) : (
+                                                      <Input
+                                                          disabled={disabled}
+                                                          placeholder={value.intensity.kind === "model-suffix" ? "如 -thinking（必填）" : level}
+                                                          value={value.intensity.values?.[level] || ""}
+                                                          onChange={(event) => {
+                                                              const values = { ...value.intensity.values };
+                                                              const wireValue = event.target.value.trim();
+                                                              if (wireValue) values[level] = wireValue;
+                                                              else delete values[level];
+                                                              onChange({ ...value, intensity: { ...value.intensity, values } });
+                                                          }}
+                                                      />
+                                                  )}
+                                              </Field>
+                                          ))}
+                            </details>
+                        </>
+                    ) : null}
+                </>
+            ) : null}
+        </CapabilityGroup>
     );
 }
 

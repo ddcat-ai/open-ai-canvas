@@ -107,10 +107,10 @@
     display: inline-flex;
     flex: none;
     align-items: center;
-    gap: 8px;
-    min-width: 64px;
-    height: 30px;
-    padding: 2px 8px 2px 4px;
+    gap: 6px;
+    min-width: 0;
+    height: 28px;
+    padding: 4px 6px;
     border: 0;
     border-radius: 999px;
     background: color-mix(in srgb, var(--agent-ink) 5%, transparent);
@@ -135,8 +135,8 @@
 .agent-context-ring-visual {
     position: relative;
     display: block;
-    width: 26px;
-    height: 26px;
+    width: 18px;
+    height: 18px;
     flex: none;
     overflow: hidden;
     border-radius: 50%;
@@ -145,7 +145,7 @@
 
 .agent-context-ring-visual::after {
     position: absolute;
-    inset: 5px;
+    inset: 3px;
     border-radius: 50%;
     background: color-mix(in srgb, var(--agent-surface-raised) 92%, transparent);
     content: "";
@@ -1291,8 +1291,8 @@
 /* 面板不够宽时上下文只显示环，把位置让给模型名、停止和主按钮；百分比点开明细可见。 */
 @container (max-width: 519px) {
     .agent-context-ring {
-        min-width: 30px;
-        padding: 2px 4px;
+        min-width: 28px;
+        padding: 5px;
         gap: 0;
     }
     .agent-context-meter-copy {
@@ -2077,6 +2077,35 @@ summary.agent-tool-step:hover {
 
 .agent-composer-selection > button {
     flex: 0 0 auto;
+}
+
+.agent-thinking-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--radius-full, 999px);
+    background: color-mix(in srgb, var(--agent-ink) 5%, transparent);
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+    white-space: nowrap;
+    cursor: pointer;
+}
+.agent-thinking-trigger:hover,
+.agent-thinking-trigger[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--agent-ink) 9%, transparent);
+    color: var(--agent-ink);
+}
+.agent-thinking-trigger:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+.agent-thinking-popover {
+    width: min(260px, calc(100vw - 64px));
+    padding: 4px;
 }
 
 .agent-composer-submit {

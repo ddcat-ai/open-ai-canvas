@@ -30,6 +30,7 @@ type ecommerceProviderConfig struct {
 	MaxConcurrent                      int
 	TextProvider                       *providerConfig
 	ImageProvider                      *providerConfig
+	TextThinkingLevel                  string
 }
 
 func ecommerceDuration(name string, fallback int) time.Duration {
@@ -106,7 +107,11 @@ func (s *Service) ecommerceConfiguredText(userID string, cfg ecommerceProviderCo
 	if err != nil {
 		return cfg, err
 	}
-	return s.ecommerceConfiguredTextFor(userID, cfg, setting.planningRef(), "策划")
+	cfg, err = s.ecommerceConfiguredTextFor(userID, cfg, setting.planningRef(), "策划")
+	if err == nil {
+		cfg.TextThinkingLevel = setting.ThinkingLevel
+	}
+	return cfg, err
 }
 
 // ecommerceVisionText resolves the administrator's recognition model, which
@@ -120,7 +125,11 @@ func (s *Service) ecommerceVisionText(userID string, cfg ecommerceProviderConfig
 	if err != nil {
 		return cfg, err
 	}
-	return s.ecommerceConfiguredTextFor(userID, cfg, setting.visionRef(), "识图")
+	cfg, err = s.ecommerceConfiguredTextFor(userID, cfg, setting.visionRef(), "识图")
+	if err == nil {
+		cfg.TextThinkingLevel = setting.VisionThinkingLevel
+	}
+	return cfg, err
 }
 
 func (s *Service) ecommerceConfiguredTextFor(userID string, cfg ecommerceProviderConfig, ref EcommerceAgentModelRef, stage string) (ecommerceProviderConfig, error) {
@@ -244,7 +253,7 @@ func (s *Service) ecommerceChatJSON(ctx context.Context, cfg ecommerceProviderCo
 		defer cancel()
 		provider := *cfg.TextProvider
 		provider.SystemPrompt = system
-		input := canvasGenerationInput{Mode: "text", Prompt: prompt, Config: provider}
+		input := canvasGenerationInput{Mode: "text", Prompt: prompt, Config: provider, TextOptions: canvasTextOptions{ThinkingLevel: cfg.TextThinkingLevel}}
 		for _, imageURL := range images {
 			input.ReferenceImages = append(input.ReferenceImages, providerMedia{DataURL: imageURL})
 		}

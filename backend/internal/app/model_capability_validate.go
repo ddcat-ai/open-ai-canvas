@@ -283,6 +283,9 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 		return nil
 	}
 	if taskInput.Mode == "text" {
+		if err := ValidateThinkingLevelRequest(taskInput.TextOptions.ThinkingLevel); err != nil {
+			return newModelCapabilityArgumentError("thinkingLevel", "unsupported_value", err)
+		}
 		return s.validateTextTaskReferences(taskInput)
 	}
 	if taskInput.Mode != "image" && taskInput.Mode != "video" && taskInput.Mode != "audio" {

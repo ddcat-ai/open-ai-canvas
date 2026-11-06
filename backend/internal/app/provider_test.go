@@ -575,7 +575,7 @@ func TestRunAgentToolTaskOmitsToolChoiceBeforeThinkingRequest(t *testing.T) {
 
 			result, err := runAgentToolTask(context.Background(), canvasGenerationInput{
 				Config:        providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model"},
-				TextOptions:   canvasTextOptions{Thinking: true},
+				TextOptions:   canvasTextOptions{ThinkingLevel: "medium"},
 				AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{"messages": []interface{}{}, "tool_choice": forcedChoice}},
 			})
 			server.Close()
@@ -648,7 +648,7 @@ func TestRunDeclarativeAgentTaskOmitsToolChoiceBeforeThinkingRequest(t *testing.
 	}
 	result, err := runAgentToolTask(withProtocolRegistry(context.Background(), registry), canvasGenerationInput{
 		Config:      providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model", InterfaceType: "chat-completion"},
-		TextOptions: canvasTextOptions{Thinking: true},
+		TextOptions: canvasTextOptions{ThinkingLevel: "medium"},
 		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{
 			"messages": []interface{}{}, "tools": []interface{}{}, "tool_choice": "required",
 		}},
@@ -738,7 +738,7 @@ data: [DONE]
 }
 
 func TestTextThinkingOptionsAndReasoningParsing(t *testing.T) {
-	input := canvasGenerationInput{TextOptions: canvasTextOptions{Thinking: true}}
+	input := canvasGenerationInput{TextOptions: canvasTextOptions{ThinkingLevel: "medium"}}
 	responsesBody := map[string]interface{}{}
 	applyTextThinking(responsesBody, input, "responses")
 	reasoning, _ := responsesBody["reasoning"].(map[string]interface{})

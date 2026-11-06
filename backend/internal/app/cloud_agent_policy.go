@@ -37,13 +37,33 @@ type cloudAgentProfileSnapshot struct {
 
 func cloudAgentReasoningMode(req CloudAgentRequest) string {
 	mode := strings.ToLower(strings.TrimSpace(req.ReasoningMode))
-	if mode == "off" || mode == "auto" || mode == "deep" {
+	if validCloudAgentReasoningMode(mode) {
 		return mode
 	}
 	return cloudAgentDefaultReasoning
 }
 
-func cloudAgentReasoningEnabled(mode string) bool { return mode == "auto" || mode == "deep" }
+func validCloudAgentReasoningMode(mode string) bool {
+	return isThinkingLevel(mode) || mode == ThinkingIntentAuto || mode == ThinkingIntentDeep
+}
+
+func cloudAgentReasoningEnabled(mode string) bool {
+	return validCloudAgentReasoningMode(mode) && mode != ThinkingLevelOff
+}
+
+// cloudAgentThinkingLevel 把运行策略的思考意图转成任务的 thinkingLevel：
+// off = 关闭（不能关闭的模型降到最低档），auto = 模型默认，deep = 模型支持的最高档（不含 max）。
+// 显式档位原样交给模型能力解析，不能退回 SDK 的默认 medium。
+// forceOff 用于空输出/超时升级重试：同样发 off，由模型能力决定能否真的关闭。
+func cloudAgentThinkingLevel(mode string, forceOff bool) string {
+	if forceOff {
+		return ThinkingLevelOff
+	}
+	if validCloudAgentReasoningMode(mode) {
+		return mode
+	}
+	return ThinkingLevelOff
+}
 
 func cloudAgentCapabilityGuide() string {
 	var b strings.Builder

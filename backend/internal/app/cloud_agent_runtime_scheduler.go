@@ -257,10 +257,12 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 			return nil
 		}
 		var result struct {
-			Text      string           `json:"text"`
-			Reasoning string           `json:"reasoning"`
-			ToolCalls []cloudAgentCall `json:"toolCalls"`
-			Legacy    []cloudAgentCall `json:"tool_calls"`
+			Text            string           `json:"text"`
+			Reasoning       string           `json:"reasoning"`
+			ReasoningWire   string           `json:"reasoningWire"`
+			ReasoningBlocks []interface{}    `json:"reasoningBlocks"`
+			ToolCalls       []cloudAgentCall `json:"toolCalls"`
+			Legacy          []cloudAgentCall `json:"tool_calls"`
 		}
 		if task.Status == model.TaskStatusSucceeded {
 			if err := json.Unmarshal([]byte(task.ResultJSON), &result); err != nil {
@@ -311,7 +313,9 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 				state.event(run.ID, "assistant_message", map[string]any{"messageId": task.ID, "text": result.Text})
 				// 普通正文可能是读取失败或多图混合回答，不能自动归为某张图的视觉事实。
 				if len(calls) == 0 {
-					state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "assistant", "content": result.Text})
+					message := map[string]any{"role": "assistant", "content": result.Text}
+					canonicalAssistantReasoning(message, result.Reasoning, result.ReasoningWire, result.ReasoningBlocks)
+					state.Canonical.Messages = append(state.Canonical.Messages, message)
 				}
 			}
 			state.ActiveTaskID = ""
@@ -323,7 +327,9 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 			state.CallIndex = 0
 			state.StepSnapshotHash = cloudAgentCaptureStepSnapshotHash(calls)
 			if len(calls) > 0 {
-				state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "assistant", "content": result.Text, "tool_calls": calls})
+				message := map[string]any{"role": "assistant", "content": result.Text, "tool_calls": calls}
+				canonicalAssistantReasoning(message, result.Reasoning, result.ReasoningWire, result.ReasoningBlocks)
+				state.Canonical.Messages = append(state.Canonical.Messages, message)
 			}
 			if strings.TrimSpace(result.Text) != "" {
 				cloudAgentConsumeInspectedImages(&state.Canonical)
@@ -401,9 +407,9 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 	}
 	// 单步输出上限与思考开关：默认按策略给每一步带上界（不带上界时上游按剩余上下文放行，
 	// 思考模型可以把单步拖到几分钟）；空输出升级重试时改为关思考 + 放大预算。
-	stepThinking := cloudAgentReasoningEnabled(state.Policy.ReasoningMode) && !state.ForceThinkingOff
+	stepThinking := cloudAgentThinkingLevel(state.Policy.ReasoningMode, state.ForceThinkingOff)
 	stepOutputTokens := cloudAgentStepOutputBudget(state.StepLimits, state.BoostStepOutputBudget)
-	input := map[string]any{"mode": "text", "prompt": state.Request.Prompt, "agentRequests": map[string]any{"canonical": canonical}, "config": map[string]any{"channelId": state.Request.ChannelID, "channelModelKey": state.Request.ChannelModelKey, "model": firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model)}, "textOptions": map[string]any{"stream": true, "thinking": stepThinking, "maxOutputTokens": stepOutputTokens}}
+	input := map[string]any{"mode": "text", "prompt": state.Request.Prompt, "agentRequests": map[string]any{"canonical": canonical}, "config": map[string]any{"channelId": state.Request.ChannelID, "channelModelKey": state.Request.ChannelModelKey, "model": firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model)}, "textOptions": map[string]any{"stream": true, "thinkingLevel": stepThinking, "maxOutputTokens": stepOutputTokens}}
 	if len(references) > 0 {
 		input["referenceImages"] = references
 	}

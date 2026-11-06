@@ -39,8 +39,10 @@ type canvasGenerationInput struct {
 }
 
 type canvasTextOptions struct {
-	Stream   *bool `json:"stream"`
-	Thinking bool  `json:"thinking"`
+	Stream *bool `json:"stream"`
+	// ThinkingLevel 是请求的思考档位（off/minimal/low/medium/high/max）或意图（auto/deep）；
+	// 空值等同 auto。实际档位按模型能力归一，见 resolveThinkingLevel。
+	ThinkingLevel string `json:"thinkingLevel,omitempty"`
 	// MaxOutputTokens 是本次调用的输出上限（思考 + 正文 + 工具参数）。
 	// 画布 Agent 的每一步都带上限：不设时上游按"剩余上下文"放行，思考模型可以把单步
 	// 拖到几分钟（实测 output_tokens 正好吃满可用预算、正文与工具调用皆空）；0 表示不限制。
@@ -398,6 +400,14 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	}
 	if channelModel.Protocol == "" {
 		return providerConfig{}, errors.New("当前模型尚未配置请求协议")
+	}
+	if normalizeCapability(channelModel.Capability) == "text" {
+		// Admission strips client capabilities; restore the authoritative text
+		// contract for both queued tasks and Agent steps before resolving thinking.
+		config.CapabilityConfig, err = normalizedChannelModelCapability(channelModel, s.protocolRegistry())
+		if err != nil {
+			return providerConfig{}, InvalidModelSelection("指定的模型能力配置无效，请联系管理员")
+		}
 	}
 	providerModelKey := strings.TrimPrefix(strings.TrimSpace(config.ProviderModelKey), "models/")
 	if config.PriceTierID != "" {

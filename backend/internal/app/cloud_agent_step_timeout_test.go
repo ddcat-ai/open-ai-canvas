@@ -217,7 +217,7 @@ func TestCloudAgentStepTimeoutRetriesThenFailsWithReadableReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := stepTaskTextOptions(t, s, task)
-	if options["thinking"] != false {
+	if options["thinkingLevel"] != ThinkingLevelOff {
 		t.Fatalf("重试请求没有关思考: %+v", options)
 	}
 	if options["maxOutputTokens"] != float64(platform.DefaultRuntimeAgentStepOutputTokens) {

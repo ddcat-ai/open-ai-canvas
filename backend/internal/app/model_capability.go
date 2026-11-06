@@ -29,6 +29,8 @@ type TextCapabilityConfig struct {
 	// MaxOutputTokens is the provider's maximum completion/reasoning budget.
 	MaxOutputTokens int                 `json:"maxOutputTokens"`
 	References      TextReferenceConfig `json:"references"`
+	// Thinking 声明模型支持的思考档位和上游写法；为空时按协议沿用开关语义，见 text_thinking.go。
+	Thinking *TextThinkingConfig `json:"thinking,omitempty"`
 }
 
 type TextReferenceConfig struct {
@@ -241,6 +243,15 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		if err := validateTextCapabilityConfig(value.Text); err != nil {
 			return nil, err
 		}
+		var registry *protocolcontract.Registry
+		if len(registries) > 0 {
+			registry = registries[0]
+		}
+		thinking, err := normalizeTextThinkingConfig(text.Thinking, thinkingWireForProtocol(protocol, registry), text.MaxOutputTokens)
+		if err != nil {
+			return nil, err
+		}
+		value.Text.Thinking = thinking
 		return value, nil
 	}
 	if capability == "image" {

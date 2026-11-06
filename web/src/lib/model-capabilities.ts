@@ -1,3 +1,4 @@
+import type { TextThinkingConfig } from "./text-thinking";
 import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
 import { projectImageParameters, normalizeImageParameters, imageParameterRequest } from "./image-parameters";
 import type { ImageResolutionOption, ImageResolutionTier } from "@/lib/image-resolution-tiers";
@@ -43,8 +44,8 @@ export type ModelCapabilityConfig = {
 export type TextCapabilityConfig = {
     /** Whether the upstream text endpoint accepts SSE streaming responses. */
     streaming?: boolean;
-    /** Whether the model exposes a user-selectable reasoning/thinking mode. */
-    thinking?: boolean;
+    /** Thinking levels and upstream wire mapping; omitted means the protocol's legacy on/off behavior. */
+    thinking?: TextThinkingConfig;
     /** Total provider input plus output context window, in tokens. */
     contextWindowTokens: number;
     /** Provider completion/reasoning output ceiling, in tokens. */

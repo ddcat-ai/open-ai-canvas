@@ -61,9 +61,10 @@ type CloudAgentEvent struct {
 }
 
 type cloudAgentCall struct {
-	ID       string `json:"id"`
-	ItemID   string `json:"item_id,omitempty"`
-	Function struct {
+	ID               string `json:"id"`
+	ItemID           string `json:"item_id,omitempty"`
+	ThoughtSignature string `json:"thoughtSignature,omitempty"`
+	Function         struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
 	} `json:"function"`

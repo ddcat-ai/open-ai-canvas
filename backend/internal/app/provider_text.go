@@ -36,7 +36,18 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	if input.Mode == "text" {
 		wire = declaredTextWire(ctx, input.Config.InterfaceType)
 	}
-	if wire == "" || (!input.StreamText && !input.TextOptions.Thinking) {
+	thinkingWire := ""
+	if input.Mode == "text" {
+		thinkingWire = textThinkingWire(ctx, input.Config.InterfaceType, false)
+	}
+	if wire == "" {
+		// 插件自定义线格式（如 Gemini generateContent）的请求和响应仍由插件映射，宿主只补思考参数。
+		if thinkingWire != "" {
+			if body := protocolBodyObject(spec.Body); body != nil {
+				applyTextThinking(body, input, thinkingWire)
+				spec.Body = body
+			}
+		}
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
 	}
@@ -170,27 +181,19 @@ func runClaudeTextTask(ctx context.Context, input canvasGenerationInput) (map[st
 	return providerTextTaskResult(result), nil
 }
 
-func applyTextThinking(body map[string]interface{}, input canvasGenerationInput, protocol string) {
-	if !input.TextOptions.Thinking {
-		return
-	}
-	switch protocol {
-	case "responses":
-		body["reasoning"] = map[string]interface{}{"effort": "medium", "summary": "auto"}
-	case "chat-completion":
-		body["reasoning_effort"] = "medium"
-	case "claude-api":
-		body["thinking"] = map[string]interface{}{"type": "enabled", "budget_tokens": 1024}
-	}
-}
-
 // Chat Completion defaults to automatic tool selection when tools are present,
 // so an explicit "auto" only reduces compatibility. Reasoning endpoints also
 // disagree on forced choices. Normalize before the first network request while
 // preserving required/named choices for non-reasoning structured tasks.
-func normalizeAgentToolChoice(body map[string]interface{}, input canvasGenerationInput, protocol string) {
-	if protocol == "chat-completion" && (input.TextOptions.Thinking || isAutoAgentToolChoice(body["tool_choice"])) {
+func normalizeAgentToolChoice(body map[string]interface{}, thinking bool, protocol string) {
+	if protocol == "chat-completion" && (thinking || isAutoAgentToolChoice(body["tool_choice"])) {
 		delete(body, "tool_choice")
+	}
+	// Claude 开启思考时只接受 auto/none，强制工具调用会直接 400。
+	if protocol == "claude-api" && thinking {
+		if choice, ok := body["tool_choice"].(map[string]interface{}); ok && stringField(choice, "type") != "auto" && stringField(choice, "type") != "none" {
+			body["tool_choice"] = map[string]interface{}{"type": "auto"}
+		}
 	}
 }
 

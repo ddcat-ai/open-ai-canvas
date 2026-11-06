@@ -52,7 +52,7 @@ func TestDeclarativeChatPluginStreamsByDeclaredPath(t *testing.T) {
 	var deltas strings.Builder
 	result, err := runTextTask(withProtocolRegistry(ctx, loadOfficialFallbackRegistry()), canvasGenerationInput{
 		Mode: "text", Prompt: "hello", StreamText: true,
-		TextOptions: canvasTextOptions{Thinking: true},
+		TextOptions: canvasTextOptions{ThinkingLevel: "medium"},
 		Config:      providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "deepseek-reasoner", InterfaceType: "deepseek-chat"},
 		OnTextDelta: func(delta string) { deltas.WriteString(delta) },
 	})
@@ -99,7 +99,7 @@ func TestDeclarativeTextThinkingFollowsDeclaredWire(t *testing.T) {
 	ctx := withProtocolRegistry(context.Background(), loadOfficialFallbackRegistry())
 
 	result, err := runTextTask(ctx, canvasGenerationInput{
-		Mode: "text", Prompt: "hello", TextOptions: canvasTextOptions{Thinking: true},
+		Mode: "text", Prompt: "hello", TextOptions: canvasTextOptions{ThinkingLevel: "medium"},
 		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "kimi-k2", InterfaceType: "kimi-chat"},
 	})
 	if err != nil || result["text"] != "hello" {
@@ -113,7 +113,7 @@ func TestDeclarativeTextThinkingFollowsDeclaredWire(t *testing.T) {
 	}
 
 	if _, err := runTextTask(ctx, canvasGenerationInput{
-		Mode: "text", Prompt: "hello", TextOptions: canvasTextOptions{Thinking: true},
+		Mode: "text", Prompt: "hello", TextOptions: canvasTextOptions{ThinkingLevel: "medium"},
 		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "command-a", InterfaceType: "cohere-chat-v2"},
 	}); err != nil {
 		t.Fatalf("cohere-chat-v2 error = %v", err)
@@ -156,7 +156,7 @@ func TestDeclarativeAgentWireFollowsDeclaredAgentPath(t *testing.T) {
 	input := func(interfaceType string) canvasGenerationInput {
 		return canvasGenerationInput{
 			Config:      providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model", InterfaceType: interfaceType},
-			TextOptions: canvasTextOptions{Thinking: true, MaxOutputTokens: 2048},
+			TextOptions: canvasTextOptions{ThinkingLevel: "medium", MaxOutputTokens: 2048},
 			AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{
 				"messages": []interface{}{}, "tools": []interface{}{}, "tool_choice": "required",
 			}},
@@ -174,8 +174,14 @@ func TestDeclarativeAgentWireFollowsDeclaredAgentPath(t *testing.T) {
 		t.Fatalf("thinking request retained tool_choice: %#v", body)
 	}
 
-	if _, err := runAgentToolTask(ctx, input("vendor-native")); err == nil || !strings.Contains(err.Error(), "不支持思考模式") {
-		t.Fatalf("plugin-defined agent wire must reject thinking explicitly, got %v", err)
+	// 宿主不认识的插件线格式视为不支持思考：照常请求，不写任何思考参数。
+	if _, err := runAgentToolTask(ctx, input("vendor-native")); err != nil {
+		t.Fatalf("plugin-defined agent wire error = %v", err)
+	}
+	for _, key := range []string{"reasoning_effort", "reasoning", "thinking", "enable_thinking"} {
+		if _, exists := body[key]; exists {
+			t.Fatalf("plugin-defined agent wire received host thinking parameter %q: %#v", key, body)
+		}
 	}
 }
 

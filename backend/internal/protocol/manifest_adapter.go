@@ -99,10 +99,16 @@ func (a manifestAdapter) ParseAgent(_ context.Context, body []byte) (AgentResult
 			continue
 		}
 		call := AgentToolCall{
-			ID:               firstPathValue(object, response.ToolCallIDPaths...),
-			Name:             firstPathValue(object, response.ToolCallNamePaths...),
-			Arguments:        firstPathJSONValue(object, response.ToolCallArgsPaths...),
-			ThoughtSignature: firstPathValue(object, response.ToolCallSignaturePaths...),
+			ID:        firstPathValue(object, response.ToolCallIDPaths...),
+			Name:      firstPathValue(object, response.ToolCallNamePaths...),
+			Arguments: firstPathJSONValue(object, response.ToolCallArgsPaths...),
+		}
+		// Signatures are opaque protocol state, not display text to normalize.
+		for _, path := range response.ToolCallSignaturePaths {
+			if signature, ok := pathValue(object, path).(string); ok && signature != "" {
+				call.ThoughtSignature = signature
+				break
+			}
 		}
 		if strings.TrimSpace(call.Name) != "" {
 			if strings.TrimSpace(call.ID) == "" {

@@ -73,10 +73,16 @@ func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]
 		case "assistant":
 			text := ""
 			calls := []interface{}{}
+			var passback agentReasoningPassback
+			passbackText := ""
 			if parts, ok := message["content"].([]interface{}); ok {
 				for _, value := range parts {
 					part, _ := value.(map[string]interface{})
 					switch stringField(part, "type") {
+					case "thinking":
+						if decoded, ok := decodeAgentReasoningPassback(stringField(part, "thinkingSignature")); ok {
+							passback, passbackText = decoded, stringField(part, "thinking")
+						}
 					case "text":
 						text += stringField(part, "text")
 					case "toolCall":
@@ -99,6 +105,9 @@ func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]
 							"id":       callID,
 							"function": map[string]interface{}{"name": stringField(part, "name"), "arguments": string(arguments)},
 						}
+						if signature := stringField(part, "thoughtSignature"); signature != "" {
+							call["thoughtSignature"] = signature
+						}
 						if itemID != "" {
 							call["item_id"] = itemID
 						}
@@ -115,6 +124,7 @@ func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]
 			if len(calls) > 0 {
 				converted["tool_calls"] = calls
 			}
+			canonicalAssistantReasoning(converted, passbackText, passback.Wire, passback.Blocks)
 			canonical.Messages = append(canonical.Messages, converted)
 		case "toolResult", "tool":
 			id, err := strictRuntimeStringAliases(message, "Pi 工具结果 call id", "toolCallId", "tool_call_id", "call_id")
@@ -296,6 +306,9 @@ func runtimeToolCalls(calls []cloudAgentCall) []map[string]any {
 		entry := map[string]any{"id": call.ID, "name": call.Function.Name, "arguments": arguments}
 		if call.ItemID != "" {
 			entry["item_id"] = call.ItemID
+		}
+		if call.ThoughtSignature != "" {
+			entry["thoughtSignature"] = call.ThoughtSignature
 		}
 		result = append(result, entry)
 	}

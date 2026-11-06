@@ -26,11 +26,13 @@ type EcommerceAgentModelRef struct {
 // prompts), kept flat for existing clients. Vision runs product recognition
 // and the four style directions; nil reuses planning.
 type EcommerceAgentSetting struct {
-	LogicalModelID string                  `json:"logicalModelId"`
-	ChannelModelID string                  `json:"channelModelId,omitempty"`
-	ChannelID      string                  `json:"channelId,omitempty"`
-	ModelKey       string                  `json:"modelKey,omitempty"`
-	Vision         *EcommerceAgentModelRef `json:"vision,omitempty"`
+	LogicalModelID      string                  `json:"logicalModelId"`
+	ChannelModelID      string                  `json:"channelModelId,omitempty"`
+	ChannelID           string                  `json:"channelId,omitempty"`
+	ModelKey            string                  `json:"modelKey,omitempty"`
+	Vision              *EcommerceAgentModelRef `json:"vision,omitempty"`
+	ThinkingLevel       string                  `json:"thinkingLevel,omitempty"`
+	VisionThinkingLevel string                  `json:"visionThinkingLevel,omitempty"`
 }
 
 func (setting EcommerceAgentSetting) planningRef() EcommerceAgentModelRef {
@@ -87,12 +89,17 @@ func (s *Service) EcommerceAgentSetting() (EcommerceAgentSetting, error) {
 	planning, ok := s.ecommerceStageModelRef(planningRole)
 	if !ok {
 		planning = legacy.planningRef()
+		planningRole.ThinkingLevel = ""
 	}
 	vision, ok := s.ecommerceStageModelRef(stages.Vision)
 	if !ok {
 		vision = legacy.visionRef()
+		stages.Vision.ThinkingLevel = ""
 	}
-	setting := EcommerceAgentSetting{LogicalModelID: planning.LogicalModelID, ChannelModelID: planning.ChannelModelID, ChannelID: planning.ChannelID, ModelKey: planning.ModelKey}
+	setting := EcommerceAgentSetting{
+		LogicalModelID: planning.LogicalModelID, ChannelModelID: planning.ChannelModelID, ChannelID: planning.ChannelID, ModelKey: planning.ModelKey,
+		ThinkingLevel: planningRole.ThinkingLevel, VisionThinkingLevel: stages.Vision.ThinkingLevel,
+	}
 	if vision != planning {
 		setting.Vision = &vision
 	}

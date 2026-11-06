@@ -23,9 +23,10 @@ type EcommerceOrchestrationModel struct {
 }
 
 type EcommerceOrchestrationRole struct {
-	Model    EcommerceOrchestrationModel `json:"model"`
-	Fallback EcommerceOrchestrationModel `json:"fallback"`
-	Reuse    string                      `json:"reuse,omitempty"`
+	Model         EcommerceOrchestrationModel `json:"model"`
+	Fallback      EcommerceOrchestrationModel `json:"fallback"`
+	Reuse         string                      `json:"reuse,omitempty"`
+	ThinkingLevel string                      `json:"thinkingLevel,omitempty"`
 }
 
 type EcommerceOrchestrationSetting struct {
@@ -89,6 +90,9 @@ func (s *Service) UpdateEcommerceOrchestrationSetting(actor *model.User, setting
 	}
 	for _, item := range roles {
 		role := item.role
+		if err := ValidateThinkingLevelRequest(role.ThinkingLevel); err != nil {
+			return EcommerceOrchestrationSetting{}, BadAuthRequest(item.name + "的思考等级无效")
+		}
 		if role.Reuse != "" {
 			if role.Reuse != item.reuse || !emptyOrchestrationModel(role.Model) || !emptyOrchestrationModel(role.Fallback) {
 				return EcommerceOrchestrationSetting{}, BadAuthRequest(item.name + "的复用配置无效")
