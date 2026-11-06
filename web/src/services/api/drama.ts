@@ -1,5 +1,6 @@
 import { compactApiParams, http } from "@/services/api/request";
 import type { Project } from "@/services/api/projects";
+import type { ThinkingRequest } from "@/lib/text-thinking";
 
 // 短剧自动制作：章节只承载小说原文，集是剧本、分镜与成片的基石。编排全部在服务端完成。
 
@@ -86,6 +87,8 @@ export type DramaDialogue = "dense" | "standard" | "sparse" | "custom";
 /** 用户技能库里的一个技能文件，作为文字步骤（资产提取、分镜拆分、视频提示词）的写作方法。 */
 export type DramaSkillRef = { skillId: string; skillName: string; path: string };
 
+export type DramaTextThinking = Partial<Record<"bible" | "plan" | "script" | "prompt", ThinkingRequest>>;
+
 export type DramaTransition = "cut" | "fadeblack" | "fadewhite";
 
 export type DramaSettings = {
@@ -107,6 +110,8 @@ export type DramaSettings = {
     mediaMode: DramaMediaMode;
     concurrency: number;
     models: DramaModels;
+    /** 各文字阶段独立的思考意图；缺省按对应模型默认值执行。 */
+    textThinking?: DramaTextThinking;
     /** 自动取参考图时每段最多发送的张数，0 为按视频模型上限；手动指定参考图的段只受模型上限约束。 */
     referenceLimit: number;
     /** 小说分集方式：chapter 每 chaptersPerEpisode 章一集，auto 由模型规划；空表示早期作品没有记录。分集完成后不能修改。 */
@@ -147,6 +152,8 @@ export type DramaProductionView = {
     /** 尚未结算订单的冻结额（冻结中）；预算按 spent + held 判断。 */
     heldMicrocredits: number;
     planDone: boolean;
+    /** 草稿保存了创建页表单，打开时回到创建页继续编辑。 */
+    hasDraftForm?: boolean;
     planCursor: number;
     sampleApproved: boolean;
     assetsReleased: boolean;
@@ -427,6 +434,8 @@ export type DramaListItem = {
     /** 尚未结算订单的冻结额，口径同 DramaProductionView.heldMicrocredits。 */
     heldMicrocredits: number;
     updatedAt: string;
+    /** 同 DramaProductionView.hasDraftForm。 */
+    hasDraftForm?: boolean;
 };
 
 export type DramaListPage = { items: DramaListItem[]; page: number; pageSize: number; total: number; hasMore: boolean; statusCounts: Partial<Record<DramaStatus | "all", number>> };
@@ -485,6 +494,23 @@ export type CreateDramaInput = {
     episodeMode: DramaEpisodeMode;
     /** 先加入制作的章节下标（从 0 起）；不传表示全部。其余章节保存为预留章节，之后可在制作台加入。 */
     selectedChapters?: number[];
+    /** start=false 时随草稿保存的创建页表单，回到创建页时原样回填。 */
+    draft?: DramaDraftForm;
+};
+
+/** 草稿回填所需的原始正文与画风 ID；章节按当前分集方式从原始正文重新拆分。 */
+export type DramaDraftForm = { sourceText: string; styleId?: string };
+
+export type DramaDraft = {
+    projectId: string;
+    name: string;
+    sourceFormat: DramaSourceFormat;
+    settings: DramaSettings;
+    budgetMicrocredits: number;
+    /** 加入制作的章节下标（从 0 起）。 */
+    selectedChapters: number[];
+    chapterCount: number;
+    form: DramaDraftForm;
 };
 
 const base = (projectId: string) => `/dramas/${encodeURIComponent(projectId)}`;
@@ -507,6 +533,15 @@ export function estimateDrama(input: { chapterCount: number; wordCount: number; 
 
 export function createDrama(input: CreateDramaInput) {
     return http.post<DramaSummary>("/dramas", input, { timeout: 120_000 });
+}
+
+export function getDramaDraft(projectId: string, signal?: AbortSignal) {
+    return http.get<DramaDraft>(`${base(projectId)}/draft`, { signal });
+}
+
+/** 整体替换从未开工的草稿；start=true 时替换后直接开工。 */
+export function saveDramaDraft(projectId: string, input: CreateDramaInput) {
+    return http.put<DramaSummary>(`${base(projectId)}/draft`, input, { timeout: 120_000 });
 }
 
 export function deleteDrama(projectId: string) {

@@ -25,6 +25,9 @@ func (s *Service) UpdateDramaSettings(userID string, projectID string, req Updat
 	if req.Settings != nil {
 		current := parseDramaSettings(productionRow.SettingsJSON)
 		next := req.Settings.normalized()
+		if err := next.TextThinking.validate(); err != nil {
+			return DramaSummary{}, err
+		}
 		if !production.ValidAspectRatio(next.AspectRatio) {
 			return DramaSummary{}, BadAuthRequest("不支持的画幅：" + next.AspectRatio)
 		}
@@ -121,7 +124,8 @@ func (s *Service) resumeDrama(productionRow *model.DramaProduction) error {
 		return BadAuthRequest("已达到预算上限（含画布精修花费），请先提高预算")
 	}
 	settings.Models = models
-	fields := map[string]any{"status": model.DramaStatusRunning, "pause_reason": "", "settings_json": encodeDramaSettings(settings)}
+	// 开工后草稿表单不再使用，清掉避免长期保存第二份原文。
+	fields := map[string]any{"status": model.DramaStatusRunning, "pause_reason": "", "settings_json": encodeDramaSettings(settings), "draft_json": ""}
 	if productionRow.Status == model.DramaStatusCompleted {
 		fields["stage"] = model.DramaStageProduce
 	}

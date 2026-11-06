@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { Check, Flame, Search, X } from "lucide-react";
+import { Check, Flame, Info, Search, X } from "lucide-react";
 
 import { DRAMA_STYLE_CATEGORIES, DRAMA_STYLES, filterDramaStyles, styleCoverBackground, type DramaStyleCategory } from "@/lib/drama/drama-styles";
+
+import { DramaStyleDetailModal } from "./style-detail-modal";
 
 type CategoryKey = "all" | "hot" | DramaStyleCategory;
 
@@ -11,6 +13,7 @@ export function DramaStylePicker({ value, onChange }: { value: string; onChange:
     const [query, setQuery] = useState("");
     const styles = useMemo(() => filterDramaStyles(query ? "all" : category, query), [category, query]);
     const selected = DRAMA_STYLES.find((style) => style.id === value);
+    const [detailId, setDetailId] = useState<string | null>(null);
     const counts = useMemo(() => Object.fromEntries(DRAMA_STYLE_CATEGORIES.map((item) => [item.key, filterDramaStyles(item.key, "").length])), []);
     return (
         <section className="drama-styles">
@@ -21,6 +24,9 @@ export function DramaStylePicker({ value, onChange }: { value: string; onChange:
                         {selected ? (
                             <>
                                 已选 <b>{selected.name}</b> · {selected.description}
+                                <button type="button" className="drama-styles-detail-link" onClick={() => setDetailId(selected.id)}>
+                                    查看详情
+                                </button>
                             </>
                         ) : (
                             "决定全剧角色、场景和镜头的统一画风"
@@ -60,33 +66,49 @@ export function DramaStylePicker({ value, onChange }: { value: string; onChange:
                 {styles.map((style) => {
                     const active = style.id === value;
                     return (
-                        <button key={style.id} type="button" role="radio" aria-checked={active} className="drama-style" onClick={() => onChange(style.id)} title={style.description}>
-                            <span className="drama-style-swatch" style={{ background: styleCoverBackground(style) }}>
-                                {!style.cover ? (
-                                    <span className="drama-style-glyph" aria-hidden>
-                                        {style.name.replace(/^3D\s*/, "").slice(0, 2)}
+                        <div key={style.id} className="drama-style" data-active={active || undefined}>
+                            <button type="button" role="radio" aria-checked={active} className="drama-style-pick" onClick={() => onChange(style.id)} title={style.description}>
+                                <span className="drama-style-swatch" style={{ background: styleCoverBackground(style) }}>
+                                    {!style.cover ? (
+                                        <span className="drama-style-glyph" aria-hidden>
+                                            {style.name.replace(/^3D\s*/, "").slice(0, 2)}
+                                        </span>
+                                    ) : null}
+                                    {style.hot ? (
+                                        <span className="drama-style-hot" title="爆款">
+                                            <Flame className="size-2.5" />
+                                        </span>
+                                    ) : null}
+                                    {active ? (
+                                        <span className="drama-style-check">
+                                            <Check className="size-3" />
+                                        </span>
+                                    ) : null}
+                                    <span className="drama-style-overlay">
+                                        <span className="drama-style-name">{style.name}</span>
+                                        <span className="drama-style-tags">{style.tags.join(" · ")}</span>
                                     </span>
-                                ) : null}
-                                {style.hot ? (
-                                    <span className="drama-style-hot" title="爆款">
-                                        <Flame className="size-2.5" />
-                                    </span>
-                                ) : null}
-                                {active ? (
-                                    <span className="drama-style-check">
-                                        <Check className="size-3" />
-                                    </span>
-                                ) : null}
-                                <span className="drama-style-overlay">
-                                    <span className="drama-style-name">{style.name}</span>
-                                    <span className="drama-style-tags">{style.tags.join(" · ")}</span>
                                 </span>
-                            </span>
-                        </button>
+                            </button>
+                            <button type="button" className="drama-style-info" aria-label={`查看“${style.name}”详情`} title="查看详情" onClick={() => setDetailId(style.id)}>
+                                <Info className="size-3" />
+                            </button>
+                        </div>
                     );
                 })}
                 {!styles.length ? <div className="col-span-full py-10 text-center text-[var(--fs-label)] text-foreground/45">没有找到“{query}”相关的风格</div> : null}
             </div>
+            <DramaStyleDetailModal
+                styleId={detailId}
+                selectedId={value}
+                onClose={() => setDetailId(null)}
+                onNavigate={setDetailId}
+                navigationIds={styles.map((style) => style.id)}
+                onUse={(id) => {
+                    onChange(id);
+                    setDetailId(null);
+                }}
+            />
         </section>
     );
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { App, Button, Dropdown } from "antd";
 import { ArrowLeft, Brush, CheckCheck, Clapperboard, FileDown, FileUp, Film, Inbox, Package, Pause, Pencil, Play, ScrollText, Settings2, UsersRound } from "lucide-react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { WorkspacePage } from "@/components/layout/workspace-page";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
@@ -297,6 +297,8 @@ export default function DramaStudioPage() {
         if (job.episodeId) navigate({ pathname: `/projects/${projectId}/e/${job.episodeId}`, search: "" });
     };
 
+    // 直接打开草稿的制作台地址时回到创建页，草稿参数都在那里编辑。
+    if (summary?.production.hasDraftForm) return <Navigate to={`/projects/new?draft=${encodeURIComponent(summary.project.id)}`} replace />;
     if (summaryQuery.isLoading)
         return (
             <WorkspacePage>

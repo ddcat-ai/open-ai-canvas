@@ -41,9 +41,46 @@ type DramaModels struct {
 // 分集规划沿用默认文本模型。
 const (
 	DramaStepBible  = "bible"
+	DramaStepPlan   = "plan"
 	DramaStepScript = "script"
 	DramaStepPrompt = "prompt"
 )
+
+type DramaTextThinking struct {
+	Bible  string `json:"bible,omitempty"`
+	Plan   string `json:"plan,omitempty"`
+	Script string `json:"script,omitempty"`
+	Prompt string `json:"prompt,omitempty"`
+}
+
+func (t DramaTextThinking) levelFor(step string) string {
+	var level string
+	switch step {
+	case DramaStepBible:
+		level = t.Bible
+	case DramaStepPlan:
+		level = t.Plan
+	case DramaStepScript:
+		level = t.Script
+	case DramaStepPrompt:
+		level = t.Prompt
+	}
+	if strings.TrimSpace(level) == "" {
+		return ThinkingIntentAuto
+	}
+	return strings.TrimSpace(level)
+}
+
+func (t DramaTextThinking) validate() error {
+	for step, level := range map[string]string{
+		DramaStepBible: t.Bible, DramaStepPlan: t.Plan, DramaStepScript: t.Script, DramaStepPrompt: t.Prompt,
+	} {
+		if err := ValidateThinkingLevelRequest(level); err != nil {
+			return BadAuthRequest("短剧" + step + "步骤的思考等级无效")
+		}
+	}
+	return nil
+}
 
 // textFor 是文字步骤实际使用的文本模型。
 func (m DramaModels) textFor(step string) DramaModelChoice {
@@ -132,12 +169,13 @@ type DramaSettings struct {
 	// PromptSkill 为空时按内置格式撰写段视频提示词。
 	PromptSkill *DramaSkillRef `json:"promptSkill,omitempty"`
 	// BibleSkill / ScriptSkill 是资产提取与分镜拆分的写作技能，为空按内置规则；输出结构始终由系统固定。
-	BibleSkill  *DramaSkillRef `json:"bibleSkill,omitempty"`
-	ScriptSkill *DramaSkillRef `json:"scriptSkill,omitempty"`
-	ReviewMode  string         `json:"reviewMode"`
-	MediaMode   string         `json:"mediaMode"`
-	Concurrency int            `json:"concurrency"`
-	Models      DramaModels    `json:"models"`
+	BibleSkill   *DramaSkillRef    `json:"bibleSkill,omitempty"`
+	ScriptSkill  *DramaSkillRef    `json:"scriptSkill,omitempty"`
+	ReviewMode   string            `json:"reviewMode"`
+	MediaMode    string            `json:"mediaMode"`
+	Concurrency  int               `json:"concurrency"`
+	Models       DramaModels       `json:"models"`
+	TextThinking DramaTextThinking `json:"textThinking,omitempty"`
 	// ReferenceLimit 是自动取参考图时每段最多随请求发送的张数，0 表示按视频模型上限；手动指定参考图的段只受模型上限约束。
 	ReferenceLimit int `json:"referenceLimit"`
 	// EpisodeMode 是小说的分集方式：chapter 按章节固定分组（每 ChaptersPerEpisode 章一集），auto 由文本模型规划。
@@ -260,6 +298,26 @@ type CreateDramaRequest struct {
 	// SelectedChapters 是先加入制作的章节下标（从 0 起，对应 Chapters）；为空表示全部章节。
 	// 没选中的章节原文照常保存为预留章节，不参与资产提取、分集与改编，之后可在制作台加入。
 	SelectedChapters []int `json:"selectedChapters"`
+	// Draft 是 start=false 时随草稿保存的创建页表单，回到创建页时原样回填；开工时不保存。
+	Draft *DramaDraftForm `json:"draft,omitempty"`
+}
+
+// DramaDraftForm 是创建页里设置之外、回填所需的表单内容：导入的原始正文（按当前分集方式重新拆章）和画风 ID。
+type DramaDraftForm struct {
+	SourceText string `json:"sourceText"`
+	StyleID    string `json:"styleId,omitempty"`
+}
+
+// DramaDraftView 是草稿回填创建页所需的全部内容；SelectedChapters 是加入制作的章节下标（从 0 起）。
+type DramaDraftView struct {
+	ProjectID          string         `json:"projectId"`
+	Name               string         `json:"name"`
+	SourceFormat       string         `json:"sourceFormat"`
+	Settings           DramaSettings  `json:"settings"`
+	BudgetMicrocredits int64          `json:"budgetMicrocredits"`
+	SelectedChapters   []int          `json:"selectedChapters"`
+	ChapterCount       int            `json:"chapterCount"`
+	Form               DramaDraftForm `json:"form"`
 }
 
 // ProduceDramaChaptersRequest 把预留的原著章节加入制作：按章节顺序每 ChaptersPerEpisode 章建成一集（不连续的章节不合并），
@@ -368,15 +426,17 @@ type DramaProductionView struct {
 	// SpentMicrocredits 是作品已实际扣费的总额：流水线任务加关联画布上的精修任务，按订单结算实收计（退回不计）。
 	// CanvasSpentMicrocredits 是其中画布精修的部分；HeldMicrocredits 是尚未结算订单的冻结额（冻结中）。
 	// 预算按 SpentMicrocredits + HeldMicrocredits 保守判断。
-	SpentMicrocredits       int64  `json:"spentMicrocredits"`
-	CanvasSpentMicrocredits int64  `json:"canvasSpentMicrocredits"`
-	HeldMicrocredits        int64  `json:"heldMicrocredits"`
-	PlanDone                bool   `json:"planDone"`
-	PlanCursor              int    `json:"planCursor"`
-	SampleApproved          bool   `json:"sampleApproved"`
-	AssetsReleased          bool   `json:"assetsReleased"`
-	Logline                 string `json:"logline"`
-	Tone                    string `json:"tone"`
+	SpentMicrocredits       int64 `json:"spentMicrocredits"`
+	CanvasSpentMicrocredits int64 `json:"canvasSpentMicrocredits"`
+	HeldMicrocredits        int64 `json:"heldMicrocredits"`
+	PlanDone                bool  `json:"planDone"`
+	PlanCursor              int   `json:"planCursor"`
+	// HasDraftForm 同 DramaListItem.HasDraftForm。
+	HasDraftForm   bool   `json:"hasDraftForm,omitempty"`
+	SampleApproved bool   `json:"sampleApproved"`
+	AssetsReleased bool   `json:"assetsReleased"`
+	Logline        string `json:"logline"`
+	Tone           string `json:"tone"`
 	// ChapterCount / WordCount 只统计已加入制作的章节；Reserved* 是导入时未选中、尚未加入制作的原著章节。
 	ChapterCount         int `json:"chapterCount"`
 	WordCount            int `json:"wordCount"`
@@ -681,6 +741,8 @@ type DramaListItem struct {
 	// HeldMicrocredits 是尚未结算订单的冻结额，口径同 DramaProductionView。
 	HeldMicrocredits int64  `json:"heldMicrocredits"`
 	UpdatedAt        string `json:"updatedAt"`
+	// HasDraftForm 表示草稿保存了创建页表单，打开时回到创建页继续编辑。
+	HasDraftForm bool `json:"hasDraftForm,omitempty"`
 }
 
 type DramaModelOption struct {

@@ -61,6 +61,58 @@ func (r *Repository) CreateDramaProject(project *model.Project, chapters []model
 	})
 }
 
+// ErrDramaDraftStarted 表示要重存的草稿已经开工（状态不是草稿或已有作业）。
+var ErrDramaDraftStarted = errors.New("drama draft started")
+
+// ReplaceDramaDraft 在同一事务内整体替换草稿：项目名称与画幅、原著章节、按章分集的集和制作控制面。
+// 只在作品仍是草稿且没有任何作业时替换；名称与同用户其他项目重复时返回 ErrProjectNameConflict。
+func (r *Repository) ReplaceDramaDraft(project *model.Project, chapters []model.ProjectUnit, production *model.DramaProduction, episodes []model.DramaEpisode) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var current model.DramaProduction
+		if err := tx.First(&current, "project_id = ? AND user_id = ?", project.ID, project.UserID).Error; err != nil {
+			return err
+		}
+		var jobs int64
+		if err := tx.Model(&model.DramaJob{}).Where("project_id = ?", project.ID).Count(&jobs).Error; err != nil {
+			return err
+		}
+		if current.Status != model.DramaStatusDraft || jobs > 0 {
+			return ErrDramaDraftStarted
+		}
+		var taken int64
+		if err := tx.Model(&model.Project{}).Where("user_id = ? AND name = ? AND id <> ?", project.UserID, project.Name, project.ID).Count(&taken).Error; err != nil {
+			return err
+		}
+		if taken > 0 {
+			return ErrProjectNameConflict
+		}
+		if err := tx.Model(&model.Project{}).Where("id = ? AND user_id = ?", project.ID, project.UserID).Updates(map[string]any{
+			"name": project.Name, "aspect_ratio": project.AspectRatio, "source_type": project.SourceType,
+			"revision": gorm.Expr("revision + 1"), "updated_at": project.UpdatedAt,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ? AND kind = ?", project.ID, model.ProjectUnitKindChapter).Delete(&model.ProjectUnit{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("project_id = ?", project.ID).Delete(&model.DramaEpisode{}).Error; err != nil {
+			return err
+		}
+		if len(chapters) > 0 {
+			if err := tx.CreateInBatches(&chapters, 200).Error; err != nil {
+				return err
+			}
+		}
+		if len(episodes) > 0 {
+			if err := tx.CreateInBatches(&episodes, 200).Error; err != nil {
+				return err
+			}
+		}
+		production.Revision = current.Revision + 1
+		return tx.Select("*").Where("project_id = ?", project.ID).Updates(production).Error
+	})
+}
+
 // DramaEpisodePlacement 指定新的一集插在哪一集之前或之后。
 type DramaEpisodePlacement struct {
 	AnchorEpisodeID string

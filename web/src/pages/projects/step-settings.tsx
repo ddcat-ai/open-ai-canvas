@@ -1,9 +1,10 @@
-import { Button } from "antd";
+import { Button, Select } from "antd";
 import { TriangleAlert } from "lucide-react";
 
 import { dramaChoiceKey, dramaVideoResolutionIssue } from "@/lib/drama/model-choice";
 import { formatVideoResolutionLabel, videoResolutionComparisonKey } from "@/lib/video-generation-options";
-import type { DramaAssetSettings, DramaCastKind, DramaModelChoice, DramaModelOption, DramaModelOverride, DramaModels, DramaSkillRef } from "@/services/api/drama";
+import type { DramaAssetSettings, DramaCastKind, DramaModelChoice, DramaModelOption, DramaModelOverride, DramaModels, DramaSkillRef, DramaTextThinking } from "@/services/api/drama";
+import { THINKING_REQUEST_OPTIONS, type ThinkingRequest } from "@/lib/text-thinking";
 
 import { DramaModelPicker, useDramaModelCatalog } from "./drama-model-picker";
 import { PromptSkillField, type DramaSkillStep } from "./prompt-skill";
@@ -24,6 +25,7 @@ const IMAGE_KINDS: Array<{ kind: DramaCastKind; override: DramaModelOverride; re
 ];
 
 export type DramaStepSkills = { bible?: DramaSkillRef; script?: DramaSkillRef; prompt?: DramaSkillRef };
+type DramaTextStep = keyof NonNullable<DramaTextThinking>;
 
 const SKILL_FIELD: Record<DramaSkillStep, keyof DramaStepSkills> = { bible: "bible", script: "script", prompt: "prompt" };
 
@@ -56,14 +58,36 @@ export function DramaTextSteps({
     onModelsChange,
     skills,
     onSkillChange,
+    textThinking,
+    onThinkingChange,
 }: {
     models?: Partial<DramaModels>;
     onModelsChange: (patch: Partial<DramaModels>) => void;
     skills: DramaStepSkills;
     onSkillChange: (step: DramaSkillStep, value?: DramaSkillRef) => void;
+    textThinking: DramaTextThinking;
+    onThinkingChange: (step: DramaTextStep, value: ThinkingRequest) => void;
 }) {
     return (
         <div className="drama-steps" role="list" aria-label="文字步骤">
+            <div className="drama-step-row" role="listitem">
+                <div className="drama-step-label">
+                    <strong>分集规划</strong>
+                    <small>小说自动分集时把章节组织为连续剧集</small>
+                </div>
+                <div className="drama-step-field">
+                    <span className="drama-step-caption">文本模型</span>
+                    <small className="drama-step-note">跟随制作模型{models?.text?.label ? ` · ${models.text.label}` : ""}</small>
+                </div>
+                <div className="drama-step-field">
+                    <span className="drama-step-caption">技能</span>
+                    <small className="drama-step-note">系统内置分集规则</small>
+                </div>
+                <div className="drama-step-field">
+                    <span className="drama-step-caption">思考等级</span>
+                    <Select aria-label="分集规划思考等级" value={textThinking.plan || "auto"} options={THINKING_REQUEST_OPTIONS} onChange={(value) => onThinkingChange("plan", value)} />
+                </div>
+            </div>
             {TEXT_STEPS.map((item) => (
                 <div key={item.step} className="drama-step-row" role="listitem">
                     <div className="drama-step-label">
@@ -77,6 +101,10 @@ export function DramaTextSteps({
                     <div className="drama-step-field">
                         <span className="drama-step-caption">技能</span>
                         <PromptSkillField compact step={item.step} value={skills[SKILL_FIELD[item.step]]} onChange={(value) => onSkillChange(item.step, value)} />
+                    </div>
+                    <div className="drama-step-field">
+                        <span className="drama-step-caption">思考等级</span>
+                        <Select aria-label={`${item.label}思考等级`} value={textThinking[item.step] || "auto"} options={THINKING_REQUEST_OPTIONS} onChange={(value) => onThinkingChange(item.step, value)} />
                     </div>
                 </div>
             ))}

@@ -1318,7 +1318,7 @@ func (r *dramaRun) submitSegmentPrompt(job *model.DramaJob) (*model.Task, bool, 
 			return nil, false, err
 		}
 		prompt := production.SegmentWriterPrompt(draft.input, production.SegmentVideoPrompt(draft.input), previous, skill)
-		task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepPrompt), "text", "text", prompt, r.textInput(job, production.SegmentWriterSystemPrompt()))
+		task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepPrompt), "text", "text", prompt, r.textInput(job, production.SegmentWriterSystemPrompt(), DramaStepPrompt))
 		return task, false, err
 	}
 	return nil, true, nil
@@ -1398,7 +1398,7 @@ func (r *dramaRun) condenseSegmentPrompt(job *model.DramaJob, payload dramaRevis
 	payload.Condensed++
 	encoded, _ := json.Marshal(payload)
 	job.PayloadJSON = string(encoded)
-	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepPrompt), "text", "text", production.SegmentCondensePrompt(prompt, payload.MaxChars), r.textInput(job, production.SegmentCondenseSystemPrompt()))
+	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepPrompt), "text", "text", production.SegmentCondensePrompt(prompt, payload.MaxChars), r.textInput(job, production.SegmentCondenseSystemPrompt(), DramaStepPrompt))
 	if err != nil {
 		job.PayloadJSON = previousPayload
 		if errors.Is(err, repository.ErrDramaJobChanged) {
@@ -1472,8 +1472,12 @@ func (r *dramaRun) castImageRatio(kind string) string {
 // textInput 让上游以流式返回：剧本与分镜这类长输出在非流式下要等全部写完才回第一个字节，
 // 中转站前的网关（如 Cloudflare 约 100 秒无响应）会先断开并报 524；流式边写边回，连接一直有数据。
 // 结果仍在流结束后整段写入任务结果，模型声明不支持流式时由执行层改走非流式。
-func (r *dramaRun) textInput(job *model.DramaJob, systemPrompt string) map[string]any {
-	return map[string]any{"config": map[string]any{"systemPrompt": systemPrompt}, "textOptions": map[string]any{"stream": true}, "metadata": r.metadata(job)}
+func (r *dramaRun) textInput(job *model.DramaJob, systemPrompt string, step string) map[string]any {
+	return map[string]any{
+		"config":      map[string]any{"systemPrompt": systemPrompt},
+		"textOptions": map[string]any{"stream": true, "thinkingLevel": r.settings.TextThinking.levelFor(step)},
+		"metadata":    r.metadata(job),
+	}
 }
 
 func (r *dramaRun) loadChapters(ids []string) ([]production.Chapter, error) {
@@ -1504,7 +1508,11 @@ func (r *dramaRun) submitBible(job *model.DramaJob) (*model.Task, bool, error) {
 		return nil, false, err
 	}
 	prompt := production.BiblePrompt(r.project.Name, r.settings.Settings, chapters, dramaBibleSampleRunes, skill)
-	input := map[string]any{"config": map[string]any{"systemPrompt": production.BibleSystemPrompt()}, "textOptions": map[string]any{"stream": true}, "metadata": map[string]any{"source": "drama_production", "domainProjectId": r.project.ID}}
+	input := map[string]any{
+		"config":      map[string]any{"systemPrompt": production.BibleSystemPrompt()},
+		"textOptions": map[string]any{"stream": true, "thinkingLevel": r.settings.TextThinking.levelFor(DramaStepBible)},
+		"metadata":    map[string]any{"source": "drama_production", "domainProjectId": r.project.ID},
+	}
 	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepBible), "text", "text", prompt, input)
 	return task, false, err
 }
@@ -1566,7 +1574,7 @@ func (r *dramaRun) submitPlan(job *model.DramaJob) (*model.Task, bool, error) {
 		previous = last.Cliffhanger
 	}
 	prompt := production.PlanPrompt(r.project.Name, r.settings.Settings, r.bibleSummary(), chapters[payload.Start:payload.End], next+1, previous)
-	task, err := r.createTask(job, "text", "text", prompt, r.textInput(job, production.PlanSystemPrompt()))
+	task, err := r.createTask(job, "text", "text", prompt, r.textInput(job, production.PlanSystemPrompt(), DramaStepPlan))
 	return task, false, err
 }
 
@@ -1597,7 +1605,7 @@ func (r *dramaRun) submitScript(job *model.DramaJob) (*model.Task, bool, error) 
 		CastSummary: r.castSummary("character", 30), PropSummary: r.castSummary("prop", 20), SceneSummary: r.castSummary("scene", 20), SourceChapters: chapters,
 		SourceFormat: episode.SourceFormat, Skill: skill,
 	})
-	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepScript), "text", "text", prompt, r.textInput(job, production.ScriptSystemPrompt()))
+	task, err := r.createTaskWith(job, r.settings.Models.textFor(DramaStepScript), "text", "text", prompt, r.textInput(job, production.ScriptSystemPrompt(), DramaStepScript))
 	return task, false, err
 }
 

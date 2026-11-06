@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { App, Button, Input, InputNumber, Select } from "antd";
+import { App, Button, Input, InputNumber, Popover, Select } from "antd";
+import { CachedResourceImage } from "@/components/cached-resource-image";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { AlertTriangle, ArrowLeft, Brush, Check, ChevronLeft, ChevronRight, Copy, Info, Loader2, Mic, Pencil, Play, Plus, RotateCcw, Trash2, X, PenLine } from "lucide-react";
 
@@ -776,16 +777,36 @@ function SegmentPrompt({ segment, castById, writing, onSave, onWrite }: { segmen
                         {segment.index > 0 ? <span className="drama-sdx-prefix-ref is-frame">首帧 · 上一段最后一帧（不占编号）</span> : null}
                         {request.references.map((ref, index) => {
                             const resourceId = ref.resourceId || castById.get(ref.castId)?.imageResourceId;
-                            return (
+                            const caption = ref.sent ? `${ref.label}：${ref.name}` : `${ref.label}（${ref.name}）未附图，按文字设定生成`;
+                            const chip = (
                                 <span
                                     key={ref.castId}
                                     className={`drama-sdx-prefix-ref ${ref.sent ? "" : "is-missing"} ${usage.used.has(index + 1) ? "" : "is-unused"}`}
-                                    title={ref.sent ? `${ref.label}：${ref.name}` : `${ref.label}（${ref.name}）未附图，按文字设定生成`}
+                                    title={resourceId ? undefined : caption}
+                                    tabIndex={resourceId ? 0 : undefined}
+                                    aria-label={caption}
                                 >
                                     <span className="drama-sdx-prefix-thumb">{resourceId ? <MediaThumb resourceId={resourceId} alt="" /> : null}</span>
                                     <b>{ref.label}</b>
                                     {ref.name}
                                 </span>
+                            );
+                            if (!resourceId) return chip;
+                            return (
+                                <Popover
+                                    key={ref.castId}
+                                    trigger={["hover", "focus"]}
+                                    mouseEnterDelay={0.2}
+                                    placement="bottom"
+                                    content={
+                                        <figure className="drama-sdx-prefix-preview">
+                                            <CachedResourceImage storageKey={`resource:${resourceId}`} alt={caption} eager draggable={false} />
+                                            <figcaption>{caption}</figcaption>
+                                        </figure>
+                                    }
+                                >
+                                    {chip}
+                                </Popover>
                             );
                         })}
                     </div>
