@@ -225,7 +225,7 @@ func normalizeJSONForCompare(t *testing.T, value interface{}) interface{} {
 	return decoded
 }
 
-// 未声明思考能力的模型沿用接入分档前的开关语义：开 = medium，关或默认 = 不发参数。
+// 未声明思考能力时开 = medium；关闭时 Claude 显式 disabled，其他协议不发参数。
 func TestApplyTextThinkingLegacyFallback(t *testing.T) {
 	on := canvasGenerationInput{TextOptions: canvasTextOptions{ThinkingLevel: "high"}}
 	body := map[string]interface{}{}
@@ -243,8 +243,19 @@ func TestApplyTextThinkingLegacyFallback(t *testing.T) {
 	body = map[string]interface{}{"max_tokens": 4096}
 	applyTextThinking(body, on, protocolcontract.TextWireClaude)
 	thinking, _ := body["thinking"].(map[string]interface{})
-	if thinking["budget_tokens"] != 1024 {
+	if thinking["type"] != "enabled" || thinking["budget_tokens"] != 1024 {
 		t.Fatalf("legacy claude thinking = %#v", body)
+	}
+	for _, level := range []string{"", "auto", "off"} {
+		body = map[string]interface{}{"max_tokens": 4096}
+		input := canvasGenerationInput{TextOptions: canvasTextOptions{ThinkingLevel: level}}
+		if applyTextThinking(body, input, protocolcontract.TextWireClaude) {
+			t.Fatalf("legacy claude %q must disable thinking", level)
+		}
+		want := map[string]interface{}{"max_tokens": 4096, "thinking": map[string]interface{}{"type": "disabled"}}
+		if !reflect.DeepEqual(body, want) {
+			t.Fatalf("legacy claude %q = %#v, want %#v", level, body, want)
+		}
 	}
 }
 

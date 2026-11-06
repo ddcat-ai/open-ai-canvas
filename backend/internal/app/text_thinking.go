@@ -400,8 +400,9 @@ func cloneStringMap(values map[string]string) map[string]string {
 	return result
 }
 
-// legacyTextThinkingConfig 是模型未声明思考能力时的行为：沿用接入分档之前的开关语义
-// （开 = medium，关 = 不发参数）。Gemini 和插件自定义接口没有通用写法，视为不支持。
+// legacyTextThinkingConfig 是模型未声明思考能力时的行为：开 = medium，默认关闭。
+// Claude 网关可能默认开启思考，关闭时显式发送 disabled；其他协议省略参数。
+// Gemini 和插件自定义接口没有通用写法，视为不支持。
 func legacyTextThinkingConfig(wire string) *TextThinkingConfig {
 	switch wire {
 	case protocolcontract.TextWireChatCompletion, protocolcontract.TextWireResponses:
@@ -409,7 +410,7 @@ func legacyTextThinkingConfig(wire string) *TextThinkingConfig {
 			Switch: ThinkingSwitchConfig{Kind: ThinkingSwitchOmit}, Intensity: ThinkingIntensityConfig{Kind: ThinkingIntensityEffort}}
 	case protocolcontract.TextWireClaude:
 		return &TextThinkingConfig{Mode: ThinkingModeToggle, Levels: []string{"off", "medium"}, Default: "off",
-			Switch: ThinkingSwitchConfig{Kind: ThinkingSwitchOmit}, Intensity: ThinkingIntensityConfig{Kind: ThinkingIntensityBudget, Budgets: map[string]int{"medium": thinkingBudgetFloor}}}
+			Switch: ThinkingSwitchConfig{Kind: ThinkingSwitchThinkingType}, Intensity: ThinkingIntensityConfig{Kind: ThinkingIntensityBudget, Budgets: map[string]int{"medium": thinkingBudgetFloor}}}
 	default:
 		return &TextThinkingConfig{Mode: ThinkingModeNone}
 	}

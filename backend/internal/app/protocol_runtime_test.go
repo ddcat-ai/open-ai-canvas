@@ -888,10 +888,8 @@ func testPluginPackage(t *testing.T, manifest []byte) []byte {
 	return buffer.Bytes()
 }
 
-// DeepSeek 等 V4 系 Anthropic 网关对 /messages 默认开启思考（GitHub 社区案例：
-// NousResearch/hermes-agent#15700），省略 thinking 字段时输出预算会被思考占满、
-// 正文为空。客户端未要求思考时，宿主必须显式下发 thinking: disabled。
-func TestDeclarativeClaudeWireSendsThinkingDisabledWhenNotRequested(t *testing.T) {
+// 未声明能力时显式关闭网关默认思考；已声明能力时遵循模型的档位和默认值。
+func TestDeclarativeClaudeWireThinkingCapabilities(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	var gotBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -919,20 +917,70 @@ func TestDeclarativeClaudeWireSendsThinkingDisabledWhenNotRequested(t *testing.T
 	if !ok {
 		t.Fatal("declarative adapter is unavailable")
 	}
-	input := canvasGenerationInput{Mode: "text", Prompt: "describe", Config: config, StreamText: true}
-	result, err := runProtocolAdapterTaskWithPolicy(ctx, input, adapter, fastVideoPollPolicy())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result["text"] != "正文" {
-		t.Fatalf("text result = %#v", result)
-	}
-	var body map[string]interface{}
-	if err := json.Unmarshal(gotBody, &body); err != nil {
-		t.Fatal(err)
-	}
-	thinking, _ := body["thinking"].(map[string]interface{})
-	if thinking["type"] != "disabled" {
-		t.Fatalf("request thinking = %#v, want explicit disabled (upstream defaults to thinking-on)", body["thinking"])
+	adaptive := mustThinkingPreset(t, "claude-adaptive", protocol.TextWireClaude)
+	adaptiveDefault := *adaptive
+	adaptiveDefault.Default = ThinkingLevelHigh
+	toggle := mustThinkingPreset(t, "thinking-type-toggle", protocol.TextWireClaude)
+	for _, tt := range []struct {
+		name         string
+		capability   *TextThinkingConfig
+		level        string
+		thinkingType string
+		effort       string
+		budget       int
+	}{
+		{name: "legacy default", thinkingType: "disabled"},
+		{name: "legacy auto", level: "auto", thinkingType: "disabled"},
+		{name: "legacy explicit off", level: "off", thinkingType: "disabled"},
+		{name: "legacy on retains budget", level: "high", thinkingType: "enabled", budget: 1024},
+		{name: "adaptive auto without default", capability: adaptive, level: "auto"},
+		{name: "adaptive auto uses model default", capability: &adaptiveDefault, level: "auto", thinkingType: "adaptive", effort: "high"},
+		{name: "adaptive high", capability: adaptive, level: "high", thinkingType: "adaptive", effort: "high"},
+		{name: "adaptive max", capability: adaptive, level: "max", thinkingType: "adaptive", effort: "max"},
+		{name: "adaptive off normalizes to lowest", capability: adaptive, level: "off", thinkingType: "adaptive", effort: "low"},
+		{name: "toggle auto without default", capability: toggle, level: "auto"},
+		{name: "toggle explicit off", capability: toggle, level: "off", thinkingType: "disabled"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			input := canvasGenerationInput{Mode: "text", Prompt: "describe", Config: config, StreamText: true,
+				TextOptions: canvasTextOptions{ThinkingLevel: tt.level}}
+			if tt.capability != nil {
+				input.Config.CapabilityConfig = &ModelCapabilityConfig{Text: &TextCapabilityConfig{Thinking: tt.capability}}
+			}
+			gotBody = nil
+			result, err := runProtocolAdapterTaskWithPolicy(ctx, input, adapter, fastVideoPollPolicy())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result["text"] != "正文" {
+				t.Fatalf("text result = %#v", result)
+			}
+			var body map[string]interface{}
+			if err := json.Unmarshal(gotBody, &body); err != nil {
+				t.Fatal(err)
+			}
+			thinking, _ := body["thinking"].(map[string]interface{})
+			if tt.thinkingType == "" {
+				if _, exists := body["thinking"]; exists {
+					t.Fatalf("model default must omit thinking: %#v", body)
+				}
+			} else if thinking["type"] != tt.thinkingType {
+				t.Fatalf("request thinking = %#v, want type %q", body["thinking"], tt.thinkingType)
+			}
+			if tt.budget == 0 {
+				if _, exists := thinking["budget_tokens"]; exists {
+					t.Fatalf("unexpected thinking budget: %#v", thinking)
+				}
+			} else if intFromAny(thinking["budget_tokens"]) != tt.budget {
+				t.Fatalf("request thinking budget = %#v, want %d", thinking["budget_tokens"], tt.budget)
+			}
+			if tt.effort == "" {
+				if _, exists := body["output_config"]; exists {
+					t.Fatalf("unexpected output_config: %#v", body["output_config"])
+				}
+			} else if output, _ := body["output_config"].(map[string]interface{}); output["effort"] != tt.effort {
+				t.Fatalf("request output_config = %#v, want effort %q", output, tt.effort)
+			}
+		})
 	}
 }
