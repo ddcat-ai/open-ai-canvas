@@ -31,6 +31,20 @@ export function markCanvasTaskRecoveryUnconfirmed(node: CanvasNodeData, expected
     return { ...node, metadata: { ...node.metadata, errorDetails: detail } };
 }
 
+/** 只有完整任务查询确认未提交的素材准备节点，才能解除刷新后遗留的提交锁。 */
+export function recoverCanvasPreparationWithoutTask(node: CanvasNodeData, expectedCreatedAt: string | undefined, taskDiscoveryComplete: boolean): CanvasNodeData {
+    const metadata = node.metadata;
+    if (!taskDiscoveryComplete || !expectedCreatedAt || metadata?.taskCreatedAt !== expectedCreatedAt || metadata.status !== "loading" || metadata.taskStage !== "正在准备参考素材") return node;
+    if (metadata.taskId || metadata.taskClientOperationId || metadata.agentGenerationContinuation?.taskId || metadata.isBatchRoot || metadata.content) return node;
+    return {
+        ...node,
+        metadata: {
+            ...resetGenerationTaskMetadata(metadata, "error"),
+            errorDetails: "任务准备已中断，未找到已提交的生成任务；请检查模型和参考素材后重新生成。",
+        },
+    };
+}
+
 // 失败节点再次提交前必须移除旧任务绑定，否则批次调度会把它误判为仍在处理。
 export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undefined, status: CanvasNodeMetadata["status"] = "idle"): CanvasNodeMetadata {
     const next = {
