@@ -480,6 +480,9 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.duration = { selection: "enum", values: [4, 6, 8], default: 6 };
         video.resolutions = ["720p", "1080p"];
     }
+    if (protocol === "dashscope-wan3-video") {
+        video.generateAudio = { supported: true, default: true };
+    }
     if (protocol === "volcengine-ark-video" || protocol === "volcengine-ark-agent-plan-video" || protocol === "newapi-channel-1" || protocol === "newapi-channel-2") {
         video.references.maxVideos = 3;
         video.references.maxAudios = 3;
