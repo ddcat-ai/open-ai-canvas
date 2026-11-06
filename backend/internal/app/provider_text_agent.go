@@ -258,19 +258,30 @@ func claudeAgentBody(request map[string]interface{}) map[string]interface{} {
 	if messages, ok := request["messages"].([]interface{}); ok {
 		claudeMessages := make([]interface{}, 0, len(messages))
 		var system []string
-		for _, value := range messages {
-			message, _ := value.(map[string]interface{})
+		for index := 0; index < len(messages); {
+			message, _ := messages[index].(map[string]interface{})
 			role := strings.ToLower(strings.TrimSpace(stringField(message, "role")))
+			if role == "tool" {
+				// Claude expects every result from one tool-use turn in the next user message.
+				results := make([]interface{}, 0)
+				for index < len(messages) {
+					result, _ := messages[index].(map[string]interface{})
+					if !strings.EqualFold(strings.TrimSpace(stringField(result, "role")), "tool") {
+						break
+					}
+					results = append(results, map[string]interface{}{
+						"type": "tool_result", "tool_use_id": stringField(result, "tool_call_id"), "content": fmt.Sprint(result["content"]),
+					})
+					index++
+				}
+				claudeMessages = append(claudeMessages, map[string]interface{}{"role": "user", "content": results})
+				continue
+			}
+			index++
 			if role == "system" {
 				if content := strings.TrimSpace(fmt.Sprint(message["content"])); content != "" {
 					system = append(system, content)
 				}
-				continue
-			}
-			if role == "tool" {
-				claudeMessages = append(claudeMessages, map[string]interface{}{"role": "user", "content": []interface{}{map[string]interface{}{
-					"type": "tool_result", "tool_use_id": stringField(message, "tool_call_id"), "content": fmt.Sprint(message["content"]),
-				}}})
 				continue
 			}
 			role = mapClaudeMessageRole(role)
