@@ -317,6 +317,13 @@ func parseSkillPackageMetadata(data []byte) skillPackageMetadata {
 				continue
 			}
 			key = strings.TrimSpace(key)
+			// description 常用 YAML 块标量（| / >）写多行，逐行 Cut 只会取到标记字符本身：
+			// 值非空于是不再走正文兜底，简介最终变成一个 "|" 或 ">"。
+			if indent == 0 && key == "description" && isYAMLBlockMarker(value) {
+				metadata.Description, index = readYAMLBlockScalar(lines, index)
+				index--
+				continue
+			}
 			value = yamlScalar(value)
 			switch {
 			case indent == 0 && key == "name":
@@ -378,6 +385,57 @@ func truncateSkillMetadata(value string, limit int) string {
 		return string(runes[:limit])
 	}
 	return string(runes[:limit-3]) + "..."
+}
+
+// isYAMLBlockMarker 判断标量值是否为 YAML 块标量标记：| 或 >，可带 +/- 与缩进指示数字。
+func isYAMLBlockMarker(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || (value[0] != '|' && value[0] != '>') {
+		return false
+	}
+	for _, r := range value[1:] {
+		switch r {
+		case ' ', '\t', '-', '+', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// readYAMLBlockScalar 收集块标量正文，返回压成单行的文本与块结束后的行下标。
+// 简介是单行字段，所以 | 与 > 都折叠成空格分隔的一段。
+func readYAMLBlockScalar(lines []string, start int) (string, int) {
+	body := make([]string, 0, 8)
+	baseIndent := -1
+	resume := len(lines)
+	for index := start + 1; index < len(lines); index++ {
+		line := lines[index]
+		if strings.TrimSpace(line) == "---" {
+			resume = index
+			break
+		}
+		if strings.TrimSpace(line) == "" {
+			body = append(body, "")
+			continue
+		}
+		indent := len(line) - len(strings.TrimLeft(line, " \t"))
+		if baseIndent < 0 {
+			baseIndent = indent
+		}
+		if indent < baseIndent {
+			resume = index
+			break
+		}
+		body = append(body, strings.TrimSpace(line[baseIndent:]))
+	}
+	for len(body) > 0 && body[len(body)-1] == "" {
+		body = body[:len(body)-1]
+	}
+	for len(body) > 0 && body[0] == "" {
+		body = body[1:]
+	}
+	return strings.Join(body, " "), resume
 }
 
 func yamlScalar(value string) string {
