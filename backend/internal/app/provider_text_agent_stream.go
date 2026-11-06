@@ -65,6 +65,7 @@ type streamingAgentParser struct {
 	toolCalls     map[int]*streamingAgentToolCall
 	toolCallByID  map[string]int
 	completed     map[string]interface{}
+	terminal      bool
 	err           error
 	emit          func(string)
 	emitReasoning func(string)
@@ -116,7 +117,11 @@ func (p *streamingAgentParser) consumeFrame(frame string) {
 		}
 	}
 	raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
-	if raw == "" || raw == "[DONE]" {
+	if raw == "" {
+		return
+	}
+	if raw == "[DONE]" {
+		p.terminal = true
 		return
 	}
 	var payload map[string]interface{}
@@ -146,7 +151,15 @@ func (p *streamingAgentParser) consumeResponsesEvent(eventName string, payload m
 	case "response.reasoning.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta":
 		p.appendReasoning(stringField(payload, "delta"))
 	case "response.completed":
+		p.terminal = true
 		p.completed, _ = payload["response"].(map[string]interface{})
+	case "response.incomplete":
+		p.terminal = true
+	case "response.failed":
+		p.terminal = true
+		response, _ := payload["response"].(map[string]interface{})
+		errorValue, _ := response["error"].(map[string]interface{})
+		p.err = errors.New(defaultString(stringField(errorValue, "message"), "Responses 上游返回失败"))
 	case "response.output_item.added":
 		item, _ := payload["item"].(map[string]interface{})
 		if stringField(item, "type") == "function_call" {
@@ -176,6 +189,9 @@ func (p *streamingAgentParser) consumeChatCompletionEvent(payload map[string]int
 	choices, _ := payload["choices"].([]interface{})
 	for _, value := range choices {
 		choice, _ := value.(map[string]interface{})
+		if stringField(choice, "finish_reason") != "" {
+			p.terminal = true
+		}
 		delta, _ := choice["delta"].(map[string]interface{})
 		p.appendText(streamContentText(delta["content"]))
 		p.appendReasoning(firstRawString(stringField(delta, "reasoning_content"), stringField(delta, "reasoning"), stringField(delta, "reasoning_text")))
@@ -227,6 +243,13 @@ func (p *streamingAgentParser) consumeClaudeEvent(payload map[string]interface{}
 		if stringField(delta, "type") == "input_json_delta" {
 			p.toolCall(index).arguments += stringField(delta, "partial_json")
 		}
+	case "message_delta":
+		delta, _ := payload["delta"].(map[string]interface{})
+		if stringField(delta, "stop_reason") != "" {
+			p.terminal = true
+		}
+	case "message_stop":
+		p.terminal = true
 	case "error":
 		errValue, _ := payload["error"].(map[string]interface{})
 		p.err = errors.New(defaultString(stringField(errValue, "message"), "Claude 上游返回失败"))
@@ -281,6 +304,9 @@ func (p *streamingAgentParser) setToolCall(index int, id string, itemID string, 
 func (p *streamingAgentParser) result() (map[string]interface{}, error) {
 	if p.err != nil {
 		return nil, p.err
+	}
+	if !p.terminal {
+		return nil, errors.New("上游流式响应提前中断：未收到结束标记")
 	}
 	if p.completed != nil {
 		result, err := parseAgentToolPayload(p.completed, p.protocol)
