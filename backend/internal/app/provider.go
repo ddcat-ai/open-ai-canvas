@@ -133,6 +133,46 @@ type imageResponse struct {
 	Msg   string                   `json:"msg"`
 }
 
+// declaredPromptMaxChars 按生成 mode 从模型协议能力声明里取 prompt 字符上限：
+// image / video 各自的能力配置都有 references.promptMaxChars，0 或能力缺失表示
+// 未声明上限，不做收敛。
+func declaredPromptMaxChars(mode string, cfg *ModelCapabilityConfig) int {
+	if cfg == nil {
+		return 0
+	}
+	switch mode {
+	case "image":
+		if cfg.Image != nil {
+			return max(cfg.Image.References.PromptMaxChars, 0)
+		}
+	case "video":
+		if cfg.Video != nil {
+			return max(cfg.Video.References.PromptMaxChars, 0)
+		}
+	}
+	return 0
+}
+
+// clipPromptToLimit 把超长 prompt 按 rune 收敛到 max，保留头部主体描述与尾部
+// 规则块，中段叙事让位。任何按模型声明的 promptMaxChars 收敛 prompt 的路径
+// （宿主组报文收口、电商工作台校验）共用这一个实现，避免按业务模块各写一份。
+func clipPromptToLimit(text string, max int) string {
+	runes := []rune(text)
+	if len(runes) <= max {
+		return text
+	}
+	if max <= 20 {
+		return string(runes[:max])
+	}
+	// Keep the first ~55% and the last ~35%, join with an ellipsis.
+	head := int(float64(max) * 0.55)
+	tail := max - head - 3
+	if tail < 0 {
+		tail = 0
+	}
+	return string(runes[:head]) + " … " + string(runes[len(runes)-tail:])
+}
+
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
 	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
 	var input canvasGenerationInput
@@ -169,6 +209,14 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		return nil, err
 	}
 	input.Config = config
+	// 生图/生视频 prompt 长度在宿主侧按所选模型声明的 promptMaxChars 统一收敛：
+	// 声明式插件（genstudio-local → POST /openapi/v1/images|videos）和内置
+	// /images/*、/videos/* 组报文都直传 request.prompt，超长 prompt 会原样发到
+	// 上游被判 PROMPT_TOO_LONG。此处是组报文唯一收口，一处收敛覆盖全部生成协议
+	// 路径；上限来自协议能力声明，对任何渠道通用。
+	if maxChars := declaredPromptMaxChars(input.Mode, input.Config.CapabilityConfig); maxChars > 0 {
+		input.Prompt = clipPromptToLimit(input.Prompt, maxChars)
+	}
 	if input.Mode == "text" && input.Config.CapabilityConfig != nil && input.Config.CapabilityConfig.Text != nil {
 		// The same capability contract drives provider output limits, billing
 		// estimates and Agent context budgeting. Never silently fall back to a
@@ -442,6 +490,10 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	if err != nil {
 		return providerConfig{}, err
 	}
+	// 解析出的模型能力（含 image/video 的 references.promptMaxChars）挂到 config 上，
+	// processCanvasGenerationTask 据此按模型声明的上限收敛 prompt。此前只用于
+	// 媒体传输，CapabilityConfig 一直为 nil，收敛取不到上限。
+	config.CapabilityConfig = modelCapability
 	var modelTransport *ReferenceMediaTransport
 	if modelCapability != nil {
 		modelTransport = modelCapability.MediaTransport
