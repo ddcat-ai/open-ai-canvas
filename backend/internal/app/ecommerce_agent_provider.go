@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"yingce/backend/internal/ecommerceagent"
+	"yingce/backend/internal/protocol"
 )
 
 type ecommerceProviderConfig struct {
@@ -258,10 +259,11 @@ func (s *Service) ecommerceChatJSON(ctx context.Context, cfg ecommerceProviderCo
 		return ecommerceParseJSON(content, out)
 	}
 	var content any = prompt
-	// Anthropic-compatible endpoints (e.g. DeepSeek /anthropic) reject OpenAI
-	// image_url content blocks with HTTP 422; they require type=image with a
-	// base64 or url source. Detect the wire format from the base URL path.
-	isAnthropic := strings.Contains(strings.ToLower(cfg.TextBaseURL), "/anthropic")
+	// Anthropic-compatible endpoints reject OpenAI image_url content blocks with
+	// HTTP 422; they require type=image with a base64 or url source. Detect the
+	// wire format from the base URL (native api.anthropic.com or an /anthropic
+	// gateway prefix), matching the community convention for Anthropic gateways.
+	isAnthropic := protocol.AnthropicWireForBaseURL(cfg.TextBaseURL)
 	if len(images) > 0 {
 		parts := []any{map[string]any{"type": "text", "text": prompt}}
 		for _, u := range images {

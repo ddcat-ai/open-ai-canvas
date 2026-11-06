@@ -69,3 +69,40 @@ func TestManifestRequestOpenAIWireImageBlocks(t *testing.T) {
 		t.Fatalf("openai wire image block type = %v, want image_url", image["type"])
 	}
 }
+
+func TestAnthropicWireForBaseURL(t *testing.T) {
+	cases := map[string]bool{
+		"https://api.anthropic.com":                true,
+		"https://api.deepseek.com/anthropic":       true,
+		"https://gateway.example.com/anthropic/v1": true,
+		"https://gateway.example.com/claude":       true,
+		"https://api.openai.com/v1":                false,
+		"https://api.deepseek.com/v1":              false,
+		"https://openai.example.com/openai":        false,
+		"":                                         false,
+	}
+	for url, want := range cases {
+		if got := AnthropicWireForBaseURL(url); got != want {
+			t.Errorf("AnthropicWireForBaseURL(%q) = %v, want %v", url, got, want)
+		}
+	}
+}
+
+// 接口 id 缺失但 BaseURL/端点形态是 Anthropic 时，也组 image 块（渠道 api_format 标错的兼容）。
+func TestManifestRequestClaudeWireByBaseURLFallback(t *testing.T) {
+	request := GenerationRequest{
+		Capability: CapabilityText,
+		Model:      "some-model",
+		Prompt:     "describe",
+		BaseURL:    "https://api.deepseek.com/anthropic",
+		Images:     []MediaReference{{DataURL: "data:image/png;base64,QUJD", Kind: "image"}},
+	}
+	values := manifestRequestValues(request)
+	messages, _ := values["messages"].([]any)
+	last, _ := messages[len(messages)-1].(map[string]any)
+	content, _ := last["content"].([]any)
+	image, _ := content[1].(map[string]any)
+	if image["type"] != "image" {
+		t.Fatalf("fallback claude wire image block type = %v, want image", image["type"])
+	}
+}

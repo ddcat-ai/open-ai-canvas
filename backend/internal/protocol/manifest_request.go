@@ -230,8 +230,14 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 		userContent = append(userContent, map[string]any{"type": "text", "text": request.Prompt})
 	}
 	// Anthropic Messages 等协议拒绝 OpenAI image_url 内容块（HTTP 422 unknown variant）；
-	// 参考图必须组 type=image + source(base64|url) 块。按宿主解析的协议接口判断线格式。
+	// 参考图必须组 type=image + source(base64|url) 块。按宿主解析的协议接口判断线格式；
+	// 接口 id 缺失或不可信（如渠道 api_format 标成 openai 但实际打 /messages）时，
+	// 退回按端点 + BaseURL 形态识别，覆盖社区里 Anthropic 兼容网关的多种写法。
 	isClaudeWire := request.InterfaceType == TextWireClaude
+	if !isClaudeWire && request.Capability == CapabilityText {
+		isClaudeWire = TextWireForPath(request.LinePath) == TextWireClaude ||
+			AnthropicWireForBaseURL(request.BaseURL)
+	}
 	for _, img := range request.Images {
 		val := defaultValue(img.URL, img.DataURL)
 		if val == "" {
