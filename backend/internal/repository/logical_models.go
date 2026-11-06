@@ -378,6 +378,12 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 			updates["cached_token_price_microcredits"] = replacement.CachedTokenPriceMicrocredits
 			updates["cache_write_token_price_microcredits"] = replacement.CacheWriteTokenPriceMicrocredits
 			updates["token_price_rules_json"] = replacement.TokenPriceRulesJSON
+			// 结算按这些快照判断：公式用量、参考视频是否计费与计入的毫秒数必须跟着新线路的单价一起换，
+			// 否则新单价会配上旧线路的参考视频口径（如带参考视频单价却不计参考视频秒数）。
+			updates["video_formula_tokens"] = replacement.VideoFormulaTokens
+			updates["reference_video_count"] = replacement.ReferenceVideoCount
+			updates["reference_video_millis"] = replacement.ReferenceVideoMillis
+			updates["reference_video_billed"] = replacement.ReferenceVideoBilled
 		}
 		billingUpdated := tx.Model(&model.BillingOrder{}).
 			Where("id = ? AND task_id = ? AND status IN ?", billingOrderID, taskID, []model.BillingStatus{model.BillingStatusReserved, model.BillingStatusRunning}).

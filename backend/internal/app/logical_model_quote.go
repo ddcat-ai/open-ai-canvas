@@ -95,7 +95,8 @@ type QuoteReferenceVideo struct {
 
 func quoteReferenceVideo(order *model.BillingOrder, estimate tokenBillingEstimate) *QuoteReferenceVideo {
 	references := estimate.ReferenceVideos
-	if order.Capability != "video" || references.Count == 0 {
+	// 按次计费与时长无关，没有“生成 N 秒 + 参考视频 M 秒”的构成可写。
+	if order.Capability != "video" || references.Count == 0 || (order.BillingMode != "per_second" && order.BillingMode != "token") {
 		return nil
 	}
 	detail := &QuoteReferenceVideo{Count: references.Count, Billed: order.ReferenceVideoBilled, ReferenceSeconds: float64(order.ReferenceVideoMillis) / 1000}

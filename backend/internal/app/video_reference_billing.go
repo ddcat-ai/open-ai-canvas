@@ -25,6 +25,13 @@ type referenceVideoUsage struct {
 }
 
 func referenceVideoUsageFromInput(input map[string]any) referenceVideoUsage {
+	// 视频处理（画质增强等）的源视频放在 referenceVideos 里，但它是处理对象、不是参考素材：
+	// 按秒价格本就按源时长计，再计一次参考视频秒数就重复收费。标记由服务端 admission 写入。
+	if metadata, _ := input["metadata"].(map[string]any); metadata != nil {
+		if processing, _ := metadata[videoProcessingMetadataKey].(bool); processing {
+			return referenceVideoUsage{}
+		}
+	}
 	references, _ := input["referenceVideos"].([]any)
 	usage := referenceVideoUsage{Count: len(references), RecordedKnown: len(references) > 0}
 	for _, raw := range references {

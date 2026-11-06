@@ -264,3 +264,52 @@ func TestValidateReferenceVideoTierPricesRequiresReferenceCost(t *testing.T) {
 		t.Fatalf("unconfigured cost must not require reference cost: %v", err)
 	}
 }
+
+// 视频处理的源视频在 referenceVideos 里，但不是参考素材：开关开启也不能按参考视频再计一次秒数。
+func TestVideoProcessingSourceIsNotReferenceVideo(t *testing.T) {
+	input := map[string]any{
+		"referenceVideos": []any{map[string]any{"storageKey": "resource:source", "durationMs": 8_000}},
+		"metadata":        map[string]any{videoProcessingMetadataKey: true},
+	}
+	if usage := referenceVideoUsageFromInput(input); usage.Count != 0 || usage.RecordedMillis != 0 {
+		t.Fatalf("processing source counted as reference video: %#v", usage)
+	}
+	delete(input, "metadata")
+	if usage := referenceVideoUsageFromInput(input); usage.Count != 1 || usage.RecordedMillis != 8_000 || !usage.RecordedKnown {
+		t.Fatalf("generation reference video = %#v", usage)
+	}
+}
+
+// 按次计费与时长无关：报价不返回“生成 N 秒 + 参考视频 M 秒”的构成。
+func TestFixedRequestQuoteHasNoReferenceBreakdown(t *testing.T) {
+	order := &model.BillingOrder{Capability: "video", BillingMode: "fixed_request", Quantity: 1}
+	estimate := tokenBillingEstimate{ReferenceVideos: referenceVideoUsage{Count: 1, RecordedMillis: 8_000, RecordedKnown: true}}
+	if detail := quoteReferenceVideo(order, estimate); detail != nil {
+		t.Fatalf("fixed request quote must not describe seconds: %#v", detail)
+	}
+}
+
+// Token 订单的参考视频时长未知时公式按 15 秒预估；预估值不写进账单快照，流水只记个数。
+func TestTokenReferenceSnapshotSkipsEstimatedDuration(t *testing.T) {
+	svc, db, channel, channelModel, _ := newVideoTokenQuoteFixture(t)
+	if err := db.Model(&model.ChannelModel{}).Where("id = ?", channelModel.ID).Update("reference_video_billing", true).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.ChannelModelPriceTier{}).Where("channel_model_id = ?", channelModel.ID).Update("reference_video_output_token_price_microcredits", 32_000_000).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		durations []int64
+		want      int64
+	}{{nil, 0}, {[]int64{8_000}, 8_000}} {
+		intent := ModelRequestIntent{Capability: "video", Inputs: map[string]int{"video": 1}, ReferenceVideoDurationsMs: tc.durations, Options: map[string]any{"vquality": "720p", "size": "16:9", "videoSeconds": 5, "videoGenerateAudio": true}}
+		estimate := estimateTaskBillingTokens(quoteInput(intent, channelModel.ModelKey), "video")
+		order, err := svc.newBillingOrderWithPriceTier("quote-user", "task", "reference-token", channel.ID, channelModel.ModelKey, "video", "test", 5, estimate, "", intent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !order.ReferenceVideoBilled || order.ReferenceVideoMillis != tc.want {
+			t.Fatalf("durations %v: billed=%v millis=%d, want %d", tc.durations, order.ReferenceVideoBilled, order.ReferenceVideoMillis, tc.want)
+		}
+	}
+}

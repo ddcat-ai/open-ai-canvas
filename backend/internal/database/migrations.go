@@ -299,7 +299,9 @@ var schemaMigrations = []migration{
 }
 
 // migrateReferenceVideoCostPrice 为价格档成本和账单成本快照增加带参考视频的成本价。
-// 新列 NOT NULL DEFAULT 0；旧价格档与旧订单的成本口径不变，管理员开启参考视频计费时再填写。
+// 新列 NOT NULL DEFAULT 0，旧订单的成本口径不变。版本 88 自动开启参考视频计费的全 Token 视频模型，
+// 挂参考视频的订单从此按带参考视频成本价记成本：这些 Token 档把带参考视频成本价回填为现有成本价，
+// 否则升级后这类订单的成本会记成 0，直到管理员重新保存模型。
 func migrateReferenceVideoCostPrice(tx *gorm.DB) error {
 	columns := []string{"cost_reference_video_unit_price_microcredits", "cost_reference_video_output_token_price_microcredits"}
 	for _, entity := range []any{&model.ChannelModelPriceTier{}, &model.BillingOrder{}} {
@@ -315,7 +317,13 @@ func migrateReferenceVideoCostPrice(tx *gorm.DB) error {
 			}
 		}
 	}
-	return nil
+	if !tx.Migrator().HasTable(&model.ChannelModel{}) || !tx.Migrator().HasTable(&model.ChannelModelPriceTier{}) {
+		return nil
+	}
+	enabled := tx.Model(&model.ChannelModel{}).Select("id").Where("capability = ? AND reference_video_billing = ?", "video", true)
+	return tx.Model(&model.ChannelModelPriceTier{}).
+		Where("billing_mode = ? AND channel_model_id IN (?) AND cost_reference_video_output_token_price_microcredits = ?", "token", enabled, 0).
+		Update("cost_reference_video_output_token_price_microcredits", gorm.Expr("cost_output_token_price_microcredits")).Error
 }
 
 // migrateReferenceVideoBilling 增加视频模型的“参考视频计费”开关、价格档的带参考视频价格和账单的参考视频快照。

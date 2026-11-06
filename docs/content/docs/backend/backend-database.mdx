@@ -18,7 +18,7 @@ description: 影策后端核心持久化表与状态边界
 
 迁移回填：只有全部价格档都按 Token 计费的视频模型会开启开关，同时把这些 Token 档的带参考视频价格设为当前输出 Token 价，所以扣费结果和迁移前一致。含按秒档的视频模型保持关闭，不会因为计入参考视频秒数而涨价；这类同时有 Token 档的模型，挂参考视频的 Token 请求从此不再计入参考视频用量。新接入的模型默认关闭。
 
-版本 89 `reference_video_cost_price` 给价格档成本和账单成本快照增加 `cost_reference_video_unit_price_microcredits` / `cost_reference_video_output_token_price_microcredits`（`NOT NULL DEFAULT 0`）。开关开启、价格档配置了成本且基础成本价大于 0 时，必须填写带参考视频成本价。挂参考视频并按带参考视频价格计费的订单，成本快照使用带参考视频成本价，按秒成本数量与售价相同（含参考视频秒数）；开关关闭时沿用基础成本价，视频 Token 成本用量仍按上游口径（含参考视频）。
+版本 89 `reference_video_cost_price` 给价格档成本和账单成本快照增加 `cost_reference_video_unit_price_microcredits` / `cost_reference_video_output_token_price_microcredits`（`NOT NULL DEFAULT 0`）。开关开启、价格档配置了成本且基础成本价大于 0 时，必须填写带参考视频成本价。挂参考视频并按带参考视频价格计费的订单，成本快照使用带参考视频成本价，按秒成本数量与售价相同（含参考视频秒数）；开关关闭时沿用基础成本价，视频 Token 成本用量仍按上游口径（含参考视频）。版本 88 自动开启开关的全 Token 视频模型，其 Token 档的带参考视频成本价在版本 89 回填为现有成本价，升级后这类订单的成本与升级前一致，不会记成 0。
 
 ## 灵感上新（Schema 87）
 

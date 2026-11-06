@@ -644,7 +644,8 @@ func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID stri
 	}
 	quantity := int64(1)
 	amount := int64(0)
-	// 成本快照按上游真实口径（含参考视频）计算，不受用户侧参考视频计费开关影响。
+	// 视频 Token 的成本用量按上游公式（含参考视频）计算，不受用户侧参考视频计费开关影响；
+	// 按秒成本数量与售价数量一致（见 snapshotCreditCost）。
 	costEstimate := tokenEstimate
 	references := referenceVideoUsage{}
 	if capability == "video" && item.Capability == "video" {
@@ -711,7 +712,8 @@ func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID stri
 		if pricedTier, err = referenceVideoPricedTier(tier); err != nil {
 			return nil, err
 		}
-		if tier.BillingMode == "token" && tokenEstimate.Video != nil {
+		// 时长未知时公式按 15 秒上限预估；预估值不写进账单快照，流水只记参考视频个数。
+		if tier.BillingMode == "token" && tokenEstimate.Video != nil && !tokenEstimate.Video.ReferenceDurationEstimated {
 			referenceMillis = int64(math.Round(tokenEstimate.Video.ReferenceSeconds * 1000))
 		}
 	}

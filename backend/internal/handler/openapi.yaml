@@ -3680,7 +3680,7 @@ components:
           $ref: "#/components/schemas/QuoteReferenceVideo"
     QuoteReferenceVideo:
       type: object
-      description: 仅视频请求挂参考视频时返回，用于展示“生成 N 秒 + 参考视频 M 秒”的报价构成
+      description: 仅按秒或视频 Token 计费的视频请求挂参考视频时返回（按次计费不返回），用于展示“生成 N 秒 + 参考视频 M 秒”的报价构成
       required:
         [count, billed, generatedSeconds, referenceSeconds, billedSeconds, estimated]
       properties:

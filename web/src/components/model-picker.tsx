@@ -431,7 +431,8 @@ export function ModelLabel({
     const textReferences = capability === "text" ? modelCapabilityConfigFor(config, model).text?.references : undefined;
     const capabilityTag = referenceCapabilityTag(videoProfile?.references ?? textReferences);
     const modelTags = capabilityTag ? [capabilityTag, ...(logicalCost?.tags || [])] : logicalCost?.tags;
-    const referenceLabel = channel.scope === "system" ? referenceVideoBillingLabel(logicalCost) : "";
+    // 只给能挂参考视频的视频模型标注；不收参考视频的模型写“参考视频不计费”会误导。
+    const referenceLabel = channel.scope === "system" && (videoProfile?.references?.maxVideos ?? 0) > 0 ? referenceVideoBillingLabel(logicalCost) : "";
     const capabilitySummary = disabledReason || logicalCost?.description?.trim() || (isDirectSystemModel(config, model) ? "" : logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? videoSummary : meta.description);
     return (
         <span className="flex w-full min-w-0 items-center gap-2 overflow-hidden py-0">
