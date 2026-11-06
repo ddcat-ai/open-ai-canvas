@@ -12,11 +12,11 @@ var ErrChannelModelPriceConflict = errors.New("模型价格已变化，请刷新
 
 // UpdateChannelModelSalePrices commits the entire selection or nothing. Only
 // pricing columns are written; version checks protect the cost snapshot used by app.
-func (r *Repository) UpdateChannelModelSalePrices(channelID string, items []model.ChannelModel) error {
+func (r *Repository) UpdateChannelModelSalePrices(items []model.ChannelModel) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		for _, item := range items {
 			result := tx.Model(&model.ChannelModel{}).
-				Where("id = ? AND channel_id = ? AND price_version = ? AND updated_at = ?", item.ID, channelID, item.PriceVersion, item.UpdatedAt).
+				Where("id = ? AND channel_id = ? AND price_version = ? AND updated_at = ?", item.ID, item.ChannelID, item.PriceVersion, item.UpdatedAt).
 				Updates(map[string]any{
 					"unit_price_microcredits":              item.UnitPriceMicrocredits,
 					"input_token_price_microcredits":       item.InputTokenPriceMicrocredits,
@@ -51,6 +51,29 @@ func (r *Repository) UpdateChannelModelSalePrices(channelID string, items []mode
 				if result.RowsAffected != 1 {
 					return ErrChannelModelPriceConflict
 				}
+			}
+		}
+		return nil
+	})
+}
+
+// UpdateChannelModelProtocols 整批写入协议与重新规范化后的能力配置；updated_at 用作乐观锁，
+// 防止覆盖并发编辑。价格档不在这里改写。
+func (r *Repository) UpdateChannelModelProtocols(items []model.ChannelModel) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for _, item := range items {
+			result := tx.Model(&model.ChannelModel{}).
+				Where("id = ? AND channel_id = ? AND updated_at = ?", item.ID, item.ChannelID, item.UpdatedAt).
+				Updates(map[string]any{
+					"protocol":               item.Protocol,
+					"capability_config_json": item.CapabilityConfigJSON,
+					"capability_version":     item.CapabilityVersion,
+				})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrChannelModelPriceConflict
 			}
 		}
 		return nil

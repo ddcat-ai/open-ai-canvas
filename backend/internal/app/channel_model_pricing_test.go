@@ -270,7 +270,7 @@ func TestBatchRepricingRollsBackOnConcurrentChange(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := svc.repo.UpdateChannelModelSalePrices("channel", items); !errors.Is(err, repository.ErrChannelModelPriceConflict) {
+			if err := svc.repo.UpdateChannelModelSalePrices(items); !errors.Is(err, repository.ErrChannelModelPriceConflict) {
 				t.Fatalf("error=%v", err)
 			}
 			item, err := svc.repo.ChannelModelByID("channel", "a")

@@ -10,11 +10,13 @@ import { type ModelProtocolDefinition } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
 import { listAdminAllChannelModels, setAdminChannelModelEnabled, type AdminChannelModelHealth, type AdminChannelModelListItem } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
-import { AdminDataTable, AdminStatusBadge, AdminTableEmpty, PaginationBar } from "../components/admin-ui";
+import { AdminBatchBar, AdminDataTable, AdminStatusBadge, AdminTableEmpty, PaginationBar } from "../components/admin-ui";
 import { AdminSearchInput } from "../components/admin-search-input";
 import { ChannelModelCostSummary } from "../components/channel-model-cost-summary";
 import { ChannelModelEditor } from "../components/channel-model-editor";
 import { ChannelModelHealthCell, channelModelHealthKey } from "../components/channel-model-health";
+import { ChannelModelRepriceDialog } from "../components/channel-model-reprice-dialog";
+import { ChannelModelProtocolDialog } from "../components/channel-model-protocol-dialog";
 
 type StatusFilter = "all" | "enabled" | "disabled" | "unhealthy";
 
@@ -57,6 +59,9 @@ export function AllChannelModelsPanel({
     const [pageSize, setPageSize] = useState(50);
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [editing, setEditing] = useState<AdminChannelModelListItem | null>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [repriceItems, setRepriceItems] = useState<AdminChannelModelListItem[]>([]);
+    const [protocolItems, setProtocolItems] = useState<AdminChannelModelListItem[]>([]);
     const [protocols, setProtocols] = useState<ModelProtocolDefinition[]>([]);
     const [protocolLoading, setProtocolLoading] = useState(true);
     const [protocolError, setProtocolError] = useState("");
@@ -262,7 +267,35 @@ export function AllChannelModelsPanel({
                 toolbarActive={hasFilters}
                 onReset={() => updateFilter({ q: "", capability: "", modelStatus: "", modelChannel: "" })}
                 trailing={<span className="text-xs text-foreground/50 tabular-nums">{loading ? "读取中…" : `${filtered.length} 个模型 · ${enabledCount} 个可用`}</span>}
-                table={{ className: "app-data-table", rowKey: "id", size: "small", loading, columns, dataSource: paged, pagination: false, scroll: { x: 1180 } }}
+                batchActions={
+                    <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
+                        <Button size="small" disabled={loading || Boolean(loadError)} onClick={() => setRepriceItems(items.filter((item) => selectedIds.includes(item.id)))}>
+                            统一调价
+                        </Button>
+                        <Button size="small" disabled={loading || Boolean(loadError)} onClick={() => setProtocolItems(items.filter((item) => selectedIds.includes(item.id)))}>
+                            修改协议
+                        </Button>
+                    </AdminBatchBar>
+                }
+                table={{
+                    className: "app-data-table",
+                    rowKey: "id",
+                    size: "small",
+                    loading,
+                    rowSelection: {
+                        selectedRowKeys: selectedIds,
+                        preserveSelectedRowKeys: true,
+                        onChange: (keys) => {
+                            const next = keys.map(String);
+                            if (next.length > 100) message.warning("单次最多选择 100 个模型");
+                            setSelectedIds(next.slice(0, 100));
+                        },
+                    },
+                    columns,
+                    dataSource: paged,
+                    pagination: false,
+                    scroll: { x: 1220 },
+                }}
                 empty={
                     loadError ? (
                         <div className="admin-inline-load-error" role="status">
@@ -288,6 +321,31 @@ export function AllChannelModelsPanel({
                     />
                 }
             />
+            {protocolItems.length > 0 && (
+                <ChannelModelProtocolDialog
+                    items={protocolItems}
+                    protocols={protocols}
+                    protocolLoading={protocolLoading}
+                    protocolError={protocolError}
+                    onClose={() => setProtocolItems([])}
+                    onSaved={async () => {
+                        setSelectedIds([]);
+                        setRetry((value) => value + 1);
+                        await onChanged();
+                    }}
+                />
+            )}
+            {repriceItems.length > 0 && (
+                <ChannelModelRepriceDialog
+                    items={repriceItems}
+                    onClose={() => setRepriceItems([])}
+                    onSaved={async () => {
+                        setSelectedIds([]);
+                        setRetry((value) => value + 1);
+                        await onChanged();
+                    }}
+                />
+            )}
             {editing && editingChannel ? (
                 <ChannelModelEditor
                     channel={editingChannel}

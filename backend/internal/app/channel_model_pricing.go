@@ -30,21 +30,73 @@ func (s *Service) RepriceAdminChannelModels(actor *model.User, channelID string,
 	if _, err := s.adminSystemChannel(channelID); err != nil {
 		return 0, err
 	}
-	if len(requests) == 0 || len(requests) > 100 {
-		return 0, BadAuthRequest("单次请选择 1 到 100 个渠道模型")
-	}
-	selected := make(map[string]ChannelModelRepriceRequest, len(requests))
-	for _, request := range requests {
-		id := strings.TrimSpace(request.ModelID)
-		if _, duplicate := selected[id]; id == "" || duplicate || request.PriceVersion < 1 {
-			return 0, BadAuthRequest("渠道模型 ID 或价格版本无效，且模型不能重复")
-		}
-		selected[id] = request
+	selected, err := normalizeChannelModelRepriceRequests(requests)
+	if err != nil {
+		return 0, err
 	}
 	items, err := s.repo.ChannelModels(channelID, true)
 	if err != nil {
 		return 0, err
 	}
+	return s.applyChannelModelReprice(items, selected)
+}
+
+// RepriceAdminAllChannelModels 是跨渠道模型视图的统一调价：所选模型可来自不同系统渠道，
+// 与单渠道调价使用同一套版本校验，并在一个事务里整批提交。
+func (s *Service) RepriceAdminAllChannelModels(actor *model.User, requests []ChannelModelRepriceRequest) (int, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return 0, err
+	}
+	selected, err := normalizeChannelModelRepriceRequests(requests)
+	if err != nil {
+		return 0, err
+	}
+	ids := make([]string, 0, len(selected))
+	for id := range selected {
+		ids = append(ids, id)
+	}
+	items, err := s.repo.ChannelModelsByIDs(ids)
+	if err != nil {
+		return 0, err
+	}
+	channelIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		channelIDs = append(channelIDs, item.ChannelID)
+	}
+	channels, err := s.repo.SystemChannelsByIDs(channelIDs, true)
+	if err != nil {
+		return 0, err
+	}
+	system := make(map[string]bool, len(channels))
+	for _, channel := range channels {
+		system[channel.ID] = true
+	}
+	scoped := items[:0]
+	for _, item := range items {
+		if system[item.ChannelID] {
+			scoped = append(scoped, item)
+		}
+	}
+	return s.applyChannelModelReprice(scoped, selected)
+}
+
+func normalizeChannelModelRepriceRequests(requests []ChannelModelRepriceRequest) (map[string]ChannelModelRepriceRequest, error) {
+	if len(requests) == 0 || len(requests) > 100 {
+		return nil, BadAuthRequest("单次请选择 1 到 100 个渠道模型")
+	}
+	selected := make(map[string]ChannelModelRepriceRequest, len(requests))
+	for _, request := range requests {
+		id := strings.TrimSpace(request.ModelID)
+		if _, duplicate := selected[id]; id == "" || duplicate || request.PriceVersion < 1 {
+			return nil, BadAuthRequest("渠道模型 ID 或价格版本无效，且模型不能重复")
+		}
+		selected[id] = request
+	}
+	return selected, nil
+}
+
+// applyChannelModelReprice 只处理 items 中的模型；调用方负责把 items 限定在允许修改的系统渠道内。
+func (s *Service) applyChannelModelReprice(items []model.ChannelModel, selected map[string]ChannelModelRepriceRequest) (int, error) {
 	updates := make([]model.ChannelModel, 0, len(selected))
 	for _, item := range items {
 		request, exists := selected[item.ID]
@@ -83,11 +135,11 @@ func (s *Service) RepriceAdminChannelModels(actor *model.User, channelID string,
 		updates = append(updates, item)
 	}
 	if len(updates) != len(selected) {
-		return 0, BadAuthRequest("所选模型已删除或不属于当前渠道，请刷新后重试")
+		return 0, BadAuthRequest("所选模型已删除或不属于系统渠道，请刷新后重试")
 	}
 	// Consistent lock order for overlapping batch requests.
 	sort.Slice(updates, func(i, j int) bool { return updates[i].ID < updates[j].ID })
-	if err := s.repo.UpdateChannelModelSalePrices(channelID, updates); err != nil {
+	if err := s.repo.UpdateChannelModelSalePrices(updates); err != nil {
 		if errors.Is(err, repository.ErrChannelModelPriceConflict) {
 			return 0, BadAuthRequest("模型价格已被其他操作修改，请刷新后重试；本次未修改任何价格")
 		}

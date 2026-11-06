@@ -431,6 +431,21 @@ export function repriceAdminChannelModels(channelId: string, models: ChannelMode
     return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-reprice`, { models });
 }
 
+/** 跨渠道统一调价：所选模型可来自不同系统渠道，结构同单渠道调价。 */
+export function repriceAdminAllChannelModels(models: ChannelModelRepriceInput[]) {
+    return http.post<{ updated: number }>("/admin/channel-models/batch-reprice", { models });
+}
+
+/** 跨渠道批量切换调用协议：所选模型可来自不同系统渠道，规则同单渠道批量切换。 */
+export function updateAdminAllChannelModelsProtocol(modelIds: string[], protocol: string) {
+    return http.post<{ updated: number }>("/admin/channel-models/batch-protocol", { modelIds, protocol });
+}
+
+/** 批量切换同一系统渠道内模型的调用协议；能力配置和价格档保留，任一模型不兼容时整批拒绝。 */
+export function updateAdminChannelModelsProtocol(channelId: string, modelIds: string[], protocol: string) {
+    return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-protocol`, { modelIds, protocol });
+}
+
 export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; pageSize?: number };
 
 export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
