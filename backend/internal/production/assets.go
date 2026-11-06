@@ -176,6 +176,30 @@ func (a AssetSettings) FrameHint() string {
 }
 
 var assetPlaceholderPattern = regexp.MustCompile(`\{\{[^{}]+\}\}`)
+var assetOrientationDirectivePattern = regexp.MustCompile(`(?:\d+\s*[:：]\s*\d+\s*)?(?:横屏|横版|竖屏|竖版|横向|竖向)(?:构图|画面|画幅|比例)`)
+var assetNumericAspectDirectivePattern = regexp.MustCompile(`\d+\s*[:：]\s*\d+\s*(?:构图|画面|画幅|比例)`)
+
+// EnforceAssetRatio 删除画风与画面规则里的冲突画幅，只保留当前资产与尺寸参数一致的要求。
+func EnforceAssetRatio(prompt, ratio string) string {
+	prompt = assetOrientationDirectivePattern.ReplaceAllString(prompt, "")
+	prompt = assetNumericAspectDirectivePattern.ReplaceAllString(prompt, "")
+	prompt = strings.NewReplacer("。。", "。", "；；", "；").Replace(prompt)
+	prompt = strings.TrimSpace(prompt)
+	ratio = strings.TrimSpace(ratio)
+	if ratio == "" {
+		return prompt
+	}
+	orientation := "，严格保持该宽高比"
+	switch ratio {
+	case "16:9", "4:3":
+		orientation = "，横版，宽度大于高度"
+	case "9:16", "3:4":
+		orientation = "，竖版，高度大于宽度"
+	case "1:1":
+		orientation = "，方图，宽度与高度相等"
+	}
+	return strings.TrimSpace(prompt + "\n最终输出画幅必须为 " + ratio + orientation + "；不得改成其他比例。")
+}
 
 // ValidateAssetPrompts 拒绝未知变量；返回第一个问题的说明。
 func ValidateAssetPrompts(a AssetSettings) string {

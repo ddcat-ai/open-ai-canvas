@@ -89,6 +89,34 @@ func TestDramaAssetSchemesRenderWithoutPlaceholders(t *testing.T) {
 	}
 }
 
+func TestDramaAssetPromptsEnforceRatio(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	projectID := createTestDrama(t, svc, DramaReviewAuto).Project.ID
+	runDramaTicks(t, svc, projectID, 20)
+	seen := map[string]bool{}
+	for _, req := range fake.requests {
+		if req.Type != "canvas_image" {
+			continue
+		}
+		if strings.Contains(req.Prompt, "9:16竖屏构图") {
+			t.Fatalf("conflicting visual rule survived submission: %s", req.Prompt)
+		}
+		if !strings.Contains(req.Prompt, "最终输出画幅必须为 16:9，横版，宽度大于高度") {
+			t.Fatalf("asset ratio missing from submission: %s", req.Prompt)
+		}
+		for kind, marker := range map[string]string{"character": "角色定妆照", "prop": "道具设定图", "scene": "场景概念设定图"} {
+			if strings.Contains(req.Prompt, marker) {
+				seen[kind] = true
+			}
+		}
+	}
+	for _, kind := range []string{"character", "prop", "scene"} {
+		if !seen[kind] {
+			t.Fatalf("no %s image request was submitted", kind)
+		}
+	}
+}
+
 func TestDramaJobDetailKeepsEveryAttempt(t *testing.T) {
 	svc, fake := newDramaTestService(t)
 	fake.fail = func(req CreateTaskRequest) bool { return req.Type == "canvas_video" }
