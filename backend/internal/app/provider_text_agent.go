@@ -72,6 +72,14 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 			result, err = postAgentRequest(ctx, input, path, withoutToolChoice, protocol)
 		}
 	}
+	if protocol == "claude-api" && isAgentToolChoiceCompatibilityError(err) {
+		if choice, _ := body["tool_choice"].(map[string]interface{}); stringField(choice, "type") != "auto" {
+			// Claude Opus 5.5、Sonnet 5.5 等模型不支持强制 tool_choice（any/tool），改用 auto 重发一次。
+			autoBody := cloneStringAnyMap(body)
+			autoBody["tool_choice"] = map[string]interface{}{"type": "auto"}
+			result, err = postAgentRequest(ctx, input, path, autoBody, protocol)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
