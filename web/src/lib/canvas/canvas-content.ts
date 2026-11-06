@@ -4,7 +4,15 @@ import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 // These fields describe local viewing / synchronization, not an edit to the document.
 export function canvasContentSnapshot(project: CanvasProject) {
     const { viewport: _viewport, updatedAt: _updatedAt, revision: _revision, remoteContentHash: _hash, ...content } = project;
-    return { ...content, projectId: content.projectId || undefined };
+    return {
+        ...content,
+        projectId: content.projectId || undefined,
+        activeChatId: content.activeChatId || undefined,
+        starterMode: content.starterMode || undefined,
+        chatSessions: content.chatSessions?.length ? content.chatSessions : undefined,
+        previsScenes: content.previsScenes?.length ? content.previsScenes : undefined,
+        timeline: content.timeline || undefined,
+    };
 }
 
 export function sameCanvasContent(left: CanvasProject | undefined, right: CanvasProject | undefined) {

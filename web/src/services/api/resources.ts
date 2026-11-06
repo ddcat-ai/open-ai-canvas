@@ -248,8 +248,12 @@ export async function syncResourceToArkPrivateAsset(id: string) {
     return data.sync;
 }
 
+const BARE_RESOURCE_ID_PATTERN = /^[0-9a-f]{32}$/i;
+
 export function resourceIdFromStorageKey(storageKey?: string) {
-    return storageKey?.startsWith("resource:") ? storageKey.slice("resource:".length) : "";
+    const trimmed = storageKey?.trim() || "";
+    if (trimmed.startsWith("resource:")) return trimmed.slice("resource:".length).trim();
+    return BARE_RESOURCE_ID_PATTERN.test(trimmed) ? trimmed.toLowerCase() : "";
 }
 
 export function isResourceUrl(url?: string) {
