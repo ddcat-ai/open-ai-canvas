@@ -258,14 +258,34 @@ func (s *Service) ecommerceChatJSON(ctx context.Context, cfg ecommerceProviderCo
 		return ecommerceParseJSON(content, out)
 	}
 	var content any = prompt
+	// Anthropic-compatible endpoints (e.g. DeepSeek /anthropic) reject OpenAI
+	// image_url content blocks with HTTP 422; they require type=image with a
+	// base64 or url source. Detect the wire format from the base URL path.
+	isAnthropic := strings.Contains(strings.ToLower(cfg.TextBaseURL), "/anthropic")
 	if len(images) > 0 {
 		parts := []any{map[string]any{"type": "text", "text": prompt}}
 		for _, u := range images {
-			parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": u}})
+			if isAnthropic {
+				source := map[string]any{"type": "url", "url": u}
+				if strings.HasPrefix(u, "data:") {
+					if mimeType, data, ok := splitDataURL(u); ok {
+						source = map[string]any{"type": "base64", "media_type": mimeType, "data": data}
+					}
+				}
+				parts = append(parts, map[string]any{"type": "image", "source": source})
+			} else {
+				parts = append(parts, map[string]any{"type": "image_url", "image_url": map[string]string{"url": u}})
+			}
 		}
 		content = parts
 	}
-	payload := map[string]any{"model": cfg.TextModel, "messages": []any{map[string]any{"role": "system", "content": system}, map[string]any{"role": "user", "content": content}}}
+	payload := map[string]any{"model": cfg.TextModel, "messages": []any{map[string]any{"role": "user", "content": content}}}
+	if !isAnthropic && system != "" {
+		payload["messages"] = []any{map[string]any{"role": "system", "content": system}, map[string]any{"role": "user", "content": content}}
+	}
+	if isAnthropic && system != "" {
+		payload["system"] = system
+	}
 	switch out.(type) {
 	case *[]ecommerceagent.Page, *[]ecommerceagent.Recommendation:
 	default:
@@ -273,10 +293,41 @@ func (s *Service) ecommerceChatJSON(ctx context.Context, cfg ecommerceProviderCo
 	}
 	body, _ := json.Marshal(payload)
 	start := time.Now()
-	data, _, err := ecommerceRequest(ctx, cfg.TextBaseURL+"/chat/completions", cfg.TextKey, cfg.TextTimeout, body, "application/json", 3)
+	endpoint := cfg.TextBaseURL + "/chat/completions"
+	if isAnthropic {
+		endpoint = cfg.TextBaseURL + "/v1/messages"
+	}
+	data, _, err := ecommerceRequest(ctx, endpoint, cfg.TextKey, cfg.TextTimeout, body, "application/json", 3)
 	if err != nil {
 		slog.Warn("ecommerce agent text failed", "taskId", taskID, "model", cfg.TextModel, "latencyMs", time.Since(start).Milliseconds(), "error", err)
 		return err
+	}
+	if isAnthropic {
+		var anthropicResp struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+			Usage struct {
+				Input  int `json:"input_tokens"`
+				Output int `json:"output_tokens"`
+			} `json:"usage"`
+			Model string `json:"model"`
+		}
+		if err := json.Unmarshal(data, &anthropicResp); err != nil {
+			return err
+		}
+		var text string
+		for _, block := range anthropicResp.Content {
+			if block.Type == "text" {
+				text += block.Text
+			}
+		}
+		if text == "" {
+			return errors.New("文本模型未返回内容")
+		}
+		slog.Info("ecommerce agent text", "taskId", taskID, "model", anthropicResp.Model, "tokens", anthropicResp.Usage.Input+anthropicResp.Usage.Output, "latencyMs", time.Since(start).Milliseconds())
+		return ecommerceParseJSON(text, out)
 	}
 	var response struct {
 		Choices []struct {
