@@ -240,7 +240,9 @@ func TestEcommerceWorkbenchLiveDirectionsUseProductImagesAndCache(t *testing.T) 
 	if err := db.Create(&channel).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.repo.SaveChannelModel(&model.ChannelModel{ID: "bridge-model", ChannelID: channel.ID, ModelKey: "fixture", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, Enabled: true, PriceConfigured: true}); err != nil {
+	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceChatCompletion), "fixture")
+	profile.Text.References.MaxImages = 1
+	if err := svc.repo.SaveChannelModel(&model.ChannelModel{ID: "bridge-model", ChannelID: channel.ID, ModelKey: "fixture", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, CapabilityConfigJSON: mustEncodeModelCapabilityConfig(t, profile), Enabled: true, PriceConfigured: true}); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.repo.SaveSystemSetting(&model.SystemSetting{Key: ecommerceAgentSettingKey, ValueJSON: `{"channelModelId":"bridge-model","channelId":"bridge-channel","modelKey":"fixture"}`}); err != nil {
