@@ -659,8 +659,13 @@ function SkillCard({ skill, accentKey, categoryLabel, libraryCategories, canCate
                 </div>
             </div>
 
-            {/* 加入状态是持久业务状态，常显：未加入为细线 +，已加入为安静的对勾。作者本人的技能不需要加入。 */}
-            {skill.isOwner ? null : (
+            {/* 加入状态是持久业务状态，常显：未加入为细线 +，已加入为安静的对勾。
+                作者本人的技能不需要「加入」，但也不能什么都不显示——那会让用户把「没有按钮」误判成缺少操作。 */}
+            {skill.isOwner ? (
+                <div className="skill-tile-corner">
+                    <span className="skill-tile-own" title="你创建或导入的技能，其他用户可在广场加入">我的</span>
+                </div>
+            ) : (
                 <div className="skill-tile-corner">
                     <Tooltip title={skill.isAdded ? "已加入我的技能，点击移除" : "加入我的技能"}>
                         <button type="button" className="skill-tile-add" aria-pressed={skill.isAdded} aria-label={skill.isAdded ? `从我的技能移除 ${skill.skillName}` : `加入我的技能 ${skill.skillName}`} disabled={loading} onClick={onAdd}>
