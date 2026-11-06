@@ -690,6 +690,8 @@ type DramaModelOption struct {
 	PriceLabel string           `json:"priceLabel"`
 	// MaxVideoSeconds 仅视频模型：单次最长生成秒数，0 表示未声明。
 	MaxVideoSeconds int `json:"maxVideoSeconds,omitempty"`
+	// MinReferenceImages 仅视频模型：模型要求的最少参考图数（含首帧），0 表示不强制参考图。
+	MinReferenceImages int `json:"minReferenceImages,omitempty"`
 	// TailFrameChain 仅视频模型：是否支持图生视频，可用于“尾帧续接”；不支持的模型只能并行出片。
 	TailFrameChain bool `json:"tailFrameChain,omitempty"`
 	// VideoRatios 仅视频模型：能准确给出的作品画幅；不含作品画幅的模型不能用于该作品。

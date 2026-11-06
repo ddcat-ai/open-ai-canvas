@@ -28,6 +28,16 @@ func dramaModelIntent(capability string) *ModelRequestIntent {
 	return &ModelRequestIntent{Capability: "text"}
 }
 
+// capabilityMatchNeedsImage 判断能力不匹配里是否有图片输入数量不足（模型声明了最少参考图数）。
+func capabilityMatchNeedsImage(match CapabilityMatch) bool {
+	for _, issue := range match.Issues {
+		if issue.Kind == "input" && issue.Name == "image" {
+			return true
+		}
+	}
+	return false
+}
+
 // 目录尚未组装剧情段素材；同时接受纯文本和单张参考图入口，实际素材数量在提交时校验。
 func (s *Service) resolveDramaLogicalModel(access *userGroupAccess, id, capability string) (*RoutedModel, error) {
 	intent := *dramaModelIntent(capability)
@@ -149,7 +159,8 @@ func (s *Service) dramaChoiceIssue(access *userGroupAccess, choice DramaModelCho
 				return "模型能力配置无效：" + err.Error()
 			}
 			match := MatchCapability(spec, *intent)
-			if !match.Matched && capability == "video" {
+			// 只在缺参考图时改按一张参考图再匹配；其他原因不重试，避免给不收图片的模型多报一条“不支持图片输入”。
+			if !match.Matched && capability == "video" && capabilityMatchNeedsImage(match) {
 				intent.Inputs = map[string]int{"image": 1}
 				match = MatchCapability(spec, *intent)
 			}
@@ -256,11 +267,17 @@ func (s *Service) DramaModelCatalog(userID string) (DramaModelCatalog, error) {
 }
 
 // preferredDramaOption 返回第一个可用的候选；视频模型还要能按作品画幅出片并支持作品的段落衔接方式。
+// 视频模型优先选不强制参考图的：没有参考设定的剧情段（如空镜）发不出参考图，强制参考图的模型会让这些段提交失败。
 // 都不满足时不替用户挑一个开工后才失败的模型，由调用方提示没有可用模型。
 func preferredDramaOption(options []DramaModelOption, settings DramaSettings) (DramaModelOption, bool) {
-	for _, option := range options {
-		if option.Capability != "video" || dramaVideoOptionFits(option, settings) {
-			return option, true
+	for _, allowRequiredReference := range []bool{false, true} {
+		for _, option := range options {
+			if option.Capability != "video" {
+				return option, true
+			}
+			if (option.MinReferenceImages > 0) == allowRequiredReference && dramaVideoOptionFits(option, settings) {
+				return option, true
+			}
 		}
 	}
 	return DramaModelOption{}, false
@@ -336,6 +353,8 @@ type dramaVideoProfile struct {
 	Durations  production.DurationOptions
 	Operations []string
 	MaxImages  int
+	// MinImages 是模型要求的最少参考图数（含首帧）；剧情段发不出这么多张时预演就报出，不提交。
+	MinImages int
 	// MaxAudios / MaxAudioSeconds 是参考音频的张数与单段时长上限（秒，0 表示未声明），用于随段发送角色声音样本。
 	MaxAudios       int
 	MaxAudioSeconds int
@@ -434,7 +453,7 @@ func (s *Service) dramaVideoProfile(choice DramaModelChoice) (dramaVideoProfile,
 	video := capability.Video
 	options := dramaDurationOptions(video.Duration)
 	// 不声明同步生成声音的模型也可以用：段视频没有对白与音效，由用户在选模型时自行取舍。
-	profile := dramaVideoProfile{Durations: options, Operations: video.Operations, MaxImages: video.References.MaxImages, MaxAudios: max(video.References.MaxAudios, 0), MaxAudioSeconds: max(video.References.MaxAudioDuration, 0), GenerateAudio: video.GenerateAudio.Supported, PromptMaxChars: max(video.References.PromptMaxChars, 0), video: video}
+	profile := dramaVideoProfile{Durations: options, Operations: video.Operations, MaxImages: video.References.MaxImages, MinImages: max(video.References.MinImages, 0), MaxAudios: max(video.References.MaxAudios, 0), MaxAudioSeconds: max(video.References.MaxAudioDuration, 0), GenerateAudio: video.GenerateAudio.Supported, PromptMaxChars: max(video.References.PromptMaxChars, 0), video: video}
 	if profile.maxSeconds() <= 0 {
 		return profile, errors.New("未声明可生成时长，无法按剧情段切分")
 	}
@@ -946,6 +965,7 @@ func (s *Service) dramaModelOption(choice DramaModelChoice, capability, label, p
 	if capability == "video" {
 		if profile, err := s.dramaVideoProfile(choice); err == nil {
 			option.MaxVideoSeconds = profile.maxSeconds()
+			option.MinReferenceImages = profile.MinImages
 			option.TailFrameChain = profile.supports("image_to_video")
 			option.VideoRatios = profile.ratios()
 			audio := profile.GenerateAudio

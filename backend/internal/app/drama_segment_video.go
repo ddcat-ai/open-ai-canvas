@@ -232,6 +232,14 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	if screen.Issue != "" {
 		return request, refs, audios, errors.New(screen.Issue)
 	}
+	// 强制参考图的模型（如只做参考图生视频）：本段发不出这么多张时准入必然拒收，预演先说明，不提交。
+	sent := len(refs)
+	if request.FirstFramePending {
+		sent++ // 上一段尾帧就绪后作为首帧发送
+	}
+	if sent < profile.MinImages {
+		return request, refs, audios, fmt.Errorf("所选视频模型至少需要 %d 张参考图，本段只能发送 %d 张；请为本段补充已生成参考图的设定，或换用不强制参考图的视频模型", profile.MinImages, sent)
+	}
 	return request, refs, audios, nil
 }
 
