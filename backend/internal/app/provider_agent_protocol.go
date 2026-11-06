@@ -95,7 +95,7 @@ func expandCanonicalAgentRequest(source *canonicalAgentRequest, config providerC
 		}
 	}
 	request := *source
-	request.Messages = messages
+	request.Messages = readableAgentMessages(messages)
 	// 同名工具会被多数供应商直接拒绝（400）。按名称去重，保留第一次出现的定义。
 	request.Tools = dedupeCanonicalAgentTools(source.Tools)
 	result := &agentToolRequests{}
