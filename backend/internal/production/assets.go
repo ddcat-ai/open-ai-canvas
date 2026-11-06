@@ -176,14 +176,43 @@ func (a AssetSettings) FrameHint() string {
 }
 
 var assetPlaceholderPattern = regexp.MustCompile(`\{\{[^{}]+\}\}`)
-var assetOrientationDirectivePattern = regexp.MustCompile(`(?:\d+\s*[:：]\s*\d+\s*)?(?:横屏|横版|竖屏|竖版|横向|竖向)(?:构图|画面|画幅|比例)`)
-var assetNumericAspectDirectivePattern = regexp.MustCompile(`\d+\s*[:：]\s*\d+\s*(?:构图|画面|画幅|比例)`)
 
-// EnforceAssetRatio 删除画风与画面规则里的冲突画幅，只保留当前资产与尺寸参数一致的要求。
-func EnforceAssetRatio(prompt, ratio string) string {
-	prompt = assetOrientationDirectivePattern.ReplaceAllString(prompt, "")
-	prompt = assetNumericAspectDirectivePattern.ReplaceAllString(prompt, "")
-	prompt = strings.NewReplacer("。。", "。", "；；", "；").Replace(prompt)
+// 作品的画风与画面规则写的是成片（视频）的画幅，竖屏作品常带“9:16 竖屏构图”；设定图有自己的画幅
+// （场景、道具固定 16:9，角色按方案）。这两段文字带进设定图提示词前先去掉画幅与横竖构图要求，
+// 再由 WithAssetRatio 写明设定图自己的画幅。角色、道具、场景设定和方案模板不经过这里，原样保留。
+//
+// 比例只认常见画幅写法，并要求两侧不是数字，“12:30 的暖光”这类时间不会被删。
+const frameRatioToken = `\b(?:9\s*[:：]\s*16|16\s*[:：]\s*9|3\s*[:：]\s*4|4\s*[:：]\s*3|1\s*[:：]\s*1|21\s*[:：]\s*9|9\s*[:：]\s*21|2\s*[:：]\s*3|3\s*[:：]\s*2|4\s*[:：]\s*5|5\s*[:：]\s*4)\b`
+
+var (
+	// “画幅 9:16”“画面比例为 9:16”“9:16 竖屏构图”“16:9画幅比例”
+	frameRatioDirective = regexp.MustCompile(`(?:(?:画幅|画面|比例|宽高比|尺寸)+\s*(?:为|是|采用|[:：])?\s*)?` + frameRatioToken + `(?:\s*(?:横屏|横版|竖屏|竖版|横向|竖向|横|竖))?(?:构图|画面|画幅|比例|拍摄|格式|视频)*`)
+	// “竖屏构图”“竖屏”“横版画面”“竖向构图”“竖构图”
+	frameOrientationDirective = regexp.MustCompile(`(?:横屏|横版|竖屏|竖版)(?:构图|画面|画幅|比例|拍摄|格式|视频)*|(?:横向|竖向|横|竖)(?:构图|画幅)+`)
+	frameSeparatorRun         = regexp.MustCompile(`[，,、；;。]+(?:\s*[，,、；;。]+)*`)
+)
+
+// StripFrameDirectives 去掉画风或画面规则里关于成片画幅、横竖构图的要求，其余描述保留。
+func StripFrameDirectives(text string) string {
+	text = frameRatioDirective.ReplaceAllString(text, "")
+	text = frameOrientationDirective.ReplaceAllString(text, "")
+	// 删除后相邻的标点合成一个，保留语气最重的那个。
+	text = frameSeparatorRun.ReplaceAllStringFunc(text, func(run string) string {
+		switch {
+		case strings.Contains(run, "。"):
+			return "。"
+		case strings.ContainsAny(run, "；;"):
+			return "；"
+		default:
+			return "，"
+		}
+	})
+	text = strings.TrimLeft(strings.TrimSpace(text), "，,、；;。")
+	return strings.TrimSpace(strings.TrimRight(text, "，,、；;"))
+}
+
+// WithAssetRatio 在设定图提示词末尾写明本张设定图的画幅，与尺寸参数一致。
+func WithAssetRatio(prompt, ratio string) string {
 	prompt = strings.TrimSpace(prompt)
 	ratio = strings.TrimSpace(ratio)
 	if ratio == "" {
