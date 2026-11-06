@@ -28,6 +28,17 @@ func dramaModelIntent(capability string) *ModelRequestIntent {
 	return &ModelRequestIntent{Capability: "text"}
 }
 
+// 目录尚未组装剧情段素材；同时接受纯文本和单张参考图入口，实际素材数量在提交时校验。
+func (s *Service) resolveDramaLogicalModel(access *userGroupAccess, id, capability string) (*RoutedModel, error) {
+	intent := *dramaModelIntent(capability)
+	routed, err := s.ResolveLogicalModel(access, id, intent)
+	if err != nil && capability == "video" {
+		intent.Inputs = map[string]int{"image": 1}
+		return s.ResolveLogicalModel(access, id, intent)
+	}
+	return routed, err
+}
+
 // dramaSegmentOperation 是剧情段视频在该衔接方式下的主要生成方式，用于报价与能力校验。
 func dramaSegmentOperation(settings DramaSettings, profile dramaVideoProfile) (string, map[string]int) {
 	if !settings.parallelVideo() {
@@ -120,7 +131,7 @@ func (s *Service) dramaModelOptions(userID string, capability string) ([]DramaMo
 func (s *Service) dramaChoiceIssue(access *userGroupAccess, choice DramaModelChoice, capability string) string {
 	intent := dramaModelIntent(capability)
 	if choice.LogicalModelID != "" {
-		if _, err := s.ResolveLogicalModel(access, choice.LogicalModelID, *intent); err != nil {
+		if _, err := s.resolveDramaLogicalModel(access, choice.LogicalModelID, capability); err != nil {
 			return dramaIntentIssue(capability, err.Error())
 		}
 	} else {
@@ -137,7 +148,12 @@ func (s *Service) dramaChoiceIssue(access *userGroupAccess, choice DramaModelCho
 			if err != nil {
 				return "模型能力配置无效：" + err.Error()
 			}
-			if match := MatchCapability(spec, *intent); !match.Matched {
+			match := MatchCapability(spec, *intent)
+			if !match.Matched && capability == "video" {
+				intent.Inputs = map[string]int{"image": 1}
+				match = MatchCapability(spec, *intent)
+			}
+			if !match.Matched {
 				return dramaIntentIssue(capability, strings.Join(match.Reasons, "；"))
 			}
 		}
@@ -385,7 +401,7 @@ func (s *Service) dramaVideoProfile(choice DramaModelChoice) (dramaVideoProfile,
 	var capability *ModelCapabilityConfig
 	if choice.LogicalModelID != "" {
 		// 只读取能力画像；用户授权在任务准入时按分组校验。
-		routed, err := s.ResolveLogicalModel(nil, choice.LogicalModelID, *dramaModelIntent("video"))
+		routed, err := s.resolveDramaLogicalModel(nil, choice.LogicalModelID, "video")
 		if err != nil {
 			return dramaVideoProfile{}, err
 		}

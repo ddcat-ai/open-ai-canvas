@@ -612,6 +612,10 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [ ] 使用真实 Bucket 只填 Region、Bucket、Access Key ID 与 Secret Access Key，测试连接并保存，确认 Endpoint 为 `https://tos-s3-<region>.volces.com`；错误 Secret 提示鉴权失败。
 - [ ] 上传图片、视频与音频后预览、下载、删除；浏览器直连源站需在 Bucket 配置 CORS（站点来源、GET/HEAD 与 Range）。公开 CDN 域名按 `cdnAuthMode=public` 读取。
 
+## 视频模型选择 - 按参考输入匹配并保留生成模式
+
+- 待人工验证：配置一个至少需要一张图、支持参考图生视频的模型。打开短剧模型选择器，再提交带参考图的开场段。模型应可选，实际请求按预演中的生成模式校验，无图请求仍按原有合同拒绝。
+
 ## 短剧：视频模型不可用时制作台崩溃
 - 问题：作品选用的视频模型解析失败（模型或渠道被删除 / 停用、能力声明缺少时长或生成方式）时，`prepareDramaSegment` 返回零值请求，集详情里每段的 `request.references` / `request.audioReferences` 为 `null`，制作台渲染参考图时报 `Cannot read properties of null (reading 'map')`，整页进入路由错误页。
 - 已修复：失败路径也返回空数组，段卡片照常显示，并在段上提示 `Warning`（如“所选模型不可用”）。

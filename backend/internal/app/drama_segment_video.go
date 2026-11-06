@@ -400,6 +400,7 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 			}
 		}
 		metadata := r.metadata(job)
+		metadata["videoEditOperation"] = request.Operation
 		if previous != nil {
 			metadata["videoStartFrameNodeId"] = "first-frame"
 		}
