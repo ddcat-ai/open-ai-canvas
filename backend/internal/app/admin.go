@@ -93,16 +93,17 @@ type AdminReferenceData struct {
 }
 
 type ChannelRequest struct {
-	Name                 string           `json:"name"`
-	SortOrder            *int             `json:"sortOrder"`
-	BaseURL              string           `json:"baseUrl"`
-	APIKey               string           `json:"apiKey"`
-	SecretKey            string           `json:"secretKey"`
-	ConcurrencyLimit     *int             `json:"concurrencyLimit"`
-	UseGlobalConcurrency *bool            `json:"useGlobalConcurrency"`
-	Models               []string         `json:"models"`
-	Headers              []OutboundHeader `json:"headers"`
-	Enabled              *bool            `json:"enabled"`
+	MediaTransport       *ReferenceMediaTransport `json:"mediaTransport"`
+	Name                 string                   `json:"name"`
+	SortOrder            *int                     `json:"sortOrder"`
+	BaseURL              string                   `json:"baseUrl"`
+	APIKey               string                   `json:"apiKey"`
+	SecretKey            string                   `json:"secretKey"`
+	ConcurrencyLimit     *int                     `json:"concurrencyLimit"`
+	UseGlobalConcurrency *bool                    `json:"useGlobalConcurrency"`
+	Models               []string                 `json:"models"`
+	Headers              []OutboundHeader         `json:"headers"`
+	Enabled              *bool                    `json:"enabled"`
 	// ProxyURL 指针语义：nil = 请求未提交该字段（更新时保持渠道现有值），
 	// 指向空串 = 显式清空渠道代理。此前用 string 类型导致「删掉代理保存」
 	// 被 mergeChannelRequest 回填旧值，永远清不掉。
@@ -110,6 +111,7 @@ type ChannelRequest struct {
 }
 
 type PublicModelChannel struct {
+	MediaTransport   *ReferenceMediaTransport  `json:"mediaTransport,omitempty"`
 	ID               string                    `json:"id"`
 	UserID           string                    `json:"userId"`
 	Scope            model.ChannelScope        `json:"scope"`
@@ -154,6 +156,9 @@ func channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.M
 }
 
 func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChannel) (model.ModelChannel, error) {
+	if _, err := normalizeReferenceMediaTransport(req.MediaTransport); err != nil {
+		return channel, err
+	}
 	name := strings.TrimSpace(req.Name)
 	baseURL := strings.TrimSpace(req.BaseURL)
 	if name == "" {

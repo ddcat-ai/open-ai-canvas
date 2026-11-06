@@ -71,6 +71,7 @@ export type WorkflowGraphPreview = {
 export const PUBLIC_MODEL_CATALOG_ID = "managed";
 
 export type ModelChannel = {
+    mediaTransport?: import("@/lib/media-transport").ReferenceMediaTransport;
     id: string;
     name: string;
     sortOrder?: number;

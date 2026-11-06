@@ -78,6 +78,9 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		if err != nil {
 			return nil, err
 		}
+		if err := validateMediaTransportRequest(spec, input); err != nil {
+			return nil, err
+		}
 		body, streamedResult, err := executeIdempotentProtocolCreate(ctx, input, spec, adapter.Metadata().IdempotentCreate)
 		if err != nil {
 			return nil, err

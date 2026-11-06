@@ -33,6 +33,15 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 				mediaPolicy.maxBytes = limits.MaxImageBytes
 			}
 		}
+		// Agent vision uses its own inline-pixel contract; ordinary generation follows admin policy.
+		if !inlineVision && len(group) > 0 {
+			mode := []string{input.Config.mediaTransport.Image, input.Config.mediaTransport.Video, input.Config.mediaTransport.Audio}[groupIndex]
+			var err error
+			mediaPolicy, err = referenceMediaPolicy(mediaPolicy, mode, input.Mask != nil && groupIndex == 0)
+			if err != nil {
+				return err
+			}
+		}
 		for index := range group {
 			if err := s.hydrateProviderMedia(userID, &group[index], mediaPolicy); err != nil {
 				return err
@@ -47,6 +56,25 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 
 func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
 	if !strings.HasPrefix(media.StorageKey, "resource:") {
+		if policy.explicitTransport == "url" {
+			value := strings.TrimSpace(media.URL)
+			if value == "" || strings.HasPrefix(value, "data:") {
+				return errors.New("URL 模式需要已上传素材或公网地址，请先把素材上传到画布")
+			}
+			if _, err := ValidateOutboundURL(value); err != nil {
+				return err
+			}
+			media.URL = value
+			media.DataURL = ""
+			return nil
+		}
+		if policy.forceBase64 {
+			if !strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
+				return errors.New("Base64 模式需要已上传素材或内嵌数据，请先把外部链接素材上传到画布")
+			}
+			media.URL = ""
+			return nil
+		}
 		if policy.requireURL && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 			return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到对象存储或提供公网素材地址")
 		}
@@ -95,7 +123,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		return nil
 	}
 	// Agent 看图以归属校验后的资源文件为准，不能让附带的内嵌内容替换真实图片。
-	if !policy.imageOnly && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
+	if !policy.imageOnly && !policy.forceBase64 && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 		return nil
 	}
 	resource, body, err := s.OpenResource(userID, resourceID)
@@ -141,7 +169,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		}
 	}
 	media.DataURL = dataURL(mimeType, data)
-	if policy.imageOnly {
+	if policy.imageOnly || policy.forceBase64 {
 		media.URL = ""
 	}
 	media.MimeType = mimeType

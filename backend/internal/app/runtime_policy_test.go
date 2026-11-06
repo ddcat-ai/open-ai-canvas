@@ -155,7 +155,7 @@ func TestResumableVideoDeadlineUsesResolvedSystemChannelProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.ModelChannel{}, &model.ChannelModel{}); err != nil {
 		t.Fatal(err)
 	}
 	channel := model.ModelChannel{

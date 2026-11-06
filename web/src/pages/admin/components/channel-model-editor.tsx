@@ -6,6 +6,7 @@ import { FlaskConical, Plus } from "lucide-react";
 import { ModelIconPicker } from "@/components/model-logo";
 import { ModelIcon } from "@/components/model-picker";
 import { ModelProtocolBrowser } from "@/components/model-protocol-browser";
+import { MediaTransportFields } from "./media-transport-fields";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocolDefinition } from "@/lib/model-protocols";
@@ -379,6 +380,9 @@ export function ChannelModelEditor({
                                     {modelCapability === "text" || modelCapability === "image" || modelCapability === "video" ? (
                                         <section className="admin-model-editor-section admin-model-editor-section-stacked admin-model-editor-references">
                                             <SectionHeading title="引用与限制" description="按媒体类型纵向配置数量、大小、时长及通用约束。" />
+                                            <Form.Item name={["capabilityConfig", "mediaTransport"]} label="参考素材发送方式" extra="优先使用模型设置，其次渠道默认值，最后使用协议默认行为。">
+                                                <MediaTransportFields channel={channel.mediaTransport || {}} />
+                                            </Form.Item>
                                             <div className="admin-model-editor-section-content">
                                                 <ModelCapabilityEditor
                                                     capability={modelCapability}
@@ -390,7 +394,7 @@ export function ChannelModelEditor({
                                                     value={capabilityConfig}
                                                     onChange={(next) => {
                                                         dirtyRef.current = true;
-                                                        form.setFieldValue("capabilityConfig", next);
+                                                        form.setFieldValue("capabilityConfig", { ...next, mediaTransport: form.getFieldValue(["capabilityConfig", "mediaTransport"]) });
                                                     }}
                                                 />
                                             </div>
@@ -410,7 +414,7 @@ export function ChannelModelEditor({
                                                     value={capabilityConfig}
                                                     onChange={(next) => {
                                                         dirtyRef.current = true;
-                                                        form.setFieldValue("capabilityConfig", next);
+                                                        form.setFieldValue("capabilityConfig", { ...next, mediaTransport: form.getFieldValue(["capabilityConfig", "mediaTransport"]) });
                                                     }}
                                                 />
                                             </div>

@@ -33,6 +33,7 @@ export {
 } from "./model-capabilities-workflow";
 
 export type ModelCapabilityConfig = {
+    mediaTransport?: import("./media-transport").ReferenceMediaTransport;
     version: number;
     text?: TextCapabilityConfig;
     image?: ImageCapabilityConfig;
