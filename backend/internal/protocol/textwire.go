@@ -49,6 +49,24 @@ func OperationPath(summary string) string {
 	return strings.TrimSpace(path)
 }
 
+// AnthropicWireForBaseURL 判断一个文本上游的 Base URL 是否走 Anthropic Messages 线。
+// 社区里 Anthropic 兼容端点有两种形态：原生 https://api.anthropic.com（打 /v1/messages），
+// 和中转的 .../anthropic 前缀（如 DeepSeek https://api.deepseek.com/anthropic、部分网关的
+// /claude 或 /anthropic/v1 路径）。OpenAI 系（api.openai.com、/v1、/openai 前缀）不受影响。
+func AnthropicWireForBaseURL(baseURL string) bool {
+	u := strings.ToLower(strings.TrimSpace(baseURL))
+	if u == "" {
+		return false
+	}
+	if strings.Contains(u, "api.anthropic.com") {
+		return true
+	}
+	if strings.Contains(u, "/anthropic") || strings.Contains(u, "/claude") {
+		return true
+	}
+	return false
+}
+
 func hasCapability(capabilities []Capability, capability Capability) bool {
 	for _, item := range capabilities {
 		if item == capability {

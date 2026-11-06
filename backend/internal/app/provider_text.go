@@ -45,6 +45,13 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 		return nil, nil, errors.New("声明式文本请求体必须是 JSON 对象")
 	}
 	applyTextThinking(body, input, wire)
+	// Anthropic 线的思考开关必须显式下发：DeepSeek 等 V4 系网关对 /messages 默认开启
+	// 思考，省略 thinking 字段时预算被思考占满、正文可能为空（社区同类案例：
+	// NousResearch/hermes-agent#15700）。客户端未要求思考时显式关闭，与
+	// applyTextThinking 的 enabled 分支互补，不把默认值留给上游。
+	if wire == protocol.TextWireClaude && !input.TextOptions.Thinking {
+		body["thinking"] = map[string]interface{}{"type": "disabled"}
+	}
 	spec.Body = body
 	if !input.StreamText {
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
