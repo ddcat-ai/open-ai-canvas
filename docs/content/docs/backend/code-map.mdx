@@ -296,3 +296,8 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 ## 画布外观
 
 `web/src/lib/canvas/canvas-appearance.ts` 管理预设快照、浅深记忆与默认偏好；`web/src/components/canvas/canvas-appearance-controls.tsx` 管理展开与微调；`web/src/components/canvas/canvas-toolbar.tsx` 限制外观和添加节点浮层尺寸。`web/src/stores/canvas/use-canvas-store.ts` 在创建时写入实际外观与线网格默认值，后续沿用画布持久化。
+
+
+### 参考素材发送方式
+
+`backend/internal/app/media_transport.go` 管理渠道策略的事务保存、配置继承和请求兼容校验；`provider_media_hydration.go` 按图片、视频、音频分别准备归属校验后的签名 URL 或 Base64。`web/src/pages/admin/components/media-transport-fields.tsx` 提供渠道默认及模型覆盖的共同设置控件。

@@ -62,43 +62,44 @@ type providerTextMessage struct {
 }
 
 type providerConfig struct {
-	ChannelID             string                 `json:"channelId"`
-	ChannelModelKey       string                 `json:"channelModelKey,omitempty"`
-	PriceTierID           string                 `json:"priceTierId,omitempty"`
-	ProviderModelKey      string                 `json:"providerModelKey,omitempty"`
-	APIFormat             string                 `json:"apiFormat"`
-	InterfaceType         string                 `json:"interfaceType"`
-	BaseURL               string                 `json:"baseUrl"`
-	APIKey                string                 `json:"apiKey"`
-	SecretKey             string                 `json:"secretKey"`
-	Headers               []OutboundHeader       `json:"headers"`
-	Model                 string                 `json:"model"`
-	Size                  string                 `json:"size"`
-	Quality               string                 `json:"quality"`
-	ImageResolution       string                 `json:"imageResolution"`
-	ImageParameters       map[string]any         `json:"imageParameters,omitempty"`
-	TransparentBackground string                 `json:"transparentBackground"`
-	Count                 string                 `json:"count"`
-	VideoSeconds          string                 `json:"videoSeconds"`
-	VQuality              string                 `json:"vquality"`
-	VideoGenerateAudio    string                 `json:"videoGenerateAudio"`
-	VideoWatermark        string                 `json:"videoWatermark"`
-	ArkPrivateAssetUpload string                 `json:"videoArkPrivateAssetUpload"`
-	AudioVoice            string                 `json:"audioVoice"`
-	AudioFormat           string                 `json:"audioFormat"`
-	AudioSpeed            string                 `json:"audioSpeed"`
-	AudioInstructions     string                 `json:"audioInstructions"`
-	AudioLanguage         string                 `json:"audioLanguage"`
-	AudioDialect          string                 `json:"audioDialect"`
-	SystemPrompt          string                 `json:"systemPrompt"`
-	CapabilityConfig      *ModelCapabilityConfig `json:"capabilityConfig"`
-	WorkflowID            string                 `json:"workflowId"`
-	WebappID              string                 `json:"webappId"`
-	WorkflowJSON          map[string]interface{} `json:"workflowJson"`
-	WorkflowFields        []WorkflowField        `json:"workflowFields"`
-	RunningHubUseWallet   bool                   `json:"runningHubUseWallet"`
-	RunningHubWalletKey   string                 `json:"runningHubWalletApiKey"`
-	RunningHubUploadKey   string                 `json:"runningHubUploadApiKey"`
+	mediaTransport        ReferenceMediaTransport // resolved from administrator settings; never deserialized from task input
+	ChannelID             string                  `json:"channelId"`
+	ChannelModelKey       string                  `json:"channelModelKey,omitempty"`
+	PriceTierID           string                  `json:"priceTierId,omitempty"`
+	ProviderModelKey      string                  `json:"providerModelKey,omitempty"`
+	APIFormat             string                  `json:"apiFormat"`
+	InterfaceType         string                  `json:"interfaceType"`
+	BaseURL               string                  `json:"baseUrl"`
+	APIKey                string                  `json:"apiKey"`
+	SecretKey             string                  `json:"secretKey"`
+	Headers               []OutboundHeader        `json:"headers"`
+	Model                 string                  `json:"model"`
+	Size                  string                  `json:"size"`
+	Quality               string                  `json:"quality"`
+	ImageResolution       string                  `json:"imageResolution"`
+	ImageParameters       map[string]any          `json:"imageParameters,omitempty"`
+	TransparentBackground string                  `json:"transparentBackground"`
+	Count                 string                  `json:"count"`
+	VideoSeconds          string                  `json:"videoSeconds"`
+	VQuality              string                  `json:"vquality"`
+	VideoGenerateAudio    string                  `json:"videoGenerateAudio"`
+	VideoWatermark        string                  `json:"videoWatermark"`
+	ArkPrivateAssetUpload string                  `json:"videoArkPrivateAssetUpload"`
+	AudioVoice            string                  `json:"audioVoice"`
+	AudioFormat           string                  `json:"audioFormat"`
+	AudioSpeed            string                  `json:"audioSpeed"`
+	AudioInstructions     string                  `json:"audioInstructions"`
+	AudioLanguage         string                  `json:"audioLanguage"`
+	AudioDialect          string                  `json:"audioDialect"`
+	SystemPrompt          string                  `json:"systemPrompt"`
+	CapabilityConfig      *ModelCapabilityConfig  `json:"capabilityConfig"`
+	WorkflowID            string                  `json:"workflowId"`
+	WebappID              string                  `json:"webappId"`
+	WorkflowJSON          map[string]interface{}  `json:"workflowJson"`
+	WorkflowFields        []WorkflowField         `json:"workflowFields"`
+	RunningHubUseWallet   bool                    `json:"runningHubUseWallet"`
+	RunningHubWalletKey   string                  `json:"runningHubWalletApiKey"`
+	RunningHubUploadKey   string                  `json:"runningHubUploadApiKey"`
 }
 
 const providerHTTPTimeout = 5 * time.Minute
@@ -241,6 +242,9 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		return nil, err
 	}
 	if resumedProviderRequestID(ctx) == "" {
+		if err := validateReferenceTransportProtocol(ctx, input); err != nil {
+			return nil, err
+		}
 		mediaPolicy := providerMediaHydrationPolicyFor(ctx, input)
 		if err := s.hydrateGenerationMedia(userID, &input, mediaPolicy); err != nil {
 			return nil, err
@@ -289,10 +293,12 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 }
 
 type providerMediaHydrationPolicy struct {
-	requireURL bool
-	preferURL  bool
-	imageOnly  bool
-	maxBytes   int64
+	forceBase64       bool
+	explicitTransport string
+	requireURL        bool
+	preferURL         bool
+	imageOnly         bool
+	maxBytes          int64
 }
 
 func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGenerationInput) providerMediaHydrationPolicy {
@@ -418,6 +424,23 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	if err != nil {
 		return providerConfig{}, err
 	}
+	channelTransport, err := s.channelMediaTransport(channel.ID)
+	if err != nil {
+		return providerConfig{}, err
+	}
+	modelCapability, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
+	if err != nil {
+		return providerConfig{}, err
+	}
+	var modelTransport *ReferenceMediaTransport
+	if modelCapability != nil {
+		modelTransport = modelCapability.MediaTransport
+	}
+	modelTransport, err = normalizeReferenceMediaTransport(modelTransport)
+	if err != nil {
+		return providerConfig{}, err
+	}
+	config.mediaTransport = resolveReferenceMediaTransport(channelTransport, modelTransport)
 	config.ChannelModelKey = modelKey
 	config.ProviderModelKey = providerModelKey
 	config.Model = firstNonEmpty(providerModelKey, channelModel.ProviderModelKey, modelKey)

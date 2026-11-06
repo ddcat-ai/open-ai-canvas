@@ -608,3 +608,7 @@ Schema 32 为 `channel_models` 新增 `tags`（TEXT、NOT NULL、默认 `'[]'`�
 迁移 46 新增 skill_curation_settings、skill_curation_categories、skill_curation_assignments；默认关闭，不导入技能内容。表结构与事务规则见 [平台技能策展](./skill-curation)。
 
 迁移 47 依赖 46，新增 skill_curation_roots 与 skill_curation_root_assignments；保留原五个根 ID，根停用时使用派生默认桶，根表为空回落固定五类。
+
+### 参考素材发送策略
+
+渠道默认策略保存于 `system_settings` 的 `channel_media_transport:<channelId>`，与渠道编辑在同一事务提交；未提交字段保持已有值。模型覆盖保存在已有 `capability_config_json.mediaTransport`。字段 `image`、`audio`、`video` 分别支持 `inherit`、`protocol`、`url`、`base64`；不新增数据表、列或迁移版本。渠道复制、导入导出保留策略，不包含素材签名或凭证。执行时由后端重新读取管理员配置，客户端任务不能覆盖系统渠道策略。
