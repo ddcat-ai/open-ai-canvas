@@ -157,6 +157,14 @@ export const frFR: Messages = {
             noAccount: "Pas encore de compte ?",
             toRegister: "S'inscrire",
             agreementPrefix: "En vous connectant, vous acceptez",
+            submitOrRegister: "Se connecter / S'inscrire",
+            autoRegisterHint: "Les nouveaux comptes sont créés après confirmation du mot de passe",
+            newAccount: "Ce compte n'existe pas encore. Confirmez le mot de passe pour le créer et vous connecter.",
+            changeAccount: "Changer de compte",
+            createAndLogin: "Créer le compte et se connecter",
+            agreeForSignup: "Les nouveaux comptes acceptent",
+            emailRequired: "Veuillez saisir un e-mail",
+            emailRequiredPlaceholder: "E-mail (obligatoire), pour la connexion et la récupération du mot de passe",
         },
         register: {
             firstUser: "Le premier compte devient administrateur ; aucun code e-mail n'est requis.",
@@ -215,6 +223,8 @@ export const frFR: Messages = {
             mismatch: "Les mots de passe ne correspondent pas",
             success: "Mot de passe réinitialisé. Connectez-vous avec le nouveau mot de passe.",
             failed: "Échec de la réinitialisation",
+            notReceived:
+                "Pas d'e-mail ? Vérifiez vos spams et que l'adresse est bien celle liée au compte. Les comptes créés par téléphone ou LinuxDO sans mot de passe ne peuvent pas être récupérés par e-mail : connectez-vous comme d'habitude et définissez un mot de passe dans les paramètres du compte.",
         },
         verification: {
             needTarget: "Renseignez d'abord vos coordonnées et votre mot de passe actuel",

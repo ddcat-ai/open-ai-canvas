@@ -35,7 +35,7 @@ func TestEmailDeliveryLogsFailureWithoutSecrets(t *testing.T) {
 	}
 	deliveryErr := errors.New(detail)
 	svc := New(nil, nil, func(EmailSettingValue, string, string, string) error { return deliveryErr })
-	if err := svc.deliverEmail(setting, recipient, subject, body); err != deliveryErr {
+	if err := svc.deliverEmail(setting, EmailDelivery{Recipient: recipient, Mail: OutgoingMail{Subject: subject, Text: body}}); err != deliveryErr {
 		t.Fatalf("delivery error was changed: %v", err)
 	}
 	var entry struct {
@@ -58,7 +58,7 @@ func TestEmailDeliveryLogsFailureWithoutSecrets(t *testing.T) {
 	}
 	svc.SetMailSender(func(EmailSettingValue, string, string, string) error { return nil })
 	output.Reset()
-	if err := svc.deliverEmail(setting, recipient, subject, body); err != nil || output.Len() != 0 {
+	if err := svc.deliverEmail(setting, EmailDelivery{Recipient: recipient, Mail: OutgoingMail{Subject: subject, Text: body}}); err != nil || output.Len() != 0 {
 		t.Fatalf("successful delivery produced an error/log: %v %s", err, output.String())
 	}
 }
@@ -113,7 +113,7 @@ func TestSMTPDeliveryLogsProtocolFailureStage(t *testing.T) {
 				done <- nil
 			}()
 			setting := EmailSettingValue{Host: "127.0.0.1", Port: listener.Addr().(*net.TCPAddr).Port, Encryption: test.encryption, Username: test.username, Password: "smtp-secret", FromEmail: "sender@example.com"}
-			err = New(nil, nil, nil).deliverEmail(setting, "reader@example.com", "Verification", "Your code is 123456.")
+			err = New(nil, nil, nil).deliverEmail(setting, EmailDelivery{Recipient: "reader@example.com", Mail: OutgoingMail{Subject: "Verification", Text: "Your code is 123456."}})
 			if serverErr := <-done; serverErr != nil {
 				t.Fatal(serverErr)
 			}

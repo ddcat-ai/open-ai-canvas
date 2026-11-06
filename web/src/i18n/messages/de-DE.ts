@@ -157,6 +157,14 @@ export const deDE: Messages = {
             noAccount: "Noch kein Konto?",
             toRegister: "Registrieren",
             agreementPrefix: "Mit der Anmeldung akzeptierst du",
+            submitOrRegister: "Anmelden / Registrieren",
+            autoRegisterHint: "Neue Konten werden nach Bestätigung des Passworts erstellt",
+            newAccount: "Dieses Konto ist noch nicht registriert. Bestätige dein Passwort, um es zu erstellen und dich anzumelden.",
+            changeAccount: "Konto ändern",
+            createAndLogin: "Konto erstellen und anmelden",
+            agreeForSignup: "Neue Konten akzeptieren",
+            emailRequired: "Bitte E-Mail-Adresse eingeben",
+            emailRequiredPlaceholder: "E-Mail (Pflichtfeld), für Anmeldung und Passwortwiederherstellung",
         },
         register: {
             firstUser: "Das erste Konto wird Administrator; ein E-Mail-Code ist nicht nötig.",
@@ -215,6 +223,8 @@ export const deDE: Messages = {
             mismatch: "Die Passwörter stimmen nicht überein",
             success: "Passwort zurückgesetzt. Melde dich mit dem neuen Passwort an.",
             failed: "Zurücksetzen fehlgeschlagen",
+            notReceived:
+                "Keine E-Mail erhalten? Prüfe den Spam-Ordner und ob dies die mit deinem Konto verknüpfte Adresse ist. Konten, die per Telefonnummer oder LinuxDO erstellt wurden und nie ein Passwort hatten, lassen sich nicht per E-Mail wiederherstellen – melde dich wie gewohnt an und setze in den Kontoeinstellungen ein Passwort.",
         },
         verification: {
             needTarget: "Gib zuerst deine Kontaktdaten und dein aktuelles Passwort ein",

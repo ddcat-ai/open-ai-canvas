@@ -95,3 +95,33 @@ func (p VerificationPolicy) allows(purpose, method string) bool {
 	return false
 }
 func (p VerificationPolicy) hash() string { raw, _ := json.Marshal(p); return HashToken(string(raw)) }
+
+// availableRegistrationMethods 返回策略开启且发送能力就绪的注册验证方式，与公开设置的过滤口径一致。
+func (s *Service) availableRegistrationMethods() ([]string, error) {
+	p, err := s.verificationPolicy()
+	if err != nil {
+		return nil, err
+	}
+	emailEnabled, err := s.EmailEnabled()
+	if err != nil {
+		return nil, err
+	}
+	smsEnabled, err := s.smsAvailable("register")
+	if err != nil {
+		return nil, err
+	}
+	if p.SMSAndEmailRegistration {
+		if smsEnabled && emailEnabled {
+			return []string{"sms_email"}, nil
+		}
+		return nil, nil
+	}
+	methods := []string{}
+	if p.SMSRegistration && smsEnabled {
+		methods = append(methods, "sms")
+	}
+	if p.EmailRegistration && emailEnabled {
+		methods = append(methods, "email")
+	}
+	return methods, nil
+}

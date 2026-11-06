@@ -5,8 +5,8 @@ import { resolve } from "node:path";
 const read = (path: string) => readFileSync(resolve(import.meta.dir, "../src", path), "utf8");
 
 describe("注册服务协议", () => {
-    test("确认密码后展示协议入口，默认未同意且保留注册限流", () => {
-        const source = read("components/auth/auth-register-form.tsx");
+    test("一体表单确认密码后展示协议入口，默认未同意且保留注册限流", () => {
+        const source = read("components/auth/auth-login-form.tsx");
         const passwordIndex = source.indexOf('aria-label={t("auth.register.confirmPassword")}');
         const agreementIndex = source.indexOf("Checkbox checked={agreementAccepted}");
         const submitIndex = source.indexOf('htmlType="submit"');
@@ -15,34 +15,34 @@ describe("注册服务协议", () => {
         expect(agreementIndex).toBeGreaterThan(passwordIndex);
         expect(submitIndex).toBeGreaterThan(agreementIndex);
         expect(source).toContain("[agreementAccepted, setAgreementAccepted] = useState(false)");
-        expect(source).toContain("disabled={disabled || registerCountdown > 0 || !agreementAccepted}");
-        expect(source).toContain("if (registering.current || registerCountdown > 0) return;");
-        expect(source).toContain("disabled={!agreementAccepted}");
+        expect(source).toContain("(Boolean(pending) && !agreementAccepted)");
+        expect(source).toContain("if (submitting || retryCountdown > 0) return;");
     });
 
-    test("普通注册与 Linux.do 注册传递同意状态，登录入口保留原合同", () => {
-        const page = read("components/auth/auth-register-form.tsx");
+    test("一体表单注册与 Linux.do 注册传递同意状态", () => {
         const login = read("components/auth/auth-login-form.tsx");
         const api = read("services/api/auth.ts");
 
-        expect(page).toContain("acceptedTerms: agreementAccepted");
-        expect(page).toContain("agreementAccepted ? linuxDOLoginURL(next, true) : undefined");
-        expect(page).toContain('message.warning(t("auth.register.agreeFirst", { title: agreementTitle }))');
-        expect(login).toContain("linuxDOLoginURL(next)");
+        expect(login).toContain("acceptedTerms: agreementAccepted");
+        expect(login).toContain('reason === "account_not_registered"');
+        expect(login).toContain("autoRegister: canRegister");
+        // 未勾选协议时不携带同意标志，Linux.do 只能登录已绑定账号。
+        expect(login).toContain("linuxDOLoginURL(next, agreementAccepted || undefined)");
+        expect(login).toContain('message.warning(t("auth.register.agreeFirst", { title: agreement.title }))');
         expect(api).toContain("acceptedTerms: boolean");
         expect(api).toContain("acceptedTerms?: boolean");
     });
 
     test("协议标题与条款来自后台配置而不是硬编码常量", () => {
         const parts = read("components/auth/auth-form-parts.tsx");
-        const register = read("components/auth/auth-register-form.tsx");
+        const login = read("components/auth/auth-login-form.tsx");
 
-        expect(register).not.toContain("SERVICE_AGREEMENT");
+        expect(login).not.toContain("SERVICE_AGREEMENT");
         expect(parts).toContain("settings?.agreementTitle");
         expect(parts).toContain("settings?.agreementContent");
         expect(parts).toContain("title={title}");
         expect(parts).toContain("paragraphs.map");
-        expect(register).toContain("<AuthAgreementDialog open={agreementOpen} title={agreementTitle}");
+        expect(login).toContain("<AuthAgreementDialog open={agreementOpen} title={agreement.title}");
         // 条款留空时的占位提示；断言关键词而非整句，允许后续补充指引文案。中文源文案在 zh-CN 目录。
         const zhCatalog = read("i18n/messages/zh-CN.ts");
         expect(parts).toContain('t("auth.register.agreementEmpty")');
@@ -50,7 +50,7 @@ describe("注册服务协议", () => {
     });
 
     test("读取设置失败时不猜协议标题，改为提示并允许重新读取", () => {
-        const register = read("components/auth/auth-register-form.tsx");
+        const login = read("components/auth/auth-login-form.tsx");
         const panel = read("components/auth/auth-panel.tsx");
         const store = read("stores/use-auth-settings-store.ts");
 
@@ -58,11 +58,11 @@ describe("注册服务协议", () => {
         expect(store).toContain('set({ status: "error" })');
         expect(panel).toContain("settingsFailed={failed}");
         const zhCatalog = read("i18n/messages/zh-CN.ts");
-        expect(register).toContain('t("auth.register.settingsFailed")');
+        expect(login).toContain('t("auth.register.settingsFailed")');
         expect(zhCatalog).toContain("读取注册设置失败，暂时无法确认服务协议名称与条款。");
-        expect(register).toContain("onClick={onReloadSettings}");
+        expect(login).toContain("onClick={onReloadSettings}");
         // 协议入口只在拿到设置后渲染，读不到配置就不展示协议名。
-        expect(register).toContain("{settings ? (");
+        expect(login).toContain("{settings && (pending || canRegister) ? (");
     });
 
     test("公开认证设置暴露协议字段，管理接口可回传协议正文", () => {

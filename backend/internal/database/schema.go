@@ -40,6 +40,8 @@ func Models() []any {
 		&model.UserIdentity{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},
+		&model.EmailLog{},
+		&model.UserNotificationSetting{},
 		&model.AuthVerification{},
 		&model.NotificationQuota{},
 		&model.SMSChannel{},

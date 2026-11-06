@@ -21,6 +21,7 @@ const (
 	CodeIdempotencyConflict    = 40901
 	CodeCanvasResourcesMissing = 40902
 	CodeRateLimited            = 42901
+	CodeAccountNotRegistered   = 40401
 )
 
 // ErrorReason 是稳定机器可读原因，前端应判断 reason 而不是解析 msg。
@@ -53,12 +54,14 @@ const (
 	ReasonAgentInterjectionDelivered ErrorReason = "agent_interjection_already_delivered"
 	// Agent 运行状态被并发写入，多次重读重试仍冲突；可稍后原样重试。
 	ReasonAgentRunStateBusy ErrorReason = "agent_run_state_busy"
-	ReasonRateLimited       ErrorReason = "rate_limited"
-	ReasonUnavailable       ErrorReason = "unavailable"
-	ReasonTimeout           ErrorReason = "timeout"
-	ReasonInternal          ErrorReason = "internal"
-	ReasonBadGateway        ErrorReason = "bad_gateway"
-	ReasonUpstreamDNSFailed ErrorReason = "upstream_dns_failed"
+	// 密码登录且客户端声明可自动注册时，账号不存在：客户端在原表单补齐注册信息后调用注册接口。
+	ReasonAccountNotRegistered ErrorReason = "account_not_registered"
+	ReasonRateLimited          ErrorReason = "rate_limited"
+	ReasonUnavailable          ErrorReason = "unavailable"
+	ReasonTimeout              ErrorReason = "timeout"
+	ReasonInternal             ErrorReason = "internal"
+	ReasonBadGateway           ErrorReason = "bad_gateway"
+	ReasonUpstreamDNSFailed    ErrorReason = "upstream_dns_failed"
 )
 
 func ReasonForStatus(status int) ErrorReason {

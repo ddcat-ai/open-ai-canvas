@@ -23,6 +23,8 @@ type (
 	PasswordResetRequest       = auth.PasswordResetRequest
 	EmailSettingRequest        = auth.EmailSettingRequest
 	PublicEmailSetting         = auth.PublicEmailSetting
+	EmailLogQuery              = auth.EmailLogQuery
+	EmailLogPage               = auth.EmailLogPage
 	LinuxDOSettingRequest      = auth.LinuxDOSettingRequest
 	PublicLinuxDOSetting       = auth.PublicLinuxDOSetting
 	LinuxDOCallbackResult      = auth.LinuxDOCallbackResult
@@ -271,4 +273,12 @@ func hashToken(token string) string {
 
 func randomToken() string {
 	return auth.RandomToken()
+}
+
+func (s *Service) AdminEmailLogs(actor *model.User, query EmailLogQuery, page, pageSize int) (*EmailLogPage, error) {
+	return s.authDomain().AdminEmailLogs(actor, query, page, pageSize)
+}
+
+func (s *Service) SendTestEmail(actor *model.User, recipient string) error {
+	return s.authDomain().SendTestEmail(actor, recipient)
 }

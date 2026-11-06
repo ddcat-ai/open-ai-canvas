@@ -72,12 +72,14 @@ type DramaProduction struct {
 	PlanDone           bool   `json:"planDone"`
 	SampleApproved     bool   `json:"sampleApproved"`
 	// AssetsReleased 为 true 后才自动生成角色/场景参考图；手动生图模式下由用户确认资产后打开。
-	AssetsReleased bool       `json:"assetsReleased"`
-	PauseReason    string     `json:"pauseReason" gorm:"size:500"`
-	Revision       int64      `json:"revision"`
-	LastTickAt     *time.Time `json:"lastTickAt,omitempty"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
+	AssetsReleased bool   `json:"assetsReleased"`
+	PauseReason    string `json:"pauseReason" gorm:"size:500"`
+	// DraftJSON 是草稿的创建页表单（原始正文、画风 ID），只在 status=draft 时有值，开工时清空。
+	DraftJSON  string     `json:"-" gorm:"type:text"`
+	Revision   int64      `json:"revision"`
+	LastTickAt *time.Time `json:"lastTickAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 // DramaCast 是全剧设定（角色 / 场景），镜头引用它的参考图保持一致性。

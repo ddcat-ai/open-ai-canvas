@@ -158,6 +158,14 @@ export const zhCN = {
             noAccount: "还没有账号？",
             toRegister: "立即注册",
             agreementPrefix: "登录即表示你已阅读并同意",
+            submitOrRegister: "登录 / 注册",
+            autoRegisterHint: "未注册的账号会在确认密码后自动创建",
+            newAccount: "该账号尚未注册，确认密码后即可创建并登录。",
+            changeAccount: "修改账号",
+            createAndLogin: "创建账号并登录",
+            agreeForSignup: "新账号注册即表示同意",
+            emailRequired: "请填写邮箱",
+            emailRequiredPlaceholder: "邮箱（必填），用于登录与找回密码",
         },
         register: {
             firstUser: "首个账号自动成为管理员，邮箱验证码暂不要求。",
@@ -216,6 +224,7 @@ export const zhCN = {
             mismatch: "两次输入的密码不一致",
             success: "密码已重置，请使用新密码登录",
             failed: "密码重置失败",
+            notReceived: "没收到邮件？请检查垃圾邮件/广告邮件文件夹，并确认填写的是账号绑定的邮箱。用手机号、LinuxDO 等方式注册且从未设置密码的账号无法用邮件找回，请用原方式登录后在账号设置中设置密码。",
         },
         verification: {
             needTarget: "请先填写联系方式及必要的当前密码",

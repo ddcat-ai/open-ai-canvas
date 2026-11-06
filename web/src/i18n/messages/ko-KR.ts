@@ -157,6 +157,14 @@ export const koKR: Messages = {
             noAccount: "계정이 없으신가요?",
             toRegister: "회원가입",
             agreementPrefix: "로그인하면 다음 약관에 동의하는 것으로 간주됩니다:",
+            submitOrRegister: "로그인 / 가입",
+            autoRegisterHint: "가입되지 않은 계정은 비밀번호 확인 후 자동으로 생성됩니다",
+            newAccount: "아직 가입되지 않은 계정입니다. 비밀번호를 확인하면 계정을 만들고 로그인합니다.",
+            changeAccount: "계정 변경",
+            createAndLogin: "계정 만들고 로그인",
+            agreeForSignup: "신규 가입 시 다음에 동의합니다",
+            emailRequired: "이메일을 입력하세요",
+            emailRequiredPlaceholder: "이메일(필수), 로그인 및 비밀번호 찾기에 사용",
         },
         register: {
             firstUser: "첫 번째 계정은 관리자가 되며 이메일 인증번호가 필요하지 않습니다.",
@@ -215,6 +223,8 @@ export const koKR: Messages = {
             mismatch: "비밀번호가 일치하지 않습니다",
             success: "비밀번호를 재설정했습니다. 새 비밀번호로 로그인하세요.",
             failed: "비밀번호 재설정에 실패했습니다",
+            notReceived:
+                "메일이 오지 않나요? 스팸함을 확인하고 계정에 연결된 이메일인지 확인하세요. 휴대폰 번호나 LinuxDO로 가입해 비밀번호를 설정하지 않은 계정은 이메일로 복구할 수 없습니다. 원래 방식으로 로그인한 뒤 계정 설정에서 비밀번호를 설정하세요.",
         },
         verification: {
             needTarget: "먼저 연락처와 필요한 현재 비밀번호를 입력하세요",

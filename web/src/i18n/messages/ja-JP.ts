@@ -157,6 +157,14 @@ export const jaJP: Messages = {
             noAccount: "アカウントをお持ちでない場合",
             toRegister: "新規登録",
             agreementPrefix: "ログインすると、次の規約に同意したことになります：",
+            submitOrRegister: "ログイン / 登録",
+            autoRegisterHint: "未登録のアカウントはパスワード確認後に自動で作成されます",
+            newAccount: "このアカウントはまだ登録されていません。パスワードを確認すると作成してログインします。",
+            changeAccount: "アカウントを変更",
+            createAndLogin: "アカウントを作成してログイン",
+            agreeForSignup: "新規登録時は次に同意したものとみなします",
+            emailRequired: "メールアドレスを入力してください",
+            emailRequiredPlaceholder: "メールアドレス（必須）、ログインとパスワード再設定に使用",
         },
         register: {
             firstUser: "最初のアカウントは管理者になります。メール認証コードは不要です。",
@@ -215,6 +223,8 @@ export const jaJP: Messages = {
             mismatch: "パスワードが一致しません",
             success: "パスワードを再設定しました。新しいパスワードでログインしてください。",
             failed: "パスワードの再設定に失敗しました",
+            notReceived:
+                "メールが届かない場合は、迷惑メールフォルダを確認し、アカウントに連携したメールアドレスか確認してください。電話番号や LinuxDO で登録しパスワード未設定のアカウントはメールで復旧できません。元の方法でログインし、アカウント設定でパスワードを設定してください。",
         },
         verification: {
             needTarget: "先に連絡先と必要な現在のパスワードを入力してください",

@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AuthLoginForm } from "./auth-login-form";
 import { AuthRecoveryForm } from "./auth-recovery-form";
-import { AuthRegisterForm } from "./auth-register-form";
 import "./auth-panel.css";
 
 export type AuthPanelProps = {
@@ -19,13 +18,14 @@ export type AuthPanelProps = {
     variant: "page" | "dialog";
 };
 
-/** 登录、注册、找回密码的共用面板。导航方式由外层决定：独立页面改路由，弹窗只切换视图。 */
+/** 登录注册一体表单与找回密码的共用面板。导航方式由外层决定：独立页面改路由，弹窗只切换视图。 */
 export function AuthPanel({ view, onViewChange, next, onAuthenticated, variant }: AuthPanelProps) {
     const { t } = useTranslation();
     const titleId = useId();
     const brand = useAppearanceStore((state) => state.appearance.brandName) || t("auth.register.platform");
     const { settings, failed, reload } = useAuthSettings();
-    const title = view === "login" ? t("auth.panel.loginTitle", { brand }) : view === "register" ? t("auth.panel.registerTitle", { brand }) : t("auth.panel.recoveryTitle");
+    // 登录与注册是同一个表单；/register 仍保留给推广链接，打开的也是一体表单。
+    const title = view === "recovery" ? t("auth.panel.recoveryTitle") : t("auth.panel.loginTitle", { brand });
     const formProps = { settings, next, onAuthenticated, onViewChange };
 
     return (
@@ -37,13 +37,7 @@ export function AuthPanel({ view, onViewChange, next, onAuthenticated, variant }
                 {view === "recovery" ? <p className="auth-panel-description">{t("auth.panel.recoveryDescription")}</p> : null}
             </header>
             <div key={view} className="auth-panel-body">
-                {view === "login" ? (
-                    <AuthLoginForm {...formProps} />
-                ) : view === "register" ? (
-                    <AuthRegisterForm {...formProps} settingsFailed={failed} onReloadSettings={() => void reload()} />
-                ) : (
-                    <AuthRecoveryForm settings={settings} onViewChange={onViewChange} />
-                )}
+                {view !== "recovery" ? <AuthLoginForm {...formProps} settingsFailed={failed} onReloadSettings={() => void reload()} /> : <AuthRecoveryForm settings={settings} onViewChange={onViewChange} />}
             </div>
         </section>
     );

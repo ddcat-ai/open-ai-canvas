@@ -25,6 +25,8 @@ const sessionMaxAge = 30 * 24 * time.Hour
 
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
 
+var usernameInvalidChars = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
+
 // AuthError 保留为兼容别名；跨认证域的新代码应直接使用 AppError。
 type AuthError = kernel.AppError
 
@@ -46,19 +48,25 @@ type LoginRequest struct {
 	LoginContext LoginContext `json:"-"`
 	Username     string       `json:"username"`
 	Password     string       `json:"password"`
+	// AutoRegister 由登录注册一体表单提交：账号不存在且允许注册时返回 account_not_registered，
+	// 客户端据此在同一表单补齐注册信息，不再提示“密码不正确”。
+	AutoRegister bool `json:"autoRegister"`
 }
 
 type PublicAuthSettings struct {
 	VerificationPolicy
-	SMSBindingAvailable   bool   `json:"smsBindingAvailable"`
-	EmailBindingAvailable bool   `json:"emailBindingAvailable"`
-	FirstUser             bool   `json:"firstUser"`
-	RegistrationEnabled   bool   `json:"registrationEnabled"`
-	LinuxDOEnabled        bool   `json:"linuxdoEnabled"`
-	EmailEnabled          bool   `json:"emailEnabled"`
-	EmailCodeRequired     bool   `json:"emailCodeRequired"`
-	AgreementTitle        string `json:"agreementTitle,omitempty"`
-	AgreementContent      string `json:"agreementContent,omitempty"`
+	SMSBindingAvailable   bool `json:"smsBindingAvailable"`
+	EmailBindingAvailable bool `json:"emailBindingAvailable"`
+	FirstUser             bool `json:"firstUser"`
+	RegistrationEnabled   bool `json:"registrationEnabled"`
+	LinuxDOEnabled        bool `json:"linuxdoEnabled"`
+	EmailEnabled          bool `json:"emailEnabled"`
+	EmailCodeRequired     bool `json:"emailCodeRequired"`
+	// EmailRequired：注册必须填写邮箱；EmailVerificationRequired：注册必须先通过验证码。
+	EmailRequired             bool   `json:"emailRequired"`
+	EmailVerificationRequired bool   `json:"emailVerificationRequired"`
+	AgreementTitle            string `json:"agreementTitle,omitempty"`
+	AgreementContent          string `json:"agreementContent,omitempty"`
 	// LoginMode 决定前台登录入口：modal 弹窗，page 跳转独立页面。
 	LoginMode string `json:"loginMode"`
 }
@@ -123,17 +131,19 @@ func (s *Service) PublicAuthSettings() (*PublicAuthSettings, error) {
 	p.SMSAndEmailRegistration = p.SMSAndEmailRegistration && smsRegister && emailEnabled
 	agreementTitle, agreementContent := s.RegistrationAgreement()
 	return &PublicAuthSettings{
-		VerificationPolicy:    p,
-		SMSBindingAvailable:   smsBind,
-		EmailBindingAvailable: emailEnabled,
-		FirstUser:             false,
-		RegistrationEnabled:   registration.Enabled,
-		LinuxDOEnabled:        s.LinuxDOEnabled(),
-		EmailEnabled:          emailEnabled,
-		EmailCodeRequired:     p.EmailRegistration || p.SMSAndEmailRegistration,
-		AgreementTitle:        agreementTitle,
-		AgreementContent:      agreementContent,
-		LoginMode:             normalizeLoginMode(registration.LoginMode),
+		VerificationPolicy:        p,
+		SMSBindingAvailable:       smsBind,
+		EmailBindingAvailable:     emailEnabled,
+		FirstUser:                 false,
+		RegistrationEnabled:       registration.Enabled,
+		LinuxDOEnabled:            s.LinuxDOEnabled(),
+		EmailEnabled:              emailEnabled,
+		EmailCodeRequired:         registration.verificationRequired() && (p.EmailRegistration || p.SMSAndEmailRegistration),
+		EmailRequired:             registration.emailRequired(),
+		EmailVerificationRequired: registration.verificationRequired(),
+		AgreementTitle:            agreementTitle,
+		AgreementContent:          agreementContent,
+		LoginMode:                 normalizeLoginMode(registration.LoginMode),
 	}, nil
 }
 
@@ -143,9 +153,12 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	}
 	username := NormalizeUsername(req.Username)
 	email := NormalizeEmail(req.Email)
-	displayName := NormalizeDisplayName(req.DisplayName, username)
-	if err := ValidateUsername(username); err != nil {
-		return nil, err
+	// 一体表单用邮箱作账号时不提交用户名，加锁后再按邮箱前缀生成。
+	generateUsername := username == "" && email != ""
+	if !generateUsername {
+		if err := ValidateUsername(username); err != nil {
+			return nil, err
+		}
 	}
 	if err := ValidatePassword(req.Password); err != nil {
 		return nil, err
@@ -165,26 +178,35 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 	var verification *model.AuthVerification
 	phone := ""
 	if count > 0 {
-		registrationEnabled, err := s.RegistrationEnabled()
+		_, registration, err := s.readRegistrationSetting()
 		if err != nil {
 			return nil, err
 		}
-		if !registrationEnabled {
+		if !registration.Enabled {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
+		}
+		if registration.emailRequired() && email == "" {
+			return nil, kernel.BadAuthRequest("请输入邮箱")
+		}
+		if email != "" {
+			if err := s.validateRegistrationEmailDomain(email); err != nil {
+				return nil, err
+			}
 		}
 		if req.Ticket != "" {
 			verification, err = s.verifyTicket("register", VerificationConfirm{Ticket: req.Ticket, EmailCode: req.EmailCode, SMSCode: req.SMSCode})
 			if err != nil {
 				return nil, err
 			}
-			if verification.Email != email || (verification.Phone != "" && strings.TrimSpace(req.Phone) != verification.Phone && "+86"+strings.TrimSpace(req.Phone) != verification.Phone) || (verification.Phone == "" && req.Phone != "") {
+			// 短信验证时邮箱可以另填，按未验证保存；邮箱验证时提交的邮箱必须与验证码一致。
+			if (verification.Email != "" && verification.Email != email) || (verification.Email == "" && verification.Method != "sms") || (verification.Phone != "" && strings.TrimSpace(req.Phone) != verification.Phone && "+86"+strings.TrimSpace(req.Phone) != verification.Phone) || (verification.Phone == "" && req.Phone != "") {
 				return nil, invalidVerification()
 			}
 			phone = verification.Phone
 			if err := s.contactAvailable(email, phone, ""); err != nil {
 				return nil, err
 			}
-		} else {
+		} else if registration.verificationRequired() {
 			p, err := s.verificationPolicy()
 			if err != nil {
 				return nil, err
@@ -195,15 +217,18 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 			if email == "" {
 				return nil, kernel.BadAuthRequest("请输入邮箱")
 			}
-			if err := s.validateRegistrationEmailDomain(email); err != nil {
-				return nil, err
-			}
 			verifiedCode, err = s.VerifyRegistrationEmailCode(email, req.EmailCode)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
+	if generateUsername {
+		if username, err = s.usernameFromEmail(email); err != nil {
+			return nil, err
+		}
+	}
+	displayName := NormalizeDisplayName(req.DisplayName, username)
 	if _, err := s.repo.UserByUsername(username); err == nil {
 		return nil, kernel.BadAuthRequest("用户名已存在")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -235,7 +260,7 @@ func (s *Service) Register(req RegisterRequest) (*AuthSessionResult, error) {
 		user.Role = model.UserRoleAdmin
 	}
 	if verification != nil {
-		if email != "" {
+		if verification.Email != "" {
 			user.EmailVerifiedAt = &now
 		}
 		if phone != "" {
@@ -294,6 +319,11 @@ func (s *Service) Login(req LoginRequest) (result *AuthSessionResult, err error)
 	user, err := s.repo.UserByAccount(account)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if req.AutoRegister {
+				if err := s.accountNotRegistered(account); err != nil {
+					return nil, err
+				}
+			}
 			return nil, kernel.Unauthorized("用户名、邮箱或密码不正确")
 		}
 		return nil, err
@@ -312,6 +342,58 @@ func (s *Service) Login(req LoginRequest) (result *AuthSessionResult, err error)
 		return nil, err
 	}
 	return s.createAuthSession(user, event)
+}
+
+// accountNotRegistered 只在允许创建账号且输入可以作为用户名或邮箱注册时返回 account_not_registered；
+// 注册关闭时保持原来的“用户名、邮箱或密码不正确”，不额外暴露账号是否存在。
+func (s *Service) accountNotRegistered(account string) error {
+	count, err := s.repo.UserCount()
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		enabled, err := s.RegistrationEnabled()
+		if err != nil {
+			return err
+		}
+		if !enabled {
+			return nil
+		}
+	}
+	kind := "username"
+	if strings.Contains(account, "@") {
+		if ValidateEmail(NormalizeEmail(account)) != nil {
+			return nil
+		}
+		kind = "email"
+	} else if ValidateUsername(account) != nil {
+		return nil
+	}
+	return &kernel.AppError{Status: 404, Code: kernel.CodeAccountNotRegistered, Reason: kernel.ReasonAccountNotRegistered, Message: "该账号尚未注册，确认密码后即可创建账号", Details: map[string]any{"accountKind": kind}}
+}
+
+// usernameFromEmail 用邮箱前缀生成可用用户名；邮箱一体注册时用户不再单独填写用户名。
+func (s *Service) usernameFromEmail(email string) (string, error) {
+	local, _, _ := strings.Cut(email, "@")
+	base := strings.Trim(usernameInvalidChars.ReplaceAllString(local, "-"), "-_")
+	if len(base) > 24 {
+		base = base[:24]
+	}
+	for len(base) < 3 {
+		base += "0"
+	}
+	candidate := base
+	for attempt := 0; attempt < 20; attempt++ {
+		if attempt > 0 {
+			candidate = base + "-" + RandomToken()[:6]
+		}
+		if _, err := s.repo.UserByUsername(candidate); errors.Is(err, gorm.ErrRecordNotFound) {
+			return candidate, nil
+		} else if err != nil {
+			return "", err
+		}
+	}
+	return "", kernel.NewAppError(409, "无法生成可用的用户名，请改用用户名注册")
 }
 
 func (s *Service) Logout(cookieValue string, contexts ...LoginContext) (err error) {

@@ -436,6 +436,10 @@ export type AuthSettings = VerificationPolicy & {
     linuxdoEnabled: boolean;
     emailEnabled: boolean;
     emailCodeRequired: boolean;
+    /** 注册必须填写邮箱。旧服务端未返回时按选填处理。 */
+    emailRequired?: boolean;
+    /** 注册必须先通过验证码。旧服务端未返回时按必须处理。 */
+    emailVerificationRequired?: boolean;
     smsBindingAvailable: boolean;
     emailBindingAvailable: boolean;
     agreementTitle?: string;
@@ -504,7 +508,8 @@ export function updateAdminFeatureAvailability(
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
 
-export async function login(input: { username: string; password: string }) {
+/** autoRegister：一体表单在账号不存在且允许注册时收到 reason=account_not_registered，而不是“密码不正确”。 */
+export async function login(input: { username: string; password: string; autoRegister?: boolean }) {
     const result = await http.post<{ user: LocalUser }>("/auth/login", input);
     // 登录会改变服务端会话身份，不能让登录前缓存的游客 session 污染后续恢复。
     invalidateAuthSessionCache();

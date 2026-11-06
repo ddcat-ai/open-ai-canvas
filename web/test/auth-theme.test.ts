@@ -38,14 +38,14 @@ describe("authentication follows the application theme", () => {
     });
 
     test("form links, tabs and notices do not assume white text", () => {
-        for (const form of ["auth-login-form", "auth-register-form", "auth-recovery-form", "auth-form-parts", "auth-panel", "auth-dialog", "verification-fields"]) {
+        for (const form of ["auth-login-form", "auth-recovery-form", "auth-form-parts", "auth-panel", "auth-dialog", "verification-fields"]) {
             const code = source(`components/auth/${form}.tsx`);
             expect(code).not.toMatch(/(?:text|border|bg)-white/);
             expect(code).not.toMatch(/text-(?:blue|amber)-[123]00/);
         }
         // 提示条统一走主题感知的 auth-scene-notice，注册与找回密码都经 AuthNotice 渲染。
         expect(source("components/auth/auth-form-parts.tsx")).toContain("auth-scene-notice");
-        expect(source("components/auth/auth-register-form.tsx")).toContain("<AuthNotice");
+        expect(source("components/auth/auth-login-form.tsx")).toContain("<AuthNotice");
         expect(source("components/auth/auth-recovery-form.tsx")).toContain("<AuthNotice");
     });
 

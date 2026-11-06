@@ -28,16 +28,22 @@ type RegistrationSettingRequest struct {
 	AgreementTitle   *string `json:"agreementTitle"`
 	AgreementContent *string `json:"agreementContent"`
 	LoginMode        *string `json:"loginMode"`
+	// EmailRequired / EmailVerificationRequired 同样是可选指针：不提交表示保留已保存值。
+	EmailRequired             *bool `json:"emailRequired"`
+	EmailVerificationRequired *bool `json:"emailVerificationRequired"`
 }
 
 type PublicRegistrationSetting struct {
-	Enabled          bool      `json:"enabled"`
-	AgreementTitle   string    `json:"agreementTitle"`
-	AgreementContent string    `json:"agreementContent"`
-	LoginMode        string    `json:"loginMode"`
-	UpdatedBy        string    `json:"updatedBy"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	Enabled          bool   `json:"enabled"`
+	AgreementTitle   string `json:"agreementTitle"`
+	AgreementContent string `json:"agreementContent"`
+	LoginMode        string `json:"loginMode"`
+	// EmailRequired：注册时必须填写邮箱。EmailVerificationRequired：注册必须先通过验证码（按登录注册策略，默认邮箱）。
+	EmailRequired             bool      `json:"emailRequired"`
+	EmailVerificationRequired bool      `json:"emailVerificationRequired"`
+	UpdatedBy                 string    `json:"updatedBy"`
+	CreatedAt                 time.Time `json:"createdAt"`
+	UpdatedAt                 time.Time `json:"updatedAt"`
 }
 
 type registrationSettingValue struct {
@@ -46,6 +52,17 @@ type registrationSettingValue struct {
 	AgreementContent string `json:"agreementContent"`
 	// 旧记录没有该字段，读取时按 modal 处理。
 	LoginMode string `json:"loginMode,omitempty"`
+	// 旧记录没有这两个字段：邮箱按选填、验证按必须处理，保持升级前的注册校验强度。
+	EmailRequired             *bool `json:"emailRequired,omitempty"`
+	EmailVerificationRequired *bool `json:"emailVerificationRequired,omitempty"`
+}
+
+func (v registrationSettingValue) emailRequired() bool {
+	return v.EmailRequired != nil && *v.EmailRequired
+}
+
+func (v registrationSettingValue) verificationRequired() bool {
+	return v.EmailVerificationRequired == nil || *v.EmailVerificationRequired
 }
 
 func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrationSetting, error) {
@@ -68,10 +85,28 @@ func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationS
 		return nil, err
 	}
 	nextValue := registrationSettingValue{
-		Enabled:          req.Enabled,
-		AgreementTitle:   currentValue.AgreementTitle,
-		AgreementContent: currentValue.AgreementContent,
-		LoginMode:        normalizeLoginMode(currentValue.LoginMode),
+		Enabled:                   req.Enabled,
+		AgreementTitle:            currentValue.AgreementTitle,
+		AgreementContent:          currentValue.AgreementContent,
+		LoginMode:                 normalizeLoginMode(currentValue.LoginMode),
+		EmailRequired:             boolPtr(currentValue.emailRequired()),
+		EmailVerificationRequired: boolPtr(currentValue.verificationRequired()),
+	}
+	if req.EmailRequired != nil {
+		nextValue.EmailRequired = boolPtr(*req.EmailRequired)
+	}
+	if req.EmailVerificationRequired != nil {
+		nextValue.EmailVerificationRequired = boolPtr(*req.EmailVerificationRequired)
+	}
+	// 只在本次打开验证要求时检查发送能力：否则新用户会因为没有可用验证方式而无法注册。
+	if nextValue.verificationRequired() && !currentValue.verificationRequired() {
+		methods, err := s.availableRegistrationMethods()
+		if err != nil {
+			return nil, err
+		}
+		if len(methods) == 0 {
+			return nil, kernel.BadAuthRequest("当前没有可用的注册验证方式，请先配置并开启邮件服务")
+		}
 	}
 	if req.AgreementTitle != nil {
 		nextValue.AgreementTitle = strings.TrimSpace(*req.AgreementTitle)
@@ -164,10 +199,12 @@ func normalizeLoginMode(value string) string {
 
 func publicRegistrationSetting(setting *model.SystemSetting, value registrationSettingValue) *PublicRegistrationSetting {
 	result := &PublicRegistrationSetting{
-		Enabled:          value.Enabled,
-		AgreementTitle:   value.AgreementTitle,
-		AgreementContent: value.AgreementContent,
-		LoginMode:        normalizeLoginMode(value.LoginMode),
+		Enabled:                   value.Enabled,
+		AgreementTitle:            value.AgreementTitle,
+		AgreementContent:          value.AgreementContent,
+		LoginMode:                 normalizeLoginMode(value.LoginMode),
+		EmailRequired:             value.emailRequired(),
+		EmailVerificationRequired: value.verificationRequired(),
 	}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy
@@ -181,3 +218,5 @@ func registrationEnabledFromEnvironment() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_REGISTRATION_ENABLED")))
 	return value == "1" || value == "true" || value == "yes"
 }
+
+func boolPtr(value bool) *bool { return &value }

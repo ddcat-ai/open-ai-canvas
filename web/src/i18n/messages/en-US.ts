@@ -156,6 +156,14 @@ export const enUS: Messages = {
             noAccount: "Don't have an account?",
             toRegister: "Sign up",
             agreementPrefix: "By signing in, you agree to",
+            submitOrRegister: "Sign in / Sign up",
+            autoRegisterHint: "New accounts are created after you confirm the password",
+            newAccount: "This account isn't registered yet. Confirm your password to create it and sign in.",
+            changeAccount: "Change account",
+            createAndLogin: "Create account and sign in",
+            agreeForSignup: "New accounts agree to",
+            emailRequired: "Please enter an email",
+            emailRequiredPlaceholder: "Email (required), used for sign-in and password recovery",
         },
         register: {
             firstUser: "The first account becomes the administrator; no email code is required.",
@@ -214,6 +222,8 @@ export const enUS: Messages = {
             mismatch: "The passwords don't match",
             success: "Password reset. Sign in with your new password.",
             failed: "Password reset failed",
+            notReceived:
+                "No email? Check your spam or promotions folder and make sure this is the email linked to your account. Accounts created with a phone number or LinuxDO that never set a password can't be recovered by email — sign in the original way and set a password in account settings.",
         },
         verification: {
             needTarget: "Fill in your contact details and current password first",

@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { App, Button, Input } from "antd";
-import { ArrowLeft, TriangleAlert } from "lucide-react";
+import { ArrowLeft, MailQuestion, TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type { AuthView } from "@/lib/auth-entry";
@@ -115,6 +115,9 @@ export function AuthRecoveryForm({ settings, onViewChange }: { settings: AuthSet
 
     return (
         <form onSubmit={submitReset} className="auth-form">
+            <AuthNotice tone="blue" icon={<MailQuestion className="size-3.5" />}>
+                {t("auth.recovery.notReceived")}
+            </AuthNotice>
             <div className="auth-form-fields">
                 <div className="auth-code-row">
                     <Input size="large" value={email} readOnly autoComplete="email" aria-label={t("auth.recovery.email")} />

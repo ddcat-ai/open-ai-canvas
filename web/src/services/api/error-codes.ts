@@ -25,6 +25,7 @@ export const API_ERROR_REASONS = [
     "agent_interjection_already_delivered",
     "agent_run_state_busy",
     "rate_limited",
+    "account_not_registered",
     "unavailable",
     "timeout",
     "internal",

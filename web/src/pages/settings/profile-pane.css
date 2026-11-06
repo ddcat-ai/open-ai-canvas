@@ -114,6 +114,15 @@
     font-size: var(--fs-caption);
     line-height: 1.6;
 }
+.profile-report-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+}
 .profile-current-email {
     display: flex;
     min-width: 0;

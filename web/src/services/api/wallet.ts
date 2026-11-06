@@ -193,6 +193,10 @@ export type RegistrationSetting = {
     agreementContent?: string;
     /** 旧服务端未返回时按弹窗处理。 */
     loginMode?: AuthLoginMode;
+    /** 注册必须填写邮箱。 */
+    emailRequired?: boolean;
+    /** 注册必须先通过验证码；关闭后邮箱按未验证保存，用户可在账号设置中验证。 */
+    emailVerificationRequired?: boolean;
     updatedBy?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -334,7 +338,7 @@ export function getAdminRegistrationSetting() {
     return http.get<{ setting: RegistrationSetting }>("/admin/settings/registration");
 }
 
-export function updateAdminRegistrationSetting(input: { enabled: boolean; agreementTitle?: string; agreementContent?: string; loginMode?: AuthLoginMode } | boolean) {
+export function updateAdminRegistrationSetting(input: { enabled: boolean; agreementTitle?: string; agreementContent?: string; loginMode?: AuthLoginMode; emailRequired?: boolean; emailVerificationRequired?: boolean } | boolean) {
     const payload = typeof input === "boolean" ? { enabled: input } : input;
     return http.patch<{ setting: RegistrationSetting }>("/admin/settings/registration", payload);
 }
