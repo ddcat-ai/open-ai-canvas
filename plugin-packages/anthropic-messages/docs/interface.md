@@ -42,7 +42,7 @@
 | `create.path` | `"/v1/messages"` |
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
-| `create.body.max_tokens` | `{"$coalesce":[{"$ref":"request.extra.max_tokens"},{"$ref":"request.providerOptions.claude-api.max_tokens"},4096]}` |
+| `create.body.max_tokens` | `{"$coalesce":[{"$ref":"request.extra.max_tokens"},{"$ref":"request.providerOptions.claude-api.max_tokens"},{"$ref":"request.providerOptions.claude-api.max_output_tokens"},4096]}` |
 | `create.body.system` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.instructions"},{"$ref":"request.providerOptions.claude-api.system"}]}}` |
 | `create.body.messages` | `{"$filter":{"from":{"$ref":"request.messages"},"as":"message","where":{"$ne":[{"$ref":"message.role"},"system"]}}}` |
 | `create.body.temperature` | `{"$omitEmpty":{"$ref":"request.providerOptions.claude-api.temperature"}}` |
@@ -243,6 +243,9 @@
                 },
                 {
                   "$ref": "request.providerOptions.claude-api.max_tokens"
+                },
+                {
+                  "$ref": "request.providerOptions.claude-api.max_output_tokens"
                 },
                 4096
               ]

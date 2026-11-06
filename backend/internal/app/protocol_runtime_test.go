@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -885,4 +886,53 @@ func testPluginPackage(t *testing.T, manifest []byte) []byte {
 		t.Fatal(err)
 	}
 	return buffer.Bytes()
+}
+
+// DeepSeek 等 V4 系 Anthropic 网关对 /messages 默认开启思考（GitHub 社区案例：
+// NousResearch/hermes-agent#15700），省略 thinking 字段时输出预算会被思考占满、
+// 正文为空。客户端未要求思考时，宿主必须显式下发 thinking: disabled。
+func TestDeclarativeClaudeWireSendsThinkingDisabledWhenNotRequested(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	var gotBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"deepseek-flash\"}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"正文\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"))
+	}))
+	defer server.Close()
+
+	manifest := []byte(`{
+		"apiVersion":"yingce.plugin/v1",
+		"id":"test-declarative-claude-thinking","version":"1.0.0","name":"Test Declarative Claude Thinking","author":"Test","documentation":"# Test",
+		"contributes":{"providers":[{"id":"test-declarative-claude-thinking","label":"Test Declarative Claude Thinking","capabilities":["text"],"scopes":["canvas"],"create":{"method":"POST","path":"/v1/messages","fields":{"model":"request.model","messages":"request.messages","max_tokens":"request.extra.max_tokens","thinking":"request.providerOptions.test-declarative-claude-thinking.thinking"}},"response":{"status":"succeeded","textPaths":["content.0.text"]}}]}
+	}`)
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := center.install(testPluginPackage(t, manifest), "test-declarative-claude-thinking.yingce-plugin"); err != nil {
+		t.Fatal(err)
+	}
+	config := providerConfig{BaseURL: server.URL, APIKey: "key", Model: "deepseek-flash", APIFormat: "anthropic", InterfaceType: "test-declarative-claude-thinking"}
+	ctx := withProtocolRegistry(context.Background(), center.registrySnapshot())
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
+	if !ok {
+		t.Fatal("declarative adapter is unavailable")
+	}
+	input := canvasGenerationInput{Mode: "text", Prompt: "describe", Config: config, StreamText: true}
+	result, err := runProtocolAdapterTaskWithPolicy(ctx, input, adapter, fastVideoPollPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["text"] != "正文" {
+		t.Fatalf("text result = %#v", result)
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(gotBody, &body); err != nil {
+		t.Fatal(err)
+	}
+	thinking, _ := body["thinking"].(map[string]interface{})
+	if thinking["type"] != "disabled" {
+		t.Fatalf("request thinking = %#v, want explicit disabled (upstream defaults to thinking-on)", body["thinking"])
+	}
 }
