@@ -526,6 +526,8 @@
 .skill-tile:is(:hover, :focus-within) .skill-tile-actions,
 .skill-tile-actions:has([aria-expanded="true"]) { opacity: 1; }
 .skill-tile-corner { position: absolute; top: var(--space-3); right: var(--space-3); z-index: 1; }
+/* 作者本人角标：与「加入」按钮同尺寸同位置，只读、muted 底、无边框，用来替代原本不渲染的空白。 */
+.skill-tile-own { display: inline-flex; height: 24px; align-items: center; padding: 0 8px; border-radius: var(--user-radius-button-sm); background: var(--user-surface-muted); color: var(--user-ink-soft); font-size: var(--fs-caption); font-weight: 500; white-space: nowrap; }
 .skill-tile-add { display: inline-flex; height: 24px; align-items: center; gap: 4px; padding: 0 8px; border: 1px solid var(--user-border); border-radius: var(--user-radius-button-sm); background: transparent; color: var(--user-ink); font-size: var(--fs-caption); font-weight: 500; white-space: nowrap; cursor: pointer; transition: background var(--user-motion), border-color var(--user-motion), color var(--user-motion); }
 .skill-tile-add svg { width: 13px; height: 13px; flex: 0 0 auto; stroke-width: 2; }
 .skill-tile-add:hover:not(:disabled) { border-color: var(--user-border-strong); background: var(--user-surface-muted); }
