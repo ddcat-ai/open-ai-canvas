@@ -408,6 +408,10 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [ ] 为 Claude（Anthropic Messages）模型设置缓存写入价，连续两次发送同一长系统提示词：第一次请求日志显示缓存写入、账单按写入价计费；第二次显示缓存命中并按命中价计费。
 - [ ] 旧价格档（未设置缓存写入价）结算金额与升级前一致；PostgreSQL 升级到 Schema 82 后 `migrate-schema verify` 通过。
 
+## 声明式结果下载 - 支持返回媒体地址的 JSON 清单
+
+- 待人工验证：让结果接口以 application/json 返回一条视频地址，再由该地址返回 MP4。应按插件的响应映射取得视频，下载实际媒体。空清单应明确失败。
+
 ## 官方插件：即梦成功码、Novita 任务结果、NewAPI 失败原因
 
 - 问题：官方即梦图片 / 视频插件用 `errorPaths: ["code"]` 判失败，火山视觉 OpenAPI 的成功码 `code=10000` 被当成失败，提交成功后任务立即显示“声明式协议任务失败：Success”。官方 Novita 插件读取顶层 `status` / `video_url`，Novita 实际返回 `task.status`（`TASK_STATUS_*`）、`task.reason` 与 `videos[].video_url`，任务停在 pending 直到超时。官方 NewAPI 两个视频插件不读 `data.fail_reason`，失败只显示“上游返回失败状态”。
