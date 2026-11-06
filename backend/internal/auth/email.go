@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"yingce/backend/internal/kernel"
 
@@ -45,44 +46,139 @@ var defaultRegistrationEmailDomains = []string{
 	"foxmail.com",
 }
 
+type EmailSender struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	Encryption string `json:"encryption"`
+	FromEmail  string `json:"fromEmail"`
+	FromName   string `json:"fromName"`
+	Enabled    bool   `json:"enabled"`
+}
+
+type PublicEmailSender struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Username          string `json:"username"`
+	Encryption        string `json:"encryption"`
+	FromEmail         string `json:"fromEmail"`
+	FromName          string `json:"fromName"`
+	FromNameInherited bool   `json:"fromNameInherited"`
+	HasPassword       bool   `json:"hasPassword"`
+	Enabled           bool   `json:"enabled"`
+}
+
+type EmailSenderRequest struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	Encryption string `json:"encryption"`
+	FromEmail  string `json:"fromEmail"`
+	FromName   string `json:"fromName"`
+	Enabled    bool   `json:"enabled"`
+}
+
 type EmailSettingRequest struct {
-	Enabled                    bool     `json:"enabled"`
-	Host                       string   `json:"host"`
-	Port                       int      `json:"port"`
-	Username                   string   `json:"username"`
-	Password                   string   `json:"password"`
-	Encryption                 string   `json:"encryption"`
-	FromEmail                  string   `json:"fromEmail"`
-	FromName                   string   `json:"fromName"`
-	RegistrationAllowedDomains []string `json:"registrationAllowedDomains"`
+	Enabled                    bool                 `json:"enabled"`
+	DispatchMode               string               `json:"dispatchMode"`
+	ActiveSenderID             string               `json:"activeSenderId"`
+	Senders                    []EmailSenderRequest `json:"senders"`
+	RegistrationAllowedDomains []string             `json:"registrationAllowedDomains"`
+
+	// Legacy fields
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	Encryption string `json:"encryption"`
+	FromEmail  string `json:"fromEmail"`
+	FromName   string `json:"fromName"`
 }
 
 type PublicEmailSetting struct {
-	Enabled                    bool      `json:"enabled"`
-	Host                       string    `json:"host"`
-	Port                       int       `json:"port"`
-	Username                   string    `json:"username"`
-	Encryption                 string    `json:"encryption"`
-	FromEmail                  string    `json:"fromEmail"`
-	FromName                   string    `json:"fromName"`
-	FromNameInherited          bool      `json:"fromNameInherited"`
-	HasPassword                bool      `json:"hasPassword"`
-	RegistrationAllowedDomains []string  `json:"registrationAllowedDomains"`
-	UpdatedBy                  string    `json:"updatedBy"`
-	CreatedAt                  time.Time `json:"createdAt"`
-	UpdatedAt                  time.Time `json:"updatedAt"`
+	Enabled                    bool                `json:"enabled"`
+	DispatchMode               string              `json:"dispatchMode"`
+	ActiveSenderID             string              `json:"activeSenderId"`
+	Senders                    []PublicEmailSender `json:"senders"`
+	RegistrationAllowedDomains []string            `json:"registrationAllowedDomains"`
+	UpdatedBy                  string              `json:"updatedBy"`
+	CreatedAt                  time.Time           `json:"createdAt"`
+	UpdatedAt                  time.Time           `json:"updatedAt"`
+
+	// Legacy fields
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Username          string `json:"username"`
+	Encryption        string `json:"encryption"`
+	FromEmail         string `json:"fromEmail"`
+	FromName          string `json:"fromName"`
+	FromNameInherited bool   `json:"fromNameInherited"`
+	HasPassword       bool   `json:"hasPassword"`
 }
 
 type EmailSettingValue struct {
-	Enabled                    bool     `json:"enabled"`
-	Host                       string   `json:"host"`
-	Port                       int      `json:"port"`
-	Username                   string   `json:"username"`
-	Password                   string   `json:"password"`
-	Encryption                 string   `json:"encryption"`
-	FromEmail                  string   `json:"fromEmail"`
-	FromName                   string   `json:"fromName"`
-	RegistrationAllowedDomains []string `json:"registrationAllowedDomains"`
+	Enabled                    bool          `json:"enabled"`
+	DispatchMode               string        `json:"dispatchMode"`
+	ActiveSenderID             string        `json:"activeSenderId"`
+	Senders                    []EmailSender `json:"senders"`
+	RegistrationAllowedDomains []string      `json:"registrationAllowedDomains"`
+
+	// Legacy fields
+	Host       string `json:"host,omitempty"`
+	Port       int    `json:"port,omitempty"`
+	Username   string `json:"username,omitempty"`
+	Password   string `json:"password,omitempty"`
+	Encryption string `json:"encryption,omitempty"`
+	FromEmail  string `json:"fromEmail,omitempty"`
+	FromName   string `json:"fromName,omitempty"`
+}
+
+type TestEmailRequest struct {
+	Recipient  string `json:"recipient"`
+	SenderID   string `json:"senderId"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	Encryption string `json:"encryption"`
+	FromEmail  string `json:"fromEmail"`
+	FromName   string `json:"fromName"`
+}
+
+type TestEmailResult struct {
+	Recipient  string `json:"recipient"`
+	DurationMs int64  `json:"durationMs"`
+}
+
+func (s EmailSettingValue) activeSenders() []EmailSender {
+	var enabled []EmailSender
+	for _, sender := range s.Senders {
+		if sender.Enabled && sender.Host != "" && sender.FromEmail != "" {
+			enabled = append(enabled, sender)
+		}
+	}
+	if len(enabled) == 0 {
+		return nil
+	}
+	if s.DispatchMode == "single" {
+		if s.ActiveSenderID != "" {
+			for _, item := range enabled {
+				if item.ID == s.ActiveSenderID {
+					return []EmailSender{item}
+				}
+			}
+		}
+		return []EmailSender{enabled[0]}
+	}
+	return enabled
 }
 
 func (s *Service) AdminEmailSetting(actor *model.User) (*PublicEmailSetting, error) {
@@ -108,22 +204,115 @@ func (s *Service) UpdateEmailSetting(actor *model.User, req EmailSettingRequest)
 	if allowedDomains == nil {
 		allowedDomains = current.RegistrationAllowedDomains
 	}
+
+	var nextSenders []EmailSender
+	if len(req.Senders) > 0 {
+		currentByID := make(map[string]EmailSender)
+		for _, s := range current.Senders {
+			currentByID[s.ID] = s
+		}
+		for index, r := range req.Senders {
+			id := strings.TrimSpace(r.ID)
+			if id == "" {
+				id = fmt.Sprintf("sender_%s_%d", kernel.NewID()[:8], index+1)
+			}
+			pwd := strings.TrimSpace(r.Password)
+			if pwd == "" && currentByID[id].Password != "" {
+				pwd = currentByID[id].Password
+			}
+			name := strings.TrimSpace(r.Name)
+			if name == "" {
+				name = r.FromEmail
+			}
+			nextSenders = append(nextSenders, EmailSender{
+				ID:         id,
+				Name:       name,
+				Host:       strings.TrimSpace(r.Host),
+				Port:       r.Port,
+				Username:   strings.TrimSpace(r.Username),
+				Password:   pwd,
+				Encryption: strings.TrimSpace(r.Encryption),
+				FromEmail:  NormalizeEmail(r.FromEmail),
+				FromName:   strings.TrimSpace(r.FromName),
+				Enabled:    r.Enabled,
+			})
+		}
+	} else if req.Host != "" && req.FromEmail != "" {
+		pwd := req.Password
+		if pwd == "" {
+			pwd = current.Password
+		}
+		nextSenders = []EmailSender{{
+			ID:         "default",
+			Name:       "默认发信邮箱",
+			Host:       req.Host,
+			Port:       req.Port,
+			Username:   req.Username,
+			Password:   pwd,
+			Encryption: req.Encryption,
+			FromEmail:  req.FromEmail,
+			FromName:   req.FromName,
+			Enabled:    req.Enabled,
+		}}
+	}
+
+	dispatchMode := req.DispatchMode
+	if dispatchMode != "round_robin" {
+		dispatchMode = "single"
+	}
+	activeSenderID := strings.TrimSpace(req.ActiveSenderID)
+	if activeSenderID == "" && len(nextSenders) > 0 {
+		activeSenderID = nextSenders[0].ID
+	}
+
 	next := normalizeEmailSetting(EmailSettingValue{
-		Enabled: req.Enabled, Host: req.Host, Port: req.Port, Username: req.Username, Password: req.Password,
-		Encryption: req.Encryption, FromEmail: req.FromEmail, FromName: req.FromName,
+		Enabled:                    req.Enabled,
+		DispatchMode:               dispatchMode,
+		ActiveSenderID:             activeSenderID,
+		Senders:                    nextSenders,
 		RegistrationAllowedDomains: allowedDomains,
 	})
-	if next.Password == "" {
-		next.Password = current.Password
+
+	var activeSender *EmailSender
+	for i := range next.Senders {
+		if next.Senders[i].ID == next.ActiveSenderID {
+			activeSender = &next.Senders[i]
+			break
+		}
 	}
+	if activeSender == nil && len(next.Senders) > 0 {
+		activeSender = &next.Senders[0]
+	}
+	if activeSender != nil {
+		next.Host = activeSender.Host
+		next.Port = activeSender.Port
+		next.Username = activeSender.Username
+		next.Password = activeSender.Password
+		next.Encryption = activeSender.Encryption
+		next.FromEmail = activeSender.FromEmail
+		next.FromName = activeSender.FromName
+	}
+
 	if err := validateEmailSetting(next); err != nil {
 		return nil, err
 	}
+
 	stored := next
-	stored.Password, err = s.host.EncryptSecret(next.Password)
-	if err != nil {
-		return nil, err
+	if stored.Password != "" {
+		stored.Password, err = s.host.EncryptSecret(stored.Password)
+		if err != nil {
+			return nil, err
+		}
 	}
+	for i := range stored.Senders {
+		if stored.Senders[i].Password != "" {
+			stored.Senders[i].Password, err = s.host.EncryptSecret(stored.Senders[i].Password)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	encoded, err := json.Marshal(stored)
 	if err != nil {
 		return nil, err
@@ -287,11 +476,67 @@ func (s *Service) readEmailSetting() (*model.SystemSetting, EmailSettingValue, e
 	if err := json.Unmarshal([]byte(setting.ValueJSON), &value); err != nil {
 		return nil, EmailSettingValue{}, errors.New("邮件配置格式无效")
 	}
-	value.Password, err = s.host.DecryptSecret(value.Password)
-	if err != nil {
-		return nil, EmailSettingValue{}, err
+	// 将历史单一配置平滑迁移至 Senders 列表
+	if len(value.Senders) == 0 && value.Host != "" && value.FromEmail != "" {
+		value.Senders = []EmailSender{{
+			ID:         "default",
+			Name:       "默认发信邮箱",
+			Host:       value.Host,
+			Port:       value.Port,
+			Username:   value.Username,
+			Password:   value.Password,
+			Encryption: value.Encryption,
+			FromEmail:  value.FromEmail,
+			FromName:   value.FromName,
+			Enabled:    value.Enabled,
+		}}
+		if value.ActiveSenderID == "" {
+			value.ActiveSenderID = "default"
+		}
+		if value.DispatchMode == "" {
+			value.DispatchMode = "single"
+		}
+	}
+	if value.Password != "" {
+		decrypted, err := s.host.DecryptSecret(value.Password)
+		if err == nil {
+			value.Password = decrypted
+		} else {
+			// 密钥发生变更或迁移时，保留原始加密密文以防覆盖，但不阻断读取其它非敏感设置。
+			value.Password = ""
+		}
+	}
+	for i := range value.Senders {
+		if value.Senders[i].Password != "" {
+			decrypted, err := s.host.DecryptSecret(value.Senders[i].Password)
+			if err == nil {
+				value.Senders[i].Password = decrypted
+			} else {
+				value.Senders[i].Password = ""
+			}
+		}
 	}
 	return setting, normalizeEmailSetting(value), nil
+}
+
+func validateEmailSender(sender EmailSender) error {
+	name := sender.Name
+	if name == "" {
+		name = sender.FromEmail
+	}
+	if sender.Host == "" || sender.Port < 1 || sender.Port > 65535 || sender.FromEmail == "" {
+		return kernel.BadAuthRequest(fmt.Sprintf("邮箱[%s]请完整填写 SMTP 主机、端口和发件邮箱", name))
+	}
+	if err := ValidateEmail(sender.FromEmail); err != nil {
+		return kernel.BadAuthRequest(fmt.Sprintf("邮箱[%s]发件邮箱格式不正确", name))
+	}
+	if sender.Username != "" && sender.Password == "" {
+		return kernel.BadAuthRequest(fmt.Sprintf("邮箱[%s]已填写用户名，请同时填写密码", name))
+	}
+	if strings.ContainsAny(sender.FromName, "\r\n") {
+		return kernel.BadAuthRequest(fmt.Sprintf("邮箱[%s]发件人名称不能包含换行", name))
+	}
+	return nil
 }
 
 func validateEmailSetting(value EmailSettingValue) error {
@@ -299,6 +544,21 @@ func validateEmailSetting(value EmailSettingValue) error {
 		return err
 	}
 	if !value.Enabled {
+		return nil
+	}
+	if len(value.Senders) > 0 {
+		hasEnabled := false
+		for _, sender := range value.Senders {
+			if sender.Enabled {
+				hasEnabled = true
+				if err := validateEmailSender(sender); err != nil {
+					return err
+				}
+			}
+		}
+		if !hasEnabled {
+			return kernel.BadAuthRequest("启用邮件前请至少启用一个有效的发信邮箱")
+		}
 		return nil
 	}
 	if value.Host == "" || value.Port < 1 || value.Port > 65535 || value.FromEmail == "" {
@@ -334,15 +594,69 @@ func normalizeEmailSetting(value EmailSettingValue) EmailSettingValue {
 	default:
 		value.Encryption = "starttls"
 	}
+	if value.DispatchMode != "round_robin" {
+		value.DispatchMode = "single"
+	}
+	if value.FromName != "" && len(value.Senders) == 1 && (value.Senders[0].FromName == "" || value.Senders[0].FromName == DefaultBrandName || value.Senders[0].ID == "default") {
+		value.Senders[0].FromName = value.FromName
+	}
+	for i := range value.Senders {
+		value.Senders[i].ID = strings.TrimSpace(value.Senders[i].ID)
+		value.Senders[i].Name = strings.TrimSpace(value.Senders[i].Name)
+		value.Senders[i].Host = strings.TrimSpace(value.Senders[i].Host)
+		value.Senders[i].Username = strings.TrimSpace(value.Senders[i].Username)
+		value.Senders[i].Password = strings.TrimSpace(value.Senders[i].Password)
+		value.Senders[i].FromEmail = NormalizeEmail(value.Senders[i].FromEmail)
+		value.Senders[i].FromName = strings.TrimSpace(value.Senders[i].FromName)
+		if value.Senders[i].Port == 0 {
+			value.Senders[i].Port = 587
+		}
+		switch value.Senders[i].Encryption {
+		case "tls", "none":
+		default:
+			value.Senders[i].Encryption = "starttls"
+		}
+	}
 	return value
 }
 
 func (s *Service) publicEmailSetting(setting *model.SystemSetting, value EmailSettingValue) *PublicEmailSetting {
 	inherited := value.FromName == "" || value.FromName == DefaultBrandName
 	value = resolveEmailSender(value, s.host.BrandName())
+	publicSenders := make([]PublicEmailSender, 0, len(value.Senders))
+	for _, sender := range value.Senders {
+		sInherited := sender.FromName == "" || sender.FromName == DefaultBrandName
+		fromName := sender.FromName
+		if sInherited {
+			fromName = s.host.BrandName()
+		}
+		publicSenders = append(publicSenders, PublicEmailSender{
+			ID:                sender.ID,
+			Name:              sender.Name,
+			Host:              sender.Host,
+			Port:              sender.Port,
+			Username:          sender.Username,
+			Encryption:        sender.Encryption,
+			FromEmail:         sender.FromEmail,
+			FromName:          fromName,
+			FromNameInherited: sInherited,
+			HasPassword:       sender.Password != "",
+			Enabled:           sender.Enabled,
+		})
+	}
 	result := &PublicEmailSetting{
-		Enabled: value.Enabled, Host: value.Host, Port: value.Port, Username: value.Username, Encryption: value.Encryption,
-		FromEmail: value.FromEmail, FromName: value.FromName, FromNameInherited: inherited, HasPassword: value.Password != "",
+		Enabled:                    value.Enabled,
+		DispatchMode:               value.DispatchMode,
+		ActiveSenderID:             value.ActiveSenderID,
+		Senders:                    publicSenders,
+		Host:                       value.Host,
+		Port:                       value.Port,
+		Username:                   value.Username,
+		Encryption:                 value.Encryption,
+		FromEmail:                  value.FromEmail,
+		FromName:                   value.FromName,
+		FromNameInherited:          inherited,
+		HasPassword:                value.Password != "",
 		RegistrationAllowedDomains: value.RegistrationAllowedDomains,
 	}
 	if setting != nil {
@@ -426,6 +740,11 @@ func resolveEmailSender(value EmailSettingValue, brandName string) EmailSettingV
 	if value.FromName == "" || value.FromName == DefaultBrandName {
 		value.FromName = brandName
 	}
+	for i := range value.Senders {
+		if value.Senders[i].FromName == "" || value.Senders[i].FromName == DefaultBrandName {
+			value.Senders[i].FromName = value.FromName
+		}
+	}
 	return value
 }
 
@@ -499,18 +818,178 @@ func sendSMTPMail(setting EmailSettingValue, recipient string, subject string, b
 }
 
 func (s *Service) deliverEmail(setting EmailSettingValue, recipient string, subject string, body string) error {
-	var err error
-	if s.mailSender != nil {
-		err = s.mailSender(setting, recipient, subject, body)
+	senders := setting.activeSenders()
+	if len(senders) == 0 {
+		if setting.Host != "" && setting.FromEmail != "" {
+			senders = []EmailSender{{
+				ID: "default", Name: "默认发信通道",
+				Host: setting.Host, Port: setting.Port, Username: setting.Username,
+				Password: setting.Password, Encryption: setting.Encryption,
+				FromEmail: setting.FromEmail, FromName: setting.FromName,
+				Enabled: setting.Enabled,
+			}}
+		}
+	}
+	if len(senders) == 0 {
+		return errors.New("未配置可用的发信邮箱")
+	}
+
+	var orderedSenders []EmailSender
+	if setting.DispatchMode == "round_robin" && len(senders) > 1 {
+		startIdx := int((atomic.AddUint64(&s.emailCursor, 1) - 1) % uint64(len(senders)))
+		for i := 0; i < len(senders); i++ {
+			orderedSenders = append(orderedSenders, senders[(startIdx+i)%len(senders)])
+		}
 	} else {
-		err = sendSMTPMail(setting, recipient, subject, body)
+		orderedSenders = senders
 	}
-	if err != nil {
+
+	if s.mailSender != nil {
+		var lastErr error
+		var failedSetting EmailSettingValue
+		for _, sender := range orderedSenders {
+			senderSetting := setting
+			senderSetting.Host = sender.Host
+			senderSetting.Port = sender.Port
+			senderSetting.Username = sender.Username
+			senderSetting.Password = sender.Password
+			senderSetting.Encryption = sender.Encryption
+			senderSetting.FromEmail = sender.FromEmail
+			if sender.FromName != "" {
+				senderSetting.FromName = sender.FromName
+			}
+			err := s.mailSender(senderSetting, recipient, subject, body)
+			if err == nil {
+				return nil
+			}
+			lastErr = err
+			failedSetting = senderSetting
+		}
+		if lastErr != nil {
+			slog.Error("smtp email delivery failed",
+				"host", failedSetting.Host, "port", failedSetting.Port, "encryption", failedSetting.Encryption,
+				"recipient", maskedEmail(recipient), "error", smtpLogError(lastErr, failedSetting, recipient, subject, body))
+		}
+		return lastErr
+	}
+
+	var lastErr error
+	var failedSetting EmailSettingValue
+	for _, sender := range orderedSenders {
+		senderSetting := setting
+		senderSetting.Host = sender.Host
+		senderSetting.Port = sender.Port
+		senderSetting.Username = sender.Username
+		senderSetting.Password = sender.Password
+		senderSetting.Encryption = sender.Encryption
+		senderSetting.FromEmail = sender.FromEmail
+		if sender.FromName != "" {
+			senderSetting.FromName = sender.FromName
+		}
+
+		err := sendSMTPMail(senderSetting, recipient, subject, body)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		failedSetting = senderSetting
+	}
+
+	if lastErr != nil {
 		slog.Error("smtp email delivery failed",
-			"host", setting.Host, "port", setting.Port, "encryption", setting.Encryption,
-			"recipient", maskedEmail(recipient), "error", smtpLogError(err, setting, recipient, subject, body))
+			"host", failedSetting.Host, "port", failedSetting.Port, "encryption", failedSetting.Encryption,
+			"recipient", maskedEmail(recipient), "error", smtpLogError(lastErr, failedSetting, recipient, subject, body))
 	}
-	return err
+	return lastErr
+}
+
+func (s *Service) TestEmail(actor *model.User, req TestEmailRequest) (*TestEmailResult, error) {
+	if err := s.host.RequireAdmin(actor); err != nil {
+		return nil, err
+	}
+	req.Recipient = strings.TrimSpace(req.Recipient)
+	if req.Recipient == "" {
+		return nil, kernel.BadAuthRequest("请输入测试收件邮箱地址")
+	}
+	if err := ValidateEmail(req.Recipient); err != nil {
+		return nil, kernel.BadAuthRequest("收件邮箱格式不正确")
+	}
+
+	_, currentSetting, err := s.readEmailSetting()
+	if err != nil {
+		return nil, err
+	}
+
+	target := EmailSender{
+		Host:       strings.TrimSpace(req.Host),
+		Port:       req.Port,
+		Username:   strings.TrimSpace(req.Username),
+		Password:   strings.TrimSpace(req.Password),
+		Encryption: strings.TrimSpace(req.Encryption),
+		FromEmail:  NormalizeEmail(req.FromEmail),
+		FromName:   strings.TrimSpace(req.FromName),
+	}
+
+	if target.Host == "" && req.SenderID != "" {
+		for _, s := range currentSetting.Senders {
+			if s.ID == req.SenderID {
+				target = s
+				if req.Password != "" {
+					target.Password = req.Password
+				}
+				break
+			}
+		}
+	} else if target.Host != "" && req.SenderID != "" && target.Password == "" {
+		for _, s := range currentSetting.Senders {
+			if s.ID == req.SenderID {
+				target.Password = s.Password
+				break
+			}
+		}
+	} else if target.Host == "" && currentSetting.Host != "" {
+		target = EmailSender{
+			Host:       currentSetting.Host,
+			Port:       currentSetting.Port,
+			Username:   currentSetting.Username,
+			Password:   currentSetting.Password,
+			Encryption: currentSetting.Encryption,
+			FromEmail:  currentSetting.FromEmail,
+			FromName:   currentSetting.FromName,
+		}
+	}
+
+	if target.Host == "" || target.FromEmail == "" {
+		return nil, kernel.BadAuthRequest("未找到要测试的发信配置，请完整填写 SMTP 参数")
+	}
+	if err := validateEmailSender(target); err != nil {
+		return nil, err
+	}
+
+	senderSetting := EmailSettingValue{
+		Host:       target.Host,
+		Port:       target.Port,
+		Username:   target.Username,
+		Password:   target.Password,
+		Encryption: target.Encryption,
+		FromEmail:  target.FromEmail,
+		FromName:   target.FromName,
+	}
+	senderSetting = resolveEmailSender(senderSetting, s.host.BrandName())
+
+	start := time.Now()
+	subject := fmt.Sprintf("【%s】发信服务测试邮件", senderSetting.FromName)
+	body := fmt.Sprintf("您好！\n\n这是一封来自 %s（%s）的测试邮件。\n发送时间：%s\n\n如果您收到这封邮件，说明该发信邮箱的 SMTP 配置完全正常！",
+		senderSetting.FromName, senderSetting.FromEmail, time.Now().Format("2006-01-02 15:04:05"))
+
+	if err := sendSMTPMail(senderSetting, req.Recipient, subject, body); err != nil {
+		return nil, kernel.NewAppError(500, fmt.Sprintf("邮件发送失败：%v", err))
+	}
+
+	return &TestEmailResult{
+		Recipient:  req.Recipient,
+		DurationMs: time.Since(start).Milliseconds(),
+	}, nil
 }
 
 var emailCodeLogPattern = regexp.MustCompile(`[0-9]{6}`)
