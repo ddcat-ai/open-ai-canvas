@@ -154,6 +154,17 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 	return finishProtocolResult(ctx, input.Config, input.Mode, taskID, downloaded, pollPolicy)
 }
 
+func protocolResultReady(mode string, result *protocol.Result, adapter protocol.Adapter) bool {
+	if mode != "video" && mode != "audio" && mode != "image" {
+		return true
+	}
+	if protocolResultHasOutput(mode, result) {
+		return true
+	}
+	capability, ok := adapter.(protocol.ResultCapability)
+	return ok && capability.ResultAvailable()
+}
+
 func protocolResultHasOutput(mode string, result *protocol.Result) bool {
 	if result == nil {
 		return false
