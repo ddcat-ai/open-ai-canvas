@@ -105,8 +105,17 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		if created.Status == protocol.StatusFailed || created.Status == protocol.StatusCancelled {
 			return nil, protocolTaskFailure(ctx, created.Status, created.Message, taskID)
 		}
-		if created.Status == protocol.StatusSucceeded && (protocolResultReady(input.Mode, created.Result, adapter) || taskID == "" || adapter.Metadata().Poll == "") {
-			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result, policy)
+		stage := created.Stage
+		if created.Status == protocol.StatusSucceeded {
+			// 已完成但还没有媒体：能按任务 ID 回查时转入轮询，在宽限期内等媒体地址。
+			canPoll := taskID != "" && strings.TrimSpace(adapter.Metadata().Poll) != ""
+			if protocolResultReady(input.Mode, created.Result, adapter) || !canPoll {
+				result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result, policy)
+				if !canPoll || !errors.Is(err, errProtocolResultNotReady) {
+					return result, err
+				}
+			}
+			stage = firstNonEmpty(stage, protocolLateResultStage)
 		}
 		if taskID == "" {
 			return nil, errors.New("声明式协议创建请求没有返回任务 ID")
@@ -116,13 +125,14 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 				// 上游已收单但本地没记住任务 ID：不能退回调度，否则恢复时无法找到原任务。
 				return nil, fmt.Errorf("上游已接收任务，但保存任务 ID 失败：%w", err)
 			}
-			return nil, detachedProtocolPending(taskID, created.Stage, created.QueueAhead)
+			return nil, detachedProtocolPending(taskID, stage, created.QueueAhead)
 		}
 	} else if detached {
 		// 恢复分离式任务：立即回查一次，未完成就再次退回调度，不在 worker 内等待。
 		policy.InitialDelay = 0
 	}
 
+	var lateResult protocolLateResultWait
 	return runVideoPollLoop(ctx, taskID, policy, func(ctx context.Context) (videoPollOutcome, error) {
 		spec, err := adapter.BuildPoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
 		if err != nil {
@@ -141,13 +151,14 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		}
 		switch state.Status {
 		case protocol.StatusSucceeded:
-			if !protocolResultReady(input.Mode, state.Result, adapter) {
-				if detached {
-					return videoPollOutcome{}, detachedProtocolPending(taskID, state.Stage, state.QueueAhead)
-				}
+			// 分离式任务也留在本 worker 内等：退回调度后每次回查都会重新计时，宽限期永远用不完。
+			if !protocolResultReady(input.Mode, state.Result, adapter) && lateResult.keepWaiting(time.Now()) {
 				return videoPollOutcome{}, nil
 			}
 			result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, policy)
+			if errors.Is(err, errProtocolResultNotReady) && lateResult.keepWaiting(time.Now()) {
+				return videoPollOutcome{}, nil
+			}
 			return videoPollOutcome{Done: err == nil, Result: result}, err
 		case protocol.StatusFailed, protocol.StatusCancelled:
 			return videoPollOutcome{}, protocolTaskFailure(ctx, state.Status, state.Message, taskID)
