@@ -15,6 +15,10 @@ func cloudAgentCanonical(system string, history []providerTextMessage, prompt st
 func cloudAgentCanonicalFor(system string, history []providerTextMessage, prompt string, req CloudAgentRequest, includeProfileTool bool) canonicalAgentRequest {
 	messages := []map[string]any{}
 	for _, m := range history {
+		// 旧版本会把失败轮次的空回复存进历史；空 assistant 消息不带信息，且会被 Claude 等上游整单拒绝。
+		if m.Role == "assistant" && strings.TrimSpace(m.Content) == "" {
+			continue
+		}
 		message := map[string]any{"role": m.Role, "content": m.Content}
 		if m.AgentContextSource != "" {
 			message[cloudAgentContextSourceKey] = m.AgentContextSource
