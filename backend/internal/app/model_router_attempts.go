@@ -284,7 +284,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		replacement, err = s.newBillingOrderWithPriceTierAt(current.CreatedAt, task.UserID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(nextInput, capability), strings.TrimSpace(priceTierID), intent)
+		replacement, err = s.newBillingOrderWithPriceTierAt(current.CreatedAt, task.UserID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), s.estimateTaskBilling(task.UserID, nextInput, capability), strings.TrimSpace(priceTierID), intent)
 		if err != nil {
 			return nil, err
 		}

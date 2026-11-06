@@ -34,6 +34,8 @@ type ChannelModelRequest struct {
 	Enabled          *bool                          `json:"enabled"`
 	CapabilityConfig *ModelCapabilityConfig         `json:"capabilityConfig"`
 	PriceTiers       []ChannelModelPriceTierRequest `json:"priceTiers"`
+	// ReferenceVideoBilling 为空指针表示保留已有设置（新建时关闭）；仅视频模型可开启。
+	ReferenceVideoBilling *bool `json:"referenceVideoBilling"`
 }
 
 const maxAdminChannelModelBatchDeleteCount = 100
@@ -57,8 +59,11 @@ type ChannelModelPriceTierRequest struct {
 	// TokenPriceRules 只用于文本 Token 档：按东八区时段与真实输入 Token 区间覆盖基础单价。
 	TokenPriceRulesEnabled bool                   `json:"tokenPriceRulesEnabled"`
 	TokenPriceRules        []model.TokenPriceRule `json:"tokenPriceRules"`
-	PriceConfigured        bool                   `json:"priceConfigured"`
-	Enabled                *bool                  `json:"enabled"`
+	// 带参考视频的价格，仅在模型开启参考视频计费时使用：按秒档用 Unit，Token 档用 OutputToken。
+	ReferenceVideoUnitPriceMicrocredits        int64 `json:"referenceVideoUnitPriceMicrocredits"`
+	ReferenceVideoOutputTokenPriceMicrocredits int64 `json:"referenceVideoOutputTokenPriceMicrocredits"`
+	PriceConfigured                            bool  `json:"priceConfigured"`
+	Enabled                                    *bool `json:"enabled"`
 }
 
 // AdminChannelModelFetchResult 是管理员从上游拉目录后的汇总：models 为去重后的标识，added 为本次新建条数。
@@ -258,6 +263,15 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	}
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
+	}
+	if req.ReferenceVideoBilling != nil {
+		item.ReferenceVideoBilling = *req.ReferenceVideoBilling
+	}
+	if capability != "video" {
+		item.ReferenceVideoBilling = false
+	}
+	if err := validateReferenceVideoTierPrices(item.ReferenceVideoBilling, tiers); err != nil {
+		return nil, err
 	}
 	if err := validateChannelModelTierCapabilities(tiers, item.CapabilityConfigJSON, capability, string(protocol)); err != nil {
 		return nil, err

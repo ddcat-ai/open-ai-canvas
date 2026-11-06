@@ -78,3 +78,29 @@ test("文本 Token 价格档回显并提交缓存写入价，旧档缺字段时�
     // 视频 Token 只按输出计费，缓存写入价强制为 0。
     assert.equal(priceTierPayloadFromForm("video", tier, "video-model").cacheWriteTokenPriceMicrocredits, 0);
 });
+
+test("带参考视频价格只随视频按秒或视频 Token 档提交", () => {
+    const perSecond = { ...defaultPriceTier(), billingMode: "per_second" as const, unitPrice: 1, referenceVideoUnitPrice: 2, referenceVideoOutputTokenPrice: 9 };
+    const videoPayload = priceTierPayloadFromForm("video", perSecond, "video-model");
+    assert.equal(videoPayload.referenceVideoUnitPriceMicrocredits, 2_000_000);
+    assert.equal(videoPayload.referenceVideoOutputTokenPriceMicrocredits, 0);
+
+    const token = { ...perSecond, billingMode: "token" as const, outputTokenPrice: 16, referenceVideoOutputTokenPrice: 32 };
+    const tokenPayload = priceTierPayloadFromForm("video", token, "video-model");
+    assert.equal(tokenPayload.referenceVideoUnitPriceMicrocredits, 0);
+    assert.equal(tokenPayload.referenceVideoOutputTokenPriceMicrocredits, 32_000_000);
+
+    // 后端拒绝非视频模型的带参考视频价格。
+    const audioPayload = priceTierPayloadFromForm("audio", perSecond, "audio-model");
+    assert.equal(audioPayload.referenceVideoUnitPriceMicrocredits, 0);
+
+    // 带参考视频成本价同样只随视频按秒或视频 Token 档提交。
+    const costed = { ...perSecond, costConfigured: true, costUnitPrice: 0.5, costReferenceVideoUnitPrice: 0.8, costReferenceVideoOutputTokenPrice: 7 };
+    assert.equal(priceTierPayloadFromForm("video", costed, "video-model").costPricing.referenceVideoUnitPriceMicrocredits, 800_000);
+    assert.equal(priceTierPayloadFromForm("video", costed, "video-model").costPricing.referenceVideoOutputTokenPriceMicrocredits, 0);
+    assert.equal(priceTierPayloadFromForm("video", { ...costed, billingMode: "token" }, "video-model").costPricing.referenceVideoOutputTokenPriceMicrocredits, 7_000_000);
+    assert.equal(priceTierPayloadFromForm("audio", costed, "audio-model").costPricing.referenceVideoUnitPriceMicrocredits, 0);
+
+    const echoed = priceTierToForm({ ...(tokenPayload as unknown as ChannelModelPriceTier), selector: {}, referenceVideoOutputTokenPriceMicrocredits: 32_000_000 } as ChannelModelPriceTier);
+    assert.equal(echoed.referenceVideoOutputTokenPrice, 32);
+});

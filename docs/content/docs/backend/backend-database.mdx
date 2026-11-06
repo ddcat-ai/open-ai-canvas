@@ -5,6 +5,21 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 视频参考视频计费（Schema 88）
+
+版本 88 `reference_video_billing` 给视频模型加一个“参考视频计费”开关、给价格档加“带参考视频”的价格、给账单加参考视频快照。新列都是 `NOT NULL DEFAULT 0/false`：
+
+| 表 / 列 | 用途 | 关键边界 |
+| --- | --- | --- |
+| `channel_models.reference_video_billing` | 视频模型是否对参考视频另外计费 | 默认关闭；非视频模型保存时强制关闭。关闭时按秒只计生成秒数，Token 只按生成时长的公式计用量 |
+| `channel_model_price_tiers.reference_video_unit_price_microcredits` | 按秒档在挂参考视频时的每秒价格 | 开关开启且请求挂参考视频时，数量 = 生成秒数 + 后端 ffprobe 实测的参考视频秒数（向上取整），测不出来拒绝提交 |
+| `channel_model_price_tiers.reference_video_output_token_price_microcredits` | Token 档在挂参考视频时的输出 Token 价格 | 用量口径不变（含参考视频时长）；开关开启时收费档必须配置，否则保存和下单都会拒绝 |
+| `billing_orders.reference_video_count` / `reference_video_millis` / `reference_video_billed` | 下单时的参考视频数量、计入或记录的总毫秒数、是否按带参考视频价格计费 | 账单流水备注据此写“参考视频 N 秒已计费 / 未计费”；旧订单为 0/false |
+
+迁移回填：只有全部价格档都按 Token 计费的视频模型会开启开关，同时把这些 Token 档的带参考视频价格设为当前输出 Token 价，所以扣费结果和迁移前一致。含按秒档的视频模型保持关闭，不会因为计入参考视频秒数而涨价；这类同时有 Token 档的模型，挂参考视频的 Token 请求从此不再计入参考视频用量。新接入的模型默认关闭。
+
+版本 89 `reference_video_cost_price` 给价格档成本和账单成本快照增加 `cost_reference_video_unit_price_microcredits` / `cost_reference_video_output_token_price_microcredits`（`NOT NULL DEFAULT 0`）。开关开启、价格档配置了成本且基础成本价大于 0 时，必须填写带参考视频成本价。挂参考视频并按带参考视频价格计费的订单，成本快照使用带参考视频成本价，按秒成本数量与售价相同（含参考视频秒数）；开关关闭时沿用基础成本价，视频 Token 成本用量仍按上游口径（含参考视频）。
+
 ## 灵感上新（Schema 87）
 
 版本 87 `inspiration_feed` 只建一张新表 `inspiration_feed_entries`，不改写既有数据。表中是后端定时从 GitHub 上的 YouMind 提示词库和 awesome-seedance 同步的灵感条目，只收正文已是中文的条目。

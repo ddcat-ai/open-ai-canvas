@@ -390,7 +390,9 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 报价包含 `logicalModelId`（系统渠道直连为空）、`billingMode`、`quantity`、`amountMicrocredits`、`estimated`。视频 Token 报价另有 `videoTokenEstimate`：`formulaTokens`、`reservedTokens`、`outputWidth`、`outputHeight`、`framesPerSecond`、`outputSeconds`、`referenceSeconds`、`referenceDurationEstimated`、`dimensionsEstimated`、`reservationMarginPercent`。
 
-Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。参考素材数量不包含时长信息，带参考视频时统一按 15 秒估算并返回 `referenceDurationEstimated: true`。所有视频协议均支持 Token 定价；10% 预留是平台策略，不是费用上限。成功后优先有效上游用量，无有效用量时按提交的公式快照结算，余量不计入公式费用。账单新增 `videoFormulaTokens` 及 `usageSource`（`provider` / `video_formula`），公式结算的 `usageAvailable` 为 `false`，`outputTokens` 表示公式数量。算法、配置与异常用量处理见[视频 Token 计费](/docs/backend/video-token-billing)。
+Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`intent.referenceVideoDurationsMs` 可按顺序给出参考视频时长（毫秒，长度必须等于 `inputs.video`，单个 1 到 3,600,000）；省略时带参考视频统一按 15 秒估算并返回 `referenceDurationEstimated: true`。该字段只用于报价，真实任务按秒计费时由后端实测参考视频时长。
+
+挂参考视频的视频报价另有 `referenceVideo`：`count`、`billed`（模型开启参考视频计费时为 `true`）、`generatedSeconds`、`referenceSeconds`、`billedSeconds`（按秒计入数量的参考视频秒数，Token 为 0）、`estimated`（时长未知、按 15 秒预估）。系统渠道目录的模型新增 `referenceVideoBilling`，价格档新增 `referenceVideoUnitPriceMicrocredits` / `referenceVideoOutputTokenPriceMicrocredits`（开关关闭时为 0）。规则见[视频 Token 计费](/docs/backend/video-token-billing#参考视频计费开关)。所有视频协议均支持 Token 定价；10% 预留是平台策略，不是费用上限。成功后优先有效上游用量，无有效用量时按提交的公式快照结算，余量不计入公式费用。账单新增 `videoFormulaTokens` 及 `usageSource`（`provider` / `video_formula`），公式结算的 `usageAvailable` 为 `false`，`outputTokens` 表示公式数量。算法、配置与异常用量处理见[视频 Token 计费](/docs/backend/video-token-billing)。
 
 ## 用户分组与多币种计价
 

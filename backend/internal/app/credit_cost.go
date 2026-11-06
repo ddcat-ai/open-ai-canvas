@@ -6,7 +6,7 @@ import (
 )
 
 func validateCreditCostPricing(capability, billingMode string, cost model.CreditCostPricing) error {
-	for _, price := range []int64{cost.UnitPriceMicrocredits, cost.InputTokenPriceMicrocredits, cost.OutputTokenPriceMicrocredits, cost.CachedTokenPriceMicrocredits, cost.CacheWriteTokenPriceMicrocredits} {
+	for _, price := range []int64{cost.UnitPriceMicrocredits, cost.InputTokenPriceMicrocredits, cost.OutputTokenPriceMicrocredits, cost.CachedTokenPriceMicrocredits, cost.CacheWriteTokenPriceMicrocredits, cost.ReferenceVideoUnitPriceMicrocredits, cost.ReferenceVideoOutputTokenPriceMicrocredits} {
 		if price < 0 || price > 1_000_000_000_000 {
 			return BadAuthRequest("积分成本价必须在 0 到 1000000 积分之间")
 		}
@@ -32,6 +32,17 @@ func snapshotCreditCost(order *model.BillingOrder, tier *model.ChannelModelPrice
 	}
 	if tier.BillingMode == "token" && estimate.Video != nil {
 		order.CostVideoFormulaTokens = estimate.Video.FormulaTokens
+	}
+	// 参考视频按带参考视频价格计费的订单，成本也换成带参考视频成本价；按秒数量与售价一致，
+	// 含参考视频秒数。快照保存实际生效的成本价，结算和日志成本无需再判断参考视频。
+	if order.ReferenceVideoBilled {
+		switch tier.BillingMode {
+		case "per_second":
+			order.CostPricing.UnitPriceMicrocredits = order.CostPricing.ReferenceVideoUnitPriceMicrocredits
+			order.CostQuantity = order.Quantity
+		case "token":
+			order.CostPricing.OutputTokenPriceMicrocredits = order.CostPricing.ReferenceVideoOutputTokenPriceMicrocredits
+		}
 	}
 }
 

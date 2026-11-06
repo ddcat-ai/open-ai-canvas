@@ -70,6 +70,9 @@ type ChannelModel struct {
 	CapabilityConfig     map[string]any `json:"capabilityConfig,omitempty" gorm:"-"`
 	// CatalogModelKey 记录来自服务商目录的推荐模型 key，便于排查来源。
 	CatalogModelKey string `json:"catalogModelKey" gorm:"size:120;not null;default:''"`
+	// ReferenceVideoBilling 仅对视频模型生效：开启后挂参考视频的请求按价格档的“带参考视频”价格计费，
+	// 按秒模式把后端实测的参考视频秒数计入数量，Token 模式把参考视频计入公式用量；关闭时参考视频不计费。
+	ReferenceVideoBilling bool `json:"referenceVideoBilling" gorm:"not null;default:false"`
 	// PriceTiers 是系统渠道模型的价格真相。标量价格仅为旧调用与历史数据兼容，
 	// 新的创作端报价必须按所选规格命中一个价格档。
 	PriceTiers []ChannelModelPriceTier `json:"priceTiers" gorm:"-"`
@@ -103,12 +106,16 @@ type ChannelModelPriceTier struct {
 	// 关闭时规则保留但不参与报价和结算。
 	TokenPriceRulesEnabled bool             `json:"tokenPriceRulesEnabled" gorm:"not null;default:false"`
 	TokenPriceRules        []TokenPriceRule `json:"tokenPriceRules" gorm:"serializer:json;type:text;not null;default:'[]'"`
-	PriceConfigured        bool             `json:"priceConfigured" gorm:"index"`
-	Enabled                bool             `json:"enabled" gorm:"index"`
-	PriceVersion           int64            `json:"priceVersion"`
-	CreatedAt              time.Time        `json:"createdAt"`
-	UpdatedAt              time.Time        `json:"updatedAt"`
-	DeletedAt              gorm.DeletedAt   `json:"-" gorm:"index"`
+	// 带参考视频的价格：模型开启 ReferenceVideoBilling 且请求挂了参考视频时替代 UnitPrice（按秒）
+	// 或 OutputTokenPrice（Token）；未开启时不使用。
+	ReferenceVideoUnitPriceMicrocredits        int64          `json:"referenceVideoUnitPriceMicrocredits" gorm:"not null;default:0"`
+	ReferenceVideoOutputTokenPriceMicrocredits int64          `json:"referenceVideoOutputTokenPriceMicrocredits" gorm:"not null;default:0"`
+	PriceConfigured                            bool           `json:"priceConfigured" gorm:"index"`
+	Enabled                                    bool           `json:"enabled" gorm:"index"`
+	PriceVersion                               int64          `json:"priceVersion"`
+	CreatedAt                                  time.Time      `json:"createdAt"`
+	UpdatedAt                                  time.Time      `json:"updatedAt"`
+	DeletedAt                                  gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type ApiCallLog struct {

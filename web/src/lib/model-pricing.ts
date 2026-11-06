@@ -101,10 +101,12 @@ export function formatPriceRange(values: number[], suffix: string) {
 export function modelQuoteDescription(quote: LogicalModelQuote) {
     const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
     const descriptions = [`${quote.estimated ? "预计" : "本次"}消耗 ${amount} 积分`];
+    const breakdown = referenceVideoQuoteBreakdown(quote.referenceVideo);
+    if (breakdown) descriptions.push(breakdown);
     const estimate = quote.videoTokenEstimate;
     if (estimate) {
         descriptions.push(`公式预估 ${estimate.formulaTokens.toLocaleString("zh-CN")} 视频 Token，平台额外预留 ${estimate.reservationMarginPercent}%（共 ${estimate.reservedTokens.toLocaleString("zh-CN")} Token）`);
-        if (estimate.referenceDurationEstimated) descriptions.push("未知的参考视频时长按 15 秒估算");
+        if (estimate.referenceDurationEstimated && !breakdown) descriptions.push("未知的参考视频时长按 15 秒估算");
         if (estimate.dimensionsEstimated) descriptions.push("实际画幅尚未确定，尺寸按当前参数估算");
     }
     if (quote.billingMode === "token")
@@ -150,7 +152,41 @@ export function systemModelQuoteRequest(config: AiConfig, value: string, capabil
             ...(requirements?.imageSize ? { size: requirements.imageSize } : {}),
         },
     };
+    const durations = referenceVideoQuoteDurations(input);
+    if (capability === "video" && durations) intent.referenceVideoDurationsMs = durations;
     return cost.logicalModelId ? { logicalModelID: cost.logicalModelId, intent } : { channelId: channel.id, modelKey: modelOptionName(value), intent };
+}
+
+// 只有全部参考视频时长都已知时才提交给报价接口；任一未知时交给后端按上限预估并标明。
+function referenceVideoQuoteDurations(input: ModelRequirements["input"]) {
+    const durations = input?.videoDurationsMs;
+    if (!input?.videoCount || durations?.length !== input.videoCount) return undefined;
+    return durations.every((value) => Number.isSafeInteger(value) && value > 0 && value <= 3_600_000) ? durations : undefined;
+}
+
+type ReferenceVideoBillingCost = { capability?: ModelCapability; referenceVideoBilling?: boolean; logicalPriceTiers?: ModelPriceTier[] };
+
+/**
+ * 视频模型的参考视频计费标签。开关关闭或带参考视频价格全为 0（免费）时标“参考视频不计费”，作为卖点展示。
+ * 非视频模型返回空串。
+ */
+export function referenceVideoBillingLabel(cost: ReferenceVideoBillingCost | undefined) {
+    if (!cost || cost.capability !== "video") return "";
+    const billed = cost.referenceVideoBilling === true && (cost.logicalPriceTiers || []).some((tier) => (tier.referenceVideoUnitPriceMicrocredits || 0) > 0 || (tier.referenceVideoOutputTokenPriceMicrocredits || 0) > 0);
+    return billed ? "参考视频另计费" : "参考视频不计费";
+}
+
+function formatSeconds(value: number) {
+    return value.toLocaleString("zh-CN", { maximumFractionDigits: 1 });
+}
+
+/** 报价构成，例如“生成 5 秒 + 参考视频 8 秒（参考视频另计费）”。 */
+export function referenceVideoQuoteBreakdown(reference: LogicalModelQuote["referenceVideo"]) {
+    if (!reference || reference.count <= 0) return "";
+    const seconds = reference.billedSeconds > 0 ? reference.billedSeconds : reference.referenceSeconds;
+    const referenceText = seconds > 0 ? `参考视频 ${formatSeconds(seconds)} 秒` : `参考视频 ${reference.count} 个`;
+    const status = reference.billed ? (reference.estimated ? "参考视频另计费，时长未知按 15 秒预估" : "参考视频另计费") : "参考视频不计费";
+    return `生成 ${formatSeconds(reference.generatedSeconds)} 秒 + ${referenceText}（${status}）`;
 }
 
 function creditAmount(billingMode: "fixed_request" | "per_second", unitPriceMicrocredits: number, count?: string | number, seconds?: string | number) {

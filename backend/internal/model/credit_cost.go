@@ -9,6 +9,9 @@ type CreditCostPricing struct {
 	OutputTokenPriceMicrocredits     int64 `json:"outputTokenPriceMicrocredits" gorm:"not null;default:0"`
 	CachedTokenPriceMicrocredits     int64 `json:"cachedTokenPriceMicrocredits" gorm:"not null;default:0"`
 	CacheWriteTokenPriceMicrocredits int64 `json:"cacheWriteTokenPriceMicrocredits" gorm:"not null;default:0"`
+	// 带参考视频的成本价，仅视频模型开启参考视频计费且请求挂参考视频时使用：按秒档替代 Unit，Token 档替代 Output。
+	ReferenceVideoUnitPriceMicrocredits        int64 `json:"referenceVideoUnitPriceMicrocredits" gorm:"not null;default:0"`
+	ReferenceVideoOutputTokenPriceMicrocredits int64 `json:"referenceVideoOutputTokenPriceMicrocredits" gorm:"not null;default:0"`
 }
 
 // BillingCostSnapshot 独立于销售价格，切换供应线路时始终更新为实际执行线路的成本。

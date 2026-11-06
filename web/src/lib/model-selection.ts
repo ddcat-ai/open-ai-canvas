@@ -11,6 +11,8 @@ export type ModelInputSummary = {
     videoCount: number;
     audioCount: number;
     characterCount: number;
+    /** 参考视频的已知时长（毫秒），按连接顺序；未知为 0。仅用于报价，提交后由后端实测。 */
+    videoDurationsMs?: number[];
 };
 
 export type ModelRequirements = {

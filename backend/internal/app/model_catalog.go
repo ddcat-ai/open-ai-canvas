@@ -84,6 +84,8 @@ type PublicChannelModel struct {
 	PriceLabel       string                        `json:"priceLabel"`
 	Available        bool                          `json:"available"`
 	Availability     *PublicModelAvailability      `json:"availability,omitempty"`
+	// ReferenceVideoBilling 仅视频模型可能为 true：挂参考视频的请求按带参考视频价格另计费。
+	ReferenceVideoBilling bool `json:"referenceVideoBilling"`
 }
 
 // PublicChannelModelPriceTier 公开的渠道模型价格档（脱敏）
@@ -100,6 +102,9 @@ type PublicChannelModelPriceTier struct {
 	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
 	// TokenPriceRules 是启用中的分时与上下文规则（东八区），单价与基础价同样已换算为当前分组实扣微积分。
 	TokenPriceRules []model.TokenPriceRule `json:"tokenPriceRules,omitempty"`
+	// 带参考视频的价格只在模型开启参考视频计费时发布，否则为 0。
+	ReferenceVideoUnitPriceMicrocredits        int64 `json:"referenceVideoUnitPriceMicrocredits"`
+	ReferenceVideoOutputTokenPriceMicrocredits int64 `json:"referenceVideoOutputTokenPriceMicrocredits"`
 }
 
 // ModelCatalog 的创作端目录始终来自系统渠道模型，不反查逻辑模型或路由。
@@ -213,6 +218,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 	// 仓储层已预加载价格档；这里只发布当前启用且价格字段自洽的活动档位。
 	priceTiers := cm.PriceTiers
 
+	referenceVideoBilling := cm.Capability == "video" && cm.ReferenceVideoBilling
 	publicTiers := make([]PublicChannelModelPriceTier, 0, len(priceTiers))
 	for _, tier := range priceTiers {
 		if !tier.Enabled || !tier.PriceConfigured || !ValidatePriceTierPrice(&tier, cm.Capability, cm.Protocol) {
@@ -236,6 +242,10 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 			CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
 			TokenPriceRules:                  publicTokenPriceRules(cm.Capability, tier),
 		})
+		if referenceVideoBilling {
+			publicTiers[len(publicTiers)-1].ReferenceVideoUnitPriceMicrocredits = tier.ReferenceVideoUnitPriceMicrocredits
+			publicTiers[len(publicTiers)-1].ReferenceVideoOutputTokenPriceMicrocredits = tier.ReferenceVideoOutputTokenPriceMicrocredits
+		}
 	}
 
 	// 展示价格和 Available 必须从同一批有效档位派生，不能回退旧标量价格制造“可用”假象。
@@ -279,6 +289,8 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		DisplayPrice:     displayPrice,
 		PriceLabel:       priceLabel,
 		Available:        len(publicTiers) > 0,
+
+		ReferenceVideoBilling: referenceVideoBilling,
 	}, nil
 }
 
@@ -295,6 +307,15 @@ func (s *Service) applyGroupCatalogPricing(policy CreditPolicy, access *userGrou
 		if err != nil {
 			return err
 		}
+		// 带参考视频价格复用同一换算：按秒价换算 Unit，Token 价换算 Output。
+		_, referencePrices, err := groupTierPricesWithPolicy(policy, access, cm, &model.ChannelModelPriceTier{
+			UnitPriceMicrocredits: tier.ReferenceVideoUnitPriceMicrocredits, OutputTokenPriceMicrocredits: tier.ReferenceVideoOutputTokenPriceMicrocredits,
+		}, cm.ModelKey)
+		if err != nil {
+			return err
+		}
+		tier.ReferenceVideoUnitPriceMicrocredits = effectiveCatalogPrice(referencePrices.Unit, pricing.MultiplierBPS)
+		tier.ReferenceVideoOutputTokenPriceMicrocredits = effectiveCatalogPrice(referencePrices.Output, pricing.MultiplierBPS)
 		tier.UnitPriceMicrocredits = effectiveCatalogPrice(prices.Unit, pricing.MultiplierBPS)
 		tier.InputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Input, pricing.MultiplierBPS)
 		tier.OutputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Output, pricing.MultiplierBPS)

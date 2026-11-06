@@ -119,12 +119,18 @@ export type PriceTierFormValues = {
     cachedTokenPrice: number;
     /** 缓存写入（创建提示词缓存）的每百万 Token 价格，0 表示不单独收费。 */
     cacheWriteTokenPrice: number;
+    /** 带参考视频的每秒价格（按秒档）与视频 Token 价格（Token 档），仅模型开启参考视频计费时使用。 */
+    referenceVideoUnitPrice: number;
+    referenceVideoOutputTokenPrice: number;
     costConfigured: boolean;
     costUnitPrice: number;
     costInputTokenPrice: number;
     costOutputTokenPrice: number;
     costCachedTokenPrice: number;
     costCacheWriteTokenPrice: number;
+    /** 带参考视频的成本价：按秒档为每秒成本，视频 Token 档为 Token 成本；仅模型开启参考视频计费时使用。 */
+    costReferenceVideoUnitPrice: number;
+    costReferenceVideoOutputTokenPrice: number;
     /** 文本 Token 档的分时与上下文价格。 */
     tokenRulesEnabled: boolean;
     tokenRules: TokenPriceRuleFormValues[];
@@ -151,12 +157,16 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
         outputTokenPrice: 0,
         cachedTokenPrice: 0,
         cacheWriteTokenPrice: 0,
+        referenceVideoUnitPrice: 0,
+        referenceVideoOutputTokenPrice: 0,
         costConfigured: false,
         costUnitPrice: 0,
         costInputTokenPrice: 0,
         costOutputTokenPrice: 0,
         costCachedTokenPrice: 0,
         costCacheWriteTokenPrice: 0,
+        costReferenceVideoUnitPrice: 0,
+        costReferenceVideoOutputTokenPrice: 0,
         tokenRulesEnabled: false,
         tokenRules: [],
         priceConfigured: true,
@@ -196,12 +206,16 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
         outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000,
         cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
         cacheWriteTokenPrice: (tier.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
+        referenceVideoUnitPrice: (tier.referenceVideoUnitPriceMicrocredits ?? 0) / 1_000_000,
+        referenceVideoOutputTokenPrice: (tier.referenceVideoOutputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costConfigured: tier.costPricing?.configured === true,
         costUnitPrice: (tier.costPricing?.unitPriceMicrocredits ?? 0) / 1_000_000,
         costInputTokenPrice: (tier.costPricing?.inputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costOutputTokenPrice: (tier.costPricing?.outputTokenPriceMicrocredits ?? 0) / 1_000_000,
         costCachedTokenPrice: (tier.costPricing?.cachedTokenPriceMicrocredits ?? 0) / 1_000_000,
         costCacheWriteTokenPrice: (tier.costPricing?.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
+        costReferenceVideoUnitPrice: (tier.costPricing?.referenceVideoUnitPriceMicrocredits ?? 0) / 1_000_000,
+        costReferenceVideoOutputTokenPrice: (tier.costPricing?.referenceVideoOutputTokenPriceMicrocredits ?? 0) / 1_000_000,
         tokenRulesEnabled: tier.tokenPriceRulesEnabled === true,
         tokenRules: (tier.tokenPriceRules || []).map(tokenPriceRuleToForm),
         priceConfigured: tier.priceConfigured,
@@ -282,6 +296,9 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
         outputTokenPriceMicrocredits: Math.round((tier.outputTokenPrice || 0) * 1_000_000),
         cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.cachedTokenPrice || 0) * 1_000_000),
         cacheWriteTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.cacheWriteTokenPrice || 0) * 1_000_000),
+        // 后端只接受视频模型的带参考视频价格；保留未开启开关时的已填值，方便重新开启。
+        referenceVideoUnitPriceMicrocredits: capability === "video" && tier.billingMode === "per_second" ? Math.round((tier.referenceVideoUnitPrice || 0) * 1_000_000) : 0,
+        referenceVideoOutputTokenPriceMicrocredits: videoTokens ? Math.round((tier.referenceVideoOutputTokenPrice || 0) * 1_000_000) : 0,
         costPricing: {
             configured: tier.costConfigured,
             unitPriceMicrocredits: Math.round(tier.costUnitPrice * 1_000_000),
@@ -289,6 +306,8 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
             outputTokenPriceMicrocredits: Math.round(tier.costOutputTokenPrice * 1_000_000),
             cachedTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costCachedTokenPrice * 1_000_000),
             cacheWriteTokenPriceMicrocredits: videoTokens ? 0 : Math.round((tier.costCacheWriteTokenPrice || 0) * 1_000_000),
+            referenceVideoUnitPriceMicrocredits: capability === "video" && tier.billingMode === "per_second" ? Math.round((tier.costReferenceVideoUnitPrice || 0) * 1_000_000) : 0,
+            referenceVideoOutputTokenPriceMicrocredits: videoTokens ? Math.round((tier.costReferenceVideoOutputTokenPrice || 0) * 1_000_000) : 0,
         },
         priceConfigured: tier.priceConfigured !== false,
         enabled: tier.enabled !== false,
