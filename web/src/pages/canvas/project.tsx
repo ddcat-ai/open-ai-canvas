@@ -130,7 +130,8 @@ import { cinematicStoryboardColumns, createCanvasNode, getInputSummary, isHidden
 import { bindStoryboardKeyframes, storyboardKeyframeTime, storyboardRowsFromBatchTable } from "@/lib/canvas/canvas-batch-storyboard";
 import { stampCanvasNodeChanges, updateCanvasNode, updateCanvasNodes } from "@/lib/canvas/canvas-node-timestamps";
 import { canvasAssetHandoffAttempt, finalizeCanvasAssetHandoff, uninsertedCanvasAssetHandoffPayloads } from "@/lib/canvas/canvas-asset-handoff";
-import { batchSourceRestriction } from "@/lib/canvas/canvas-batch-connection";
+import { expandBatchSourceNodeIds } from "@/lib/canvas/canvas-batch-connection";
+import { isFrameNode } from "@/lib/canvas/canvas-frame";
 import { deriveStoryboardPipelineProgress } from "@/lib/canvas/canvas-storyboard-progress";
 import { CanvasOperationChangeToast, CanvasMergeStatusToast, CanvasUploadStatusToast } from "./canvas-project-feedback";
 import { getGenerationCount } from "@/lib/canvas/canvas-project-generation";
@@ -1182,7 +1183,10 @@ function CanvasViewportPage() {
         onReplaceReference: handleReplaceNodeReference,
     });
 
-    const batchSourceNodeIds = useMemo(() => nodes.filter((node) => selectedNodeIds.has(node.id) && !batchSourceRestriction(node)).map((node) => node.id), [nodes, selectedNodeIds]);
+    // 选中背板等同于选中其内部素材：单独点中背板也能直接拖出连线。
+    const batchSourceNodeIds = useMemo(() => expandBatchSourceNodeIds(selectedNodeIds, nodes), [nodes, selectedNodeIds]);
+    const batchSourceNodeIdsRef = useRef(batchSourceNodeIds);
+    batchSourceNodeIdsRef.current = batchSourceNodeIds;
 
     const handleCanvasSelectionStart = useCallback(() => {
         setContextMenu(null);
@@ -1519,6 +1523,13 @@ function CanvasViewportPage() {
         scriptEditorNodeId,
         dialogNodeId,
     });
+    // 单独选中背板时没有多选包围框，用背板自身的范围承载批量连线手柄。
+    const singleSelectedFrame = selectedNodeIds.size === 1 ? nodeById.get([...selectedNodeIds][0]) : undefined;
+    const batchConnectionBounds = useMemo(() => {
+        if (selectedNodeBounds) return selectedNodeBounds;
+        if (!isFrameNode(singleSelectedFrame) || !batchSourceNodeIds.length) return null;
+        return { left: singleSelectedFrame.position.x, top: singleSelectedFrame.position.y, width: singleSelectedFrame.width, height: singleSelectedFrame.height, count: 1 };
+    }, [batchSourceNodeIds.length, selectedNodeBounds, singleSelectedFrame]);
 
     const handleSelectedImageWheel = useCanvasImageWheelResize({ projectId, nodesRef, selectedNodeIdsRef, historyPausedRef, setNodes, onResize: handleNodeResize });
     const visibleDisplayConnections = useMemo(
@@ -1817,7 +1828,11 @@ function CanvasViewportPage() {
         exitFocusMode,
         toggleFocusMode,
         onOpenSearch: () => setNodeSearchOpen(true),
-        beginBatchConnection: () => beginBatchConnectionMode(Array.from(selectedNodeIdsRef.current)),
+        beginBatchConnection: () => {
+            const selected = selectedNodeIdsRef.current;
+            const hasFrame = [...selected].some((id) => isFrameNode(nodesRef.current.find((node) => node.id === id)));
+            if (selected.size > 1 || hasFrame) beginBatchConnectionMode(batchSourceNodeIdsRef.current);
+        },
     });
 
     const startTitleEditing = useCallback(() => {
@@ -3072,7 +3087,7 @@ function CanvasViewportPage() {
                                                     resourceReferenceByNodeId={resourceReferenceByNodeId}
                                                     mentionReferencesByNodeId={mentionReferencesByNodeId}
                                                     mediaEffectsDisabledNodeId={emotionNodeId}
-                                                    selectedNodeBounds={selectedNodeBounds}
+                                                    selectedNodeBounds={batchConnectionBounds}
                                                     batchSourceNodeIds={batchSourceNodeIds}
                                                     batchConnectionPreview={batchConnectionPreview}
                                                     isNodeDragging={isNodeDragging}
@@ -3283,7 +3298,7 @@ function CanvasViewportPage() {
                                     onArrange={arrangeSelectedNodes}
                                     onCreateStoryboard={createStoryboardGroup}
                                     onCreateReferenceGroup={createReferenceGroup}
-                                    onBatchConnect={() => beginBatchConnectionMode(Array.from(selectedNodeIds))}
+                                    onBatchConnect={() => beginBatchConnectionMode(batchSourceNodeIds)}
                                     onMergeVideos={() => void mergeSelectedVideos()}
                                     onSendSelectionToAgent={() => sendSelectionToAgent()}
                                 />
