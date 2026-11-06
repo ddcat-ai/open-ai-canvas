@@ -2700,6 +2700,133 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /admin/channels/{id}/models/batch-protocol:
+    post:
+      tags: [admin]
+      summary: 批量修改系统渠道模型的调用协议
+      description: |
+        仅管理员可用。把同一系统渠道内所选模型切换到同一调用协议；协议能力必须与每个模型的能力一致。
+        保留原能力配置与价格档，只按新协议重新规范化并校验；任一模型不兼容、已删除或被并发修改时整批拒绝。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modelIds, protocol]
+              properties:
+                modelIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, minLength: 1 }
+                protocol: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 更新成功，data.updated 为更新的模型数量
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      updated: { type: integer }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /admin/channel-models/batch-protocol:
+    post:
+      tags: [admin]
+      summary: 跨系统渠道批量修改模型调用协议
+      description: |
+        仅管理员可用。规则同 `/admin/channels/{id}/models/batch-protocol`，但所选模型可来自不同系统渠道；
+        每个模型按所属渠道校验协议鉴权要求，不属于系统渠道或已删除的模型整批拒绝。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [modelIds, protocol]
+              properties:
+                modelIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: string, minLength: 1 }
+                protocol: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 更新成功，data.updated 为更新的模型数量
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      updated: { type: integer }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /admin/channel-models/batch-reprice:
+    post:
+      tags: [admin]
+      summary: 跨系统渠道批量保存模型最终销售价
+      description: |
+        仅管理员可用。请求结构与校验规则同 `/admin/channels/{id}/models/batch-reprice`，
+        但所选模型可来自不同系统渠道；不属于系统渠道或已删除的模型整批拒绝。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [models]
+              properties:
+                models:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: object }
+      responses:
+        "200":
+          description: 更新成功，data.updated 为更新的模型数量
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      updated: { type: integer }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
   /admin/agent-memory-documents:
     get:
       tags: [admin]
@@ -3097,10 +3224,15 @@ paths:
               properties:
                 username: { type: string }
                 password: { type: string }
+                autoRegister:
+                  type: boolean
+                  description: 一体表单提交；账号不存在且允许注册时返回 404 account_not_registered
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
         "401":
+          $ref: "#/components/responses/Error"
+        "404":
           $ref: "#/components/responses/Error"
   /projects:
     get:
@@ -3358,6 +3490,12 @@ paths:
     post:
       tags: [tasks]
       summary: 创建生成任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -3478,6 +3616,36 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ThinkingRequest:
+      type: string
+      enum: ["", auto, deep, off, minimal, low, medium, high, max]
+      description: 空串或省略等同 auto（模型默认）；deep 取模型支持的最高非 max 档位。具体档位按实际渠道模型的思考能力归一，不改变计价。
+    CanvasTextOptions:
+      type: object
+      properties:
+        stream:
+          type: boolean
+        thinkingLevel:
+          $ref: "#/components/schemas/ThinkingRequest"
+    CreateTaskRequest:
+      type: object
+      required: [type]
+      properties:
+        projectId: { type: string }
+        type: { type: string }
+        operation: { type: string }
+        prompt: { type: string }
+        provider: { type: string }
+        model: { type: string }
+        logicalModelId: { type: string }
+        input:
+          type: object
+          description: 按任务模式传入参数；模型、渠道、协议与计价由服务端重新校验。电商文本阶段的思考意图由后台阶段配置覆盖。
+          properties:
+            mode: { type: string }
+            textOptions:
+              $ref: "#/components/schemas/CanvasTextOptions"
+          additionalProperties: true
     FeedbackAttachment:
       type: object
       required: [id, name, type, url, size, mimeType]
@@ -4024,8 +4192,8 @@ components:
           enum: [read_only, request_approval, auto]
         reasoningMode:
           type: string
-          enum: [off, auto, deep]
-          description: 本轮推理策略；供应商是否支持由后端校验
+          enum: [off, auto, deep, minimal, low, medium, high, max]
+          description: 本轮思考意图或明确档位；auto 沿用模型默认，deep 取最高非极限档，max 明确选择极限；按实际渠道模型能力归一
         profileRevision:
           type: string
           description: GET /agent/profile 的生效合并 revision；变化时拒绝创建新轮次

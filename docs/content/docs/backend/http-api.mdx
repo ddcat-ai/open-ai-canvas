@@ -80,6 +80,21 @@ description: 信封、错误码与 OpenAPI
 
 渠道模型的 `capabilityConfig.image.responseFormat` 包含 `supported` 和可选的 `default`。默认值为 `auto`，表示请求中不发送 `response_format`，由上游决定返回 URL 或 Base64；`b64_json` 和 `url` 会分别强制发送对应值。该配置按模型保存，不根据 `openai-image` 协议名称自动推断，避免兼容网关不接受 Base64 时生成失败。需要持久化 Base64 结果的模型（例如已验证的 ddcat 图片模型）应将默认值设为 `b64_json`。
 
+## 邮件发送记录与消费日报
+
+菜单“运行监控 → 邮件记录”，页面 `/admin/email-logs`。管理员权限在 service 校验：匿名 401、普通用户 403。
+
+- `GET /api/admin/email-logs`：支持 `keyword`（收件邮箱、标题或用户 ID）、`purpose`、`status=sent|failed|skipped`、RFC3339 `from/to`、`page/pageSize`。成功 `data={logs,total,page,pageSize,last24h}`，`last24h` 是近 24 小时各状态数量。
+- `POST /api/admin/settings/email/test`：`{ recipient }`，留空发给当前管理员邮箱。用已保存的 SMTP 配置发一封验证码样式的测试邮件；失败返回 400，`msg` 带脱敏后的 SMTP 原因。每位管理员 10 分钟最多 10 次。
+- `GET /api/auth/notification-settings`：当前用户的订阅状态，`data.settings={consumptionReportEnabled,emailAvailable,email}`。
+- `PUT /api/auth/notification-settings`：`{ consumptionReportEnabled: boolean }`。开启时要求平台已启用邮件且账号已绑定邮箱，否则 400。
+
+找回密码接口对外始终返回成功，避免枚举账号；邮箱未绑定账号、账号停用、账号未设置密码、60 秒内重复请求这几种情况不发信，但会写一条 `status=skipped` 的发送记录并注明原因，供管理员排查“收不到邮件”。
+
+系统邮件为 `multipart/alternative`（纯文本 + HTML），带 `Date`、`Message-ID` 头；验证码同时出现在标题开头和正文独立一行。SMTP 会话总时长上限 45 秒；端口 465 且未选“无加密”时按直接 TLS 连接。
+
+消费日报：已订阅、账号正常且有邮箱、当天（东八区自然日）有 `consume` 流水的用户，在 23:59 收到当天报告，含净消费、较昨日变化、生成次数、失败退回、余额、按小时分布、按能力构成、模型排行、近 7 日趋势、单笔 Top 5 和文字分析。多实例由协调器租约互斥，`last_consumption_report_date` 保证每人每天最多一封；投递失败不重试，结果见发送记录。报告里的链接取 `CANVAS_PUBLIC_BASE_URL`，未配置时不放链接。
+
 ## 用户登录日志
 
 菜单“用户与运营 → 用户登录日志”，页面 `/admin/login-logs`。查询在 service 校验管理员权限：匿名 401、普通用户 403。
@@ -311,6 +326,19 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 `PATCH /admin/settings/registration` 的两个协议字段为可选指针语义：不提交表示保留已保存内容，提交空串表示明确清空。注册开关与协议正文可以分开保存，单独切换 `enabled` 不会覆盖协议。当前只校验本次注册的同意标志，不保存长期协议版本或签署凭证。前后端需一起更新，旧客户端缺少同意标志时无法注册。
 
+## 登录注册一体与邮箱要求
+
+前台只有一个登录注册表单。密码登录时客户端提交 `autoRegister: true`：账号不存在、允许创建账号（或尚无任何账号）且输入是合法用户名或邮箱时，`POST /auth/login` 返回 HTTP 404、`code=40401`、`reason=account_not_registered`，`details.accountKind` 为 `username` 或 `email`。客户端据此在同一表单补齐确认密码、邮箱或验证码和服务协议，再调用 `POST /auth/register`。注册关闭、输入不合法或未提交 `autoRegister` 时保持原来的 401“用户名、邮箱或密码不正确”，不额外暴露账号是否存在。`/register` 路由保留给推广链接，打开的也是一体表单。
+
+`POST /auth/register` 的 `username` 可以为空，前提是提交了 `email`：服务端加锁后按邮箱前缀生成可用用户名（非法字符替换为 `-`，冲突时追加随机后缀）。
+
+`PATCH /admin/settings/registration` 可选提交两个邮箱开关，不提交表示保留已保存值，`GET /admin/settings/registration` 与 `GET /auth/settings` 都会返回：
+
+- `emailRequired`（默认 `false`）：注册必须填写邮箱，缺少时返回 400“请输入邮箱”。
+- `emailVerificationRequired`（默认 `true`，旧记录缺字段时同样按 `true`）：注册必须先通过登录注册策略里的验证方式。关闭后不校验验证码，填写的邮箱按未验证保存（`emailVerifiedAt` 为空），仍然检查唯一性和注册域名白名单。从关闭切到开启时，如果没有可用验证方式（邮件服务或短信渠道未就绪），返回 400。
+
+未验证邮箱可以用于密码登录，但不能用于邮箱验证码登录。找回密码仍按邮箱发信，因此关闭验证会让填写他人邮箱的账号收到找回邮件，部署方应按需权衡。绑定邮箱：用户在账号设置里走 `POST /settings/profile/email-code` 和 `/settings/profile/email` 验证新邮箱；当前邮箱未验证时允许填同一地址重新验证，验证成功后写入 `emailVerifiedAt`，不再发“邮箱已变更”通知。`emailCodeRequired` 在关闭验证时为 `false`。
+
 ## 登录与注册打开方式
 
 `PATCH /admin/settings/registration` 可选提交 `loginMode`：`modal`（默认，在当前页面弹出登录框）或 `page`（跳转 `/login` 独立页面）。与协议字段相同，不提交表示保留已保存值；其他值返回 HTTP 400。`GET /admin/settings/registration` 与公开的 `GET /auth/settings` 都返回 `loginMode`，未配置或旧记录缺少该字段时为 `modal`，尚无账号时同样下发。
@@ -475,6 +503,9 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`inten
 | --- | --- |
 | `GET /admin/channel-models` | 返回全部系统渠道（含停用渠道）的模型，结构同 `GET /admin/channels/:id/models` 的单项，另加 `channelName`、`channelEnabled`，供按模型名称跨渠道筛选。 |
 | `GET /admin/channel-models/health?channelId=` | 返回模型调用稳定性 `{ items, computedAt, truncated }`。每项含 `channelId`、`modelKey`、近 24 小时 `requests24h` / `succeeded24h` / `failed24h` / `successRate24h`、近 7 天 `requests7d` / `successRate7d`、`p95DurationMs24h`、最近 10 次结果 `recentResults`（左旧右新）、`lastErrorCode`、`lastFailedAt`、`lastCalledAt`。成功率为 0–1 小数，没有样本时为 `null`。只统计 `request_kind = create`，不设用户端的最少样本门槛；读取近 7 天最新 50,000 条记录，超出时 `truncated = true`。结果缓存 30 秒；不传 `channelId` 时返回全部系统渠道。 |
+| `POST /admin/channel-models/batch-protocol` | 跨渠道批量切换调用协议，请求体 `{ "modelIds": string[], "protocol": string }`，规则同 `POST /admin/channels/:id/models/batch-protocol`；所选模型可来自不同系统渠道，每个模型按所属渠道校验协议鉴权要求，不属于系统渠道的模型整批拒绝。 |
+| `POST /admin/channel-models/batch-reprice` | 跨渠道统一调价，请求体与校验同 `POST /admin/channels/:id/models/batch-reprice`，但所选模型可来自不同系统渠道；不属于系统渠道或已删除的模型整批拒绝，所有修改在一个事务内提交。 |
+| `POST /admin/channels/:id/models/batch-protocol` | 请求体 `{ "modelIds": string[], "protocol": string }`，单批 1–100 个模型，把同一系统渠道内所选模型切换到同一调用协议。协议能力须与每个模型的能力一致；保留能力配置和价格档，按新协议重新规范化并校验，任一模型不兼容、已删除或被并发修改（按 `updatedAt` 乐观锁）时整批拒绝。不改价格版本。写管理员审计 `channel_model.batch_protocol`。 |
 | `PATCH /admin/channels/:id/models/:modelId/enabled` | 请求体 `{ "enabled": boolean }`，只改启停，不重写价格档、能力配置和价格版本；能力或协议未配置的模型不能启用。写管理员审计 `channel_model.enable` / `channel_model.disable`。 |
 
 `GET /admin/analytics/export.csv` 沿用相同口径，CSV 输出收入、成本、利润（整数微积分）；重复请求只在该筛选范围内选定的一行记录金额，未知值留空。
@@ -785,6 +816,7 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 | 40301 | 403 | `quota_exceeded` | 账号配额用尽（不自动重试） |
 | 40301 | 403 | `storage_capacity_exceeded` | 账号文件容量不足，上传或媒体生成被拒；前端据此展示“购买空间”入口 |
 | 40302 | 403 | `storage_read_only` | 账号超出文件容量且 7 天宽限期已结束，内容写入被拒；`details` 含 `usedBytes`、`totalBytes`、`readOnlyAt` |
+| 40401 | 404 | `account_not_registered` | 一体表单密码登录时账号不存在且允许注册；`details.accountKind` 为 `username` / `email` |
 | 40901 | 409 | `conflict` | 幂等冲突 |
 | 42901 | 429 | `rate_limited` | 请求限流（可带 Retry-After） |
 
@@ -916,6 +948,7 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 | `POST /dramas` | 一次性创建作品、写入原文与制作设置；`start=true` 立即进入自动制作。`sourceFormat` 为 `novel`（默认）/ `script` / `storyboard`；分集方式写在 `settings.episodeMode`（`auto` 模型分集 / `chapter` 按章分集，顶层 `episodeMode` 只在设置里没写时使用）与 `settings.chaptersPerEpisode`（按章分集时每 1–12 章一集，默认 1），剧本与分镜总是每章一集。按章分集时建档即写好各集、不经过分集规划，合并后单集原文 ≤ 4 万字。任何分集方式下单章都 ≤ 1.2 万字（剧本提示词每章读取上限，超出会丢台词，所以直接拒绝）。请求体上限 32 MiB，单章 ≤ 6 万字，全书 ≤ 600 万字。`selectedChapters`（章节下标数组，从 0 起）只让这些章节先加入制作：资产提取、分集规划与改编都只读选中的章节，按章分集时不相邻的章节不合进同一集；其余章节原文照常保存为预留章节（`project_units.status=reserved`），1.2 万字上限在加入制作时才检查；不传表示全部章节 |
 | `GET /dramas/:id` | 制作台摘要：控制面状态、每集按剧情段聚合的进度 `stats`（`segments`、`promptReady`、`videoReady`、`failed`）、队列计数、待处理收件箱。`cast_failed` 的 `castKind` 为 character/prop/scene；`segment_failed` 带 `episodeNumber`、`segmentIndex` 与失败环节 `media`（prompt/video） |
 | `PATCH /dramas/:id/settings` | 修改单集时长（30–1200 秒）、分镜规则 `storyboard`（`segmentMode` auto/fixed/range、`segmentSeconds`、`segmentMinSeconds`、`segmentMaxSeconds`、`pacing`、`dialogue`、`transition`、`transitionMs`、`performance`、`cameraMotion`）、视频提示词技能 `promptSkill`（`{ skillId, skillName, path }`，不可读时返回 400；传空 `skillId` 清除）、资产提取与分镜拆分技能 `bibleSkill` / `scriptSkill`（同格式）、视频分辨率 `videoResolution`（空为模型默认）、每段最多参考图 `referenceLimit`（0–20，0 为按视频模型上限，只约束自动取参考图的段）、审阅方式、生成节奏、参考图方案、模型、并发与预算；分集方式 `episodeMode` / `chaptersPerEpisode` 只能在分集完成（`planDone`）前修改，只影响还没分集的章节，改成按章分集后下一轮调度直接把剩余章节分组建集、在途的模型规划作废；开工后不能修改画幅；画幅只接受 9:16 / 16:9 / 1:1 / 3:4 / 4:3（创建作品同样，未知值返回 400，不再改成 9:16），视频模型给不出作品画幅时返回 400；提示词包含未知变量时返回 400 |
+| `GET /dramas/:id/draft` · `PUT /dramas/:id/draft` | 草稿回填与重存。`GET` 返回 `{ projectId, name, sourceFormat, settings, budgetMicrocredits, selectedChapters, chapterCount, form: { sourceText, styleId } }`；作品不是草稿或没有保存表单时返回 400。`PUT` 请求体同 `POST /dramas`，整体替换名称、原文章节、选章、设置与预算，`start=true` 时替换后直接开工；作品已开工返回 400，名称与其他作品重复返回 409。`POST /dramas` 在 `start=false` 时可带 `draft: { sourceText, styleId }`，作品列表项与 `production` 的 `hasDraftForm=true` 表示打开时回到创建页（`/projects/new?draft=<id>`）。保存草稿时请求体还带一份原始正文，`POST /dramas` 与 `PUT /dramas/:id/draft` 的请求体上限为 64 MiB |
 | `POST /dramas/:id/media/release` | 手动模式下放行生成：`target=assets` 只生成参考图，`episodes`（配合 `episodeIds`，最多 500）生成指定集的参考图与剧情段视频，`all` 全部开始 |
 | `POST /dramas/:id/start` · `/pause` · `/retry-failed` | 继续 / 暂停 / 把失败的参考图、段提示词与段视频重新排队，返回 `{ segments, casts }` |
 
@@ -978,6 +1011,14 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 段提示词写法：`settings.storyboard.performance`（表演强度）与 `cameraMotion`（运镜动感）都是 1–10 的整数，缺省或 0 按 5，超出范围夹到 1–10。提示词写入档位与刻度两端，并按 1–2 / 3–4 / 5–6 / 7–8 / 9–10 五段给出具体要求（表演：内敛 / 克制 / 自然 / 饱满 / 夸张；运镜：静态 / 稳定 / 标准 / 动感 / 强烈）；镜头表里的运镜词按 1–3 缓慢、4–7 按情绪、8–10 快速三组换写。不改镜头时长。尾帧续接时段末只要求末 0.5 秒动作收住、镜头停稳，不再要求整段凝固的硬定格。
 
 文字步骤与参考图模型：`settings.models` 可选 `bibleText`（资产提取）、`scriptText`（分镜拆分）、`promptText`（视频提示词与自动精简）、`characterImage`、`propImage`、`sceneImage`，为空沿用 `text` / `image`；单独指定的模型必须在当前用户的短剧模型目录里，否则保存返回 400。`settings.bibleSkill`、`settings.scriptSkill` 与 `promptSkill` 同格式，执行该步骤时把技能文件全文交给文本模型；资产提取与分镜拆分的输出 JSON 结构不变，技能与结构冲突时以结构为准。`settings.assets.propResolution`、`sceneResolution` 分别是道具、场景参考图的分辨率档位，`resolution` 只用于角色参考图。
+
+### 文本步骤的思考等级
+
+短剧 `settings.textThinking` 按步骤保存请求意图：`bible`（资产提取）、`plan`（小说自动分集规划）、`script`（分镜拆分）、`prompt`（视频提示词及其自动精简）。创建作品和保存设置时校验；省略某一步或选择 `auto` 都沿用该步实际模型的默认值。分集规划继续使用 `settings.models.text`，其余步骤使用对应覆盖模型，任务写入 `input.textOptions.thinkingLevel`，再按实际路由到的渠道模型能力归一。
+
+电商 Agent 的后台阶段配置 `GET/PUT /ecommerce/knowledge/orchestration` 中，`vision.thinkingLevel` 用于商品识别与视觉方向，`director.thinkingLevel` 用于整套策划；`director.reuse=marketing` 时沿用 `marketing.thinkingLevel`。主模型不可用而切换备用模型时，保留同一阶段意图，按备用模型能力重新归一。`GET /ecommerce/agent-setting` 返回解析后的 `thinkingLevel` 和 `visionThinkingLevel`。工作台通过通用 `POST /tasks` 提交的这三个文本阶段（`planning`、`product-understanding`、`creative-directions`）由服务端覆盖阶段思考意图，客户端不能绕过后台配置；服务端直接执行电商文本请求也使用同一配置。思考等级不新增计价维度。
+
+文本任务的思考档位：`textOptions.thinkingLevel` 取 `off`、`minimal`、`low`、`medium`、`high`、`max`，或意图值 `auto`（模型默认档位）与 `deep`（模型支持的最高档，不含 `max`）；省略等同 `auto`，其他值在创建任务时以 `reason=invalid_argument` 拒绝。旧字段 `textOptions.thinking` 已移除。执行时按渠道模型能力的 `thinking` 声明归一：模型不支持的档位就近取档（等距取低档），不能关闭的模型把 `off` 降到最低档，未声明思考能力时沿用旧开关语义。写入上游的参数随接口格式与声明而定，例如 OpenAI `reasoning_effort` / `reasoning.effort`、Claude `thinking` + `output_config.effort` 或 `budget_tokens`、Gemini `thinkingConfig`、DeepSeek `thinking.type` + `reasoning_effort`、Qwen `enable_thinking`。Agent 带工具调用的多轮会话会把同协议产生的思考内容回传给上游（Chat Completions 的 `reasoning_content`、Claude 带签名的 thinking 块），换协议后丢弃；旧式 Claude 预算思考会话停在一轮没有思考块的工具循环里时，该步关闭思考；adaptive 模型可合法不输出思考块，不因此降低续轮的请求等级。`auto` 只省略显式控制参数，不丢弃同协议推理回传；Chat Completions 普通回答的完整推理正文也保留到下一用户轮，不截断为展示摘要。Gemini 的 `thoughtSignature` 作为不透明协议数据，经 Go/Pi 会话原样回传；并行工具调用及其响应按原顺序组合在对应 model/user 轮次，不能删签名、改函数名或伪造签名。Cloud Agent 的 `reasoningMode` 接受 `off`、`auto`、`deep` 以及明确档位 `minimal`、`low`、`medium`、`high`、`max`；`deep` 仍不含极限，选择极限须传 `max`。首页与 Agent 使用同一离散滑条，默认位置传 `auto`，明确档位原样提交，由服务端最终模型能力归一。系统渠道执行时从服务端模型记录重新加载文本能力，不能信任客户端能力，也不能因任务准入清除了客户端能力而回退成 medium。
 
 文本任务：短剧的作品圣经、分集、剧本、段提示词与精简任务都以上游流式（`textOptions.stream=true`）请求，避免长输出在中转站网关前因长时间无响应被断开（524）；结果仍在流结束后整段写入任务结果，模型能力声明不支持流式时改走非流式。单次任务仍受运行策略“文本任务超时”约束。
 
