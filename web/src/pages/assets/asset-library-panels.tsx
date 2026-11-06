@@ -4,6 +4,7 @@ import { Button, Drawer, Tag } from "antd";
 import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Mic, Plus, RotateCcw, ShieldCheck, Trash2, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
+import { CachedResourceImage } from "@/components/cached-resource-image";
 import { StatusBadge } from "@/components/ui/base/badges";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { currentLocale } from "@/i18n";
@@ -476,7 +477,15 @@ export function AssetImageZoom({ asset }: { asset: LibraryAsset & { kind: "image
                 dragRef.current = null;
             }}
         >
-            <img src={asset.coverUrl || asset.data.dataUrl} alt={asset.title} loading="lazy" decoding="async" className="asset-archive-preview-media asset-zoom-image" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />
+            <CachedResourceImage
+                storageKey={asset.data.storageKey}
+                src={asset.data.dataUrl || asset.coverUrl}
+                alt={asset.title}
+                eager
+                decoding="async"
+                className="asset-archive-preview-media asset-zoom-image"
+                style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
+            />
             <div className="asset-zoom-controls" data-canvas-no-zoom>
                 <button type="button" title="缩小" aria-label="缩小" onClick={() => setScale((value) => Math.max(0.25, value / 1.25))}>
                     <ZoomOut className="size-4" />
