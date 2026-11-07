@@ -88,3 +88,5 @@ backend/tmp_*
 # Keep the runtime in source control; its optional debug map is not deployed.
 /web/public/live2d/live2dcubismcore.min.js.map
 .zocde/
+# Generated locally by scripts/export-theme-skins.ts.
+/web/theme-skins-install.js

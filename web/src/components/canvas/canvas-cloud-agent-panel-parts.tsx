@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { Live2DAvatar } from "./live2d-avatar";
 import { agentAvatarBundleFileURL, live2DModelURL } from "@/services/api/appearance";
 import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { AgentOrb, agentOrbStateForAvatar } from "@/components/ui/agent-orb";
 import { ArrowDown, ArrowLeft, Check, ChevronDown, Clock3, Download, Ellipsis, History, LoaderCircle, Maximize2, MessageSquarePlus, Minus, PanelRight, PictureInPicture2, RefreshCw, Scaling, Settings2, ShieldCheck, Trash2, X, Blocks } from "lucide-react";
 import { agentModifierShortcut } from "@/lib/canvas/agent-outbox";
 import { Button, Input, Popover } from "antd";
@@ -161,14 +161,14 @@ export const AgentLauncher = memo(function AgentLauncher({
             >
                 {hitInset ? <span className="canvas-agent-launcher-hit" aria-hidden="true" style={{ inset: `${hitInset.top * 100}% ${hitInset.side * 100}% ${hitInset.bottom * 100}%` }} {...pointerHandlers} /> : null}
                 {collapsed ? (
-                    <FluidOrb size={30} color="#7164f6" />
+                    <AgentOrb state={agentOrbStateForAvatar(avatarState)} size={30} color="#7164f6" />
                 ) : live ? (
                     <Live2DAvatar
                         url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)}
                         width={width}
                         height={height}
                         reducedMotion={reducedMotion}
-                        fallback={<FluidOrb size={60} color="#7164f6" />}
+                        fallback={<AgentOrb state={agentOrbStateForAvatar(avatarState)} size={60} color="#7164f6" />}
                         onReady={() => setLive2DError("")}
                         onError={setLive2DError}
                     />
@@ -180,7 +180,7 @@ export const AgentLauncher = memo(function AgentLauncher({
                         <span className="sr-only">正在加载助手形象</span>
                     </span>
                 ) : (
-                    <FluidOrb size={60} color="#7164f6" />
+                    <AgentOrb state={agentOrbStateForAvatar(avatarState)} size={60} color="#7164f6" />
                 )}
                 {appearance.launcherLabel && !collapsed ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
                 {live && live2DError ? (
