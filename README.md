@@ -416,13 +416,6 @@ cd docs && bun run types:check
   <sub><a href="mailto:309151651@qq.com">309151651@qq.com</a></sub><br>
   <sub><em>没什么大不了</em></sub>
 </td>
-<td align="center" valign="top" width="33%">
-  <img src="assets/user-bensharp.jpg" alt="nancy" width="72" height="72"><br>
-  <strong>nancy</strong><br>
-  <sub>VV：jiahezuiai</sub><br>
-  <sub><a href="mailto:275008147@qq.com">275008147@qq.com</a></sub><br>
-  <sub><em>在哪跌倒，就在哪睡一觉</em></sub>
-</td>
 </tr>
 <tr>
 <td align="center" valign="top" width="33%">
