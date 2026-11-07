@@ -75,6 +75,8 @@ type CanvasNodeProps = {
     onOpenPrevis?: (node: CanvasNodeData) => void;
     onOpenDrawing?: (node: CanvasNodeData) => void;
     onMediaPlayRequest?: (nodeId: string) => void;
+    onMediaPlaybackEnded?: () => void;
+    onMediaPlaybackUnavailable?: () => void;
     onContextMenu: (event: React.MouseEvent, nodeId: string) => void;
 };
 
@@ -123,6 +125,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     onOpenPrevis,
     onOpenDrawing,
     onMediaPlayRequest,
+    onMediaPlaybackEnded,
+    onMediaPlaybackUnavailable,
     onContextMenu,
 }: CanvasNodeProps) {
     const theme = canvasThemes[useActiveTheme()];
@@ -345,6 +349,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                         disableMediaEffects={disableMediaEffects}
                         mediaActive={mediaActive}
                         onMediaPlayRequest={onMediaPlayRequest}
+                        onMediaPlaybackEnded={onMediaPlaybackEnded}
+                        onMediaPlaybackUnavailable={onMediaPlaybackUnavailable}
                     />
                 </div>
 

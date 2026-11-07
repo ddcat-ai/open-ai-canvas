@@ -57,6 +57,10 @@ export type CanvasNodeContentProps = {
     disableMediaEffects?: boolean;
     mediaActive?: boolean;
     onMediaPlayRequest?: (nodeId: string) => void;
+    /** 激活播放的视频自然播完（onEnded）后回调：释放播放授权，让节点回到带 ▶ 入口的预览态。 */
+    onMediaPlaybackEnded?: () => void;
+    /** 激活态下视频地址续签穷尽仍不可播时回调：同样释放授权，避免黑块死态。 */
+    onMediaPlaybackUnavailable?: () => void;
 };
 
 /** 由页面 renderNodeContent 渲染的节点；CanvasNode 的 memo 只对这些节点比较该回调。 */
