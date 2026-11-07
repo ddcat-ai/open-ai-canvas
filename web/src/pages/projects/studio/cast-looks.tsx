@@ -121,7 +121,7 @@ export function CastLooks({ projectId, character, looks, restyle, onChanged }: {
             <div className="drama-field-label">
                 <span>造型 · 妆造</span>
                 <small>
-                    不同时期 / 身份的服装妆造；最多 {MAX_LOOKS} 套（{looks.length}/{MAX_LOOKS}）
+                    角色本体即基础造型；额外妆造最多 {MAX_LOOKS} 套（{looks.length}/{MAX_LOOKS}）
                 </small>
             </div>
             <div className="drama-looks">

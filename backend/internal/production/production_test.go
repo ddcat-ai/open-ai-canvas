@@ -55,6 +55,23 @@ func TestParseBibleDeduplicatesNames(t *testing.T) {
 	}
 }
 
+func TestParseBibleDoesNotDuplicateBaseLook(t *testing.T) {
+	raw := `{"characters":[{"name":"主角","gender":"男","age":"青年","appearance":"黑发，白衣。","looks":[
+		{"name":"初始造型","appearance":"初次登场的白衣少年"},
+		{"name":"日常","appearance":" 黑发 白衣 "},
+		{"name":"初登场","appearance":"男，青年，黑发白衣"},
+		{"name":"夜行","appearance":"黑色夜行衣，蒙面","fromChapter":5},
+		{"name":"潜行","appearance":"黑色夜行衣 蒙面"}
+	]},{"name":"配角","appearance":"红衣","looks":[]}]}`
+	bible, err := ParseBible(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bible.Characters[0].Looks) != 1 || bible.Characters[0].Looks[0].Name != "夜行" || len(bible.Characters[1].Looks) != 0 {
+		t.Fatalf("only an actual costume change should create another look: %+v", bible.Characters)
+	}
+}
+
 func TestParseScriptDropsEmptyShotsAndClearsSpeaker(t *testing.T) {
 	raw := `{"shots":[{"action":"他抬头","speaker":"萧炎","dialogue":""},{"speaker":"x"}]}`
 	shots, err := ParseScript(raw)

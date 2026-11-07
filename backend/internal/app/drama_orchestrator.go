@@ -1042,6 +1042,15 @@ func (r *dramaRun) applyScriptShots(episode *model.DramaEpisode, scripted []prod
 		if !ok || strings.TrimSpace(hint.Appearance) == "" {
 			return ""
 		}
+		appearanceKey := production.NormalizeName(hint.Appearance)
+		for _, cast := range append(append([]model.DramaCast{}, casts...), created...) {
+			if cast.ID == characterID && production.NormalizeName(cast.Appearance) == appearanceKey {
+				return ""
+			}
+			if cast.ParentID == characterID && production.NormalizeName(cast.Appearance) == appearanceKey {
+				return cast.ID
+			}
+		}
 		look := model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "character", ParentID: characterID, Name: dramaCastName(casts, created, characterID), LookName: truncateRunes(name, 60), Appearance: truncateRunes(hint.Appearance, 1000), Position: position, CreatedAt: now, UpdatedAt: now}
 		position++
 		created = append(created, look)

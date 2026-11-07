@@ -220,6 +220,7 @@ export type DramaShot = {
     scene: string;
     sceneCastId?: string;
     castIdsJson: string;
+    lookCastIdsJson: string;
     propIdsJson: string;
     speaker: string;
     dialogue: string;

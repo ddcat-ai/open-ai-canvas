@@ -38,6 +38,71 @@ func TestDefaultLookByChapter(t *testing.T) {
 	}
 }
 
+func TestDramaExplicitBaseLookOverridesChapterLook(t *testing.T) {
+	character := model.DramaCast{ID: "hero"}
+	looks := []model.DramaCast{{ID: "night", ParentID: "hero", LookName: "夜行", LookFromChapter: 1, LookToChapter: 10}}
+	for _, name := range []string{"基础造型", "默认造型", "初始造型"} {
+		if got := dramaResolveShotLook(character, looks, name, []int{2}); got != "" {
+			t.Fatalf("explicit base look %q must use the character itself, got %q", name, got)
+		}
+	}
+	if got := dramaResolveShotLook(character, looks, "", []int{2}); got != "night" {
+		t.Fatalf("unspecified look should still follow the chapter: %q", got)
+	}
+}
+
+func TestDramaScriptDoesNotCreateDuplicateBaseLook(t *testing.T) {
+	svc, _ := newDramaTestService(t)
+	summary := createTestDramaWithMedia(t, svc, DramaReviewAuto, DramaMediaManual)
+	runDramaTicks(t, svc, summary.Project.ID, 20)
+	summary, err := svc.DramaSummary("usr-drama", summary.Project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	casts, err := svc.repo.DramaCasts(summary.Project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hero model.DramaCast
+	for _, cast := range casts {
+		if cast.Name == "萧炎" && cast.ParentID == "" {
+			hero = cast
+		}
+	}
+	if hero.ID == "" {
+		t.Fatal("missing fixture character")
+	}
+	episode, err := svc.repo.DramaEpisode(summary.Project.ID, summary.Episodes[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &dramaRun{s: svc, project: &summary.Project, settings: summary.Production.Settings}
+	var shots []production.ScriptShot
+	var hints []production.ScriptCast
+	for _, look := range []struct{ name, appearance string }{{"便装", hero.Appearance}, {"初始造型", "第一次登场形象"}, {"夜行", "黑衣蒙面"}, {"潜行", "黑衣，蒙面。"}} {
+		shots = append(shots, production.ScriptShot{Characters: []string{hero.Name}, Looks: production.LookChoices{hero.Name: look.name}, Action: "走过院子"})
+		hints = append(hints, production.ScriptCast{Kind: "look", Name: hero.Name, Look: look.name, Appearance: look.appearance})
+	}
+	if err := run.applyScriptShots(episode, shots, hints, production.ScriptEpisode{}, false); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := svc.repo.DramaCasts(summary.Project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	looks := dramaLooksForCharacter(updated, hero.ID)
+	if len(looks) != 1 || looks[0].LookName != "夜行" {
+		t.Fatalf("only the distinct outfit should create a look: %+v", looks)
+	}
+	saved, err := svc.repo.DramaShots(episode.ID)
+	if err != nil || len(saved) != 4 {
+		t.Fatalf("shots: %+v %v", saved, err)
+	}
+	if len(decodeStringList(saved[0].LookCastIDsJSON)) != 0 || len(decodeStringList(saved[1].LookCastIDsJSON)) != 0 || saved[2].LookCastIDsJSON != saved[3].LookCastIDsJSON {
+		t.Fatalf("base shots should reuse the character and repeated outfits should reuse the same look: %+v", saved)
+	}
+}
+
 // 角色造型的增删改走服务层：造型是角色子行，删除后镜头回退角色本体。
 func TestDramaCastLookLifecycle(t *testing.T) {
 	svc, fake := newDramaTestService(t)

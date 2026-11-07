@@ -63,8 +63,8 @@ export function useDramaInvalidate(projectId: string) {
         void queryClient.invalidateQueries({ queryKey: dramaKeys.jobs(projectId) });
         void queryClient.invalidateQueries({ queryKey: ["drama", projectId, "takes"] });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.chapters(projectId) });
-        if (options.renumbered) void queryClient.invalidateQueries({ queryKey: dramaKeys.episodes(projectId) });
-        else if (episodeId) void queryClient.invalidateQueries({ queryKey: dramaKeys.episode(projectId, episodeId) });
+        if (options.renumbered) return queryClient.invalidateQueries({ queryKey: dramaKeys.episodes(projectId) });
+        if (episodeId) return queryClient.invalidateQueries({ queryKey: dramaKeys.episode(projectId, episodeId) });
     };
 }
 

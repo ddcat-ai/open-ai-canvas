@@ -174,8 +174,9 @@ export default function DramaStudioPage() {
     });
     const saveReferences = useMutation({
         mutationFn: ({ segment, patch }: { segment: DramaSegment; patch: Parameters<typeof updateDramaSegmentReferences>[3] }) => updateDramaSegmentReferences(projectId, episodeId, segment.index, patch),
-        onSuccess: () => {
-            invalidate(episodeId);
+        onSuccess: async () => {
+            // 二级菜单支持连续添加；等服务端选择刷新后再允许下一次修改。
+            await invalidate(episodeId);
             message.success("已保存本段参考与音色选择，请核对提示词中的参考编号");
         },
         onError: (error) => errorMessage(error, "保存失败"),
