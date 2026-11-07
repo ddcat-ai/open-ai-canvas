@@ -65,95 +65,95 @@ const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels: [
 useConfigStore.setState({ config });
 afterAll(() => dom.happyDOM.abort());
 
-test("真实图片审批卡片可切换比例、分辨率、质量，提交值与界面一致", async () => {
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    let submitted: AgentMediaSettings | undefined;
-    const initial = {
-        channelId: channel.id,
-        channelModelKey: "gpt-image-2",
-        size: "1024x1024",
-        imageResolution: "1k",
-        quality: "auto",
-        imageParameters: JSON.stringify({ seed: 42, size: "1024x1024", imageResolution: "1k", quality: "auto", count: 1, transparentBackground: false }),
-        prompt: "测试图片",
-        referenceNodeIds: [],
-    };
-    const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.trim() === label)!;
-    const press = async (label: string) => {
-        expect(button(label), label).toBeDefined();
-        await act(async () => button(label).click());
-    };
-    const selected = (label: string) => {
-        expect(button(label), [...host.querySelectorAll("button")].map((item) => item.textContent).join(", ")).toBeDefined();
-        expect(button(label).getAttribute("aria-pressed"), label).toBe("true");
-    };
-    const submit = async (size: string, resolution: string, quality: string) => {
-        await press("同意执行");
-        expect(submitted).toMatchObject({ channelId: channel.id, channelModelKey: "gpt-image-2", size, imageResolution: resolution, quality });
-        expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground: false });
-        expect(imageParameterRequest(profile, submitted!, true)).toEqual({ size, imageResolution: resolution, quality, seed: 42, count: 1, transparentBackground: false });
-    };
-    const render = (submitting = false) =>
-        root.render(
-            <ApprovalCard
-                approval={{ approvalId: "image-approval", detail: { toolName: "generate_media", arguments: { ...initial, mode: "image" } }, reason: "" }}
-                theme={canvasThemes.dark}
-                submitting={submitting}
-                blocked={false}
-                onReasonChange={() => {}}
-                onApprove={(settings) => {
-                    submitted = settings;
-                }}
-                onReject={() => {}}
-            />,
-        );
-    try {
-        await act(async () => render());
-        selected("1:1");
-        selected("1K");
-        await press("16:9");
-        selected("16:9");
-        expect(host.querySelector("output")?.textContent).toContain("16:9");
-        await submit(imagePresetForRatio("1k", "16:9").size, "1k", "auto");
-        await press("2K");
-        selected("2K");
-        selected("16:9");
-        await submit(imagePresetForRatio("2k", "16:9").size, "2k", "auto");
-        await press("high");
-        selected("high");
-        selected("16:9");
-        await submit(imagePresetForRatio("2k", "16:9").size, "2k", "high");
-        await press("9:16");
-        selected("9:16");
-        await press("4K");
-        selected("4K");
-        selected("9:16");
-        await submit(imagePresetForRatio("4k", "9:16").size, "4k", "high");
-        await press("1");
-        expect(button("1").getAttribute("aria-pressed")).toBe("true");
-        await press("42");
-        await submit(imagePresetForRatio("4k", "9:16").size, "4k", "high");
-        await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click());
-        await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 30));
-        });
-        const alternative = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((item) => item.textContent?.includes("gpt-image-2.5"));
-        expect(alternative).toBeDefined();
-        await act(async () => alternative!.click());
-        await press("同意执行");
-        expect(submitted).toMatchObject({ channelId: channel.id, channelModelKey: "gpt-image-2.5", size: imagePresetForRatio("4k", "9:16").size, imageResolution: "4k", quality: "high" });
-        expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground: false });
-        submitted = undefined;
-        await act(async () => render(true));
-        expect(host.querySelector("fieldset")?.disabled).toBe(true);
-        await press("1:1");
-        selected("9:16");
-        await press("正在提交");
-        expect(submitted).toBeUndefined();
-    } finally {
-        await act(async () => root.unmount());
-        host.remove();
-    }
-});
+for (const toolName of ["generate_media", "generate_media_batch"])
+    test(`真实图片审批卡片 ${toolName} 可切换模型与规格，提交值与界面一致`, async () => {
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        let submitted: AgentMediaSettings | undefined;
+        const initial = {
+            channelId: channel.id,
+            channelModelKey: "gpt-image-2",
+            size: "1024x1024",
+            imageResolution: "1k",
+            quality: "auto",
+            imageParameters: JSON.stringify({ seed: 42, size: "1024x1024", imageResolution: "1k", quality: "auto", count: 1, transparentBackground: false }),
+            prompt: "测试图片",
+            referenceNodeIds: [],
+        };
+        const button = (label: string) => [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.trim() === label)!;
+        const press = async (label: string) => {
+            expect(button(label), label).toBeDefined();
+            await act(async () => button(label).click());
+        };
+        const selected = (label: string) => {
+            expect(button(label), [...host.querySelectorAll("button")].map((item) => item.textContent).join(", ")).toBeDefined();
+            expect(button(label).getAttribute("aria-pressed"), label).toBe("true");
+        };
+        const submit = async (size: string, resolution: string, quality: string) => {
+            await press("同意执行");
+            expect(submitted).toMatchObject({ channelId: channel.id, channelModelKey: "gpt-image-2", size, imageResolution: resolution, quality });
+            expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground: false });
+            expect(imageParameterRequest(profile, submitted!, true)).toEqual({ size, imageResolution: resolution, quality, seed: 42, count: 1, transparentBackground: false });
+        };
+        const render = (submitting = false) =>
+            root.render(
+                <ApprovalCard
+                    approval={{ approvalId: "image-approval", detail: { toolName, arguments: { ...initial, mode: "image", ...(toolName === "generate_media_batch" ? { items: [{ nodeId: "batch-row" }] } : {}) } }, reason: "" }}
+                    theme={canvasThemes.dark}
+                    submitting={submitting}
+                    onReasonChange={() => {}}
+                    onApprove={(settings) => {
+                        submitted = settings;
+                    }}
+                    onReject={() => {}}
+                />,
+            );
+        try {
+            await act(async () => render());
+            selected("1:1");
+            selected("1K");
+            await press("16:9");
+            selected("16:9");
+            expect(host.querySelector("output")?.textContent).toContain("16:9");
+            await submit(imagePresetForRatio("1k", "16:9").size, "1k", "auto");
+            await press("2K");
+            selected("2K");
+            selected("16:9");
+            await submit(imagePresetForRatio("2k", "16:9").size, "2k", "auto");
+            await press("high");
+            selected("high");
+            selected("16:9");
+            await submit(imagePresetForRatio("2k", "16:9").size, "2k", "high");
+            await press("9:16");
+            selected("9:16");
+            await press("4K");
+            selected("4K");
+            selected("9:16");
+            await submit(imagePresetForRatio("4k", "9:16").size, "4k", "high");
+            await press("1");
+            expect(button("1").getAttribute("aria-pressed")).toBe("true");
+            await press("42");
+            await submit(imagePresetForRatio("4k", "9:16").size, "4k", "high");
+            await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click());
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 30));
+            });
+            const alternative = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((item) => item.textContent?.includes("gpt-image-2.5"));
+            expect(alternative).toBeDefined();
+            await act(async () => alternative!.click());
+            await press("同意执行");
+            expect(submitted).toMatchObject({ channelId: channel.id, channelModelKey: "gpt-image-2.5", size: imagePresetForRatio("4k", "9:16").size, imageResolution: "4k", quality: "high" });
+            expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground: false });
+            submitted = undefined;
+            await act(async () => render(true));
+            expect(host.querySelector("fieldset")?.disabled).toBe(true);
+            await press("1:1");
+            selected("9:16");
+            await press("正在提交");
+            expect(submitted).toBeUndefined();
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    });

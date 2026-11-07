@@ -1020,6 +1020,11 @@ export function ApprovalCard({
             ) : videoApproval ? (
                 <CanvasAgentVideoApprovalSettings initial={videoApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} />
             ) : null}
+            {(imageApproval || videoApproval) && action.kind === "media_batch" ? (
+                <p className="canvas-agent-approval-description" style={{ color: theme.node.muted }}>
+                    模型与规格修改应用于本批次全部项目；修改视频时长会统一各项时长，提交前会重新校验模型能力与费用。
+                </p>
+            ) : null}
             <button type="button" className="canvas-agent-approval-reason-toggle" aria-expanded={showReason} onClick={() => setShowReason((value) => !value)} disabled={submitting}>
                 {showReason ? "收起拒绝理由" : "填写拒绝理由（可选）"}
             </button>

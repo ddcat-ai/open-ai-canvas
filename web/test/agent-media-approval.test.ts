@@ -1,5 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import { AGENT_APPROVAL_SUPERSEDED_BY_NODE, agentApprovalMatchesSettings, agentApprovalModel, agentApprovalModelSelection, agentApprovalTargetGenerating, agentImageApproval, agentMediaApprovalTargetNodeId, agentMediaSettings, agentVideoApproval } from "../src/lib/canvas/agent-media-approval";
+import {
+    AGENT_APPROVAL_SUPERSEDED_BY_NODE,
+    agentApprovalMatchesSettings,
+    agentApprovalModel,
+    agentApprovalModelSelection,
+    agentApprovalTargetGenerating,
+    agentImageApproval,
+    agentMediaApprovalTargetNodeId,
+    agentMediaSettings,
+    agentVideoApproval,
+} from "../src/lib/canvas/agent-media-approval";
 import type { CanvasNodeData } from "../src/types/canvas";
 import { createModelChannel, defaultConfig, encodeChannelModel } from "../src/stores/use-config-store";
 
@@ -24,11 +34,14 @@ describe("image generation approval settings", () => {
     });
     it("switches between logical and channel models without retaining the previous selector", () => {
         const cost = { model: "gpt-image-2", capability: "image" as const, billingMode: "fixed_request" as const, unitPriceMicrocredits: 1, priceConfigured: true };
-        const config = { ...defaultConfig, channels: [
-            createModelChannel({ id: "platform", scope: "system", models: [cost.model], modelCosts: [cost] }),
-            createModelChannel({ id: "managed", scope: "system", models: [cost.model], modelCosts: [{ ...cost, logicalModelId: "logical-image" }] }),
-            createModelChannel({ id: "personal", scope: "custom", models: [cost.model], modelCosts: [cost] }),
-        ] };
+        const config = {
+            ...defaultConfig,
+            channels: [
+                createModelChannel({ id: "platform", scope: "system", models: [cost.model], modelCosts: [cost] }),
+                createModelChannel({ id: "managed", scope: "system", models: [cost.model], modelCosts: [{ ...cost, logicalModelId: "logical-image" }] }),
+                createModelChannel({ id: "personal", scope: "custom", models: [cost.model], modelCosts: [cost] }),
+            ],
+        };
         const logical = agentApprovalModelSelection(config, encodeChannelModel("managed", cost.model));
         expect(logical).toEqual({ logicalModelId: "logical-image" });
         expect(agentApprovalModel(config, { ...logical, size: args.size, quality: args.quality })).toBe(encodeChannelModel("managed", cost.model));
@@ -42,7 +55,10 @@ describe("image generation approval settings", () => {
 
 describe("video generation approval settings", () => {
     it("reads video duration and audio options", () => {
-        const approval = agentVideoApproval({ toolName: "generate_media", arguments: { mode: "video", prompt: "镜头运动", size: "9:16", quality: "720p", durationSeconds: 8, videoGenerateAudio: true, channelId: "platform", channelModelKey: "seedance-test", referenceNodeIds: ["image"] } });
+        const approval = agentVideoApproval({
+            toolName: "generate_media",
+            arguments: { mode: "video", prompt: "镜头运动", size: "9:16", quality: "720p", durationSeconds: 8, videoGenerateAudio: true, channelId: "platform", channelModelKey: "seedance-test", referenceNodeIds: ["image"] },
+        });
         expect(approval?.durationSeconds).toBe(8);
         expect(approval?.videoGenerateAudio).toBe(true);
         expect(approval?.referenceNodeIds).toEqual(["image"]);
@@ -53,7 +69,21 @@ describe("approval media settings sent back to the backend", () => {
     const mediaKeys = ["channelId", "channelModelKey", "durationSeconds", "imageParameters", "imageResolution", "logicalModelId", "quality", "size", "videoArkPrivateAssetUpload", "videoGenerateAudio", "videoWatermark"];
 
     it("drops prompt and reference nodes that the decision API rejects", () => {
-        const approval = agentVideoApproval({ toolName: "generate_media", arguments: { mode: "video", prompt: "镜头运动", size: "9:16", quality: "720p", durationSeconds: 8, channelId: "platform", channelModelKey: "seedance-test", referenceNodeIds: ["image"], referenceTransientIds: ["tmp-image"], sourceNodeId: "shot-1" } });
+        const approval = agentVideoApproval({
+            toolName: "generate_media",
+            arguments: {
+                mode: "video",
+                prompt: "镜头运动",
+                size: "9:16",
+                quality: "720p",
+                durationSeconds: 8,
+                channelId: "platform",
+                channelModelKey: "seedance-test",
+                referenceNodeIds: ["image"],
+                referenceTransientIds: ["tmp-image"],
+                sourceNodeId: "shot-1",
+            },
+        });
         expect(approval).not.toBeNull();
         const settings = agentMediaSettings(approval!);
         expect(Object.keys(settings).sort()).toEqual(mediaKeys);
@@ -95,5 +125,29 @@ describe("approval target already generating on the canvas", () => {
 
     it("uses the same decision value as the backend", () => {
         expect(AGENT_APPROVAL_SUPERSEDED_BY_NODE).toBe("superseded_by_node");
+    });
+});
+
+describe("batch generation approval settings", () => {
+    it("shows model settings for image batches in live events and restored approvals", () => {
+        const args = { mode: "image", channelId: "platform", channelModelKey: "image-model", size: "1:1", quality: "high", items: [{ nodeId: "batch-node", prompt: "第一行" }] };
+        const live = agentImageApproval({ toolName: "generate_media_batch", arguments: args });
+        const restored = agentImageApproval({ call: { function: { name: "generate_media_batch", arguments: JSON.stringify(args) } } });
+        expect(live).not.toBeNull();
+        expect(live).toEqual(restored);
+        expect(live?.channelModelKey).toBe("image-model");
+        expect(agentMediaSettings(live!)).not.toHaveProperty("items");
+        expect(agentApprovalMatchesSettings(args, agentMediaSettings(live!))).toBe(true);
+        expect(agentApprovalMatchesSettings(args, { ...agentMediaSettings(live!), channelModelKey: "other" })).toBe(false);
+    });
+    it("reads batch video defaults without requiring a shared prompt", () => {
+        const result = agentVideoApproval({ toolName: "generate_media_batch", arguments: { mode: "video", logicalModelId: "video-model", durationSeconds: 8, items: [{ nodeId: "a" }, { nodeId: "b" }] } });
+        expect(result?.logicalModelId).toBe("video-model");
+        expect(result?.durationSeconds).toBe(8);
+        expect(result?.size).toBe("");
+    });
+    it("does not offer media settings for empty or non-image/video batches", () => {
+        expect(agentImageApproval({ toolName: "generate_media_batch", arguments: { mode: "image", items: [] } })).toBeNull();
+        expect(agentVideoApproval({ toolName: "generate_media_batch", arguments: { mode: "audio", items: [{ nodeId: "a" }] } })).toBeNull();
     });
 });

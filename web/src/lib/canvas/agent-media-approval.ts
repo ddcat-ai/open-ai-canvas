@@ -27,12 +27,27 @@ export function agentMediaSettings(value: AgentMediaSettings): AgentMediaSetting
     };
 }
 
-export function agentVideoApproval(detail: Record<string, unknown>): AgentVideoApproval | null {
+function mediaApprovalArguments(detail: Record<string, unknown>): Record<string, unknown> | null {
     const call = detail.call as { function?: { name?: string; arguments?: unknown } } | undefined;
-    if ((call?.function?.name || detail.toolName) !== "generate_media") return null;
+    const toolName = call?.function?.name || detail.toolName;
+    if (toolName !== "generate_media" && toolName !== "generate_media_batch") return null;
     const raw = call?.function?.arguments ?? detail.arguments;
     try {
         const args = typeof raw === "string" ? JSON.parse(raw) : raw;
+        if (!args || typeof args !== "object" || Array.isArray(args)) return null;
+        if (toolName === "generate_media_batch") {
+            if (!Array.isArray(args.items) || !args.items.length) return null;
+            return { ...args, prompt: "", size: typeof args.size === "string" ? args.size : "" };
+        }
+        return args;
+    } catch {
+        return null;
+    }
+}
+
+export function agentVideoApproval(detail: Record<string, unknown>): AgentVideoApproval | null {
+    try {
+        const args = mediaApprovalArguments(detail);
         if (!args || args.mode !== "video" || typeof args.prompt !== "string") return null;
         return {
             logicalModelId: typeof args.logicalModelId === "string" ? args.logicalModelId : "",
@@ -55,11 +70,8 @@ export function agentVideoApproval(detail: Record<string, unknown>): AgentVideoA
 }
 
 export function agentImageApproval(detail: Record<string, unknown>): AgentImageApproval | null {
-    const call = detail.call as { function?: { name?: string; arguments?: unknown } } | undefined;
-    if ((call?.function?.name || detail.toolName) !== "generate_media") return null;
-    const raw = call?.function?.arguments ?? detail.arguments;
     try {
-        const args = typeof raw === "string" ? JSON.parse(raw) : raw;
+        const args = mediaApprovalArguments(detail);
         if (!args || args.mode !== "image" || typeof args.size !== "string" || typeof args.prompt !== "string") return null;
         return {
             logicalModelId: typeof args.logicalModelId === "string" ? args.logicalModelId : "",
@@ -78,14 +90,23 @@ export function agentImageApproval(detail: Record<string, unknown>): AgentImageA
 }
 
 export function agentApprovalModel(config: AiConfig, settings: AgentMediaSettings, capability: "image" | "video" = "image"): string {
-    return selectableModelsByCapability(config, capability).find((model) => {
-        if (settings.logicalModelId) return logicalModelIDForConfig({ ...config, model }) === settings.logicalModelId;
-        return resolveModelChannel(config, model).id === settings.channelId && modelOptionName(model) === settings.channelModelKey;
-    }) || "";
+    return (
+        selectableModelsByCapability(config, capability).find((model) => {
+            if (settings.logicalModelId) return logicalModelIDForConfig({ ...config, model }) === settings.logicalModelId;
+            return resolveModelChannel(config, model).id === settings.channelId && modelOptionName(model) === settings.channelModelKey;
+        }) || ""
+    );
 }
 
 export function agentApprovalMatchesSettings(argumentsValue: unknown, settings: AgentMediaSettings): boolean {
-    const detail = { toolName: "generate_media", arguments: argumentsValue };
+    let args: unknown;
+    try {
+        args = typeof argumentsValue === "string" ? JSON.parse(argumentsValue) : argumentsValue;
+    } catch {
+        return false;
+    }
+    const batch = args && typeof args === "object" && "items" in args;
+    const detail = { toolName: batch ? "generate_media_batch" : "generate_media", arguments: args };
     const approved = agentImageApproval(detail) || agentVideoApproval(detail);
     if (!approved) return false;
     return (["logicalModelId", "channelId", "channelModelKey", "size", "quality", "durationSeconds", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"] as const).every((key) => {
