@@ -201,6 +201,35 @@ func TestDramaCastLookLifecycle(t *testing.T) {
 	if err != nil || adopted.ImageResourceID != custom || !adopted.Locked {
 		t.Fatalf("custom look image not adopted: %+v %v", adopted, err)
 	}
+	baseBefore, err := svc.repo.DramaCast(project, hero.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canvasImage := fake.resource("usr-drama", "image", "image/png")
+	if _, err := svc.SetDramaCastImage("usr-drama", project, look.ID, SetDramaCastImageRequest{ResourceID: canvasImage, Source: "canvas"}); err != nil {
+		t.Fatal(err)
+	}
+	canvasLook, err := svc.repo.DramaCast(project, look.ID)
+	if err != nil || canvasLook.ImageResourceID != canvasImage || !canvasLook.Locked || canvasLook.ImageStatus != model.DramaMediaReady {
+		t.Fatalf("canvas image must be adopted into the selected look: %+v %v", canvasLook, err)
+	}
+	baseAfter, err := svc.repo.DramaCast(project, hero.ID)
+	if err != nil || baseAfter.ImageResourceID != baseBefore.ImageResourceID || baseAfter.ImageVersion != baseBefore.ImageVersion || baseAfter.Locked != baseBefore.Locked {
+		t.Fatalf("adopting a look must preserve the base character image: %+v %v", baseAfter, err)
+	}
+	takes, err := svc.DramaTakes("usr-drama", project, look.ID, "cast")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundCanvasTake := false
+	for _, take := range takes["takes"].([]DramaTakeView) {
+		if take.ResourceID == canvasImage && take.Current && take.Source == "canvas" && take.OwnerID == look.ID {
+			foundCanvasTake = true
+		}
+	}
+	if !foundCanvasTake {
+		t.Fatal("the selected look must record a current canvas take")
+	}
 
 	references := []string{look.ID}
 	episodeID := summary.Episodes[0].ID

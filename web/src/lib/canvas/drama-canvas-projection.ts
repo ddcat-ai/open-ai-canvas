@@ -4,7 +4,7 @@ import { createCanvasNode, createStoryboardRow } from "@/lib/canvas/canvas-proje
 import { FRAME_HEADER_HEIGHT, FRAME_PADDING } from "@/lib/canvas/canvas-frame";
 import { findAvailableGenerationGroupPosition } from "@/lib/canvas/canvas-generation-layout";
 import { createDefaultTracks, DEFAULT_VIDEO_TRACK_ID } from "@/lib/timeline/timeline-tracks";
-import { DRAMA_CAST_KIND_LABEL } from "@/lib/drama/drama-format";
+import { DRAMA_CAST_KIND_LABEL, dramaCastDisplayName } from "@/lib/drama/drama-format";
 import type { DramaCast, DramaCastKind, DramaEpisode, DramaSegment, DramaShot, DramaTake } from "@/services/api/drama";
 import { CanvasNodeType, type CanvasConnection, type CanvasDramaRef, type CanvasMediaVersion, type CanvasNodeData, type CanvasVideoEditOperation, type Position, type StoryboardColumn, type StoryboardRow } from "@/types/canvas";
 import type { TimelineClip, TimelineProject } from "@/types/timeline";
@@ -185,8 +185,8 @@ export function dramaPlacement(nodes: CanvasNodeData[], size: { width: number; h
 export function buildDramaCastNode(input: { projectId: string; cast: DramaCast; ratio?: string; takes?: DramaTake[]; media: DramaProjectionMedia; topLeft: Position }): CanvasNodeData {
     const { cast, media } = input;
     const size = dramaMediaSize(input.ratio || "16:9", CAST_WIDTH * 1.3);
-    const prompt = [cast.appearance, cast.kind === "character" && cast.voiceInstructions ? `声线：${cast.voiceInstructions}` : ""].filter(Boolean).join("\n");
-    const node = mediaNode(CanvasNodeType.Image, `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${cast.name}`, cast.imageResourceId, media, {
+    const prompt = [cast.imagePrompt || cast.appearance, cast.kind === "character" && cast.voiceInstructions ? `声线：${cast.voiceInstructions}` : ""].filter(Boolean).join("\n");
+    const node = mediaNode(CanvasNodeType.Image, `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${dramaCastDisplayName(cast)}`, cast.imageResourceId, media, {
         prompt,
         composerContent: prompt,
         assetCategory: DRAMA_CAST_ASSET_CATEGORY[cast.kind],

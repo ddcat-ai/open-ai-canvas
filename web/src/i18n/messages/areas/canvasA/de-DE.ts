@@ -670,6 +670,11 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         noDescription: "Keine Beschreibung",
     },
     dramaAdopt: {
+        look: "Kleidung / Styling",
+        chooseLook: "Kleidung oder Look auswählen",
+        baseLook: "Grundaussehen der Figur",
+        lookNote: "Für den gewählten Look übernehmen; andere Bilder bleiben unverändert.",
+        noLooks: "Fügen Sie zuerst einen Look in den Figureneinstellungen hinzu und speichern Sie ihn.",
         mediaPending: "Das Medium wird noch generiert oder hochgeladen. Übernimm es, sobald es fertig ist.",
         mediaNotStored: "Das Medium dieses Knotens ist nicht auf dem Server gespeichert (z. B. ein externer Link) und kann nicht übernommen werden. Lade es zuerst auf die Leinwand hoch.",
         chooseSegment: "Wähle das zu ersetzende Segment.",

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
-import type { DramaCast, DramaSegment, DramaSegmentReferencePatch } from "../src/services/api/drama";
+import type { DramaCast, DramaSegment, DramaSegmentReferencePatch, DramaSummary } from "../src/services/api/drama";
 
 const dom = new Window({ url: "http://localhost/projects/drama" });
 const globals = new Map<string, PropertyDescriptor | undefined>();
@@ -31,7 +31,11 @@ const { App } = await import("antd");
 const { CastLooks } = await import("../src/pages/projects/studio/cast-looks");
 const { CastVoicePreview } = await import("../src/pages/projects/studio/cast-voice");
 const { ReferenceBoard } = await import("../src/pages/projects/studio/segment-references");
+const { CanvasDramaAdoptModal } = await import("../src/components/canvas/canvas-drama-adopt-modal");
+const { buildDramaCastNode, defaultDramaAdoptTarget } = await import("../src/lib/canvas/drama-canvas-projection");
+const { CanvasNodeType } = await import("../src/types/canvas");
 const api = await import("../src/services/api/drama");
+const resources = await import("../src/services/api/resources");
 const imageStorage = await import("../src/services/image-storage");
 const character = { id: "hero", name: "主角", kind: "character", imageStatus: "ready", imageResourceId: "base" } as DramaCast;
 const look = { id: "look", name: "主角", parentId: "hero", kind: "character", lookName: "晚宴", appearance: "黑色礼服", imagePrompt: "银色耳饰，柔和侧光", imageStatus: "draft" } as DramaCast;
@@ -265,4 +269,97 @@ test("reference image opens the real large preview and can return to the referen
     await act(async () => document.querySelector<HTMLButtonElement>(".canvas-image-preview-modal .ant-modal-close")!.click());
     expect(document.querySelector(".canvas-image-preview-modal")).toBeNull();
     expect(host.querySelector('[aria-label="夜景资产"]')).not.toBeNull();
+});
+
+const adoptCast = [character, look, { ...character, id: "second", name: "配角" }, { ...character, id: "hall", kind: "scene", name: "大厅" }, { ...character, id: "sword", kind: "prop", name: "宝剑" }] as DramaCast[];
+
+async function renderAdopt(boundCastId?: string) {
+    const summary = { project: { id: "project" }, episodes: [], production: { settings: {} } } as unknown as DramaSummary;
+    const node = {
+        id: "canvas-image",
+        type: CanvasNodeType.Image,
+        position: { x: 0, y: 0 },
+        width: 320,
+        height: 240,
+        metadata: {
+            storageKey: "resource:canvas-outfit",
+            ...(boundCastId ? { dramaRef: { projectId: "project", kind: "cast" as const, id: boundCastId } } : {}),
+        },
+    };
+    const adopted = mock(() => {});
+    const closed = mock(() => {});
+    const impact = spyOn(api, "getDramaCastImpact").mockResolvedValue({ episodes: 1, segments: 2 });
+    const save = spyOn(api, "setDramaCastImage").mockImplementation(async (_projectId, castId) => ({ cast: adoptCast.find((item) => item.id === castId)!, affectedSegments: 0 }));
+    spyOn(resources, "getResourceAccess").mockRejectedValue(new Error("Preview unavailable in this fixture"));
+    await act(async () =>
+        root.render(
+            <QueryClientProvider client={client}>
+                <App>
+                    <CanvasDramaAdoptModal node={node} nodes={[node]} summary={summary} cast={adoptCast} onClose={closed} onAdopted={adopted} />
+                </App>
+            </QueryClientProvider>,
+        ),
+    );
+    return { save, adopted, closed, impact };
+}
+
+async function selectAdoptOption(label: string, optionText: string) {
+    const input = document.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+    expect(input).not.toBeNull();
+    await act(async () => input!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })));
+    const option = [...document.querySelectorAll<HTMLElement>(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option")].find((item) => item.textContent?.trim() === optionText);
+    expect(option).toBeDefined();
+    await act(async () => option!.click());
+}
+
+test("canvas adoption selects a character outfit and submits its own slot", async () => {
+    const { save, adopted, closed, impact } = await renderAdopt();
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect([...dialog.querySelectorAll("button")].find((item) => item.textContent?.replace(/\s/g, "") === "采用")?.disabled).toBe(true);
+    await selectAdoptOption("选择设定", "主角");
+    await selectAdoptOption("选择服装或妆造", "晚宴");
+    expect(impact.mock.calls.at(-1)?.slice(0, 2)).toEqual(["project", "look"]);
+    await click("采用", dialog);
+    expect(save).toHaveBeenCalledWith("project", "look", "canvas-outfit", false, { source: "canvas", taskId: undefined });
+    expect(adopted).toHaveBeenCalledWith("canvas-image", { kind: "cast", castId: "look" }, "canvas-outfit");
+    expect(closed).toHaveBeenCalledTimes(1);
+});
+
+test("an outfit-bound canvas image defaults to the same character and outfit", async () => {
+    const { save } = await renderAdopt("look");
+    expect(document.querySelector('[aria-label="选择设定"]')?.closest(".app-unified-select")?.textContent).toContain("主角");
+    expect(document.querySelector('[aria-label="选择服装或妆造"]')?.closest(".app-unified-select")?.textContent).toContain("晚宴");
+    await click("采用", document);
+    expect(save.mock.calls[0]?.[1]).toBe("look");
+});
+
+test("switching characters clears the previous outfit and selects the new base", async () => {
+    const { save } = await renderAdopt("look");
+    await selectAdoptOption("选择设定", "配角");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("还没有额外造型");
+    await click("采用", document);
+    expect(save.mock.calls[0]?.[1]).toBe("second");
+});
+
+test("base appearance remains an explicit adoption option", async () => {
+    const { save } = await renderAdopt("look");
+    await selectAdoptOption("选择服装或妆造", "基础造型（角色本体）");
+    await click("采用", document);
+    expect(save.mock.calls[0]?.[1]).toBe("hero");
+});
+
+test.each(["大厅", "宝剑"])("adopting to %s needs no character outfit selection", async (name) => {
+    const { save } = await renderAdopt("look");
+    await selectAdoptOption("选择设定", name);
+    expect(document.querySelector('[aria-label="选择服装或妆造"]')).toBeNull();
+    await click("采用", document);
+    expect(save.mock.calls[0]?.[1]).toBe(name === "大厅" ? "hall" : "sword");
+});
+
+test("outfit projection preserves its name, custom prompt and adoption binding", () => {
+    const node = buildDramaCastNode({ projectId: "project", cast: look, media: { assetIdOf: () => undefined, urlOf: () => "" }, topLeft: { x: 0, y: 0 } });
+    expect(node.title).toBe("角色 · 主角 · 晚宴");
+    expect(node.metadata?.prompt).toBe(look.imagePrompt);
+    expect(node.metadata?.composerContent).toBe(look.imagePrompt);
+    expect(defaultDramaAdoptTarget(node, [node])).toEqual({ kind: "cast", castId: "look" });
 });

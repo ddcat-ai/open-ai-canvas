@@ -670,6 +670,11 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
         noDescription: "Aucune description",
     },
     dramaAdopt: {
+        look: "Tenue / apparence",
+        chooseLook: "Choisir une tenue ou une apparence",
+        baseLook: "Apparence de base du personnage",
+        lookNote: "Appliquer à cette apparence ; les autres images restent inchangées.",
+        noLooks: "Ajoutez et enregistrez une apparence dans les paramètres du personnage.",
         mediaPending: "Le média est encore en cours de génération ou d'envoi. Adoptez-le une fois terminé.",
         mediaNotStored: "Le média de ce nœud n'est pas stocké sur le serveur (par exemple un lien externe) et ne peut pas être adopté. Importez-le d'abord sur le canevas.",
         chooseSegment: "Choisissez le segment à remplacer.",

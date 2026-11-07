@@ -670,6 +670,11 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         noDescription: "스킬 설명이 없습니다",
     },
     dramaAdopt: {
+        look: "의상 / 스타일링",
+        chooseLook: "의상 또는 스타일 선택",
+        baseLook: "기본 스타일 (캐릭터)",
+        lookNote: "선택한 스타일에 적용합니다. 다른 스타일 이미지는 유지됩니다.",
+        noLooks: "추가 스타일이 없습니다. 제작 화면의 캐릭터 설정에서 먼저 추가하고 저장하세요.",
         mediaPending: "미디어가 아직 생성 또는 업로드 중입니다. 완료된 후 채택하세요.",
         mediaNotStored: "이 노드의 미디어는 서버에 저장되어 있지 않아(예: 외부 링크) 채택할 수 없습니다. 먼저 캔버스에 업로드한 뒤 다시 시도하세요.",
         chooseSegment: "교체할 장면을 선택하세요.",

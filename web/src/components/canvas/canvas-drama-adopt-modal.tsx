@@ -12,7 +12,7 @@ import { Select } from "@/components/ui/base/select";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Callout } from "@/components/ui/product/callout";
 import { defaultDramaAdoptTarget, type DramaAdoptTarget } from "@/lib/canvas/drama-canvas-projection";
-import { DRAMA_CAST_KIND_LABEL } from "@/lib/drama/drama-format";
+import { DRAMA_CAST_KIND_LABEL, dramaCastDisplayName } from "@/lib/drama/drama-format";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { adoptDramaSegmentVideo, DRAMA_ERROR_REASON, getDramaCastImpact, getDramaEpisode, setDramaCastImage, type DramaCast, type DramaSegment, type DramaSummary } from "@/services/api/drama";
 import { ApiError } from "@/services/api/request";
@@ -72,6 +72,8 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
     const segment = segmentIndex === null ? undefined : segments.find((item) => item.index === segmentIndex);
     const episode = summary.episodes.find((item) => item.id === episodeId);
     const targetCast = cast?.find((item) => item.id === castId);
+    const character = targetCast?.parentId ? cast?.find((item) => item.id === targetCast.parentId) : targetCast;
+    const characterLooks = character?.kind === "character" ? (cast || []).filter((item) => item.parentId === character.id).sort((left, right) => left.position - right.position) : [];
     const laterWithVideo = segment ? segments.filter((item) => item.index > segment.index && item.videoResourceId).length : 0;
     // 并行出片的段不以上一段尾帧为首帧，换掉本段不影响后续段，不提供级联重生成。
     const parallelVideo = summary.production.settings.videoContinuity === "parallel";
@@ -81,7 +83,7 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
             CAST_KIND_ORDER.map((kind) => ({
                 label: DRAMA_CAST_KIND_LABEL[kind],
                 options: (cast || [])
-                    .filter((item) => item.kind === kind)
+                    .filter((item) => item.kind === kind && !item.parentId)
                     .sort((left, right) => left.position - right.position)
                     .map((item) => ({ value: item.id, label: item.name })),
             })).filter((group) => group.options.length),
@@ -107,8 +109,9 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
         try {
             if (!isVideo && targetCast) {
                 const result = await setDramaCastImage(dramaId, targetCast.id, resourceId, restyle, { source: "canvas", taskId: node.metadata?.taskId });
-                if (result.unchanged) message.info(t("canvasA.dramaAdopt.castUnchanged", { name: result.cast.name }));
-                else message.success(result.affectedSegments ? t("canvasA.dramaAdopt.castReplacedRestyle", { name: result.cast.name, count: result.affectedSegments }) : t("canvasA.dramaAdopt.castReplaced", { name: result.cast.name }));
+                const name = dramaCastDisplayName(result.cast);
+                if (result.unchanged) message.info(t("canvasA.dramaAdopt.castUnchanged", { name }));
+                else message.success(result.affectedSegments ? t("canvasA.dramaAdopt.castReplacedRestyle", { name, count: result.affectedSegments }) : t("canvasA.dramaAdopt.castReplaced", { name }));
                 onAdopted(node.id, { kind: "cast", castId: targetCast.id }, resourceId);
             } else if (isVideo && segment && episode) {
                 const result = await adoptDramaSegmentVideo(dramaId, episode.id, segment.index, { resourceId, taskId: node.metadata?.taskId, cascade: cascade && !parallelVideo, expectedRevision: segment.revision });
@@ -197,12 +200,27 @@ export function CanvasDramaAdoptModal({ node, nodes, summary, cast, onClose, onA
                             appearance="field"
                             showSearch
                             optionFilterProp="label"
-                            value={castId || undefined}
+                            value={character?.id || undefined}
                             options={castOptions}
                             onChange={(value: string) => setCastId(value)}
                             placeholder={cast ? t("canvasA.dramaAdopt.castPlaceholder") : t("canvasA.dramaAdopt.loadingCast")}
                         />
                     </label>
+                    {character?.kind === "character" ? (
+                        <label className="grid gap-1 text-xs text-muted-foreground">
+                            {t("canvasA.dramaAdopt.look")}
+                            <Select
+                                ariaLabel={t("canvasA.dramaAdopt.chooseLook")}
+                                appearance="field"
+                                showSearch
+                                optionFilterProp="label"
+                                value={targetCast?.id}
+                                options={[{ value: character.id, label: t("canvasA.dramaAdopt.baseLook") }, ...characterLooks.map((item) => ({ value: item.id, label: item.lookName || item.name }))]}
+                                onChange={(value: string) => setCastId(value)}
+                            />
+                            <span>{characterLooks.length ? t("canvasA.dramaAdopt.lookNote") : t("canvasA.dramaAdopt.noLooks")}</span>
+                        </label>
+                    ) : null}
                     {targetCast ? (
                         <div className="flex items-center gap-3">
                             <Thumb storageKey={targetCast.imageResourceId ? `resource:${targetCast.imageResourceId}` : undefined} label={t("canvasA.dramaAdopt.currentInDrama")} />
