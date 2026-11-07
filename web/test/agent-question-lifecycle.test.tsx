@@ -190,3 +190,56 @@ test("视频规格单选可修改，多选字段提交稳定 ID 数组", async (
         await fixture.dispose();
     }
 });
+
+test("长表单只有内容区滚动，操作按钮位于滚动区外且提示上下位置", async () => {
+    const fixture = await questionFixture({
+        kind: "form",
+        questionId: "long-form",
+        question: "确认制作需求",
+        options: [],
+        fields: Array.from({ length: 16 }, (_, i) => ({ id: `field-${i}`, title: `字段${i}`, type: "text" as const })),
+    });
+    try {
+        const scroll = fixture.host.querySelector<HTMLElement>(".agent-question-scroll")!;
+        const actions = fixture.host.querySelector(".agent-question-actions")!;
+        expect(scroll).not.toBeNull();
+        expect(scroll.contains(actions)).toBe(false);
+        expect(scroll.querySelectorAll("[data-agent-field-id]").length).toBe(16);
+        expect(scroll.querySelector("#agent-question-additional-notes")).not.toBeNull();
+        expect(scroll.getAttribute("tabindex")).toBe("0");
+        Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 120 });
+        Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 700 });
+        await act(async () => scroll.dispatchEvent(new dom.Event("scroll")));
+        const up = fixture.host.querySelector<HTMLButtonElement>('[aria-label="向上查看表单"]')!;
+        const down = fixture.host.querySelector<HTMLButtonElement>('[aria-label="向下查看更多选项"]')!;
+        expect(up.disabled).toBe(true);
+        expect(down.disabled).toBe(false);
+        expect(fixture.host.textContent).toContain("下方还有更多选项");
+        scroll.scrollTop = 580;
+        await act(async () => scroll.dispatchEvent(new dom.Event("scroll")));
+        expect(up.disabled).toBe(false);
+        expect(down.disabled).toBe(true);
+        expect(fixture.host.textContent).toContain("已到表单底部");
+    } finally {
+        await fixture.dispose();
+    }
+});
+
+test("必填字段缺失时定位字段，保留表单并且不提交", async () => {
+    const fixture = await questionFixture({ kind: "form", questionId: "required", question: "补充需求", options: [], fields: [{ id: "missing", title: "必填需求", type: "text", required: true }] });
+    try {
+        const field = fixture.host.querySelector<HTMLElement>('[data-agent-field-id="missing"]')!;
+        let scrolled = false;
+        field.scrollIntoView = () => {
+            scrolled = true;
+        };
+        const submit = [...fixture.host.querySelectorAll("button")].find((button) => button.textContent === "确认并继续")!;
+        await act(async () => submit.click());
+        expect(scrolled).toBe(true);
+        expect(document.activeElement?.id).toBe("agent-field-missing");
+        expect(fixture.host.querySelector('[role="alert"]')?.textContent).toContain("必填需求");
+        expect(fixture.answers).toHaveLength(0);
+    } finally {
+        await fixture.dispose();
+    }
+});
