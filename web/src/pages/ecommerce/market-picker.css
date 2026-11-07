@@ -44,6 +44,8 @@
 }
 .commerce-market-body {
     display: grid;
+    /* 弹窗高度受限时，隐式行若按容器收缩，带纵向滚动的语言列表会被压到只剩内边距。 */
+    grid-auto-rows: max-content;
     gap: var(--space-5);
     min-height: 0;
     overflow-y: auto;
@@ -164,7 +166,8 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: var(--space-1);
-    max-height: none;
+    max-height: 240px;
+    overflow-y: auto;
     margin: calc(var(--space-2) * -1) 0 0;
     padding: var(--space-2);
     border: 0;
