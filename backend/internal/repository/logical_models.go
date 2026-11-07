@@ -293,7 +293,7 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 			return nil
 		}
 		var order model.BillingOrder
-		if err := tx.First(&order, "id = ? AND task_id = ? AND status IN ?", billingOrderID, taskID, []model.BillingStatus{model.BillingStatusReserved, model.BillingStatusRunning}).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, "id = ? AND task_id = ? AND status IN ?", billingOrderID, taskID, []model.BillingStatus{model.BillingStatusReserved, model.BillingStatusRunning}).Error; err != nil {
 			return err
 		}
 		now := time.Now()

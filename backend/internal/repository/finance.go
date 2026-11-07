@@ -16,6 +16,7 @@ var (
 	ErrRedeemCodeInvalid       = errors.New("兑换码无效或已使用")
 	ErrActiveTaskLimit         = errors.New("同时进行的任务数已达上限，请等待已有任务完成")
 	ErrTaskNotRetryable        = errors.New("该任务当前状态不支持重试")
+	ErrTaskBillingReview       = errors.New("上一次调用费用仍需核对")
 	ErrBillingStateConflict    = errors.New("计费状态已变化，请刷新后重试")
 	ErrBillingUsageUnavailable = errors.New("暂时无法获取用量，计费未完成")
 	ErrBillingChargeLimit      = errors.New("本次费用超过授权上限，已拒绝扣费")
@@ -168,10 +169,39 @@ func (r *Repository) CreateTaskWithActiveLimit(task *model.Task, activeTaskLimit
 	})
 }
 
-func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, order *model.BillingOrder, activeTaskLimit int) (*model.Task, error) {
+func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, order *model.BillingOrder, activeTaskLimit int, authorizeRelease ...func(*Repository, *model.Task, *model.BillingOrder) error) (*model.Task, error) {
 	var task model.Task
 	taskID := prepared.ID
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		// 与自动退款保持任务先于账户的锁顺序；重试资格也必须在预扣前确认。
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&task, "id = ? AND user_id = ?", taskID, userID).Error; err != nil {
+			return err
+		}
+		if task.Status != model.TaskStatusFailed && task.Status != model.TaskStatusCancelled {
+			return ErrTaskNotRetryable
+		}
+		if task.BillingOrderID != "" {
+			var previous model.BillingOrder
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&previous, "id = ? AND user_id = ? AND task_id = ?", task.BillingOrderID, userID, task.ID).Error; err != nil {
+				return err
+			}
+			switch previous.Status {
+			case model.BillingStatusSettled, model.BillingStatusRefunded:
+			case model.BillingStatusReserved, model.BillingStatusRunning:
+				if len(authorizeRelease) != 1 || authorizeRelease[0] == nil {
+					return ErrTaskBillingReview
+				}
+				if err := authorizeRelease[0](New(tx), &task, &previous); err != nil {
+					return err
+				}
+				// 旧执行证据将在重试时清空，必须先在同一事务中完成释放。
+				if err := refundBillingOrder(tx, previous, "重试前退回：已确认上次请求未提交或上游明确失败"); err != nil {
+					return err
+				}
+			default:
+				return ErrTaskBillingReview
+			}
+		}
 		if err := enforceActiveTaskLimit(tx, userID, activeTaskLimit); err != nil {
 			return err
 		}

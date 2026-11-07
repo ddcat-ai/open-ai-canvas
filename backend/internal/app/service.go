@@ -35,6 +35,7 @@ type Service struct {
 	registrationMu           sync.Mutex
 	emailCodeMu              sync.Mutex
 	redeemBatchMu            sync.Mutex
+	billingAutoRefund        billingAutoRefundScan
 	storageMu                sync.Mutex
 	storageTestMu            sync.Mutex
 	workerRuntimeMu          sync.Mutex
