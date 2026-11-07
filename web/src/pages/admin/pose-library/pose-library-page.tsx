@@ -41,6 +41,57 @@ const statusLabels: Record<AdminPoseLibraryItem["status"], { label: string; tone
 
 type SyncProgress = { running: boolean; succeeded: number; failed: number; lastError?: string };
 
+/** 体系数量会随导入增长；折叠并在展开时限高，避免把下方筛选和姿势列表挤出屏幕。 */
+export function PoseLibrarySystems({ systems, sourceName, onBulk }: { systems: AdminPoseLibrarySystem[]; sourceName: Map<string, string>; onBulk: (action: PoseLibraryBulkAction, target: AdminPoseLibrarySystem) => void }) {
+    return (
+        <section className="rounded-[var(--card-radius)] bg-[var(--library-surface)] p-4">
+            <details className="pose-library-systems">
+                <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium">
+                    <span>按体系管理</span>
+                    <span className="text-xs font-normal text-[var(--text-secondary)]">
+                        {systems.length} 个体系 · 共 {systems.reduce((sum, item) => sum + item.total, 0)} 条 · 已启用 {systems.reduce((sum, item) => sum + item.enabled, 0)} 条
+                    </span>
+                </summary>
+                <div className="mt-2 max-h-60 overflow-y-auto pr-1">
+                    <div className="divide-y divide-[var(--border)]">
+                        {systems.map((item) => (
+                            <div key={`${item.sourceKey}:${item.system}`} className="flex flex-wrap items-center gap-3 py-2">
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm">
+                                        {item.system}
+                                        {isAdultPoseSystem(item.system) ? (
+                                            <span className="ml-2">
+                                                <AdminStatusBadge label="成人向" tone="warning" />
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <div className="text-xs text-[var(--text-secondary)]">
+                                        {sourceName.get(item.sourceKey) || item.sourceKey} · 共 {item.total} · 已同步 {item.ready} · 启用 {item.enabled}
+                                    </div>
+                                </div>
+                                <Button size="small" disabled={item.enabled === item.total} onClick={() => onBulk("enable", item)}>
+                                    全部启用
+                                </Button>
+                                <Button size="small" disabled={item.enabled === 0} onClick={() => onBulk("disable", item)}>
+                                    全部停用
+                                </Button>
+                                {item.sourceKey !== "custom" ? (
+                                    <Button size="small" title="数据目录丢失或来源图片更新后，放回待同步再点「同步图片」" onClick={() => onBulk("resync", item)}>
+                                        重新同步
+                                    </Button>
+                                ) : null}
+                                <Button size="small" danger onClick={() => onBulk("delete", item)}>
+                                    删除
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </details>
+        </section>
+    );
+}
+
 export default function PoseLibraryAdminPage() {
     const { message, modal } = App.useApp();
     const [keyword, setKeyword] = useState("");
@@ -255,44 +306,7 @@ export default function PoseLibraryAdminPage() {
                 ) : null}
             </section>
 
-            {systems.length ? (
-                <section className="rounded-[var(--card-radius)] bg-[var(--library-surface)] p-4">
-                    <div className="mb-2 text-sm font-medium">按体系管理</div>
-                    <div className="divide-y divide-[var(--border)]">
-                        {systems.map((item) => (
-                            <div key={`${item.sourceKey}:${item.system}`} className="flex flex-wrap items-center gap-3 py-2">
-                                <div className="min-w-0 flex-1">
-                                    <div className="truncate text-sm">
-                                        {item.system}
-                                        {isAdultPoseSystem(item.system) ? (
-                                            <span className="ml-2">
-                                                <AdminStatusBadge label="成人向" tone="warning" />
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    <div className="text-xs text-[var(--text-secondary)]">
-                                        {sourceName.get(item.sourceKey) || item.sourceKey} · 共 {item.total} · 已同步 {item.ready} · 启用 {item.enabled}
-                                    </div>
-                                </div>
-                                <Button size="small" disabled={item.enabled === item.total} onClick={() => runBulk("enable", item)}>
-                                    全部启用
-                                </Button>
-                                <Button size="small" disabled={item.enabled === 0} onClick={() => runBulk("disable", item)}>
-                                    全部停用
-                                </Button>
-                                {item.sourceKey !== "custom" ? (
-                                    <Button size="small" title="数据目录丢失或来源图片更新后，放回待同步再点「同步图片」" onClick={() => runBulk("resync", item)}>
-                                        重新同步
-                                    </Button>
-                                ) : null}
-                                <Button size="small" danger onClick={() => runBulk("delete", item)}>
-                                    删除
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            ) : null}
+            {systems.length ? <PoseLibrarySystems systems={systems} sourceName={sourceName} onBulk={runBulk} /> : null}
 
             <AdminDataTable<AdminPoseLibraryItem>
                 toolbar={
