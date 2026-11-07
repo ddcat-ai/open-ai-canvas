@@ -105,6 +105,67 @@ test("confirming a look saves its editable prompt without requesting generation"
     expect(generate).not.toHaveBeenCalled();
 });
 
+async function fillLookField(label: string, value: string) {
+    const input = host.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${label}"]`)!;
+    const prototype = input.tagName === "TEXTAREA" ? dom.HTMLTextAreaElement.prototype : dom.HTMLInputElement.prototype;
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+}
+
+test("new appearance requires confirmation and saves a custom prompt without generation", async () => {
+    const add = spyOn(api, "addDramaCastLook").mockResolvedValue({ look });
+    const generate = spyOn(api, "regenerateDramaCast").mockResolvedValue({ affectedSegments: 0 });
+    await renderLooks([]);
+    await click("添加造型");
+    await fillLookField("造型名", "舞台妆");
+    await fillLookField("造型外观", "红色长裙，盘发，淡金眼妆");
+    await fillLookField("造型生成提示词", "保持人物五官，红色丝绸长裙，柔和舞台光");
+    expect(add).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
+    await click("确认保存");
+    expect(add).toHaveBeenCalledWith("project", "hero", {
+        lookName: "舞台妆",
+        appearance: "红色长裙，盘发，淡金眼妆",
+        imagePrompt: "保持人物五官，红色丝绸长裙，柔和舞台光",
+        fromChapter: 0,
+        toChapter: 0,
+    });
+    expect(generate).not.toHaveBeenCalled();
+});
+
+test("editing an appearance submits the newly typed prompt and keeps generation separate", async () => {
+    const update = spyOn(api, "updateDramaCastLook").mockResolvedValue({ look, affectedSegments: 0 });
+    const generate = spyOn(api, "regenerateDramaCast").mockResolvedValue({ affectedSegments: 0 });
+    await renderLooks();
+    await click("编辑造型 晚宴");
+    await fillLookField("造型生成提示词", "珍珠耳饰，暖色逆光，保留人物面部特征");
+    expect(update).not.toHaveBeenCalled();
+    await click("确认保存");
+    expect(update).toHaveBeenCalledWith("project", "look", expect.objectContaining({ imagePrompt: "珍珠耳饰，暖色逆光，保留人物面部特征" }));
+    expect(generate).not.toHaveBeenCalled();
+});
+
+test("custom appearance image is uploaded and assigned only after confirmation", async () => {
+    const upload = spyOn(resources, "uploadResourceFile").mockResolvedValue({ id: "custom-look" } as Awaited<ReturnType<typeof resources.uploadResourceFile>>);
+    const save = spyOn(api, "setDramaCastImage").mockResolvedValue({ cast: { ...look, imageResourceId: "custom-look", locked: true }, affectedSegments: 0 });
+    const generate = spyOn(api, "regenerateDramaCast").mockResolvedValue({ affectedSegments: 0 });
+    await renderLooks();
+    await click("自定义图");
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new dom.File(["image"], "舞台妆.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("确认后保存并锁定这张图片，不调用模型生成");
+    expect(upload).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    await click("确认保存", document);
+    expect(upload).toHaveBeenCalledWith(file, "image", { fileName: "舞台妆.png" });
+    expect(save).toHaveBeenCalledWith("project", "look", "custom-look", false);
+    expect(generate).not.toHaveBeenCalled();
+});
+
 test("saved draft generates only through its separate generation button", async () => {
     const generate = spyOn(api, "regenerateDramaCast").mockResolvedValue({ affectedSegments: 0 });
     await renderLooks();
@@ -125,6 +186,40 @@ test("voice preview distinguishes characters with and without audio", async () =
     );
     expect(host.querySelector<HTMLButtonElement>('[aria-label="试听甲的音频"]')?.disabled).toBe(false);
     expect(host.querySelector<HTMLButtonElement>('[aria-label="乙未绑定音频"]')?.disabled).toBe(true);
+});
+
+test("voice preview plays the authorized sample, pauses, and stops on unmount", async () => {
+    const originalAudio = Object.getOwnPropertyDescriptor(globalThis, "Audio");
+    const audio = { src: "", play: mock(async () => {}), pause: mock(() => {}), onended: null, onerror: null };
+    Object.defineProperty(globalThis, "Audio", {
+        configurable: true,
+        writable: true,
+        value: function () {
+            return audio;
+        },
+    });
+    const access = spyOn(resources, "getResourceAccess").mockResolvedValue({ url: "/api/resources/sample/content" } as Awaited<ReturnType<typeof resources.getResourceAccess>>);
+    try {
+        await act(async () =>
+            root.render(
+                <App>
+                    <CastVoicePreview name="主角" resourceId="sample" />
+                </App>,
+            ),
+        );
+        await click("试听主角的音频");
+        expect(access).toHaveBeenCalledWith(resources.resourceStorageKey("sample"), "display", "playback");
+        expect(audio.play).toHaveBeenCalledTimes(1);
+        expect(audio.src).toBe(resources.resolveResourceAccessURL("/api/resources/sample/content"));
+        await click("暂停主角的音频");
+        expect(audio.pause).toHaveBeenCalledTimes(1);
+        await click("试听主角的音频");
+        await act(async () => root.render(null));
+        expect(audio.pause).toHaveBeenCalledTimes(2);
+    } finally {
+        if (originalAudio) Object.defineProperty(globalThis, "Audio", originalAudio);
+        else Reflect.deleteProperty(globalThis, "Audio");
+    }
 });
 
 const segment = {

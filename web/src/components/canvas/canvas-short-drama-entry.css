@@ -25,16 +25,6 @@
     pointer-events: none;
 }
 
-.canvas-entry-ripple::before {
-    content: "";
-    position: absolute;
-    width: 720px;
-    height: 720px;
-    border-radius: var(--r-full);
-    background: radial-gradient(circle, color-mix(in srgb, var(--canvas-entry-text) 7%, transparent) 0%, transparent 62%);
-    transform: translate(-50%, -50%);
-}
-
 .canvas-entry-ripple > span {
     position: absolute;
     width: 920px;
@@ -47,14 +37,28 @@
     will-change: transform, opacity;
 }
 
-.canvas-entry-ripple > span:nth-child(2) { animation-delay: 2.4s; }
-.canvas-entry-ripple > span:nth-child(3) { animation-delay: 4.8s; }
-.canvas-entry-ripple > span:nth-child(4) { animation-delay: 7.2s; }
+.canvas-entry-ripple > span:nth-child(2) {
+    animation-delay: 2.4s;
+}
+.canvas-entry-ripple > span:nth-child(3) {
+    animation-delay: 4.8s;
+}
+.canvas-entry-ripple > span:nth-child(4) {
+    animation-delay: 7.2s;
+}
 
 @keyframes canvas-entry-ripple {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.16); }
-    12% { opacity: 0.9; }
-    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.16);
+    }
+    12% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1);
+    }
 }
 
 .canvas-entry-click-ripple {
@@ -70,8 +74,14 @@
 }
 
 @keyframes canvas-entry-click-ripple {
-    0% { opacity: 1; transform: scale(0.04); }
-    100% { opacity: 0; transform: scale(1); }
+    0% {
+        opacity: 1;
+        transform: scale(0.04);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1);
+    }
 }
 
 /* 交互期暂停涟漪，不和画布平移/缩放争抢合成。 */
@@ -96,7 +106,9 @@
     scrollbar-width: none;
 }
 
-.canvas-entry-shell::-webkit-scrollbar { display: none; }
+.canvas-entry-shell::-webkit-scrollbar {
+    display: none;
+}
 
 .canvas-entry-shell button {
     font: inherit;
@@ -127,7 +139,10 @@
     letter-spacing: 0.04em;
 }
 
-.canvas-entry-eyebrow svg { width: 12px; height: 12px; }
+.canvas-entry-eyebrow svg {
+    width: 12px;
+    height: 12px;
+}
 
 .canvas-entry-title {
     margin: var(--space-4) 0 0;
@@ -160,16 +175,18 @@
     border: 1px solid var(--canvas-entry-border);
     border-radius: var(--r-3xl);
     background: var(--canvas-entry-surface);
-    box-shadow: 0 1px 2px color-mix(in srgb, black 6%, transparent), 0 18px 48px var(--canvas-entry-shadow);
+    box-shadow: none;
     text-align: left;
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
-    transition: border-color var(--motion-state) ease, box-shadow var(--motion-state) ease;
+    transition:
+        border-color var(--motion-state) ease,
+        box-shadow var(--motion-state) ease;
 }
 
 .canvas-entry-composer:focus-within {
     border-color: color-mix(in srgb, var(--canvas-entry-text) 28%, transparent);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--canvas-entry-text) 6%, transparent), 0 18px 48px var(--canvas-entry-shadow);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--canvas-entry-text) 6%, transparent);
 }
 
 .canvas-entry-composer textarea {
@@ -188,7 +205,9 @@
     field-sizing: content;
 }
 
-.canvas-entry-composer textarea::placeholder { color: color-mix(in srgb, var(--canvas-entry-muted) 75%, transparent); }
+.canvas-entry-composer textarea::placeholder {
+    color: color-mix(in srgb, var(--canvas-entry-muted) 75%, transparent);
+}
 
 .canvas-entry-composer-bar {
     display: flex;
@@ -209,11 +228,19 @@
     background: transparent;
     color: var(--canvas-entry-muted);
     font-size: var(--fs-caption);
-    transition: background-color var(--motion-state) ease, color var(--motion-state) ease;
+    transition:
+        background-color var(--motion-state) ease,
+        color var(--motion-state) ease;
 }
 
-.canvas-entry-ghost svg { width: 14px; height: 14px; }
-.canvas-entry-ghost:hover { background: var(--canvas-entry-chip); color: var(--canvas-entry-text); }
+.canvas-entry-ghost svg {
+    width: 14px;
+    height: 14px;
+}
+.canvas-entry-ghost:hover {
+    background: var(--canvas-entry-chip);
+    color: var(--canvas-entry-text);
+}
 
 .canvas-entry-hint {
     margin-left: auto;
@@ -233,13 +260,27 @@
     background: var(--canvas-entry-accent);
     color: var(--canvas-entry-on-accent);
     box-shadow: var(--button-primary-shadow);
-    transition: opacity var(--motion-state) ease, filter var(--motion-state) ease;
+    transition:
+        opacity var(--motion-state) ease,
+        filter var(--motion-state) ease;
 }
 
-.canvas-entry-send svg { width: 16px; height: 16px; stroke-width: 2.2; }
-.canvas-entry-send:not(:disabled):hover { filter: brightness(1.08); }
-.canvas-entry-send:not(:disabled):active { box-shadow: var(--button-primary-active-shadow); }
-.canvas-entry-shell .canvas-entry-send:disabled { cursor: not-allowed; box-shadow: none; opacity: var(--button-disabled-opacity); }
+.canvas-entry-send svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2.2;
+}
+.canvas-entry-send:not(:disabled):hover {
+    filter: brightness(1.08);
+}
+.canvas-entry-send:not(:disabled):active {
+    box-shadow: var(--button-primary-active-shadow);
+}
+.canvas-entry-shell .canvas-entry-send:disabled {
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: var(--button-disabled-opacity);
+}
 
 /* ---------- 灵感示例 ---------- */
 .canvas-entry-suggestions {
@@ -259,10 +300,15 @@
     color: var(--canvas-entry-muted);
     font-size: var(--fs-label);
     white-space: nowrap;
-    transition: background-color var(--motion-state) ease, color var(--motion-state) ease;
+    transition:
+        background-color var(--motion-state) ease,
+        color var(--motion-state) ease;
 }
 
-.canvas-entry-suggestions button:hover { background: var(--canvas-entry-chip-hover); color: var(--canvas-entry-text); }
+.canvas-entry-suggestions button:hover {
+    background: var(--canvas-entry-chip-hover);
+    color: var(--canvas-entry-text);
+}
 
 /* ---------- 其他起点 ---------- */
 .canvas-entry-paths {
@@ -284,7 +330,10 @@
     background: color-mix(in srgb, var(--canvas-entry-surface) 60%, transparent);
     color: var(--canvas-entry-text);
     text-align: left;
-    transition: background-color var(--motion-state) ease, border-color var(--motion-state) ease, transform var(--motion-state) var(--motion-ease-out);
+    transition:
+        background-color var(--motion-state) ease,
+        border-color var(--motion-state) ease,
+        transform var(--motion-state) var(--motion-ease-out);
 }
 
 .canvas-entry-paths button:hover {
@@ -300,29 +349,67 @@
     stroke-width: 1.7;
 }
 
-.canvas-entry-paths span { display: grid; min-width: 0; gap: 2px; }
-.canvas-entry-paths strong { overflow: hidden; font-size: var(--fs-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.canvas-entry-paths small { overflow: hidden; color: var(--canvas-entry-muted); font-size: var(--fs-tiny); text-overflow: ellipsis; white-space: nowrap; }
+.canvas-entry-paths span {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+.canvas-entry-paths strong {
+    overflow: hidden;
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.canvas-entry-paths small {
+    overflow: hidden;
+    color: var(--canvas-entry-muted);
+    font-size: var(--fs-tiny);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 @media (max-width: 640px) {
-    .canvas-entry-stage { padding-inline: var(--space-4); }
-    .canvas-entry-title { font-size: var(--typ-display-sm); }
-    .canvas-entry-paths { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .canvas-entry-hint { display: none; }
-    .canvas-entry-ghost { margin-right: auto; }
+    .canvas-entry-stage {
+        padding-inline: var(--space-4);
+    }
+    .canvas-entry-title {
+        font-size: var(--typ-display-sm);
+    }
+    .canvas-entry-paths {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .canvas-entry-hint {
+        display: none;
+    }
+    .canvas-entry-ghost {
+        margin-right: auto;
+    }
 }
 
 @media (max-height: 620px) {
-    .canvas-entry-stage { padding-block: var(--space-4); }
-    .canvas-entry-composer { margin-top: var(--space-4); }
-    .canvas-entry-paths { margin-top: var(--space-4); }
+    .canvas-entry-stage {
+        padding-block: var(--space-4);
+    }
+    .canvas-entry-composer {
+        margin-top: var(--space-4);
+    }
+    .canvas-entry-paths {
+        margin-top: var(--space-4);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .canvas-entry-ripple > span,
-    .canvas-entry-click-ripple { display: none; }
+    .canvas-entry-click-ripple {
+        display: none;
+    }
     .canvas-entry-shell button,
-    .canvas-entry-composer { transition: none; }
+    .canvas-entry-composer {
+        transition: none;
+    }
     .canvas-entry-paths button:hover,
-    .canvas-entry-send:not(:disabled):hover { transform: none; }
+    .canvas-entry-send:not(:disabled):hover {
+        transform: none;
+    }
 }
