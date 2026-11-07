@@ -35,23 +35,18 @@
     }
 }
 
-/* Agent 新建节点入场：按创建顺序错开淡入、轻微放大上浮。
-   只动 opacity 与独立的 scale/translate 属性，不覆盖节点定位用的 transform。 */
+/* 节点外层的 transform/translate 由定位和拖拽独占。
+   入场只短暂提亮，不延迟隐藏节点，也不在结束后保留动画层。 */
 [data-node-id][data-agent-enter="true"] {
-    animation: canvas-agent-node-enter 420ms var(--motion-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
-    animation-delay: var(--agent-enter-delay, 0ms);
+    animation: canvas-agent-node-enter 200ms var(--motion-ease-out, ease-out);
 }
 
 @keyframes canvas-agent-node-enter {
     from {
-        opacity: 0;
-        scale: 0.92;
-        translate: 0 12px;
+        opacity: 0.65;
     }
     to {
         opacity: 1;
-        scale: 1;
-        translate: 0 0;
     }
 }
 
