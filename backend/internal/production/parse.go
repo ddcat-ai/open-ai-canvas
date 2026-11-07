@@ -187,7 +187,11 @@ func ParseBible(raw string) (Bible, error) {
 	var bible Bible
 	text, err := ExtractJSONObject(raw)
 	if err != nil {
-		return bible, err
+		var recovered bool
+		text, recovered = repairBibleJSON(raw)
+		if !recovered {
+			return bible, err
+		}
 	}
 	if err := json.Unmarshal([]byte(text), &bible); err != nil {
 		return bible, err
