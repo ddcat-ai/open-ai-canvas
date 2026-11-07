@@ -173,10 +173,10 @@ export default function DramaStudioPage() {
         onError: (error) => errorMessage(error, "保存失败"),
     });
     const saveReferences = useMutation({
-        mutationFn: ({ segment, castIds }: { segment: DramaSegment; castIds: string[] | null }) => updateDramaSegmentReferences(projectId, episodeId, segment.index, castIds),
-        onSuccess: (_, { castIds }) => {
+        mutationFn: ({ segment, patch }: { segment: DramaSegment; patch: Parameters<typeof updateDramaSegmentReferences>[3] }) => updateDramaSegmentReferences(projectId, episodeId, segment.index, patch),
+        onSuccess: () => {
             invalidate(episodeId);
-            message.success(castIds ? "已更新本段参考图；参考图编号变了，请重新撰写视频提示词" : "已恢复按镜头自动取参考图");
+            message.success("已保存本段参考与音色选择，请核对提示词中的参考编号");
         },
         onError: (error) => errorMessage(error, "保存失败"),
     });
@@ -710,7 +710,7 @@ export default function DramaStudioPage() {
                             onInsertShot={(shot, position) => insertShot.mutate({ shot, position })}
                             onDeleteShot={(shot) => removeShot.mutate(shot)}
                             onSavePrompt={(segment, override) => saveSegment.mutate({ segment, override })}
-                            onSaveReferences={(segment, castIds) => saveReferences.mutate({ segment, castIds })}
+                            onSaveReferences={(segment, patch) => saveReferences.mutateAsync({ segment, patch })}
                             onWritePrompt={(segment) => writeSegment.mutate([segment.index])}
                             onGenerate={(segment, videoModel) => generateSegments.mutate({ segments: [segment.index], videoModel })}
                             reprocessing={reprocessSegment.isPending}

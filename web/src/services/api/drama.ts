@@ -137,7 +137,7 @@ export type DramaEpisodeMode = "auto" | "chapter";
 
 export type DramaEpisodeStage = "queued" | "script" | "prompts" | "review" | "video" | "render" | "done";
 
-export type DramaMediaStatus = "" | "queued" | "running" | "ready" | "failed" | "stale" | "skipped";
+export type DramaMediaStatus = "" | "draft" | "queued" | "running" | "ready" | "failed" | "stale" | "skipped";
 
 export type DramaProductionView = {
     status: DramaStatus;
@@ -345,6 +345,7 @@ export type DramaSegment = {
     videoModel: DramaModelChoice;
     /** auto 按本段镜头自动取参考图；custom 为手动指定（顺序即参考图编号）。 */
     referenceMode: "auto" | "custom";
+    audioReferenceMode: "auto" | "custom";
     request: DramaSegmentRequest;
     promptJob?: DramaJob;
     videoJob?: DramaJob;
@@ -353,7 +354,10 @@ export type DramaSegment = {
 };
 
 /** 参考图编号与提交顺序一致；sent=false 表示未就绪或超过模型上限，不随请求发送。 */
-export type DramaSegmentReference = { castId: string; label: string; kind: DramaCastKind; name: string; resourceId?: string; sent: boolean };
+export type DramaSegmentReference = { castId: string; label: string; kind: DramaCastKind | "image"; name: string; resourceId?: string; sent: boolean };
+
+export type DramaReferenceImage = { resourceId: string; name: string };
+export type DramaSegmentReferencePatch = { referenceCastIds?: string[]; autoReferences?: boolean; referenceImages?: DramaReferenceImage[]; audioCastIds?: string[]; autoAudioReferences?: boolean };
 
 /**
  * 生成本段视频时实际发送的内容，与提交同一函数计算。
@@ -384,7 +388,7 @@ export type DramaSegmentRequest = {
     warning?: string;
     /** 提示词正文里不属于本段的“参考图N”；存在时服务端拒绝生成视频。 */
     unknownReferences?: string[];
-    /** 本段开口说话、且指定了声音样本的角色；sent 的作为“参考音频N”随请求发送，否则 note 说明原因。 */
+    /** 自动或手动选择的角色音色；sent 的作为“参考音频N”随请求发送，否则 note 说明原因。 */
     audioReferences?: DramaSegmentAudioReference[];
     /** 视频模型声明的参考音频上限，0 或缺省表示不支持参考音频。 */
     modelMaxAudios?: number;
@@ -402,6 +406,7 @@ export type DramaCast = {
     role: string;
     description: string;
     appearance: string;
+    imagePrompt?: string;
     voiceInstructions: string;
     importance: number;
     imageResourceId?: string;
@@ -450,6 +455,7 @@ export type DramaModelOption = {
     label: string;
     priceLabel: string;
     maxVideoSeconds?: number;
+    maxAudios?: number;
     /** 仅视频模型：支持图生视频，可用于尾帧续接；为 false 时只能并行出片。 */
     tailFrameChain?: boolean;
     /** 仅视频模型：能准确给出的作品画幅；不含作品画幅的模型不能用于该作品。 */
@@ -650,8 +656,8 @@ export function updateDramaSegment(projectId: string, episodeId: string, index: 
 }
 
 /** 指定本段参考图（顺序即编号，空数组表示不发参考图）；传 null 恢复按镜头自动取。模型撰写的提示词会标记过期。 */
-export function updateDramaSegmentReferences(projectId: string, episodeId: string, index: number, castIds: string[] | null) {
-    return http.patch<{ saved: boolean }>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/segments/${index}`, castIds ? { referenceCastIds: castIds } : { autoReferences: true });
+export function updateDramaSegmentReferences(projectId: string, episodeId: string, index: number, patch: DramaSegmentReferencePatch) {
+    return http.patch<{ saved: boolean }>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/segments/${index}`, patch);
 }
 
 export function updateDramaShot(projectId: string, shotId: string, patch: DramaShotPatch) {
@@ -689,12 +695,12 @@ export function clearDramaCastVoice(projectId: string, castId: string, restyleSe
     return http.delete<{ cast: DramaCast; affectedSegments: number }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/voice`, { params: compactApiParams({ restyleSegments: restyleSegments ? "true" : undefined }) });
 }
 
-/** 为角色新增一套造型（妆造）：lookName 造型名，appearance 外观，fromChapter / toChapter 默认适用的原著章节（从 1 起，0 不限）。 */
-export function addDramaCastLook(projectId: string, castId: string, input: { lookName: string; appearance: string; fromChapter?: number; toChapter?: number }) {
+/** 保存造型草稿，不自动生图；imagePrompt 留空按外观描述生成，章节从 1 起，0 不限。 */
+export function addDramaCastLook(projectId: string, castId: string, input: { lookName: string; appearance: string; imagePrompt?: string; fromChapter?: number; toChapter?: number }) {
     return http.post<{ look: DramaCast }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/looks`, input);
 }
 
-export function updateDramaCastLook(projectId: string, lookId: string, input: { lookName?: string; appearance?: string; fromChapter?: number; toChapter?: number; restyleSegments?: boolean }) {
+export function updateDramaCastLook(projectId: string, lookId: string, input: { lookName?: string; appearance?: string; imagePrompt?: string; fromChapter?: number; toChapter?: number; restyleSegments?: boolean }) {
     return http.patch<{ look: DramaCast; affectedSegments: number }>(`${base(projectId)}/looks/${encodeURIComponent(lookId)}`, input);
 }
 

@@ -121,12 +121,12 @@ func TestDramaCastVoiceSkippedWithReason(t *testing.T) {
 	}
 	svc := &Service{}
 	request := DramaSegmentRequest{Operation: "image_to_video"}
-	media, err := svc.dramaSegmentAudioReferences(&request, dramaVideoProfile{MaxAudios: 3}, speakers, casts, true)
+	media, err := svc.dramaSegmentAudioReferences(&request, dramaVideoProfile{MaxAudios: 3}, speakers, casts, true, "")
 	if err != nil || len(media) != 0 || len(request.AudioReferences) != 1 || request.AudioReferences[0].Sent || !strings.Contains(request.AudioReferences[0].Note, "尾帧") {
 		t.Fatalf("tail-frame segments skip audio with a reason: %+v %v", request.AudioReferences, err)
 	}
 	request = DramaSegmentRequest{Operation: "reference_to_video"}
-	if _, err := svc.dramaSegmentAudioReferences(&request, dramaVideoProfile{}, speakers, casts, true); err != nil || !strings.Contains(request.AudioReferences[0].Note, "不支持参考音频") {
+	if _, err := svc.dramaSegmentAudioReferences(&request, dramaVideoProfile{}, speakers, casts, true, ""); err != nil || !strings.Contains(request.AudioReferences[0].Note, "不支持参考音频") {
 		t.Fatalf("models without audio references explain why: %+v %v", request.AudioReferences, err)
 	}
 }

@@ -610,7 +610,8 @@ type DramaSegmentView struct {
 	VideoReprocessable bool             `json:"videoReprocessable,omitempty"`
 	VideoModel         DramaModelChoice `json:"videoModel"`
 	// ReferenceMode：auto 按本段镜头自动取参考图；custom 为用户指定的参考图。
-	ReferenceMode string `json:"referenceMode"`
+	ReferenceMode      string `json:"referenceMode"`
+	AudioReferenceMode string `json:"audioReferenceMode"`
 	// Request 是生成本段视频时实际会发送的内容：生成方式、首帧、参考图、秒数与追加在提示词前的参考图说明。
 	Request   DramaSegmentRequest `json:"request"`
 	PromptJob *DramaJobView       `json:"promptJob,omitempty"`
@@ -649,7 +650,7 @@ type DramaSegmentRequest struct {
 	Warning string `json:"warning,omitempty"`
 	// UnknownReferences 是提示词正文里不属于本段的“参考图N”（编号超出本段参考图数量），存在时不能提交视频。
 	UnknownReferences []string `json:"unknownReferences,omitempty"`
-	// AudioReferences 是本段说话、且指定了声音样本的角色（按开口顺序）；Sent 的作为“参考音频N”随请求发送。
+	// AudioReferences 为按对白自动选择或用户手动指定的角色；Sent 的作为“参考音频N”随请求发送。
 	// ModelMaxAudios 是视频模型声明的参考音频上限，0 表示不支持参考音频。
 	AudioReferences []DramaSegmentAudioReference `json:"audioReferences"`
 	ModelMaxAudios  int                          `json:"modelMaxAudios,omitempty"`
@@ -679,8 +680,11 @@ type UpdateDramaSegmentRequest struct {
 	// VideoPromptOverride 传空串表示恢复模型撰写的版本。
 	VideoPromptOverride *string `json:"videoPromptOverride"`
 	// ReferenceCastIDs 指定本段参考图（顺序即编号，可为空数组表示不发参考图）；AutoReferences=true 恢复按镜头自动取。
-	ReferenceCastIDs *[]string `json:"referenceCastIds"`
-	AutoReferences   bool      `json:"autoReferences"`
+	ReferenceCastIDs    *[]string                    `json:"referenceCastIds"`
+	AutoReferences      bool                         `json:"autoReferences"`
+	ReferenceImages     *[]model.DramaReferenceImage `json:"referenceImages"`
+	AudioCastIDs        *[]string                    `json:"audioCastIds"`
+	AutoAudioReferences bool                         `json:"autoAudioReferences"`
 }
 
 // UpdateDramaShotRequest 修改镜头的剧本内容；镜头只是撰写视频提示词的素材，修改后本段提示词标记过期。
@@ -709,11 +713,12 @@ type SetDramaCastVoiceRequest struct {
 // DramaCastLookRequest 新增或修改一套角色造型：LookName 造型名，Appearance 这套造型的外观，
 // FromChapter / ToChapter 默认适用的原著章节号（从 1 起，0 或 nil 表示该端不限）。
 type DramaCastLookRequest struct {
-	LookName        string `json:"lookName"`
-	Appearance      string `json:"appearance"`
-	FromChapter     *int   `json:"fromChapter"`
-	ToChapter       *int   `json:"toChapter"`
-	RestyleSegments bool   `json:"restyleSegments"`
+	LookName        string  `json:"lookName"`
+	Appearance      string  `json:"appearance"`
+	ImagePrompt     *string `json:"imagePrompt"`
+	FromChapter     *int    `json:"fromChapter"`
+	ToChapter       *int    `json:"toChapter"`
+	RestyleSegments bool    `json:"restyleSegments"`
 }
 
 type UpdateDramaCastRequest struct {
@@ -752,6 +757,7 @@ type DramaModelOption struct {
 	PriceLabel string           `json:"priceLabel"`
 	// MaxVideoSeconds 仅视频模型：单次最长生成秒数，0 表示未声明。
 	MaxVideoSeconds int `json:"maxVideoSeconds,omitempty"`
+	MaxAudios       int `json:"maxAudios"`
 	// MinReferenceImages 仅视频模型：模型要求的最少参考图数（含首帧），0 表示不强制参考图。
 	MinReferenceImages int `json:"minReferenceImages,omitempty"`
 	// TailFrameChain 仅视频模型：是否支持图生视频，可用于“尾帧续接”；不支持的模型只能并行出片。

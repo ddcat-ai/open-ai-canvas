@@ -965,6 +965,7 @@ func (s *Service) dramaModelOption(choice DramaModelChoice, capability, label, p
 	if capability == "video" {
 		if profile, err := s.dramaVideoProfile(choice); err == nil {
 			option.MaxVideoSeconds = profile.maxSeconds()
+			option.MaxAudios = profile.MaxAudios
 			option.MinReferenceImages = profile.MinImages
 			option.TailFrameChain = profile.supports("image_to_video")
 			option.VideoRatios = profile.ratios()

@@ -157,6 +157,18 @@ description: 影策后端核心持久化表与状态边界
 
 版本 78 `drama_cast_voice_looks` 为 `drama_casts` 增加角色声音与造型列，为 `drama_shots` 增加镜头造型选择：`voice_profile_id` / `voice_sample_resource_id` 是角色指定的声音（声音库条目与样本音频），支持参考音频的视频模型在该角色开口的剧情段里随请求发送样本；`parent_id` 非空表示这一行是所属角色的一套造型（妆造），`look_name` 造型名、`appearance` 是这套造型的外观、`look_from_chapter` / `look_to_chapter` 是默认适用的原著章节号（从 1 起，0 不限），名称、别名与声音沿用角色本体；造型参考图以角色本体参考图为底图 `image_to_image` 生成，保持同一张脸。`drama_shots.look_cast_ids_json` 是本镜出镜角色选用的造型行 ID 列表，空表示用本集默认造型或角色本体；取参考图时用造型行的外观与参考图替换角色本体。旧数据这些列为零值（角色本身、无指定声音、各镜用本体）。资产提取（作品圣经）为角色输出 `looks`，剧本为每镜输出 `looks`（角色名 → 造型名）并可在 `cast` 里用 `kind=look` 即时建新造型。
 
+## 短剧参考控制与造型提示词（Schema 92）
+
+版本 92 `drama_reference_controls` 增加以下 text 列，不改已有参考图与媒体内容：
+
+| 表 / 列 | 含义 |
+| --- | --- |
+| `drama_casts.image_prompt` | 用户为造型保存的生图提示词，最多 12000 字；空时按外观描述生成，并保持角色本体形象一致 |
+| `drama_segments.reference_images_json` | 本段从素材库或上传添加的图片数组 `[{resourceId,name}]`，排在设定参考后；空串或 `[]` 表示没有附加图片 |
+| `drama_segments.audio_cast_ids_json` | 空串按对白自动选取音色；非空为用户指定的角色本体 ID 数组，`[]` 表示关闭全部音色 |
+
+新增的手工造型保存为 `image_status=draft`；放行作品参考图不会自动生成这些草稿。单独请求生成才改为 `queued`，保存外观和提示词不改当前图片状态。采用自定义图后为 `ready` 且 `locked=true`。段级参考修改使用已有修订号与过期合同；附加图片纳入短剧资源引用检查，移除引用不删除图片。
+
 ## 推广中心（Schema 72）
 
 版本 72 `referral_center` 为 `users` 增加 `is_promoter`（非空布尔，默认 `false`，带索引），并新增三张表。开放方式保存在 `system_settings` 的 `referral` 键：`enabled`、`mode`（`all` 全民推广 / `assigned` 指定推广人）、`commissionRateBasisPoints`（万分比，0–5000）。默认关闭。

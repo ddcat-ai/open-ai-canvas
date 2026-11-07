@@ -167,6 +167,34 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	// 没随请求发送的参考图按原因分开列出：未就绪的点名，超出上限的说明是哪种上限。
 	var missing, overflow []string
 	for _, reference := range draft.view.Request.References {
+		if reference.CastID == "" {
+			resource, err := s.repo.Resource(reference.ResourceID)
+			if err != nil {
+				return request, nil, nil, err
+			}
+			if resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
+				return request, nil, nil, errors.New("自定义参考图片已不可用，请移除后重新添加")
+			}
+			reference.Sent = capacity > 0
+			if reference.Sent {
+				ref, err := s.dramaResourceReference(reference.ResourceID, reference.Label, "")
+				if err != nil {
+					return request, nil, nil, err
+				}
+				refs = append(refs, ref)
+				capacity--
+				header = append(header, reference.Label+"："+reference.Name)
+			} else {
+				header = append(header, reference.Label+"（"+reference.Name+"）未附图")
+				if settingLimited {
+					request.ReferenceLimited = true
+				} else {
+					overflow = append(overflow, reference.Label+" "+reference.Name)
+				}
+			}
+			request.References = append(request.References, reference)
+			continue
+		}
 		cast, exists := casts[reference.CastID]
 		if !exists {
 			return request, nil, nil, errors.New("剧情段引用的设定不存在")
@@ -200,7 +228,7 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		}
 		request.References = append(request.References, reference)
 	}
-	audios, err := s.dramaSegmentAudioReferences(&request, profile, draft.shots, casts, len(refs) > 0)
+	audios, err := s.dramaSegmentAudioReferences(&request, profile, draft.shots, casts, len(refs) > 0, segment.AudioCastIDsJSON)
 	if err != nil {
 		return request, nil, nil, err
 	}
@@ -243,15 +271,27 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	return request, refs, audios, nil
 }
 
-// dramaSegmentAudioReferences 列出本段开口说话、且指定了声音样本的角色（按开口顺序，造型归到所属角色），
+// dramaSegmentAudioReferences 按对白或段级指定选择角色声音（造型归到所属角色），
 // 能发送的写成“参考音频N”并返回任务输入的媒体项。只在参考图生视频时发送：上游要求参考音频与至少一张参考图同时提供，
 // 以上一段尾帧作首帧的段不混用参考素材。没能发送的写明原因，该角色的对白按声线描述生成。
-func (s *Service) dramaSegmentAudioReferences(request *DramaSegmentRequest, profile dramaVideoProfile, shots []model.DramaShot, casts map[string]model.DramaCast, hasImages bool) ([]any, error) {
+func (s *Service) dramaSegmentAudioReferences(request *DramaSegmentRequest, profile dramaVideoProfile, shots []model.DramaShot, casts map[string]model.DramaCast, hasImages bool, audioIDsJSON string) ([]any, error) {
 	speakers := dramaSegmentVoicedSpeakers(shots, casts)
+	if strings.TrimSpace(audioIDsJSON) != "" {
+		speakers = []model.DramaCast{}
+		for _, id := range decodeStringList(audioIDsJSON) {
+			cast, ok := casts[id]
+			if !ok || cast.Kind != "character" || cast.ParentID != "" {
+				return nil, errors.New("参考音色角色已不存在，请重新选择")
+			}
+			speakers = append(speakers, cast)
+		}
+	}
 	media := []any{}
 	for _, cast := range speakers {
 		reference := DramaSegmentAudioReference{CastID: cast.ID, Name: cast.Name, ResourceID: cast.VoiceSampleResourceID}
 		switch {
+		case cast.VoiceSampleResourceID == "":
+			reference.Note = "角色尚未绑定声音样本"
 		case profile.MaxAudios <= 0:
 			reference.Note = "所选视频模型不支持参考音频，按声线描述生成"
 		case request.Operation == "image_to_video":

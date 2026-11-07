@@ -267,8 +267,8 @@ export function buildDramaSegmentGroup(input: {
     const referenceNodes = references.map((reference, index) => {
         const cast = input.castById.get(reference.castId);
         const node = mediaNode(CanvasNodeType.Image, `${reference.label} · ${reference.name}`, reference.resourceId, media, {
-            assetCategory: DRAMA_CAST_ASSET_CATEGORY[reference.kind],
-            dramaRef: { projectId: input.projectId, kind: "cast", id: reference.castId, baseResourceId: cast?.imageResourceId || reference.resourceId },
+            assetCategory: reference.kind === "image" ? "material" : DRAMA_CAST_ASSET_CATEGORY[reference.kind],
+            ...(reference.castId ? { dramaRef: { projectId: input.projectId, kind: "cast" as const, id: reference.castId, baseResourceId: cast?.imageResourceId || reference.resourceId } } : {}),
         });
         return { ...node, position: { x: x + (index % columns) * (REF_SIZE + REF_GAP), y: contentTop + Math.floor(index / columns) * (REF_SIZE + REF_GAP) }, width: REF_SIZE, height: REF_SIZE };
     });

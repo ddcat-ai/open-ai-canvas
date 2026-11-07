@@ -198,6 +198,11 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 		b.WriteString(rules + "。")
 	}
 	b.WriteString("画面不出现字幕、水印和界面元素。\n")
+	for _, ref := range in.References {
+		if ref.Kind == "image" {
+			fmt.Fprintf(&b, "补充参考：%s（%s），结合本段剧情使用该图的视觉信息，不凭图片名称增加角色或台词。\n", ref.Name, ref.Label)
+		}
+	}
 
 	b.WriteString("\n【场景布局、人物站位与机位轴线】\n")
 	scenes := []string{}

@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { App, Button, Input, InputNumber, Popover, Select } from "antd";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { AlertTriangle, ArrowLeft, Brush, Check, ChevronLeft, ChevronRight, Copy, Info, Loader2, Mic, Pencil, Play, Plus, RotateCcw, Trash2, X, PenLine } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Brush, Check, ChevronLeft, ChevronRight, Copy, Info, Loader2, Mic, Pencil, Play, Plus, RotateCcw, Trash2, X, PenLine, Upload, Library } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { TRANSITION_LABEL } from "@/lib/drama/storyboard";
-import type { DramaCast, DramaEpisodeDetail, DramaModelChoice, DramaSegment, DramaShot, DramaShotPatch, DramaTransition } from "@/services/api/drama";
+import type { DramaCast, DramaEpisodeDetail, DramaModelChoice, DramaSegment, DramaSegmentReferencePatch, DramaShot, DramaShotPatch, DramaTransition } from "@/services/api/drama";
+import { uploadResourceFile } from "@/services/api/resources";
+import { CastLibraryPicker } from "./cast-library-picker";
+import { CastVoicePreview } from "./cast-voice";
 import { dramaChoiceKey } from "@/lib/drama/model-choice";
 
 import { DramaModelPicker, useDramaModelCatalog } from "../drama-model-picker";
@@ -56,7 +59,7 @@ type Props = {
     onDeleteShot?: (shot: DramaShot) => void;
     onSavePrompt: (segment: DramaSegment, override: string) => void;
     /** 指定本段参考图；null 恢复按镜头自动取。 */
-    onSaveReferences: (segment: DramaSegment, castIds: string[] | null) => void;
+    onSaveReferences: (segment: DramaSegment, patch: DramaSegmentReferencePatch) => Promise<unknown>;
     onWritePrompt: (segment: DramaSegment) => void;
     onGenerate: (segment: DramaSegment, model?: DramaModelChoice) => void;
     reprocessing: boolean;
@@ -157,7 +160,7 @@ export function SegmentDialog({
                                 onWritePrompt={() => onWritePrompt(segment)}
                             />
                             <SegmentPrompt segment={segment} castById={castById} writing={writing} onSave={(override) => onSavePrompt(segment, override)} onWrite={() => onWritePrompt(segment)} />
-                            <ReferenceBoard segment={segment} shots={shots} castById={castById} busy={busy} onChange={(ids) => onSaveReferences(segment, ids)} onOpenCast={onOpenCast} />
+                            <ReferenceBoard key={segment.id} segment={segment} shots={shots} castById={castById} busy={busy} onSave={(patch) => onSaveReferences(segment, patch)} onOpenCast={onOpenCast} />
                             <SegmentReceipt segment={segment} />
                             <section className="drama-sdx-section" aria-label="本段镜头">
                                 <div className="drama-sdx-section-head">
@@ -258,6 +261,8 @@ function SegmentToolbar({
     const config = useEffectiveConfig();
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const catalogQuery = useDramaModelCatalog();
+    const chosenOption = dramaVideoOptionFor(catalogQuery.data?.options.video, choice);
+    const chosenAudioLimit = changed ? chosenOption?.maxAudios : segment.request.modelMaxAudios;
     const quoteMissing = creditsEnabled && dramaSegmentQuoteMissing(config, choice, dramaSegmentVideoRequirements(segment.request, dramaVideoOptionFor(catalogQuery.data?.options.video, choice), changed, videoResolution));
     const running = mediaBusy(segment.videoStatus);
     const writingNow = segment.promptStatus === "queued" || segment.promptStatus === "running";
@@ -312,6 +317,7 @@ function SegmentToolbar({
                 </Button>
             </div>
             {!promptReady(segment) && !running ? <p className="drama-sdx-hint">提示词就绪后才能生成视频</p> : null}
+            {changed && chosenAudioLimit !== undefined ? <p className="drama-sdx-hint">所选模型{chosenAudioLimit ? `最多支持 ${chosenAudioLimit} 个参考音色` : "不支持参考音色"}；参考面板的发送状态在模型应用后更新。</p> : null}
             {quoteMissing && !running ? <p className="drama-sdx-hint is-error">{SEGMENT_NO_QUOTE_HINT}</p> : null}
             {segment.request.unknownReferences?.length ? <p className="drama-sdx-hint is-error">提示词里的 {segment.request.unknownReferences.join("、")} 不是本段的参考图，改正编号后才能生成视频</p> : null}
         </section>
@@ -320,7 +326,7 @@ function SegmentToolbar({
 
 const CAST_KIND_ORDER: DramaCast["kind"][] = ["character", "prop", "scene"];
 
-function moveItem(ids: string[], from: number, to: number) {
+function moveItem<T>(ids: T[], from: number, to: number) {
     const next = [...ids];
     const [item] = next.splice(from, 1);
     next.splice(to, 0, item);
@@ -332,9 +338,65 @@ function moveItem(ids: string[], from: number, to: number) {
  * 本段镜头里出现、但没选上的设定作为候选排在后面；勾选即加入，取消即移除。
  * 改动后参考图编号变化，模型撰写的提示词标记过期，需要重新撰写。
  */
-function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }: { segment: DramaSegment; shots: DramaShot[]; castById: Map<string, DramaCast>; busy: boolean; onChange: (ids: string[] | null) => void; onOpenCast: (id: string) => void }) {
+export function ReferenceBoard({
+    segment,
+    shots,
+    castById,
+    busy: saving,
+    onSave,
+    onOpenCast,
+}: {
+    segment: DramaSegment;
+    shots: DramaShot[];
+    castById: Map<string, DramaCast>;
+    busy: boolean;
+    onSave: (patch: DramaSegmentReferencePatch) => Promise<unknown>;
+    onOpenCast: (id: string) => void;
+}) {
+    const { message } = App.useApp();
+    const [libraryOpen, setLibraryOpen] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [voiceDraft, setVoiceDraft] = useState<string[] | null>(null);
+    const fileRef = useRef<HTMLInputElement>(null);
+    const busy = saving || uploading;
     const { request } = segment;
-    const ids = request.references.map((ref) => ref.castId);
+    const ids = request.references.map((ref) => ref.castId).filter(Boolean);
+    const images = request.references.filter((ref) => !ref.castId && ref.resourceId).map((ref) => ({ resourceId: ref.resourceId!, name: ref.name }));
+    const save = (patch: DramaSegmentReferencePatch) => {
+        // 父层 mutation 已显示保存失败；此处只终止事件处理，保持服务端选择不变。
+        void onSave(patch).catch(() => {});
+    };
+    const onChange = (castIds: string[] | null) => save(castIds === null ? { autoReferences: true } : { referenceCastIds: castIds });
+    const addImage = async (resourceId: string, name: string) => {
+        if (request.references.some((ref) => ref.resourceId === resourceId)) {
+            message.info("本段已添加这张参考图");
+            return;
+        }
+        await onSave({ referenceImages: [...images, { resourceId, name }] });
+    };
+    const upload = async (file: File) => {
+        if (!file.type.startsWith("image/")) {
+            message.error("请选择图片文件");
+            return;
+        }
+        if (file.size > 20 * 1024 * 1024) {
+            message.error("参考图不能超过 20 MB");
+            return;
+        }
+        setUploading(true);
+        try {
+            const resource = await uploadResourceFile(file, "image", { fileName: file.name });
+            await addImage(resource.id, file.name.replace(/\.[^.]+$/, ""));
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "添加参考图失败");
+        } finally {
+            setUploading(false);
+        }
+    };
+    const savedVoices = (request.audioReferences || []).map((voice) => voice.castId);
+    const selectedVoices = voiceDraft ?? savedVoices;
+    const voices = [...castById.values()].filter((cast) => cast.kind === "character" && !cast.parentId);
+    const audioLimit = request.modelMaxAudios || 0;
     const sent = request.references.filter((ref) => ref.sent).length;
     const custom = segment.referenceMode === "custom";
     const candidates = useMemo(() => {
@@ -358,7 +420,9 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
         const listed = new Set([...ids, ...candidates.map((cast) => cast.id)]);
         return CAST_KIND_ORDER.map((kind) => ({
             label: CAST_KIND_LABEL[kind],
-            options: [...castById.values()].filter((cast) => cast.kind === kind && !listed.has(cast.id)).map((cast) => ({ value: cast.id, label: cast.imageStatus === "ready" && cast.imageResourceId ? cast.name : `${cast.name}（暂无参考图）` })),
+            options: [...castById.values()]
+                .filter((cast) => cast.kind === kind && !listed.has(cast.id))
+                .map((cast) => ({ value: cast.id, label: `${cast.name}${cast.lookName ? ` · ${cast.lookName}` : ""}${cast.imageStatus === "ready" && cast.imageResourceId ? "" : "（暂无参考图）"}` })),
         })).filter((group) => group.options.length);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [castById, candidates, ids.join("|")]);
@@ -370,7 +434,7 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
                     本段参考 {sent}/{request.references.length}
                 </span>
                 <small>
-                    {custom ? "手动指定" : "按镜头自动取"} · 本段最多发送 {request.referenceCapacity} 张{request.modelMaxImages ? ` · 模型上限 ${request.modelMaxImages} 张（含首帧）` : ""}；勾选决定本段生成时用哪些参考图
+                    {custom ? "手动指定" : "按镜头自动取"} · 本段最多发送 {request.referenceCapacity} 张{request.modelMaxImages ? ` · 模型上限 ${request.modelMaxImages} 张（含首帧）` : ""}；移除只取消本段引用
                 </small>
                 {custom ? (
                     <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} disabled={busy} onClick={() => onChange(null)}>
@@ -390,11 +454,13 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
                 </Tooltip>
                 {request.references.map((ref, index) => {
                     const cast = castById.get(ref.castId);
-                    const reason = ref.sent ? "" : referenceMissingReason(segment, cast);
+                    const reason = ref.sent ? "" : referenceMissingReason(segment, cast, ref.resourceId);
+                    const castIndex = ids.indexOf(ref.castId);
                     return (
                         <AssetChip
-                            key={ref.castId}
+                            key={ref.castId || ref.resourceId}
                             cast={cast}
+                            resourceId={ref.resourceId}
                             name={ref.name}
                             kindLabel={CAST_KIND_LABEL[ref.kind]}
                             badge={ref.label.replace("参考图", "图")}
@@ -402,9 +468,9 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
                             note={ref.sent ? "随请求发送" : `未附图：${reason}`}
                             missing={!ref.sent}
                             disabled={busy}
-                            onToggle={() => onChange(ids.filter((id) => id !== ref.castId))}
-                            onOpen={() => onOpenCast(ref.castId)}
-                            onRaise={index > 0 ? () => onChange(moveItem(ids, index, index - 1)) : undefined}
+                            onToggle={() => (ref.castId ? onChange(ids.filter((id) => id !== ref.castId)) : save({ referenceImages: images.filter((image) => image.resourceId !== ref.resourceId) }))}
+                            onOpen={ref.castId ? () => onOpenCast(ref.castId) : undefined}
+                            onRaise={castIndex > 0 ? () => onChange(moveItem(ids, castIndex, castIndex - 1)) : !ref.castId && index > ids.length ? () => save({ referenceImages: moveItem(images, index - ids.length, index - ids.length - 1) }) : undefined}
                         />
                     );
                 })}
@@ -412,7 +478,7 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
                     <AssetChip
                         key={cast.id}
                         cast={cast}
-                        name={cast.name}
+                        name={`${cast.name}${cast.lookName ? ` · ${cast.lookName}` : ""}`}
                         kindLabel={CAST_KIND_LABEL[cast.kind]}
                         checked={false}
                         note="本段镜头中出现，未选用"
@@ -422,18 +488,6 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
                     />
                 ))}
             </div>
-            {request.audioReferences?.length ? (
-                <div className="drama-sdx-voices" aria-label="本段参考音频">
-                    {request.audioReferences.map((voice) => (
-                        <span key={voice.castId} className={`drama-sdx-voice ${voice.sent ? "" : "is-missing"}`} title={voice.sent ? `${voice.label}：${voice.name}的声音，随请求发送` : voice.note}>
-                            <Mic className="size-3" />
-                            <b>{voice.sent ? voice.label?.replace("参考音频", "音") : "未发"}</b>
-                            {voice.name}
-                            {voice.sent ? null : <small>{voice.note}</small>}
-                        </span>
-                    ))}
-                </div>
-            ) : null}
             <div className="drama-sdx-assets-foot">
                 <Select
                     className="drama-sdx-add"
@@ -450,7 +504,81 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
                         if (id) onChange([...ids, id]);
                     }}
                 />
+                <Button size="small" icon={<Library className="size-3.5" />} disabled={busy} onClick={() => setLibraryOpen(true)}>
+                    素材库
+                </Button>
+                <Button size="small" icon={<Upload className="size-3.5" />} loading={uploading} disabled={saving} onClick={() => fileRef.current?.click()}>
+                    上传参考图
+                </Button>
+                <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void upload(file);
+                    }}
+                />
                 <small>参考图编号会随勾选与顺序变化，模型撰写的提示词需要重新撰写；手写的提示词请自行核对编号。</small>
+            </div>
+            <CastLibraryPicker open={libraryOpen} cast={{ kind: "character", name: segment.title }} segment onClose={() => setLibraryOpen(false)} onPick={addImage} />
+            <div className="drama-sdx-section-head mt-4">
+                <span className="drama-sdx-count">
+                    <Mic className="size-3.5" />
+                    角色音色 {selectedVoices.length}/{audioLimit}
+                </span>
+                <small>
+                    {segment.audioReferenceMode === "custom" ? "手动选择" : "按对白自动开启说话角色的音色"} · {audioLimit ? `当前模型音色不可多于 ${audioLimit} 个` : "当前模型不支持参考音色"}
+                </small>
+                {segment.audioReferenceMode === "custom" ? (
+                    <Button size="small" type="text" disabled={busy || voiceDraft !== null} icon={<RotateCcw className="size-3.5" />} onClick={() => save({ autoAudioReferences: true })}>
+                        恢复自动音色
+                    </Button>
+                ) : null}
+                {voiceDraft ? (
+                    <Button
+                        size="small"
+                        disabled={busy || selectedVoices.length > audioLimit}
+                        onClick={() => {
+                            void onSave({ audioCastIds: selectedVoices })
+                                .then(() => setVoiceDraft(null))
+                                .catch(() => {});
+                        }}
+                    >
+                        保存音色选择
+                    </Button>
+                ) : null}
+                {voiceDraft ? (
+                    <Button size="small" type="text" disabled={busy} onClick={() => setVoiceDraft(null)}>
+                        取消调整
+                    </Button>
+                ) : null}
+            </div>
+            {selectedVoices.length > audioLimit ? <p className="drama-sdx-hint is-error">说话角色的音色超过模型上限，请手动关闭部分音色；未发送的角色按声线描述生成。</p> : null}
+            <div className="drama-sdx-voices" aria-label="本段角色音色">
+                {voices.map((cast) => {
+                    const voice = request.audioReferences?.find((item) => item.castId === cast.id);
+                    const checked = selectedVoices.includes(cast.id);
+                    return (
+                        <div key={cast.id} className={`drama-sdx-voice ${voice?.sent ? "" : "is-missing"}`}>
+                            <button
+                                type="button"
+                                aria-pressed={checked}
+                                aria-label={`${checked ? "关闭" : "开启"}${cast.name}的音色`}
+                                disabled={busy || (!checked && (!cast.voiceSampleResourceId || selectedVoices.length >= audioLimit))}
+                                onClick={() => setVoiceDraft(checked ? selectedVoices.filter((id) => id !== cast.id) : [...selectedVoices, cast.id])}
+                                className="flex items-center gap-1 disabled:opacity-40"
+                            >
+                                {checked ? <Check className="size-3" /> : <Plus className="size-3" />}
+                                {cast.name} · {checked ? "已选择" : "未选择"}
+                            </button>
+                            <CastVoicePreview resourceId={cast.voiceSampleResourceId} name={cast.name} />
+                            <small>{voiceDraft ? "调整未保存" : voice ? (voice.sent ? `${voice.label} · 随请求发送` : voice.note) : !cast.voiceSampleResourceId ? "未绑定音频" : ""}</small>
+                        </div>
+                    );
+                })}
             </div>
         </section>
     );
@@ -459,6 +587,7 @@ function ReferenceBoard({ segment, shots, castById, busy, onChange, onOpenCast }
 /** 单个参考资产：勾选决定是否随本段请求发送，悬停放大查看参考图，点名称打开设定。 */
 function AssetChip({
     cast,
+    resourceId = cast?.imageResourceId,
     name,
     kindLabel,
     badge,
@@ -471,6 +600,7 @@ function AssetChip({
     onRaise,
 }: {
     cast?: DramaCast;
+    resourceId?: string;
     name: string;
     kindLabel: string;
     badge?: string;
@@ -479,22 +609,22 @@ function AssetChip({
     missing?: boolean;
     disabled: boolean;
     onToggle: () => void;
-    onOpen: () => void;
+    onOpen?: () => void;
     onRaise?: () => void;
 }) {
-    const preview = cast?.imageResourceId ? (
+    const preview = resourceId ? (
         <span className="drama-sdx-preview">
-            <MediaThumb resourceId={cast.imageResourceId} alt={name} />
+            <MediaThumb resourceId={resourceId} alt={name} />
         </span>
     ) : (
         `${kindLabel} · ${name}：暂无参考图`
     );
     return (
         <div className={`drama-sdx-asset ${checked ? "is-checked" : ""} ${missing ? "is-missing" : ""}`}>
-            <input type="checkbox" className="drama-sdx-asset-check" checked={checked} disabled={disabled} aria-label={checked ? `不再把${name}作为本段参考图` : `把${name}作为本段参考图`} onChange={onToggle} />
+            <Button size="small" type="text" icon={checked ? <Trash2 className="size-3.5" /> : <Plus className="size-3.5" />} disabled={disabled} aria-label={checked ? `移除参考图${name}` : `添加参考图${name}`} onClick={onToggle} />
             <Tooltip title={preview} placement="right" mouseEnterDelay={0.25} styles={{ root: { maxWidth: 360 } }}>
                 <span className="drama-sdx-asset-thumb">
-                    {cast?.imageResourceId ? <MediaThumb resourceId={cast.imageResourceId} alt={name} /> : <span>{kindLabel}</span>}
+                    {resourceId ? <MediaThumb resourceId={resourceId} alt={name} /> : <span>{kindLabel}</span>}
                     {badge ? <em>{badge}</em> : null}
                 </span>
             </Tooltip>
@@ -726,7 +856,7 @@ function SegmentPrompt({ segment, castById, writing, onSave, onWrite }: { segmen
             request.references.map((ref) => {
                 const resourceId = ref.resourceId || castById.get(ref.castId)?.imageResourceId;
                 return {
-                    id: `drama-ref:${ref.castId}`,
+                    id: `drama-ref:${ref.castId || ref.resourceId}`,
                     nodeId: "",
                     kind: "image",
                     label: ref.label,
@@ -780,7 +910,7 @@ function SegmentPrompt({ segment, castById, writing, onSave, onWrite }: { segmen
                             const caption = ref.sent ? `${ref.label}：${ref.name}` : `${ref.label}（${ref.name}）未附图，按文字设定生成`;
                             const chip = (
                                 <span
-                                    key={ref.castId}
+                                    key={ref.castId || ref.resourceId}
                                     className={`drama-sdx-prefix-ref ${ref.sent ? "" : "is-missing"} ${usage.used.has(index + 1) ? "" : "is-unused"}`}
                                     title={resourceId ? undefined : caption}
                                     tabIndex={resourceId ? 0 : undefined}
@@ -794,7 +924,7 @@ function SegmentPrompt({ segment, castById, writing, onSave, onWrite }: { segmen
                             if (!resourceId) return chip;
                             return (
                                 <Popover
-                                    key={ref.castId}
+                                    key={ref.castId || ref.resourceId}
                                     trigger={["hover", "focus"]}
                                     mouseEnterDelay={0.2}
                                     placement="bottom"

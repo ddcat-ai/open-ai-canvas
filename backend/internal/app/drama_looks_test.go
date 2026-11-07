@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"yingce/backend/internal/model"
@@ -74,6 +75,9 @@ func TestDramaCastLookLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	look := result["look"].(model.DramaCast)
+	if look.ImageStatus != model.DramaMediaDraft {
+		t.Fatalf("saving a look must leave it as a draft: %+v", look)
+	}
 	// 起止颠倒被交换。
 	if look.ParentID != hero.ID || look.LookName != "内门弟子" || look.LookFromChapter != 2 || look.LookToChapter != 5 {
 		t.Fatalf("look not stored right: %+v", look)
@@ -83,28 +87,69 @@ func TestDramaCastLookLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	runDramaTicks(t, svc, project, 8)
+	saved, err := svc.repo.DramaCast(project, look.ID)
+	if err != nil || saved.ImageStatus != model.DramaMediaDraft || saved.ImageResourceID != "" {
+		t.Fatalf("release assets must not generate an unconfirmed look: %+v %v", saved, err)
+	}
+	prompt := "青色丝绸长袍，银色发簪，柔和侧光"
+	if _, err := svc.UpdateDramaCastLook("usr-drama", project, look.ID, DramaCastLookRequest{ImagePrompt: &prompt}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RegenerateDramaCast("usr-drama", project, look.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 8)
 	imageOps := map[string]int{}
+	foundPrompt := false
 	for _, req := range fake.requests {
 		if req.Type == "canvas_image" {
 			imageOps[req.Operation]++
+			if req.Operation == "image_to_image" && strings.Contains(req.Prompt, prompt) {
+				foundPrompt = true
+			}
 		}
 	}
 	if imageOps["image_to_image"] == 0 {
 		t.Fatalf("look image must reference the base character: %v", imageOps)
+	}
+	if !foundPrompt {
+		t.Fatal("look generation must use the saved custom prompt")
 	}
 
 	if _, err := svc.UpdateDramaCastLook("usr-drama", project, look.ID, DramaCastLookRequest{Appearance: "青色劲装加外袍"}); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := svc.repo.DramaCast(project, look.ID)
-	if err != nil || updated.Appearance != "青色劲装加外袍" || updated.ImageStatus != model.DramaMediaQueued {
-		t.Fatalf("appearance change must requeue the look image: %+v %v", updated, err)
+	if err != nil || updated.Appearance != "青色劲装加外袍" || updated.ImageStatus != model.DramaMediaReady {
+		t.Fatalf("saving appearance must preserve the current image without requeuing: %+v %v", updated, err)
+	}
+	before := fake.byKind["image"]
+	runDramaTicks(t, svc, project, 4)
+	if fake.byKind["image"] != before {
+		t.Fatal("editing a look must not submit image tasks")
+	}
+	custom := fake.resource("usr-drama", "image", "image/png")
+	if _, err := svc.SetDramaCastImage("usr-drama", project, look.ID, SetDramaCastImageRequest{ResourceID: custom}); err != nil {
+		t.Fatal(err)
+	}
+	adopted, err := svc.repo.DramaCast(project, look.ID)
+	if err != nil || adopted.ImageResourceID != custom || !adopted.Locked {
+		t.Fatalf("custom look image not adopted: %+v %v", adopted, err)
 	}
 
+	references := []string{look.ID}
+	episodeID := summary.Episodes[0].ID
+	if err := svc.UpdateDramaSegment("usr-drama", project, episodeID, 0, UpdateDramaSegmentRequest{ReferenceCastIDs: &references}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := svc.DeleteDramaCastLook("usr-drama", project, look.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.repo.DramaCast(project, look.ID); err == nil {
 		t.Fatal("look should be deleted")
+	}
+	detail, err := svc.DramaEpisodeDetail("usr-drama", project, episodeID)
+	if err != nil || len(detail.Segments[0].Request.References) != 1 || detail.Segments[0].Request.References[0].CastID != hero.ID {
+		t.Fatalf("deleting a look must restore its base character reference: %+v %v", detail, err)
 	}
 }
