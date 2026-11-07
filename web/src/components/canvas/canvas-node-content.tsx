@@ -80,6 +80,7 @@ export function canvasNodeRendersStatusContent(node: CanvasNodeData, options: { 
     const status = node.metadata?.status;
     if (status !== "loading" && status !== "error") return false;
     if (node.metadata?.fileUpload) return false;
+    if (options.hasCustomRenderer && node.type === CanvasNodeType.Script) return true;
     if (options.hasCustomRenderer && canvasNodeUsesCustomContent(node, options.isEditingContent)) return false;
     if (node.type === ART_CRITIQUE_NODE_TYPE || node.type === MEDIA_CONVERSION_NODE_TYPE) return false;
     if (options.isBatchRoot) return !node.metadata?.content && !node.metadata?.storageKey;
