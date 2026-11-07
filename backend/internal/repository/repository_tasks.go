@@ -24,6 +24,13 @@ func (r *Repository) Task(id string) (*model.Task, error) {
 	return &task, nil
 }
 
+// TaskStatus 避免等待循环反复读取大输入、文本草稿和结果正文。
+func (r *Repository) TaskStatus(id string) (model.TaskStatus, error) {
+	var task model.Task
+	err := r.db.Select("status").First(&task, "id = ?", id).Error
+	return task.Status, err
+}
+
 func (r *Repository) TaskForUser(userID string, id string) (*model.Task, error) {
 	var task model.Task
 	if err := r.db.First(&task, "id = ? AND user_id = ?", id, userID).Error; err != nil {

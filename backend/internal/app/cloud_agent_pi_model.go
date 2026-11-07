@@ -737,12 +737,24 @@ func (s *Service) finishCloudAgentPiModelStepWithInvalidCalls(userID, runID, tas
 func (s *Service) waitCloudAgentTask(ctx context.Context, taskID string) (*model.Task, error) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	repo := s.repo.WithContext(ctx)
 	for {
-		task, err := s.repo.Task(taskID)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		status, err := repo.TaskStatus(taskID)
 		if err != nil {
 			return nil, err
 		}
-		if cloudAgentTaskTerminal(task.Status) {
+		if cloudAgentTaskTerminal(status) {
+			task, err := repo.Task(taskID)
+			if err != nil {
+				return nil, err
+			}
+			// 两次读取之间可能已重试，不能把新一轮运行当成旧终态。
+			if !cloudAgentTaskTerminal(task.Status) {
+				continue
+			}
 			if task.Status != model.TaskStatusSucceeded {
 				// 与画布节点同一套失败分类（网络/审核/存储/HTTP 状态/供应商原因），
 				// 原始错误保留在任务中心诊断里，不直接抛给用户。
