@@ -43,6 +43,9 @@ func dramaLookRanges(looks []model.DramaCast) []production.LookRange {
 // 镜头明确指定了造型名（lookChoices[角色名]）时用它，否则用本集默认造型；都没有时用角色本体（返回空串）。
 // chapters 是本集的章节序号（从 1 起），用于计算默认造型。
 func dramaResolveShotLook(character model.DramaCast, looks []model.DramaCast, chosenLookName string, chapters []int) string {
+	if name := strings.TrimSpace(chosenLookName); name != "" && production.IsBaseLookName(name) {
+		return ""
+	}
 	if len(looks) == 0 {
 		return ""
 	}

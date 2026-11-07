@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"time"
 
 	"yingce/backend/internal/model"
@@ -156,8 +157,8 @@ func (r *Repository) dramaResourceReferences(userID string, resourceIDs []string
 		references = append(references, ResourceDirectReference{Kind: DramaResourceReferenceKind, ID: cast.ID, Title: cast.Name, ResourceID: cast.ImageResourceID})
 	}
 	var segments []model.DramaSegment
-	if err := r.db.Select("id", "segment_index", "video_resource_id", "tail_frame_resource_id").
-		Where("project_id IN (?) AND (video_resource_id IN ? OR tail_frame_resource_id IN ?)", projects, resourceIDs, resourceIDs).Find(&segments).Error; err != nil {
+	if err := r.db.Select("id", "segment_index", "video_resource_id", "tail_frame_resource_id", "reference_images_json").
+		Where("project_id IN (?) AND (video_resource_id IN ? OR tail_frame_resource_id IN ? OR (reference_images_json IS NOT NULL AND reference_images_json <> ''))", projects, resourceIDs, resourceIDs).Find(&segments).Error; err != nil {
 		return nil, err
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
@@ -165,7 +166,17 @@ func (r *Repository) dramaResourceReferences(userID string, resourceIDs []string
 		wanted[id] = struct{}{}
 	}
 	for _, segment := range segments {
-		for _, id := range []string{segment.VideoResourceID, segment.TailFrameResourceID} {
+		ids := []string{segment.VideoResourceID, segment.TailFrameResourceID}
+		var images []model.DramaReferenceImage
+		if segment.ReferenceImagesJSON != "" {
+			if err := json.Unmarshal([]byte(segment.ReferenceImagesJSON), &images); err != nil {
+				return nil, err
+			}
+		}
+		for _, image := range images {
+			ids = append(ids, image.ResourceID)
+		}
+		for _, id := range ids {
 			if _, ok := wanted[id]; ok && id != "" {
 				references = append(references, ResourceDirectReference{Kind: DramaResourceReferenceKind, ID: segment.ID, Title: "剧情段", ResourceID: id})
 			}

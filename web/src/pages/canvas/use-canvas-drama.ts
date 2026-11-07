@@ -25,7 +25,7 @@ import {
     type DramaCurrentMedia,
     type DramaProjectionMedia,
 } from "@/lib/canvas/drama-canvas-projection";
-import { DRAMA_CAST_KIND_LABEL } from "@/lib/drama/drama-format";
+import { DRAMA_CAST_KIND_LABEL, dramaCastDisplayName } from "@/lib/drama/drama-format";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { getDrama, getDramaEpisode, listDramaCast, listDramaTakes, type DramaCast, type DramaEpisode, type DramaEpisodeDetail, type DramaSegment, type DramaSettings, type DramaSummary, type DramaTake, type DramaTakeKind } from "@/services/api/drama";
 import { ApiError } from "@/services/api/request";
@@ -70,8 +70,8 @@ function combineEpisodeDetails(results: Array<UseQueryResult<DramaEpisodeDetail,
     return results.map((result) => result.data);
 }
 
-function castTitle(cast: Pick<DramaCast, "kind" | "name">) {
-    return `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${cast.name}`;
+function castTitle(cast: Pick<DramaCast, "kind" | "name" | "lookName">) {
+    return `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${dramaCastDisplayName(cast)}`;
 }
 
 /** 设定参考图的初始画幅，与制作台一致：角色按参考图方案，场景与道具统一 16:9；图片加载后节点按真实比例校正。 */
@@ -87,7 +87,11 @@ function segmentAssetItems(episode: Pick<DramaEpisode, "number">, segment: Drama
     const label = segmentLabel(episode, segment);
     const items: DramaCanvasAssetItem[] = segment.request.references
         .filter((reference) => reference.sent && reference.resourceId)
-        .map((reference) => ({ resourceId: reference.resourceId!, title: castTitle(reference), category: dramaCastAssetCategory(reference.kind) }));
+        .map((reference) => ({
+            resourceId: reference.resourceId!,
+            title: reference.kind === "image" ? reference.name : castTitle({ kind: reference.kind, name: reference.name }),
+            category: reference.kind === "image" ? "material" : dramaCastAssetCategory(reference.kind),
+        }));
     if (segment.request.firstFrameResourceId) items.push({ resourceId: segment.request.firstFrameResourceId, title: `${label} · 首帧`, category: "material" });
     for (const resourceId of dramaSegmentResourceIds(segment, takes)) {
         if (!items.some((item) => item.resourceId === resourceId)) items.push({ resourceId, title: `${label} · 视频`, category: "material" });

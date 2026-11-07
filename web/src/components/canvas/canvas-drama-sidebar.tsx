@@ -5,7 +5,7 @@ import { Link } from "react-router";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import type { DramaCanvasPresence } from "@/lib/canvas/drama-canvas-projection";
-import { DRAMA_CAST_KIND_LABEL, DRAMA_STATUS_LABEL, formatDramaCredits } from "@/lib/drama/drama-format";
+import { DRAMA_CAST_KIND_LABEL, DRAMA_STATUS_LABEL, dramaCastDisplayName, formatDramaCredits } from "@/lib/drama/drama-format";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { getDramaEpisode, type DramaCast, type DramaEpisodeRow, type DramaSegment, type DramaSummary } from "@/services/api/drama";
 
@@ -81,7 +81,7 @@ export const CanvasDramaSidebar = memo(function CanvasDramaSidebar({ summary, ca
                                     className="canvas-project-sidebar-chapter-row group flex h-11 items-center gap-2 px-1 text-left text-xs"
                                     disabled={Boolean(busyKey)}
                                     onClick={() => onProjectCast(item.id)}
-                                    title={placed ? `在画布上定位「${item.name}」` : `把「${item.name}」的参考图投送到画布`}
+                                    title={placed ? `在画布上定位「${dramaCastDisplayName(item)}」` : `把「${dramaCastDisplayName(item)}」的参考图投送到画布`}
                                 >
                                     <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-[var(--r-sm)] bg-foreground/[.05] text-foreground/30">
                                         {item.imageResourceId ? (
@@ -91,7 +91,7 @@ export const CanvasDramaSidebar = memo(function CanvasDramaSidebar({ summary, ca
                                         )}
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-foreground/78">{item.name}</span>
+                                        <span className="block truncate text-foreground/78">{dramaCastDisplayName(item)}</span>
                                         <span className="block truncate text-[var(--fs-micro)] text-foreground/38">
                                             {DRAMA_CAST_KIND_LABEL[item.kind]}
                                             {item.imageResourceId ? "" : " · 尚无参考图"}

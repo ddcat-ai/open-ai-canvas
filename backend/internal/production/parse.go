@@ -107,7 +107,7 @@ func (l *LookChoices) UnmarshalJSON(data []byte) error {
 // IsBaseLookName 判断造型名是否指角色本身的基础造型（模型常写“基础造型”“默认”）。
 func IsBaseLookName(name string) bool {
 	switch NormalizeName(name) {
-	case "", "基础", "基础造型", "默认", "默认造型", "原始造型", "本体", "无":
+	case "", "基础", "基础造型", "默认", "默认造型", "初始造型", "初始", "原始造型", "基础形象", "默认形象", "本体", "无":
 		return true
 	}
 	return false
@@ -187,7 +187,11 @@ func ParseBible(raw string) (Bible, error) {
 	var bible Bible
 	text, err := ExtractJSONObject(raw)
 	if err != nil {
-		return bible, err
+		var recovered bool
+		text, recovered = repairBibleJSON(raw)
+		if !recovered {
+			return bible, err
+		}
 	}
 	if err := json.Unmarshal([]byte(text), &bible); err != nil {
 		return bible, err
@@ -201,7 +205,7 @@ func ParseBible(raw string) (Bible, error) {
 			continue
 		}
 		seen[key] = true
-		character.Looks = normalizeBibleLooks(character.Looks)
+		character.Looks = normalizeBibleLooks(character)
 		characters = append(characters, character)
 		if len(characters) >= 24 {
 			break
@@ -244,17 +248,25 @@ func ParseBible(raw string) (Bible, error) {
 	return bible, nil
 }
 
-// normalizeBibleLooks 去掉没有名称或外观、与基础造型同名或重复的造型，章节序号不为负、起止颠倒时交换，最多保留 MaxCharacterLooks 套。
-func normalizeBibleLooks(looks BibleLooks) BibleLooks {
+// normalizeBibleLooks 排除基础造型的重复副本；性别、年龄前缀不算换装差异。
+func normalizeBibleLooks(character BibleCharacter) BibleLooks {
 	result := BibleLooks{}
 	seen := map[string]bool{}
-	for _, look := range looks {
+	appearances := map[string]bool{}
+	for _, prefix := range []string{"", character.Gender, character.Age, character.Gender + character.Age} {
+		if strings.TrimSpace(character.Appearance) != "" {
+			appearances[NormalizeName(prefix+character.Appearance)] = true
+		}
+	}
+	for _, look := range character.Looks {
 		look.Name, look.Appearance = strings.TrimSpace(look.Name), strings.TrimSpace(look.Appearance)
 		key := NormalizeName(look.Name)
-		if look.Name == "" || look.Appearance == "" || IsBaseLookName(look.Name) || seen[key] {
+		appearanceKey := NormalizeName(look.Appearance)
+		if look.Name == "" || look.Appearance == "" || IsBaseLookName(look.Name) || seen[key] || appearances[appearanceKey] {
 			continue
 		}
 		seen[key] = true
+		appearances[appearanceKey] = true
 		look.FromChapter, look.ToChapter = max(look.FromChapter, 0), max(look.ToChapter, 0)
 		if look.FromChapter > 0 && look.ToChapter > 0 && look.FromChapter > look.ToChapter {
 			look.FromChapter, look.ToChapter = look.ToChapter, look.FromChapter

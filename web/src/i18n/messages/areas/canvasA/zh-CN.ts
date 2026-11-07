@@ -669,6 +669,11 @@ export const zhCN = {
         noDescription: "暂无技能说明",
     },
     dramaAdopt: {
+        look: "服装 / 妆造",
+        chooseLook: "选择服装或妆造",
+        baseLook: "基础造型（角色本体）",
+        lookNote: "采用到所选造型；其他造型图片保持不变。",
+        noLooks: "还没有额外造型，可先到制作台的角色设定中添加并保存。",
         mediaPending: "媒体还在生成或上传，完成后再采用。",
         mediaNotStored: "这个节点的媒体没有保存在服务端（例如外部链接），无法采用。可以先上传到画布再试。",
         chooseSegment: "请选择要替换的剧情段。",

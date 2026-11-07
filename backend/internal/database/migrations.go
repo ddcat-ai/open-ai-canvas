@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 91
+const CurrentSchemaVersion int64 = 92
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -306,6 +306,27 @@ var schemaMigrations = []migration{
 	{version: 91, name: "email_logs_and_notifications", checksum: "sha256:email-logs-and-notifications-v91-20261106", apply: func(tx *gorm.DB) error {
 		// 邮件发送记录与用户邮件订阅（消费日报，默认关闭）；只建新表。
 		return tx.AutoMigrate(&model.EmailLog{}, &model.UserNotificationSetting{})
+	}},
+	{version: 92, name: "drama_reference_controls", checksum: "sha256:drama-reference-controls-v92", apply: func(tx *gorm.DB) error {
+		for _, change := range []struct {
+			entity any
+			fields []string
+		}{
+			{&model.DramaCast{}, []string{"ImagePrompt"}},
+			{&model.DramaSegment{}, []string{"ReferenceImagesJSON", "AudioCastIDsJSON"}},
+		} {
+			if !tx.Migrator().HasTable(change.entity) {
+				continue
+			}
+			for _, field := range change.fields {
+				if !tx.Migrator().HasColumn(change.entity, field) {
+					if err := tx.Migrator().AddColumn(change.entity, field); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
 	}},
 }
 

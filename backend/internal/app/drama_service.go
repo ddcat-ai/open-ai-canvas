@@ -880,7 +880,10 @@ func (s *Service) fillDramaSegmentViews(projectID string, p *model.DramaProducti
 			if len(request.References) < len(draft.view.Request.References) {
 				request.References = make([]DramaSegmentReference, 0, len(draft.view.Request.References))
 				for _, reference := range draft.view.Request.References {
-					reference.ResourceID, reference.Sent = castByID[reference.CastID].ImageResourceID, false
+					if reference.CastID != "" {
+						reference.ResourceID = castByID[reference.CastID].ImageResourceID
+					}
+					reference.Sent = false
 					request.References = append(request.References, reference)
 				}
 			}
@@ -931,10 +934,14 @@ type dramaSegmentDraft struct {
 // 用户为某段手动指定过参考图时（rows 里 reference_cast_ids_json 非空），按用户给的顺序与集合编号。
 func buildDramaSegmentDrafts(settings DramaSettings, meta dramaBibleMeta, shots []model.DramaShot, castByID map[string]model.DramaCast, rows []model.DramaSegment) []dramaSegmentDraft {
 	overrides := map[int][]string{}
+	images := map[int][]model.DramaReferenceImage{}
 	for _, row := range rows {
 		if strings.TrimSpace(row.ReferenceCastIDsJSON) != "" {
 			overrides[row.SegmentIndex] = decodeStringList(row.ReferenceCastIDsJSON)
 		}
+		var extra []model.DramaReferenceImage
+		_ = json.Unmarshal([]byte(row.ReferenceImagesJSON), &extra)
+		images[row.SegmentIndex] = extra
 	}
 	groups := [][]model.DramaShot{}
 	for _, shot := range shots {
@@ -1010,6 +1017,11 @@ func buildDramaSegmentDrafts(settings DramaSettings, meta dramaBibleMeta, shots 
 			view.Request.References = append(view.Request.References, DramaSegmentReference{CastID: cast.ID, Label: label, Kind: cast.Kind, Name: name})
 			input.References = append(input.References, production.SegmentReference{Label: label, Kind: cast.Kind, Name: name, Detail: firstNonEmpty(cast.Appearance, cast.Description), Voice: voice})
 		}
+		for _, extra := range images[view.Index] {
+			label := fmt.Sprintf("参考图%d", len(view.Request.References)+1)
+			view.Request.References = append(view.Request.References, DramaSegmentReference{ResourceID: extra.ResourceID, Label: label, Kind: "image", Name: extra.Name})
+			input.References = append(input.References, production.SegmentReference{Label: label, Kind: "image", Name: extra.Name, Detail: "用户指定的参考图片"})
+		}
 		drafts = append(drafts, dramaSegmentDraft{view: view, input: input, shots: group})
 	}
 	return drafts
@@ -1025,8 +1037,12 @@ func buildDramaSegmentViews(settings DramaSettings, meta dramaBibleMeta, shots [
 	views := make([]DramaSegmentView, 0, len(drafts))
 	for _, draft := range drafts {
 		view := draft.view
+		view.AudioReferenceMode = "auto"
 		view.PromptStatus = "none"
 		if row, ok := rowByIndex[view.Index]; ok {
+			if strings.TrimSpace(row.AudioCastIDsJSON) != "" {
+				view.AudioReferenceMode = "custom"
+			}
 			view.ID, view.Revision, view.UpdatedAt = row.ID, row.Revision, row.UpdatedAt.Format(time.RFC3339)
 			view.Generated, view.PromptError = strings.TrimSpace(row.VideoPrompt), row.PromptError
 			view.VideoStatus, view.VideoResourceID, view.TailFrameResourceID, view.VideoError = row.VideoStatus, row.VideoResourceID, row.TailFrameResourceID, row.VideoError
@@ -1089,7 +1105,7 @@ func (s *Service) UpdateDramaSegment(userID string, projectID string, episodeID 
 	if err != nil {
 		return err
 	}
-	if req.VideoPromptOverride == nil && req.ReferenceCastIDs == nil && !req.AutoReferences {
+	if req.VideoPromptOverride == nil && req.ReferenceCastIDs == nil && !req.AutoReferences && req.ReferenceImages == nil && req.AudioCastIDs == nil && !req.AutoAudioReferences {
 		return BadAuthRequest("没有要保存的修改")
 	}
 	shots, err := s.repo.DramaShots(episode.ID)
@@ -1106,6 +1122,7 @@ func (s *Service) UpdateDramaSegment(userID string, projectID string, episodeID 
 	if !found {
 		return BadAuthRequest("剧情段不存在")
 	}
+	fields := map[string]any{}
 	if req.AutoReferences || req.ReferenceCastIDs != nil {
 		// 参考图编号写在提示词里，换参考图后模型撰写的提示词标记过期；手写的提示词保留，由用户自行核对编号。
 		encoded := ""
@@ -1116,7 +1133,34 @@ func (s *Service) UpdateDramaSegment(userID string, projectID string, episodeID 
 			}
 			encoded = encodeStringList(ids)
 		}
-		if err := s.repo.SaveDramaSegmentReferences(episode.ID, index, encoded); err != nil {
+		fields["reference_cast_ids_json"] = encoded
+	}
+	if req.ReferenceImages != nil {
+		images, err := s.dramaReferenceImages(userID, *req.ReferenceImages)
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(images)
+		if err != nil {
+			return err
+		}
+		fields["reference_images_json"] = string(encoded)
+	}
+	if req.AutoAudioReferences {
+		fields["audio_cast_ids_json"] = ""
+	} else if req.AudioCastIDs != nil {
+		ids, err := s.dramaSegmentAudioIDs(project.ID, episode.ID, index, *req.AudioCastIDs)
+		if err != nil {
+			return err
+		}
+		fields["audio_cast_ids_json"] = encodeStringList(ids)
+	}
+	// 先完成全部校验，再写参考选择，避免一个无效字段使本次修改只保存一半。
+	if req.VideoPromptOverride != nil && utf8.RuneCountInString(strings.TrimSpace(*req.VideoPromptOverride)) > 12000 {
+		return BadAuthRequest("段提示词过长（最多 12000 字）")
+	}
+	if len(fields) > 0 {
+		if err := s.repo.SaveDramaSegmentReferenceFields(episode.ID, index, fields); err != nil {
 			return err
 		}
 	}

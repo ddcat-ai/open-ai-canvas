@@ -35,6 +35,7 @@ const (
 
 	// 媒体槽位状态：空串表示尚未开始。
 	DramaMediaQueued  = "queued"
+	DramaMediaDraft   = "draft"
 	DramaMediaRunning = "running"
 	DramaMediaReady   = "ready"
 	DramaMediaFailed  = "failed"
@@ -93,6 +94,7 @@ type DramaCast struct {
 	Role        string `json:"role" gorm:"size:120"`
 	Description string `json:"description" gorm:"type:text"`
 	Appearance  string `json:"appearance" gorm:"type:text"`
+	ImagePrompt string `json:"imagePrompt" gorm:"type:text"`
 	// VoiceInstructions 是声线描述（音色、语速、情绪），写进视频提示词，由视频模型同步生成对白。
 	VoiceInstructions string `json:"voiceInstructions" gorm:"type:text"`
 	// VoiceProfileID 是用户为角色指定的声音（声音库条目）；VoiceSampleResourceID 是它的样本音频，
@@ -200,6 +202,10 @@ type DramaSegment struct {
 	VideoModelJSON string `json:"videoModelJson" gorm:"type:text"`
 	// ReferenceCastIDsJSON 为空表示按镜头自动取参考图；非空是用户为本段指定的设定 ID 列表（顺序即参考图编号，可为 []）。
 	ReferenceCastIDsJSON string `json:"referenceCastIdsJson" gorm:"type:text"`
+	// ReferenceImagesJSON 保存用户上传或从素材库选择的附加参考图，排在设定图之后。
+	ReferenceImagesJSON string `json:"referenceImagesJson" gorm:"type:text"`
+	// AudioCastIDsJSON 为空时按对白自动选择；[] 表示手动关闭全部角色音色。
+	AudioCastIDsJSON string `json:"audioCastIdsJson" gorm:"type:text"`
 	// VideoStatus 为空表示待生成；TailFrameResourceID 是本段视频最后一帧，作为下一段的参考图，保证段与段衔接。
 	VideoStatus         string    `json:"videoStatus" gorm:"size:16"`
 	VideoResourceID     string    `json:"videoResourceId,omitempty" gorm:"size:36"`
@@ -208,6 +214,11 @@ type DramaSegment struct {
 	VideoError          string    `json:"videoError" gorm:"type:text"`
 	CreatedAt           time.Time `json:"createdAt"`
 	UpdatedAt           time.Time `json:"updatedAt"`
+}
+
+type DramaReferenceImage struct {
+	ResourceID string `json:"resourceId"`
+	Name       string `json:"name"`
 }
 
 // DramaTake 保存每个产物的全部版本：角色/场景参考图（cast）、剧情段视频（video）与成片（final）。

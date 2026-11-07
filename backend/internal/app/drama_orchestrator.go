@@ -1042,6 +1042,15 @@ func (r *dramaRun) applyScriptShots(episode *model.DramaEpisode, scripted []prod
 		if !ok || strings.TrimSpace(hint.Appearance) == "" {
 			return ""
 		}
+		appearanceKey := production.NormalizeName(hint.Appearance)
+		for _, cast := range append(append([]model.DramaCast{}, casts...), created...) {
+			if cast.ID == characterID && production.NormalizeName(cast.Appearance) == appearanceKey {
+				return ""
+			}
+			if cast.ParentID == characterID && production.NormalizeName(cast.Appearance) == appearanceKey {
+				return cast.ID
+			}
+		}
 		look := model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "character", ParentID: characterID, Name: dramaCastName(casts, created, characterID), LookName: truncateRunes(name, 60), Appearance: truncateRunes(hint.Appearance, 1000), Position: position, CreatedAt: now, UpdatedAt: now}
 		position++
 		created = append(created, look)
@@ -1612,7 +1621,7 @@ func (r *dramaRun) submitScript(job *model.DramaJob) (*model.Task, bool, error) 
 func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, error) {
 	cast, err := r.s.repo.DramaCast(r.project.ID, job.CastID)
 	// 槽位处于 running 可能是本工作的上一轮尝试，只有已就绪或锁定时才不再需要。
-	if err != nil || cast.Locked || cast.ImageStatus == model.DramaMediaReady {
+	if err != nil || cast.Locked || cast.ImageStatus == model.DramaMediaReady || cast.ImageStatus == model.DramaMediaDraft {
 		return nil, true, nil
 	}
 	appearance := firstNonEmpty(cast.Appearance, cast.Description, cast.Role)
@@ -1638,7 +1647,7 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 	visualRules := production.StripFrameDirectives(r.meta.VisualRules)
 	prompt := production.CastImagePrompt(assets, cast.Kind, cast.Name, appearance, stylePrompt, visualRules)
 	if baseImage != nil {
-		prompt = "参考图1是角色" + cast.Name + "的既有形象。保持五官、脸型、体态与参考图1完全一致，只把造型改为：" + appearance + "。" + stylePrompt
+		prompt = "参考图1是角色" + cast.Name + "的既有形象。保持五官、脸型、体态与参考图1完全一致。" + firstNonEmpty(strings.TrimSpace(cast.ImagePrompt), "只把造型改为："+appearance+"。"+stylePrompt)
 	}
 	// 资产参考图统一横版 16:9，与作品画幅无关：场景要容纳完整空间，道具要留足展示余量。
 	// 角色按参考图方案的画幅（内置方案均为 16:9，自定义方案可改）。画幅通过尺寸参数约束，

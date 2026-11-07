@@ -984,17 +984,25 @@ func (r *Repository) SaveDramaSegmentOverride(segment model.DramaSegment) error 
 	})
 }
 
-// SaveDramaSegmentReferences 写入或清除段级参考图指定；参考图编号写在提示词里，所以已写好的提示词标记过期、视频过期。
-func (r *Repository) SaveDramaSegmentReferences(episodeID string, index int, referenceIDsJSON string) error {
+// SaveDramaSegmentReferenceFields 一次保存图片与音色选择，并使在途作业按修订号失效。
+func (r *Repository) SaveDramaSegmentReferenceFields(episodeID string, index int, fields map[string]any) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var current model.DramaSegment
 		if err := tx.Where("episode_id = ? AND segment_index = ?", episodeID, index).First(&current).Error; err != nil {
 			return err
 		}
-		if current.ReferenceCastIDsJSON == referenceIDsJSON {
+		values := map[string]string{"reference_cast_ids_json": current.ReferenceCastIDsJSON, "reference_images_json": current.ReferenceImagesJSON, "audio_cast_ids_json": current.AudioCastIDsJSON}
+		changed := false
+		for key, value := range fields {
+			if values[key] != value {
+				changed = true
+			}
+		}
+		if !changed {
 			return nil
 		}
-		return invalidateDramaSegment(tx, current, map[string]any{"reference_cast_ids_json": referenceIDsJSON, "prompt_status": promptStatusAfterInputChange(current.PromptStatus)}, true)
+		fields["prompt_status"] = promptStatusAfterInputChange(current.PromptStatus)
+		return invalidateDramaSegment(tx, current, fields, true)
 	})
 }
 
@@ -1062,7 +1070,7 @@ func (r *Repository) MarkDramaSegmentVideoStale(episodeID string, index int) (bo
 }
 
 // DeleteDramaCastLook 删除一套造型，并把引用它的镜头回退到角色本体（从 look_cast_ids_json 里移除）。
-// 造型行自己不被镜头的 cast_ids_json 引用，所以只需清镜头的造型选择。
+// 段级手动参考中的造型同步回退到角色本体，重新编号后提示词与视频过期。
 func (r *Repository) DeleteDramaCastLook(projectID, lookID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var look model.DramaCast
@@ -1087,6 +1095,34 @@ func (r *Repository) DeleteDramaCastLook(projectID, lookID string) error {
 				return err
 			}
 		}
+		var segments []model.DramaSegment
+		if err := tx.Where("project_id = ? AND reference_cast_ids_json LIKE ?", projectID, "%\""+lookID+"\"%").Find(&segments).Error; err != nil {
+			return err
+		}
+		for _, segment := range segments {
+			var ids []string
+			if err := json.Unmarshal([]byte(segment.ReferenceCastIDsJSON), &ids); err != nil {
+				return err
+			}
+			kept := []string{}
+			seen := map[string]bool{}
+			for _, id := range ids {
+				if id == lookID {
+					id = look.ParentID
+				}
+				if !seen[id] {
+					kept = append(kept, id)
+					seen[id] = true
+				}
+			}
+			encoded, err := json.Marshal(kept)
+			if err != nil {
+				return err
+			}
+			if err := invalidateDramaSegment(tx, segment, map[string]any{"reference_cast_ids_json": string(encoded), "prompt_status": promptStatusAfterInputChange(segment.PromptStatus)}, true); err != nil {
+				return err
+			}
+		}
 		return tx.Where("id = ? AND project_id = ?", lookID, projectID).Delete(&model.DramaCast{}).Error
 	})
 }
@@ -1094,7 +1130,8 @@ func (r *Repository) DeleteDramaCastLook(projectID, lookID string) error {
 func (r *Repository) DramaShotsReferencingCast(projectID string, castID string) ([]model.DramaShot, error) {
 	var shots []model.DramaShot
 	pattern := "%\"" + castID + "\"%"
-	err := r.db.Where("project_id = ? AND (scene_cast_id = ? OR cast_ids_json LIKE ? OR prop_ids_json LIKE ?)", projectID, castID, pattern, pattern).Find(&shots).Error
+	segments := r.db.Model(&model.DramaSegment{}).Select("1").Where("drama_segments.episode_id = drama_shots.episode_id AND drama_segments.segment_index = drama_shots.segment_index AND (reference_cast_ids_json LIKE ? OR audio_cast_ids_json LIKE ?)", pattern, pattern)
+	err := r.db.Where("project_id = ? AND (scene_cast_id = ? OR cast_ids_json LIKE ? OR prop_ids_json LIKE ? OR look_cast_ids_json LIKE ? OR EXISTS (?))", projectID, castID, pattern, pattern, pattern, segments).Find(&shots).Error
 	return shots, err
 }
 
