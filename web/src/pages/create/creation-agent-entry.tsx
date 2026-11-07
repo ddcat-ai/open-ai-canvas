@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { App, Button } from "antd";
 import { ArrowUpRight, FolderOpen, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { AgentOrb } from "@/components/ui/agent-orb";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { createCanvasProjectWithRemoteSync, hasRemoteUserDataSyncSession, saveRemoteUserDataNow } from "@/services/user-data-sync";
@@ -44,12 +44,35 @@ export function CreationAgentEntry() {
                 setError(detail);
                 message.error(detail);
             }
-        } finally { lock.current = false; setBusy(false); }
+        } finally {
+            lock.current = false;
+            setBusy(false);
+        }
     };
-    return <section className="creation-agent-entry" aria-label={t("create.agentEntry.region")}>
-        <div className="creation-agent-orb" aria-hidden><FluidOrb size={88} /></div>
-        <div className="creation-agent-copy"><span className="creation-agent-eyebrow">CANVAS AGENT</span><h2>{t("create.agentEntry.title")}</h2><p>{t("create.agentEntry.description")}</p></div>
-        <div className="creation-agent-actions"><Button type="primary" icon={<ArrowRight />} loading={busy} disabled={!hydrated} onClick={() => void start()}>{created.current ? t("create.agentEntry.retryEnter") : t("create.agentEntry.newCanvas")}<ArrowUpRight /></Button><Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate("/canvas?agent=1")}>{t("create.agentEntry.continueExisting")}</Button></div>
-        {error ? <p className="creation-agent-error" role="alert">{error}</p> : null}
-    </section>;
+    return (
+        <section className="creation-agent-entry" aria-label={t("create.agentEntry.region")}>
+            <div className="creation-agent-orb" aria-hidden>
+                <AgentOrb size={88} />
+            </div>
+            <div className="creation-agent-copy">
+                <span className="creation-agent-eyebrow">CANVAS AGENT</span>
+                <h2>{t("create.agentEntry.title")}</h2>
+                <p>{t("create.agentEntry.description")}</p>
+            </div>
+            <div className="creation-agent-actions">
+                <Button type="primary" icon={<ArrowRight />} loading={busy} disabled={!hydrated} onClick={() => void start()}>
+                    {created.current ? t("create.agentEntry.retryEnter") : t("create.agentEntry.newCanvas")}
+                    <ArrowUpRight />
+                </Button>
+                <Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate("/canvas?agent=1")}>
+                    {t("create.agentEntry.continueExisting")}
+                </Button>
+            </div>
+            {error ? (
+                <p className="creation-agent-error" role="alert">
+                    {error}
+                </p>
+            ) : null}
+        </section>
+    );
 }

@@ -5,6 +5,10 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 前端主题包
+
+主题登记与切换在 `web/src/themes/`：`registry.ts` 按皮肤 ID 查找，`load.ts` 自动载入，`apply.ts` 处理画布预设还原与品牌变量。各主题目录封装助手形象、空状态、404、字体和样式，静态资源在 `web/public/themes/`。入口通过 `application.tsx` 加载；后台外观提交在 `stores/use-appearance-store.ts` 应用当前主题。使用与扩展说明见 `web/src/themes/README.md`。
+
 ## 电商 Agent 与后台知识库
 
 - 页面：`web/src/pages/ecommerce/`；后台：`web/src/pages/admin/ecommerce-agent-config-page.tsx`（上线检查、阶段模型 `ecommerce-stage-models.tsx` 与目录换算 `ecommerce-model-catalog.ts`）；`ecommerce-management-page.tsx`（知识与技能标签页：`ecommerce-knowledge-page.tsx`、`ecommerce-skills-page.tsx`、`ecommerce-categories-page.tsx`，内容头 `ecommerce-library-panel.tsx`）；`knowledge-domain-coverage.ts`。

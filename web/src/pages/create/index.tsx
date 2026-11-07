@@ -28,6 +28,7 @@ import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-s
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { loadAssetsForUse, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useThemePack } from "@/themes/use-theme-pack";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
@@ -135,6 +136,7 @@ export default function CreatePage() {
     const [openingCanvas, setOpeningCanvas] = useState(false);
     const openingCanvasRef = useRef(false);
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    const themeHomeHeading = useThemePack()?.copy?.homeHeading;
     const config = useEffectiveConfig();
     const composerPreferencesHydrated = useCreationPreferencesStore((state) => state.hydrated);
     const rememberMode = useCreationPreferencesStore((state) => state.rememberMode);
@@ -1492,7 +1494,7 @@ export default function CreatePage() {
                             <section ref={launchpadRef} className="creation-launchpad" aria-label={t("create.page.launchpadLabel")}>
                                 <header className="creation-start-heading">
                                     <div>
-                                        <h1>{t("create.page.heading", { brand: brandName })}</h1>
+                                        <h1>{themeHomeHeading || t("create.page.heading", { brand: brandName })}</h1>
                                         <p>{t("create.page.subheading")}</p>
                                     </div>
                                     <button type="button" className="creation-history-entry" aria-label={t("create.page.viewHistory")} aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}>

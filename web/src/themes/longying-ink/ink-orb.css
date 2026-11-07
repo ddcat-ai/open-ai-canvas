@@ -1,0 +1,24 @@
+/* 龙影墨珠：画布比墨珠大一圈（晕边、墨晕），居中溢出，不改变外层占位。 */
+.ink-orb {
+    position: relative;
+    display: block;
+    flex: 0 0 auto;
+    pointer-events: none;
+}
+
+.ink-orb canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: block;
+    transform: translate(-50%, -50%);
+}
+
+.canvas-agent-launcher > .ink-orb {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 1;
+    margin: 0;
+    transform: translate(-50%, -50%);
+}
