@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/production"
 )
 
 func TestDramaTimelineUsesWholeSegmentAudioAndRejectsMissingMedia(t *testing.T) {
@@ -78,6 +79,84 @@ func TestDramaSegmentEditInvalidatesDescendantsAndRejectsLateResult(t *testing.T
 	}
 	if _, err := svc.GenerateDramaSegments("usr-drama", project, episode, GenerateDramaSegmentsRequest{Segments: []int{999}}); err == nil {
 		t.Fatal("unknown segment")
+	}
+}
+
+
+func TestParallelVideoEditDoesNotCascadeStaleLaterSegments(t *testing.T) {
+	svc, _ := newDramaTestService(t)
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaAuto, Concurrency: 16, Models: fakeDramaModels, VideoContinuity: DramaContinuityParallel}
+	settings.EpisodeSeconds = 60
+	settings.Storyboard.SegmentMode, settings.Storyboard.SegmentSeconds = production.SegmentFixed, 5
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "并行编辑", Start: true, Settings: settings, Chapters: []DramaChapterInput{
+		{Title: "第一章", Text: "甲……"}, {Title: "第二章", Text: "乙……"}, {Title: "第三章", Text: "丙……"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := summary.Project.ID
+	runDramaTicks(t, svc, project, 24)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	episode := summary.Episodes[0].ID
+	rows, err := svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) < 2 || rows[0].VideoStatus != model.DramaMediaReady || rows[1].VideoStatus != model.DramaMediaReady {
+		t.Fatalf("need two ready segments under parallel continuity: %+v", rows)
+	}
+	laterStatus, laterRevision := rows[1].VideoStatus, rows[1].Revision
+	custom := "并行模式只改本段提示词"
+	if err := svc.UpdateDramaSegment("usr-drama", project, episode, rows[0].SegmentIndex, UpdateDramaSegmentRequest{VideoPromptOverride: &custom}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].VideoStatus != model.DramaMediaStale {
+		t.Fatalf("edited segment must go stale: %+v", rows[0])
+	}
+	if rows[1].VideoStatus != laterStatus || rows[1].Revision != laterRevision {
+		t.Fatalf("parallel continuity must not cascade-stale later segments: got %+v want status=%s revision=%d", rows[1], laterStatus, laterRevision)
+	}
+}
+
+func TestParallelVideoRegenerateDoesNotCascadeStaleLaterSegments(t *testing.T) {
+	svc, _ := newDramaTestService(t)
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaAuto, Concurrency: 16, Models: fakeDramaModels, VideoContinuity: DramaContinuityParallel}
+	settings.EpisodeSeconds = 60
+	settings.Storyboard.SegmentMode, settings.Storyboard.SegmentSeconds = production.SegmentFixed, 5
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "并行重生成", Start: true, Settings: settings, Chapters: []DramaChapterInput{
+		{Title: "第一章", Text: "甲……"}, {Title: "第二章", Text: "乙……"}, {Title: "第三章", Text: "丙……"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := summary.Project.ID
+	runDramaTicks(t, svc, project, 24)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	episode := summary.Episodes[0].ID
+	rows, err := svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) < 2 || rows[0].VideoStatus != model.DramaMediaReady || rows[1].VideoStatus != model.DramaMediaReady {
+		t.Fatalf("need two ready segments under parallel continuity: %+v", rows)
+	}
+	laterStatus, laterRevision := rows[1].VideoStatus, rows[1].Revision
+	if _, err := svc.GenerateDramaSegments("usr-drama", project, episode, GenerateDramaSegmentsRequest{Segments: []int{rows[0].SegmentIndex}}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].VideoStatus != model.DramaMediaQueued {
+		t.Fatalf("regenerated segment must be queued: %+v", rows[0])
+	}
+	if rows[1].VideoStatus != laterStatus || rows[1].Revision != laterRevision {
+		t.Fatalf("parallel regenerate must not cascade-stale later segments: got %+v want status=%s revision=%d", rows[1], laterStatus, laterRevision)
 	}
 }
 
