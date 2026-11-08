@@ -60,6 +60,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
 import { AdminTooltip } from "../ui/controls";
+import { AdminGlobalSearch } from "./admin-global-search";
 import { AdminDensityProvider, useAdminDensity } from "./admin-density";
 import { preloadAdminPages } from "../admin-page-loader";
 import "@/styles/admin-ui.css";
@@ -71,6 +72,7 @@ type AdminNavigationItem = {
     label: string;
     /** 折叠侧栏图标下方的两字名称，与用户端折叠导航保持一致。 */
     shortLabel: string;
+    keywords?: string;
     icon: ReactNode;
     requireFeature?: "frontendModelsEnabled";
 };
@@ -83,73 +85,73 @@ const adminNavigation: AdminNavigationGroup[] = [
         key: "overview",
         label: "运营监控",
         items: [
-            { path: "/admin", label: "运行总览", shortLabel: "总览", icon: <BarChart3 className="size-4" /> },
-            { path: "/admin/logs", label: "请求明细", shortLabel: "请求", icon: <FileClock className="size-4" /> },
-            { path: "/admin/login-logs", label: "登录日志", shortLabel: "登录", icon: <LogIn className="size-4" /> },
-            { path: "/admin/email-logs", label: "邮件记录", shortLabel: "邮件", icon: <MailSearch className="size-4" /> },
-            { path: "/admin/settings/system-performance", label: "系统性能", shortLabel: "性能", icon: <Activity className="size-4" /> },
+            { path: "/admin", keywords: "统计 仪表盘 收入 使用量 dashboard analytics", label: "运行总览", shortLabel: "总览", icon: <BarChart3 className="size-4" /> },
+            { path: "/admin/logs", keywords: "请求 日志 错误 调用 计费 退款", label: "请求明细", shortLabel: "请求", icon: <FileClock className="size-4" /> },
+            { path: "/admin/login-logs", keywords: "登录 记录 IP 安全", label: "登录日志", shortLabel: "登录", icon: <LogIn className="size-4" /> },
+            { path: "/admin/email-logs", keywords: "邮件 发送 记录 验证码", label: "邮件记录", shortLabel: "邮件", icon: <MailSearch className="size-4" /> },
+            { path: "/admin/settings/system-performance", keywords: "性能 监控 CPU 内存 缓存 队列", label: "系统性能", shortLabel: "性能", icon: <Activity className="size-4" /> },
         ],
     },
     {
         key: "users",
         label: "用户与运营",
         items: [
-            { path: "/admin/users", label: "用户管理", shortLabel: "用户", icon: <UsersRound className="size-4" /> },
-            { path: "/admin/user-groups", label: "用户分组", shortLabel: "分组", icon: <Crown className="size-4" /> },
-            { path: "/admin/credit-operations", label: "积分运营", shortLabel: "积分", icon: <Coins className="size-4" /> },
-            { path: "/admin/payments", label: "支付充值", shortLabel: "支付", icon: <CreditCard className="size-4" /> },
-            { path: "/admin/redemption-codes", label: "兑换码", shortLabel: "兑换", icon: <TicketCheck className="size-4" /> },
-            { path: "/admin/referral", label: "推广中心", shortLabel: "推广", icon: <Gift className="size-4" /> },
-            { path: "/admin/announcements", label: "系统公告", shortLabel: "公告", icon: <BellRing className="size-4" /> },
-            { path: "/admin/banner-announcements", label: "常驻通知", shortLabel: "通知", icon: <Megaphone className="size-4" /> },
-            { path: "/admin/feedbacks", label: "用户反馈", shortLabel: "反馈", icon: <Inbox className="size-4" /> },
-            { path: "/admin/agent-lessons", label: "Agent 记忆", shortLabel: "记忆", icon: <BookMarked className="size-4" /> },
+            { path: "/admin/users", keywords: "账号 用户 权限 封禁 密码", label: "用户管理", shortLabel: "用户", icon: <UsersRound className="size-4" /> },
+            { path: "/admin/user-groups", keywords: "用户组 倍率 VIP 定价", label: "用户分组", shortLabel: "分组", icon: <Crown className="size-4" /> },
+            { path: "/admin/credit-operations", keywords: "积分 余额 账务 退款", label: "积分运营", shortLabel: "积分", icon: <Coins className="size-4" /> },
+            { path: "/admin/payments", keywords: "支付 充值 订单 商品 支付宝 微信", label: "支付充值", shortLabel: "支付", icon: <CreditCard className="size-4" /> },
+            { path: "/admin/redemption-codes", keywords: "兑换码 激活码 充值", label: "兑换码", shortLabel: "兑换", icon: <TicketCheck className="size-4" /> },
+            { path: "/admin/referral", keywords: "推广 邀请 佣金 返佣", label: "推广中心", shortLabel: "推广", icon: <Gift className="size-4" /> },
+            { path: "/admin/announcements", keywords: "公告 更新 弹窗", label: "系统公告", shortLabel: "公告", icon: <BellRing className="size-4" /> },
+            { path: "/admin/banner-announcements", keywords: "通知 横幅", label: "常驻通知", shortLabel: "通知", icon: <Megaphone className="size-4" /> },
+            { path: "/admin/feedbacks", keywords: "反馈 工单 建议 问题", label: "用户反馈", shortLabel: "反馈", icon: <Inbox className="size-4" /> },
+            { path: "/admin/agent-lessons", keywords: "Agent 记忆 经验", label: "Agent 记忆", shortLabel: "记忆", icon: <BookMarked className="size-4" /> },
         ],
     },
     {
         key: "models",
         label: "模型与渠道",
         items: [
-            { path: "/admin/channels", label: "渠道与模型", shortLabel: "渠道", icon: <RadioTower className="size-4" /> },
-            { path: "/admin/models", label: "前台模型", shortLabel: "模型", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
+            { path: "/admin/channels", keywords: "渠道 模型 API Key 密钥 上游 定价 协议", label: "渠道与模型", shortLabel: "渠道", icon: <RadioTower className="size-4" /> },
+            { path: "/admin/models", keywords: "前台模型 逻辑模型 能力", label: "前台模型", shortLabel: "模型", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
         ],
     },
     {
         key: "creation",
         label: "创作与扩展",
         items: [
-            { path: "/admin/workbench-tools", label: "工作台工具", shortLabel: "工具", icon: <Shapes className="size-4" /> },
-            { path: "/admin/prompt-templates", label: "提示词模板", shortLabel: "模板", icon: <MessageSquareText className="size-4" /> },
-            { path: "/admin/pose-library", label: "姿势库", shortLabel: "姿势", icon: <PersonStanding className="size-4" /> },
-            { path: "/admin/settings/drawing-engine", label: "绘图工具", shortLabel: "绘图", icon: <Paintbrush className="size-4" /> },
-            { path: "/admin/plugins", label: "插件管理", shortLabel: "插件", icon: <PlugZap className="size-4" /> },
-            { path: "/admin/skills", label: "技能管理", shortLabel: "技能", icon: <Wand2 className="size-4" /> },
-            { path: "/admin/skill-curation", label: "技能分类", shortLabel: "分类", icon: <Sparkles className="size-4" /> },
-            { path: "/admin/resources", label: "存储资源", shortLabel: "资源", icon: <Database className="size-4" /> },
+            { path: "/admin/workbench-tools", keywords: "工作台 工具 首页", label: "工作台工具", shortLabel: "工具", icon: <Shapes className="size-4" /> },
+            { path: "/admin/prompt-templates", keywords: "提示词 模板 分镜 prompt", label: "提示词模板", shortLabel: "模板", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/pose-library", keywords: "姿势 动作 pose", label: "姿势库", shortLabel: "姿势", icon: <PersonStanding className="size-4" /> },
+            { path: "/admin/settings/drawing-engine", keywords: "绘图 画板 引擎", label: "绘图工具", shortLabel: "绘图", icon: <Paintbrush className="size-4" /> },
+            { path: "/admin/plugins", keywords: "插件 扩展 协议 plugin", label: "插件管理", shortLabel: "插件", icon: <PlugZap className="size-4" /> },
+            { path: "/admin/skills", keywords: "技能 skill", label: "技能管理", shortLabel: "技能", icon: <Wand2 className="size-4" /> },
+            { path: "/admin/skill-curation", keywords: "技能 分类 推荐", label: "技能分类", shortLabel: "分类", icon: <Sparkles className="size-4" /> },
+            { path: "/admin/resources", keywords: "资源 文件 素材 存储 清理", label: "存储资源", shortLabel: "资源", icon: <Database className="size-4" /> },
         ],
     },
     {
         key: "ecommerce-agent",
         label: "电商 Agent",
         items: [
-            { path: "/admin/ecommerce/agent", label: "电商 Agent 配置", shortLabel: "配置", icon: <Bot className="size-4" /> },
-            { path: "/admin/ecommerce/library", label: "知识与技能", shortLabel: "知识", icon: <Database className="size-4" /> },
+            { path: "/admin/ecommerce/agent", keywords: "电商 Agent 模型 配置", label: "电商 Agent 配置", shortLabel: "配置", icon: <Bot className="size-4" /> },
+            { path: "/admin/ecommerce/library", keywords: "电商 知识 技能 品类", label: "知识与技能", shortLabel: "知识", icon: <Database className="size-4" /> },
         ],
     },
     {
         key: "settings",
         label: "系统设置",
         items: [
-            { path: "/admin/settings/appearance", label: "站点及外观", shortLabel: "外观", icon: <Palette className="size-4" /> },
-            { path: "/admin/settings/features", label: "功能开放", shortLabel: "功能", icon: <ToggleLeft className="size-4" /> },
-            { path: "/admin/settings/access", label: "登录与注册", shortLabel: "注册", icon: <ShieldCheck className="size-4" /> },
-            { path: "/admin/settings/email", label: "邮件服务", shortLabel: "邮件", icon: <Mail className="size-4" /> },
-            { path: "/admin/settings/storage", label: "存储服务", shortLabel: "存储", icon: <HardDrive className="size-4" /> },
-            { path: "/admin/settings/runtime-policy", label: "资源与策略", shortLabel: "策略", icon: <Settings2 className="size-4" /> },
-            { path: "/admin/settings/ark-private-assets", label: "方舟素材库", shortLabel: "方舟", icon: <CloudUpload className="size-4" /> },
-            { path: "/admin/settings/third-party", label: "第三方参数配置", shortLabel: "三方", icon: <KeyRound className="size-4" /> },
-            { path: "/admin/settings/response-interception", label: "模型响应拦截", shortLabel: "拦截", icon: <ShieldAlert className="size-4" /> },
-            { path: "/admin/settings/system-update", label: "系统更新", shortLabel: "更新", icon: <RefreshCw className="size-4" /> },
+            { path: "/admin/settings/appearance", keywords: "站点 外观 品牌 主题 Logo 皮肤", label: "站点及外观", shortLabel: "外观", icon: <Palette className="size-4" /> },
+            { path: "/admin/settings/features", keywords: "功能 开关 开放", label: "功能开放", shortLabel: "功能", icon: <ToggleLeft className="size-4" /> },
+            { path: "/admin/settings/access", keywords: "登录 注册 验证码 认证", label: "登录与注册", shortLabel: "注册", icon: <ShieldCheck className="size-4" /> },
+            { path: "/admin/settings/email", keywords: "邮件 SMTP 发信 邮箱", label: "邮件服务", shortLabel: "邮件", icon: <Mail className="size-4" /> },
+            { path: "/admin/settings/storage", keywords: "存储 OSS S3 对象存储 上传", label: "存储服务", shortLabel: "存储", icon: <HardDrive className="size-4" /> },
+            { path: "/admin/settings/runtime-policy", keywords: "资源 策略 并发 限流 配额 worker", label: "资源与策略", shortLabel: "策略", icon: <Settings2 className="size-4" /> },
+            { path: "/admin/settings/ark-private-assets", keywords: "方舟 素材库 火山", label: "方舟素材库", shortLabel: "方舟", icon: <CloudUpload className="size-4" /> },
+            { path: "/admin/settings/third-party", keywords: "第三方 参数 配置 密钥 LibTV", label: "第三方参数配置", shortLabel: "三方", icon: <KeyRound className="size-4" /> },
+            { path: "/admin/settings/response-interception", keywords: "模型 响应 拦截 敏感词 过滤", label: "模型响应拦截", shortLabel: "拦截", icon: <ShieldAlert className="size-4" /> },
+            { path: "/admin/settings/system-update", keywords: "系统 更新 升级 版本 部署", label: "系统更新", shortLabel: "更新", icon: <RefreshCw className="size-4" /> },
         ],
     },
 ];
@@ -202,6 +204,8 @@ export function AdminShell() {
 
 function AdminShellLayout() {
     const { density } = useAdminDensity();
+    const features = useUserStore((state) => state.features);
+    const searchEntries = visibleNavigationGroups(features).flatMap((group) => group.items.map((item) => ({ path: item.path, label: item.label, group: group.label, keywords: item.keywords })));
     const appearance = useAppearanceStore((state) => state.appearance);
     const [collapsed, setCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const dark = useThemeStore((state) => state.theme === "dark");
@@ -268,6 +272,9 @@ function AdminShellLayout() {
                     </aside>
                     <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
                         <MobileAdminNavigation />
+                        <div className="admin-global-search-bar">
+                            <AdminGlobalSearch entries={searchEntries} />
+                        </div>
                         <Suspense
                             fallback={
                                 <div className="p-8 text-sm" role="status">
