@@ -28,12 +28,17 @@ func newModelCapabilityArgumentError(field, issue string, cause error) error {
 func modelCapabilityMismatchError(match CapabilityMatch) error {
 	details := map[string]any{"capabilityIssues": match.Issues}
 	for _, issue := range match.Issues {
-		if issue.Kind != "option" && issue.Kind != "image_parameter" {
-			continue
-		}
 		field := issue.Name
-		if field == "vquality" {
-			field = "quality"
+		switch issue.Kind {
+		case "option", "image_parameter":
+			if field == "vquality" {
+				field = "quality"
+			}
+		case "input":
+			// 参考素材数量或类型不符时，调用方可减少参考或改选模型后重试。
+			field = "referenceNodeIds"
+		default:
+			continue
 		}
 		details["field"] = field
 		details["issue"] = "unsupported_value"

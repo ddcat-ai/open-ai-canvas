@@ -61,7 +61,7 @@ func cloudAgentMediaReferencePrompt(prompt string, refs map[string]any) (string,
 	mentioned := map[string]bool{}
 	for _, token := range cloudAgentMediaMention.FindAllString(prompt, -1) {
 		if !available[token] {
-			return "", BadAuthRequest(fmt.Sprintf("提示词中的 %s 没有对应的参考素材；请按 referenceNodeIds 中各媒体类型的顺序修正引用", token))
+			return "", cloudAgentFieldError("prompt", "unsupported_value", fmt.Sprintf("提示词中的 %s 没有对应的参考素材；请按 referenceNodeIds 中各媒体类型的顺序修正引用", token))
 		}
 		mentioned[token] = true
 	}
