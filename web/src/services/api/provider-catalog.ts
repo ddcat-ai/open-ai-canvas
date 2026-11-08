@@ -10,6 +10,7 @@ export type ProviderCatalogPriceTier = {
     costInputMicrocredits: number;
     costOutputMicrocredits: number;
     costCachedMicrocredits: number;
+    costReferenceVideoMicrocredits?: number;
 };
 
 export type ProviderCatalogModel = {

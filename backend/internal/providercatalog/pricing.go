@@ -10,6 +10,7 @@ import (
 type TierPrice struct {
 	CostUnit, CostInput, CostOutput, CostCached int64
 	SaleUnit, SaleInput, SaleOutput, SaleCached int64
+	CostReferenceVideo, SaleReferenceVideo      int64
 }
 
 // YuanToMicrocredits 按 1 元 = 1 积分换算，四舍五入到 microcredit。
@@ -54,7 +55,11 @@ func PriceFor(capability string, tier PriceTier, basisPoints int64) TierPrice {
 		}
 	} else {
 		price.CostUnit = YuanToMicrocredits(tier.Cost)
+		if capability == "video" && tier.BillingMode == "per_second" {
+			price.CostReferenceVideo = YuanToMicrocredits(tier.ReferenceVideoCost)
+		}
 	}
+	price.SaleReferenceVideo = ApplyMarkup(price.CostReferenceVideo, basisPoints)
 	price.SaleUnit = ApplyMarkup(price.CostUnit, basisPoints)
 	price.SaleInput = ApplyMarkup(price.CostInput, basisPoints)
 	price.SaleOutput = ApplyMarkup(price.CostOutput, basisPoints)

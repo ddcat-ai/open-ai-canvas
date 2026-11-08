@@ -217,6 +217,15 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Resolutions = []string{"768P", "2K"}
 		video.DefaultResolution = "768P"
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
+		if modelName == "seedance-2.0-mini" || modelName == "seedance-2.0" {
+			video.Duration = VideoDurationConfig{Selection: "enum", Values: []int{4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}, Default: 4}
+			video.Resolutions = []string{"480p", "720p"}
+			if modelName == "seedance-2.0" {
+				video.Resolutions = append(video.Resolutions, "1080p", "4k")
+			}
+			video.DefaultResolution = "480p"
+			video.Watermark = VideoBooleanConfig{}
+		}
 	case model.ChannelInterfaceAgnesVideo:
 		video = applyModelSpecificVideoCapability(video, protocol, modelName)
 	case model.ChannelInterfaceType(VolcengineMediaKitEnhanceVideoProtocol):

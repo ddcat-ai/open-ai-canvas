@@ -178,6 +178,30 @@ func TestDefaultMiniMaxVideoCapabilitySupportsThirtySecondGeneration(t *testing.
 	}
 }
 
+func TestDefaultMetasoSeedanceCapability(t *testing.T) {
+	for _, protocol := range []string{"minimax-video", "metaso-h3"} {
+		for _, name := range []string{"seedance-2.0-mini", "seedance-2.0"} {
+			t.Run(protocol+"/"+name, func(t *testing.T) {
+				profile := DefaultModelCapabilityConfigForModel(protocol, name).Video
+				want := []string{"480p", "720p"}
+				if name == "seedance-2.0" {
+					want = append(want, "1080p", "4k")
+				}
+				if profile.Duration.Default != 4 || len(profile.Duration.Values) != 12 || profile.DefaultResolution != "480p" || fmt.Sprint(profile.Resolutions) != fmt.Sprint(want) || profile.Watermark.Supported || profile.Watermark.Default {
+					t.Fatalf("invalid profile: %#v", profile)
+				}
+				for _, seconds := range []int{3, 4, 15, 16} {
+					input := canvasGenerationInput{Mode: "video", Prompt: "a boat", Config: providerConfig{InterfaceType: protocol, Model: name, VideoSeconds: fmt.Sprint(seconds), Size: "16:9", VQuality: "480p"}}
+					err := validateVideoTask(profile, input)
+					if (err == nil) != (seconds >= 4 && seconds <= 15) {
+						t.Fatalf("%ds: %v", seconds, err)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestDefaultMiniMaxVideoCapabilitySupportsReferenceGeneration(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("minimax-video", "MiniMax-H3")
 	if profile == nil || profile.Video == nil {

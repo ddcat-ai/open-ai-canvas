@@ -58,12 +58,13 @@ type ProviderCatalogModel struct {
 
 // ProviderCatalogPriceTier 的成本已按 1 元 = 1 积分换算为 microcredits。
 type ProviderCatalogPriceTier struct {
-	Selector               map[string]string `json:"selector,omitempty"`
-	BillingMode            string            `json:"billingMode"`
-	CostUnitMicrocredits   int64             `json:"costUnitMicrocredits"`
-	CostInputMicrocredits  int64             `json:"costInputMicrocredits"`
-	CostOutputMicrocredits int64             `json:"costOutputMicrocredits"`
-	CostCachedMicrocredits int64             `json:"costCachedMicrocredits"`
+	Selector                       map[string]string `json:"selector,omitempty"`
+	BillingMode                    string            `json:"billingMode"`
+	CostUnitMicrocredits           int64             `json:"costUnitMicrocredits"`
+	CostInputMicrocredits          int64             `json:"costInputMicrocredits"`
+	CostOutputMicrocredits         int64             `json:"costOutputMicrocredits"`
+	CostCachedMicrocredits         int64             `json:"costCachedMicrocredits"`
+	CostReferenceVideoMicrocredits int64             `json:"costReferenceVideoMicrocredits,omitempty"`
 }
 
 type ProviderCatalogVerifyRequest struct {
@@ -167,6 +168,7 @@ func (s *Service) providerCatalogItem(provider providercatalog.Provider, install
 				Selector: tier.Selector, BillingMode: tier.BillingMode,
 				CostUnitMicrocredits: price.CostUnit, CostInputMicrocredits: price.CostInput,
 				CostOutputMicrocredits: price.CostOutput, CostCachedMicrocredits: price.CostCached,
+				CostReferenceVideoMicrocredits: price.CostReferenceVideo,
 			})
 		}
 		item.Models = append(item.Models, view)
@@ -334,10 +336,11 @@ func (s *Service) buildCatalogChannelModel(channel *model.ModelChannel, entry pr
 		price := providercatalog.PriceFor(entry.Capability, tier, markup)
 		enabled := true
 		req.PriceTiers = append(req.PriceTiers, ChannelModelPriceTierRequest{
-			CostPricing: model.CreditCostPricing{Configured: true, UnitPriceMicrocredits: price.CostUnit, InputTokenPriceMicrocredits: price.CostInput, OutputTokenPriceMicrocredits: price.CostOutput, CachedTokenPriceMicrocredits: price.CostCached},
+			CostPricing: model.CreditCostPricing{Configured: true, UnitPriceMicrocredits: price.CostUnit, InputTokenPriceMicrocredits: price.CostInput, OutputTokenPriceMicrocredits: price.CostOutput, CachedTokenPriceMicrocredits: price.CostCached, ReferenceVideoUnitPriceMicrocredits: price.CostReferenceVideo},
 			Selector:    tier.Selector, ProviderModelKey: tier.ProviderModelKey, BillingMode: tier.BillingMode,
 			UnitPriceMicrocredits: price.SaleUnit, InputTokenPriceMicrocredits: price.SaleInput, OutputTokenPriceMicrocredits: price.SaleOutput, CachedTokenPriceMicrocredits: price.SaleCached,
-			PriceConfigured: true, Enabled: &enabled,
+			ReferenceVideoUnitPriceMicrocredits: price.SaleReferenceVideo,
+			PriceConfigured:                     true, Enabled: &enabled,
 		})
 	}
 	protocolType := model.ChannelInterfaceType(protocolID)
@@ -376,6 +379,7 @@ func (s *Service) buildCatalogChannelModel(channel *model.ModelChannel, entry pr
 		DisplayName: entry.DisplayName, ChannelLabel: entry.ChannelLabel, Tags: tags, Description: entry.Description, Icon: entry.Icon,
 		SortOrder: sortOrder, Capability: entry.Capability, Protocol: protocolType, Enabled: true, PriceVersion: 1,
 		CapabilityConfigJSON: capabilityJSON, CatalogModelKey: entry.ModelKey,
+		ReferenceVideoBilling: entry.ReferenceVideoBilling,
 	}
 	if capabilityJSON != "" {
 		item.CapabilityVersion = 1

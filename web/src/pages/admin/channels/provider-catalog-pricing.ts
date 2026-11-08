@@ -23,7 +23,13 @@ export type TierPriceLine = { label: string; cost: number; sale: number };
 export function tierPriceLines(capability: ProviderCatalogModel["capability"], tier: ProviderCatalogPriceTier, markupPercent: number): TierPriceLine[] {
     if (tier.billingMode !== "token") {
         const unit = tier.billingMode === "per_second" ? "每秒" : "每次";
-        return [{ label: unit, cost: tier.costUnitMicrocredits, sale: applyMarkup(tier.costUnitMicrocredits, markupPercent) }];
+        const lines = [{ label: unit, cost: tier.costUnitMicrocredits, sale: applyMarkup(tier.costUnitMicrocredits, markupPercent) }];
+        if (capability === "video" && tier.billingMode === "per_second" && (tier.costReferenceVideoMicrocredits ?? 0) > 0) {
+            const cost = tier.costReferenceVideoMicrocredits!;
+            lines[0].label = "无参考视频 / 每秒";
+            lines.push({ label: "有参考视频 / 每秒（参考 + 生成时长）", cost, sale: applyMarkup(cost, markupPercent) });
+        }
+        return lines;
     }
     if (capability === "video") return [{ label: "每百万视频 Token", cost: tier.costOutputMicrocredits, sale: applyMarkup(tier.costOutputMicrocredits, markupPercent) }];
     const lines = [
