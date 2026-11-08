@@ -14,3 +14,6 @@
 - 首尾帧可与角色、风格参考图同时提交，不再在本地拒绝。
 
 完整字段见 [docs/interface.md](docs/interface.md)。
+# 秘塔 Seedance 2.0
+
+Base URL 设置为 `https://metaso.cn/api/minimax` 时，同一秘塔 API Key 可调用 `seedance-2.0-mini`（480p、720p）和 `seedance-2.0`（另支持 1080p、4k）。均为 4–15 整数秒，默认 4 秒、480p，无水印。支持文生、图生、多模态参考视频；不支持 Context IR、提示词优化或视频再生成。4K 结果可能需要支持 HEVC 的播放器。

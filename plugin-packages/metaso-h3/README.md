@@ -20,3 +20,6 @@
 - 多模态参考：图片 reference_image / 视频 reference_video / 音频 reference_audio。
 - 异步任务：创建后返回 task_id，轮询查询接口直到 status=succeeded，成片 URL 在 task.content.url。
 - 鉴权：`Authorization: Bearer mk-xxx`。
+# Seedance 2.0
+
+同一秘塔 API Key 可调用 `seedance-2.0-mini`（480p、720p）和 `seedance-2.0`（另支持 1080p、4k）。均为 4–15 整数秒，默认 4 秒、480p，无水印。支持文生、图生、多模态参考视频；不支持 Context IR、提示词优化或视频再生成。4K 结果可能需要支持 HEVC 的播放器。
