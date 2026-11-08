@@ -261,7 +261,8 @@ function SegmentToolbar({
     const catalogQuery = useDramaModelCatalog();
     const chosenOption = dramaVideoOptionFor(catalogQuery.data?.options.video, choice);
     const chosenAudioLimit = changed ? chosenOption?.maxAudios : segment.request.modelMaxAudios;
-    const quoteMissing = creditsEnabled && dramaSegmentQuoteMissing(config, choice, dramaSegmentVideoRequirements(segment.request, dramaVideoOptionFor(catalogQuery.data?.options.video, choice), changed, videoResolution));
+    const requirements = dramaSegmentVideoRequirements(segment.request, chosenOption, changed, videoResolution);
+    const quoteMissing = creditsEnabled && dramaSegmentQuoteMissing(config, choice, requirements);
     const running = mediaBusy(segment.videoStatus);
     const writingNow = segment.promptStatus === "queued" || segment.promptStatus === "running";
     const sent = [segment.request.header, segment.videoPrompt.trim()].filter(Boolean).join("\n\n");
@@ -277,7 +278,7 @@ function SegmentToolbar({
     return (
         <section className="drama-sdx-toolbar" aria-label="生成设置">
             <div className="drama-sdx-toolbar-row">
-                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" aspectRatio={aspectRatio} videoResolution={videoResolution} />
+                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" aspectRatio={aspectRatio} videoResolution={videoResolution} requirements={requirements} />
                 <Tooltip title={segment.request.maxVideoSeconds ? `按本段镜头时长生成；模型单次最长 ${segment.request.maxVideoSeconds} 秒` : "按本段镜头时长生成"}>
                     <span className="drama-sdx-chip">{segment.request.seconds ? `${segment.request.seconds}s` : secondsLabel(segment.durationMs)}</span>
                 </Tooltip>
