@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 92
+const CurrentSchemaVersion int64 = 93
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -328,6 +328,21 @@ var schemaMigrations = []migration{
 		}
 		return nil
 	}},
+	{version: 93, name: "banner_sort_order_backfill", checksum: "sha256:banner-sort-order-backfill-v93-20261108", apply: migrateBannerSortOrderBackfill},
+}
+
+// v49 只加列：升级库里已有的通知条 sort_order 为 NULL（PostgreSQL 升序时 NULL 排在最后），
+// 也缺少新库由 AutoMigrate 建的索引。
+func migrateBannerSortOrderBackfill(tx *gorm.DB) error {
+	if err := tx.Model(&model.BannerAnnouncement{}).Where("sort_order IS NULL").Update("sort_order", 0).Error; err != nil {
+		return fmt.Errorf("回填通知条排序：%w", err)
+	}
+	if !tx.Migrator().HasIndex(&model.BannerAnnouncement{}, "SortOrder") {
+		if err := tx.Migrator().CreateIndex(&model.BannerAnnouncement{}, "SortOrder"); err != nil {
+			return fmt.Errorf("创建通知条排序索引：%w", err)
+		}
+	}
+	return nil
 }
 
 // migrateReferenceVideoCostPrice 为价格档成本和账单成本快照增加带参考视频的成本价。
