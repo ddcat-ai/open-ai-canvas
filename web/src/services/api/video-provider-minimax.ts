@@ -21,6 +21,17 @@ export async function createMiniMaxVideoTask(
     audioReferences: ReferenceAudio[],
     options?: RequestOptions,
 ): Promise<VideoGenerationTask> {
+    const modelName = modelOptionName(model);
+    const seedance = modelName === "seedance-2.0-mini" || modelName === "seedance-2.0";
+    const duration = seedance ? Number(config.videoSeconds || 4) : normalizeMiniMaxDuration(config.videoSeconds);
+    const resolution = seedance ? config.vquality.trim() || "480p" : normalizeMiniMaxResolution(config.vquality);
+    const watermark = boolConfig(config.videoWatermark, false);
+    if (seedance) {
+        if (!Number.isInteger(duration) || duration < 4 || duration > 15) throw new Error("Seedance 时长必须为 4–15 整数秒");
+        const resolutions = modelName === "seedance-2.0-mini" ? ["480p", "720p"] : ["480p", "720p", "1080p", "4k"];
+        if (!resolutions.includes(resolution)) throw new Error("Seedance 分辨率不受当前模型支持");
+        if (watermark) throw new Error("Seedance 不支持水印");
+    }
     const imageUrls = await Promise.all(references.slice(0, 9).map((image) => resolveMiniMaxImageUrl(image)));
     const videoUrls = await Promise.all(videoReferences.slice(0, 3).map((video) => resolveMiniMaxMediaUrl(video, "参考视频")));
     const audioUrls = await Promise.all(audioReferences.slice(0, 3).map((audio) => resolveMiniMaxMediaUrl(audio, "参考音频")));
@@ -35,12 +46,12 @@ export async function createMiniMaxVideoTask(
     videoUrls.forEach((url) => content.push({ type: "video_url", video_url: { url }, role: "reference_video" }));
     audioUrls.forEach((url) => content.push({ type: "audio_url", audio_url: { url }, role: "reference_audio" }));
     const payload = {
-        model: modelOptionName(model),
+        model: modelName,
         content,
-        resolution: normalizeMiniMaxResolution(config.vquality),
-        duration: normalizeMiniMaxDuration(config.videoSeconds),
+        resolution,
+        duration,
         ratio: normalizeMiniMaxRatio(config.size, frameMode),
-        aigc_watermark: boolConfig(config.videoWatermark, false),
+        aigc_watermark: watermark,
     };
     try {
         const created = await deps.transport.post<MiniMaxVideoCreateResponse>(miniMaxVideoUrl(config, "/video_generation"), payload, options);
@@ -74,6 +85,7 @@ export async function pollMiniMaxVideoTask(deps: VideoProviderDeps, config: Reso
 
 function miniMaxVideoUrl(config: ResolvedAiConfig, path: string) {
     const base = config.baseUrl.replace(/\/+$/, "");
+    if (config.interfaceType === "metaso-h3") return `${base}/api/minimax/v2${path}`;
     return /\/v2$/i.test(base) ? `${base}${path}` : `${base}/v2${path}`;
 }
 

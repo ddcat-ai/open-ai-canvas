@@ -62,7 +62,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "minimax-hailuo-video-v2",
   "name": "MiniMax Hailuo Video V2 / H3",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "author": "MiniMax / 影策",
   "description": "MiniMax / Hailuo V2 视频生成协议，保留首帧、尾帧、参考图、视频和音频角色语义。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -249,24 +249,40 @@
           },
           {
             "assert": {
-              "$and": [
-                {
-                  "$gte": [
+              "$if": {
+                "condition": {
+                  "$in": [
                     {
-                      "$ref": "request.duration"
+                      "$ref": "request.model"
                     },
-                    4
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
                   ]
                 },
-                {
-                  "$lte": [
+                "then": true,
+                "else": {
+                  "$and": [
                     {
-                      "$ref": "request.duration"
+                      "$gte": [
+                        {
+                          "$ref": "request.duration"
+                        },
+                        4
+                      ]
                     },
-                    30
+                    {
+                      "$lte": [
+                        {
+                          "$ref": "request.duration"
+                        },
+                        30
+                      ]
+                    }
                   ]
                 }
-              ]
+              }
             },
             "message": "MiniMax H3 duration 必须在 4-30 秒之间"
           },
@@ -374,6 +390,171 @@
               ]
             },
             "message": "MiniMax H3 使用尾帧时必须同时提供首帧"
+          },
+          {
+            "assert": {
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$if": {
+                            "condition": {
+                              "$eq": [
+                                {
+                                  "$ref": "request.duration"
+                                },
+                                0
+                              ]
+                            },
+                            "then": 4,
+                            "else": {
+                              "$ref": "request.duration"
+                            }
+                          }
+                        },
+                        4
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$if": {
+                            "condition": {
+                              "$eq": [
+                                {
+                                  "$ref": "request.duration"
+                                },
+                                0
+                              ]
+                            },
+                            "then": 4,
+                            "else": {
+                              "$ref": "request.duration"
+                            }
+                          }
+                        },
+                        15
+                      ]
+                    }
+                  ]
+                },
+                "else": true
+              }
+            },
+            "message": "Seedance duration 必须在 4-15 秒之间"
+          },
+          {
+            "assert": {
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$in": [
+                    {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.resolution"
+                        },
+                        "480p"
+                      ]
+                    },
+                    {
+                      "$if": {
+                        "condition": {
+                          "$eq": [
+                            {
+                              "$ref": "request.model"
+                            },
+                            "seedance-2.0-mini"
+                          ]
+                        },
+                        "then": [
+                          "480p",
+                          "720p"
+                        ],
+                        "else": [
+                          "480p",
+                          "720p",
+                          "1080p",
+                          "4k"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "else": true
+              }
+            },
+            "message": "Seedance resolution 不受此模型支持"
+          },
+          {
+            "assert": {
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$and": [
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.watermark"
+                        },
+                        true
+                      ]
+                    },
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.providerOptions.metaso-h3.aigc_watermark"
+                        },
+                        true
+                      ]
+                    },
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.providerOptions.minimax-video.aigc_watermark"
+                        },
+                        true
+                      ]
+                    }
+                  ]
+                },
+                "else": true
+              }
+            },
+            "message": "Seedance 不支持 aigc_watermark=true"
           }
         ],
         "create": {
@@ -475,15 +656,69 @@
               ]
             },
             "duration": {
-              "$ref": "request.duration"
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$if": {
+                    "condition": {
+                      "$eq": [
+                        {
+                          "$ref": "request.duration"
+                        },
+                        0
+                      ]
+                    },
+                    "then": 4,
+                    "else": {
+                      "$ref": "request.duration"
+                    }
+                  }
+                },
+                "else": {
+                  "$ref": "request.duration"
+                }
+              }
             },
             "resolution": {
-              "$coalesce": [
-                {
-                  "$ref": "request.resolution"
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
                 },
-                "768P"
-              ]
+                "then": {
+                  "$coalesce": [
+                    {
+                      "$ref": "request.resolution"
+                    },
+                    "480p"
+                  ]
+                },
+                "else": {
+                  "$coalesce": [
+                    {
+                      "$ref": "request.resolution"
+                    },
+                    "768P"
+                  ]
+                }
+              }
             },
             "ratio": {
               "$if": {
@@ -590,10 +825,42 @@
               }
             },
             "aigc_watermark": {
-              "$ref": "request.watermark"
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": false,
+                "else": {
+                  "$ref": "request.watermark"
+                }
+              }
             },
             "generate_audio": {
-              "$ref": "request.generateAudio"
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$ref": "request.generateAudio"
+                }
+              }
             },
             "seed": {
               "$omitEmpty": {
@@ -601,8 +868,24 @@
               }
             },
             "prompt_optimizer": {
-              "$omitEmpty": {
-                "$ref": "request.providerOptions.minimax-video.prompt_optimizer"
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": null,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.minimax-video.prompt_optimizer"
+                  }
+                }
               }
             }
           }

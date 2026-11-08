@@ -75,7 +75,7 @@ status 取值：queued / running / succeeded / failed / cancelled。
   "apiVersion": "yingce.plugin/v2",
   "id": "metaso-h3",
   "name": "METASO MiniMax H3",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "METASO",
   "description": "秘塔 METASO MiniMax H3 文生视频/图生视频协议插件（异步任务）。",
   "permissions": [
@@ -313,29 +313,83 @@ status 取值：queued / running / succeeded / failed / cancelled。
               ]
             },
             "resolution": {
-              "$omitEmpty": {
-                "$coalesce": [
-                  {
-                    "$ref": "request.resolution"
-                  },
-                  {
-                    "$ref": "request.providerOptions.metaso-h3.resolution"
-                  },
-                  "768P"
-                ]
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$coalesce": [
+                    {
+                      "$ref": "request.resolution"
+                    },
+                    "480p"
+                  ]
+                },
+                "else": {
+                  "$omitEmpty": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.resolution"
+                      },
+                      {
+                        "$ref": "request.providerOptions.metaso-h3.resolution"
+                      },
+                      "768P"
+                    ]
+                  }
+                }
               }
             },
             "duration": {
-              "$omitEmpty": {
-                "$coalesce": [
-                  {
-                    "$ref": "request.duration"
-                  },
-                  {
-                    "$ref": "request.providerOptions.metaso-h3.duration"
-                  },
-                  5
-                ]
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$if": {
+                    "condition": {
+                      "$eq": [
+                        {
+                          "$ref": "request.duration"
+                        },
+                        0
+                      ]
+                    },
+                    "then": 4,
+                    "else": {
+                      "$ref": "request.duration"
+                    }
+                  }
+                },
+                "else": {
+                  "$omitEmpty": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.duration"
+                      },
+                      {
+                        "$ref": "request.providerOptions.metaso-h3.duration"
+                      },
+                      5
+                    ]
+                  }
+                }
               }
             },
             "ratio": {
@@ -383,8 +437,24 @@ status 取值：queued / running / succeeded / failed / cancelled。
               }
             },
             "aigc_watermark": {
-              "$omitEmpty": {
-                "$ref": "request.providerOptions.metaso-h3.aigc_watermark"
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": false,
+                "else": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.metaso-h3.aigc_watermark"
+                  }
+                }
               }
             }
           }
@@ -619,6 +689,171 @@ status 取值：queued / running / succeeded / failed / cancelled。
               ]
             },
             "message": "METASO MiniMax H3 使用尾帧时必须同时提供首帧"
+          },
+          {
+            "assert": {
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$if": {
+                            "condition": {
+                              "$eq": [
+                                {
+                                  "$ref": "request.duration"
+                                },
+                                0
+                              ]
+                            },
+                            "then": 4,
+                            "else": {
+                              "$ref": "request.duration"
+                            }
+                          }
+                        },
+                        4
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$if": {
+                            "condition": {
+                              "$eq": [
+                                {
+                                  "$ref": "request.duration"
+                                },
+                                0
+                              ]
+                            },
+                            "then": 4,
+                            "else": {
+                              "$ref": "request.duration"
+                            }
+                          }
+                        },
+                        15
+                      ]
+                    }
+                  ]
+                },
+                "else": true
+              }
+            },
+            "message": "Seedance duration 必须在 4-15 秒之间"
+          },
+          {
+            "assert": {
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$in": [
+                    {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.resolution"
+                        },
+                        "480p"
+                      ]
+                    },
+                    {
+                      "$if": {
+                        "condition": {
+                          "$eq": [
+                            {
+                              "$ref": "request.model"
+                            },
+                            "seedance-2.0-mini"
+                          ]
+                        },
+                        "then": [
+                          "480p",
+                          "720p"
+                        ],
+                        "else": [
+                          "480p",
+                          "720p",
+                          "1080p",
+                          "4k"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "else": true
+              }
+            },
+            "message": "Seedance resolution 不受此模型支持"
+          },
+          {
+            "assert": {
+              "$if": {
+                "condition": {
+                  "$in": [
+                    {
+                      "$ref": "request.model"
+                    },
+                    [
+                      "seedance-2.0-mini",
+                      "seedance-2.0"
+                    ]
+                  ]
+                },
+                "then": {
+                  "$and": [
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.watermark"
+                        },
+                        true
+                      ]
+                    },
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.providerOptions.metaso-h3.aigc_watermark"
+                        },
+                        true
+                      ]
+                    },
+                    {
+                      "$ne": [
+                        {
+                          "$ref": "request.providerOptions.minimax-video.aigc_watermark"
+                        },
+                        true
+                      ]
+                    }
+                  ]
+                },
+                "else": true
+              }
+            },
+            "message": "Seedance 不支持 aigc_watermark=true"
           }
         ]
       }

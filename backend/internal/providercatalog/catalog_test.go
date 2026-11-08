@@ -73,6 +73,35 @@ func TestParseRejectsWrongSchema(t *testing.T) {
 	}
 }
 
+func TestParseReferenceVideoPriceValidation(t *testing.T) {
+	for _, tc := range []struct {
+		capability, mode, price string
+		valid                   bool
+	}{
+		{"video", "per_second", "0.09", true},
+		{"video", "per_second", "-1", false},
+		{"video", "per_second", "1000001", false},
+		{"video", "per_second", "0", false},
+		{"text", "per_second", "0.09", false},
+		{"video", "token", "0.09", false},
+	} {
+		body := strings.Replace(sampleCatalog, `"capability":"video","protocol":"newapi","priceTiers":[{"billingMode":"fixed_request","cost":1.2}]`, `"capability":"`+tc.capability+`","protocol":"newapi","referenceVideoBilling":true,"priceTiers":[{"billingMode":"`+tc.mode+`","cost":1.2,"referenceVideoCost":`+tc.price+`}]`, 1)
+		catalog, _, err := Parse([]byte(body), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, m := range catalog.Providers[0].Models {
+			if m.ModelKey == "m1" {
+				found = true
+			}
+		}
+		if found != tc.valid {
+			t.Fatalf("%+v: found=%v", tc, found)
+		}
+	}
+}
+
 func TestActiveFiltersByWindowAndSortsByRank(t *testing.T) {
 	catalog, _, err := Parse([]byte(sampleCatalog), "")
 	if err != nil {

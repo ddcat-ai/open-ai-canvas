@@ -60,6 +60,23 @@ test("switching to MiniMax H3 replaces an unsupported 720p value with 768P", () 
     });
 });
 
+test("Metaso Seedance defaults match each model and replace stale H3 values", () => {
+    for (const protocol of ["minimax-video", "metaso-h3"]) {
+        for (const model of ["seedance-2.0-mini", "seedance-2.0"]) {
+            const profile = defaultModelCapabilityConfig(protocol, model).video!;
+            assert.deepEqual(
+                profile.duration.values,
+                Array.from({ length: 12 }, (_, i) => i + 4),
+            );
+            assert.equal(profile.duration.default, 4);
+            assert.deepEqual(profile.resolutions, model === "seedance-2.0-mini" ? ["480p", "720p"] : ["480p", "720p", "1080p", "4k"]);
+            assert.equal(profile.defaultResolution, "480p");
+            assert.deepEqual(profile.watermark, { supported: false, default: false });
+            assert.deepEqual(normalizeVideoValue(profile, { seconds: "30", ratio: "16:9", resolution: "768P" }), { seconds: "4", ratio: "16:9", resolution: "480p" });
+        }
+    }
+});
+
 // 视频提示词由「输入框文本 + 连线内容 + 技能上下文」合成，技能上下文预算为 32000，
 // 合成结果远长于用户手输内容。默认上限过小会把正常可用的画布工作流拦在本地预检。
 // 这里锁定默认值本身，避免被改回偏小值（前端放行/后端拒绝的判定必须同源）。

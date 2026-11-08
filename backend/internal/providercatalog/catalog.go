@@ -80,28 +80,30 @@ type ModelTag struct {
 }
 
 type Model struct {
-	ChannelLabel     string          `json:"channelLabel"`
-	Tags             []ModelTag      `json:"tags"`
-	ModelKey         string          `json:"modelKey"`
-	ProviderModelKey string          `json:"providerModelKey"`
-	DisplayName      string          `json:"displayName"`
-	Capability       string          `json:"capability"`
-	Protocol         string          `json:"protocol"`
-	Description      string          `json:"description"`
-	Icon             string          `json:"icon"`
-	CapabilityConfig json.RawMessage `json:"capabilityConfig,omitempty"`
-	PriceTiers       []PriceTier     `json:"priceTiers"`
+	ChannelLabel          string          `json:"channelLabel"`
+	Tags                  []ModelTag      `json:"tags"`
+	ModelKey              string          `json:"modelKey"`
+	ProviderModelKey      string          `json:"providerModelKey"`
+	DisplayName           string          `json:"displayName"`
+	Capability            string          `json:"capability"`
+	Protocol              string          `json:"protocol"`
+	Description           string          `json:"description"`
+	Icon                  string          `json:"icon"`
+	CapabilityConfig      json.RawMessage `json:"capabilityConfig,omitempty"`
+	PriceTiers            []PriceTier     `json:"priceTiers"`
+	ReferenceVideoBilling bool            `json:"referenceVideoBilling,omitempty"`
 }
 
 // PriceTier 的金额均为人民币元。按次/按秒用 Cost，token 用每百万 token 单价。
 type PriceTier struct {
-	Selector         map[string]string `json:"selector,omitempty"`
-	BillingMode      string            `json:"billingMode"`
-	ProviderModelKey string            `json:"providerModelKey,omitempty"`
-	Cost             float64           `json:"cost,omitempty"`
-	InputPerMillion  float64           `json:"inputPerMillion,omitempty"`
-	OutputPerMillion float64           `json:"outputPerMillion,omitempty"`
-	CachedPerMillion float64           `json:"cachedPerMillion,omitempty"`
+	Selector           map[string]string `json:"selector,omitempty"`
+	BillingMode        string            `json:"billingMode"`
+	ProviderModelKey   string            `json:"providerModelKey,omitempty"`
+	Cost               float64           `json:"cost,omitempty"`
+	ReferenceVideoCost float64           `json:"referenceVideoCost,omitempty"`
+	InputPerMillion    float64           `json:"inputPerMillion,omitempty"`
+	OutputPerMillion   float64           `json:"outputPerMillion,omitempty"`
+	CachedPerMillion   float64           `json:"cachedPerMillion,omitempty"`
 }
 
 // Parse 解码并校验目录。单个服务商或模型无效时丢弃该条并记入 warnings，
@@ -270,10 +272,13 @@ func normalizeModel(m Model) (Model, error) {
 		if tier.BillingMode != "fixed_request" && tier.BillingMode != "per_second" && tier.BillingMode != "token" {
 			return m, errors.New("billingMode 只能是 fixed_request、per_second、token")
 		}
-		for _, value := range []float64{tier.Cost, tier.InputPerMillion, tier.OutputPerMillion, tier.CachedPerMillion} {
+		for _, value := range []float64{tier.Cost, tier.ReferenceVideoCost, tier.InputPerMillion, tier.OutputPerMillion, tier.CachedPerMillion} {
 			if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 1_000_000 {
 				return m, errors.New("价格必须在 0 到 1000000 元之间")
 			}
+		}
+		if m.ReferenceVideoBilling && (m.Capability != "video" || tier.BillingMode != "per_second" || tier.ReferenceVideoCost <= 0) {
+			return m, errors.New("目录参考视频计费仅支持视频按秒档，且必须配置正的 referenceVideoCost")
 		}
 		tier.ProviderModelKey = strings.TrimPrefix(strings.TrimSpace(tier.ProviderModelKey), "models/")
 	}

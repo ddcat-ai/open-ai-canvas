@@ -522,6 +522,12 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.defaultResolution = "768P";
         video.watermark = { supported: true, default: false };
         video.operations.push("reference_to_video");
+        if (model === "seedance-2.0-mini" || model === "seedance-2.0") {
+            video.duration = { selection: "enum", values: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], default: 4 };
+            video.resolutions = model === "seedance-2.0-mini" ? ["480p", "720p"] : ["480p", "720p", "1080p", "4k"];
+            video.defaultResolution = "480p";
+            video.watermark = { supported: false, default: false };
+        }
     }
     if (protocol === "agnes-video" && ["agnes-video-2.5", "agnes-video-2.5-flash"].includes(model.trim().toLowerCase())) {
         const flash = model.trim().toLowerCase() === "agnes-video-2.5-flash";

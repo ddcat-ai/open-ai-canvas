@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { applyMarkup, matchesProvider, tierPriceLines, tierSpecLabel, validMarkup } from "../src/pages/admin/channels/provider-catalog-pricing";
 
+test("catalog displays separate prices for videos with references", () => {
+    const lines = tierPriceLines("video", { billingMode: "per_second", costUnitMicrocredits: 140000, costReferenceVideoMicrocredits: 90000, costInputMicrocredits: 0, costOutputMicrocredits: 0, costCachedMicrocredits: 0 }, 30);
+    expect(lines.map((line) => line.sale)).toEqual([182000, 117000]);
+    expect(lines[1].label).toContain("参考");
+});
+
 describe("provider catalog pricing", () => {
     test("applies markup with ceil like the backend", () => {
         expect(applyMarkup(1_200_000, 30)).toBe(1_560_000);
