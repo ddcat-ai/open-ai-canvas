@@ -5,6 +5,12 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 # 功能清单
 
+## 秘塔 Seedance 2.0 视频
+
+系统渠道支持 `seedance-2.0-mini` 和 `seedance-2.0`，沿用秘塔 API Key。两者支持文生、图生和多模态参考视频，时长为 4–15 整数秒，默认 4 秒、480p，无水印；Mini 支持 480p/720p，标准版另支持 1080p/4k。使用 `minimax-video` 协议时 Base URL 为 `https://metaso.cn/api/minimax`；使用 `metaso-h3` 协议时为 `https://metaso.cn`。
+
+模型按视频类型下的 Seedance 分组展示两个型号，不需要个人渠道。目录带有普通生成与参考视频的独立价格；有参考视频时按“参考视频总时长 + 生成时长”计费，图片、音频不额外收费。不支持 Context IR 或视频再生成；4K 视频可能需要支持 HEVC 的本地播放器。
+
 电商 Agent 支持SHEIN（希音）及逐平台风格、风险资料与生成文案检查；资料覆盖范围及尚待核实的上架条件见[电商平台风格与图片规则](/docs/overview/ecommerce-platform-rules)。
 
 ## 后台全局搜索
