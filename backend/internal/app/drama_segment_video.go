@@ -487,6 +487,15 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return err
 	}
+	// 入库秒数与成片拼接优先跟资源实测时长对齐（与画布采用路径一致）；探测不到时回退请求秒数。
+	durationMs := int64(payload.Seconds) * 1000
+	seconds := payload.Seconds
+	if resource, resErr := r.s.repo.ResourceForUser(r.project.UserID, resourceID); resErr == nil && resource != nil && resource.DurationMs > 0 {
+		durationMs = resource.DurationMs
+		if calibrated := int((resource.DurationMs + 999) / 1000); calibrated > 0 {
+			seconds = calibrated
+		}
+	}
 	segment, err := r.s.repo.DramaSegment(r.project.ID, job.ShotID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -494,7 +503,7 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 	current := err == nil && segment.Revision == payload.Revision
 	// 抽尾帧在后台进行，本函数每轮都会重入：段视频已是这条结果时说明版本记录与入库已经做过。
 	if !current || segment.VideoResourceID != resourceID {
-		if err := r.s.repo.CreateDramaTake(&model.DramaTake{ID: newID(), ProjectID: r.project.ID, OwnerID: job.ShotID, Kind: "video", ResourceID: resourceID, TaskID: task.ID, Prompt: task.Prompt, DurationMs: int64(payload.Seconds) * 1000, CreatedAt: time.Now()}); err != nil {
+		if err := r.s.repo.CreateDramaTake(&model.DramaTake{ID: newID(), ProjectID: r.project.ID, OwnerID: job.ShotID, Kind: "video", ResourceID: resourceID, TaskID: task.ID, Prompt: task.Prompt, DurationMs: durationMs, CreatedAt: time.Now()}); err != nil {
 			return err
 		}
 	}
@@ -504,7 +513,7 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 	if segment.VideoResourceID != resourceID {
 		// Persist the paid output before local post-processing. Retrying only reopens this task's result.
 		// 换成新视频时清掉旧尾帧，旧尾帧不能当作新视频的最后一帧。
-		if _, err := r.s.repo.UpdateDramaSegmentRevision(segment.ID, payload.Revision, map[string]any{"video_resource_id": resourceID, "video_seconds": payload.Seconds, "tail_frame_resource_id": ""}); err != nil {
+		if _, err := r.s.repo.UpdateDramaSegmentRevision(segment.ID, payload.Revision, map[string]any{"video_resource_id": resourceID, "video_seconds": seconds, "tail_frame_resource_id": ""}); err != nil {
 			return err
 		}
 		segment.VideoResourceID, segment.TailFrameResourceID = resourceID, ""

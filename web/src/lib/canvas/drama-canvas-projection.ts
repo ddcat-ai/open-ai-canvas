@@ -372,7 +372,8 @@ export function buildDramaFinalNode(input: {
 }
 
 /**
- * 一集的剪辑时间线：各剧情段当前视频按顺序首尾相接，时长与成片合成一致（videoSeconds）。
+ * 一集的剪辑时间线：各剧情段当前视频按顺序首尾相接。
+ * 时长取 videoSeconds（入库时按资源实测时长校准，与自动成片一致）；精剪裁切在这条时间线完成。
  * 没有视频的段跳过并返回段号，由调用方提示。
  */
 export function buildDramaEpisodeTimeline(input: { episode: Pick<DramaEpisode, "number">; segments: DramaSegment[]; media: DramaProjectionMedia }): { timeline: TimelineProject; skipped: number[]; resourceIds: string[] } {

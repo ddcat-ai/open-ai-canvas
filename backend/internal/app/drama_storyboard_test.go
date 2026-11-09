@@ -10,7 +10,7 @@ import (
 
 func TestDramaTimelineUsesWholeSegmentAudioAndRejectsMissingMedia(t *testing.T) {
 	segments := []model.DramaSegment{{ID: "a", VideoStatus: "ready", VideoResourceID: "video-a", VideoSeconds: 5}, {ID: "b", VideoStatus: "ready", VideoResourceID: "video-b", VideoSeconds: 10}}
-	timeline, err := buildDramaTimeline(segments, "9:16")
+	timeline, err := buildDramaTimeline(segments, "9:16", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,9 +19,37 @@ func TestDramaTimelineUsesWholeSegmentAudioAndRejectsMissingMedia(t *testing.T) 
 	}
 	for _, status := range []string{"", "failed", "running", "stale"} {
 		segments[1].VideoStatus = status
-		if _, err := buildDramaTimeline(segments, "9:16"); err == nil {
+		if _, err := buildDramaTimeline(segments, "9:16", nil); err == nil {
 			t.Fatalf("must reject %q", status)
 		}
+	}
+}
+
+func TestDramaTimelinePrefersActualSourceDurationOverPlannedSeconds(t *testing.T) {
+	segments := []model.DramaSegment{
+		{ID: "a", VideoStatus: "ready", VideoResourceID: "video-a", VideoSeconds: 10},
+		{ID: "b", VideoStatus: "ready", VideoResourceID: "video-b", VideoSeconds: 10},
+	}
+	// 实测略长于/短于设定秒：成片应按文件时长拼接，而不是裁到 10s。
+	actual := map[string]int64{"video-a": 10420, "video-b": 9580}
+	timeline, err := buildDramaTimeline(segments, "9:16", actual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if timeline.DurationMs != 20000 || timeline.Clips[0].DurationMs != 10420 || timeline.Clips[1].DurationMs != 9580 || timeline.Clips[1].StartMs != 10420 {
+		t.Fatalf("expected actual-duration stitch, got %+v", timeline)
+	}
+	if timeline.Clips[0].SourceDurationMs != 10420 || timeline.Clips[1].SourceDurationMs != 9580 {
+		t.Fatalf("source duration must match clip duration: %+v", timeline.Clips)
+	}
+	// 缺探测时长时回退 video_seconds。
+	partial := map[string]int64{"video-a": 10420}
+	timeline, err = buildDramaTimeline(segments, "9:16", partial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if timeline.DurationMs != 20420 || timeline.Clips[1].DurationMs != 10000 {
+		t.Fatalf("missing probe must fall back to planned seconds: %+v", timeline)
 	}
 }
 
