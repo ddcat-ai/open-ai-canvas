@@ -197,7 +197,16 @@ export function VideoResolutionField({ option, value, onChange, options }: { opt
                     const actual = dramaVideoResolutionValue(option, tier);
                     const active = Boolean(value) && Boolean(supported) && videoResolutionComparisonKey(value) === videoResolutionComparisonKey(tier);
                     return (
-                        <button key={tier} type="button" role="radio" className="drama-tab" aria-checked={active} disabled={!option || !actual} title={!option ? "选好视频模型后可选" : !actual ? "当前模型不支持这个档位" : undefined} onClick={() => actual && onChange(actual)}>
+                        <button
+                            key={tier}
+                            type="button"
+                            role="radio"
+                            className="drama-tab"
+                            aria-checked={active}
+                            disabled={!option || !actual}
+                            title={!option ? "选好视频模型后可选" : !actual ? "当前模型不支持这个档位" : undefined}
+                            onClick={() => actual && onChange(actual)}
+                        >
                             {formatVideoResolutionLabel(tier)}
                         </button>
                     );

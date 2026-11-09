@@ -325,7 +325,11 @@ function SegmentToolbar({
             </div>
             {!promptReady(segment) && !running ? <p className="drama-sdx-hint">提示词就绪后才能生成视频</p> : null}
             {changed && chosenAudioLimit !== undefined ? <p className="drama-sdx-hint">所选模型{chosenAudioLimit ? `最多支持 ${chosenAudioLimit} 个参考音色` : "不支持参考音色"}；参考面板的发送状态在模型应用后更新。</p> : null}
-            {resolutionFallback ? <p className="drama-sdx-hint">新模型不支持 {videoResolution ? formatVideoResolutionLabel(videoResolution) : ""}，本段按模型默认{chosenOption?.defaultVideoResolution ? ` ${formatVideoResolutionLabel(chosenOption.defaultVideoResolution)}` : ""}出片。</p> : null}
+            {resolutionFallback ? (
+                <p className="drama-sdx-hint">
+                    新模型不支持 {videoResolution ? formatVideoResolutionLabel(videoResolution) : ""}，本段按模型默认{chosenOption?.defaultVideoResolution ? ` ${formatVideoResolutionLabel(chosenOption.defaultVideoResolution)}` : ""}出片。
+                </p>
+            ) : null}
             {quoteMissing && !running ? <p className="drama-sdx-hint is-error">{SEGMENT_NO_QUOTE_HINT}</p> : null}
             {segment.request.unknownReferences?.length ? <p className="drama-sdx-hint is-error">提示词里的 {segment.request.unknownReferences.join("、")} 不是本段的参考图，改正编号后才能生成视频</p> : null}
         </section>
