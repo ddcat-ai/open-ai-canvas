@@ -29,7 +29,7 @@ export function dramaSegmentVideoRequirements(request: DramaSegmentRequest, opti
         input: { textCount: 1, imageCount, videoCount: 0, audioCount: 0, characterCount: 0 },
         videoOperation: request.operation,
         videoSeconds: String(request.seconds),
-        options: { vquality: resolution, videoGenerateAudio: generateAudio },
+        options: { size: request.size || request.aspectRatio, vquality: resolution, videoGenerateAudio: generateAudio },
     };
 }
 

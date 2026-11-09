@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { ModelPicker } from "@/components/model-picker";
+import type { ModelRequirements } from "@/lib/model-selection";
 import { dramaChoiceKey, dramaChoiceKeys, dramaChoiceToModel, dramaVideoRatioIssue, dramaVideoResolutionIssue, modelToDramaChoice } from "@/lib/drama/model-choice";
 import { cn } from "@/lib/utils";
 import { getDramaModels, type DramaCapability, type DramaModelChoice } from "@/services/api/drama";
@@ -23,6 +24,7 @@ export function DramaModelPicker({
     placeholder,
     aspectRatio,
     videoResolution,
+    requirements,
     size = "md",
     showPrice = true,
     className,
@@ -34,6 +36,8 @@ export function DramaModelPicker({
     aspectRatio?: string;
     /** 视频模型：作品指定的分辨率，给不出的模型置灰。 */
     videoResolution?: string;
+    /** 当前剧情段实际生成规格，用于价格档匹配和服务端报价。 */
+    requirements?: ModelRequirements;
     size?: "sm" | "md";
     showPrice?: boolean;
     className?: string;
@@ -72,6 +76,7 @@ export function DramaModelPicker({
             config={config}
             value={current}
             capability={capability}
+            requirements={requirements}
             variant="creation"
             fullWidth
             showSelectedPrice={showPrice}
