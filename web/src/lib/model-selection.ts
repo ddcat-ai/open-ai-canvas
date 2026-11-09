@@ -281,12 +281,16 @@ export function compatibleModelInGroup(config: AiConfig, models: string[], requi
     const compatible = models.filter((model) => !modelCompatibilityError(config, model, requirements));
     if (!compatible.length) return "";
     if (compatible.length === 1) return compatible[0];
+    // 用户显式选中的模型只要兼容就必须保留：同显示名组内可能包含不同 SKU（如 fast/quality），
+    // 按价格重路由会静默改变产物档位，且与请求日志对不上。仅在未指定偏好或偏好不兼容时，
+    // 才回退到组内最低价成员（无成本信息的模型视为最贵，避免被当成默认落点）。
+    if (preferred && compatible.includes(preferred)) return preferred;
     const priceOf = (model: string) => {
         const channel = resolveModelChannel(config, model);
         const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
         return cost && Number.isFinite(cost.unitPriceMicrocredits) ? cost.unitPriceMicrocredits : Number.POSITIVE_INFINITY;
     };
-    return compatible.sort((left, right) => priceOf(left) - priceOf(right) || (left === preferred ? -1 : right === preferred ? 1 : 0))[0];
+    return compatible.sort((left, right) => priceOf(left) - priceOf(right))[0];
 }
 
 export function resolveCompatibleModel(config: AiConfig, selected: string, requirements?: ModelRequirements) {
