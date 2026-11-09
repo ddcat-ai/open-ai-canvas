@@ -146,6 +146,28 @@ func TestConvertEcommerceProjectRoundsGroupsAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestConvertEcommerceProjectWithoutHistoryPersistsActiveRound(t *testing.T) {
+	db := ecommerceRoundsTestDB(t)
+	repo := New(db)
+	plan := model.EcommercePlan{Images: []model.EcommercePlanTask{ecommerceRoundsTestImage("active-1", "", "")}}
+	raw, _ := json.Marshal(plan)
+	project := &model.EcommerceProject{ID: "project-1", UserID: "user-1", Name: "商品", Status: "draft", DraftJSON: `{}`, PlanJSON: string(raw), Revision: 1}
+	if err := repo.CreateEcommerceProject(project); err != nil {
+		t.Fatal(err)
+	}
+	converted, created, err := repo.ConvertEcommerceProjectRounds("user-1", "project-1", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created != 0 || converted.ActiveRoundID == "" || converted.Revision != 2 {
+		t.Fatalf("created=%d active=%q revision=%d", created, converted.ActiveRoundID, converted.Revision)
+	}
+	again, created, err := repo.ConvertEcommerceProjectRounds("user-1", "project-1", converted.Revision)
+	if err != nil || created != 0 || again.Revision != converted.Revision || again.ActiveRoundID != converted.ActiveRoundID {
+		t.Fatalf("second conversion created=%d revision=%d err=%v", created, again.Revision, err)
+	}
+}
+
 func TestLegacySaveOnConvertedProjectSplitsInlineHistory(t *testing.T) {
 	db := ecommerceRoundsTestDB(t)
 	repo := New(db)

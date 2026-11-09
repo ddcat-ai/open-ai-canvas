@@ -224,11 +224,12 @@ func (r *Repository) ConvertEcommerceProjectRounds(userID, projectID string, exp
 		}
 		var before model.EcommercePlan
 		hadPrevious := json.Unmarshal([]byte(stored.PlanJSON), &before) == nil && len(before.PreviousImages) > 0
+		alreadyConverted := stored.ActiveRoundID != ""
 		created, err = convertEcommerceLegacyRounds(tx, stored)
 		if err != nil {
 			return err
 		}
-		if !hadPrevious && stored.ActiveRoundID != "" {
+		if !hadPrevious && alreadyConverted {
 			return nil
 		}
 		if stored.ActiveRoundID == "" {
