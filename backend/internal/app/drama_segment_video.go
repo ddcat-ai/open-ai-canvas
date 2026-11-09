@@ -71,6 +71,7 @@ func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *m
 
 // dramaReferencesInProgress 返回本段引用、仍在生成的参考图名称。等它们能提升角色一致性；
 // 失败、锁定或从未请求的参考图不再等待，提交时改用文字设定（见 prepareDramaSegment）。
+// 造型行与本体一样参与等待；草稿/空状态在已放行自动排队时也算“进行中”，避免出片只带文字外观。
 func dramaReferencesInProgress(segmentIndex int, shots []model.DramaShot, lookup func(string) (model.DramaCast, bool), unrequestedQueued bool) []string {
 	names := []string{}
 	seen := map[string]bool{}
@@ -84,9 +85,16 @@ func dramaReferencesInProgress(segmentIndex int, shots []model.DramaShot, lookup
 				continue
 			}
 			seen[id] = true
-			if cast.ImageStatus == model.DramaMediaQueued || cast.ImageStatus == model.DramaMediaRunning || (cast.ImageStatus == "" && unrequestedQueued) {
-				names = append(names, cast.Name)
+			pending := cast.ImageStatus == model.DramaMediaQueued || cast.ImageStatus == model.DramaMediaRunning ||
+				((cast.ImageStatus == "" || cast.ImageStatus == model.DramaMediaDraft) && unrequestedQueued)
+			if !pending {
+				continue
 			}
+			name := cast.Name
+			if cast.ParentID != "" && strings.TrimSpace(cast.LookName) != "" {
+				name = cast.Name + "·" + cast.LookName
+			}
+			names = append(names, name)
 		}
 	}
 	return names

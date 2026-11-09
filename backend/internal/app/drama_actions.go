@@ -2,12 +2,14 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 	"yingce/backend/internal/production"
 
 	"gorm.io/gorm"
@@ -789,6 +791,16 @@ func (s *Service) RetryFailedDrama(userID, projectID string) (map[string]any, er
 	}
 	count := 0
 	for _, cast := range casts {
+		if cast.ImageStatus != model.DramaMediaFailed {
+			continue
+		}
+		// 上游已出图、仅本地保存失败：优先恢复下载，不重新生成。
+		if recovered, err := s.recoverFailedDramaCastImage(project.ID, cast.ID); err != nil {
+			return nil, err
+		} else if recovered {
+			count++
+			continue
+		}
 		applied, err := s.repo.UpdateDramaCastIf(cast.ID, []string{model.DramaMediaFailed}, map[string]any{"image_status": model.DramaMediaQueued})
 		if err != nil {
 			return nil, err
@@ -929,6 +941,7 @@ func dramaSameChoice(a, b DramaModelChoice) bool {
 }
 
 // releaseDramaEpisodes 放行指定集的视频生成，并把这些集引用、尚未请求的参考图标记为待生成。
+// 含镜头挂上的造型行；草稿造型一旦被本集引用也进入排队，避免出片只带文字外观。
 func (s *Service) releaseDramaEpisodes(projectID string, episodeIDs []string) error {
 	if len(episodeIDs) == 0 {
 		return nil
@@ -957,12 +970,71 @@ func (s *Service) releaseDramaEpisodes(projectID string, episodeIDs []string) er
 		}
 	}
 	for castID := range casts {
-		// 只把从未请求过的参考图排队；已生成、失败或锁定的保持原状。
-		if _, err := s.repo.UpdateDramaCastIf(castID, []string{""}, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {
+		// 空串=从未请求，draft=造型已保存待生成；已生成、失败或锁定的保持原状。
+		if _, err := s.repo.UpdateDramaCastIf(castID, []string{"", model.DramaMediaDraft}, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// queueUnrequestedDramaCastImages 把作品里尚未请求的参考图（含草稿造型）排进队列。
+// 「生成全部参考图」走这里，避免造型一直停在 draft、只能手工逐个点。
+func (s *Service) queueUnrequestedDramaCastImages(projectID string) error {
+	casts, err := s.repo.DramaCasts(projectID)
+	if err != nil {
+		return err
+	}
+	for _, cast := range casts {
+		if cast.Locked {
+			continue
+		}
+		if _, err := s.repo.UpdateDramaCastIf(cast.ID, []string{"", model.DramaMediaDraft}, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recoverFailedDramaCastImage 若该设定最近一次失败作业对应的任务仍有作品恢复检查点，
+// 则重新排队下载/保存并恢复作业与槽位为运行中，返回 true 表示已接管、无需重新生成。
+func (s *Service) recoverFailedDramaCastImage(projectID, castID string) (bool, error) {
+	jobs, err := s.repo.DramaJobsByStatus(projectID, model.DramaJobFailed)
+	if err != nil {
+		return false, err
+	}
+	var job *model.DramaJob
+	for i := range jobs {
+		item := &jobs[i]
+		if item.Kind != model.DramaJobCastImage || item.CastID != castID || strings.TrimSpace(item.TaskID) == "" {
+			continue
+		}
+		if job == nil || item.CreatedAt.After(job.CreatedAt) {
+			job = item
+		}
+	}
+	if job == nil {
+		return false, nil
+	}
+	task, err := s.repo.Task(job.TaskID)
+	if err != nil || task == nil || !s.dramaTaskMediaRecoveryRetryable(task) {
+		return false, nil
+	}
+	if err := s.repo.RequeueTaskMediaRecovery(task, task.MediaRecoveryJSON); err != nil {
+		if errors.Is(err, repository.ErrTaskStateConflict) {
+			return false, nil
+		}
+		return false, err
+	}
+	job.Status, job.Error, job.FinishedAt = model.DramaJobRunning, "", nil
+	if err := s.repo.SaveDramaJob(job); err != nil {
+		return false, err
+	}
+	if _, err := s.repo.UpdateDramaCastIf(castID, []string{model.DramaMediaFailed}, map[string]any{"image_status": model.DramaMediaRunning}); err != nil {
+		return false, err
+	}
+	s.wakeTaskDispatcher()
+	return true, nil
 }
 
 // ReleaseDramaMedia 是手动生图模式的“开始生图”：先确认剧情、分镜和资产，再按需放行。
@@ -974,6 +1046,9 @@ func (s *Service) ReleaseDramaMedia(userID string, projectID string, req Release
 	switch req.Target {
 	case "assets":
 		if err := s.repo.UpdateDramaProduction(project.ID, map[string]any{"assets_released": true}); err != nil {
+			return DramaSummary{}, err
+		}
+		if err := s.queueUnrequestedDramaCastImages(project.ID); err != nil {
 			return DramaSummary{}, err
 		}
 	case "episodes":
@@ -993,6 +1068,9 @@ func (s *Service) ReleaseDramaMedia(userID string, projectID string, req Release
 			ids = append(ids, episode.ID)
 		}
 		if err := s.repo.UpdateDramaProduction(project.ID, map[string]any{"assets_released": true}); err != nil {
+			return DramaSummary{}, err
+		}
+		if err := s.queueUnrequestedDramaCastImages(project.ID); err != nil {
 			return DramaSummary{}, err
 		}
 		if err := s.releaseDramaEpisodes(project.ID, ids); err != nil {

@@ -1203,9 +1203,11 @@ func (s *Service) dramaSegmentReferenceIDs(projectID string, ids []string) ([]st
 	return result, nil
 }
 
-// dramaShotCastIDs 返回镜头引用的全部设定：出场角色、关键道具与场景。
+// dramaShotCastIDs 返回镜头引用的全部设定：出场角色、关键道具、场景与造型行。
+// 出视频时造型会替换本体参考图；放行/等待参考图时也必须包含造型，否则只带文字外观。
 func dramaShotCastIDs(shot model.DramaShot) []string {
 	ids := append(decodeStringList(shot.CastIDsJSON), decodeStringList(shot.PropIDsJSON)...)
+	ids = append(ids, decodeStringList(shot.LookCastIDsJSON)...)
 	if shot.SceneCastID != "" {
 		ids = append(ids, shot.SceneCastID)
 	}
