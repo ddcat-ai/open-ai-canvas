@@ -438,6 +438,49 @@ func TestDramaVideoScreenFollowsCapabilityContract(t *testing.T) {
 	}
 }
 
+func TestDramaVideoResolutionKeyMatchesCaseAndAliases(t *testing.T) {
+	for _, pair := range [][2]string{{"720P", "720p"}, {"480P", "480p"}, {"1080P", "1080p"}, {"4K", "2160p"}, {"2K", "1440p"}} {
+		if left, right := dramaVideoResolutionKey(pair[0]), dramaVideoResolutionKey(pair[1]); left != right {
+			t.Fatalf("%s and %s must share a resolution key: %q != %q", pair[0], pair[1], left, right)
+		}
+	}
+	if dramaVideoResolutionKey("720p") == dramaVideoResolutionKey("768p") {
+		t.Fatal("720p and 768p must remain different tiers")
+	}
+}
+
+func TestDramaEffectiveResolutionFallsBackToModelDefault(t *testing.T) {
+	profile := dramaVideoProfile{video: &VideoCapabilityConfig{Ratios: []string{"9:16"}, Resolutions: []string{"480p", "720p", "1080p"}}}
+	if got := profile.effectiveResolution("720P"); got != "720P" {
+		t.Fatalf("a supported uppercase resolution must be kept: %q", got)
+	}
+	if got := profile.effectiveResolution("768p"); got != "" {
+		t.Fatalf("an unsupported resolution must fall back to the model default: %q", got)
+	}
+	if got := profile.effectiveResolution(""); got != "" {
+		t.Fatalf("an empty resolution already means the model default: %q", got)
+	}
+	fixed := dramaVideoProfile{video: &VideoCapabilityConfig{Resolutions: []string{"768p横", "768p竖"}, FixedScreenSpec: &VideoScreenSpecConfig{}}}
+	if got := fixed.effectiveResolution("768p"); got != "768p" {
+		t.Fatalf("a fixed-screen model must match by tier: %q", got)
+	}
+	if got := fixed.effectiveResolution("1080p"); got != "" {
+		t.Fatalf("a fixed-screen model without the tier must fall back: %q", got)
+	}
+}
+
+func TestDramaVideoDefaultSelectionIgnoresResolution(t *testing.T) {
+	settings := DramaSettings{Settings: production.Settings{AspectRatio: "9:16"}, VideoResolution: "768p"}
+	option := DramaModelOption{Capability: "video", VideoRatios: []string{"9:16"}, TailFrameChain: true, VideoResolutions: []string{"720p"}}
+	if !dramaVideoOptionFits(option, settings) {
+		t.Fatal("an old resolution must not block a model that fits the aspect and continuity")
+	}
+	option.VideoRatios = []string{"16:9"}
+	if dramaVideoOptionFits(option, settings) {
+		t.Fatal("an unsupported aspect must still block the model")
+	}
+}
+
 func TestDramaSegmentVideoUsesResolutionLabelAndSilentModel(t *testing.T) {
 	svc, fake := newDramaTestService(t)
 	video := dramaVideoFixture()

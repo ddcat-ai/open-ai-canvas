@@ -4,7 +4,8 @@ import { App, Button, Checkbox, Input, InputNumber, Select, Switch } from "antd"
 import { AlertCircle, ArrowRight, Brush, CheckCheck, Clapperboard, Film, FolderOpen, Gem, Inbox, Lock, MapPinned, Maximize2, PauseCircle, RefreshCw, RotateCcw, ScrollText, Upload, UserRound, UsersRound, Cpu, PackageCheck, Play } from "lucide-react";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
-import { dramaChoiceKey, dramaVideoRatioIssue } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaResolutionAfterModelChange, dramaVideoRatioIssue, dramaVideoResolutionIssue } from "@/lib/drama/model-choice";
+import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import {
     getDramaCastImpact,
@@ -20,6 +21,7 @@ import {
     type DramaSettings,
     type DramaInboxItem,
     type DramaMediaMode,
+    type DramaModelChoice,
     type DramaReviewMode,
     type DramaSummary,
     type DramaTextThinking,
@@ -666,12 +668,23 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
         onError: (error) => message.error(error instanceof Error ? error.message : "操作失败"),
     });
     const catalogQuery = useDramaModelCatalog();
-    const videoOption = catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(settings.models.video));
+    const videoOptionFor = (choice?: DramaModelChoice) => catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(choice));
+    const videoOption = videoOptionFor(settings.models.video);
     // 角色参考图用单独指定的模型，没有就用默认图片模型；参考图方案按它检查角色画幅。
     const characterImage = dramaChoiceKey(settings.models.characterImage) ? settings.models.characterImage : settings.models.image;
     const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(characterImage));
     const videoRatioProblem = dramaVideoRatioIssue(videoOption, current.aspectRatio);
+    const videoResolutionProblem = dramaVideoResolutionIssue(videoOption, settings.videoResolution);
     const setModels = (patch: Partial<DramaSettings["models"]>) => setSettings({ ...settings, models: { ...settings.models, ...patch } });
+    const setModelChoice = (capability: DramaCapability, choice: DramaModelChoice) => {
+        if (capability !== "video") {
+            setModels({ [capability]: choice });
+            return;
+        }
+        // 视频模型与分辨率一起更新：新模型支持就保留，不支持就清空，按新模型默认档出片。
+        const next = videoOptionFor(choice);
+        setSettings({ ...settings, models: { ...settings.models, video: choice }, ...(next ? { videoResolution: dramaResolutionAfterModelChange(next, settings.videoResolution) } : {}) });
+    };
     const continuity: DramaVideoContinuity = settings.videoContinuity || "tail_frame";
     const sampleCharacter = cast.find((item) => item.kind === "character" && item.appearance);
     const sampleScene = cast.find((item) => item.kind === "scene" && item.appearance);
@@ -782,9 +795,8 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                                 capability={capability}
                                                 value={settings.models[capability]}
                                                 aspectRatio={current.aspectRatio}
-                                                videoResolution={settings.videoResolution}
                                                 placeholder={`选择${CAPABILITY_META[capability].label}模型`}
-                                                onChange={(choice) => setModels({ [capability]: choice })}
+                                                onChange={(choice) => setModelChoice(capability, choice)}
                                             />
                                         </div>
                                     ))}
@@ -797,6 +809,11 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                     </div>
                                 </div>
                                 {videoRatioProblem ? <p className="drama-cfg-note">当前视频模型{videoRatioProblem}，剧情段视频无法提交，请换模型。</p> : null}
+                                {videoResolutionProblem ? (
+                                    <p className="drama-cfg-note">
+                                        当前视频模型{videoResolutionProblem}，实际按模型默认{videoOption?.defaultVideoResolution ? ` ${formatVideoResolutionLabel(videoOption.defaultVideoResolution)}` : ""}出片。
+                                    </p>
+                                ) : null}
                                 {videoOption?.generateAudio === false ? <p className="drama-cfg-note">当前视频模型不同步生成声音，剧情段视频没有对白与音效。</p> : null}
                             </section>
                         </div>
