@@ -8,6 +8,7 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
+import { currentGenerationBatchLimit } from "@/lib/generation-batch-limit";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
@@ -398,7 +399,8 @@ export async function hydrateAssistantImages(sessions: CanvasAssistantSession[])
 }
 
 export function getGenerationCount(count: string) {
-    return Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
+    // 画布张数是拆单数，上限不超过账号同时任务数。
+    return Math.max(1, Math.min(15, currentGenerationBatchLimit(), Math.floor(Math.abs(Number(count)) || 1)));
 }
 
 export function generationWorkflowMetadata(config: AiConfig): Pick<CanvasNodeMetadata, "workflowProvider" | "runningHubWorkflowId" | "runningHubWorkflowKind"> {

@@ -48,21 +48,24 @@ type ImageSettingsPanelProps = {
     className?: string;
     maxCount?: number;
     quickCount?: number;
+    /** 画布节点的张数是拆单数，传值时按账号同时任务数取上限，不再受单模型 maxOutputs 限制。 */
+    countLimit?: number;
     /** 局部编辑等场景需要先允许选择参数，由后端负责最终计费校验。 */
     bypassPriceGuard?: boolean;
 };
 
-export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showQuality = true, showTransparent = true, showSize = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 3, bypassPriceGuard = false }: ImageSettingsPanelProps) {
+export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showQuality = true, showTransparent = true, showSize = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 3, countLimit, bypassPriceGuard = false }: ImageSettingsPanelProps) {
     const profile = mergedImageCapabilityConfig(config, config.model || config.imageModel);
     const normalized = normalizeImageValue(profile, config);
     const quality = normalized.quality;
     const transparentBackground = normalized.transparentBackground === "true";
-    const effectiveMaxCount = Math.min(maxCount, profile.maxOutputs);
-    const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
+    const effectiveMaxCount = Math.min(maxCount, countLimit === undefined ? profile.maxOutputs : countLimit);
+    // 传了 countLimit 时 config.count 是拆单数，normalized.count 已被单模型 maxOutputs 压到 1。
+    const count = countLimit === undefined ? Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count))) : Math.max(1, Math.min(effectiveMaxCount, Math.floor(Number(config.count)) || 1));
     const activeSize = normalized.size;
     const activeQualityOptions = profile.quality.values.map((value) => ({ value, label: imageQualityLabel(value) }));
     const priceTiers = imageModelPriceTiers(config);
-    if (profile.parameters) return <ImageSettingsTheme theme={theme}><div className={className}>{showTitle ? <div className="mb-3 text-base font-semibold">图像设置</div> : null}<ImageParameterFields profile={profile} config={config} onChange={onConfigChange} showSize={showSize} showCount={showCount} showQuality={showQuality} showTransparent={showTransparent} /></div></ImageSettingsTheme>;
+    if (profile.parameters) return <ImageSettingsTheme theme={theme}><div className={className}>{showTitle ? <div className="mb-3 text-base font-semibold">图像设置</div> : null}<ImageParameterFields profile={profile} config={config} onChange={onConfigChange} showSize={showSize} showCount={showCount} showQuality={showQuality} showTransparent={showTransparent} countLimit={countLimit} /></div></ImageSettingsTheme>;
 
     return (
         <ImageSettingsTheme theme={theme}>
