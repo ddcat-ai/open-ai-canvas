@@ -125,6 +125,21 @@ func (p ImageParameter) Accepts(value any) bool {
 	return false
 }
 
+// CanonicalValue 返回声明里的原始写法：字符串枚举不区分大小写，比较通过后仍按 1K/2K/4K 下发，
+// 避免把用户输入的小写透传给只认声明值的上游。
+func (p ImageParameter) CanonicalValue(value any) any {
+	text, ok := value.(string)
+	if !ok || p.Type != "string" {
+		return value
+	}
+	for _, candidate := range p.Values {
+		if declared, isString := candidate.(string); isString && strings.EqualFold(strings.TrimSpace(declared), strings.TrimSpace(text)) {
+			return declared
+		}
+	}
+	return value
+}
+
 func imageParameterNumber(value any) (float64, bool) {
 	switch v := value.(type) {
 	case float64:
@@ -144,6 +159,12 @@ func imageParameterNumber(value any) (float64, bool) {
 }
 
 func ImageParameterValuesEqual(left, right any) bool {
+	// 字符串枚举按声明值比较，不区分大小写；数字与布尔仍走严格比较。
+	if l, lok := left.(string); lok {
+		if r, rok := right.(string); rok {
+			return strings.EqualFold(l, r)
+		}
+	}
 	l, lok := imageParameterNumber(left)
 	r, rok := imageParameterNumber(right)
 	if lok || rok {
