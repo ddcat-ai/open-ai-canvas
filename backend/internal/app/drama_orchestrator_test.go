@@ -508,3 +508,55 @@ func TestDramaVideoOptionsReportRatiosAndAudio(t *testing.T) {
 		t.Fatalf("a parallel vertical work must pick the vertical model: %+v %v", picked, ok)
 	}
 }
+
+func TestComposeDramaEpisodeRequeuesFinalRender(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	project := createTestDrama(t, svc, DramaReviewAuto).Project.ID
+	runDramaTicks(t, svc, project, 40)
+	summary, err := svc.DramaSummary("usr-drama", project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	episodeID := summary.Episodes[0].ID
+	if summary.Episodes[0].Stage != model.DramaEpisodeDone || summary.Episodes[0].FinalResourceID == "" || summary.Episodes[0].FinalStale {
+		t.Fatalf("sample must finish first: %+v", summary.Episodes[0])
+	}
+	rendersBefore := fake.byKind["render"]
+
+	if _, err := svc.ComposeDramaEpisode("someone", project, episodeID); err == nil {
+		t.Fatal("ownership")
+	}
+	detail, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Episode.Stage != model.DramaEpisodeRender || !detail.Episode.FinalStale || detail.Episode.FinalResourceID == "" {
+		t.Fatalf("compose must mark final stale and enter render: %+v", detail.Episode)
+	}
+
+	// 合成中再次点击：幂等，不报错。
+	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err != nil {
+		t.Fatal(err)
+	}
+
+	runDramaTicks(t, svc, project, 12)
+	detail, err = svc.DramaEpisodeDetail("usr-drama", project, episodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Episode.Stage != model.DramaEpisodeDone || detail.Episode.FinalStale || detail.Episode.FinalResourceID == "" {
+		t.Fatalf("compose must finish a new final: %+v", detail.Episode)
+	}
+	if fake.byKind["render"] <= rendersBefore {
+		t.Fatalf("expected a new render job, before=%d after=%d", rendersBefore, fake.byKind["render"])
+	}
+
+	// 段视频未就绪时拒绝。
+	rows, _ := svc.repo.DramaSegments(episodeID)
+	if _, err := svc.repo.UpdateDramaSegmentRevision(rows[0].ID, rows[0].Revision, map[string]any{"video_status": model.DramaMediaStale}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err == nil || !strings.Contains(err.Error(), "就绪") {
+		t.Fatalf("must reject incomplete segments: %v", err)
+	}
+}

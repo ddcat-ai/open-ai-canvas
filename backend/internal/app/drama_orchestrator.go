@@ -1707,8 +1707,10 @@ func dramaRenderSize(aspect string) (int, int) {
 	return 1080, 1920
 }
 
-// buildDramaTimeline 把一集镜头装配为时间线：视频轨静音，配音轨按镜头起点对齐，字幕单独输出。
-func buildDramaTimeline(segments []model.DramaSegment, aspect string) (renderProject, error) {
+// buildDramaTimeline 把一集镜头装配为时间线：按各段视频文件实测时长首尾相接。
+// sourceDurationMs 优先（resource.DurationMs）；没有探测时长时回退到入库的 video_seconds。
+// 故意裁切留给画布「到画布精剪」多轨时间线，自动成片不再按设定秒 trim/tpad。
+func buildDramaTimeline(segments []model.DramaSegment, aspect string, sourceDurationMs map[string]int64) (renderProject, error) {
 	width, height := dramaRenderSize(aspect)
 	visible := true
 	timeline := renderProject{Version: 2, Width: width, Height: height, Tracks: []renderTrack{{ID: "video", Kind: "video", Visible: &visible}}}
@@ -1716,10 +1718,19 @@ func buildDramaTimeline(segments []model.DramaSegment, aspect string) (renderPro
 		return timeline, errors.New("没有可合成的剧情段")
 	}
 	for _, seg := range segments {
-		if seg.VideoStatus != model.DramaMediaReady || seg.VideoResourceID == "" || seg.VideoSeconds <= 0 {
+		if seg.VideoStatus != model.DramaMediaReady || seg.VideoResourceID == "" {
 			return timeline, errors.New("所有剧情段视频就绪后才能合成")
 		}
-		duration := int64(seg.VideoSeconds) * 1000
+		duration := int64(0)
+		if sourceDurationMs != nil {
+			duration = sourceDurationMs[seg.VideoResourceID]
+		}
+		if duration <= 0 {
+			duration = int64(seg.VideoSeconds) * 1000
+		}
+		if duration <= 0 {
+			return timeline, errors.New("所有剧情段视频就绪后才能合成")
+		}
 		clip := renderClip{ID: "v-" + seg.ID, Kind: "video", TrackID: "video", StartMs: timeline.DurationMs, DurationMs: duration, SourceDurationMs: duration, Volume: 1}
 		clip.DirectMedia = &struct {
 			ID         string `json:"id"`
@@ -1730,6 +1741,37 @@ func buildDramaTimeline(segments []model.DramaSegment, aspect string) (renderPro
 		timeline.DurationMs += duration
 	}
 	return timeline, nil
+}
+
+// dramaSegmentSourceDurations 读取段视频资源的实测时长（毫秒），供自动成片按文件长度拼接。
+func dramaSegmentSourceDurations(repo *repository.Repository, segments []model.DramaSegment) map[string]int64 {
+	ids := make([]string, 0, len(segments))
+	seen := map[string]struct{}{}
+	for _, seg := range segments {
+		id := strings.TrimSpace(seg.VideoResourceID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	out := map[string]int64{}
+	if len(ids) == 0 {
+		return out
+	}
+	resources, err := repo.ResourcesByIDs(ids)
+	if err != nil {
+		return out
+	}
+	for _, res := range resources {
+		if res.DurationMs > 0 {
+			out[res.ID] = res.DurationMs
+		}
+	}
+	return out
 }
 
 func (r *dramaRun) submitRender(job *model.DramaJob) (*model.Task, bool, error) {
@@ -1743,7 +1785,7 @@ func (r *dramaRun) submitRender(job *model.DramaJob) (*model.Task, bool, error) 
 	if err != nil {
 		return nil, false, err
 	}
-	timeline, err := buildDramaTimeline(segments, r.settings.AspectRatio)
+	timeline, err := buildDramaTimeline(segments, r.settings.AspectRatio, dramaSegmentSourceDurations(r.s.repo, segments))
 	if err != nil {
 		return nil, false, err
 	}

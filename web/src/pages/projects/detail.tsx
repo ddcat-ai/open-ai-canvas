@@ -9,6 +9,7 @@ import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/workspace-state";
 import {
     approveDramaEpisode,
+    composeDramaEpisode,
     deleteDramaShot,
     generateDramaSegments,
     insertDramaShot,
@@ -228,6 +229,17 @@ export default function DramaStudioPage() {
         onError: (error) => {
             invalidate(episodeId);
             errorMessage(error, "操作失败");
+        },
+    });
+    const composeFinal = useMutation({
+        mutationFn: () => composeDramaEpisode(projectId, episodeId),
+        onSuccess: () => {
+            invalidate(episodeId);
+            message.success(running ? "已开始合成成品" : "已继续制作，正在合成成品");
+        },
+        onError: (error) => {
+            invalidate(episodeId);
+            errorMessage(error, "合成失败");
         },
     });
     const retry = useMutation({
@@ -693,6 +705,8 @@ export default function DramaStudioPage() {
                                         onOpenSegment={(index) => setParams({ tab: null, segment: String(index), shot: null })}
                                         onOpenCut={() => void canvas.open({ kind: "cut", episodeId: detail.episode.id })}
                                         cutOpening={canvas.opening === `cut:${detail.episode.id}`}
+                                        onCompose={() => composeFinal.mutate()}
+                                        composing={composeFinal.isPending}
                                     />
                                 )}
                             </div>

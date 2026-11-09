@@ -17,6 +17,8 @@ export function FinalView({
     onOpenSegment,
     onOpenCut,
     cutOpening,
+    onCompose,
+    composing,
 }: {
     projectId: string;
     title: string;
@@ -26,6 +28,9 @@ export function FinalView({
     /** 把各段视频按成片顺序载入精修画布的时间线，在画布里精剪。 */
     onOpenCut: () => void;
     cutOpening: boolean;
+    /** 手动重新合成成品（按实测时长拼接）。 */
+    onCompose: () => void;
+    composing: boolean;
 }) {
     const { episode, segments } = detail;
     const { message } = App.useApp();
@@ -33,6 +38,10 @@ export function FinalView({
     const videoRef = useRef<HTMLVideoElement>(null);
     const url = useResourceMediaUrl(episode.finalResourceId, "playback");
     const readySegments = segments.filter((segment) => segment.videoResourceId && (segment.videoStatus === "ready" || segment.videoStatus === "stale")).length;
+    // 合成要求各段为 ready（过期段需先重新生成）；与后端 timeline 校验一致。
+    const composeReady = segments.length > 0 && segments.every((segment) => segment.videoStatus === "ready" && segment.videoResourceId);
+    const rendering = episode.stage === "render";
+    const composeBusy = composing || rendering;
     const starts: number[] = [];
     segments.reduce((cursor, segment) => {
         starts.push(cursor);
@@ -51,7 +60,7 @@ export function FinalView({
                     ) : (
                         <div className="drama-finalv-empty">
                             <Film className="size-6" aria-hidden />
-                            <span>{STAGE_LABEL[episode.stage]} · 全部段视频生成后自动合成</span>
+                            <span>{STAGE_LABEL[episode.stage]} · {rendering ? "正在合成成片…" : "全部段视频生成后自动合成，也可点右侧「合成成品」"}</span>
                         </div>
                     )}
                 </div>
@@ -84,9 +93,19 @@ export function FinalView({
                 </p>
                 {episode.finalStale ? (
                     <p className="drama-finalv-stale" role="status">
-                        内容已修改，当前成片是修改前的版本，相关段重新生成后会自动重新合成。
+                        {rendering ? "正在重新合成成片…" : "内容已修改，当前成片是修改前的版本，相关段重新生成后会自动重新合成，也可点下方「合成成品」。"}
                     </p>
                 ) : null}
+                <Button
+                    type="primary"
+                    icon={<Film className="size-4" />}
+                    disabled={!composeReady}
+                    loading={composeBusy}
+                    onClick={onCompose}
+                    title={composeReady ? (rendering ? "正在合成成片" : "按各段视频实测时长重新拼接成片") : "所有剧情段视频就绪后才能合成"}
+                >
+                    合成成品
+                </Button>
                 <Button icon={<Download className="size-4" />} disabled={!episode.finalResourceId} onClick={download}>
                     下载成片
                 </Button>

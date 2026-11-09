@@ -271,6 +271,49 @@ func (s *Service) RescriptDramaEpisode(userID string, projectID string, episodeI
 	return s.DramaEpisodeDetail(userID, projectID, episodeID)
 }
 
+// ComposeDramaEpisode 手动重新合成本集成片：各段视频就绪后按实测时长拼接。
+// 已在合成中（stage=render 且无错误）则只唤醒调度，幂等不重复改版本；已有成片会标过期，新成片就绪前仍可预览旧片。
+func (s *Service) ComposeDramaEpisode(userID, projectID, episodeID string) (DramaEpisodeDetail, error) {
+	project, productionRow, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return DramaEpisodeDetail{}, err
+	}
+	episode, err := s.repo.DramaEpisode(project.ID, episodeID)
+	if err != nil {
+		return DramaEpisodeDetail{}, err
+	}
+	segments, err := s.repo.DramaSegments(episode.ID)
+	if err != nil {
+		return DramaEpisodeDetail{}, err
+	}
+	if len(segments) == 0 {
+		return DramaEpisodeDetail{}, BadAuthRequest("尚无剧情段，无法合成成片")
+	}
+	for _, seg := range segments {
+		if seg.VideoStatus != model.DramaMediaReady || seg.VideoResourceID == "" {
+			return DramaEpisodeDetail{}, BadAuthRequest("所有剧情段视频就绪后才能合成成片")
+		}
+	}
+	// 正在合成：只唤醒调度，避免 bump revision 让在途渲染结果失效。
+	if episode.Stage == model.DramaEpisodeRender && episode.Error == "" {
+		if err := s.requestDramaWork(productionRow); err != nil {
+			return DramaEpisodeDetail{}, err
+		}
+		return s.DramaEpisodeDetail(userID, projectID, episodeID)
+	}
+	fields := map[string]any{"stage": model.DramaEpisodeRender, "error": ""}
+	if episode.FinalResourceID != "" {
+		fields["final_stale"] = true
+	}
+	if err := s.repo.UpdateDramaEpisodeUser(episode.ID, fields); err != nil {
+		return DramaEpisodeDetail{}, err
+	}
+	if err := s.requestDramaWork(productionRow); err != nil {
+		return DramaEpisodeDetail{}, err
+	}
+	return s.DramaEpisodeDetail(userID, projectID, episodeID)
+}
+
 // UpdateDramaShot 修改镜头内容，并只把受影响的下游槽位标为过期。
 func (s *Service) UpdateDramaShot(userID, projectID, shotID string, req UpdateDramaShotRequest) (model.DramaShot, error) {
 	project, p, err := s.dramaForUser(userID, projectID)
