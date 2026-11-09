@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -354,10 +356,20 @@ func sameJSONDocument(left, right string) bool {
 func canonicalJSONValue(value any) any {
 	switch typed := value.(type) {
 	case json.Number:
-		if rational, ok := new(big.Rat).SetString(typed.String()); ok {
+		raw := typed.String()
+		// 工具参数里的浮点原文（模型给出）与 float64 的最短表示可能不同，
+		// 例如 4140.7990379296753 与 4140.799037929675 是同一 float64 值。
+		// 写库前会按 float64 重新编码事件体，若仍用精确有理数比较，会把这种
+		// 等价数值误判成"历史事件被改写"。小数/科学计数按 float64 归一，整数仍精确。
+		if strings.ContainsAny(raw, ".eE") {
+			if f, err := strconv.ParseFloat(raw, 64); err == nil {
+				return strconv.FormatFloat(f, 'g', -1, 64)
+			}
+		}
+		if rational, ok := new(big.Rat).SetString(raw); ok {
 			return rational.RatString()
 		}
-		return typed.String()
+		return raw
 	case []any:
 		for index := range typed {
 			typed[index] = canonicalJSONValue(typed[index])
