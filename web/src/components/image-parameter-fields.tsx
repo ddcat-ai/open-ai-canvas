@@ -122,6 +122,7 @@ export function ImageParameterFields({
     showSize = true,
     showQuality = true,
     showTransparent = true,
+    countLimit,
 }: {
     profile: ImageCapabilityConfig;
     config: AiConfig;
@@ -130,6 +131,8 @@ export function ImageParameterFields({
     showSize?: boolean;
     showQuality?: boolean;
     showTransparent?: boolean;
+    /** 画布与创作页的张数是拆单数，传值时按账号同时任务数取上限，不再受单模型 maxOutputs 限制。 */
+    countLimit?: number;
 }) {
     const values = imageParameterRequest(profile, config) || {};
     const sizeField = profile.parameters?.find((p) => p.name === "size");
@@ -139,7 +142,7 @@ export function ImageParameterFields({
         (p) =>
             p.enabled !== false &&
             (!groupedSize || (p.name !== "size" && p.name !== "imageResolution")) &&
-            (p.name !== "count" || (showCount && (p.max ?? 1) > 1)) &&
+            (p.name !== "count" || (showCount && (countLimit === undefined ? (p.max ?? 1) > 1 : countLimit > 1))) &&
             (p.name !== "size" || showSize) &&
             (p.name !== "quality" || showQuality) &&
             (p.name !== "transparentBackground" || showTransparent),
@@ -160,8 +163,9 @@ export function ImageParameterFields({
             ) : null}
             {fields.map((field) => {
                 if (field.name === "count") {
-                    const max = Number(field.max ?? profile.maxOutputs ?? 15);
-                    const countVal = Number(values.count ?? config.count ?? 1);
+                    const max = countLimit === undefined ? Number(field.max ?? profile.maxOutputs ?? 15) : Math.min(15, countLimit);
+                    // 传了 countLimit 时 config.count 才是拆单数，参数里的 count 固定为每单 1 张。
+                    const countVal = countLimit === undefined ? Number(values.count ?? config.count ?? 1) : Math.max(1, Math.min(max, Math.floor(Number(config.count ?? 1)) || 1));
                     return (
                         <div className="space-y-2" key="count">
                             <div className="text-xs font-medium">生成张数</div>
@@ -189,7 +193,8 @@ export function ImageParameterFields({
                                     />
                                 ) : null}
                             </div>
-                            {field.description ? <p className="text-xs leading-relaxed text-foreground/55">{field.description}</p> : null}
+                            {/* 张数改为拆单数后，模型单次张数的说明不再适用。 */}
+                            {field.description && countLimit === undefined ? <p className="text-xs leading-relaxed text-foreground/55">{field.description}</p> : null}
                         </div>
                     );
                 }

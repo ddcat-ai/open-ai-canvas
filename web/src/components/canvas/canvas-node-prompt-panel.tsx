@@ -13,6 +13,8 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
 import { modelRequestOptions, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
+import { useGenerationBatchLimit, batchQuoteTotal } from "@/lib/generation-batch-limit";
+import { getGenerationCount } from "@/lib/canvas/canvas-project-generation";
 import { referenceImageSizeSelection, type ImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -120,6 +122,8 @@ export function CanvasNodePromptPanel({
     const themeName = useActiveTheme();
     const theme = canvasThemes[themeName];
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    // 画布节点选几张等于拆几单，上限按账号同时任务数。
+    const batchLimit = useGenerationBatchLimit();
     const promptOptimizerInstallation = usePluginStore((state) => state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID));
     const promptOptimizerEnabled = usePluginStore((state) => state.pluginStates[PROMPT_OPTIMIZER_PLUGIN_ID]?.effectiveEnabled ?? Boolean(state.installations.find((item) => item.manifest.id === PROMPT_OPTIMIZER_PLUGIN_ID)?.enabled));
     const simpleMode = workspaceMode === "simple";
@@ -210,7 +214,8 @@ export function CanvasNodePromptPanel({
         if (!promptOptimizerEnabled || !promptOptimizerInstallation || !promptOptimizerPlugin.createPromptOptimizer) return null;
         return promptOptimizerPlugin.createPromptOptimizer(createPluginHostContext(promptOptimizerPlugin, promptOptimizerInstallation, globalConfig));
     }, [globalConfig, promptOptimizerEnabled, promptOptimizerInstallation]);
-    const generationCount = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
+    // 张数是拆单数，上限与执行链路的 getGenerationCount 保持一致。
+    const generationCount = getGenerationCount(config.count);
     const priceChannel = resolveModelChannel(config, config.model);
     const configuredCredits = requestCreditCost({
         channelMode: priceChannel.scope === "system" ? "remote" : "local",
@@ -222,10 +227,12 @@ export function CanvasNodePromptPanel({
         config,
         requirements: resolvedRequirements,
     });
-    const quoteRequest = modelQuoteRequest(config, config.model, mode, resolvedRequirements);
+    // 服务端按单任务报价，图片按每单 1 张询价，显示时再乘实际单数。
+    const quoteRequirements: ModelRequirements = mode === "image" ? { ...resolvedRequirements, options: { ...resolvedRequirements.options, count: 1 } } : resolvedRequirements;
+    const quoteRequest = modelQuoteRequest(config, config.model, mode, quoteRequirements);
     const quoteRequestKey = JSON.stringify(quoteRequest || null);
     const [routeQuote, setRouteQuote] = useState<LogicalModelQuote | null>(null);
-    const credits = routeQuote ? routeQuote.amountMicrocredits / 1_000_000 : configuredCredits;
+    const credits = routeQuote ? batchQuoteTotal(routeQuote.amountMicrocredits, mode === "image" ? generationCount : 1) : configuredCredits;
     const activeReferenceCount = activeReferences.length;
     const videoFrameOptions = resolvedMentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
     const hasVideoPromptTools = mode === "video" && !simpleMode && videoFrameOptions.length > 0;
@@ -564,11 +571,11 @@ export function CanvasNodePromptPanel({
                                     <InputNumber
                                         size="small"
                                         min={1}
-                                        max={15}
-                                        value={Math.max(1, Math.min(15, Math.floor(Math.abs(Number(node.metadata?.textCount) || 1))))}
+                                        max={Math.min(15, batchLimit)}
+                                        value={Math.max(1, Math.min(Math.min(15, batchLimit), Math.floor(Math.abs(Number(node.metadata?.textCount) || 1))))}
                                         onChange={(value) =>
                                             onConfigChange(node.id, {
-                                                textCount: Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value) || 1)))),
+                                                textCount: Math.max(1, Math.min(Math.min(15, batchLimit), Math.floor(Math.abs(Number(value) || 1)))),
                                             })
                                         }
                                         aria-label="文本生成份数"
@@ -587,6 +594,7 @@ export function CanvasNodePromptPanel({
                             <CanvasCameraControlPopover cameraControl={node.metadata?.cameraControl} onCameraControlChange={(options) => onConfigChange(node.id, { cameraControl: options })} theme={theme} compact={!expanded} />
                             <CanvasImageSettingsPopover
                                 config={config}
+                                countLimit={batchLimit}
                                 placement={expanded ? "topRight" : "topLeft"}
                                 buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3"
                                 onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : key === "size" ? { size: value, imageSizeSource: "user" } : { [key]: value })}

@@ -2,6 +2,7 @@ import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageV
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { imageParameterRequest, imageParameterDefaults, imageParameterAccepts } from "./image-parameters";
 import { imageSizePresets } from "@/lib/image-size-presets";
+import { currentGenerationBatchLimit } from "./generation-batch-limit";
 import { modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
@@ -366,7 +367,11 @@ export function resolveModelGenerationDefaults(
             },
             cost?.protocol,
         );
-        return normalized;
+        return {
+            ...normalized,
+            // 画布与创作页的张数是拆单数，不能被单模型 maxOutputs(=1) 压回 1。
+            count: String(Math.max(1, Math.min(currentGenerationBatchLimit(), Math.floor(Math.abs(Number(source("count") ?? normalized.count)) || 1)))),
+        };
     }
 
     if (capability === "video" && profile.video) {
