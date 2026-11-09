@@ -146,6 +146,59 @@ func TestConvertEcommerceProjectRoundsGroupsAndIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestConvertEcommerceProjectRoundsRollsBackOnInterrupt(t *testing.T) {
+	db := ecommerceRoundsTestDB(t)
+	repo := New(db)
+	plan := model.EcommercePlan{
+		Images: []model.EcommercePlanTask{ecommerceRoundsTestImage("active-1", "task-active", "")},
+		PreviousImages: []model.EcommercePlanTask{
+			ecommerceRoundsTestImage("old-1", "task-1", `{"productName":"A"}`),
+			ecommerceRoundsTestImage("old-2", "task-2", `{"productName":"B"}`),
+		},
+	}
+	raw, _ := json.Marshal(plan)
+	project := &model.EcommerceProject{ID: "project-1", UserID: "user-1", Name: "商品", Status: "draft", DraftJSON: `{}`, PlanJSON: string(raw), Revision: 1}
+	if err := repo.CreateEcommerceProject(project); err != nil {
+		t.Fatal(err)
+	}
+	roundCreates := 0
+	const callback = "test:interrupt_second_round"
+	if err := db.Callback().Create().Before("gorm:create").Register(callback, func(tx *gorm.DB) {
+		if tx.Statement.Schema != nil && tx.Statement.Schema.Table == "ecommerce_rounds" {
+			roundCreates++
+			if roundCreates == 2 {
+				tx.AddError(errors.New("injected interruption"))
+			}
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := repo.ConvertEcommerceProjectRounds("user-1", "project-1", 1); err == nil {
+		t.Fatal("interrupted conversion reported success")
+	}
+	count, _, err := repo.EcommerceRoundStats("user-1", "project-1")
+	if err != nil || count != 0 {
+		t.Fatalf("partial rounds survived rollback: count=%d err=%v", count, err)
+	}
+	stored, err := repo.EcommerceProject("user-1", "project-1")
+	if err != nil || stored.Revision != 1 || stored.ActiveRoundID != "" {
+		t.Fatalf("project changed after rollback: revision=%d active=%q err=%v", stored.Revision, stored.ActiveRoundID, err)
+	}
+	var storedPlan model.EcommercePlan
+	if err := json.Unmarshal([]byte(stored.PlanJSON), &storedPlan); err != nil || len(storedPlan.PreviousImages) != 2 {
+		t.Fatalf("legacy history lost after rollback: %+v err=%v", storedPlan, err)
+	}
+	if err := db.Callback().Create().Remove(callback); err != nil {
+		t.Fatal(err)
+	}
+	if _, created, err := repo.ConvertEcommerceProjectRounds("user-1", "project-1", 1); err != nil || created != 2 {
+		t.Fatalf("retry created=%d err=%v", created, err)
+	}
+	if count, images, err := repo.EcommerceRoundStats("user-1", "project-1"); err != nil || count != 2 || images != 2 {
+		t.Fatalf("retry stats count=%d images=%d err=%v", count, images, err)
+	}
+}
+
 func TestConvertEcommerceProjectWithoutHistoryPersistsActiveRound(t *testing.T) {
 	db := ecommerceRoundsTestDB(t)
 	repo := New(db)
