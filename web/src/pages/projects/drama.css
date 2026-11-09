@@ -2249,6 +2249,15 @@
 .drama-look-actions {
     display: inline-flex;
     flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    max-width: 100%;
+}
+.drama-look-item {
+    display: grid;
+    gap: 6px;
 }
 .drama-look-form {
     display: grid;

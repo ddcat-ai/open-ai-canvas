@@ -184,7 +184,7 @@ func (r *dramaRun) loadCasts() error {
 
 // syncJobs 读取已派发任务的终态并写回业务对象。
 func (r *dramaRun) syncJobs() error {
-	jobs, err := r.s.repo.DramaJobsByStatus(r.project.ID, model.DramaJobQueued, model.DramaJobRunning)
+	jobs, err := r.s.repo.DramaJobsByStatus(r.project.ID, model.DramaJobQueued, model.DramaJobRunning, model.DramaJobFailed)
 	if err != nil {
 		return err
 	}
@@ -192,6 +192,16 @@ func (r *dramaRun) syncJobs() error {
 	r.running = map[string]int{}
 	for i := range jobs {
 		job := &jobs[i]
+		if job.Status == model.DramaJobFailed {
+			// 暂停后掉出运行中列表的可恢复失败：拉回运行并重新排队下载/保存。
+			if err := r.recoverFailedJobMedia(job); err != nil {
+				var deferred *dramaSyncDeferred
+				if !errors.As(err, &deferred) {
+					return err
+				}
+				slog.Warn("drama recoverable job sync deferred", "project", r.project.ID, "job", job.ID, "error", deferred.err)
+			}
+		}
 		if job.Status == model.DramaJobRunning {
 			if err := r.syncRunningJob(job); err != nil {
 				var deferred *dramaSyncDeferred
@@ -214,6 +224,56 @@ func (r *dramaRun) syncJobs() error {
 			}
 		}
 	}
+	return nil
+}
+
+
+// dramaTaskMediaRecoveryRetryable 表示失败任务仍有作品恢复检查点且未用尽自动重试窗口。
+func (s *Service) dramaTaskMediaRecoveryRetryable(task *model.Task) bool {
+	if task == nil || task.Status != model.TaskStatusFailed || strings.TrimSpace(task.MediaRecoveryJSON) == "" {
+		return false
+	}
+	checkpoint, err := s.decodeMediaCheckpoint(task)
+	if err != nil {
+		return false
+	}
+	return checkpoint.Attempts < len(mediaRecoveryDelays) && time.Since(checkpoint.StartedAt) < 20*time.Minute
+}
+
+// recoverFailedJobMedia 把“上游已成功、本地保存失败”的作业重新置为运行并排队恢复下载。
+func (r *dramaRun) recoverFailedJobMedia(job *model.DramaJob) error {
+	if strings.TrimSpace(job.TaskID) == "" {
+		return nil
+	}
+	task, err := r.s.repo.Task(job.TaskID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return &dramaSyncDeferred{err: err}
+	}
+	if !r.s.dramaTaskMediaRecoveryRetryable(task) {
+		return nil
+	}
+	if err := r.s.repo.RequeueTaskMediaRecovery(task, task.MediaRecoveryJSON); err != nil {
+		if errors.Is(err, repository.ErrTaskStateConflict) {
+			return nil
+		}
+		return &dramaSyncDeferred{err: err}
+	}
+	job.Status, job.Error, job.FinishedAt = model.DramaJobRunning, "", nil
+	if err := r.s.repo.SaveDramaJob(job); err != nil {
+		return err
+	}
+	switch job.Kind {
+	case model.DramaJobCastImage:
+		_, _ = r.s.repo.UpdateDramaCastIf(job.CastID, []string{model.DramaMediaFailed}, map[string]any{"image_status": model.DramaMediaRunning})
+	case model.DramaJobSegmentVideo:
+		var payload dramaRevisionPayload
+		_ = json.Unmarshal([]byte(job.PayloadJSON), &payload)
+		_, _ = r.s.repo.UpdateDramaSegmentRevision(job.ShotID, payload.Revision, map[string]any{"video_status": model.DramaMediaRunning, "video_error": ""})
+	}
+	r.s.wakeTaskDispatcher()
 	return nil
 }
 
@@ -257,6 +317,18 @@ func (r *dramaRun) syncRunningJob(job *model.DramaJob) error {
 		job.Status, job.FinishedAt, job.Error = model.DramaJobSucceeded, &now, ""
 		return r.s.repo.SaveDramaJob(job)
 	case model.TaskStatusFailed, model.TaskStatusCancelled:
+		// 上游已出结果、仅本地下载/保存失败：若仍有自动重试额度则重新排队恢复，
+		// 不把设定/段标失败，也不因作品暂停而丢掉已付费结果。
+		if task.Status == model.TaskStatusFailed && r.s.dramaTaskMediaRecoveryRetryable(task) {
+			if err := r.s.repo.RequeueTaskMediaRecovery(task, task.MediaRecoveryJSON); err != nil {
+				if !errors.Is(err, repository.ErrTaskStateConflict) {
+					return &dramaSyncDeferred{err: err}
+				}
+			} else {
+				r.s.wakeTaskDispatcher()
+			}
+			return nil
+		}
 		if err := r.settleTaskAttempt(job, task, firstNonEmpty(task.Error, "生成失败")); err != nil {
 			return err
 		}
@@ -765,7 +837,7 @@ func (r *dramaRun) markRunning(job *model.DramaJob) error {
 		_ = json.Unmarshal([]byte(job.PayloadJSON), &payload)
 		_, err = r.s.repo.UpdateDramaSegmentRevision(job.ShotID, payload.Revision, map[string]any{"prompt_status": model.DramaMediaRunning})
 	case model.DramaJobCastImage:
-		_, err = r.s.repo.UpdateDramaCastIf(job.CastID, []string{"", model.DramaMediaQueued}, map[string]any{"image_status": model.DramaMediaRunning})
+		_, err = r.s.repo.UpdateDramaCastIf(job.CastID, []string{"", model.DramaMediaDraft, model.DramaMediaQueued}, map[string]any{"image_status": model.DramaMediaRunning})
 	case model.DramaJobSegmentVideo:
 		var payload dramaRevisionPayload
 		_ = json.Unmarshal([]byte(job.PayloadJSON), &payload)

@@ -28,11 +28,19 @@ func (r *Repository) DramaProduction(projectID string) (*model.DramaProduction, 
 }
 
 // RunningDramaProductions 返回需要调度循环推进的项目：运行中的项目，以及暂停或已完成但仍有已派发任务的项目。
-// 后者只回收任务结果（已付费的视频、尾帧），不再派发新工作。
+// 后者只回收任务结果（已付费的视频、尾帧、参考图下载），不再派发新工作。
+// 含“上游已成功、本地保存失败且仍有恢复检查点”的失败作业，避免暂停后项目掉出调度、已出图无法落库。
 func (r *Repository) RunningDramaProductions(limit int) ([]model.DramaProduction, error) {
 	var productions []model.DramaProduction
 	pending := r.db.Model(&model.DramaJob{}).Select("project_id").Where("status = ?", model.DramaJobRunning)
-	err := r.db.Where("status = ? OR project_id IN (?)", model.DramaStatusRunning, pending).Order("updated_at asc").Limit(limit).Find(&productions).Error
+	recoverable := r.db.Model(&model.DramaJob{}).Select("project_id").Where(
+		"status = ? AND updated_at > ? AND task_id IN (?)",
+		model.DramaJobFailed,
+		time.Now().Add(-24*time.Hour),
+		r.db.Model(&model.Task{}).Select("id").Where("status = ? AND media_recovery_json <> '' AND media_recovery_json IS NOT NULL", model.TaskStatusFailed),
+	)
+	err := r.db.Where("status = ? OR project_id IN (?) OR project_id IN (?)", model.DramaStatusRunning, pending, recoverable).
+		Order("updated_at asc").Limit(limit).Find(&productions).Error
 	return productions, err
 }
 
