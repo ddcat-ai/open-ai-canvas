@@ -710,11 +710,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             // only after its first save; with no history the first save is safe
             // to send in round mode even to an older server.
             const rounds = roundsModeRef.current || Boolean(owner.project?.activeRoundId) || (!owner.project && !hasHistory);
-            const saved = await owner.save(
-                nextDraft,
-                nextPlan,
-                rounds ? { historyMode: "rounds", advanceRound: Boolean(options?.advanceRound), activeRoundId: owner.project?.activeRoundId } : undefined,
-            );
+            const saved = await owner.save(nextDraft, nextPlan, rounds ? { historyMode: "rounds", advanceRound: Boolean(options?.advanceRound), activeRoundId: owner.project?.activeRoundId } : undefined);
             if (saved.activeRoundId) roundsModeRef.current = true;
             if (rounds && options?.advanceRound && saved.id) {
                 void loadHistoryPage(saved.id, 0).catch(() => undefined);
@@ -1585,7 +1581,10 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 });
                 applyRoundUpdate(updatedRound);
             } else {
-                await save(draft, updateCommerceCanvasImage(plan, image.id, (entry) => ({ ...entry, taskId: task.id })));
+                await save(
+                    draft,
+                    updateCommerceCanvasImage(plan, image.id, (entry) => ({ ...entry, taskId: task.id })),
+                );
             }
             sessionStorage.removeItem(receiptKey);
             if (!isCurrent(session)) return;
@@ -1656,7 +1655,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 const updatedRound = await patchEcommerceRoundImage(destination.id, target.round.id, edited.id, { version: target.round.version, image: { ...updatedImage, roundId: target.round.id } });
                 applyRoundUpdate(updatedRound);
             } else {
-                await save(projectDraft(destination), updateCommerceCanvasImage(activePlan!, edited.id, () => updatedImage), session);
+                await save(
+                    projectDraft(destination),
+                    updateCommerceCanvasImage(activePlan!, edited.id, () => updatedImage),
+                    session,
+                );
                 destination = projectRef.current || destination;
             }
             if (!isCurrent(session)) return;

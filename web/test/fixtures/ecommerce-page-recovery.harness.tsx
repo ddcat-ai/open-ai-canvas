@@ -392,7 +392,10 @@ beforeEach(async () => {
             next.images[index] = { ...body.image!, id: imageId, roundId: undefined };
         }
         const updated = { ...round, plan: next, imageCount: next.images.length, version: round.version + 1, updatedAt: new Date().toISOString() };
-        rounds.set(projectId, list.map((entry) => (entry.id === roundId ? updated : entry)));
+        rounds.set(
+            projectId,
+            list.map((entry) => (entry.id === roundId ? updated : entry)),
+        );
         return structuredClone(updated);
     }) as typeof http.patch);
     spyOn(http, "deleteWithBody").mockImplementation((async (path: string, body: { ids?: string[]; all?: boolean; expectedTotal: number }) => {

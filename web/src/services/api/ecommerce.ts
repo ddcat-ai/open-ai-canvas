@@ -262,9 +262,7 @@ export function saveEcommerceProject(project: EcommerceProject, draft: Ecommerce
         // Round-mode saves never upload archived rounds. The active plan is the
         // only plan the server stores on the project row.
         ...(plan ? { plan: options?.historyMode === "rounds" ? { ...plan, previousImages: undefined } : plan } : {}),
-        ...(options?.historyMode
-            ? { historyMode: options.historyMode, advanceRound: Boolean(options.advanceRound), ...(options.activeRoundId ? { activeRoundId: options.activeRoundId } : {}) }
-            : {}),
+        ...(options?.historyMode ? { historyMode: options.historyMode, advanceRound: Boolean(options.advanceRound), ...(options.activeRoundId ? { activeRoundId: options.activeRoundId } : {}) } : {}),
     });
 }
 /** Idempotently converts legacy inline history into round rows. 404 on older servers. */
@@ -278,12 +276,7 @@ export function listEcommerceRounds(id: string, options?: { limit?: number; befo
     const query = params.toString();
     return http.get<EcommerceRoundPage>(`/ecommerce/projects/${encodeURIComponent(id)}/rounds${query ? `?${query}` : ""}`);
 }
-export function patchEcommerceRoundImage(
-    projectId: string,
-    roundId: string,
-    imageId: string,
-    update: { version: number; image?: EcommercePlanImage; remove?: boolean },
-) {
+export function patchEcommerceRoundImage(projectId: string, roundId: string, imageId: string, update: { version: number; image?: EcommercePlanImage; remove?: boolean }) {
     return http.patch<EcommerceRound>(`/ecommerce/projects/${encodeURIComponent(projectId)}/rounds/${encodeURIComponent(roundId)}/images/${encodeURIComponent(imageId)}`, update);
 }
 
