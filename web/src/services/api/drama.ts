@@ -644,6 +644,11 @@ export function rescriptDramaEpisode(projectId: string, episodeId: string) {
     return http.post<DramaEpisodeDetail>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/rescript`);
 }
 
+/** 手动重新合成本集成片：各段视频就绪后按实测时长拼接；合成中可重复点，幂等。 */
+export function composeDramaEpisode(projectId: string, episodeId: string) {
+    return http.post<DramaEpisodeDetail>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/compose`);
+}
+
 export type DramaShotPatch = Partial<Pick<DramaShot, "speaker" | "dialogue" | "action" | "shotSize" | "camera" | "imagePrompt" | "videoPrompt">> & { transition?: DramaTransition; durationSeconds?: number };
 
 /** 让文本模型（重新）撰写指定剧情段的完整视频提示词。 */
