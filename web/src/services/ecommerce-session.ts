@@ -1,7 +1,7 @@
 import { createClientUUID } from "@/lib/client-id";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { getActiveUserScope, scopedStorageKey } from "@/lib/user-scope";
-import { createEcommerceProject, saveEcommerceProject, type EcommerceDraft, type EcommercePlan, type EcommerceProject } from "@/services/api/ecommerce";
+import { createEcommerceProject, saveEcommerceProject, type EcommerceDraft, type EcommercePlan, type EcommerceProject, type EcommerceSaveOptions } from "@/services/api/ecommerce";
 
 export type EcommerceWorkspaceCheckpoint = {
     sessionId: string;
@@ -213,9 +213,10 @@ export function createEcommerceSession(scope: string, initialProject?: Ecommerce
             workspaceListeners.get(scope)?.forEach((listener) => listener());
         },
         adopt,
-        save(draft: EcommerceDraft, plan: EcommercePlan | null): Promise<EcommerceProject> {
+        save(draft: EcommerceDraft, plan: EcommercePlan | null, options?: EcommerceSaveOptions): Promise<EcommerceProject> {
             const draftSnapshot = copy(draft);
             const planSnapshot = copy(plan);
+            const optionsSnapshot = options ? { ...options } : undefined;
             const operation = state.tail
                 .catch(() => undefined)
                 .then(async () => {
@@ -226,7 +227,7 @@ export function createEcommerceSession(scope: string, initialProject?: Ecommerce
                         assertScope();
                     }
                     assertScope();
-                    const saved = await dependencies.saveProject(state.project!, draftSnapshot, planSnapshot);
+                    const saved = await dependencies.saveProject(state.project!, draftSnapshot, planSnapshot, optionsSnapshot);
                     adopt(saved);
                     assertScope();
                     return copy(saved);
