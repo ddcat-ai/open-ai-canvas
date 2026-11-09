@@ -9,7 +9,7 @@ import (
 // 分镜规则：剧情段时长（一次视频调用的长度）、镜头节奏、对白密度与转场。剧本提示词、镜头时长、
 // 剧情段切分、费用预估与成片渲染都读同一份规则，用户在设置里看到的就是实际执行的约束。
 const (
-	// 镜头节奏五档，从快到慢；fast 是新作品与未设置时的默认。
+	// 镜头节奏五档，从快到慢；rapid 是新作品与未设置时的默认。
 	PacingRapid    = "rapid"
 	PacingFast     = "fast"
 	PacingStandard = "standard"
@@ -44,8 +44,8 @@ const (
 	// 表演强度与运镜动感是 1–10 档，只改变剧本与段视频提示词的写法，不改镜头时长；0 表示未设置，按默认档。
 	MinDirectionLevel       = 1
 	MaxDirectionLevel       = 10
-	DefaultPerformanceLevel = 5
-	DefaultCameraLevel      = 5
+	DefaultPerformanceLevel = 7
+	DefaultCameraLevel      = 3
 
 	// SegmentAuto 按剧情节拍（场景切换）切段，单段不超过视频模型单次上限。
 	SegmentAuto = "auto"
@@ -107,9 +107,9 @@ func clampInt(value, low, high int) int {
 
 func (s StoryboardSettings) Normalized() StoryboardSettings {
 	switch s.SegmentMode {
-	case SegmentFixed, SegmentRange:
+	case SegmentFixed, SegmentRange, SegmentAuto:
 	default:
-		s.SegmentMode = SegmentAuto
+		s.SegmentMode = SegmentFixed
 	}
 	// 三种模式的数值都保留，切换模式时不丢用户填过的值。
 	if s.SegmentSeconds <= 0 {
@@ -128,14 +128,14 @@ func (s StoryboardSettings) Normalized() StoryboardSettings {
 		s.SegmentMinSeconds, s.SegmentMaxSeconds = s.SegmentMaxSeconds, s.SegmentMinSeconds
 	}
 	switch s.Pacing {
-	case PacingRapid, PacingStandard, PacingRelaxed, PacingSlow:
+	case PacingRapid, PacingFast, PacingStandard, PacingRelaxed, PacingSlow:
 	default:
-		s.Pacing = PacingFast
+		s.Pacing = PacingRapid
 	}
 	switch s.Dialogue {
-	case DialogueDense, DialogueSparse, DialogueCustom:
+	case DialogueDense, DialogueStandard, DialogueSparse, DialogueCustom:
 	default:
-		s.Dialogue = DialogueStandard
+		s.Dialogue = DialogueDense
 	}
 	// 自定义参数填了就夹到可设范围；自定义档缺项时按标准档补齐，预设档下未填的保持未填。
 	custom, base := s.Dialogue == DialogueCustom, dialogueRules[DialogueStandard]

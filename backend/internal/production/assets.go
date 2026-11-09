@@ -116,15 +116,15 @@ const assetPromptLimit = 4000
 func (a AssetSettings) Normalized() AssetSettings {
 	scheme, known := assetScheme(a.Mode)
 	if !known && a.Mode != AssetModeCustom {
-		a.Mode = AssetModePortrait
-		scheme, _ = assetScheme(AssetModePortrait)
+		a.Mode = AssetModeFourView
+		scheme, _ = assetScheme(AssetModeFourView)
 	}
 	a.CharacterPrompt = truncateRunes(strings.TrimSpace(a.CharacterPrompt), assetPromptLimit)
 	a.ScenePrompt = truncateRunes(strings.TrimSpace(a.ScenePrompt), assetPromptLimit)
 	if a.CharacterPrompt == "" {
 		if a.Mode == AssetModeCustom {
-			a.Mode = AssetModePortrait
-			scheme, _ = assetScheme(AssetModePortrait)
+			a.Mode = AssetModeFourView
+			scheme, _ = assetScheme(AssetModeFourView)
 		}
 		a.CharacterPrompt = scheme.CharacterPrompt
 	}
