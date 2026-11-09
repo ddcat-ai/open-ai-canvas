@@ -186,6 +186,16 @@ export default function CreatePage() {
     const [historyOpen, setHistoryOpen] = useState(false);
     const { openAuth } = useAuthEntry();
     const [libraryOpen, setLibraryOpen] = useState(false);
+    const requireCreationLogin = useCallback(() => {
+        if (useUserStore.getState().user) return true;
+        setLibraryOpen(false);
+        openAuth({ preferDialog: true });
+        return false;
+    }, [openAuth]);
+    const openReferenceLibrary = () => {
+        if (!requireCreationLogin()) return;
+        setLibraryOpen(true);
+    };
     const externalAssetSources = useExternalAssetSources(libraryOpen);
     const abortRef = useRef<AbortController | null>(null);
     const composerFocusRef = useRef<HTMLTextAreaElement>(null);
@@ -711,6 +721,7 @@ export default function CreatePage() {
         };
     };
     const uploadLibraryAssets = async (files: FileList | File[]) => {
+        if (!requireCreationLogin()) return [];
         const next = Array.from(files).filter((file) => creationFileAccepted(mode, file));
         if (!next.length) return [];
         const settled = await Promise.allSettled(
@@ -727,6 +738,7 @@ export default function CreatePage() {
     };
 
     const handleLibrarySelect = async (selectedIds: string[], pickedItems = libraryItems) => {
+        if (!requireCreationLogin()) return;
         const next = creationLibrarySelectionToAttachments(selectedIds, pickedItems, mode, videoReferenceLimits);
         if (!next.length) return;
         const selected = new Set(selectedIds);
@@ -797,6 +809,7 @@ export default function CreatePage() {
 
     const replaceReferenceFromFiles = useCallback(
         async (targetAttachmentId: string, files: File[]) => {
+            if (!requireCreationLogin()) return;
             if (busy || referenceReplacementBusy) return;
             const file = files.find((item) => item.type.startsWith("image/"));
             if (!file) {
@@ -815,7 +828,7 @@ export default function CreatePage() {
                 setReferenceReplacementBusy(false);
             }
         },
-        [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, toast],
+        [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, requireCreationLogin, toast],
     );
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
@@ -1402,7 +1415,7 @@ export default function CreatePage() {
         onReorderAttachments: reorderAttachments,
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
-        onOpenLibrary: () => setLibraryOpen(true),
+        onOpenLibrary: openReferenceLibrary,
         onModeChange: selectMode,
         model: selectedModel,
         modelRequirements,
@@ -1522,6 +1535,7 @@ export default function CreatePage() {
                                 <CreationEmptySuggest
                                     onStartPrompt={startPrompt}
                                     onOpenLibrary={() => {
+                                        if (!requireCreationLogin()) return;
                                         setAgentMode(false);
                                         selectMode("image");
                                         setLibraryOpen(true);
@@ -1626,7 +1640,14 @@ export default function CreatePage() {
                             accept: creationUploadAccept(mode),
                             description: mode === "text" ? t("create.page.uploadHintText") : mode === "video" ? t("create.page.uploadHintVideo") : t("create.page.uploadHintImage"),
                             onUpload: uploadLibraryAssets,
-                            external: { accept: "image/*", description: t("create.page.uploadHintEagle"), onUpload: (files, folderId) => externalAssetSources.uploadExternalFiles(files, folderId) },
+                            external: {
+                                accept: "image/*",
+                                description: t("create.page.uploadHintEagle"),
+                                onUpload: (files, folderId) => {
+                                    if (!requireCreationLogin()) return Promise.resolve([]);
+                                    return externalAssetSources.uploadExternalFiles(files, folderId);
+                                },
+                            },
                         }}
                         onClose={() => setLibraryOpen(false)}
                         onConfirm={handleLibrarySelect}
