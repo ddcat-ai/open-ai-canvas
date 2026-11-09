@@ -76,6 +76,7 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
         vquality: defaults.vquality ?? normalizeVideoResolution(globalConfig.vquality || defaultConfig.vquality),
         videoGenerateAudio: defaults.videoGenerateAudio ?? globalConfig.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: defaults.videoWatermark ?? globalConfig.videoWatermark ?? defaultConfig.videoWatermark,
+        videoArkPrivateAssetUpload: node.metadata?.arkPrivateAssetUpload ?? globalConfig.videoArkPrivateAssetUpload ?? defaultConfig.videoArkPrivateAssetUpload,
         audioVoice: node.metadata?.audioVoice ?? globalConfig.audioVoice ?? defaultConfig.audioVoice,
         audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat || defaultConfig.audioFormat,
         audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed || defaultConfig.audioSpeed,
