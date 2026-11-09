@@ -53,6 +53,28 @@ func TestImageParametersCannotExpandPluginConstraintsOrBindings(t *testing.T) {
 	}
 }
 
+// 字符串枚举忽略大小写比较，并通过 CanonicalValue 回填声明原值；数字仍严格比较。
+func TestImageParametersEnumValuesIgnoreCaseAndReturnDeclaredValue(t *testing.T) {
+	parameter := ImageParameter{Name: "imageResolution", Label: "分辨率", Type: "string", Values: []any{"1K", "2K", "4K"}}
+	if !parameter.Accepts("2k") || !parameter.Accepts("2K") {
+		t.Fatal("string enum values must compare case-insensitively")
+	}
+	if parameter.Accepts("8K") {
+		t.Fatal("undeclared value accepted")
+	}
+	if got := parameter.CanonicalValue("2k"); got != "2K" {
+		t.Fatalf("canonical value = %#v, want declared 2K", got)
+	}
+	if !ImageParameterValuesEqual("2k", "2K") || ImageParameterValuesEqual("2k", "4k") {
+		t.Fatal("case-insensitive equality must still distinguish values")
+	}
+	// 数字与布尔不接受大小写放宽，仍按原值比较。
+	number := ImageParameter{Name: "count", Label: "数量", Type: "integer", Min: new(float64)}
+	if !ImageParameterValuesEqual(2, 2.0) || ImageParameterValuesEqual(2, 3) || number.CanonicalValue(2) != 2 {
+		t.Fatal("numeric comparison must keep exact semantics")
+	}
+}
+
 func TestImageParametersGeminiResolutionIsIndependentFromStaleQuality(t *testing.T) {
 	adapter := officialPackageAdapter(t, "google-gemini-image.yingce-plugin", "gemini-image")
 	request := GenerationRequest{Capability: CapabilityImage, Model: "image-model", Prompt: "portrait", ImageParameters: map[string]any{"imageResolution": "2k", "seed": 0}}

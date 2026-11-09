@@ -238,7 +238,8 @@ func imageParameterDefaults(parameters []protocol.ImageParameter) map[string]any
 	result := map[string]any{}
 	for _, p := range parameters {
 		if p.IsEnabled() && p.Default != nil {
-			result[p.Name] = p.Default
+			// 默认值也按声明写法保存，与用户选择的取值保持一致。
+			result[p.Name] = p.CanonicalValue(p.Default)
 		}
 	}
 	return result
@@ -317,6 +318,8 @@ func resolveImageParameterValues(parameters []protocol.ImageParameter, values ma
 		if !p.Accepts(value) {
 			return nil, imageParameterAdmissionError(p.Name, "unsupported_value", imageParameterUnsupportedMessage(p))
 		}
+		// 校验通过后回填声明写法（2k → 2K），下游只接受声明值。
+		value = p.CanonicalValue(value)
 		if value != nil && value != "" {
 			result[name] = value
 		}
@@ -353,6 +356,8 @@ func validateImageParameterPriceSelector(parameters []protocol.ImageParameter, s
 		if !p.Accepts(imageParameterValue(p, value)) {
 			return BadAuthRequest("价格档参数不在支持范围内：" + p.Label)
 		}
+		// 价格档同样按声明写法匹配，避免大小写不同导致命中不了价格。
+		selector[name] = fmt.Sprint(p.CanonicalValue(imageParameterValue(p, value)))
 	}
 	return nil
 }

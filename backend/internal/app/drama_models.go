@@ -660,7 +660,8 @@ func dramaImageRequestForSpec(spec CapabilitySpec, defaults map[string]any, rati
 	}
 	request := dramaImageRequest{}
 	if constraint, independent := spec.Options["imageResolution"]; independent && tier != "" && matchOptionConstraint("imageResolution", constraint, tier) {
-		request.Resolution = tier
+		// 档位比较不分大小写，下发时仍用声明的原值（如 2K）。
+		request.Resolution = dramaDeclaredOptionValue(constraint, tier)
 	}
 	candidates := dramaSizeCandidates(spec, constraint, tier)
 	best, bestRatio, bestScore := "", "", math.Inf(1)
@@ -690,6 +691,16 @@ func dramaImageRequestForSpec(spec CapabilitySpec, defaults map[string]any, rati
 		return dramaImageRequest{Issue: "所选图片模型没有声明可用的画面尺寸，无法按 " + ratio + " 出图"}
 	}
 	return dramaImageRequest{Issue: fmt.Sprintf("所选图片模型没有接近 %s 的尺寸（最接近的是 %s），参考图会变形或变成方图；请换用支持 %s 的图片模型，或改参考图画幅", ratio, dramaRatioLabel(bestRatio), ratio)}
+}
+
+// dramaDeclaredOptionValue 在声明值里查找给定档位并返回声明原值，不区分大小写。
+func dramaDeclaredOptionValue(constraint OptionConstraint, value string) string {
+	for _, candidate := range constraint.Values {
+		if text, ok := candidate.(string); ok && strings.EqualFold(strings.TrimSpace(text), value) {
+			return text
+		}
+	}
+	return value
 }
 
 type dramaSizeCandidate struct {
