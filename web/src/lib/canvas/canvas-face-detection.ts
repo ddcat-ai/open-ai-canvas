@@ -26,7 +26,8 @@ const pendingRequests = new Map<number, PendingRequest>();
 
 export async function detectCanvasFaces(dataUrl: string, signal?: AbortSignal): Promise<CanvasFaceDetectionResult> {
     if (signal?.aborted) throw new DOMException("人脸识别已取消", "AbortError");
-    const response = await fetch(dataUrl, { signal });
+    // 画布 <img> 可能已用无 Origin 请求缓存了不带 CORS 头的响应，复用会被拦下，这里跳过 HTTP 缓存重新读取。
+    const response = await fetch(dataUrl, { signal, cache: "no-store" });
     if (!response.ok) throw new Error("无法读取源图片，请重新上传后再试");
     const image = await createImageBitmap(await response.blob());
     const worker = getDetectorWorker();
