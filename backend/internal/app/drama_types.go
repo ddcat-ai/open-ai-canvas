@@ -215,7 +215,7 @@ func (s DramaSettings) normalized() DramaSettings {
 	switch s.ReviewMode {
 	case DramaReviewSample, DramaReviewEvery, DramaReviewAuto:
 	default:
-		s.ReviewMode = DramaReviewSample
+		s.ReviewMode = DramaReviewEvery
 	}
 	if s.MediaMode != DramaMediaManual {
 		// 早于该设置创建的作品一直是全自动，保持原行为；新建作品由 CreateDrama 默认 manual。
