@@ -1,6 +1,6 @@
 # OpenAI Images
 
-OpenAI Images 插件实现 JSON 文生图请求，并解析 OpenAI Images 风格的 `data[]` 响应。上游官方还提供 multipart 图像编辑接口，但当前宿主适配器的创建路径只构造 `/v1/images/generations`；详情中列出编辑接口是为了说明协议能力，不代表当前画布已发送编辑请求。
+OpenAI Images 支持 JSON 文生图及 multipart 参考图编辑，并解析 OpenAI Images 风格的 `data[]` 响应。画布宿主适配器在有参考图时使用编辑接口。
 
 ## 接口与鉴权
 
@@ -12,7 +12,7 @@ Authorization: Bearer <API_KEY>
 Content-Type: application/json
 ```
 
-官方编辑接口为 `POST /v1/images/edits`、`multipart/form-data`。当前适配器未在有参考图时切换到该路径，这是明确的实现缺口。
+编辑接口为 `POST /v1/images/edits`、`multipart/form-data`。单张参考图使用文件字段 `image`，多张参考图全部使用 `image[]`，不能重复发送标量 `image`。蒙版保持独立 `mask` 字段，参考图顺序不变。
 
 ## 模型、尺寸与质量
 

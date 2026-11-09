@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	stdlog "log"
+	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
@@ -14,6 +15,7 @@ import (
 )
 
 func (s *Service) LogAPICall(log model.ApiCallLog) error {
+	logFailedProviderCall(log)
 	if log.ID == "" {
 		log.ID = newID()
 	}
@@ -76,6 +78,20 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 		return err
 	}
 	return s.repo.Create(&log)
+}
+
+// Emit before persistence so quota or database failures cannot hide upstream failures.
+func logFailedProviderCall(call model.ApiCallLog) {
+	if call.Status != model.ApiCallStatusFailed {
+		return
+	}
+	call.Error = redactDiagnosticMarker(call.Error, "bearer")
+	safe := sanitizeDiagnosticAPICall(call)
+	slog.Error("provider call failed", "task_id", safe.TaskID, "channel_id", safe.ChannelID,
+		"request_id", safe.RequestID, "trace_id", safe.TraceID, "model", safe.Model,
+		"provider_request_id", safe.ProviderRequestID, "capability", safe.Capability,
+		"request_kind", safe.RequestKind, "status_code", safe.StatusCode,
+		"error_code", safe.ErrorCode, "error", redactUpstreamAddress(safe.Error))
 }
 
 func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) {

@@ -70,8 +70,12 @@ func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]
 		if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
 			writeField(writer, key, value)
 		}
+		imageField := "image"
+		if len(input.ReferenceImages) > 1 {
+			imageField = "image[]"
+		}
 		for _, image := range input.ReferenceImages {
-			if err := writeMediaPart(writer, "image", image); err != nil {
+			if err := writeMediaPart(writer, imageField, image); err != nil {
 				return nil, err
 			}
 		}
