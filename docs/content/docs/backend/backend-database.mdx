@@ -5,6 +5,10 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 通知条排序回填（Schema 93）
+
+版本 93 `banner_sort_order_backfill` 将升级库中 `banner_announcements.sort_order` 为 NULL 的旧通知条回填为 0，并补建新库已有的 `sort_order` 索引。版本 49 只增加了该列，升级库的旧通知条在 PostgreSQL 升序排序时会排到最后。
+
 ## 邮件发送记录与消费日报订阅（Schema 91）
 
 版本 91 `email_logs_and_notifications` 新增两张表，只建表不改旧数据：
