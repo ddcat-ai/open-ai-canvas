@@ -151,6 +151,7 @@ export const frFR: Messages = {
             passwordPlaceholder: "Saisissez votre mot de passe",
             submit: "Se connecter",
             linuxdo: "Se connecter avec Linux.do",
+            oidc: "Se connecter avec OIDC",
             success: "Connexion réussie",
             failed: "Échec de la connexion",
             needCode: "Demandez d'abord un code de vérification",

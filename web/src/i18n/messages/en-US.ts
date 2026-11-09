@@ -150,6 +150,7 @@ export const enUS: Messages = {
             passwordPlaceholder: "Enter your password",
             submit: "Sign in",
             linuxdo: "Sign in with Linux.do",
+            oidc: "Sign in with OIDC",
             success: "Signed in",
             failed: "Sign-in failed",
             needCode: "Request a verification code first",

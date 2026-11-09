@@ -151,6 +151,7 @@ export const deDE: Messages = {
             passwordPlaceholder: "Passwort eingeben",
             submit: "Anmelden",
             linuxdo: "Mit Linux.do anmelden",
+            oidc: "Mit OIDC anmelden",
             success: "Angemeldet",
             failed: "Anmeldung fehlgeschlagen",
             needCode: "Fordere zuerst einen Bestätigungscode an",

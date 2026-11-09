@@ -368,7 +368,7 @@ paths:
             schema:
               {
                 type: string,
-                enum: [password, email, sms, linuxdo, verification, unknown],
+                enum: [password, email, sms, linuxdo, oidc, verification, unknown],
               },
           }
         - {
@@ -3234,6 +3234,36 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /auth/oidc/start:
+    get:
+      tags: [auth]
+      security: []
+      summary: 发起 OIDC 登录
+      parameters:
+        - { name: next, in: query, schema: { type: string } }
+        - { name: acceptedTerms, in: query, schema: { type: boolean } }
+      responses:
+        "302":
+          description: 设置一次性状态 Cookie 并重定向到 OIDC 提供方
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /auth/oidc/callback:
+    get:
+      tags: [auth]
+      security: []
+      summary: 处理 OIDC 授权码回调
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+      responses:
+        "302":
+          description: 登录后设置会话 Cookie 并跳转，或返回登录页显示认证错误
+        "400":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
   /projects:
     get:
       tags: [projects]
@@ -3748,7 +3778,7 @@ components:
         method:
           {
             type: string,
-            enum: [password, email, sms, linuxdo, verification, unknown],
+            enum: [password, email, sms, linuxdo, oidc, verification, unknown],
           }
         source: { type: string, enum: [login, registration, logout] }
         result: { type: string, enum: [success, failed] }
