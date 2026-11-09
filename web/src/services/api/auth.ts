@@ -434,6 +434,7 @@ export type AuthSettings = VerificationPolicy & {
     firstUser: boolean;
     registrationEnabled: boolean;
     linuxdoEnabled: boolean;
+    oidcEnabled?: boolean;
     emailEnabled: boolean;
     emailCodeRequired: boolean;
     /** 注册必须填写邮箱。旧服务端未返回时按选填处理。 */
@@ -455,6 +456,12 @@ export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
     const base = String(apiBaseURL).replace(/\/$/, "");
     const termsQuery = acceptedTerms === undefined ? "" : `&acceptedTerms=${acceptedTerms ? "true" : "false"}`;
     return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}${termsQuery}`;
+}
+
+export function oidcLoginURL(next: string, acceptedTerms: boolean) {
+    const base = String(apiBaseURL).replace(/\/$/, "");
+    const query = new URLSearchParams({ next, acceptedTerms: String(acceptedTerms) });
+    return `${base}/auth/oidc/start?${query}`;
 }
 
 export function getAuthSession() {

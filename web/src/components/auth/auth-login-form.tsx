@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { VerificationFields } from "@/components/auth/verification-fields";
 import { clearReferralCode, readReferralCode, type AuthView } from "@/lib/auth-entry";
-import { getAuthSession, linuxDOLoginURL, login, register, type AuthSettings } from "@/services/api/auth";
+import { getAuthSession, linuxDOLoginURL, login, oidcLoginURL, register, type AuthSettings } from "@/services/api/auth";
 import { ApiError } from "@/services/api/request";
 import { emptyVerification, loginVerification, registrationVerificationRequired, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 import { AuthAgreementDialog, AuthNotice, AuthTabs, LinuxDOIcon, authTabId, authTabPanelId, useAuthAgreement } from "./auth-form-parts";
@@ -14,7 +14,7 @@ type LoginMethod = "password" | VerificationMethod;
 
 export type AuthFormProps = {
     settings: AuthSettings | null;
-    /** 登录成功后的站内地址，Linux.do 跳转回站时同样使用。 */
+    /** 登录成功后的站内地址，第三方登录跳转回站时同样使用。 */
     next: string;
     onAuthenticated: () => void;
     onViewChange: (view: AuthView) => void;
@@ -52,6 +52,9 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
     const methods: LoginMethod[] = [...(settings ? verificationMethods(settings, "login") : []), "password"];
     const method = pending ? "password" : chosenMethod && methods.includes(chosenMethod) ? chosenMethod : methods[0];
     const canRegister = Boolean(settings && (settings.firstUser || settings.registrationEnabled));
+    const showLinuxDO = Boolean(settings?.linuxdoEnabled && !settings.smsAndEmailRegistration && !pending);
+    const showOIDC = Boolean(settings?.oidcEnabled && !pending);
+    const showAgreement = Boolean(settings && (pending || canRegister || showOIDC));
     const verificationRequired = Boolean(settings && registrationVerificationRequired(settings));
     const registerMethods = settings && verificationRequired ? verificationMethods(settings, "register") : [];
     const registerMethod = chosenRegisterMethod && registerMethods.includes(chosenRegisterMethod) ? chosenRegisterMethod : registerMethods[0];
@@ -266,7 +269,7 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
                     <VerificationFields key={method} purpose="login" method={method} value={verification} onChange={setVerification} disabled={submitting} />
                 )}
             </div>
-            {settings && (pending || canRegister) ? (
+            {showAgreement ? (
                 <div className="auth-agreement-row" data-accepted={agreementAccepted ? "true" : "false"}>
                     <Checkbox checked={agreementAccepted} onChange={(event) => setAgreementAccepted(event.target.checked)}>
                         <span className="auth-agreement-label">{pending ? t("auth.register.agree") : t("auth.login.agreeForSignup")}</span>
@@ -280,18 +283,25 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
                 {retryCountdown > 0 ? t("auth.register.retryIn", { seconds: retryCountdown }) : pending ? t("auth.login.createAndLogin") : canRegister && method === "password" ? t("auth.login.submitOrRegister") : t("auth.login.submit")}
             </Button>
             {!pending && canRegister && method === "password" ? <p className="auth-form-switch">{t("auth.login.autoRegisterHint")}</p> : null}
-            {settings?.linuxdoEnabled && !pending && !settings.smsAndEmailRegistration ? (
+            {showLinuxDO || showOIDC ? (
                 <>
                     <Divider plain className="auth-scene-divider auth-form-divider">
                         {t("common.or")}
                     </Divider>
                     {/* 新 Linux.do 账号同样需要同意协议：勾选后才携带同意标志，否则只能登录已绑定账号。 */}
-                    <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next, agreementAccepted || undefined)}>
-                        {t("auth.login.linuxdo")}
-                    </Button>
+                    {showLinuxDO ? (
+                        <Button size="large" block icon={<LinuxDOIcon />} href={linuxDOLoginURL(next, agreementAccepted || undefined)}>
+                            {t("auth.login.linuxdo")}
+                        </Button>
+                    ) : null}
+                    {showOIDC ? (
+                        <Button size="large" block href={oidcLoginURL(next, agreementAccepted)}>
+                            {t("auth.login.oidc")}
+                        </Button>
+                    ) : null}
                 </>
             ) : null}
-            {settings && !canRegister ? (
+            {settings && !showAgreement ? (
                 <p className="auth-form-legal">
                     {t("auth.login.agreementPrefix")}
                     <button type="button" className="auth-form-link is-strong" onClick={() => setAgreementOpen(true)}>

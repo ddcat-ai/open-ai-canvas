@@ -151,6 +151,7 @@ export const jaJP: Messages = {
             passwordPlaceholder: "パスワードを入力",
             submit: "ログイン",
             linuxdo: "Linux.do でログイン",
+            oidc: "OIDC でログイン",
             success: "ログインしました",
             failed: "ログインに失敗しました",
             needCode: "先に認証コードを取得してください",

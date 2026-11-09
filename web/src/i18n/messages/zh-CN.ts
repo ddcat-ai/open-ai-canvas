@@ -152,6 +152,7 @@ export const zhCN = {
             passwordPlaceholder: "请输入密码",
             submit: "登录",
             linuxdo: "使用 Linux.do 登录",
+            oidc: "使用 OIDC 登录",
             success: "登录成功",
             failed: "登录失败",
             needCode: "请先获取本次登录验证码",

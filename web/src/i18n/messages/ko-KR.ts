@@ -151,6 +151,7 @@ export const koKR: Messages = {
             passwordPlaceholder: "비밀번호 입력",
             submit: "로그인",
             linuxdo: "Linux.do로 로그인",
+            oidc: "OIDC로 로그인",
             success: "로그인했습니다",
             failed: "로그인에 실패했습니다",
             needCode: "먼저 인증번호를 받으세요",

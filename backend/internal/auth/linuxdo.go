@@ -79,7 +79,7 @@ type linuxDOSettingValue struct {
 	AvatarField      string   `json:"avatarField"`
 }
 
-type LinuxDOCallbackResult struct {
+type OAuthCallbackResult struct {
 	Session         *AuthSessionResult
 	Next            string
 	Reauthenticated bool
@@ -214,7 +214,7 @@ func (s *Service) beginLinuxDOAuthorization(setting linuxDOSettingValue, record 
 	return authorizeURL.String(), nil
 }
 
-func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieValue string, contexts ...LoginContext) (result *LinuxDOCallbackResult, err error) {
+func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieValue string, contexts ...LoginContext) (result *OAuthCallbackResult, err error) {
 	var context LoginContext
 	if len(contexts) > 0 {
 		context = contexts[0]
@@ -281,20 +281,30 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieVal
 		if err := s.repo.ReauthenticateLinuxDOSession(reauthUser, reauthSession, subject, time.Now()); err != nil {
 			return nil, profileWriteError(err)
 		}
-		return &LinuxDOCallbackResult{Next: "/settings?section=profile&reauth=success", Reauthenticated: true}, nil
+		return &OAuthCallbackResult{Next: "/settings?section=profile&reauth=success", Reauthenticated: true}, nil
 	}
 	providerUsername := profileString(profile, setting.UsernameField)
 	displayName := kernel.FirstNonEmpty(profileString(profile, setting.DisplayNameField), providerUsername, "Linux.do 用户")
-	avatarURL := profileString(profile, setting.AvatarField)
-	identity, err := s.repo.UserIdentity("linuxdo", subject)
+	return s.finishOAuthLogin(state, event, oauthProfile{
+		provider: "linuxdo", subject: subject, username: providerUsername, name: displayName,
+		email: profileString(profile, setting.EmailField), avatarURL: profileString(profile, setting.AvatarField),
+	}, false)
+}
+
+type oauthProfile struct {
+	provider, subject, username, name, email, avatarURL string
+}
+
+func (s *Service) finishOAuthLogin(state *model.OAuthState, event *model.LoginLog, profile oauthProfile, allowPrivateSignup bool) (*OAuthCallbackResult, error) {
+	identity, err := s.repo.UserIdentity(profile.provider, profile.subject)
 	var user *model.User
 	if err == nil {
 		user, err = s.repo.User(identity.UserID)
 		if err != nil {
 			return nil, err
 		}
-		identity.ProviderUsername = providerUsername
-		identity.AvatarURL = avatarURL
+		identity.ProviderUsername = profile.username
+		identity.AvatarURL = profile.avatarURL
 		identity.UpdatedAt = time.Now()
 		if err := s.repo.Save(identity); err != nil {
 			return nil, err
@@ -312,13 +322,13 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieVal
 		if settingErr != nil {
 			return nil, settingErr
 		}
-		if !registrationEnabled {
+		if !registrationEnabled && !allowPrivateSignup {
 			return nil, kernel.Forbidden("管理员未开放新用户注册")
 		}
 		if !state.AcceptedTerms {
 			return nil, kernel.BadAuthRequest("请先同意" + s.AgreementTitleForMessage())
 		}
-		user, identity, err = s.createLinuxDOUser(subject, providerUsername, displayName, profileString(profile, setting.EmailField), avatarURL)
+		user, identity, err = s.newOAuthUser(profile)
 		if err != nil {
 			return nil, err
 		}
@@ -345,25 +355,25 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieVal
 	if err != nil {
 		return nil, err
 	}
-	return &LinuxDOCallbackResult{Session: session, Next: safeOAuthNext(state.NextPath)}, nil
+	return &OAuthCallbackResult{Session: session, Next: safeOAuthNext(state.NextPath)}, nil
 }
 
-func (s *Service) createLinuxDOUser(subject string, providerUsername string, displayName string, email string, avatarURL string) (*model.User, *model.UserIdentity, error) {
-	base := oauthUsernameSanitizer.ReplaceAllString(strings.TrimSpace(providerUsername), "_")
+func (s *Service) newOAuthUser(profile oauthProfile) (*model.User, *model.UserIdentity, error) {
+	base := oauthUsernameSanitizer.ReplaceAllString(strings.TrimSpace(profile.username), "_")
 	base = strings.Trim(base, "_-")
 	if len(base) < 3 {
-		base = "linuxdo_" + shortSubject(subject)
+		base = profile.provider + "_" + shortSubject(profile.subject)
 	}
 	if len(base) > 24 {
 		base = base[:24]
 	}
 	username := base
 	if existing, err := s.repo.UserByUsername(username); err == nil && existing != nil {
-		username = kernel.TruncateRunes(base, 23) + "_" + shortSubject(subject)
+		username = kernel.TruncateRunes(base, 23) + "_" + shortSubject(profile.subject)
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil, err
 	}
-	email = NormalizeEmail(email)
+	email := NormalizeEmail(profile.email)
 	if email != "" {
 		if ValidateEmail(email) != nil {
 			email = ""
@@ -374,8 +384,8 @@ func (s *Service) createLinuxDOUser(subject string, providerUsername string, dis
 			return nil, nil, err
 		}
 	}
-	user := &model.User{ID: kernel.NewID(), Username: username, Email: email, DisplayName: NormalizeDisplayName(displayName, username), Role: model.UserRoleUser, Status: model.UserStatusActive}
-	identity := &model.UserIdentity{ID: kernel.NewID(), UserID: user.ID, Provider: "linuxdo", Subject: subject, ProviderUsername: providerUsername, AvatarURL: avatarURL}
+	user := &model.User{ID: kernel.NewID(), Username: username, Email: email, DisplayName: NormalizeDisplayName(profile.name, username), Role: model.UserRoleUser, Status: model.UserStatusActive}
+	identity := &model.UserIdentity{ID: kernel.NewID(), UserID: user.ID, Provider: profile.provider, Subject: profile.subject, ProviderUsername: profile.username, AvatarURL: profile.avatarURL}
 	return user, identity, nil
 }
 
