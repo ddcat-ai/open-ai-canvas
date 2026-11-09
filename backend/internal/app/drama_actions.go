@@ -598,6 +598,21 @@ func (s *Service) RegenerateDramaCast(userID string, projectID string, castID st
 	if err := s.repo.UpdateDramaCastFields(cast.ID, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {
 		return nil, err
 	}
+	// 重试角色本体时，把它因本体失败而落败的造型一起重新排队。
+	if cast.ParentID == "" {
+		casts, err := s.repo.DramaCasts(project.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, look := range casts {
+			if look.ParentID != cast.ID || look.ImageStatus != model.DramaMediaFailed {
+				continue
+			}
+			if _, err := s.repo.UpdateDramaCastIf(look.ID, []string{model.DramaMediaFailed}, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {
+				return nil, err
+			}
+		}
+	}
 	affected := 0
 	if restyleSegments {
 		if affected, err = s.restyleDramaCastSegments(project.ID, cast.ID); err != nil {
