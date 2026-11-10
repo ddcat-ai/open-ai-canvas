@@ -1,6 +1,8 @@
 package database
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -75,7 +77,13 @@ func migrateCanvasNodeScope(tx *gorm.DB, userID, canvasID string) error {
 			if err := json.Unmarshal(next, &after); err != nil {
 				return "", false, err
 			}
-			hashes[canvasdoc.SnapshotHash(before)] = canvasdoc.SnapshotHash(after)
+			nextHash := canvasdoc.SnapshotHash(after)
+			for _, oldHash := range canvasMigrationSnapshotHashes(before) {
+				if existing, ok := hashes[oldHash]; ok && existing != nextHash {
+					return "", false, fmt.Errorf("同一原始快照哈希对应不同迁移结果，拒绝推断撤销授权")
+				}
+				hashes[oldHash] = nextHash
+			}
 		}
 		changedScope = changedScope || changed
 		return string(next), changed, nil
@@ -150,19 +158,26 @@ func migrateCanvasNodeScope(tx *gorm.DB, userID, canvasID string) error {
 				if err != nil {
 					return fmt.Errorf("cloud_agent_canvas_mutations %q: %w", row.ID, err)
 				}
-				if !changed {
-					continue
-				}
 				var before map[string]any
 				if err := json.Unmarshal([]byte(row.BeforeJSON), &before); err != nil {
 					return err
 				}
-				oldHash := canvasdoc.SnapshotHash(before)
-				if row.BeforeSnapshotHash != oldHash {
+				if !changed && row.BeforeSnapshotHash == canvasdoc.SnapshotHash(before) {
+					continue
+				}
+				verified := false
+				for _, oldHash := range canvasMigrationSnapshotHashes(before) {
+					verified = verified || row.BeforeSnapshotHash == oldHash
+				}
+				if !verified {
 					return fmt.Errorf("Agent 撤销快照 %q 的原始哈希不匹配，未迁移任何内容", row.ID)
 				}
-				changedBefore[row.ID] = true
-				if err := tx.Model(&model.CloudAgentCanvasMutation{}).Where("id = ?", row.ID).UpdateColumns(map[string]any{"before_json": next, "before_snapshot_hash": hashes[oldHash]}).Error; err != nil {
+				changedBefore[row.ID], changedScope = true, true
+				updates := map[string]any{"before_snapshot_hash": hashes[row.BeforeSnapshotHash]}
+				if changed {
+					updates["before_json"] = next
+				}
+				if err := tx.Model(&model.CloudAgentCanvasMutation{}).Where("id = ?", row.ID).UpdateColumns(updates).Error; err != nil {
 					return err
 				}
 			}
@@ -195,6 +210,43 @@ func migrateCanvasNodeScope(tx *gorm.DB, userID, canvasID string) error {
 		}
 	}
 	return nil
+}
+
+// Old mutation rows have no hash-version column. Recompute only the two actual
+// historical contracts: 5f359f2b normalized top-level presentation fields, then
+// 8e8d78a5 excluded node timestamps. Each accepted hash still proves this exact
+// preimage; these aliases must remain scoped to its owner and canvas.
+func canvasMigrationSnapshotHashes(doc map[string]any) []string {
+	withNodeTimestamps := make(map[string]any, len(doc))
+	original := make(map[string]any, len(doc))
+	for key, value := range doc {
+		if key != "viewport" && key != "updatedAt" {
+			original[key] = value
+		}
+		switch key {
+		case "id", "viewport", "updatedAt", "revision", "createdAt":
+			continue
+		case "title", "projectId":
+			if text, ok := value.(string); ok && strings.TrimSpace(text) == "" {
+				continue
+			}
+		}
+		withNodeTimestamps[key] = value
+	}
+	for _, key := range []string{"nodes", "connections"} {
+		if value, exists := withNodeTimestamps[key]; !exists || value == nil {
+			withNodeTimestamps[key] = []any{}
+		}
+	}
+	hashes := []string{canvasdoc.SnapshotHash(doc)}
+	for _, content := range []map[string]any{withNodeTimestamps, original} {
+		// These maps contain only values decoded from valid JSON; this matches
+		// the historical creationHash encoding, including its numeric contract.
+		encoded, _ := json.Marshal(content)
+		digest := sha256.Sum256(encoded)
+		hashes = append(hashes, hex.EncodeToString(digest[:]))
+	}
+	return hashes
 }
 
 func migrateCreationCanvasBaselines(tx *gorm.DB) error {

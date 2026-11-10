@@ -94,6 +94,141 @@ func migrationHash(t *testing.T, raw string) string {
 	return canvasdoc.SnapshotHash(doc)
 }
 
+const legacyUndoBeforeJSON = `{"id":"canvas","revision":7,"createdAt":"2026-10-20T00:00:00Z","updatedAt":"2026-10-20T01:00:00Z","title":"作品","nodes":[{"id":"n","type":"markdown","createdAt":"2026-10-20T00:00:00Z","updatedAt":"2026-10-20T01:00:00Z","metadata":{"content":"before"}}],"connections":[]}`
+
+func TestCanvasMigrationHistoricalHashContracts(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(legacyUndoBeforeJSON), &doc); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(doc)
+	got := canvasMigrationSnapshotHashes(doc)
+	// Fixed historical vectors include both node timestamps and top-level
+	// bookkeeping, rather than generating the expected proof with the migrator.
+	if got[1] != "553c6893d27c6920fa6e18f1f07e0d9f2583e2fa50c607b1fd4d2190070da5e1" || got[2] != "f815564670a2a5579df71e85d45066c7f1305fc9cf0e9695a31b50636121dc2b" {
+		t.Fatalf("historical hashes = %v", got)
+	}
+	if got[0] == got[1] || got[1] == got[2] {
+		t.Fatal("fixture did not distinguish historical contracts")
+	}
+	after, _ := json.Marshal(doc)
+	if string(before) != string(after) {
+		t.Fatal("hash compatibility mutated its preimage")
+	}
+}
+
+func TestCanvasUnifiedNodeMigrationPreservesHistoricalUndoProofs(t *testing.T) {
+	for _, driver := range []string{"sqlite", "postgres"} {
+		for _, kind := range []string{"markdown", "text"} {
+			for _, version := range []int{1, 2} {
+				t.Run(fmt.Sprintf("%s/%s/hash-%d", driver, kind, version), func(t *testing.T) {
+					db := canvasNodeMigrationDB(t, driver)
+					before := strings.Replace(legacyUndoBeforeJSON, `"markdown"`, `"`+kind+`"`, 1)
+					after := strings.Replace(before, `"before"`, `"after"`, 1)
+					var beforeDoc, afterDoc map[string]any
+					if err := json.Unmarshal([]byte(before), &beforeDoc); err != nil {
+						t.Fatal(err)
+					}
+					if err := json.Unmarshal([]byte(after), &afterDoc); err != nil {
+						t.Fatal(err)
+					}
+					beforeHash, afterHash := canvasMigrationSnapshotHashes(beforeDoc)[version], canvasMigrationSnapshotHashes(afterDoc)[version]
+					at := time.Date(2026, 10, 20, 22, 37, 29, 0, time.UTC)
+					project := model.CanvasProject{ID: "canvas", UserID: "owner", Revision: 7, PayloadJSON: after, CreatedAt: at, UpdatedAt: at}
+					if err := db.Create(&project).Error; err != nil {
+						t.Fatal(err)
+					}
+					cases := []struct {
+						id, status string
+						submitted  bool
+					}{{"applied", "applied", false}, {"submitted", "applied", true}, {"undone", "undone", false}, {"blocked", "not_undoable", false}, {"unprovable", "applied", false}}
+					for _, item := range cases {
+						row := model.CloudAgentCanvasMutation{ID: item.id, UserID: "owner", CanvasID: "canvas", RunID: "run", StepID: item.id, Operation: "generate_media_submit", Status: item.status, HasSubmittedTask: item.submitted, BeforeJSON: before, BeforeSnapshotHash: beforeHash, AfterSnapshotHash: afterHash, CreatedAt: at}
+						if item.id == "unprovable" {
+							row.AfterSnapshotHash = strings.Repeat("f", 64)
+						}
+						if err := db.Create(&row).Error; err != nil {
+							t.Fatal(err)
+						}
+					}
+					if err := db.Transaction(migrateCanvasNodeModel); err != nil {
+						t.Fatal(err)
+					}
+					var migrated model.CanvasProject
+					if err := db.First(&migrated, "id = ?", project.ID).Error; err != nil {
+						t.Fatal(err)
+					}
+					if kind == "text" && (migrated.PayloadJSON != after || migrated.Revision != 7) {
+						t.Fatal("hash-only repair rewrote the live document or revision")
+					}
+					for _, item := range cases {
+						var row model.CloudAgentCanvasMutation
+						if err := db.First(&row, "id = ?", item.id).Error; err != nil {
+							t.Fatal(err)
+						}
+						wantStatus := item.status
+						if item.id == "unprovable" {
+							wantStatus = "not_undoable"
+						} else if row.AfterSnapshotHash != migrationHash(t, migrated.PayloadJSON) {
+							t.Fatalf("%s lost its proven historical after hash", item.id)
+						}
+						if row.BeforeSnapshotHash != migrationHash(t, row.BeforeJSON) || row.Status != wantStatus || row.HasSubmittedTask != item.submitted || !row.CreatedAt.Equal(at) {
+							t.Fatalf("%s altered undo authority or failed to rehash: %+v", item.id, row)
+						}
+						if kind == "text" && row.BeforeJSON != before {
+							t.Fatal("hash-only repair changed historical JSON bytes")
+						}
+						if item.id == "unprovable" && row.AfterSnapshotHash != strings.Repeat("f", 64) {
+							t.Fatal("unknown postimage was invented")
+						}
+					}
+					var first, repeated []model.CloudAgentCanvasMutation
+					db.Order("id").Find(&first)
+					if err := db.Transaction(migrateCanvasNodeModel); err != nil {
+						t.Fatal(err)
+					}
+					db.Order("id").Find(&repeated)
+					if !reflect.DeepEqual(first, repeated) {
+						t.Fatal("second migration changed undo records")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestCanvasUnifiedNodeMigrationRejectsBorrowedHistoricalProof(t *testing.T) {
+	for _, driver := range []string{"sqlite", "postgres"} {
+		for _, kind := range []string{"markdown", "text"} {
+			t.Run(driver+"/"+kind, func(t *testing.T) {
+				db := canvasNodeMigrationDB(t, driver)
+				before := strings.Replace(legacyUndoBeforeJSON, `"markdown"`, `"`+kind+`"`, 1)
+				after := strings.Replace(before, `"before"`, `"after"`, 1)
+				var afterDoc map[string]any
+				json.Unmarshal([]byte(after), &afterDoc)
+				project := model.CanvasProject{ID: "canvas", UserID: "owner", Revision: 7, PayloadJSON: after}
+				if err := db.Create(&project).Error; err != nil {
+					t.Fatal(err)
+				}
+				// This hash is known in the same canvas, but does not prove this
+				// row's preimage. An alias lookup alone would incorrectly accept it.
+				row := model.CloudAgentCanvasMutation{ID: "forged", UserID: "owner", CanvasID: "canvas", Status: "undone", BeforeJSON: before, BeforeSnapshotHash: canvasMigrationSnapshotHashes(afterDoc)[1]}
+				if err := db.Create(&row).Error; err != nil {
+					t.Fatal(err)
+				}
+				if err := db.Transaction(migrateCanvasNodeModel); err == nil {
+					t.Fatal("migration accepted another preimage's historical proof")
+				}
+				var got model.CanvasProject
+				db.First(&got, "id = ?", project.ID)
+				if got.PayloadJSON != after || got.Revision != 7 {
+					t.Fatal("invalid proof committed part of the migration")
+				}
+			})
+		}
+	}
+}
+
 func TestCanvasUnifiedNodeMigration(t *testing.T) {
 	for _, driver := range []string{"sqlite", "postgres"} {
 		t.Run(driver, func(t *testing.T) {
