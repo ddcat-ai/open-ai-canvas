@@ -348,6 +348,10 @@ func TestImageParametersPixelSelectionKeepsExactSizeWithoutResolution(t *testing
 	if err := projectImageParameters(profile.Image); err != nil {
 		t.Fatal(err)
 	}
+	spec, err := CapabilitySpecFromModelCapabilityConfig(profile, "image")
+	if err != nil || spec.ImageSize == nil || len(spec.ImageSize.Presets) != 2 {
+		t.Fatalf("pixel-only public projection lost configured groups: %#v %v", spec.ImageSize, err)
+	}
 	config := providerConfig{InterfaceType: "opaque-provider", Size: "2048x2048", ImageParameters: map[string]any{"size": "2048x2048"}}
 	if err := applyImageParameterValues(&config, profile.Image); err != nil {
 		t.Fatal(err)

@@ -88,11 +88,14 @@ func TestChannelModelLabelSaveAndCatalogPreserveChannelIdentity(t *testing.T) {
 		t.Fatal("accepted oversized description")
 	}
 	request.Description = strings.Repeat("字", 500)
-	if _, err := svc.SaveAdminChannelModel(admin, "channel-a", firstID, request); err != nil {
+	request.ExpectedUpdatedAt, request.ExpectedPriceVersion = unchanged.UpdatedAt, unchanged.PriceVersion
+	saved, err := svc.SaveAdminChannelModel(admin, "channel-a", firstID, request)
+	if err != nil {
 		t.Fatalf("rejected valid 500-character description: %v", err)
 	}
 	request.Description = "  "
 	request.Tags = []model.ChannelModelTag{}
+	request.ExpectedUpdatedAt, request.ExpectedPriceVersion = saved.UpdatedAt, saved.PriceVersion
 	updated, err := svc.SaveAdminChannelModel(admin, "channel-a", firstID, request)
 	if err != nil || updated.ChannelLabel != "" || updated.Description != "" || updated.ID != firstID {
 		t.Fatalf("label clearing changed identity: %#v, %v", updated, err)

@@ -11,8 +11,80 @@ import (
 	"yingce/backend/internal/protocol"
 )
 
-func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions []protocol.ImageParameter, model string) error {
+func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions []protocol.ImageParameter, model, create string) error {
+	// Preserve the established legacy quality-as-resolution conversion before
+	// supplementing generic fields; explicit parameter schemas are untouched.
+	if image.Parameters == nil && !image.Resolution.Supported && image.Quality.Supported && len(image.Quality.Values) > 0 {
+		hasQuality := false
+		for _, field := range definitions {
+			hasQuality = hasQuality || field.Name == "quality"
+		}
+		if !hasQuality {
+			for _, field := range definitions {
+				if field.Name != "imageResolution" {
+					continue
+				}
+				valid := true
+				for _, value := range image.Quality.Values {
+					valid = valid && field.Accepts(value)
+				}
+				if valid {
+					image.Resolution = ImageResolutionConfig{Supported: true, Values: image.Quality.Values, Default: image.Quality.Default}
+					image.Quality = ImageQualityConfig{Default: "auto", Values: []string{}}
+				}
+			}
+		}
+	}
+	definitions = append([]protocol.ImageParameter(nil), definitions...)
+	targetEncoding := protocol.StandardImageSizeEncoding(create)
+	for i := range definitions {
+		if definitions[i].Name == "size" && definitions[i].Encoding == "" {
+			definitions[i].Encoding = targetEncoding
+		}
+	}
+	for _, name := range []string{"size", "imageResolution", "quality", "count", "transparentBackground"} {
+		found := false
+		for _, definition := range definitions {
+			found = found || definition.Name == name
+		}
+		if found {
+			continue
+		}
+		configured := false
+		for _, field := range image.Parameters {
+			configured = configured || field.Name == name
+		}
+		legacyEnabled := (name == "size" && image.Size.Parameter != "none") || (name == "imageResolution" && image.Resolution.Supported) || (name == "quality" && image.Quality.Supported) || (name == "count" && image.MaxOutputs > 1) || (name == "transparentBackground" && image.TransparentBackground.Supported)
+		if !configured && (image.Parameters != nil || !legacyEnabled) {
+			continue
+		}
+		field, _ := protocol.CommonImageParameter(name)
+		if name == "size" {
+			field.Encoding = "ratio"
+			if image.Size.Parameter == "size" {
+				field.Encoding = "pixels"
+			}
+			if targetEncoding != "" {
+				field.Encoding = targetEncoding
+			}
+		}
+		definitions = append(definitions, field)
+	}
 	configured := image.Parameters
+	if configured != nil && len(image.Resolution.Values) > 0 {
+		declared := false
+		for _, field := range configured {
+			declared = declared || field.Name == "imageResolution"
+		}
+		if !declared {
+			values := make([]any, 0, len(image.Resolution.Values))
+			for _, value := range image.Resolution.Values {
+				values = append(values, value)
+			}
+			enabled := image.Resolution.Supported
+			configured = append(configured, protocol.ImageParameter{Name: "imageResolution", Enabled: &enabled, Values: values, Default: image.Resolution.Default})
+		}
+	}
 	if configured == nil {
 		// Import existing declarations once. A resolution-only plugin may import
 		// old quality tiers only when every value is explicitly in its contract.
@@ -23,7 +95,8 @@ func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions 
 			}
 		}
 		for _, definition := range definitions {
-			if !definition.AppliesTo(model) {
+			_, common := protocol.CommonImageParameter(definition.Name)
+			if !definition.AppliesTo(model) && !common {
 				continue
 			}
 			p := definition
@@ -37,7 +110,7 @@ func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions 
 			case "imageResolution":
 				enabled = image.Resolution.Supported
 				values, initial = image.Resolution.Values, image.Resolution.Default
-				if !enabled && !hasQuality && image.Quality.Supported {
+				if !image.Resolution.Supported && !hasQuality && image.Quality.Supported {
 					valid := len(image.Quality.Values) > 0
 					for _, value := range image.Quality.Values {
 						valid = valid && definition.Accepts(value)
@@ -52,14 +125,12 @@ func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions 
 				enabled, p.Default = image.TransparentBackground.Supported, image.TransparentBackground.Default
 			case "count":
 				maximum := float64(image.MaxOutputs)
-				if p.Max == nil || maximum < *p.Max {
-					p.Max = &maximum
-				}
+				p.Max = &maximum
 			}
 			if len(values) > 0 {
 				p.Values = nil
 				for _, value := range values {
-					if definition.Accepts(value) {
+					if common || definition.Accepts(value) {
 						p.Values = append(p.Values, value)
 					}
 				}
@@ -93,6 +164,7 @@ func projectImageParameters(image *ImageCapabilityConfig) error {
 	image.Resolution = ImageResolutionConfig{Default: "auto", Values: []string{}}
 	image.TransparentBackground = VideoBooleanConfig{}
 	image.ResolutionUsesQuality = false
+	previousMaxOutputs := image.MaxOutputs
 	image.MaxOutputs = 1
 	sizeEnabled := false
 	for _, p := range image.Parameters {
@@ -113,7 +185,11 @@ func projectImageParameters(image *ImageCapabilityConfig) error {
 		case "size":
 			sizeEnabled = true
 			image.Size.Parameter = "aspect_ratio"
-			if p.Encoding == "pixels" {
+			pixelValues := false
+			for _, value := range values {
+				pixelValues = pixelValues || strings.Contains(value, "x")
+			}
+			if p.Encoding == "pixels" || pixelValues {
 				image.Size.Parameter = "size"
 				for _, value := range values {
 					if strings.Contains(value, ":") {
@@ -133,6 +209,8 @@ func projectImageParameters(image *ImageCapabilityConfig) error {
 		case "count":
 			if p.Max != nil {
 				image.MaxOutputs = int(*p.Max)
+			} else if previousMaxOutputs > 0 {
+				image.MaxOutputs = previousMaxOutputs
 			}
 		}
 	}
@@ -195,6 +273,16 @@ func singleImageSizeTier(image *ImageCapabilityConfig) (string, bool) {
 
 func activeImageSizePresets(image *ImageCapabilityConfig) []ImageSizePreset {
 	if image.Parameters == nil || image.Resolution.Supported {
+		return image.Size.Presets
+	}
+	declaresResolution := false
+	for _, field := range image.Parameters {
+		declaresResolution = declaresResolution || field.Name == "imageResolution"
+	}
+	// A model with only exact pixel sizes has no independent resolution switch.
+	// Preserve every configured pixel group; only an explicitly disabled field
+	// selects one default group.
+	if !declaresResolution && image.Size.Parameter == "size" {
 		return image.Size.Presets
 	}
 	tier, ok := singleImageSizeTier(image)
@@ -433,6 +521,16 @@ func applyImageParameterValues(config *providerConfig, profile *ImageCapabilityC
 		for _, field := range profile.Parameters {
 			if field.Name == "size" && field.Accepts(config.Size) {
 				config.ImageParameters["size"] = config.Size
+			}
+		}
+	} else {
+		for _, field := range profile.Parameters {
+			if field.Name == "size" && field.IsEnabled() && field.Encoding == "ratio" && strings.Contains(config.Size, "x") {
+				ratio := imageSizeRatioForDeclaredPreset(profile, config.Size, config.ImageResolution)
+				if ratio == "" {
+					return BadAuthRequest("当前像素尺寸缺少明确的比例映射")
+				}
+				config.Size = ratio
 			}
 		}
 	}

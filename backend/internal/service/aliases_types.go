@@ -133,6 +133,12 @@ type (
 	ChannelModelCatalogOptions             = app.ChannelModelCatalogOptions
 	ChannelModelPriceTierRequest           = app.ChannelModelPriceTierRequest
 	ChannelModelRequest                    = app.ChannelModelRequest
+	ChannelModelProtocolGroup              = app.ChannelModelProtocolGroup
+	ChannelModelBatchProtocolRequest       = app.ChannelModelBatchProtocolRequest
+	BatchChannelModelUpdate                = app.BatchChannelModelUpdate
+	BatchChannelModelChanges               = app.BatchChannelModelChanges
+	BatchModelCapabilityTemplate           = app.BatchModelCapabilityTemplate
+	BatchModelPricingTemplate              = app.BatchModelPricingTemplate
 	ChannelModelRepriceRequest             = app.ChannelModelRepriceRequest
 	ChannelModelQuoteRequest               = app.ChannelModelQuoteRequest
 	ChannelModelSortRequest                = app.ChannelModelSortRequest

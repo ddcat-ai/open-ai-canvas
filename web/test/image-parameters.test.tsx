@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ImageParameterFields, ImageParameterSchemaEditor, ImagePixelMappingEditor } from "../src/components/image-parameter-fields";
 import { ModelCapabilityEditor } from "../src/components/model-capability-editor";
-import { imagePresetForRatio } from "../src/lib/image-size-presets";
+import { imagePresetForRatio, imageSizePresets } from "../src/lib/image-size-presets";
 import { imageParameterConstraints, imageParameterRequest, initializeImageRatioDefaults, normalizeImageParameters, projectImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter } from "../src/lib/image-parameters";
 import { defaultImageCapabilityConfig } from "../src/lib/model-capabilities";
 import { projectLogicalCapability } from "../src/lib/user-session";
@@ -122,6 +122,15 @@ describe("plugin image parameters across model configuration and generation", ()
         expect(html).not.toContain('aria-label="1K 支持的宽高比"');
         expect(html).not.toContain('aria-label="启用 2K 规格"');
     });
+    test("pixel-only public projection retains every configured size group", () => {
+        const { image } = fixture([{ name: "size", label: "像素", type: "string", values: ["1024x1024", "2048x2048"], default: "1024x1024", encoding: "pixels" }]);
+        image.size.presets = [imagePresetForRatio("1k", "1:1"), imagePresetForRatio("2k", "1:1")];
+        expect(imageSizePresets(image)).toEqual(image.size.presets);
+        const spec = capabilitySpecFromChannelModel({ capability: "image", capabilityConfig: { version: 1, image } } as ChannelModel)!;
+        const projected = projectLogicalCapability(spec, {}).image!;
+        expect(imageSizePresets(projected)).toEqual(image.size.presets);
+        expect(imageParameterRequest(projected, { size: "2048x2048" }, true)).toEqual({ size: "2048x2048" });
+    });
     test("disabled resolution uses one ratio group and restores existing tier presets on enabling", () => {
         const { image, config } = fixture([
             { name: "size", label: "画幅", type: "string", values: ["1:1"], default: "1:1", encoding: "pixels" },
@@ -204,7 +213,7 @@ describe("plugin image parameters across model configuration and generation", ()
         const tier = { ...defaultPriceTier("advanced"), imageSelector: { imageResolution: "large", creativeAmount: "100", rawMode: "true", quality: "4k" } };
         expect(skuSelectorFromForm("image", tier, { version: 1, image })).toEqual({ imageResolution: "large" });
     });
-    test("zero and false persist while unsupported fields do not cross model switches", () => {
+    test("zero and false survive typed projection; canonical storage retains the original until capability resolution", () => {
         const { image, config } = fixture();
         expect(imageParameterRequest(image, config)).toEqual({ imageResolution: "large", creativeAmount: 0, rawMode: false });
         expect(normalizeImageParameters([parameters[0]], config.imageParameters)).toEqual({ imageResolution: "small" });
@@ -213,22 +222,26 @@ describe("plugin image parameters across model configuration and generation", ()
         expect(metadata.imageParameters).toBe(config.imageParameters);
         const node = { id: "node", type: "image", metadata } as CanvasNodeData;
         const changed = synchronizeGenerationSpec(node, { model: encodeChannelModel("other", "model") });
-        expect(changed.metadata?.imageParameters).toBeUndefined();
+        expect(changed.metadata?.imageParameters).toBe(config.imageParameters);
     });
     test("actual task payload includes typed extensions and no stale quality requirement", async () => {
         const { config } = fixture();
-        const task = await prepareBackendGenerationTask({ mode: "image", prompt: "portrait", config });
+        const adapted = await prepareBackendGenerationTask({ mode: "image", prompt: "portrait", config });
+        expect((adapted.input.capabilityOptions as Record<string, unknown>).oldParameter).toBeUndefined();
+        const task = await prepareBackendGenerationTask({ mode: "image", prompt: "portrait", config: { ...config, size: "auto", imageParameters: JSON.stringify({ creativeAmount: 0, rawMode: false }) } });
         const input = task.input as Record<string, any>;
         expect(input.capabilityOptions).toEqual({ imageResolution: "large", creativeAmount: 0, rawMode: false });
         expect(input.config.imageParameters).toEqual(input.capabilityOptions);
         expect(input.capabilityOptions.quality).toBeUndefined();
     });
-    test("submission rejects explicit invalid fields while display can normalize stored preferences", async () => {
+    test("switch adaptation uses valid defaults while the strict encoder still rejects invalid raw values", async () => {
         const { image, config } = fixture();
         const invalid = { ...config, imageParameters: JSON.stringify({ creativeAmount: 201 }) };
         expect(imageParameterRequest(image, invalid)?.creativeAmount).toBe(0);
         expect(() => imageParameterRequest(image, invalid, true)).toThrow("创意程度");
-        await expect(prepareBackendGenerationTask({ mode: "image", prompt: "portrait", config: invalid })).rejects.toThrow("创意程度");
+        const task = await prepareBackendGenerationTask({ mode: "image", prompt: "portrait", config: invalid });
+        expect((task.input.capabilityOptions as Record<string, unknown>).creativeAmount).toBe(0);
+        await expect(prepareBackendGenerationTask({ mode: "image", prompt: "portrait", config: { ...config, imageParameters: '{"creativeAmount":"wrong"}' } })).rejects.toThrow("创意程度");
         expect(() => imageParameterRequest(image, { ...config, imageParameters: "invalid" }, true)).toThrow("格式无效");
     });
     test("pixel mapping accepts plugin resolution names without inventing dimensions", () => {

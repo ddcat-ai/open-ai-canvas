@@ -1,4 +1,5 @@
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { assertMediaSettings, resolvedMediaConfig } from "@/lib/media-settings";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -35,6 +36,8 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
 
 export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] = [], videoReferences: ReferenceVideo[] = [], audioReferences: ReferenceAudio[] = [], options?: RequestOptions): Promise<VideoGenerationTask> {
     const selectedModel = (config.model || config.videoModel).trim();
+    assertMediaSettings(config, "video", selectedModel);
+    config = resolvedMediaConfig(config, "video", selectedModel);
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     assertVideoConfig(requestConfig, requestConfig.model);
     assertVideoCapability(modelCapabilityConfigFor(config, selectedModel).video!, references, videoReferences, audioReferences, config.videoSeconds);

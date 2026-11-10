@@ -116,7 +116,7 @@ export function imageQualityForSelection(profile: ImageCapabilityConfig, tier: I
 
 export function imageSizePresets(profile: ImageCapabilityConfig): ImageResolutionOption[] {
     if (profile.size.parameter === "none") return [];
-    if (profile.parameters && !profile.resolution.supported) {
+    if (profile.parameters && !profile.resolution.supported && (profile.parameters.some((field) => field.name === "imageResolution") || profile.size.parameter !== "size")) {
         const tier = imageSingleSizeTier(profile);
         return (profile.size.presets || []).filter((preset) => preset.tier === (tier ?? ""));
     }

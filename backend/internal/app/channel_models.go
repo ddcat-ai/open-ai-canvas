@@ -13,6 +13,9 @@ import (
 )
 
 type ChannelModelRequest struct {
+	ExpectedUpdatedAt                time.Time               `json:"expectedUpdatedAt,omitempty"`
+	ExpectedPriceVersion             int64                   `json:"expectedPriceVersion,omitempty"`
+	ProtocolSelectionExplicit        *bool                   `json:"protocolSelectionExplicit,omitempty"`
 	ModelKey                         string                  `json:"modelKey"`
 	ProviderModelKey                 string                  `json:"providerModelKey"`
 	DisplayName                      string                  `json:"displayName"`
@@ -203,19 +206,25 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 			return nil, err
 		}
 	}
-	modelID, err := s.repo.NextPrefixedID("MODEL")
-	if err != nil {
-		return nil, err
-	}
-	item := &model.ChannelModel{ID: modelID, ChannelID: channelID, Enabled: true, PriceVersion: 1, PriceCurrency: model.PriceCurrencyCredits}
+	item := &model.ChannelModel{ChannelID: channelID, Enabled: true, PriceVersion: 1, PriceCurrency: model.PriceCurrencyCredits}
 	previousProviderModelKey := ""
+	previousProtocol := model.ChannelInterfaceType("")
 	if id != "" {
 		item, err = s.repo.ChannelModelByID(channelID, id)
 		if err != nil {
 			return nil, err
 		}
+		if req.ExpectedUpdatedAt.IsZero() || !req.ExpectedUpdatedAt.Equal(item.UpdatedAt) || req.ExpectedPriceVersion != item.PriceVersion {
+			return nil, BadAuthRequest("模型已被修改或缺少编辑版本，请刷新后重新编辑；本次未保存任何修改")
+		}
 		previousProviderModelKey = strings.TrimPrefix(strings.TrimSpace(item.ProviderModelKey), "models/")
+		previousProtocol = item.Protocol
 		item.PriceVersion++
+	} else {
+		item.ID, err = s.repo.NextPrefixedID("MODEL")
+		if err != nil {
+			return nil, err
+		}
 	}
 	// 模型级上游键重命名时，与旧值相同的档位键属于“跟随模型默认”的隐式固化，必须级联跟随；
 	// 否则任务请求会继续把旧上游键发给供应商。管理员显式配置的其他上游 SKU 不受影响。
@@ -277,17 +286,40 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		return nil, err
 	}
 	// 渠道模型及所有价格档必须同时落库，不能出现“能力已开放但规格价格尚未更新”的窗口。
-	if err := s.repo.SaveChannelModelWithPriceTiers(item, tiers); err != nil {
+	if err := s.repo.Transaction(func(repo *repository.Repository) error {
+		if channel.WebsiteID != "" {
+			if _, err := repo.LockChannelWebsite(channel.WebsiteID); err != nil {
+				return err
+			}
+		}
+		if err := repo.LockSystemChannelConfiguration([]string{channel.ID}); err != nil {
+			return err
+		}
+		currentChannel, err := repo.AdminSystemChannel(channel.ID)
+		if err != nil {
+			return err
+		}
+		if currentChannel.WebsiteID != channel.WebsiteID {
+			return BadAuthRequest("Key 分组归属已变化，请刷新后重试")
+		}
+		if err := repo.SaveChannelModelWithPriceTiers(item, tiers); err != nil {
+			return err
+		}
+		item.PriceTiers = tiers
+		if err := repo.SyncChannelModelNames(channel.ID, time.Now()); err != nil {
+			return err
+		}
+		if previousProtocol != item.Protocol && (req.ProtocolSelectionExplicit == nil || *req.ProtocolSelectionExplicit) {
+			return repo.RecordChannelProtocolSelection(channel.WebsiteID, actor.ID, item)
+		}
+		return nil
+	}); err != nil {
+		if errors.Is(err, repository.ErrTaskStateConflict) {
+			return nil, BadAuthRequest("模型已被修改，请刷新后重新编辑；本次未保存任何修改")
+		}
 		return nil, err
 	}
-	item.PriceTiers = tiers
 	s.invalidateRouteCatalog()
-	if err := s.syncChannelModelNames(channel); err != nil {
-		return nil, err
-	}
-	if err := s.syncLogicalModelsFromChannelModel(actor, item); err != nil {
-		return nil, err
-	}
 	return item, nil
 }
 

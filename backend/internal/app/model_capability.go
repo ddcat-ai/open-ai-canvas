@@ -258,13 +258,15 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		if input == nil || input.Image == nil {
 			return nil, BadAuthRequest("请配置图片模型能力参数")
 		}
+		if input.Image.Parameters == nil {
+			normalizeLegacyImageResolutionConfig(protocol, input.Image)
+		}
 		if len(registries) > 0 && registries[0] != nil {
-			if adapter, ok := registries[0].Resolve(protocol); ok && adapter.Metadata().ImageParameters != nil {
-				if err := resolveImageCapabilityParameters(input.Image, adapter.Metadata().ImageParameters, modelName); err != nil {
+			if adapter, ok := registries[0].Resolve(protocol); ok {
+				metadata := adapter.Metadata()
+				if err := resolveImageCapabilityParameters(input.Image, metadata.ImageParameters, modelName, metadata.Create); err != nil {
 					return nil, err
 				}
-			} else if input.Image.Parameters != nil {
-				return nil, BadAuthRequest("当前插件未声明图片参数合同，请先更新插件")
 			}
 		}
 		if input.Image.Parameters != nil {
@@ -288,7 +290,8 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 	if input == nil || input.Video == nil {
 		return nil, BadAuthRequest("请配置视频模型能力参数")
 	}
-	video := applyModelSpecificVideoCapability(input.Video, protocol, modelName)
+	// 已保存和提交的能力由管理员决定；型号建议只用于构造默认配置。
+	video := input.Video
 	if strings.TrimSpace(protocol) == "autodl-comfyui" {
 		var err error
 		video, err = normalizeAutoDLVideoScreenSpec(video, modelName)

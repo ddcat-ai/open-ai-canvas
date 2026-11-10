@@ -5,6 +5,7 @@ import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
 import { imageResponseFormatFor, modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
+import { assertMediaSettings, resolvedMediaConfig } from "@/lib/media-settings";
 import { buildGeminiImageGenerationConfig, parseGeminiImageDataUrl, type GeminiImageGenerationConfig } from "@/lib/gemini-image";
 import { isVolcengineArkImageProtocol } from "@/lib/model-protocols";
 import { aiApiUrl, aiHeaders, imageChannelTransport, postChannelJSON, postGeminiJSON, postVolcengineArkImage } from "@/services/api/image-transport";
@@ -58,6 +59,8 @@ async function requestGeminiImagesOnce(config: AiConfig, prompt: string, referen
 
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
+    assertMediaSettings(config, "image", selectedModel);
+    config = resolvedMediaConfig(config, "image", selectedModel);
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, []);
@@ -135,6 +138,8 @@ async function grokImageInputURL(image: ReferenceImage) {
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
+    assertMediaSettings(config, "image", selectedModel);
+    config = resolvedMediaConfig(config, "image", selectedModel);
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, references, mask);

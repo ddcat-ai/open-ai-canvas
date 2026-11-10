@@ -19098,6 +19098,22 @@ html:not(.dark) .creation-custom-value {
     grid-template-rows: minmax(0, 1fr);
 }
 
+/* 版本预览的网格轨道必须可收缩，否则竖图的原始尺寸会撑破固定预览高度。 */
+.canvas-version-image > .cached-resource-image-shell {
+    min-width: 0;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+}
+.canvas-version-image > img,
+.canvas-version-image > .cached-resource-image-shell > img {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    object-fit: contain;
+}
+
 @media (max-width: 680px) {
     .creation-empty-workspace {
         width: calc(100% - 28px);
@@ -27543,4 +27559,49 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     border: 0 !important;
     background: color-mix(in srgb, var(--popover-foreground) 10%, var(--popover)) !important;
     color: var(--popover-foreground) !important;
+}
+
+/* 图片浮层保留透明外壳，使原图缩放和拖动不被内容面板裁切。 */
+.canvas-image-preview-modal {
+    width: fit-content !important;
+    max-width: calc(100vw - 24px);
+}
+
+.canvas-image-preview-modal .ant-modal-container,
+.canvas-image-preview-modal .ant-modal-content {
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+.canvas-image-preview-modal .ant-modal-container,
+.canvas-image-preview-modal .ant-modal-body {
+    padding: 0 !important;
+}
+
+.canvas-image-preview-modal .ant-modal-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.canvas-image-preview-modal .ant-modal-close {
+    top: -40px !important;
+    inset-inline-end: 0 !important;
+    border-radius: 9999px;
+    background: color-mix(in srgb, black 58%, transparent);
+    color: white;
+}
+
+.canvas-image-preview-modal .ant-modal-close:hover {
+    background: color-mix(in srgb, black 78%, transparent) !important;
+    color: white !important;
 }

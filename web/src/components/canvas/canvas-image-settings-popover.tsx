@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { ImageSettingsPanel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { preserveImageSettings as normalizeImageValue } from "@/lib/media-settings";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
-import type { AiConfig } from "@/stores/use-config-store";
+import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { CanvasSettingsPopover, type CanvasSettingsPlacement } from "./canvas-settings-popover";
 
 type CanvasImageSettingsPopoverProps = {
@@ -25,7 +26,7 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, showCount =
     const theme = canvasThemes[useActiveTheme()];
     const profile = modelCapabilityConfigFor(config, config.model || config.imageModel).image;
     if (!profile) return null;
-    const current = normalizeImageValue(profile, config);
+    const current = normalizeImageValue(profile, config, resolveModelRequestConfig(config, config.model || config.imageModel).interfaceType);
     const parts: string[] = [];
     if (profile.size.parameter !== "none") parts.push(imageSizeLabel(current.size));
     if (profile.quality.supported) parts.push(imageQualityLabel(current.quality));

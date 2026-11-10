@@ -613,7 +613,7 @@ export function importAdminChannels(payload: SystemChannelExport) {
     return http.post<SystemChannelImportResult>("/admin/channels/import", payload);
 }
 
-export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {
+export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean; expectedUpdatedAt?: string }) {
     return http.patch<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}`, input);
 }
 

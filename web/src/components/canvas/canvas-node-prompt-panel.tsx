@@ -1,3 +1,4 @@
+import { mediaSettingIssues } from "@/lib/media-settings";
 import { Button, InputNumber, Modal } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
@@ -259,7 +260,10 @@ export function CanvasNodePromptPanel({
         if (!rect?.width || !rect.height) return { width: PROMPT_EDITOR_MODAL_DEFAULT_WIDTH, height: PROMPT_EDITOR_MODAL_DEFAULT_HEIGHT };
         return { width: Math.round(rect.width), height: Math.round(rect.height) };
     };
-    const isSubmitDisabled = !isRunning && !prompt.trim();
+    const settingsError = mediaSettingIssues(config, mode)
+        .map((item) => item.message)
+        .join("；");
+    const isSubmitDisabled = Boolean(settingsError) || (!isRunning && !prompt.trim());
     const canExpandPrompt = mode === "image" || mode === "video";
     const canOptimizePrompt = Boolean(promptOptimizerProvider) && canExpandPrompt;
     const isPortraitTexture = mode === "image" && Boolean(node.metadata?.portraitTexture);
@@ -349,14 +353,7 @@ export function CanvasNodePromptPanel({
     const removeMotionToolMention = () => updatePromptFromCurrent((currentPrompt) => removeToolMentions(currentPrompt, "motion"));
 
     const changeModel = (model: string) => {
-        if (mode !== "image") {
-            onConfigChange(node.id, { model });
-            return;
-        }
-        // 切换模型回到新模型默认参数；接了参考图时比例仍跟随参考图，空节点占位框随之改比例。
-        const defaults = defaultImageParamsForModel(config, model);
-        const referenceSize = referenceImageSize ? referenceImageSizeSelection(config, model, referenceImageSize, defaults) : undefined;
-        onConfigChange(node.id, { model, ...defaults, ...referenceSize, imageSizeSource: referenceSize ? "reference" : "default" });
+        if (model !== config.model) onConfigChange(node.id, { model });
     };
 
     const submit = () => {
@@ -474,6 +471,12 @@ export function CanvasNodePromptPanel({
     );
 
     const renderSubmitButton = (expanded: boolean) => {
+        if (settingsError)
+            return (
+                <span role="alert" className="text-xs" title={settingsError}>
+                    {settingsError}
+                </span>
+            );
         const showCost = creditsEnabled && credits !== null;
         const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
         const actionLabel = isRunning ? "生成中" : showCost ? `${routeQuote?.estimated ? "预估" : "消耗"} ${formattedCredits} 积分，生成` : "生成";

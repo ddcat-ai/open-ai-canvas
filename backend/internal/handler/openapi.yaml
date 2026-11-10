@@ -2811,6 +2811,134 @@ paths:
             application/yaml:
               schema:
                 type: string
+  /admin/channel-websites:
+    get:
+      tags: [admin]
+      summary: 列出系统渠道网站及 Key 分组数量
+      responses:
+        "200":
+          description: 信封 data.websites 数组；每项包含 id、name、baseUrl、apiFormat、proxyUrl、headers、keyCount、createdAt、updatedAt，不包含 Key 密钥
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [admin]
+      summary: 新建系统渠道网站
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChannelWebsiteRequest"}
+      responses:
+        "200": {description: 信封 data.website 为新建网站及 keyCount}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channel-websites/{id}:
+    parameters:
+      - {in: path, name: id, required: true, schema: {type: string}}
+    patch:
+      tags: [admin]
+      summary: 保存网站及共享连接配置
+      description: |
+        提交完整网站字段和原 updatedAt 作为 expectedUpdatedAt；版本过期时整批拒绝。
+        同事务同步所属 Key 的连接与公共头，保留每个 Key 的密钥和私有头；连接变化后原目录快照标记 stale。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: "#/components/schemas/ChannelWebsiteRequest"}
+                - {type: object, required: [expectedUpdatedAt]}
+      responses:
+        "200": {description: 信封 data.website 为更新后的网站及 keyCount}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+    delete:
+      tags: [admin]
+      summary: 删除空网站
+      description: 仅允许删除没有所属 Key 分组的网站。
+      responses:
+        "200": {description: 信封 data.ok 为 true}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/catalog-status:
+    get:
+      tags: [admin]
+      summary: 查看当前 Key 的最近成功目录快照
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: 信封 data 包含 models 字符串数组、可选 readAt 和 stale；从未读取时 models 为空且无 readAt，连接或凭据变化后 stale 为 true
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/models/fetch:
+    post:
+      tags: [admin]
+      summary: 读取当前 Key 的上游目录并比较快照
+      description: |
+        仅保存成功完整读取的目录快照，不创建渠道模型；需通过原 models/import 接口确认导入。
+        失败、不完整分页或读取期间连接变化均不替换旧快照。连接变化后的首次成功读取重置比较基准。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: 信封 data 包含 models、added、retained、missing 字符串数组，firstRead、baselineReset 布尔值，readAt 和可选 previousReadAt；首次读取或重置时全部模型归入 added
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/protocol-suggestion:
+    get:
+      tags: [admin]
+      summary: 查询同网站、上游模型与能力的协议建议
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: query, name: providerModelKey, schema: {type: string}}
+        - {in: query, name: capability, schema: {type: string, enum: [text, image, video]}}
+      responses:
+        "200":
+          description: 信封 data 包含 source（none、selection、history、conflict 或 invalid）、candidates 数组及可选 protocol、reason、selectedAt；冲突或失效时不自动选协议
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/models/batch-update:
+    post:
+      tags: [admin]
+      summary: 同 Key 统一批量修改模型配置
+      description: |
+        仅管理员可用，请求上限 2 MiB、1–100 个模型。按三项版本校验后，将协议、能力模板、积分模板和稀疏修改合并为最终状态再完整校验。
+        任一模型失效、归属不符、版本过期或配置不兼容均整批拒绝；模型、价格档、显式协议记忆与审计同事务提交。
+        只修改启停时保留现有成本、售价、SKU 和规则。能力模板不选择协议；无类型模型初始化必须明确提交 capability 与 protocol。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChannelModelBatchUpdateRequest"}
+      responses:
+        "200": {description: 信封 data.updated 为修改的模型数量}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channel-models/batch-update:
+    post:
+      tags: [admin]
+      summary: 跨 Key 统一批量修改系统模型配置
+      description: 规则同同 Key batch-update；各模型按所属系统渠道的凭据与能力校验，整批原子提交。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChannelModelBatchUpdateRequest"}
+      responses:
+        "200": {description: 信封 data.updated 为修改的模型数量}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/channels/{id}/duplicate:
     post:
       tags: [admin]
@@ -2955,8 +3083,9 @@ paths:
       tags: [admin]
       summary: 批量修改系统渠道模型的调用协议
       description: |
-        仅管理员可用。把同一系统渠道内所选模型切换到同一调用协议；协议能力必须与每个模型的能力一致。
-        保留原能力配置与价格档，只按新协议重新规范化并校验；任一模型不兼容、已删除或被并发修改时整批拒绝。
+        仅管理员可用。兼容原 modelIds + protocol 单协议请求，也接受 groups 分组协议请求；两种格式互斥，最多共 100 个模型，请求上限 32 KiB。
+        每组按原能力选择兼容协议，模型不能重复；保留原能力配置与价格档，只按新协议重新规范化并校验。
+        任一模型不兼容、已删除或被并发修改时整批拒绝；显式协议记忆与模型同事务更新。
       parameters:
         - in: path
           name: id
@@ -2967,15 +3096,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [modelIds, protocol]
-              properties:
-                modelIds:
-                  type: array
-                  minItems: 1
-                  maxItems: 100
-                  items: { type: string, minLength: 1 }
-                protocol: { type: string, minLength: 1 }
+              $ref: "#/components/schemas/ChannelModelBatchProtocolRequest"
       responses:
         "200":
           description: 更新成功，data.updated 为更新的模型数量
@@ -3008,15 +3129,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [modelIds, protocol]
-              properties:
-                modelIds:
-                  type: array
-                  minItems: 1
-                  maxItems: 100
-                  items: { type: string, minLength: 1 }
-                protocol: { type: string, minLength: 1 }
+              $ref: "#/components/schemas/ChannelModelBatchProtocolRequest"
       responses:
         "200":
           description: 更新成功，data.updated 为更新的模型数量
@@ -4010,6 +4123,106 @@ components:
               properties:
                 look: { $ref: "#/components/schemas/DramaCast" }
                 affectedSegments: { type: integer, minimum: 0 }
+
+    ChannelWebsiteRequest:
+      type: object
+      required: [name, baseUrl]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        baseUrl: {type: string, format: uri}
+        apiFormat: {type: string, enum: [openai, gemini], default: openai}
+        proxyUrl: {type: string, description: 可为空；网站共享代理地址}
+        headers:
+          type: array
+          description: 仅允许 Anthropic-Version、OpenAI-Beta（名称不区分大小写）；鉴权和其他私有头只能保存在 Key 分组
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name: {type: string}
+              value: {type: string}
+        expectedUpdatedAt: {type: string, format: date-time, description: 更新必填，取自最近读取的网站 updatedAt}
+    ChannelModelProtocolGroup:
+      type: object
+      additionalProperties: false
+      required: [modelIds, protocol]
+      properties:
+        modelIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {type: string, minLength: 1}
+        protocol: {type: string, minLength: 1}
+    ChannelModelBatchProtocolRequest:
+      oneOf:
+        - {$ref: "#/components/schemas/ChannelModelProtocolGroup"}
+        - type: object
+          additionalProperties: false
+          required: [groups]
+          properties:
+            groups:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items: {$ref: "#/components/schemas/ChannelModelProtocolGroup"}
+    ChannelModelBatchUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [models]
+      properties:
+        models:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [modelId, priceVersion, capabilityVersion, updatedAt, changes]
+            properties:
+              modelId: {type: string, minLength: 1}
+              priceVersion: {type: integer, format: int64, minimum: 0}
+              capabilityVersion: {type: integer, format: int64, minimum: 0}
+              updatedAt: {type: string, format: date-time}
+              changes:
+                type: object
+                minProperties: 1
+                additionalProperties: false
+                description: 仅提交需要修改的字段；缺省保留原值，不接受 null
+                properties:
+                  capability: {type: string, enum: [text, image, video]}
+                  protocol: {type: string}
+                  displayName: {type: string, maxLength: 160}
+                  description: {type: string, maxLength: 500}
+                  enabled: {type: boolean}
+                  pricingEnabled: {type: boolean, description: 统一切换各价格档的 enabled；停用保留 priceConfigured、金额、成本、SKU 和规则，启用前校验金额完整性}
+                  capabilityTemplate:
+                    type: object
+                    additionalProperties: false
+                    required: [capabilityConfig]
+                    properties:
+                      protocol: {type: string, deprecated: true, description: 兼容字段，不参与协议选择；仅 changes.protocol 可指定协议}
+                      capabilityConfig:
+                        type: object
+                        description: 与模型编辑的 ModelCapabilityConfig 相同，包含 version 及对应 text/image/video 和可选 mediaTransport；最终按目标模型协议完整校验，标量不接受 null
+                  pricingTemplate:
+                    type: object
+                    additionalProperties: false
+                    required: [priceCurrency, referenceVideoBilling, priceTiers]
+                    properties:
+                      priceCurrency: {type: string, enum: [credits, USD, CNY]}
+                      referenceVideoBilling: {type: boolean}
+                      priceTiers:
+                        type: array
+                        minItems: 1
+                        maxItems: 48
+                        description: 完整替换价格档；与模型编辑的 ChannelModelPriceTierRequest 相同。每档必填 billingMode、priceConfigured、enabled，以及对应计费模式的全部金额字段；缺失金额不能视为免费，所有字段拒绝 null。支持 selector、resolution、videoSeconds、providerModelKey、costPricing、Token 规则和参考视频价。
+                        items:
+                          type: object
+                          required: [billingMode, priceConfigured, enabled]
+                          properties:
+                            billingMode: {type: string}
+                            priceConfigured: {type: boolean}
+                            enabled: {type: boolean}
     ThinkingRequest:
       type: string
       enum: ["", auto, deep, off, minimal, low, medium, high, max]

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User, channelID string) (*AdminChannelModelFetchResult, error) {
@@ -22,7 +23,7 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 		return nil, err
 	}
 	// 使用服务端保存的渠道密钥和请求头访问上游，避免敏感配置再次经过浏览器。
-	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
+	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, ProxyURL: channel.ProxyURL, Headers: headers})
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +51,15 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 		}
 		missing = append(missing, model.ChannelModel{ID: modelID, ChannelID: channelID, ModelKey: name, ProviderModelKey: name, DisplayName: "未分类", BillingMode: "fixed_request", Enabled: false, PriceVersion: 1})
 	}
-	added, err := s.repo.CreateMissingChannelModels(missing)
+	var added int64
+	err = s.repo.Transaction(func(repo *repository.Repository) error {
+		if err := s.checkCatalogSource(repo, channel); err != nil {
+			return err
+		}
+		var err error
+		added, err = repo.CreateMissingChannelModels(missing)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +145,15 @@ func (s *Service) ImportAdminChannelModels(ctx context.Context, actor *model.Use
 		missing = append(missing, model.ChannelModel{ID: modelID, ChannelID: channelID, ModelKey: name, ProviderModelKey: name, DisplayName: "未分类", BillingMode: "fixed_request", Enabled: false, PriceConfigured: false, PriceVersion: 1})
 		known[key] = struct{}{}
 	}
-	added, err := s.repo.CreateMissingChannelModels(missing)
+	var added int64
+	err = s.repo.Transaction(func(repo *repository.Repository) error {
+		if err := s.checkCatalogSource(repo, channel); err != nil {
+			return err
+		}
+		var err error
+		added, err = repo.CreateMissingChannelModels(missing)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -147,17 +164,9 @@ func (s *Service) ImportAdminChannelModels(ctx context.Context, actor *model.Use
 }
 
 func (s *Service) fetchAdminChannelModelCatalog(ctx context.Context, actor *model.User, channelID string) ([]string, error) {
-	channel, err := s.adminSystemChannel(channelID)
+	result, err := s.ReadAdminChannelCatalog(ctx, actor, channelID)
 	if err != nil {
 		return nil, err
 	}
-	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
-	if err != nil {
-		return nil, err
-	}
-	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
-	if err != nil {
-		return nil, err
-	}
-	return uniqueNonEmpty(models), nil
+	return result.Models, nil
 }
