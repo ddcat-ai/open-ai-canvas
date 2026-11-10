@@ -9,8 +9,8 @@ import (
 	"unicode/utf8"
 
 	"yingce/backend/internal/model"
-	"yingce/backend/internal/repository"
 	"yingce/backend/internal/production"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -639,6 +639,9 @@ func (s *Service) RegenerateDramaCast(userID string, projectID string, castID st
 	if cast.Locked {
 		return nil, BadAuthRequest("设定已锁定，请先解锁")
 	}
+	if !dramaCastHasImageBrief(*cast) {
+		return nil, BadAuthRequest("请先填写外貌或外形描述，再生成参考图")
+	}
 	// queued 表示用户明确请求：手动生图模式下即使资产尚未整体放行也会生成。
 	if err := s.repo.UpdateDramaCastFields(cast.ID, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {
 		return nil, err
@@ -970,6 +973,14 @@ func (s *Service) releaseDramaEpisodes(projectID string, episodeIDs []string) er
 		}
 	}
 	for castID := range casts {
+		cast, err := s.repo.DramaCast(projectID, castID)
+		if err != nil {
+			return err
+		}
+		// 没有外貌或外形描述时不排队参考图，避免只凭名字和画风生成撞脸形象。
+		if !dramaCastHasImageBrief(*cast) {
+			continue
+		}
 		// 空串=从未请求，draft=造型已保存待生成；已生成、失败或锁定的保持原状。
 		if _, err := s.repo.UpdateDramaCastIf(castID, []string{"", model.DramaMediaDraft}, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {
 			return err
@@ -986,7 +997,7 @@ func (s *Service) queueUnrequestedDramaCastImages(projectID string) error {
 		return err
 	}
 	for _, cast := range casts {
-		if cast.Locked {
+		if cast.Locked || !dramaCastHasImageBrief(cast) {
 			continue
 		}
 		if _, err := s.repo.UpdateDramaCastIf(cast.ID, []string{"", model.DramaMediaDraft}, map[string]any{"image_status": model.DramaMediaQueued}); err != nil {

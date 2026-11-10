@@ -918,7 +918,7 @@ func (s *Service) fillDramaSegmentViews(projectID string, p *model.DramaProducti
 			view.VideoWait = job.Wait
 			continue
 		}
-		view.VideoWait = firstNonEmpty(dramaVideoWaitReason(settings, p, &detail.Episode, rows, i, detail.Shots, lookup), "排队中，等待调度提交")
+		view.VideoWait = firstNonEmpty(dramaVideoWaitReason(settings, p, &detail.Episode, rows, i, detail.Shots, lookup, dramaJobListExtractPending(detail.Jobs, detail.Episode.ID)), "排队中，等待调度提交")
 	}
 	return nil
 }
@@ -1213,3 +1213,4 @@ func dramaShotCastIDs(shot model.DramaShot) []string {
 	}
 	return ids
 }
+

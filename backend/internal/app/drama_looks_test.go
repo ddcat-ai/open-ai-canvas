@@ -244,7 +244,6 @@ func TestDramaCastLookLifecycle(t *testing.T) {
 	}
 }
 
-
 func TestDramaShotCastIDsIncludeLooks(t *testing.T) {
 	shot := model.DramaShot{
 		CastIDsJSON:     `["char-1"]`,
@@ -261,7 +260,7 @@ func TestDramaShotCastIDsIncludeLooks(t *testing.T) {
 }
 
 func TestDramaReferencesInProgressWaitsForDraftLooks(t *testing.T) {
-	look := model.DramaCast{ID: "look-1", Name: "萧炎", LookName: "内门弟子", ParentID: "char-1", ImageStatus: model.DramaMediaDraft}
+	look := model.DramaCast{ID: "look-1", Name: "萧炎", LookName: "内门弟子", ParentID: "char-1", Appearance: "青色劲装", ImageStatus: model.DramaMediaDraft}
 	shots := []model.DramaShot{{SegmentIndex: 0, LookCastIDsJSON: `["look-1"]`, CastIDsJSON: `["char-1"]`}}
 	lookup := func(id string) (model.DramaCast, bool) {
 		if id == look.ID {

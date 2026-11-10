@@ -11,8 +11,8 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
-	"yingce/backend/internal/protocol"
 	"yingce/backend/internal/production"
+	"yingce/backend/internal/protocol"
 )
 
 // fakeDramaModels uses a persisted capability contract; only upstream execution is replaced.
@@ -59,6 +59,9 @@ func (f *fakeDramaBackend) submit(userID string, req CreateTaskRequest, timeline
 			system, _ = config["systemPrompt"].(string)
 		}
 		switch {
+		case strings.Contains(system, "尚未写清外貌的新角色"):
+			f.byKind["cast_extract"]++
+			result = map[string]any{"mode": "text", "text": `{"characters":[],"props":[],"scenes":[]}`}
 		case strings.Contains(system, "作品圣经"):
 			f.byKind["bible"]++
 			result = map[string]any{"mode": "text", "text": `{"logline":"退婚少年逆袭","visualRules":"冷色调","characters":[{"name":"萧炎","aliases":["炎儿"],"appearance":"黑发少年"},{"name":"纳兰嫣然","appearance":"白衣少女"}],"props":[{"name":"退婚书","appearance":"烫金红纸卷轴"}],"scenes":[{"name":"萧家大厅","appearance":"古朴大厅"}]}`}
@@ -561,7 +564,6 @@ func TestComposeDramaEpisodeRequeuesFinalRender(t *testing.T) {
 		t.Fatalf("must reject incomplete segments: %v", err)
 	}
 }
-
 
 func TestDramaPausedKeepsRecoverableCastImageJob(t *testing.T) {
 	svc, fake := newDramaTestService(t)

@@ -51,8 +51,10 @@ const (
 	DramaJobBible     = "bible"
 	DramaJobPlan      = "plan"
 	DramaJobCastImage = "cast_image"
-	DramaJobScript    = "script"
-	DramaJobRender    = "render"
+	// DramaJobCastExtract 从本集原文与分镜补全后出现、尚无外貌的角色/道具/场景，不覆盖已有设定。
+	DramaJobCastExtract = "cast_extract"
+	DramaJobScript      = "script"
+	DramaJobRender      = "render"
 	// DramaJobSegmentPrompt 为一个剧情段撰写完整视频提示词；ShotID 存放 drama_segments.id。
 	DramaJobSegmentPrompt = "segment_prompt"
 	// DramaJobSegmentVideo 为一个剧情段生成整段视频；ShotID 存放 drama_segments.id。

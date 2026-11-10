@@ -258,7 +258,7 @@ export type DramaEpisode = {
 
 export type DramaJob = {
     id: string;
-    kind: "bible" | "plan" | "cast_image" | "script" | "segment_prompt" | "segment_video" | "render";
+    kind: "bible" | "plan" | "cast_image" | "cast_extract" | "script" | "segment_prompt" | "segment_video" | "render";
     status: "queued" | "running" | "succeeded" | "failed" | "canceled";
     label: string;
     error?: string;

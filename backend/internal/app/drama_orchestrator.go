@@ -227,7 +227,6 @@ func (r *dramaRun) syncJobs() error {
 	return nil
 }
 
-
 // dramaTaskMediaRecoveryRetryable 表示失败任务仍有作品恢复检查点且未用尽自动重试窗口。
 func (s *Service) dramaTaskMediaRecoveryRetryable(task *model.Task) bool {
 	if task == nil || task.Status != model.TaskStatusFailed || strings.TrimSpace(task.MediaRecoveryJSON) == "" {
@@ -463,6 +462,9 @@ func dramaAttemptRecorded(job *model.DramaJob, taskID string) bool {
 }
 
 func (r *dramaRun) enqueue(kind, episodeID, shotID, castID string, priority int, label string, payload any) bool {
+	if r.active == nil {
+		r.active = map[string]bool{}
+	}
 	key := dramaJobKey(kind, episodeID, shotID, castID)
 	if r.active[key] {
 		return false
@@ -515,7 +517,7 @@ func (r *dramaRun) plan() error {
 		cast := &r.casts[i]
 		// "" 表示从未请求，只有放行后才自动生成；queued 是用户明确请求（重做、重试或按集放行）。
 		requested := cast.ImageStatus == model.DramaMediaQueued || (cast.ImageStatus == "" && r.assetsReleased())
-		if requested && !cast.Locked {
+		if requested && !cast.Locked && dramaCastHasImageBrief(*cast) {
 			r.enqueue(model.DramaJobCastImage, "", "", cast.ID, castImagePriority(cast.Position), "参考图："+cast.Name, nil)
 		}
 	}
@@ -702,7 +704,7 @@ func (r *dramaRun) enqueueSegmentVideos(e *model.DramaEpisode, segments []model.
 			}
 			shots = loaded
 		}
-		if dramaVideoWaitReason(r.settings, r.production, e, segments, i, shots, r.castLookup) == "" {
+		if dramaVideoWaitReason(r.settings, r.production, e, segments, i, shots, r.castLookup, r.episodeCastExtractPending(e.ID)) == "" {
 			r.enqueue(model.DramaJobSegmentVideo, e.ID, seg.ID, "", segmentPriority(dramaRankVideo, e.Number, seg.SegmentIndex), fmt.Sprintf("第 %d 集 第 %d 段视频", e.Number, seg.SegmentIndex+1), nil)
 		}
 		return false, nil
@@ -731,7 +733,7 @@ func (r *dramaRun) enqueueParallelSegmentVideos(e *model.DramaEpisode, segments 
 			}
 			shots = loaded
 		}
-		if dramaVideoWaitReason(r.settings, r.production, e, segments, i, shots, r.castLookup) == "" {
+		if dramaVideoWaitReason(r.settings, r.production, e, segments, i, shots, r.castLookup, r.episodeCastExtractPending(e.ID)) == "" {
 			r.enqueue(model.DramaJobSegmentVideo, e.ID, seg.ID, "", segmentPriority(dramaRankVideo, e.Number, seg.SegmentIndex), fmt.Sprintf("第 %d 集 第 %d 段视频", e.Number, seg.SegmentIndex+1), nil)
 		}
 	}
@@ -858,6 +860,8 @@ func (r *dramaRun) applyJob(job *model.DramaJob, task *model.Task) error {
 		return r.applyScript(job, task)
 	case model.DramaJobCastImage:
 		return r.applyCastImage(job, task)
+	case model.DramaJobCastExtract:
+		return r.applyCastExtract(job, task)
 	case model.DramaJobSegmentVideo:
 		return r.applySegmentVideo(job, task)
 	case model.DramaJobRender:
@@ -1174,6 +1178,7 @@ func (r *dramaRun) applyScriptShots(episode *model.DramaEpisode, scripted []prod
 	if err := r.s.repo.CreateDramaCasts(created); err != nil {
 		return err
 	}
+	r.enqueueLateAssetExtract(episode, created)
 	fields := map[string]any{"shot_count": len(shots), "duration_ms": total, "stage": model.DramaEpisodePrompts, "error": "", "approved": false}
 	if strings.TrimSpace(episode.Synopsis) == "" && info.Synopsis != "" {
 		fields["synopsis"], fields["hook"], fields["cliffhanger"] = truncateRunes(info.Synopsis, 1000), truncateRunes(info.Hook, 300), truncateRunes(info.Cliffhanger, 300)
@@ -1331,6 +1336,8 @@ func (r *dramaRun) submit(job *model.DramaJob) (*model.Task, bool, error) {
 		}
 		job.PayloadJSON = encodeDramaRevision(cast.Revision)
 		return r.submitCastImage(job)
+	case model.DramaJobCastExtract:
+		return r.submitCastExtract(job)
 	case model.DramaJobSegmentVideo:
 		return r.submitSegmentVideo(job)
 	case model.DramaJobRender:
@@ -1696,7 +1703,16 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 	if err != nil || cast.Locked || cast.ImageStatus == model.DramaMediaReady || cast.ImageStatus == model.DramaMediaDraft {
 		return nil, true, nil
 	}
-	appearance := firstNonEmpty(cast.Appearance, cast.Description, cast.Role)
+	if !dramaCastHasImageBrief(*cast) {
+		// 没有外貌或外形描述时不凭名字和画风编造参考图，等补全后再生成。
+		if cast.ImageStatus == model.DramaMediaQueued {
+			if _, err := r.s.repo.UpdateDramaCastIf(cast.ID, []string{model.DramaMediaQueued}, map[string]any{"image_status": ""}); err != nil {
+				return nil, false, err
+			}
+		}
+		return nil, true, nil
+	}
+	appearance := firstNonEmpty(cast.Appearance, cast.Description, cast.ImagePrompt, cast.Role)
 	assets := r.settings.Assets
 	// 造型行：以所属角色的参考图为底图做图生图，保持五官、脸型一致，只换服装、发型与妆容。
 	var baseImage *model.DramaCast

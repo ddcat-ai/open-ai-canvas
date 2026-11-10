@@ -12,6 +12,7 @@ export const JOB_KIND_LABEL: Record<DramaJob["kind"], string> = {
     bible: "作品圣经",
     plan: "分集规划",
     cast_image: "参考图",
+    cast_extract: "补全新设定",
     script: "剧本与分镜",
     segment_prompt: "段视频提示词",
     segment_video: "段视频",
