@@ -25,34 +25,16 @@ export type ExternalAssetSourceState = {
 export function useExternalAssetSources(open: boolean): ExternalAssetSourceState {
     const hydrated = usePluginStore((state) => state.hydrated);
     const installations = usePluginStore((state) => state.installations);
-    const needsEagle = open && hydrated && installations.some((installation) => installation.manifest.id === "eagle-asset-connector");
-    const [eagleLoaded, setEagleLoaded] = useState(false);
+    const pluginStates = usePluginStore((state) => state.pluginStates);
+    const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const [loadedSources, setLoadedSources] = useState<LoadedAssetSource[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
-    useEffect(() => {
-        if (!needsEagle) {
-            setEagleLoaded(true);
-            return;
-        }
-
-        let cancelled = false;
-        setEagleLoaded(false);
-        void import("@/lib/plugins/builtin/eagle")
-            .catch(() => undefined)
-            .finally(() => {
-                if (!cancelled) setEagleLoaded(true);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [needsEagle]);
-
     const sources = useMemo(() => {
-        if (!hydrated || (needsEagle && !eagleLoaded)) return [];
+        if (!open || !hydrated) return [];
         return createHostedAssetSources(installations);
-    }, [eagleLoaded, hydrated, installations, needsEagle]);
+    }, [open, hydrated, installations, pluginStates, runtimeStatuses]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -65,67 +47,77 @@ export function useExternalAssetSources(open: boolean): ExternalAssetSourceState
 
         setLoading(true);
         setError("");
-        void Promise.allSettled(sources.map(async (source) => {
-            try {
-                const [folders, items] = await Promise.all([
-                    source.provider.listFolders?.(controller.signal) || Promise.resolve([]),
-                    source.provider.list?.({ limit: 200, offset: 0, signal: controller.signal }) || Promise.resolve([]),
-                ]);
-                return { source, folders: folders || [], items: items || [] };
-            } catch (reason) {
-                const detail = reason instanceof Error ? reason.message : "读取失败";
-                throw new Error(source.name + "：" + detail);
-            }
-        })).then((results) => {
-            if (controller.signal.aborted) return;
-            const loaded: LoadedAssetSource[] = [];
-            const errors: string[] = [];
-            results.forEach((result) => {
-                if (result.status === "fulfilled") loaded.push(result.value);
-                else errors.push(result.reason instanceof Error ? result.reason.message : "外部素材来源读取失败");
+        void Promise.allSettled(
+            sources.map(async (source) => {
+                try {
+                    const [folders, items] = await Promise.all([source.provider.listFolders?.(controller.signal) || Promise.resolve([]), source.provider.list?.({ limit: 200, offset: 0, signal: controller.signal }) || Promise.resolve([])]);
+                    return { source, folders: folders || [], items: items || [] };
+                } catch (reason) {
+                    const detail = reason instanceof Error ? reason.message : "读取失败";
+                    throw new Error(source.name + "：" + detail);
+                }
+            }),
+        )
+            .then((results) => {
+                if (controller.signal.aborted) return;
+                const loaded: LoadedAssetSource[] = [];
+                const errors: string[] = [];
+                results.forEach((result) => {
+                    if (result.status === "fulfilled") loaded.push(result.value);
+                    else errors.push(result.reason instanceof Error ? result.reason.message : "外部素材来源读取失败");
+                });
+                setLoadedSources(loaded);
+                setError(errors.join("；"));
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setLoading(false);
             });
-            setLoadedSources(loaded);
-            setError(errors.join("；"));
-        }).finally(() => {
-            if (!controller.signal.aborted) setLoading(false);
-        });
 
         return () => controller.abort();
     }, [open, sources]);
 
     const items = useMemo(() => loadedSources.flatMap(({ source, items: sourceItems }) => sourceItems.filter(isPickerMedia).map((item) => toPickerItem(source, item))), [loadedSources]);
-    const folders = useMemo(() => loadedSources.flatMap(({ source, folders: sourceFolders }) => sourceFolders.map((folder) => ({
-        id: externalFolderId(source.id, folder.id),
-        parentId: folder.parentId ? externalFolderId(source.id, folder.parentId) : undefined,
-        name: folder.name,
-    }))), [loadedSources]);
-    const categoryLabels = useMemo(
-        () => Object.fromEntries(sources.map((source) => [externalCategory(source.id), source.name])),
+    const folders = useMemo(
+        () =>
+            loadedSources.flatMap(({ source, folders: sourceFolders }) =>
+                sourceFolders.map((folder) => ({
+                    id: externalFolderId(source.id, folder.id),
+                    parentId: folder.parentId ? externalFolderId(source.id, folder.parentId) : undefined,
+                    name: folder.name,
+                })),
+            ),
+        [loadedSources],
+    );
+    const categoryLabels = useMemo(() => Object.fromEntries(sources.map((source) => [externalCategory(source.id), source.name])), [sources]);
+
+    const importExternalAsset = useCallback(
+        async (reference: ExternalAssetPickerReference, signal?: AbortSignal) => {
+            const source = sources.find((item) => item.id === reference.sourceId);
+            if (!source?.provider.importAsset) throw new Error(`${reference.sourceName}暂不支持导入项目资产`);
+            return source.provider.importAsset(reference.item, signal);
+        },
         [sources],
     );
 
-    const importExternalAsset = useCallback(async (reference: ExternalAssetPickerReference, signal?: AbortSignal) => {
-        const source = sources.find((item) => item.id === reference.sourceId);
-        if (!source?.provider.importAsset) throw new Error(`${reference.sourceName}暂不支持导入项目资产`);
-        return source.provider.importAsset(reference.item, signal);
-    }, [sources]);
-
-    const uploadExternalFiles = useCallback(async (files: FileList | File[], folderId?: string, signal?: AbortSignal) => {
-        const source = resolveUploadSource(sources, folderId);
-        if (!source?.provider.uploadFile) throw new Error("当前插件不支持写入文件");
-        const providerFolderId = folderId ? externalFolderValue(source.id, folderId) : undefined;
-        const uploadedItems: ExternalAssetItem[] = [];
-        for (const file of Array.from(files)) {
-            uploadedItems.push(await source.provider.uploadFile(file, providerFolderId, signal));
-        }
-        const pickerItems = uploadedItems.map((item) => toPickerItem(source, item));
-        setLoadedSources((current) => {
-            const existing = current.find((item) => item.source.id === source.id);
-            if (!existing) return [...current, { source, folders: [], items: uploadedItems }];
-            return current.map((item) => item.source.id === source.id ? { ...item, items: [...item.items, ...uploadedItems] } : item);
-        });
-        return pickerItems;
-    }, [sources]);
+    const uploadExternalFiles = useCallback(
+        async (files: FileList | File[], folderId?: string, signal?: AbortSignal) => {
+            const source = resolveUploadSource(sources, folderId);
+            if (!source?.provider.uploadFile) throw new Error("当前插件不支持写入文件");
+            const providerFolderId = folderId ? externalFolderValue(source.id, folderId) : undefined;
+            const uploadedItems: ExternalAssetItem[] = [];
+            for (const file of Array.from(files)) {
+                uploadedItems.push(await source.provider.uploadFile(file, providerFolderId, signal));
+            }
+            const pickerItems = uploadedItems.map((item) => toPickerItem(source, item));
+            setLoadedSources((current) => {
+                const existing = current.find((item) => item.source.id === source.id);
+                if (!existing) return [...current, { source, folders: [], items: uploadedItems }];
+                return current.map((item) => (item.source.id === source.id ? { ...item, items: [...item.items, ...uploadedItems] } : item));
+            });
+            return pickerItems;
+        },
+        [sources],
+    );
 
     return { items, folders, categoryLabels, loading, error, importExternalAsset, uploadExternalFiles };
 }

@@ -1,193 +1,104 @@
 import { Button, Spin } from "antd";
-import { Tooltip } from "@/components/ui/base/tooltip";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Mic, Square, X } from "lucide-react";
 
-import { Check, Mic, Square, X } from "lucide-react";
-
-import { AudioWaveform } from "./audio-waveform";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
-import { useVoiceRecording } from "@/hooks/use-voice-recording";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
-type VoiceRecordingInlineProps = {
-    /** 转写完成回调，返回转写文本 */
-    onTranscribed: (text: string) => void;
-    /** 取消录制回调 */
-    onCancel: () => void;
-};
+type VoiceRecordingInlineProps = { onTranscribed: (text: string) => void; onCancel: () => void };
 
-type TranscribeState = "idle" | "transcribing" | "done" | "error";
-
-/**
- * 内联语音录制条（输入行内展示）
- * 挂载后自动开始录音，显示波形动画；点击停止后自动转写为文字（浏览器 Web Speech API，无需后端与 API Key）
- */
+/** 语音文字输入只启用 Web Speech；角色样本录制独立使用 MediaRecorder。 */
 export function VoiceRecordingInline({ onTranscribed, onCancel }: VoiceRecordingInlineProps) {
     const theme = canvasThemes[useActiveTheme()];
-    const {
-        state,
-        waveform,
-        duration,
-        error: recorderError,
-        start: startRecording,
-        stop: stopRecording,
-        cancel: cancelRecording,
-    } = useVoiceRecording({
-        maxDuration: 60,
-    });
-    const {
-        supported: speechSupported,
-        error: speechError,
-        start: startSpeech,
-        stop: stopSpeech,
-        cancel: cancelSpeech,
-    } = useSpeechRecognition();
-    const [transcribeState, setTranscribeState] = useState<TranscribeState>("idle");
-    const [transcribeError, setTranscribeError] = useState("");
-    const stopRequestedRef = useRef(false);
-    const wasRecordingRef = useRef(false);
+    const { supported, listening, error, start, stop, cancel } = useSpeechRecognition();
+    const [duration, setDuration] = useState(0);
+    const [transcribing, setTranscribing] = useState(false);
+    const [emptyError, setEmptyError] = useState("");
+    const callbacks = useRef({ onTranscribed, onCancel });
+    callbacks.current = { onTranscribed, onCancel };
+    const generation = useRef(0);
+    const stopping = useRef(false);
+    const wasListening = useRef(false);
 
-    // 挂载后自动开始录音与语音识别，卸载时清理
-    useEffect(() => {
-        if (!speechSupported) {
-            setTranscribeError("当前浏览器不支持语音识别，请使用 Chrome 或 Edge 浏览器");
-            setTranscribeState("error");
-            return;
+    const finish = useCallback(async () => {
+        if (stopping.current) return;
+        stopping.current = true;
+        const token = generation.current;
+        setTranscribing(true);
+        const text = (await stop()).trim();
+        if (token !== generation.current) return;
+        setTranscribing(false);
+        wasListening.current = false;
+        if (text) callbacks.current.onTranscribed(text);
+        else {
+            setEmptyError("未识别到语音内容，请重试");
+            stopping.current = false;
         }
-        void startRecording();
-        startSpeech();
+    }, [stop]);
+
+    useEffect(() => {
+        generation.current++;
+        if (supported) start();
         return () => {
-            cancelRecording();
-            cancelSpeech();
+            generation.current++;
+            cancel();
         };
-    }, [startRecording, cancelRecording, startSpeech, cancelSpeech, speechSupported]);
-
-    const handleStop = async () => {
-        if (stopRequestedRef.current || transcribeState !== "idle") return;
-        stopRequestedRef.current = true;
-        setTranscribeState("transcribing");
-        setTranscribeError("");
-        const text = await stopSpeech();
-        void stopRecording();
-        const trimmed = text.trim();
-        if (!trimmed) {
-            setTranscribeError("未识别到语音内容，请重试");
-            setTranscribeState("error");
-            stopRequestedRef.current = false;
-            return;
-        }
-        setTranscribeState("done");
-        // 短暂展示成功状态后回调
-        window.setTimeout(() => onTranscribed(trimmed), 600);
-    };
-
-    // 录音达到最大时长自动停止时，自动触发转写
+    }, [supported, start, cancel]);
     useEffect(() => {
-        if (state === "recording") wasRecordingRef.current = true;
-        if (state === "idle" && wasRecordingRef.current && transcribeState === "idle" && !stopRequestedRef.current) {
-            wasRecordingRef.current = false;
-            void handleStop();
-        }
-    }, [state, transcribeState]);
-
-    const handleRetry = () => {
-        stopRequestedRef.current = false;
-        wasRecordingRef.current = false;
-        setTranscribeError("");
-        setTranscribeState("idle");
-        void startRecording();
-        startSpeech();
+        if (!listening) return;
+        wasListening.current = true;
+        const startedAt = Date.now();
+        const timer = window.setInterval(() => setDuration(Math.min(60, Math.floor((Date.now() - startedAt) / 1000))), 1000);
+        const deadline = window.setTimeout(() => void finish(), 60_000);
+        return () => {
+            window.clearInterval(timer);
+            window.clearTimeout(deadline);
+        };
+    }, [listening, finish]);
+    useEffect(() => {
+        if (!listening && wasListening.current && !error && !stopping.current) void finish();
+    }, [listening, error, finish]);
+    const close = () => {
+        generation.current++;
+        cancel();
+        callbacks.current.onCancel();
     };
-
-    const formatDuration = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, "0")}`;
+    const retry = () => {
+        generation.current++;
+        stopping.current = false;
+        wasListening.current = false;
+        setDuration(0);
+        setEmptyError("");
+        setTranscribing(false);
+        start();
     };
-
-    const displayError = recorderError || (speechError ? speechError.message : "") || (transcribeState === "error" ? transcribeError : "");
-
+    const displayError = !supported ? "当前浏览器不支持语音识别，请使用 Chrome 或 Edge" : error?.message || emptyError;
     return (
-        <div
-            className="voice-recording-inline flex min-w-0 flex-1 items-center gap-2 rounded-lg border px-2 py-2"
-            style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}
-        >
+        <div className="voice-recording-inline flex min-w-0 flex-1 items-center gap-2 rounded-lg border px-2 py-2" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
             {displayError ? (
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="truncate text-xs" style={{ color: "#dc2626" }}>
+                <>
+                    <span className="min-w-0 flex-1 truncate text-xs" role="alert" style={{ color: "var(--status-error)" }}>
                         {displayError}
                     </span>
-                    {speechSupported ? (
-                        <Tooltip title="重试">
-                            <Button
-                                type="text"
-                                size="small"
-                                icon={<Mic className="size-3.5" />}
-                                onClick={handleRetry}
-                                style={{ color: theme.node.muted }}
-                            />
-                        </Tooltip>
-                    ) : null}
-                    <Tooltip title="取消">
-                        <Button
-                            type="text"
-                            size="small"
-                            icon={<X className="size-3.5" />}
-                            onClick={onCancel}
-                            style={{ color: theme.node.muted }}
-                        />
-                    </Tooltip>
-                </div>
-            ) : transcribeState === "transcribing" ? (
-                <div className="flex items-center gap-2 px-2" style={{ color: theme.node.muted }}>
+                    {supported ? <Button type="text" size="small" icon={<Mic className="size-3.5" />} aria-label="重试语音识别" onClick={retry} /> : null}
+                </>
+            ) : transcribing ? (
+                <span role="status" className="flex items-center gap-2 text-xs">
                     <Spin size="small" />
-                    <span className="text-xs">正在转写...</span>
-                </div>
-            ) : transcribeState === "done" ? (
-                <div className="flex items-center gap-2 px-2" style={{ color: "#16a34a" }}>
-                    <Check className="size-4" />
-                    <span className="text-xs">转写完成</span>
-                </div>
+                    正在整理语音…
+                </span>
             ) : (
                 <>
-                    <AudioWaveform
-                        waveform={waveform}
-                        color={theme.accent.primary}
-                        height={32}
-                        width={160}
-                        animated={state === "recording"}
-                    />
-                    {state === "recording" ? (
-                        <span className="font-mono text-xs tabular-nums" style={{ color: theme.node.text }}>
-                            {formatDuration(duration)}
-                        </span>
-                    ) : null}
-                    <Tooltip title="取消">
-                        <Button
-                            type="text"
-                            size="small"
-                            icon={<X className="size-3.5" />}
-                            onClick={() => {
-                                cancelRecording();
-                                cancelSpeech();
-                                onCancel();
-                            }}
-                            style={{ color: theme.node.muted }}
-                        />
-                    </Tooltip>
-                    <Tooltip title="停止并转写">
-                        <Button
-                            type="text"
-                            size="small"
-                            icon={<Square className="size-3.5" />}
-                            onClick={handleStop}
-                            disabled={state !== "recording" || transcribeState !== "idle"}
-                            style={{ color: theme.accent.primary }}
-                        />
-                    </Tooltip>
+                    <Mic className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1 text-xs">{listening ? "正在聆听" : "正在启动"}</span>
+                    <span className="font-mono text-xs tabular-nums">
+                        {Math.floor(duration / 60)}:{String(duration % 60).padStart(2, "0")}
+                    </span>
+                    <Button type="text" size="small" icon={<Square className="size-3.5" />} aria-label="停止并转写" disabled={!listening} onClick={() => void finish()} />
                 </>
             )}
+            <Button type="text" size="small" icon={<X className="size-3.5" />} aria-label="取消语音输入" onClick={close} />
         </div>
     );
 }

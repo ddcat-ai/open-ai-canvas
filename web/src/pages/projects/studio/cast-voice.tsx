@@ -23,7 +23,14 @@ function useSamplePlayer(resourceId: string) {
         setPlaying(false);
         return () => {
             requestRef.current++;
-            audioRef.current?.pause();
+            const audio = audioRef.current;
+            if (audio) {
+                audio.onended = null;
+                audio.onerror = null;
+                audio.pause();
+                audio.removeAttribute("src");
+                audio.load();
+            }
             audioRef.current = null;
         };
     }, [resourceId]);
@@ -91,9 +98,6 @@ export function CastVoiceField({ projectId, cast, restyle, onChanged }: { projec
     const current = profiles.find((profile) => profile.id === cast.voiceProfileId);
     const sampleId = cast.voiceSampleResourceId || "";
     const player = useSamplePlayer(sampleId);
-    // 录音 Hook 到达上限时只停止录制、不交出音频，所以上限由这里在录音仍在进行时主动结束（见下方 effect）。
-    const recorder = useVoiceRecording({ maxDuration: MAX_RECORD_SECONDS * 20 });
-    const finishingRef = useRef(false);
     const done = (result: { affectedSegments: number }, text: string) => {
         message.success(result.affectedSegments ? `${text}；${result.affectedSegments} 个剧情段的视频需重新生成` : text);
         void queryClient.invalidateQueries({ queryKey: VOICE_PROFILES_KEY });
@@ -118,27 +122,16 @@ export function CastVoiceField({ projectId, cast, restyle, onChanged }: { projec
         onError: (error) => message.error(error instanceof Error ? error.message : "清除失败"),
     });
     const busy = bind.isPending || upload.isPending || clear.isPending;
-    const recording = recorder.state !== "idle";
-    const finishRecording = async () => {
-        if (finishingRef.current) return;
-        finishingRef.current = true;
-        try {
-            const blob = await recorder.stop();
-            if (!blob || !blob.size) {
-                message.warning("没有录到声音，请重试");
-                return;
-            }
+    const recorder = useVoiceRecording({
+        maxDuration: MAX_RECORD_SECONDS,
+        onComplete: (blob) => {
             const extension = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm";
             upload.mutate({ file: blob, name: `${cast.name}录音.${extension}` });
-        } finally {
-            finishingRef.current = false;
-        }
-    };
-    useEffect(() => {
-        if (recorder.state === "recording" && recorder.duration >= MAX_RECORD_SECONDS) void finishRecording();
-        // finishRecording 每次渲染都是新函数；只在时长到达上限时触发一次。
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [recorder.duration, recorder.state]);
+        },
+    });
+    useEffect(() => recorder.cancel, [projectId, cast.id, recorder.cancel]);
+    const recording = recorder.state !== "idle";
+    const finishRecording = () => recorder.stop();
     return (
         <div className="drama-voice">
             <div className="drama-voice-current">
@@ -182,7 +175,8 @@ export function CastVoiceField({ projectId, cast, restyle, onChanged }: { projec
                     <Button
                         size="small"
                         icon={<Mic className="size-3.5" />}
-                        disabled={busy}
+                        disabled={busy || recorder.starting}
+                        loading={recorder.starting}
                         onClick={() =>
                             void recorder.start().catch(() => {
                                 message.error("无法使用麦克风，请检查浏览器权限");
