@@ -99,6 +99,20 @@ func TestPostgresChannelWebsiteMigrationUpgradesVersion93(t *testing.T) {
 	if err != nil || status.Current != 93 || status.Ready {
 		t.Fatalf("legacy schema status: %+v err=%v", status, err)
 	}
+	// Startup migrates a newly opened pool before reading channel rows. Keep
+	// fixture SELECT * plans for the old schema out of that upgrade connection.
+	if err := dbSQL.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = Open(Config{Driver: "postgres", DSN: testDSN})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbSQL, err = db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dbSQL.Close()
 	if err := MigrateSchema(db); err != nil {
 		t.Fatalf("v93 to v94 migration: %v", err)
 	}
