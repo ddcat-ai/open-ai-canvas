@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 94
+const CurrentSchemaVersion int64 = 95
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -337,6 +337,7 @@ var schemaMigrations = []migration{
 		return nil
 	}},
 	{version: 94, name: "drama_cast_styles_import", checksum: "sha256:drama-cast-styles-import-v94", apply: migrateDramaCastStylesImport},
+	{version: 95, name: "ark_private_asset_binding_identity", checksum: "sha256:ark-private-asset-binding-identity-v95", apply: migrateArkPrivateAssetBindingIdentity},
 }
 
 // migrateReferenceVideoCostPrice 为价格档成本和账单成本快照增加带参考视频的成本价。

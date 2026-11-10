@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 方舟可信素材绑定唯一索引（Schema 95）
+
+版本 95 `ark_private_asset_binding_identity` 为旧库的 `ark_private_asset_bindings` 补建 `idx_ark_private_asset_binding_resource_project`，唯一键为 `(resource_id, project_name)`。同一不可变资源在同一方舟 Project 中只保留一条上传与审核绑定；`user_id` 不参与唯一键，同一资源在不同方舟 Project 中可以分别绑定。创建时通过 `ON CONFLICT (resource_id, project_name) DO NOTHING` 选出首次上传者，其他请求复用已有绑定，保留原素材组 ID、方舟素材 ID、审核状态及时间戳。
+
+新库的基线 `AutoMigrate` 已按模型声明创建该索引，但执行过基线迁移的旧库不会重跑它，仅更新模型无法补齐旧库。版本 95 显式补建缺失索引；若整张绑定表缺失则按当前模型创建。同名索引已存在时校验唯一性、两列组成及可仲裁条件：非唯一、列不符、部分索引，或 PostgreSQL 中无效、未就绪、延迟约束索引均明确报错，保留原索引与绑定且不记录版本 95，需先核对修复索引定义后重试；有效索引保持不变。若检测到重复的 `(resource_id, project_name)`，迁移明确报错并回滚，不自动删除或合并已有认证记录，也不写入版本 95 成功记录；应先备份并核对重复绑定的方舟素材 ID 与审核状态，再处理重复记录并重试。
+
+升级沿用部署实际的数据库配置：先备份，再执行新版本的 `migrate-schema up` 和 `migrate-schema verify`；受管 Compose 由独立 `migrate` 服务先完成升级，`CANVAS_AUTO_MIGRATE=true` 的部署由新后端启动时执行。不要修改旧迁移记录或校验和。SQLite 与 PostgreSQL 使用相同的复合唯一约束；仅重新启动未包含此迁移的旧版本不会修复缺索引问题。
+
 ## 邮件发送记录与消费日报订阅（Schema 91）
 
 版本 91 `email_logs_and_notifications` 新增两张表，只建表不改旧数据：
