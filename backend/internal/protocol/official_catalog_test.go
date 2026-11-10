@@ -191,6 +191,41 @@ func TestOfficialRuncrateChatProfile(t *testing.T) {
 	}
 }
 
+func TestOfficialUberLLMChatProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "uberllm-chat.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	if provider.ID != "uberllm-chat" || provider.BaseURL != "https://api.uberllm.dev" || provider.Auth.Type != "bearer" {
+		t.Fatalf("UberLLM provider metadata = %#v", provider)
+	}
+
+	adapter := officialPackageAdapter(t, "uberllm-chat.yingce-plugin", "uberllm-chat")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:    "deepseek/deepseek-v4-flash",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if spec.Method != "POST" || spec.Path != "/v1/chat/completions" || body["model"] != "deepseek/deepseek-v4-flash" {
+		t.Fatalf("UberLLM request = %#v, body = %#v", spec, body)
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"uberllm ok"}}],"usage":{"total_tokens":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "uberllm ok" {
+		t.Fatalf("UberLLM response = %#v", result)
+	}
+}
+
 func assertManifestContractMatchesPackage(t *testing.T, packageName string, manifestRaw []byte, interfaceDocs string) {
 	t.Helper()
 	start := strings.Index(interfaceDocs, manifestContractStart)
