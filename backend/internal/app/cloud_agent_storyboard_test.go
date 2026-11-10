@@ -173,7 +173,7 @@ func TestCloudAgentNodeCapabilityCardsExplainStoryboardTradeoffs(t *testing.T) {
 		byType[node["type"].(string)] = node
 	}
 	storyboard := byType["script"]
-	for _, nodeType := range []string{"text", "markdown", "image", "video", "audio", "frame", "script"} {
+	for _, nodeType := range []string{"text", "image", "video", "audio", "frame", "script"} {
 		node := byType[nodeType]
 		for _, key := range []string{"purpose", "goodFor", "notIdealFor", "tradeoffs"} {
 			if value, exists := node[key]; !exists || value == nil {
@@ -186,7 +186,7 @@ func TestCloudAgentNodeCapabilityCardsExplainStoryboardTradeoffs(t *testing.T) {
 			t.Fatalf("%s capability card lacks actions: %+v", nodeType, byType[nodeType])
 		}
 	}
-	if storyboard["purpose"] == byType["text"]["purpose"] || storyboard["purpose"] == byType["markdown"]["purpose"] {
+	if storyboard["purpose"] == byType["text"]["purpose"] {
 		t.Fatal("storyboard and lightweight nodes expose indistinguishable purposes")
 	}
 	videoGoodFor := strings.Join(byType["video"]["goodFor"].([]string), "\n")
