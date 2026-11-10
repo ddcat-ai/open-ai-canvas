@@ -21,6 +21,7 @@ type (
 	EcommerceCreativeDirectionSelection    = app.EcommerceCreativeDirectionSelection
 	EcommerceKnowledgeEvidence             = app.EcommerceKnowledgeEvidence
 	DeleteEcommerceProjectsRequest         = app.DeleteEcommerceProjectsRequest
+	EcommerceRoundImageUpdateRequest       = app.EcommerceRoundImageUpdateRequest
 	BindProjectAssetImageRequest           = app.BindProjectAssetImageRequest
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery

@@ -55,8 +55,11 @@ import {
     selectEcommerceCreativeDirection,
     projectDraft,
     projectPlan,
-    saveEcommerceProject,
+    convertEcommerceProjectRounds,
+    listEcommerceRounds,
+    patchEcommerceRoundImage,
     normalizeEcommerceReferenceGroups,
+    type EcommerceRound,
     type EcommerceDraft,
     type EcommercePlan,
     type EcommercePlanImage,
@@ -261,6 +264,65 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         }
     }, [project?.id, draft.creativeDirectionId, chosenDirection, scope]);
     const projectRef = useRef<EcommerceProject | null>(null);
+    // Archived rounds are loaded a page at a time; the active plan never carries them.
+    const roundsModeRef = useRef(false);
+    const historyRoundsRef = useRef<EcommerceRound[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyHasMore, setHistoryHasMore] = useState(false);
+    const loadHistoryPage = useCallback(async (projectId: string, before = 0) => {
+        setHistoryLoading(true);
+        try {
+            const page = await listEcommerceRounds(projectId, { limit: 10, ...(before ? { before } : {}) });
+            const known = before ? historyRoundsRef.current : [];
+            const seen = new Set(known.map((round) => round.id));
+            historyRoundsRef.current = [...known, ...page.rounds.filter((round) => !seen.has(round.id))];
+            setHistoryHasMore(page.hasMore);
+            return page;
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, []);
+    const ensureRoundTarget = useCallback(
+        async (imageId: string): Promise<{ round: EcommerceRound; image: EcommercePlanImage } | null> => {
+            const find = () => {
+                for (const round of historyRoundsRef.current) {
+                    const image = round.plan?.images?.find((entry) => entry.id === imageId);
+                    if (image) return { round, image };
+                }
+                return null;
+            };
+            const hit = find();
+            if (hit) return hit;
+            const projectId = projectRef.current?.id;
+            if (!projectId || !roundsModeRef.current) return null;
+            let before = historyRoundsRef.current[historyRoundsRef.current.length - 1]?.ordinal || 0;
+            for (let pageIndex = 0; pageIndex < 5; pageIndex += 1) {
+                const page = await loadHistoryPage(projectId, before);
+                const found = find();
+                if (found) return found;
+                if (!page.hasMore || !page.rounds.length) break;
+                before = page.rounds[page.rounds.length - 1].ordinal;
+            }
+            return find();
+        },
+        [loadHistoryPage],
+    );
+    const applyRoundUpdate = (updated: EcommerceRound) => {
+        historyRoundsRef.current = historyRoundsRef.current.map((round) => (round.id === updated.id ? updated : round));
+    };
+    const loadMoreHistory = useCallback(async () => {
+        const projectId = projectRef.current?.id;
+        if (!projectId || historyLoading) return;
+        const last = historyRoundsRef.current[historyRoundsRef.current.length - 1];
+        if (!last) return;
+        try {
+            await loadHistoryPage(projectId, last.ordinal);
+            const previousImages = [...historyRoundsRef.current].reverse().flatMap((round) => round.plan?.images || []);
+            setPlan((current) => (current ? { ...current, previousImages: previousImages.length ? previousImages : undefined } : current));
+        } catch (cause) {
+            message.error(errorText(cause));
+        }
+    }, [historyLoading, loadHistoryPage, message]);
     const [tasks, setTasks] = useState<Record<string, GenerationTask>>({});
     const [qualityIssues, setQualityIssues] = useState<Record<string, string[]>>({});
     const inspectedAssets = useRef(new Set<string>());
@@ -465,6 +527,41 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 setEcommerceActiveProject(scope, null);
                 setCacheError(compatibleCache ? "原项目已不存在，本机未提交的商品资料已保留为新草稿" : "原项目已不存在，已为你打开新草稿");
             }
+            roundsModeRef.current = false;
+            historyRoundsRef.current = [];
+            setHistoryHasMore(false);
+            let roundsMode = false;
+            if (saved) {
+                try {
+                    if (!saved.activeRoundId) {
+                        // Older projects are converted once, idempotently. Their
+                        // inline history is split into rounds and removed from the
+                        // project row; the revision bump invalidates stale writers.
+                        const converted = await convertEcommerceProjectRounds(saved.id, saved.revision);
+                        saved = converted.project;
+                        roundsMode = true;
+                    } else {
+                        roundsMode = true;
+                    }
+                } catch (cause) {
+                    if (cause instanceof ApiError && cause.status === 409) {
+                        saved = await getEcommerceProject(saved.id);
+                        roundsMode = Boolean(saved.activeRoundId);
+                    } else {
+                        // Older server without the rounds endpoint: keep the
+                        // legacy whole-plan view instead of losing history.
+                        roundsMode = false;
+                    }
+                }
+                if (roundsMode) {
+                    try {
+                        await loadHistoryPage(saved.id, 0);
+                    } catch {
+                        /* History stays retryable through "加载更多" / refresh. */
+                    }
+                }
+            }
+            roundsModeRef.current = roundsMode;
             if (cancelled || getActiveUserScope() !== scope) return;
             if (saved) {
                 owner.adopt(saved);
@@ -472,7 +569,15 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             }
             const useCache = compatibleCache && (orphaned || !saved || (compatibleCache.project?.revision || 0) >= saved.revision);
             let nextDraft = useCache ? compatibleCache.draft : saved ? projectDraft(saved) : emptyEcommerceDraft();
-            const nextPlan = orphaned ? null : useCache ? compatibleCache.plan : saved ? projectPlan(saved) : null;
+            let nextPlan = orphaned ? null : useCache ? compatibleCache.plan : saved ? projectPlan(saved) : null;
+            if (!orphaned && roundsMode) {
+                // Archived rounds live only in round rows; the project row holds
+                // the active plan. A local cache never overrides that split.
+                const active = saved ? projectPlan(saved) : null;
+                const base = active || nextPlan;
+                const previousImages = [...historyRoundsRef.current].reverse().flatMap((round) => round.plan?.images || []);
+                if (base) nextPlan = { ...base, previousImages: previousImages.length ? previousImages : undefined };
+            }
             if (orphaned) nextDraft = { ...nextDraft, planningTaskId: undefined, directionsTaskId: undefined, creativeDirectionId: undefined, creativeRecommendationId: undefined };
             const receipt = saved && !nextPlan?.images.length ? getEcommercePlanningReceipt(scope, saved.id) : null;
             if (receipt) nextDraft = { ...nextDraft, planningTaskId: receipt };
@@ -598,9 +703,18 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     }, [plan, tasks, session]);
 
     const save = useCallback(
-        async (nextDraft: EcommerceDraft, nextPlan: EcommercePlan | null, owner = session) => {
+        async (nextDraft: EcommerceDraft, nextPlan: EcommercePlan | null, owner = session, options?: { advanceRound?: boolean }) => {
             nextDraft = { ...nextDraft, creativeOptions: normalizeCreativeOptions(nextDraft) };
-            const saved = await owner.save(nextDraft, nextPlan);
+            const hasHistory = Boolean(nextPlan?.previousImages?.length);
+            // A brand-new session may already know this server supports rounds
+            // only after its first save; with no history the first save is safe
+            // to send in round mode even to an older server.
+            const rounds = roundsModeRef.current || Boolean(owner.project?.activeRoundId) || (!owner.project && !hasHistory);
+            const saved = await owner.save(nextDraft, nextPlan, rounds ? { historyMode: "rounds", advanceRound: Boolean(options?.advanceRound), activeRoundId: owner.project?.activeRoundId } : undefined);
+            if (saved.activeRoundId) roundsModeRef.current = true;
+            if (rounds && options?.advanceRound && saved.id) {
+                void loadHistoryPage(saved.id, 0).catch(() => undefined);
+            }
             const cached = peekEcommerceWorkspace(scope);
             if (cached?.sessionId === owner.id || isCurrent(owner)) {
                 setEcommerceActiveProject(scope, saved.id);
@@ -617,7 +731,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             navigate(`/ecommerce?${nextParams.toString()}`, { replace: true });
             return saved;
         },
-        [session, scope, navigate, sourceCanvasId, sourceAgentNodeId, creationMode, autoGenerate],
+        [session, scope, navigate, sourceCanvasId, sourceAgentNodeId, creationMode, autoGenerate, loadHistoryPage],
     );
 
     const saveDraft = async () => {
@@ -634,7 +748,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             // Keep prior results in this project's canvas when saving the next round.
             const nextDraft = { ...draft, planningTaskId: undefined };
             const previousPlan = archiveCommercePlan(plan, owner.project ? projectDraft(owner.project) : undefined);
-            const saved = await save(nextDraft, previousPlan, owner);
+            const saved = await save(nextDraft, previousPlan, owner, { advanceRound: true });
             if (!isCurrent(owner)) return;
             projectRef.current = saved;
             setProject(saved);
@@ -1033,7 +1147,8 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         try {
             const snapshot = { ...draft, agentModel: planningModel, directionsTaskId: undefined, creativeDirectionId: undefined, creativeRecommendationId: undefined, creativeOptions: normalizeCreativeOptions(draft) };
             const isNewProject = owner !== session;
-            const existingPlan = !followup || draftDiffersFromPlan ? archiveCommercePlan(plan, owner.project ? projectDraft(owner.project) : undefined) : plan;
+            const archived = !followup || draftDiffersFromPlan;
+            const existingPlan = archived ? archiveCommercePlan(plan, owner.project ? projectDraft(owner.project) : undefined) : plan;
             if (isNewProject) {
                 activateSession(owner);
                 projectRef.current = null;
@@ -1042,7 +1157,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 setTasks({});
                 setSelectedExportIds(new Set());
             }
-            const destination = await save(snapshot, existingPlan, owner);
+            const destination = await save(snapshot, existingPlan, owner, { advanceRound: archived });
             const input = await prepareBackendGenerationTask({
                 projectId: destination.id,
                 mode: "text",
@@ -1242,7 +1357,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             });
             const resolvedDraft = payload.draft;
             const previousPlan = archiveCommercePlan(plan, owner.project ? projectDraft(owner.project) : undefined);
-            const destination = await save(resolvedDraft, previousPlan, owner);
+            const destination = await save(resolvedDraft, previousPlan, owner, { advanceRound: true });
             try {
                 if (selectedDirection && resolvedDraft.creativeDirectionId) localStorage.setItem(`ecommerce-direction:${scope}:${destination.id}`, JSON.stringify(selectedDirection));
             } catch {
@@ -1457,11 +1572,23 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             const task = priorId ? await queryGenerationTask(priorId) : await retryGenerationTask(image.taskId);
             sessionStorage.setItem(receiptKey, task.id);
             if (isCurrent(session)) setTasks((current) => ({ ...current, [task.id]: task }));
-            const nextPlan = updateCommerceCanvasImage(plan, image.id, (entry) => ({ ...entry, taskId: task.id }));
-            await save(draft, nextPlan);
+            const target = image.roundId ? await ensureRoundTarget(image.id) : null;
+            if (image.roundId && !target) throw new Error("历史轮次已更新，请刷新后重试");
+            if (target) {
+                const updatedRound = await patchEcommerceRoundImage(projectRef.current.id, target.round.id, image.id, {
+                    version: target.round.version,
+                    image: { ...image, taskId: task.id, roundId: target.round.id },
+                });
+                applyRoundUpdate(updatedRound);
+            } else {
+                await save(
+                    draft,
+                    updateCommerceCanvasImage(plan, image.id, (entry) => ({ ...entry, taskId: task.id })),
+                );
+            }
             sessionStorage.removeItem(receiptKey);
             if (!isCurrent(session)) return;
-            setPlan(nextPlan);
+            setPlan(updateCommerceCanvasImage(plan, image.id, (entry) => ({ ...entry, taskId: task.id })));
             message.success("重试任务已提交");
         } catch (cause) {
             if (isCurrent(session)) message.error(`重试提交状态未确认：${errorText(cause)}。请先查看创作历史，避免重复扣费。`);
@@ -1498,8 +1625,10 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         try {
             if (receipt && receipt.projectId !== originalProject.id) throw new Error("先前的重生成任务已保存在历史项目，请先查看任务回执");
             let destination = await getEcommerceProject(originalProject.id);
-            const latestPlan = projectPlan(destination);
-            if (!latestPlan || !commerceCanvasImages(latestPlan).some((image) => image.id === edited.id)) throw new Error("当前图片已从画布移除，请刷新后查看任务历史");
+            const target = originalImage.roundId ? await ensureRoundTarget(edited.id) : null;
+            if (originalImage.roundId && !target) throw new Error("历史轮次已更新，请刷新后重试");
+            const activePlan = target ? null : projectPlan(destination);
+            if (!target && (!activePlan || !commerceCanvasImages(activePlan).some((image) => image.id === edited.id))) throw new Error("当前图片已从画布移除，请刷新后查看任务历史");
             receipt ||= { projectId: destination.id, signature };
             receipt.submitting = true;
             sessionStorage.setItem(receiptKey, JSON.stringify(receipt));
@@ -1519,19 +1648,31 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                   });
             receipt.taskId = task.id;
             sessionStorage.setItem(receiptKey, JSON.stringify(receipt));
-            const nextPlan = updateCommerceCanvasImage(latestPlan, edited.id, () => ({ ...edited, taskId: task.id, sourceDraft: originalImage.sourceDraft }));
-            destination = await saveEcommerceProject(destination, projectDraft(destination), nextPlan);
+            const updatedImage = { ...edited, taskId: task.id, sourceDraft: originalImage.sourceDraft };
+            if (target) {
+                // Historical rounds are patched in place; the active plan and
+                // project revision stay untouched.
+                const updatedRound = await patchEcommerceRoundImage(destination.id, target.round.id, edited.id, { version: target.round.version, image: { ...updatedImage, roundId: target.round.id } });
+                applyRoundUpdate(updatedRound);
+            } else {
+                await save(
+                    projectDraft(destination),
+                    updateCommerceCanvasImage(activePlan!, edited.id, () => updatedImage),
+                    session,
+                );
+                destination = projectRef.current || destination;
+            }
             if (!isCurrent(session)) return;
             submissionLock.current = false;
             setBusy(false);
             session.adopt(destination);
             setProjectState(destination);
-            setPlan(nextPlan);
+            setPlan(updateCommerceCanvasImage(plan, edited.id, () => updatedImage));
             setTasks((current) => ({ ...current, [task.id]: task }));
             setEcommerceActiveProject(scope, destination.id);
             navigate(`/ecommerce?project=${encodeURIComponent(destination.id)}`, { replace: true });
             sessionStorage.removeItem(receiptKey);
-            setStage("已在当前项目提交这张图片的新任务，原作品仍保留在资产库与任务历史中");
+            setStage(target ? "已为这轮历史图片提交新任务，历史轮次参数保持不变" : "已在当前项目提交这张图片的新任务，原作品仍保留在资产库与任务历史中");
         } finally {
             session.endSubmission();
             if (isCurrent(session)) {
@@ -1577,19 +1718,27 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             message.info("请等待当前操作提交完成");
             return;
         }
-        if (plan.previousImages?.some((entry) => entry.id === image.id)) {
-            const previousImages = plan.previousImages.filter((entry) => entry.id !== image.id);
-            const next = plan.images.length || previousImages.length ? { ...plan, previousImages } : null;
+        if (image.roundId || plan.previousImages?.some((entry) => entry.id === image.id)) {
             submissionLock.current = true;
             setBusy(true);
             try {
-                await save(projectDraft(projectRef.current), next);
-                if (isCurrent(session)) {
-                    setPlan(next);
-                    setSelectedExportIds((current) => new Set([...current].filter((id) => id !== image.id)));
+                const target = image.roundId ? await ensureRoundTarget(image.id) : null;
+                if (image.roundId && !target) throw new Error("历史轮次已更新，请刷新后重试");
+                if (target) {
+                    const updatedRound = await patchEcommerceRoundImage(projectRef.current.id, target.round.id, image.id, { version: target.round.version, remove: true });
+                    applyRoundUpdate(updatedRound);
+                } else {
+                    // Older server keeps inline history; remove through the legacy plan save.
+                    await save(projectDraft(projectRef.current), { ...plan, previousImages: plan.previousImages?.filter((entry) => entry.id !== image.id) });
                 }
+                if (!isCurrent(session)) return;
+                const previousImages = roundsModeRef.current ? [...historyRoundsRef.current].reverse().flatMap((round) => round.plan?.images || []) : plan.previousImages?.filter((entry) => entry.id !== image.id) || [];
+                const next = plan.images.length || previousImages.length ? { ...plan, previousImages: previousImages.length ? previousImages : undefined } : null;
+                setPlan(next);
+                setSelectedExportIds((current) => new Set([...current].filter((id) => id !== image.id)));
+                message.success("已从当前画布移除，原作品与任务历史仍保留");
             } catch (cause) {
-                message.error(errorText(cause));
+                if (isCurrent(session)) message.error(errorText(cause));
             } finally {
                 submissionLock.current = false;
                 if (isCurrent(session)) setBusy(false);
@@ -1728,7 +1877,9 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         setDraft(next);
         setPlan(null);
         setStage("真实资料已更新，请点击 AI 一键策划重新制定方案");
-        void save(next, null).catch((cause) => message.error(errorText(cause)));
+        // Clearing the active plan must archive admitted results instead of
+        // overwriting them on the project row.
+        void save(next, null, session, { advanceRound: Boolean(plan.images.length) }).catch((cause) => message.error(errorText(cause)));
     };
     const completed = plan?.images.filter((image) => image.taskId && tasks[image.taskId]?.status === "succeeded" && tasks[image.taskId]?.outputs?.some((output) => output.materializedAssetId)).length || 0;
     useEffect(() => {
@@ -1824,7 +1975,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             const next = continueCommercePlan(directCommercePlan(source), plan, owner.project ? projectDraft(owner.project) : undefined);
             assertCommerceImageReferenceCapacity(commerceRequiredImageReferenceCount(source), imageProfile?.references.maxImages || 0);
             if (quote?.imageTotal == null) throw new Error("请等待图片服务端报价后再生成");
-            await save(source, next, owner);
+            await save(source, next, owner, { advanceRound: Boolean(plan?.images.length) });
             if (isCurrent(owner)) {
                 setDraft(source);
                 setPlan(next);
@@ -2248,6 +2399,9 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     generationPending={busy || Boolean(activeImages)}
                     regeneratingIds={regeneratingIds}
                     regenerationPreviews={regenerationPreviews}
+                    historyHasMore={historyHasMore}
+                    historyLoading={historyLoading}
+                    onLoadMoreHistory={() => void loadMoreHistory()}
                     stage={stagePanel}
                     stageActive={stageActive}
                     nextStep={nextStep}

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 import localforage from "localforage";
-import type { EcommerceDraft, EcommercePlan, EcommerceProject } from "../../src/services/api/ecommerce";
+import type { EcommerceDraft, EcommercePlan, EcommerceProject, EcommerceRound } from "../../src/services/api/ecommerce";
 import type { GenerationTask } from "../../src/services/api/task-center";
 import type { RemoteResource } from "../../src/services/api/resources";
 
@@ -86,6 +86,9 @@ let navigate: ReturnType<typeof useNavigate>;
 let config = configStore.defaultConfig;
 let draft: EcommerceDraft;
 const projects = new Map<string, EcommerceProject>();
+const rounds = new Map<string, EcommerceRound[]>();
+const saveBodies: Array<Record<string, unknown>> = [];
+let roundsServer = false;
 const tasks = new Map<string, GenerationTask>();
 const fetched: string[] = [];
 const errors: string[] = [];
@@ -99,6 +102,33 @@ const originalUser = useUserStore.getState();
 
 function project(value: EcommerceDraft): EcommerceProject {
     return { id: crypto.randomUUID(), name: value.productName, status: value.planningTaskId ? "planning" : "draft", revision: 1, draftJson: JSON.stringify(value), planJson: "{}", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+}
+function roundRecord(projectId: string, ordinal: number, plan: EcommercePlan, version = 1): EcommerceRound {
+    const now = new Date().toISOString();
+    return { id: `round-${projectId}-${ordinal}`, projectId, ordinal, imageCount: plan.images.length, version, createdAt: now, updatedAt: now, plan: structuredClone(plan) };
+}
+function planImage(id: string, taskId: string): EcommercePlan["images"][number] {
+    return {
+        id,
+        taskId,
+        imageType: "detail",
+        platform: draft.platform,
+        language: draft.language,
+        goal: "详情",
+        theme: id,
+        composition: "上图下文",
+        mainVisual: "商品",
+        verifiedClaims: "",
+        copy: "",
+        lighting: "柔光",
+        fidelity: "保持真实外观",
+        prompt: `提示词 ${id}`,
+        negativePrompt: "",
+        imageModel: draft.imageModel,
+        ratio: draft.ratio,
+        resolution: draft.resolution,
+        deliveryStatus: "delivered",
+    };
 }
 function runningTask(id: string): GenerationTask {
     return { id, projectId: "", type: "canvas_text", status: "running", prompt: "", attempts: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -196,6 +226,9 @@ beforeEach(async () => {
     // 电商创作默认关闭；页面生命周期用例在管理员已开放的前提下运行。
     useUserStore.setState({ user: { id: scope, username: "test", displayName: "测试", role: "user", status: "active" }, features: { ...originalUser.features, ecommerceEnabled: true } });
     projects.clear();
+    rounds.clear();
+    saveBodies.length = 0;
+    roundsServer = false;
     tasks.clear();
     fetched.length = 0;
     errors.length = 0;
@@ -246,6 +279,24 @@ beforeEach(async () => {
             const all = [...projects.values()].reverse();
             return { projects: all.slice((page - 1) * pageSize, page * pageSize), total: all.length, page, pageSize };
         }
+        const roundsMatch = path.match(/^\/ecommerce\/projects\/([^/?]+)\/rounds(?:\?(.*))?$/);
+        if (roundsMatch) {
+            const id = decodeURIComponent(roundsMatch[1]);
+            if (!projects.has(id)) throw new Error("project missing");
+            const query = new URLSearchParams(roundsMatch[2] || "");
+            const limit = Math.min(Number(query.get("limit")) || 10, 20);
+            const before = Number(query.get("before")) || 0;
+            const all = (rounds.get(id) || []).slice().sort((left, right) => right.ordinal - left.ordinal);
+            const list = all.filter((round) => !before || round.ordinal < before).slice(0, limit);
+            return {
+                rounds: list.map((round) => ({
+                    ...structuredClone(round),
+                    plan: round.plan ? { ...structuredClone(round.plan), images: round.plan.images.map((image) => ({ ...image, roundId: round.id })) } : null,
+                })),
+                total: all.length,
+                hasMore: (list.at(-1)?.ordinal || 0) > 1,
+            };
+        }
         if (path.startsWith("/ecommerce/projects/")) {
             const id = path.split("/").at(-1)!;
             fetched.push(id);
@@ -255,15 +306,44 @@ beforeEach(async () => {
         }
         throw new Error(`unexpected GET ${path}`);
     }) as typeof http.get);
-    spyOn(http, "post").mockImplementation((async (path: string) => {
+    spyOn(http, "post").mockImplementation((async (path: string, body?: { revision?: number }) => {
         if (path === "/ecommerce/projects") {
             const value = project(emptyEcommerceDraft());
             projects.set(value.id, value);
             return structuredClone(value);
         }
+        const convertMatch = path.match(/^\/ecommerce\/projects\/([^/?]+)\/rounds-convert$/);
+        if (roundsServer && convertMatch) {
+            const id = decodeURIComponent(convertMatch[1]);
+            const current = projects.get(id);
+            if (!current) throw new Error("project missing");
+            if (current.revision !== body?.revision) throw new Error("stale revision");
+            const plan = JSON.parse(current.planJson) as EcommercePlan;
+            const groups = new Map<string, EcommercePlan["images"]>();
+            for (const image of plan.previousImages || []) {
+                const key = image.sourceDraft ? JSON.stringify(image.sourceDraft) : "{}";
+                groups.set(key, [...(groups.get(key) || []), image]);
+            }
+            const list = rounds.get(id) || [];
+            let ordinal = Math.max(0, ...list.map((round) => round.ordinal));
+            let createdRounds = 0;
+            let totalImages = 0;
+            for (const images of groups.values()) {
+                if (list.some((round) => round.plan && JSON.stringify(round.plan.images) === JSON.stringify(images))) continue;
+                ordinal += 1;
+                createdRounds += 1;
+                totalImages += images.length;
+                list.push(roundRecord(id, ordinal, { ...plan, images, previousImages: undefined }));
+            }
+            rounds.set(id, list);
+            const saved = { ...current, activeRoundId: current.activeRoundId || `active-${id}`, revision: current.revision + 1, planJson: JSON.stringify({ ...plan, previousImages: undefined }) };
+            projects.set(id, saved);
+            return { project: structuredClone(saved), conversion: { createdRounds, totalRounds: list.length, totalImages } };
+        }
         throw new Error(`unexpected POST ${path}`);
     }) as typeof http.post);
-    spyOn(http, "put").mockImplementation((async (path: string, body: { revision: number; draft: EcommerceDraft; plan?: unknown; name: string }) => {
+    spyOn(http, "put").mockImplementation((async (path: string, body: { revision: number; draft: EcommerceDraft; plan?: EcommercePlan | null; name: string; historyMode?: "rounds"; advanceRound?: boolean; activeRoundId?: string }) => {
+        saveBodies.push(body as unknown as Record<string, unknown>);
         if (failedSaves > 0) {
             failedSaves--;
             throw new Error("保存连接暂时中断");
@@ -271,10 +351,53 @@ beforeEach(async () => {
         const id = path.split("/").at(-1)!;
         const current = projects.get(id)!;
         if (current.revision !== body.revision) throw new Error("stale revision");
-        const saved = { ...current, revision: current.revision + 1, name: body.name, draftJson: JSON.stringify(body.draft), planJson: JSON.stringify(body.plan || {}) };
+        let saved: EcommerceProject;
+        if (roundsServer && body.historyMode === "rounds") {
+            if (body.activeRoundId && current.activeRoundId && body.activeRoundId !== current.activeRoundId) throw new Error("stale active round");
+            if (body.plan?.previousImages?.length) throw new Error("round save carried archived history");
+            let activeRoundId = current.activeRoundId || `active-${id}`;
+            if (body.advanceRound) {
+                const stored = JSON.parse(current.planJson) as EcommercePlan;
+                const admitted = (stored.images || []).filter((image) => image.taskId);
+                if (admitted.length) {
+                    const list = rounds.get(id) || [];
+                    if (!list.some((round) => round.plan && JSON.stringify(round.plan.images) === JSON.stringify(admitted))) {
+                        list.push(roundRecord(id, Math.max(0, ...list.map((round) => round.ordinal)) + 1, { ...stored, images: admitted, previousImages: undefined }));
+                        rounds.set(id, list);
+                    }
+                    activeRoundId = `active-${id}-${current.revision + 1}`;
+                }
+            }
+            saved = { ...current, revision: current.revision + 1, name: body.name, draftJson: JSON.stringify(body.draft), planJson: JSON.stringify(body.plan || {}), activeRoundId };
+        } else {
+            saved = { ...current, revision: current.revision + 1, name: body.name, draftJson: JSON.stringify(body.draft), planJson: JSON.stringify(body.plan || {}) };
+        }
         projects.set(id, saved);
         return structuredClone(saved);
     }) as typeof http.put);
+    spyOn(http, "patch").mockImplementation((async (path: string, body: { version: number; image?: EcommercePlan["images"][number]; remove?: boolean }) => {
+        const match = path.match(/^\/ecommerce\/projects\/([^/?]+)\/rounds\/([^/?]+)\/images\/([^/?]+)$/);
+        if (!match) throw new Error(`unexpected PATCH ${path}`);
+        const [projectId, roundId, imageId] = match.slice(1).map(decodeURIComponent);
+        const list = rounds.get(projectId) || [];
+        const round = list.find((entry) => entry.id === roundId);
+        if (!round?.plan) throw new Error("round missing");
+        if (round.version !== body.version) throw new Error("stale version");
+        const next = structuredClone(round.plan);
+        const index = next.images.findIndex((image) => image.id === imageId);
+        if (body.remove) {
+            if (index >= 0) next.images.splice(index, 1);
+        } else {
+            if (index < 0) throw new Error("image missing");
+            next.images[index] = { ...body.image!, id: imageId, roundId: undefined };
+        }
+        const updated = { ...round, plan: next, imageCount: next.images.length, version: round.version + 1, updatedAt: new Date().toISOString() };
+        rounds.set(
+            projectId,
+            list.map((entry) => (entry.id === roundId ? updated : entry)),
+        );
+        return structuredClone(updated);
+    }) as typeof http.patch);
     spyOn(http, "deleteWithBody").mockImplementation((async (path: string, body: { ids?: string[]; all?: boolean; expectedTotal: number }) => {
         if (path !== "/ecommerce/projects") throw new Error(`unexpected DELETE ${path}`);
         const ids = body.all ? [...projects.keys()] : body.ids || [];
@@ -723,7 +846,9 @@ describe("真实电商页面生命周期", () => {
         });
         expect(paidSubmissions).toHaveLength(0);
         expect(imageTasks).not.toHaveBeenCalled();
-        expect(post.mock.calls.map(([path]) => path).filter((path) => path !== "/resources/access")).toEqual([]);
+        // 旧服务端没有轮次接口：页面只尝试幂等转换，失败后留在整包兼容模式，依然不建项目、不提交付费任务。
+        const attempted = post.mock.calls.map(([path]) => String(path)).filter((path) => path !== "/resources/access");
+        expect(attempted.every((path) => path.endsWith("/rounds-convert"))).toBe(true);
         expect(projects.size).toBe(1);
         expect(route).toContain(saved.id);
         expect(projects.get(saved.id)?.planJson).toBe(saved.planJson);
@@ -1985,6 +2110,93 @@ describe("真实电商页面生命周期", () => {
         expect(planningProgress()).toBeNull();
         expect(sessions.getEcommercePlanningReceipt(scope, saved.id)).toBeNull();
         expect(JSON.parse(projects.get(saved.id)!.planJson).images).toHaveLength(1);
+        expect(paidSubmissions).toHaveLength(0);
+    });
+
+    test("历史轮次按页加载；保存与开新轮只提交本轮计划，不回传整包历史", async () => {
+        roundsServer = true;
+        const active = planImage("active-image", "active-task");
+        const basePlan: EcommercePlan = { productSummary: "商品", confirmedFacts: [], uncertainFacts: [], qualityChecks: [], visualStrategy: "方向", inputSignature: commerceInputSignature(draft), images: [] };
+        const saved = { ...project(draft), activeRoundId: "active-current" };
+        saved.planJson = JSON.stringify({ ...basePlan, images: [active] });
+        projects.set(saved.id, saved);
+        rounds.set(
+            saved.id,
+            Array.from({ length: 12 }, (_, index) => roundRecord(saved.id, index + 1, { ...basePlan, images: [planImage(`history-image-${index}`, `history-task-${index}`)] })),
+        );
+        for (const image of [active, ...Array.from({ length: 12 }, (_, index) => planImage(`history-image-${index}`, `history-task-${index}`))])
+            tasks.set(image.taskId!, { ...runningTask(image.taskId!), status: "succeeded", outputs: [{ outputIndex: 0, materializedAssetId: `asset-${image.id}` }], resultJson: JSON.stringify({ images: [{ dataUrl: `/${image.id}.png` }] }) });
+        await render(`/ecommerce?project=${saved.id}`);
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        });
+        const previous = () => host.querySelector('[aria-label="之前的商品作品"]');
+        expect(previous()?.textContent).toContain("10 张");
+        const more = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "加载更早的作品");
+        expect(more).toBeDefined();
+        await act(async () => {
+            more!.click();
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        });
+        expect(previous()?.textContent).toContain("12 张");
+        expect(Array.from(host.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent?.trim() === "加载更早的作品")).toBe(false);
+
+        await press("保存草稿");
+        const plain = saveBodies.at(-1)!;
+        expect(plain.historyMode).toBe("rounds");
+        expect(plain.advanceRound).toBe(false);
+        expect((plain.plan as EcommercePlan).images.map((image) => image.id)).toEqual([active.id]);
+        expect((plain.plan as EcommercePlan).previousImages).toBeUndefined();
+        expect(JSON.stringify(plain)).not.toContain("history-task-0");
+        expect(rounds.get(saved.id)).toHaveLength(12);
+
+        const setter = Object.getOwnPropertyDescriptor(dom.HTMLInputElement.prototype, "value")!.set!;
+        await act(async () => {
+            setter.call(productInput(), "换一款商品继续");
+            productInput()!.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        await press("保存草稿");
+        const advanced = saveBodies.at(-1)!;
+        expect(advanced.advanceRound).toBe(true);
+        expect((advanced.plan as EcommercePlan).previousImages).toBeUndefined();
+        expect(JSON.stringify(advanced)).not.toContain("history-task-0");
+        const archived = rounds.get(saved.id)!;
+        expect(archived).toHaveLength(13);
+        expect(archived.find((round) => round.ordinal === 13)?.plan?.images.map((image) => image.id)).toEqual([active.id]);
+        expect(projects.get(saved.id)?.activeRoundId).not.toBe("active-current");
+        expect(paidSubmissions).toHaveLength(0);
+    });
+
+    test("移除历史作品只修改对应轮次，当前轮计划与历史参数保持不变", async () => {
+        roundsServer = true;
+        const active = planImage("active-image", "active-task");
+        const historical = planImage("history-image", "history-task");
+        const basePlan: EcommercePlan = { productSummary: "商品", confirmedFacts: [], uncertainFacts: [], qualityChecks: [], visualStrategy: "方向", inputSignature: commerceInputSignature(draft), images: [] };
+        const saved = { ...project(draft), activeRoundId: "active-current" };
+        saved.planJson = JSON.stringify({ ...basePlan, images: [active] });
+        projects.set(saved.id, saved);
+        rounds.set(saved.id, [roundRecord(saved.id, 1, { ...basePlan, images: [historical] })]);
+        for (const image of [active, historical])
+            tasks.set(image.taskId!, { ...runningTask(image.taskId!), status: "succeeded", outputs: [{ outputIndex: 0, materializedAssetId: `asset-${image.id}` }], resultJson: JSON.stringify({ images: [{ dataUrl: `/${image.id}.png` }] }) });
+        const planBefore = projects.get(saved.id)!.planJson;
+        await render(`/ecommerce?project=${saved.id}`);
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 30));
+        });
+        const previous = host.querySelector('[aria-label="之前的商品作品"]')!;
+        expect(previous.textContent).toContain("1 张");
+        const removed = { ...historical };
+        await act(async () => {
+            previous.querySelector<HTMLButtonElement>('[aria-label="从本轮移除第 1 张"]')!.click();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+        const round = rounds.get(saved.id)![0];
+        expect(round.version).toBe(2);
+        expect(round.plan?.images).toEqual([]);
+        expect(removed.prompt).toBe(historical.prompt);
+        expect(projects.get(saved.id)!.planJson).toBe(planBefore);
+        expect(projects.get(saved.id)!.activeRoundId).toBe("active-current");
+        expect(saveBodies).toHaveLength(0);
         expect(paidSubmissions).toHaveLength(0);
     });
 });
