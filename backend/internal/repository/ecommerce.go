@@ -291,21 +291,36 @@ func convertEcommerceLegacyRounds(tx *gorm.DB, project *model.EcommerceProject) 
 		draft  string
 		images []model.EcommercePlanTask
 	}
+	// Only adjacent images sharing a draft form one round. Grouping by draft
+	// globally would merge a later round back into an earlier one whenever the
+	// same product draft reappears, losing the chronological round boundaries.
 	groups := make([]group, 0, 4)
-	index := make(map[string]int, 4)
 	for _, image := range plan.PreviousImages {
 		draftJSON := "{}"
 		if len(image.SourceDraft) > 0 && json.Valid(image.SourceDraft) {
 			draftJSON = string(image.SourceDraft)
 		}
-		position, ok := index[draftJSON]
-		if !ok {
-			position = len(groups)
-			index[draftJSON] = position
+		image.RoundID = ""
+		if len(groups) == 0 || groups[len(groups)-1].draft != draftJSON {
 			groups = append(groups, group{draft: draftJSON})
 		}
-		image.RoundID = ""
-		groups[position].images = append(groups[position].images, image)
+		groups[len(groups)-1].images = append(groups[len(groups)-1].images, image)
+	}
+	var existingRounds []model.EcommerceRound
+	if err := tx.Model(&model.EcommerceRound{}).Where("project_id = ?", project.ID).Select("plan_json").Find(&existingRounds).Error; err != nil {
+		return 0, err
+	}
+	archivedTasks := make(map[string]struct{})
+	for _, round := range existingRounds {
+		var archived model.EcommercePlan
+		if json.Unmarshal([]byte(round.PlanJSON), &archived) != nil {
+			continue
+		}
+		for _, image := range archived.Images {
+			if image.TaskID != "" {
+				archivedTasks[image.TaskID] = struct{}{}
+			}
+		}
 	}
 	var maxOrdinal int
 	if err := tx.Model(&model.EcommerceRound{}).Where("project_id = ?", project.ID).Select("COALESCE(MAX(ordinal), 0)").Scan(&maxOrdinal).Error; err != nil {
@@ -314,6 +329,20 @@ func convertEcommerceLegacyRounds(tx *gorm.DB, project *model.EcommerceProject) 
 	created := 0
 	ordinal := maxOrdinal
 	for _, item := range groups {
+		// A legacy client can replay the same artwork with a new draft snapshot
+		// stamped on it (and with locally edited/removed images). Tasks are unique
+		// per generated artwork, so any overlap means this group was already
+		// archived; re-inserting it would duplicate or resurrect edited history.
+		replayed := false
+		for _, image := range item.images {
+			if _, ok := archivedTasks[image.TaskID]; ok && image.TaskID != "" {
+				replayed = true
+				break
+			}
+		}
+		if replayed {
+			continue
+		}
 		dedup := ecommerceRoundKey(item.draft, item.images)
 		var existing int64
 		if err := tx.Model(&model.EcommerceRound{}).Where("project_id = ? AND dedup_key = ?", project.ID, dedup).Count(&existing).Error; err != nil {
@@ -340,6 +369,11 @@ func convertEcommerceLegacyRounds(tx *gorm.DB, project *model.EcommerceProject) 
 		}
 		if err := tx.Create(&round).Error; err != nil {
 			return 0, err
+		}
+		for _, image := range item.images {
+			if image.TaskID != "" {
+				archivedTasks[image.TaskID] = struct{}{}
+			}
 		}
 		created++
 	}
