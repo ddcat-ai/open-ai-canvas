@@ -19,12 +19,7 @@ export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Video]: { width: 720, height: 405, title: "视频" },
     [CanvasNodeType.Audio]: { width: 340, height: 120, title: "Audio" },
     [CanvasNodeType.Frame]: { width: 760, height: 520, title: "未命名背板" },
-    [CanvasNodeType.Markdown]: { width: 420, height: 320, title: "Markdown" },
-    [CanvasNodeType.Svg]: { width: 420, height: 320, title: "SVG" },
-    [CanvasNodeType.Html]: { width: 520, height: 380, title: "HTML" },
     [CanvasNodeType.Panorama]: { width: 520, height: 300, title: "全景" },
-    [CanvasNodeType.Compare]: { width: 520, height: 320, title: "对比" },
-    [CanvasNodeType.Chart]: { width: 480, height: 320, title: "图表" },
     [CanvasNodeType.ColorGrade]: { width: 420, height: 360, title: "调色" },
     [CanvasNodeType.MediaConversion]: { width: 480, height: 460, title: "转换" },
     [CanvasNodeType.BatchTable]: { width: 1280, height: 560, title: "批量创作表" },
@@ -75,28 +70,8 @@ export const NODE_SPECS = {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Frame],
         metadata: { frame: { collapsed: false, expandedWidth: NODE_DEFAULT_SIZE[CanvasNodeType.Frame].width, expandedHeight: NODE_DEFAULT_SIZE[CanvasNodeType.Frame].height } },
     },
-    [CanvasNodeType.Markdown]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Markdown],
-        metadata: { content: "", status: "idle" },
-    },
-    [CanvasNodeType.Svg]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Svg],
-        metadata: { content: "", status: "idle" },
-    },
-    [CanvasNodeType.Html]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Html],
-        metadata: { content: "", status: "idle" },
-    },
     [CanvasNodeType.Panorama]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Panorama],
-        metadata: { content: "", status: "idle" },
-    },
-    [CanvasNodeType.Compare]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Compare],
-        metadata: { status: "idle" },
-    },
-    [CanvasNodeType.Chart]: {
-        ...NODE_DEFAULT_SIZE[CanvasNodeType.Chart],
         metadata: { content: "", status: "idle" },
     },
     [CanvasNodeType.ColorGrade]: {

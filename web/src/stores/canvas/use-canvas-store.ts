@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
 import { nanoid } from "nanoid";
+import { migrateCanvasNodeModel } from "@/lib/canvas/migrate-canvas-node-model";
 import { sameCanvasContent } from "@/lib/canvas/canvas-content";
 import { canvasAppearanceForPreset, DEFAULT_CANVAS_BACKGROUND_MODE, NEW_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, readCanvasAppearanceDefault, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { parseCanvasStorageDocument, rebaseCanvasProjects, serializeCanvasStorageDocument, type CanvasStorageDocument } from "@/lib/canvas/canvas-storage-revision";
@@ -40,17 +41,58 @@ export type CanvasProject = {
 type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
+    drafts: Record<string, { scope: string; project: CanvasProject }>;
+    createDraftProject: (title?: string, id?: string) => string;
+    getDraftProject: (id: string) => CanvasProject | null;
+    materializeDraft: (id: string) => void;
     createProject: (title?: string, projectId?: string) => string;
     importProject: (project: Partial<CanvasProject>) => string;
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
     replaceProjects: (projects: CanvasProject[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "projectId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "starterMode" | "appearance" | "backgroundMode" | "showImageInfo" | "viewport" | "previsScenes" | "timeline">>) => void;
+    updateProject: (
+        id: string,
+        patch: Partial<Pick<CanvasProject, "projectId" | "nodes" | "connections" | "chatSessions" | "activeChatId" | "starterMode" | "appearance" | "backgroundMode" | "showImageInfo" | "viewport" | "previsScenes" | "timeline">>,
+    ) => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
 export const CANVAS_STORE_KEY = "yingce:canvas_store";
+
+/** Upload placeholders and empty assistant sessions are UI state, not saved work. */
+function hasDraftContent(project: CanvasProject) {
+    return project.nodes.some((node) => !node.metadata?.fileUpload) || project.connections.length > 0 || project.chatSessions.some((session) => session.messages.length > 0) || project.previsScenes.length > 0 || Boolean(project.timeline?.clips.length);
+}
+
+function emptyCanvasProject(id: string, title: string, projectId?: string): CanvasProject {
+    const now = new Date().toISOString();
+    const appearanceDefault = readCanvasAppearanceDefault();
+    return {
+        id,
+        revision: 0,
+        projectId,
+        title,
+        createdAt: now,
+        updatedAt: now,
+        nodes: [],
+        connections: [],
+        chatSessions: [],
+        activeChatId: null,
+        appearance: appearanceDefault?.appearance ?? canvasAppearanceForPreset(useThemeStore.getState().theme),
+        backgroundMode: appearanceDefault?.backgroundMode || NEW_CANVAS_BACKGROUND_MODE,
+        showImageInfo: false,
+        viewport: initialViewport,
+        previsScenes: [],
+    };
+}
+
+// Only navigation intent survives a refresh in browser history; canvas data stays
+// out of persistence until content or an explicit save materializes this ID.
+export function canvasDraftNavigationState(id: string) {
+    const project = useCanvasStore.getState().getDraftProject(id);
+    return project ? { canvasDraft: { id, title: project.title, scope: getActiveUserScope() } } : undefined;
+}
 type PersistedCanvasState = Pick<CanvasStore, "projects">;
 type QueuedCanvasPersist = {
     name: string;
@@ -93,8 +135,13 @@ function createCanvasPersistenceJournal(scope: string, name: string, previous: C
     const after = new Map(next.map((project) => [project.id, project]));
     const changed = new Set([...before.keys(), ...after.keys()].filter((id) => before.get(id) !== after.get(id)));
     return {
-        version: 1, name, scope, writerId: canvasJournalWriterId, token,
-        savedAt: new Date().toISOString(), baseRevision,
+        version: 1,
+        name,
+        scope,
+        writerId: canvasJournalWriterId,
+        token,
+        savedAt: new Date().toISOString(),
+        baseRevision,
         baseProjects: previous.filter((project) => changed.has(project.id)),
         projects: next.filter((project) => changed.has(project.id)),
     };
@@ -116,12 +163,23 @@ function readCanvasPersistenceJournals(scope: string): CanvasPersistenceJournal[
             if (!raw) return [];
             try {
                 const journal = JSON.parse(raw) as CanvasPersistenceJournal;
-                return journal.version === 1 && journal.scope === scope && journal.name && typeof journal.writerId === "string"
-                    && key === canvasPersistenceJournalKey(scope, journal.writerId) && Number.isSafeInteger(journal.token)
-                    && Array.isArray(journal.projects) && Array.isArray(journal.baseProjects) ? [journal] : [];
-            } catch { return []; }
+                return journal.version === 1 &&
+                    journal.scope === scope &&
+                    journal.name &&
+                    typeof journal.writerId === "string" &&
+                    key === canvasPersistenceJournalKey(scope, journal.writerId) &&
+                    Number.isSafeInteger(journal.token) &&
+                    Array.isArray(journal.projects) &&
+                    Array.isArray(journal.baseProjects)
+                    ? [journal]
+                    : [];
+            } catch {
+                return [];
+            }
         });
-    } catch { return []; }
+    } catch {
+        return [];
+    }
 }
 
 function writeCanvasPersistenceJournal(journal: CanvasPersistenceJournal) {
@@ -133,7 +191,9 @@ function writeCanvasPersistenceJournal(journal: CanvasPersistenceJournal) {
         if (new TextEncoder().encode(serialized).byteLength > CANVAS_JOURNAL_MAX_BYTES) return false;
         window.localStorage.setItem(canvasPersistenceJournalKey(journal.scope, journal.writerId), serialized);
         return true;
-    } catch { return false; }
+    } catch {
+        return false;
+    }
 }
 
 function clearCanvasPersistenceJournal(scope: string, token: number, writerId = canvasJournalWriterId) {
@@ -143,7 +203,9 @@ function clearCanvasPersistenceJournal(scope: string, token: number, writerId = 
         const raw = window.localStorage?.getItem(key);
         // A previous save must never clear edits made while IndexedDB was writing.
         if (raw && (JSON.parse(raw) as CanvasPersistenceJournal).token <= token) window.localStorage.removeItem(key);
-    } catch { /* The durable receipt makes a leftover journal safe to replay. */ }
+    } catch {
+        /* The durable receipt makes a leftover journal safe to replay. */
+    }
 }
 
 function applyCanvasPersistenceJournal(document: CanvasStorageDocument, journal: CanvasPersistenceJournal) {
@@ -163,7 +225,6 @@ async function preserveLocalRebaseConflicts(scope: string, projects: CanvasProje
         });
     }
 }
-
 
 function setCanvasLocalPersistenceProgress(projects: CanvasProject[], patch: Partial<SyncProjectProgress>) {
     const progress = useSyncProgressStore.getState();
@@ -204,8 +265,6 @@ function recordCanvasNodePersistenceCounts(before: CanvasProject[], after: Canva
         });
     }
 }
-
-
 
 let suppressCanvasStorePersistence = 0;
 const canvasMemoryStates = new Map<string, PersistedCanvasState>();
@@ -250,7 +309,12 @@ function runWithBrowserCanvasStorageLock<T>(scope: string, operation: () => Prom
  */
 export function withCanvasStorePersistenceLock<T>(scope: string, operation: () => Promise<T>, options: CanvasStorageLockOptions = {}): Promise<T> {
     const previous = canvasStorageTails.get(scope) ?? Promise.resolve();
-    const pending = previous.then(() => undefined, () => undefined).then(() => runWithBrowserCanvasStorageLock(scope, operation, options));
+    const pending = previous
+        .then(
+            () => undefined,
+            () => undefined,
+        )
+        .then(() => runWithBrowserCanvasStorageLock(scope, operation, options));
     const tail = pending.then(
         () => undefined,
         () => undefined,
@@ -390,7 +454,21 @@ function samePersistenceValue(left: unknown, right: unknown) {
 function rollbackGenerationValue(previous: unknown, attempted: unknown, live: unknown, durable: unknown): unknown {
     if (samePersistenceValue(previous, attempted)) return live;
     if (samePersistenceValue(live, attempted)) return durable;
-    if (!previous || !attempted || !live || !durable || Array.isArray(previous) || Array.isArray(attempted) || Array.isArray(live) || Array.isArray(durable) || typeof previous !== "object" || typeof attempted !== "object" || typeof live !== "object" || typeof durable !== "object") return live;
+    if (
+        !previous ||
+        !attempted ||
+        !live ||
+        !durable ||
+        Array.isArray(previous) ||
+        Array.isArray(attempted) ||
+        Array.isArray(live) ||
+        Array.isArray(durable) ||
+        typeof previous !== "object" ||
+        typeof attempted !== "object" ||
+        typeof live !== "object" ||
+        typeof durable !== "object"
+    )
+        return live;
 
     const previousRecord = previous as Record<string, unknown>;
     const attemptedRecord = attempted as Record<string, unknown>;
@@ -455,9 +533,7 @@ function ordinaryCanvasProjectSnapshot(scope: string, project: CanvasProject, du
                 const attemptedNode = attempt?.nodes?.find((candidate) => candidate.id === node.id);
                 // durableNode comes from the observed storage snapshot. Never mutate that snapshot while
                 // rebuilding a failed generation, otherwise a later retry observes a partially rolled-back base.
-                const rolledBack = previousNode && attemptedNode
-                    ? (rollbackGenerationValue(previousNode, attemptedNode, node, durableNode) as CanvasNodeData)
-                    : { ...durableNode, metadata: durableNode.metadata ? { ...durableNode.metadata } : undefined };
+                const rolledBack = previousNode && attemptedNode ? (rollbackGenerationValue(previousNode, attemptedNode, node, durableNode) as CanvasNodeData) : { ...durableNode, metadata: durableNode.metadata ? { ...durableNode.metadata } : undefined };
                 const metadata = { ...(rolledBack.metadata || {}) };
                 if (durableKeys?.length) metadata.generationEffectKeys = [...durableKeys];
                 else delete metadata.generationEffectKeys;
@@ -491,9 +567,10 @@ function ordinaryCanvasProjectSnapshot(scope: string, project: CanvasProject, du
                 const attempt = pendingGenerationAttempt(scope, project.id, session.generationEffectKeys);
                 const previousSession = attempt?.previousChatSessions?.find((candidate) => candidate.id === session.id);
                 const attemptedSession = attempt?.chatSessions?.find((candidate) => candidate.id === session.id);
-                const rolledBack = previousSession && attemptedSession
-                    ? (rollbackGenerationValue(previousSession, attemptedSession, session, durableSession) as CanvasAssistantSession)
-                    : { ...durableSession, generationEffectKeys: durableSession.generationEffectKeys ? [...durableSession.generationEffectKeys] : undefined };
+                const rolledBack =
+                    previousSession && attemptedSession
+                        ? (rollbackGenerationValue(previousSession, attemptedSession, session, durableSession) as CanvasAssistantSession)
+                        : { ...durableSession, generationEffectKeys: durableSession.generationEffectKeys ? [...durableSession.generationEffectKeys] : undefined };
                 if (durableKeys?.length) rolledBack.generationEffectKeys = [...durableKeys];
                 else delete rolledBack.generationEffectKeys;
                 chatSessions.push(rolledBack);
@@ -528,8 +605,7 @@ function ordinaryCanvasProjectSnapshot(scope: string, project: CanvasProject, du
 
 function hasGenerationEffectKeys(value: CanvasProject | undefined) {
     if (!value) return false;
-    return value.nodes.some((node) => Boolean(node.metadata?.generationEffectKeys?.length))
-        || value.chatSessions.some((session) => Boolean(session.generationEffectKeys?.length));
+    return value.nodes.some((node) => Boolean(node.metadata?.generationEffectKeys?.length)) || value.chatSessions.some((session) => Boolean(session.generationEffectKeys?.length));
 }
 
 function sameGenerationEffectKeys(left?: readonly string[], right?: readonly string[]) {
@@ -557,9 +633,9 @@ export function reconcileCanvasGenerationFailure(scope: string, durableProjects:
 const failedCanvasJournalRecoveries = new Map<string, string>();
 
 async function recoverCanvasPersistenceJournalLocked(scope: string, name: string, initial: CanvasStorageDocument) {
-    const journals = readCanvasPersistenceJournals(scope).filter((journal) => journal.name === name)
+    const journals = readCanvasPersistenceJournals(scope)
+        .filter((journal) => journal.name === name)
         .sort((left, right) => left.savedAt.localeCompare(right.savedAt) || left.writerId.localeCompare(right.writerId) || left.token - right.token);
-    if (!journals.length) return initial;
     const storage = localForageStorageForScope(scope);
     let durable = parseCanvasStorageDocument(await storage.getItem(name), initial.state.projects);
     for (const journal of journals) {
@@ -570,6 +646,11 @@ async function recoverCanvasPersistenceJournalLocked(scope: string, name: string
         clearCanvasPersistenceJournal(scope, journal.token, journal.writerId);
         recordCanvasNodePersistenceCounts(durable.state.projects, saved.state.projects);
         durable = saved;
+    }
+    const projects = durable.state.projects.map(migrateCanvasNodeModel);
+    if (projects.some((project, index) => project !== durable.state.projects[index])) {
+        durable = { ...durable, state: { projects }, storageRevision: durable.storageRevision + 1, savedAt: new Date().toISOString() };
+        await storage.setItem(name, serializeCanvasStorageDocument(durable));
     }
     failedCanvasJournalRecoveries.delete(scope);
     return durable;
@@ -587,7 +668,7 @@ async function recoverCanvasPersistenceJournal(scope: string, name: string, init
             if ((initial.journalTokens?.[journal.writerId] ?? -1) >= journal.token) continue;
             for (const project of journal.projects) projects.set(project.id, project);
         }
-        const recoveredProjects = [...projects.values()];
+        const recoveredProjects = [...projects.values()].map(migrateCanvasNodeModel);
         if (getActiveUserScope() === scope) markCanvasLocalPersistencePending(recoveredProjects, error instanceof Error ? error.message : "本地恢复记录写入失败");
         return { ...initial, state: { projects: recoveredProjects } };
     }
@@ -639,13 +720,16 @@ const canvasStorage: PersistStorage<CanvasStore> = {
         });
         markCanvasLocalPersistencePending(nextState.projects, journal && !journalWritten ? "本地快速恢复记录写入失败，正在等待完整画布保存" : undefined);
         clearCanvasSaveTimer(scope);
-        const timer = setTimeout(() => {
-            if (canvasSaveTimers.get(scope) === timer) canvasSaveTimers.delete(scope);
-            void writeQueuedCanvasPersist(scope, token).catch((error) => {
-                // 自动保存无法把异常返回给原始状态更新调用方，但失败队列和 journal 会保留给下一次写入或显式 flush 重试。
-                console.warn("画布本地持久化失败，已保留待写队列", { scope, error });
-            });
-        }, journalWritten ? 400 : 0);
+        const timer = setTimeout(
+            () => {
+                if (canvasSaveTimers.get(scope) === timer) canvasSaveTimers.delete(scope);
+                void writeQueuedCanvasPersist(scope, token).catch((error) => {
+                    // 自动保存无法把异常返回给原始状态更新调用方，但失败队列和 journal 会保留给下一次写入或显式 flush 重试。
+                    console.warn("画布本地持久化失败，已保留待写队列", { scope, error });
+                });
+            },
+            journalWritten ? 400 : 0,
+        );
         canvasSaveTimers.set(scope, timer);
     },
     removeItem: (name) => {
@@ -669,31 +753,34 @@ export const useCanvasStore = create<CanvasStore>()(
         (set, get) => ({
             hydrated: false,
             projects: [],
+            drafts: {},
+            createDraftProject: (title = "未命名画布", id = nanoid()) => {
+                if (get().openProject(id)) return id;
+                set((state) => ({ drafts: { ...state.drafts, [id]: { scope: getActiveUserScope(), project: emptyCanvasProject(id, title) } } }));
+                return id;
+            },
+            getDraftProject: (id) => {
+                if (get().projects.some((project) => project.id === id)) return null;
+                const draft = get().drafts[id];
+                return draft?.scope === getActiveUserScope() ? draft.project : null;
+            },
+            materializeDraft: (id) => {
+                const draft = get().getDraftProject(id);
+                if (!draft) return;
+                set((state) => {
+                    const drafts = { ...state.drafts };
+                    delete drafts[id];
+                    return { drafts, projects: state.projects.some((project) => project.id === id) ? state.projects : [draft, ...state.projects] };
+                });
+            },
             createProject: (title = "未命名画布", projectId) => {
-                const now = new Date().toISOString();
                 const id = nanoid();
-                const appearanceDefault = readCanvasAppearanceDefault();
-                const project: CanvasProject = {
-                    id,
-                    revision: 0,
-                    projectId,
-                    title,
-                    createdAt: now,
-                    updatedAt: now,
-                    nodes: [],
-                    connections: [],
-                    chatSessions: [],
-                    activeChatId: null,
-                    appearance: appearanceDefault?.appearance ?? canvasAppearanceForPreset(useThemeStore.getState().theme),
-                    backgroundMode: appearanceDefault?.backgroundMode || NEW_CANVAS_BACKGROUND_MODE,
-                    showImageInfo: false,
-                    viewport: initialViewport,
-                    previsScenes: [],
-                };
+                const project = emptyCanvasProject(id, title, projectId);
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return id;
             },
             importProject: (source) => {
+                source = migrateCanvasNodeModel({ ...source, nodes: source.nodes || [], connections: source.connections || [] });
                 const now = new Date().toISOString();
                 const project: CanvasProject = {
                     id: nanoid(),
@@ -717,33 +804,48 @@ export const useCanvasStore = create<CanvasStore>()(
                 return project.id;
             },
             openProject: (id) => {
-                return get().projects.find((item) => item.id === id) || null;
+                return get().projects.find((item) => item.id === id) || get().getDraftProject(id);
             },
-            renameProject: (id, title) => set((state) => {
-                const current = state.projects.find((project) => project.id === id);
-                const nextTitle = title.trim() || current?.title;
-                if (!current || current.title === nextTitle) return state;
-                return { projects: state.projects.map((project) => project === current ? { ...project, title: nextTitle!, updatedAt: new Date().toISOString() } : project) };
-            }),
+            renameProject: (id, title) =>
+                set((state) => {
+                    const draft = get().getDraftProject(id);
+                    if (draft) return { drafts: { ...state.drafts, [id]: { scope: getActiveUserScope(), project: { ...draft, title: title.trim() || draft.title } } } };
+                    const current = state.projects.find((project) => project.id === id);
+                    const nextTitle = title.trim() || current?.title;
+                    if (!current || current.title === nextTitle) return state;
+                    return { projects: state.projects.map((project) => (project === current ? { ...project, title: nextTitle!, updatedAt: new Date().toISOString() } : project)) };
+                }),
             deleteProjects: (ids) =>
                 set((state) => {
+                    const drafts = { ...state.drafts };
+                    for (const id of ids) delete drafts[id];
                     const projects = state.projects.filter((project) => !ids.includes(project.id));
-                    return { projects };
+                    return { drafts, projects: projects.length === state.projects.length ? state.projects : projects };
                 }),
             replaceProjects: (projects) => set({ projects }),
-            updateProject: (id, patch) => set((state) => {
-                const current = state.projects.find((project) => project.id === id);
-                if (!current) return state;
-                const next = { ...current, ...patch };
-                if (Object.keys(patch).every((key) => key === "viewport")) {
-                    if (samePersistenceValue(current.viewport, next.viewport)) return state;
-                    return { projects: state.projects.map((project) => project === current ? next : project) };
-                }
-                const contentChanged = !sameCanvasContent(current, next);
-                if (!contentChanged && samePersistenceValue(current.viewport, next.viewport)) return state;
-                if (contentChanged) next.updatedAt = new Date().toISOString();
-                return { projects: state.projects.map((project) => project === current ? next : project) };
-            }),
+            updateProject: (id, patch) =>
+                set((state) => {
+                    const draft = get().getDraftProject(id);
+                    if (draft && !state.projects.some((project) => project.id === id)) {
+                        const next = { ...draft, ...patch };
+                        if (Object.keys(patch).every((key) => samePersistenceValue(draft[key as keyof CanvasProject], next[key as keyof CanvasProject]))) return state;
+                        const drafts = { ...state.drafts, [id]: { scope: getActiveUserScope(), project: next } };
+                        if (!hasDraftContent(next)) return { drafts };
+                        delete drafts[id];
+                        return { drafts, projects: [{ ...next, updatedAt: new Date().toISOString() }, ...state.projects] };
+                    }
+                    const current = state.projects.find((project) => project.id === id);
+                    if (!current) return state;
+                    const next = { ...current, ...patch };
+                    if (Object.keys(patch).every((key) => key === "viewport")) {
+                        if (samePersistenceValue(current.viewport, next.viewport)) return state;
+                        return { projects: state.projects.map((project) => (project === current ? next : project)) };
+                    }
+                    const contentChanged = !sameCanvasContent(current, next);
+                    if (!contentChanged && samePersistenceValue(current.viewport, next.viewport)) return state;
+                    if (contentChanged) next.updatedAt = new Date().toISOString();
+                    return { projects: state.projects.map((project) => (project === current ? next : project)) };
+                }),
         }),
         {
             name: CANVAS_STORE_KEY,

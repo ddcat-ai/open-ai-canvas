@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button, Popconfirm } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { Check, Copy, ImageOff, LoaderCircle, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { useVideoPlaybackUrl } from "@/components/canvas/canvas-node-media-content";
+import { CanvasImageComparison } from "./canvas-image-comparison";
 import { Kbd } from "@/components/ui/base/kbd";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -298,59 +299,14 @@ function useResolvedMediaUrl(storageKey: string | undefined, fallback: string) {
 /** 左侧为预览版本、右侧为当前版本，拖动分隔线比较同一位置的差异。 */
 function CompareStage({ node, version, current }: { node: CanvasNodeData; version: CanvasMediaVersion; current: CanvasMediaVersion }) {
     const { t } = useTranslation();
-    const [split, setSplit] = useState(50);
-    const stageRef = useRef<HTMLDivElement>(null);
-    const updateFromPointer = (event: ReactPointerEvent) => {
-        const rect = stageRef.current?.getBoundingClientRect();
-        if (!rect?.width) return;
-        setSplit(Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)));
-    };
     return (
-        <div
-            ref={stageRef}
-            className="relative size-full cursor-ew-resize touch-none select-none"
-            onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                updateFromPointer(event);
-            }}
-            onPointerMove={(event) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
-            }}
-        >
-            <div className="absolute inset-0">
-                <StageMedia node={node} version={current} />
-            </div>
-            <div className="absolute inset-0" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}>
-                <StageMedia node={node} version={version} />
-            </div>
-            <div
-                role="slider"
-                tabIndex={0}
-                aria-label={t("canvasB.mediaVersion.compareDivider")}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(split)}
-                className="absolute inset-y-0 z-[1] w-0.5 -translate-x-1/2 bg-[var(--btn-solid-bg)] outline-none focus-visible:ring-2"
-                style={{ left: `${split}%` }}
-                onKeyDown={(event) => {
-                    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setSplit((value) => Math.min(100, Math.max(0, value + (event.key === "ArrowRight" ? 5 : -5))));
-                }}
-            >
-                <span className="absolute left-1/2 top-1/2 grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--btn-solid-bg)] text-[var(--btn-solid-fg)] shadow-[var(--elevation-card)]">
-                    <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                        <path d="M6 4 2 8l4 4M10 4l4 4-4 4" />
-                    </svg>
-                </span>
-            </div>
-            <StageBadge className="bottom-3 left-3">{t("canvasB.mediaVersion.badgePreview", { number: version.number })}</StageBadge>
-            <StageBadge className="bottom-3 right-3">
-                <Check className="size-3" />
-                {t("canvasB.mediaVersion.badgeCurrent", { number: current.number })}
-            </StageBadge>
-        </div>
+        <CanvasImageComparison
+            before={<StageMedia node={node} version={version} />}
+            after={<StageMedia node={node} version={current} />}
+            beforeLabel={t("canvasB.mediaVersion.badgePreview", { number: version.number })}
+            afterLabel={t("canvasB.mediaVersion.badgeCurrent", { number: current.number })}
+            label={t("canvasB.mediaVersion.compareDivider")}
+        />
     );
 }
 

@@ -13,26 +13,16 @@ func BuiltinRegistry() *Registry {
 	registry, err := NewRegistry([]Descriptor{
 		{
 			Type: "text", Version: "1", Label: "文本", DefaultWidth: 340, DefaultHeight: 240,
-			Purpose:     "承载普通说明、创意草稿和单段提示词。",
+			Purpose:     "承载普通说明、创意草稿、Markdown 文档和单段提示词。",
 			GoodFor:     []string{"单个创意", "一次性提示词", "临时备注", "快速试验"},
 			NotIdealFor: []string{"多镜头脚本", "需要逐镜修改的内容", "需要镜头级资产关系的内容"},
 			Tradeoffs:   []string{"创建和编辑最轻量", "没有镜头级字段和逐镜维护能力"},
 			InputKind:   "text", Connection: ConnectionPolicy{CanSource: true}, CanUpdate: true,
-			SummaryFields: []string{"content"}, DetailFields: []string{"content"},
+			SummaryFields: []string{"content", "textFormat"}, DetailFields: []string{"content", "textFormat"},
 			PatchFields: editableNodeFields("metadata.content", "正文", "节点正文"),
 			CreateMetadata: func(content string) map[string]any {
-				return map[string]any{"content": content, "status": "idle", "fontSize": float64(14)}
+				return map[string]any{"content": content, "status": "idle", "fontSize": float64(14), "textFormat": "markdown"}
 			},
-		},
-		{
-			Type: "markdown", Version: "1", Label: "Markdown", DefaultWidth: 420, DefaultHeight: 320,
-			Purpose:     "承载面向人阅读的方案、脚本草稿和格式化文档。",
-			GoodFor:     []string{"创意方案", "脚本草稿", "交付文档", "需要排版的长文本"},
-			NotIdealFor: []string{"需要逐镜生成或审核的多镜头内容", "需要绑定媒体资产的结构化流程"},
-			Tradeoffs:   []string{"适合阅读和导出", "结构化程度低，不能替代可维护的分镜表"},
-			InputKind:   "text", Connection: ConnectionPolicy{CanSource: true}, CanUpdate: true,
-			SummaryFields: []string{"content"}, DetailFields: []string{"content"},
-			PatchFields: editableNodeFields("metadata.content", "Markdown 正文", "Markdown 正文"),
 		},
 		{
 			Type: "file", Version: "1", Label: "文本文件", DefaultWidth: 420, DefaultHeight: 320,
@@ -57,7 +47,7 @@ func BuiltinRegistry() *Registry {
 			Type: "frame", Version: "1", Label: "背板", DefaultWidth: 760, DefaultHeight: 520,
 			Purpose:       "在画布上建立可移动、可折叠的视觉分区，用来归组相关节点；背板本身不承载创作正文或生成结果。",
 			GoodFor:       []string{"按场景或镜头组归拢脚本、参考图和生成结果", "按前期策划、制作、交付等阶段划分工作区", "为大型画布建立清晰分区，便于移动或折叠整组内容"},
-			NotIdealFor:   []string{"承载结构化镜头数据（应使用分镜脚本节点）", "存放需要 Agent 单独读写的正文（应使用文本或 Markdown 节点）", "替代具体业务节点或媒体生成节点"},
+			NotIdealFor:   []string{"承载结构化镜头数据（应使用分镜脚本节点）", "存放需要 Agent 单独读写的正文（应使用文本节点）", "替代具体业务节点或媒体生成节点"},
 			Tradeoffs:     []string{"改善空间组织但不增加内容结构或生成能力"},
 			SummaryFields: []string{"label"}, DetailFields: []string{"label"},
 			CreateMetadata: func(string) map[string]any {

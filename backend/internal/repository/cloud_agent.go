@@ -400,6 +400,9 @@ func canonicalJSONValue(value any) any {
 }
 
 func (r *Repository) CreateCloudAgentCanvasMutation(mutation *model.CloudAgentCanvasMutation) error {
+	if err := canonicalizeCanvasUndoSnapshot(mutation); err != nil {
+		return err
+	}
 	return r.db.Create(mutation).Error
 }
 

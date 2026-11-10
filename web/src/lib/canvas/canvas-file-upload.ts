@@ -18,7 +18,7 @@ export function uploadPercent(loaded: number, total: number): number | undefined
     return Math.round(Math.min(1, Math.max(0, loaded / total)) * 100);
 }
 export function uploadVeilOpacity(percent = 0) {
-    return 1 - Math.min(100, Math.max(0, percent)) / 100 * 0.9;
+    return 1 - (Math.min(100, Math.max(0, percent)) / 100) * 0.9;
 }
 
 // 字节传完后服务端仍在保存，清晰图保留一点透明度透出磨砂底图，切换为正式节点后才完全清晰。
@@ -38,11 +38,14 @@ export async function createFileUploadPlaceholder(id: string, file: File, positi
     const type = uploadNodeType(file);
     if (!type) throw new Error("请选择图片、视频、音频或 TXT / Markdown 文件");
     if (type === CanvasNodeType.Image) return createImageUploadPlaceholder(id, file, position, await readUploadImageSize(file));
-    const size = type === CanvasNodeType.Video ? fitNodeSize(...await readUploadVideoSize(file)) : NODE_DEFAULT_SIZE[type];
+    const size = type === CanvasNodeType.Video ? fitNodeSize(...(await readUploadVideoSize(file))) : NODE_DEFAULT_SIZE[type];
     return {
-        id, type, title: file.name, ...size,
+        ...size,
+        id,
+        type,
+        title: file.name,
         position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
-        metadata: { fileUpload: "uploading", bytes: file.size, mimeType: file.type },
+        metadata: { fileUpload: "uploading", originalFileName: file.name, bytes: file.size, mimeType: file.type },
     } satisfies CanvasNodeData;
 }
 
@@ -57,7 +60,10 @@ async function readUploadVideoSize(file: File): Promise<[number, number]> {
                 if (video.videoWidth && video.videoHeight) resolve([video.videoWidth, video.videoHeight]);
                 else reject(new Error("无法读取视频尺寸"));
             };
-            video.onerror = () => { window.clearTimeout(timer); reject(new Error("无法读取视频，请确认格式受浏览器支持")); };
+            video.onerror = () => {
+                window.clearTimeout(timer);
+                reject(new Error("无法读取视频，请确认格式受浏览器支持"));
+            };
             video.preload = "metadata";
             video.src = url;
         });
@@ -87,10 +93,12 @@ export async function readUploadImageSize(file: File): Promise<{ width: number; 
 export function createImageUploadPlaceholder(id: string, file: Pick<File, "name" | "size" | "type">, position: Position, naturalSize: { width: number; height: number }): CanvasNodeData {
     const size = fitImageNodeSize(naturalSize.width, naturalSize.height);
     return {
-        id, type: CanvasNodeType.Image, title: file.name,
+        id,
+        type: CanvasNodeType.Image,
+        title: file.name,
         position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
         ...size,
-        metadata: { fileUpload: "uploading", naturalWidth: naturalSize.width, naturalHeight: naturalSize.height, bytes: file.size, mimeType: file.type },
+        metadata: { fileUpload: "uploading", originalFileName: file.name, naturalWidth: naturalSize.width, naturalHeight: naturalSize.height, bytes: file.size, mimeType: file.type },
     };
 }
 

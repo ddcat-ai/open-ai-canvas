@@ -8,6 +8,7 @@ import (
 
 	"yingce/backend/internal/assets"
 	"yingce/backend/internal/canvas/capability"
+	"yingce/backend/internal/canvas/document"
 	"yingce/backend/internal/repository"
 )
 
@@ -57,64 +58,7 @@ func cloudAgentNodeSnapshotMatches(doc map[string]any, nodeID, snapshotHash stri
 
 // Viewport autosaves must not invalidate approved content; node edits still do.
 func cloudAgentCanvasHash(doc map[string]any) string {
-	content := make(map[string]any, len(doc))
-	for key, value := range doc {
-		switch key {
-		case "id", "viewport", "updatedAt", "revision", "createdAt":
-			continue
-		case "title", "projectId":
-			if text, ok := value.(string); ok && strings.TrimSpace(text) == "" {
-				continue
-			}
-		}
-		content[key] = value
-	}
-	for _, key := range []string{"nodes", "connections"} {
-		if value, exists := content[key]; !exists || value == nil {
-			content[key] = []any{}
-		}
-	}
-	content["nodes"] = cloudAgentNodesWithoutTimestamps(content["nodes"])
-	return creationHash(content)
-}
-
-// cloudAgentNodesWithoutTimestamps 去掉节点层的 createdAt/updatedAt。前端会给 Agent 新建或
-// 修改过的节点补写时间戳并自动保存，单纯的时间戳变化不代表内容被改，不应让模型手上的
-// 快照失效；节点其他字段（含未知字段）仍全部参与哈希。没有时间戳的节点原样保留，哈希不变。
-func cloudAgentNodesWithoutTimestamps(value any) any {
-	items, ok := value.([]any)
-	if !ok {
-		if typed, isMaps := value.([]map[string]any); isMaps {
-			items = make([]any, len(typed))
-			for index, node := range typed {
-				items[index] = node
-			}
-		} else {
-			return value
-		}
-	}
-	projected := make([]any, len(items))
-	for index, item := range items {
-		node, isMap := item.(map[string]any)
-		if !isMap {
-			projected[index] = item
-			continue
-		}
-		_, hasCreated := node["createdAt"]
-		_, hasUpdated := node["updatedAt"]
-		if !hasCreated && !hasUpdated {
-			projected[index] = node
-			continue
-		}
-		copied := make(map[string]any, len(node))
-		for key, field := range node {
-			if key != "createdAt" && key != "updatedAt" {
-				copied[key] = field
-			}
-		}
-		projected[index] = copied
-	}
-	return projected
+	return document.SnapshotHash(doc)
 }
 
 // Generation uses the graph, not canvas presentation or autosave bookkeeping.

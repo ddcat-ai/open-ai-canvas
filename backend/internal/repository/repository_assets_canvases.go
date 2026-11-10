@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	canvasdoc "yingce/backend/internal/canvas/document"
 	"yingce/backend/internal/model"
 )
 
@@ -101,6 +102,13 @@ func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.Canv
 }
 
 func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
+	canonical, changed, err := canvasdoc.Canonicalize([]byte(project.PayloadJSON))
+	if err != nil {
+		return err
+	}
+	if changed {
+		project.PayloadJSON = string(canonical)
+	}
 	return r.Transaction(func(tx *Repository) error {
 		if project.Revision > 0 {
 			if err := tx.LockCanvasMutation(project.UserID, project.ID); err != nil {

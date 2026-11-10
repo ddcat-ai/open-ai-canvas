@@ -9,8 +9,7 @@ import { ProjectPreview } from "@/components/canvas/canvas-project-card";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { loadCanvasProjectPage } from "@/lib/workspace-route-modules";
 import { listRemoteCanvasProjectsPage, type CanvasLibrarySummary } from "@/services/api/user-data";
-import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync";
-import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { canvasDraftNavigationState, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { RelativeTime } from "@/components/ui/product/relative-time";
 
@@ -55,11 +54,9 @@ export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () 
         creatingRef.current = true;
         setCreating(true);
         try {
-            const { id, syncError } = await createCanvasProjectWithRemoteSync(t("create.recent.untitledCanvas"));
-            await flushCanvasStorePersistence();
+            const id = useCanvasStore.getState().createDraftProject(t("create.recent.untitledCanvas"));
             if (getActiveUserScope() !== scope || useUserStore.getState().user?.id !== userId) return;
-            if (syncError) message.warning(t("create.recent.syncPending"));
-            navigate(`/canvas/${id}`);
+            navigate(`/canvas/${id}`, { state: canvasDraftNavigationState(id) });
         } catch (error) {
             if (getActiveUserScope() === scope) message.error(error instanceof Error ? error.message : t("create.recent.createFailed"));
         } finally {

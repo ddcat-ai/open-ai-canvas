@@ -7,6 +7,7 @@ import { CANVAS_IMAGE_ASSET_DND_TYPE } from "@/components/canvas/canvas-asset-tr
 import type { InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { CANVAS_PROJECT_CHAPTER_DND_TYPE, type CanvasProjectChapterPayload } from "@/lib/canvas/canvas-project-chapter-dnd";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { audioMetadata, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
@@ -19,12 +20,11 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { prepareCanvasImage } from "@/services/canvas-image-loader";
 import { registerUploadPreview, releaseUploadPreview } from "@/services/canvas-upload-preview";
-import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
+import { acquireCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 import { getProjectUnit } from "@/services/api/projects";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useAssetStore, type ImageAsset } from "@/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData, type ContextMenuState, type Position } from "@/types/canvas";
-import type { TimelineDirectMedia } from "@/types/timeline";
 import type { CanvasUploadStatus } from "./canvas-project-feedback";
 
 type UseCanvasUploadOptions = {
@@ -77,16 +77,17 @@ function isBatchTableDragEvent(event: DragEvent<HTMLElement>) {
 
 // 切换为正式图片节点前先解码本地原图，节点首帧即可上屏；超时或失败只放弃预热，不影响上传结果。
 async function warmUploadedImage(storageKey?: string) {
-    const url = storageKey ? peekCachedResourceObjectUrl(storageKey) : "";
-    if (!url) return;
+    const lease = storageKey ? acquireCachedResourceObjectUrl(storageKey) : null;
+    if (!lease) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), UPLOAD_WARM_TIMEOUT_MS);
     try {
-        await prepareCanvasImage(url, controller.signal);
+        await prepareCanvasImage(lease.url, controller.signal);
     } catch {
         // 预热只是体验优化；节点仍会按正常资源加载路径显示。
     } finally {
         window.clearTimeout(timer);
+        lease.release();
     }
 }
 
@@ -104,12 +105,15 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
     const [uploadStatus, setUploadStatus] = useState<CanvasUploadStatus | null>(null);
     const [fileDropActive, setFileDropActive] = useState(false);
 
-    useEffect(
-        () => () => {
+    const uploadSessionRef = useRef({ active: true });
+    useEffect(() => {
+        const session = { active: true };
+        uploadSessionRef.current = session;
+        return () => {
+            session.active = false;
             statusTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-        },
-        [],
-    );
+        };
+    }, [canvasId]);
 
     const startUploadStatus = useCallback<StartCanvasUploadStatus>((title, detail, total = 3, initialStep = 1) => {
         const id = (uploadStatusIdRef.current += 1);
@@ -158,37 +162,12 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
         [canvasId, domainProjectId, message, queryClient, setNodes],
     );
 
-    const persistTimelineMedia = useCallback(
-        async (media: TimelineDirectMedia) => {
-            const type = media.kind === "audio" ? CanvasNodeType.Audio : media.kind === "video" ? CanvasNodeType.Video : CanvasNodeType.Image;
-            const defaults = NODE_DEFAULT_SIZE[type];
-            const node: CanvasNodeData = {
-                id: media.id,
-                type,
-                title: media.title,
-                position: { x: 0, y: 0 },
-                width: media.width || defaults.width,
-                height: media.height || defaults.height,
-                metadata: {
-                    content: media.url || media.dataUrl || media.content || "",
-                    storageKey: media.storageKey,
-                    naturalWidth: media.width,
-                    naturalHeight: media.height,
-                    durationMs: media.durationMs,
-                    bytes: media.bytes,
-                    mimeType: media.mimeType,
-                },
-            };
-            const result = await ensureCanvasNodeAsset({ canvasId, domainProjectId, node, source: "canvas-upload" });
-            if (domainProjectId) await queryClient.invalidateQueries({ queryKey: ["project", domainProjectId] });
-            return result.assetId;
-        },
-        [canvasId, domainProjectId, queryClient],
-    );
-
     const activeUploadsRef = useRef(new Set<string>());
     const createFileNode = useCallback(
         async (file: File, position: Position, replaceId?: string, options: FileNodeUploadOptions = {}) => {
+            const session = uploadSessionRef.current;
+            const scope = getActiveUserScope();
+            const isCurrent = () => session.active && scope === getActiveUserScope();
             const original = replaceId ? nodesRef.current.find((node) => node.id === replaceId) : undefined;
             if (replaceId && (!original || activeUploadsRef.current.has(replaceId))) return null;
             const id = replaceId || options.quiet?.nodeId || `upload-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -201,6 +180,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             if (fileType === CanvasNodeType.Image || fileType === CanvasNodeType.Video) registerUploadPreview(id, file);
             try {
                 const placeholder = await createFileUploadPlaceholder(id, file, position);
+                if (!isCurrent()) return null;
                 setNodes((current) =>
                     replaceId
                         ? current.map((item) =>
@@ -219,6 +199,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 let lastPercent: number | undefined;
                 let lastPaintAt = 0;
                 const onProgress = (loaded: number, total: number) => {
+                    if (!isCurrent()) return;
                     const percent = uploadPercent(loaded, total);
                     if (percent === undefined || percent === lastPercent) return;
                     const now = performance.now();
@@ -243,6 +224,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     const media = await uploadMediaFile(file, placeholder.type === CanvasNodeType.Video ? "video" : "audio", onProgress);
                     metadata = placeholder.type === CanvasNodeType.Video ? videoMetadata(media) : audioMetadata(media);
                 }
+                if (!isCurrent()) return null;
                 progress.update(translate("canvasPage.upload.updatingNode"), 3);
                 const currentNode = nodesRef.current.find((item) => item.id === id);
                 if (!currentNode) {
@@ -252,9 +234,11 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 const uploadedNode: CanvasNodeData = {
                     ...currentNode,
                     type: placeholder.type,
+                    title: replaceId && currentNode.title === original?.title ? file.name : currentNode.title,
                     metadata: {
                         ...currentNode.metadata,
                         ...metadata,
+                        originalFileName: file.name,
                         fileUpload: undefined,
                         fileUploadProgress: undefined,
                         errorDetails: undefined,
@@ -290,7 +274,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 };
                 // 替换文件保留旧媒体为历史版本，可在版本面板切回。
                 const node = replaceId ? recordReplacedMediaVersion(original, uploadedNode, "upload") : uploadedNode;
-                setNodes((current) => current.map((item) => (item.id === id ? { ...item, type: node.type, metadata: node.metadata } : item)));
+                setNodes((current) => current.map((item) => (item.id === id ? { ...item, title: node.title, type: node.type, metadata: node.metadata } : item)));
                 if (domainProjectId) progress.update(translate("canvasPage.upload.writingProjectAssets"), 4);
                 const persisted = await persistMediaNode(node, { refreshProject: !batch });
                 const localOnly = metadata.storageKey && !resourceIdFromStorageKey(metadata.storageKey);
@@ -310,6 +294,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 }
                 return id;
             } catch (error) {
+                if (!isCurrent()) return null;
                 const details = error instanceof Error ? error.message : translate("canvasPage.upload.uploadFailed");
                 setNodes((current) =>
                     current.map((item) =>
@@ -341,8 +326,11 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
     // quiet：Agent 输入框拖入素材时不改选区；返回新节点 ID，失败返回 null。
     const createImageAssetNode = useCallback(
         async (asset: ImageAsset, position?: Position, options: { quiet?: boolean } = {}) => {
+            const session = uploadSessionRef.current;
+            const scope = getActiveUserScope();
             try {
                 const content = asset.data.storageKey ? await resolveImageUrl(asset.data.storageKey, asset.data.dataUrl || asset.coverUrl) : asset.data.dataUrl || asset.coverUrl;
+                if (!session.active || scope !== getActiveUserScope()) return null;
                 if (!content) {
                     message.error(translate("canvasPage.upload.assetImageUnavailable"));
                     return null;
@@ -368,6 +356,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                         prompt: typeof asset.metadata?.prompt === "string" ? asset.metadata.prompt : asset.title,
                         assetId: asset.id,
                         assetTags: asset.tags || [],
+                        originalFileName: typeof asset.metadata?.originalFileName === "string" ? asset.metadata.originalFileName : undefined,
                     },
                 };
                 setNodes((current) => [...current, node]);
@@ -516,103 +505,6 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             return true;
         },
         [createFileNode, domainProjectId, getCanvasCenter, message, queryClient, setDialogNodeId, setSelectedConnectionId, setSelectedNodeIds, startUploadStatus],
-    );
-
-    // 时间线专用：把本地音视频文件上传为直连媒体（仅时间线作用域，不创建画布节点），返回媒体描述数组。
-    const uploadTimelineMedia = useCallback(
-        async (files: File[]): Promise<TimelineDirectMedia[]> => {
-            const supportedFiles = files.filter((file) => file.type.startsWith("video/") || isAudioFile(file));
-            if (!supportedFiles.length) {
-                message.warning(translate("canvasPage.upload.selectTimelineFiles"));
-                return [];
-            }
-            const created: TimelineDirectMedia[] = [];
-            for (const file of supportedFiles) {
-                try {
-                    if (isAudioFile(file)) {
-                        const audio = await uploadMediaFile(file, "audio");
-                        const media: TimelineDirectMedia = {
-                            id: `audio-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                            kind: "audio",
-                            title: file.name,
-                            storageKey: audio.storageKey,
-                            url: audio.url,
-                            durationMs: audio.durationMs,
-                            bytes: audio.bytes,
-                            mimeType: audio.mimeType,
-                        };
-                        media.assetId = await persistTimelineMedia(media);
-                        created.push(media);
-                    } else {
-                        const video = await uploadMediaFile(file, "video");
-                        const media: TimelineDirectMedia = {
-                            id: `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                            kind: "video",
-                            title: file.name,
-                            storageKey: video.storageKey,
-                            url: video.url,
-                            width: video.width,
-                            height: video.height,
-                            durationMs: video.durationMs,
-                            bytes: video.bytes,
-                            mimeType: video.mimeType,
-                        };
-                        media.assetId = await persistTimelineMedia(media);
-                        created.push(media);
-                    }
-                } catch (error) {
-                    message.error(error instanceof Error ? translate("canvasPage.upload.assetUploadFailedWithReason", { error: error.message }) : translate("canvasPage.upload.assetUploadFailed"));
-                }
-            }
-            if (created.length) message.success(translate("canvasPage.upload.uploadedToTimeline", { count: created.length }));
-            return created;
-        },
-        [message, persistTimelineMedia],
-    );
-
-    // 组装能力闭环：把时间线合成结果（MP4 Blob）上传并创建为新的视频节点放回画布，
-    // 复用上传/持久化/选中逻辑，新节点可继续编辑字幕与样式。
-    const createVideoNodeFromBlob = useCallback(
-        async (blob: Blob, title: string): Promise<CanvasNodeData | null> => {
-            const progress = startUploadStatus(translate("canvasPage.upload.composeClip"), translate("canvasPage.upload.uploadingComposite"), domainProjectId ? 4 : 3);
-            try {
-                progress.update(translate("canvasPage.upload.uploadingToServer"), 2);
-                const video = await uploadMediaFile(blob, "video");
-                progress.update(translate("canvasPage.upload.updatingNode"), 3);
-                const size = fitNodeSize(video.width || 1280, video.height || 720, VIDEO_NODE_MAX_SIZE.width, VIDEO_NODE_MAX_SIZE.height);
-                const center = getCanvasCenter();
-                const id = `video-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-                const node = {
-                    id,
-                    type: CanvasNodeType.Video,
-                    title,
-                    position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
-                    width: size.width,
-                    height: size.height,
-                    metadata: { ...videoMetadata(video), status: NODE_STATUS_SUCCESS },
-                } satisfies CanvasNodeData;
-                setNodes((current) => [...current, node]);
-                selectInsertedNode(id, "preserve");
-                if (domainProjectId) progress.update(translate("canvasPage.upload.writingProjectAssets"), 4);
-                const persisted = await persistMediaNode(node);
-                progress.done(
-                    persisted.syncPending
-                        ? domainProjectId
-                            ? translate("canvasPage.upload.clipSavedProjectSync")
-                            : translate("canvasPage.upload.clipSavedAssetSync")
-                        : persisted.persisted
-                          ? translate("canvasPage.upload.clipAddedToProject")
-                          : translate("canvasPage.upload.clipProjectRetry"),
-                );
-                return node;
-            } catch (error) {
-                const details = error instanceof Error ? error.message : translate("canvasPage.upload.composeClipFailed");
-                progress.fail(details);
-                message.error(details);
-                return null;
-            }
-        },
-        [domainProjectId, getCanvasCenter, message, persistMediaNode, selectInsertedNode, setNodes, startUploadStatus],
     );
 
     const replaceNodeMedia = useCallback(
@@ -865,7 +757,10 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             } satisfies CanvasNodeData;
         }
         if (payload.kind === "text") {
-            const node = { ...createCanvasNode(CanvasNodeType.Text, center, { content: payload.content, status: NODE_STATUS_SUCCESS, assetId: payload.assetId }), title: payload.content.slice(0, 32) || "Assistant Text" };
+            const node = {
+                ...createCanvasNode(CanvasNodeType.Text, center, { content: payload.content, status: NODE_STATUS_SUCCESS, assetId: payload.assetId, originalFileName: payload.originalFileName }),
+                title: payload.title || payload.content.slice(0, 32) || "Assistant Text",
+            };
             return node;
         }
         if (payload.kind === "audio") {
@@ -878,7 +773,16 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 position: { x: center.x - spec.width / 2, y: center.y - spec.height / 2 },
                 width: spec.width,
                 height: spec.height,
-                metadata: { content: payload.url, storageKey: payload.storageKey, durationMs: payload.durationMs, bytes: payload.bytes, mimeType: payload.mimeType || "audio/mpeg", assetId: payload.assetId, status: NODE_STATUS_SUCCESS },
+                metadata: {
+                    content: payload.url,
+                    storageKey: payload.storageKey,
+                    originalFileName: payload.originalFileName,
+                    durationMs: payload.durationMs,
+                    bytes: payload.bytes,
+                    mimeType: payload.mimeType || "audio/mpeg",
+                    assetId: payload.assetId,
+                    status: NODE_STATUS_SUCCESS,
+                },
             } satisfies CanvasNodeData;
         }
         if (payload.kind === "video") {
@@ -895,6 +799,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 metadata: {
                     content: payload.url,
                     storageKey: payload.storageKey,
+                    originalFileName: payload.originalFileName,
                     status: NODE_STATUS_SUCCESS,
                     naturalWidth: payload.width,
                     naturalHeight: payload.height,
@@ -920,16 +825,18 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
         return {
             id,
             type: CanvasNodeType.Image,
-            title: payload.title.slice(0, 32) || "Generated Image",
+            title: payload.title || "Generated Image",
             position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
             width: size.width,
             height: size.height,
-            metadata: { ...metadata, prompt: payload.title, assetId: payload.assetId },
+            metadata: { ...metadata, prompt: payload.title, assetId: payload.assetId, originalFileName: payload.originalFileName },
         } satisfies CanvasNodeData;
     }, []);
 
     const insertAssetPayloads = useCallback(
         async (payloads: InsertAssetPayload[], origin: Position, successMessage: string, failureMessage: string): Promise<CanvasNodeData[]> => {
+            const session = uploadSessionRef.current;
+            const scope = getActiveUserScope();
             try {
                 const created = await Promise.all(
                     payloads.map((payload, index) =>
@@ -939,6 +846,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                         }),
                     ),
                 );
+                if (!session.active || scope !== getActiveUserScope()) return [];
                 setNodes((current) => [...current, ...created]);
                 setSelectedNodeIds(new Set(created.map((node) => node.id)));
                 setSelectedConnectionId(null);
@@ -973,7 +881,6 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
         assetPickerOpen,
         closeAssetPicker,
         createFileNode,
-        createVideoNodeFromBlob,
         createAssetPayloadNode,
         createImageAssetNode,
         fileDropActive,
@@ -996,7 +903,6 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
         startUploadStatus,
         uploadModalOpen,
         uploadStatus,
-        uploadTimelineMedia,
     };
 }
 

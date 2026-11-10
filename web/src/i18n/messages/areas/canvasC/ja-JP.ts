@@ -1,13 +1,6 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 export const jaJP: DeepStringRecord<typeof zhCN> = {
-    timelinePreview: {
-        pause: "プレビューを一時停止",
-        play: "プレビューを再生",
-        noClipHere: "この位置に動画クリップはありません",
-        noClip: "動画クリップなし",
-        noSubtitle: "ここには字幕がありません。字幕クリップを選択すると下で編集できます",
-    },
     toolbar: {
         appearance: "キャンバスの外観",
         appearanceSubtitle: "配色とグリッド",

@@ -9,6 +9,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { canvasBottomRowLayout } from "@/lib/canvas/canvas-overlay-layout";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import "./canvas-bottom-toolbar.css";
 import "./canvas-zoom-controls.css";
 
 type CanvasZoomControlsProps = {
@@ -27,6 +28,7 @@ type CanvasZoomControlsProps = {
 const QUICK_ZOOM_LEVELS = [0.25, 0.5, 1, 2] as const;
 /** 主工具条（canvas-toolbar.tsx）读取这个变量，从整行居中右移（让开左侧轨道、视图控制条，或在停靠 Agent 时两侧等距）。 */
 const MAIN_TOOLBAR_SHIFT = "--canvas-main-toolbar-shift";
+const MAIN_TOOLBAR_MAX_WIDTH = "--canvas-main-toolbar-max-width";
 
 export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, hideNodeConnections = false, onHideNodeConnectionsChange, isMiniMapOpen, onToggleMiniMap, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
     const theme = canvasThemes[useActiveTheme()];
@@ -49,16 +51,22 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
         // Share one bottom row with the main toolbar, measured from real widths (toolbar preferences, side panels, docked Agent):
         // with a docked Agent the main toolbar is centered in the space right of these controls, so its gaps to them and to the Agent stay even;
         // otherwise it is centered on the canvas like the top bar and only moves right to clear these controls.
-        // On the same row this bar has no surface and is shorter than the main toolbar, so align it to the toolbar's middle line.
+        // Align the compact view bar and the main toolbar by their middle line.
         const measure = () => {
             const container = shell.offsetParent?.getBoundingClientRect();
-            // Include the sibling node counter and follow toggle in the collision bounds.
+            // Measure the complete view controls when avoiding the main toolbar.
             const controls = shell.getBoundingClientRect();
             const bar = dock.getBoundingClientRect();
             if (!container || !bar.width || !bar.height) return;
             // The gap to these controls equals the row's own inset, so both sides of the main toolbar get the same space.
-            const layout = canvasBottomRowLayout(controls, toolbar.getBoundingClientRect(), bar.width, parseFloat(getComputedStyle(toolbar).left) || 0, { evenGaps: workspace?.dataset.agentDocked === "true" });
-            const bottom = layout.stacked ? "calc(var(--canvas-inset-y) + var(--space-16))" : `${Math.round(container.bottom - (bar.top + bar.height / 2) - controls.height / 2)}px`;
+            const row = toolbar.getBoundingClientRect();
+            const gap = parseFloat(getComputedStyle(toolbar).left) || 0;
+            const availableWidth = `${Math.max(0, Math.floor(row.right - controls.left))}px`;
+            if (shell.style.maxWidth !== availableWidth) shell.style.maxWidth = availableWidth;
+            if (toolbar.style.getPropertyValue(MAIN_TOOLBAR_MAX_WIDTH) !== availableWidth) toolbar.style.setProperty(MAIN_TOOLBAR_MAX_WIDTH, availableWidth);
+            const layout = canvasBottomRowLayout(controls, row, bar.width, gap, { evenGaps: workspace?.dataset.agentDocked === "true" });
+            const bottom = layout.stacked ? `${Math.round(container.bottom - bar.top + gap)}px` : `${Math.round(container.bottom - (bar.top + bar.height / 2) - controls.height / 2)}px`;
+            shell.dataset.bottomLayout = layout.stacked ? "stacked" : "inline";
             if (shell.style.bottom !== bottom) shell.style.bottom = bottom;
             const shift = layout.shift ? `${layout.shift}px` : "";
             if (toolbar.style.getPropertyValue(MAIN_TOOLBAR_SHIFT) === shift) return;
@@ -77,7 +85,10 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
             state.disconnect();
             window.removeEventListener("resize", measure);
             shell.style.removeProperty("bottom");
+            shell.style.removeProperty("max-width");
+            delete shell.dataset.bottomLayout;
             toolbar.style.removeProperty(MAIN_TOOLBAR_SHIFT);
+            toolbar.style.removeProperty(MAIN_TOOLBAR_MAX_WIDTH);
         };
     }, []);
 
@@ -98,10 +109,10 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
             if (event.key === "Escape") setPrecisionOpen(false);
         };
         document.addEventListener("pointerdown", close, true);
-        document.addEventListener("keydown", closeOnEscape);
+        document.addEventListener("keydown", closeOnEscape, true);
         return () => {
             document.removeEventListener("pointerdown", close, true);
-            document.removeEventListener("keydown", closeOnEscape);
+            document.removeEventListener("keydown", closeOnEscape, true);
         };
     }, [precisionOpen]);
 
@@ -139,6 +150,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
         {
             id: "zoom-precision",
             label: "精确缩放",
+            expands: true,
             wide: true,
             quiet: true,
             icon: (
@@ -156,18 +168,17 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
     ];
 
     return (
-        <div ref={rootRef} data-canvas-no-zoom className="relative z-[var(--z-toolbar)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+        <div ref={rootRef} data-canvas-no-zoom className="canvas-zoom-controls relative z-[var(--z-toolbar)]" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
             <AnimatePresence>
                 {precisionOpen ? (
                     <motion.div
-                        initial={{ opacity: 0, y: 14, scale: 0.92 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 9, scale: 0.96 }}
-                        transition={aceternityMotion.spring.panel}
-                        className="aceternity-floating-panel absolute bottom-[var(--canvas-dock-popover-offset)] left-0 w-[220px] overflow-hidden rounded-[var(--panel-radius)] border p-2 backdrop-blur-2xl"
-                        style={{ background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: `0 28px 80px ${theme.spatial.shadow}` }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: aceternityMotion.duration.panel }}
+                        className="aceternity-floating-panel absolute bottom-full left-0 mb-2 w-[220px] max-w-full overflow-hidden rounded-[var(--panel-radius)] border p-2"
+                        style={{ background: theme.node.panel, borderColor: theme.toolbar.border, color: theme.node.text, boxShadow: "var(--elevation-overlay)" }}
                     >
-                        <div className="absolute inset-x-10 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${theme.spatial.glowStrong}, transparent)` }} />
                         <div className="flex items-center justify-between gap-3">
                             <span>
                                 <span className="block text-[var(--fs-tiny)] font-semibold">画布尺度</span>
@@ -177,7 +188,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
                             </span>
                             <span
                                 ref={panelLabelRef}
-                                className="rounded-full border px-2 py-0.5 text-[var(--fs-tiny)] font-semibold tabular-nums"
+                                className="rounded-[var(--r-sm)] px-2 py-1 text-[var(--fs-caption)] font-medium tabular-nums"
                                 style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.accent.primary }}
                             >
                                 {Math.round(scale * 100)}%
@@ -200,9 +211,6 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
                                 <motion.button
                                     key={level}
                                     type="button"
-                                    whileHover={{ y: -1 }}
-                                    whileTap={{ scale: 0.95 }}
-                                    transition={aceternityMotion.spring.dock}
                                     className="h-7 rounded-[var(--dock-item-radius)] border text-[var(--fs-micro)] font-semibold tabular-nums outline-none focus-visible:ring-2"
                                     style={{ background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.muted }}
                                     onClick={() => commitScale(level)}
@@ -215,7 +223,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
                 ) : null}
             </AnimatePresence>
 
-            <FloatingDock items={items} size="compact" className="canvas-floating-dock is-bare" style={canvasDockStyle(theme, theme.node.text)} ariaLabel="画布视图控制" />
+            <FloatingDock items={items} variant="toolbar" size="compact" className="canvas-floating-dock canvas-bottom-dock" style={canvasDockStyle(theme, theme.node.text)} ariaLabel="画布视图控制" />
         </div>
     );
 }

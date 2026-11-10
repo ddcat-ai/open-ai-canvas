@@ -497,9 +497,11 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`inten
 
 文字任务带参考视频时同样在预授权前校验：模型未开启视频识别（`text.references.maxVideos <= 0`，后台「支持视频识别」未勾选）返回 `referenceNodeIds` / `unsupported_value`「当前文字模型未开启视频识别，请选择支持视频识别的文字模型」；视频数超过 `maxVideos` 返回 `item_count`；单个视频超过 `maxVideoBytes` 返回 `unsupported_value`。自定义渠道只在请求附带文字能力配置时校验。Claude Messages 协议没有视频内容块，带参考视频时任务失败并说明原因，不再静默丢弃视频。
 
-## 时间线渲染规格与来源标识
+## 短剧内部合成规格与来源标识
 
-时间线渲染请求的 `timeline` 可带 `fit`（`auto` / `pad` / `crop`，缺省 `auto`）。`auto` 按片段判断：来源与输出宽高比相对差 `|源宽高比 ÷ 目标宽高比 − 1|` 不超过 3% 时裁切填满，否则等比缩小补黑边；来源尺寸未知时补黑边。浏览器端精剪导出使用同一规则，默认目标为关联短剧的作品画幅，未关联时跟随首个片段（长边不超过 1920）。
+手工编辑器退场后，不再注册 `POST /timeline/renders` 和 `POST /timeline/transcriptions`；短剧内部仍可创建渲染任务，已受理任务继续使用现有处理器。剪映草稿与资产包导出保留在短剧接口。
+
+内部渲染快照的 `timeline` 可带 `fit`（`auto` / `pad` / `crop`，缺省 `auto`）。`auto` 按片段判断：来源与输出宽高比相对差 `|源宽高比 ÷ 目标宽高比 − 1|` 不超过 3% 时裁切填满，否则等比缩小补黑边；来源尺寸未知时补黑边。
 
 渲染结果 JSON 在原字段外增加 `width`、`height`、`fit`、`aigc`（写入成片的 AIGC 标识 JSON）与 `sources[]`（`clipId`、`resourceId`、`kind`、`width`、`height`、实际 `fit`、来源文件原有的 `aigc`）。成片不继承来源容器元数据，改写为 GB 45438 隐式标识：`AIGC` 字段为 `{Label, ContentProducer, ProduceID, ReservedCode1, ContentPropagator, PropagateID, ReservedCode2}`，`Label` 与生成方字段取自来源文件，`ContentPropagator` 为常量 `AIGCPlatformPropagator`（默认占位 `yingce`，部署方须替换为登记的服务提供者编码），`PropagateID` 为渲染任务 ID；另写 `comment=AI生成合成内容`。
 

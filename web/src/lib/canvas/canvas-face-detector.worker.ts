@@ -26,7 +26,9 @@ const workerGlobal = self as typeof self & {
 
 // MediaPipe 会在模块 Worker 中从 importScripts 失败分支转向 self.import。
 // 这里显式标记为运行时 URL，避免 Vite 将 public loader 当作源码模块转换。
-workerGlobal.importScripts = () => { throw new TypeError("module worker uses dynamic import"); };
+workerGlobal.importScripts = () => {
+    throw new TypeError("module worker uses dynamic import");
+};
 workerGlobal.import = async (url: string) => {
     const response = await fetch(url.replace(/\?import(?:&.*)?$/, ""));
     if (!response.ok) throw new Error(`MediaPipe loader 加载失败：${response.status}`);
@@ -51,7 +53,10 @@ function getDetector() {
                 minDetectionConfidence: 0.25,
                 minSuppressionThreshold: 0.3,
             },
-        );
+        ).catch((error) => {
+            detectorPromise = null;
+            throw error;
+        });
     }
     return detectorPromise;
 }
@@ -64,15 +69,17 @@ self.onmessage = async (event: MessageEvent<DetectFaceRequest>) => {
         response.faces = detector.detect(image).detections.flatMap((detection, index) => {
             const box = detection.boundingBox;
             if (!box) return [];
-            return [{
-                id: `face-${id}-${index}`,
-                x: box.originX,
-                y: box.originY,
-                width: box.width,
-                height: box.height,
-                confidence: detection.categories[0]?.score,
-                source: "detected" as const,
-            }];
+            return [
+                {
+                    id: `face-${id}-${index}`,
+                    x: box.originX,
+                    y: box.originY,
+                    width: box.width,
+                    height: box.height,
+                    confidence: detection.categories[0]?.score,
+                    source: "detected" as const,
+                },
+            ];
         });
     } catch (error) {
         response.error = error instanceof Error ? error.message : "人脸识别失败";

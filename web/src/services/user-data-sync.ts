@@ -304,6 +304,11 @@ function liveCanvasIfUnchanged(id: string, snapshot: CanvasProject | null | unde
 }
 
 export async function loadCanvasProjectForEditing(id: string, options: { onLoad?: (project: CanvasProject) => void } = {}) {
+    const draft = useCanvasStore.getState().getDraftProject(id);
+    if (draft) {
+        options.onLoad?.(draft);
+        return draft;
+    }
     const mode = "normal";
     const existing = remoteProjectLoadPromises.get(id);
     const existingRequest = existing?.promise;
@@ -999,7 +1004,10 @@ export async function deleteAssetsWithRemoteSync(ids: string[]) {
 
 export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
     const epoch = sessionEpoch;
-    const projectIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    const requestedIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    const draftIds = requestedIds.filter((id) => useCanvasStore.getState().getDraftProject(id));
+    if (draftIds.length) useCanvasStore.getState().deleteProjects(draftIds);
+    const projectIds = requestedIds.filter((id) => !draftIds.includes(id));
     if (!projectIds.length) return;
     // 删除只依赖画布 ID，跳过编辑加载，避免关联素材的合同校验阻塞删除。
     await withRemoteUserDataSyncExclusive(async () => {
@@ -1120,6 +1128,8 @@ export async function saveRemoteUserDataNow(input?: string | readonly string[]) 
 
 export async function prepareCanvasForCloudAction(id: string) {
     try {
+        useCanvasStore.getState().materializeDraft(id);
+        await flushCanvasStorePersistence();
         await saveRemoteUserDataNow(id);
     } catch (error) {
         // Callers retain their input without adding sync errors to task UI.

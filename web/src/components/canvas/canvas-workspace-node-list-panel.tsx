@@ -117,7 +117,11 @@ function CanvasNodeListThumbnail({ node }: { node: CanvasNodeData }) {
     const commonStyle = { borderColor: "color-mix(in srgb, var(--foreground) 9%, transparent)", background: "color-mix(in srgb, var(--foreground) 5%, transparent)" };
 
     if (node.type === CanvasNodeType.Video) {
-        const fallback = <span aria-hidden="true" className="grid h-9 w-11 place-items-center rounded-[var(--r-sm)] border text-foreground/48" style={commonStyle}><CanvasVideoIcon className="size-3.5" /></span>;
+        const fallback = (
+            <span aria-hidden="true" className="grid h-9 w-11 place-items-center rounded-[var(--r-sm)] border text-foreground/48" style={commonStyle}>
+                <CanvasVideoIcon className="size-3.5" />
+            </span>
+        );
         return <CanvasVideoPreviewImage node={node} alt="" width={44} height={36} loading="lazy" decoding="async" className={commonClass} style={commonStyle} fallback={fallback} />;
     }
 
@@ -126,7 +130,7 @@ function CanvasNodeListThumbnail({ node }: { node: CanvasNodeData }) {
     }
 
     const textPreview = node.metadata?.previewContent || node.metadata?.composerContent || node.metadata?.prompt || node.metadata?.content;
-    if (textPreview && (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Markdown || node.type === CanvasNodeType.Script)) {
+    if (textPreview && (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Script)) {
         return (
             <span aria-hidden="true" className="line-clamp-3 h-9 w-11 overflow-hidden rounded-[var(--r-sm)] border px-1 py-0.5 text-[7px] leading-[10px] text-foreground/55" style={commonStyle}>
                 {textPreview}

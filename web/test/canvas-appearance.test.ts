@@ -22,11 +22,16 @@ let originalWindow: PropertyDescriptor | undefined;
 beforeEach(() => {
     originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
     storage.clear();
-    Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => storage.set(key, value),
-        removeItem: (key: string) => storage.delete(key),
-    } } });
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: {
+            localStorage: {
+                getItem: (key: string) => storage.get(key) ?? null,
+                setItem: (key: string, value: string) => storage.set(key, value),
+                removeItem: (key: string) => storage.delete(key),
+            },
+        },
+    });
 });
 afterEach(() => {
     if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
@@ -38,6 +43,16 @@ describe("canvas appearance persistence and presets", () => {
         mode: "custom" as const,
         custom: { baseTheme: "light" as const, backgroundColor: "#DFE9E6", backgroundBrightness: -3, gridColor: "#345678", gridOpacity: 27 },
     };
+
+    test("defaults to white when first switching to light while preserving saved gray snapshots", () => {
+        expect(resolveCanvasAppearance(undefined, "light").background).toBe("#FFFFFF");
+        expect(resolveCanvasAppearance(switchCanvasAppearanceTheme({ mode: "dark" }, "light"), "dark").background).toBe("#FFFFFF");
+        const saved = canvasAppearanceForPreset("light");
+        saved.preset!.values.backgroundColor = "#F0F0F0";
+        const reopened = normalizeCanvasAppearance(JSON.parse(JSON.stringify(saved)), "light");
+        expect(resolveCanvasAppearance(reopened, "light").background).toBe("#F0F0F0");
+        expect(resolveCanvasAppearance({ mode: "dark" }, "light").background).toBe("#000000");
+    });
 
     test("retains every custom value across both fixed themes and a JSON save/reopen", () => {
         const switched = canvasAppearanceForTheme("light", canvasAppearanceForTheme("dark", custom));
@@ -149,14 +164,14 @@ describe("canvas appearance persistence and presets", () => {
     test("editing a fixed legacy appearance starts from what is visible", () => {
         const legacy = canvasAppearanceForTheme("light", custom);
         const values = canvasAppearanceValues(legacy, "dark");
-        expect(values.backgroundColor).toBe("#F0F0F0");
+        expect(values.backgroundColor).toBe("#FFFFFF");
         expect(values.gridOpacity).toBe(80);
         expect(updateCustomCanvasAppearance(legacy, { gridOpacity: 22 }, "dark").custom).toEqual({ ...values, gridOpacity: 22 });
     });
 
-    test("restores original light swatches exactly without dropping the current dark presets", () => {
+    test("uses white for the classic light preset while retaining other swatches", () => {
         const light = CANVAS_APPEARANCE_PRESETS.filter((preset) => preset.values.baseTheme === "light");
-        expect(light.map((preset) => preset.values.backgroundColor)).toEqual(["#F0F0F0", "#F3DCE5", "#EEE5D8", "#DFE9E6"]);
+        expect(light.map((preset) => preset.values.backgroundColor)).toEqual(["#FFFFFF", "#F3DCE5", "#EEE5D8", "#DFE9E6"]);
         expect(light.every((preset) => preset.values.gridColor === "#000000" && preset.values.gridOpacity === 23)).toBe(true);
         expect(CANVAS_APPEARANCE_PRESETS.filter((preset) => preset.values.baseTheme === "dark").map((preset) => preset.id)).toEqual(["dark", "slate"]);
     });

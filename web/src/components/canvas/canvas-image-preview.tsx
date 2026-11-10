@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { resolveImageUrl } from "@/services/image-storage";
-import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
+import { useCachedResourceUrl } from "@/hooks/use-cached-resource-url";
 
 type CanvasImagePreviewProps = {
     src?: string;
@@ -16,20 +16,22 @@ type CanvasImagePreviewProps = {
 export function CanvasImagePreview({ src = "", storageKey, alt: altProp, onClose }: CanvasImagePreviewProps) {
     const { t } = useTranslation();
     const alt = altProp ?? t("canvasB.common.image");
-    const [resolvedSrc, setResolvedSrc] = useState(() => (storageKey ? peekCachedResourceObjectUrl(storageKey) : src));
+    const cachedUrl = useCachedResourceUrl(storageKey);
+    const [resolvedSrc, setResolvedSrc] = useState(storageKey ? "" : src);
     const [loading, setLoading] = useState(Boolean(src || storageKey));
     const [error, setError] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
         // 本会话刚上传的图片直接用内存中的原图 Blob，打开预览不再等待服务器回传。
-        const localSrc = storageKey ? peekCachedResourceObjectUrl(storageKey) : "";
+        const localSrc = cachedUrl;
         setResolvedSrc(storageKey ? localSrc : src);
         setLoading(Boolean(src || storageKey));
         setError(false);
-        if (localSrc || (!src && !storageKey)) return () => {
-            cancelled = true;
-        };
+        if (localSrc || (!src && !storageKey))
+            return () => {
+                cancelled = true;
+            };
         void resolveImageUrl(storageKey, src)
             .then((url) => {
                 if (cancelled) return;
@@ -49,7 +51,7 @@ export function CanvasImagePreview({ src = "", storageKey, alt: altProp, onClose
         return () => {
             cancelled = true;
         };
-    }, [src, storageKey]);
+    }, [src, storageKey, cachedUrl]);
 
     if (!src && !storageKey) return null;
 
@@ -69,7 +71,9 @@ export function CanvasImagePreview({ src = "", storageKey, alt: altProp, onClose
                     >
                         <ImageIcon className="size-4" />
                     </span>
-                    <span className="min-w-0 truncate text-sm font-semibold" title={alt}>{alt}</span>
+                    <span className="min-w-0 truncate text-sm font-semibold" title={alt}>
+                        {alt}
+                    </span>
                 </div>
             }
             footer={null}

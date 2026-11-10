@@ -47,7 +47,7 @@ export async function restoreRemoteTextNodeContents<T>(value: T, readText: (stor
         record.nodes.map(async (item) => {
             if (!item || typeof item !== "object" || Array.isArray(item)) return item;
             const node = item as Record<string, unknown>;
-            if (node.type !== "text" && node.type !== "markdown") return item;
+            if (node.type !== "text") return item;
             const metadata = node.metadata;
             if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return item;
             const nextMetadata = { ...(metadata as Record<string, unknown>) };
@@ -156,6 +156,7 @@ export async function uploadLocalStorageKey(storageKey: string, payload: Record<
     if (!blob) throw new Error(`本地媒体不存在，无法同步：${storageKey}`);
     const kind = blob.type.startsWith("image/") ? "image" : blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
     const resource = await uploadResourceFile(blob, kind, {
+        fileName: typeof payload.originalFileName === "string" ? payload.originalFileName : blob instanceof File ? blob.name : undefined,
         width: numberValue(payload.naturalWidth) || numberValue(payload.width),
         height: numberValue(payload.naturalHeight) || numberValue(payload.height),
         durationMs: numberValue(payload.durationMs),
