@@ -123,13 +123,21 @@ describe("生成副作用跨标签租约", () => {
         }
     });
 
-    test("生产要求跨标签锁而浏览器未提供时，在读取和改写租约前终止", async () => {
+    test("生产要求跨标签锁而浏览器未提供时，降级为进程内互斥仍可领取", async () => {
         const harness = sharedBrowserHarness();
         try {
             const realm = harness.createRealm();
             await realm.invoke("initialize", { browserLocks: false, required: true });
-            await expect(realm.invoke("claim", "materialize:no-lock:0", "no-lock")).rejects.toThrow("跨页面生成副作用互斥");
-            expect(harness.storageReads).toBe(0);
+            const owner = await realm.invoke<GenerationTaskEffectClaim>("claim", "materialize:no-lock:0", "no-lock");
+            expect(owner.status).toBe("claimed");
+            if (owner.status !== "claimed") throw new Error("Expected a claimed lease");
+            await realm.invoke("complete", "materialize:no-lock:0", "no-lock", { materializedAssetId: "saved-without-web-locks" }, owner.binding);
+            await expect(realm.invoke("claim", "materialize:no-lock:0", "no-lock")).resolves.toEqual({
+                status: "completed",
+                result: { materializedAssetId: "saved-without-web-locks" },
+            });
+            expect(harness.lockRequests).toBe(0);
+            expect(harness.storageReads).toBeGreaterThan(0);
         } finally {
             harness.dispose();
         }
