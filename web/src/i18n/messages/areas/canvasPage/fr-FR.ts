@@ -186,6 +186,7 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "Le doublage de personnage ne peut référencer qu’une seule fiche à la fois",
         voiceNotBound: "Aucune voix n’est associée à ce personnage, impossible de créer une tâche de doublage",
         submissionInProgress: "Une requête de génération pour ce nœud est déjà en cours, ne cliquez pas à nouveau",
+        videoRequiresReferenceImages: "Ce modèle vidéo exige au moins {{count}} image(s) de référence. Connectez un nœud image avant de générer",
     },
     timelineInsert: {
         unsupportedMedia: "Les images et textes ne peuvent pas encore être placés directement sur la timeline, insérez-les d’abord dans le canevas",

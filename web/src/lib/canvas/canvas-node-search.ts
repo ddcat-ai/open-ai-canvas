@@ -64,7 +64,39 @@ function canvasNodeSearchTerms(node: CanvasNodeData, config?: AiConfig) {
         node.metadata?.workflowDescription,
         typeof node.metadata?.shotIndex === "number" ? `镜头 ${node.metadata.shotIndex + 1}` : "",
         ...(node.metadata?.assetTags || []),
+        // 分镜单元格文本：搜索占位符承诺可搜「镜头」，镜头提示词与台词必须可命中。
+        ...storyboardCellSearchTerms(node),
     ].filter((value): value is string => typeof value === "string" && Boolean(value));
+}
+
+function storyboardCellSearchTerms(node: CanvasNodeData) {
+    // 分镜表（批量表节点）：每镜提示词在 batchTable.rows[].prompt；标准分镜结构与
+    // 单元格文本分别在 storyboardRows 与 cells。
+    const table = node.metadata?.batchTable;
+    const batchTerms = table
+        ? [
+              ...table.rows.map((row) => row.prompt),
+              ...(table.contentKind === "storyboard"
+                  ? (table.storyboardRows || []).flatMap(storyboardRowSearchTerms)
+                  : []),
+              ...table.rows.flatMap((row) => Object.values(row.cells ?? {})),
+          ]
+        : [];
+    // 分镜脚本节点的标准分镜结构：镜头视频提示词（videoMotionPrompt）、台词等单元格文本。
+    const scriptRows = node.metadata?.storyboard?.rows || [];
+    const scriptTerms = scriptRows.flatMap(storyboardRowSearchTerms);
+    return [...batchTerms, ...scriptTerms];
+}
+
+function storyboardRowSearchTerms(row: {
+    plotDescription?: string;
+    dialogue?: string;
+    narrativeIntent?: string;
+    performanceBlocking?: string;
+    videoMotionPrompt?: string;
+    imageGenerationPrompt?: string;
+}) {
+    return [row.videoMotionPrompt, row.plotDescription, row.dialogue, row.imageGenerationPrompt, row.narrativeIntent, row.performanceBlocking];
 }
 
 function timestampValue(value?: string) {

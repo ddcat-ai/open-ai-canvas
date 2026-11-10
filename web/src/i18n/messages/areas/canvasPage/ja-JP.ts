@@ -186,6 +186,7 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "キャラクターボイスで参照できるキャラクターカードは一度に 1 枚だけです",
         voiceNotBound: "キャラクターに利用可能な音声が紐づいていないため、キャラクターボイスのタスクを作成できません",
         submissionInProgress: "このノードの生成リクエストは送信中または実行中です。繰り返しクリックしないでください",
+        videoRequiresReferenceImages: "この動画モデルには参照画像が最低 {{count}} 枚必要です。画像ノードを接続してから生成してください",
     },
     timelineInsert: {
         unsupportedMedia: "画像とテキスト素材はまだタイムラインに直接追加できません。先にキャンバスに挿入してください",
