@@ -78,6 +78,17 @@ describe("commerce planning activity", () => {
         expect(markup).toContain("1 分 30 秒");
     });
 
+    test("an invalid start time falls back to a valid creation time before the mount time", () => {
+        const markup = render(task("running", { createdAt: new Date(Date.now() - 90_000).toISOString(), startedAt: "also-bad" }));
+        expect(markup).toContain("1 分 30 秒");
+    });
+
+    test("a finished task announces that it has ended instead of still running", () => {
+        const markup = render(task("failed", { error: "上游失败" }));
+        expect(markup).toContain('aria-label="Agent 策划已结束"');
+        expect(markup).not.toContain('aria-busy="true"');
+    });
+
     test("only the status line is a live region, so the ticking clock is not re-announced", () => {
         const markup = render(task("running", { textDraft: "输出" }));
         expect(markup.match(/role="status"/g)).toHaveLength(1);

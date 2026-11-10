@@ -12,8 +12,9 @@ export function PlanningActivity({ task, references, count, automaticScreens = f
     }, []);
     // Only timestamps the server sent are trusted; a missing or invalid time
     // starts counting from this mount instead of inventing an earlier start.
-    const parsedStartedAt = Date.parse(task?.startedAt || task?.createdAt || "");
-    const started = Number.isFinite(parsedStartedAt) ? parsedStartedAt : openedAt;
+    const parsedStartedAt = Date.parse(task?.startedAt || "");
+    const parsedCreatedAt = Date.parse(task?.createdAt || "");
+    const started = Number.isFinite(parsedStartedAt) ? parsedStartedAt : Number.isFinite(parsedCreatedAt) ? parsedCreatedAt : openedAt;
     const seconds = Math.max(0, Math.floor((now - started) / 1000));
     const ended = task?.status === "failed" || task?.status === "cancelled";
     const status = !task ? "正在读取策划进度" : task.status === "queued" ? "已排队，等待模型处理" : task.status === "succeeded" ? "正在校验图片方案" : ended ? "策划任务已结束，正在整理结果" : "正在分析商品与构建方案";
@@ -29,7 +30,7 @@ export function PlanningActivity({ task, references, count, automaticScreens = f
               ? `已收到 ${task.textDraft.length} 字策划输出，等待完整方案`
               : "正在等待模型返回可审阅的策划内容";
     return (
-        <section className="commerce-planning-activity" aria-label="Agent 策划进行中" aria-busy={!ended}>
+        <section className="commerce-planning-activity" aria-label={ended ? "Agent 策划已结束" : "Agent 策划进行中"} aria-busy={!ended}>
             <div className="commerce-planning-emblem" aria-hidden="true">
                 <span />
                 <Sparkles size={24} strokeWidth={1.5} />
