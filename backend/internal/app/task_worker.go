@@ -50,6 +50,7 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s := w.service
 	s.startTextReplayCleanup(ctx)
 	s.startCanvasMutationReceiptCleanup(ctx)
+	s.startSiteTrafficCleanup(ctx)
 	s.startProviderCancellationReconciliation(ctx)
 	s.startBillingReviewAudit(ctx)
 	s.runWorkerLoop(func(ctx context.Context) {

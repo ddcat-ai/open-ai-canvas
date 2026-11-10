@@ -88,6 +88,7 @@ import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { useCreationConversationRoute } from "./use-creation-conversation-route";
 import { creationVideoConfig, creationVideoSettings } from "./creation-generation-config";
+import { trackSiteTrafficAction } from "@/services/site-traffic";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const InspirationHall = lazy(() => import("@/pages/inspirations"));
@@ -1500,7 +1501,10 @@ export default function CreatePage() {
         promptOptimizerProvider,
         composerFocusRef,
         onPromptFocus: loadAddedSkills,
-        onSubmit: () => void submit(),
+        onSubmit: () => {
+            if (prompt.trim() && !busy && !referenceReplacementBusy) trackSiteTrafficAction(mode === "text" ? "creation_submit_text" : mode === "image" ? "creation_submit_image" : "creation_submit_video");
+            void submit();
+        },
     };
 
     return (

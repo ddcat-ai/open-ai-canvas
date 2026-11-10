@@ -58,6 +58,7 @@ func Models() []any {
 		&model.LogicalModelRoute{},
 		&model.RouteAttempt{},
 		&model.ApiCallLog{},
+		&model.SiteTrafficEvent{},
 		&model.ModelPricing{},
 		&model.CreditAccount{},
 		&model.CreditLedgerEntry{},

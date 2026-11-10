@@ -16,6 +16,7 @@ const AdminPage = lazy(() => import("@/pages/admin"));
 const EcommerceManagementPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-management-page"));
 const EcommerceAgentConfigPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-agent-config-page"));
 const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
+const TrafficPage = lazyAdminPage(() => import("@/pages/admin/traffic/traffic-page"));
 const AnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const BannerAnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
 const StorageResourcesPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
@@ -235,6 +236,7 @@ export const router = createBrowserRouter([
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
                 children: [
                     { index: true, element: <AnalyticsPage /> },
+                    { path: "traffic", element: <TrafficPage /> },
                     { path: "users", element: <UsersPage /> },
                     { path: "user-groups", element: <UserGroupsPage /> },
                     { path: "login-logs", element: <LoginLogsPage /> },

@@ -27,6 +27,7 @@ import {
     Megaphone,
     MessageSquareText,
     Moon,
+    MousePointerClick,
     Paintbrush,
     Palette,
     PanelLeftClose,
@@ -86,6 +87,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "运营监控",
         items: [
             { path: "/admin", keywords: "统计 仪表盘 收入 使用量 dashboard analytics", label: "运行总览", shortLabel: "总览", icon: <BarChart3 className="size-4" /> },
+            { path: "/admin/traffic", keywords: "访问 访客 页面 操作 流量 traffic", label: "访问统计", shortLabel: "访问", icon: <MousePointerClick className="size-4" /> },
             { path: "/admin/logs", keywords: "请求 日志 错误 调用 计费 退款", label: "请求明细", shortLabel: "请求", icon: <FileClock className="size-4" /> },
             { path: "/admin/login-logs", keywords: "登录 记录 IP 安全", label: "登录日志", shortLabel: "登录", icon: <LogIn className="size-4" /> },
             { path: "/admin/email-logs", keywords: "邮件 发送 记录 验证码", label: "邮件记录", shortLabel: "邮件", icon: <MailSearch className="size-4" /> },
