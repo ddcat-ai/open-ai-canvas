@@ -459,6 +459,13 @@ cd docs && bun run types:check
   <sub><em>千里之行，始于足下。</em></sub>
 </td>
 </tr>
+<tr>
+<td align="center" valign="top" width="33%">
+  <img src="assets/user-aleyn.jpg" alt="Aleyn" width="72" height="72"><br>
+  <strong>Aleyn<br>微信：Aleyn_X</strong><br>
+  <sub><a href="mailto:cslin5277@163.com">cslin5277@163.com</a></sub>
+</td>
+</tr>
 </table>
 
 ## 3D 预演台赞助用户
