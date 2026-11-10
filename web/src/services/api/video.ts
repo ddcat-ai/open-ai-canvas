@@ -39,7 +39,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
     assertVideoConfig(requestConfig, requestConfig.model);
     assertVideoCapability(modelCapabilityConfigFor(config, selectedModel).video!, references, videoReferences, audioReferences, config.videoSeconds);
     const deps: VideoProviderDeps = { transport: createVideoTransport(requestConfig), response: videoResponseTools };
-    if (requestConfig.interfaceType === "newapi-channel-2") return createVideoGenerationsTask(deps, requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
+    if (requestConfig.interfaceType === "newapi-channel-2" || requestConfig.interfaceType === "newapi-video-tasks") return createVideoGenerationsTask(deps, requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     if (requestConfig.interfaceType === "gemini-veo") return createGeminiVeoTask(deps, requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     if (requestConfig.interfaceType === "novita-video") return createNovitaVideoTask(deps, requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
     if (requestConfig.interfaceType === "minimax-video") return createMiniMaxVideoTask(deps, requestConfig, selectedModel, prompt, references, videoReferences, audioReferences, options);
@@ -53,7 +53,7 @@ export async function pollVideoGenerationTask(config: AiConfig, task: VideoGener
     const requestConfig = resolveModelRequestConfig(config, task.model);
     assertVideoConfig(requestConfig, requestConfig.model);
     const deps: VideoProviderDeps = { transport: createVideoTransport(requestConfig), response: videoResponseTools };
-    if (task.provider === "video-generations") return pollVideoGenerationsTask(deps, task, options);
+    if (task.provider === "video-generations") return pollVideoGenerationsTask(deps, task, options, requestConfig.interfaceType === "newapi-video-tasks" ? `/video/tasks/${encodeURIComponent(task.id)}` : undefined);
     if (task.provider === "gemini-veo") return pollGeminiVeoTask(deps, requestConfig, task, options);
     if (task.provider === "novita") return pollNovitaVideoTask(deps, requestConfig, task, options);
     if (task.provider === "minimax") return pollMiniMaxVideoTask(deps, requestConfig, task, options);

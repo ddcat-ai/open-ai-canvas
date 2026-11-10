@@ -155,6 +155,58 @@ func chapterHeading(chapter Chapter, suffix string) string {
 	return "## " + chapter.Title + suffix + "\n"
 }
 
+// LateAssetSystemPrompt 约束后续集补全新设定时的输出结构，字段与作品圣经一致。
+func LateAssetSystemPrompt() string {
+	return "你是资深短剧总编剧与美术指导。你根据本集原文和分镜，只为名单中尚未写清外貌的新角色、道具与场景补全设定。" + jsonOnly
+}
+
+// LateAsset 是后续集里需要补全外貌的已建档名字。
+type LateAsset struct {
+	Kind string
+	Name string
+}
+
+// LateAssetPrompt 复用作品圣经的字段定义，只根据本集原文与分镜为指定名单提取外貌、简介与声线。
+// 原文没有依据时 appearance 必须留空，避免只凭名字和画风编造形象。
+func LateAssetPrompt(title string, settings Settings, assets []LateAsset, chapters []Chapter, shotSummary string, skill *WritingSkill) string {
+	settings = settings.Normalized()
+	var b strings.Builder
+	fmt.Fprintf(&b, "作品：%s\n画幅：%s\n视觉风格：%s\n对白语言：%s\n\n", title, settings.AspectRatio, firstNonEmpty(settings.StylePrompt, "写实电影感"), settings.Language)
+	b.WriteString(structuredSkillBlock("提取角色、道具与场景", skill))
+	b.WriteString("请只为下面列出的、设定表里尚未写清外貌的新角色/道具/场景补全设定。只根据【本集原文】和【本集分镜】里已有的信息提取；原文没写清外貌或环境时，对应 appearance 必须留空，不要凭名字或身份编造。不要输出名单以外的条目，不要修改已有设定。\n")
+	b.WriteString("输出与作品圣经相同字段：\n")
+	b.WriteString(`{"characters":[{"name":"标准名","aliases":["别名/称呼"],"role":"主角/反派/配角","gender":"男/女","age":"年龄段","description":"性格与身份","appearance":"可直接用于生图的外貌、发型、服装描述（中文，40-80字；原文未写明则留空）","voice":"音色、语速与说话方式（原文未写明则留空）","looks":[]}],"props":[{"name":"道具名","description":"用途与归属","appearance":"可直接用于生图的外形、材质、颜色描述（原文未写明则留空）"}],"scenes":[{"name":"场景名","description":"用途","appearance":"可直接用于生图的环境描述（原文未写明则留空）"}]}` + "\n")
+	b.WriteString("角色本体的 appearance 已是基础造型；只有原文明示换装且外观与基础造型不同，才在 looks 里追加。fromChapter / toChapter 用原文里方括号中的章节序号，不确定的一端写 0。每个字段名与字符串值必须分别用双引号包围。\n\n")
+	b.WriteString("【待补全设定】\n")
+	if len(assets) == 0 {
+		b.WriteString("无\n")
+	} else {
+		for _, asset := range assets {
+			kind := "角色"
+			switch asset.Kind {
+			case "prop":
+				kind = "道具"
+			case "scene":
+				kind = "场景"
+			}
+			fmt.Fprintf(&b, "- %s：%s\n", kind, asset.Name)
+		}
+	}
+	b.WriteString("\n【本集原文】\n")
+	if len(chapters) == 0 {
+		b.WriteString("无\n")
+	} else {
+		for _, chapter := range chapters {
+			b.WriteString(chapterHeading(chapter, "") + truncateRunes(chapter.Text, ScriptSourceChapterRunes) + "\n\n")
+		}
+	}
+	if strings.TrimSpace(shotSummary) != "" {
+		b.WriteString("【本集分镜】\n")
+		b.WriteString(strings.TrimSpace(shotSummary) + "\n")
+	}
+	return b.String()
+}
+
 func PlanSystemPrompt() string {
 	return "你是竖屏短剧分集编剧。你把小说章节改编为节奏紧凑的分集大纲：每集开场 3 秒有钩子，结尾停在悬念。" + jsonOnly
 }

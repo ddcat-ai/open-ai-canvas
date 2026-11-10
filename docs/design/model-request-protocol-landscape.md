@@ -170,6 +170,7 @@
 | Novita Video | `/v3/video/create`，`/v3/async/task-result` | `model_name`, prompt, duration, aspect_ratio, image_url | 常见单起始图 | 适合作为简单异步协议，不等于支持角色参考 |
 | NewAPI Channel 1 媒体任务 | `POST /v1/videos`，GET `/v1/videos/{id}` | `{model,input:{prompt,media[]},parameters:{...}}` | `media[].type` 表达 first_frame/last_frame/reference_image/reference_video/reference_voice | 是 NewAPI 的统一媒体包装之一，不是 OpenAI Videos |
 | NewAPI Channel 2 Video Generations | `POST /v1/video/generations`，GET 同路径 task | 扁平 JSON：seconds、aspect_ratio、resolution、image_urls/video_urls/audio_urls | 常以数组和顺序表达，role 能力取决于具体版本 | 与 Channel 1 不兼容；同一 NewAPI 部署可能因版本或渠道插件行为不同 |
+| NewAPI Video Tasks | `POST /v1/video/generations`，`GET /v1/video/tasks/{id}` | 与 Channel 2 相同的扁平 JSON | 与 Channel 2 相同 | 查询路径不同，不能与 Channel 2 混用；小力孩等网关使用该查询接口 |
 | fal.ai Queue | submit/status/result | 每个模型自定义 schema | 由模型 endpoint schema 决定 | queue runtime 统一，模型请求不统一 |
 | Replicate Predictions | predictions + webhook/cancel | 任意 model input | 由模型版本 schema 决定 | 可统一生命周期，不能统一字段名 |
 | ComfyUI | `/prompt`, `/history`, `/view` | 完整 workflow graph | 素材上传后映射节点 input；首尾帧取决于 workflow | 插件应映射工作流 schema，不应伪装成固定视频 provider |
@@ -441,6 +442,7 @@ if model name contains minimax/h3
 | `dashscope-wan-video` | DashScope async Wan task |
 | `newapi-media-task-v1` | NewAPI Channel 1 包装 |
 | `newapi-video-generations-v1` | NewAPI Channel 2 包装 |
+| `newapi-video-tasks-v1` | NewAPI Video Tasks 包装（查询 `/v1/video/tasks`） |
 | `agnes-video-25` | 2.5/Flash profile |
 | `agnes-video-v20` | frame-based V2.0 profile |
 | `replicate-prediction` | prediction lifecycle + model schema |

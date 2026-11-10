@@ -32,13 +32,14 @@ func dramaDispatchPool(kind string) string {
 	return dramaPoolText
 }
 
-// 作业优先级：作品级工作（圣经、分集规划、参考图）在前；单集工作先按集号排，前面的集整体优先，
+// 作业优先级：作品级工作（圣经、分集规划、后出现设定补全、参考图）在前；单集工作先按集号排，前面的集整体优先，
 // 同一集内再按 成片 > 剧本 > 段提示词 > 段视频。分池以后优先级只在同一池内、以及账号同时任务数
 // 用满时决定谁先提交：例如第 1 集的段提示词排在第 5 集的剧本前面，第 1 集更早进入出片。
 const (
-	dramaPriorityBible     = 30_000_000
-	dramaPriorityPlan      = 20_000_000
-	dramaPriorityCastImage = 10_100_000
+	dramaPriorityBible       = 30_000_000
+	dramaPriorityPlan        = 20_000_000
+	dramaPriorityCastExtract = 10_500_000
+	dramaPriorityCastImage   = 10_100_000
 
 	dramaRankRender = 900
 	dramaRankScript = 800

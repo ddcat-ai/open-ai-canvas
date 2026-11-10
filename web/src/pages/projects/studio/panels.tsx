@@ -18,6 +18,7 @@ import {
     type DramaCastKind,
     type DramaEpisodeMode,
     type DramaSettings,
+    formatDramaInboxCount,
     type DramaInboxItem,
     type DramaMediaMode,
     type DramaReviewMode,
@@ -466,6 +467,7 @@ const CHIP_LIMIT = 24;
 
 export function InboxPanel({
     items,
+    failureCount,
     castById,
     retrying,
     retryingGroup,
@@ -477,6 +479,7 @@ export function InboxPanel({
     onReleaseAll,
 }: {
     items: DramaInboxItem[];
+    failureCount?: number;
     castById: Map<string, DramaCast>;
     retrying: boolean;
     retryingGroup: string;
@@ -488,7 +491,8 @@ export function InboxPanel({
     onReleaseAll: () => void;
 }) {
     const groups = useMemo(() => groupInbox(items), [items]);
-    const failures = items.filter((item) => item.severity === "error").length;
+    const listedFailures = items.filter((item) => item.severity === "error").length;
+    const failures = failureCount ?? listedFailures;
     const reviews = items.filter((item) => item.kind === "review").length;
     return (
         <div className="drama-view">
@@ -500,7 +504,7 @@ export function InboxPanel({
                             {failures ? (
                                 <span className="is-err">
                                     <AlertCircle className="size-3.5" />
-                                    {failures} 项失败
+                                    {formatDramaInboxCount(failures)} 项失败
                                 </span>
                             ) : null}
                             {reviews ? (
@@ -510,6 +514,7 @@ export function InboxPanel({
                                 </span>
                             ) : null}
                             <span>共 {groups.length} 类</span>
+                            {failures > listedFailures ? <span>将重试全部失败项，不只是下列已列出的</span> : null}
                         </div>
                     ) : null}
                     {failures ? (

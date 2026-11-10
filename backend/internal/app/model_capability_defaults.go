@@ -183,7 +183,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
 		video.Resolutions = []string{"480p", "720p", "1080p"}
-	case model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2:
+	case model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceNewAPIVideoTasks:
 		video.References.MaxVideos, video.References.MaxAudios = 3, 3
 		video.References.MaxVideoBytes, video.References.MaxAudioBytes = 200*1024*1024, 15*1024*1024
 		video.References.MaxVideoDuration, video.References.MaxAudioDuration = 15, 15

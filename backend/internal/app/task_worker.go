@@ -534,7 +534,7 @@ func (s *Service) videoProviderSupportsTaskResume(interfaceType string) bool {
 	if ok && metadata.Execution == "declarative" && strings.TrimSpace(metadata.Poll) != "" {
 		return true
 	}
-	return interfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+	return interfaceType == string(model.ChannelInterfaceNewAPIChannel2) || interfaceType == string(model.ChannelInterfaceNewAPIVideoTasks)
 }
 
 func newAPIChannel2TaskSyncExpired(task model.Task, err error, now time.Time) bool {

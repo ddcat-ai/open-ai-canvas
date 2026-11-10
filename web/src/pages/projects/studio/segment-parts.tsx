@@ -66,12 +66,13 @@ export function SegmentStatus({ segment }: { segment: DramaSegment }) {
     );
 }
 
-export function SegmentVideo({ segment, aspectRatio, className = "" }: { segment: DramaSegment; aspectRatio: string; className?: string }) {
+export function SegmentVideo({ segment, aspectRatio, className = "", previewResourceId }: { segment: DramaSegment; aspectRatio: string; className?: string; previewResourceId?: string }) {
     const viewable = segment.videoStatus === "ready" || segment.videoStatus === "stale" || segment.videoStatus === "failed";
-    const url = useResourceMediaUrl(viewable ? segment.videoResourceId : undefined, "playback");
+    const resourceId = previewResourceId || (viewable ? segment.videoResourceId : undefined);
+    const url = useResourceMediaUrl(resourceId, "playback");
     const state = segmentState(segment);
     return (
-        <div className={`drama-sg-video ${className}`} style={{ aspectRatio: aspectRatioValue(aspectRatio) }}>
+        <div className={`drama-sg-video ${className}${previewResourceId ? " is-preview" : ""}`} style={{ aspectRatio: aspectRatioValue(aspectRatio) }}>
             {url ? (
                 <video key={url} src={url} controls playsInline preload="metadata" />
             ) : (

@@ -43,7 +43,7 @@ func dramaSegmentVideoDone(segment model.DramaSegment) bool {
 }
 
 // dramaVideoWaitReason 说明第 index 段视频为何还不能提交；空串表示调度会提交它。调度与详情页共用。
-func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *model.DramaEpisode, segments []model.DramaSegment, index int, shots []model.DramaShot, lookup func(string) (model.DramaCast, bool)) string {
+func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *model.DramaEpisode, segments []model.DramaSegment, index int, shots []model.DramaShot, lookup func(string) (model.DramaCast, bool), extractPending bool) string {
 	if wait := dramaProductionWait(p); wait != "" {
 		return wait
 	}
@@ -61,7 +61,11 @@ func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *m
 	if !dramaPromptReady(segments[index]) {
 		return "等待本段视频提示词撰写完成"
 	}
-	// 未生成的参考图在自动生图或已放行时会被调度排队，同样要等。
+	if extractPending {
+		return "等待补全后出现角色、道具或场景的外貌"
+	}
+	// 未生成的参考图在自动生图或已放行、且已有外貌依据时会被调度排队，同样要等。
+	// 没有外貌的后出现设定不会自动生图，不能一直卡住出片。
 	requested := settings.MediaMode != DramaMediaManual || p.AssetsReleased
 	if names := dramaReferencesInProgress(segments[index].SegmentIndex, shots, lookup, requested); len(names) > 0 {
 		return "等待参考图生成：" + strings.Join(names, "、")
@@ -85,8 +89,9 @@ func dramaReferencesInProgress(segmentIndex int, shots []model.DramaShot, lookup
 				continue
 			}
 			seen[id] = true
-			pending := cast.ImageStatus == model.DramaMediaQueued || cast.ImageStatus == model.DramaMediaRunning ||
-				((cast.ImageStatus == "" || cast.ImageStatus == model.DramaMediaDraft) && unrequestedQueued)
+			hasBrief := dramaCastHasImageBrief(cast)
+			pending := hasBrief && (cast.ImageStatus == model.DramaMediaQueued || cast.ImageStatus == model.DramaMediaRunning ||
+				((cast.ImageStatus == "" || cast.ImageStatus == model.DramaMediaDraft) && unrequestedQueued))
 			if !pending {
 				continue
 			}

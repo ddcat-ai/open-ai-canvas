@@ -538,6 +538,7 @@ func TestNewAPITaskFailureKeepsUpstreamReason(t *testing.T) {
 	payload := `{"code":"success","message":"","data":{"task_id":"task-upstream","status":"FAILURE","fail_reason":"内容审核未通过","progress":"100%"}}`
 	for _, profile := range []struct{ packageName, providerID string }{
 		{"newapi-video-generations-v1.yingce-plugin", "newapi-channel-2"},
+		{"newapi-video-tasks-v1.yingce-plugin", "newapi-video-tasks"},
 		{"newapi-media-task-v1.yingce-plugin", "newapi-channel-1"},
 	} {
 		t.Run(profile.providerID, func(t *testing.T) {
