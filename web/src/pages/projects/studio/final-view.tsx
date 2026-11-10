@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { App, Button } from "antd";
-import { Clapperboard, Download, Film, Scissors } from "lucide-react";
+import { Clapperboard, Download, Film } from "lucide-react";
 
 import type { DramaEpisodeDetail } from "@/services/api/drama";
 
@@ -9,25 +9,9 @@ import { JianyingDraftModal } from "./asset-transfer";
 import { secondsLabel } from "./segment-parts";
 
 /** 成片：各剧情段视频按顺序拼接，保留视频模型生成的对白与音效。片段条可跳到对应段并打开该段详情。 */
-export function FinalView({
-    projectId,
-    title,
-    detail,
-    aspectRatio,
-    onOpenSegment,
-    onOpenCut,
-    cutOpening,
-}: {
-    projectId: string;
-    title: string;
-    detail: DramaEpisodeDetail;
-    aspectRatio: string;
-    onOpenSegment: (index: number) => void;
-    /** 把各段视频按成片顺序载入精修画布的时间线，在画布里精剪。 */
-    onOpenCut: () => void;
-    cutOpening: boolean;
-}) {
-    const { episode, segments } = detail;
+export function FinalView({ projectId, title, detail, aspectRatio, onOpenSegment }: { projectId: string; title: string; detail: DramaEpisodeDetail; aspectRatio: string; onOpenSegment: (index: number) => void }) {
+    const { episode } = detail;
+    const segments = [...detail.segments].sort((left, right) => left.index - right.index);
     const { message } = App.useApp();
     const [exportingDraft, setExportingDraft] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -36,7 +20,7 @@ export function FinalView({
     const starts: number[] = [];
     segments.reduce((cursor, segment) => {
         starts.push(cursor);
-        return cursor + (segment.request.seconds || segment.durationMs / 1000);
+        return cursor + (segment.videoSeconds || segment.request.seconds || segment.durationMs / 1000);
     }, 0);
     const download = () => {
         if (!episode.finalResourceId) return;
@@ -90,15 +74,16 @@ export function FinalView({
                 <Button icon={<Download className="size-4" />} disabled={!episode.finalResourceId} onClick={download}>
                     下载成片
                 </Button>
-                <Button icon={<Scissors className="size-4" />} disabled={!readySegments} loading={cutOpening} onClick={onOpenCut}>
-                    到画布精剪
-                </Button>
-                <Button icon={<Clapperboard className="size-4" />} disabled={!readySegments} onClick={() => setExportingDraft(true)} title={readySegments ? "导出为剪映专业版草稿，在剪映里继续剪辑" : "本集还没有生成好的剧情段视频"}>
+                <Button icon={<Clapperboard className="size-4" />} disabled={!segments.length} onClick={() => setExportingDraft(true)} title="检查可用剧情段、缺段与旧版本后，导出剪映草稿">
                     导出剪映草稿
                 </Button>
-                {readySegments ? <p className="drama-editor-note">按成片顺序把 {readySegments} 段视频载入精修画布的时间线，或导出为剪映草稿；剪辑结果不会替换这里的成片。</p> : null}
+                {readySegments ? (
+                    <p className="drama-editor-note">
+                        当前 {readySegments}/{segments.length} 段视频可供检查；导出前会核对缺段、旧版本与文件读取状态。
+                    </p>
+                ) : null}
             </aside>
-            {exportingDraft ? <JianyingDraftModal open projectId={projectId} episodeId={episode.id} episodeLabel={`第 ${episode.number} 集`} readySegments={readySegments} onClose={() => setExportingDraft(false)} /> : null}
+            {exportingDraft ? <JianyingDraftModal open projectId={projectId} episodeId={episode.id} episodeLabel={`第 ${episode.number} 集`} onClose={() => setExportingDraft(false)} /> : null}
         </div>
     );
 }

@@ -685,15 +685,7 @@ export default function DramaStudioPage() {
                                         empty={episodeEmpty}
                                     />
                                 ) : (
-                                    <FinalView
-                                        projectId={projectId}
-                                        title={summary.project.name}
-                                        detail={detail}
-                                        aspectRatio={aspectRatio}
-                                        onOpenSegment={(index) => setParams({ tab: null, segment: String(index), shot: null })}
-                                        onOpenCut={() => void canvas.open({ kind: "cut", episodeId: detail.episode.id })}
-                                        cutOpening={canvas.opening === `cut:${detail.episode.id}`}
-                                    />
+                                    <FinalView projectId={projectId} title={summary.project.name} detail={detail} aspectRatio={aspectRatio} onOpenSegment={(index) => setParams({ tab: null, segment: String(index), shot: null })} />
                                 )}
                             </div>
                         </main>

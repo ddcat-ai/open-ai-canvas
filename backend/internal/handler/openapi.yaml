@@ -38,6 +38,94 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /dramas/{id}/episodes/{episodeId}/jianying-draft/preview:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: episodeId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 预检剪映草稿的目录与可用素材
+      description: 只校验当前用户的作品/剧集归属、资源记录和媒体首字节，不生成 ZIP、不保存目录配置。返回缺段、旧版本、估时提示及交付指纹；目录只在 POST 正文中传递。响应 private,no-store，请求最多 16 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [draftRoot, captions]
+              properties:
+                draftRoot: { type: string, maxLength: 400, description: Windows/macOS 本机绝对草稿目录；支持共享目录下的子文件夹 }
+                captions: { type: boolean, description: 是否按分镜估时附带字幕轨与 SRT }
+      responses:
+        "200":
+          description: 预检结果；availableSegments 为零时不得提交下载
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    required: [draftRoot, revision, totalSegments, availableSegments, missingSegments, staleSegments, durationMs, mediaBytes, captionCount, segments, warnings]
+                    properties:
+                      draftRoot: { type: string, description: 规范化后的本机目录 }
+                      revision: { type: string, pattern: '^[a-f0-9]{64}$', description: 实际交付相关数据的指纹，无服务器持久化令牌 }
+                      totalSegments: { type: integer }
+                      availableSegments: { type: integer }
+                      missingSegments: { type: integer }
+                      staleSegments: { type: integer }
+                      durationMs: { type: integer, format: int64 }
+                      mediaBytes: { type: integer, format: int64, description: 媒体字节估计，不包含 ZIP 目录和草稿文本 }
+                      captionCount: { type: integer }
+                      warnings: { type: array, items: { type: string } }
+                      segments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            index: { type: integer, description: 从 0 开始的剧情段序号 }
+                            title: { type: string }
+                            included: { type: boolean }
+                            stale: { type: boolean }
+                            reason: { type: string, description: 不可用原因，不包含敏感存储地址 }
+                            durationMs: { type: integer, format: int64 }
+                            durationEstimated: { type: boolean }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/episodes/{episodeId}/jianying-draft:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: episodeId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 按已确认的预检结果流式下载剪映草稿
+      description: 再次校验归属、文件读取状态和交付指纹；缺少或过期 revision 返回 409。缺段/旧版本必须分别明确确认。通过后流式 ZIP 交给浏览器，不代表客户端下载完成；传输中断不补写 JSON 或完整 ZIP 目录。具体剪映版本兼容性需要实际验收。
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [draftRoot, captions, revision]
+              properties:
+                draftRoot: { type: string, maxLength: 400 }
+                captions: { type: string, enum: ["0", "1"] }
+                revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+                allowIncomplete: { type: string, enum: ["0", "1"], default: "0" }
+                allowStale: { type: string, enum: ["0", "1"], default: "0" }
+      responses:
+        "200":
+          description: 流式 ZIP 附件；包含视频、草稿、可选字幕与导入说明
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /dramas/{id}/cast:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }

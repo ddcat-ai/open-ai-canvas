@@ -30,5 +30,6 @@ type (
 	DramaCanvasAssetsRequest      = app.DramaCanvasAssetsRequest
 	DramaArchive                  = app.DramaArchive
 	DramaJianyingDraftRequest     = app.DramaJianyingDraftRequest
+	DramaJianyingDraftPreview     = app.DramaJianyingDraftPreview
 	DramaAssetPackageRequest      = app.DramaAssetPackageRequest
 )
