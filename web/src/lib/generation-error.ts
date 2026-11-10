@@ -15,13 +15,22 @@ const MODEL_CAPABILITY_ERROR_MESSAGE = "所选模型不支持当前生成方式�
 const MODEL_PARAMETER_ERROR_MESSAGE = "当前模型不支持这组参数或参考素材，请调整输入或切换模型后重试。";
 const MODEL_SERVICE_ERROR_MESSAGE = "模型服务处理失败，请稍后重试或换用其他模型。";
 
+// 按 HTTP 状态推导的 reason 本身不说明具体原因：后端返回可读中文时优先显示原文。
+const STATUS_REASON_MESSAGES: Record<string, string> = {
+    quota_exceeded: "积分或额度不足，请充值后再试。",
+    unauthorized: "当前登录状态或权限不足，请重新登录后再试。",
+    forbidden: "当前账号没有执行此操作的权限。",
+    failed_precondition: "当前请求条件不满足，请检查输入或换用其他模型。",
+    conflict: "请求状态已发生变化，请刷新后再试。",
+    internal: "系统暂时无法完成生成，请稍后再试。",
+};
+
 const REASON_MESSAGES: Record<string, string> = {
     model_price_not_configured: "当前模型暂未配置价格，请换用其他模型或联系管理员。",
     model_route_unavailable: "当前模型暂时没有可用渠道，请稍后重试或换用其他模型。",
     provider_request_failed: MODEL_SERVICE_ERROR_MESSAGE,
     model_catalog_mismatch: "模型配置已更新，请重新选择模型后再试。",
     invalid_model_selection: "模型选择无效，请重新选择模型后再试。",
-    quota_exceeded: "积分或额度不足，请充值后再试。",
     storage_capacity_exceeded: "账号存储空间不足，请清理素材或购买存储空间后再试。",
     storage_read_only: "账号已超出存储容量且宽限期已结束，当前为只读状态。请删除素材或购买存储空间。",
     drama_budget_exhausted: "这部短剧已达到预算上限（含画布精修花费），请在短剧设置里提高预算后再生成。",
@@ -30,11 +39,6 @@ const REASON_MESSAGES: Record<string, string> = {
     bad_gateway: "模型服务暂时不可用，请稍后再试。",
     unavailable: "模型服务暂时不可用，请稍后再试。",
     upstream_dns_failed: "模型服务暂时不可用，请稍后再试。",
-    unauthorized: "当前登录状态或权限不足，请重新登录后再试。",
-    forbidden: "当前账号没有执行此操作的权限。",
-    failed_precondition: "当前请求条件不满足，请检查输入或换用其他模型。",
-    conflict: "请求状态已发生变化，请刷新后再试。",
-    internal: "系统暂时无法完成生成，请稍后再试。",
 };
 
 // 用户可见文案（画布失败原因、积分流水备注）不能出现上游地址；
@@ -82,6 +86,8 @@ export function generationErrorMessage(error: unknown) {
     if (reason === "model_capability_not_supported") return MODEL_CAPABILITY_ERROR_MESSAGE;
     if (reason === "invalid_argument" && isModelCapabilityFailure(raw)) return MODEL_CAPABILITY_ERROR_MESSAGE;
     if (reason === "invalid_argument" && isModelParameterFailure(raw)) return MODEL_PARAMETER_ERROR_MESSAGE;
+    // 用脱敏前的原文判断：含地址、HTTP 状态等技术信息时仍回退通用文案。
+    if (reason && STATUS_REASON_MESSAGES[reason]) return readableBackendMessage(original) ? raw : STATUS_REASON_MESSAGES[reason];
     if (reason && REASON_MESSAGES[reason]) return REASON_MESSAGES[reason];
 
     const providerMessage = extractStructuredProviderMessage(raw) || extractWrappedProviderMessage(raw);
@@ -180,6 +186,13 @@ function isModelCapabilityFailure(value: string) {
 
 function isModelParameterFailure(value: string) {
     return /不支持参数|超出支持范围|数量需在|至少需要\s+\d+\s+个|暂时无法满足这组输入和参数/i.test(value);
+}
+
+function readableBackendMessage(value: string) {
+    const text = value.trim();
+    if (!/[㐀-鿿]/.test(text)) return "";
+    if (isTechnicalProviderMessage(text) || containsInfrastructureDetails(text) || isNetworkFailure(text)) return "";
+    return text;
 }
 
 function isTechnicalProviderMessage(value: string) {
