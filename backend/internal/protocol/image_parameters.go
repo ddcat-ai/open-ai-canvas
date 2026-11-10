@@ -184,8 +184,30 @@ func validImageParameterBinding(binding string) bool {
 	return len(parts) == 3 && parts[0] == "providerOptions" && validManifestIdentifier(parts[1]) && imageParameterName.MatchString(parts[2])
 }
 
-// ResolveImageParameters takes only channel-editable restrictions. Labels,
-// types, pricing eligibility and bindings always come from the plugin.
+// CommonImageParameter defines host semantics, not provider capability limits.
+// Model configuration owns values/ranges; bindings remain controlled here.
+func CommonImageParameter(name string) (ImageParameter, bool) {
+	p := ImageParameter{Name: name, Type: "string", Pricing: true}
+	switch name {
+	case "size":
+		p.Label, p.Binding = "画幅 / 尺寸", "aspectRatio"
+	case "imageResolution":
+		p.Label, p.Binding = "分辨率", "resolution"
+	case "quality":
+		p.Label, p.Binding = "图片质量", "quality"
+	case "count":
+		minimum, step := 1.0, 1.0
+		p.Label, p.Binding, p.Type, p.Min, p.Step = "生成数量", "imageCount", "integer", &minimum, &step
+	case "transparentBackground":
+		p.Label, p.Binding, p.Type = "透明背景", "transparentBackground", "boolean"
+	default:
+		return ImageParameter{}, false
+	}
+	return p, true
+}
+
+// ResolveImageParameters preserves configured common capabilities while private
+// extensions remain restricted to the installed plugin's bindings and bounds.
 func ResolveImageParameters(definitions, configured []ImageParameter, model string) ([]ImageParameter, error) {
 	if err := ValidateImageParameters(definitions); err != nil {
 		return nil, err
@@ -197,9 +219,52 @@ func ResolveImageParameters(definitions, configured []ImageParameter, model stri
 		}
 		settings[p.Name] = p
 	}
+	definitions = append([]ImageParameter(nil), definitions...)
+	for _, setting := range configured {
+		common, ok := CommonImageParameter(setting.Name)
+		if !ok {
+			continue
+		}
+		found := false
+		for _, definition := range definitions {
+			found = found || definition.Name == setting.Name
+		}
+		if !found {
+			common.Encoding = setting.Encoding
+			definitions = append(definitions, common)
+		}
+	}
 	result := make([]ImageParameter, 0, len(definitions))
 	for _, definition := range definitions {
-		if !definition.AppliesTo(model) {
+		setting, configured := settings[definition.Name]
+		common, isCommon := CommonImageParameter(definition.Name)
+		if !definition.AppliesTo(model) && !(isCommon && configured) {
+			continue
+		}
+		if isCommon && configured {
+			if setting.Type != "" && setting.Type != common.Type {
+				return nil, fmt.Errorf("%s has invalid type", common.Label)
+			}
+			p := definition
+			p.Type, p.Binding, p.Models, p.Pricing = common.Type, common.Binding, nil, true
+			p.Enabled, p.Default = setting.Enabled, setting.Default
+			p.Values, p.Min, p.Max, p.Step, p.MaxLength = setting.Values, setting.Min, setting.Max, setting.Step, setting.MaxLength
+			if p.Name == "count" {
+				if p.Min == nil {
+					p.Min = common.Min
+				}
+				if *p.Min < 1 {
+					return nil, fmt.Errorf("生成数量最小值必须为正整数")
+				}
+				if p.Step == nil {
+					p.Step = common.Step
+				}
+			}
+			if !p.IsEnabled() && p.Required {
+				return nil, fmt.Errorf("%s is required", p.Label)
+			}
+			delete(settings, p.Name)
+			result = append(result, p)
 			continue
 		}
 		p := definition
@@ -252,10 +317,15 @@ func ResolveImageParameters(definitions, configured []ImageParameter, model stri
 		}
 		result = append(result, p)
 	}
-	for name, p := range settings {
-		if p.IsEnabled() {
-			return nil, fmt.Errorf("plugin does not declare image parameter %s for this model", name)
+	for _, p := range configured {
+		name := p.Name
+		if _, exists := settings[name]; !exists {
+			continue
 		}
+		if p.IsEnabled() {
+			return nil, fmt.Errorf("图片扩展参数 %s 缺少目标协议的安全映射", name)
+		}
+		result = append(result, p)
 	}
 	return result, ValidateImageParameters(result)
 }
@@ -280,6 +350,12 @@ func ApplyImageParameters(request GenerationRequest, definitions []ImageParamete
 	}
 	for name, value := range request.ImageParameters {
 		p, ok := allowed[name]
+		if common, exists := CommonImageParameter(name); exists {
+			// Model admission already validates configured ranges. Plugin enum
+			// recommendations must not override them at the request boundary.
+			common.Encoding = p.Encoding
+			p, ok = common, true
+		}
 		if !ok || !p.Accepts(value) {
 			return request, fmt.Errorf("unsupported image parameter %s", name)
 		}
@@ -288,7 +364,11 @@ func ApplyImageParameters(request GenerationRequest, definitions []ImageParamete
 		}
 		switch p.Binding {
 		case "aspectRatio":
-			request.AspectRatio = fmt.Sprint(value)
+			// The app may have already encoded a ratio + resolution using its
+			// saved pixel preset. Keep that exact outbound size.
+			if !(p.Encoding == "pixels" && strings.Contains(fmt.Sprint(value), ":") && strings.Contains(request.AspectRatio, "x")) {
+				request.AspectRatio = fmt.Sprint(value)
+			}
 		case "resolution":
 			request.Resolution = fmt.Sprint(value)
 		case "quality":

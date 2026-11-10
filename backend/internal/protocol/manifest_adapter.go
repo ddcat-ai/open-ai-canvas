@@ -69,7 +69,11 @@ func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (Reque
 	if err := validateManifestRequest(a.manifest.Validations, request); err != nil {
 		return RequestSpec{}, err
 	}
-	return buildManifestOperation(a.manifest.Create, a.manifest.Auth, request, "")
+	spec, err := buildManifestOperation(a.manifest.Create, a.manifest.Auth, request, "")
+	if err != nil {
+		return RequestSpec{}, err
+	}
+	return completeCommonImageRequest(spec, a.manifest.Create, request)
 }
 
 func (a manifestAdapter) BuildAgent(_ context.Context, c AgentRequestContext) (RequestSpec, error) {
