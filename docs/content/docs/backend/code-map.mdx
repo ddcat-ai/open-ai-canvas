@@ -13,6 +13,10 @@ description: 从产品功能快速定位主要代码入口
 - 官方插件校验：`backend/internal/app/protocol_plugins.go` 缓存每路径最新清单/摘要，不持有原包字节；落盘硬链接或流式复制核验，专项 `official_plugin_package_cache_test.go`。
 - 工作区路由：`web/src/lib/workspace-route-modules.ts` 保留导航意图预取，登录不再无条件预热全部一级页面。录音测试页面仅在 `router.tsx` 的 DEV 路由注册。
 
+## 前端主题包
+
+主题登记与切换在 `web/src/themes/`：`registry.ts` 按皮肤 ID 查找，`load.ts` 自动载入，`apply.ts` 处理画布预设还原与品牌变量。各主题目录封装助手形象、空状态、404、字体和样式，静态资源在 `web/public/themes/`。入口通过 `application.tsx` 加载；后台外观提交在 `stores/use-appearance-store.ts` 应用当前主题。使用与扩展说明见 `web/src/themes/README.md`。
+
 ## 电商 Agent 与后台知识库
 
 - 页面：`web/src/pages/ecommerce/`；后台：`web/src/pages/admin/ecommerce-agent-config-page.tsx`（上线检查、阶段模型 `ecommerce-stage-models.tsx` 与目录换算 `ecommerce-model-catalog.ts`）；`ecommerce-management-page.tsx`（知识与技能标签页：`ecommerce-knowledge-page.tsx`、`ecommerce-skills-page.tsx`、`ecommerce-categories-page.tsx`，内容头 `ecommerce-library-panel.tsx`）；`knowledge-domain-coverage.ts`。

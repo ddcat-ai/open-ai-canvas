@@ -5,6 +5,7 @@ import "./styles/globals.css";
 import "./styles/shared/model-picker.css";
 import "./styles/shared/overlays.css";
 import "./styles/shared/scrollbars.css";
+import "@/themes/load";
 import { RouterProvider } from "react-router";
 
 import { AuthDialogHost } from "@/components/auth/auth-dialog-host";

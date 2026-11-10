@@ -4,7 +4,7 @@ import { App, Button } from "antd";
 import { ArrowUpRight, FolderOpen, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useAuthEntry } from "@/hooks/use-auth-entry";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { AgentOrb } from "@/components/ui/agent-orb";
 import { canvasDraftNavigationState, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
@@ -54,7 +54,7 @@ export function CreationAgentEntry() {
     return (
         <section className="creation-agent-entry" aria-label={t("create.agentEntry.region")}>
             <div className="creation-agent-orb" aria-hidden>
-                <FluidOrb size={88} />
+                <AgentOrb size={88} />
             </div>
             <div className="creation-agent-copy">
                 <span className="creation-agent-eyebrow">CANVAS AGENT</span>

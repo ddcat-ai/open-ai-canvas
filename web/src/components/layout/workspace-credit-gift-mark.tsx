@@ -1,9 +1,13 @@
 import { useId } from "react";
 
 import { cn } from "@/lib/utils";
+import { useThemePack } from "@/themes/use-theme-pack";
 
 export function WorkspaceCreditGiftMark({ className }: { className?: string }) {
     const uid = useId().replace(/:/g, "");
+    // 当前皮肤的主题包带了积分图标时用它（例如龙影水墨的朱印「积」），否则用上游礼盒。
+    const ThemeMark = useThemePack()?.creditMark;
+    if (ThemeMark) return <ThemeMark className={className} />;
     const box = `${uid}-box`;
     const lid = `${uid}-lid`;
     const ribbon = `${uid}-ribbon`;

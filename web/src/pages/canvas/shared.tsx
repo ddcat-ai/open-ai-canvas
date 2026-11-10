@@ -24,6 +24,8 @@ import { getPublicCanvasShare } from "@/services/api/canvas-share";
 import { useCanvasThemeStore, useCanvasThemeScope } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type Position, type ViewportTransform } from "@/types/canvas";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
+import { useThemePack } from "@/themes/use-theme-pack";
+import { useAppearanceStore } from "@/stores/use-appearance-store";
 type ContextMenu = { x: number; y: number; world: Position; nodeId?: string };
 type DragState = { primaryId: string; nodeIds: string[]; startX: number; startY: number; origins: Map<string, Position>; moved: boolean };
 
@@ -50,6 +52,8 @@ export default function SharedCanvasPage() {
     const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
+    const pack = useThemePack();
+    const brandName = useAppearanceStore((state) => state.appearance.brandName);
 
     const unauthorized = useCallback(() => message.warning("未授权：分享画布仅供查看，该操作不会执行。"), [message]);
     const infoNode = nodes.find((node) => node.id === infoNodeId) || null;
@@ -465,6 +469,12 @@ export default function SharedCanvasPage() {
             </div>
             <div className="pointer-events-none absolute bottom-5 right-5 z-[var(--z-panel-floating)] max-w-[340px] text-right text-xs leading-5" style={{ color: theme.node.muted }}>
                 访客操作仅在当前页面临时生效
+                {pack?.copy?.sealGlyph ? (
+                    <span className="shared-canvas-signature">
+                        <i aria-hidden="true">{pack.copy.sealGlyph}</i>
+                        {brandName}
+                    </span>
+                ) : null}
             </div>
 
             {contextMenu ? (
