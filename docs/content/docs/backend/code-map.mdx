@@ -61,6 +61,16 @@ description: 从产品功能快速定位主要代码入口
 - Secret Key 与续查：`app/provider_protocol_auth.go` 的 `protocolAuthUsesSecretKey`；`app/task_worker.go` 的 `videoProviderSupportsTaskResume`。
 - 前端：`web/src/services/api/text-wire.ts`（文本请求路径）、`web/src/hooks/use-user-protocol-catalog.ts`（设置页 Secret Key 校验）。
 
+## SeedanceMINI1
+
+- 协议清单与接口文档：`plugin-packages/seedance-mini1/manifest.json`、`plugin-packages/seedance-mini1/docs/interface.md`；发行包：`plugin-packages/seedance-mini1.yingce-plugin`。插件无固定服务地址，连接由渠道配置管理。
+- 协议字段、参数范围与结果解析：`backend/internal/protocol/seedance_mini1_test.go`；真实运行时的上传、创建、轮询与鉴权下载回归：`backend/internal/app/seedance_mini1_test.go`。声明独立结果接口的插件在二进制下载时保留轮询 usage，入口为 `backend/internal/protocol/manifest_adapter.go` 与 `backend/internal/app/provider_protocol_result.go`。
+
+## MUSE2API 异步视频
+
+- 协议合同与发行包：`plugin-packages/muse2api-video/manifest.json`、`plugin-packages/muse2api-video/docs/interface.md`、`plugin-packages/muse2api-video.yingce-plugin`。
+- 请求映射与异步状态回归：`backend/internal/protocol/muse2api_video_test.go`；根相对结果地址下载：`backend/internal/app/protocol_result_manifest_test.go`、`backend/internal/app/provider_protocol_result.go`。
+
 ## 可美 KM Seedream
 
 - 声明式请求、响应与参数合同：`plugin-packages/km-kemei-seedream/manifest.json`、`docs/interface.md`；分发包：`plugin-packages/km-kemei-seedream.yingce-plugin`。
