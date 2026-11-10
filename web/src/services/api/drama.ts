@@ -408,6 +408,11 @@ export type DramaCast = {
     description: string;
     appearance: string;
     imagePrompt?: string;
+    imageStyleId?: string;
+    imageStyleName?: string;
+    imageStylePrompt?: string;
+    sourceProjectId?: string;
+    sourceCastId?: string;
     voiceInstructions: string;
     importance: number;
     imageResourceId?: string;
@@ -669,7 +674,23 @@ export function listDramaCast(projectId: string, signal?: AbortSignal) {
     return http.get<{ cast: DramaCast[] }>(`${base(projectId)}/cast`, { signal });
 }
 
-export type DramaCastPatch = Partial<Pick<DramaCast, "name" | "appearance" | "description" | "voiceInstructions" | "locked">> & { aliases?: string[] };
+export type DramaCastImageStyle = Pick<DramaCast, "imageStyleId" | "imageStyleName" | "imageStylePrompt">;
+export type CreateDramaCastInput = DramaCastImageStyle & { kind: DramaCastKind; name: string; appearance: string; description?: string; imagePrompt?: string };
+
+export function createDramaCast(projectId: string, input: CreateDramaCastInput) {
+    return http.post<{ cast: DramaCast }>(`${base(projectId)}/cast`, input);
+}
+
+export function importDramaCast(projectId: string, input: { sourceProjectId: string; castIds: string[]; matchByName: boolean; replaceExisting: boolean }) {
+    return http.post<{ imported: number; skipped: number; cast: DramaCast[] }>(`${base(projectId)}/cast/import`, input);
+}
+
+/** 按外观、独立风格和参考图方案编排提示词；不保存，也不调用模型。 */
+export function rebuildDramaCastImagePrompt(projectId: string, castId: string, input: DramaCastImageStyle & { appearance?: string }) {
+    return http.post<{ imagePrompt: string }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/image-prompt`, input);
+}
+
+export type DramaCastPatch = Partial<Pick<DramaCast, "name" | "appearance" | "description" | "voiceInstructions" | "locked" | "imagePrompt">> & DramaCastImageStyle & { aliases?: string[] };
 
 export function updateDramaCast(projectId: string, castId: string, patch: DramaCastPatch) {
     return http.patch<{ cast: DramaCast }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}`, patch);
@@ -697,11 +718,11 @@ export function clearDramaCastVoice(projectId: string, castId: string, restyleSe
 }
 
 /** 保存造型草稿，不自动生图；imagePrompt 留空按外观描述生成，章节从 1 起，0 不限。 */
-export function addDramaCastLook(projectId: string, castId: string, input: { lookName: string; appearance: string; imagePrompt?: string; fromChapter?: number; toChapter?: number }) {
+export function addDramaCastLook(projectId: string, castId: string, input: DramaCastImageStyle & { lookName: string; appearance: string; imagePrompt?: string; fromChapter?: number; toChapter?: number }) {
     return http.post<{ look: DramaCast }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/looks`, input);
 }
 
-export function updateDramaCastLook(projectId: string, lookId: string, input: { lookName?: string; appearance?: string; imagePrompt?: string; fromChapter?: number; toChapter?: number; restyleSegments?: boolean }) {
+export function updateDramaCastLook(projectId: string, lookId: string, input: DramaCastImageStyle & { lookName?: string; appearance?: string; imagePrompt?: string; fromChapter?: number; toChapter?: number; restyleSegments?: boolean }) {
     return http.patch<{ look: DramaCast; affectedSegments: number }>(`${base(projectId)}/looks/${encodeURIComponent(lookId)}`, input);
 }
 

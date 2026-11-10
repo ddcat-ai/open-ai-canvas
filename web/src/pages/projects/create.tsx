@@ -535,7 +535,7 @@ export default function DramaCreatePage() {
                             ) : null}
                         </div>
                     </section>
-                    <DramaStylePicker value={styleId} onChange={setStyleId} />
+                    <DramaStylePicker value={styleId} onChange={setStyleId} disabled={create.isPending} />
                     <section>
                         <div className="drama-section-title">
                             <h2>文字步骤</h2>

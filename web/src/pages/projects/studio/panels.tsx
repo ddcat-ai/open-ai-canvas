@@ -1,7 +1,34 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { App, Button, Checkbox, Input, InputNumber, Select, Switch } from "antd";
-import { AlertCircle, ArrowRight, Brush, CheckCheck, Clapperboard, Film, FolderOpen, Gem, Inbox, Lock, MapPinned, Maximize2, PauseCircle, RefreshCw, RotateCcw, ScrollText, Upload, UserRound, UsersRound, Cpu, PackageCheck, Play } from "lucide-react";
+import {
+    AlertCircle,
+    ArrowRight,
+    Brush,
+    CheckCheck,
+    Clapperboard,
+    Film,
+    FolderOpen,
+    Gem,
+    Inbox,
+    Lock,
+    MapPinned,
+    Maximize2,
+    PauseCircle,
+    RefreshCw,
+    RotateCcw,
+    ScrollText,
+    Upload,
+    UserRound,
+    UsersRound,
+    Cpu,
+    PackageCheck,
+    Play,
+    Plus,
+    Link2,
+    Shirt,
+    Trash2,
+} from "lucide-react";
 
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { dramaChoiceKey, dramaResolutionAfterModelChange, dramaVideoRatioIssue, dramaVideoResolutionIssue } from "@/lib/drama/model-choice";
@@ -13,6 +40,8 @@ import {
     regenerateDramaCasts,
     setDramaCastImage,
     updateDramaCast,
+    updateDramaCastLook,
+    deleteDramaCastLook,
     updateDramaSettings,
     type DramaCapability,
     type DramaCast,
@@ -39,6 +68,9 @@ import { DramaTakeList } from "./take-list";
 import { CastLibraryPicker } from "./cast-library-picker";
 import { CastVoiceField, CastVoicePreview } from "./cast-voice";
 import { CastLooks } from "./cast-looks";
+import { CastImageFields, type CastImageFieldsValue } from "./cast-image-fields";
+import { CastCreateDialog } from "./cast-create-dialog";
+import { CastProjectImport } from "./cast-project-import";
 
 // 制作台的三个整页视图：设定（角色 / 道具 / 场景）、待处理、制作设置。都在主区域内展示，不使用抽屉遮挡。
 
@@ -46,6 +78,8 @@ import { CastLooks } from "./cast-looks";
 
 const CAST_KIND_ICON: Record<DramaCastKind, ReactNode> = { character: <UserRound className="size-6 opacity-30" />, prop: <Gem className="size-6 opacity-30" />, scene: <MapPinned className="size-6 opacity-30" /> };
 const CAST_KINDS: DramaCastKind[] = ["character", "prop", "scene"];
+const CAST_TABS = ["character", "look", "prop", "scene"] as const;
+type CastTab = (typeof CAST_TABS)[number];
 
 type CastFilter = "all" | "failed" | "busy" | "locked";
 
@@ -100,16 +134,19 @@ export function CastPanel({
     /** 正在打开画布的设定 ID。 */
     canvasOpening?: string;
 }) {
-    const [kind, setKind] = useState<DramaCastKind>("character");
+    const [kind, setKind] = useState<CastTab>("character");
     const [filter, setFilter] = useState<CastFilter>("all");
+    const [creating, setCreating] = useState(false);
+    const [importing, setImporting] = useState(false);
     const focused = cast.find((item) => item.id === focusId);
+    const focusedKind = focused?.kind;
+    const focusedParent = focused?.parentId;
     useEffect(() => {
-        if (focused) setKind(focused.kind);
-    }, [focused]);
-    // 造型行（parentId 非空）不在顶层设定列表里单独成卡，而是归到所属角色的详情里。
+        if (focusedKind) setKind((current) => (focusedParent ? (current === "character" ? current : "look") : focusedKind));
+    }, [focusId, focusedKind, focusedParent]);
     const bases = cast.filter((item) => !item.parentId);
-    const ofKind = bases.filter((item) => item.kind === kind);
-    const failed = bases.filter((item) => item.imageStatus === "failed").length;
+    const ofKind = kind === "look" ? cast.filter((item) => item.parentId) : bases.filter((item) => item.kind === kind);
+    const failed = cast.filter((item) => item.imageStatus === "failed").length;
     const count = (predicate: (item: DramaCast) => boolean) => ofKind.filter(predicate).length;
     const filters: Array<[CastFilter, string, number]> = [
         ["all", "全部", ofKind.length],
@@ -123,17 +160,45 @@ export function CastPanel({
         if (filter === "locked") return item.locked;
         return true;
     });
-    const active = focused && focused.kind === kind ? focused : list[0];
-    const kindRatio = castRatio(kind, ratios);
+    const active = focused && (kind === "look" ? focused.parentId : focused.kind === kind) ? focused : list[0];
+    const kindRatio = castRatio(kind === "look" ? "character" : kind, ratios);
+    const tabLabel = (value: CastTab) => (value === "look" ? "造型" : CAST_KIND_LABEL[value]);
+    // 导入或外部保存后回填新设定；媒体轮询和锁定状态变化不打断正在输入的表单。
+    const activeFormKey = active
+        ? JSON.stringify([
+              active.id,
+              active.name,
+              active.lookName,
+              active.appearance,
+              active.aliasesJson,
+              active.voiceInstructions,
+              active.imagePrompt,
+              active.imageStyleId,
+              active.imageStyleName,
+              active.imageStylePrompt,
+              active.lookFromChapter,
+              active.lookToChapter,
+          ])
+        : "";
     return (
         <div className="drama-view drama-cast-layout">
             <section className="drama-view-main">
                 <div className="drama-view-head">
                     <div className="drama-tabs" role="tablist" aria-label="设定类型">
-                        {CAST_KINDS.map((value) => (
-                            <button key={value} type="button" role="tab" className="drama-tab" aria-selected={kind === value} onClick={() => setKind(value)}>
-                                {CAST_KIND_LABEL[value]}
-                                <span className="drama-tab-count">{bases.filter((item) => item.kind === value).length}</span>
+                        {CAST_TABS.map((value) => (
+                            <button
+                                key={value}
+                                type="button"
+                                role="tab"
+                                className="drama-tab"
+                                aria-selected={kind === value}
+                                onClick={() => {
+                                    setKind(value);
+                                    setFilter("all");
+                                }}
+                            >
+                                {tabLabel(value)}
+                                <span className="drama-tab-count">{value === "look" ? cast.filter((item) => item.parentId).length : bases.filter((item) => item.kind === value).length}</span>
                             </button>
                         ))}
                     </div>
@@ -144,6 +209,14 @@ export function CastPanel({
                                 <b>{value}</b>
                             </button>
                         ))}
+                    </div>
+                    <div className="drama-cast-toolbar">
+                        <Button icon={<Link2 className="size-4" />} onClick={() => setImporting(true)}>
+                            关联已有作品素材
+                        </Button>
+                        <Button icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+                            新增设定
+                        </Button>
                     </div>
                     {failed ? (
                         <Button className="!ml-auto" icon={<RotateCcw className="size-4" />} loading={retrying} onClick={onRetry}>
@@ -166,8 +239,8 @@ export function CastPanel({
                     ) : null}
                     <div className={`drama-cast-grid ${kindRatio.orientation}`}>
                         {list.map((item) => (
-                            <div key={item.id} className="drama-cast-card" aria-current={item.id === active?.id}>
-                                <button type="button" className="block w-full text-left" aria-label={`编辑${item.name}`} onClick={() => onFocus(item.id)}>
+                            <div key={item.id} className="drama-cast-card" aria-current={item.id === active?.id || item.id === active?.parentId}>
+                                <button type="button" className="block w-full text-left" aria-label={`编辑${item.lookName || item.name}`} onClick={() => onFocus(item.id)}>
                                     <div className="drama-cast-card-media" style={kindRatio.style}>
                                         {item.imageResourceId ? <MediaThumb resourceId={item.imageResourceId} alt={item.name} loading={castImageLoading} failed={castImageFailed} /> : null}
                                         {!item.imageResourceId || mediaBusy(item.imageStatus) || item.imageStatus === "failed" || item.imageStatus === "" ? (
@@ -193,11 +266,24 @@ export function CastPanel({
                                         ) : null}
                                     </div>
                                     <div className="drama-cast-card-body">
-                                        <strong>{item.name}</strong>
-                                        <span>{item.role || parseList(item.aliasesJson).join("、") || item.description || "—"}</span>
+                                        <strong>{item.lookName || item.name}</strong>
+                                        <span>
+                                            {item.parentId
+                                                ? `${cast.find((base) => base.id === item.parentId)?.name || item.name} · ${item.imageStyleName || "沿用作品风格"}`
+                                                : item.role || parseList(item.aliasesJson).join("、") || item.description || "—"}
+                                        </span>
                                     </div>
                                 </button>
-                                {item.kind === "character" ? (
+                                {item.kind === "character" && !item.parentId && cast.some((look) => look.parentId === item.id) ? (
+                                    <div className="drama-cast-look-switcher" role="group" aria-label={`${item.name}的造型`}>
+                                        {[item, ...cast.filter((look) => look.parentId === item.id)].map((look) => (
+                                            <button type="button" key={look.id} aria-label={`切换到${look.lookName || "基础造型"}`} title={look.lookName || "基础造型"} aria-pressed={look.id === active?.id} onClick={() => onFocus(look.id)}>
+                                                {look.imageResourceId ? <MediaThumb resourceId={look.imageResourceId} alt={look.lookName || "基础造型"} /> : <Shirt className="size-4 opacity-40" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+                                {item.kind === "character" && !item.parentId ? (
                                     <div className="px-2 pb-2">
                                         <CastVoicePreview resourceId={item.voiceSampleResourceId} name={item.name} />
                                     </div>
@@ -208,7 +294,7 @@ export function CastPanel({
                     {!list.length ? (
                         <div className="drama-empty">
                             <UserRound className="size-7" />
-                            <span>{ofKind.length ? "没有符合筛选的设定" : `作品圣经建立后，${CAST_KIND_LABEL[kind]}会出现在这里`}</span>
+                            <span>{ofKind.length ? "没有符合筛选的设定" : kind === "look" ? "选择角色后可添加造型，或从已有作品关联素材" : `可新增${CAST_KIND_LABEL[kind]}，也可从已有作品关联素材`}</span>
                         </div>
                     ) : null}
                 </div>
@@ -216,9 +302,10 @@ export function CastPanel({
             <aside className="drama-view-side thin-scrollbar">
                 {active ? (
                     <CastEditor
-                        key={active.id}
+                        key={activeFormKey}
                         projectId={projectId}
                         cast={active}
+                        parent={active.parentId ? cast.find((item) => item.id === active.parentId) : undefined}
                         looks={cast.filter((item) => item.parentId === active.id)}
                         ratios={ratios}
                         onChanged={onChanged}
@@ -231,23 +318,68 @@ export function CastPanel({
                     </div>
                 )}
             </aside>
+            {creating ? (
+                <CastCreateDialog
+                    projectId={projectId}
+                    initialKind={kind === "look" ? "character" : kind}
+                    onClose={() => setCreating(false)}
+                    onCreated={(item) => {
+                        setKind(item.kind);
+                        onFocus(item.id);
+                        onChanged();
+                    }}
+                />
+            ) : null}
+            {importing ? <CastProjectImport projectId={projectId} currentCast={cast} onClose={() => setImporting(false)} onImported={onChanged} /> : null}
         </div>
     );
 }
 
-function CastEditor({ projectId, cast, looks, ratios, onChanged, onOpenCanvas, canvasOpening }: { projectId: string; cast: DramaCast; looks: DramaCast[]; ratios: CastRatios; onChanged: () => void; onOpenCanvas: () => void; canvasOpening: boolean }) {
-    const { message } = App.useApp();
+function CastEditor({
+    projectId,
+    cast,
+    parent,
+    looks,
+    ratios,
+    onChanged,
+    onOpenCanvas,
+    canvasOpening,
+}: {
+    projectId: string;
+    cast: DramaCast;
+    parent?: DramaCast;
+    looks: DramaCast[];
+    ratios: CastRatios;
+    onChanged: () => void;
+    onOpenCanvas: () => void;
+    canvasOpening: boolean;
+}) {
+    const { message, modal } = App.useApp();
     const [previewing, setPreviewing] = useState(false);
-    const [name, setName] = useState(cast.name);
+    const [name, setName] = useState(cast.lookName || cast.name);
     const [aliases, setAliases] = useState(parseList(cast.aliasesJson));
     const [appearance, setAppearance] = useState(cast.appearance);
     const [voiceInstructions, setVoiceInstructions] = useState(cast.voiceInstructions);
+    const [imageFields, setImageFields] = useState<CastImageFieldsValue>({ imagePrompt: cast.imagePrompt || "", imageStyleId: cast.imageStyleId || "", imageStyleName: cast.imageStyleName || "", imageStylePrompt: cast.imageStylePrompt || "" });
+    const [from, setFrom] = useState<number | null>(cast.lookFromChapter || null);
+    const [to, setTo] = useState<number | null>(cast.lookToChapter || null);
     const [restyle, setRestyle] = useState(true);
+    const isLook = Boolean(cast.parentId);
     const impactQuery = useQuery({ queryKey: dramaKeys.castImpact(projectId, cast.id), queryFn: ({ signal }) => getDramaCastImpact(projectId, cast.id, signal) });
-    const dirty = name !== cast.name || appearance !== cast.appearance || voiceInstructions !== cast.voiceInstructions || aliases.join("|") !== parseList(cast.aliasesJson).join("|");
-    const fields = { name, aliases, appearance, voiceInstructions };
+    const imageDirty = (["imagePrompt", "imageStyleId", "imageStyleName", "imageStylePrompt"] as const).some((key) => (imageFields[key] || "") !== (cast[key] || ""));
+    const dirty =
+        imageDirty ||
+        name !== (cast.lookName || cast.name) ||
+        appearance !== cast.appearance ||
+        voiceInstructions !== cast.voiceInstructions ||
+        aliases.join("|") !== parseList(cast.aliasesJson).join("|") ||
+        (isLook && ((from || 0) !== (cast.lookFromChapter || 0) || (to || 0) !== (cast.lookToChapter || 0)));
+    const fields = { name, aliases, appearance, voiceInstructions, ...imageFields };
+    const saveFields = () => (isLook ? updateDramaCastLook(projectId, cast.id, { lookName: name, appearance, ...imageFields, fromChapter: from || 0, toChapter: to || 0, restyleSegments: restyle }) : updateDramaCast(projectId, cast.id, fields));
     const save = useMutation({
-        mutationFn: () => updateDramaCast(projectId, cast.id, fields),
+        mutationFn: async () => {
+            await saveFields();
+        },
         onSuccess: () => {
             message.success("设定已保存");
             onChanged();
@@ -257,7 +389,7 @@ function CastEditor({ projectId, cast, looks, ratios, onChanged, onOpenCanvas, c
     const lock = useMutation({ mutationFn: (locked: boolean) => updateDramaCast(projectId, cast.id, { locked }), onSuccess: onChanged });
     const regenerate = useMutation({
         mutationFn: async () => {
-            if (dirty) await updateDramaCast(projectId, cast.id, fields);
+            if (dirty) await saveFields();
             return regenerateDramaCast(projectId, cast.id, restyle);
         },
         onSuccess: (result) => {
@@ -285,14 +417,16 @@ function CastEditor({ projectId, cast, looks, ratios, onChanged, onOpenCanvas, c
     // 素材库选图的失败由选择弹窗内联显示，这里只处理成功。
     const adoptLibraryImage = async (resourceId: string) => imageAdopted(await setDramaCastImage(projectId, cast.id, resourceId, restyle));
     const impact = impactQuery.data;
-    const isCharacter = cast.kind === "character";
-    const kindLabel = CAST_KIND_LABEL[cast.kind];
+    const isCharacter = cast.kind === "character" && !isLook;
+    const kindLabel = isLook ? "造型" : CAST_KIND_LABEL[cast.kind];
+    const busy = save.isPending || regenerate.isPending || upload.isPending || mediaBusy(cast.imageStatus);
+    const parentReady = !isLook || (parent?.imageStatus === "ready" && Boolean(parent.imageResourceId));
     return (
         <div className="drama-editor">
             <div className="drama-cast-hero" style={castRatio(cast.kind, ratios).style}>
                 {cast.imageResourceId ? <MediaThumb resourceId={cast.imageResourceId} alt={cast.name} loading={castImageLoading} failed={castImageFailed} /> : null}
                 {cast.imageResourceId ? (
-                    <button type="button" className="drama-cast-hero-zoom" aria-label={`放大查看${cast.name}的参考图`} title="点击放大查看" onClick={() => setPreviewing(true)}>
+                    <button type="button" className="drama-cast-hero-zoom" aria-label={`放大查看${cast.lookName || cast.name}的参考图`} title="点击放大查看" onClick={() => setPreviewing(true)}>
                         <span className="drama-cast-hero-zoom-hint" aria-hidden="true">
                             <Maximize2 className="size-3.5" />
                         </span>
@@ -321,8 +455,14 @@ function CastEditor({ projectId, cast, looks, ratios, onChanged, onOpenCanvas, c
                     <Switch size="small" checked={cast.locked} loading={lock.isPending} onChange={(checked) => lock.mutate(checked)} />
                 </label>
             </div>
-            <Field label="名称">
-                <Input value={name} maxLength={60} onChange={(event) => setName(event.target.value)} aria-label="名称" />
+            {isLook ? <p className="drama-editor-note">所属角色：{parent?.name || cast.name}。造型使用角色的多视图参考图方案，服装、年龄和风格可独立设置。</p> : null}
+            {cast.sourceProjectId ? (
+                <p className="drama-editor-note">
+                    <Link2 className="inline size-3.5" /> 已关联其他作品素材，当前设定可独立编辑。
+                </p>
+            ) : null}
+            <Field label={isLook ? "造型名称" : "名称"}>
+                <Input value={name} maxLength={60} disabled={busy} onChange={(event) => setName(event.target.value)} aria-label={isLook ? "造型名称" : "名称"} />
             </Field>
             {isCharacter ? (
                 <Field label="别名与称呼" hint="剧本里这些称呼都会归到此角色">
@@ -330,8 +470,18 @@ function CastEditor({ projectId, cast, looks, ratios, onChanged, onOpenCanvas, c
                 </Field>
             ) : null}
             <Field label={APPEARANCE_LABEL[cast.kind]} hint="用于参考图与剧情段视频提示词">
-                <Input.TextArea value={appearance} autoSize={{ minRows: 4, maxRows: 10 }} onChange={(event) => setAppearance(event.target.value)} aria-label={APPEARANCE_LABEL[cast.kind]} />
+                <Input.TextArea value={appearance} maxLength={1000} disabled={busy} autoSize={{ minRows: 4, maxRows: 10 }} onChange={(event) => setAppearance(event.target.value)} aria-label={APPEARANCE_LABEL[cast.kind]} />
             </Field>
+            <CastImageFields projectId={projectId} castId={cast.id} appearance={appearance} value={imageFields} disabled={busy} onChange={(patch) => setImageFields((current) => ({ ...current, ...patch }))} />
+            {isLook ? (
+                <Field label="默认适用章节" hint="留空表示不限，按本季原著章节设置">
+                    <div className="drama-look-form-range">
+                        <InputNumber aria-label="造型起始章" min={0} precision={0} value={from} placeholder="起始章" disabled={busy} onChange={setFrom} />
+                        <span>至</span>
+                        <InputNumber aria-label="造型结束章" min={0} precision={0} value={to} placeholder="结束章" disabled={busy} onChange={setTo} />
+                    </div>
+                </Field>
+            ) : null}
             {isCharacter ? (
                 <Field label="声线" hint="写进视频提示词，由视频模型生成对白">
                     <Input value={voiceInstructions} placeholder="少年音，坚毅，语速偏快" onChange={(event) => setVoiceInstructions(event.target.value)} aria-label="声线" />
@@ -354,7 +504,7 @@ function CastEditor({ projectId, cast, looks, ratios, onChanged, onOpenCanvas, c
                 ) : null}
             </div>
             <div className="drama-editor-actions">
-                <Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>
+                <Button disabled={!dirty || busy || !name.trim() || !appearance.trim()} loading={save.isPending} onClick={() => save.mutate()}>
                     保存设定
                 </Button>
                 <Button icon={<Upload className="size-4" />} loading={upload.isPending} onClick={() => fileRef.current?.click()}>
@@ -385,16 +535,46 @@ function CastEditor({ projectId, cast, looks, ratios, onChanged, onOpenCanvas, c
                         upload.mutate(file);
                     }}
                 />
-                <Button type="primary" className="drama-editor-wide" icon={<RefreshCw className="size-4" />} disabled={cast.locked || mediaBusy(cast.imageStatus)} loading={regenerate.isPending} onClick={() => regenerate.mutate()}>
+                <Button
+                    type="primary"
+                    className="drama-editor-wide"
+                    icon={<RefreshCw className="size-4" />}
+                    disabled={cast.locked || busy || !parentReady || !name.trim() || !appearance.trim()}
+                    title={!parentReady ? "请先生成或上传角色本体图" : undefined}
+                    loading={regenerate.isPending}
+                    onClick={() => regenerate.mutate()}
+                >
                     {cast.imageResourceId ? (dirty ? "保存并重新生成" : "重新生成") : dirty ? "保存并生成参考图" : "生成参考图"}
                 </Button>
                 <Button className="drama-editor-wide" icon={<Brush className="size-4" />} loading={canvasOpening} onClick={onOpenCanvas}>
                     在画布中精修
                 </Button>
+                {isLook ? (
+                    <Button
+                        danger
+                        className="drama-editor-wide"
+                        icon={<Trash2 className="size-4" />}
+                        disabled={busy}
+                        onClick={() =>
+                            modal.confirm({
+                                title: `删除造型「${cast.lookName}」？`,
+                                content: "引用这套造型的镜头将回到角色基础造型。",
+                                okText: "删除造型",
+                                cancelText: "取消",
+                                onOk: async () => {
+                                    await deleteDramaCastLook(projectId, cast.id, restyle);
+                                    onChanged();
+                                },
+                            })
+                        }
+                    >
+                        删除造型
+                    </Button>
+                ) : null}
             </div>
             <p className="drama-editor-note">旧版本保留在版本记录中；锁定后参考图不会被重新生成。上传或从画布采用的形象图会自动锁定，生成剧情段视频时随请求发送，并要求外貌、发型与服装以它为准。</p>
             <DramaTakeList projectId={projectId} ownerId={cast.id} kind="cast" />
-            {previewing && cast.imageResourceId ? <CanvasImagePreview storageKey={`resource:${cast.imageResourceId}`} alt={`${cast.name} · ${kindLabel}参考图`} onClose={() => setPreviewing(false)} /> : null}
+            {previewing && cast.imageResourceId ? <CanvasImagePreview storageKey={`resource:${cast.imageResourceId}`} alt={`${cast.lookName || cast.name} · ${kindLabel}参考图`} onClose={() => setPreviewing(false)} /> : null}
         </div>
     );
 }

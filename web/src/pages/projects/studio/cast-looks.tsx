@@ -3,14 +3,16 @@ import { useMutation } from "@tanstack/react-query";
 import { App, Button, Input, InputNumber } from "antd";
 import { AlertCircle, Check, Pencil, Plus, Shirt, Trash2, X, Play, Upload, Library } from "lucide-react";
 
-import { addDramaCastLook, deleteDramaCastLook, updateDramaCastLook, regenerateDramaCast, setDramaCastImage, updateDramaCast, type DramaCast } from "@/services/api/drama";
+import { addDramaCastLook, deleteDramaCastLook, updateDramaCastLook, regenerateDramaCast, setDramaCastImage, updateDramaCast, type DramaCast, type DramaCastImageStyle } from "@/services/api/drama";
+import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
+import { CastImageFields, type CastImageFieldsValue } from "./cast-image-fields";
 import { uploadResourceFile } from "@/services/api/resources";
 import { CastLibraryPicker } from "./cast-library-picker";
 
 import { mediaBusy, MediaThumb } from "../drama-shared";
 
 const MAX_LOOKS = 6;
-type LookInput = { lookName: string; appearance: string; imagePrompt: string; fromChapter?: number; toChapter?: number };
+type LookInput = DramaCastImageStyle & { lookName: string; appearance: string; imagePrompt: string; fromChapter?: number; toChapter?: number };
 
 function chapterLabel(from?: number, to?: number) {
     if (from && to) return `第 ${from}–${to} 章`;
@@ -20,10 +22,15 @@ function chapterLabel(from?: number, to?: number) {
 }
 
 /** 一套造型的编辑表单（新增或修改共用）。 */
-function LookForm({ initial, submitting, onCancel, onSubmit }: { initial?: DramaCast; submitting: boolean; onCancel: () => void; onSubmit: (value: LookInput) => void }) {
+function LookForm({ projectId, initial, submitting, onCancel, onSubmit }: { projectId: string; initial?: DramaCast; submitting: boolean; onCancel: () => void; onSubmit: (value: LookInput) => void }) {
     const [name, setName] = useState(initial?.lookName || "");
     const [appearance, setAppearance] = useState(initial?.appearance || "");
-    const [imagePrompt, setImagePrompt] = useState(initial?.imagePrompt || "");
+    const [imageFields, setImageFields] = useState<CastImageFieldsValue>({
+        imagePrompt: initial?.imagePrompt || "",
+        imageStyleId: initial?.imageStyleId || "",
+        imageStyleName: initial?.imageStyleName || "",
+        imageStylePrompt: initial?.imageStylePrompt || "",
+    });
     const [from, setFrom] = useState<number | null>(initial?.lookFromChapter || null);
     const [to, setTo] = useState<number | null>(initial?.lookToChapter || null);
     const valid = name.trim() && appearance.trim();
@@ -31,15 +38,7 @@ function LookForm({ initial, submitting, onCancel, onSubmit }: { initial?: Drama
         <div className="drama-look-form">
             <Input value={name} maxLength={60} placeholder="造型名，如 外门弟子、霸道总裁" aria-label="造型名" onChange={(event) => setName(event.target.value)} />
             <Input.TextArea value={appearance} maxLength={1000} autoSize={{ minRows: 2, maxRows: 5 }} placeholder="这套造型的服装、发型与妆容；五官脸型沿用角色本体" aria-label="造型外观" onChange={(event) => setAppearance(event.target.value)} />
-            <label className="drama-field-label">造型生成提示词</label>
-            <Input.TextArea
-                value={imagePrompt}
-                maxLength={12000}
-                autoSize={{ minRows: 3, maxRows: 8 }}
-                placeholder="自定义服装、妆容、发型、构图等生图要求；留空按外观描述生成"
-                aria-label="造型生成提示词"
-                onChange={(event) => setImagePrompt(event.target.value)}
-            />
+            <CastImageFields projectId={projectId} castId={initial?.id} appearance={appearance} value={imageFields} disabled={submitting} onChange={(patch) => setImageFields((current) => ({ ...current, ...patch }))} />
             <small>以角色本体图保持人物一致。确认只保存设定，点击“生成造型图”才调用模型。</small>
             <div className="drama-look-form-range">
                 <span>默认适用</span>
@@ -58,7 +57,7 @@ function LookForm({ initial, submitting, onCancel, onSubmit }: { initial?: Drama
                     icon={<Check className="size-3.5" />}
                     loading={submitting}
                     disabled={!valid}
-                    onClick={() => onSubmit({ lookName: name.trim(), appearance: appearance.trim(), imagePrompt: imagePrompt.trim(), fromChapter: from ?? 0, toChapter: to ?? 0 })}
+                    onClick={() => onSubmit({ ...imageFields, lookName: name.trim(), appearance: appearance.trim(), imagePrompt: (imageFields.imagePrompt || "").trim(), fromChapter: from ?? 0, toChapter: to ?? 0 })}
                 >
                     确认保存
                 </Button>
@@ -76,6 +75,7 @@ export function CastLooks({ projectId, character, looks, restyle, onChanged }: {
     const [adding, setAdding] = useState(false);
     const [editingId, setEditingId] = useState<string>();
     const [libraryLook, setLibraryLook] = useState<DramaCast>();
+    const [previewLook, setPreviewLook] = useState<DramaCast>();
     const fileRef = useRef<HTMLInputElement>(null);
     const uploadLookRef = useRef<DramaCast | undefined>(undefined);
     const done = (text: string, affected?: number) => {
@@ -127,15 +127,15 @@ export function CastLooks({ projectId, character, looks, restyle, onChanged }: {
             <div className="drama-looks">
                 {looks.map((look) =>
                     editingId === look.id ? (
-                        <LookForm key={look.id} initial={look} submitting={update.isPending} onCancel={() => setEditingId(undefined)} onSubmit={(value) => update.mutate({ id: look.id, value })} />
+                        <LookForm projectId={projectId} key={look.id} initial={look} submitting={update.isPending} onCancel={() => setEditingId(undefined)} onSubmit={(value) => update.mutate({ id: look.id, value })} />
                     ) : (
                         <div key={look.id} className="drama-look-item">
                             <div className="drama-look">
-                                <span className="drama-look-thumb">
+                                <button type="button" className="drama-look-thumb" disabled={!look.imageResourceId} aria-label={`放大查看${look.lookName || "造型"}的参考图`} onClick={() => setPreviewLook(look)}>
                                     {look.imageResourceId ? <MediaThumb resourceId={look.imageResourceId} alt={look.lookName || "造型"} /> : <Shirt className="size-4 opacity-40" />}
                                     {mediaBusy(look.imageStatus) ? <span className="drama-look-busy" aria-label="参考图生成中" /> : null}
                                     {look.imageStatus === "failed" ? <AlertCircle className="size-3.5 text-[var(--status-error)]" aria-label="参考图生成失败" /> : null}
-                                </span>
+                                </button>
                                 <span className="drama-look-body">
                                     <b className="truncate">{look.lookName || "未命名造型"}</b>
                                     <small>{chapterLabel(look.lookFromChapter, look.lookToChapter)}</small>
@@ -178,7 +178,7 @@ export function CastLooks({ projectId, character, looks, restyle, onChanged }: {
                     ),
                 )}
                 {adding ? (
-                    <LookForm submitting={add.isPending} onCancel={() => setAdding(false)} onSubmit={(value) => add.mutate(value)} />
+                    <LookForm projectId={projectId} submitting={add.isPending} onCancel={() => setAdding(false)} onSubmit={(value) => add.mutate(value)} />
                 ) : looks.length < MAX_LOOKS ? (
                     <Button size="small" icon={<Plus className="size-3.5" />} disabled={busy} onClick={() => setAdding(true)}>
                         添加造型
@@ -202,6 +202,7 @@ export function CastLooks({ projectId, character, looks, restyle, onChanged }: {
                     modal.confirm({ title: `采用「${look.lookName}」的自定义图？`, content: "确认后保存并锁定这张图片，不调用模型生成。", okText: "确认保存", cancelText: "取消", onOk: () => upload.mutateAsync({ look, file }) });
                 }}
             />
+            {previewLook?.imageResourceId ? <CanvasImagePreview storageKey={`resource:${previewLook.imageResourceId}`} alt={previewLook.lookName || "造型"} onClose={() => setPreviewLook(undefined)} /> : null}
             {libraryLook ? (
                 <CastLibraryPicker
                     open

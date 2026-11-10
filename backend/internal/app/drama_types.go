@@ -713,21 +713,60 @@ type SetDramaCastVoiceRequest struct {
 // DramaCastLookRequest 新增或修改一套角色造型：LookName 造型名，Appearance 这套造型的外观，
 // FromChapter / ToChapter 默认适用的原著章节号（从 1 起，0 或 nil 表示该端不限）。
 type DramaCastLookRequest struct {
-	LookName        string  `json:"lookName"`
-	Appearance      string  `json:"appearance"`
-	ImagePrompt     *string `json:"imagePrompt"`
-	FromChapter     *int    `json:"fromChapter"`
-	ToChapter       *int    `json:"toChapter"`
-	RestyleSegments bool    `json:"restyleSegments"`
+	LookName         string  `json:"lookName"`
+	Appearance       string  `json:"appearance"`
+	ImagePrompt      *string `json:"imagePrompt"`
+	ImageStyleID     *string `json:"imageStyleId"`
+	ImageStyleName   *string `json:"imageStyleName"`
+	ImageStylePrompt *string `json:"imageStylePrompt"`
+	FromChapter      *int    `json:"fromChapter"`
+	ToChapter        *int    `json:"toChapter"`
+	RestyleSegments  bool    `json:"restyleSegments"`
 }
 
 type UpdateDramaCastRequest struct {
 	Name              *string   `json:"name"`
 	Aliases           *[]string `json:"aliases"`
 	Appearance        *string   `json:"appearance"`
+	ImagePrompt       *string   `json:"imagePrompt"`
+	ImageStyleID      *string   `json:"imageStyleId"`
+	ImageStyleName    *string   `json:"imageStyleName"`
+	ImageStylePrompt  *string   `json:"imageStylePrompt"`
 	Description       *string   `json:"description"`
 	VoiceInstructions *string   `json:"voiceInstructions"`
 	Locked            *bool     `json:"locked"`
+}
+
+type CreateDramaCastRequest struct {
+	Kind             string `json:"kind"`
+	Name             string `json:"name"`
+	Appearance       string `json:"appearance"`
+	Description      string `json:"description"`
+	ImagePrompt      string `json:"imagePrompt"`
+	ImageStyleID     string `json:"imageStyleId"`
+	ImageStyleName   string `json:"imageStyleName"`
+	ImageStylePrompt string `json:"imageStylePrompt"`
+}
+
+// 只编排当前表单的提示词，不调用模型、不保存，也不嵌入已有自定义提示词。
+type DramaCastImagePromptRequest struct {
+	Appearance       *string `json:"appearance"`
+	ImageStyleID     *string `json:"imageStyleId"`
+	ImageStyleName   *string `json:"imageStyleName"`
+	ImageStylePrompt *string `json:"imageStylePrompt"`
+}
+
+type ImportDramaCastRequest struct {
+	SourceProjectID string   `json:"sourceProjectId"`
+	CastIDs         []string `json:"castIds"`
+	MatchByName     bool     `json:"matchByName"`
+	ReplaceExisting bool     `json:"replaceExisting"`
+}
+
+type ImportDramaCastResult struct {
+	Imported int               `json:"imported"`
+	Skipped  int               `json:"skipped"`
+	Cast     []model.DramaCast `json:"cast"`
 }
 
 type DramaListItem struct {

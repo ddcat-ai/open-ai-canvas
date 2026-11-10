@@ -27,6 +27,8 @@ tags:
   - name: admin
   - name: skills
   - name: workbench
+  - name: dramas
+    description: 短剧作品与角色、场景、道具设定
   - name: feedback
     description: 用户反馈与管理员收件箱
   - name: referral
@@ -36,6 +38,166 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /dramas/{id}/cast:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 手动创建角色、场景或道具草稿
+      description: 校验当前用户的作品归属；保存 imageStatus=draft，不创建作业、不调用模型、不扣费。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDramaCastRequest" }
+      responses:
+        "200":
+          description: 已创建独立设定草稿
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/{castId}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: castId, required: true, schema: { type: string } }
+    patch:
+      tags: [dramas]
+      summary: 保存设定文字、图片提示词与独立画风
+      description: 省略字段保持原值；imagePrompt 和画风字段传空串清空。保存保留当前参考图，不自动生成。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDramaCastRequest" }
+      responses:
+        "200":
+          description: 已保存设定
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/{castId}/image-prompt:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: castId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 按当前外观和画风重新编排参考图提示词
+      description: 省略字段使用已保存值；覆盖字段仅供本次预览。使用真实生成入口的编排函数和作品参考图方案，忽略旧 imagePrompt，不调用收费模型、不保存、不递归嵌入旧提示词。适用于基础设定和造型。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DramaCastImagePromptRequest" }
+      responses:
+        "200":
+          description: 可编辑的完整图片提示词
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [imagePrompt]
+                        properties:
+                          imagePrompt: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/import:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 从当前用户的另一部作品关联导入设定
+      description: |
+        只选择基础设定 ID，角色自动携带造型、当前图片和声音。原子事务创建独立目标记录并保存来源 ID，图片与声音资源必须归当前用户且已就绪；无图片可导入草稿，不复制生成中状态或作业、不触发生成或收费。
+        同类型同名仅唯一匹配；已有来源优先匹配。同名命中有图且未允许替换时只关联来源并计入 skipped，原图与本季设定保留。重复导入默认保持本季编辑。显式 replaceExisting=true 可更新设定并替换已有图片，旧图保留在 takes，相关下游内容标记过期。来源无图不会清除目标已有图。
+        造型 parentId 重映射到本季角色，复制的默认章节范围重置不限，每个角色最多 6 套造型。冲突、歧义或生成中的目标返回 409，reason=drama_cast_import_conflict，整个导入回滚。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportDramaCastRequest" }
+      responses:
+        "200":
+          description: imported/skipped 按基础设定与造型记录合计；cast 返回本次关联到的目标记录（包括 skipped）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [imported, skipped, cast]
+                        properties:
+                          imported: { type: integer, minimum: 0 }
+                          skipped: { type: integer, minimum: 0 }
+                          cast:
+                            type: array
+                            items: { $ref: "#/components/schemas/DramaCast" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/{castId}/looks:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: castId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 新增角色造型草稿
+      description: 仅基础角色可以新增造型，每个角色最多 6 套。保存不生成；图片提示词和画风按造型独立选择，三项画风字段全空时继承作品画风。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/DramaCastLookRequest" }
+                - type: object
+                  required: [lookName, appearance]
+      responses:
+        "200":
+          description: 已创建造型草稿
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastLookEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/looks/{lookId}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: lookId, required: true, schema: { type: string } }
+    patch:
+      tags: [dramas]
+      summary: 保存角色造型与独立画风
+      description: imagePrompt 和三项画风字段省略时不变、空串清空；造型生成中不可修改。保存保留旧图，不自动生成。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DramaCastLookRequest" }
+      responses:
+        "200":
+          description: 已保存造型，data.affectedSegments 返回按请求标记过期的剧情段数量
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastLookEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /admin/ecommerce/skills/install:
     post:
       tags: [admin]
@@ -3646,6 +3808,120 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    DramaCastImageSettings:
+      type: object
+      description: 图片提示词与画风独立于作品；三项画风字段全空时继承作品，任一非空时覆盖作品画风和 visualRules。更新传空串清空，省略保持原值。
+      properties:
+        imagePrompt: { type: string, maxLength: 12000, description: 完整自定义图片提示词；空串使用作品参考图方案重新编排 }
+        imageStyleId: { type: string, maxLength: 64 }
+        imageStyleName: { type: string, maxLength: 120 }
+        imageStylePrompt: { type: string, maxLength: 4000 }
+    CreateDramaCastRequest:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          required: [kind, name, appearance]
+          properties:
+            kind: { type: string, enum: [character, scene, prop] }
+            name: { type: string, minLength: 1, maxLength: 60 }
+            appearance: { type: string, minLength: 1, maxLength: 1000 }
+            description: { type: string, maxLength: 1000 }
+    UpdateDramaCastRequest:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          properties:
+            name: { type: string, minLength: 1, maxLength: 60 }
+            appearance: { type: string, minLength: 1, maxLength: 1000 }
+            description: { type: string, maxLength: 1000 }
+            aliases:
+              type: array
+              items: { type: string }
+            voiceInstructions: { type: string, maxLength: 500 }
+            locked: { type: boolean }
+    DramaCastLookRequest:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          properties:
+            lookName: { type: string, minLength: 1, maxLength: 60 }
+            appearance: { type: string, minLength: 1, maxLength: 1000 }
+            fromChapter: { type: integer, description: 原著章节号，从 1 起；0 或空表示不限，负数归零，起止颠倒会交换 }
+            toChapter: { type: integer }
+            restyleSegments: { type: boolean, default: false }
+    DramaCastImagePromptRequest:
+      type: object
+      properties:
+        appearance: { type: string, minLength: 1, maxLength: 1000 }
+        imageStyleId: { type: string, maxLength: 64 }
+        imageStyleName: { type: string, maxLength: 120 }
+        imageStylePrompt: { type: string, maxLength: 4000 }
+    ImportDramaCastRequest:
+      type: object
+      required: [sourceProjectId, castIds]
+      properties:
+        sourceProjectId: { type: string, minLength: 1, maxLength: 36, description: 当前用户的另一部作品 ID }
+        castIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          description: 来源基础设定 ID，不可直接选择造型；重复 ID 合并处理
+          items: { type: string, minLength: 1, maxLength: 36 }
+        matchByName: { type: boolean, default: false }
+        replaceExisting: { type: boolean, default: false }
+    DramaCast:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          required: [id, projectId, kind, name, appearance, imageStatus, imageVersion, revision]
+          properties:
+            id: { type: string }
+            projectId: { type: string }
+            kind: { type: string, enum: [character, scene, prop] }
+            name: { type: string }
+            aliasesJson: { type: string, description: 别名数组的 JSON 字符串 }
+            role: { type: string }
+            description: { type: string }
+            appearance: { type: string }
+            voiceInstructions: { type: string }
+            voiceProfileId: { type: string }
+            voiceSampleResourceId: { type: string }
+            parentId: { type: string, description: 非空表示该行是角色的造型，指向本作品基础角色 }
+            lookName: { type: string }
+            lookFromChapter: { type: integer }
+            lookToChapter: { type: integer }
+            sourceProjectId: { type: string, description: 复制时的来源作品 ID，仅记录来源，之后两季编辑相互独立 }
+            sourceCastId: { type: string, description: 来源设定或造型 ID，在目标作品内唯一，避免重复导入 }
+            importance: { type: integer }
+            imageResourceId: { type: string }
+            imageStatus: { type: string, enum: ["", draft, queued, running, ready, failed, stale, skipped] }
+            imageVersion: { type: integer }
+            locked: { type: boolean }
+            position: { type: integer }
+            revision: { type: integer, format: int64 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    DramaCastEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [cast]
+              properties:
+                cast: { $ref: "#/components/schemas/DramaCast" }
+    DramaCastLookEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [look]
+              properties:
+                look: { $ref: "#/components/schemas/DramaCast" }
+                affectedSegments: { type: integer, minimum: 0 }
     ThinkingRequest:
       type: string
       enum: ["", auto, deep, off, minimal, low, medium, high, max]

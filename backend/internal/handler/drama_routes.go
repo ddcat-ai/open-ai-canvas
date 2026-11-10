@@ -310,7 +310,30 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		casts, err := svc.DramaCasts(userID, c.Param("id"))
 		return gin.H{"cast": casts}, err
 	}))
-	r.PATCH("/dramas/:id/cast/:castId", dramaRoute(svc, 64<<10, func(c *gin.Context, userID string) (any, error) {
+	r.POST("/dramas/:id/cast", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.CreateDramaCastRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		cast, err := svc.CreateDramaCast(userID, c.Param("id"), req)
+		return gin.H{"cast": cast}, err
+	}))
+	r.POST("/dramas/:id/cast/import", dramaRoute(svc, 64<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.ImportDramaCastRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.ImportDramaCast(userID, c.Param("id"), req)
+	}))
+	r.POST("/dramas/:id/cast/:castId/image-prompt", dramaRoute(svc, 64<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.DramaCastImagePromptRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		prompt, err := svc.PreviewDramaCastImagePrompt(userID, c.Param("id"), c.Param("castId"), req)
+		return gin.H{"imagePrompt": prompt}, err
+	}))
+	r.PATCH("/dramas/:id/cast/:castId", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
 		var req service.UpdateDramaCastRequest
 		if err := bindDramaJSON(c, &req); err != nil {
 			return nil, err
@@ -325,14 +348,14 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		return svc.SetDramaCastImage(userID, c.Param("id"), c.Param("castId"), req)
 	}))
-	r.POST("/dramas/:id/cast/:castId/looks", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
+	r.POST("/dramas/:id/cast/:castId/looks", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
 		var req service.DramaCastLookRequest
 		if err := bindDramaJSON(c, &req); err != nil {
 			return nil, err
 		}
 		return svc.AddDramaCastLook(userID, c.Param("id"), c.Param("castId"), req)
 	}))
-	r.PATCH("/dramas/:id/looks/:lookId", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
+	r.PATCH("/dramas/:id/looks/:lookId", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
 		var req service.DramaCastLookRequest
 		if err := bindDramaJSON(c, &req); err != nil {
 			return nil, err

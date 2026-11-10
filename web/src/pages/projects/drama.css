@@ -2002,6 +2002,82 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.drama-cast-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-left: auto;
+}
+.drama-cast-look-switcher {
+    display: flex;
+    gap: var(--space-1);
+    padding: 0 var(--space-2) var(--space-2);
+    overflow-x: auto;
+}
+.drama-cast-look-switcher > button {
+    display: grid;
+    place-items: center;
+    flex: 0 0 48px;
+    height: 40px;
+    overflow: hidden;
+    border-radius: var(--r-md);
+    background: var(--library-cover-surface);
+    border: 1px solid transparent;
+}
+.drama-cast-look-switcher > button[aria-pressed="true"] {
+    border-color: var(--control-selected-border);
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+.drama-cast-look-switcher > button:focus-visible,
+.drama-look-thumb:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+.drama-cast-look-switcher img,
+.drama-cast-import-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.drama-cast-form,
+.drama-cast-image-fields {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+}
+.drama-cast-import-list {
+    max-height: min(40vh, 360px);
+    overflow-y: auto;
+    display: grid;
+    gap: var(--space-2);
+}
+.drama-cast-import-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2);
+    border-radius: var(--r-lg);
+    background: var(--library-surface);
+}
+.drama-cast-import-thumb {
+    width: 72px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: var(--r-md);
+    background: var(--library-cover-surface);
+}
+.drama-cast-import-description {
+    min-width: 0;
+    display: grid;
+    gap: var(--space-1);
+    overflow-wrap: anywhere;
+}
+.drama-cast-import-description small {
+    color: var(--text-secondary);
+}
 .drama-cast-hero {
     position: relative;
     aspect-ratio: var(--drama-cast-ratio, 3 / 4);
@@ -2702,8 +2778,13 @@
     .drama-root *,
     .drama-root *::before,
     .drama-root *::after {
-        animation: none !important;
-        transition: none !important;
+        /* rc-motion 依赖结束事件收起弹窗；保留事件，只缩短动效。 */
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+        scroll-behavior: auto !important;
     }
 }
 
@@ -5382,15 +5463,16 @@
 }
 .drama-sg-cover-play {
     position: absolute;
-    left: 4px;
-    bottom: 4px;
+    left: var(--space-1);
+    bottom: var(--space-1);
     display: grid;
     place-items: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r-full);
+    background: var(--canvas-card-media-chip-bg);
+    color: var(--canvas-card-media-chip-ink);
+    border: 1px solid color-mix(in srgb, var(--canvas-card-media-chip-ink) 70%, transparent);
 }
 .drama-sg-main {
     display: grid;

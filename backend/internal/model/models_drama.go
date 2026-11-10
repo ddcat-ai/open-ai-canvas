@@ -87,7 +87,7 @@ type DramaProduction struct {
 type DramaCast struct {
 	Revision    int64  `json:"revision"`
 	ID          string `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID   string `json:"projectId" gorm:"index;size:36;index:idx_drama_casts_project_kind,priority:1"`
+	ProjectID   string `json:"projectId" gorm:"index;size:36;index:idx_drama_casts_project_kind,priority:1;index:idx_drama_cast_source,unique,priority:1,where:source_cast_id <> ''"`
 	Kind        string `json:"kind" gorm:"size:16;index:idx_drama_casts_project_kind,priority:2"`
 	Name        string `json:"name" gorm:"size:120"`
 	AliasesJSON string `json:"aliasesJson" gorm:"type:text"`
@@ -95,6 +95,13 @@ type DramaCast struct {
 	Description string `json:"description" gorm:"type:text"`
 	Appearance  string `json:"appearance" gorm:"type:text"`
 	ImagePrompt string `json:"imagePrompt" gorm:"type:text"`
+	// 三个画风字段全空时继承作品画风；造型与基础设定分别选择。
+	ImageStyleID     string `json:"imageStyleId" gorm:"size:64"`
+	ImageStyleName   string `json:"imageStyleName" gorm:"size:120"`
+	ImageStylePrompt string `json:"imageStylePrompt" gorm:"type:text"`
+	// 导入只保留来源关联，编辑目标记录不会回写来源作品。
+	SourceProjectID string `json:"sourceProjectId,omitempty" gorm:"size:36"`
+	SourceCastID    string `json:"sourceCastId,omitempty" gorm:"size:36;index:idx_drama_cast_source,unique,priority:2,where:source_cast_id <> ''"`
 	// VoiceInstructions 是声线描述（音色、语速、情绪），写进视频提示词，由视频模型同步生成对白。
 	VoiceInstructions string `json:"voiceInstructions" gorm:"type:text"`
 	// VoiceProfileID 是用户为角色指定的声音（声音库条目）；VoiceSampleResourceID 是它的样本音频，

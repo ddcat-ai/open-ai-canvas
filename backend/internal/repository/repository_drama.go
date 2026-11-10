@@ -921,8 +921,8 @@ func (r *Repository) UpdateDramaCastFields(id string, fields map[string]any) err
 		if err := tx.First(&cast, "id = ?", id).Error; err != nil {
 			return err
 		}
-		var shots []model.DramaShot
-		if err := tx.Where("project_id = ? AND (scene_cast_id = ? OR cast_ids_json LIKE ?)", cast.ProjectID, id, fmt.Sprintf("%%%q%%", id)).Find(&shots).Error; err != nil {
+		shots, err := (&Repository{db: tx}).DramaShotsReferencingCast(cast.ProjectID, id)
+		if err != nil {
 			return err
 		}
 		seen := map[string]bool{}
