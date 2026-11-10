@@ -24,7 +24,10 @@ import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { formatShotOrdinal } from "@/lib/shot-label";
 import { buildImageResolutionOptions, formatImageResolutionSize, supportsImageResolutionPresets } from "@/lib/image-resolution-tiers";
-import { normalizeVideoValue, videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { videoDurationOptions, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { preserveVideoSettings as normalizeVideoValue } from "@/lib/media-settings";
+import { mediaSettingIssues } from "@/lib/media-settings";
+import { MediaSettingsNotice } from "@/components/media-settings-notice";
 import { mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import { imageQualityLabel } from "@/lib/image-quality";
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
@@ -219,7 +222,10 @@ export function CreationComposer(props: ComposerProps) {
     const interactionBusy = props.busy || props.referenceReplacementBusy;
     // 创作页张数等于拆单数，上限按账号同时任务数，硬上限仍为 15。
     const imageBatchLimit = Math.min(15, useGenerationBatchLimit());
-    const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy;
+    const settingsError = mediaSettingIssues(props.config, props.mode, props.model)
+        .map((item) => item.message)
+        .join("；");
+    const canSubmit = Boolean(props.prompt.trim()) && !interactionBusy && !settingsError;
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const priceChannel = resolveModelChannel(props.config, props.model);
     // 实际提交单数与 index.tsx 的 taskCount 同样 clamp。
@@ -600,6 +606,21 @@ export function CreationComposer(props: ComposerProps) {
                     </span>
                 </Button>
             </footer>
+            {props.mode === "image" || props.mode === "video" ? (
+                <MediaSettingsNotice
+                    config={{ ...props.config, model: props.model }}
+                    capability={props.mode}
+                    onChange={(field, value) => {
+                        if (field === "size") props.setRatio(value);
+                        else if (field === "quality") props.setQuality(value);
+                        else if (field === "imageResolution") props.setImageResolution(value);
+                        else if (field === "imageParameters") props.setImageParameters(value);
+                        else if (field === "count") props.setCount(value);
+                        else if (field === "videoSeconds") props.setSeconds(value);
+                        else if (field === "vquality") props.setVideoQuality(value);
+                    }}
+                />
+            ) : null}
             <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
         </SpotlightSurface>
     );
@@ -895,9 +916,9 @@ function ThinkingControl({ levels, value, resolvedLevel, onChange, disabled }: {
     );
 }
 
-function DurationMenu({ profile, seconds, onChange }: { profile: VideoCapabilityConfig; seconds: string; onChange: (value: string) => void }) {
+function DurationMenu({ profile, seconds, onChange, protocol }: { profile: VideoCapabilityConfig; seconds: string; onChange: (value: string) => void; protocol?: string }) {
     const [open, setOpen] = useState(false);
-    const value = Number(normalizeVideoValue(profile, { seconds }).seconds);
+    const value = Number(normalizeVideoValue(profile, { seconds }, protocol).seconds);
     const presets = profile.duration.selection === "enum" ? videoDurationOptions(profile) : [];
     const fallbackPreset = presets.length ? presets : [profile.duration.default];
     const min = profile.duration.selection === "range" ? profile.duration.min || 1 : Math.min(...fallbackPreset);

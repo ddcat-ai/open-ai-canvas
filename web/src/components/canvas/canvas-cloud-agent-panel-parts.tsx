@@ -37,7 +37,8 @@ import { ModelPicker } from "@/components/model-picker";
 import { ThinkingLevelSlider } from "@/components/thinking-level-slider";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { LEGACY_TEXT_THINKING_CONFIG, THINKING_LEVEL_LABELS, resolveThinkingLevel, thinkingLevelsFor } from "@/lib/text-thinking";
-import { agentImageApproval, agentVideoApproval } from "@/lib/canvas/agent-media-approval";
+import { agentImageApproval, agentVideoApproval, agentApprovalModel } from "@/lib/canvas/agent-media-approval";
+import { mediaSettingIssues } from "@/lib/media-settings";
 import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentation";
 import { CanvasAgentImageApprovalSettings } from "./canvas-agent-image-approval-settings";
 import { CanvasAgentVideoApprovalSettings } from "./canvas-agent-video-approval-settings";
@@ -986,6 +987,32 @@ export function ApprovalCard({
     const [mediaSettings, setMediaSettings] = useState<AgentMediaSettings>();
     const imageApproval = agentImageApproval(approval.detail);
     const videoApproval = agentVideoApproval(approval.detail);
+    const effectiveConfig = useEffectiveConfig();
+    const currentSettings = mediaSettings || imageApproval || videoApproval;
+    const mediaMode = videoApproval ? "video" : "image";
+    const settingsModel = currentSettings ? agentApprovalModel(effectiveConfig, currentSettings, mediaMode) : "";
+    const settingsError =
+        currentSettings && settingsModel
+            ? mediaSettingIssues(
+                  {
+                      ...effectiveConfig,
+                      model: settingsModel,
+                      size: currentSettings.size,
+                      quality: mediaMode === "image" ? currentSettings.quality : "",
+                      imageResolution: currentSettings.imageResolution || "",
+                      imageParameters: currentSettings.imageParameters,
+                      count: "1",
+                      transparentBackground: "false",
+                      vquality: currentSettings.quality,
+                      videoSeconds: String(currentSettings.durationSeconds || ""),
+                      videoGenerateAudio: currentSettings.videoGenerateAudio === undefined ? "" : String(currentSettings.videoGenerateAudio),
+                      videoWatermark: currentSettings.videoWatermark === undefined ? "" : String(currentSettings.videoWatermark),
+                  },
+                  mediaMode,
+              )
+                  .map((item) => item.message)
+                  .join("；")
+            : "";
     const action = agentApprovalPresentation(approval.detail);
     return (
         <section className="canvas-agent-approval-card" aria-label={action.title}>
@@ -1049,10 +1076,22 @@ export function ApprovalCard({
                 </p>
             ) : null}
             <div className="canvas-agent-approval-actions">
+                {settingsError ? (
+                    <p role="alert" className="text-xs">
+                        {settingsError}
+                    </p>
+                ) : null}
                 <button type="button" className="canvas-agent-approval-reject" disabled={submitting || Boolean(blockedReason)} onClick={onReject}>
                     暂不执行
                 </button>
-                <button type="button" className="canvas-agent-approval-approve" disabled={submitting || Boolean(blockedReason) || Boolean(targetGenerating)} onClick={() => onApprove(mediaSettings)}>
+                <button
+                    type="button"
+                    className="canvas-agent-approval-approve"
+                    disabled={submitting || Boolean(blockedReason) || Boolean(targetGenerating) || Boolean(settingsError)}
+                    onClick={() => {
+                        if (!settingsError) onApprove(mediaSettings);
+                    }}
+                >
                     {submitting ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
                     {submitting ? "正在提交" : targetGenerating ? "已在节点中生成" : "同意执行"}
                 </button>

@@ -155,10 +155,31 @@ describe("图生图默认跟随参考图比例", () => {
         expect(generated.quality).toBe("2k");
     });
 
-    test("切换模型时清除旧的尺寸来源", () => {
-        const node = imageNode("node", { model: MODEL, size: "1:1", imageSizeSource: "user" });
-        const next = applyNodeConfigPatch(node, { model: "relay::other-image" });
-        expect(next.metadata?.size).toBeUndefined();
-        expect(next.metadata?.imageSizeSource).toBeUndefined();
+    test("切换模型保留兼容的用户比例，不重新跟随参考图", () => {
+        const node = imageNode("node", { model: "relay::old-image", size: "1:1", imageSizeSource: "user" });
+        const config = aspectRatioConfig();
+        const next = applyNodeConfigPatch(node, { model: MODEL }, config);
+        expect(next.metadata?.size).toBe("1:1");
+        expect(next.metadata?.imageSizeSource).toBe("user");
+        expect(buildNodeConfig(config, next, "image", { capability: "image" }, { width: 1920, height: 1080 }).size).toBe("1:1");
+    });
+
+    test("隐式跟随参考图的节点切换、保存重开后仍使用参考比例", () => {
+        const config = aspectRatioConfig();
+        config.channels[0].models.push("other-image");
+        config.channels[0].modelCosts!.push({ ...config.channels[0].modelCosts![0], model: "other-image" });
+        const reference = { width: 1080, height: 1920 };
+        for (const metadata of [{}, { size: "auto" }, { size: "1:1", imageSizeSource: "default" as const }, { size: "9:16", imageSizeSource: "reference" as const }]) {
+            const node = imageNode("implicit", { model: MODEL, ...metadata });
+            expect(buildNodeConfig(config, node, "image", { capability: "image" }, reference).size).toBe("9:16");
+            const switched = applyNodeConfigPatch(node, { model: "relay::other-image" }, config);
+            const reopened: CanvasNodeData = JSON.parse(JSON.stringify(switched));
+            expect(followsReferenceImageSize(reopened)).toBe(true);
+            expect([reopened.width, reopened.height, reopened.position]).toEqual([node.width, node.height, node.position]);
+            expect(buildNodeConfig(config, reopened, "image", { capability: "image" }, reference).size).toBe("9:16");
+            expect(buildGenerationConfig(config, reopened, "image", undefined, false, reference).size).toBe("9:16");
+            const nextReference = { width: 1920, height: 1080 };
+            expect(buildGenerationConfig(config, reopened, "image", undefined, false, nextReference).size).toBe("16:9");
+        }
     });
 });

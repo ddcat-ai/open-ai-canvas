@@ -7,6 +7,7 @@ export type InputConstraint = { min: number; max: number };
 export type OptionConstraint = { values?: unknown[]; min?: number; max?: number; step?: number };
 export type CapabilityImageSizePreset = ImageResolutionOption;
 export type CapabilityImageSize = {
+    defaultTier?: string;
     parameter?: "size" | "aspect_ratio";
     allowCustom?: boolean;
     presets?: CapabilityImageSizePreset[];

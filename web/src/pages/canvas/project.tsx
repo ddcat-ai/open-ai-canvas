@@ -1331,6 +1331,7 @@ function CanvasViewportPage() {
         toggleFrameCollapsed,
         toggleNodeFreeResize,
     } = useCanvasNodeEditor({
+        config: effectiveConfig,
         canvasId: projectId,
         canvasTitle: currentProject?.title || "未命名画布",
         domainProjectId: linkedProjectId,

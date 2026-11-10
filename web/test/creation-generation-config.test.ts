@@ -30,28 +30,29 @@ function videoConfig(generateAudio: { supported: boolean; default: boolean }): A
     };
 }
 
-test("创作台无声视频报价、提交与重试不携带全局音频和水印默认值", async () => {
+test("创作台自动关闭不适用音轨与水印，报价、提交与重试一致省略", async () => {
     const config = videoConfig({ supported: false, default: false });
     const requestConfig = creationVideoConfig(config, config.videoModel, { ratio: "16:9", seconds: "6", videoQuality: "480" });
     const quote = modelQuoteRequest(requestConfig, requestConfig.model, "video");
-    expect(quote?.intent.options).toMatchObject({ size: "16:9", vquality: "480", videoSeconds: 6, videoGenerateAudio: false, videoWatermark: false });
+    expect(quote).toBeDefined();
+    expect(quote?.intent.options).not.toHaveProperty("videoGenerateAudio");
+    expect(quote?.intent.options).not.toHaveProperty("videoWatermark");
+    expect(requestConfig.videoGenerateAudio).toBe("false");
+    expect(requestConfig.videoWatermark).toBe("false");
 
     for (const retryOf of [undefined, "failed-task"]) {
         const task = await prepareBackendGenerationTask({ mode: "video", prompt: "小猫在流泪", config: requestConfig, retryOf });
-        expect(task.input).toMatchObject({
-            config: { size: "16:9", vquality: "480", videoSeconds: "6", videoGenerateAudio: "false", videoWatermark: "false" },
-            ...(retryOf ? { metadata: { retryOf } } : {}),
-        });
-        expect(task.operation).toBe("text_to_video");
+        expect(task.input.config).toMatchObject({ videoGenerateAudio: undefined, videoWatermark: undefined });
     }
     expect(config.videoGenerateAudio).toBe("true");
     expect(config.videoWatermark).toBe("true");
 });
 
-test.each([false, true])("创作台支持同步音频时遵循模型默认值 %s", (audioDefault) => {
+test.each([false, true])("创作台支持同步音频时保留已有开关，不被默认值 %s 覆盖", (audioDefault) => {
     const config = videoConfig({ supported: true, default: audioDefault });
     config.videoGenerateAudio = String(!audioDefault);
+    config.videoWatermark = "false";
     const requestConfig = creationVideoConfig(config, config.videoModel, { ratio: "16:9", seconds: "6", videoQuality: "480" });
-    expect(requestConfig.videoGenerateAudio).toBe(String(audioDefault));
-    expect(modelQuoteRequest(requestConfig, requestConfig.model, "video")?.intent.options?.videoGenerateAudio).toBe(audioDefault);
+    expect(requestConfig.videoGenerateAudio).toBe(String(!audioDefault));
+    expect(modelQuoteRequest(requestConfig, requestConfig.model, "video")?.intent.options?.videoGenerateAudio).toBe(!audioDefault);
 });

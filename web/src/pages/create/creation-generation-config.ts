@@ -1,9 +1,10 @@
-import { modelCapabilityConfigFor, normalizeVideoValue } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { preserveVideoSettings as normalizeVideoValue } from "@/lib/media-settings";
 import { resolveModelVideoBooleanOptions } from "@/lib/model-selection";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CreationSettings } from "./creation-types";
 
-// 创作台没有音频和水印开关；报价与提交共用所选模型的默认值和能力限制。
+// 报价与提交共用目标模型适配结果，兼容的已有音轨设置继续保留。
 export function creationVideoConfig(config: AiConfig, model: string, settings: Pick<CreationSettings, "ratio" | "seconds" | "videoQuality">): AiConfig {
     const profile = modelCapabilityConfigFor(config, model).video!;
     const normalized = normalizeVideoValue(profile, {
@@ -18,14 +19,9 @@ export function creationVideoConfig(config: AiConfig, model: string, settings: P
         size: normalized.ratio,
         videoSeconds: normalized.seconds,
         vquality: normalized.resolution.replace(/p$/i, ""),
-        ...resolveModelVideoBooleanOptions(
-            config,
-            model,
-            {},
-            {
-                videoGenerateAudio: config.videoGenerateAudio,
-                videoWatermark: config.videoWatermark,
-            },
-        ),
+        ...resolveModelVideoBooleanOptions(config, model, {
+            videoGenerateAudio: config.videoGenerateAudio,
+            videoWatermark: config.videoWatermark,
+        }),
     };
 }

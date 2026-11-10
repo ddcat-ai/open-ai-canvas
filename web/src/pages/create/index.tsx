@@ -10,14 +10,15 @@ import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-p
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
 import { useGenerationBatchLimit } from "@/lib/generation-batch-limit";
 import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
-import { imageParameterRequest, normalizeImageParameters } from "@/lib/image-parameters";
+import { imageParameterRequest } from "@/lib/image-parameters";
 import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { continueCreationConversationOnCanvas } from "@/services/creation-canvas-conversation";
 import { useAuthEntry } from "@/hooks/use-auth-entry";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { LEGACY_TEXT_THINKING_CONFIG, isThinkingLevel, resolveThinkingLevel, thinkingLevelsFor, type ThinkingLevel, type ThinkingRequest } from "@/lib/text-thinking";
-import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, videoDurationAllowed, videoDurationOptions } from "@/lib/model-capabilities";
+import { preserveImageSettings as normalizeImageValue, preserveVideoSettings as normalizeVideoValue, mediaSettingIssues } from "@/lib/media-settings";
 import { inferVideoOperation, modelGroupReferenceLimits, resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { Skill } from "@/services/api/skills";
@@ -247,7 +248,15 @@ export default function CreatePage() {
         [attachments, config, preferredModel, count, hasPrompt, imageResolution, imageParameters, mode, quality, ratio, seconds, videoQuality],
     );
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
-    const generationConfig = useMemo(() => (mode === "video" ? creationVideoConfig(config, selectedModel, { ratio, seconds, videoQuality }) : config), [config, mode, ratio, seconds, selectedModel, videoQuality]);
+    const generationConfig = useMemo(
+        () =>
+            mode === "video"
+                ? creationVideoConfig(config, selectedModel, { ratio, seconds, videoQuality })
+                : mode === "image"
+                  ? { ...config, model: selectedModel, imageModel: selectedModel, size: ratio, quality, imageResolution, imageParameters, count }
+                  : config,
+        [config, mode, ratio, seconds, selectedModel, videoQuality, quality, imageResolution, imageParameters, count],
+    );
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
     const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
     const textThinkingConfig = useMemo(() => (mode === "text" ? modelCapabilityConfigFor(config, selectedModel).text?.thinking || LEGACY_TEXT_THINKING_CONFIG : undefined), [config, mode, selectedModel]);
@@ -322,17 +331,21 @@ export default function CreatePage() {
         if (!composerPreferencesHydrated || !composerPreferencesInitialized || mode !== "image") return;
         const saved = useCreationPreferencesStore.getState().preferences.image;
         // 优先恢复用户上次选择；只有当前模型不支持该值时，normalizeImageValue 才回退到模型默认值。
-        const normalized = normalizeImageValue(imageProfile, {
-            size: saved?.ratio || imageProfile.size.default,
-            quality: saved?.quality || imageProfile.quality.default,
-            imageResolution: saved?.imageResolution || imageProfile.resolution.default,
-            imageParameters: saved?.model === selectedModel ? saved.imageParameters : undefined,
-            count: saved?.count || count,
-        });
+        const normalized = normalizeImageValue(
+            imageProfile,
+            {
+                size: saved?.ratio || imageProfile.size.default,
+                quality: saved?.quality || imageProfile.quality.default,
+                imageResolution: saved?.imageResolution,
+                imageParameters: saved?.imageParameters,
+                count: saved?.count || count,
+            },
+            resolveModelRequestConfig(config, selectedModel).interfaceType,
+        );
         setRatio(normalized.size);
         setQuality(normalized.quality);
         setImageResolution(normalized.imageResolution || imageProfile.resolution.default);
-        setImageParameters(JSON.stringify(normalizeImageParameters(imageProfile.parameters, saved?.model === selectedModel ? saved.imageParameters : undefined)));
+        setImageParameters(normalized.imageParameters || "{}");
         // 恢复上次张数时按账号同时任务数 clamp，不再被单模型 maxOutputs(=1) 压回 1。
         setCount(String(Math.max(1, Math.min(imageBatchLimit, Math.floor(Number(saved?.count || count)) || 1))));
     }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, imageProfile]);
@@ -853,7 +866,16 @@ export default function CreatePage() {
             releaseSubmitGate();
             return;
         }
-        if (mode === "video" && !videoDurationAllowed(videoProfile, Number(seconds))) {
+        const settingsError = mediaSettingIssues(generationConfig, mode, selectedModel)
+            .map((item) => item.message)
+            .join("；");
+        if (settingsError) {
+            toast.error(settingsError);
+            releaseRetryLock();
+            releaseSubmitGate();
+            return;
+        }
+        if (mode === "video" && videoProfile.durationSupported !== false && !videoDurationAllowed(videoProfile, Number(generationConfig.videoSeconds))) {
             toast.error(t("create.page.durationUnsupported"));
             releaseRetryLock();
             releaseSubmitGate();
