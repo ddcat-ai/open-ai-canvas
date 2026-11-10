@@ -522,6 +522,11 @@ func (s *Service) upsertUserCanvasProjectWithHistory(userID string, raw json.Raw
 
 func (s *Service) DeleteUserCanvasProject(userID string, id string) error {
 	err := s.repo.DeleteCanvasProject(userID, id)
+	var busy *repository.CanvasAgentBusyError
+	if errors.As(err, &busy) {
+		return &kernel.AppError{Status: 409, Code: 409, Reason: "canvas_agent_busy", Message: "画布 Agent 仍在执行或收尾，请先停止并等待任务完成后再删除",
+			Details: map[string]any{"canvasId": id, "agent": busy.Activity}}
+	}
 	if errors.Is(err, repository.ErrCanvasEditLease) {
 		return canvasMutationError("canvas_edit_lease_conflict", err.Error())
 	}

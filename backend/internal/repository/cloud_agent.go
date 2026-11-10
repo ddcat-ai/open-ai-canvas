@@ -2,6 +2,7 @@ package repository
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -60,8 +61,24 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 		}
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(run).Error; err != nil {
-			return err
+		// GORM saves associations even when the parent INSERT loses its conflict.
+		// A late initializer must not reinsert transcript rows removed by a newer
+		// checkpoint, or append journal rows outside the revision/CAS transition.
+		created := tx.Omit("Journal", "Transcript").Clauses(clause.OnConflict{DoNothing: true}).Create(run)
+		if created.Error != nil {
+			return created.Error
+		}
+		if created.RowsAffected == 1 {
+			if len(run.Journal) > 0 {
+				if err := tx.Create(&run.Journal).Error; err != nil {
+					return err
+				}
+			}
+			if len(run.Transcript) > 0 {
+				if err := tx.Create(&run.Transcript).Error; err != nil {
+					return err
+				}
+			}
 		}
 		// The marker excludes completed Pi carriers (still text_replay) from
 		// reservation scans. It is not a cached busy/idle or permission flag.
@@ -71,9 +88,9 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 	})
 }
 
-// CloudAgent 在同一个只读事务里读取执行行和它的事件/消息行。分开读的话，并发写入
-// （运行时事件、工具结果）可能落在两次查询之间：读到旧的计数配新的行，解码时会被
-// 当成"记录不完整"而把一次正常运行判死。
+// PostgreSQL 的默认 READ COMMITTED 会让同一事务里的 SELECT 看到不同版本。
+// 执行行、journal 和可压缩 transcript 必须共享快照，否则正常并发 checkpoint
+// 会被解码器当成历史损坏。写事务内的嵌套调用已经持有执行行锁。
 func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, error) {
 	var run model.CloudAgentExecution
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -81,7 +98,7 @@ func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, 
 			return err
 		}
 		return New(tx).hydrateCloudAgent(&run)
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return &run, err
 }
 
@@ -158,7 +175,7 @@ func (r *Repository) CloudAgentForActiveTask(userID, taskID string) (*model.Clou
 			return err
 		}
 		return New(tx).hydrateCloudAgent(&run)
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return &run, err
 }
 
@@ -195,7 +212,7 @@ func (r *Repository) ActiveCloudAgentsAfter(after string, limit int) ([]model.Cl
 			}
 		}
 		return nil
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return runs, err
 }
 
