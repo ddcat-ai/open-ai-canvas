@@ -26,6 +26,7 @@ import {
     writeDramaSegmentPrompts,
     updateDramaShot,
     type DramaEpisodeRow,
+    formatDramaInboxCount,
     type DramaInboxItem,
     type DramaJob,
     type DramaModelChoice,
@@ -410,7 +411,7 @@ export default function DramaStudioPage() {
                         </button>
                         <button type="button" className="drama-nav-item" aria-current={view === "inbox" ? "page" : undefined} onClick={() => openView("inbox")}>
                             <Inbox className="size-4" />
-                            待处理{summary.inbox.length ? <span className="drama-nav-count is-alert">{summary.inbox.length > 99 ? "99+" : summary.inbox.length}</span> : null}
+                            待处理{(summary.inboxCount ?? summary.inbox.length) ? <span className="drama-nav-count is-alert">{formatDramaInboxCount(summary.inboxCount ?? summary.inbox.length)}</span> : null}
                         </button>
                         <button type="button" className="drama-nav-item" aria-current={view === "settings" ? "page" : undefined} onClick={() => openView("settings")}>
                             <Settings2 className="size-4" />
@@ -475,6 +476,7 @@ export default function DramaStudioPage() {
                 ) : view === "inbox" ? (
                     <InboxPanel
                         items={summary.inbox}
+                        failureCount={summary.inboxFailureCount ?? summary.inbox.filter((item) => item.severity === "error").length}
                         castById={castById}
                         retrying={retry.isPending}
                         retryingGroup={retryingGroup}

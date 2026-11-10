@@ -1184,9 +1184,21 @@ func (r *Repository) DramaSegmentStats(projectID string) (map[string]DramaSegmen
 // FailedDramaSegments 返回提示词或视频失败的剧情段，供待处理与一键重试使用。
 func (r *Repository) FailedDramaSegments(projectID string, limit int) ([]model.DramaSegment, error) {
 	var segments []model.DramaSegment
-	err := r.db.Where("project_id = ? AND (prompt_status = ? OR video_status = ?)", projectID, model.DramaMediaFailed, model.DramaMediaFailed).
-		Order("updated_at desc").Limit(limit).Find(&segments).Error
+	query := r.db.Where("project_id = ? AND (prompt_status = ? OR video_status = ?)", projectID, model.DramaMediaFailed, model.DramaMediaFailed).
+		Order("updated_at desc")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	err := query.Find(&segments).Error
 	return segments, err
+}
+
+func (r *Repository) CountFailedDramaSegments(projectID string) (int, error) {
+	var total int64
+	err := r.db.Model(&model.DramaSegment{}).
+		Where("project_id = ? AND (prompt_status = ? OR video_status = ?)", projectID, model.DramaMediaFailed, model.DramaMediaFailed).
+		Count(&total).Error
+	return int(total), err
 }
 
 func (r *Repository) UpdateDramaSegmentFields(id string, fields map[string]any) error {

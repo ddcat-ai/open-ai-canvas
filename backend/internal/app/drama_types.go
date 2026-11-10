@@ -566,7 +566,10 @@ type DramaSummary struct {
 	Episodes   []DramaEpisodeRow   `json:"episodes"`
 	JobCounts  map[string]int64    `json:"jobCounts"`
 	Inbox      []DramaInboxItem    `json:"inbox"`
-	CastCount  int                 `json:"castCount"`
+	// InboxCount 是待处理条目的真实总数（含未列入列表的失败剧情段）；InboxFailureCount 是其中的失败项总数。
+	InboxCount        int `json:"inboxCount"`
+	InboxFailureCount int `json:"inboxFailureCount"`
+	CastCount         int `json:"castCount"`
 }
 
 type DramaChapterRef struct {

@@ -207,8 +207,14 @@ export type DramaSummary = {
     episodes: DramaEpisodeRow[];
     jobCounts: Partial<Record<"queued" | "running" | "succeeded" | "failed" | "canceled", number>>;
     inbox: DramaInboxItem[];
+    inboxCount: number;
+    inboxFailureCount: number;
     castCount: number;
 };
+
+export function formatDramaInboxCount(n: number): string {
+    return n > 99 ? "99+" : String(n);
+}
 
 export type DramaShot = {
     id: string;
