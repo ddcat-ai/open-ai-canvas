@@ -49,6 +49,31 @@ func registerAdminAPILogRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		serveResourceDelivery(c, delivery, "private, no-cache", disposition)
 	})
+	r.GET("/admin/api-logs/:id/references/:refId/media", func(c *gin.Context) {
+		c.Header("Cache-Control", "private, no-store")
+		c.Header("Referrer-Policy", "no-referrer")
+		c.Header("X-Content-Type-Options", "nosniff")
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.RequireAdmin(user); err != nil {
+			failService(c, err)
+			return
+		}
+		// The route accepts no delivery overrides or arbitrary URL parameters.
+		if len(c.Request.URL.Query()) != 0 {
+			failService(c, service.BadAuthRequest("原始媒体接口不接受查询参数"))
+			return
+		}
+		delivery, err := svc.PrepareAdminAPICallLogReferenceDelivery(user, c.Param("id"), c.Param("refId"), c.GetHeader("Range"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		serveResourceDelivery(c, delivery, "private, no-store", "")
+	})
 	r.GET("/admin/api-logs/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

@@ -38,6 +38,61 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /admin/api-logs/{id}:
+    get:
+      tags: [admin]
+      summary: 管理员读取单条模型请求详情
+      description: 仅管理员可读。视频 create 根日志提供 generationContent；优先使用请求时白名单快照，旧日志只按可证明属于该次请求的任务输入或请求正文降级。列表和 CSV 不返回生成内容。媒体缺失时 available 为 false，不提供外链。
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: 请求详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          log:
+                            type: object
+                            properties:
+                              generationContent: { $ref: "#/components/schemas/APICallGenerationContent" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /admin/api-logs/{id}/references/{refId}/media:
+    get:
+      tags: [admin]
+      summary: 管理员读取该次视频请求的原始参考媒体
+      description: 校验管理员、日志用户、引用和资源归属。refId 必须来自该日志生成内容；固定 original，通过后端流返回，不重定向、不返回存储 URL。不接受任何查询参数（包括 url、variant、access）。响应带 private,no-store、no-referrer 和 nosniff；支持单段 Range。
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: refId, required: true, schema: { type: string } }
+        - { in: header, name: Range, schema: { type: string }, description: 例如 bytes=0-1023 }
+      responses:
+        "200":
+          description: 原始媒体完整字节
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "206":
+          description: 原始媒体部分字节
+          headers:
+            Content-Range: { schema: { type: string } }
+            Accept-Ranges: { schema: { type: string, enum: [bytes] } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "416": { description: Range 不满足原始媒体长度 }
   /dramas/{id}/episodes/{episodeId}/jianying-draft/preview:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
@@ -4009,6 +4064,30 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    APICallGenerationContent:
+      type: object
+      required: [prompt, references, source, incomplete]
+      properties:
+        prompt: { type: string, description: 当次请求提示词；工具引用已展开，图片视频音频编号按各请求数组顺序，敏感地址与凭据已脱敏 }
+        references:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/APICallGenerationReference" }
+        source: { type: string, enum: [snapshot, task, request] }
+        incomplete: { type: boolean }
+        note: { type: string }
+    APICallGenerationReference:
+      type: object
+      required: [id, kind, label, name, available]
+      properties:
+        id: { type: string, description: 日志内稳定引用标识，不是资源 ID 或画布节点 ID }
+        kind: { type: string, enum: [image, video, audio] }
+        label: { type: string, description: 图片1、视频1、音频1 等 }
+        name: { type: string, description: 请求时媒体名称，已脱敏 }
+        role: { type: string, enum: [reference, first_frame, last_frame] }
+        available: { type: boolean }
+        unavailableReason: { type: string }
+        mediaUrl: { type: string, description: 仅 available=true 提供的同源管理员媒体路径，不包含外部 URL 或访问凭据 }
     DramaCastImageSettings:
       type: object
       description: 图片提示词与画风独立于作品；三项画风字段全空时继承作品，任一非空时覆盖作品画风和 visualRules。更新传空串清空，省略保持原值。

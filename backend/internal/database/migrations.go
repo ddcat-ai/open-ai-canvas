@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 97
+const CurrentSchemaVersion int64 = 98
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -340,6 +340,14 @@ var schemaMigrations = []migration{
 	{version: 95, name: "ark_private_asset_binding_identity", checksum: "sha256:ark-private-asset-binding-identity-v95", apply: migrateArkPrivateAssetBindingIdentity},
 	{version: 96, name: "canvas_unified_text_nodes", checksum: canvasNodeModelChecksum, apply: migrateCanvasNodeModel},
 	{version: 97, name: "channel_websites", checksum: "sha256:channel-websites-v97-20261110", apply: migrateChannelWebsites},
+	{version: 98, name: "api_log_generation_content", checksum: "sha256:api-log-generation-content-v98", apply: migrateAPILogGenerationContent},
+}
+
+func migrateAPILogGenerationContent(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.ApiCallLog{}) || tx.Migrator().HasColumn(&model.ApiCallLog{}, "GenerationContentJSON") {
+		return nil
+	}
+	return tx.Migrator().AddColumn(&model.ApiCallLog{}, "GenerationContentJSON")
 }
 
 // migrateReferenceVideoCostPrice 为价格档成本和账单成本快照增加带参考视频的成本价。

@@ -438,6 +438,9 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		ErrorCode: errorCode, Error: errorText, ConcurrencyLimit: metadata.ConcurrencyLimit, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,
 		ProviderRequestID: metadata.ProviderRequestID, RequestContentType: req.Header.Get("Content-Type"), RequestBody: requestPayloadForLog(req), ResponseBody: SanitizeAPICallPayload(responseBody, ""),
 	}
+	if requestKind == "create" {
+		callLog.GenerationContentJSON = metadata.GenerationContentJSON
+	}
 	channelSlotFailure := false
 	if code, message := ChannelSlotFailureDetails(requestErr); code != "" {
 		channelSlotFailure = true

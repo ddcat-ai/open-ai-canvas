@@ -44,6 +44,8 @@ type (
 	AgentMemoryRevisionRestore             = app.AgentMemoryRevisionRestore
 	AgentMemoryProposalView                = app.AgentMemoryProposalView
 	AgentMemoryRevisionView                = app.AgentMemoryRevisionView
+	APICallGenerationContent               = app.APICallGenerationContent
+	APICallGenerationReference             = app.APICallGenerationReference
 	APICallLogPage                         = app.APICallLogPage
 	APICallLogQuery                        = app.APICallLogQuery
 	AccountFileStorageUsage                = app.AccountFileStorageUsage

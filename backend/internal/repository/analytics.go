@@ -105,7 +105,7 @@ func (r *Repository) AnalyticsTasks(filter AnalyticsFilter) ([]model.Task, error
 func (r *Repository) AnalyticsAPICallLogs(filter AnalyticsFilter) ([]model.ApiCallLog, error) {
 	var logs []model.ApiCallLog
 	query := r.apiCallLogQuery(filter)
-	return logs, query.Omit("RequestBody", "ResponseBody").Find(&logs).Error
+	return logs, query.Omit("RequestBody", "ResponseBody", "GenerationContentJSON").Find(&logs).Error
 }
 
 // PublicModelAvailabilityLogs returns the compact, user-facing create
@@ -184,7 +184,7 @@ func (r *Repository) QueryAPICallLogs(filter APICallLogFilter) ([]model.ApiCallL
 		return nil, 0, err
 	}
 	var logs []model.ApiCallLog
-	err := r.filteredAPICallLogQuery(filter).Omit("RequestBody", "ResponseBody").Order("api_call_logs.created_at desc").Offset((filter.Page - 1) * filter.Limit).Limit(filter.Limit).Find(&logs).Error
+	err := r.filteredAPICallLogQuery(filter).Omit("RequestBody", "ResponseBody", "GenerationContentJSON").Order("api_call_logs.created_at desc").Offset((filter.Page - 1) * filter.Limit).Limit(filter.Limit).Find(&logs).Error
 	return logs, total, err
 }
 
@@ -197,7 +197,7 @@ func (r *Repository) ExportAPICallLogs(filter APICallLogFilter, limit int) ([]mo
 		query = query.Where("api_call_logs.id IN ?", filter.IDs)
 	}
 	var logs []model.ApiCallLog
-	err := query.Omit("RequestBody", "ResponseBody").Order("api_call_logs.created_at desc").Limit(limit).Find(&logs).Error
+	err := query.Omit("RequestBody", "ResponseBody", "GenerationContentJSON").Order("api_call_logs.created_at desc").Limit(limit).Find(&logs).Error
 	return logs, err
 }
 
@@ -323,13 +323,23 @@ func (r *Repository) HasAPICallLogForTask(taskID string) (bool, error) {
 // HasVisibleFailedAPICallLogForTask 判断管理端默认请求明细里是否已经有这条任务的失败记录。
 // 轮询、下载、上传和本地保存默认不出现在请求日志列表，不能据此认为用户可见的失败已经被记录。
 func (r *Repository) HasVisibleFailedAPICallLogForTask(taskID string) (bool, error) {
-	if strings.TrimSpace(taskID) == "" {
+	return r.HasVisibleFailedAPICallLogForAttempt(model.Task{ID: taskID})
+}
+
+func (r *Repository) HasVisibleFailedAPICallLogForAttempt(task model.Task) (bool, error) {
+	if strings.TrimSpace(task.ID) == "" {
 		return false, nil
 	}
 	var count int64
-	err := r.db.Model(&model.ApiCallLog{}).
-		Where("task_id = ? AND status = ? AND COALESCE(request_kind, '') NOT IN ?", taskID, model.ApiCallStatusFailed, []string{"poll", "download", "upload", "local_save", "local_fallback", "offload", "register"}).
-		Count(&count).Error
+	query := r.db.Model(&model.ApiCallLog{}).
+		Where("task_id = ? AND status = ? AND COALESCE(request_kind, '') NOT IN ?", task.ID, model.ApiCallStatusFailed, []string{"poll", "download", "upload", "local_save", "local_fallback", "offload", "register"})
+	if task.BillingOrderID != "" {
+		query = query.Where("billing_order_id = ?", task.BillingOrderID)
+	}
+	if task.StartedAt != nil {
+		query = query.Where("created_at >= ?", *task.StartedAt)
+	}
+	err := query.Count(&count).Error
 	return count > 0, err
 }
 

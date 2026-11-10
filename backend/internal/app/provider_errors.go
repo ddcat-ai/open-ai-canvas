@@ -76,23 +76,24 @@ func (e providerStatePendingError) Unwrap() error { return e.Cause }
 type providerAnalyticsKey struct{}
 
 type providerAnalyticsContext struct {
-	Service           *Service
-	Billing           taskBillingLifecycle
-	UserID            string
-	TaskID            string
-	TraceID           string
-	RequestID         string
-	BillingOrderID    string
-	BillingMode       string
-	Capability        string
-	Operation         string
-	ChannelID         string
-	ProxyURL          string
-	Model             string
-	VideoSeconds      int
-	RequestKind       string
-	ProviderRequestID string
-	ConcurrencyLimit  int
+	Service               *Service
+	Billing               taskBillingLifecycle
+	UserID                string
+	TaskID                string
+	TraceID               string
+	RequestID             string
+	BillingOrderID        string
+	BillingMode           string
+	Capability            string
+	Operation             string
+	ChannelID             string
+	ProxyURL              string
+	Model                 string
+	VideoSeconds          int
+	RequestKind           string
+	ProviderRequestID     string
+	ConcurrencyLimit      int
+	GenerationContentJSON string
 }
 
 func withProviderAnalytics(ctx context.Context, service *Service, task model.Task) context.Context {

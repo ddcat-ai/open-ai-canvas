@@ -23,6 +23,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	if log.StartedAt.IsZero() {
 		log.StartedAt = log.CreatedAt.Add(-time.Duration(log.DurationMs) * time.Millisecond)
 	}
+	s.captureAPILogGeneration(&log)
 	s.estimateCallCost(&log)
 	if log.BillingOrderID != "" && log.ProviderRequestID != "" {
 		if err := s.repo.UpdateBillingProviderRequestID(log.BillingOrderID, log.ProviderRequestID); err != nil {
@@ -71,7 +72,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	if err != nil {
 		return err
 	}
-	incomingBytes := int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL) + len(log.RequestContentType) + len(log.RequestBody) + len(log.ResponseBody))
+	incomingBytes := int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL) + len(log.RequestContentType) + len(log.RequestBody) + len(log.ResponseBody) + len(log.GenerationContentJSON))
 	if err := validateAPICallLogQuotaWithPolicy(usage, incomingBytes, policy.Resource); err != nil {
 		return err
 	}
