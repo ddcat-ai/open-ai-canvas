@@ -254,6 +254,13 @@ export type PrevisScene = {
     updatedAt: string;
 };
 
+export type PrevisCanvasExport = {
+    sceneId: string;
+    shotId: string;
+    title: string;
+    prompt: string;
+} & ({ kind: "prompt" } | { kind: "screenshot"; image: Blob; renderMode: PrevisRenderMode; timecode: string; duration: number });
+
 export type PrevisSceneOutput = {
     scene: PrevisScene;
     shot: PrevisShot;

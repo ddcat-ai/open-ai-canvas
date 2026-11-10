@@ -1701,7 +1701,7 @@ function CanvasViewportPage() {
         setStylePickerOpen,
     });
 
-    const { applyPrevisOutput, createPrevisShot, openPrevisWorkbench, savePrevisScene } = useCanvasPrevis({
+    const { addPrevisToCanvas, applyPrevisOutput, createPrevisShot, openPrevisWorkbench, savePrevisScene } = useCanvasPrevis({
         projectId,
         domainProjectId: currentProject?.projectId,
         previsNodeId,
@@ -3674,6 +3674,7 @@ function CanvasViewportPage() {
                                         onClose={() => setPrevisNodeId(null)}
                                         onChange={savePrevisScene}
                                         onApply={applyPrevisOutput}
+                                        onAddToCanvas={addPrevisToCanvas}
                                         onDeleteImageNode={(nodeId) => deleteNodes(new Set([nodeId]))}
                                         onFlush={() => flushCanvasStorePersistence()}
                                         onboardingScope={previsOnboardingScope}
