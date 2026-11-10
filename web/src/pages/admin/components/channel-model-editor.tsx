@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
-import { Alert, App, AutoComplete, Button, Form, Input, Segmented, Switch, Tabs } from "antd";
-import { useAdminContext } from "../admin-context";
+import { useEffect, useRef, useState } from "react";
+import { Alert, App, Button, Form, Input, Segmented, Switch, Tabs } from "antd";
+import { ModelDisplayNameInput } from "./model-display-name-input";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { FlaskConical, Plus } from "lucide-react";
 import { ModelIconPicker } from "@/components/model-logo";
@@ -10,13 +10,15 @@ import { MediaTransportFields } from "./media-transport-fields";
 import { ModelCapabilityEditor } from "@/components/model-capability-editor";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import type { ModelProtocolDefinition } from "@/lib/model-protocols";
-import { createAdminChannelModel, testAdminChannelModel, updateAdminChannelModel, type ChannelModel } from "@/services/api/wallet";
+import { createAdminChannelModel, getAdminChannelProtocolSuggestion, testAdminChannelModel, updateAdminChannelModel, type ChannelModel, type ChannelProtocolSuggestion } from "@/services/api/wallet";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { priceCurrencyOptions } from "@/services/api/user-groups";
 import { defaultPriceTier, normalizeUpstreamModelKey, priceTierPayloadFromForm } from "./channel-model-price-tier-form";
 import { PriceTierFields } from "./channel-model-price-tier-fields";
 import { TokenPriceRulesSection } from "./channel-model-token-rules";
 import { ChannelModelTagsEditor } from "./channel-model-tags-editor";
+import { CapabilityTemplatePanel, PricingTemplatePanel } from "./channel-model-template-panels";
+import { priceSelectorIssues } from "./channel-model-templates";
 import {
     changeChannelModelCapability,
     changeChannelModelProtocol,
@@ -52,11 +54,9 @@ export function ChannelModelEditor({
     onSaved: () => Promise<void>;
 }) {
     const { message, modal } = App.useApp();
-    const { references } = useAdminContext();
-    const displayNameOptions = [...new Set(["未分类", ...references.channels.flatMap((item) => item.modelDisplayNames ?? [])])].sort((a, b) => a.localeCompare(b, "zh-CN")).map((value) => ({ value }));
-    const [groupSearch, setGroupSearch] = useState("");
     const [form] = Form.useForm<FormValues>();
     const [initialValues] = useState(() => draftValues ?? initialChannelModelValues(editing, protocols));
+    const [editVersion] = useState(() => (editing ? { expectedUpdatedAt: editing.updatedAt, expectedPriceVersion: editing.priceVersion } : {}));
     const previousUpstream = useRef(normalizeUpstreamModelKey(initialValues.providerModelKey || initialValues.modelKey));
     const [activeSection, setActiveSection] = useState<EditorSection>("identity");
     const [saving, setSaving] = useState(false);
@@ -64,6 +64,10 @@ export function ChannelModelEditor({
     const [configurationChanged, setConfigurationChanged] = useState(false);
     const busyRef = useRef(false);
     const dirtyRef = useRef(false);
+    const explicitProtocol = useRef(false);
+    const preserveTemplateCapability = useRef(false);
+    const [protocolSuggestion, setProtocolSuggestion] = useState<ChannelProtocolSuggestion>();
+    const [suggestionError, setSuggestionError] = useState("");
     const modelCapability = Form.useWatch("capability", form);
     const modelProtocol = Form.useWatch("protocol", form);
     const modelKey = Form.useWatch("modelKey", form) || "";
@@ -76,6 +80,41 @@ export function ChannelModelEditor({
     const tiersWithOwnUpstream = priceTiers.filter((tier) => tier.providerModelKey?.trim());
     const modelUpstream = normalizeUpstreamModelKey(providerModelKey || modelKey);
     const busy = saving || testing;
+    const selectorIssues = modelCapability ? priceSelectorIssues({ capability: modelCapability, protocol: modelProtocol, capabilityConfig, priceTiers, protocols }) : [];
+
+    useEffect(() => {
+        // 复制草稿保留预填协议，但预填本身不构成新的明确选择事件。
+        const copiedProtocol = draftValues?.protocol && draftValues.capability === modelCapability;
+        if (editing?.protocol || copiedProtocol || explicitProtocol.current || !modelUpstream || !modelCapability || protocolLoading || protocolError) return;
+        let cancelled = false;
+        setProtocolSuggestion(undefined);
+        setSuggestionError("");
+        form.setFieldValue("protocol", undefined);
+        void getAdminChannelProtocolSuggestion(channel.id, modelUpstream, modelCapability)
+            .then((suggestion) => {
+                if (cancelled || explicitProtocol.current) return;
+                const definition = protocols.find((item) => item.value === suggestion.protocol && item.capability === modelCapability && item.enabled !== false);
+                if (suggestion.protocol && !definition) {
+                    setProtocolSuggestion({ ...suggestion, source: "invalid", reason: "建议的协议未安装、已停用或与当前能力不匹配，请手动选择" });
+                    return;
+                }
+                setProtocolSuggestion(suggestion);
+                if (definition && (suggestion.source === "selection" || suggestion.source === "history")) {
+                    const current = form.getFieldsValue(true);
+                    const next = changeChannelModelProtocol(current, definition.value, protocols);
+                    form.setFieldValue("protocol", definition.value);
+                    // 模板操作早于或晚于建议请求，都应保留用户明确设置的能力。
+                    if (!preserveTemplateCapability.current) form.setFieldValue("capabilityConfig", next.capabilityConfig);
+                    // 自动协议建议不能改写价格，也不构成新的明确协议选择。
+                }
+            })
+            .catch((error) => {
+                if (!cancelled) setSuggestionError(error instanceof Error ? error.message : "协议建议读取失败，可手动选择协议");
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [channel.id, editing?.protocol, draftValues?.protocol, draftValues?.capability, form, modelUpstream, modelCapability, protocolLoading, protocolError, protocols]);
 
     const requestClose = () => {
         if (busyRef.current) return;
@@ -89,9 +128,15 @@ export function ChannelModelEditor({
     const handleFormValuesChange = (changed: Partial<FormValues>) => {
         dirtyRef.current = true;
         if (changed.capability) {
+            explicitProtocol.current = false;
+            preserveTemplateCapability.current = false;
+            setProtocolSuggestion(undefined);
             replaceChannelModelFormValues(form, changeChannelModelCapability(form.getFieldsValue(true), protocols));
             setConfigurationChanged(true);
         } else if (changed.protocol) {
+            explicitProtocol.current = true;
+            preserveTemplateCapability.current = false;
+            setProtocolSuggestion(undefined);
             replaceChannelModelFormValues(form, changeChannelModelProtocol(form.getFieldsValue(true), changed.protocol, protocols));
             setConfigurationChanged(true);
         } else if (changed.providerModelKey !== undefined || changed.modelKey !== undefined) {
@@ -138,6 +183,7 @@ export function ChannelModelEditor({
         setSaving(true);
         try {
             const payload = {
+                ...editVersion,
                 modelKey: values.modelKey.trim(),
                 providerModelKey: upstreamModel,
                 displayName: values.displayName?.trim() || "未分类",
@@ -147,6 +193,7 @@ export function ChannelModelEditor({
                 icon: values.icon?.trim() || "",
                 capability: values.capability,
                 protocol: values.protocol,
+                protocolSelectionExplicit: explicitProtocol.current && (!editing || editing.protocol !== values.protocol),
                 priceTiers: values.priceTiers.map((tier) => priceTierPayloadFromForm(values.capability, tier, upstreamModel, capabilityConfig)),
                 priceCurrency: values.priceCurrency || "credits",
                 referenceVideoBilling: values.capability === "video" && values.referenceVideoBilling === true,
@@ -245,7 +292,7 @@ export function ChannelModelEditor({
                         <Button disabled={busy} onClick={requestClose}>
                             取消
                         </Button>
-                        <Button type="primary" loading={saving} disabled={testing || protocolLoading || Boolean(protocolError)} onClick={() => void save()}>
+                        <Button type="primary" loading={saving} disabled={testing || protocolLoading || Boolean(protocolError) || selectorIssues.length > 0} onClick={() => void save()}>
                             {editing ? "保存修改" : "添加模型"}
                         </Button>
                     </div>
@@ -292,17 +339,7 @@ export function ChannelModelEditor({
                                                 <Input placeholder="留空则使用产品模型标识" />
                                             </Form.Item>
                                             <Form.Item name="displayName" label="模型展示名（一级目录）" tooltip="跨所有系统渠道按此名称分组；新模型默认未分类。同名模型归入同一组，不改变调用 ID。">
-                                                <AutoComplete
-                                                    options={displayNameOptions}
-                                                    filterOption={(_, option) => Boolean(option?.value.toLowerCase().includes(groupSearch.trim().toLowerCase()))}
-                                                    onSearch={setGroupSearch}
-                                                    onFocus={() => setGroupSearch("")}
-                                                    onOpenChange={(open) => {
-                                                        if (open) setGroupSearch("");
-                                                    }}
-                                                    placeholder="选择已有分组或输入新名称，默认为未分类"
-                                                    allowClear
-                                                />
+                                                <ModelDisplayNameInput />
                                             </Form.Item>
                                             <Form.Item
                                                 name="channelLabel"
@@ -352,6 +389,29 @@ export function ChannelModelEditor({
                                             <Form.Item className="admin-model-protocol-field" name="protocol" label="调用协议" rules={[{ validator: async (_, value) => validateChannelModelProtocol(form.getFieldValue("capability"), value, protocols) }]}>
                                                 <ModelProtocolBrowser disabled={busy} capability={modelCapability} protocols={protocols} loading={protocolLoading} error={protocolError} />
                                             </Form.Item>
+                                            {protocolSuggestion && protocolSuggestion.source !== "none" ? (
+                                                <Alert
+                                                    type={protocolSuggestion.source === "invalid" || protocolSuggestion.source === "conflict" ? "warning" : "info"}
+                                                    showIcon
+                                                    title={
+                                                        protocolSuggestion.source === "selection"
+                                                            ? "已预选同网站上次明确保存的协议"
+                                                            : protocolSuggestion.source === "history"
+                                                              ? "已根据同网站一致的历史配置预选协议"
+                                                              : protocolSuggestion.source === "conflict"
+                                                                ? "同网站历史协议存在冲突，请手动选择"
+                                                                : "协议建议已失效，请手动选择"
+                                                    }
+                                                    description={
+                                                        <>
+                                                            {protocolSuggestion.reason}
+                                                            {protocolSuggestion.candidates?.length ? <p>候选协议：{protocolSuggestion.candidates.join("、")}</p> : null}
+                                                            {protocolSuggestion.source === "selection" || protocolSuggestion.source === "history" ? <p>仅继承协议，参数按协议默认初始化，请核对当前 Key 的实际能力和价格。</p> : null}
+                                                        </>
+                                                    }
+                                                />
+                                            ) : null}
+                                            {suggestionError ? <Alert type="warning" title="协议建议读取失败，可手动选择" description={suggestionError} /> : null}
                                             {protocolError && (
                                                 <Alert
                                                     type="error"
@@ -376,6 +436,16 @@ export function ChannelModelEditor({
                             forceRender: true,
                             children: (
                                 <div className="admin-model-editor-tab-content">
+                                    <CapabilityTemplatePanel
+                                        form={form}
+                                        protocols={protocols}
+                                        channelMediaTransport={channel.mediaTransport}
+                                        disabled={busy}
+                                        onApplied={() => {
+                                            dirtyRef.current = true;
+                                            preserveTemplateCapability.current = true;
+                                        }}
+                                    />
                                     {configurationChanged && <Alert type="warning" showIcon title="能力或协议已变更" description="引用与参数已恢复为新协议默认值，旧规格条件已在切换能力时清除。价格与计费方式保留，请在保存前核对。" />}{" "}
                                     {modelCapability === "text" || modelCapability === "image" || modelCapability === "video" ? (
                                         <section className="admin-model-editor-section admin-model-editor-section-stacked admin-model-editor-references">
@@ -430,6 +500,28 @@ export function ChannelModelEditor({
                             forceRender: true,
                             children: (
                                 <div className="admin-model-editor-tab-content">
+                                    <PricingTemplatePanel
+                                        form={form}
+                                        protocols={protocols}
+                                        disabled={busy}
+                                        onApplied={() => {
+                                            dirtyRef.current = true;
+                                        }}
+                                    />
+                                    {selectorIssues.length ? (
+                                        <Alert
+                                            type="warning"
+                                            showIcon
+                                            title="请调整不兼容或重复的价格条件"
+                                            description={
+                                                <ul>
+                                                    {selectorIssues.map((issue) => (
+                                                        <li key={issue}>{issue}</li>
+                                                    ))}
+                                                </ul>
+                                            }
+                                        />
+                                    ) : null}
                                     {configurationChanged && <Alert type="warning" showIcon title="请核对定价" description="能力或协议已变更。请重新检查规格条件、计费方式和金额；不会自动转换价格单位。" />}{" "}
                                     <section className="admin-model-editor-section">
                                         <SectionHeading title="用户积分价格" description="默认只需填写一个统一价格；需要区分生成方式、质量或尺寸时，再添加规格价格。" />
@@ -470,6 +562,8 @@ export function ChannelModelEditor({
                                                                 capability: form.getFieldValue("capability"),
                                                                 protocol: form.getFieldValue("protocol"),
                                                                 priceTiers: value,
+                                                                capabilityConfig: form.getFieldValue("capabilityConfig"),
+                                                                protocols,
                                                                 referenceVideoBilling: form.getFieldValue("referenceVideoBilling"),
                                                             });
                                                         },

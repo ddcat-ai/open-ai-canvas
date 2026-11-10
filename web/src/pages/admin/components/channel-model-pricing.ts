@@ -12,7 +12,19 @@ export function formatModelMarkup(cost: number | undefined, sale: number | undef
     return `${(((sale - cost) * 100) / cost).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}%`;
 }
 
-export function modelPriceFields(tier: ChannelModelPriceTier, capability: ChannelModel["capability"]) {
+export function modelPriceFields(tier: ChannelModelPriceTier, capability: ChannelModel["capability"], referenceVideoBilling = false) {
+    if (capability === "video" && referenceVideoBilling) {
+        if (tier.billingMode === "per_second")
+            return [
+                { key: "unitPriceMicrocredits" as const, label: "基础", unit: "秒" },
+                { key: "referenceVideoUnitPriceMicrocredits" as const, label: "带参考视频", unit: "秒" },
+            ];
+        if (tier.billingMode === "token")
+            return [
+                { key: "outputTokenPriceMicrocredits" as const, label: "基础视频", unit: "百万视频 Token" },
+                { key: "referenceVideoOutputTokenPriceMicrocredits" as const, label: "带参考视频", unit: "百万视频 Token" },
+            ];
+    }
     if (tier.billingMode !== "token") return [{ key: "unitPriceMicrocredits" as const, label: "", unit: tier.billingMode === "per_second" ? "秒" : "次" }];
     if (capability === "video") return [{ key: "outputTokenPriceMicrocredits" as const, label: "视频", unit: "百万视频 Token" }];
     return [
@@ -41,8 +53,8 @@ export function previewModelRepricing(items: ChannelModel[], markupPercent: numb
                 const name = `${item.displayName || item.modelKey}（${tier.selectorKey}）`;
                 if (!tier.id || !tier.priceConfigured || !tier.costPricing?.configured) throw new Error(`${name}：请先保存完整的规格成本价和销售价配置`);
                 const next = { ...tier };
-                for (const { key } of modelPriceFields(tier, item.capability)) {
-                    const cost = tier.costPricing[key];
+                for (const { key } of modelPriceFields(tier, item.capability, item.referenceVideoBilling)) {
+                    const cost = tier.costPricing[key] ?? (key.startsWith("referenceVideo") ? 0 : undefined);
                     if (!validPrice(cost) || cost > 1_000_000_000_000) throw new Error(`${name}：成本价无效`);
                     // Round once at the selected credit precision, with exact half-up ties.
                     const numerator = BigInt(cost) * multiplier;
@@ -57,7 +69,7 @@ export function previewModelRepricing(items: ChannelModel[], markupPercent: numb
     });
 }
 
-export function saleInputValue(microcredits: number) {
+export function saleInputValue(microcredits: number | undefined) {
     if (!validPrice(microcredits)) return null;
     const value = BigInt(microcredits);
     return `${value / BigInt(1_000_000)}.${String(value % BigInt(1_000_000)).padStart(6, "0")}`.replace(/\.?0+$/, "");
@@ -85,12 +97,12 @@ export function modelRepriceRows(items: ChannelModel[]): ModelRepriceRow[] {
         model.priceTiers
             .filter((tier) => tier.enabled)
             .flatMap((tier) =>
-                modelPriceFields(tier, model.capability).map((field) => ({
+                modelPriceFields(tier, model.capability, model.referenceVideoBilling).map((field) => ({
                     key: `${tier.id}:${field.key}`,
                     model,
                     tier,
                     field,
-                    sale: tier.priceConfigured ? saleInputValue(tier[field.key]) : null,
+                    sale: tier.priceConfigured ? saleInputValue(tier[field.key] ?? (field.key.startsWith("referenceVideo") ? 0 : undefined)) : null,
                     manual: false,
                 })),
             ),
@@ -109,12 +121,17 @@ export function modelRepricePayload(items: ChannelModel[], rows: ModelRepriceRow
             priceTiers: tiers.map((tier) => {
                 if (!tier.id || !tier.priceConfigured || !tier.costPricing?.configured) throw new Error(`${item.displayName || item.modelKey}：请先配置规格成本价和销售价`);
                 const prices: ChannelModelRepriceInput["priceTiers"][number]["prices"] = {};
-                for (const { key } of modelPriceFields(tier, item.capability)) {
-                    const cost = tier.costPricing[key];
+                for (const { key } of modelPriceFields(tier, item.capability, item.referenceVideoBilling)) {
+                    const cost = tier.costPricing[key] ?? (key.startsWith("referenceVideo") ? 0 : undefined);
                     if (!validPrice(cost) || cost > 1_000_000_000_000) throw new Error(`${item.displayName || item.modelKey}：成本价无效`);
                     const sale = parseSaleInput(byKey.get(`${tier.id}:${key}`)?.sale ?? null);
                     if (tier.billingMode === "token" && sale > 1_000_000_000_000) throw new Error("Token 售价不能超过 1,000,000 积分");
                     prices[key] = sale;
+                }
+                if (item.capability === "video" && item.referenceVideoBilling) {
+                    const base = tier.billingMode === "token" ? prices.outputTokenPriceMicrocredits : prices.unitPriceMicrocredits;
+                    const reference = tier.billingMode === "token" ? prices.referenceVideoOutputTokenPriceMicrocredits : prices.referenceVideoUnitPriceMicrocredits;
+                    if ((tier.billingMode === "token" || tier.billingMode === "per_second") && (base ?? 0) > 0 && !reference) throw new Error(`${item.displayName || item.modelKey}：请配置带参考视频的销售价`);
                 }
                 return { id: tier.id, priceVersion: tier.priceVersion, prices };
             }),

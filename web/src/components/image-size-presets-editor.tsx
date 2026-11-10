@@ -6,7 +6,7 @@ import "./image-size-picker.css";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { DEFAULT_IMAGE_RATIOS, IMAGE_RATIOS, imageResolutionTiers, imagePresetForRatio, imageResolutionUsesQuality, imageSizeConfigWithPresets, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
 import { validateImageSize } from "@/services/api/image-validation";
-import type { ImageResolutionTier } from "@/lib/image-resolution-tiers";
+import type { ImageResolutionOption, ImageResolutionTier } from "@/lib/image-resolution-tiers";
 
 export function ImageSizePresetsEditor({
     profile,
@@ -16,6 +16,7 @@ export function ImageSizePresetsEditor({
     ratios: allowedRatios,
     allowCustomRatio = true,
     grouped = true,
+    defaultPresets = [],
 }: {
     profile: ImageCapabilityConfig;
     disabled?: boolean;
@@ -24,6 +25,7 @@ export function ImageSizePresetsEditor({
     ratios?: string[];
     allowCustomRatio?: boolean;
     grouped?: boolean;
+    defaultPresets?: ImageResolutionOption[];
 }) {
     const IMAGE_RESOLUTIONS = tiers ?? imageResolutionTiers(profile);
     const presets = imageSizePresets(profile);
@@ -32,7 +34,7 @@ export function ImageSizePresetsEditor({
     const [drafts, setDrafts] = useState<Partial<Record<ImageResolutionTier, string>>>({});
     const [errors, setErrors] = useState<Partial<Record<ImageResolutionTier, string>>>({});
     const candidate = (tier: string, ratio: string) => {
-        const existing = presets.find((preset) => preset.tier === tier && preset.ratio === ratio);
+        const existing = presets.find((preset) => preset.tier === tier && preset.ratio === ratio) || defaultPresets.find((preset) => preset.tier === tier && preset.ratio === ratio);
         if (existing) return existing;
         try {
             return imagePresetForRatio(tier, ratio);

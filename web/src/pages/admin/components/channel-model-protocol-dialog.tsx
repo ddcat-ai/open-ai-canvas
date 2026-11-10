@@ -1,15 +1,21 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, App } from "antd";
 import { AdminModal } from "@/pages/admin/ui/overlays";
-import { ModelProtocolBrowser } from "@/components/model-protocol-browser";
-import type { ModelProtocolDefinition, ProtocolCapability } from "@/lib/model-protocols";
-import { updateAdminAllChannelModelsProtocol, updateAdminChannelModelsProtocol, type ChannelModel } from "@/services/api/wallet";
+import { Select } from "@/components/ui/base/select";
+import type { ModelProtocolDefinition } from "@/lib/model-protocols";
+import { getActiveUserScope } from "@/lib/user-scope";
+import { useUserStore } from "@/stores/use-user-store";
+import { updateAdminAllChannelModelsProtocolGroups, updateAdminChannelModelsProtocolGroups, type ChannelModel } from "@/services/api/wallet";
+import { assertBatchModelSelectionCurrent } from "./channel-model-batch-edit";
+import { channelModelProtocolGroups, channelModelProtocolGroupUpdates, type ProtocolGroupSelection } from "./channel-model-protocol-groups";
 
-/** 批量切换所选模型的调用协议；协议只能在同一能力内切换，能力配置与价格档由后端按新协议校验。
+/** 按原能力分组选择协议，能力配置与价格档由后端按新协议校验。
  * 不传 channelId 时为跨渠道切换，所选模型可来自不同系统渠道。 */
 export function ChannelModelProtocolDialog({
     channelId,
     items,
+    currentItems,
+    contextKey,
     protocols,
     protocolLoading,
     protocolError,
@@ -18,6 +24,8 @@ export function ChannelModelProtocolDialog({
 }: {
     channelId?: string;
     items: ChannelModel[];
+    currentItems: ChannelModel[];
+    contextKey: string;
     protocols: ModelProtocolDefinition[];
     protocolLoading: boolean;
     protocolError: string;
@@ -25,34 +33,68 @@ export function ChannelModelProtocolDialog({
     onSaved: () => Promise<void>;
 }) {
     const { message } = App.useApp();
-    const capabilities = Array.from(new Set(items.map((item) => item.capability)));
-    const capability = capabilities.length === 1 && capabilities[0] ? (capabilities[0] as ProtocolCapability) : undefined;
-    const [protocol, setProtocol] = useState<string | undefined>(() => {
-        const current = Array.from(new Set(items.map((item) => item.protocol)));
-        return current.length === 1 ? current[0] : undefined;
-    });
+    const userId = useUserStore((state) => state.user?.id);
+    const [scope] = useState(getActiveUserScope);
+    const [openedContext] = useState(contextKey);
+    const groups = channelModelProtocolGroups(items);
+    const unconfiguredCount = items.length - groups.reduce((count, group) => count + group.items.length, 0);
+    const [selection, setSelection] = useState<ProtocolGroupSelection>({});
     const [saving, setSaving] = useState(false);
-    const unchanged = items.every((item) => item.protocol === protocol);
+    const [submitError, setSubmitError] = useState("");
+    const saveLock = useRef(false);
+    const callbacks = useRef({ onSaved, onClose });
+    callbacks.current = { onSaved, onClose };
+    const prepare = () => {
+        if (scope === "guest" || userId !== scope || getActiveUserScope() !== scope || useUserStore.getState().user?.id !== scope) throw new Error("账号已切换，请重新打开协议设置");
+        if (contextKey !== openedContext) throw new Error("当前 Key 或筛选已变化，请重新打开协议设置");
+        if (protocolLoading) throw new Error("正在读取协议，请稍候");
+        if (protocolError) throw new Error(protocolError);
+        const updates = channelModelProtocolGroupUpdates(items, selection, protocols);
+        const ids = new Set(updates.flatMap((group) => group.modelIds));
+        const changed = items.filter((item) => ids.has(item.id));
+        assertBatchModelSelectionCurrent(changed, currentItems);
+        if (channelId && changed.some((item) => item.channelId !== channelId)) throw new Error("当前 Key 已变化，请重新选择模型");
+        return updates;
+    };
+    let error = "",
+        changedCount = 0;
+    try {
+        changedCount = prepare().reduce((count, group) => count + group.modelIds.length, 0);
+    } catch (cause) {
+        error = cause instanceof Error ? cause.message : "请检查协议选择";
+    }
 
     const save = async () => {
-        if (!protocol || !capability || unchanged || saving) return;
-        setSaving(true);
+        if (saveLock.current) return;
+        let updates;
         try {
-            const ids = items.map((item) => item.id);
-            const result = channelId ? await updateAdminChannelModelsProtocol(channelId, ids, protocol) : await updateAdminAllChannelModelsProtocol(ids, protocol);
-            message.success(`已修改 ${result.updated} 个模型的调用协议`);
+            updates = prepare();
+            if (!updates.length) return;
         } catch (cause) {
-            message.error(cause instanceof Error ? cause.message : "批量修改协议失败");
+            setSubmitError(cause instanceof Error ? cause.message : "请检查协议选择");
+            return;
+        }
+        saveLock.current = true;
+        setSaving(true);
+        setSubmitError("");
+        let updated = 0;
+        try {
+            const result = channelId ? await updateAdminChannelModelsProtocolGroups(channelId, updates) : await updateAdminAllChannelModelsProtocolGroups(updates);
+            updated = result.updated;
+        } catch (cause) {
+            setSubmitError(cause instanceof Error ? cause.message : "批量修改协议失败");
+            saveLock.current = false;
             setSaving(false);
             return;
         }
         try {
-            await onSaved();
+            if (useUserStore.getState().user?.id === scope && getActiveUserScope() === scope) await callbacks.current.onSaved();
+            message.success(`已修改 ${updated} 个模型的调用协议`);
         } catch {
-            message.warning("协议已保存，但列表刷新失败，请手动刷新");
+            message.warning("已保存，刷新失败，请手动刷新列表");
         } finally {
-            setSaving(false);
-            onClose();
+            // 成功后保持锁定；即使刷新失败，也不能重发已完成的写入。
+            callbacks.current.onClose();
         }
     };
 
@@ -61,29 +103,49 @@ export function ChannelModelProtocolDialog({
             title={`修改调用协议 · ${items.length} 个模型`}
             open
             centered
-            width={760}
-            onCancel={onClose}
+            width={600}
+            onCancel={() => {
+                if (!saveLock.current) onClose();
+            }}
             closable={!saving}
             mask={{ closable: !saving }}
             keyboard={!saving}
             confirmLoading={saving}
             cancelButtonProps={{ disabled: saving }}
-            okButtonProps={{ disabled: !capability || !protocol || unchanged || protocolLoading || Boolean(protocolError) }}
-            okText="保存协议"
+            okButtonProps={{ disabled: !changedCount || Boolean(error) }}
+            okText="保存"
+            cancelText="取消"
             onOk={() => void save()}
         >
-            {capability ? (
-                <div className="flex flex-col gap-3">
-                    <ModelProtocolBrowser capability={capability} protocols={protocols} loading={protocolLoading} error={protocolError} disabled={saving} value={protocol} onChange={setProtocol} />
-                    <Alert
-                        type="info"
-                        showIcon
-                        title="能力参数和价格档保留原值，不会重置为新协议的默认值；只按新协议的参数范围校验，超出范围或价格档规格不匹配时整批不修改，需单独编辑该模型。图片协议会去掉新协议不支持的参数，并按新协议补齐它新增的参数。建议修改后逐个测试模型。"
-                    />
-                </div>
-            ) : (
-                <Alert type="warning" showIcon title="所选模型的能力不一致（或尚未配置能力），协议只能在同一能力内切换。请按能力筛选后再批量修改。" />
-            )}
+            <div className="space-y-4">
+                <p className="text-sm text-foreground/60">各类型分别选择，未选择的类型不修改。</p>
+                {groups.map((group) => (
+                    <div key={group.capability} className="grid grid-cols-[100px_minmax(0,1fr)] items-center gap-3">
+                        <span>
+                            {group.label} <span className="text-xs text-foreground/50">{group.items.length} 个</span>
+                        </span>
+                        <Select
+                            ariaLabel={`${group.label}调用协议`}
+                            className="w-full"
+                            placeholder="不修改"
+                            allowClear
+                            showSearch
+                            optionFilterProp="label"
+                            value={selection[group.capability]}
+                            loading={protocolLoading}
+                            disabled={saving || protocolLoading || Boolean(protocolError)}
+                            options={protocols.filter((protocol) => protocol.capability === group.capability && protocol.enabled !== false).map((protocol) => ({ value: protocol.value, label: `${protocol.label} · ${protocol.value}` }))}
+                            onChange={(protocol) => {
+                                setSelection((current) => ({ ...current, [group.capability]: protocol }));
+                                setSubmitError("");
+                            }}
+                        />
+                    </div>
+                ))}
+                {unconfiguredCount > 0 ? <Alert type="warning" showIcon title={`${unconfiguredCount} 个模型未配置能力，请先单独设置类型；其他组仍可修改。`} /> : null}
+                <p className="text-xs text-foreground/60">按新协议核对能力参数与价格档，不兼容时整批不保存。</p>
+                {error || submitError ? <Alert type="error" showIcon title={error || submitError} /> : null}
+            </div>
         </AdminModal>
     );
 }
