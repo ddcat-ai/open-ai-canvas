@@ -846,7 +846,7 @@ func (s *Service) GenerateDramaSegments(userID, projectID, episodeID string, req
 		if err != nil {
 			return nil, err
 		}
-		if issue := profile.screen(settings.AspectRatio, settings.VideoResolution).Issue; issue != "" {
+		if issue := profile.screen(settings.AspectRatio, profile.effectiveResolution(settings.VideoResolution)).Issue; issue != "" {
 			return nil, BadAuthRequest(issue)
 		}
 		// 第 1 段总用参考图或文生视频；尾帧续接的后续段才需要图生视频。

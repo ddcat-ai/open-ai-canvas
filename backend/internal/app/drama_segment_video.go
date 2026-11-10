@@ -113,7 +113,7 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		// 视频模型不可用时详情页仍展示本段并给出 Warning；数组字段必须是 []，null 会让制作台渲染参考图时崩溃。
 		return DramaSegmentRequest{AspectRatio: settings.AspectRatio, References: []DramaSegmentReference{}, AudioReferences: []DramaSegmentAudioReference{}}, nil, nil, err
 	}
-	screen := profile.screen(settings.AspectRatio, settings.VideoResolution)
+	screen := profile.screen(settings.AspectRatio, profile.effectiveResolution(settings.VideoResolution))
 	request := DramaSegmentRequest{Seconds: production.SnapVideoSeconds(draft.view.DurationMs, profile.Durations), MaxVideoSeconds: profile.maxSeconds(), AspectRatio: settings.AspectRatio, Size: screen.Size, Resolution: screen.Resolution, PromptMaxChars: profile.PromptMaxChars, GenerateAudio: profile.GenerateAudio, References: []DramaSegmentReference{}, AudioReferences: []DramaSegmentAudioReference{}, ModelMaxAudios: profile.MaxAudios}
 	if draft.view.DurationMs > int64(request.MaxVideoSeconds)*1000 {
 		return request, nil, nil, errors.New("剧情段超过所选视频模型的时长上限，请调整分镜时长或重新改编")

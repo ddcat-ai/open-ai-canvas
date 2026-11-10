@@ -69,7 +69,7 @@ func (s *Service) validateDramaVideoSettings(settings DramaSettings) error {
 	if err != nil {
 		return BadAuthRequest("视频模型不可用于短剧：" + err.Error())
 	}
-	if issue := profile.screen(settings.AspectRatio, settings.VideoResolution).Issue; issue != "" {
+	if issue := profile.screen(settings.AspectRatio, profile.effectiveResolution(settings.VideoResolution)).Issue; issue != "" {
 		return BadAuthRequest(issue)
 	}
 	if issue := profile.continuityIssue(settings); issue != "" {
@@ -283,27 +283,15 @@ func preferredDramaOption(options []DramaModelOption, settings DramaSettings) (D
 	return DramaModelOption{}, false
 }
 
+// 分辨率不参与挑选：先选模型，模型给不出作品分辨率时按模型默认出片。
 func dramaVideoOptionFits(option DramaModelOption, settings DramaSettings) bool {
-	return (settings.parallelVideo() || option.TailFrameChain) && slices.Contains(option.VideoRatios, settings.AspectRatio) && dramaVideoResolutionOffered(option.VideoResolutions, settings.VideoResolution)
+	return (settings.parallelVideo() || option.TailFrameChain) && slices.Contains(option.VideoRatios, settings.AspectRatio)
 }
 
-// dramaVideoResolutionOffered 判断作品指定的分辨率在模型可选档位里；未指定（按模型默认）总是可以。
-func dramaVideoResolutionOffered(options []string, value string) bool {
-	if value == "" {
-		return true
-	}
-	key := dramaVideoResolutionKey(value)
-	for _, option := range options {
-		if dramaVideoResolutionKey(option) == key {
-			return true
-		}
-	}
-	return false
-}
-
-// dramaVideoResolutionKey 让 720、720p、4k、2160p 这类写法按同一档位比较。
+// dramaVideoResolutionKey 让 720、720p、720P、4k、2160p 这类写法按同一档位比较。
+// 必须先转小写再归一化，否则大写 720P 会被补成 720Pp。
 func dramaVideoResolutionKey(value string) string {
-	return strings.ToLower(normalizeVideoResolution(strings.TrimSpace(value)))
+	return normalizeVideoResolution(strings.ToLower(strings.TrimSpace(value)))
 }
 
 func setDramaModelChoice(models *DramaModels, capability string, choice DramaModelChoice) {
@@ -367,6 +355,22 @@ type dramaVideoProfile struct {
 // screen 把作品画幅与分辨率换算成本模型的画面参数，与任务准入使用同一份能力合同；resolution 为空按模型默认。
 func (p dramaVideoProfile) screen(ratio string, resolution string) dramaVideoScreen {
 	return dramaVideoScreenFor(p.video, ratio, resolution)
+}
+
+// effectiveResolution 是模型实际会用的分辨率：作品指定且模型给得出时沿用，否则退回模型默认（空串）。
+// 分辨率不挡模型选择；报价、保存校验与实际提交都走这一个口径，避免旧分辨率把新模型的价格档筛掉或提交失败。
+func (p dramaVideoProfile) effectiveResolution(resolution string) string {
+	if resolution == "" || p.video == nil {
+		return ""
+	}
+	key := dramaVideoResolutionKey(resolution)
+	tier := dramaResolutionTier(resolution)
+	for _, label := range p.video.Resolutions {
+		if dramaVideoResolutionKey(label) == key || (p.video.FixedScreenSpec != nil && tier != "" && dramaResolutionTier(label) == tier) {
+			return resolution
+		}
+	}
+	return ""
 }
 
 // ratios 是本模型能准确给出的作品画幅（按 production.AspectRatios 的顺序）。
@@ -546,7 +550,7 @@ func (s *Service) EstimateDrama(userID string, req DramaEstimateRequest) (DramaE
 	operation, inputs := dramaSegmentOperation(settings, profile)
 	// 与剧情段提交时的画面参数和声音开关一致，价格档可能按分辨率与是否出声区分。
 	videoOptions := map[string]any{"videoSeconds": itoa(production.SnapVideoSeconds(int64(segmentSeconds)*1000, profile.Durations)), "videoGenerateAudio": strconv.FormatBool(profile.GenerateAudio)}
-	if screen := profile.screen(settings.AspectRatio, settings.VideoResolution); screen.Issue == "" {
+	if screen := profile.screen(settings.AspectRatio, profile.effectiveResolution(settings.VideoResolution)); screen.Issue == "" {
 		screen.apply(videoOptions)
 	}
 	videoCost, okVideo := s.quoteDramaChoice(userID, models.Video, ModelRequestIntent{Capability: "video", Operation: operation, Inputs: inputs, Options: videoOptions})
