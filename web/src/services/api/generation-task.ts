@@ -363,7 +363,7 @@ async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAud
 }
 
 async function prepareBackendImageReference(image: ReferenceImage, preferArkAssetUrl = false) {
-    if (preferArkAssetUrl && image.arkAssetId) return backendImageReference(image, { url: `asset://${image.arkAssetId}` });
+    if (preferArkAssetUrl && image.arkAssetId) return backendImageReference(image, { url: `asset://${image.arkAssetId}`, sourceResourceId: resourceIdFromStorageKey(image.storageKey) || undefined });
     if (resourceIdFromStorageKey(image.storageKey)) return backendImageReference(image, { storageKey: image.storageKey });
     const sourceUrl = image.url || image.dataUrl;
     if (/^https?:\/\//i.test(sourceUrl)) return backendImageReference(image, { url: sourceUrl });
@@ -386,6 +386,7 @@ function backendImageReference(image: ReferenceImage, override: Partial<Referenc
         dataUrl: "",
         url: override.url,
         storageKey: override.storageKey,
+        ...(override.sourceResourceId ? { sourceResourceId: override.sourceResourceId } : {}),
         ...(image.bytes ? { bytes: image.bytes } : {}),
         ...(image.width ? { width: image.width } : {}),
         ...(image.height ? { height: image.height } : {}),

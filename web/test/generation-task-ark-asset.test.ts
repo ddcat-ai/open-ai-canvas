@@ -111,8 +111,10 @@ describe("generation-task ark asset references", () => {
                 },
             ],
         });
-        const images = (input.input as { referenceImages?: Array<{ url?: string }> }).referenceImages || [];
+        const images = (input.input as { referenceImages?: Array<{ url?: string; sourceResourceId?: string; storageKey?: string }> }).referenceImages || [];
         expect(images).toHaveLength(1);
         expect(images[0]?.url).toBe("asset://asset-already-synced");
+        expect(images[0]?.sourceResourceId).toBe("res-1");
+        expect(images[0]?.storageKey).toBeUndefined();
     });
 });
