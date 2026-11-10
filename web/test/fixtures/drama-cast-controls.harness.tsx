@@ -193,7 +193,17 @@ test("voice preview distinguishes characters with and without audio", async () =
 
 test("voice preview plays the authorized sample, pauses, and stops on unmount", async () => {
     const originalAudio = Object.getOwnPropertyDescriptor(globalThis, "Audio");
-    const audio = { src: "", play: mock(async () => {}), pause: mock(() => {}), onended: null, onerror: null };
+    const audio = {
+        src: "",
+        play: mock(async () => {}),
+        pause: mock(() => {}),
+        removeAttribute: mock((name: string) => {
+            if (name === "src") audio.src = "";
+        }),
+        load: mock(() => {}),
+        onended: null,
+        onerror: null,
+    };
     Object.defineProperty(globalThis, "Audio", {
         configurable: true,
         writable: true,
@@ -219,6 +229,11 @@ test("voice preview plays the authorized sample, pauses, and stops on unmount", 
         await click("试听主角的音频");
         await act(async () => root.render(null));
         expect(audio.pause).toHaveBeenCalledTimes(2);
+        expect(audio.removeAttribute).toHaveBeenCalledWith("src");
+        expect(audio.load).toHaveBeenCalledTimes(1);
+        expect(audio.src).toBe("");
+        expect(audio.onended).toBeNull();
+        expect(audio.onerror).toBeNull();
     } finally {
         if (originalAudio) Object.defineProperty(globalThis, "Audio", originalAudio);
         else Reflect.deleteProperty(globalThis, "Audio");

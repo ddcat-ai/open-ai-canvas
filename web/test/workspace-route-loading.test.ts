@@ -96,7 +96,7 @@ describe("workspace route loading", () => {
         expect(detail).not.toContain("AppDrawer");
         expect(layout).not.toContain("useCanvasUiStore");
         expect(layout).not.toContain("CanvasDeleteProjectsDialog");
-        expect(canvas).toContain("deleteDialogOpen ? <Suspense");
+        expect(canvas).toMatch(/deleteDialogOpen\s*\?\s*\(?\s*<Suspense/);
     });
 
     test("does not poll wallet balance from permanent workspace chrome", () => {
