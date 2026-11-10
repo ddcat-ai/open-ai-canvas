@@ -184,18 +184,6 @@ function referenceVideoQuoteDurations(input: ModelRequirements["input"]) {
     return durations.every((value) => Number.isSafeInteger(value) && value > 0 && value <= 3_600_000) ? durations : undefined;
 }
 
-type ReferenceVideoBillingCost = { capability?: ModelCapability; referenceVideoBilling?: boolean; logicalPriceTiers?: ModelPriceTier[] };
-
-/**
- * 模型列表只展示“参考视频不计费”的卖点；收费构成保留在具体请求的报价说明中。
- * 非视频模型返回空串。
- */
-export function referenceVideoBillingLabel(cost: ReferenceVideoBillingCost | undefined) {
-    if (!cost || cost.capability !== "video") return "";
-    const billed = cost.referenceVideoBilling === true && (cost.logicalPriceTiers || []).some((tier) => (tier.referenceVideoUnitPriceMicrocredits || 0) > 0 || (tier.referenceVideoOutputTokenPriceMicrocredits || 0) > 0);
-    return billed ? "" : "参考视频不计费";
-}
-
 function formatSeconds(value: number) {
     return value.toLocaleString("zh-CN", { maximumFractionDigits: 1 });
 }

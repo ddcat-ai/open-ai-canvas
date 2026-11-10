@@ -87,6 +87,22 @@ test("video Token badges use compact units while retaining exact rates and full 
     }
 });
 
+test("model rows omit reference video billing labels for paid and free references", () => {
+    for (const billed of [true, false]) {
+        const config = fixture();
+        const cost = config.channels[0].modelCosts![0];
+        cost.referenceVideoBilling = billed;
+        cost.capabilityConfig = defaultModelCapabilityConfig();
+        cost.capabilityConfig.video!.references.maxVideos = 3;
+        for (const tier of cost.logicalPriceTiers!) tier.referenceVideoUnitPriceMicrocredits = billed ? 2_000_000 : 0;
+        const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={canvasThemes.light} creationVariant showConfiguredModelName={false} showPrice showDescription />);
+        expect(markup).not.toContain("参考视频另计费");
+        expect(markup).not.toContain("参考视频不计费");
+        expect(markup).toContain("0.1-0.2 积分/秒");
+        expect(markup).toContain("视×3");
+    }
+});
+
 test("unified video Token pricing uses the same compact label and full unit explanation", () => {
     const config = fixture();
     const cost = config.channels[0].modelCosts![0];

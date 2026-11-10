@@ -6,7 +6,7 @@ import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 import { imageQualityLabel } from "@/lib/image-quality";
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, videoDurationOptions } from "@/lib/model-capabilities";
-import { formatPriceRange, modelQuoteDescription, modelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection, referenceVideoBillingLabel, tokenPriceRuleDescription } from "@/lib/model-pricing";
+import { formatPriceRange, modelQuoteDescription, modelQuoteRequest, normalizeTierResolution, priceTierSummaryLabel, priceTiersForCurrentSelection, tokenPriceRuleDescription } from "@/lib/model-pricing";
 import { compatibleModelInGroup, configuredModelDisplayName, modelCompatibilityError, resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import { groupModelsForPicker, isDirectSystemModel, modelChannelLabel, type ModelPickerGroup } from "@/lib/model-picker-groups";
 import { cn } from "@/lib/utils";
@@ -431,8 +431,6 @@ export function ModelLabel({
     const textReferences = capability === "text" ? modelCapabilityConfigFor(config, model).text?.references : undefined;
     const capabilityTag = referenceCapabilityTag(videoProfile?.references ?? textReferences);
     const modelTags = capabilityTag ? [capabilityTag, ...(logicalCost?.tags || [])] : logicalCost?.tags;
-    // 只给能挂参考视频的视频模型标注；不收参考视频的模型写“参考视频不计费”会误导。
-    const referenceLabel = channel.scope === "system" && (videoProfile?.references?.maxVideos ?? 0) > 0 ? referenceVideoBillingLabel(logicalCost) : "";
     const capabilitySummary = disabledReason || logicalCost?.description?.trim() || (isDirectSystemModel(config, model) ? "" : logicalSpec ? logicalCapabilitySummary(logicalSpec) : videoProfile ? videoSummary : meta.description);
     return (
         <span className="flex w-full min-w-0 items-center gap-2 overflow-hidden py-0">
@@ -446,14 +444,13 @@ export function ModelLabel({
                             {label || pickerModelDisplayName(config, model, showConfiguredModelName)}
                         </span>
                         {channel.scope !== "system" ? <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">个人</span> : null}
+                        {showPrice ? (
+                            <span className="canvas-model-picker-option-price">
+                                {/* 候选模型展示自身价目；当前参数的精确报价只在选中后的触发器显示。 */}
+                                <ModelPrice price={modelMenuPrice(config, model, capability, true, requirements)} />
+                            </span>
+                        ) : null}
                     </span>
-                    {showPrice ? (
-                        <span className="canvas-model-picker-option-price">
-                            {/* 候选模型展示自身价目；当前参数的精确报价只在选中后的触发器显示。 */}
-                            <ModelPrice price={modelMenuPrice(config, model, capability, true, requirements)} />
-                            {referenceLabel ? <span className="canvas-model-picker-reference-billing">{referenceLabel}</span> : null}
-                        </span>
-                    ) : null}
                     <ModelAvailabilityBadge availability={modelAvailability(config, model)} available={logicalCost?.available ?? true} showAvailability={channel.scope === "system"} />
                 </span>
                 <span className={cn("canvas-model-picker-description mt-1 block", showDescription && "is-visible")} style={{ color: theme.node.muted }}>

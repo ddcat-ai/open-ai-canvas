@@ -1,8 +1,7 @@
 /* Creation-specific geometry. Shared controls still use the workspace tokens. */
-/* 两片错开的淡色只铺在创作起步区域；local 让环境光随内容滚走，不延伸到整页画廊。 */
+/* 渐变铺满滚动背景，椭圆在四边内完全淡出，避免固定图片尺寸被截成矩形色块。 */
 .creation-home-scroll {
-    --creation-ambient-cool: color-mix(in srgb, var(--product-accent-blue) 9%, transparent);
-    --creation-ambient-warm: color-mix(in srgb, var(--product-accent-orange) 5%, transparent);
+    --creation-ambient-tint: color-mix(in srgb, var(--product-accent-blue) 7%, transparent);
     display: block;
     width: 100%;
     min-height: 0;
@@ -10,15 +9,12 @@
     overflow: auto;
     overscroll-behavior: contain;
     padding: var(--space-6) var(--space-8) var(--space-12);
-    background-image: radial-gradient(ellipse at 28% 8%, var(--creation-ambient-cool), transparent 64%), radial-gradient(ellipse at 78% 28%, var(--creation-ambient-warm), transparent 58%);
-    background-size: min(1440px, 140%) 620px;
-    background-position: center top;
+    background-image: radial-gradient(ellipse 46% 240px at 50% 260px, var(--creation-ambient-tint), transparent);
     background-repeat: no-repeat;
     background-attachment: local;
 }
 .dark .creation-home-scroll {
-    --creation-ambient-cool: color-mix(in srgb, var(--product-accent-blue) 11%, transparent);
-    --creation-ambient-warm: color-mix(in srgb, var(--product-accent-orange) 6%, transparent);
+    --creation-ambient-tint: color-mix(in srgb, var(--product-accent-blue) 9%, transparent);
 }
 .creation-home-scroll > * {
     width: 100%;

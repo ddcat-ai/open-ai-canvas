@@ -770,7 +770,13 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 
 .canvas-model-picker-option-title {
-    flex: 1 1 100%;
+    flex: 1 1 14rem;
+    min-width: min(100%, 14rem);
+}
+
+.canvas-model-picker-option-heading > .model-picker-availability {
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 .canvas-model-picker-option-name {
@@ -782,18 +788,9 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
 }
 
 .canvas-model-picker-option-price {
+    flex: 0 0 auto;
     min-width: 0;
     max-width: 100%;
-    margin-right: auto;
-}
-
-/* 视频模型的参考视频计费标注，跟在价格后；沿用所在主题的文字色，弱化为次要信息。 */
-.canvas-model-picker-reference-billing {
-    margin-left: 6px;
-    font-size: var(--fs-tiny);
-    font-weight: 500;
-    white-space: nowrap;
-    opacity: 0.68;
 }
 
 .canvas-model-picker-description {
