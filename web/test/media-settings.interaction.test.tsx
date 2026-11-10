@@ -202,6 +202,14 @@ test("真实视频设置面板自动适配时长与分辨率，不发送不支�
         expect(host.querySelector('button[aria-pressed="true"]')?.textContent).not.toContain("720");
         expect(videoResolutionLabel("auto")).toBe("自动");
         expect(backendProviderConfig(config, "video").vquality).toBe("auto");
+        // Seedance 面板按模型名分流；实际 newapi-channel-2 仍允许 auto 省略。
+        const seedanceModel = "seedance-2.0";
+        config = { ...config, model: encodeChannelModel("video", seedanceModel), channels: [{ ...channel, models: [seedanceModel], modelCosts: [{ ...channel.modelCosts![0], model: seedanceModel }] }] };
+        await act(async () => render());
+        const seedanceResolution = [...host.querySelectorAll("button")].find((button) => button.textContent === "720P")!;
+        expect(seedanceResolution).toBeDefined();
+        expect(seedanceResolution.getAttribute("aria-pressed")).toBe("false");
+        expect(backendProviderConfig(config, "video").vquality).toBe("auto");
     } finally {
         await act(async () => root.unmount());
         host.remove();

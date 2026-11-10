@@ -142,7 +142,7 @@ function JiMengVideoSettingsPanel({ config, profile, priceTiers, onConfigChange,
 
 function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChange, theme, showTitle, className }: VideoSettingsPanelProps & { profile: VideoCapabilityConfig; priceTiers: ReturnType<typeof modelPriceTiers> }) {
     const model = modelOptionName(config.model || config.videoModel);
-    const { resolution, ratio, seconds } = preserveVideoSettings(profile, { resolution: config.vquality, ratio: config.size, seconds: config.videoSeconds });
+    const { resolution, ratio, seconds } = preserveVideoSettings(profile, { resolution: config.vquality, ratio: config.size, seconds: config.videoSeconds }, resolveModelRequestConfig(config, config.model || config.videoModel).interfaceType);
     const duration = Number(seconds);
     const generateAudio = boolConfig(config.videoGenerateAudio, profile.generateAudio.default);
     const watermark = boolConfig(config.videoWatermark, profile.watermark.default);
