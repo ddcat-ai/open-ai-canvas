@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -144,6 +145,199 @@ func TestConvertEcommerceProjectRoundsGroupsAndIsIdempotent(t *testing.T) {
 	if count != 2 {
 		t.Fatalf("rounds duplicated: %d", count)
 	}
+}
+
+func TestConvertEcommerceProjectRoundsKeepsAdjacentDraftBoundaries(t *testing.T) {
+	db := ecommerceRoundsTestDB(t)
+	repo := New(db)
+	draftA := `{"productName":"A"}`
+	draftB := `{"productName":"B"}`
+	plan := model.EcommercePlan{
+		Images: []model.EcommercePlanTask{ecommerceRoundsTestImage("active-1", "task-active", "")},
+		PreviousImages: []model.EcommercePlanTask{
+			ecommerceRoundsTestImage("a-1", "task-a1", draftA),
+			ecommerceRoundsTestImage("a-2", "task-a2", draftA),
+			ecommerceRoundsTestImage("b-1", "task-b1", draftB),
+			ecommerceRoundsTestImage("a-3", "task-a3", draftA),
+		},
+	}
+	raw, _ := json.Marshal(plan)
+	project := &model.EcommerceProject{ID: "project-1", UserID: "user-1", Name: "商品", Status: "draft", DraftJSON: `{}`, PlanJSON: string(raw), Revision: 1}
+	if err := repo.CreateEcommerceProject(project); err != nil {
+		t.Fatal(err)
+	}
+	if _, created, err := repo.ConvertEcommerceProjectRounds("user-1", "project-1", 1); err != nil || created != 3 {
+		t.Fatalf("created=%d err=%v", created, err)
+	}
+	rounds, total, err := repo.EcommerceRoundPage("user-1", "project-1", 10, 0)
+	if err != nil || total != 3 || len(rounds) != 3 {
+		t.Fatalf("total=%d len=%d err=%v", total, len(rounds), err)
+	}
+	want := [][]string{{"a-3"}, {"b-1"}, {"a-1", "a-2"}}
+	for index, round := range rounds {
+		if round.Ordinal != 3-index {
+			t.Fatalf("round %d ordinal=%d", index, round.Ordinal)
+		}
+		var archived model.EcommercePlan
+		if err := json.Unmarshal([]byte(round.PlanJSON), &archived); err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]string, 0, len(archived.Images))
+		for _, image := range archived.Images {
+			ids = append(ids, image.ID)
+		}
+		if len(ids) != len(want[index]) {
+			t.Fatalf("round %d images=%v want %v", round.Ordinal, ids, want[index])
+		}
+		for i := range ids {
+			if ids[i] != want[index][i] {
+				t.Fatalf("round %d images=%v want %v", round.Ordinal, ids, want[index])
+			}
+		}
+	}
+}
+
+func TestArchiveKeepsFailedAndRunningTaskCards(t *testing.T) {
+	db := ecommerceRoundsTestDB(t)
+	repo := New(db)
+	project := ecommerceRoundsTestProject(ecommerceRoundsTestPlan(
+		ecommerceRoundsTestImage("ok", "task-ok", ""),
+		ecommerceRoundsTestImage("failed", "task-failed", ""),
+		ecommerceRoundsTestImage("running", "task-running", ""),
+	))
+	if err := repo.CreateEcommerceProject(project); err != nil {
+		t.Fatal(err)
+	}
+	stored := *project
+	stored.PlanJSON = "{}"
+	if err := repo.SaveEcommerceProjectRounds(&stored, 1, EcommerceRoundsSaveOptions{RoundMode: true, AdvanceRound: true, ActiveRoundID: "active-1"}); err != nil {
+		t.Fatal(err)
+	}
+	rounds, _, err := repo.EcommerceRoundPage("user-1", "project-1", 10, 0)
+	if err != nil || len(rounds) != 1 || rounds[0].ImageCount != 3 {
+		t.Fatalf("rounds=%d err=%v", len(rounds), err)
+	}
+	var archived model.EcommercePlan
+	if err := json.Unmarshal([]byte(rounds[0].PlanJSON), &archived); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, 0, 3)
+	for _, image := range archived.Images {
+		got = append(got, image.TaskID)
+	}
+	want := []string{"task-ok", "task-failed", "task-running"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("task ids=%v want %v", got, want)
+		}
+	}
+}
+
+func TestArchiveDeduplicatesRetriesButKeepsDifferentTaskIdentities(t *testing.T) {
+	db := ecommerceRoundsTestDB(t)
+	repo := New(db)
+	first := ecommerceRoundsTestImage("image-a", "task-a", "")
+	first.Prompt = "same visual"
+	project := ecommerceRoundsTestProject(ecommerceRoundsTestPlan(first))
+	if err := repo.CreateEcommerceProject(project); err != nil {
+		t.Fatal(err)
+	}
+	second := ecommerceRoundsTestImage("image-b", "task-b", "")
+	second.Prompt = "same visual"
+	stored := *project
+	stored.PlanJSON = ecommerceRoundsTestPlan(second)
+	if err := repo.SaveEcommerceProjectRounds(&stored, 1, EcommerceRoundsSaveOptions{RoundMode: true, AdvanceRound: true, ActiveRoundID: "active-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveEcommerceProjectRounds(&stored, 2, EcommerceRoundsSaveOptions{RoundMode: true, AdvanceRound: true, ActiveRoundID: stored.ActiveRoundID}); err != nil {
+		t.Fatal(err)
+	}
+	if count, images, err := repo.EcommerceRoundStats("user-1", "project-1"); err != nil || count != 2 || images != 2 {
+		t.Fatalf("count=%d images=%d err=%v", count, images, err)
+	}
+	if ecommerceRoundKey(`{}`, []model.EcommercePlanTask{first}) == ecommerceRoundKey(`{}`, []model.EcommercePlanTask{second}) {
+		t.Fatal("identical visuals with different task identities collapsed into one dedup key")
+	}
+}
+
+func TestLegacyReplayDoesNotResurrectEditedOrRemovedRoundImage(t *testing.T) {
+	db := ecommerceRoundsTestDB(t)
+	repo := New(db)
+	original := []model.EcommercePlanTask{
+		ecommerceRoundsTestImage("image-1", "task-1", ""),
+		ecommerceRoundsTestImage("image-2", "task-2", ""),
+	}
+	project := ecommerceRoundsTestProject(ecommerceRoundsTestPlan(original...))
+	if err := repo.CreateEcommerceProject(project); err != nil {
+		t.Fatal(err)
+	}
+	stored := *project
+	stored.PlanJSON = "{}"
+	if err := repo.SaveEcommerceProjectRounds(&stored, 1, EcommerceRoundsSaveOptions{RoundMode: true, AdvanceRound: true, ActiveRoundID: "active-1"}); err != nil {
+		t.Fatal(err)
+	}
+	rounds, _, err := repo.EcommerceRoundPage("user-1", "project-1", 10, 0)
+	if err != nil || len(rounds) != 1 {
+		t.Fatalf("rounds=%d err=%v", len(rounds), err)
+	}
+	edited := ecommerceRoundsTestImage("image-1", "task-1", "")
+	edited.Prompt = "edited prompt"
+	if _, _, err := repo.UpdateEcommerceRoundImage("user-1", "project-1", rounds[0].ID, "image-1", EcommerceRoundImageUpdate{ExpectedVersion: 1, Image: &edited}); err != nil {
+		t.Fatal(err)
+	}
+	removed, _, err := repo.UpdateEcommerceRoundImage("user-1", "project-1", rounds[0].ID, "image-2", EcommerceRoundImageUpdate{ExpectedVersion: 2, Remove: true})
+	if err != nil || removed.ImageCount != 1 {
+		t.Fatalf("remove imageCount=%d err=%v", removed.ImageCount, err)
+	}
+
+	replay := *project
+	replay.PlanJSON = string(mustJSON(t, model.EcommercePlan{
+		Images:         []model.EcommercePlanTask{},
+		PreviousImages: originalWithDraft(original, `{"productName":"replayed"}`),
+	}))
+	current, err := repo.EcommerceProject("user-1", "project-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay.Revision = current.Revision
+	if err := repo.SaveEcommerceProject(&replay, current.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if count, images, err := repo.EcommerceRoundStats("user-1", "project-1"); err != nil || count != 1 || images != 1 {
+		t.Fatalf("replay duplicated rounds: count=%d images=%d err=%v", count, images, err)
+	}
+	after, err := repo.EcommerceRound("user-1", "project-1", rounds[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Version != 3 || after.ImageCount != 1 {
+		t.Fatalf("edited round overwritten: version=%d images=%d", after.Version, after.ImageCount)
+	}
+	var archived model.EcommercePlan
+	if err := json.Unmarshal([]byte(after.PlanJSON), &archived); err != nil {
+		t.Fatal(err)
+	}
+	if len(archived.Images) != 1 || archived.Images[0].ID != "image-1" || archived.Images[0].Prompt != "edited prompt" {
+		t.Fatalf("archived plan resurrected removed or overwritten image: %+v", archived.Images)
+	}
+}
+
+func originalWithDraft(images []model.EcommercePlanTask, draft string) []model.EcommercePlanTask {
+	result := make([]model.EcommercePlanTask, 0, len(images))
+	for _, image := range images {
+		image.SourceDraft = json.RawMessage(draft)
+		result = append(result, image)
+	}
+	return result
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
 func TestConvertEcommerceProjectRoundsRollsBackOnInterrupt(t *testing.T) {
@@ -305,5 +499,86 @@ func TestUpdateEcommerceRoundImageVersionAndIdempotency(t *testing.T) {
 	removed, _, err := repo.UpdateEcommerceRoundImage("user-1", "project-1", rounds[0].ID, "image-1", EcommerceRoundImageUpdate{ExpectedVersion: 3, Remove: true})
 	if err != nil || removed.ImageCount != 0 {
 		t.Fatalf("imageCount=%d err=%v", removed.ImageCount, err)
+	}
+}
+
+// The save payload must stay bounded by the active round regardless of how
+// much history a project accumulated; archived images are read from pages.
+func TestConvertedSavePayloadStaysBoundedWithHistory(t *testing.T) {
+	baseline := 0
+	for _, archived := range []int{0, 42, 100, 500} {
+		t.Run(fmt.Sprintf("%d-archived", archived), func(t *testing.T) {
+			db := ecommerceRoundsTestDB(t)
+			repo := New(db)
+			previous := make([]model.EcommercePlanTask, 0, archived)
+			for i := 0; i < archived; i++ {
+				previous = append(previous, ecommerceRoundsTestImage(fmt.Sprintf("old-%d", i), fmt.Sprintf("task-old-%d", i), fmt.Sprintf(`{"batch":%d}`, i/6)))
+			}
+			active := make([]model.EcommercePlanTask, 0, 6)
+			for i := 0; i < 6; i++ {
+				active = append(active, ecommerceRoundsTestImage(fmt.Sprintf("active-%d", i), fmt.Sprintf("task-active-%d", i), `{"batch":"active"}`))
+			}
+			raw, _ := json.Marshal(model.EcommercePlan{Images: active, PreviousImages: previous})
+			project := &model.EcommerceProject{ID: "project-1", UserID: "user-1", Name: "商品", Status: "draft", DraftJSON: `{"productName":"商品"}`, PlanJSON: string(raw), Revision: 1}
+			if err := repo.CreateEcommerceProject(project); err != nil {
+				t.Fatal(err)
+			}
+			converted, created, err := repo.ConvertEcommerceProjectRounds("user-1", "project-1", 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if archived == 0 && created != 0 {
+				t.Fatalf("created=%d without history", created)
+			}
+			var stored model.EcommercePlan
+			if err := json.Unmarshal([]byte(converted.PlanJSON), &stored); err != nil {
+				t.Fatal(err)
+			}
+			if len(stored.PreviousImages) != 0 || len(stored.Images) != 6 {
+				t.Fatalf("stored plan previous=%d active=%d", len(stored.PreviousImages), len(stored.Images))
+			}
+			payload, err := json.Marshal(map[string]any{
+				"revision": converted.Revision,
+				"name":     converted.Name,
+				"draft":    json.RawMessage(converted.DraftJSON),
+				"plan":     stored,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(payload) > 64<<10 {
+				t.Fatalf("save payload = %d bytes", len(payload))
+			}
+			if archived == 0 {
+				baseline = len(payload)
+			} else if len(payload) != baseline {
+				t.Fatalf("save payload grew from %d to %d bytes with %d archived images", baseline, len(payload), archived)
+			}
+
+			seenImages, before, pages := 0, 0, 0
+			for {
+				rounds, total, err := repo.EcommerceRoundPage("user-1", "project-1", 10, before)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if total != int64(created) {
+					t.Fatalf("total=%d created=%d", total, created)
+				}
+				if len(rounds) == 0 {
+					break
+				}
+				for _, round := range rounds {
+					seenImages += round.ImageCount
+				}
+				before = rounds[len(rounds)-1].Ordinal
+				pages++
+				if pages > 100 {
+					t.Fatal("history pagination did not terminate")
+				}
+			}
+			if seenImages != archived {
+				t.Fatalf("history images = %d, archived = %d", seenImages, archived)
+			}
+		})
 	}
 }
