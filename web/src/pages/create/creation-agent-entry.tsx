@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { App, Button } from "antd";
 import { ArrowUpRight, FolderOpen, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useAuthEntry } from "@/hooks/use-auth-entry";
 import { FluidOrb } from "@/components/ui/fluid-orb";
 import { canvasDraftNavigationState, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -12,6 +13,7 @@ import { hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
 export function CreationAgentEntry() {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const { openAuth } = useAuthEntry();
     const { message } = App.useApp();
     const hydrated = useCanvasStore((state) => state.hydrated);
     const [busy, setBusy] = useState(false);
@@ -20,6 +22,10 @@ export function CreationAgentEntry() {
     const created = useRef<{ id: string; userId: string } | null>(null);
     const start = async () => {
         if (lock.current) return;
+        if (!useUserStore.getState().user) {
+            openAuth({ preferDialog: true });
+            return;
+        }
         lock.current = true;
         setBusy(true);
         setError("");
