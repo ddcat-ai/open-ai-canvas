@@ -243,6 +243,18 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		return svc.AdoptDramaSegmentVideo(userID, c.Param("id"), c.Param("episodeId"), index, req)
 	}))
+	// 把本段历史视频版本设为当前：只换本段当前视频，不新建版本、不级联后续段。
+	r.PUT("/dramas/:id/episodes/:episodeId/segments/:index/current-take", dramaRoute(svc, 4<<10, func(c *gin.Context, userID string) (any, error) {
+		index, err := strconv.Atoi(c.Param("index"))
+		if err != nil || index < 0 {
+			return nil, service.BadAuthRequest("剧情段序号无效")
+		}
+		var req service.RestoreDramaSegmentTakeRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.RestoreDramaSegmentTake(userID, c.Param("id"), c.Param("episodeId"), index, req)
+	}))
 	// 作品的精修画布：返回最近使用的关联画布，没有时由前端新建。
 	r.GET("/dramas/:id/canvas", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
 		return svc.DramaCanvas(userID, c.Param("id"))

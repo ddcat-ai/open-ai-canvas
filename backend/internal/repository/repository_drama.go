@@ -595,6 +595,15 @@ func (r *Repository) CreateDramaTake(take *model.DramaTake) error {
 	})
 }
 
+// DramaTake 按作品读取一条产物版本；找不到时返回 gorm.ErrRecordNotFound。
+func (r *Repository) DramaTake(projectID, id string) (*model.DramaTake, error) {
+	var take model.DramaTake
+	if err := r.db.First(&take, "id = ? AND project_id = ?", id, projectID).Error; err != nil {
+		return nil, err
+	}
+	return &take, nil
+}
+
 func (r *Repository) DramaJobsByStatus(projectID string, statuses ...string) ([]model.DramaJob, error) {
 	var jobs []model.DramaJob
 	err := r.db.Where("project_id = ? AND status IN ?", projectID, statuses).Order("priority desc, created_at asc").Find(&jobs).Error

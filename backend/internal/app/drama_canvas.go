@@ -280,13 +280,17 @@ func (s *Service) DramaTakes(userID, projectID, ownerID, kind string) (map[strin
 	if err != nil {
 		return nil, err
 	}
+	taskModels, err := s.repo.TaskModels(userID, taskIDs)
+	if err != nil {
+		return nil, err
+	}
 	views := make([]DramaTakeView, 0, len(takes))
 	currentMarked := false
 	for _, take := range takes {
 		view := DramaTakeView{
 			ID: take.ID, OwnerID: take.OwnerID, Kind: take.Kind, Version: take.Version, ResourceID: take.ResourceID, TaskID: take.TaskID,
 			Prompt: truncateRunes(take.Prompt, 300), DurationMs: take.DurationMs, Source: dramaTakeSource(take, taskProjects, project.ID),
-			CreatedAt: take.CreatedAt.Format(time.RFC3339),
+			CreatedAt: take.CreatedAt.Format(time.RFC3339), Model: taskModels[take.TaskID],
 		}
 		// 同一资源可能有多条版本记录（例如重复采用），只把最新一条标为当前。
 		if !currentMarked && current != "" && take.ResourceID == current {
@@ -334,6 +338,9 @@ type dramaSegmentAdoption struct {
 	task       *model.Task
 	cascade    bool
 	unchanged  bool
+	// reuseTake 为 true 时只切换当前视频，不新建版本记录（用于把历史版本设为当前）。
+	reuseTake  bool
+	durationMs int64
 }
 
 func (s *Service) prepareDramaSegmentAdoption(userID, projectID, episodeID string, index int, req AdoptDramaSegmentVideoRequest) (*dramaSegmentAdoption, error) {
@@ -381,7 +388,7 @@ func (s *Service) prepareDramaSegmentAdoption(userID, projectID, episodeID strin
 	}
 	// 并行出片的段不以上一段尾帧为首帧，换掉本段不影响后续段，级联重生成只会白白计费。
 	cascade := req.Cascade && !parseDramaSettings(productionRow.SettingsJSON).parallelVideo()
-	plan := &dramaSegmentAdoption{project: project, production: productionRow, episode: episode, segment: *segment, resource: resource, cascade: cascade}
+	plan := &dramaSegmentAdoption{project: project, production: productionRow, episode: episode, segment: *segment, resource: resource, cascade: cascade, durationMs: resource.DurationMs}
 	plan.task = s.dramaCanvasSourceTask(userID, req.TaskID, resource.ID)
 	plan.unchanged = segment.VideoResourceID == resource.ID && segment.VideoStatus == model.DramaMediaReady
 	return plan, nil
@@ -424,6 +431,110 @@ func (s *Service) AdoptDramaSegmentVideo(userID, projectID, episodeID string, in
 	return result, nil
 }
 
+// RestoreDramaSegmentTake 把本段已有的视频版本设为当前播放版本。
+// 复用采用写入（时长、尾帧、成片过期），但不新建版本记录、不删除其它版本、不级联后续段。
+func (s *Service) RestoreDramaSegmentTake(userID, projectID, episodeID string, index int, req RestoreDramaSegmentTakeRequest) (map[string]any, error) {
+	plan, err := s.prepareDramaSegmentTakeRestore(userID, projectID, episodeID, index, req)
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.applyDramaSegmentAdoption(plan, true)
+	if result != nil {
+		if adopted, ok := result["adopted"].(bool); ok {
+			result["restored"] = adopted
+		}
+	}
+	if err != nil || plan.unchanged {
+		return result, err
+	}
+	segment, err := s.repo.DramaSegment(plan.project.ID, plan.segment.ID)
+	if err != nil {
+		return result, nil
+	}
+	if segment.VideoResourceID == plan.resource.ID && segment.TailFrameResourceID == "" {
+		if backfillErr := s.backfillDramaSegmentTail(userID, *segment); backfillErr != nil {
+			result["tailError"] = backfillErr.Error()
+		}
+		if refreshed, refreshErr := s.repo.DramaSegment(plan.project.ID, plan.segment.ID); refreshErr == nil {
+			segment = refreshed
+		}
+	}
+	result["tailPending"] = segment.TailFrameResourceID == "" && segment.VideoStatus == model.DramaMediaReady
+	if segment.VideoStatus == model.DramaMediaFailed {
+		result["videoError"] = segment.VideoError
+	}
+	result["videoSeconds"] = segment.VideoSeconds
+	return result, nil
+}
+
+func (s *Service) prepareDramaSegmentTakeRestore(userID, projectID, episodeID string, index int, req RestoreDramaSegmentTakeRequest) (*dramaSegmentAdoption, error) {
+	project, productionRow, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
+	episode, err := s.repo.DramaEpisode(project.ID, strings.TrimSpace(episodeID))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("这一集不存在")
+		}
+		return nil, err
+	}
+	rows, err := s.repo.DramaSegments(episode.ID)
+	if err != nil {
+		return nil, err
+	}
+	var segment *model.DramaSegment
+	for i := range rows {
+		if rows[i].SegmentIndex == index {
+			segment = &rows[i]
+			break
+		}
+	}
+	if segment == nil {
+		return nil, BadAuthRequest("剧情段不存在，可能已重新改编")
+	}
+	if req.ExpectedRevision != nil && *req.ExpectedRevision != segment.Revision {
+		return nil, dramaSegmentChangedError()
+	}
+	takeID := strings.TrimSpace(req.TakeID)
+	if takeID == "" {
+		return nil, BadAuthRequest("请选择要切换的版本")
+	}
+	take, err := s.repo.DramaTake(project.ID, takeID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, NotFound("该版本不存在")
+		}
+		return nil, err
+	}
+	if take.OwnerID != segment.ID || take.Kind != "video" {
+		return nil, BadAuthRequest("该版本不属于本段视频")
+	}
+	if take.ResourceID == "" {
+		return nil, BadAuthRequest("该版本没有可播放的视频")
+	}
+	resource, err := s.repo.ResourceForUser(userID, take.ResourceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, BadAuthRequest("视频不存在或无权使用")
+		}
+		return nil, err
+	}
+	if resource.Status != model.ResourceStatusReady || !strings.HasPrefix(resource.MimeType, "video/") {
+		return nil, BadAuthRequest("请选择已完成的视频")
+	}
+	durationMs := resource.DurationMs
+	if durationMs <= 0 {
+		durationMs = take.DurationMs
+	}
+	plan := &dramaSegmentAdoption{project: project, production: productionRow, episode: episode, segment: *segment, resource: resource, cascade: false, reuseTake: true, durationMs: durationMs}
+	if take.TaskID != "" {
+		plan.task = s.dramaCanvasSourceTask(userID, take.TaskID, resource.ID)
+	}
+	plan.unchanged = segment.VideoResourceID == resource.ID && segment.VideoStatus == model.DramaMediaReady
+	return plan, nil
+}
+
 // applyDramaSegmentAdoption 写入采用结果。resume=false 用于 Agent 检查点事务：不恢复暂停的制作（恢复会解析模型目录），
 // 只唤醒调度；暂停中的作品在用户继续制作后补抽尾帧并重新合成。
 func (s *Service) applyDramaSegmentAdoption(plan *dramaSegmentAdoption, resume bool) (map[string]any, error) {
@@ -432,17 +543,22 @@ func (s *Service) applyDramaSegmentAdoption(plan *dramaSegmentAdoption, resume b
 		result["unchanged"] = true
 		return result, nil
 	}
-	durationMs := plan.resource.DurationMs
+	durationMs := plan.durationMs
+	if durationMs <= 0 {
+		durationMs = plan.resource.DurationMs
+	}
 	seconds := 0
 	if durationMs > 0 {
 		seconds = int((durationMs + 999) / 1000)
 	}
-	take := &model.DramaTake{ID: newID(), ProjectID: plan.project.ID, OwnerID: plan.segment.ID, Kind: "video", ResourceID: plan.resource.ID, Prompt: dramaTakeCanvasPrompt, DurationMs: durationMs, CreatedAt: time.Now()}
-	if plan.task != nil {
-		take.TaskID, take.Prompt = plan.task.ID, truncateRunes(firstNonEmpty(strings.TrimSpace(plan.task.Prompt), dramaTakeCanvasPrompt), 2000)
-	}
-	if err := s.repo.CreateDramaTake(take); err != nil {
-		return nil, err
+	if !plan.reuseTake {
+		take := &model.DramaTake{ID: newID(), ProjectID: plan.project.ID, OwnerID: plan.segment.ID, Kind: "video", ResourceID: plan.resource.ID, Prompt: dramaTakeCanvasPrompt, DurationMs: durationMs, CreatedAt: time.Now()}
+		if plan.task != nil {
+			take.TaskID, take.Prompt = plan.task.ID, truncateRunes(firstNonEmpty(strings.TrimSpace(plan.task.Prompt), dramaTakeCanvasPrompt), 2000)
+		}
+		if err := s.repo.CreateDramaTake(take); err != nil {
+			return nil, err
+		}
 	}
 	fields := map[string]any{"video_resource_id": plan.resource.ID, "video_seconds": seconds, "tail_frame_resource_id": "", "video_status": model.DramaMediaReady, "video_error": ""}
 	adopted, requeued, err := s.repo.AdoptDramaSegmentVideo(plan.segment, fields, plan.cascade)

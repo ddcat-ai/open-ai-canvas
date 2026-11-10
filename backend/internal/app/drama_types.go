@@ -379,6 +379,13 @@ type AdoptDramaSegmentVideoRequest struct {
 	ExpectedRevision *int64 `json:"expectedRevision"`
 }
 
+// RestoreDramaSegmentTakeRequest 把本段已有的视频版本设为当前播放版本；不新建版本记录，也不级联后续段。
+type RestoreDramaSegmentTakeRequest struct {
+	TakeID string `json:"takeId"`
+	// ExpectedRevision 是客户端看到的剧情段版本；版本已变时拒绝，避免覆盖刚发生的修改。
+	ExpectedRevision *int64 `json:"expectedRevision"`
+}
+
 // DramaCanvasAssetsRequest 为投送到画布的短剧媒体登记素材记录：画布媒体节点必须由当前用户的素材引用资源。
 type DramaCanvasAssetsRequest struct {
 	Resources []DramaCanvasAssetInput `json:"resources"`
@@ -403,6 +410,8 @@ type DramaTakeView struct {
 	Source     string `json:"source"`
 	Current    bool   `json:"current"`
 	CreatedAt  string `json:"createdAt"`
+	// Model 是产出该版本的任务模型标识（若能关联到任务）；仅用于展示。
+	Model string `json:"model,omitempty"`
 }
 
 // DramaDialogueCheck 是原文台词与镜头台词的逐句核对结果；Missing 是被删掉或改写的原文台词（最多展示 30 句）。
