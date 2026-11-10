@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -295,6 +297,73 @@ func TestBatchModelUpdateHTTPContract(t *testing.T) {
 			if len(stored.PriceTiers) != 1 || !stored.PriceTiers[0].PriceConfigured || stored.PriceTiers[0].Enabled != enabled || stored.PriceTiers[0].UnitPriceMicrocredits != 0 || stored.PriceConfigured != enabled {
 				t.Fatalf("free price or availability changed: %+v", stored)
 			}
+		}
+	}
+	frontendJSON, err := os.ReadFile("testdata/batch_template_availability.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var frontendCases []struct {
+		Name     string          `json:"name"`
+		Apply    json.RawMessage `json:"apply"`
+		Reenable json.RawMessage `json:"reenable"`
+	}
+	if err := json.Unmarshal(frontendJSON, &frontendCases); err != nil {
+		t.Fatal(err)
+	}
+	// Only identity/version fields are rebound to the isolated model;
+	// submitted changes remain the frontend builder's exact JSON payload.
+	bindFrontendRequest := func(raw json.RawMessage) string {
+		t.Helper()
+		var body map[string][]map[string]any
+		if err := json.Unmarshal(raw, &body); err != nil {
+			t.Fatal(err)
+		}
+		latest, err := repository.New(db).ChannelModelByID(channel.ID, item.ID)
+		if err != nil || len(body["models"]) != 1 {
+			t.Fatalf("load current model or fixture: %v", err)
+		}
+		request := body["models"][0]
+		request["modelId"], request["priceVersion"] = latest.ID, latest.PriceVersion
+		request["capabilityVersion"], request["updatedAt"] = latest.CapabilityVersion, latest.UpdatedAt.Format(time.RFC3339Nano)
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(encoded)
+	}
+	for _, path := range []string{"/api/admin/channels/" + channel.ID + "/models/batch-update", "/api/admin/channel-models/batch-update"} {
+		for _, scenario := range frontendCases {
+			t.Run("frontend-template/"+scenario.Name+path, func(t *testing.T) {
+				response := call("admin", path, bindFrontendRequest(scenario.Apply))
+				if response.Code != http.StatusOK {
+					t.Fatalf("frontend apply+disable: status=%d body=%s", response.Code, response.Body.String())
+				}
+				disabled, err := repository.New(db).ChannelModelByID(channel.ID, item.ID)
+				if err != nil || len(disabled.PriceTiers) != 1 {
+					t.Fatalf("read disabled model: %v", err)
+				}
+				tier := disabled.PriceTiers[0]
+				if disabled.PriceConfigured || tier.Enabled || !tier.PriceConfigured || tier.UnitPriceMicrocredits != 0 || !tier.CostPricing.Configured || tier.CostPricing.UnitPriceMicrocredits != 250_000 {
+					t.Fatalf("frontend template lost prices/configured marker: %+v", disabled)
+				}
+				if scenario.Name == "zero-token-cache" && (tier.BillingMode != "token" || tier.InputTokenPriceMicrocredits != 1_000_000 || tier.OutputTokenPriceMicrocredits != 2_000_000 || tier.CachedTokenPriceMicrocredits != 0 || tier.CacheWriteTokenPriceMicrocredits != 0) {
+					t.Fatalf("frontend token template prices changed: %+v", tier)
+				}
+				response = call("admin", path, bindFrontendRequest(scenario.Reenable))
+				if response.Code != http.StatusOK {
+					t.Fatalf("frontend reenable: status=%d body=%s", response.Code, response.Body.String())
+				}
+				enabled, err := repository.New(db).ChannelModelByID(channel.ID, item.ID)
+				if err != nil || !enabled.PriceConfigured || len(enabled.PriceTiers) != 1 || !enabled.PriceTiers[0].Enabled {
+					t.Fatalf("read reenabled model: %+v err=%v", enabled, err)
+				}
+				actual := enabled.PriceTiers[0]
+				actual.Enabled, actual.PriceVersion, actual.UpdatedAt = tier.Enabled, tier.PriceVersion, tier.UpdatedAt
+				if !reflect.DeepEqual(actual, tier) {
+					t.Fatal("frontend roundtrip changed prices, costs or SKU")
+				}
+			})
 		}
 	}
 }

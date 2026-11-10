@@ -107,7 +107,7 @@ export function batchChannelModelUpdates(items: ChannelModel[], draft: ChannelMo
                     const incomplete = values.priceTiers.findIndex((tier) => !priceTierAmountsComplete(values.capability, tier, values.referenceVideoBilling));
                     if (incomplete >= 0) throw new Error(`价格档 ${incomplete + 1} 金额尚未填写完整，请先编辑或应用积分模板`);
                 }
-                values = { ...values, priceTiers: values.priceTiers.map((tier) => ({ ...tier, priceConfigured: selected.pricingEnabled!, enabled: selected.pricingEnabled! })) };
+                values = { ...values, priceTiers: values.priceTiers.map((tier) => ({ ...tier, enabled: selected.pricingEnabled! })) };
             }
             validateChannelModelProtocol(values.capability, values.protocol, protocols);
             validateChannelModelPrices({ ...values, protocols });

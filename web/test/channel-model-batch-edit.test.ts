@@ -3,7 +3,7 @@ import { batchChannelModelUpdates, assertBatchModelSelectionCurrent } from "../s
 import { defaultPriceTier } from "../src/pages/admin/components/channel-model-price-tier-form";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import type { SavedCapabilityTemplate } from "../src/pages/admin/components/saved-capability-templates";
-import { batchModel, batchPricing, batchProtocols, batchTier } from "./fixtures/channel-model-batch-edit.fixtures";
+import { batchModel, batchPricing, batchProtocols, batchTemplateAvailabilityPayloads, batchTier } from "./fixtures/channel-model-batch-edit.fixtures";
 
 test("批量修改只提交显式勾选字段，保留原始更新时间精度和源模型", () => {
     const models = [batchModel(), batchModel({ id: "second", channelId: "other", capabilityVersion: undefined })];
@@ -82,6 +82,28 @@ test("应用明确免费模板并开启可供用户使用在同一批中生效",
     const result = batchChannelModelUpdates([batchModel({ priceTiers: [batchTier({ priceConfigured: false, enabled: false, unitPriceMicrocredits: 0 })] })], { pricingTemplate: template, pricingEnabled: true }, batchProtocols)[0].changes;
     expect(result.pricingTemplate!.priceTiers[0]).toMatchObject({ unitPriceMicrocredits: 0, priceConfigured: true, enabled: true, providerModelKey: "" });
     expect(result.pricingEnabled).toBe(true);
+});
+
+test("免费和零缓存价模板与停用组合保留已配置标记，刷新后可重新开启", () => {
+    for (const scenario of batchTemplateAvailabilityPayloads()) {
+        const changes = scenario.apply.models[0].changes;
+        expect(changes.pricingEnabled).toBe(false);
+        expect(changes.pricingTemplate!.priceTiers[0]).toMatchObject({ priceConfigured: true, enabled: false });
+        expect(batchChannelModelUpdates([scenario.disabled], { pricingEnabled: true }, batchProtocols)[0].changes).toEqual({ pricingEnabled: true });
+    }
+});
+
+test("积分模板停用不把未填金额变成明确免费", () => {
+    for (const pricingEnabled of [false, true]) {
+        const template = batchPricing({ pricing: { priceCurrency: "credits", referenceVideoBilling: false, priceTiers: [{ ...defaultPriceTier(), unitPrice: null }] } });
+        expect(() => batchChannelModelUpdates([batchModel()], { pricingTemplate: template, pricingEnabled }, batchProtocols)).toThrow("价格");
+    }
+});
+
+test("后端 HTTP 往返 fixture 来自当前前端批量请求构造器", async () => {
+    const expected = await Bun.file(new URL("../../backend/internal/handler/testdata/batch_template_availability.json", import.meta.url)).json();
+    const actual = batchTemplateAvailabilityPayloads().map(({ name, apply, disabled }) => ({ name, apply, reenable: { models: batchChannelModelUpdates([disabled], { pricingEnabled: true }, batchProtocols) } }));
+    expect(actual).toEqual(expected);
 });
 
 test("积分模板保留价格币种成本与规则，移除独立上游型号", () => {

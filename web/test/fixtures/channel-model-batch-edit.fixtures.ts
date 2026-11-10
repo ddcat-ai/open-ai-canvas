@@ -3,6 +3,7 @@ import type { ModelProtocolDefinition } from "../../src/lib/model-protocols";
 import { defaultModelCapabilityConfig } from "../../src/lib/model-capabilities";
 import { defaultPriceTier } from "../../src/pages/admin/components/channel-model-price-tier-form";
 import type { SavedPricingTemplate } from "../../src/pages/admin/components/saved-pricing-templates";
+import { batchChannelModelUpdates } from "../../src/pages/admin/components/channel-model-batch-edit";
 
 export const batchProtocols: ModelProtocolDefinition[] = ["text", "image", "video", "audio"].map((capability) => ({
     value: `${capability}-protocol`,
@@ -76,4 +77,25 @@ export function batchPricing(patch: Partial<SavedPricingTemplate> = {}): SavedPr
         pricing: { priceCurrency: "USD", referenceVideoBilling: false, priceTiers: [{ ...defaultPriceTier(), unitPrice: 2, costConfigured: true, costUnitPrice: 1, providerModelKey: "source-upstream" }] },
         ...patch,
     };
+}
+
+// Both Bun and the backend HTTP regression consume these real frontend payloads.
+export function batchTemplateAvailabilityPayloads() {
+    return ["free-request", "zero-token-cache"].map((name) => {
+        const source = batchModel();
+        const tier = {
+            ...defaultPriceTier(),
+            unitPrice: 0,
+            ...(name === "zero-token-cache" ? { billingMode: "token" as const, inputTokenPrice: 1, outputTokenPrice: 2, cachedTokenPrice: 0, cacheWriteTokenPrice: 0 } : {}),
+            costConfigured: true,
+            costUnitPrice: 0.25,
+            costInputTokenPrice: 0.1,
+            costOutputTokenPrice: 0.2,
+        };
+        const template = batchPricing({ pricing: { priceCurrency: "credits", referenceVideoBilling: false, priceTiers: [tier] } });
+        const apply = { models: batchChannelModelUpdates([source], { pricingTemplate: template, pricingEnabled: false }, batchProtocols) };
+        const projected = apply.models[0].changes.pricingTemplate!.priceTiers[0];
+        const disabled = batchModel({ priceConfigured: false, priceTiers: [batchTier(projected)] });
+        return { name, apply, disabled };
+    });
 }
