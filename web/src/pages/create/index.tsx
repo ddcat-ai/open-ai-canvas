@@ -84,6 +84,7 @@ import { fillablePrompt } from "@/lib/inspirations/resolve";
 import { CreationRecentCanvases } from "./creation-recent-canvases";
 import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
+import { useCreationConversationRoute } from "./use-creation-conversation-route";
 import { creationVideoConfig } from "./creation-generation-config";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
@@ -1153,7 +1154,9 @@ export default function CreatePage() {
     }, [retrySequence]);
 
     const startNewConversation = () => {
+        if (busy || openingCanvas || !conversationStorageReady) return activeId;
         const next = newConversation();
+        setAgentMode(false);
         followLatestMessageRef.current = true;
         setConversations((current) => [next, ...current]);
         setActiveId(next.id);
@@ -1161,6 +1164,7 @@ export default function CreatePage() {
         setAttachments([]);
         setDraftReferences([]);
         setHistoryOpen(false);
+        return next.id;
     };
 
     const continueOnCanvas = async (selectedAssetIds?: string[]) => {
@@ -1208,12 +1212,33 @@ export default function CreatePage() {
     };
 
     const selectConversation = (conversation: CreationConversation) => {
+        if (busy || openingCanvas || !conversationStorageReady) return;
+        setAgentMode(false);
         followLatestMessageRef.current = true;
         setActiveId(conversation.id);
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
         setHistoryOpen(false);
+    };
+
+    const selectConversationRoute = useCreationConversationRoute({
+        scope: activeConversationScope,
+        ready: userSessionHydrated && hydrated && conversationStorageReady && conversationScope === activeConversationScope,
+        activeId,
+        canSelect: !busy && !openingCanvas,
+        ids: conversations.map((conversation) => conversation.id),
+        onSelect: (id) => {
+            const conversation = conversationsRef.current.find((item) => item.id === id);
+            if (conversation) selectConversation(conversation);
+        },
+        onNew: startNewConversation,
+    });
+    const startNewConversationFromHistory = () => selectConversationRoute(startNewConversation());
+    const selectConversationFromHistory = (conversation: CreationConversation) => {
+        if (busy || openingCanvas || !conversationStorageReady) return;
+        selectConversation(conversation);
+        selectConversationRoute(conversation.id);
     };
 
     const confirmDeleteConversation = (conversation: CreationConversation) => {
@@ -1239,6 +1264,7 @@ export default function CreatePage() {
                         followLatestMessageRef.current = true;
                         activeIdRef.current = fallback.id;
                         setActiveId(fallback.id);
+                        selectConversationRoute(fallback.id);
                         setPrompt("");
                         setAttachments([]);
                         setDraftReferences([]);
@@ -1567,7 +1593,7 @@ export default function CreatePage() {
                 ) : (
                     <div className="creation-thread-workbench">
                         <CreationWorkspaceToolbar
-                            onNewConversation={startNewConversation}
+                            onNewConversation={startNewConversationFromHistory}
                             onOpenHistory={() => setHistoryOpen(true)}
                             shots={videoShots}
                             onJumpToShot={jumpToShot}
@@ -1609,9 +1635,9 @@ export default function CreatePage() {
                 open={historyOpen}
                 conversations={historyConversations}
                 activeId={activeConversation.id}
-                onNew={startNewConversation}
+                onNew={startNewConversationFromHistory}
                 onClose={() => setHistoryOpen(false)}
-                onSelect={selectConversation}
+                onSelect={selectConversationFromHistory}
                 onDelete={confirmDeleteConversation}
                 onRename={renameConversationTitle}
             />
