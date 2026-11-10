@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 视频请求日志生成内容
+
+- 后台详情：`web/src/pages/admin/components/api-log-detail-drawer.tsx` 挂载 `api-log-generation-content.tsx`，提示词编号解析在 `pages/admin/logs/generation-content.ts`。原始图片可放大，视频和音频按需播放；只请求管理员日志媒体接口，不以当前账号的素材库替换原请求。
+- 请求快照：`backend/internal/app/api_log_generation_content.go` 在媒体转换前保存提示词与原资源身份，详情检查来源和归属；`model/api_log_generation.go` 定义只读返回合同。请求根日志保留快照，轮询合并不覆盖。
+- 资源保留：`repository/api_log_generation.go` 将日志引用纳入删除和孤儿清理；日志移除后自然释放该引用。接口在 `handler/admin_api_log_routes.go`，迁移在 `database/migrations.go`。
+
 ## 媒体资源与按需加载
 
 - 远程 Blob：`web/src/services/resource-blob-cache.ts` 分开管理有界闲置缓存、持久化队列与活动 URL 租约；`hooks/use-cached-resource-url.ts` 对接画布图片/大图预览，`services/canvas-video-preview.ts` 在抽帧结束释放。上传预热由 `pages/canvas/use-canvas-upload.ts` 短暂借用。

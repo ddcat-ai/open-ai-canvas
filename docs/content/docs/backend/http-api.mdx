@@ -494,6 +494,12 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`inten
 
 `GET /admin/api-logs` 与 `GET /admin/api-logs-export.csv` 支持 `from`、`to`（`YYYY-MM-DD` 按 UTC 自然日、含结束日，或 RFC 3339 时间点）、`userId`、`model`、`channelId`、`capability`；不传日期时默认近 30 个 UTC 日，单次最多 366 天。
 
+视频模型的 `GET /admin/api-logs/:id` 详情增加 `generationContent`，包含 `prompt`、按本次请求顺序编号的 `references[]`、`source`（`snapshot` / `task` / `request`）、`incomplete` 与可选 `note`。每个引用返回 `{ id, kind, label, name, role?, available, unavailableReason?, mediaUrl? }`；编号分别为图片、视频、音频独立计数，对应提示词中的 `@图片N`、`@视频N`、`@音频N`。列表和 CSV 不返回该快照。快照绑定实际请求，成功任务压缩输入、当前画布修改或同 ID 重试都不会替换旧日志的素材身份。
+
+`GET /admin/api-logs/:id/references/:refId/media` 读取该日志中已验证归属的原始资源，支持 HTTP Range；仅管理员可用，继续核对日志、关联任务与资源所属用户。接口固定后端转发原件，不接受 URL、资源 ID 或交付变体等查询参数，不重定向到对象存储。返回 `Cache-Control: private, no-store`、`Referrer-Policy: no-referrer` 与 `X-Content-Type-Options: nosniff`。
+
+新快照仅保存脱敏提示词、名称、编号、角色和原始资源身份，不保存密钥、请求头、外部链接、签名 URL 或内嵌媒体。方舟 `asset://` 引用只有在原始资源与当前用户的素材绑定一致时才提供预览。旧日志只使用能够确认属于同次请求的任务输入或已保存报文；原始素材没有保存、已删除或无法证明来源时返回不可用说明，不根据当前画布猜测，不在查看详情时访问外部 URL。
+
 `GET /admin/billing-orders` 的每条订单额外返回 `userDisplayName`、`userAccount`，按当前页用户 ID 批量读取；字段不入库，普通用户的订单接口不返回。
 
 ## 用户任务计费与作品花费口径
