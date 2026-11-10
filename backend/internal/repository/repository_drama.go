@@ -1064,7 +1064,8 @@ func (r *Repository) MarkDramaSegmentVideoStale(episodeID string, index int) (bo
 			return err
 		}
 		marked = true
-		return markLaterSegmentsStale(tx, segment.EpisodeID, segment.SegmentIndex)
+		_, err := markLaterSegmentsStale(tx, segment.EpisodeID, segment.SegmentIndex)
+		return err
 	})
 	return marked, err
 }
@@ -1192,10 +1193,29 @@ func (r *Repository) SetDramaSegmentTail(id string, revision int64, videoResourc
 	return result.RowsAffected > 0, result.Error
 }
 
-func markLaterSegmentsStale(tx *gorm.DB, episodeID string, index int) error {
+// markLaterSegmentsStale returns whether later segments depend on the edited
+// segment. Independent videos keep their revisions and in-flight result slots.
+func markLaterSegmentsStale(tx *gorm.DB, episodeID string, index int) (bool, error) {
+	var production model.DramaProduction
+	if err := tx.Select("drama_productions.settings_json").
+		Joins("JOIN drama_episodes ON drama_episodes.project_id = drama_productions.project_id").
+		Where("drama_episodes.id = ?", episodeID).First(&production).Error; err != nil {
+		return false, err
+	}
+	var settings struct {
+		VideoContinuity string `json:"videoContinuity"`
+	}
+	if strings.TrimSpace(production.SettingsJSON) != "" {
+		if err := json.Unmarshal([]byte(production.SettingsJSON), &settings); err != nil {
+			return false, err
+		}
+	}
+	if settings.VideoContinuity == "parallel" {
+		return false, nil
+	}
 	// Queued descendants remain requested, but receive a new revision and wait for the new tail.
 	// The new revision also voids running prompt jobs, so those segments go back to pending instead of staying "running".
-	return tx.Model(&model.DramaSegment{}).Where("episode_id = ? AND segment_index > ?", episodeID, index).
+	return true, tx.Model(&model.DramaSegment{}).Where("episode_id = ? AND segment_index > ?", episodeID, index).
 		Updates(map[string]any{
 			"video_status":  gorm.Expr("CASE WHEN video_status IN ? THEN ? ELSE video_status END", []string{"ready", "running"}, "stale"),
 			"prompt_status": gorm.Expr("CASE WHEN prompt_status = ? THEN '' ELSE prompt_status END", model.DramaMediaRunning),
@@ -1216,7 +1236,8 @@ func invalidateDramaSegment(tx *gorm.DB, segment model.DramaSegment, fields map[
 	if err := tx.Model(&model.DramaSegment{}).Where("id = ?", segment.ID).Updates(fields).Error; err != nil {
 		return err
 	}
-	if err := markLaterSegmentsStale(tx, segment.EpisodeID, segment.SegmentIndex); err != nil {
+	cascade, err := markLaterSegmentsStale(tx, segment.EpisodeID, segment.SegmentIndex)
+	if err != nil {
 		return err
 	}
 	stage := "video"
@@ -1226,7 +1247,11 @@ func invalidateDramaSegment(tx *gorm.DB, segment model.DramaSegment, fields map[
 	if err := tx.Model(&model.DramaEpisode{}).Where("id = ?", segment.EpisodeID).Updates(map[string]any{"stage": stage, "approved": false, "final_stale": true, "error": "", "revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error; err != nil {
 		return err
 	}
-	return tx.Model(&model.DramaJob{}).Where("episode_id = ? AND status = ? AND kind IN ?", segment.EpisodeID, "queued", []string{"segment_prompt", "segment_video", "render"}).Updates(map[string]any{"status": "canceled", "updated_at": time.Now()}).Error
+	jobs := tx.Model(&model.DramaJob{}).Where("episode_id = ? AND status = ? AND kind IN ?", segment.EpisodeID, "queued", []string{"segment_prompt", "segment_video", "render"})
+	if !cascade {
+		jobs = jobs.Where("shot_id = ? OR kind = ?", segment.ID, model.DramaJobRender)
+	}
+	return jobs.Updates(map[string]any{"status": "canceled", "updated_at": time.Now()}).Error
 }
 
 func (r *Repository) UpdateDramaShotScript(shot model.DramaShot, fields map[string]any) error {
