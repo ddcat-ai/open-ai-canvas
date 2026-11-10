@@ -5,6 +5,28 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 网站、Key 分组与模型批量配置
+
+以下接口沿用登录 Cookie、Origin 检查及 `{ code, data, msg, reason }` 信封，服务层要求管理员权限。网站公共连接与各 Key 的凭据分开维护；网站响应不包含 Key。
+
+| 接口 | 入参与结果 |
+| --- | --- |
+| `GET /api/admin/channel-websites` | 返回 `data.websites[]`，包含 `id/name/baseUrl/apiFormat/proxyUrl/headers/keyCount/createdAt/updatedAt` |
+| `POST /api/admin/channel-websites`、`PATCH /api/admin/channel-websites/:id` | `{name,baseUrl,apiFormat,proxyUrl,headers,expectedUpdatedAt?}`；编辑携带读取时的 `updatedAt`，公共连接同步到网站下的 Key，返回 `data.website`。公共头仅接受 `Anthropic-Version`、`OpenAI-Beta` |
+| `DELETE /api/admin/channel-websites/:id` | 仅允许删除空网站，返回 `data.ok` |
+| `POST /api/admin/channels`、`PATCH /api/admin/channels/:id` | 原合同增加 `websiteId`；编辑可携带 `expectedUpdatedAt`。关联网站后公共连接从网站取得，Key 凭据和模型独立 |
+| `GET /api/admin/channels/:id/catalog-status` | 返回最近目录 `models/readAt?/stale`，不请求上游 |
+| `POST /api/admin/channels/:id/models/fetch` | 读取该 Key 的目录，返回 `models/added/retained/missing/firstRead/baselineReset/readAt/previousReadAt?`；缺失型号不会自动删除 |
+| `GET /api/admin/channels/:id/protocol-suggestion` | 查询参数 `providerModelKey/capability`；返回 `protocol?`、`source`（`selection/history/conflict/none/invalid`）、`candidates`、`reason?`、`selectedAt?`。建议不等于明确选择 |
+| `POST /api/admin/channels/:id/models/batch-update`、`POST /api/admin/channel-models/batch-update` | `{models:[{modelId,priceVersion,capabilityVersion,updatedAt,changes}]}`，分别限定单 Key 或允许跨 Key；返回 `data.updated` |
+| `POST /api/admin/channels/:id/models/batch-protocol`、`POST /api/admin/channel-models/batch-protocol` | 支持 `{groups:[{modelIds,protocol}]}`，按模型原类型分组设置协议 |
+
+`changes` 可包含 `capability`（仅初始化未设置类型的模型）、`protocol`、`displayName`、`description`、`enabled`、`pricingEnabled`、`capabilityTemplate`、`pricingTemplate`。省略字段保持原值，不接受以 `null` 隐式清空或设置为零。`capabilityTemplate` 只需 `{capabilityConfig}`，不能用模板内容隐式切换协议；`pricingTemplate` 为 `{priceCurrency,referenceVideoBilling,priceTiers}`，金额和开关按价格档合同明确提供。
+
+`pricingEnabled` 对所选模型全部价格档的「可供用户使用」生效，不修改金额、成本或免费状态。整个批次先组合并校验最终配置，检查模型时间戳及能力 / 价格版本，再在一个事务内写入；任一项失效或类型冲突则整批零写入，返回 HTTP 400、`reason=invalid_argument`。接口拒绝未知字段及多余 JSON 对象，批量请求体上限为 2 MiB。客户端收到成功后刷新失败时，应刷新列表而非重发修改。
+
+使用说明见[渠道、模板与批量配置](/docs/backend/channel-configuration)，迁移见[后端数据库](/docs/backend/backend-database)。
+
 ## 灵感上新
 
 后端每 6 小时从 GitHub 拉取 YouMind 提示词库（两个 `README_zh.md`）和 awesome-seedance（`data/cases.json`、`data/case-taxonomy.json`），经出站 SSRF 客户端下载，只收正文已是中文的条目。上次有来源失败时 1 小时后重试；多实例部署通过协调器锁只让一个实例同步。服务器访问 GitHub 需要正常 DNS，必要时配置 `HTTPS_PROXY`。数据表见 [后端数据库](/docs/backend/backend-database)。
