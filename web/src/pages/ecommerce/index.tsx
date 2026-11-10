@@ -75,6 +75,7 @@ import { displayImageSizeChoices, imageTypes, labelOf, languages, options, platf
 import { CommerceMarketPicker, PlatformMark } from "./market-picker";
 import { CommerceDirectionCards, directionDescription } from "./direction-cards";
 import { CommerceStylePicker } from "./style-picker";
+import { PlanningActivity } from "./planning-activity";
 import { MarketingMaterialPicker } from "./marketing-material-picker";
 import { commerceScenes, currentCommerceScene, type CommerceScene } from "./scenes";
 import { automaticMarketingSelections, marketingPlanSlots, parseMarketingSelections, type MarketingSelection } from "./marketing-materials";
@@ -2211,10 +2212,17 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 </section>
             ) : null}
             {/* 正在运行的步骤在这里写明做什么；顶部流程条此时只亮起当前步，不再重复同一句话。 */}
-            {restoring || planningPending || directionsStatus === "loading" ? (
+            {restoring ? (
                 <div className="ecs-progress commerce-assistant-progress" role="status">
                     <LoaderCircle className="commerce-planning-spin" size={15} />
-                    <span>{restoring ? "正在恢复商品创作…" : commerceFlowNextStep(flowSteps)}</span>
+                    <span>正在恢复商品创作…</span>
+                </div>
+            ) : planningPending && !planningSaveError ? (
+                <PlanningActivity task={planningTask} references={activeCommerceReferences(draft).length} count={displayCount} automaticScreens={draft.imageType === "marketing" || draft.referenceMode === "detail"} />
+            ) : directionsStatus === "loading" ? (
+                <div className="ecs-progress commerce-assistant-progress" role="status">
+                    <LoaderCircle className="commerce-planning-spin" size={15} />
+                    <span>{commerceFlowNextStep(flowSteps)}</span>
                 </div>
             ) : null}
             {stageMessage && !(plan && completed === total && creativeDirections.length) ? (

@@ -178,7 +178,7 @@ async function press(text: string) {
         });
 }
 const productInput = () => host.querySelector<HTMLInputElement>('input[placeholder="例如：便携式香薰机"]');
-const planningProgress = () => host.querySelector<HTMLElement>(".commerce-assistant-progress[role=status]");
+const planningProgress = () => host.querySelector<HTMLElement>(".commerce-planning-activity") || host.querySelector<HTMLElement>(".commerce-assistant-progress[role=status]");
 async function selectOption(label: string, text: string) {
     const input = host.querySelector<HTMLElement>(`[aria-label="${label}"]`);
     expect(input).not.toBeNull();
@@ -2197,6 +2197,88 @@ describe("真实电商页面生命周期", () => {
         expect(projects.get(saved.id)!.planJson).toBe(planBefore);
         expect(projects.get(saved.id)!.activeRoundId).toBe("active-current");
         expect(saveBodies).toHaveLength(0);
+        expect(paidSubmissions).toHaveLength(0);
+    });
+
+    test("策划等待页展示真实参考资料、累计字数与已用时，不额外创建任务", async () => {
+        draft = {
+            ...draft,
+            references: [
+                { resourceId: "product-a", role: "primary" },
+                { resourceId: "product-b", role: "detail" },
+            ],
+            count: 3,
+            instruction: "为蓝色耳机生成详情页",
+        };
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("跳过选方向");
+        expect(paidSubmissions).toHaveLength(1);
+        const progress = host.querySelector<HTMLElement>(".commerce-planning-activity")!;
+        expect(progress).not.toBeNull();
+        expect(progress.textContent).toContain("2 张参考图");
+        expect(progress.textContent).toContain("3 张图片方案");
+        expect(progress.textContent).toContain("正在分析商品与构建方案");
+        expect(progress.textContent).not.toContain("%");
+        const taskId = sessions.peekEcommerceWorkspace(scope)!.draft.planningTaskId!;
+        await act(async () => {
+            const updated = { ...tasks.get(taskId)!, status: "running" as const, textDraft: "第一段" };
+            tasks.set(taskId, updated);
+            observers.get(taskId)?.forEach((listener) => listener(updated));
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 3 字策划输出");
+        await act(async () => {
+            const updated = { ...tasks.get(taskId)!, status: "running" as const, textDraft: "第一段第二段" };
+            tasks.set(taskId, updated);
+            observers.get(taskId)?.forEach((listener) => listener(updated));
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 6 字策划输出");
+        // The server sends cumulative snapshots; a repeated snapshot must not double count.
+        await act(async () => {
+            observers.get(taskId)?.forEach((listener) => listener(tasks.get(taskId)!));
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 6 字策划输出");
+        const seconds = () => {
+            const text = host.querySelector<HTMLElement>(".commerce-planning-title > span")!.textContent || "";
+            return Number(/(\d+) 分/.exec(text)?.[1] || 0) * 60 + Number(/(\d+) 秒/.exec(text)?.[1] || 0);
+        };
+        const before = seconds();
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+        });
+        expect(seconds()).toBeGreaterThan(before);
+        expect(paidSubmissions).toHaveLength(1);
+    });
+
+    test("逐屏详情策划等待时按实际参考图计数并显示待识别的屏数", async () => {
+        draft = { ...draft, referenceMode: "detail", imageType: "detail", count: 6, instruction: "照着这张长图做详情页", layoutReferences: Array.from({ length: 23 }, (_, index) => ({ resourceId: `long-${index}`, role: "style" as const })) };
+        spyOn(referenceMedia, "prepareCommerceReferenceViews").mockImplementation(async (source) => ({ draft: source, views: [] }));
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("跳过选方向");
+        expect(paidSubmissions).toHaveLength(1);
+        const progress = host.querySelector<HTMLElement>(".commerce-planning-activity")!;
+        expect(progress.textContent).toContain("24 张参考图");
+        expect(progress.textContent).toContain("自动识别长图屏数");
+        expect(progress.textContent).not.toContain("6 张图片方案");
+    });
+
+    test("策划任务失败且结果未保存时不再显示进行中状态", async () => {
+        const task = { ...runningTask("failed-planning-task"), status: "failed" as const, error: "上游暂时不可用" };
+        tasks.set(task.id, task);
+        const saved = project({ ...draft, planningTaskId: task.id });
+        projects.set(saved.id, saved);
+        sessions.setEcommerceActiveProject(scope, saved.id);
+        sessions.setEcommercePlanningReceipt(scope, saved.id, task.id);
+        failedSaves = 1;
+        await render();
+        expect(host.textContent).toContain("重试保存分析结果");
+        expect(host.textContent).toContain("结果尚未保存");
+        expect(host.querySelector(".commerce-planning-activity")).toBeNull();
+        expect(paidSubmissions).toHaveLength(0);
+        await press("重试保存分析结果");
+        expect(host.textContent).toContain("上游暂时不可用");
+        expect(host.querySelector(".commerce-planning-activity")).toBeNull();
         expect(paidSubmissions).toHaveLength(0);
     });
 });
