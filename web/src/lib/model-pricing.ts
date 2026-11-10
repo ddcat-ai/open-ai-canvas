@@ -54,7 +54,7 @@ export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capabilit
     return matched;
 }
 
-export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: ModelCapability) {
+export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: ModelCapability, compactTokenUnit = false) {
     const unitPrices = (billingMode: ModelPriceTier["billingMode"]) =>
         tiers
             .filter((tier) => tier.billingMode === billingMode)
@@ -73,7 +73,7 @@ export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: Mode
         [
             fixedRequestValues.length ? formatPriceRange(fixedRequestValues, "积分") : "",
             perSecondValues.length ? formatPriceRange(perSecondValues, "积分/秒") : "",
-            tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}${timeBased ? " · 分时" : ""}` : "",
+            tokenValues.length ? `${capability === "video" ? "" : "输出 "}${formatPriceRange(tokenValues, compactTokenUnit ? "/M Token" : capability === "video" ? "积分/百万视频 Token" : "积分/百万 Token")}${timeBased ? " · 分时" : ""}` : "",
         ]
             .filter(Boolean)
             .join(" · ") || "未配置"
@@ -187,13 +187,13 @@ function referenceVideoQuoteDurations(input: ModelRequirements["input"]) {
 type ReferenceVideoBillingCost = { capability?: ModelCapability; referenceVideoBilling?: boolean; logicalPriceTiers?: ModelPriceTier[] };
 
 /**
- * 视频模型的参考视频计费标签。开关关闭或带参考视频价格全为 0（免费）时标“参考视频不计费”，作为卖点展示。
+ * 模型列表只展示“参考视频不计费”的卖点；收费构成保留在具体请求的报价说明中。
  * 非视频模型返回空串。
  */
 export function referenceVideoBillingLabel(cost: ReferenceVideoBillingCost | undefined) {
     if (!cost || cost.capability !== "video") return "";
     const billed = cost.referenceVideoBilling === true && (cost.logicalPriceTiers || []).some((tier) => (tier.referenceVideoUnitPriceMicrocredits || 0) > 0 || (tier.referenceVideoOutputTokenPriceMicrocredits || 0) > 0);
-    return billed ? "参考视频另计费" : "参考视频不计费";
+    return billed ? "" : "参考视频不计费";
 }
 
 function formatSeconds(value: number) {

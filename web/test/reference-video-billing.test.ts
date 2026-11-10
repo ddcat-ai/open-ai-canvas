@@ -18,8 +18,8 @@ const tier = (prices: { reference?: number } = {}) => ({
 });
 
 describe("reference video billing labels", () => {
-    test("marks billed, unbilled and free video models", () => {
-        expect(referenceVideoBillingLabel({ capability: "video", referenceVideoBilling: true, logicalPriceTiers: [tier({ reference: 2_000_000 })] })).toBe("参考视频另计费");
+    test("only labels unbilled and free video models in the model list", () => {
+        expect(referenceVideoBillingLabel({ capability: "video", referenceVideoBilling: true, logicalPriceTiers: [tier({ reference: 2_000_000 })] })).toBe("");
         expect(referenceVideoBillingLabel({ capability: "video", referenceVideoBilling: false, logicalPriceTiers: [tier()] })).toBe("参考视频不计费");
         // 免费模型（带参考视频价格为 0）也标注不计费，作为卖点。
         expect(referenceVideoBillingLabel({ capability: "video", referenceVideoBilling: true, logicalPriceTiers: [{ ...tier(), unitPriceMicrocredits: 0 }] })).toBe("参考视频不计费");
