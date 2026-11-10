@@ -79,7 +79,7 @@ func Builtins() *Registry {
 	}
 	registry, err := NewRegistry(
 		openAIChatAdapter(), openAIResponsesAdapter(), claudeAdapter(),
-		openAIVideosAdapter(), newAPIChannel1Adapter(), newAPIVideosAdapter(), xAIVideosAdapter(), arkVideosAdapter(), jimengVideosAdapter(), geminiVeoAdapter(), novitaVideosAdapter(), miniMaxVideosAdapter(),
+		openAIVideosAdapter(), newAPIChannel1Adapter(), newAPIVideosAdapter(), newAPIVideoTasksAdapter(), xAIVideosAdapter(), arkVideosAdapter(), jimengVideosAdapter(), geminiVeoAdapter(), novitaVideosAdapter(), miniMaxVideosAdapter(),
 		agnesAdapter(),
 	)
 	if err != nil {
@@ -228,23 +228,31 @@ func newAPIVideosAdapter() Adapter {
 	info := metadata("newapi-channel-2", "NewAPI Video Generations", "NewAPI", CapabilityVideo, "POST /v1/video/generations", "GET /v1/video/generations/{task_id}", "application/json")
 	info.LegacyAliases = []string{"newapi-video-generations"}
 	info.Parameters = videoParams()
-	return videoAdapter(info, func(r GenerationRequest) (RequestSpec, error) {
-		body := map[string]any{"model": r.Model, "prompt": r.Prompt, "seconds": strconv.Itoa(defaultInt(r.Duration, 6)), "aspect_ratio": defaultValue(r.AspectRatio, "16:9")}
-		copyIf(body, "resolution", r.Resolution)
-		if r.GenerateAudio {
-			body["generate_audio"] = true
-		}
-		if len(r.Images) > 0 {
-			body["image_urls"] = mediaValues(r.Images)
-		}
-		if len(r.Videos) > 0 {
-			body["video_urls"] = mediaValues(r.Videos)
-		}
-		if len(r.Audios) > 0 {
-			body["audio_urls"] = mediaValues(r.Audios)
-		}
-		return jsonSpec(http.MethodPost, "/v1/video/generations", body), nil
-	})
+	return videoAdapter(info, newAPIVideoGenerationsCreate)
+}
+
+func newAPIVideoTasksAdapter() Adapter {
+	info := metadata("newapi-video-tasks", "NewAPI Video Tasks", "NewAPI", CapabilityVideo, "POST /v1/video/generations", "GET /v1/video/tasks/{task_id}", "application/json")
+	info.Parameters = videoParams()
+	return videoAdapter(info, newAPIVideoGenerationsCreate)
+}
+
+func newAPIVideoGenerationsCreate(r GenerationRequest) (RequestSpec, error) {
+	body := map[string]any{"model": r.Model, "prompt": r.Prompt, "seconds": strconv.Itoa(defaultInt(r.Duration, 6)), "aspect_ratio": defaultValue(r.AspectRatio, "16:9")}
+	copyIf(body, "resolution", r.Resolution)
+	if r.GenerateAudio {
+		body["generate_audio"] = true
+	}
+	if len(r.Images) > 0 {
+		body["image_urls"] = mediaValues(r.Images)
+	}
+	if len(r.Videos) > 0 {
+		body["video_urls"] = mediaValues(r.Videos)
+	}
+	if len(r.Audios) > 0 {
+		body["audio_urls"] = mediaValues(r.Audios)
+	}
+	return jsonSpec(http.MethodPost, "/v1/video/generations", body), nil
 }
 
 func newAPIChannel1Adapter() Adapter {
