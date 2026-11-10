@@ -190,7 +190,19 @@ func TestPostgresChannelWebsiteMigrationUpgradesVersion96(t *testing.T) {
 	if !reflect.DeepEqual(snapshot, afterSnapshot) || !reflect.DeepEqual(selection, afterSelection) {
 		t.Fatal("new catalog/protocol rows changed across repeat migration")
 	}
-	if len(records) != len(oldRecords)+1 || !reflect.DeepEqual(oldRecords, records[:len(oldRecords)]) || records[len(records)-1].Version != 97 {
-		t.Fatal("migration changed historical schema records or reapplied v97")
+	var applied []migration
+	for _, entry := range schemaMigrations {
+		if entry.version >= 97 {
+			applied = append(applied, entry)
+		}
+	}
+	if len(records) != len(oldRecords)+len(applied) || !reflect.DeepEqual(oldRecords, records[:len(oldRecords)]) {
+		t.Fatal("migration changed historical schema records or reapplied an upgrade")
+	}
+	for i, entry := range applied {
+		record := records[len(oldRecords)+i]
+		if record.Version != entry.version || record.Name != entry.name || record.Checksum != entry.checksum || record.AppliedAt.IsZero() {
+			t.Fatalf("unexpected upgrade record: %+v, want version %d (%s)", record, entry.version, entry.name)
+		}
 	}
 }

@@ -85,10 +85,12 @@ func TestCanvasAgentActivityIndexed(t *testing.T) {
 
 func testCanvasAgentHistoryPlan(t *testing.T, db *gorm.DB) {
 	t.Helper()
+	// Seed checkpointed history directly: dead reservation-index entries cannot
+	// be vacuumed while unrelated PostgreSQL transactions hold older snapshots.
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		for i := range 1000 {
 			id := fmt.Sprintf("pi-history-%d", i)
-			if err := tx.Create(&model.Task{ID: id, UserID: "history", ProjectID: "history-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay}).Error; err != nil {
+			if err := tx.Create(&model.Task{ID: id, UserID: "history", ProjectID: "history-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, AgentExecutionReady: true}).Error; err != nil {
 				return err
 			}
 			if err := New(tx).EnsureCloudAgent(&model.CloudAgentExecution{ID: id, UserID: "history", Status: "completed"}); err != nil {
@@ -103,17 +105,8 @@ func testCanvasAgentHistoryPlan(t *testing.T, db *gorm.DB) {
 	if err != nil || activity != nil {
 		t.Fatalf("history occupancy: %+v %v", activity, err)
 	}
-	// Clear dead reservation-index entries created by the insert/checkpoint
-	// fixture sequence before testing the steady-state historical read plan.
-	analyze := "ANALYZE"
-	if db.Dialector.Name() == "postgres" {
-		analyze = "VACUUM ANALYZE tasks"
-	}
-	if err := db.Exec(analyze).Error; err != nil {
-		t.Fatal(err)
-	}
-	if db.Dialector.Name() == "postgres" {
-		if err := db.Exec("ANALYZE cloud_agent_executions").Error; err != nil {
+	for _, table := range []string{"tasks", "cloud_agent_executions"} {
+		if err := db.Exec("ANALYZE " + table).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
