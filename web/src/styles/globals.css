@@ -26520,26 +26520,26 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     min-height: var(--workspace-reference-row) !important;
     padding: var(--space-1) var(--space-2) !important;
     border-radius: var(--r-md) !important;
-    color: var(--user-ink-muted) !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
+    color: var(--user-ink) !important;
+    font-size: var(--fs-body) !important;
+    font-weight: 600 !important;
     transition:
         background var(--user-motion),
         color var(--user-motion),
         transform var(--user-motion);
 }
 .app-user-workspace .app-workspace-nav-link .app-workspace-nav-main {
-    gap: 8px !important;
+    gap: calc(var(--space-2) - var(--space-half)) !important;
 }
 .app-user-workspace .app-workspace-nav-link .app-workspace-nav-icon svg,
 .app-user-workspace .app-workspace-nav-link .app-workspace-nav-main > svg {
-    width: 16px !important;
-    height: 16px !important;
+    width: 18px !important;
+    height: 18px !important;
 }
 .app-user-workspace .app-workspace-nav-link.is-active {
     background: transparent !important;
     color: var(--user-ink) !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
 }
 .app-user-workspace .app-workspace-nav-link:hover:not(.is-active),
 .app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) {

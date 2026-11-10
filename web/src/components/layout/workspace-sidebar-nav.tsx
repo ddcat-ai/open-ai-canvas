@@ -204,7 +204,7 @@ function NavItem({
             <span className="app-workspace-nav-main flex min-w-0 items-center gap-2">
                 {Icon ? (
                     <span className="app-workspace-nav-icon" aria-hidden>
-                        <Icon className="size-4 shrink-0" strokeWidth={1.8} />
+                        <Icon className="size-4.5 shrink-0" strokeWidth={2.2} />
                     </span>
                 ) : (
                     <span className="size-1.5 shrink-0 rounded-full bg-current opacity-40" aria-hidden />
