@@ -4,11 +4,14 @@ import { useEffect, useRef } from "react";
  * 绿幕形象视频：每帧把视频画到画布上做抠像。抠像在主线程逐像素处理，开销不小，
  * 所以 paused（入口被面板挡住时）和页面隐藏时都不处理帧，也暂停视频解码。
  */
-export function AgentAvatarVideo({ src, loop = true, paused = false, onError, className }: { src: string; loop?: boolean; paused?: boolean; onError?: () => void; className?: string }) {
+export function AgentAvatarVideo({ src, loop = true, paused = false, onReady, onError, className }: { src: string; loop?: boolean; paused?: boolean; onReady?: (src: string) => void; onError?: () => void; className?: string }) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const errorRef = useRef(onError);
     errorRef.current = onError;
+    const readyRef = useRef(onReady);
+    readyRef.current = onReady;
+    const readySourceRef = useRef("");
 
     useEffect(() => {
         const video = videoRef.current;
@@ -44,6 +47,11 @@ export function AgentAvatarVideo({ src, loop = true, paused = false, onError, cl
                 }
             }
             context.putImageData(image, 0, 0);
+            // 首帧完成抠像后才撤掉占位，loadeddata 仍可能早于画布绘制。
+            if (readySourceRef.current !== src) {
+                readySourceRef.current = src;
+                readyRef.current?.(src);
+            }
         };
         const scheduleFrame = () => {
             if (disposed || document.visibilityState === "hidden") return;

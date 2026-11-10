@@ -1,7 +1,7 @@
 .canvas-agent-panel,
 .agent-context-popover {
     /* Canvas theme -> material tokens. */
-    --agent-material-solid: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-surface-base));
+    --agent-material-solid: var(--agent-surface-base);
     --agent-surface-soft: color-mix(in srgb, var(--agent-ink) 4%, transparent);
     --agent-surface-hover: color-mix(in srgb, var(--agent-ink) 7%, transparent);
     --agent-surface-raised: color-mix(in srgb, var(--agent-ink) 6%, var(--agent-material-solid));
@@ -81,20 +81,40 @@
 }
 
 .agent-panel-header {
-    min-height: 68px;
-    padding: var(--space-3) var(--space-4) var(--space-2) var(--space-5);
+    min-height: 52px;
+    padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+}
+
+.agent-panel-title-button {
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    margin-inline-start: calc(-1 * var(--space-2));
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--agent-ink);
+    text-align: left;
+    cursor: pointer;
+}
+
+.agent-panel-title-button:hover {
+    background: var(--agent-surface-soft);
+}
+
+.agent-panel-title-button:focus-visible {
+    outline: var(--focus-ring-width) solid var(--agent-focus-ring);
+    outline-offset: 2px;
 }
 
 .agent-panel-title {
-    font-size: var(--fs-heading);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-}
-
-.agent-panel-context {
-    margin-top: var(--space-1);
-    color: var(--agent-caption);
-    font-size: var(--fs-label);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-body);
+    font-weight: 500;
 }
 
 .agent-panel-status {
@@ -454,6 +474,145 @@
     scroll-padding-block: var(--space-4);
 }
 
+.agent-welcome {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding-block: var(--space-6);
+}
+
+.agent-welcome-intro {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.agent-welcome-orb {
+    display: inline-block;
+    width: 52px;
+    height: 52px;
+    margin-bottom: var(--space-5);
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 32% 24%, var(--color-neutral-0), transparent 36%), radial-gradient(circle at 70% 80%, var(--palette-node-audio), transparent 64%),
+        radial-gradient(circle at 35% 65%, color-mix(in srgb, var(--agent-accent) 65%, var(--color-neutral-0)), var(--agent-accent));
+    box-shadow:
+        inset -4px -6px 14px color-mix(in srgb, var(--agent-accent) 28%, transparent),
+        0 8px 32px color-mix(in srgb, var(--agent-accent) 14%, transparent);
+}
+
+.agent-welcome-intro h2 {
+    margin: 0;
+    color: var(--agent-ink);
+    font-size: var(--fs-title);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    line-height: 1.5;
+    text-wrap: balance;
+}
+
+.agent-welcome-intro p {
+    margin: var(--space-2) 0 0;
+    color: var(--agent-caption);
+    font-size: var(--fs-caption);
+    line-height: 1.7;
+}
+
+.agent-welcome-actions {
+    display: grid;
+    width: 100%;
+    max-width: 360px;
+    gap: var(--space-1);
+    margin-top: var(--space-8);
+}
+
+.agent-welcome-actions button {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: 0;
+    border-radius: var(--space-4);
+    background: transparent;
+    color: var(--agent-caption);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease;
+}
+
+.agent-welcome-actions button:hover:not(:disabled) {
+    background: var(--agent-surface-soft);
+    color: var(--agent-ink);
+}
+
+.agent-welcome-actions button:focus-visible {
+    outline: 2px solid var(--agent-focus-ring);
+    outline-offset: 2px;
+}
+
+.agent-welcome-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.agent-welcome-actions svg {
+    width: var(--space-5);
+    height: var(--space-5);
+    flex: 0 0 auto;
+    stroke-width: 1.5;
+}
+
+.agent-welcome-actions button > span {
+    min-width: 0;
+    flex: 1;
+}
+
+.agent-welcome-actions strong,
+.agent-welcome-actions small {
+    display: block;
+    font-weight: 400;
+    line-height: 1.6;
+}
+
+.agent-welcome-actions strong {
+    color: var(--agent-ink);
+    font-size: var(--fs-body);
+}
+
+.agent-welcome-actions small {
+    margin-top: var(--space-half);
+    font-size: var(--fs-label);
+}
+
+.agent-welcome-actions .agent-welcome-arrow {
+    width: var(--space-4);
+    height: var(--space-4);
+    opacity: 0.6;
+}
+
+.agent-welcome-footnote {
+    margin: var(--space-6) 0 0;
+    color: var(--agent-caption);
+    font-size: var(--fs-label);
+}
+
+@container (max-width: 400px) {
+    .agent-welcome-actions button {
+        padding-inline: var(--space-2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .agent-welcome-actions button {
+        transition: none;
+    }
+}
+
 .agent-conversation-messages {
     min-width: 0;
 }
@@ -465,7 +624,11 @@
 }
 
 .agent-conversation-messages > * + * {
-    margin-top: 8px;
+    margin-top: var(--space-3);
+}
+
+.agent-conversation-messages > .agent-message-row[data-agent-role="user"]:not([data-agent-interjection]):not(:first-child) {
+    margin-top: var(--space-6);
 }
 
 .agent-load-earlier {
@@ -680,146 +843,24 @@
     margin-bottom: 0.35em;
 }
 
-.agent-welcome {
-    display: flex;
-    min-height: 100%;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding-block: var(--space-6);
-}
-
-.agent-welcome-intro {
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    text-align: center;
-}
-
-.agent-welcome-orb {
-    display: inline-block;
-    width: 52px;
-    height: 52px;
-    margin-bottom: var(--space-5);
-    border-radius: 50%;
-    background:
-        radial-gradient(circle at 32% 24%, var(--color-neutral-0), transparent 36%), radial-gradient(circle at 70% 80%, var(--palette-node-audio), transparent 64%),
-        radial-gradient(circle at 35% 65%, color-mix(in srgb, var(--agent-accent) 65%, var(--color-neutral-0)), var(--agent-accent));
-    box-shadow:
-        inset -4px -6px 14px color-mix(in srgb, var(--agent-accent) 28%, transparent),
-        0 8px 32px color-mix(in srgb, var(--agent-accent) 14%, transparent);
-}
-
-.agent-welcome-intro h2 {
-    margin: 0;
-    color: var(--agent-ink);
-    font-size: var(--fs-title);
-    font-weight: 500;
-    letter-spacing: -0.03em;
-    line-height: 1.5;
-    text-wrap: balance;
-}
-
-.agent-welcome-intro p {
-    margin: var(--space-2) 0 0;
-    color: var(--agent-caption);
-    font-size: var(--fs-caption);
-    line-height: 1.7;
-}
-
-.agent-welcome-actions {
-    display: grid;
-    width: 100%;
-    max-width: 360px;
-    gap: var(--space-1);
-    margin-top: var(--space-8);
-}
-
-.agent-welcome-actions button {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border: 0;
-    border-radius: var(--space-4);
-    background: transparent;
-    color: var(--agent-caption);
-    text-align: left;
-    cursor: pointer;
-    transition:
-        background-color 160ms ease,
-        color 160ms ease;
-}
-
-.agent-welcome-actions button:hover:not(:disabled) {
-    background: var(--agent-surface-soft);
-    color: var(--agent-ink);
-}
-
-.agent-welcome-actions button:focus-visible {
-    outline: 2px solid var(--agent-focus-ring);
-    outline-offset: 2px;
-}
-
-.agent-welcome-actions button:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-}
-
-.agent-welcome-actions svg {
-    width: var(--space-5);
-    height: var(--space-5);
-    flex: 0 0 auto;
-    stroke-width: 1.5;
-}
-
-.agent-welcome-actions button > span {
-    min-width: 0;
-    flex: 1;
-}
-
-.agent-welcome-actions strong,
-.agent-welcome-actions small {
-    display: block;
-    font-weight: 400;
-    line-height: 1.6;
-}
-
-.agent-welcome-actions strong {
-    color: var(--agent-ink);
-    font-size: var(--fs-body);
-}
-
-.agent-welcome-actions small {
-    margin-top: var(--space-half);
-    font-size: var(--fs-label);
-}
-
-.agent-welcome-actions .agent-welcome-arrow {
-    width: var(--space-4);
-    height: var(--space-4);
-    opacity: 0.6;
-}
-
-.agent-welcome-footnote {
-    margin: var(--space-6) 0 0;
-    color: var(--agent-caption);
-    font-size: var(--fs-label);
-}
-
 .agent-composer-wrap {
     padding: var(--space-2) var(--space-3) var(--space-3);
 }
 
 .agent-composer-surface {
     padding: var(--space-3) var(--space-3) var(--space-2);
-    border-radius: var(--agent-radius-surface, var(--radius-xl));
-    background: var(--agent-surface-raised, var(--background));
+    border: 1px solid color-mix(in srgb, var(--agent-ink) 10%, transparent);
+    border-radius: var(--r-xl);
+    background: var(--agent-surface-base, var(--background));
+}
+
+.agent-composer-surface:focus-within {
+    border-color: color-mix(in srgb, var(--agent-focus-ring) 45%, transparent);
 }
 
 /* 底部托盘：外壳与输入卡片同为一张卡，输入卡片嵌在上方，底部条直接落在托盘里；无分隔线、无间距。 */
 .agent-composer-shell[data-has-footer] {
-    border-radius: var(--agent-radius-surface, var(--radius-xl));
+    border-radius: var(--r-xl);
     background: color-mix(in srgb, var(--agent-ink) 3%, var(--agent-material-solid, var(--background)));
 }
 
@@ -1210,7 +1251,13 @@
     }
 }
 
-/* 场景起步标签：透明底、彩色细描边，不叠加卡片表面。 */
+.agent-skill-presets {
+    min-width: 0;
+    flex-shrink: 0;
+    padding-block: var(--space-2);
+}
+
+/* 技能库中的组合入口：由用户打开技能库后主动选用。 */
 .agent-scene-capsules-heading {
     display: flex;
     align-items: center;
@@ -1362,10 +1409,6 @@
     .agent-context-panel-foot {
         display: grid;
     }
-
-    .agent-welcome-actions button {
-        padding-inline: var(--space-2);
-    }
 }
 
 @media (max-width: 639px) {
@@ -1375,12 +1418,6 @@
     }
     .agent-composer-wrap {
         padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .agent-welcome-actions button {
-        transition: none;
     }
 }
 
@@ -2499,13 +2536,15 @@ summary.agent-tool-step:hover {
     backdrop-filter: blur(10px);
 }
 
-.canvas-agent-launcher.canvas-agent-launcher-live2d {
+.canvas-agent-launcher.canvas-agent-launcher-live2d,
+.canvas-agent-launcher.is-loading {
     padding: 0;
     border-radius: var(--radius-lg);
     box-shadow: none;
 }
 
-.canvas-agent-launcher-live2d::before {
+.canvas-agent-launcher-live2d::before,
+.canvas-agent-launcher.is-loading::before {
     display: none;
 }
 
@@ -2530,9 +2569,66 @@ summary.agent-tool-step:hover {
     -webkit-user-drag: none;
 }
 
-.canvas-agent-launcher-media > .canvas-agent-keyed-video {
+.canvas-agent-launcher-media > .canvas-agent-keyed-video,
+.canvas-agent-launcher-media > .canvas-agent-launcher-poster {
     border-radius: 12px;
     transform: scale(1.18);
+    transition: opacity var(--motion-dur-base) var(--motion-ease-out);
+}
+
+.canvas-agent-launcher-poster {
+    position: absolute;
+    inset: 0;
+}
+
+.canvas-agent-launcher-media.is-loading > .canvas-agent-keyed-video,
+.canvas-agent-launcher-media:not(.is-loading) > .canvas-agent-launcher-poster {
+    opacity: 0;
+}
+
+.canvas-agent-launcher-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    font-weight: 400;
+}
+
+.canvas-agent-launcher-loading-dots {
+    display: inline-flex;
+    gap: var(--space-1);
+}
+
+.canvas-agent-launcher-loading-dots > span {
+    width: var(--space-1);
+    height: var(--space-1);
+    border-radius: var(--r-full);
+    background: currentColor;
+    opacity: 0.4;
+    animation: agent-launcher-loading-pulse 1.4s ease-in-out infinite;
+}
+
+.canvas-agent-launcher-loading-dots > span:nth-child(2) {
+    animation-delay: 160ms;
+}
+
+.canvas-agent-launcher-loading-dots > span:nth-child(3) {
+    animation-delay: 320ms;
+}
+
+@keyframes agent-launcher-loading-pulse {
+    50% {
+        opacity: 1;
+    }
+}
+
+.canvas-agent-launcher.is-reduced-motion > .canvas-agent-keyed-video,
+.canvas-agent-launcher.is-reduced-motion > .canvas-agent-launcher-poster {
+    transition: none;
+}
+
+.canvas-agent-launcher.is-reduced-motion .canvas-agent-launcher-loading-dots > span {
+    animation: none;
 }
 
 /* 大形象外框不接收指针，透明处的点击落到页面按钮上；拖拽与点击由身体热区承接，内缩比例见组件。 */
@@ -2640,8 +2736,14 @@ summary.agent-tool-step:hover {
 
 @media (prefers-reduced-motion: reduce) {
     .canvas-agent-launcher,
-    .canvas-agent-launcher-toggle {
+    .canvas-agent-launcher-toggle,
+    .canvas-agent-launcher > .canvas-agent-keyed-video,
+    .canvas-agent-launcher > .canvas-agent-launcher-poster {
         transition: none !important;
+    }
+
+    .canvas-agent-launcher-loading-dots > span {
+        animation: none;
     }
 }
 

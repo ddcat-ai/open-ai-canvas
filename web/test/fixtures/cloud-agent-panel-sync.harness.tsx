@@ -657,6 +657,72 @@ test("原样重试未知 POST 后得到明确 stale_parent 可解除旧身份，
     }
 });
 
+test("思考期间快速切换模型只改变下一轮设置，当前订阅和历史连续", async () => {
+    const current = chat("local", { ...makeRun("thinking", "running"), model: "paid-model" });
+    const mounted = await mount(current, [current]);
+    try {
+        const observation = subscriptions.at(-1)!;
+        const subscriptionCount = subscriptions.length;
+        for (const model of ["local-test::local-agent-test", "paid-channel::paid-model", "local-test::local-agent-test"]) {
+            await act(async () => controls.onModelChange(model));
+        }
+        expect(controls.selectedModel).toBe("local-test::local-agent-test");
+        expect(subscriptions).toHaveLength(subscriptionCount);
+        expect(observation.closed).toBe(false);
+        await act(async () => {
+            observation.event({ eventId: "thinking:5", runId: "thinking", seq: 5, type: "assistant_delta", payload: { messageId: "thinking-answer", text: "思考中的模型继续回答" }, createdAt: current.updatedAt });
+        });
+        expect(conversationUI.messages.some((item: any) => item.text === "结果-thinking")).toBe(true);
+        expect(conversationUI.messages.find((item: any) => item.id === "thinking-answer")?.text).toBe("思考中的模型继续回答");
+        await persist();
+        expect(local.find((item) => item.id === activeId)?.run).toMatchObject({ id: "thinking", status: "running", model: "paid-model" });
+        expect(sent).toHaveLength(0);
+        expect(generated).toBe(0);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("提交等待与未确认重试之间切换模型，原请求正文、渠道和幂等键保持冻结", async () => {
+    const initial = chat("original", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    let release: ((value: unknown) => void) | undefined;
+    try {
+        capabilitiesOverride = () => new Promise((resolve) => (release = resolve));
+        sendFailure = new TypeError("network failed after POST");
+        await act(async () => composer.onPromptChange("冻结提交时选择的模型"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(release).toBeDefined();
+        await act(async () => controls.onModelChange("local-test::local-agent-test"));
+        await act(async () => {
+            release!({ permissionModes: ["request_approval"], skills: true });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        const frozen = structuredClone(sendInputs[0]);
+        expect(frozen).toMatchObject({ model: "paid-model", channelId: "paid-channel", channelModelKey: "paid-model", prompt: "冻结提交时选择的模型" });
+        expect(pending?.request).toEqual(frozen);
+        expect(composer.prompt).toBe("冻结提交时选择的模型");
+        await act(async () => controls.onModelChange("paid-channel::paid-model"));
+        await act(async () => controls.onModelChange("local-test::local-agent-test"));
+        sendFailure = undefined;
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toEqual(["first", "first"]);
+        expect(sendInputs[1]).toEqual(frozen);
+        expect(pending).toBeNull();
+        expect(generated).toBe(0);
+    } finally {
+        release?.({ permissionModes: ["request_approval"], skills: true });
+        await mounted.close();
+    }
+});
+
 test("手动重新打开当前云端历史时同步水位，旧 SSE 缓冲不会重复正文", async () => {
     const current = chat("local", makeRun("same-current"));
     const mounted = await mount(current, [current]);
