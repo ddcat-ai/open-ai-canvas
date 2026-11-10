@@ -167,8 +167,7 @@ function isEngagement(value: SiteTrafficOverview["engagement"] | null | undefine
 }
 
 function isComparison(value: SiteTrafficOverview["comparison"] | null | undefined, query: SiteTrafficQuery, asOf: string) {
-    if (!value || !isDay(value.range?.from) || !isDay(value.range?.to) || value.range.timeZone !== "Asia/Shanghai"
-        || value.range.from > value.range.to || !isInterval(value.effectiveFrom, value.effectiveTo, asOf)) return false;
+    if (!value || !isDay(value.range?.from) || !isDay(value.range?.to) || value.range.timeZone !== "Asia/Shanghai" || value.range.from > value.range.to || !isInterval(value.effectiveFrom, value.effectiveTo, asOf)) return false;
     const day = 86_400_000;
     const start = Date.parse(`${query.from}T00:00:00Z`);
     const end = Date.parse(`${query.to}T00:00:00Z`);
@@ -179,22 +178,22 @@ function isComparison(value: SiteTrafficOverview["comparison"] | null | undefine
 }
 
 function isFraction(value: unknown, numerator: number, denominator: number) {
-    return denominator === 0 ? value === null : typeof value === "number" && Number.isFinite(value)
-        && value >= 0 && value <= 1 && Math.abs(value - numerator / denominator) < 1e-9;
+    return denominator === 0 ? value === null : typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 && Math.abs(value - numerator / denominator) < 1e-9;
 }
 
 function isEndpoint(value: SiteTrafficEndpoint | null | undefined, visits: number) {
-    if (!value || !isCount(value.undeterminedVisits) || value.undeterminedVisits > visits
-        || !Array.isArray(value.pages) || value.pages.length > Object.keys(siteTrafficPageLabels).length) return false;
+    if (!value || !isCount(value.undeterminedVisits) || value.undeterminedVisits > visits || !Array.isArray(value.pages) || value.pages.length > Object.keys(siteTrafficPageLabels).length) return false;
     const pages = new Set<string>();
     let total = value.undeterminedVisits;
-    if (!value.pages.every((row) => {
-        if (!row || typeof row.page !== "string" || !Object.hasOwn(siteTrafficPageLabels, row.page) || pages.has(row.page)
-            || !isCount(row.visits) || row.visits > visits || !isFraction(row.rate, row.visits, visits)) return false;
-        pages.add(row.page);
-        total += row.visits;
-        return Number.isSafeInteger(total);
-    })) return false;
+    if (
+        !value.pages.every((row) => {
+            if (!row || typeof row.page !== "string" || !Object.hasOwn(siteTrafficPageLabels, row.page) || pages.has(row.page) || !isCount(row.visits) || row.visits > visits || !isFraction(row.rate, row.visits, visits)) return false;
+            pages.add(row.page);
+            total += row.visits;
+            return Number.isSafeInteger(total);
+        })
+    )
+        return false;
     return total === visits;
 }
 
@@ -204,49 +203,64 @@ function isOperations(value: SiteTrafficOperations | null | undefined, overview:
     const day = 86_400_000;
     const localDate = new Date(Date.parse(overview.asOf) + 28_800_000).toISOString().slice(0, 10);
     const retentionStart = Date.parse(`${localDate}T00:00:00+08:00`) - 364 * day;
-    if (!isCount(mix.visitors) || !isInterval(mix.lookbackFrom, mix.lookbackTo, overview.asOf)
-        || Date.parse(mix.lookbackFrom) !== retentionStart || Date.parse(mix.lookbackTo) !== Date.parse(overview.effectiveFrom)) return false;
+    if (!isCount(mix.visitors) || !isInterval(mix.lookbackFrom, mix.lookbackTo, overview.asOf) || Date.parse(mix.lookbackFrom) !== retentionStart || Date.parse(mix.lookbackTo) !== Date.parse(overview.effectiveFrom)) return false;
     if (Date.parse(mix.lookbackFrom) === Date.parse(mix.lookbackTo)) {
-        if (mix.status !== "no_lookback" || mix.firstObservedVisitors !== null || mix.returningVisitors !== null
-            || mix.firstObservedRate !== null || mix.returningRate !== null) return false;
-    } else if (mix.status !== "ready" || !isCount(mix.firstObservedVisitors) || !isCount(mix.returningVisitors)
-        || !Number.isSafeInteger(mix.firstObservedVisitors + mix.returningVisitors)
-        || mix.firstObservedVisitors + mix.returningVisitors !== mix.visitors
-        || !isFraction(mix.firstObservedRate, mix.firstObservedVisitors, mix.visitors)
-        || !isFraction(mix.returningRate, mix.returningVisitors, mix.visitors)) return false;
-    if (!isCount(value.endpoints.visits) || !isEndpoint(value.endpoints.first, value.endpoints.visits)
-        || !isEndpoint(value.endpoints.last, value.endpoints.visits)) return false;
+        if (mix.status !== "no_lookback" || mix.firstObservedVisitors !== null || mix.returningVisitors !== null || mix.firstObservedRate !== null || mix.returningRate !== null) return false;
+    } else if (
+        mix.status !== "ready" ||
+        !isCount(mix.firstObservedVisitors) ||
+        !isCount(mix.returningVisitors) ||
+        !Number.isSafeInteger(mix.firstObservedVisitors + mix.returningVisitors) ||
+        mix.firstObservedVisitors + mix.returningVisitors !== mix.visitors ||
+        !isFraction(mix.firstObservedRate, mix.firstObservedVisitors, mix.visitors) ||
+        !isFraction(mix.returningRate, mix.returningVisitors, mix.visitors)
+    )
+        return false;
+    if (!isCount(value.endpoints.visits) || !isEndpoint(value.endpoints.first, value.endpoints.visits) || !isEndpoint(value.endpoints.last, value.endpoints.visits)) return false;
     const paths = value.paths;
-    if (!isCount(paths.visits) || !isCount(paths.ambiguousVisits) || paths.ambiguousVisits > paths.visits
-        || !Array.isArray(paths.rows) || paths.rows.length > 10) return false;
+    if (!isCount(paths.visits) || !isCount(paths.ambiguousVisits) || paths.ambiguousVisits > paths.visits || !Array.isArray(paths.rows) || paths.rows.length > 10) return false;
     const pairs = new Set<string>();
-    if (!paths.rows.every((row) => {
-        if (!row || typeof row.from !== "string" || typeof row.to !== "string" || row.from === row.to
-            || !Object.hasOwn(siteTrafficPageLabels, row.from) || !Object.hasOwn(siteTrafficPageLabels, row.to)
-            || !isCount(row.visits) || row.visits === 0 || row.visits > paths.visits || !isFraction(row.rate, row.visits, paths.visits)) return false;
-        const key = `${row.from}:${row.to}`;
-        if (pairs.has(key)) return false;
-        pairs.add(key);
-        return true;
-    })) return false;
+    if (
+        !paths.rows.every((row) => {
+            if (
+                !row ||
+                typeof row.from !== "string" ||
+                typeof row.to !== "string" ||
+                row.from === row.to ||
+                !Object.hasOwn(siteTrafficPageLabels, row.from) ||
+                !Object.hasOwn(siteTrafficPageLabels, row.to) ||
+                !isCount(row.visits) ||
+                row.visits === 0 ||
+                row.visits > paths.visits ||
+                !isFraction(row.rate, row.visits, paths.visits)
+            )
+                return false;
+            const key = `${row.from}:${row.to}`;
+            if (pairs.has(key)) return false;
+            pairs.add(key);
+            return true;
+        })
+    )
+        return false;
     const stepKeys = ["inspirations", "open_create", "create", "submit"];
     const steps = value.funnel.steps;
-    if (!Array.isArray(steps) || steps.length !== stepKeys.length || !steps.every((step, index) => {
-        if (!step || step.key !== stepKeys[index] || !isCount(step.visits) || !isCount(step.possibleVisits)
-            || !isCount(step.uncertainVisits) || step.visits > step.possibleVisits
-            || step.uncertainVisits !== step.possibleVisits - step.visits) return false;
-        if (index === 0) return step.possibleVisits === step.visits && step.uncertainVisits === 0
-            && step.previousRate === null && isFraction(step.rate, step.visits, step.visits);
-        const previous = steps[index - 1];
-        return step.visits <= previous.visits && step.possibleVisits <= previous.possibleVisits
-            && isFraction(step.rate, step.visits, steps[0].visits) && isFraction(step.previousRate, step.visits, previous.visits);
-    })) return false;
+    if (
+        !Array.isArray(steps) ||
+        steps.length !== stepKeys.length ||
+        !steps.every((step, index) => {
+            if (!step || step.key !== stepKeys[index] || !isCount(step.visits) || !isCount(step.possibleVisits) || !isCount(step.uncertainVisits) || step.visits > step.possibleVisits || step.uncertainVisits !== step.possibleVisits - step.visits)
+                return false;
+            if (index === 0) return step.possibleVisits === step.visits && step.uncertainVisits === 0 && step.previousRate === null && isFraction(step.rate, step.visits, step.visits);
+            const previous = steps[index - 1];
+            return step.visits <= previous.visits && step.possibleVisits <= previous.possibleVisits && isFraction(step.rate, step.visits, steps[0].visits) && isFraction(step.previousRate, step.visits, previous.visits);
+        })
+    )
+        return false;
     const anomalies = value.anomalies;
     const rules = anomalies.rules;
     const keys = ["visitors", "pageViews", "visits", "actions"] as const;
-    if (anomalies.status !== overview.comparison.status || !rules || rules.minimumBaseline !== 30
-        || rules.minimumAbsoluteChange !== 10 || rules.relativeThreshold !== 0.3
-        || !Array.isArray(anomalies.metrics) || anomalies.metrics.length !== keys.length) return false;
+    if (anomalies.status !== overview.comparison.status || !rules || rules.minimumBaseline !== 30 || rules.minimumAbsoluteChange !== 10 || rules.relativeThreshold !== 0.3 || !Array.isArray(anomalies.metrics) || anomalies.metrics.length !== keys.length)
+        return false;
     return anomalies.metrics.every((metric, index) => {
         const key = keys[index];
         if (!metric || metric.key !== key || !isCount(metric.current) || metric.current !== overview.kpi[key]) return false;
@@ -256,80 +270,133 @@ function isOperations(value: SiteTrafficOperations | null | undefined, overview:
         if (previous === 0) return metric.status === "zero_baseline" && metric.relativeChange === null;
         const delta = metric.current - previous;
         const relative = delta / previous;
-        const status = previous < 30 ? "insufficient_sample" : Math.abs(delta) >= 10 && Math.abs(relative) >= 0.3
-            ? delta > 0 ? "increase" : "decrease" : "stable";
-        return metric.status === status && typeof metric.relativeChange === "number" && Number.isFinite(metric.relativeChange)
-            && Math.abs(metric.relativeChange - relative) < 1e-9;
+        const status = previous < 30 ? "insufficient_sample" : Math.abs(delta) >= 10 && Math.abs(relative) >= 0.3 ? (delta > 0 ? "increase" : "decrease") : "stable";
+        return metric.status === status && typeof metric.relativeChange === "number" && Number.isFinite(metric.relativeChange) && Math.abs(metric.relativeChange - relative) < 1e-9;
     });
 }
 
 function isInsights(value: SiteTrafficInsights | null | undefined, overview: SiteTrafficOverview) {
-    if (!value || !Array.isArray(value.heatmap) || value.heatmap.length !== 168
-        || !Array.isArray(value.featureTrend) || !Array.isArray(value.pageEngagement)
-        || value.pageEngagement.length > Object.keys(siteTrafficPageLabels).length
-        || !value.depth || !isCount(value.depth.visits) || !Array.isArray(value.depth.buckets) || value.depth.buckets.length !== 3) return false;
+    if (
+        !value ||
+        !Array.isArray(value.heatmap) ||
+        value.heatmap.length !== 168 ||
+        !Array.isArray(value.featureTrend) ||
+        !Array.isArray(value.pageEngagement) ||
+        value.pageEngagement.length > Object.keys(siteTrafficPageLabels).length ||
+        !value.depth ||
+        !isCount(value.depth.visits) ||
+        !Array.isArray(value.depth.buckets) ||
+        value.depth.buckets.length !== 3
+    )
+        return false;
     const historyStatuses = ["retained", "partial", "unknown"];
     const cells = new Set<string>();
     let partialCells = 0;
     const end = new Date(Date.parse(overview.effectiveTo) + 8 * 60 * 60 * 1000);
     const endWeekday = end.getUTCDay() || 7;
-    if (!value.heatmap.every((cell) => {
-        if (!cell || !isCount(cell.weekday) || cell.weekday < 1 || cell.weekday > 7 || !isCount(cell.hour) || cell.hour > 23
-            || !isCount(cell.hours) || !isCount(cell.completedHours) || cell.completedHours > cell.hours || typeof cell.partial !== "boolean") return false;
-        const key = `${cell.weekday}:${cell.hour}`;
-        if (cells.has(key)) return false;
-        cells.add(key);
-        if (cell.hours === 0) return cell.historyStatus === "outside_range" && cell.pageViews === null && cell.completedHours === 0 && !cell.partial;
-        if (!historyStatuses.includes(cell.historyStatus) || cell.hours - cell.completedHours !== (cell.partial ? 1 : 0)) return false;
-        if (cell.partial) {
-            partialCells += 1;
-            if (cell.weekday !== endWeekday || cell.hour !== end.getUTCHours() || Date.parse(overview.effectiveTo) % 3_600_000 === 0) return false;
-        }
-        return cell.historyStatus === "unknown" ? cell.pageViews === null : isCount(cell.pageViews);
-    }) || partialCells > 1) return false;
+    if (
+        !value.heatmap.every((cell) => {
+            if (
+                !cell ||
+                !isCount(cell.weekday) ||
+                cell.weekday < 1 ||
+                cell.weekday > 7 ||
+                !isCount(cell.hour) ||
+                cell.hour > 23 ||
+                !isCount(cell.hours) ||
+                !isCount(cell.completedHours) ||
+                cell.completedHours > cell.hours ||
+                typeof cell.partial !== "boolean"
+            )
+                return false;
+            const key = `${cell.weekday}:${cell.hour}`;
+            if (cells.has(key)) return false;
+            cells.add(key);
+            if (cell.hours === 0) return cell.historyStatus === "outside_range" && cell.pageViews === null && cell.completedHours === 0 && !cell.partial;
+            if (!historyStatuses.includes(cell.historyStatus) || cell.hours - cell.completedHours !== (cell.partial ? 1 : 0)) return false;
+            if (cell.partial) {
+                partialCells += 1;
+                if (cell.weekday !== endWeekday || cell.hour !== end.getUTCHours() || Date.parse(overview.effectiveTo) % 3_600_000 === 0) return false;
+            }
+            return cell.historyStatus === "unknown" ? cell.pageViews === null : isCount(cell.pageViews);
+        }) ||
+        partialCells > 1
+    )
+        return false;
     const day = 86_400_000;
     const start = Date.parse(`${overview.range.from}T00:00:00Z`);
     const days = (Date.parse(`${overview.range.to}T00:00:00Z`) - start) / day + 1;
     const serverDate = new Date(Date.parse(overview.asOf) + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const actionKeys = Object.keys(siteTrafficActionLabels) as SiteTrafficAction[];
-    if (!Number.isInteger(days) || days < 1 || days > 365 || value.featureTrend.length !== days
-        || !value.featureTrend.every((point, index) => {
-            if (!point || point.date !== new Date(start + index * day).toISOString().slice(0, 10)
-                || point.partial !== (point.date === serverDate) || !historyStatuses.includes(point.historyStatus)) return false;
+    if (
+        !Number.isInteger(days) ||
+        days < 1 ||
+        days > 365 ||
+        value.featureTrend.length !== days ||
+        !value.featureTrend.every((point, index) => {
+            if (!point || point.date !== new Date(start + index * day).toISOString().slice(0, 10) || point.partial !== (point.date === serverDate) || !historyStatuses.includes(point.historyStatus)) return false;
             if (point.historyStatus === "unknown") return point.counts === null;
-            return point.counts != null && typeof point.counts === "object" && !Array.isArray(point.counts)
-                && Object.keys(point.counts).length === actionKeys.length
-                && actionKeys.every((action) => Object.hasOwn(point.counts!, action) && isCount(point.counts![action]));
-        })) return false;
+            return (
+                point.counts != null &&
+                typeof point.counts === "object" &&
+                !Array.isArray(point.counts) &&
+                Object.keys(point.counts).length === actionKeys.length &&
+                actionKeys.every((action) => Object.hasOwn(point.counts!, action) && isCount(point.counts![action]))
+            );
+        })
+    )
+        return false;
     const pages = new Set<SiteTrafficPage>();
-    if (!value.pageEngagement.every((row) => {
-        if (!row || typeof row.page !== "string" || !Object.hasOwn(siteTrafficPageLabels, row.page) || pages.has(row.page) || !isCount(row.visits)) return false;
-        pages.add(row.page);
-        if (row.measurement === "unsupported" || row.measurement === "mixed") return row.engagedVisits === null && row.rate === null;
-        return row.measurement === "supported" && isCount(row.engagedVisits) && isEngagement({ visits: row.visits, engagedVisits: row.engagedVisits, rate: row.rate });
-    })) return false;
+    if (
+        !value.pageEngagement.every((row) => {
+            if (!row || typeof row.page !== "string" || !Object.hasOwn(siteTrafficPageLabels, row.page) || pages.has(row.page) || !isCount(row.visits)) return false;
+            pages.add(row.page);
+            if (row.measurement === "unsupported" || row.measurement === "mixed") return row.engagedVisits === null && row.rate === null;
+            return row.measurement === "supported" && isCount(row.engagedVisits) && isEngagement({ visits: row.visits, engagedVisits: row.engagedVisits, rate: row.rate });
+        })
+    )
+        return false;
     const depthKeys = ["1", "2-3", "4+"];
     let depthVisits = 0;
-    if (!value.depth.buckets.every((bucket, index) => {
-        if (!bucket || bucket.key !== depthKeys[index] || !isCount(bucket.visits) || bucket.visits > value.depth.visits) return false;
-        depthVisits += bucket.visits;
-        return value.depth.visits === 0 ? bucket.rate === null
-            : typeof bucket.rate === "number" && Number.isFinite(bucket.rate) && bucket.rate >= 0 && bucket.rate <= 1
-                && Math.abs(bucket.rate - bucket.visits / value.depth.visits) < 1e-9;
-    })) return false;
+    if (
+        !value.depth.buckets.every((bucket, index) => {
+            if (!bucket || bucket.key !== depthKeys[index] || !isCount(bucket.visits) || bucket.visits > value.depth.visits) return false;
+            depthVisits += bucket.visits;
+            return value.depth.visits === 0 ? bucket.rate === null : typeof bucket.rate === "number" && Number.isFinite(bucket.rate) && bucket.rate >= 0 && bucket.rate <= 1 && Math.abs(bucket.rate - bucket.visits / value.depth.visits) < 1e-9;
+        })
+    )
+        return false;
     // 只核本条聚合内部合计；独立 SQL 可能看到同截止时间内稍后落库的事件，不能强等另一条 KPI。
-    return Number.isSafeInteger(depthVisits) && depthVisits === value.depth.visits
-        && isOperations(value.operations, overview);
+    return Number.isSafeInteger(depthVisits) && depthVisits === value.depth.visits && isOperations(value.operations, overview);
 }
 
 export async function getSiteTrafficOverview(query: SiteTrafficQuery, options: SiteTrafficRequestOptions = {}) {
     const result = await http.get<SiteTrafficOverview>("/admin/traffic/overview", { params: { from: query.from, to: query.to }, signal: options.signal });
-    if (!result || !isDay(query.from) || !isDay(query.to) || query.from > query.to || result.range?.from !== query.from || result.range?.to !== query.to || result.range?.timeZone !== "Asia/Shanghai" || result.retentionDays !== 365 || !(result.availableFrom === null || isTimestamp(result.availableFrom)) || !isCounts(result.kpi)
-        || !isTimestamp(result.asOf) || !isInterval(result.effectiveFrom, result.effectiveTo, result.asOf)
-        || !isEngagement(result.engagement) || !isComparison(result.comparison, query, result.asOf) || !isInsights(result.insights, result)
-        || !Array.isArray(result.trend) || !result.trend.every((row) => row != null && isDay(row.date) && row.date >= query.from && row.date <= query.to && isCounts(row))
-        || !Array.isArray(result.pages) || !result.pages.every((row) => row != null && typeof row.page === "string" && Object.hasOwn(siteTrafficPageLabels, row.page) && isCount(row.pageViews) && isCount(row.visitors) && isCount(row.visits))
-        || !Array.isArray(result.actions) || !result.actions.every((row) => row != null && typeof row.page === "string" && Object.hasOwn(siteTrafficPageLabels, row.page) && typeof row.action === "string" && Object.hasOwn(siteTrafficActionLabels, row.action) && isCount(row.count) && isCount(row.visitors))) {
+    if (
+        !result ||
+        !isDay(query.from) ||
+        !isDay(query.to) ||
+        query.from > query.to ||
+        result.range?.from !== query.from ||
+        result.range?.to !== query.to ||
+        result.range?.timeZone !== "Asia/Shanghai" ||
+        result.retentionDays !== 365 ||
+        !(result.availableFrom === null || isTimestamp(result.availableFrom)) ||
+        !isCounts(result.kpi) ||
+        !isTimestamp(result.asOf) ||
+        !isInterval(result.effectiveFrom, result.effectiveTo, result.asOf) ||
+        !isEngagement(result.engagement) ||
+        !isComparison(result.comparison, query, result.asOf) ||
+        !isInsights(result.insights, result) ||
+        !Array.isArray(result.trend) ||
+        !result.trend.every((row) => row != null && isDay(row.date) && row.date >= query.from && row.date <= query.to && isCounts(row)) ||
+        !Array.isArray(result.pages) ||
+        !result.pages.every((row) => row != null && typeof row.page === "string" && Object.hasOwn(siteTrafficPageLabels, row.page) && isCount(row.pageViews) && isCount(row.visitors) && isCount(row.visits)) ||
+        !Array.isArray(result.actions) ||
+        !result.actions.every(
+            (row) => row != null && typeof row.page === "string" && Object.hasOwn(siteTrafficPageLabels, row.page) && typeof row.action === "string" && Object.hasOwn(siteTrafficActionLabels, row.action) && isCount(row.count) && isCount(row.visitors),
+        )
+    ) {
         throw new TypeError("访问统计概览响应无效");
     }
     return result;
@@ -338,14 +405,26 @@ export async function getSiteTrafficOverview(query: SiteTrafficQuery, options: S
 export async function getSiteTrafficToday(options: SiteTrafficRequestOptions = {}) {
     // 今日与近期窗口只由服务器时钟决定，不携带范围或来源筛选。
     const result = await http.get<SiteTrafficToday>("/admin/traffic/today", { signal: options.signal });
-    if (!result || !isDay(result.date) || result.timeZone !== "Asia/Shanghai" || !isTimestamp(result.asOf)
-        || !result.active || !isCount(result.active.visitors) || !isInterval(result.active.windowFrom, result.active.windowTo, result.asOf)
-        || Date.parse(result.active.windowTo) !== Date.parse(result.asOf) || Date.parse(result.active.windowTo) - Date.parse(result.active.windowFrom) !== 300_000
-        || !Array.isArray(result.hours)) throw new TypeError("今日访问统计响应无效");
+    if (
+        !result ||
+        !isDay(result.date) ||
+        result.timeZone !== "Asia/Shanghai" ||
+        !isTimestamp(result.asOf) ||
+        !result.active ||
+        !isCount(result.active.visitors) ||
+        !isInterval(result.active.windowFrom, result.active.windowTo, result.asOf) ||
+        Date.parse(result.active.windowTo) !== Date.parse(result.asOf) ||
+        Date.parse(result.active.windowTo) - Date.parse(result.active.windowFrom) !== 300_000 ||
+        !Array.isArray(result.hours)
+    )
+        throw new TypeError("今日访问统计响应无效");
     const serverTime = new Date(Date.parse(result.asOf) + 8 * 60 * 60 * 1000);
     const currentHour = serverTime.getUTCHours();
-    if (serverTime.toISOString().slice(0, 10) !== result.date || result.hours.length !== currentHour + 1
-        || !result.hours.every((row, index) => row != null && isCount(row.hour) && row.hour <= 23 && row.hour === index && row.partial === (index === currentHour) && isCounts(row))) {
+    if (
+        serverTime.toISOString().slice(0, 10) !== result.date ||
+        result.hours.length !== currentHour + 1 ||
+        !result.hours.every((row, index) => row != null && isCount(row.hour) && row.hour <= 23 && row.hour === index && row.partial === (index === currentHour) && isCounts(row))
+    ) {
         throw new TypeError("今日访问统计响应无效");
     }
     return result;

@@ -73,18 +73,20 @@ export function createSiteTrafficCollector(browser: Window, send: typeof collect
         // RequireAuth 的跳转发生在组件中，router idle 仍可能只显示认证加载/重定向。
         if (auth && !auth.user && !isGuestWorkspacePath(pathname)) return null;
         // 功能关闭时路由只展示门禁页，不能计入对应业务页面。
-        if (auth && (page === "tools_image" && !auth.features.imageWorkbenchEnabled
-            || page === "tools_video" && !auth.features.videoWorkbenchEnabled
-            || page === "history" && !auth.features.taskCenterEnabled
-            || page === "drama" && !auth.features.shortDramaEnabled)) return null;
+        if (
+            auth &&
+            ((page === "tools_image" && !auth.features.imageWorkbenchEnabled) ||
+                (page === "tools_video" && !auth.features.videoWorkbenchEnabled) ||
+                (page === "history" && !auth.features.taskCenterEnabled) ||
+                (page === "drama" && !auth.features.shortDramaEnabled))
+        )
+            return null;
         return page ? { pathname, page } : null;
     };
     const updateSession = () => {
         const now = Date.now();
         visitorId ||= createClientUUID();
-        session = !session || now - session.updatedAt >= SESSION_IDLE_MS
-            ? { id: createClientUUID(), updatedAt: now }
-            : { id: session.id, updatedAt: Math.max(now, session.updatedAt) };
+        session = !session || now - session.updatedAt >= SESSION_IDLE_MS ? { id: createClientUUID(), updatedAt: now } : { id: session.id, updatedAt: Math.max(now, session.updatedAt) };
         return { visitorId, sessionId: session.id };
     };
     const readAndTouchIdentity = () => {
@@ -115,7 +117,10 @@ export function createSiteTrafficCollector(browser: Window, send: typeof collect
     };
     const schedule = (delay = 600) => {
         if (!active() || timer !== undefined || inFlight.length || !queue.length) return;
-        timer = browser.setTimeout(() => { timer = undefined; void flush(); }, delay);
+        timer = browser.setTimeout(() => {
+            timer = undefined;
+            void flush();
+        }, delay);
     };
     const flush = async () => {
         if (!active() || inFlight.length) return;
@@ -130,7 +135,10 @@ export function createSiteTrafficCollector(browser: Window, send: typeof collect
         const signal = lifetime.signal;
         let delay = 600;
         try {
-            await send(batch.map(({ event }) => event), { signal });
+            await send(
+                batch.map(({ event }) => event),
+                { signal },
+            );
         } catch (error) {
             if (signal.aborted || !active() || !allowed()) return;
             if (error instanceof ApiError && (error.status === 404 || error.status === 405)) {
@@ -139,7 +147,9 @@ export function createSiteTrafficCollector(browser: Window, send: typeof collect
                 queue = [];
                 diagnose("endpoint_unavailable", batch.length);
             } else if (error instanceof ApiError && error.retryable && batch.every((item) => item.failures < 2)) {
-                batch.forEach((item) => { item.failures += 1; });
+                batch.forEach((item) => {
+                    item.failures += 1;
+                });
                 queue.unshift(...batch);
                 delay = Math.min(30_000, Math.max(1000 * 2 ** (batch[0].failures - 1), error.retryAfterMs || 0));
             } else {
@@ -159,23 +169,28 @@ export function createSiteTrafficCollector(browser: Window, send: typeof collect
         const signal = lifetime.signal;
         pendingCount += 1;
         // 串行并有界地分配身份，Web Lock 的回调内只做同步小配置读写，不持锁等待网络。
-        pending = pending.then(async () => {
-            if (signal.aborted || !active() || !allowed()) return;
-            const identity = await identityForEvent(signal);
-            if (!identity || signal.aborted || !active() || !allowed()) return;
-            const base = { id: createClientUUID(), ...identity, page };
-            queue.push({ event: action ? { ...base, type: "action", action } : { ...base, type: "page_view" }, failures: 0 });
-            schedule();
-        }).catch(() => {
-            if (!signal.aborted) diagnose("identity_unavailable");
-        }).finally(() => { pendingCount -= 1; });
+        pending = pending
+            .then(async () => {
+                if (signal.aborted || !active() || !allowed()) return;
+                const identity = await identityForEvent(signal);
+                if (!identity || signal.aborted || !active() || !allowed()) return;
+                const base = { id: createClientUUID(), ...identity, page };
+                queue.push({ event: action ? { ...base, type: "action", action } : { ...base, type: "page_view" }, failures: 0 });
+                schedule();
+            })
+            .catch(() => {
+                if (!signal.aborted) diagnose("identity_unavailable");
+            })
+            .finally(() => {
+                pendingCount -= 1;
+            });
     };
     const observePage = () => {
         if (!active() || !allowed() || browser.document.visibilityState !== "visible") return;
         const current = currentPage();
         if (!current) {
             // 离开可采集页面后再返回仍是一次展示，但不在导航或认证加载期间改动去重状态。
-            if (!router || router.state.initialized && router.state.navigation.state === "idle" && useUserStore.getState().hydrated) pageMemory.pathname = undefined;
+            if (!router || (router.state.initialized && router.state.navigation.state === "idle" && useUserStore.getState().hydrated)) pageMemory.pathname = undefined;
             return;
         }
         if (pageMemory.pathname === current.pathname) return;
@@ -187,7 +202,9 @@ export function createSiteTrafficCollector(browser: Window, send: typeof collect
         if (event.key === VISITOR_KEY || event.key === null) visitorId = event.newValue && UUID.test(event.newValue) ? event.newValue : undefined;
         if (event.key === SESSION_KEY || event.key === null) session = readSession(event.newValue);
     };
-    const onPageHide = () => { void flush(); };
+    const onPageHide = () => {
+        void flush();
+    };
     const dispose = () => {
         references = 0;
         unsubscribe?.();
@@ -208,9 +225,10 @@ export function createSiteTrafficCollector(browser: Window, send: typeof collect
             lifetime = new AbortController();
             router = source;
             unsubscribe = router?.subscribe(observePage);
-            if (router) unsubscribeAuth = useUserStore.subscribe((state, previous) => {
-                if (state.hydrated !== previous.hydrated || Boolean(state.user) !== Boolean(previous.user) || state.features !== previous.features) observePage();
-            });
+            if (router)
+                unsubscribeAuth = useUserStore.subscribe((state, previous) => {
+                    if (state.hydrated !== previous.hydrated || Boolean(state.user) !== Boolean(previous.user) || state.features !== previous.features) observePage();
+                });
             browser.document.addEventListener("visibilitychange", observePage);
             browser.addEventListener("storage", onStorage);
             browser.addEventListener("pagehide", onPageHide);
@@ -244,7 +262,8 @@ export function trackSiteTrafficAction(action: SiteTrafficAction) {
     collector?.trackAction(action);
 }
 
-if (import.meta.hot) import.meta.hot.dispose((data) => {
-    data.siteTrafficPageMemory = pageMemory;
-    collector?.dispose();
-});
+if (import.meta.hot)
+    import.meta.hot.dispose((data) => {
+        data.siteTrafficPageMemory = pageMemory;
+        collector?.dispose();
+    });

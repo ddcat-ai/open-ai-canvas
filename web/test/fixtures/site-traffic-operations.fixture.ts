@@ -5,7 +5,8 @@ type OperationsContext = Pick<SiteTrafficOverview, "asOf" | "effectiveFrom" | "k
 };
 
 const defaultContext: OperationsContext = {
-    asOf: "2026-11-10T08:00:00Z", effectiveFrom: "2026-11-01T00:00:00+08:00",
+    asOf: "2026-11-10T08:00:00Z",
+    effectiveFrom: "2026-11-01T00:00:00+08:00",
     kpi: { visitors: 1, pageViews: 2, visits: 1, actions: 0 },
     comparison: { status: "ready", kpi: { visitors: 0, pageViews: 0, visits: 0, actions: 0 } },
 };
@@ -18,19 +19,39 @@ export function trafficOperationsFixture(context: OperationsContext = defaultCon
     const noLookback = Date.parse(lookbackFrom) === Date.parse(context.effectiveFrom);
     return {
         visitorMix: {
-            status: noLookback ? "no_lookback" : "ready", visitors: 3,
-            firstObservedVisitors: noLookback ? null : 2, returningVisitors: noLookback ? null : 1,
-            firstObservedRate: noLookback ? null : 2 / 3, returningRate: noLookback ? null : 1 / 3,
-            lookbackFrom, lookbackTo: context.effectiveFrom,
+            status: noLookback ? "no_lookback" : "ready",
+            visitors: 3,
+            firstObservedVisitors: noLookback ? null : 2,
+            returningVisitors: noLookback ? null : 1,
+            firstObservedRate: noLookback ? null : 2 / 3,
+            returningRate: noLookback ? null : 1 / 3,
+            lookbackFrom,
+            lookbackTo: context.effectiveFrom,
         },
         endpoints: {
             visits: 5,
-            first: { undeterminedVisits: 1, pages: [{ page: "inspirations", visits: 3, rate: 0.6 }, { page: "create", visits: 1, rate: 0.2 }] },
-            last: { undeterminedVisits: 0, pages: [{ page: "canvas", visits: 3, rate: 0.6 }, { page: "create", visits: 2, rate: 0.4 }] },
+            first: {
+                undeterminedVisits: 1,
+                pages: [
+                    { page: "inspirations", visits: 3, rate: 0.6 },
+                    { page: "create", visits: 1, rate: 0.2 },
+                ],
+            },
+            last: {
+                undeterminedVisits: 0,
+                pages: [
+                    { page: "canvas", visits: 3, rate: 0.6 },
+                    { page: "create", visits: 2, rate: 0.4 },
+                ],
+            },
         },
         paths: {
-            visits: 5, ambiguousVisits: 1,
-            rows: [{ from: "inspirations", to: "create", visits: 3, rate: 0.6 }, { from: "create", to: "canvas", visits: 3, rate: 0.6 }],
+            visits: 5,
+            ambiguousVisits: 1,
+            rows: [
+                { from: "inspirations", to: "create", visits: 3, rate: 0.6 },
+                { from: "create", to: "canvas", visits: 3, rate: 0.6 },
+            ],
         },
         funnel: {
             steps: [
@@ -45,10 +66,20 @@ export function trafficOperationsFixture(context: OperationsContext = defaultCon
             rules: { minimumBaseline: 30, minimumAbsoluteChange: 10, relativeThreshold: 0.3 },
             metrics: (["visitors", "pageViews", "visits", "actions"] as const).map((key) => {
                 const current = context.kpi[key];
-                const previous = context.comparison.status === "ready" ? context.comparison.kpi?.[key] ?? null : null;
+                const previous = context.comparison.status === "ready" ? (context.comparison.kpi?.[key] ?? null) : null;
                 const relativeChange = previous === null || previous === 0 ? null : (current - previous) / previous;
-                const status: SiteTrafficOperations["anomalies"]["metrics"][number]["status"] = previous === null ? "unavailable" : previous === 0 ? "zero_baseline" : previous < 30 ? "insufficient_sample"
-                    : Math.abs(current - previous) >= 10 && Math.abs(relativeChange!) >= 0.3 ? current > previous ? "increase" : "decrease" : "stable";
+                const status: SiteTrafficOperations["anomalies"]["metrics"][number]["status"] =
+                    previous === null
+                        ? "unavailable"
+                        : previous === 0
+                          ? "zero_baseline"
+                          : previous < 30
+                            ? "insufficient_sample"
+                            : Math.abs(current - previous) >= 10 && Math.abs(relativeChange!) >= 0.3
+                              ? current > previous
+                                  ? "increase"
+                                  : "decrease"
+                              : "stable";
                 return { key, current, previous, relativeChange, status };
             }),
         },

@@ -5,8 +5,13 @@ import { trafficOperationsFixture } from "./fixtures/site-traffic-operations.fix
 
 function insightsFixture(): SiteTrafficInsights {
     const heatmap: SiteTrafficInsights["heatmap"] = Array.from({ length: 168 }, (_, index) => ({
-        weekday: Math.floor(index / 24) + 1, hour: index % 24, pageViews: null,
-        hours: 0, completedHours: 0, partial: false, historyStatus: "outside_range",
+        weekday: Math.floor(index / 24) + 1,
+        hour: index % 24,
+        pageViews: null,
+        hours: 0,
+        completedHours: 0,
+        partial: false,
+        historyStatus: "outside_range",
     }));
     for (let time = Date.parse("2026-11-01T00:00:00+08:00"); time < Date.parse("2026-11-10T16:00:00+08:00"); time += 3_600_000) {
         const local = new Date(time + 28_800_000);
@@ -20,7 +25,9 @@ function insightsFixture(): SiteTrafficInsights {
     return {
         heatmap,
         featureTrend: Array.from({ length: 10 }, (_, index) => ({
-            date: `2026-11-${String(index + 1).padStart(2, "0")}`, partial: index === 9, historyStatus: "retained",
+            date: `2026-11-${String(index + 1).padStart(2, "0")}`,
+            partial: index === 9,
+            historyStatus: "retained",
             counts: { open_create: 0, new_canvas: 0, open_ecommerce: 0, creation_submit_text: 0, creation_submit_image: 0, creation_submit_video: 0, creation_submit_agent: 0 },
         })),
         pageEngagement: [
@@ -29,7 +36,14 @@ function insightsFixture(): SiteTrafficInsights {
             { page: "inspirations", measurement: "unsupported", visits: 0, engagedVisits: null, rate: null },
             { page: "tools_image", measurement: "supported", visits: 0, engagedVisits: 0, rate: null },
         ],
-        depth: { visits: 1, buckets: [{ key: "1", visits: 0, rate: 0 }, { key: "2-3", visits: 1, rate: 1 }, { key: "4+", visits: 0, rate: 0 }] },
+        depth: {
+            visits: 1,
+            buckets: [
+                { key: "1", visits: 0, rate: 0 },
+                { key: "2-3", visits: 1, rate: 1 },
+                { key: "4+", visits: 0, rate: 0 },
+            ],
+        },
         operations: trafficOperationsFixture(),
     };
 }
@@ -37,13 +51,19 @@ function insightsFixture(): SiteTrafficInsights {
 const event: SiteTrafficEvent = { id: "765db62e-cb85-4bcc-9f95-f4337594535b", visitorId: "59885ec5-e685-4c5d-b234-81111e3df7ea", sessionId: "01d1f157-c8b6-4b2a-8e97-52d621a97fbf", type: "page_view", page: "canvas" };
 const query = { from: "2026-11-01", to: "2026-11-10" };
 const valid: SiteTrafficOverview = {
-    range: { ...query, timeZone: "Asia/Shanghai" }, retentionDays: 365, availableFrom: "2026-10-22T00:00:00+08:00",
-    asOf: "2026-11-10T08:00:00Z", effectiveFrom: "2026-11-01T00:00:00+08:00", effectiveTo: "2026-11-10T08:00:00Z",
+    range: { ...query, timeZone: "Asia/Shanghai" },
+    retentionDays: 365,
+    availableFrom: "2026-10-22T00:00:00+08:00",
+    asOf: "2026-11-10T08:00:00Z",
+    effectiveFrom: "2026-11-01T00:00:00+08:00",
+    effectiveTo: "2026-11-10T08:00:00Z",
     engagement: { visits: 1, engagedVisits: 0, rate: 0 },
     comparison: {
         range: { from: "2026-10-22", to: "2026-10-31", timeZone: "Asia/Shanghai" },
-        effectiveFrom: "2026-10-22T00:00:00+08:00", effectiveTo: "2026-10-31T16:00:00+08:00",
-        status: "ready", kpi: { visitors: 0, pageViews: 0, visits: 0, actions: 0 },
+        effectiveFrom: "2026-10-22T00:00:00+08:00",
+        effectiveTo: "2026-10-31T16:00:00+08:00",
+        status: "ready",
+        kpi: { visitors: 0, pageViews: 0, visits: 0, actions: 0 },
     },
     kpi: { visitors: 1, pageViews: 2, visits: 1, actions: 0 },
     trend: [{ date: "2026-11-01", visitors: 1, pageViews: 2, visits: 1, actions: 0 }],
@@ -53,7 +73,9 @@ const valid: SiteTrafficOverview = {
 };
 
 const today: SiteTrafficToday = {
-    date: "2026-11-11", timeZone: "Asia/Shanghai", asOf: "2026-11-10T16:02:30Z",
+    date: "2026-11-11",
+    timeZone: "Asia/Shanghai",
+    asOf: "2026-11-10T16:02:30Z",
     active: { visitors: 3, windowFrom: "2026-11-10T15:57:30Z", windowTo: "2026-11-10T16:02:30Z" },
     hours: [{ hour: 0, partial: true, visitors: 1, pageViews: 2, visits: 1, actions: 1 }],
 };
@@ -65,7 +87,11 @@ function envelope(data: unknown): { data: BackendEnvelope<unknown>; status: numb
 async function withResponse(data: unknown, run: () => Promise<unknown>) {
     const original = apiClient.request;
     apiClient.request = (async () => envelope(data)) as typeof apiClient.request;
-    try { return await run(); } finally { apiClient.request = original; }
+    try {
+        return await run();
+    } finally {
+        apiClient.request = original;
+    }
 }
 
 describe("site traffic API contract", () => {
@@ -91,7 +117,9 @@ describe("site traffic API contract", () => {
             const extra = { ...event, pathname: "/canvas/private-id", prompt: "private prompt", userId: "private account", title: "private title", referrer: "private referrer", props: { private: true } };
             await expect(collectSiteTraffic([extra, { ...extra, type: "action", action: "new_canvas" }], { signal: controller.signal })).resolves.toEqual({ accepted: 2 });
             expect(observed).toBe(true);
-        } finally { apiClient.request = original; }
+        } finally {
+            apiClient.request = original;
+        }
     });
 
     test("overview serializes only inclusive from/to and preserves cancellation", async () => {
@@ -107,7 +135,9 @@ describe("site traffic API contract", () => {
         }) as typeof apiClient.request;
         try {
             await expect(getSiteTrafficOverview({ ...query, secret: "private" } as typeof query, { signal: controller.signal })).resolves.toEqual(valid);
-        } finally { apiClient.request = original; }
+        } finally {
+            apiClient.request = original;
+        }
     });
 
     test("today uses the shared client without range/source params and preserves signal", async () => {
@@ -121,8 +151,11 @@ describe("site traffic API contract", () => {
             expect(config.withCredentials).not.toBe(false);
             return envelope(today);
         }) as typeof apiClient.request;
-        try { await expect(getSiteTrafficToday({ signal: controller.signal })).resolves.toEqual(today); }
-        finally { apiClient.request = original; }
+        try {
+            await expect(getSiteTrafficToday({ signal: controller.signal })).resolves.toEqual(today);
+        } finally {
+            apiClient.request = original;
+        }
     });
 
     test("all APIs preserve shared nonzero-envelope and HTTP errors", async () => {
@@ -134,36 +167,53 @@ describe("site traffic API contract", () => {
                 expect(error).toBeInstanceOf(ApiError);
                 expect(error).toMatchObject({ code: 40301, status: 200, retryable: false });
             }
-            apiClient.request = (async () => { throw { isAxiosError: true, message: "missing", response: { status: 404, data: { code: 404, data: null, msg: "请求不存在" }, headers: {} } }; }) as typeof apiClient.request;
+            apiClient.request = (async () => {
+                throw { isAxiosError: true, message: "missing", response: { status: 404, data: { code: 404, data: null, msg: "请求不存在" }, headers: {} } };
+            }) as typeof apiClient.request;
             await expect(collectSiteTraffic([event])).rejects.toMatchObject({ status: 404, retryable: false });
             await expect(getSiteTrafficOverview(query)).rejects.toMatchObject({ status: 404, retryable: false });
             await expect(getSiteTrafficToday()).rejects.toMatchObject({ status: 404, retryable: false });
-        } finally { apiClient.request = original; }
+        } finally {
+            apiClient.request = original;
+        }
     });
 
     test("all APIs preserve AbortError instead of presenting cancellation as business failure", async () => {
         const original = apiClient.request;
-        apiClient.request = (async () => { throw { __CANCEL__: true, code: "ERR_CANCELED" }; }) as typeof apiClient.request;
+        apiClient.request = (async () => {
+            throw { __CANCEL__: true, code: "ERR_CANCELED" };
+        }) as typeof apiClient.request;
         try {
             await expect(collectSiteTraffic([event])).rejects.toMatchObject({ name: "AbortError" });
             await expect(getSiteTrafficOverview(query)).rejects.toMatchObject({ name: "AbortError" });
             await expect(getSiteTrafficToday()).rejects.toMatchObject({ name: "AbortError" });
-        } finally { apiClient.request = original; }
+        } finally {
+            apiClient.request = original;
+        }
     });
 
     test("rejects non-whitelisted events before transport", async () => {
         const original = apiClient.request;
         let calls = 0;
-        apiClient.request = (async () => { calls += 1; return envelope({ accepted: 1 }); }) as typeof apiClient.request;
+        apiClient.request = (async () => {
+            calls += 1;
+            return envelope({ accepted: 1 });
+        }) as typeof apiClient.request;
         try {
             for (const invalid of [
                 { ...event, page: "/canvas/private-id" },
-                ...["welcome", "plugins", "share", "library", "runninghub", "other", "tools", "auth", "account"].flatMap((page) => [{ ...event, page }, { ...event, page, type: "action", action: "open_create" }]),
+                ...["welcome", "plugins", "share", "library", "runninghub", "other", "tools", "auth", "account"].flatMap((page) => [
+                    { ...event, page },
+                    { ...event, page, type: "action", action: "open_create" },
+                ]),
                 { ...event, type: "arbitrary" },
                 { ...event, type: "action", action: "private-action" },
-            ]) await expect(collectSiteTraffic([invalid as SiteTrafficEvent])).rejects.toThrow("访问统计事件类型无效");
+            ])
+                await expect(collectSiteTraffic([invalid as SiteTrafficEvent])).rejects.toThrow("访问统计事件类型无效");
             expect(calls).toBe(0);
-        } finally { apiClient.request = original; }
+        } finally {
+            apiClient.request = original;
+        }
     });
 
     test("image and video tools keep separate keys in collection and overview", async () => {
@@ -174,8 +224,11 @@ describe("site traffic API contract", () => {
             expect(config.data).toEqual({ events });
             return envelope({ accepted: 2 });
         }) as typeof apiClient.request;
-        try { await expect(collectSiteTraffic(events)).resolves.toEqual({ accepted: 2 }); }
-        finally { apiClient.request = original; }
+        try {
+            await expect(collectSiteTraffic(events)).resolves.toEqual({ accepted: 2 });
+        } finally {
+            apiClient.request = original;
+        }
         const snapshot: SiteTrafficOverview = {
             ...valid,
             pages: toolPages.map((page) => ({ page, pageViews: 1, visitors: 1, visits: 1 })),
@@ -188,7 +241,8 @@ describe("site traffic API contract", () => {
                 { ...snapshot, pages: [{ ...snapshot.pages[0], page }] },
                 { ...snapshot, actions: [{ ...snapshot.actions[0], page }] },
                 { ...snapshot, insights: { ...snapshot.insights, pageEngagement: [{ ...snapshot.insights.pageEngagement[0], page }] } },
-            ]) await expect(withResponse(invalid, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
+            ])
+                await expect(withResponse(invalid, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
         }
     });
 
@@ -201,14 +255,22 @@ describe("site traffic API contract", () => {
 
     test("overview rejects missing structure, invalid range, timezone, retention and RFC3339 dates", async () => {
         const invalid = [
-            undefined, null, {}, { ...valid, range: undefined },
+            undefined,
+            null,
+            {},
+            { ...valid, range: undefined },
             { ...valid, range: { ...valid.range, from: "2026-11-02" } },
             { ...valid, range: { ...valid.range, to: "2026-11-09" } },
             { ...valid, range: { ...valid.range, timeZone: "UTC" } },
-            { ...valid, retentionDays: 30 }, { ...valid, retentionDays: "365" },
-            { ...valid, availableFrom: undefined }, { ...valid, availableFrom: "2026-11-01" },
-            { ...valid, availableFrom: "2026-02-30T00:00:00Z" }, { ...valid, availableFrom: "2026-11-01T25:00:00Z" },
-            { ...valid, trend: null }, { ...valid, pages: {} }, { ...valid, actions: undefined },
+            { ...valid, retentionDays: 30 },
+            { ...valid, retentionDays: "365" },
+            { ...valid, availableFrom: undefined },
+            { ...valid, availableFrom: "2026-11-01" },
+            { ...valid, availableFrom: "2026-02-30T00:00:00Z" },
+            { ...valid, availableFrom: "2026-11-01T25:00:00Z" },
+            { ...valid, trend: null },
+            { ...valid, pages: {} },
+            { ...valid, actions: undefined },
             { ...valid, trend: [{ ...valid.trend[0], date: "2026-10-31" }] },
         ];
         for (const value of invalid) await expect(withResponse(value, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
@@ -218,19 +280,24 @@ describe("site traffic API contract", () => {
 
     test("comparison and engagement reject incomplete/unavailable fake values but allow independent denominators", async () => {
         for (const value of [
-            { ...valid, asOf: undefined }, { ...valid, asOf: "2026-02-30T00:00:00Z" },
-            { ...valid, effectiveFrom: "bad" }, { ...valid, effectiveTo: "2027-01-01T00:00:00Z" },
-            { ...valid, engagement: undefined }, { ...valid, engagement: { visits: 0, engagedVisits: 0, rate: 0 } },
+            { ...valid, asOf: undefined },
+            { ...valid, asOf: "2026-02-30T00:00:00Z" },
+            { ...valid, effectiveFrom: "bad" },
+            { ...valid, effectiveTo: "2027-01-01T00:00:00Z" },
+            { ...valid, engagement: undefined },
+            { ...valid, engagement: { visits: 0, engagedVisits: 0, rate: 0 } },
             { ...valid, engagement: { visits: 1, engagedVisits: 2, rate: 1 } },
             { ...valid, engagement: { visits: 2, engagedVisits: 1, rate: 50 } },
             { ...valid, engagement: { visits: 2, engagedVisits: 1, rate: Number.NaN } },
-            { ...valid, comparison: undefined }, { ...valid, comparison: { ...valid.comparison, status: "unknown" } },
+            { ...valid, comparison: undefined },
+            { ...valid, comparison: { ...valid.comparison, status: "unknown" } },
             { ...valid, comparison: { ...valid.comparison, status: "ready", kpi: null } },
             { ...valid, comparison: { ...valid.comparison, status: "insufficient_history" } },
             { ...valid, comparison: { ...valid.comparison, kpi: { ...valid.kpi, actions: -1 } } },
             { ...valid, comparison: { ...valid.comparison, effectiveTo: "bad" } },
             { ...valid, comparison: { ...valid.comparison, range: { ...valid.comparison.range, from: "2026-10-21" } } },
-        ]) await expect(withResponse(value, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
+        ])
+            await expect(withResponse(value, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
         for (const status of ["outside_retention", "insufficient_history"] as const) {
             const snapshot: SiteTrafficOverview = { ...valid, comparison: { ...valid.comparison, status, kpi: null }, insights: insightsFixture() };
             snapshot.insights.operations = trafficOperationsFixture(snapshot);
@@ -242,27 +309,70 @@ describe("site traffic API contract", () => {
 
     test("insights rejects missing dimensions, duplicates, invalid counts and false historical zeroes", async () => {
         const mutations: Array<(value: SiteTrafficInsights) => void> = [
-            (value) => { value.heatmap.pop(); },
-            (value) => { value.heatmap[0] = null as never; },
-            (value) => { value.heatmap[1] = { ...value.heatmap[0] }; },
-            (value) => { value.heatmap[0].weekday = 0; },
-            (value) => { value.heatmap[0].hour = 24; },
-            (value) => { value.heatmap[0].hours = -1; },
-            (value) => { value.heatmap[0].completedHours = value.heatmap[0].hours + 1; },
-            (value) => { value.heatmap[0].pageViews = Number.MAX_SAFE_INTEGER + 1; },
-            (value) => { value.heatmap[0].historyStatus = "unknown"; },
-            (value) => { value.heatmap[0].historyStatus = "outside_range"; },
-            (value) => { value.heatmap[0].hours = 0; value.heatmap[0].completedHours = 0; },
-            (value) => { value.heatmap[0].partial = true; },
-            (value) => { value.featureTrend.pop(); },
-            (value) => { value.featureTrend[1] = { ...value.featureTrend[0] }; },
-            (value) => { value.featureTrend[0].partial = true; },
-            (value) => { value.featureTrend[9].partial = false; },
-            (value) => { value.featureTrend[0].historyStatus = "unknown"; },
-            (value) => { value.featureTrend[0].counts = null; },
-            (value) => { value.featureTrend[0].counts!.open_create = -1; },
-            (value) => { delete (value.featureTrend[0].counts as { new_canvas?: number }).new_canvas; },
-            (value) => { value.featureTrend[0].counts = { ...value.featureTrend[0].counts!, secret: 1 } as never; },
+            (value) => {
+                value.heatmap.pop();
+            },
+            (value) => {
+                value.heatmap[0] = null as never;
+            },
+            (value) => {
+                value.heatmap[1] = { ...value.heatmap[0] };
+            },
+            (value) => {
+                value.heatmap[0].weekday = 0;
+            },
+            (value) => {
+                value.heatmap[0].hour = 24;
+            },
+            (value) => {
+                value.heatmap[0].hours = -1;
+            },
+            (value) => {
+                value.heatmap[0].completedHours = value.heatmap[0].hours + 1;
+            },
+            (value) => {
+                value.heatmap[0].pageViews = Number.MAX_SAFE_INTEGER + 1;
+            },
+            (value) => {
+                value.heatmap[0].historyStatus = "unknown";
+            },
+            (value) => {
+                value.heatmap[0].historyStatus = "outside_range";
+            },
+            (value) => {
+                value.heatmap[0].hours = 0;
+                value.heatmap[0].completedHours = 0;
+            },
+            (value) => {
+                value.heatmap[0].partial = true;
+            },
+            (value) => {
+                value.featureTrend.pop();
+            },
+            (value) => {
+                value.featureTrend[1] = { ...value.featureTrend[0] };
+            },
+            (value) => {
+                value.featureTrend[0].partial = true;
+            },
+            (value) => {
+                value.featureTrend[9].partial = false;
+            },
+            (value) => {
+                value.featureTrend[0].historyStatus = "unknown";
+            },
+            (value) => {
+                value.featureTrend[0].counts = null;
+            },
+            (value) => {
+                value.featureTrend[0].counts!.open_create = -1;
+            },
+            (value) => {
+                delete (value.featureTrend[0].counts as { new_canvas?: number }).new_canvas;
+            },
+            (value) => {
+                value.featureTrend[0].counts = { ...value.featureTrend[0].counts!, secret: 1 } as never;
+            },
         ];
         for (const mutate of mutations) {
             const insights = insightsFixture();
@@ -304,15 +414,29 @@ describe("site traffic API contract", () => {
         const midnightQuery = { from: "2026-11-10", to: "2026-11-10" };
         const zeroCounts = { visitors: 0, pageViews: 0, visits: 0, actions: 0 };
         const midnight: SiteTrafficOverview = {
-            ...valid, range: { ...midnightQuery, timeZone: "Asia/Shanghai" },
-            asOf: "2026-11-09T16:00:00Z", effectiveFrom: "2026-11-10T00:00:00+08:00", effectiveTo: "2026-11-10T00:00:00+08:00",
-            kpi: zeroCounts, engagement: { visits: 0, engagedVisits: 0, rate: null },
+            ...valid,
+            range: { ...midnightQuery, timeZone: "Asia/Shanghai" },
+            asOf: "2026-11-09T16:00:00Z",
+            effectiveFrom: "2026-11-10T00:00:00+08:00",
+            effectiveTo: "2026-11-10T00:00:00+08:00",
+            kpi: zeroCounts,
+            engagement: { visits: 0, engagedVisits: 0, rate: null },
             comparison: { range: { from: "2026-11-09", to: "2026-11-09", timeZone: "Asia/Shanghai" }, effectiveFrom: "2026-11-09T00:00:00+08:00", effectiveTo: "2026-11-09T00:00:00+08:00", status: "ready", kpi: zeroCounts },
-            trend: [{ date: "2026-11-10", ...zeroCounts }], pages: [], actions: [],
+            trend: [{ date: "2026-11-10", ...zeroCounts }],
+            pages: [],
+            actions: [],
             insights: {
                 heatmap: insightsFixture().heatmap.map((cell) => ({ ...cell, hours: 0, completedHours: 0, partial: false, historyStatus: "outside_range", pageViews: null })),
                 featureTrend: [{ date: "2026-11-10", partial: true, historyStatus: "unknown", counts: null }],
-                pageEngagement: [], depth: { visits: 0, buckets: [{ key: "1", visits: 0, rate: null }, { key: "2-3", visits: 0, rate: null }, { key: "4+", visits: 0, rate: null }] },
+                pageEngagement: [],
+                depth: {
+                    visits: 0,
+                    buckets: [
+                        { key: "1", visits: 0, rate: null },
+                        { key: "2-3", visits: 0, rate: null },
+                        { key: "4+", visits: 0, rate: null },
+                    ],
+                },
                 operations: trafficOperationsFixture(),
             },
         };
@@ -325,20 +449,48 @@ describe("site traffic API contract", () => {
 
     test("page engagement and depth enforce N/A, ratios and their own complete denominators", async () => {
         const mutations: Array<(value: SiteTrafficInsights) => void> = [
-            (value) => { value.pageEngagement[1] = { ...value.pageEngagement[0] }; },
-            (value) => { value.pageEngagement[0].page = "private" as never; },
-            (value) => { value.pageEngagement[0].measurement = "unknown" as never; },
-            (value) => { value.pageEngagement[0].engagedVisits = 2; },
-            (value) => { value.pageEngagement[0].rate = 0.5; },
-            (value) => { value.pageEngagement[0].visits = 0; },
-            (value) => { value.pageEngagement[1].engagedVisits = 0; },
-            (value) => { value.pageEngagement[2].rate = 0; },
-            (value) => { value.depth.buckets.pop(); },
-            (value) => { value.depth.buckets[1].key = "1"; },
-            (value) => { value.depth.buckets[0].visits = -1; },
-            (value) => { value.depth.buckets[0].rate = Number.NaN; },
-            (value) => { value.depth.buckets[1].rate = 0.5; },
-            (value) => { value.depth.visits = 2; },
+            (value) => {
+                value.pageEngagement[1] = { ...value.pageEngagement[0] };
+            },
+            (value) => {
+                value.pageEngagement[0].page = "private" as never;
+            },
+            (value) => {
+                value.pageEngagement[0].measurement = "unknown" as never;
+            },
+            (value) => {
+                value.pageEngagement[0].engagedVisits = 2;
+            },
+            (value) => {
+                value.pageEngagement[0].rate = 0.5;
+            },
+            (value) => {
+                value.pageEngagement[0].visits = 0;
+            },
+            (value) => {
+                value.pageEngagement[1].engagedVisits = 0;
+            },
+            (value) => {
+                value.pageEngagement[2].rate = 0;
+            },
+            (value) => {
+                value.depth.buckets.pop();
+            },
+            (value) => {
+                value.depth.buckets[1].key = "1";
+            },
+            (value) => {
+                value.depth.buckets[0].visits = -1;
+            },
+            (value) => {
+                value.depth.buckets[0].rate = Number.NaN;
+            },
+            (value) => {
+                value.depth.buckets[1].rate = 0.5;
+            },
+            (value) => {
+                value.depth.visits = 2;
+            },
         ];
         for (const mutate of mutations) {
             const insights = insightsFixture();
@@ -347,7 +499,14 @@ describe("site traffic API contract", () => {
         }
         const independent = insightsFixture();
         independent.pageEngagement[0] = { page: "canvas", measurement: "supported", visits: 7, engagedVisits: 2, rate: 2 / 7 };
-        independent.depth = { visits: 3, buckets: [{ key: "1", visits: 1, rate: 1 / 3 }, { key: "2-3", visits: 0, rate: 0 }, { key: "4+", visits: 2, rate: 2 / 3 }] };
+        independent.depth = {
+            visits: 3,
+            buckets: [
+                { key: "1", visits: 1, rate: 1 / 3 },
+                { key: "2-3", visits: 0, rate: 0 },
+                { key: "4+", visits: 2, rate: 2 / 3 },
+            ],
+        };
         await expect(withResponse({ ...valid, insights: independent }, () => getSiteTrafficOverview(query))).resolves.toMatchObject({ kpi: { visits: 1 }, insights: independent });
         const zero = insightsFixture();
         zero.pageEngagement[0] = { page: "canvas", measurement: "supported", visits: 0, engagedVisits: 0, rate: null };
@@ -367,17 +526,41 @@ describe("site traffic API contract", () => {
             await expect(withResponse({ ...valid, insights: { ...valid.insights, operations } }, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
         }
         const mutations: Array<(value: SiteTrafficOperations) => void> = [
-            (value) => { value.visitorMix.status = "unknown" as never; },
-            (value) => { value.visitorMix.visitors = 2; },
-            (value) => { value.visitorMix.firstObservedVisitors = null; },
-            (value) => { value.visitorMix.returningVisitors = null; },
-            (value) => { value.visitorMix.firstObservedVisitors = Number.MAX_SAFE_INTEGER; value.visitorMix.returningVisitors = 1; value.visitorMix.visitors = Number.MAX_SAFE_INTEGER; },
-            (value) => { value.visitorMix.lookbackFrom = "2025-11-11"; },
-            (value) => { value.visitorMix.lookbackFrom = "2025-11-10T00:00:00+08:00"; },
-            (value) => { value.visitorMix.lookbackTo = "bad"; },
-            (value) => { value.visitorMix.lookbackTo = "2026-11-02T00:00:00+08:00"; },
-            (value) => { value.visitorMix.lookbackTo = "2026-11-11T00:00:00+08:00"; },
-            (value) => { Object.assign(value.visitorMix, { status: "no_lookback", firstObservedVisitors: null, returningVisitors: null, firstObservedRate: null, returningRate: null }); },
+            (value) => {
+                value.visitorMix.status = "unknown" as never;
+            },
+            (value) => {
+                value.visitorMix.visitors = 2;
+            },
+            (value) => {
+                value.visitorMix.firstObservedVisitors = null;
+            },
+            (value) => {
+                value.visitorMix.returningVisitors = null;
+            },
+            (value) => {
+                value.visitorMix.firstObservedVisitors = Number.MAX_SAFE_INTEGER;
+                value.visitorMix.returningVisitors = 1;
+                value.visitorMix.visitors = Number.MAX_SAFE_INTEGER;
+            },
+            (value) => {
+                value.visitorMix.lookbackFrom = "2025-11-11";
+            },
+            (value) => {
+                value.visitorMix.lookbackFrom = "2025-11-10T00:00:00+08:00";
+            },
+            (value) => {
+                value.visitorMix.lookbackTo = "bad";
+            },
+            (value) => {
+                value.visitorMix.lookbackTo = "2026-11-02T00:00:00+08:00";
+            },
+            (value) => {
+                value.visitorMix.lookbackTo = "2026-11-11T00:00:00+08:00";
+            },
+            (value) => {
+                Object.assign(value.visitorMix, { status: "no_lookback", firstObservedVisitors: null, returningVisitors: null, firstObservedRate: null, returningRate: null });
+            },
         ];
         for (const mutate of mutations) {
             const snapshot = structuredClone(valid);
@@ -388,51 +571,106 @@ describe("site traffic API contract", () => {
 
     test("operations requires safe non-negative counts and exact finite fractions in every dimension", async () => {
         const counts: Array<(value: SiteTrafficOperations, bad: never) => void> = [
-            (value, bad) => { value.visitorMix.visitors = bad; },
-            (value, bad) => { value.visitorMix.firstObservedVisitors = bad; },
-            (value, bad) => { value.visitorMix.returningVisitors = bad; },
-            (value, bad) => { value.endpoints.visits = bad; },
-            (value, bad) => { value.endpoints.first.undeterminedVisits = bad; },
-            (value, bad) => { value.endpoints.last.undeterminedVisits = bad; },
-            (value, bad) => { value.endpoints.first.pages[0].visits = bad; },
-            (value, bad) => { value.endpoints.last.pages[0].visits = bad; },
-            (value, bad) => { value.paths.visits = bad; },
-            (value, bad) => { value.paths.ambiguousVisits = bad; },
-            (value, bad) => { value.paths.rows[0].visits = bad; },
-            (value, bad) => { value.funnel.steps[1].visits = bad; },
-            (value, bad) => { value.funnel.steps[1].possibleVisits = bad; },
-            (value, bad) => { value.funnel.steps[1].uncertainVisits = bad; },
-            (value, bad) => { value.anomalies.metrics[0].current = bad; },
-            (value, bad) => { value.anomalies.metrics[0].previous = bad; },
+            (value, bad) => {
+                value.visitorMix.visitors = bad;
+            },
+            (value, bad) => {
+                value.visitorMix.firstObservedVisitors = bad;
+            },
+            (value, bad) => {
+                value.visitorMix.returningVisitors = bad;
+            },
+            (value, bad) => {
+                value.endpoints.visits = bad;
+            },
+            (value, bad) => {
+                value.endpoints.first.undeterminedVisits = bad;
+            },
+            (value, bad) => {
+                value.endpoints.last.undeterminedVisits = bad;
+            },
+            (value, bad) => {
+                value.endpoints.first.pages[0].visits = bad;
+            },
+            (value, bad) => {
+                value.endpoints.last.pages[0].visits = bad;
+            },
+            (value, bad) => {
+                value.paths.visits = bad;
+            },
+            (value, bad) => {
+                value.paths.ambiguousVisits = bad;
+            },
+            (value, bad) => {
+                value.paths.rows[0].visits = bad;
+            },
+            (value, bad) => {
+                value.funnel.steps[1].visits = bad;
+            },
+            (value, bad) => {
+                value.funnel.steps[1].possibleVisits = bad;
+            },
+            (value, bad) => {
+                value.funnel.steps[1].uncertainVisits = bad;
+            },
+            (value, bad) => {
+                value.anomalies.metrics[0].current = bad;
+            },
+            (value, bad) => {
+                value.anomalies.metrics[0].previous = bad;
+            },
         ];
         const fractions: Array<(value: SiteTrafficOperations, bad: never) => void> = [
-            (value, bad) => { value.visitorMix.firstObservedRate = bad; },
-            (value, bad) => { value.visitorMix.returningRate = bad; },
-            (value, bad) => { value.endpoints.first.pages[0].rate = bad; },
-            (value, bad) => { value.endpoints.last.pages[0].rate = bad; },
-            (value, bad) => { value.paths.rows[0].rate = bad; },
-            (value, bad) => { value.funnel.steps[1].rate = bad; },
-            (value, bad) => { value.funnel.steps[2].previousRate = bad; },
+            (value, bad) => {
+                value.visitorMix.firstObservedRate = bad;
+            },
+            (value, bad) => {
+                value.visitorMix.returningRate = bad;
+            },
+            (value, bad) => {
+                value.endpoints.first.pages[0].rate = bad;
+            },
+            (value, bad) => {
+                value.endpoints.last.pages[0].rate = bad;
+            },
+            (value, bad) => {
+                value.paths.rows[0].rate = bad;
+            },
+            (value, bad) => {
+                value.funnel.steps[1].rate = bad;
+            },
+            (value, bad) => {
+                value.funnel.steps[2].previousRate = bad;
+            },
         ];
         for (const [setters, badValues] of [
             [counts, [-1, 0.5, Number.POSITIVE_INFINITY, Number.NaN, Number.MAX_SAFE_INTEGER + 1, "0", null, undefined]],
             [fractions, [-1, 0, 1, 1.1, Number.POSITIVE_INFINITY, Number.NaN, "0.6", null, undefined]],
         ] as const) {
-            for (const bad of badValues) for (const set of setters) {
-                const snapshot = structuredClone(valid);
-                set(snapshot.insights.operations, bad as never);
-                await expect(withResponse(snapshot, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
-            }
+            for (const bad of badValues)
+                for (const set of setters) {
+                    const snapshot = structuredClone(valid);
+                    set(snapshot.insights.operations, bad as never);
+                    await expect(withResponse(snapshot, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
+                }
         }
     });
 
     test("operations rejects retired page keys on first/last endpoints and both path directions", async () => {
         for (const page of ["welcome", "plugins", "share", "library", "runninghub", "other", "tools", "auth", "account", "private-server-key"]) {
             const mutations: Array<(value: SiteTrafficOperations) => void> = [
-                (value) => { value.endpoints.first.pages[0].page = page as never; },
-                (value) => { value.endpoints.last.pages[0].page = page as never; },
-                (value) => { value.paths.rows[0].from = page as never; },
-                (value) => { value.paths.rows[0].to = page as never; },
+                (value) => {
+                    value.endpoints.first.pages[0].page = page as never;
+                },
+                (value) => {
+                    value.endpoints.last.pages[0].page = page as never;
+                },
+                (value) => {
+                    value.paths.rows[0].from = page as never;
+                },
+                (value) => {
+                    value.paths.rows[0].to = page as never;
+                },
             ];
             for (const mutate of mutations) {
                 const snapshot = structuredClone(valid);
@@ -444,14 +682,32 @@ describe("site traffic API contract", () => {
 
     test("operations first and last endpoints require unique pages and full internal conservation", async () => {
         const mutations: Array<(value: SiteTrafficOperations["endpoints"]["first"]) => void> = [
-            (value) => { value.undeterminedVisits = 6; },
-            (value) => { value.undeterminedVisits += 1; },
-            (value) => { value.pages = null as never; },
-            (value) => { value.pages[0] = null as never; },
-            (value) => { value.pages[1].page = value.pages[0].page; },
-            (value) => { value.pages.pop(); },
-            (value) => { value.pages[0].visits = 6; value.pages[0].rate = 1; },
-            (value) => { value.pages[0].visits -= 1; value.pages[0].rate = value.pages[0].visits / 5; },
+            (value) => {
+                value.undeterminedVisits = 6;
+            },
+            (value) => {
+                value.undeterminedVisits += 1;
+            },
+            (value) => {
+                value.pages = null as never;
+            },
+            (value) => {
+                value.pages[0] = null as never;
+            },
+            (value) => {
+                value.pages[1].page = value.pages[0].page;
+            },
+            (value) => {
+                value.pages.pop();
+            },
+            (value) => {
+                value.pages[0].visits = 6;
+                value.pages[0].rate = 1;
+            },
+            (value) => {
+                value.pages[0].visits -= 1;
+                value.pages[0].rate = value.pages[0].visits / 5;
+            },
         ];
         for (const end of ["first", "last"] as const) {
             for (const missing of [undefined, null, {}]) {
@@ -477,13 +733,29 @@ describe("site traffic API contract", () => {
 
     test("operations paths reject more than ten rows, self pairs, duplicates and out-of-bound counts", async () => {
         const mutations: Array<(value: SiteTrafficOperations["paths"]) => void> = [
-            (value) => { value.rows = null as never; },
-            (value) => { value.rows[0] = null as never; },
-            (value) => { value.ambiguousVisits = value.visits + 1; },
-            (value) => { value.rows[0].from = value.rows[0].to; },
-            (value) => { value.rows.push({ ...value.rows[0] }); },
-            (value) => { value.rows[0].visits = 0; value.rows[0].rate = 0; },
-            (value) => { value.rows[0].visits = value.visits + 1; value.rows[0].rate = 1; },
+            (value) => {
+                value.rows = null as never;
+            },
+            (value) => {
+                value.rows[0] = null as never;
+            },
+            (value) => {
+                value.ambiguousVisits = value.visits + 1;
+            },
+            (value) => {
+                value.rows[0].from = value.rows[0].to;
+            },
+            (value) => {
+                value.rows.push({ ...value.rows[0] });
+            },
+            (value) => {
+                value.rows[0].visits = 0;
+                value.rows[0].rate = 0;
+            },
+            (value) => {
+                value.rows[0].visits = value.visits + 1;
+                value.rows[0].rate = 1;
+            },
             (value) => {
                 const pages = ["inspirations", "create", "canvas", "tools_image"] as const;
                 value.rows = pages.flatMap((from) => pages.filter((to) => to !== from).map((to) => ({ from, to, visits: 1, rate: 1 / value.visits }))).slice(0, 11);
@@ -498,22 +770,56 @@ describe("site traffic API contract", () => {
 
     test("operations funnel requires four ordered monotonic steps, exact uncertainty and both rate denominators", async () => {
         const mutations: Array<(value: SiteTrafficOperations["funnel"]) => void> = [
-            (value) => { value.steps = null as never; },
-            (value) => { value.steps[0] = null as never; },
-            (value) => { value.steps.pop(); },
-            (value) => { value.steps.push({ ...value.steps[3] }); },
-            (value) => { [value.steps[0], value.steps[1]] = [value.steps[1], value.steps[0]]; },
-            (value) => { value.steps[1].key = value.steps[0].key; },
-            (value) => { value.steps[2].key = "unknown" as never; },
-            (value) => { value.steps[0].possibleVisits += 1; value.steps[0].uncertainVisits = 1; },
-            (value) => { value.steps[0].previousRate = 1; },
-            (value) => { value.steps[0].rate = null; },
-            (value) => { value.steps[1].possibleVisits = 2; },
-            (value) => { value.steps[1].uncertainVisits = 0; },
-            (value) => { value.steps[2].possibleVisits = 5; value.steps[2].uncertainVisits = 3; },
-            (value) => { Object.assign(value.steps[2], { visits: 4, possibleVisits: 4, uncertainVisits: 0, rate: 0.8, previousRate: 4 / 3 }); },
-            (value) => { value.steps[1].rate = 3 / 4; },
-            (value) => { value.steps[2].previousRate = 2 / 4; },
+            (value) => {
+                value.steps = null as never;
+            },
+            (value) => {
+                value.steps[0] = null as never;
+            },
+            (value) => {
+                value.steps.pop();
+            },
+            (value) => {
+                value.steps.push({ ...value.steps[3] });
+            },
+            (value) => {
+                [value.steps[0], value.steps[1]] = [value.steps[1], value.steps[0]];
+            },
+            (value) => {
+                value.steps[1].key = value.steps[0].key;
+            },
+            (value) => {
+                value.steps[2].key = "unknown" as never;
+            },
+            (value) => {
+                value.steps[0].possibleVisits += 1;
+                value.steps[0].uncertainVisits = 1;
+            },
+            (value) => {
+                value.steps[0].previousRate = 1;
+            },
+            (value) => {
+                value.steps[0].rate = null;
+            },
+            (value) => {
+                value.steps[1].possibleVisits = 2;
+            },
+            (value) => {
+                value.steps[1].uncertainVisits = 0;
+            },
+            (value) => {
+                value.steps[2].possibleVisits = 5;
+                value.steps[2].uncertainVisits = 3;
+            },
+            (value) => {
+                Object.assign(value.steps[2], { visits: 4, possibleVisits: 4, uncertainVisits: 0, rate: 0.8, previousRate: 4 / 3 });
+            },
+            (value) => {
+                value.steps[1].rate = 3 / 4;
+            },
+            (value) => {
+                value.steps[2].previousRate = 2 / 4;
+            },
         ];
         for (const mutate of mutations) {
             const snapshot = structuredClone(valid);
@@ -552,13 +858,27 @@ describe("site traffic API contract", () => {
         const zero = { ...valid, insights: { ...insightsFixture(), operations } };
         await expect(withResponse(zero, () => getSiteTrafficOverview(query))).resolves.toEqual(zero);
         const mutations: Array<(value: SiteTrafficOperations) => void> = [
-            (value) => { value.visitorMix.firstObservedRate = 0; },
-            (value) => { value.visitorMix.returningRate = 0; },
-            (value) => { value.endpoints.first.pages[0].rate = 0; },
-            (value) => { value.funnel.steps[0].rate = 0; },
-            (value) => { value.funnel.steps[1].rate = 0; },
-            (value) => { value.funnel.steps[1].previousRate = 0; },
-            (value) => { value.paths.rows = [{ from: "inspirations", to: "create", visits: 0, rate: 0 }]; },
+            (value) => {
+                value.visitorMix.firstObservedRate = 0;
+            },
+            (value) => {
+                value.visitorMix.returningRate = 0;
+            },
+            (value) => {
+                value.endpoints.first.pages[0].rate = 0;
+            },
+            (value) => {
+                value.funnel.steps[0].rate = 0;
+            },
+            (value) => {
+                value.funnel.steps[1].rate = 0;
+            },
+            (value) => {
+                value.funnel.steps[1].previousRate = 0;
+            },
+            (value) => {
+                value.paths.rows = [{ from: "inspirations", to: "create", visits: 0, rate: 0 }];
+            },
         ];
         for (const mutate of mutations) {
             const snapshot = structuredClone(zero);
@@ -570,30 +890,53 @@ describe("site traffic API contract", () => {
     test("operations no_lookback derives the retention edge from server date and keeps unknown splits null", async () => {
         const boundaryQuery = { from: "2025-11-11", to: "2025-11-11" };
         const snapshot: SiteTrafficOverview = {
-            ...valid, range: { ...boundaryQuery, timeZone: "Asia/Shanghai" }, availableFrom: "2025-11-11T00:00:00+08:00",
-            effectiveFrom: "2025-11-11T00:00:00+08:00", effectiveTo: "2025-11-12T00:00:00+08:00",
+            ...valid,
+            range: { ...boundaryQuery, timeZone: "Asia/Shanghai" },
+            availableFrom: "2025-11-11T00:00:00+08:00",
+            effectiveFrom: "2025-11-11T00:00:00+08:00",
+            effectiveTo: "2025-11-12T00:00:00+08:00",
             comparison: { range: { from: "2025-11-10", to: "2025-11-10", timeZone: "Asia/Shanghai" }, effectiveFrom: "2025-11-10T00:00:00+08:00", effectiveTo: "2025-11-11T00:00:00+08:00", status: "outside_retention", kpi: null },
             trend: [{ date: boundaryQuery.from, ...valid.kpi }],
             insights: {
                 ...insightsFixture(),
                 heatmap: valid.insights.heatmap.map((cell): SiteTrafficInsights["heatmap"][number] => ({
-                    ...cell, hours: cell.weekday === 2 ? 1 : 0, completedHours: cell.weekday === 2 ? 1 : 0, partial: false,
-                    historyStatus: cell.weekday === 2 ? "retained" : "outside_range", pageViews: cell.weekday === 2 ? cell.hour === 0 ? 2 : 0 : null,
+                    ...cell,
+                    hours: cell.weekday === 2 ? 1 : 0,
+                    completedHours: cell.weekday === 2 ? 1 : 0,
+                    partial: false,
+                    historyStatus: cell.weekday === 2 ? "retained" : "outside_range",
+                    pageViews: cell.weekday === 2 ? (cell.hour === 0 ? 2 : 0) : null,
                 })),
                 featureTrend: [{ ...valid.insights.featureTrend[0], date: boundaryQuery.from, partial: false }],
             },
         };
         snapshot.insights.operations = trafficOperationsFixture(snapshot);
         await expect(withResponse(snapshot, () => getSiteTrafficOverview(boundaryQuery))).resolves.toMatchObject({
-            insights: { operations: { visitorMix: { status: "no_lookback", visitors: 3, firstObservedVisitors: null, returningVisitors: null, firstObservedRate: null, returningRate: null, lookbackFrom: "2025-11-10T16:00:00.000Z", lookbackTo: snapshot.effectiveFrom } } },
+            insights: {
+                operations: {
+                    visitorMix: { status: "no_lookback", visitors: 3, firstObservedVisitors: null, returningVisitors: null, firstObservedRate: null, returningRate: null, lookbackFrom: "2025-11-10T16:00:00.000Z", lookbackTo: snapshot.effectiveFrom },
+                },
+            },
         });
         const mutations: Array<(value: SiteTrafficOperations["visitorMix"]) => void> = [
-            (value) => { value.status = "ready"; },
-            (value) => { value.firstObservedVisitors = 0; },
-            (value) => { value.returningVisitors = 0; },
-            (value) => { value.firstObservedRate = 0; },
-            (value) => { value.returningRate = 0; },
-            (value) => { value.lookbackFrom = "2025-11-10T00:00:00+08:00"; },
+            (value) => {
+                value.status = "ready";
+            },
+            (value) => {
+                value.firstObservedVisitors = 0;
+            },
+            (value) => {
+                value.returningVisitors = 0;
+            },
+            (value) => {
+                value.firstObservedRate = 0;
+            },
+            (value) => {
+                value.returningRate = 0;
+            },
+            (value) => {
+                value.lookbackFrom = "2025-11-10T00:00:00+08:00";
+            },
         ];
         for (const mutate of mutations) {
             const invalid = structuredClone(snapshot);
@@ -617,46 +960,95 @@ describe("site traffic API contract", () => {
 
     test("operations anomalies rejects wrong rules, status, metric order and current/previous derivations", async () => {
         const base: SiteTrafficOverview = {
-            ...valid, kpi: { visitors: 40, pageViews: 60, visits: 39, actions: 0 },
-            comparison: { ...valid.comparison, status: "ready", kpi: { visitors: 30, pageViews: 100, visits: 30, actions: 29 } }, insights: insightsFixture(),
+            ...valid,
+            kpi: { visitors: 40, pageViews: 60, visits: 39, actions: 0 },
+            comparison: { ...valid.comparison, status: "ready", kpi: { visitors: 30, pageViews: 100, visits: 30, actions: 29 } },
+            insights: insightsFixture(),
         };
         base.insights.operations = trafficOperationsFixture(base);
         const mutations: Array<(value: SiteTrafficOperations["anomalies"]) => void> = [
-            (value) => { value.rules = null as never; },
-            (value) => { value.rules.minimumBaseline = 29 as never; },
-            (value) => { value.rules.minimumAbsoluteChange = 9 as never; },
-            (value) => { value.rules.relativeThreshold = 0.31 as never; },
-            (value) => { value.status = "insufficient_history"; },
-            (value) => { value.status = "unknown" as never; },
-            (value) => { value.metrics = null as never; },
-            (value) => { value.metrics.pop(); },
-            (value) => { value.metrics.push({ ...value.metrics[0] }); },
-            (value) => { value.metrics[0] = null as never; },
-            (value) => { value.metrics[1].key = value.metrics[0].key; },
-            (value) => { [value.metrics[0], value.metrics[1]] = [value.metrics[1], value.metrics[0]]; },
-            (value) => { value.metrics[0].key = "private-server-key" as never; },
-            (value) => { value.metrics[0].previous = null; },
-            (value) => { value.metrics[0].relativeChange = null; },
-            (value) => { value.metrics[0].relativeChange = Number.NaN; },
-            (value) => { value.metrics[0].relativeChange = Number.POSITIVE_INFINITY; },
-            (value) => { value.metrics[0].relativeChange = -1 / 3; },
-            (value) => { value.metrics[0].status = "stable"; },
-            (value) => { value.metrics[1].status = "increase"; },
-            (value) => { value.metrics[2].status = "increase"; },
-            (value) => { value.metrics[3].status = "decrease"; },
-            (value) => { value.metrics[0].status = "unknown" as never; },
+            (value) => {
+                value.rules = null as never;
+            },
+            (value) => {
+                value.rules.minimumBaseline = 29 as never;
+            },
+            (value) => {
+                value.rules.minimumAbsoluteChange = 9 as never;
+            },
+            (value) => {
+                value.rules.relativeThreshold = 0.31 as never;
+            },
+            (value) => {
+                value.status = "insufficient_history";
+            },
+            (value) => {
+                value.status = "unknown" as never;
+            },
+            (value) => {
+                value.metrics = null as never;
+            },
+            (value) => {
+                value.metrics.pop();
+            },
+            (value) => {
+                value.metrics.push({ ...value.metrics[0] });
+            },
+            (value) => {
+                value.metrics[0] = null as never;
+            },
+            (value) => {
+                value.metrics[1].key = value.metrics[0].key;
+            },
+            (value) => {
+                [value.metrics[0], value.metrics[1]] = [value.metrics[1], value.metrics[0]];
+            },
+            (value) => {
+                value.metrics[0].key = "private-server-key" as never;
+            },
+            (value) => {
+                value.metrics[0].previous = null;
+            },
+            (value) => {
+                value.metrics[0].relativeChange = null;
+            },
+            (value) => {
+                value.metrics[0].relativeChange = Number.NaN;
+            },
+            (value) => {
+                value.metrics[0].relativeChange = Number.POSITIVE_INFINITY;
+            },
+            (value) => {
+                value.metrics[0].relativeChange = -1 / 3;
+            },
+            (value) => {
+                value.metrics[0].status = "stable";
+            },
+            (value) => {
+                value.metrics[1].status = "increase";
+            },
+            (value) => {
+                value.metrics[2].status = "increase";
+            },
+            (value) => {
+                value.metrics[3].status = "decrease";
+            },
+            (value) => {
+                value.metrics[0].status = "unknown" as never;
+            },
         ];
         for (const mutate of mutations) {
             const snapshot = structuredClone(base);
             mutate(snapshot.insights.operations.anomalies);
             await expect(withResponse(snapshot, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
         }
-        for (const index of [0, 1, 2, 3]) for (const field of ["current", "previous"] as const) {
-            const snapshot = structuredClone(base);
-            const metric = snapshot.insights.operations.anomalies.metrics[index];
-            metric[field] = metric[field]! + 1;
-            await expect(withResponse(snapshot, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
-        }
+        for (const index of [0, 1, 2, 3])
+            for (const field of ["current", "previous"] as const) {
+                const snapshot = structuredClone(base);
+                const metric = snapshot.insights.operations.anomalies.metrics[index];
+                metric[field] = metric[field]! + 1;
+                await expect(withResponse(snapshot, () => getSiteTrafficOverview(query))).rejects.toThrow("访问统计概览响应无效");
+            }
         for (const patch of [{ status: "stable" }, { relativeChange: 0 }]) {
             const snapshot = structuredClone(valid);
             Object.assign(snapshot.insights.operations.anomalies.metrics[0], patch);
@@ -675,18 +1067,25 @@ describe("site traffic API contract", () => {
 
     test("today validates server date, full cross-midnight window, ordered elapsed hours and partial flags", async () => {
         for (const value of [
-            undefined, null, {}, { ...today, timeZone: "UTC" }, { ...today, date: "2026-11-10" },
-            { ...today, asOf: "2026-11-11" }, { ...today, active: null },
+            undefined,
+            null,
+            {},
+            { ...today, timeZone: "UTC" },
+            { ...today, date: "2026-11-10" },
+            { ...today, asOf: "2026-11-11" },
+            { ...today, active: null },
             { ...today, active: { ...today.active, visitors: -1 } },
             { ...today, active: { ...today.active, windowFrom: "2026-11-10T16:00:00Z" } },
             { ...today, active: { ...today.active, windowTo: "2026-11-10T16:02:29Z" } },
-            { ...today, hours: [] }, { ...today, hours: null },
+            { ...today, hours: [] },
+            { ...today, hours: null },
             { ...today, hours: [{ ...today.hours[0], hour: 1 }] },
             { ...today, hours: [{ ...today.hours[0], hour: 0.5 }] },
             { ...today, hours: [{ ...today.hours[0], partial: false }] },
             { ...today, hours: [{ ...today.hours[0], partial: "true" }] },
             { ...today, hours: [today.hours[0], { ...today.hours[0], hour: 1, partial: false }] },
-        ]) await expect(withResponse(value, () => getSiteTrafficToday())).rejects.toThrow("今日访问统计响应无效");
+        ])
+            await expect(withResponse(value, () => getSiteTrafficToday())).rejects.toThrow("今日访问统计响应无效");
         for (const key of ["visitors", "pageViews", "visits", "actions"]) {
             await expect(withResponse({ ...today, hours: [{ ...today.hours[0], [key]: -1 }] }, () => getSiteTrafficToday())).rejects.toThrow(TypeError);
         }

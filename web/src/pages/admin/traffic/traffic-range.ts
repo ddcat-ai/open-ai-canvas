@@ -18,7 +18,13 @@ export function trafficDateBounds(now = Date.now()) {
 
 export function trafficPresetRange(days: 7 | 30 | 60, now = Date.now()): TrafficDateRange {
     const { today } = trafficDateBounds(now);
-    return { from: dayjs.utc(today, dateFormat, true).subtract(days - 1, "day").format(dateFormat), to: today };
+    return {
+        from: dayjs
+            .utc(today, dateFormat, true)
+            .subtract(days - 1, "day")
+            .format(dateFormat),
+        to: today,
+    };
 }
 
 export function trafficRangeError(range: TrafficDateRange, now = Date.now()): string {

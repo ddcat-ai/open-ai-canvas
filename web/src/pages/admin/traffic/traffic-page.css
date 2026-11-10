@@ -65,7 +65,9 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color var(--admin-motion), color var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion);
 }
 
 .admin-traffic-page .admin-traffic-live-toggle:hover:not(:disabled) {
@@ -88,7 +90,9 @@
     height: 7px;
     border-radius: 999px;
     background: var(--admin-text-placeholder);
-    transition: background-color var(--admin-motion), transform var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        transform var(--admin-motion);
 }
 
 .admin-traffic-page .admin-traffic-live-dot[data-active="true"] {
@@ -97,7 +101,8 @@
 }
 
 @keyframes admin-traffic-pulse {
-    0%, 100% {
+    0%,
+    100% {
         transform: scale(1);
         opacity: 1;
     }
@@ -174,7 +179,10 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color var(--admin-motion), color var(--admin-motion), transform var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion),
+        transform var(--admin-motion);
 }
 
 .admin-traffic-page .admin-traffic-toggle-group button:hover {
@@ -297,7 +305,9 @@
     flex-direction: column;
     min-height: calc(var(--admin-space) * 16);
     padding: calc(var(--admin-space) * 2) calc(var(--admin-space) * 2.25);
-    transition: transform 180ms ease, background-color 180ms ease;
+    transition:
+        transform 180ms ease,
+        background-color 180ms ease;
 }
 
 .admin-traffic-page .admin-traffic-kpi-card[data-accent="indigo"] {
@@ -344,7 +354,9 @@
     border-radius: var(--admin-radius);
     background: color-mix(in srgb, var(--kpi-accent) 12%, var(--admin-surface));
     color: var(--kpi-accent);
-    transition: transform 180ms ease, background-color 180ms ease;
+    transition:
+        transform 180ms ease,
+        background-color 180ms ease;
 }
 
 .admin-traffic-page .admin-traffic-kpi-card:hover .admin-traffic-kpi-icon {
@@ -522,7 +534,9 @@
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     font-weight: 550;
-    transition: background-color var(--admin-motion), color var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion);
 }
 
 .admin-traffic-page .admin-traffic-spotlight-pill[data-hovered="true"] {
@@ -580,7 +594,11 @@
     font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color var(--admin-motion), color var(--admin-motion), opacity var(--admin-motion), transform var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion),
+        opacity var(--admin-motion),
+        transform var(--admin-motion);
 }
 
 .admin-traffic-page .admin-traffic-legend-btn[data-static="true"] {
@@ -1176,7 +1194,19 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .admin-traffic-page :is(.admin-stat-tile, .admin-traffic-kpi-icon, .admin-traffic-toggle-group button, .admin-traffic-live-toggle, .admin-traffic-live-dot, .admin-traffic-legend-btn, .admin-traffic-spotlight-pill, .admin-traffic-refresh-btn svg, .admin-traffic-methodology-chevron, .admin-traffic-heatmap-cell) {
+    .admin-traffic-page
+        :is(
+            .admin-stat-tile,
+            .admin-traffic-kpi-icon,
+            .admin-traffic-toggle-group button,
+            .admin-traffic-live-toggle,
+            .admin-traffic-live-dot,
+            .admin-traffic-legend-btn,
+            .admin-traffic-spotlight-pill,
+            .admin-traffic-refresh-btn svg,
+            .admin-traffic-methodology-chevron,
+            .admin-traffic-heatmap-cell
+        ) {
         transition: none;
         animation: none;
     }

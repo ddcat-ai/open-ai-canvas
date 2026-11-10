@@ -12,7 +12,12 @@ beforeEach(() => {
     useUserStore.setState({ hydrated: true, user: null });
     restores.push(() => useUserStore.setState(previous, true));
 });
-afterEach(() => { restores.splice(0).reverse().forEach((restore) => restore()); });
+afterEach(() => {
+    restores
+        .splice(0)
+        .reverse()
+        .forEach((restore) => restore());
+});
 
 async function settle() {
     // 队列最多 100 条，排空其有界身份分配链；不启动真实网络、计时器或浏览器。
@@ -27,8 +32,14 @@ function makeClock() {
     restores.push(() => dateSpy.mockRestore());
     return {
         tasks,
-        setTimeout: (run: () => void, delay = 0) => { const id = ++nextId; tasks.set(id, { at: now + delay, run }); return id; },
-        clearTimeout: (id: number) => { tasks.delete(id); },
+        setTimeout: (run: () => void, delay = 0) => {
+            const id = ++nextId;
+            tasks.set(id, { at: now + delay, run });
+            return id;
+        },
+        clearTimeout: (id: number) => {
+            tasks.delete(id);
+        },
         async advance(ms: number) {
             await settle();
             const target = now + ms;
@@ -55,7 +66,10 @@ function makeShared() {
                 if (options.signal.aborted) throw new DOMException("cancelled", "AbortError");
                 return run();
             });
-            lockTail = result.then(() => undefined, () => undefined);
+            lockTail = result.then(
+                () => undefined,
+                () => undefined,
+            );
             return result;
         },
     };
@@ -73,11 +87,13 @@ function makeTab(clock: ReturnType<typeof makeClock>, options: { path?: string; 
     let reads = 0;
     let writes = 0;
     let blockedStorage = options.blockedStorage || false;
-    const send: typeof collectSiteTraffic = options.send || (async (events, requestOptions = {}) => {
-        batches.push(events.map((event) => ({ ...event })));
-        signals.push(requestOptions.signal);
-        return { accepted: events.length };
-    });
+    const send: typeof collectSiteTraffic =
+        options.send ||
+        (async (events, requestOptions = {}) => {
+            batches.push(events.map((event) => ({ ...event })));
+            signals.push(requestOptions.signal);
+            return { accepted: events.length };
+        });
     const browser = Object.assign(target, {
         document,
         location,
@@ -85,59 +101,94 @@ function makeTab(clock: ReturnType<typeof makeClock>, options: { path?: string; 
         setTimeout: clock.setTimeout,
         clearTimeout: clock.clearTimeout,
     });
-    Object.defineProperty(browser, "localStorage", { get() {
-        reads += 1;
-        if (blockedStorage) throw new DOMException("denied", "SecurityError");
-        return {
-            getItem: (key: string) => shared.values.get(key) || null,
-            setItem: (key: string, value: string) => {
-                writes += 1;
-                shared.values.set(key, value);
-                for (const other of shared.tabs) if (other !== target) other.dispatchEvent(Object.assign(new Event("storage"), { key, newValue: value }));
-            },
-        };
-    } });
+    Object.defineProperty(browser, "localStorage", {
+        get() {
+            reads += 1;
+            if (blockedStorage) throw new DOMException("denied", "SecurityError");
+            return {
+                getItem: (key: string) => shared.values.get(key) || null,
+                setItem: (key: string, value: string) => {
+                    writes += 1;
+                    shared.values.set(key, value);
+                    for (const other of shared.tabs) if (other !== target) other.dispatchEvent(Object.assign(new Event("storage"), { key, newValue: value }));
+                },
+            };
+        },
+    });
     const warning = spyOn(console, "warn").mockImplementation(() => undefined);
     restores.push(() => warning.mockRestore());
     const collector = createSiteTrafficCollector(browser as unknown as Window, send);
     restores.push(collector.dispose);
     return {
-        collector, browser: browser as unknown as Window, batches, signals, shared, warning,
+        collector,
+        browser: browser as unknown as Window,
+        batches,
+        signals,
+        shared,
+        warning,
         reads: () => reads,
         writes: () => writes,
-        blockStorage: () => { blockedStorage = true; },
-        visible(value: boolean) { document.visibilityState = value ? "visible" : "hidden"; document.dispatchEvent(new Event("visibilitychange")); },
-        pagehide() { target.dispatchEvent(new Event("pagehide")); },
+        blockStorage: () => {
+            blockedStorage = true;
+        },
+        visible(value: boolean) {
+            document.visibilityState = value ? "visible" : "hidden";
+            document.dispatchEvent(new Event("visibilitychange"));
+        },
+        pagehide() {
+            target.dispatchEvent(new Event("pagehide"));
+        },
     };
 }
 
 function makeRouter(path = "/") {
     const listeners = new Set<() => void>();
     const state = { initialized: true, navigation: { state: "idle" }, location: new URL(path, "https://traffic.invalid") };
-    const source = { state, subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; } } as unknown as SiteTrafficRouter;
+    const source = {
+        state,
+        subscribe: (listener: () => void) => {
+            listeners.add(listener);
+            return () => {
+                listeners.delete(listener);
+            };
+        },
+    } as unknown as SiteTrafficRouter;
     return {
-        source, state, listeners,
+        source,
+        state,
+        listeners,
         notify: () => listeners.forEach((listener) => listener()),
-        commit(next: string) { state.initialized = true; state.navigation.state = "idle"; state.location = new URL(next, "https://traffic.invalid"); listeners.forEach((listener) => listener()); },
+        commit(next: string) {
+            state.initialized = true;
+            state.navigation.state = "idle";
+            state.location = new URL(next, "https://traffic.invalid");
+            listeners.forEach((listener) => listener());
+        },
     };
 }
 
-function events(tab: ReturnType<typeof makeTab>) { return tab.batches.flat(); }
+function events(tab: ReturnType<typeof makeTab>) {
+    return tab.batches.flat();
+}
 
-const excludedAccountPaths = ["/settings", "/login", "/register", "/forgot-password"].flatMap((path) => [
-    path, `${path}/`, path.toUpperCase(), `${path}?next=private&section=models#private`, `${path.toUpperCase()}/?next=private#private`,
-]);
+const excludedAccountPaths = ["/settings", "/login", "/register", "/forgot-password"].flatMap((path) => [path, `${path}/`, path.toUpperCase(), `${path}?next=private&section=models#private`, `${path.toUpperCase()}/?next=private#private`]);
 
 describe("site traffic fixed registry", () => {
     test("normalizes the actual router paths without exposing dynamic values", () => {
         const cases = [
-            ["/", "create"], ["/create", "create"],
-            ["/canvas", "canvas_list"], ["/canvas/private-project?title=private#prompt", "canvas"],
-            ["/assets", "assets"], ["/tasks", "history"], ["/ecommerce", "ecommerce"],
+            ["/", "create"],
+            ["/create", "create"],
+            ["/canvas", "canvas_list"],
+            ["/canvas/private-project?title=private#prompt", "canvas"],
+            ["/assets", "assets"],
+            ["/tasks", "history"],
+            ["/ecommerce", "ecommerce"],
             ["/projects/new", "drama"],
-            ["/projects/private/e/private-episode", "drama"], ["/skills/private/edit", "skills"],
+            ["/projects/private/e/private-episode", "drama"],
+            ["/skills/private/edit", "skills"],
             ["/referral", "referral"],
-            ["/toolbox/image", "tools_image"], ["/toolbox/video", "tools_video"],
+            ["/toolbox/image", "tools_image"],
+            ["/toolbox/video", "tools_video"],
         ];
         for (const [path, page] of cases) expect(resolveSiteTrafficPage(path)).toBe(page);
         expect(Object.keys(siteTrafficPageLabels)).toHaveLength(13);
@@ -145,7 +196,29 @@ describe("site traffic fixed registry", () => {
     });
 
     test("excludes disabled pages, unknown paths, admin, labs and redirect-only screens", () => {
-        for (const path of ["/inspirations", "/ecommerce-pipeline/private-folder", "/welcome/", "/plugins", "/plugins/eagle", "/share/canvas/private-token", "/library", "/runninghub", "/home", "/toolbox/unknown", "/admin", "/admin/traffic", "/ADMIN/traffic", "/Dev/previs-repro", "/dev/previs-repro", "/__fixture/private", "/test-voice-recording", "/wallet", "/ark-portrait/result", "/projects/private/legacy", ...excludedAccountPaths]) {
+        for (const path of [
+            "/inspirations",
+            "/ecommerce-pipeline/private-folder",
+            "/welcome/",
+            "/plugins",
+            "/plugins/eagle",
+            "/share/canvas/private-token",
+            "/library",
+            "/runninghub",
+            "/home",
+            "/toolbox/unknown",
+            "/admin",
+            "/admin/traffic",
+            "/ADMIN/traffic",
+            "/Dev/previs-repro",
+            "/dev/previs-repro",
+            "/__fixture/private",
+            "/test-voice-recording",
+            "/wallet",
+            "/ark-portrait/result",
+            "/projects/private/legacy",
+            ...excludedAccountPaths,
+        ]) {
             expect(resolveSiteTrafficPage(path)).toBeNull();
         }
     });
@@ -173,17 +246,26 @@ describe("site traffic page lifecycle and privacy", () => {
         }
         router.commit("/create");
         await clock.advance(600);
-        expect(events(tab).map((event) => [event.type, event.page])).toEqual([["page_view", "create"], ["page_view", "create"]]);
+        expect(events(tab).map((event) => [event.type, event.page])).toEqual([
+            ["page_view", "create"],
+            ["page_view", "create"],
+        ]);
     });
 
     test("image and video tool routes enqueue separate page and action sources", async () => {
         const clock = makeClock();
-        for (const [path, page] of [["/toolbox/image", "tools_image"], ["/toolbox/video", "tools_video"]]) {
+        for (const [path, page] of [
+            ["/toolbox/image", "tools_image"],
+            ["/toolbox/video", "tools_video"],
+        ]) {
             const tab = makeTab(clock, { path });
             tab.collector.install();
             tab.collector.trackAction("open_create");
             await clock.advance(600);
-            expect(events(tab).map((event) => [event.type, event.page])).toEqual([["page_view", page], ["action", page]]);
+            expect(events(tab).map((event) => [event.type, event.page])).toEqual([
+                ["page_view", page],
+                ["action", page],
+            ]);
         }
     });
 
@@ -284,7 +366,10 @@ describe("site traffic page lifecycle and privacy", () => {
 
     test("guest workspace pages wait for authentication readiness but remain visible anonymously", async () => {
         const clock = makeClock();
-        for (const [pathname, page] of [["/", "create"], ["/create", "create"]]) {
+        for (const [pathname, page] of [
+            ["/", "create"],
+            ["/create", "create"],
+        ]) {
             useUserStore.setState({ hydrated: false, user: null });
             const tab = makeTab(clock);
             const router = makeRouter(pathname);
@@ -351,7 +436,10 @@ describe("site traffic page lifecycle and privacy", () => {
         router.commit("/create");
         await clock.advance(600);
         expect(events(tab).map((event) => [event.type, event.page])).toEqual([
-            ["page_view", "create"], ["action", "create"], ["page_view", "canvas"], ["page_view", "create"],
+            ["page_view", "create"],
+            ["action", "create"],
+            ["page_view", "canvas"],
+            ["page_view", "create"],
         ]);
         expect(events(tab).filter((event) => event.type === "action")).toHaveLength(1);
     });
@@ -363,9 +451,12 @@ describe("site traffic page lifecycle and privacy", () => {
         const first = tab.collector.install(router.source);
         const second = tab.collector.install(router.source);
         expect(router.listeners.size).toBe(1);
-        first(); first();
+        first();
+        first();
         expect(router.listeners.size).toBe(1);
-        tab.visible(false); tab.visible(true); tab.visible(true);
+        tab.visible(false);
+        tab.visible(true);
+        tab.visible(true);
         tab.browser.dispatchEvent(new Event("focus"));
         await clock.advance(600);
         expect(events(tab)).toHaveLength(1);
@@ -378,7 +469,10 @@ describe("site traffic page lifecycle and privacy", () => {
         const clock = makeClock();
         const tab = makeTab(clock);
         const memory = {};
-        const send: typeof collectSiteTraffic = async (batch) => { tab.batches.push([...batch]); return { accepted: batch.length }; };
+        const send: typeof collectSiteTraffic = async (batch) => {
+            tab.batches.push([...batch]);
+            return { accepted: batch.length };
+        };
         const first = createSiteTrafficCollector(tab.browser, send, memory);
         first.install();
         await clock.advance(600);
@@ -403,7 +497,8 @@ describe("site traffic page lifecycle and privacy", () => {
         expect(tab.reads()).toBe(0);
         tab.visible(true);
         await clock.advance(600);
-        tab.visible(false); tab.visible(true);
+        tab.visible(false);
+        tab.visible(true);
         await clock.advance(600);
         expect(events(tab).map((event) => event.page)).toEqual(["create"]);
     });
@@ -414,7 +509,9 @@ describe("site traffic page lifecycle and privacy", () => {
             const tab = makeTab(clock, { ...privacy, blockedStorage: true });
             tab.collector.install();
             tab.collector.trackAction("open_create");
-            tab.visible(false); tab.visible(true); tab.pagehide();
+            tab.visible(false);
+            tab.visible(true);
+            tab.pagehide();
             await clock.advance(60_000);
             expect(tab.reads()).toBe(0);
             expect(tab.writes()).toBe(0);
@@ -442,7 +539,8 @@ describe("site traffic page lifecycle and privacy", () => {
         const shared = makeShared();
         const left = makeTab(clock, { shared });
         const right = makeTab(clock, { shared, path: "/create" });
-        left.collector.install(); right.collector.install();
+        left.collector.install();
+        right.collector.install();
         await clock.advance(600);
         const original = events(left)[0];
         expect(events(right)[0].visitorId).toBe(original.visitorId);
@@ -456,7 +554,8 @@ describe("site traffic page lifecycle and privacy", () => {
         expect(events(right)[1].sessionId).toBe(original.sessionId);
         const lastActivity = shared.values.get("site-traffic:session");
         await clock.advance(30 * 60_000);
-        right.visible(false); right.visible(true);
+        right.visible(false);
+        right.visible(true);
         await settle();
         expect(shared.values.get("site-traffic:session")).toBe(lastActivity);
         expect(events(right)).toHaveLength(2);
@@ -530,10 +629,12 @@ describe("site traffic bounded delivery", () => {
     test("retries a failed batch twice with unchanged event IDs, then stops timers", async () => {
         const clock = makeClock();
         const attempts: SiteTrafficEvent[][] = [];
-        const tab = makeTab(clock, { send: async (batch) => {
-            attempts.push([...batch]);
-            throw new ApiError("private upstream details", { status: 503, retryable: true });
-        } });
+        const tab = makeTab(clock, {
+            send: async (batch) => {
+                attempts.push([...batch]);
+                throw new ApiError("private upstream details", { status: 503, retryable: true });
+            },
+        });
         tab.collector.install();
         tab.collector.trackAction("open_create");
         await clock.advance(600);
@@ -555,7 +656,12 @@ describe("site traffic bounded delivery", () => {
     test("a missing old-backend endpoint disables future requests and never logs the server error", async () => {
         const clock = makeClock();
         let calls = 0;
-        const tab = makeTab(clock, { send: async () => { calls += 1; throw new ApiError("sensitive error", { status: 404 }); } });
+        const tab = makeTab(clock, {
+            send: async () => {
+                calls += 1;
+                throw new ApiError("sensitive error", { status: 404 });
+            },
+        });
         const router = makeRouter();
         tab.collector.install(router.source);
         await clock.advance(600);
@@ -571,11 +677,16 @@ describe("site traffic bounded delivery", () => {
         const clock = makeClock();
         const attempts: SiteTrafficEvent[][] = [];
         let release: (() => void) | undefined;
-        const tab = makeTab(clock, { send: async (batch) => {
-            attempts.push([...batch]);
-            if (attempts.length === 1) await new Promise<void>((resolve) => { release = resolve; });
-            return { accepted: batch.length };
-        } });
+        const tab = makeTab(clock, {
+            send: async (batch) => {
+                attempts.push([...batch]);
+                if (attempts.length === 1)
+                    await new Promise<void>((resolve) => {
+                        release = resolve;
+                    });
+                return { accepted: batch.length };
+            },
+        });
         tab.collector.install();
         for (let index = 0; index < 300; index += 1) tab.collector.trackAction("open_create");
         await clock.advance(600);
@@ -597,11 +708,13 @@ describe("site traffic bounded delivery", () => {
         const clock = makeClock();
         let signal: AbortSignal | undefined;
         let calls = 0;
-        const tab = makeTab(clock, { send: (_batch, options) => {
-            calls += 1;
-            signal = options?.signal;
-            return new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")), { once: true }));
-        } });
+        const tab = makeTab(clock, {
+            send: (_batch, options) => {
+                calls += 1;
+                signal = options?.signal;
+                return new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")), { once: true }));
+            },
+        });
         const router = makeRouter();
         const dispose = tab.collector.install(router.source);
         await clock.advance(600);

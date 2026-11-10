@@ -21,7 +21,8 @@ test("仅允许含今日近365日，非法/倒序/未来和过早日期明确拒
         { from: "2026-02-30", to: "2026-03-01" },
         { from: "2026-2-01", to: "2026-03-01" },
         { from: "", to: "2026-11-11" },
-    ]) expect(trafficRangeError(range, now)).not.toBe("");
+    ])
+        expect(trafficRangeError(range, now)).not.toBe("");
     const leapNow = Date.parse("2024-03-01T12:00:00Z");
     expect(trafficRangeError({ from: "2024-02-29", to: "2024-03-01" }, leapNow)).toBe("");
     expect(trafficEventTime("2026-11-10T16:05:00Z")).toBe("2026-11-11 00:05");
@@ -33,12 +34,12 @@ test("访问统计独立懒加载、导航紧接运行总览且旧index接线不
     const shell = await Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text();
     expect(router).toContain('const TrafficPage = lazyAdminPage(() => import("@/pages/admin/traffic/traffic-page"))');
     expect(router).toContain('{ path: "traffic", element: <TrafficPage /> }');
-    expect(router).toContain('{ index: true, element: <AnalyticsPage /> }');
+    expect(router).toContain("{ index: true, element: <AnalyticsPage /> }");
     expect(shell).toMatch(/path: "\/admin", [^\n]*label: "运行总览"[^\n]*\r?\n\s*\{ path: "\/admin\/traffic", [^\n]*label: "访问统计", shortLabel: "访问", icon: <MousePointerClick/);
     const page = await Bun.file(new URL("../src/pages/admin/traffic/traffic-page.tsx", import.meta.url)).text();
     expect(page).toContain('<AdminPageFrame title="访问统计"');
     expect(page).toContain('queryKey: ["admin", "site-traffic", range.from, range.to]');
-    expect(page).toContain('getSiteTrafficOverview(range, { signal })');
+    expect(page).toContain("getSiteTrafficOverview(range, { signal })");
     expect(page).not.toContain("refetchInterval");
     expect(page).toContain("AdminExportButton");
     expect(page).toContain("createTrafficCsv(snapshot, kind, sourcePage)");
@@ -50,23 +51,23 @@ test("趋势图职责局部抽取，保留动态系列/650ms/减少动画及两�
     const page = await Bun.file(new URL("../src/pages/admin/traffic/traffic-page.tsx", import.meta.url)).text();
     const chart = await Bun.file(new URL("../src/pages/admin/traffic/traffic-trend-chart.tsx", import.meta.url)).text();
     expect(page).toContain('import { TrafficTrendChart } from "./traffic-trend-chart"');
-    expect(page).toContain('getSiteTrafficToday({ signal })');
-    expect(page).toContain('useState(false)');
-    expect(page).toContain('15_000');
-    expect(page).toContain('cancelRefetch: false');
+    expect(page).toContain("getSiteTrafficToday({ signal })");
+    expect(page).toContain("useState(false)");
+    expect(page).toContain("15_000");
+    expect(page).toContain("cancelRefetch: false");
     expect(page).not.toContain("ComposedChart");
     expect(chart.split("\n").length).toBeLessThan(500);
     expect(chart).toContain("<ComposedChart");
     expect(chart).toContain("<Area");
     expect(chart).toContain("visitSeriesConfig");
-    expect(chart).toContain('animationDuration={650}');
-    expect(chart).toContain('isAnimationActive={chartAnimated}');
-    expect(chart).toContain('(prefers-reduced-motion: reduce)');
+    expect(chart).toContain("animationDuration={650}");
+    expect(chart).toContain("isAnimationActive={chartAnimated}");
+    expect(chart).toContain("(prefers-reduced-motion: reduce)");
     expect(chart).toContain('aria-label="趋势时间粒度"');
     expect(chart).toContain('aria-label="趋势视图"');
     expect(chart).toContain('aria-label="趋势图例筛选"');
     expect(chart).toContain('id="admin-traffic-trend-title"');
-    expect(chart).toContain('onFocus={() => setFocusedSeries(series.key)}');
+    expect(chart).toContain("onFocus={() => setFocusedSeries(series.key)}");
 });
 
 test("页面私有样式无普通卡片装饰边框，复用既有admin token并处理窄屏与减少动画", async () => {
@@ -92,23 +93,23 @@ test("五项扩展局限本页，热力图键盘/范围边界、七功能断点�
     expect(csv.split("\n").length).toBeLessThan(500);
     expect(page).toContain("<TrafficHeatmap cells={data?.insights.heatmap}");
     expect(heatmap).toContain("aria-describedby={tooltipId}");
-    expect(heatmap).toContain('onFocus={() => setActiveKey(key)}');
-    expect(heatmap).toContain('cell.pageViews === null');
-    expect(heatmap).toContain('outside_range');
-    expect(chart).toContain('dataKey={`features.${series.key}`}');
-    expect(chart).toContain('disabled={features}');
-    expect(chart).toContain('features: point.counts');
-    expect(chart).toContain('connectNulls={false}');
+    expect(heatmap).toContain("onFocus={() => setActiveKey(key)}");
+    expect(heatmap).toContain("cell.pageViews === null");
+    expect(heatmap).toContain("outside_range");
+    expect(chart).toContain("dataKey={`features.${series.key}`}");
+    expect(chart).toContain("disabled={features}");
+    expect(chart).toContain("features: point.counts");
+    expect(chart).toContain("connectNulls={false}");
     expect(csv).toContain('import Papa from "papaparse"');
-    expect(csv).toContain('Papa.unparse');
-    expect(csv).toContain('escapeFormulae: formulaPrefix');
-    expect(csv).toContain('snapshot.trend.map');
-    expect(csv).not.toContain('...snapshot');
-    expect(csv).not.toContain('fetch(');
-    expect(csv).not.toContain('apiClient');
-    expect(css).toContain('[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-scroll');
-    expect(css).toContain('overflow-x: auto');
-    expect(css).toContain('admin-traffic-heatmap-cell, .admin-traffic-heatmap-scroll):focus-visible');
+    expect(csv).toContain("Papa.unparse");
+    expect(csv).toContain("escapeFormulae: formulaPrefix");
+    expect(csv).toContain("snapshot.trend.map");
+    expect(csv).not.toContain("...snapshot");
+    expect(csv).not.toContain("fetch(");
+    expect(csv).not.toContain("apiClient");
+    expect(css).toContain("[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-scroll");
+    expect(css).toContain("overflow-x: auto");
+    expect(css).toContain("admin-traffic-heatmap-cell, .admin-traffic-heatmap-scroll):focus-visible");
 });
 
 test("运营分析只展示原概览数据，五项帮助/原生折叠/局部样式及无新副作用保持", async () => {

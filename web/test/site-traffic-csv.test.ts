@@ -9,21 +9,35 @@ import { trafficOperationsFixture } from "./fixtures/site-traffic-operations.fix
 function snapshot(): SiteTrafficOverview {
     const zeroActions = { open_create: 0, new_canvas: 0, open_ecommerce: 0, creation_submit_text: 0, creation_submit_image: 0, creation_submit_video: 0, creation_submit_agent: 0 };
     const value: SiteTrafficOverview = {
-        range: { from: "2026-11-10", to: "2026-11-11", timeZone: "Asia/Shanghai" }, retentionDays: 365,
-        availableFrom: "2026-11-10T16:00:00Z", asOf: "2026-11-10T16:05:00Z", effectiveFrom: "2026-11-09T16:00:00Z", effectiveTo: "2026-11-10T16:05:00Z",
+        range: { from: "2026-11-10", to: "2026-11-11", timeZone: "Asia/Shanghai" },
+        retentionDays: 365,
+        availableFrom: "2026-11-10T16:00:00Z",
+        asOf: "2026-11-10T16:05:00Z",
+        effectiveFrom: "2026-11-09T16:00:00Z",
+        effectiveTo: "2026-11-10T16:05:00Z",
         comparison: { range: { from: "2026-11-08", to: "2026-11-09", timeZone: "Asia/Shanghai" }, effectiveFrom: "2026-11-07T16:00:00Z", effectiveTo: "2026-11-08T16:05:00Z", status: "insufficient_history", kpi: null },
-        kpi: { pageViews: 4, visitors: 2, visits: 2, actions: 1 }, engagement: { visits: 2, engagedVisits: 1, rate: 0.5 },
-        trend: [{ date: "2026-11-10", pageViews: 4, visitors: 2, visits: 2, actions: 1 }, { date: "2026-11-11", pageViews: 0, visitors: 0, visits: 0, actions: 0 }],
+        kpi: { pageViews: 4, visitors: 2, visits: 2, actions: 1 },
+        engagement: { visits: 2, engagedVisits: 1, rate: 0.5 },
+        trend: [
+            { date: "2026-11-10", pageViews: 4, visitors: 2, visits: 2, actions: 1 },
+            { date: "2026-11-11", pageViews: 0, visitors: 0, visits: 0, actions: 0 },
+        ],
         pages: [
             { page: "create", pageViews: 4, visitors: 2, visits: 2 },
             { page: "inspirations", pageViews: 1, visitors: 1, visits: 1 },
             { page: "assets", pageViews: 0, visitors: 0, visits: 0 },
             { page: "history", pageViews: 1, visitors: 1, visits: 1 },
         ],
-        actions: [{ page: "create", action: "open_create", count: 2, visitors: 2 }, { page: "canvas_list", action: "new_canvas", count: 1, visitors: 1 }],
+        actions: [
+            { page: "create", action: "open_create", count: 2, visitors: 2 },
+            { page: "canvas_list", action: "new_canvas", count: 1, visitors: 1 },
+        ],
         insights: {
             heatmap: Array.from({ length: 168 }, (_, index) => ({ weekday: Math.floor(index / 24) + 1, hour: index % 24, pageViews: null, hours: 0, completedHours: 0, partial: false, historyStatus: "outside_range" })),
-            featureTrend: [{ date: "2026-11-10", partial: false, historyStatus: "unknown", counts: null }, { date: "2026-11-11", partial: true, historyStatus: "retained", counts: zeroActions }],
+            featureTrend: [
+                { date: "2026-11-10", partial: false, historyStatus: "unknown", counts: null },
+                { date: "2026-11-11", partial: true, historyStatus: "retained", counts: zeroActions },
+            ],
             // unsupported/mixed 仅隔离 CSV 协议投影；不是当前后端会返回的页面状态。
             pageEngagement: [
                 { page: "create", measurement: "supported", visits: 4, engagedVisits: 1, rate: 0.25 },
@@ -31,7 +45,14 @@ function snapshot(): SiteTrafficOverview {
                 { page: "assets", measurement: "supported", visits: 0, engagedVisits: 0, rate: null },
                 { page: "tools_image", measurement: "mixed", visits: 12, engagedVisits: null, rate: null },
             ],
-            depth: { visits: 3, buckets: [{ key: "1", visits: 1, rate: 1 / 3 }, { key: "2-3", visits: 1, rate: 1 / 3 }, { key: "4+", visits: 1, rate: 1 / 3 }] },
+            depth: {
+                visits: 3,
+                buckets: [
+                    { key: "1", visits: 1, rate: 1 / 3 },
+                    { key: "2-3", visits: 1, rate: 1 / 3 },
+                    { key: "4+", visits: 1, rate: 1 / 3 },
+                ],
+            },
             operations: trafficOperationsFixture(),
         },
     };
@@ -53,7 +74,21 @@ test("每日CSV固定白名单列、全日期与覆盖元数据，真零和未�
     const result = parse(csv);
     expect(result.meta.fields).toEqual([...commonFields, "recordStatus", "date", "partial", "historyStatus", "pageViews", "visitors", "visits", "actions"]);
     expect(result.data).toHaveLength(2);
-    expect(result.data[0]).toMatchObject({ rangeFrom: "2026-11-10", rangeTo: "2026-11-11", timeZone: "Asia/Shanghai", asOf: value.asOf, effectiveFrom: value.effectiveFrom, effectiveTo: value.effectiveTo, availableFrom: value.availableFrom, retentionDays: "365", scope: "仅应用日期范围", sourceFilter: "不适用", historyStatus: "unknown", partial: "false", pageViews: "4" });
+    expect(result.data[0]).toMatchObject({
+        rangeFrom: "2026-11-10",
+        rangeTo: "2026-11-11",
+        timeZone: "Asia/Shanghai",
+        asOf: value.asOf,
+        effectiveFrom: value.effectiveFrom,
+        effectiveTo: value.effectiveTo,
+        availableFrom: value.availableFrom,
+        retentionDays: "365",
+        scope: "仅应用日期范围",
+        sourceFilter: "不适用",
+        historyStatus: "unknown",
+        partial: "false",
+        pageViews: "4",
+    });
     expect(result.data[1]).toMatchObject({ date: "2026-11-11", historyStatus: "retained", partial: "true", pageViews: "0", visitors: "0", visits: "0", actions: "0" });
     expect(csv.startsWith("\uFEFF")).toBe(true);
     expect(csv.match(/\uFEFF/g)).toHaveLength(1);
@@ -92,7 +127,10 @@ test("两工具分别导出并独立筛选来源，停采与旧工具箱键拒�
     value.actions = toolPages.map((page) => ({ page, action: "open_create", count: 1, visitors: 1 }));
     value.insights.pageEngagement = toolPages.map((page) => ({ page, measurement: "supported", visits: 1, engagedVisits: 1, rate: 1 }));
     const pages = parse(createTrafficCsv(value, "pages")).data;
-    expect(pages.map((row) => [row.page, row.pageLabel])).toEqual([["tools_image", "图片生成"], ["tools_video", "视频生成"]]);
+    expect(pages.map((row) => [row.page, row.pageLabel])).toEqual([
+        ["tools_image", "图片生成"],
+        ["tools_video", "视频生成"],
+    ]);
     for (const page of toolPages) {
         const rows = parse(createTrafficCsv(value, "actions", siteTrafficPageLabels[page])).data;
         expect(rows).toHaveLength(1);
@@ -101,13 +139,13 @@ test("两工具分别导出并独立筛选来源，停采与旧工具箱键拒�
     }
     for (const page of ["welcome", "plugins", "share", "library", "runninghub", "other", "tools", "auth", "account"]) {
         const invalidPages = snapshot();
-        invalidPages.pages[0]!.page = page as typeof value.pages[number]["page"];
+        invalidPages.pages[0]!.page = page as (typeof value.pages)[number]["page"];
         expect(() => createTrafficCsv(invalidPages, "pages")).toThrow("字段无效");
         const invalidActions = snapshot();
-        invalidActions.actions[0]!.page = page as typeof value.actions[number]["page"];
+        invalidActions.actions[0]!.page = page as (typeof value.actions)[number]["page"];
         expect(() => createTrafficCsv(invalidActions, "actions")).toThrow("字段无效");
         const invalidEngagement = snapshot();
-        invalidEngagement.insights.pageEngagement[0]!.page = page as typeof value.insights.pageEngagement[number]["page"];
+        invalidEngagement.insights.pageEngagement[0]!.page = page as (typeof value.insights.pageEngagement)[number]["page"];
         expect(() => createTrafficCsv(invalidEngagement, "pages")).toThrow("字段无效");
     }
     for (const source of ["欢迎页", "插件", "分享画布", "资源库", "RunningHub", "其他页面", "工具箱", "登录与注册", "账号设置"]) {
@@ -162,15 +200,18 @@ test("显式投影拒绝传播任意响应附带私密字段，页面/操作非�
         const columns = parse(csv).meta.fields!;
         for (const key of Object.keys(privateFields)) expect(columns).not.toContain(key);
     }
-    value.pages[0]!.page = "__proto__" as typeof value.pages[number]["page"];
+    value.pages[0]!.page = "__proto__" as (typeof value.pages)[number]["page"];
     expect(() => createTrafficCsv(value, "pages")).toThrow("字段无效");
-    value.actions[0]!.action = "constructor" as typeof value.actions[number]["action"];
+    value.actions[0]!.action = "constructor" as (typeof value.actions)[number]["action"];
     expect(() => createTrafficCsv(value, "actions")).toThrow("字段无效");
 });
 
 test("空结果导出元数据行且无伪造零记录，不修改成功快照原对象", () => {
     const value = snapshot();
-    value.trend = []; value.pages = []; value.actions = []; value.insights.pageEngagement = [];
+    value.trend = [];
+    value.pages = [];
+    value.actions = [];
+    value.insights.pageEngagement = [];
     const before = JSON.stringify(value);
     for (const kind of ["daily", "pages", "actions"] as const satisfies readonly TrafficCsvKind[]) {
         const row = parse(createTrafficCsv(value, kind)).data[0]!;

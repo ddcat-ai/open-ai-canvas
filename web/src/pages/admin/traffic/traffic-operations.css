@@ -247,7 +247,9 @@
     font: inherit;
     font-size: 0.925em;
     cursor: pointer;
-    transition: background-color var(--admin-motion), color var(--admin-motion);
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion);
 }
 
 .admin-traffic-ops-toggle button:hover {

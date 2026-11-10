@@ -72,7 +72,8 @@ export function registerTrafficOperationsCases(context: TrafficOperationsCaseCon
 
     test("历史不可比与未触发规则分开，进行中提示保留", async () => {
         const data = trafficOperationsFixture({
-            asOf: "2026-11-10T08:00:00Z", effectiveFrom: "2026-11-01T00:00:00+08:00",
+            asOf: "2026-11-10T08:00:00Z",
+            effectiveFrom: "2026-11-01T00:00:00+08:00",
             kpi: { visitors: 50, pageViews: 100, visits: 60, actions: 30 },
             comparison: { status: "ready", kpi: { visitors: 50, pageViews: 100, visits: 60, actions: 30 } },
         });
@@ -83,7 +84,12 @@ export function registerTrafficOperationsCases(context: TrafficOperationsCaseCon
     });
 
     test("无数据不伪造计数或百分比", async () => {
-        await context.render(<><TrafficOperations loading={false} unavailableValue="不可用" partial={false} /><TrafficJourneys loading={false} unavailableValue="不可用" partial={false} /></>);
+        await context.render(
+            <>
+                <TrafficOperations loading={false} unavailableValue="不可用" partial={false} />
+                <TrafficJourneys loading={false} unavailableValue="不可用" partial={false} />
+            </>,
+        );
         expect(rows("admin-traffic-endpoints-title")).toHaveLength(0);
         expect(rows("admin-traffic-funnel-title")).toHaveLength(0);
         expect(context.host().textContent).toContain("不可用");
@@ -93,8 +99,10 @@ export function registerTrafficOperationsCases(context: TrafficOperationsCaseCon
 
     test("历史不可比不补上期基数，也不误标稳定", async () => {
         const data = trafficOperationsFixture({
-            asOf: "2026-11-10T08:00:00Z", effectiveFrom: "2026-11-01T00:00:00+08:00",
-            kpi: { visitors: 1, pageViews: 2, visits: 1, actions: 0 }, comparison: { status: "outside_retention", kpi: null },
+            asOf: "2026-11-10T08:00:00Z",
+            effectiveFrom: "2026-11-01T00:00:00+08:00",
+            kpi: { visitors: 1, pageViews: 2, visits: 1, actions: 0 },
+            comparison: { status: "outside_retention", kpi: null },
         });
         await context.render(<TrafficOperations data={data} loading={false} unavailableValue="不可用" partial={false} />);
         expect(rows("admin-traffic-anomalies-title")[0]!.textContent).toContain("不可比");
