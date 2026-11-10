@@ -14,6 +14,7 @@ import type { CanvasProject } from "../src/stores/canvas/use-canvas-store";
 import { backendProviderConfig, prepareBackendGenerationTask } from "../src/services/api/generation-task";
 import { defaultConfig, createModelChannel, encodeChannelModel, type AiConfig } from "../src/stores/use-config-store";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
+import { useUserStore } from "../src/stores/use-user-store";
 
 function fixture(capabilityConfig = structuredClone(snapshot) as ModelCapabilityConfig) {
     const channel = createModelChannel({
@@ -151,28 +152,38 @@ test("目标关闭分辨率时清除两个存储字段，结构损坏的扩展�
     await expect(prepareBackendGenerationTask({ mode: "image", prompt: "测试", config: buildGenerationConfig(config, switched, "image") })).rejects.toThrow();
 });
 
-test("切换模型保留当前画布拆单张数，不受目标单次输出上限限制", () => {
-    const profile = structuredClone(snapshot) as ModelCapabilityConfig;
-    profile.image!.maxOutputs = 4;
-    profile.image!.parameters = profile.image!.parameters!.filter((field) => field.name !== "count");
-    profile.image!.parameters.push({ name: "count", label: "张数", type: "integer", min: 1, max: 4, default: 1 });
-    const config = { ...fixture(profile), canvasImageCount: "4", count: "2" };
-    for (const type of [CanvasNodeType.Image, CanvasNodeType.Config]) {
-        const node: CanvasNodeData = { id: "count", type, title: "张数", position: { x: 0, y: 0 }, width: 300, height: 200, metadata: { generationMode: "image", model: "source::old" } };
-        const reopened: CanvasNodeData = JSON.parse(JSON.stringify(applyNodeConfigPatch(node, { model: config.model }, config)));
-        expect(reopened.metadata?.count).toBe(4);
-        const runtime = buildGenerationConfig(config, reopened, "image");
-        expect(runtime.count).toBe("4");
-        // 画布分发四个单图任务，单次报价继续按一张计算。
-        expect(modelQuoteRequest(runtime, runtime.model, "image")!.intent.options.count).toBe(1);
-        if (type === CanvasNodeType.Image) {
-            expect(reopened.metadata?.generationSpec?.options.count).toBe(4);
-            expect(buildNodeConfig(config, reopened, "image", { capability: "image" }).count).toBe("4");
+test.each([
+    [5, 4, 2],
+    [3, 3, 2],
+    [1, 1, 1],
+])("切换模型保留当前画布拆单张数，不受目标单次输出上限限制（账号上限 %d）", (activeTaskLimit, expectedCount, expectedExplicitCount) => {
+    const previousLimits = useUserStore.getState().runtimeLimits;
+    useUserStore.getState().setRuntimeLimits({ ...previousLimits, activeTaskLimit });
+    try {
+        const profile = structuredClone(snapshot) as ModelCapabilityConfig;
+        profile.image!.maxOutputs = 4;
+        profile.image!.parameters = profile.image!.parameters!.filter((field) => field.name !== "count");
+        profile.image!.parameters.push({ name: "count", label: "张数", type: "integer", min: 1, max: 4, default: 1 });
+        const config = { ...fixture(profile), canvasImageCount: "4", count: "2" };
+        for (const type of [CanvasNodeType.Image, CanvasNodeType.Config]) {
+            const node: CanvasNodeData = { id: "count", type, title: "张数", position: { x: 0, y: 0 }, width: 300, height: 200, metadata: { generationMode: "image", model: "source::old" } };
+            const reopened: CanvasNodeData = JSON.parse(JSON.stringify(applyNodeConfigPatch(node, { model: config.model }, config)));
+            expect(reopened.metadata?.count).toBe(expectedCount);
+            const runtime = buildGenerationConfig(config, reopened, "image");
+            expect(runtime.count).toBe(String(expectedCount));
+            // 画布按账号上限分发单图任务，单次报价继续按一张计算。
+            expect(modelQuoteRequest(runtime, runtime.model, "image")!.intent.options.count).toBe(1);
+            if (type === CanvasNodeType.Image) {
+                expect(reopened.metadata?.generationSpec?.options.count).toBe(expectedCount);
+                expect(buildNodeConfig(config, reopened, "image", { capability: "image" }).count).toBe(String(expectedCount));
+            }
+            expect(applyNodeConfigPatch({ ...node, metadata: { ...node.metadata, count: 2 } }, { model: config.model }, config).metadata?.count).toBe(expectedExplicitCount);
+            const restricted = fixture();
+            restricted.canvasImageCount = "4";
+            expect(applyNodeConfigPatch(node, { model: restricted.model }, restricted).metadata?.count).toBe(expectedCount);
         }
-        expect(applyNodeConfigPatch({ ...node, metadata: { ...node.metadata, count: 2 } }, { model: config.model }, config).metadata?.count).toBe(2);
-        const restricted = fixture();
-        restricted.canvasImageCount = "4";
-        expect(applyNodeConfigPatch(node, { model: restricted.model }, restricted).metadata?.count).toBe(4);
+    } finally {
+        useUserStore.getState().setRuntimeLimits(previousLimits);
     }
 });
 

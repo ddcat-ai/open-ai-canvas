@@ -38,12 +38,17 @@ describe("generationBatchLimit", () => {
 
 describe("currentGenerationBatchLimit", () => {
     test("读取当前账号的同时任务数", () => {
-        useUserStore.getState().setRuntimeLimits({ activeTaskLimit: 10, resourceUploadMB: 50 });
-        expect(currentGenerationBatchLimit()).toBe(10);
-        useUserStore.getState().setRuntimeLimits({ activeTaskLimit: 3, resourceUploadMB: 50 });
-        expect(currentGenerationBatchLimit()).toBe(3);
-        useUserStore.getState().setRuntimeLimits({ activeTaskLimit: 0, resourceUploadMB: 50 });
-        expect(currentGenerationBatchLimit()).toBe(1);
+        const previousLimits = useUserStore.getState().runtimeLimits;
+        try {
+            useUserStore.getState().setRuntimeLimits({ activeTaskLimit: 10, resourceUploadMB: 50 });
+            expect(currentGenerationBatchLimit()).toBe(10);
+            useUserStore.getState().setRuntimeLimits({ activeTaskLimit: 3, resourceUploadMB: 50 });
+            expect(currentGenerationBatchLimit()).toBe(3);
+            useUserStore.getState().setRuntimeLimits({ activeTaskLimit: 0, resourceUploadMB: 50 });
+            expect(currentGenerationBatchLimit()).toBe(1);
+        } finally {
+            useUserStore.getState().setRuntimeLimits(previousLimits);
+        }
     });
 });
 
