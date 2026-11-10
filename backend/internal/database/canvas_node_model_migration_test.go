@@ -102,7 +102,8 @@ func TestCanvasUnifiedNodeMigration(t *testing.T) {
 			current, history := migrationCanvas(t, "# 最新原文"), migrationCanvas(t, "# 历史原文")
 			project := model.CanvasProject{ID: "canvas", UserID: "owner", Title: "作品", Revision: 7, PayloadJSON: current, CreatedAt: at, UpdatedAt: at}
 			snapshot := model.CanvasSnapshot{ID: "snap", UserID: "owner", CanvasID: "canvas", Revision: 4, PayloadJSON: history, PayloadBytes: len([]byte(history)), NodeCount: 3, ConnectionCount: 1, Reason: "automatic", CreatedAt: at, ContentUpdatedAt: at}
-			share := model.CanvasShare{ID: "share", UserID: "owner", ProjectID: "canvas", TokenHash: "kept-token-hash", TokenCipher: "kept-cipher", Enabled: true, CreatedAt: at, UpdatedAt: at}
+			unrelatedAt := at.Add(123456789 * time.Nanosecond)
+			share := model.CanvasShare{ID: "share", UserID: "owner", ProjectID: "canvas", TokenHash: "kept-token-hash", TokenCipher: "kept-cipher", Enabled: true, CreatedAt: unrelatedAt, UpdatedAt: unrelatedAt}
 			undo := model.CloudAgentCanvasMutation{ID: "undo", UserID: "owner", CanvasID: "canvas", RunID: "run", StepID: "step", Status: "applied", BeforeJSON: history, BeforeSnapshotHash: migrationHash(t, history), AfterSnapshotHash: migrationHash(t, current), CreatedAt: at}
 			unknownAfter := undo
 			unknownAfter.ID = "unprovable"
@@ -118,6 +119,31 @@ func TestCanvasUnifiedNodeMigration(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			loadUnrelated := func() []any {
+				rows := []any{&model.CanvasShare{}, &model.CanvasMutationReceipt{}, &model.CloudAgentEventRecord{}, &model.CanvasProject{}, &model.CanvasSnapshotResource{}}
+				for _, row := range rows {
+					var result *gorm.DB
+					switch row := row.(type) {
+					case *model.CanvasShare:
+						result = db.First(row, "id = ?", "share")
+					case *model.CanvasMutationReceipt:
+						result = db.First(row, "id = ?", "receipt")
+					case *model.CloudAgentEventRecord:
+						result = db.First(row, "run_id = ? AND sequence = ?", "run", 1)
+					case *model.CanvasProject:
+						result = db.First(row, "id = ?", "unchanged")
+					case *model.CanvasSnapshotResource:
+						result = db.First(row, "snapshot_id = ?", "snap")
+					}
+					if result.Error != nil {
+						t.Fatalf("load unrelated record %T: %v", row, result.Error)
+					}
+				}
+				return rows
+			}
+			// Compare database round trips so driver time zones and timestamp precision
+			// are consistent, including fields deliberately excluded from JSON.
+			unrelatedBefore := loadUnrelated()
 			if err := db.Transaction(migrateCanvasNodeModel); err != nil {
 				t.Fatal(err)
 			}
@@ -158,27 +184,9 @@ func TestCanvasUnifiedNodeMigration(t *testing.T) {
 			if savedCreation.Revision != 9 || savedCreation.CreateHash != baseline.CreateHash || savedCreation.ApprovedProposalHash != baseline.ApprovedProposalHash || savedCreation.ApprovedOperationsJSON != baseline.ApprovedOperationsJSON {
 				t.Fatal("approval/request authority rewritten")
 			}
-			for _, pair := range []struct{ original, loaded any }{{&share, &model.CanvasShare{}}, {&receipt, &model.CanvasMutationReceipt{}}, {&event, &model.CloudAgentEventRecord{}}, {&unchanged, &model.CanvasProject{}}, {&ref, &model.CanvasSnapshotResource{}}} {
-				switch loaded := pair.loaded.(type) {
-				case *model.CanvasShare:
-					db.First(loaded, "id = ?", "share")
-				case *model.CanvasMutationReceipt:
-					db.First(loaded, "id = ?", "receipt")
-				case *model.CloudAgentEventRecord:
-					db.First(loaded, "run_id = ? AND sequence = ?", "run", 1)
-				case *model.CanvasProject:
-					db.First(loaded, "id = ?", "unchanged")
-				case *model.CanvasSnapshotResource:
-					db.First(loaded, "snapshot_id = ?", "snap")
-				}
-				// Time zone locations vary by SQL driver; compare serialized values.
-				a, _ := json.Marshal(pair.original)
-				b, _ := json.Marshal(pair.loaded)
-				var x, y any
-				json.Unmarshal(a, &x)
-				json.Unmarshal(b, &y)
-				if !reflect.DeepEqual(x, y) {
-					t.Fatalf("unrelated record changed: %T\n%s\n%s", pair.original, a, b)
+			for i, loaded := range loadUnrelated() {
+				if !reflect.DeepEqual(unrelatedBefore[i], loaded) {
+					t.Fatalf("unrelated record changed: %T\nbefore: %+v\nafter: %+v", loaded, unrelatedBefore[i], loaded)
 				}
 			}
 			if err := db.Transaction(migrateCanvasNodeModel); err != nil {
