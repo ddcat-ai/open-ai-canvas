@@ -63,3 +63,23 @@ func TestCanvasHistoryCompositeKeyMigration(t *testing.T) {
 		t.Fatalf("history refs not copied/verified: %d %v", count, err)
 	}
 }
+
+func TestChannelWebsiteMigrationDependencyOrder(t *testing.T) {
+	positions := make(map[string]int)
+	for i, migration := range migrations() {
+		positions[migration.name] = i
+	}
+	for _, dependency := range [][2]string{
+		{"channel_websites", "model_channels"},
+		{"model_channels", "channel_catalog_snapshots"},
+		{"channel_websites", "channel_protocol_selections"},
+		{"channel_models", "channel_protocol_selections"},
+		{"users", "channel_protocol_selections"},
+	} {
+		parent, parentFound := positions[dependency[0]]
+		child, childFound := positions[dependency[1]]
+		if !parentFound || !childFound || parent >= child {
+			t.Errorf("migration must copy %s before %s", dependency[0], dependency[1])
+		}
+	}
+}

@@ -148,7 +148,7 @@ func TestUnifiedBatchMetadataAndDisableDoNotRequireCallingContract(t *testing.T)
 				t.Fatalf("deactivation changed unrelated fields: %+v", after)
 			}
 			for i, tier := range after.PriceTiers {
-				if tier.Enabled || tier.PriceConfigured || tier.UnitPriceMicrocredits != before.PriceTiers[i].UnitPriceMicrocredits || !reflect.DeepEqual(tier.CostPricing, before.PriceTiers[i].CostPricing) {
+				if tier.Enabled || tier.PriceConfigured != before.PriceTiers[i].PriceConfigured || tier.UnitPriceMicrocredits != before.PriceTiers[i].UnitPriceMicrocredits || !reflect.DeepEqual(tier.CostPricing, before.PriceTiers[i].CostPricing) {
 					t.Fatal("deactivation changed prices or costs")
 				}
 			}

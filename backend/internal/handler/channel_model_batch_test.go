@@ -93,7 +93,7 @@ func TestBatchModelUpdateHTTPContract(t *testing.T) {
 			t.Fatalf("stale request status=%d body=%s", w.Code, w.Body.String())
 		}
 		stored, _ := repository.New(db).ChannelModelByID(channel.ID, item.ID)
-		if stored.Enabled || stored.PriceTiers[0].Enabled || stored.PriceTiers[0].PriceConfigured || stored.PriceTiers[0].UnitPriceMicrocredits != 12 {
+		if stored.Enabled || stored.PriceTiers[0].Enabled || !stored.PriceTiers[0].PriceConfigured || stored.PriceTiers[0].UnitPriceMicrocredits != 12 {
 			t.Fatalf("stored=%+v", stored)
 		}
 		for _, legacy := range []string{"", "removed-plugin"} {
@@ -273,6 +273,28 @@ func TestBatchModelUpdateHTTPContract(t *testing.T) {
 					t.Fatal("rejected overlap changed models, tiers, channel, sequence or audit")
 				}
 			})
+		}
+	}
+	for _, path := range []string{"/api/admin/channels/" + channel.ID + "/models/batch-update", "/api/admin/channel-models/batch-update"} {
+		freeTemplate := map[string]any{"priceCurrency": "credits", "referenceVideoBilling": false, "priceTiers": []any{
+			map[string]any{"billingMode": "fixed_request", "unitPriceMicrocredits": 0, "priceConfigured": true, "enabled": true},
+		}}
+		response := call("admin", path, payload(map[string]any{"pricingTemplate": freeTemplate}))
+		if response.Code != http.StatusOK {
+			t.Fatalf("save explicit free price: status=%d body=%s", response.Code, response.Body.String())
+		}
+		for _, enabled := range []bool{false, true} {
+			response := call("admin", path, payload(map[string]any{"pricingEnabled": enabled}))
+			if response.Code != http.StatusOK {
+				t.Fatalf("free price availability=%t: status=%d body=%s", enabled, response.Code, response.Body.String())
+			}
+			stored, err := repository.New(db).ChannelModelByID(channel.ID, item.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(stored.PriceTiers) != 1 || !stored.PriceTiers[0].PriceConfigured || stored.PriceTiers[0].Enabled != enabled || stored.PriceTiers[0].UnitPriceMicrocredits != 0 || stored.PriceConfigured != enabled {
+				t.Fatalf("free price or availability changed: %+v", stored)
+			}
 		}
 	}
 }

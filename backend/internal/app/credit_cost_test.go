@@ -54,6 +54,7 @@ func TestCreditCostSnapshotPersistsWithoutChangingSalesOrPublicResponses(t *test
 		t.Fatal(err)
 	}
 	req.PriceTiers[0].CostPricing.UnitPriceMicrocredits = 654_321
+	req.ExpectedUpdatedAt, req.ExpectedPriceVersion = saved.UpdatedAt, saved.PriceVersion
 	if _, err := svc.SaveAdminChannelModel(admin, channel.ID, saved.ID, req); err != nil {
 		t.Fatal(err)
 	}

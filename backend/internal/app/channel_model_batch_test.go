@@ -65,8 +65,67 @@ func TestBatchModelAvailabilityPreservesAmountsAndReenables(t *testing.T) {
 		}
 		item, _ := svc.repo.ChannelModelByID("channel", "a")
 		tier := item.PriceTiers[0]
-		if !item.Enabled || tier.Enabled != enabled || tier.PriceConfigured != enabled || tier.UnitPriceMicrocredits != 9 || tier.CostPricing.UnitPriceMicrocredits != 1_000_000 || item.PriceConfigured != enabled {
+		if !item.Enabled || tier.Enabled != enabled || !tier.PriceConfigured || tier.UnitPriceMicrocredits != 9 || tier.CostPricing.UnitPriceMicrocredits != 1_000_000 || item.PriceConfigured != enabled {
 			t.Fatalf("availability changed other values: %+v", item)
+		}
+	}
+}
+
+func TestBatchModelAvailabilityRoundtripPreservesExplicitZeroPrices(t *testing.T) {
+	for _, kind := range []string{"free request", "zero token cache", "legacy free request"} {
+		for _, withProtocol := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/protocol=%t", kind, withProtocol), func(t *testing.T) {
+				svc, db, admin := seedBatchUpdates(t)
+				item, err := svc.repo.ChannelModelByID("channel", "a")
+				if err != nil {
+					t.Fatal(err)
+				}
+				tier := item.PriceTiers[0]
+				tier.UnitPriceMicrocredits = 0
+				if kind == "zero token cache" {
+					tier.BillingMode = "token"
+					tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits = 11, 22
+					tier.CachedTokenPriceMicrocredits, tier.CacheWriteTokenPriceMicrocredits = 0, 0
+				}
+				if kind == "legacy free request" {
+					if err := db.Where("channel_model_id = ?", item.ID).Delete(&model.ChannelModelPriceTier{}).Error; err != nil {
+						t.Fatal(err)
+					}
+					if err := db.Model(&model.ChannelModel{}).Where("id = ?", item.ID).Updates(map[string]any{"price_configured": true, "unit_price_microcredits": 0}).Error; err != nil {
+						t.Fatal(err)
+					}
+				} else if err := db.Save(&tier).Error; err != nil {
+					t.Fatal(err)
+				}
+				changes := BatchChannelModelChanges{PricingEnabled: batchBool(false)}
+				if withProtocol {
+					changes.Protocol = batchText("openai-response")
+				}
+				for _, enabled := range []bool{false, true} {
+					changes.PricingEnabled = batchBool(enabled)
+					if _, err := svc.BatchUpdateAdminChannelModels(admin, "channel", []BatchChannelModelUpdate{batchRequest(t, svc, item.ID, changes)}); err != nil {
+						t.Fatalf("availability=%t: %v", enabled, err)
+					}
+					stored, err := svc.repo.ChannelModelByID("channel", item.ID)
+					if err != nil || len(stored.PriceTiers) != 1 {
+						t.Fatalf("load saved price tier: %+v err=%v", stored, err)
+					}
+					actual := stored.PriceTiers[0]
+					if actual.Enabled != enabled || !actual.PriceConfigured || stored.PriceConfigured != enabled {
+						t.Fatalf("availability=%t lost configured state: %+v", enabled, stored)
+					}
+					if kind == "legacy free request" {
+						if actual.UnitPriceMicrocredits != 0 {
+							t.Fatal("legacy free price changed")
+						}
+					} else {
+						actual.Enabled, actual.PriceVersion, actual.UpdatedAt = tier.Enabled, tier.PriceVersion, tier.UpdatedAt
+						if !reflect.DeepEqual(actual, tier) {
+							t.Fatalf("availability changed price, cost or SKU: before=%+v after=%+v", tier, actual)
+						}
+					}
+				}
+			})
 		}
 	}
 }

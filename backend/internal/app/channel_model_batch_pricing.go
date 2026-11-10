@@ -37,7 +37,7 @@ func batchTierAmountsComplete(item model.ChannelModel, tier model.ChannelModelPr
 	for _, name := range batchRequiredAmounts(item.Capability, tier.BillingMode, item.ReferenceVideoBilling) {
 		value := amounts[name]
 		// Match priceTierToForm: inactive, unconfigured zero amounts display as
-		// empty. Evaluate before setting the two availability flags.
+		// empty. A configured zero remains explicit when availability changes.
 		if value < 0 || value > 1_000_000_000_000 || (!tier.PriceConfigured && !tier.Enabled && value == 0) {
 			return false
 		}

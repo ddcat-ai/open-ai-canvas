@@ -207,14 +207,29 @@ func (s *Service) prepareBatchModelUpdate(repo *repository.Repository, channel *
 	// has no calling contract, or its old protocol/configuration is unavailable.
 	if !changes.requiresModelContract() {
 		if changes.PricingEnabled != nil {
+			if len(after.PriceTiers) == 0 && before.PriceConfigured {
+				// Keep explicit legacy prices in a disabled tier before clearing
+				// the model's availability summary. Deactivation must also work
+				// with an obsolete calling contract or invalid old amounts.
+				tier := batchLegacyPriceTier(before)
+				id, err := repo.NextPrefixedID("PTIER")
+				if err != nil {
+					return batchModelUpdate{}, err
+				}
+				tier.ID, tier.PriceVersion = id, 1
+				tier.SelectorKey, tier.SelectorJSON = "{}", "{}"
+				tier.ProviderModelKey = firstNonEmpty(before.ProviderModelKey, before.ModelKey)
+				after.PriceTiers = []model.ChannelModelPriceTier{tier}
+				replaceTiers = true
+			}
 			for i := range after.PriceTiers {
-				after.PriceTiers[i].Enabled, after.PriceTiers[i].PriceConfigured = false, false
+				after.PriceTiers[i].Enabled = false
 			}
 			after.PriceConfigured = false
 			after.PriceVersion++
 			columns["price_configured"], columns["price_version"] = false, after.PriceVersion
 		}
-		return batchModelUpdate{before: before, after: after, changes: changes, columns: columns}, nil
+		return batchModelUpdate{before: before, after: after, changes: changes, columns: columns, replaceTiers: replaceTiers}, nil
 	}
 	config, upstream, err := s.prepareBatchModelContract(channel, before, &after, changes, columns)
 	if err != nil {
@@ -251,7 +266,10 @@ func (s *Service) prepareBatchModelUpdate(repo *repository.Repository, channel *
 			if *changes.PricingEnabled && !batchTierAmountsComplete(after, *tier) {
 				return batchModelUpdate{}, BadAuthRequest(fmt.Sprintf("价格档 %d 金额尚未配置完整，不能开启可供用户使用", i+1))
 			}
-			tier.Enabled, tier.PriceConfigured = *changes.PricingEnabled, *changes.PricingEnabled
+			tier.Enabled = *changes.PricingEnabled
+			if tier.Enabled {
+				tier.PriceConfigured = true
+			}
 		}
 	}
 	if err := validateBatchFinalPrices(after, config); err != nil {

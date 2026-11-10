@@ -3829,7 +3829,7 @@ components:
                   displayName: {type: string, maxLength: 160}
                   description: {type: string, maxLength: 500}
                   enabled: {type: boolean}
-                  pricingEnabled: {type: boolean, description: 统一切换各价格档的 enabled 与 priceConfigured，保留金额、成本、SKU 和规则}
+                  pricingEnabled: {type: boolean, description: 统一切换各价格档的 enabled；停用保留 priceConfigured、金额、成本、SKU 和规则，启用前校验金额完整性}
                   capabilityTemplate:
                     type: object
                     additionalProperties: false
