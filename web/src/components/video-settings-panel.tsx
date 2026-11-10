@@ -47,8 +47,8 @@ function VideoSettingsControls({ config, onConfigChange, theme, showTitle = true
         return <SeedanceVideoSettingsPanel config={config} profile={profile} priceTiers={priceTiers} onConfigChange={onConfigChange} theme={theme} showTitle={showTitle} className={className} />;
     }
 
-    const { seconds, resolution, ratio } = preserveVideoSettings(profile, { seconds: config.videoSeconds, resolution: config.vquality, ratio: config.size });
-    const dimensions = videoDimensionsForRatioAndResolution(ratio, resolution);
+    const { seconds, resolution, ratio } = preserveVideoSettings(profile, { seconds: config.videoSeconds, resolution: config.vquality, ratio: config.size }, resolveModelRequestConfig(config, config.model).interfaceType);
+    const dimensions = resolution === "auto" ? undefined : videoDimensionsForRatioAndResolution(ratio, resolution);
     const sizeSupported = profile.ratios.length > 0;
     const configuredResolutions = profile.resolutions.map((value) => ({ value, label: formatVideoResolutionLabel(value) }));
     const generateAudio = boolConfig(config.videoGenerateAudio, profile.generateAudio.default);
@@ -211,7 +211,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
 }
 
 export function videoResolutionLabel(value: string) {
-    return formatVideoResolutionLabel(value);
+    return value === "auto" ? "自动" : formatVideoResolutionLabel(value);
 }
 
 export function videoSizeLabel(value: string) {

@@ -27582,7 +27582,15 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
 }
 
 .canvas-image-preview-modal .ant-modal-header {
-    display: none !important;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .canvas-image-preview-modal .ant-modal-close {

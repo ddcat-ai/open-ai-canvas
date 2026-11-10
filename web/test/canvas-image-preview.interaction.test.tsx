@@ -153,10 +153,13 @@ test("竖图和横图以完整比例显示，图片及展示区无描边且保�
     }
 });
 
-test("预览只保留照片浮层，不再渲染标题栏和整页白色内容窗", async () => {
+test("预览只保留照片浮层，标题仅用于可访问名称，不显示标题栏和整页白色内容窗", async () => {
     const f = await fixture();
     try {
-        expect(document.querySelector(".canvas-image-preview-modal .ant-modal-header")).toBeNull();
+        expect(document.querySelector(".canvas-image-preview-modal .ant-modal-header")?.className).toContain("sr-only");
+        const dialog = document.querySelector('.canvas-image-preview-modal [role="dialog"], .canvas-image-preview-modal[role="dialog"]')!;
+        const label = document.getElementById(dialog.getAttribute("aria-labelledby")!);
+        expect(label?.textContent).toBe("预览测试");
         expect(f.surface().className).not.toMatch(/min-h-|w-full|p-4|p-6/);
         expect(f.stage().className).not.toMatch(/min-h-|w-full|p-3|p-5/);
         expect(f.image().className).toContain("max-w-[94vw]");

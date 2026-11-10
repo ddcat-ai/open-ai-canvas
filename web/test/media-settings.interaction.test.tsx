@@ -28,7 +28,7 @@ for (const [key, value] of Object.entries({
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { ImageSettingsPanel } = await import("../src/components/image-settings-panel");
-const { VideoSettingsPanel } = await import("../src/components/video-settings-panel");
+const { VideoSettingsPanel, videoResolutionLabel } = await import("../src/components/video-settings-panel");
 const { defaultConfig, createModelChannel, encodeChannelModel, useConfigStore } = await import("../src/stores/use-config-store");
 const { useUserStore } = await import("../src/stores/use-user-store");
 const { CanvasConfigNodePanel } = await import("../src/components/canvas/canvas-config-node-panel");
@@ -195,6 +195,13 @@ test("真实视频设置面板自动适配时长与分辨率，不发送不支�
         expect(host.querySelector('[role="alert"]')).toBeNull();
         expect(mediaSettingIssues(config, "video")).toEqual([]);
         expect(backendProviderConfig(config, "video")).toMatchObject({ size: "9:16", videoSeconds: "5", vquality: "720p", videoGenerateAudio: undefined });
+        config = { ...config, vquality: "auto" };
+        await act(async () => render());
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        expect(host.textContent).not.toContain("W");
+        expect(host.querySelector('button[aria-pressed="true"]')?.textContent).not.toContain("720");
+        expect(videoResolutionLabel("auto")).toBe("自动");
+        expect(backendProviderConfig(config, "video").vquality).toBe("auto");
     } finally {
         await act(async () => root.unmount());
         host.remove();

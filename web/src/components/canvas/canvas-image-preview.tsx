@@ -101,7 +101,7 @@ export function CanvasImagePreview({ src = "", storageKey, alt: altProp, onClose
     if (!src && !storageKey) return null;
 
     return (
-        <AppModal open flush title={null} footer={null} centered width="fit-content" onCancel={onClose} className="canvas-image-preview-modal">
+        <AppModal open flush title={alt} footer={null} centered width="fit-content" onCancel={onClose} className="canvas-image-preview-modal" classNames={{ header: "sr-only" }}>
             <div ref={bindWheel} data-canvas-no-zoom className="relative grid max-w-[94vw] place-items-center overflow-visible overscroll-contain">
                 <div ref={stageRef} className="relative grid max-h-[84vh] max-w-[94vw] place-items-center">
                     {loading && !error ? (

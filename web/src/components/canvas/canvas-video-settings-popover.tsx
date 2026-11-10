@@ -3,7 +3,7 @@ import { VideoSettingsPanel, videoResolutionLabel, videoSecondsLabel, videoSizeL
 import { canvasThemes } from "@/lib/canvas-theme";
 import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue } from "@/lib/model-capabilities";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
-import type { AiConfig } from "@/stores/use-config-store";
+import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { useTranslation } from "react-i18next";
 import { CanvasSettingsPopover, type CanvasSettingsPlacement } from "./canvas-settings-popover";
 
@@ -13,7 +13,7 @@ export function CanvasVideoSettingsPopover({ config, onConfigChange, ...popover 
     const { t } = useTranslation();
     const theme = canvasThemes[useActiveTheme()];
     const profile = modelCapabilityConfigFor(config, config.model).video;
-    const selected = profile ? preserveVideoSettings(profile, { seconds: config.videoSeconds, ratio: config.size, resolution: config.vquality }) : undefined;
+    const selected = profile ? preserveVideoSettings(profile, { seconds: config.videoSeconds, ratio: config.size, resolution: config.vquality }, resolveModelRequestConfig(config, config.model).interfaceType) : undefined;
     const parts: string[] = [];
     if (profile?.resolutions.length && selected) parts.push(videoResolutionLabel(selected.resolution));
     if (profile?.ratios.length && selected) parts.push(videoSizeLabel(selected.ratio));

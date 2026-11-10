@@ -23,12 +23,22 @@ export function compatibleVideoResolution(profile: VideoCapabilityConfig, value:
     return profile.resolutions.find((candidate) => key(candidate) === key(value));
 }
 
+function omitsVideoResolution(value: string | undefined, protocol?: ModelProtocol) {
+    // These request adapters explicitly omit an automatic resolution. Other
+    // protocols still adapt an unsupported value to their configured default.
+    return value === "auto" && (protocol === "newapi" || protocol === "openai-video" || protocol === "newapi-channel-2");
+}
+
 export function preserveVideoSettings(profile: VideoCapabilityConfig, value: VideoSettings, protocol?: ModelProtocol) {
     const seconds = present(value.seconds) ? value.seconds : String(profile.duration.default);
     return {
         seconds: profile.durationSupported !== false && /^-?\d+$/.test(seconds) && !videoDurationAllowed(profile, Number(seconds)) ? String(profile.duration.default) : seconds,
         ratio: present(value.ratio) && (!profile.ratios.length || profile.ratios.includes(value.ratio)) ? value.ratio : profile.defaultRatio,
-        resolution: present(value.resolution) ? (compatibleVideoResolution(profile, value.resolution) ?? (!profile.resolutions.length ? value.resolution : profile.defaultResolution)) : profile.defaultResolution,
+        resolution: omitsVideoResolution(value.resolution, protocol)
+            ? "auto"
+            : present(value.resolution)
+              ? (compatibleVideoResolution(profile, value.resolution) ?? (!profile.resolutions.length ? value.resolution : profile.defaultResolution))
+              : profile.defaultResolution,
     };
 }
 
@@ -237,7 +247,7 @@ export function videoSettingIssues(profile: VideoCapabilityConfig, input: VideoS
             ),
         );
     if (profile.ratios.length && !profile.ratios.includes(value.ratio)) issues.push(issue("size", "比例", value.ratio, profile.ratios, profile.defaultRatio));
-    if (profile.resolutions.length && !compatibleVideoResolution(profile, value.resolution)) issues.push(issue("vquality", "分辨率", value.resolution, profile.resolutions, profile.defaultResolution));
+    if (profile.resolutions.length && !omitsVideoResolution(value.resolution, protocol) && !compatibleVideoResolution(profile, value.resolution)) issues.push(issue("vquality", "分辨率", value.resolution, profile.resolutions, profile.defaultResolution));
     for (const [field, raw] of [
         ["videoGenerateAudio", input.generateAudio],
         ["videoWatermark", input.watermark],

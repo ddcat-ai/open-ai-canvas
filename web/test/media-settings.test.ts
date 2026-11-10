@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import axios from "axios";
 import { requestGeneration } from "../src/services/api/image";
 import { defaultModelCapabilityConfig, modelCapabilityConfigFor } from "../src/lib/model-capabilities";
-import { preserveVideoSettings, preserveImageSettings, videoSettingIssues, imageSettingIssues, mediaSettingIssues } from "../src/lib/media-settings";
+import { preserveVideoSettings, preserveImageSettings, videoSettingIssues, imageSettingIssues, mediaSettingIssues, resolvedMediaConfig } from "../src/lib/media-settings";
 import { projectImageParameters } from "../src/lib/image-parameters";
 import { defaultConfig, createModelChannel, encodeChannelModel, type AiConfig } from "../src/stores/use-config-store";
 import { resolveModelGenerationDefaults } from "../src/lib/model-selection";
@@ -170,6 +170,20 @@ describe("媒体模型切换兼容设置", () => {
         expect(value).toMatchObject({ size: "9:16", videoSeconds: "10", vquality: "720", videoGenerateAudio: "true" });
         expect(mediaSettingIssues(config, "video")).toEqual([]);
         expect(resolveModelGenerationDefaults(config, config.model, "video", {}).videoSeconds).toBe("5");
+    });
+
+    test("视频 auto 仅在支持省略分辨率的协议保留，未填写仍使用模型默认", () => {
+        const config = { ...videoConfig(), vquality: "auto" };
+        const profile = modelCapabilityConfigFor(config, config.model).video!;
+        for (const protocol of ["newapi", "openai-video", "newapi-channel-2"]) {
+            expect(preserveVideoSettings(profile, { resolution: "auto" }, protocol).resolution).toBe("auto");
+            expect(videoSettingIssues(profile, { resolution: "auto" }, protocol)).toEqual([]);
+            expect(preserveVideoSettings(profile, {}, protocol).resolution).toBe(profile.defaultResolution);
+        }
+        expect(preserveVideoSettings(profile, { resolution: "auto" }, "volcengine-ark-video").resolution).toBe(profile.defaultResolution);
+        expect(resolvedMediaConfig(config, "video").vquality).toBe("auto");
+        expect(resolveModelGenerationDefaults(config, config.model, "video", { vquality: "auto" }).vquality).toBe("auto");
+        expect(mediaSettingIssues(config, "video")).toEqual([]);
     });
 
     test("不兼容整数时长使用默认，错误类型不取整，2K 使用默认而非 1440p", () => {
