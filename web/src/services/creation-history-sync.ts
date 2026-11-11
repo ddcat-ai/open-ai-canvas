@@ -4,7 +4,7 @@ import { conversationFromHistory, historyFingerprint as fingerprint, historyMess
 import { persistableCreationConversations } from "./creation-conversation-store";
 
 export const CREATION_HISTORY_SYNC_KEY = "creation-history-sync-v1";
-export type HistorySyncStatus = { phase: "local" | "pending" | "synced" | "error"; message?: string };
+export type HistorySyncStatus = { phase: "local" | "pending" | "synced" | "conflict" | "error"; message?: string };
 type Cache = {
     version: 1;
     conversations: CreationConversation[];
@@ -258,7 +258,7 @@ export class CreationHistorySync {
                 } while (after);
             } while (this.again);
             this.assertActive();
-            this.deps.onStatus(failure ? { phase: "error", message: failure } : hadConflict || this.cache.conflicts.length ? { phase: "error", message: "云端有更新，已保留云端版本；可下载本机冲突副本" } : { phase: "synced" });
+            this.deps.onStatus(failure ? { phase: "error", message: failure } : hadConflict || this.cache.conflicts.length ? { phase: "conflict" } : { phase: "synced" });
         } catch (error) {
             if (!this.disposed && this.deps.active()) this.deps.onStatus({ phase: "error", message: error instanceof Error ? error.message : "历史同步失败，本机记录已保留" });
         }

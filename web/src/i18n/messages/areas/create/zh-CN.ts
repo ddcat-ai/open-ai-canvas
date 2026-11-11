@@ -1,6 +1,7 @@
 /** 创作首页、灵感、图片/视频工作台的界面文案（源语言）。键结构是其他语言文件的约束。 */
 export const zhCN = {
     historySync: {
+        conflict: "历史已同步，有冲突副本",
         local: "仅保存在本机",
         pending: "历史待同步",
         synced: "历史已同步",

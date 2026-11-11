@@ -3,6 +3,7 @@ import type { zhCN } from "./zh-CN";
 
 export const enUS: DeepStringRecord<typeof zhCN> = {
     historySync: {
+        conflict: "History synced; conflict backup available",
         local: "History saved on this device",
         pending: "History sync pending",
         synced: "History synced",

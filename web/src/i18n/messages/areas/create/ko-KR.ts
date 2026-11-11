@@ -3,6 +3,7 @@ import type { zhCN } from "./zh-CN";
 
 export const koKR: DeepStringRecord<typeof zhCN> = {
     historySync: {
+        conflict: "기록 동기화 완료 · 충돌 백업 있음",
         local: "기기에 저장된 기록",
         pending: "기록 동기화 대기 중",
         synced: "기록 동기화 완료",

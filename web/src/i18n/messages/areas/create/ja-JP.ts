@@ -3,6 +3,7 @@ import type { zhCN } from "./zh-CN";
 
 export const jaJP: DeepStringRecord<typeof zhCN> = {
     historySync: {
+        conflict: "履歴を同期済み・競合のコピーがあります",
         local: "履歴はこの端末に保存されています",
         pending: "履歴を同期待ち",
         synced: "履歴を同期済み",

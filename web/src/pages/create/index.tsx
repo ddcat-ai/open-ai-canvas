@@ -1573,7 +1573,7 @@ export default function CreatePage() {
                             {t("create.historySync.retry")}
                         </button>
                     ) : null}
-                    {historySync.phase === "error" ? (
+                    {historySync.phase === "conflict" ? (
                         <button
                             type="button"
                             className="ml-2 underline"

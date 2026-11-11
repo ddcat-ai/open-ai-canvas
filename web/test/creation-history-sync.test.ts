@@ -226,7 +226,7 @@ describe("创作历史离线队列与修订合并", () => {
         expect(b.value()[0].messages.find((m) => m.id === "m1")?.content).toBe("cloud");
         expect(remote.rows.get("c1")?.messages).toHaveLength(2);
         expect(JSON.parse(b.disk()).conflicts[0].local.title).toBe("old title");
-        expect(b.status().phase).toBe("error");
+        expect(b.status().phase).toBe("conflict");
     });
 
     test("两个离线设备并发追加与重命名不整数组覆盖", async () => {
