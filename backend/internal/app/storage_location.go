@@ -293,7 +293,7 @@ func (s *Service) populateStorageLocationPublic(result *PublicOSSSetting, scope 
 
 func deleteOSSObject(setting ossSettingValue, objectKey string) error {
 	switch normalizeOSSSetting(setting).Provider {
-	case s3Provider, volcengineTOSProvider:
+	case s3Provider, rainyunOSSProvider, volcengineTOSProvider:
 		return deleteS3Object(setting, objectKey)
 	case tencentCOSProvider:
 		return deleteTencentCOSObject(setting, objectKey)

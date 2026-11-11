@@ -47,6 +47,14 @@
     --admin-chart-primary: #0f172a;
     --admin-chart-secondary: #0f766e;
     --admin-chart-warning: #b45309;
+    --admin-perf-accent-indigo: #4f46e5;
+    --admin-perf-accent-cyan: #0891b2;
+    --admin-perf-accent-violet: #7c3aed;
+    --admin-perf-accent-emerald: #059669;
+    --admin-perf-accent-amber: #d97706;
+    --admin-perf-grid-line: rgba(15, 23, 42, 0.06);
+    --admin-perf-panel-surface: #f8fafc;
+    --admin-perf-panel-hover: #f1f5f9;
     --admin-card-shadow: none;
 
     /* Compatibility aliases used by existing admin-ui.css. Independent values, not workspace skins. */
@@ -128,6 +136,14 @@
     --admin-chart-primary: #e8eef6;
     --admin-chart-secondary: #2dd4bf;
     --admin-chart-warning: #fbbf24;
+    --admin-perf-accent-indigo: #818cf8;
+    --admin-perf-accent-cyan: #22d3ee;
+    --admin-perf-accent-violet: #a78bfa;
+    --admin-perf-accent-emerald: #34d399;
+    --admin-perf-accent-amber: #fbbf24;
+    --admin-perf-grid-line: rgba(248, 250, 252, 0.07);
+    --admin-perf-panel-surface: #1e222a;
+    --admin-perf-panel-hover: #252a34;
     --admin-shadow-overlay: 0 22px 56px rgba(0, 0, 0, 0.48);
 }
 

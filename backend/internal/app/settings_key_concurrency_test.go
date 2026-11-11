@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -21,8 +22,9 @@ func TestSettingsEncryptionKeyPublication(t *testing.T) {
 			t.Fatalf("incomplete temporary key: %v", err)
 		}
 		info, err := os.Stat(temp)
-		if err != nil || info.Mode().Perm() != 0600 {
-			t.Fatalf("temporary permissions: %v", err)
+		// Windows FileMode reports file attributes, not Unix permission bits.
+		if err != nil || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
+			t.Fatalf("temporary key file or permissions: %v", err)
 		}
 		if _, err := os.Stat(target); !os.IsNotExist(err) {
 			t.Fatalf("key visible before publication: %v", err)
@@ -65,8 +67,8 @@ func TestSettingsEncryptionKeyLinkFallback(t *testing.T) {
 				t.Fatalf("key changed: %v", err)
 			}
 			info, err := os.Stat(path)
-			if err != nil || info.Mode().Perm() != 0600 {
-				t.Fatalf("permissions: %v", err)
+			if err != nil || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
+				t.Fatalf("key file or permissions: %v", err)
 			}
 		})
 	}
@@ -105,8 +107,8 @@ func TestSettingsEncryptionKeyConcurrentFirstUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
-		t.Fatalf("key permissions = %o", info.Mode().Perm())
+	if !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
+		t.Fatalf("key mode = %v", info.Mode())
 	}
 }
 

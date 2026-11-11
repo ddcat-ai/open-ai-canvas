@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -118,6 +119,14 @@ type Service struct {
 	modelAvailabilityAt      time.Time
 	adminModelHealthMu       sync.Mutex
 	adminModelHealthCache    *AdminChannelModelHealthReport
+	rainyunMonitorSettingsMu sync.Mutex
+	rainyunMonitorOnce       sync.Once
+	rainyunMonitorCache      *platform.BoundedReadCache[[32]byte, SystemPerformanceRainyun]
+	rainyunRealtimeOnce      sync.Once
+	rainyunRealtimeCache     *rainyunRealtimeCache
+	// 仅供离线监控测试替换传输，生产始终使用固定官方 API 与受控桶 HEAD。
+	rainyunMonitorTransport http.RoundTripper
+	rainyunMonitorHead      func(context.Context, ossSettingValue) (int, error)
 	// dramaTaskHook 只在测试中替换短剧调度的任务提交，生产路径始终走 CreateTask 准入。
 	dramaTailFrameHook func(userID, resourceID string) (string, error)
 	dramaTaskHook      func(userID string, req CreateTaskRequest, timeline *renderProject) (*model.Task, error)

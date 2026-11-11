@@ -5,6 +5,44 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 系统性能：服务器 CPU 与内存
+
+`GET /api/admin/system-performance` 沿用登录 Cookie、标准业务信封及 service 层管理员校验。`host.cpu` 返回 `{status,usagePercent,sampledAt?,sampleSeconds}`：
+
+- `status="ready"` 时，`usagePercent` 是两个累计 CPU 计数之间的忙碌比例，范围 0–100，真实 0 保留；`sampledAt` 是区间结束时刻（RFC3339），`sampleSeconds` 是实际区间秒数，不是瞬时值。
+- 首次或计数回退、无有效差分时为 `sampling`；系统调用失败或平台不支持时为 `unavailable`。两者 `usagePercent=null`，不返回有效采样时间，不能按 0% 展示。
+- 仅按管理员读取按需采集，在进程内互斥保存上一组计数和最近结果；不足 1 秒的连续读取复用原结果与采样时间，不阻塞等待、不存历史。原页面 15 秒刷新保持，暂停或手动刷新会改变实际采样区间。
+- Linux 使用 `/proc/stat` 聚合 CPU 行，`idle+iowait` 视为非忙碌，`guest/guest_nice` 不重复累计；Windows 使用 `GetSystemTimes`，多处理器组明确不可用，不拿一组数据代表整机。macOS 及其他未实现平台显示不可用。
+
+整机内存继续使用 `memory.systemAvailable/totalBytes/usedBytes/availableBytes/usagePercent`，已用为总量减可用量。Linux 读取 `/proc/meminfo`，必需字段缺失、非法或可用量大于总量时不可用；Windows 使用 `GlobalMemoryStatusEx` 物理内存字段。不可用时系统字节字段归零且 `systemAvailable=false`，前端明确显示不可用，不能将这些占位零显示为真实测量；Go 的 `heapAllocBytes/sysBytes` 等独立保留在进程详情。
+
+以上为**后端运行环境可见的系统指标**，不是浏览器、Redis 或远程数据库机器的资源；容器内没有新增宿主机采集通道或 cgroup 配额适配，不能承诺为物理宿主机或容器配额监控。不新增数据表、迁移或独立轮询接口。
+
+## 系统性能：雨云 OSS 监控
+
+以下接口使用登录 Cookie 和标准业务信封，service 校验管理员权限；匿名为 401、普通用户为 403。监控设置在后台「存储服务」独立保存，统计和状态集中展示于「系统性能」。
+
+| 接口 | 入参与结果 |
+| --- | --- |
+| `GET /api/admin/settings/rainyun-monitor` | 返回 `data={enabled,instanceId,hasApiKey}`，不返回管理密钥 |
+| `PATCH /api/admin/settings/rainyun-monitor` | 完整提交 `{enabled,instanceId,apiKey}`，三个字段均须存在且非 `null`；显式 `enabled=false`、`instanceId=0` 可停用，启用时要求正整数 ROS 实例 ID 和管理 API Key，`apiKey=""` 保留已存密钥。保存本身不请求雨云，也不修改资源存储设置，返回同上公开字段 |
+| `GET /api/admin/system-performance` | 原性能快照新增 `rainyun`：开关、配置状态、`status/statusMessage`、`sourceStatus/sourceMessage/sourceLatencyMs?`、管理请求 `latencyMs?`、`checkedAt?`、实例 ID、套餐名称、云端状态、`expiresAt?`、`periodStart?/periodEnd?`、`extraAccounting?` 和四个可选字节指标 |
+| `GET /api/admin/system-performance/rainyun-realtime` | 独立实例时序读取，无客户端上游参数；返回开关、配置状态、`status/statusMessage`、`instanceId?`、`checkedAt?`、`sampleIntervalSeconds?`、`retryAfterSeconds` 和有界 `points[]`，每点为 `{time,receivedBytesPerSecond?,sentBytesPerSecond?,requestsTotal?}`；时间均为 RFC3339 |
+
+字节指标为 `storageUsedBytes/storageQuotaBytes/trafficUsedBytes/trafficQuotaBytes`。管理 API 固定只读访问雨云 `GET /product/ros/instance/{id}/`，使用独立的 `X-Api-Key`（不是 S3 AK/SK），禁止重定向；只向前端投影白名单字段，不透传含凭据的完整实例响应、签名 URL 或原始错误。管理密钥使用后端已有设置密钥加密，详情见[数据库](/docs/backend/backend-database)。
+
+统计口径是**整个 ROS 实例，包含实例下全部桶**，不是本站登记资源量或当前单桶大小。官方 `UsageData.metrics_usage_total_bytes` 为已用空间字节，`metrics_sent_bytes` 为重置周期内已发送流量字节；`Plan.storage_size/bandwidth` 为 GiB，转换为字节后返回。前端使用 GiB，套餐内剩余量为 `max(0,额度-已用)`；开启弹性计费时套餐额度不是硬上限。缺失、无效和获取失败的字段保持未知，不补 0，不扫描存储桶估算。
+
+`Plan.chinese` 提供套餐名称；`ExpDate/last_reset_date/next_reset_date` 按官方时间工具的数值规则归一为 RFC3339（绝对值小于 `1e11` 按秒，否则按毫秒），前端按浏览器本地时区显示。流量周期使用雨云实际重置时间，不假设自然月；到期剩余天数向上取整，7 天内提醒，已过期明确告警。
+
+采集按需进行，每个后端进程有界缓存 60 秒并合并并发请求，失败也缓存为明确状态；配置变化不复用旧快照。页面仍每 15 秒刷新，手动刷新不绕过雨云缓存。源站探测仅对当前平台雨云存储发送桶级 `HEAD`，不上传、读取正文、列举或删除对象；403 表示鉴权/探测权限不足，不能据此断言雨云服务宕机。管理接口正常不等于 S3 数据面正常，桶级 HEAD 正常也不等于上传、删除或 CDN 全链路通过。
+
+实时接口固定调用官方实例 `GET /product/ros/instance/{id}/monitor`，以 Unix 秒级 `start_date/end_date` 请求最近 5 分钟，按 `Columns/Values` 的精确列名解析并只返回有界真实点。`time` 转为 RFC3339，收/发流量对应 `minio_bucket_traffic_received_bytes/minio_bucket_traffic_sent_bytes`，沿官方控制台速率展示口径统一为 B/s；`minio_bucket_requests_total` 为官方各时点请求总数，不能将曲线点求和当作历史累计，也不是本站 AI 调用数。缺失指标保持未知，真实 0 保留；非法时间不作有效样本，相同时间去重。
+
+实时采集与上述 60 秒套餐/用量和桶 HEAD 完全独立，使用单独的有界缓存与并发合并，并通过 `retryAfterSeconds` 表达失败或限频退避。页面每秒刷新界面、只画真实时间点，沿用自动刷新开关；暂停、页面不可见或卸载时取消在途实时请求，不重叠轮询。`checkedAt` 是本站采集时刻，点的 `time` 才是云端样本时刻；`sampleIntervalSeconds` 仅根据实际样本间距得出，不是雨云承诺的采样频率。官方没有公开保证每秒采样，重复或陈旧样本不冒充新数据，不插值补零；真实秒级精度和请求统计范围仍需与控制台对照验收。
+
+平台存储可选择 `rainyun`：沿用 S3 兼容接口、强制 path-style，默认 Region 为 `rainyun`；存储 AK/SK 与上述管理 API Key 分开保存，不因保存监控设置而切换存储服务。
+
 ## Agent MCP
 
 所有接口使用登录 Cookie、统一业务信封和严格 JSON 入参。个人连接归属、平台管理员权限、连接启用状态和工具授权均在 service 层校验。

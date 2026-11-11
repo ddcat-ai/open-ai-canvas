@@ -83,6 +83,12 @@ type (
 	AdminStorageResourceView               = app.AdminStorageResourceView
 	AdminStorageStats                      = app.AdminStorageStats
 	AdminSystemPerformance                 = app.AdminSystemPerformance
+	AdminRainyunMonitorSetting             = app.AdminRainyunMonitorSetting
+	RainyunMonitorSettingRequest           = app.RainyunMonitorSettingRequest
+	SystemPerformanceRainyun               = app.SystemPerformanceRainyun
+	SystemPerformanceRainyunRealtime       = app.SystemPerformanceRainyunRealtime
+	RainyunRealtimePoint                   = app.RainyunRealtimePoint
+	SystemPerformanceCPU                   = app.SystemPerformanceCPU
 	AdminTaskPage                          = app.AdminTaskPage
 	AdminUser                              = app.AdminUser
 	AdminUserDetail                        = app.AdminUserDetail

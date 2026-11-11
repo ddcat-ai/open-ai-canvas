@@ -6,10 +6,219 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestRainyunOSSSettingDefaultsRegionAndDoesNotReuseOtherProviderSecret(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+
+	next, err := ossSettingFromRequest(OSSSettingRequest{
+		Enabled: true, Provider: rainyunOSSProvider, Endpoint: server.URL,
+		Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret",
+	}, ossSettingValue{Provider: aliyunOSSProvider, AccessKeySecret: "aliyun-secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Region != "rainyun" {
+		t.Fatalf("Region = %q, want rainyun", next.Region)
+	}
+
+	_, err = ossSettingFromRequest(OSSSettingRequest{
+		Enabled: true, Provider: rainyunOSSProvider, Endpoint: server.URL,
+		Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id",
+	}, ossSettingValue{Provider: aliyunOSSProvider, AccessKeySecret: "aliyun-secret"})
+	if err == nil || !strings.Contains(err.Error(), "访问密钥 SecretKey") {
+		t.Fatalf("ossSettingFromRequest() error = %v", err)
+	}
+}
+
+func TestRainyunOSSSettingRejectsIncompatibleEndpoint(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	for _, endpoint := range []string{"http://127.0.0.1:8080/s3", "http://127.0.0.1:8080/?token=secret", "http://127.0.0.1:8080/#fragment"} {
+		_, err := ossSettingFromRequest(OSSSettingRequest{
+			Enabled: true, Provider: rainyunOSSProvider, Endpoint: endpoint,
+			Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret",
+		}, ossSettingValue{})
+		if err == nil {
+			t.Fatalf("Endpoint %q should be rejected", endpoint)
+		}
+	}
+	_, err := ossSettingFromRequest(OSSSettingRequest{
+		Enabled: true, Provider: rainyunOSSProvider, Endpoint: "http://127.0.0.1:8080",
+		Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret",
+	}, ossSettingValue{})
+	if err != nil {
+		t.Fatalf("allowlisted HTTP test endpoint rejected: %v", err)
+	}
+}
+
+func TestSignedRainyunS3ObjectURLUsesPathStyleAndSigV4(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+
+	value, err := signedOriginObjectURL(ossSettingValue{
+		Provider: rainyunOSSProvider, Endpoint: server.URL, Bucket: "rainyun-bucket",
+		AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret",
+	}, "users/u-1/image/test image.png", time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := parsed.Query()
+	if parsed.Path != "/rainyun-bucket/users/u-1/image/test image.png" || query.Get("X-Amz-Algorithm") != "AWS4-HMAC-SHA256" || query.Get("X-Amz-Credential") == "" || query.Get("X-Amz-Signature") == "" || !strings.Contains(value, "test%20image.png") {
+		t.Fatalf("signed Rainyun URL = %q", value)
+	}
+	if strings.Contains(value, "rainyun-secret") {
+		t.Fatalf("signed URL leaked secret key: %q", value)
+	}
+}
+
+func TestRainyunS3UploadAndRangeUseS3Endpoint(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	payload := []byte("rainyun payload")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rainyun-bucket/users/u-1/image/test.png" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("X-Amz-Algorithm") != "AWS4-HMAC-SHA256" {
+			t.Errorf("X-Amz-Algorithm = %q, want AWS4-HMAC-SHA256 (presigned)", r.URL.Query().Get("X-Amz-Algorithm"))
+		}
+		switch r.Method {
+		case http.MethodPut:
+			if strings.Contains(r.URL.RawQuery, "uploads") || strings.Contains(r.URL.RawQuery, "uploadId") {
+				t.Errorf("PUT should not include multipart query: %q", r.URL.RawQuery)
+			}
+			if !strings.Contains(r.URL.RawQuery, "X-Amz-Signature=") {
+				t.Errorf("PUT should include presigned signature in query: %q", r.URL.RawQuery)
+			}
+			if r.Header.Get("Content-Length") != strconv.Itoa(len(payload)) {
+				t.Errorf("Content-Length = %q", r.Header.Get("Content-Length"))
+			}
+			if r.Header.Get("Content-Type") != "image/png" {
+				t.Errorf("Content-Type = %q", r.Header.Get("Content-Type"))
+			}
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Error(err)
+			}
+			if !bytes.Equal(data, payload) {
+				t.Errorf("upload body = %q", data)
+			}
+			w.Header().Set("ETag", `"rainyun-etag"`)
+			w.WriteHeader(http.StatusOK)
+		case http.MethodGet:
+			if r.Header.Get("Range") != "bytes=0-3" {
+				t.Errorf("Range = %q", r.Header.Get("Range"))
+			}
+			w.Header().Set("Accept-Ranges", "bytes")
+			w.Header().Set("Content-Range", "bytes 0-3/15")
+			w.Header().Set("Content-Length", "4")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte("rain"))
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	setting := ossSettingValue{Provider: rainyunOSSProvider, Endpoint: server.URL, Region: "rainyun", Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret"}
+	etag, err := putOSSObject(setting, "users/u-1/image/test.png", "image/png", int64(len(payload)), bytes.NewReader(payload))
+	if err != nil || etag != "rainyun-etag" {
+		t.Fatalf("putOSSObject() = %q, %v", etag, err)
+	}
+	stream, err := getOSSObjectRange(setting, "users/u-1/image/test.png", "bytes=0-3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Body.Close()
+	data, err := io.ReadAll(stream.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stream.StatusCode != http.StatusPartialContent || stream.ContentRange != "bytes 0-3/15" || string(data) != "rain" {
+		t.Fatalf("stream = %#v, data = %q", stream, data)
+	}
+}
+
+func TestRainyunUploadBodyRejectsSeekableReaderWithWrongRemainingSize(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("mismatched upload must fail before sending a request")
+	}))
+	defer server.Close()
+	reader := bytes.NewReader([]byte("prefixpayload"))
+	if _, err := reader.Seek(int64(len("prefix")), io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	_, err := putOSSObject(ossSettingValue{Provider: rainyunOSSProvider, Endpoint: server.URL, Region: "rainyun", Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret"}, "users/u-1/image/test.png", "image/png", int64(len("payload")-1), reader)
+	if err == nil {
+		t.Fatal("putOSSObject() accepted a seekable reader with mismatched remaining size")
+	}
+}
+
+func TestRainyunS3UploadRetriesRetryableStatusWithCompleteBody(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	payload := []byte("rainyun retry payload")
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		if !bytes.Equal(data, payload) {
+			t.Errorf("attempt %d body = %q, want the full payload", attempts, data)
+		}
+		if attempts == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("ETag", `"rainyun-retry-etag"`)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	setting := ossSettingValue{Provider: rainyunOSSProvider, Endpoint: server.URL, Region: "rainyun", Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret"}
+	etag, err := putOSSObject(setting, "users/u-1/video/test.mp4", "video/mp4", int64(len(payload)), bytes.NewReader(payload))
+	if err != nil || etag != "rainyun-retry-etag" {
+		t.Fatalf("putOSSObject() = %q, %v", etag, err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestRainyunS3UploadDoesNotRetryClientError(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	payload := []byte("rainyun payload")
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("<Error><Code>SignatureDoesNotMatch</Code></Error>"))
+	}))
+	defer server.Close()
+
+	setting := ossSettingValue{Provider: rainyunOSSProvider, Endpoint: server.URL, Region: "rainyun", Bucket: "rainyun-bucket", AccessKeyID: "rainyun-id", AccessKeySecret: "rainyun-secret"}
+	if _, err := putOSSObject(setting, "users/u-1/video/test.mp4", "video/mp4", int64(len(payload)), bytes.NewReader(payload)); err == nil {
+		t.Fatal("putOSSObject() should fail on 403")
+	} else if !strings.Contains(err.Error(), "SignatureDoesNotMatch") {
+		t.Fatalf("putOSSObject() error = %v, want the upstream detail preserved", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1 (4xx must not be retried)", attempts)
+	}
+}
 
 func TestS3ObjectOperationsUsePathStyleSessionTokenAndNoManagedHeaders(t *testing.T) {
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")

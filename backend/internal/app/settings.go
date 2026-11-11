@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,14 +33,15 @@ const (
 	aliyunOSSProvider     = "aliyun"
 	tencentCOSProvider    = "tencent"
 	qiniuKodoProvider     = "qiniu"
+	rainyunOSSProvider    = "rainyun"
 	volcengineTOSProvider = "volcengine"
 	s3Provider            = "s3"
 )
 
-const unsupportedOSSProviderMessage = "仅支持阿里云 OSS、腾讯云 COS、七牛云 Kodo、火山引擎 TOS 和通用 S3"
+const unsupportedOSSProviderMessage = "仅支持阿里云 OSS、腾讯云 COS、七牛云 Kodo、雨云 OSS、火山引擎 TOS 和通用 S3"
 
 func supportedOSSProvider(provider string) bool {
-	return oneOf(provider, aliyunOSSProvider, tencentCOSProvider, qiniuKodoProvider, volcengineTOSProvider, s3Provider)
+	return oneOf(provider, aliyunOSSProvider, tencentCOSProvider, qiniuKodoProvider, rainyunOSSProvider, volcengineTOSProvider, s3Provider)
 }
 
 type OSSSettingRequest struct {
@@ -494,6 +496,10 @@ func publishSettingsKey(path string, key []byte, link func(string, string) error
 			return err
 		}
 	}
+	// Windows does not support Sync on a directory opened with os.Open.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	// Persist the published name, not only the inode's contents.
 	dir, err := os.Open(filepath.Dir(path))
 	if err != nil {
@@ -640,6 +646,9 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 			if next.Provider == qiniuKodoProvider {
 				return next, BadAuthRequest("请填写七牛云 Kodo 上传 Endpoint")
 			}
+			if next.Provider == rainyunOSSProvider {
+				return next, BadAuthRequest("请填写雨云 OSS Endpoint")
+			}
 			if next.Provider == volcengineTOSProvider {
 				return next, BadAuthRequest("请填写火山引擎 TOS Region 或 Endpoint")
 			}
@@ -664,6 +673,11 @@ func ossSettingFromRequest(req OSSSettingRequest, current ossSettingValue) (ossS
 		}
 		if endpointErr != nil {
 			return next, endpointErr
+		}
+		if next.Provider == rainyunOSSProvider {
+			if _, err := validateRainyunEndpoint(next.Endpoint); err != nil {
+				return next, err
+			}
 		}
 		if next.CDNBaseURL != "" {
 			if _, err := ossCDNBaseURL(next.CDNBaseURL); err != nil {

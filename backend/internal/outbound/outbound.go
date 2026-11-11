@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -36,6 +37,7 @@ type OutboundHeader struct {
 
 var (
 	outboundTransport          = newOutboundTransport(resolveOutboundHost)
+	storageTransport           = newStorageTransport(resolveOutboundHost)
 	customRelayTransport       = newOutboundTransport(resolveCustomRelayHost)
 	blockedCustomRelayPrefixes = []netip.Prefix{
 		netip.MustParsePrefix("0.0.0.0/8"),
@@ -122,8 +124,16 @@ func ValidateProxyURL(rawURL string) (*url.URL, error) {
 }
 
 func OutboundHTTPClient(timeout time.Duration) *http.Client {
+	return outboundClientWithTransport(outboundTransport, timeout)
+}
+
+func StorageHTTPClient(timeout time.Duration) *http.Client {
+	return outboundClientWithTransport(storageTransport, timeout)
+}
+
+func outboundClientWithTransport(transport http.RoundTripper, timeout time.Duration) *http.Client {
 	return &http.Client{
-		Transport: outboundTransport,
+		Transport: transport,
 		Timeout:   timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= maxOutboundRedirects {
@@ -331,6 +341,13 @@ func newOutboundTransport(resolveHost func(context.Context, string) ([]net.IP, e
 		TLSHandshakeTimeout:   15 * time.Second,
 		ExpectContinueTimeout: time.Second,
 	}
+}
+
+func newStorageTransport(resolveHost func(context.Context, string) ([]net.IP, error)) *http.Transport {
+	transport := newOutboundTransport(resolveHost)
+	transport.ForceAttemptHTTP2 = false
+	transport.TLSClientConfig = &tls.Config{NextProtos: []string{"http/1.1"}}
+	return transport
 }
 
 func outboundProxyFromEnvironment(req *http.Request) (*url.URL, error) {

@@ -107,7 +107,7 @@ export function providerDraftValues(mode: Exclude<StorageMode, "local">, setting
 export function normalizeStoragePayload(values: Partial<OSSFormValues>, setting: AdminOSSSetting): StoragePayload {
     const mode = values.mode || "local";
     const provider = mode === "local" ? setting.provider || "aliyun" : mode;
-    let region = values.region?.trim() || "";
+    let region = values.region?.trim() || (provider === "rainyun" ? "rainyun" : "");
     let endpoint = trimTrailingSlash(values.endpoint || "");
     const bucket = values.bucket?.trim() || "";
     if (provider === "tencent" && !endpoint && region) endpoint = `https://cos.${region}.myqcloud.com`;
@@ -152,9 +152,11 @@ export function validateStorageDraft(values: OSSFormValues, setting: AdminOSSSet
               ? "请填写七牛云 Kodo 上传 Endpoint"
               : draft.provider === "volcengine"
                 ? "请填写火山引擎 TOS Region 或 Endpoint"
-                : draft.provider === "s3"
-                  ? "请填写 S3 Endpoint 服务根 URL"
-                  : "请填写阿里云 OSS Endpoint";
+                : draft.provider === "rainyun"
+                  ? "请填写雨云 OSS Endpoint"
+                  : draft.provider === "s3"
+                    ? "请填写 S3 Endpoint 服务根 URL"
+                    : "请填写阿里云 OSS Endpoint";
     if (draft.provider === "s3" && !draft.region) return "请填写 S3 Region";
     if (draft.provider === "volcengine" && !draft.region) return "请填写火山引擎 TOS Region";
     if (draft.provider === "volcengine" && volcengineTOSLocationError(draft.region, draft.endpoint)) return volcengineTOSLocationError(draft.region, draft.endpoint);
@@ -191,7 +193,7 @@ export function isAdminOSSSetting(value: unknown): value is AdminOSSSetting {
     const setting = value as Partial<AdminOSSSetting>;
     return (
         typeof setting.enabled === "boolean" &&
-        ["aliyun", "tencent", "qiniu", "volcengine", "s3"].includes(setting.provider || "") &&
+        ["aliyun", "tencent", "qiniu", "volcengine", "rainyun", "s3"].includes(setting.provider || "") &&
         ["aws", "r2", "b2", "rustfs", "custom"].includes(setting.s3Preset || "") &&
         typeof setting.region === "string" &&
         typeof setting.endpoint === "string" &&
@@ -216,7 +218,19 @@ export function storageConfigurationReady(mode: StorageMode, values: StoragePayl
 }
 
 export function storageProviderLabel(provider?: StorageMode) {
-    return provider === "s3" ? "S3 兼容存储" : provider === "tencent" ? "腾讯云 COS" : provider === "qiniu" ? "七牛云 Kodo" : provider === "volcengine" ? "火山引擎 TOS" : provider === "aliyun" ? "阿里云 OSS" : "服务器本地";
+    return provider === "s3"
+        ? "S3 兼容存储"
+        : provider === "tencent"
+          ? "腾讯云 COS"
+          : provider === "qiniu"
+            ? "七牛云 Kodo"
+            : provider === "volcengine"
+              ? "火山引擎 TOS"
+              : provider === "rainyun"
+                ? "雨云 OSS"
+                : provider === "aliyun"
+                  ? "阿里云 OSS"
+                  : "服务器本地";
 }
 
 export function providerGuidance(mode: Exclude<StorageMode, "local">) {
@@ -224,15 +238,16 @@ export function providerGuidance(mode: Exclude<StorageMode, "local">) {
     if (mode === "tencent") return "腾讯云可只填写 Region，由服务端生成标准 COS Endpoint；也可填写完整 Endpoint 覆盖。";
     if (mode === "qiniu") return "七牛上传必须配置上传 Endpoint；绑定域名可选，留空时资源由当前后端使用 AK/SK 代理读取。";
     if (mode === "volcengine") return "火山引擎可只填写 Region，由服务端生成 S3 兼容 Endpoint；粘贴控制台的原生域名或 Bucket 域名也会换算为同地域 tos-s3 地址。浏览器直连源站时需在 Bucket 配置跨域访问。";
+    if (mode === "rainyun") return "雨云使用 S3 兼容接口并强制 path-style 访问；Region 留空时由服务端默认为 rainyun。";
     return "阿里云需要完整 OSS Endpoint、Bucket 和访问密钥；CDN 域名可选。";
 }
 
 export function accessKeyIdLabel(mode: Exclude<StorageMode, "local"> | AdminOSSSetting["provider"]) {
-    return mode === "tencent" ? "SecretId" : mode === "qiniu" ? "AccessKey" : mode === "volcengine" ? "Access Key ID" : "AccessKey ID";
+    return mode === "tencent" ? "SecretId" : mode === "qiniu" || mode === "rainyun" ? "AccessKey" : mode === "volcengine" ? "Access Key ID" : "AccessKey ID";
 }
 
 export function accessKeySecretLabel(mode: Exclude<StorageMode, "local"> | AdminOSSSetting["provider"]) {
-    return mode === "tencent" || mode === "qiniu" ? "SecretKey" : mode === "volcengine" ? "Secret Access Key" : "AccessKey Secret";
+    return mode === "tencent" || mode === "qiniu" || mode === "rainyun" ? "SecretKey" : mode === "volcengine" ? "Secret Access Key" : "AccessKey Secret";
 }
 
 export function isHTTPURL(value: string) {

@@ -10,8 +10,25 @@ import { type OSSConnectionTestResult, changesRequireOSSRetest, getS3PresetHints
 import { getAdminOSSSetting, updateAdminOSSSetting, type AdminOSSSetting, testAdminOSSConnection } from "@/services/api/auth";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
-import { accessKeySecretLabel, formValues, formatSettingTime, hasStorageChanges, isAdminOSSSetting, normalizeStoragePayload, providerDraftValues, storageProviderLabel, storageResponseMatches, type StoragePayload, validateStorageDraft, connectionInput, storageConfigurationReady, providerGuidance, accessKeyIdLabel } from "./storage-settings-model";
+import {
+    accessKeySecretLabel,
+    formValues,
+    formatSettingTime,
+    hasStorageChanges,
+    isAdminOSSSetting,
+    normalizeStoragePayload,
+    providerDraftValues,
+    storageProviderLabel,
+    storageResponseMatches,
+    type StoragePayload,
+    validateStorageDraft,
+    connectionInput,
+    storageConfigurationReady,
+    providerGuidance,
+    accessKeyIdLabel,
+} from "./storage-settings-model";
 import { type OSSFormValues, type StorageMode } from "./storage-settings-model";
+import RainyunMonitorSettings from "./rainyun-monitor-settings";
 
 export { type OSSFormValues, type StorageMode, type StoragePayload } from "./storage-settings-model";
 
@@ -21,6 +38,7 @@ const STORAGE_MODES: Array<{ mode: StorageMode; label: string; short: string; de
     { mode: "tencent", label: "腾讯云 COS", short: "对象存储", description: "新增资源写入腾讯云 Bucket，可由 Region 生成 Endpoint。" },
     { mode: "qiniu", label: "七牛云 Kodo", short: "对象存储", description: "新增资源上传到 Kodo；无绑定域名时由后端代理读取。" },
     { mode: "volcengine", label: "火山引擎 TOS", short: "对象存储", description: "新增资源写入火山引擎 Bucket，可由 Region 生成 S3 兼容 Endpoint。" },
+    { mode: "rainyun", label: "雨云 OSS", short: "对象存储", description: "新增资源写入雨云对象存储，使用 S3 兼容接口并按 path-style 访问。" },
     { mode: "s3", label: "S3 兼容存储", short: "对象存储", description: "支持 AWS S3、Cloudflare R2、Backblaze B2、RustFS 与自定义 S3 Endpoint。" },
 ];
 
@@ -35,6 +53,7 @@ export default function StorageSettingsPage() {
     const [testResult, setTestResult] = useState<OSSConnectionTestResult | null>(null);
     const [testStale, setTestStale] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [monitorDirty, setMonitorDirty] = useState(false);
     const [draftMode, setDraftMode] = useState<StorageMode>("local");
     const [loadError, setLoadError] = useState("");
     const [saveError, setSaveError] = useState("");
@@ -88,16 +107,16 @@ export default function StorageSettingsPage() {
         setDraftMode(values.mode);
     }, [form, loading, setting]);
 
-    const blocker = useBlocker(dirty && !saving);
+    const blocker = useBlocker((dirty && !saving) || monitorDirty);
 
     useEffect(() => {
         const beforeUnload = (event: BeforeUnloadEvent) => {
-            if (!dirty || saving) return;
+            if ((!dirty || saving) && !monitorDirty) return;
             event.preventDefault();
         };
         window.addEventListener("beforeunload", beforeUnload);
         return () => window.removeEventListener("beforeunload", beforeUnload);
-    }, [dirty, saving]);
+    }, [dirty, monitorDirty, saving]);
 
     useEffect(() => {
         if (blocker.state !== "blocked" || navigationConfirmOpenRef.current) return;
@@ -480,7 +499,9 @@ export default function StorageSettingsPage() {
                                                           ? "无绑定域名时用于兼容 S3 的私有读取。"
                                                           : draftMode === "volcengine"
                                                             ? `Endpoint 留空时由 Region 自动生成。可选：${VOLCENGINE_TOS_REGION_HINT}。`
-                                                            : "按云厂商控制台显示值填写。"
+                                                            : draftMode === "rainyun"
+                                                              ? "留空时由服务端默认为 rainyun。"
+                                                              : "按云厂商控制台显示值填写。"
                                                 }
                                             >
                                                 <Input
@@ -494,12 +515,17 @@ export default function StorageSettingsPage() {
                                                                 ? "z0 / cn-east-1"
                                                                 : draftMode === "volcengine"
                                                                   ? "cn-beijing"
-                                                                  : "oss-cn-hangzhou"
+                                                                  : draftMode === "rainyun"
+                                                                    ? "rainyun"
+                                                                    : "oss-cn-hangzhou"
                                                     }
                                                 />
                                             </Form.Item>
                                             <Form.Item name="bucket" label="Bucket">
-                                                <Input autoComplete="off" placeholder={draftMode === "qiniu" ? "七牛云存储空间名称" : draftMode === "volcengine" ? "火山引擎存储桶名称" : "对象存储 Bucket"} />
+                                                <Input
+                                                    autoComplete="off"
+                                                    placeholder={draftMode === "qiniu" ? "七牛云存储空间名称" : draftMode === "volcengine" ? "火山引擎存储桶名称" : draftMode === "rainyun" ? "雨云对象存储 Bucket" : "对象存储 Bucket"}
+                                                />
                                             </Form.Item>
                                             <Form.Item label="路径前缀" extra={`可自行填写；也可采用外观管理中的英文品牌标识 ${brandSlug}。保存时自动去除首尾斜杠。`}>
                                                 <div className="admin-storage-address-control">
@@ -542,7 +568,9 @@ export default function StorageSettingsPage() {
                                                                 ? "https://up-z0.qiniup.com"
                                                                 : draftMode === "volcengine"
                                                                   ? "https://tos-s3-cn-beijing.volces.com"
-                                                                  : "https://oss-cn-hangzhou.aliyuncs.com"
+                                                                  : draftMode === "rainyun"
+                                                                    ? "https://cn-sy1.rains3.com"
+                                                                    : "https://oss-cn-hangzhou.aliyuncs.com"
                                                     }
                                                 />
                                             </Form.Item>
@@ -565,7 +593,12 @@ export default function StorageSettingsPage() {
                                             <Form.Item name="requireCDN" label="必须走 CDN" valuePropName="checked" extra="开启后 CDN 鉴权配置不完整时直接失败，不会静默回源。">
                                                 <Switch checkedChildren="严格" unCheckedChildren="允许回源" />
                                             </Form.Item>
-                                            <Form.Item name="allowPrivateProxy" label="允许模型输入代理" valuePropName="checked" extra="仅允许服务端向第三方模型提交参考素材时读取私有源站。浏览器展示、复制、下载和本地处理始终直连 OSS/CDN，不会经平台中转媒体正文。">
+                                            <Form.Item
+                                                name="allowPrivateProxy"
+                                                label="允许模型输入代理"
+                                                valuePropName="checked"
+                                                extra="仅允许服务端向第三方模型提交参考素材时读取私有源站。浏览器展示、复制、下载和本地处理始终直连 OSS/CDN，不会经平台中转媒体正文。"
+                                            >
                                                 <Switch checkedChildren="允许" unCheckedChildren="禁止" />
                                             </Form.Item>
                                         </div>
@@ -615,6 +648,9 @@ export default function StorageSettingsPage() {
                             </div>
                         </Form>
                     </SettingsSectionCard>
+                </div>
+                <div id="admin-rainyun-monitor" className="admin-settings-anchor">
+                    <RainyunMonitorSettings onDirtyChange={setMonitorDirty} />
                 </div>
             </div>
         </AdminPageFrame>

@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 系统性能与雨云监控
+
+- 系统快照：`backend/internal/handler/admin_system_performance.go` → `service/aliases_types.go` → `app/admin_system_performance.go`；跨平台 CPU 与整机内存采集在 `app/system_metrics*.go`，进程指标仍使用 Go runtime。
+- 雨云监控：`app/admin_rainyun_monitor.go` 负责独立配置、加密和套餐缓存，`admin_rainyun_monitor_parse.go` 归一白名单字段，`admin_rainyun_monitor_realtime.go` 解析有界时序与退避；`storage/rainyun_monitor.go` 只负责桶级 HEAD。
+- 前端：`web/src/services/api/system-performance.ts`、`pages/admin/settings/system-performance-page.tsx`、`rainyun-realtime-chart.tsx`；独立配置在 `rainyun-monitor-settings.tsx`，从存储设置页进入。页面样式和主题 token 复用现有后台样式入口。
+- 回归：`app/admin_system_performance_test.go`、`app/admin_rainyun_monitor*_test.go`、`storage/rainyun_monitor_test.go`、`web/test/rainyun-monitor.test.tsx`。协议与密钥边界见 [HTTP API](/docs/backend/http-api) 和 [后端数据库](/docs/backend/backend-database)。
+
 ## Agent 记忆、Pi 与 MCP
 
 - 用户工作回忆：`app/cloud_agent_memory_recall.go`、`repository/agent_memory_recall.go`；长期偏好沿用 `cloud_agent_memory_document*.go`。冻结注入在 `cloud_agent_skill_catalog.go`，按需检索工具为 `memory_search`。
