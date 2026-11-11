@@ -18,6 +18,7 @@ var storageReadOnlyExemptPrefixes = []string{
 	"/admin/",
 	"/settings/",
 	"/diagnostics/",
+	"/integrations/feishu/",
 	"/model-catalog/",
 }
 

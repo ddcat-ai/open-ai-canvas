@@ -855,7 +855,7 @@
 }
 
 .agent-composer-surface:focus-within {
-    border-color: color-mix(in srgb, var(--agent-focus-ring) 45%, transparent);
+    border-color: color-mix(in srgb, var(--agent-ink) 10%, transparent);
 }
 
 /* 底部托盘：外壳与输入卡片同为一张卡，输入卡片嵌在上方，底部条直接落在托盘里；无分隔线、无间距。 */
@@ -865,6 +865,7 @@
 }
 
 .agent-media-batch-bar {
+    position: relative;
     border: 0;
     background: var(--agent-surface-soft, color-mix(in srgb, var(--foreground) 4%, transparent));
 }
@@ -2152,8 +2153,8 @@ summary.agent-tool-step:hover {
 
 .agent-composer-selection > .w-full {
     min-width: 0;
-    max-width: 13rem;
-    flex: 1 1 13rem;
+    max-width: 18rem;
+    flex: 1 1 18rem;
 }
 
 .agent-composer-selection .agent-composer-model-trigger,

@@ -5,6 +5,14 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## Agent 记忆、Pi 与 MCP
+
+- 用户工作回忆：`app/cloud_agent_memory_recall.go`、`repository/agent_memory_recall.go`；长期偏好沿用 `cloud_agent_memory_document*.go`。冻结注入在 `cloud_agent_skill_catalog.go`，按需检索工具为 `memory_search`。
+- Pi `1.5.2` 与真实运行回归：`backend/agent-runtime/pi/agent-runtime.mjs`、`agent-runtime.compaction.test.mjs`；受管模型桥、真实 Token 计量和缓存前缀在 `app/cloud_agent_pi_model.go`。
+- MCP HTTP 接口：`handler/mcp.go` → `service/aliases_mcp.go` → `app/mcp.go`；领域实现 `internal/integrations/mcp/`，持久化 `repository/mcp.go`、`model/models_mcp.go`，追加迁移 100 在 `database/migration_mcp.go`。
+- MCP 工具发现、审批预览与执行：`app/cloud_agent_tools_mcp.go`；分类与 Schema 仍使用统一工具注册表。外部 IO 在检查点事务外执行，独立回执防止重复调用。
+- 前端：`web/src/components/mcp/` 与 `services/api/agent-mcp.ts`；个人入口在 Agent 设置，平台市场和连接在 `pages/admin/mcp/`。
+
 ## 网站访问统计
 
 - 匿名采集与分类：`web/src/lib/site-traffic.ts`、`services/site-traffic.ts`；后台路由 `/admin/traffic` 在 `pages/admin/traffic/`，API 校验在 `services/api/site-traffic.ts`，三类 CSV 在 `traffic-csv.ts`。

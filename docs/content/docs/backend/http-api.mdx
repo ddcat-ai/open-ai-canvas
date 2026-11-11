@@ -5,6 +5,45 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## Agent MCP
+
+所有接口使用登录 Cookie、统一业务信封和严格 JSON 入参。个人连接归属、平台管理员权限、连接启用状态和工具授权均在 service 层校验。
+
+| 接口 | 合同 |
+| --- | --- |
+| `GET /api/agent/mcp/catalog` | 返回 `data.items[]`，只包含已发布市场模板 |
+| `GET /api/agent/mcp/connections` | 返回个人连接及已启用的平台连接；平台连接对普通用户只读，不返回其参数或凭据 |
+| `POST /api/agent/mcp/connections`、`PUT /api/agent/mcp/connections/:id` | 完整写入 `{name,templateId?,transport,serverUrl,parameters,enabled,allowedTools}`，返回连接视图；`transport` 为 `streamable_http` 或 `sse` |
+| `POST /api/agent/mcp/connections/:id/test` | 服务端真实握手并发现工具，返回最新连接视图；成功后需要重新选择允许工具，默认禁用；失败返回真实错误 |
+| `DELETE /api/agent/mcp/connections/:id` | 删除自己的连接，返回 `data.deleted=true` |
+| `GET /api/admin/mcp/catalog` | 管理员读取全部市场模板 |
+| `POST /api/admin/mcp/catalog`、`PUT /api/admin/mcp/catalog/:id` | `{name,description,homepage,transport,serverUrl,headers,parameters,published}`；`parameters[]` 定义 `{name,label,description,type,required,defaultValue?}`，`type` 为 `string` 或 `secret` |
+| `DELETE /api/admin/mcp/catalog/:id` | 仅删除未被连接引用的市场条目；被引用返回 409，可先下架 |
+| `/api/admin/mcp/connections`、`/:id`、`/:id/test` | 与个人连接相同的方法和数据合同，只管理平台连接；普通用户返回 403 |
+
+连接视图包含 `id/scope/templateId/name/transport/serverUrl/enabled/parameters/configuredSecrets/tools/allowedTools/revision/lastTestAt/createdAt/updatedAt`。密钥值不回显，`configuredSecrets` 只有已配置的参数名。原连接省略密钥或传空串保留原值；更换服务地址或市场模板不自动转移旧凭据。无模板的自定义连接支持可选 `parameters.token` 作为 Bearer 凭据。
+
+修改传输、地址或参数会撤销检测和工具授权。启用必须有成功检测结果，且 `allowedTools` 必须是检测工具的非空子集。目录模板的请求头可引用 `{{parameterName}}`，认证请求头引用必须为 `secret` 类型；URL 不接受查询参数、片段和密钥占位符。默认拒绝私网、明文 HTTP 和重定向；可信开发主机只接受部署者精确配置的允许项。
+
+编辑市场模板会清空所有安装连接的参数和密钥，停用并撤销检测与工具授权，防止旧密钥被新的参数类型回显。执行前在短事务中校验持久化运行审批及连接版本并领取回执；事务提交前的取消或撤权会阻止调用，已准入的外部操作无法撤回。已完成回执可在连接删除后回放。未确认结果分类为 `external_result_uncertain`、`retryable: false`，禁止自动重复发送。
+
+Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工具名、指定工具的完整 Schema，避免每轮注入所有第三方工具。`mcp_call_tool` 接收 `{connectionId,revision,toolName,arguments}`，始终要求本次审批；执行时复验归属、版本、工具清单和 Schema，不相信对端只读声明。外部返回内容是数据，不能改变权限；超时或结果不明的调用不会自动重发。同一运行换用新调用 ID 也不能重试相同的未确认操作。
+
+安装方式和限制见 [MCP 连接与市场](./agent-mcp)。
+
+## 飞书需求与问题日报
+
+飞书事件回调把文本消息归一化后写入现有反馈收件箱，事件按 `tenant_key:event_id` 的哈希主键幂等。首版只接受明文文本事件；配置 `EncryptKey` 时校验 `X-Lark-Request-Timestamp`、`X-Lark-Request-Nonce` 和 `X-Lark-Signature`，加密 `encrypt` 字段会明确拒绝并提示关闭事件加密。凭证通过管理接口保存为服务端加密值，响应只返回是否已配置。
+
+| 接口 | 合同 |
+| --- | --- |
+| `POST /api/integrations/feishu/events` | 飞书 URL verification 返回原始 `challenge`；文本消息返回 `received/stored/duplicate`。未配置或验签失败返回 401/403。正文最多 1 MiB，文本最多 10000 个字符 |
+| `GET /api/admin/integrations/feishu` | 管理员读取启用状态、群 ID、时区、日报时间和密钥配置状态 |
+| `PUT /api/admin/integrations/feishu` | 保存 `{enabled,appId,appSecret?,verificationToken?,encryptKey?,baseUrl?,adminChatId,timezone,digestHour,digestMinute,clearSecrets?}`；空密钥保留原值，启用时必须具备应用凭证、校验 token 和管理员群 ID |
+| `POST /api/admin/integrations/feishu/digest` | 管理员手动发送当日日报；自动 worker 对同日已成功或结果不确定的投递不自动重试，管理员核对后可手动触发 |
+
+后台 worker 按配置时区在日报时间之后执行，使用跨实例租约和持久化状态避免重复投递。发送前先写入 `running`，网络结果不确定时记为 `uncertain` 且不自动重试；日报按 Bug、需求和其他类型稳定排序，内容过长会截断并引导管理员查看后台反馈列表。目标群只能配置官方 `open.feishu.cn` 或 `open.larksuite.com` 地址。
+
 ## 网站访问统计
 
 | 接口 | 合同 |
@@ -636,11 +675,11 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - 创建和追加消息可选择 `reasoningMode`，默认 `off`；`auto`/`deep` 为服务端行为策略与模型推理配置的选择，不等于允许暴露内部思维链。供应商能力由后端校验；声明式 Agent 渠道不支持时明确报错。推理可能增加耗时和费用。
 - Cloud Agent 与首页创造的规划请求使用自动工具选择。OpenAI Chat Completion 兼容协议会把显式 `auto` 归一化为省略 `tool_choice`，沿用协议默认的自动选择语义；显式开启思考模式时还会在首个上游请求前移除 `required` 或指定函数对象。非思考模式仍保留艺术点评、提示词优化等结构化任务的强制函数选择。若上游隐式开启思考而本地未声明，仍按 `required` → `auto` → 省略字段做兼容重试。
 - `GET /agent/profile?scope=user|project|canvas&projectId=...&canvasId=...` 按作用域读取生效的用户 → 项目 → 画布偏好；`PATCH /agent/profile` 用 `{ scope, projectId?, canvasId?, content, revision }` 更新单层（首次 revision 为 0，冲突返回 409）。读取返回各层独立数字 revision，以及合并文档的 `revision`/`hash`；新轮次携带合并 `profileRevision`，发生变化拒绝创建，已运行轮次仍用提交时固定的快照。system prompt 只包含层级、revision、hash 和长度清单，正文保存在运行快照中；本轮快照有层时才提供 `agent_profile_read`，只读清单中存在的层。没有偏好层时工具清单不含该工具。偏好仅是非授权数据，不能扩展工具、节点或预算，不能绕过审批；最多 12000 字符/层。
-- 行为规则唯一来源是编译进后端的 `agent-system-policy.md` v20；不再 embed 旧操作合同或独立媒体策略。媒体 ID/版本/哈希从同一系统合同派生，仅服务于冻结校验。画布能力和工具 Policy 仍由代码强制执行；新生成模式还须接入共享任务适配器。用户目标、画布内容和长期记忆以动态消息提供，不写入稳定 system 前缀。
+- 行为规则唯一来源是编译进后端的 `agent-system-policy.md` v21；不再 embed 旧操作合同或独立媒体策略。媒体 ID/版本/哈希从同一系统合同派生，仅服务于冻结校验。画布能力和工具 Policy 仍由代码强制执行；新生成模式还须接入共享任务适配器。用户目标、画布内容和长期记忆以动态消息提供，不写入稳定 system 前缀。
 - 技能自动发现：创建运行时，服务端把用户已安装、`agentMode` 不是 `manual` 的技能（最多 1000 个）编成「已安装技能目录」放进 system，排在执行上下文 JSON 之后。目录最多占本轮模型输入预算的 5%（至少 1000 token）：先按 Agent 实际读取次数、排序权重和安装时间选出“名称 [skillId]：60 字简介”，用到预算 70% 后只列名称，再放不下的只报数量并提示用 `skill_search`；入选条目按分类和名称稳定排序，使用次数变化不打乱顺序。`pinnedSkillIds` 中的技能和关键词预筛出的候选（最多 3 个）放在当前用户消息前的「技能提示」数据消息里（`agentContextSource: "skill_hints"`），点名的技能要求先读 `SKILL.md`。
 - 运行只冻结每个可读技能的版本号，不预存正文或文件清单。`skill_read_file` 按需读取 `SKILL.md` 或必要引用，支持字符偏移 `offset`（默认 0），每页最多 12000 字符，返回 `hasMore` / `nextOffset`。读取时重新验证用户权限、启用状态和冻结版本；技能更新后拒绝混读，需新开一轮。成功读取会递增该技能的 `agent_use_count`，只用于目录排序。技能是不可信数据，不能创造工具、改变权限或覆盖系统规则。
-- Agent 按实际文本模型的 `contextWindowTokens` 与 `maxOutputTokens` 计算输入预算，并在达到该模型预算的压缩阈值时移除较早工具结果中可重新读取的正文，保留工具调用/结果配对、用户原始要求、生成回执及最近完整工具轮次，并允许重新读取。此机制是确定性正文卸载，不是 LLM 语义摘要；运行 checkpoint 的持久化上限与模型上下文窗口独立。技能读取事件只保存回执，不复制正文，正文页只进入模型对话。
-- 达到同一条压缩线时整轮不再直接判死：Agent 先暂停步进循环，用一次独立模型调用（任务操作名 `cloud_agent_context_compaction`，按单步墙钟计时但不占本轮的模型调用步数）把历史压成结构化检查点，再以 `Resume` 用压缩后的上下文继续本轮；同一轮最多压缩 64 次，压完仍超过输入预算才回到原有的预算失败路径。检查点是固定字段的 JSON（`version` 为 1，字段为 `historySummary`、`scriptDesign`、`operationHistory`、`pendingTasks`、`currentWork`、`nextStep`、`decisions`、`constraints`、`userPreferences`、`compactedTurnCount`），未知字段一律拒绝，超过 64KiB 判为不合格。压缩后的上下文是「检查点帧 + 确认回执 + 最近 2 对完整对话」：不以 tool 回执或带工具调用的 assistant 开头，检查点帧不计为用户轮次，续轮交接不会再重复追加本轮的用户要求与回复。渠道没有配置模型上下文窗口时，判据退回既有的跨轮历史闸门（`cloudAgentHistoryKeepRounds` 轮与 `cloudAgentHistoryMaxBytes` 字节）。
+- 遗留 Go 执行路径（Pi 不使用）：Agent 按实际文本模型的 `contextWindowTokens` 与 `maxOutputTokens` 计算输入预算，并在达到该模型预算的压缩阈值时移除较早工具结果中可重新读取的正文，保留工具调用/结果配对、用户原始要求、生成回执及最近完整工具轮次，并允许重新读取。此机制是确定性正文卸载，不是 LLM 语义摘要；运行 checkpoint 的持久化上限与模型上下文窗口独立。技能读取事件只保存回执，不复制正文，正文页只进入模型对话。
+- 遗留 Go 执行路径（Pi 不使用）：达到同一条压缩线时整轮不再直接判死：Agent 先暂停步进循环，用一次独立模型调用（任务操作名 `cloud_agent_context_compaction`，按单步墙钟计时但不占本轮的模型调用步数）把历史压成结构化检查点，再以 `Resume` 用压缩后的上下文继续本轮；同一轮最多压缩 64 次，压完仍超过输入预算才回到原有的预算失败路径。检查点是固定字段的 JSON（`version` 为 1，字段为 `historySummary`、`scriptDesign`、`operationHistory`、`pendingTasks`、`currentWork`、`nextStep`、`decisions`、`constraints`、`userPreferences`、`compactedTurnCount`），未知字段一律拒绝，超过 64KiB 判为不合格。压缩后的上下文是「检查点帧 + 确认回执 + 最近 2 对完整对话」：不以 tool 回执或带工具调用的 assistant 开头，检查点帧不计为用户轮次，续轮交接不会再重复追加本轮的用户要求与回复。渠道没有配置模型上下文窗口时，判据退回既有的跨轮历史闸门（`cloudAgentHistoryKeepRounds` 轮与 `cloudAgentHistoryMaxBytes` 字节）。 Pi 使用原生压缩与 JSONL 会话持久化，参见 [Pi 压缩与缓存前缀](./agent-prompt-policy#pi-压缩与缓存前缀)。
 - 压缩过程对外只有两个事件：`context_compaction_requested` 带触发读数（`basis` 为 `tokens`／`bytes`、`projectedTokens`、`usableInputTokens`、`compactAtTokens`、`pressureRatio`、`budgetSource`、`sourceBytes`、`turnCount`），`context_compacted` 带 `mode`（`model` 为压缩模型输出，`fallback` 为服务端保底检查点）、`resume`、`historyMessages`、`compactedTurnCount`、`droppedTurns`，降级时附 `reason`。压缩模型失败、输出不合规、或本轮在压缩期间被取消／失败，服务端都落保底检查点并写 `mode=fallback`；终态轮次的收尾只落检查点与事件，不改写已经失败或已取消的状态。
 - 每次普通 Agent 步进模型调用发出之前都会落一条 `context_pressure` 事件（`schemaVersion: 2`、`phase: "before_request"`），把"这次请求装了多少、离装不下还有多远"作为可观测读数下发，`requestId` 是本次请求的任务 ID。主读数是 `projectedNextInputTokens`：有可采信的上游实测锚点时等于"锚点实测 + 本地估算的有符号增量"（`tokenSource` / `measurementSource` 为 `provider`，`tokenScale` 给出实测÷估算的换算比例）；没有实测时退回纯本地估算（`tokenSource` 为 `estimate`）。两把尺子各有自己的名字、谁也**不覆盖**谁：`estimatedInputTokens`（`readingScope: "next_request"`、`estimateMethod: "local_v1"`）永远是本地下一次请求的估算，`pressureTokens` / `providerUsage`（`providerMeasurementScope: "previous_request"`）永远是上游对**上一次**请求的实测，消费方不得把两者画成一条曲线。本读数只增加可观测性：请求准入与正文裁剪的既有判据不变。
 - 上游实测锚点的采信与治理：上游没有回 usage 的调用（`usage_available=false`）不定锚、不猜用量，读数继续用估算；只有"模型调用"这一步能配锚（媒体任务发的是另一份信封，`operation` 不匹配即跳过）。上游实测与本地估算差出一个量级时不采信（比值低于 0.5× 或高于 2×，通常是换了模型或计量口径），事件给 `anchorRejected` 说明原因并继续用估算。锚点可以跨步沿用，但**换模型、换线路、换系统提示或工具 schema、换模型窗口，以及超过 3 步未刷新**（`anchor.ageSteps`）都会作废：真机上出现过锚点被冻结、估算已经涨了 50% 而读数还停在老值的情况。
@@ -648,7 +687,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - 窗口口径由 `contextWindowTokens` / `reservedOutputTokens` / `overheadTokens` / `inputBudgetTokens` / `usableInputTokens` / `budgetSource` 给出：输入预算 = 上下文窗口 − 输出预留 − overhead，其中 overhead 是工具 schema、协议包装与兜底轮的比例预留（窗口的 4%，夹在 4096–32768），`compactAtTokens` 是既有的"可重读正文就地裁剪"触发线（输入预算的 85%），`budgetSource` 说明这份窗口来自渠道模型还是逻辑模型的线路交集。**没有解析到模型自己声明的窗口时不下发这些字段、也不给占用率**（`modelLimitConfigured: false`）：窗口未知就说未知，不拿兜底默认窗口冒充真实能力编一个百分比。
 - `context_transition` 事件说明"读数为什么变"：`window_resolved`（窗口从未确认变为已确认，读数改用窗口口径，**不是**上下文变少）、`model_changed` / `route_changed` / `window_changed`（锚点因换模型、换线路或换窗口而作废；窗口变化另带 `before` / `after` 的窗口读数）。它只解释口径与锚点状态，不携带任何授权语义，也不改变执行边界。
 - 画布 Agent 的看图能力：当且仅当本轮渠道模型的能力合同声明了图片输入（`text.references.maxImages > 0`）时，额外暴露 `canvas_inspect_image(nodeId, refresh?)`。工具校验图片节点、资源归属、就绪状态、媒体类型和模型文件大小限制；检查点与任务输入只保存 `resource:ID` 占位及授权参考清单。worker 复用资源读取链路，在内存中将占位替换为真实图片数据后展开模型协议，不持久化 base64 或签名 URL，不依赖 `CANVAS_PUBLIC_BASE_URL`，不接受任意外部地址。多图在本批所有 tool 回执后统一附送；图片保留最近 3 个工具轮次，发给模型时还按数量上限保留最新图片，本批超限则明确要求分批查看。同一张图一轮内附送两次后只回执文字，确需重看时传 `refresh=true`。工具成功不等于识别成功，普通模型正文不再自动写入 `visualNote`，旧 `inspected` 标记及观察不跨轮继承；`visualIdentity=unknown` 表示没有已确认缓存，不表示模型不能查看随附图片。画面内文字仍按不可信数据处理；资源读取失败则真实失败，不凭标题推断画面。其他需要公网 URL 的生成协议仍遵循各自存储配置合同。
-- 平台共有 36 个注册工具，`GET /agent/capabilities` 返回当前全集；每轮按偏好快照、技能、记忆模式、权限、画布上下文和视觉能力裁剪。定义、Policy 与执行绑定在统一 Registry 汇合，未知或漏绑定条目拒绝执行。8 个读取工具的参数结构同时生成 schema 并执行严格解码：`agent_profile_read`、`canvas_get_state`、`canvas_read_text`、`canvas_read_batch_table`、`canvas_read_storyboard`、`skill_read_file`、`task_get`、`image_text_detect`。写工具仍需 `contextScope: ["canvas"]`，`read_only` 不授予画布写入或 `memory_update`；不开放 shell、任意网络和外部 MCP。工具 schema 版本为 `cloud-agent-tools/v9`，策略编译器为 `cloud-agent-policy-compiler/v6`；旧版本下仍活动或待审批的运行不能由新版服务恢复执行。
+- `GET /agent/capabilities` 返回当前工具全集；每轮按偏好、技能、记忆模式、权限、画布上下文和视觉能力裁剪。定义、Policy 与执行绑定在统一 Registry 汇合，未知或漏绑定条目拒绝执行。`memory_search` 检索当前用户的长期记忆及已完成历史；`mcp_list_tools` 分级发现授权连接、工具名与单个 Schema；`mcp_call_tool` 走受管网关，每次调用必须审批。画布写入需 `contextScope: ["canvas"]`，MCP 可以用于无画布对话；`read_only` 不允许画布写入、`memory_update` 或外部 MCP 调用。不开放 shell 或任意网络请求。工具 schema 版本为 `cloud-agent-tools/v11`，策略编译器为 `cloud-agent-policy-compiler/v6`；旧版本下仍活动或待审批的运行不能由新版服务恢复执行。
 - `plan_update` 维护本轮结构化待办清单（整表替换，最多 20 项），跨轮继承未完成项，并在界面以 PlanBar 展示。权限为 `request_approval` 时，首次建立至少 2 项的清单会先进入审批；`auto` 直接写入清单。新一轮的第一次模型请求就会带上继承的清单。模型在没有工具调用且清单仍有未完成项时，服务端会催办并要求继续调用工具；这是软约束，不验证工作是否真的完成，也不会在没有清单时强行催建。
 - 短剧工具只在运行绑定的画布关联到当前用户的自动制作短剧时出现（服务端按画布的 `project_id` 判断，客户端不能声明）：`drama_get_context` 只读返回作品的设定、分集与剧情段摘要和画布节点上的 `dramaRef` 绑定；`drama_adopt_canvas_media` 把画布上已就绪的图片采用为设定参考图、或把视频采用为剧情段视频（默认只换本段，`cascade` 重新生成后续段），总是需要用户审批，预览类型为 `canvas_mutation`、条目操作为 `adopt_drama_media`。采用在运行检查点事务内只写数据库，不读写对象存储；剧情段尾帧与精确时长由调度循环补做，暂停中的作品在继续制作后再重新合成成片。
 - 批量生成：`generate_media_batch` 一次审批同一模式的最多 40 个空闲占位节点。条目只传 `nodeId`（可选 `prompt` 覆盖），提示词与参考取自节点及其无 handle 的入边，视频首尾帧取节点字段。服务端逐条复用 `generate_media` 的无扣费准入并报价，建好草稿后只发一张审批卡（预览 `kind: media_batch`，条目操作 `generate_media_item`），列明细、合计积分、并发、试跑与每条重试次数（0–2，默认 1）；总额上限为合计 ×（1+重试次数）。图片和视频批次审批可通过同一 decision 接口的 `mediaSettings` 统一修改模型与规格，不允许改单条目标、提示词、参考或并发/重试策略。服务端对全部条目重新做无扣费准入、预算与报价校验，原子更新审批哈希、资源引用租约与批次快照；任一条目失败则保留原审批。省略 `durationSeconds` 保留各视频条目的原时长，显式传入则统一覆盖每项时长。音频批次暂不支持此设置编辑。批准后后台执行器按并发（默认 3，不超过账号同时任务上限）提交：每次提交都重新准入，规格哈希必须与批准时一致、报价不得高于批准单价（作为 `MaxCharge`），并按本轮积分、生成次数和视频秒数预算强校验；结果逐条回写节点并发 `media_batch_progress` 事件（阶段切换带全部条目，条目变化只带增量）。`canary=true` 时先只跑第 1 条，结束后把回执交回 Agent；全部结束后记录工具回执并用恢复提示词续跑。批次执行期间 Pi 会话暂停，进程重启后按持久化的 `mediaBatch` 状态重新挂上执行器；停止本轮时未提交条目取消，已进入上游的条目按单条媒体规则继续生成并回写。

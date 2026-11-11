@@ -631,8 +631,11 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			} else {
 				toolErr = BadAuthRequest("工具未获本轮权限授权")
 			}
-		case binding.Handler.Write != nil:
-			result, toolErr = binding.Handler.Write(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
+		case toolPolicy.OutsideTransaction:
+			// Network and other external side effects must never run while the
+			// checkpoint transaction is open. MCP uses its Read-shaped executor
+			// above to perform durable admission and receipt claiming first.
+			result, toolErr = skillResult, skillErr
 		case binding.Handler.Pipeline == cloudAgentToolVision:
 			result, toolErr = inspectionResult, inspectionErr
 			if toolErr == nil && inspectionResult != nil {
@@ -648,8 +651,8 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					}
 				}
 			}
-		case toolPolicy.OutsideTransaction:
-			result, toolErr = skillResult, skillErr
+		case binding.Handler.Write != nil:
+			result, toolErr = binding.Handler.Write(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		default:
 			result, toolErr = cloudAgentReadToolCached(repo, run.UserID, state, call)
 		}

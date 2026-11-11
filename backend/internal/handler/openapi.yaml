@@ -24,6 +24,8 @@ tags:
   - name: assets
   - name: models
   - name: agent
+  - name: mcp
+    description: Agent 个人及平台 MCP 连接、工具发现与市场配置
   - name: admin
   - name: skills
   - name: workbench
@@ -31,6 +33,8 @@ tags:
     description: 短剧作品与角色、场景、道具设定
   - name: feedback
     description: 用户反馈与管理员收件箱
+  - name: integration
+    description: 外部平台事件与消息集成
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
   - name: inspirations
@@ -827,6 +831,83 @@ paths:
                       data: { $ref: "#/components/schemas/FeedbackAttachment" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /integrations/feishu/events:
+    post:
+      tags: [integration, feedback]
+      summary: 接收飞书事件回调
+      description: 校验 verification token；配置 EncryptKey 时同时校验签名。首版只接受明文 text 事件，重复事件按事件 ID 幂等确认。
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { type: object, additionalProperties: true } }
+      responses:
+        "200":
+          description: URL verification 返回 challenge，普通事件返回接收状态
+          content:
+            application/json: { schema: { type: object, additionalProperties: true } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/integrations/feishu:
+    get:
+      tags: [integration, admin]
+      summary: 读取飞书反馈接入配置
+      responses:
+        "200":
+          description: 成功信封，密钥只返回是否已配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/FeishuFeedbackSettings" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [integration, admin]
+      summary: 保存飞书反馈接入配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeishuFeedbackSettingsInput" }
+      responses:
+        "200":
+          description: 成功信封，密钥只返回是否已配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/FeishuFeedbackSettings" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/integrations/feishu/digest:
+    post:
+      tags: [integration, feedback, admin]
+      summary: 手动发送当日飞书反馈日报
+      description: 同一自然日已发送的日报不会自动重复发送；不确定结果需要管理员核对后再决定是否重试。
+      responses:
+        "200":
+          description: 成功信封，data 为日报投递状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/FeishuDigestState" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /admin/feedbacks:
     get:
@@ -2072,6 +2153,228 @@ paths:
           description: 返回更新后的生效偏好视图
         "409":
           description: 偏好 revision 已变化，须重新读取后保存
+  /agent/mcp/catalog:
+    get:
+      tags: [agent, mcp]
+      operationId: listAgentMCPCatalog
+      summary: 读取已发布的 MCP 市场条目
+      description: 需要登录。条目仅包含远端服务和用户参数的定义，不包含任何已安装连接的凭据。
+      responses:
+        "200": { $ref: "#/components/responses/MCPCatalog" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /agent/mcp/connections:
+    get:
+      tags: [agent, mcp]
+      operationId: listAgentMCPConnections
+      summary: 读取个人连接及已启用的平台连接
+      description: 个人连接只返回非密钥参数及已配置密钥的名称；平台连接不返回参数和密钥名称，工具仅包含已授权项。普通用户不能编辑、检测或删除平台连接。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnections" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [agent, mcp]
+      operationId: createAgentMCPConnection
+      summary: 安装或创建个人 MCP 连接
+      description: 请求最多 128 KiB。每个用户最多 30 个个人连接。省略 templateId 表示自定义远端服务，可配置 token 作为 Bearer 密钥。创建时必须停用且 allowedTools 为空；保存不代表连接检测成功。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /agent/mcp/connections/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    put:
+      tags: [agent, mcp]
+      operationId: updateAgentMCPConnection
+      summary: 更新本人 MCP 参数、工具授权和启用状态
+      description: 请求最多 128 KiB。修改地址、连接方式、模板或参数时必须停用并清空 allowedTools，随后重新检测。更换地址或模板不会转移旧凭据；其他情况下省略参数或将密钥设为空串保留已有值。启用要求已有检测结果且至少授权一个已发现工具。配置更新递增服务端 revision，使旧审批失效。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [agent, mcp]
+      operationId: deleteAgentMCPConnection
+      summary: 移除本人 MCP 连接
+      description: 不接受平台连接或其他用户的连接；移除后旧工具调用不能继续通过授权校验。
+      responses:
+        "200": { $ref: "#/components/responses/MCPDeleted" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /agent/mcp/connections/{id}/test:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    post:
+      tags: [agent, mcp]
+      operationId: testAgentMCPConnection
+      summary: 检测本人 MCP 连接并发现工具
+      description: 不需要请求正文。使用服务端保存的参数进行真实握手和工具发现，不执行工具。成功后更新 tools、lastTestAt 和 revision，清空 allowedTools 并停用连接，需重新选择工具和启用；失败不伪造可用工具清单。最多发现 128 个工具。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /admin/mcp/catalog:
+    get:
+      tags: [admin, mcp]
+      operationId: listAdminMCPCatalog
+      summary: 管理员读取全部 MCP 市场条目
+      description: 仅管理员可读，包含已发布和未发布条目。
+      responses:
+        "200": { $ref: "#/components/responses/MCPCatalog" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin, mcp]
+      operationId: createAdminMCPTemplate
+      summary: 管理员创建 MCP 市场条目
+      description: 请求最多 64 KiB，ID 由服务端生成。市场模板不能保存真实凭据；敏感请求头必须引用 secret 参数。published 控制用户市场可见性。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPTemplateInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPTemplate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/catalog/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    put:
+      tags: [admin, mcp]
+      operationId: updateAdminMCPTemplate
+      summary: 管理员更新或上下架 MCP 市场条目
+      description: 请求最多 64 KiB。任何模板更新都会清空已安装连接的参数和凭据、停用连接、清除工具发现与授权并递增连接版本；安装者需重新填写参数、检测和授权。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPTemplateInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPTemplate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin, mcp]
+      operationId: deleteAdminMCPTemplate
+      summary: 管理员删除 MCP 市场条目
+      description: 仍被连接引用的条目不能删除，返回冲突；应先处理引用连接或下架条目。
+      responses:
+        "200": { $ref: "#/components/responses/MCPDeleted" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/connections:
+    get:
+      tags: [admin, mcp]
+      operationId: listAdminMCPConnections
+      summary: 管理员读取全部平台 MCP 连接
+      description: 仅管理员可读，包含未启用的平台连接；不返回个人连接或密钥原文。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnections" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin, mcp]
+      operationId: createAdminMCPConnection
+      summary: 管理员创建平台 MCP 连接
+      description: 请求最多 128 KiB，最多配置 30 个平台连接。创建时必须停用且 allowedTools 为空；检测并授权启用后向平台用户开放。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/connections/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    put:
+      tags: [admin, mcp]
+      operationId: updateAdminMCPConnection
+      summary: 管理员更新平台 MCP 连接与工具授权
+      description: 请求最多 128 KiB。参数变更须停用、清空授权并重新检测；更换地址或模板不转移旧凭据。启用后用户只能调用已授权工具，且每次仍需审批。更新递增连接版本，使旧审批失效。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin, mcp]
+      operationId: deleteAdminMCPConnection
+      summary: 管理员移除平台 MCP 连接
+      responses:
+        "200": { $ref: "#/components/responses/MCPDeleted" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/connections/{id}/test:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    post:
+      tags: [admin, mcp]
+      operationId: testAdminMCPConnection
+      summary: 管理员检测平台 MCP 连接并发现工具
+      description: 不需要请求正文。实际握手与发现成功后更新工具和 lastTestAt，清空旧授权、停用连接并递增 revision，需重新选择工具及启用；不执行任何外部工具。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
   /agent/memory:
     get:
       tags: [agent]
@@ -4052,6 +4355,12 @@ paths:
           $ref: "#/components/responses/Error"
 components:
   parameters:
+    MCPResourceID:
+      name: id
+      in: path
+      required: true
+      description: MCP 连接或市场条目的 ID
+      schema: { type: string }
     AgentRunID:
       name: id
       in: path
@@ -4064,6 +4373,197 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    MCPParameter:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name:
+          {
+            type: string,
+            pattern: "^[a-zA-Z][a-zA-Z0-9_]{0,63}$",
+            description: 条目内唯一的参数名称,
+          }
+        label: { type: string, description: 显示名称，最多 300 字节 }
+        description: { type: string, description: 参数说明，最多 3000 字节 }
+        type: { type: string, enum: [string, secret] }
+        required: { type: boolean, default: false }
+        defaultValue:
+          {
+            type: string,
+            description: 普通参数的可选默认值，最多 4096 字节；secret 不得设置非空默认值,
+          }
+    MCPTemplateInput:
+      type: object
+      additionalProperties: false
+      required: [name, transport]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 3000 }
+        homepage:
+          {
+            type: string,
+            description: 可选官网或使用文档地址；不能携带认证、查询参数或片段,
+          }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl:
+          {
+            type: string,
+            description: 默认远端地址；需要用户自部署时可为空。禁止账号密码、查询参数、片段和参数占位符,
+          }
+        headers:
+          type: object
+          maxProperties: 16
+          additionalProperties: { type: string }
+          description: 请求头模板，可使用双花括号引用已声明参数。Authorization 及名称含 key/token 的请求头必须引用 secret 参数；禁止覆盖协议请求头、Cookie、代理头及大小写重复头。
+        parameters:
+          type: array
+          maxItems: 24
+          items: { $ref: "#/components/schemas/MCPParameter" }
+        published:
+          {
+            type: boolean,
+            default: false,
+            description: 是否发布到用户 MCP 市场,
+          }
+    MCPTemplate:
+      type: object
+      required:
+        [
+          id,
+          name,
+          description,
+          homepage,
+          transport,
+          serverUrl,
+          headers,
+          parameters,
+          published,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        homepage: { type: string }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl: { type: string, description: 默认远端地址，可为空 }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          description: 仅参数占位模板，不包含安装后的凭据
+        parameters:
+          type: array
+          items: { $ref: "#/components/schemas/MCPParameter" }
+        published: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MCPConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [name, transport, serverUrl]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        templateId:
+          {
+            type: string,
+            description: 可选市场条目 ID；省略或空串表示自定义连接，仅支持可选 token 参数作为 Bearer 密钥,
+          }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl:
+          {
+            type: string,
+            format: uri,
+            description: 完整 HTTP/HTTPS 远端地址。禁止账号密码、查询参数、片段和参数占位符，遵守服务端出站限制,
+          }
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+          description: 参数值最多 8192 字节且不能含非法请求头字符。更新时省略参数或密钥为空串保留已有值；普通参数空串清空。更换地址或模板不转移已有凭据。密钥仅写入加密存储，不回显。
+        enabled:
+          {
+            type: boolean,
+            default: false,
+            description: 启用需要成功检测且 allowedTools 非空；新建或参数变更时必须为 false,
+          }
+        allowedTools:
+          type: array
+          uniqueItems: true
+          maxItems: 128
+          items: { type: string }
+          description: 必须来自本连接最近检测结果；空数组不允许调用任何工具。新建或参数变更时必须为空。
+    MCPTool:
+      type: object
+      required: [name, description, inputSchema, readOnly]
+      properties:
+        name: { type: string, description: 工具名称，最多 128 字节 }
+        description:
+          { type: string, description: 远端工具说明，按服务端展示上限截断 }
+        inputSchema:
+          type: object
+          additionalProperties: true
+          description: 工具输入的对象 JSON Schema，最多 32 KiB；发现时验证并拒绝外部引用。
+        readOnly:
+          { type: boolean, description: 远端的只读提示，不授予权限也不豁免审批 }
+    MCPConnection:
+      type: object
+      required:
+        [
+          id,
+          scope,
+          name,
+          transport,
+          serverUrl,
+          enabled,
+          parameters,
+          configuredSecrets,
+          tools,
+          allowedTools,
+          revision,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        scope: { type: string, enum: [user, platform] }
+        templateId: { type: string }
+        name: { type: string }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl: { type: string, format: uri }
+        enabled: { type: boolean }
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+          description: 仅非密钥参数；普通用户查看平台连接时为空对象
+        configuredSecrets:
+          type: array
+          items: { type: string }
+          description: 已配置密钥的名称，不返回原值；普通用户查看平台连接时为空数组
+        tools:
+          type: array
+          maxItems: 128
+          items: { $ref: "#/components/schemas/MCPTool" }
+          description: 最近检测发现的工具；普通用户查看平台连接时只返回已授权项
+        allowedTools:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+        revision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            description: 配置与授权版本，外部工具审批和执行时必须与当前版本一致,
+          }
+        lastTestAt:
+          {
+            type: string,
+            format: date-time,
+            description: 最近成功检测时间；未检测或配置变化后不返回此字段,
+          }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     APICallGenerationContent:
       type: object
       required: [prompt, references, source, incomplete]
@@ -4421,6 +4921,45 @@ components:
         total: { type: integer, format: int64 }
         page: { type: integer, minimum: 1 }
         limit: { type: integer, minimum: 1, maximum: 100 }
+    FeishuFeedbackSettings:
+      type: object
+      required: [enabled, appId, baseUrl, adminChatId, timezone, digestHour, digestMinute, appSecretSet, verificationTokenSet, encryptKeySet]
+      properties:
+        enabled: { type: boolean }
+        appId: { type: string }
+        baseUrl: { type: string, format: uri }
+        adminChatId: { type: string }
+        timezone: { type: string, example: Asia/Shanghai }
+        digestHour: { type: integer, minimum: 0, maximum: 23 }
+        digestMinute: { type: integer, minimum: 0, maximum: 59 }
+        appSecretSet: { type: boolean }
+        verificationTokenSet: { type: boolean }
+        encryptKeySet: { type: boolean }
+    FeishuFeedbackSettingsInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        appId: { type: string }
+        appSecret: { type: string }
+        verificationToken: { type: string }
+        encryptKey: { type: string }
+        baseUrl: { type: string, format: uri }
+        adminChatId: { type: string }
+        timezone: { type: string }
+        digestHour: { type: integer, minimum: 0, maximum: 23 }
+        digestMinute: { type: integer, minimum: 0, maximum: 59 }
+        clearSecrets: { type: boolean, default: false }
+    FeishuDigestState:
+      type: object
+      required: [date, status, count, attemptedAt]
+      properties:
+        date: { type: string, format: date }
+        status: { type: string, enum: [running, sent, uncertain] }
+        count: { type: integer, minimum: 0 }
+        attemptedAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time, nullable: true }
+        error: { type: string }
 
     LoginLog:
       type: object
@@ -4998,6 +5537,86 @@ components:
                 - model_catalog_mismatch
                 - invalid_model_selection
   responses:
+    MCPCatalog:
+      description: MCP 市场条目列表；空列表返回 items 数组
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/MCPTemplate" },
+                        }
+    MCPTemplate:
+      description: 已保存的 MCP 市场条目，位于信封 data
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/MCPTemplate" }
+    MCPConnections:
+      description: 当前调用方可见的 MCP 连接列表；不返回密钥原文
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/MCPConnection" },
+                        }
+    MCPConnection:
+      description: 已保存或检测完成的 MCP 连接，位于信封 data；不返回密钥原文
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/MCPConnection" }
+    MCPDeleted:
+      description: 已删除 MCP 连接或市场条目
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data:
+                    type: object
+                    required: [deleted]
+                    properties:
+                      deleted: { type: boolean, enum: [true] }
     ModelQuote:
       description: 当前参数对应的费用报价，位于信封 data.quote
       content:

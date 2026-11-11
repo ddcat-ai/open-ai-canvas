@@ -1,4 +1,7 @@
 [
+  "memory_search",
+  "mcp_list_tools",
+  "mcp_call_tool",
   "agent_profile_read",
   "plan_update",
   "ask_user",

@@ -133,6 +133,17 @@ describe("Agent tool presentation", () => {
         expect(agentToolStatus("canvas_get_state", "失败")).toBe("failed");
         expect(friendlyAgentToolSummary("canvas_get_state", "无法访问", { eventType: "tool_failed" })).toBe("获取画布清单失败");
     });
+    it("distinguishes MCP execution from canvas writes and describes memory recall", () => {
+        expect(agentToolCategory("mcp_list_tools")).toBe("read");
+        expect(agentToolCategory("memory_search")).toBe("read");
+        expect(agentToolCategory("mcp_call_tool")).toBe("other");
+        expect(friendlyAgentToolSummary("mcp_call_tool", "", undefined, true)).toBe("准备调用外部 MCP 工具");
+        expect(friendlyAgentToolSummary("mcp_call_tool", "", { eventType: "tool_failed" })).toBe("外部 MCP 工具调用未完成");
+        expect(agentToolStatus("mcp_call_tool", "", { eventType: "tool_completed", result: { isError: true } })).toBe("failed");
+        expect(friendlyAgentToolSummary("mcp_call_tool", "", { eventType: "tool_completed", result: { isError: true } })).toBe("外部 MCP 工具调用未完成");
+        expect(friendlyAgentToolSummary("mcp_list_tools", "", { eventType: "tool_completed" })).toBe("已读取可用 MCP 连接与工具");
+        expect(friendlyAgentToolSummary("memory_search", "", { eventType: "tool_completed" })).toBe("已检索个人记忆与历史会话");
+    });
 });
 
 describe("Agent tool error classification", () => {
@@ -141,6 +152,7 @@ describe("Agent tool error classification", () => {
         expect(agentToolErrorClassLabel({ result: { errorClass: "state_conflict" } })).toBe("画布状态已变化");
         expect(agentToolErrorClassLabel({ errorClass: "permission_violation", errorClassLabel: "超出本轮权限" })).toBe("超出本轮权限");
         expect(agentToolErrorClassLabel({ result: { errorClass: "upstream_failure" } })).toBe("上游故障");
+        expect(agentToolErrorClassLabel({ errorClass: "external_result_uncertain" })).toBe("外部操作结果待核对");
         expect(agentToolErrorClassLabel({ errorClass: "admission_failure" })).toBe("媒体生成准入失败");
         expect(agentToolErrorClassLabel({ errorClass: "invalid_model_output" })).toBe("模型输出问题");
         expect(agentToolErrorClassLabel({ errorClass: "unknown_new_class" })).toBe("工具执行失败");

@@ -84,6 +84,10 @@ jobs:
       - name: Install Pi Agent runtime dependencies
         working-directory: backend/agent-runtime/pi
         run: npm ci --omit=dev --ignore-scripts
+      - name: Test Pi Agent runtime
+        if: matrix.shard == 'rest'
+        working-directory: backend/agent-runtime/pi
+        run: node --test *.test.mjs
       - name: Install redis-server for integration tests
         # 用例自己拉起临时 redis-server（unix socket），所以需要的是可执行文件而不是 redis 服务。
         run: |
