@@ -89,12 +89,21 @@ jobs:
         if: matrix.shard == 'rest'
         working-directory: backend/agent-runtime/pi
         run: node --test *.test.mjs
-      - name: Install redis-server for integration tests
-        # 用例自己拉起临时 redis-server（unix socket），所以需要的是可执行文件而不是 redis 服务。
+      - name: Checkout Redis source for integration tests
+        uses: actions/checkout@v4
+        with:
+          repository: redis/redis
+          # Redis 7.4.7；与部署的 7.4 系列一致，固定源码避免系统软件源故障阻塞验证。
+          ref: 4d1a341aaf0b96f9d2c43418efac732e31dc28ad
+          path: .local/cache/ci-redis
+          persist-credentials: false
+      - name: Build redis-server for integration tests
+        # 用例自己拉起临时 Unix socket 实例，不需要安装或启动系统 Redis 服务。
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq redis-server
-          sudo systemctl stop redis-server || true
+          make -C ../.local/cache/ci-redis -j2 MALLOC=libc BUILD_TLS=no REDIS_CFLAGS= REDIS_LDFLAGS= redis-server
+          install -Dm755 ../.local/cache/ci-redis/src/redis-server "$RUNNER_TEMP/redis/bin/redis-server"
+          echo "$RUNNER_TEMP/redis/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/redis/bin/redis-server" --version
       - name: Check formatting
         if: matrix.shard == 'rest'
         shell: bash
