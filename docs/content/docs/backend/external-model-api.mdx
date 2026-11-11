@@ -1,0 +1,163 @@
+---
+title: 对外模型 API 与 API Key
+description: 通过独立 Bearer Key 调用模型、查询产物及管理密钥
+---
+
+# 对外模型 API 与 API Key
+
+站内入口：「设置 → API 访问」（`/settings?section=api-keys`）可创建、查看和吊销 Key；公开说明页 `/api-docs` 无需登录，包含参数表、调用状态、错误码及可复制的四类能力示例。说明页示例只使用占位密钥，不会提交真实生成任务。
+
+登录后，说明页通过 Cookie 读取同一个 `GET /api/model-calls/models` 目录，按能力选择模型，显示模型 ID、说明及逐模型参数规格，并使用声明的默认值生成 curl。未登录仍可阅读通用文档和填写模型 ID。目录查询失败可重试；切换账号使用独立查询缓存，不在文档页收集或保存 API Key。
+
+模型有必填参数但未声明默认值时，说明页提示按参数表补全，不生成缺少必填字段的 curl。
+
+目录每项包含 `id`、`name`、`capability`、`description`、`parameters`，以及可选的 `limitation`。`parameters` 的键即创建调用时 `parameters` 下的字段名，值包含 `type`、可选 `default`、`enum`、`minimum`、`maximum`、`step`、`required`、`description`。规格从现有规范化模型能力投影，只暴露外部 API 接受的字段，不暴露供应商绑定或传输配置。未声明的默认值和范围不表示任意值均可用；参数组合、价格和最终准入仍由任务校验决定。
+
+需要参考图或视频处理输入的模型保留在账号目录中，但通过 `limitation` 明确提示当前外部 API 无法调用，页面不为其生成调用示例。音频模型当前没有统一的声音、格式和速度枚举配置，目录会明确说明未声明范围，示例省略这些参数并使用协议默认值。
+
+只有目录读取接受 Cookie；创建、查询调用和下载产物仍必须使用 Bearer Key。请求包含 `Authorization` 时只验证 Bearer Key，不能使用 Cookie 绕过失效或吊销密钥。
+
+接口挂在现有 Web 入口的 `/api` 下，复用后端模型目录、任务队列、能力校验、账号额度、积分预占/结算/失败退款和协议插件，无需另开后端公网端口。
+
+这是原生异步模型接口，不兼容 OpenAI `/v1/chat/completions`。文本、图片、视频、音频均先返回任务 ID，再查询终态。首版支持纯文本消息和提示词，不支持工具调用、参考媒体上传或 SSE；需参考图的视频模型会被原有能力校验拒绝。
+
+## 使用前提
+
+管理员需先配置系统渠道、模型协议、能力和有效价格档，并为调用账号准备积分。部署方式见[Docker 部署](../overview/docker)，实现入口见[代码地图](./code-map)，数据库迁移见[数据库](./backend-database)。
+
+## 管理 API Key
+
+管理接口只接受登录 Cookie。Key 无法签发、列出或吊销 Key。每个账号可创建多把，各自独立吊销，权限和费用归属该账号。
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| POST | `/api/api-keys` | 签发，HTTP 201，明文只返回一次 |
+| GET | `/api/api-keys` | 列出自己的 Key 元数据 |
+| DELETE | `/api/api-keys/:id` | 吊销自己的 Key，重复吊销幂等 |
+
+示例均为占位值。生产使用 HTTPS，并通过秘密管理器注入凭证，避免留在共享终端历史中。
+
+```bash
+BASE_URL=http://localhost:3000
+umask 077
+curl -sS -c cookies.txt "$BASE_URL/api/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"YOUR_USERNAME","password":"YOUR_PASSWORD"}'
+
+curl -sS -b cookies.txt "$BASE_URL/api/api-keys" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"my-automation"}'
+```
+
+签发响应示例：
+
+```json
+{"code":0,"data":{"id":"KEY_ID","name":"my-automation","prefix":"yc_xxxxxxxx","expiresAt":null,"revokedAt":null,"createdAt":"2026-11-06T08:00:00Z","key":"yc_REPLACE_WITH_THE_ISSUED_SECRET"},"msg":"ok"}
+```
+
+只有本次响应存在 `key`。可在请求中添加 RFC3339 `expiresAt`，必须晚于服务器当前时间，省略表示不过期。推荐设置到期时间。
+
+```bash
+curl -sS -b cookies.txt "$BASE_URL/api/api-keys"
+curl -sS -X DELETE -b cookies.txt "$BASE_URL/api/api-keys/KEY_ID"
+```
+
+列表为 `{"code":0,"data":{"keys":[...]},"msg":"ok"}`，只含 ID、名称、前缀及时间，不返回密钥或散列。吊销返回 `{"code":0,"data":{"revoked":true},"msg":"ok"}`；其他账号的 Key 返回 404。
+
+## 调用模型
+
+只接受 `Authorization: Bearer <key>`，不使用 Cookie 或查询参数鉴权。Key 不能成为站内账号、素材、渠道或管理员接口的登录凭证。
+
+| 方法 | 路径 | 行为 |
+| --- | --- | --- |
+| GET | `/api/model-calls/models` | 列出账号可用模型的 ID、名称、能力 |
+| POST | `/api/model-calls` | 创建任务，HTTP 202，Location 为查询地址 |
+| GET | `/api/model-calls/:id` | 查询当前账号的模型生成任务 |
+| GET | `/api/model-calls/:id/media/:resourceId` | 获取该调用产物，支持资源分发及 Range |
+
+```bash
+export CANVAS_API_KEY='yc_REPLACE_WITH_THE_ISSUED_SECRET'
+curl -sS "$BASE_URL/api/model-calls/models" \
+  -H "Authorization: Bearer $CANVAS_API_KEY"
+```
+
+```json
+{"code":0,"data":{"models":[{"id":"CHANNEL_ID::MODEL_KEY","name":"示例文本模型","capability":"text"}]},"msg":"ok"}
+```
+
+```bash
+curl -sS "$BASE_URL/api/model-calls" \
+  -H "Authorization: Bearer $CANVAS_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model":"CHANNEL_ID::MODEL_KEY",
+    "messages":[
+      {"role":"system","content":"请简洁回答。"},
+      {"role":"user","content":"用一句话介绍这个项目。"}
+    ],
+    "parameters":{"thinking":false}
+  }'
+```
+
+```json
+{"code":0,"data":{"id":"CALL_ID","model":"MODEL_KEY","capability":"text","status":"pending"},"msg":"ok"}
+```
+
+`capability` 默认 `text`，也支持 `image`、`video`、`audio`。`model` 须使用目录 ID `channelId::modelKey`。消息只支持 `system/user/assistant` 和非空字符串 `content`。不指定 `prompt` 时最后一条必须是 user，该条作为本轮提示词，其余作为历史；指定 prompt 时全部消息作为历史。
+
+| parameters 字段 | 用途 |
+| --- | --- |
+| `thinking` | 文本思考开关；按模型能力归一为关闭/标准档，无法关闭的模型使用最低开启档。输出上限沿用模型配置，目录的 `outputTokenLimit` 只读展示，不接受请求覆盖 |
+| `aspectRatio`、`resolution`、`quality` | 模型支持的画幅、分辨率和质量 |
+| `count` | 图片张数 |
+| `duration`、`generateAudio`、`watermark` | 视频秒数、音频、水印 |
+| `voice`、`audioFormat`、`audioSpeed` | 音频声音、格式和速度 |
+
+参数仍受模型原有能力和默认值约束。首版不支持任意供应商参数、`temperature` 或 `top_p`；未知字段返回 400。请求最多 1 MiB，禁止渠道凭证、上游地址、自定义 Header 和内部任务/画布/项目上下文。
+
+图片示例（替换成支持相应参数的模型）：
+
+```bash
+curl -sS "$BASE_URL/api/model-calls" \
+  -H "Authorization: Bearer $CANVAS_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"capability":"image","model":"CHANNEL_ID::IMAGE_MODEL_KEY","prompt":"雨夜城市街道","parameters":{"aspectRatio":"1:1","count":1}}'
+```
+
+每 2–5 秒查询一次，不要重复创建：
+
+```bash
+curl -sS "$BASE_URL/api/model-calls/CALL_ID" \
+  -H "Authorization: Bearer $CANVAS_API_KEY"
+```
+
+```json
+{"code":0,"data":{"id":"CALL_ID","model":"MODEL_KEY","capability":"text","status":"succeeded","result":{"text":"影策是一个 AI 影视与短剧创作工作台。"}},"msg":"ok"}
+```
+
+状态为 `pending/processing/succeeded/failed/cancelled`。HTTP 200 表示查询成功，生成是否成功看 `data.status`；失败时返回脱敏的 `data.reason`。文本可含 `text/reasoning`，媒体在 `images/videos/audios` 中。现有生成链不保证发布 Token 用量，因此不承诺 `usage`。
+
+媒体项示例：`{"id":"RESOURCE_ID","url":"/api/model-calls/CALL_ID/media/RESOURCE_ID","mimeType":"image/png"}`。
+
+```bash
+curl -sS -L "$BASE_URL/api/model-calls/CALL_ID/media/RESOURCE_ID" \
+  -H "Authorization: Bearer $CANVAS_API_KEY" -o result.png
+```
+
+对象存储可能返回临时重定向。不要使用 `--location-trusted`，避免本站 Key 被转发给其他域名。媒体入口按账号校验任务和资源归属，且资源必须出现在任务结果中。轮换 Key 后，同账号的有效 Key 仍可查询生成任务和下载产物。
+
+## 存储、安全与错误
+
+- Schema 100 新增 `api_keys`：ID、账号、名称、显示前缀、SHA-256 散列、到期/吊销/创建时间。密钥使用 32 字节密码学随机数，不保存明文，无法恢复。
+- Key 只负责入口鉴权，内部任务沿用账号归属及现有生成流程，不保存 Key 关联。
+- 上游凭证仍归系统渠道管理。本站 Key 不转发给上游，不写入任务正文或 URL；Key 响应设置 `Cache-Control: no-store`。
+- 每次请求检查吊销、到期和账号状态。吊销立即阻止后续请求；已入队任务继续执行和计费，吊销不会取消任务或退款。
+- 任务创建按账号共享 `TaskCreatePerMinute`，避免多 Key 绕过；Key 创建每账号每小时 30 次；外部入口每 IP 每分钟 300 次。任务并发、容量和余额限制仍有效。
+- Key 可调用所属账号所有可用模型，无单 Key 限额或模型授权。需分账时使用独立账号并控制账号积分。保护数据库、备份、Cookie 和秘密管理器；生产 HTTPS；自定义代理禁止记录 Authorization。
+- 401：缺失/错误/到期/吊销；403：账号禁用或权限不足；404：Key/调用/产物不归当前主体；400：入参、模型、能力、价格或余额不满足；413：过大；429：限流；500/503：内部错误或维护。业务信封 `code` 非零为失败，机器判断使用 `reason`。
+
+```json
+{"code":401,"data":null,"msg":"API Key 无效","reason":"unauthorized"}
+```
+
+OpenAPI：`GET /api/openapi.yaml`。模型接口显式使用 `modelAPIKey`，密钥管理继续使用 `sessionCookie`。

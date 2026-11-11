@@ -11,6 +11,10 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 切换图片 / 视频模型保留兼容参数并调整不适配值，保存、报价和请求使用同一适配结果；图片版本预览完整展示原比例，双击后可滚轮缩放、拖动查看。详细边界见[渠道、模板与批量配置](/docs/backend/channel-configuration)。
 
+## 对外模型 API
+
+登录账号可在「设置 → API 访问」创建、列出和吊销多把 API Key，使用 Bearer Key 调用文本/图片/视频/音频模型并查询任务、下载产物。公开 `/api-docs` 说明页提供能力、参数和可复制 curl。权限、限额和积分复用账号配置，密钥仅保存散列。支持纯文本提示词/消息及明确生成参数，所有调用异步执行。详见[对外模型 API 与 API Key](/docs/backend/external-model-api)。
+
 电商 Agent 支持SHEIN（希音）及逐平台风格、风险资料与生成文案检查；资料覆盖范围及尚待核实的上架条件见[电商平台风格与图片规则](/docs/overview/ecommerce-platform-rules)。
 
 ## 后台全局搜索

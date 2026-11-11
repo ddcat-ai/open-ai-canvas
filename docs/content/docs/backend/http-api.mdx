@@ -51,6 +51,8 @@ description: 信封、错误码与 OpenAPI
 
 使用说明见[渠道、模板与批量配置](/docs/backend/channel-configuration)，迁移见[后端数据库](/docs/backend/backend-database)。
 
+对外模型调用使用独立 Bearer Key；签发、列出、吊销 Key 使用站内 Cookie。请求参数、异步响应与 curl 示例见[对外模型 API 与 API Key](./external-model-api)。
+
 ## 灵感上新
 
 后端每 6 小时从 GitHub 拉取 YouMind 提示词库（两个 `README_zh.md`）和 awesome-seedance（`data/cases.json`、`data/case-taxonomy.json`），经出站 SSRF 客户端下载，只收正文已是中文的条目。上次有来源失败时 1 小时后重试；多实例部署通过协调器锁只让一个实例同步。服务器访问 GitHub 需要正常 DNS，必要时配置 `HTTPS_PROXY`。数据表见 [后端数据库](/docs/backend/backend-database)。

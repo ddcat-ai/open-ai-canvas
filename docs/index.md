@@ -9,6 +9,7 @@
 - [Docker 部署](content/docs/overview/docker.mdx)：默认服务器方案、Compose 选择与已有部署核对。
 - [在线更新与安全回退](content/docs/backend/system-update.mdx)：受管部署条件、安装、备份、迁移和回退。
 - [本地开发](content/docs/backend/local-development.mdx)：宿主机与热更新开发环境。
+- [对外模型 API 与 API Key](content/docs/backend/external-model-api.mdx)：密钥签发、列出、吊销，模型调用、结果查询、产物下载与 curl。
 
 ## 设计沉淀
 

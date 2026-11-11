@@ -72,6 +72,12 @@ description: 影策后端核心持久化表与状态边界
 
 重存草稿在同一事务内删掉该作品的原著章节（`project_units.kind=chapter`）和 `drama_episodes`，按新表单重新写入，并更新 `projects` 的名称、画幅和素材类型以及 `drama_productions` 整行；仍是草稿且没有任何 `drama_jobs` 时才执行。
 
+## 对外模型 API（Schema 100）
+
+`external_model_api_keys` 新增 `api_keys` 表：`id`（主键）、`user_id`（索引）、`name`、`prefix`、`token_hash`（唯一索引）、`expires_at`、`revoked_at`、`created_at`。只保存随机密钥的 SHA-256，不保存明文。
+
+Key 鉴权后使用所属账号的任务权限，不修改任务表。吊销保留密钥元数据，不取消已提交任务。详见[对外模型 API 与 API Key](./external-model-api)。
+
 ## 视频参考视频计费（Schema 88）
 
 版本 88 `reference_video_billing` 给视频模型加一个“参考视频计费”开关、给价格档加“带参考视频”的价格、给账单加参考视频快照。新列都是 `NOT NULL DEFAULT 0/false`：

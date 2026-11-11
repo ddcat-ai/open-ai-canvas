@@ -73,6 +73,7 @@ const ProjectsPage = workspaceRoutePages.projects;
 const ProjectDetailPage = workspaceRoutePages.projectDetail;
 const ProjectCreatePage = workspaceRoutePages.projectCreate;
 const SettingsPage = workspaceRoutePages.settings;
+const APIDocsPage = lazy(() => import("@/pages/api-docs"));
 const ReferralPage = workspaceRoutePages.referral;
 const AdminReferralPage = lazyAdminPage(() => import("@/pages/admin/referral/referral-admin-page"));
 const UserLayout = lazy(() => import("@/layouts/user-layout"));
@@ -120,6 +121,7 @@ function devRoutes() {
 }
 
 export const router = createBrowserRouter([
+    { path: "/api-docs", element: deferred(<APIDocsPage />), errorElement: <RouteErrorPage /> },
     {
         element: <AuthScene />,
         errorElement: <RouteErrorPage />,

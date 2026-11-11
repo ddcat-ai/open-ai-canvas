@@ -1,0 +1,115 @@
+.api-docs-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.api-docs-layout {
+    grid-template-columns: 12rem minmax(0, 1fr);
+}
+.api-docs-nav {
+    position: sticky;
+    top: 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+.api-docs-nav a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-md);
+    color: var(--muted-foreground);
+    font-size: var(--fs-body);
+}
+.api-docs-nav a:hover {
+    color: var(--foreground);
+    background: var(--bg-secondary);
+}
+.api-docs a:focus-visible,
+.api-docs pre:focus-visible,
+.api-docs-highlight:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+}
+.api-docs-section {
+    scroll-margin-top: 7rem;
+}
+.api-docs-section > p {
+    color: var(--muted-foreground);
+    font-size: var(--fs-body);
+    line-height: 1.8;
+}
+.api-docs-link {
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.api-docs-table {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+}
+.api-docs-table table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: var(--fs-caption);
+    line-height: 1.7;
+}
+.api-docs-table th {
+    color: var(--foreground);
+    font-weight: 500;
+    background: var(--bg-secondary);
+    white-space: nowrap;
+}
+.api-docs-table td {
+    color: var(--muted-foreground);
+    border-top: 1px solid var(--border);
+}
+.api-docs-table th,
+.api-docs-table td {
+    padding: var(--space-3) var(--space-4);
+    vertical-align: top;
+}
+.api-docs-table td:first-child {
+    min-width: 9rem;
+    overflow-wrap: anywhere;
+}
+.api-docs-table td:last-child {
+    min-width: 13rem;
+}
+.api-docs-code pre {
+    margin: 0;
+}
+.api-docs-highlight .shiki {
+    background: transparent !important;
+}
+.api-docs-highlight .shiki code {
+    font-family: inherit;
+    font-size: inherit;
+}
+.api-docs-highlight .shiki,
+.api-docs-highlight .shiki span {
+    color: var(--shiki-light);
+}
+.dark .api-docs-highlight .shiki,
+.dark .api-docs-highlight .shiki span {
+    color: var(--shiki-dark);
+}
+@media (max-width: 767px) {
+    .api-docs-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .api-docs-nav {
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+    .api-docs-nav > p {
+        display: none;
+    }
+    .api-docs-section {
+        scroll-margin-top: 9rem;
+    }
+}

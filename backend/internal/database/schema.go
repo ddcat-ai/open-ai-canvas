@@ -39,6 +39,7 @@ func Models() []any {
 		&model.UserGroupChannel{},
 		&model.UserAvatar{},
 		&model.AuthSession{},
+		&model.APIKey{},
 		&model.LoginLog{},
 		&model.UserIdentity{},
 		&model.OAuthState{},
