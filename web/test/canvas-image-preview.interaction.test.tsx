@@ -48,6 +48,7 @@ async function fixture(initialSource = portrait) {
     const root = createRoot(host);
     const canvasRef = createRef<HTMLDivElement>();
     const viewportChanges: unknown[] = [];
+    const contextMenus: unknown[] = [];
     const bubbleEvents: Event[] = [];
     let closed = 0;
     let source = initialSource;
@@ -57,7 +58,7 @@ async function fixture(initialSource = portrait) {
     const render = () =>
         root.render(
             <ConfigProvider theme={{ token: { motion: false } }}>
-                <CanvasViewport containerRef={canvasRef} viewport={{ x: 30, y: 40, k: 2 }} onViewportChange={(value) => viewportChanges.push(value)}>
+                <CanvasViewport containerRef={canvasRef} viewport={{ x: 30, y: 40, k: 2 }} onViewportChange={(value) => viewportChanges.push(value)} onContextMenu={(event) => contextMenus.push(event)}>
                     {visible ? (
                         <CanvasImagePreview
                             src={source}
@@ -86,6 +87,7 @@ async function fixture(initialSource = portrait) {
         surface,
         stage,
         viewportChanges,
+        contextMenus,
         bubbleEvents,
         closed: () => closed,
         async load() {
@@ -273,6 +275,47 @@ test("拖动平移放大图，捕获指针并隔离底层画布，取消后停�
         await pointer("pointermove", 490, 350);
         expect(transform(f.image())).toEqual({ x: 60, y: 20, scale });
         expect(f.viewportChanges).toEqual([]);
+    } finally {
+        await f.dispose();
+    }
+});
+
+test("右键拖动平移画布并抑制菜单，右键单击仍保留菜单", async () => {
+    const f = await fixture();
+    try {
+        const canvas = document.querySelector<HTMLElement>("[data-canvas-viewport]")!;
+        const capture = new Set<number>();
+        canvas.setPointerCapture = (id) => {
+            capture.add(id);
+        };
+        canvas.hasPointerCapture = (id) => capture.has(id);
+        canvas.releasePointerCapture = (id) => {
+            capture.delete(id);
+        };
+        const pointer = async (type: string, x: number, y: number) => {
+            const target = type === "pointerdown" ? canvas : window;
+            await act(async () => target.dispatchEvent(new dom.PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 2, pointerType: "mouse", button: 2, clientX: x, clientY: y }) as unknown as Event));
+        };
+        const contextMenu = async () => {
+            const event = new dom.MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 });
+            await act(async () => canvas.dispatchEvent(event));
+            return event;
+        };
+
+        await pointer("pointerdown", 400, 300);
+        expect(capture.has(2)).toBe(true);
+        await pointer("pointermove", 460, 320);
+        await act(async () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve())));
+        const worldLayer = canvas.querySelector<HTMLElement>("[data-canvas-world-layer]")!;
+        expect(worldLayer.style.transform).toContain("translate3d(90px, 60px");
+        await pointer("pointerup", 460, 320);
+        expect((await contextMenu()).defaultPrevented).toBe(true);
+        expect(f.contextMenus).toHaveLength(0);
+
+        await pointer("pointerdown", 460, 320);
+        await pointer("pointerup", 460, 320);
+        expect((await contextMenu()).defaultPrevented).toBe(false);
+        expect(f.contextMenus).toHaveLength(1);
     } finally {
         await f.dispose();
     }

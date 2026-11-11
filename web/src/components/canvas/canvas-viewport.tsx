@@ -16,7 +16,6 @@ type CanvasViewportProps = {
     appearance?: CanvasAppearance;
     backgroundMode?: CanvasBackgroundMode;
     onViewportChange: (viewport: ViewportTransform) => void;
-    onSelectedImageWheel?: (deltaPixels: number) => boolean;
     onViewportPreviewChange?: (viewport: ViewportTransform) => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
     boxSelectEnabled?: boolean;
@@ -56,7 +55,6 @@ export function CanvasViewport({
     appearance,
     backgroundMode = "dots",
     onViewportChange,
-    onSelectedImageWheel,
     onViewportPreviewChange,
     onCanvasMouseDown,
     boxSelectEnabled = false,
@@ -76,12 +74,14 @@ export function CanvasViewport({
     const panState = useRef({
         isPanning: false,
         pointerId: -1,
+        button: -1,
         startX: 0,
         startY: 0,
         initialX: 0,
         initialY: 0,
         hasMoved: false,
     });
+    const suppressNextContextMenuRef = useRef(false);
     const viewportRef = useRef(viewport);
     const scaleRef = useRef(viewport.k);
     const containerRectRef = useRef<DOMRect | null>(null);
@@ -94,7 +94,6 @@ export function CanvasViewport({
     const pinchStateRef = useRef<PinchState>({ active: false, pointerIds: [-1, -1], initialDistance: 1, worldX: 0, worldY: 0, initialScale: viewport.k });
     const wheelIntentRef = useRef(createCanvasWheelIntent<Element>());
     const spacePressedRef = useRef(false);
-    const controlPressedRef = useRef(false);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
 
@@ -105,6 +104,8 @@ export function CanvasViewport({
             if (container?.hasPointerCapture(id)) container.releasePointerCapture(id);
         }
         panState.current.isPanning = false;
+        panState.current.button = -1;
+        suppressNextContextMenuRef.current = false;
         pinchStateRef.current.active = false;
         touchPointsRef.current.clear();
         interactingRef.current = false;
@@ -181,7 +182,6 @@ export function CanvasViewport({
     useEffect(() => {
         if (!interactive) return;
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Control") controlPressedRef.current = true;
             if (event.code !== "Space") return;
             if (event.target instanceof Element && event.target.closest("input,textarea,select,button,[contenteditable='true']")) return;
             event.preventDefault();
@@ -190,7 +190,6 @@ export function CanvasViewport({
         };
 
         const handleKeyUp = (event: KeyboardEvent) => {
-            if (event.key === "Control") controlPressedRef.current = false;
             if (event.code !== "Space") return;
             spacePressedRef.current = false;
             setIsSpacePressed(false);
@@ -198,7 +197,6 @@ export function CanvasViewport({
 
         const handleBlur = () => {
             wheelIntentRef.current.reset();
-            controlPressedRef.current = false;
             spacePressedRef.current = false;
             setIsSpacePressed(false);
         };
@@ -232,19 +230,6 @@ export function CanvasViewport({
             if (!intentTarget && target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && !isPinchZoom) {
                 // 普通滚动仍留在既有输入、弹层和滚动面板边界内。
                 if (event.shiftKey || absX > absY) event.preventDefault();
-                return;
-            }
-
-            if (
-                event.ctrlKey &&
-                controlPressedRef.current &&
-                !event.metaKey &&
-                !event.shiftKey &&
-                !document.activeElement?.matches("input,textarea,select,[contenteditable]:not([contenteditable='false'])") &&
-                !target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) &&
-                onSelectedImageWheel?.(deltaY)
-            ) {
-                event.preventDefault();
                 return;
             }
 
@@ -287,11 +272,13 @@ export function CanvasViewport({
                 true,
             );
         },
-        [containerRef, onSelectedImageWheel, scheduleViewportChange],
+        [containerRef, scheduleViewportChange],
     );
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         if (!interactive) return;
+        // 若浏览器没有派发上一次拖动后的 contextmenu，下一次按下时丢弃过期抑制标记。
+        suppressNextContextMenuRef.current = false;
         const target = event.target instanceof Element ? event.target : null;
         // AntD 浮层通过 Portal 渲染到节点 DOM 之外；若不统一排除，会被误判为画布空白并捕获指针。
         if (target?.closest(CANVAS_POINTER_IGNORE_SELECTOR)) return;
@@ -349,6 +336,7 @@ export function CanvasViewport({
             panState.current = {
                 isPanning: true,
                 pointerId: event.pointerId,
+                button: event.button,
                 startX: event.clientX,
                 startY: event.clientY,
                 initialX: current.x,
@@ -362,12 +350,14 @@ export function CanvasViewport({
 
         if (pointerIntent === "pan") {
             const current = viewportRef.current;
-            event.preventDefault();
+            // 保留右键单击的 contextmenu；右键拖动在移动后由 contextmenu 回调拦截。
+            if (event.button !== 2) event.preventDefault();
             event.currentTarget.setPointerCapture(event.pointerId);
             interactingRef.current = true;
             panState.current = {
                 isPanning: true,
                 pointerId: event.pointerId,
+                button: event.button,
                 startX: event.clientX,
                 startY: event.clientY,
                 initialX: current.x,
@@ -410,6 +400,7 @@ export function CanvasViewport({
             const dy = event.clientY - panState.current.startY;
             if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
                 panState.current.hasMoved = true;
+                if (panState.current.button === 2) event.preventDefault();
             }
 
             scheduleViewportChange({
@@ -425,6 +416,7 @@ export function CanvasViewport({
                 touchPointsRef.current.clear();
                 panState.current.isPanning = false;
                 panState.current.pointerId = -1;
+                panState.current.button = -1;
                 interactingRef.current = false;
                 if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
                 delete containerRef.current?.dataset.canvasViewportInteracting;
@@ -437,11 +429,16 @@ export function CanvasViewport({
             if (event.pointerType === "touch") touchPointsRef.current.delete(event.pointerId);
             if (!panState.current.isPanning || panState.current.pointerId !== event.pointerId) return;
 
-            if (event.type === "pointerup" && !panState.current.hasMoved) {
+            const { button, hasMoved } = panState.current;
+            if (event.type === "pointerup" && button === 2 && hasMoved) {
+                suppressNextContextMenuRef.current = true;
+            }
+            if (event.type === "pointerup" && button !== 2 && !hasMoved) {
                 onCanvasDeselect?.();
             }
             panState.current.isPanning = false;
             panState.current.pointerId = -1;
+            panState.current.button = -1;
             interactingRef.current = false;
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
             delete containerRef.current?.dataset.canvasViewportInteracting;
@@ -512,7 +509,15 @@ export function CanvasViewport({
                 const target = event.target instanceof Element ? event.target : null;
                 if (!target?.closest("[data-node-id],[data-connection-id],[data-canvas-no-zoom]")) onCanvasDoubleClick?.(event);
             }}
-            onContextMenu={onContextMenu}
+            onContextMenu={(event) => {
+                const isRightButtonDrag = panState.current.isPanning && panState.current.button === 2 && panState.current.hasMoved;
+                if (suppressNextContextMenuRef.current || isRightButtonDrag) {
+                    suppressNextContextMenuRef.current = false;
+                    event.preventDefault();
+                    return;
+                }
+                onContextMenu?.(event);
+            }}
             onDragEnter={(event) => {
                 if (isCanvasInternalDragEvent(event)) {
                     event.preventDefault();
