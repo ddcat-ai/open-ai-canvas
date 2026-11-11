@@ -4,9 +4,9 @@
 
 ## 使用
 
-本目录包含龙影水墨（`longying-ink`）与云鹤仙观（`yunhe-xianguan`）。主题代码随前端构建，但不会自动改写站点配置或启用主题。
+本目录包含龙影水墨（`longying-ink`）与云鹤仙观（`yunhe-xianguan`）。管理员可直接在「站点及外观 → 皮肤主题」选择并保存。新站仍默认启用经典黑白。旧站读取外观设置时，服务端按皮肤库剩余容量补入缺少的两套皮肤，保留当前选择和已保存的同 ID 皮肤。
 
-需要把两套皮肤加入现有后台时，在 `web` 目录运行：
+旧版服务端或曾手动删除主题的站点需要重新加入时，可在 `web` 目录导出安装脚本：
 
 ```sh
 bun scripts/export-theme-skins.ts > theme-skins-install.js
@@ -21,7 +21,7 @@ bun scripts/export-theme-skins.ts > theme-skins-install.js
 - `types.ts` 定义可选展示接口；`registry.ts` 按皮肤 ID 注册主题。
 - `load.ts` 自动加载每个主题子目录的 `index.ts`；主题缺失的能力回落到原组件。
 - `apply.ts` 在皮肤提交时应用画布预设与品牌 CSS 变量；切回无主题包的皮肤时还原原值。
-- 每套主题代码放在 `src/themes/<id>/`，静态文件放在 `public/themes/<id>/`。样式以 `html[data-skin="<id>"]` 或等价 `:root[data-skin="<id>"]` 限定。
+- 每套主题代码放在 `src/themes/<id>/`，静态文件放在 `public/themes/<id>/`。样式以 `html[data-skin="<id>"]` 或等价 `:root[data-skin="<id>"]` 限定。两套内置主题的皮肤数据由前端和后端共用，来源为 `backend/internal/app/appearance_theme_packs.json`。
 
 新增主题时复制结构并使用独立 ID，保证切换不会污染其他皮肤。没有对应主题包时，经典皮肤继续使用原来的组件和画布配色。
 

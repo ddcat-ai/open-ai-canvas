@@ -1,9 +1,12 @@
 package app
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -11,9 +14,13 @@ import (
 
 const maxAppearanceSkinThemes = 16
 
+//go:embed appearance_theme_packs.json
+var appearanceThemePackDefinitions []byte
+
 var (
-	appearanceSkinIDPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
-	appearanceColorPattern  = regexp.MustCompile(`^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$`)
+	appearanceSkinIDPattern  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
+	appearanceColorPattern   = regexp.MustCompile(`^#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?$`)
+	appearanceThemePackSkins = loadAppearanceThemePackSkins()
 )
 
 // AppearanceSkinModeTokens is deliberately an allowlist instead of arbitrary CSS.
@@ -195,7 +202,32 @@ func defaultAppearanceSkinThemes() []AppearanceSkinTheme {
 	studio.Tokens.Buttons = defaultAppearanceSkinButtons()
 	warm.Tokens.Buttons = defaultAppearanceSkinButtons()
 	violet.Tokens.Buttons = defaultAppearanceSkinButtons()
-	return []AppearanceSkinTheme{classic, studio, warm, violet}
+	return append([]AppearanceSkinTheme{classic, studio, warm, violet}, appearanceThemePackSkins[:]...)
+}
+
+func loadAppearanceThemePackSkins() [2]AppearanceSkinTheme {
+	var definitions struct {
+		LongyingInk   AppearanceSkinTheme `json:"longyingInk"`
+		YunheXianguan AppearanceSkinTheme `json:"yunheXianguan"`
+	}
+	if err := json.Unmarshal(appearanceThemePackDefinitions, &definitions); err != nil {
+		panic(fmt.Errorf("decode bundled appearance theme packs: %w", err))
+	}
+	return [2]AppearanceSkinTheme{definitions.LongyingInk, definitions.YunheXianguan}
+}
+
+// Existing sites can keep their own version of an imported skin and their
+// current selection. Once saved at the new version, deleted skins stay deleted.
+func appendMissingAppearanceThemePackSkins(themes []AppearanceSkinTheme) []AppearanceSkinTheme {
+	for _, bundled := range appearanceThemePackSkins {
+		if len(themes) >= maxAppearanceSkinThemes {
+			break
+		}
+		if !slices.ContainsFunc(themes, func(theme AppearanceSkinTheme) bool { return theme.ID == bundled.ID }) {
+			themes = append(themes, bundled)
+		}
+	}
+	return themes
 }
 
 func defaultClassicAppearanceSkin() AppearanceSkinTheme {
