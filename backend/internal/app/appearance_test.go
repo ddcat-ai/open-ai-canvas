@@ -10,6 +10,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,8 +46,67 @@ func TestAppearanceDefaultsPreserveBuiltInBrand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(adminAppearance.SkinThemes) != 4 || !adminAppearance.SkinThemes[0].Locked {
+	if len(adminAppearance.SkinThemes) != 6 || !adminAppearance.SkinThemes[0].Locked {
 		t.Fatalf("AdminAppearance() skin library = %#v", adminAppearance.SkinThemes)
+	}
+	if adminAppearance.SkinThemes[4].ID != "longying-ink" || adminAppearance.SkinThemes[5].ID != "yunhe-xianguan" {
+		t.Fatal("default skin library is missing the bundled theme packs")
+	}
+	if err := validateAppearanceSkinThemes(adminAppearance.SkinThemes, defaultAppearanceSkinID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAppearanceAddsBundledSkinsToLegacyLibrary(t *testing.T) {
+	svc, db, _, admin := newAppearanceTestService(t)
+	installed := appearanceThemePackSkins[0]
+	installed.Name = "自定义水墨"
+	installed.Tokens.Light.Primary = "#123456"
+	legacy := defaultAppearanceSetting()
+	legacy.SchemaVersion = 11
+	legacy.SkinID = installed.ID
+	legacy.SkinThemes = []AppearanceSkinTheme{defaultClassicAppearanceSkin(), installed}
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := model.SystemSetting{Key: appearanceSettingKey, ValueJSON: string(encoded)}
+	if err := db.Create(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := svc.AdminAppearance(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append(legacy.SkinThemes, appearanceThemePackSkins[1])
+	if !slices.Equal(loaded.SkinThemes, want) || loaded.Public.ActiveSkin != installed {
+		t.Fatal("upgrade must append only the missing skin and keep the existing selection")
+	}
+	loaded.SkinThemes = loaded.SkinThemes[:2]
+	if _, err := svc.UpdateAppearance(admin, loaded.AppearanceSetting); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := svc.AdminAppearance(admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(reloaded.SkinThemes, legacy.SkinThemes) {
+		t.Fatal("a skin removed after upgrade must stay removed")
+	}
+}
+
+func TestAppearanceBundledSkinsRespectLibraryLimit(t *testing.T) {
+	existing := []AppearanceSkinTheme{defaultClassicAppearanceSkin()}
+	for index := 1; index < maxAppearanceSkinThemes-1; index++ {
+		existing = append(existing, cloneAppearanceSkin(existing[0], "custom-"+strconv.Itoa(index), "自定义皮肤", ""))
+	}
+	got := appendMissingAppearanceThemePackSkins(slices.Clone(existing))
+	if len(got) != maxAppearanceSkinThemes || !slices.Equal(got[:len(existing)], existing) || got[len(existing)].ID != "longying-ink" {
+		t.Fatal("only the available library slot may be used")
+	}
+	if !slices.Equal(appendMissingAppearanceThemePackSkins(slices.Clone(got)), got) {
+		t.Fatal("a full library must stay intact")
 	}
 }
 
@@ -455,7 +515,7 @@ func TestAppearanceSkinLibrarySupportsEditableCopiesAndProtectsClassic(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Public.ActiveSkin.ID != custom.ID || updated.Public.ActiveSkin.Tokens.Light.Primary != "#123456" || updated.Public.ActiveSkin.Tokens.Components.ButtonRadius != 14 || len(updated.SkinThemes) != 5 {
+	if updated.Public.ActiveSkin.ID != custom.ID || updated.Public.ActiveSkin.Tokens.Light.Primary != "#123456" || updated.Public.ActiveSkin.Tokens.Components.ButtonRadius != 14 || len(updated.SkinThemes) != len(themes) {
 		t.Fatalf("custom skin round trip = %#v", updated)
 	}
 
