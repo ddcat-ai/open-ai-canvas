@@ -332,6 +332,7 @@ handle 放错端点、格式错误或行 ID 不存在时，工具错误回执提
 
 - `POST /api/resources/access` 要求登录，请求体为 1–100 项 `{ resourceId, purpose?, variant? }`。`purpose` 支持 `display`、`copy`、`download`、`browser-process`、`provider-input`；`variant` 支持 `original`、`playback`、`thumbnail`（缩略图未生成前回落原件，`fallbackReason` 为 `thumbnail_not_ready`）。每项独立返回 `access` 或结构化 `error`。
 - `access.delivery` 为 `cdn`、`origin`、`platform-local` 或 `platform-proxy`。媒体配置了可用 CDN 时返回 CDN 地址；OSS 源站签名是源站直连，不等于 CDN。媒体的 `requireCDN` 开启且 CDN 鉴权不完整时失败，不静默回源。浏览器媒体的展示、复制、下载和本地处理不使用 `platform-proxy`，正文由 OSS/CDN 直接发送；`allowPrivateProxy` 允许服务端在 `provider-input` 场景读取私有媒体源站。非媒体附件始终通过平台控制响应头，不受上述媒体直连规则影响。
+- 绑定历史存储位置的资源仍使用原位置和凭据；provider、Endpoint、Bucket 与当前配置一致时，平台资源沿用管理员当前的 CDN 域名、鉴权和回退策略，个人资源沿用个人当前策略。此规则同时适用于展示、复制、下载、本地处理与模型输入，个人配置不会覆盖平台资源的 CDN 出口。
 - `expiresAt` / `refreshAt` 只描述当前授权有效期。有效期来自后台「资源与请求策略」（`provider-input` 与其余签名访问分别配置，默认均为 4 小时）；公开 CDN 可没有 `expiresAt`。签名地址不写入画布或服务端持久化内容。
 - `display`、`copy`、`browser-process` 的源站签名把签名起始时间对齐到有效期 1/4 的时间窗（按 Unix 纪元对齐），过期时间为窗口起点加有效期：同一窗口内重复签发得到逐字节相同的 URL，刷新画布或多实例签发都能命中浏览器 HTTP 缓存；签名同时携带 `response-cache-control=private, max-age=<有效期>, immutable`，由对象存储回写缓存头。`download` 与 `provider-input` 仍按当前时间签发，不带缓存覆盖。
 - `GET /api/resources/:id/file` 仍是稳定平台入口，负责本地/平台代理字节流，可直连的云媒体返回 307 到 CDN 或对象存储，非媒体附件走平台流；`?access=1` 只返回访问描述，不打开正文。`Range` 只影响字节流路径。
