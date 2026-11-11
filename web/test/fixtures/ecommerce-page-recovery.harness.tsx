@@ -456,6 +456,94 @@ afterAll(() => {
 });
 
 describe("真实电商页面生命周期", () => {
+    test("按文案开始创作直接进入策划并关闭自动出图，不要求另填画面描述", async () => {
+        draft.imageType = "single";
+        draft.instruction = "";
+        draft.copyBrief = { text: "蓝色设计\n圆润轮廓", mode: "verbatim" };
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: true });
+        await render();
+        expect(host.querySelector<HTMLButtonElement>(".ecs-submit")!.disabled).toBe(false);
+        await press("开始创作");
+        expect(paidSubmissions).toHaveLength(1);
+        const input = paidSubmissions[0] as { metadata: { stage: string; ecommerceDraft: EcommerceDraft }; prompt: string };
+        expect(input.metadata.stage).toBe("planning");
+        expect(input.metadata.ecommerceDraft.copyBrief).toEqual(draft.copyBrief);
+        expect(input.prompt).toContain("逐字保留原文");
+        const planned: EcommercePlan = {
+            productSummary: "蓝色商品",
+            confirmedFacts: [],
+            uncertainFacts: [],
+            qualityChecks: [],
+            visualStrategy: "顶部留白",
+            images: [{ ...planImage("copy-page", ""), imageType: draft.imageType, copy: draft.copyBrief.text }],
+        };
+        const taskId = sessions.peekEcommerceWorkspace(scope)!.draft.planningTaskId!;
+        await act(async () => {
+            const done = { ...tasks.get(taskId)!, status: "succeeded" as const, resultJson: JSON.stringify({ text: JSON.stringify(planned) }), inputJson: JSON.stringify({ metadata: input.metadata }) };
+            tasks.set(taskId, done);
+            observers.get(taskId)?.forEach((listener) => listener(done));
+        });
+        expect(paidSubmissions).toHaveLength(1);
+        expect(host.textContent).toContain("按方案生成");
+        expect(sessions.peekEcommerceWorkspace(scope)?.plan?.images[0].textLayout).toBeDefined();
+    });
+
+    test("实拍文案排版保存并切页恢复，不调用付费模型", async () => {
+        draft.imageType = "single";
+        draft.copyBrief = { text: "蓝色设计\n圆润轮廓", mode: "verbatim" };
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("用已上传实拍图直接排版");
+        expect(paidSubmissions).toHaveLength(0);
+        expect(projects.size).toBe(1);
+        const saved = Array.from(projects.values())[0];
+        const plan = JSON.parse(saved.planJson) as EcommercePlan;
+        expect(plan.images[0].sourcePhotoResourceId).toBe("owned-product");
+        expect(plan.images[0].copy).toBe(draft.copyBrief.text);
+        expect(plan.images[0].textLayout?.x).toBe(8);
+        await act(async () => {
+            navigate("/other");
+        });
+        await act(async () => {
+            navigate(`/ecommerce?project=${saved.id}`);
+        });
+        expect(host.textContent).toContain("蓝色设计");
+        expect(host.querySelector('[data-status="done"]')).not.toBeNull();
+        expect(paidSubmissions).toHaveLength(0);
+        spyOn(dom.HTMLCanvasElement.prototype, "getContext").mockImplementation(() => ({ measureText: (text: string) => ({ width: Array.from(text).length * 20 }), font: "" }) as never);
+        await act(async () => {
+            host.querySelector<HTMLButtonElement>('[aria-label="预览第 1 张图片"]')!.click();
+        });
+        const editText = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "编辑文字排版");
+        expect(editText).toBeDefined();
+        await act(async () => {
+            editText!.click();
+        });
+        const editor = document.querySelector<HTMLTextAreaElement>('[aria-label="编辑成品文案"]')!;
+        expect(editor).not.toBeNull();
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(dom.HTMLTextAreaElement.prototype, "value")!.set!.call(editor, "圆润设计\n蓝色细节");
+            editor.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+        const saveText = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === "保存排版");
+        // Go emits fontFamily first; this must not look like another editor changed the layout.
+        const serverPlan = JSON.parse(projects.get(saved.id)!.planJson) as EcommercePlan;
+        serverPlan.images[0].textLayout = { fontFamily: serverPlan.images[0].textLayout?.fontFamily, ...serverPlan.images[0].textLayout! };
+        projects.set(saved.id, { ...projects.get(saved.id)!, planJson: JSON.stringify(serverPlan) });
+        await act(async () => {
+            saveText!.click();
+        });
+        expect(JSON.parse(projects.get(saved.id)!.planJson).images[0].copy).toBe("圆润设计\n蓝色细节");
+        expect(paidSubmissions).toHaveLength(0);
+        await act(async () => {
+            navigate("/other");
+        });
+        await act(async () => {
+            navigate(`/ecommerce?project=${saved.id}`);
+        });
+        expect(host.textContent).toContain("圆润设计");
+    });
+
     test("发送后从对话反复拖图复用原资源，连续导入不清空对话且刷新保留已发送快照", async () => {
         const observer = Object.getOwnPropertyDescriptor(globalThis, "IntersectionObserver");
         Object.defineProperty(globalThis, "IntersectionObserver", { value: undefined, configurable: true });

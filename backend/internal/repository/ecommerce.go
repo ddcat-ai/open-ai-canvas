@@ -401,7 +401,7 @@ func archiveEcommerceRound(tx *gorm.DB, userID, projectID, draftJSON, planJSON s
 	// pending sketches are discarded when the round advances.
 	admitted := make([]model.EcommercePlanTask, 0, len(plan.Images))
 	for _, image := range plan.Images {
-		if image.TaskID == "" {
+		if image.TaskID == "" && image.SourcePhotoResourceID == "" {
 			continue
 		}
 		image.RoundID = ""

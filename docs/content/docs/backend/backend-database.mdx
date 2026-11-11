@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 电商文案与文字图层（JSON 扩展）
+
+`ecommerce_agent_projects.draft_json` 可保存 `copyBrief: {text, mode}`，`mode` 为 `verbatim` 或 `polish`。计划图片可保存 `textLayout: {x,y,width,fontSize,color,background,align}`，前三个位置/宽度值为百分比，字号为图片宽度百分比；`sourcePhotoResourceId` 指向本人已上传且 ready 的图片资源。相同字段随历史轮次的 `plan_json` 持久化，轮次修改继续受版本条件约束。
+
+文字层另有可选 `fontFamily`，值为 `sans`、`serif`、`rounded`，缺省使用黑体类系统字体。字体预览和导出均使用当前设备可用的对应字体及回退字体。
+
+这些字段均为可选 JSON 字段，不新增表、列或迁移，旧计划没有文字层时保持原行为。实拍结果不需要生成任务 ID 也可归档；资源引用扫描覆盖实拍来源及历史轮次，不能通过换来源引用其他账号图片。合成图在导出时产生，原图和文字参数分别保留；不会把合成图自动冒充已入库的生成资产。
+
 ## Agent MCP（Schema 100）
 
 版本 100 `agent_mcp_connections` 只新增三张表及 GitHub、飞书两个市场配置模板，不改写既有业务数据。模板不代表连接已配置、检测通过或工具已授权。

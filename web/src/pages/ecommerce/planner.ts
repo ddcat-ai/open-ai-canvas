@@ -10,6 +10,7 @@ import { commerceLayoutReference, commerceLayoutReferences, commerceReferenceIns
 import { assertCommerceConsumerCopy, commerceTypographyInstruction } from "./consumer-copy";
 import { commerceDisplayAssignment, commerceDisplaySlotsApply } from "./display-slots";
 import { commerceRestrictedPhrase } from "./platform-knowledge";
+import { assertSuppliedCopy, copyFirstInstruction, defaultTextLayout, validateCopyBrief } from "./copy-first";
 
 export function commerceInputSignature(draft: EcommerceDraft): string {
     draft = normalizeEcommerceReferenceGroups(draft);
@@ -54,6 +55,7 @@ export function commerceInputSignature(draft: EcommerceDraft): string {
             .filter(([, value]) => value)
             .sort(([a], [b]) => a.localeCompare(b)),
         creativeOptions: normalizeCreativeOptions(draft),
+        ...(draft.copyBrief ? { copyBrief: draft.copyBrief } : {}),
         skillIds: draft.skillIds || [],
         ...(draft.referenceMode && draft.referenceMode !== "product" ? { referenceMode: draft.referenceMode, layoutReferences: commerceLayoutReferences(draft).map(({ resourceId, role }) => [resourceId, role]) } : {}),
         references: draft.references.map(({ resourceId, role, catalogId }) => [resourceId, role, catalogId || ""]),
@@ -413,6 +415,8 @@ const commerceLayoutPrecedence =
     "版式来源优先级：平台与创作类型的硬性规则、真实商品事实、用户明确指定的内容和借鉴图版式最优先；其次是服务端【本轮版式方案】（若本提示末尾提供）给出的逐张版式、UI 套件、字体与人物设定；本提示中的分镜与版式骨架（含第21、37、44、45条中的骨架与组件示例，以及下方的整套内容分镜和逐张分镜备选）只在未指定时作为备选，不能用来覆盖【本轮版式方案】。";
 
 export function plannerPrompt(draft: EcommerceDraft, skillPrompt = "", random: () => number = Math.random) {
+    validateCopyBrief(draft);
+    skillPrompt = [skillPrompt, copyFirstInstruction(draft)].filter(Boolean).join("\n\n");
     draft = normalizeReferenceDraft(draft);
     const detailReference = draft.referenceMode === "detail";
     const layoutReference = commerceLayoutReference(draft);
@@ -517,6 +521,9 @@ export function parsePlannerOutput(text: string, draft: EcommerceDraft): Ecommer
         seen.add(image.id);
         delete image.taskId;
         delete image.manualPrompt;
+        delete image.sourcePhotoResourceId;
+        delete image.textLayout;
+        if (draft.copyBrief) image.textLayout = defaultTextLayout(draft);
         if (!detailReference) delete image.referenceScreen;
         else if (image.referenceScreen && typeof image.referenceScreen === "object") delete image.referenceScreen.resourceId;
         const required: Array<keyof EcommercePlanImage> = ["imageType", "platform", "language", "fidelity", "imageModel", "ratio", "resolution"];
@@ -561,6 +568,7 @@ export function parsePlannerOutput(text: string, draft: EcommerceDraft): Ecommer
         image.negativePrompt ||= "";
     }
     if ([result.confirmedFacts, result.uncertainFacts, result.qualityChecks].some((items) => !Array.isArray(items) || items.some((item) => typeof item !== "string"))) throw new Error("策划结果中的商品事实与质检项格式错误，请重新策划");
+    assertSuppliedCopy(result, draft);
     assertCommerceDetailRhythm(result, draft);
     if (draft.imageType === "sku") {
         for (const sku of draft.skus) {

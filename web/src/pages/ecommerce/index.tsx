@@ -1,4 +1,7 @@
 import { createClientUUID } from "@/lib/client-id";
+import { CopyFirstPanel } from "./copy-first-panel";
+import { photoCopyPlan, validateCopyBrief } from "./copy-first";
+import { sameCommerceTextLayout } from "./text-layout";
 import { App, Button, Input, Select } from "antd";
 import { AlertCircle, ArrowDownToLine, ArrowUp, ChevronDown, Clapperboard, Image as ImageIcon, LoaderCircle, Minus, Plus, RotateCcw, Save, Sparkles } from "lucide-react";
 import { HistoryIcon, LightbulbIcon } from "@/components/ui/ecommerce-icons";
@@ -362,7 +365,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         setDownloadError("");
         const sourceTask = item.image.taskId ? tasks[item.image.taskId] : undefined;
         try {
-            item = { ...item, resourceId: resourceIdFromStorageKey(sourceTask && parseBackendGenerationResult(sourceTask)?.images?.[0]?.storageKey) || item.image.resourceId };
+            item = { ...item, resourceId: resourceIdFromStorageKey(sourceTask && parseBackendGenerationResult(sourceTask)?.images?.[0]?.storageKey) || item.image.resourceId || item.image.sourcePhotoResourceId || item.resourceId };
         } catch {
             /* Older assets use the existing Blob exporter. */
         }
@@ -602,7 +605,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 setComposerTextOverride(null);
             }
 
-            setCreationMode(nextDraft.referenceMode && nextDraft.referenceMode !== "product" ? "ai" : compatibleCache?.creationMode || "ai");
+            setCreationMode(nextDraft.copyBrief || (nextDraft.referenceMode && nextDraft.referenceMode !== "product") ? "ai" : compatibleCache?.creationMode || "ai");
             setAutoGenerate(nextDraft.referenceMode === "detail" ? false : compatibleCache?.autoGenerate || false);
             // Restoring a project never starts paid work by itself: a planning task that
             // finishes after a reload waits for the explicit "continue" action.
@@ -663,7 +666,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const projectImages = useMemo(() => commerceCanvasImages(plan), [plan]);
     const taskIds = useMemo(() => projectImages.map((image) => image.taskId).filter((id): id is string => Boolean(id)), [projectImages]);
     useEffect(() => {
-        if (plan?.images.length && plan.images.every((image) => image.id.startsWith("direct-"))) setCreationMode("direct");
+        if (plan?.images.length && plan.images.every((image) => image.id.startsWith("direct-")) && !draft.copyBrief) setCreationMode("direct");
     }, [plan]);
     useEffect(() => {
         if (!taskIds.length) return;
@@ -808,7 +811,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     setStage(failure);
                     return;
                 }
-                if (autoStartRef.current) {
+                if (autoStartRef.current && !sourceDraft.copyBrief) {
                     autoStartRef.current = false;
                     autoStartTaskRef.current = "";
                     setStage("商品分析与策划完成，正在提交图片任务");
@@ -1270,6 +1273,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             : "";
         let planningDraft: EcommerceDraft;
         try {
+            validateCopyBrief(draft);
             planningDraft = normalizeReferenceDraft({
                 ...draft,
                 agentModel: planningModel,
@@ -1333,7 +1337,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         const owner = session;
         if (owner !== session) planningDraft = { ...planningDraft, directionsTaskId: undefined };
         if (!owner.beginSubmission()) return;
-        autoStartRef.current = Boolean(planningDraft.creativeDirectionId) || (planningDraft.referenceMode !== "detail" && autoGenerate);
+        autoStartRef.current = !planningDraft.copyBrief && (Boolean(planningDraft.creativeDirectionId) || (planningDraft.referenceMode !== "detail" && autoGenerate));
         submissionLock.current = true;
         setBusy(true);
         setStage("正在保存商品资料");
@@ -1412,7 +1416,9 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         // Unsupported claims are removed from the affected pages instead of stopping the set.
         try {
             assertCommercePlanCurrent(selectedPlan, selectedDraft);
+            const reviewedCopy = selectedPlan.images.map((image) => image.copy);
             selectedPlan = groundCommerceClaims(selectedPlan, selectedDraft);
+            if (selectedDraft.copyBrief && selectedPlan.images.some((image, index) => image.copy !== reviewedCopy[index])) throw new Error("给定文案包含未确认的商品主张，请先修改或确认文案，未提交生图");
             validateCommerceReferencePlan(selectedPlan, selectedDraft);
         } catch (cause) {
             message.error(errorText(cause));
@@ -1841,6 +1847,62 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     };
     const updateImage = (id: string, patch: Partial<EcommercePlanImage>) =>
         setPlan((current) => (current ? { ...current, images: current.images.map((image) => (image.id === id ? manuallyEditedCommerceImage(image, { ...image, ...patch }) : image)) } : null));
+    const saveTextLayout = async (edited: EcommercePlanImage) => {
+        if (!plan || !projectRef.current || !session.beginSubmission()) throw new Error("项目尚未就绪或正在保存，请稍后重试");
+        submissionLock.current = true;
+        setBusy(true);
+        try {
+            const destination = await getEcommerceProject(projectRef.current.id);
+            const original = commerceCanvasImages(plan).find((image) => image.id === edited.id);
+            if (!original?.textLayout) throw new Error("这张图片没有独立文字层");
+            const target = original.roundId ? await ensureRoundTarget(edited.id) : null;
+            if (original.roundId && !target) throw new Error("历史轮次已更新，请刷新后重试");
+            const active = target ? null : projectPlan(destination);
+            const stored = target?.image || (active && commerceCanvasImages(active).find((image) => image.id === edited.id));
+            if (!stored || stored.taskId !== original.taskId) throw new Error("图片已更新，请重新打开排版编辑");
+            if (stored.copy !== original.copy || !sameCommerceTextLayout(stored.textLayout, original.textLayout)) throw new Error("文字排版已在其他窗口更新，请刷新后重新编辑");
+            const updated = { ...stored, copy: edited.copy, textLayout: edited.textLayout };
+            if (target) {
+                applyRoundUpdate(await patchEcommerceRoundImage(destination.id, target.round.id, edited.id, { version: target.round.version, image: updated }));
+            } else {
+                const next = updateCommerceCanvasImage(active!, edited.id, () => updated);
+                await save(projectDraft(destination), next, session);
+                if (isCurrent(session)) setPlan((current) => (current ? updateCommerceCanvasImage(current, edited.id, () => updated) : current));
+            }
+            if (isCurrent(session)) message.success("文字排版已保存，下载将包含文字");
+        } finally {
+            session.endSubmission();
+            if (isCurrent(session)) {
+                submissionLock.current = false;
+                setBusy(false);
+            }
+        }
+    };
+    const createPhotoLayouts = async () => {
+        if (!ecommerceEnabled || busy || restoring || uploading || planningPending || directionsPending || activeImages || !session.beginSubmission()) return;
+        submissionLock.current = true;
+        setBusy(true);
+        try {
+            const source = { ...draft, planningTaskId: undefined, directionsTaskId: undefined };
+            const next = photoCopyPlan(source);
+            next.inputSignature = commerceInputSignature(source);
+            const continued = continueCommercePlan(next, plan);
+            await save(source, continued, session, { advanceRound: true });
+            if (isCurrent(session)) {
+                setDraft(source);
+                setPlan(continued);
+                setStage("实拍排版已保存。点击图片预览中的“编辑文字排版”调整位置，确认后下载图文成品。");
+            }
+        } catch (cause) {
+            if (isCurrent(session)) message.error(errorText(cause));
+        } finally {
+            session.endSubmission();
+            if (isCurrent(session)) {
+                submissionLock.current = false;
+                setBusy(false);
+            }
+        }
+    };
     const resizePlan = (images: EcommercePlanImage[]) => {
         if (!plan) return;
         if (draft.referenceMode === "detail") {
@@ -1881,7 +1943,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         // overwriting them on the project row.
         void save(next, null, session, { advanceRound: Boolean(plan.images.length) }).catch((cause) => message.error(errorText(cause)));
     };
-    const completed = plan?.images.filter((image) => image.taskId && tasks[image.taskId]?.status === "succeeded" && tasks[image.taskId]?.outputs?.some((output) => output.materializedAssetId)).length || 0;
+    const completed = plan?.images.filter((image) => (image.taskId ? tasks[image.taskId]?.status === "succeeded" && tasks[image.taskId]?.outputs?.some((output) => output.materializedAssetId) : image.sourcePhotoResourceId)).length || 0;
     useEffect(() => {
         if (!plan) return;
         setRegenerationPreviews((current) => {
@@ -1896,11 +1958,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             let resourceId = image.resourceId;
             try {
                 const task = image.taskId ? tasks[image.taskId] : undefined;
-                resourceId ||= resourceIdFromStorageKey(task && parseBackendGenerationResult(task)?.images?.[0]?.storageKey) || undefined;
+                resourceId = resourceIdFromStorageKey(task && parseBackendGenerationResult(task)?.images?.[0]?.storageKey) || resourceId || image.sourcePhotoResourceId;
             } catch {
                 /* Older tasks keep their Blob download path. */
             }
-            return assetId && (!selectedExportIds.size || selectedExportIds.has(image.id)) ? [{ image, assetId, index, resourceId }] : [];
+            return (assetId || image.sourcePhotoResourceId) && (!selectedExportIds.size || selectedExportIds.has(image.id)) ? [{ image, assetId: assetId || "", index, resourceId }] : [];
         }) || [];
     // 长图是一套连续画面：没勾选时只拼本轮作品，不混入之前几轮；勾选了就按勾选拼。
     const roundImageIds = new Set(plan?.images.map((image) => image.id));
@@ -1918,12 +1980,12 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             .catch(downloadFailed)
             .finally(() => setBusy(false));
     };
-    const submitted = plan?.images.filter((image) => image.taskId).length || 0;
+    const submitted = plan?.images.filter((image) => image.taskId || image.sourcePhotoResourceId).length || 0;
     const activeImages = plan?.images.filter((image) => image.taskId && (!tasks[image.taskId] || !terminal(tasks[image.taskId].status))).length || 0;
     const total = plan?.images.length || requestedCount;
     // The next paid analysis starts from the user's follow-up action, never
     // automatically after the last image or when reopening a completed project.
-    const stage = submitted > 0 && completed === total ? `全部完成 · ${completed} 张图片已保存到资产库` : stageMessage;
+    const stage = submitted > 0 && completed === total ? (plan?.images.some((image) => image.textLayout) ? `全部完成 · ${completed} 张图文保存在项目中，点击图片可编辑排版并下载` : `全部完成 · ${completed} 张图片已保存到资产库`) : stageMessage;
     // Failed analysis used to render as plain grey text under the greeting; show
     // it as an error with a retry so the user knows what to do next.
     const failure = /^(商品分析未完成|分析结果读取失败|方向推荐提交或保存未完成|策划提交或保存未完成|暂时无法查询分析进度)[：:]\s*(.*)$/s.exec(stageMessage);
@@ -2000,7 +2062,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         const submission = { accepted: false };
         composerSubmissionRef.current = submission;
         hideComposerInput(submittedDraft);
-        const run = creationMode === "direct" ? startDirect() : action === "plan" ? startPlanning() : requestCreativeDirections();
+        const run = draft.copyBrief ? startPlanning() : creationMode === "direct" ? startDirect() : action === "plan" ? startPlanning() : requestCreativeDirections();
         void run.finally(() => {
             if (composerSubmissionRef.current === submission) composerSubmissionRef.current = null;
             if (!submission.accepted && composerFingerprint(draftRef.current) === composerFingerprint(submittedDraft)) {
@@ -2010,6 +2072,15 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         });
     };
     const requestGenerationConfirmation = async (action: "quick" | "plan" = "quick") => {
+        if (draft.copyBrief) {
+            try {
+                validateCopyBrief(draft);
+            } catch (cause) {
+                message.error(errorText(cause));
+                return;
+            }
+            action = "plan";
+        }
         if (confirmingGeneration || (directionsPending && !draftDiffersFromPlan) || (activeImages && !draftDiffersFromPlan) || (action === "quick" && !(composerTextOverride ?? draft.instruction).trim())) return;
         setConfirmingGeneration(true);
         try {
@@ -2045,7 +2116,16 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const directionsOutdated = Boolean(creativeDirections.length && directionsInputSignatureRef.current !== commerceInputSignature(draft));
     // 后台阶段模型不可用时 AI 流程走不通：按钮直接置灰，原因常驻显示在按钮上方。
     const adminBlocked = creationMode !== "direct" && Boolean(adminModelIssue);
-    const submitDisabled = !ecommerceEnabled || restoring || uploading || busy || planningPending || (directionsPending && !draftDiffersFromPlan) || (Boolean(activeImages) && !draftDiffersFromPlan) || confirmingGeneration || !composerText.trim();
+    const submitDisabled =
+        !ecommerceEnabled ||
+        restoring ||
+        uploading ||
+        busy ||
+        planningPending ||
+        (directionsPending && !draftDiffersFromPlan) ||
+        (Boolean(activeImages) && !draftDiffersFromPlan) ||
+        confirmingGeneration ||
+        (!composerText.trim() && !draft.copyBrief?.text.trim());
     /** Enter 发送，Shift+Enter 换行；输入法组字期间的回车只用于上屏。 */
     const submitComposerOnEnter = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
         if (event.key !== "Enter" || event.shiftKey || event.altKey || event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -2099,9 +2179,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const busyIndicator = confirmingGeneration || busy || planningPending;
     // 整条流程折算成五步进度：作品区顶部的进度条、空态提示和底部按钮说明都从这里取，不再各写一套。
     const flowSteps = resolveCommerceFlow({
+        copyFirst: Boolean(draft.copyBrief),
+        photoLayout: Boolean(plan?.images.length && plan.images.every((image) => image.sourcePhotoResourceId && !image.taskId)),
         direct: creationMode === "direct",
         hasProduct: Boolean(productReferences.length || rememberedReferenceCount),
-        hasInstruction: Boolean(composerText.trim()) || Boolean(rememberedReferenceCount),
+        hasInstruction: Boolean(composerText.trim()) || Boolean(rememberedReferenceCount) || Boolean(draft.copyBrief?.text.trim()),
         directionsLoading: directionsStatus === "loading" || directionsPending,
         directionsReady: creativeDirections.length > 0,
         directionChosen: Boolean(chosenDirection || draft.creativeDirectionId),
@@ -2119,6 +2201,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
           ? `先在右侧添加${scene?.materials.required || "商品图"}，作品会显示在这里。`
           : commerceFlowNextStep(flowSteps);
     const roundDelivered = Boolean(plan && submitted > 0 && completed === total);
+    const deliveredWithText = Boolean(plan?.images.some((image) => image.textLayout));
     // 商品视频交给视频生成页：带上一张已完成的作品做首帧。两个开关都开着才出现入口。
     const productVideoAvailable = ecommerceVideoEnabled && videoWorkbenchEnabled;
     const makeProductVideo = (resourceId?: string) => navigate(resourceId ? `/toolbox/video?ref=${encodeURIComponent(resourceId)}` : "/toolbox/video");
@@ -2185,7 +2268,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 <section className="commerce-delivery" aria-label="本轮交付">
                     <header>
                         <strong>本轮 {completed} 张已全部完成</strong>
-                        <p>已保存到资产库。可以直接导出交付，也可以做成商品视频，或为这件商品继续下一组。</p>
+                        <p>{deliveredWithText ? "原图和文字排版已保存到项目。可以继续编辑文字，或导出合成后的图文成品。" : "已保存到资产库。可以直接导出交付，也可以做成商品视频，或为这件商品继续下一组。"}</p>
                     </header>
                     <div className="commerce-delivery-actions">
                         <Button type="primary" icon={<ArrowDownToLine size={14} />} disabled={busy || !exportItems.length} onClick={() => runExport("zip")}>
@@ -2196,7 +2279,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 拼成长图
                             </Button>
                         ) : null}
-                        {productVideoAvailable ? (
+                        {productVideoAvailable && !deliveredWithText ? (
                             <Button icon={<Clapperboard size={14} />} onClick={() => makeProductVideo(firstDeliveredResource)}>
                                 做成商品视频
                             </Button>
@@ -2349,12 +2432,12 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 </details>
             ) : null}
             {plan && plan.images.length > 0 && !submitted && !planningPending ? (
-                <Button type="primary" disabled={busy} onClick={() => void startGeneration(plan.uncertainFacts.length ? excludeCommerceFacts(plan) : plan, draft)}>
+                <Button type="primary" disabled={busy} onClick={() => void startGeneration(plan.uncertainFacts.length && !draft.copyBrief ? excludeCommerceFacts(plan) : plan, draft)}>
                     按方案生成 {plan.images.length} 张图片
                 </Button>
             ) : null}
             {plan && submitted > 0 && submitted < plan.images.length && !activeImages && !planningPending ? (
-                <Button type="primary" disabled={busy} onClick={() => void startGeneration(plan.uncertainFacts.length ? excludeCommerceFacts(plan) : plan, draft)}>
+                <Button type="primary" disabled={busy} onClick={() => void startGeneration(plan.uncertainFacts.length && !draft.copyBrief ? excludeCommerceFacts(plan) : plan, draft)}>
                     继续生成剩余 {plan.images.length - submitted} 张图片
                 </Button>
             ) : null}
@@ -2395,6 +2478,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     onDownload={downloadOne}
                     onRemove={removeResult}
                     onRegenerate={regenerateWithPreview}
+                    onSaveText={saveTextLayout}
                     onRetry={(image) => void retryImage(image)}
                     generationPending={busy || Boolean(activeImages)}
                     regeneratingIds={regeneratingIds}
@@ -2420,7 +2504,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 商品图片
                             </button>
                             {/* 没开放商品视频时不放一个永远点不了的按钮；开放后带着已完成的作品去视频生成。 */}
-                            {productVideoAvailable ? (
+                            {productVideoAvailable && !deliveredWithText ? (
                                 <AntTooltip title={firstDeliveredResource ? "用本轮第一张作品做首帧，去视频生成制作商品视频" : "去视频生成制作商品视频；出图后可在作品上点「做成视频」"}>
                                     <button type="button" aria-pressed="false" onClick={() => makeProductVideo(firstDeliveredResource)}>
                                         <Clapperboard size={15} />
@@ -2502,6 +2586,21 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 <span>参考方式</span>
                                 <ReferenceModePanel draft={draft} onChange={updateDraft} onUpload={uploadModeReference} uploading={uploading || restoring || busy} uploadProgress={uploadProgress} />
                             </div>
+                        </ComposerBlock>
+                        <ComposerBlock title="文案配图">
+                            <CopyFirstPanel
+                                draft={draft}
+                                disabled={!ecommerceEnabled || busy || restoring || uploading || planningPending || directionsPending || Boolean(activeImages)}
+                                onChange={(patch) => {
+                                    updateDraft(patch);
+                                    if (patch.copyBrief) {
+                                        setCreationMode("ai");
+                                        setAutoGenerate(false);
+                                        autoStartRef.current = false;
+                                    }
+                                }}
+                                onPhotos={() => void createPhotoLayouts()}
+                            />
                         </ComposerBlock>
                         <ComposerBlock title="画面描述" hint="点选短语会写入描述，可继续修改">
                             <div
@@ -2695,7 +2794,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                                 </strong>
                             )}
                             <span>
-                                {displayCount} 张 · {creationMode === "direct" ? "按设置直接出图" : "先推荐视觉方向，选定后自动出图"}
+                                {displayCount} 张 · {draft.copyBrief ? "按文案策划，确认后生成配图" : creationMode === "direct" ? "按设置直接出图" : "先推荐视觉方向，选定后自动出图"}
                             </span>
                         </div>
                         {creationMode === "direct" ? null : (

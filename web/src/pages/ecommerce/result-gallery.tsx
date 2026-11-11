@@ -53,11 +53,12 @@ export function SingleImageEditor({
 }) {
     const [edited, setEdited] = useState<EcommercePlanImage>(() => ({
         ...image,
-        copy: "",
+        copy: image.textLayout ? image.copy : "",
         manualPrompt: true,
-        prompt: image.manualPrompt
-            ? image.prompt
-            : [image.prompt, image.copy?.trim() && !commerceCopyHasDirections(image.copy) ? `成品文案与位置：\n${image.copy}\n文字完整放在画幅内，按本提示词指定位置排版，不遮挡商品。` : ""].filter(Boolean).join("\n\n"),
+        prompt:
+            image.manualPrompt || image.textLayout
+                ? image.prompt
+                : [image.prompt, image.copy?.trim() && !commerceCopyHasDirections(image.copy) ? `成品文案与位置：\n${image.copy}\n文字完整放在画幅内，按本提示词指定位置排版，不遮挡商品。` : ""].filter(Boolean).join("\n\n"),
     }));
     const [request, setRequest] = useState("");
     const [cost, setCost] = useState<number>();

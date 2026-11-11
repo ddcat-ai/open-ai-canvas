@@ -141,6 +141,9 @@ func (s *Service) UpdateEcommerceRoundImage(userID, projectID, roundID, imageID 
 	}
 	if req.Image != nil {
 		image := *req.Image
+		if err := s.validateEcommerceTextImage(userID, image); err != nil {
+			return nil, err
+		}
 		if image.ID != imageID {
 			return nil, BadAuthRequest("图片ID与路径不一致")
 		}

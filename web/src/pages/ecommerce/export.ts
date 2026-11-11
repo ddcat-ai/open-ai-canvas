@@ -1,7 +1,7 @@
 import { saveAs } from "file-saver";
 
 import { createZip } from "@/lib/zip";
-import { getResourceBlob, resolveResourceUrl, resourceFileUrl } from "@/services/api/resources";
+import { getResourceBlob, resolveResourceUrl, resourceFileUrl, resourceStorageKey } from "@/services/api/resources";
 import { apiBaseURL } from "@/services/api/request";
 import { createClientUUID } from "@/lib/client-id";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -9,6 +9,7 @@ import { useAssetStore } from "@/stores/use-asset-store";
 import { loadAssetsForUse } from "@/services/user-data-sync";
 import type { EcommercePlanImage } from "@/services/api/ecommerce";
 import { ecommerceOutputSize } from "./output-size";
+import { paintCommerceText } from "./text-layout";
 
 export type EcommerceExportItem = { image: EcommercePlanImage; assetId: string; index: number; resourceId?: string };
 export type EcommerceDownload = { blob: Blob; fileName: string };
@@ -20,6 +21,7 @@ function deliverDownload(blob: Blob, fileName: string): EcommerceDownload {
 
 /** Browser downloads start in the click handler; large ZIPs stream from storage. */
 export function startEcommerceDownload(items: EcommerceExportItem[]): boolean {
+    if (items.some((item) => item.image.textLayout)) return false;
     if (!items.length || items.some((item) => !item.resourceId)) return false;
     if (items.length > 1) {
         const owner = getActiveUserScope();
@@ -82,11 +84,12 @@ async function imageBlob(assetId: string): Promise<Blob> {
 }
 
 async function composedImageBlob(item: EcommerceExportItem): Promise<Blob> {
-    const original = await imageBlob(item.assetId);
+    const original = item.resourceId ? await getResourceBlob(resourceStorageKey(item.resourceId), "ecommerce-export") : await imageBlob(item.assetId);
+    if (!original) throw new Error("图片资源不可用，请刷新后重试");
     const bitmap = await createImageBitmap(original);
     try {
-        const target = ecommerceOutputSize(item.image.ratio, bitmap.width, bitmap.height);
-        if (target.width === bitmap.width && target.height === bitmap.height) return original;
+        const target = item.image.textLayout ? { width: bitmap.width, height: bitmap.height } : ecommerceOutputSize(item.image.ratio, bitmap.width, bitmap.height);
+        if (!item.image.textLayout && target.width === bitmap.width && target.height === bitmap.height) return original;
         const canvas = document.createElement("canvas");
         canvas.width = target.width;
         canvas.height = target.height;
@@ -101,6 +104,10 @@ async function composedImageBlob(item: EcommerceExportItem): Promise<Blob> {
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = "high";
         context.drawImage(bitmap, (canvas.width - width) / 2, (photoHeight - height) / 2, width, height);
+        if (item.image.textLayout && item.image.copy) {
+            await document.fonts.ready;
+            paintCommerceText(context, item.image.copy, item.image.textLayout, canvas.width, canvas.height);
+        }
         return await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("文字图层导出失败"))), "image/png"));
     } finally {
         bitmap.close();

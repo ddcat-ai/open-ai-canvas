@@ -292,6 +292,13 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	for _, project := range ecommerceProjects {
 		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "电商项目", ID: project.ID, Title: project.Name, PrimaryJSON: project.DraftJSON, SecondaryJSON: project.PlanJSON})
 	}
+	var ecommerceRounds []model.EcommerceRound
+	if err := r.db.Where("user_id = ?", userID).Find(&ecommerceRounds).Error; err != nil {
+		return snapshot, err
+	}
+	for _, round := range ecommerceRounds {
+		snapshot.Documents = append(snapshot.Documents, ResourceReferenceDocument{Kind: "电商历史轮次", ID: round.ID, PrimaryJSON: round.DraftJSON, SecondaryJSON: round.PlanJSON})
+	}
 	var styles []model.StyleProfile
 	if err := r.db.Where("user_id = ?", userID).Find(&styles).Error; err != nil {
 		return snapshot, err

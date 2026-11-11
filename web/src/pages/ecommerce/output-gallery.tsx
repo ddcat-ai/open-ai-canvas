@@ -6,13 +6,14 @@ import type { GenerationTask } from "@/services/api/task-center";
 import type { EcommerceDraft, EcommercePlan, EcommercePlanImage } from "@/services/api/ecommerce";
 import type { AiConfig } from "@/stores/use-config-store";
 import { parseBackendGenerationResult } from "@/services/api/generation-task";
-import { resolveResourceVariantUrl, resourceIdFromStorageKey } from "@/services/api/resources";
+import { resolveResourceVariantUrl, resolveResourceUrl, resourceStorageKey, resourceIdFromStorageKey } from "@/services/api/resources";
 import type { EcommerceExportItem } from "./export";
 import { imageTypes, labelOf } from "./catalog";
 import { commerceCanvasAspect } from "./canvas-layout";
 import { CommerceGeneratingArtwork, CommerceResultImage } from "./result-image";
 import { SingleImageEditor, imageResultAsset } from "./result-gallery";
 import "./output-gallery.css";
+import { TextLayoutEditor } from "./text-layout-editor";
 
 type OutputImage = { image: EcommercePlanImage; index: number; task?: GenerationTask; src?: string; assetId?: string; resourceId?: string };
 
@@ -36,6 +37,7 @@ export function EcommerceOutputGallery({
     onDownload,
     onRemove,
     onRegenerate,
+    onSaveText,
     onRetry,
     generationPending,
     regeneratingIds = new Set<string>(),
@@ -64,6 +66,7 @@ export function EcommerceOutputGallery({
     onDownload: (item: EcommerceExportItem) => void;
     onRemove: (image: EcommercePlanImage) => Promise<void>;
     onRegenerate: (image: EcommercePlanImage) => Promise<void>;
+    onSaveText: (image: EcommercePlanImage) => Promise<void>;
     onRetry: (image: EcommercePlanImage) => void;
     generationPending: boolean;
     regeneratingIds?: Set<string>;
@@ -88,11 +91,12 @@ export function EcommerceOutputGallery({
 }) {
     const [preview, setPreview] = useState<OutputImage | null>(null);
     const [editing, setEditing] = useState<string | null>(null);
+    const [textEditing, setTextEditing] = useState<OutputImage | null>(null);
     const [filter, setFilter] = useState<OutputFilter>("all");
     const images = [...(plan?.previousImages || []), ...(plan?.images || [])];
     const stateOf = (image: EcommercePlanImage, pending: boolean): OutputFilter => {
         const task = image.taskId ? tasks[image.taskId] : undefined;
-        if (task?.status === "succeeded" || (!task && image.deliveryStatus === "delivered")) return "done";
+        if (task?.status === "succeeded" || (!task && (image.deliveryStatus === "delivered" || image.sourcePhotoResourceId))) return "done";
         if (task && ["failed", "cancelled"].includes(task.status)) return "failed";
         return regenerationPending(image, tasks, pending, regeneratingIds) ? "active" : "all";
     };
@@ -119,7 +123,7 @@ export function EcommerceOutputGallery({
             resourceId={resourceFor(image, tasks)}
             issues={qualityIssues?.[image.taskId ? imageResultAsset(tasks[image.taskId]) || "" : ""]}
             onSelect={() => onSelect(image.id)}
-            onPreview={(value) => setPreview(value)}
+            onPreview={(value) => setPreview({ ...value, src: value.resourceId ? resolveResourceUrl(resourceStorageKey(value.resourceId)) : value.src })}
             onDownload={onDownload}
             onRetry={() => onRetry(image)}
             onEdit={() => setEditing(image.id)}
@@ -210,7 +214,7 @@ export function EcommerceOutputGallery({
             {preview ? (
                 <AppModal open onCancel={() => setPreview(null)} footer={null} width="min(1120px, calc(100vw - 32px))" title={`${String(preview.index + 1).padStart(2, "0")} · ${labelOf(imageTypes, preview.image.imageType)}`}>
                     <div className="commerce-output-preview">
-                        <CommerceResultImage ratio={commerceCanvasAspect(preview.image.ratio)} src={preview.src || ""} alt={`第 ${preview.index + 1} 张商品图片预览`} />
+                        <CommerceResultImage ratio={commerceCanvasAspect(preview.image.ratio)} src={preview.src || ""} copy={preview.image.copy} textLayout={preview.image.textLayout} alt={`第 ${preview.index + 1} 张商品图片预览`} />
                         <section>
                             {preview.image.copy ? <p>{preview.image.copy}</p> : null}
                             <Typography.Text type="secondary">{preview.image.prompt}</Typography.Text>
@@ -220,23 +224,43 @@ export function EcommerceOutputGallery({
                                     <dd>{labelOf(imageTypes, preview.image.imageType)}</dd>
                                 </div>
                                 <div>
-                                    <dt>模型</dt>
-                                    <dd>{preview.image.imageModel}</dd>
+                                    <dt>{preview.image.sourcePhotoResourceId && !preview.image.taskId ? "来源" : "模型"}</dt>
+                                    <dd>{preview.image.sourcePhotoResourceId && !preview.image.taskId ? "已上传实拍图" : preview.image.imageModel}</dd>
                                 </div>
                                 <div>
                                     <dt>尺寸</dt>
-                                    <dd>
-                                        {preview.image.ratio} · {preview.image.resolution}
-                                    </dd>
+                                    <dd>{preview.image.sourcePhotoResourceId && !preview.image.taskId ? "保留原图尺寸和比例" : `${preview.image.ratio} · ${preview.image.resolution}`}</dd>
                                 </div>
                             </dl>
-                            {preview.assetId ? (
-                                <Button type="primary" icon={<ArrowDownToLine size={14} />} onClick={() => onDownload({ image: preview.image, index: preview.index, assetId: preview.assetId!, resourceId: preview.resourceId })}>
-                                    下载原图
+                            {preview.image.textLayout ? (
+                                <Button
+                                    onClick={() => {
+                                        setTextEditing(preview);
+                                        setPreview(null);
+                                    }}
+                                >
+                                    编辑文字排版
+                                </Button>
+                            ) : null}
+                            {preview.assetId || preview.resourceId ? (
+                                <Button type="primary" icon={<ArrowDownToLine size={14} />} onClick={() => onDownload({ image: preview.image, index: preview.index, assetId: preview.assetId || "", resourceId: preview.resourceId })}>
+                                    {preview.image.textLayout ? "下载图文成品" : "下载原图"}
                                 </Button>
                             ) : null}
                         </section>
                     </div>
+                </AppModal>
+            ) : null}
+            {textEditing ? (
+                <AppModal open onCancel={() => setTextEditing(null)} footer={null} width="min(1120px, calc(100vw - 32px))" title="编辑文字排版">
+                    <TextLayoutEditor
+                        image={textEditing.image}
+                        src={textEditing.src || ""}
+                        onSave={async (image) => {
+                            await onSaveText(image);
+                            setTextEditing(null);
+                        }}
+                    />
                 </AppModal>
             ) : null}
             {editing
@@ -301,7 +325,7 @@ function OutputCard({
                   ? task?.status === "queued"
                       ? "排队中"
                       : task?.stage || "生成中"
-                  : image.deliveryStatus === "delivered"
+                  : image.deliveryStatus === "delivered" || image.sourcePhotoResourceId
                     ? "已完成"
                     : "待生成";
     const title = `${String(index + 1).padStart(2, "0")} · ${labelOf(imageTypes, image.imageType)}`;
@@ -310,7 +334,7 @@ function OutputCard({
             <div className="commerce-output-card-frame">
                 <button type="button" className="commerce-output-card-media" disabled={!src} onClick={() => src && onPreview({ image, index, src, assetId, resourceId })} aria-label={`预览第 ${index + 1} 张图片`}>
                     {src ? (
-                        <CommerceResultImage ratio={commerceCanvasAspect(image.ratio)} src={src} alt={`${labelOf(imageTypes, image.imageType)}生成结果`} loading="lazy" />
+                        <CommerceResultImage ratio={commerceCanvasAspect(image.ratio)} src={src} copy={image.copy} textLayout={image.textLayout} alt={`${labelOf(imageTypes, image.imageType)}生成结果`} loading="lazy" />
                     ) : working ? (
                         <CommerceGeneratingArtwork queued={!image.taskId || task?.status === "queued"} label={String(index + 1).padStart(2, "0")} />
                     ) : (
@@ -339,12 +363,14 @@ function OutputCard({
                 <Button size="small" type="text" icon={<RotateCcw size={14} />} onClick={onEdit}>
                     修改这张
                 </Button>
-                {assetId && resourceId && onMakeVideo ? (
+                {assetId && resourceId && onMakeVideo && !image.textLayout ? (
                     <Button size="small" type="text" icon={<Clapperboard size={14} />} onClick={() => onMakeVideo(resourceId)}>
                         做成视频
                     </Button>
                 ) : null}
-                {assetId && resourceId ? <Button size="small" type="text" icon={<ArrowDownToLine size={14} />} aria-label={`下载第 ${index + 1} 张`} onClick={() => onDownload({ image, index, assetId, resourceId })} /> : null}
+                {(assetId || image.sourcePhotoResourceId) && resourceId ? (
+                    <Button size="small" type="text" icon={<ArrowDownToLine size={14} />} aria-label={`下载第 ${index + 1} 张`} onClick={() => onDownload({ image, index, assetId: assetId || "", resourceId })} />
+                ) : null}
                 <Button size="small" type="text" icon={<Trash2 size={14} />} aria-label={`从本轮移除第 ${index + 1} 张`} onClick={onRemove} />
             </footer>
         </article>
@@ -358,6 +384,7 @@ function outputSource(image: EcommercePlanImage, tasks: Record<string, Generatio
         if (output?.storageKey) return resolveResourceVariantUrl(output.storageKey, "thumbnail");
         if (output?.dataUrl || task?.previewUrl) return output?.dataUrl || task?.previewUrl;
         if (image.resourceId) return resolveResourceVariantUrl(image.resourceId, "thumbnail");
+        if (image.sourcePhotoResourceId) return resolveResourceVariantUrl(resourceStorageKey(image.sourcePhotoResourceId), "thumbnail");
     } catch {
         if (task?.previewUrl) return task.previewUrl;
     }
@@ -367,7 +394,7 @@ function outputSource(image: EcommercePlanImage, tasks: Record<string, Generatio
 function resourceFor(image: EcommercePlanImage, tasks: Record<string, GenerationTask>) {
     const task = image.taskId ? tasks[image.taskId] : undefined;
     try {
-        return resourceIdFromStorageKey(task && parseBackendGenerationResult(task)?.images?.[0]?.storageKey) || image.resourceId;
+        return resourceIdFromStorageKey(task && parseBackendGenerationResult(task)?.images?.[0]?.storageKey) || image.resourceId || image.sourcePhotoResourceId;
     } catch {
         return image.resourceId;
     }

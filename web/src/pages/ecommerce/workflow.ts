@@ -89,6 +89,11 @@ export function commerceImageParameters(profile: ImageCapabilityConfig, ratio: s
 }
 
 export function commerceImagePrompt(draft: EcommerceDraft, image: EcommercePlan["images"][number], productSummary = "", visualStrategy = "", parameters?: Pick<CommerceImageParameters, "size">) {
+    if (image.textLayout) {
+        const cleanDraft = { ...draft, noText: true };
+        const layout = image.textLayout;
+        return `${baseCommerceImagePrompt(cleanDraft, { ...image, copy: "" }, productSummary, visualStrategy)}\n【可编辑图文分层·最终要求】本次只生成商品照片与背景，所有广告文案由系统后期叠加。忽略分镜中绘制标题、标签或文字的要求，不渲染任何新文字。商品原有 Logo 保留。文字预留区域：左侧 ${layout.x}%、顶部 ${layout.y}%、宽度 ${layout.width}%，该区域背景干净、商品主体避让。按 ${image.ratio} 比例满版构图。`;
+    }
     if (!image.manualPrompt && commerceAllowsText(draft, image.imageType)) assertCommerceConsumerCopy(image.copy || "");
     const prompt = baseCommerceImagePrompt(draft, image, productSummary, visualStrategy);
     const reference = commerceReferenceImageInstruction(draft, image);
@@ -345,7 +350,9 @@ export async function submitCommerceImages(config: Config, draft: EcommerceDraft
         const phrase = commerceRestrictedPhrase(image.copy || "");
         if (phrase) throw new Error(`第${index + 1}张含高风险宣传词「${phrase}」，请改为有依据的具体描述后再生成`);
     }
+    const reviewedCopy = plan.images.map((image) => image.copy);
     plan = groundCommerceClaims(plan, draft);
+    if (draft.copyBrief && plan.images.some((image, index) => image.copy !== reviewedCopy[index])) throw new Error("文案包含尚未确认的商品主张，请先修改或确认方案中的文案；未提交生图");
     assertCommerceDetailRhythm(plan, draft);
     validateCommerceReferencePlan(plan, draft);
     if (plan.images.length !== draft.count || plan.uncertainFacts.length) throw new Error("请核对策划数量与待确认商品事实后再生成");

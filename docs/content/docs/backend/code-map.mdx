@@ -48,6 +48,8 @@ description: 从产品功能快速定位主要代码入口
 
 ## 电商 Agent 与后台知识库
 
+- 按文案创作：`pages/ecommerce/copy-first.ts` 负责分页、原文核对和实拍计划，`copy-first-panel.tsx` 提供输入入口；`planner.ts` 与 `workflow.ts` 分别策划配图、提交无广告字底图。`text-layout.ts` 为预览与导出提供同一排版几何，`text-overlay.tsx` / `text-layout-editor.tsx` 负责文字预览与编辑。`app/ecommerce_copy_first.go` 校验文案、排版值与实拍资源归属；项目和历史轮次沿用原有保存及版本冲突合同。
+
 - 页面：`web/src/pages/ecommerce/`；后台：`web/src/pages/admin/ecommerce-agent-config-page.tsx`（上线检查、阶段模型 `ecommerce-stage-models.tsx` 与目录换算 `ecommerce-model-catalog.ts`）；`ecommerce-management-page.tsx`（知识与技能标签页：`ecommerce-knowledge-page.tsx`、`ecommerce-skills-page.tsx`、`ecommerce-categories-page.tsx`，内容头 `ecommerce-library-panel.tsx`）；`knowledge-domain-coverage.ts`。
 - API：`web/src/services/api/ecommerce.ts`、`ecommerce-knowledge.ts`；会话恢复：`web/src/services/ecommerce-session.ts`。
 - 服务端：`backend/internal/handler/ecommerce*.go` → `app/ecommerce*.go` → `repository/ecommerce*.go`、`model/models_ecommerce*.go`；领域协议与知识方法在 `ecommerceagent/`、`ecommerceskills/`。

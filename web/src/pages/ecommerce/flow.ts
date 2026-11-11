@@ -7,6 +7,8 @@ export type CommerceFlowStepStatus = "done" | "current" | "todo";
 export type CommerceFlowStep = { key: CommerceFlowStepKey; label: string; status: CommerceFlowStepStatus; detail: string; running: boolean };
 
 export type CommerceFlowInput = {
+    copyFirst?: boolean;
+    photoLayout?: boolean;
     /** 直接生成的旧项目：没有方向和方案两步。 */
     direct: boolean;
     hasProduct: boolean;
@@ -36,11 +38,11 @@ const labels: Record<CommerceFlowStepKey, string> = {
 function currentStep(input: CommerceFlowInput): CommerceFlowStepKey {
     // 正在进行的分析优先：上一轮已交付后继续下一组时，进度回到选方向 / 策划。
     if (!input.direct && input.planningPending) return "plan";
-    if (!input.direct && (input.directionsLoading || input.directionsReady)) return "direction";
+    if (!input.direct && !input.copyFirst && (input.directionsLoading || input.directionsReady)) return "direction";
     if (input.submitted > 0) return input.planCount > 0 && input.completed >= input.planCount ? "deliver" : "generate";
     if (input.direct) return input.hasProduct && input.hasInstruction ? "generate" : "material";
     if (input.planReady || input.directionChosen) return "plan";
-    return input.hasProduct && input.hasInstruction ? "direction" : "material";
+    return input.hasProduct && input.hasInstruction ? (input.copyFirst ? "plan" : "direction") : "material";
 }
 
 function stepDetail(key: CommerceFlowStepKey, input: CommerceFlowInput): string {
@@ -50,18 +52,26 @@ function stepDetail(key: CommerceFlowStepKey, input: CommerceFlowInput): string 
         case "direction":
             return input.directionsLoading ? "正在识别商品并推荐 4 套视觉方向，切换页面不会中断" : input.directionsReady ? "选一套视觉方向，选定后自动策划并出图" : "点「开始创作」，先推荐 4 套视觉方向；也可以「跳过选方向」直接策划";
         case "plan":
+            if (input.copyFirst) return input.planReady ? `方案共 ${input.planCount} 张，请核对原文、画面描述后确认出图` : input.planningPending ? "正在根据给定文案安排配图，完成后请先确认方案" : "点「开始创作」，根据文案策划配图；也可直接用实拍图排版";
             if (input.planningPending) return `正在写卖点文案、逐张分镜和生图提示词，${input.directionChosen ? "完成后自动出图" : "完成后请审阅方案再出图"}`;
             return input.planReady ? `方案共 ${input.planCount} 张，审阅后确认出图` : "按选定方向生成图片方案";
         case "generate":
             if (!input.submitted) return input.direct ? "点「开始创作」直接按设置出图" : "确认方案后逐张出图";
             return `已完成 ${input.completed} / ${input.planCount} 张${input.failed ? `，${input.failed} 张失败可重试` : ""}`;
         case "deliver":
+            if (input.copyFirst || input.photoLayout) return "图片和排版已保存到项目。点击图片可编辑文字，再下载图文成品";
             return "全部完成，已保存到资产库，可导出、做成视频或继续下一组";
     }
 }
 
 export function resolveCommerceFlow(input: CommerceFlowInput): CommerceFlowStep[] {
-    const keys: CommerceFlowStepKey[] = input.direct ? ["material", "generate", "deliver"] : ["material", "direction", "plan", "generate", "deliver"];
+    const keys: CommerceFlowStepKey[] = input.photoLayout
+        ? ["material", "deliver"]
+        : input.copyFirst
+          ? ["material", "plan", "generate", "deliver"]
+          : input.direct
+            ? ["material", "generate", "deliver"]
+            : ["material", "direction", "plan", "generate", "deliver"];
     const current = keys.indexOf(currentStep(input));
     return keys.map((key, index) => {
         // 交付是终点：到了这一步就算完成，同时保持高亮提示下一步可做的事。

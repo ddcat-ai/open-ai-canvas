@@ -117,34 +117,48 @@ type EcommerceCreativeRecommendation struct {
 }
 
 type EcommercePlanTask struct {
-	SourceDraft          json.RawMessage           `json:"sourceDraft,omitempty"`
-	ID                   string                    `json:"id"`
-	ImageType            string                    `json:"imageType"`
-	Platform             string                    `json:"platform"`
-	Language             string                    `json:"language"`
-	Goal                 string                    `json:"goal"`
-	Theme                string                    `json:"theme"`
-	Composition          string                    `json:"composition"`
-	DisplayAssignment    string                    `json:"displayAssignment,omitempty"`
-	MainVisual           string                    `json:"mainVisual"`
-	VerifiedClaims       string                    `json:"verifiedClaims"`
-	PerformanceAngle     string                    `json:"performanceAngle,omitempty"`
-	InformationComponent string                    `json:"informationComponent,omitempty"`
-	Copy                 string                    `json:"copy"`
-	Lighting             string                    `json:"lighting"`
-	Fidelity             string                    `json:"fidelity"`
-	Prompt               string                    `json:"prompt"`
-	ManualPrompt         bool                      `json:"manualPrompt,omitempty"`
-	NegativePrompt       string                    `json:"negativePrompt"`
-	ImageModel           string                    `json:"imageModel"`
-	Ratio                string                    `json:"ratio"`
-	Resolution           string                    `json:"resolution"`
-	SkuID                string                    `json:"skuId,omitempty"`
-	TaskID               string                    `json:"taskId,omitempty"`
-	ReferenceScreen      *EcommerceReferenceScreen `json:"referenceScreen,omitempty"`
+	TextLayout            *EcommerceTextLayout      `json:"textLayout,omitempty"`
+	SourcePhotoResourceID string                    `json:"sourcePhotoResourceId,omitempty"`
+	SourceDraft           json.RawMessage           `json:"sourceDraft,omitempty"`
+	ID                    string                    `json:"id"`
+	ImageType             string                    `json:"imageType"`
+	Platform              string                    `json:"platform"`
+	Language              string                    `json:"language"`
+	Goal                  string                    `json:"goal"`
+	Theme                 string                    `json:"theme"`
+	Composition           string                    `json:"composition"`
+	DisplayAssignment     string                    `json:"displayAssignment,omitempty"`
+	MainVisual            string                    `json:"mainVisual"`
+	VerifiedClaims        string                    `json:"verifiedClaims"`
+	PerformanceAngle      string                    `json:"performanceAngle,omitempty"`
+	InformationComponent  string                    `json:"informationComponent,omitempty"`
+	Copy                  string                    `json:"copy"`
+	Lighting              string                    `json:"lighting"`
+	Fidelity              string                    `json:"fidelity"`
+	Prompt                string                    `json:"prompt"`
+	ManualPrompt          bool                      `json:"manualPrompt,omitempty"`
+	NegativePrompt        string                    `json:"negativePrompt"`
+	ImageModel            string                    `json:"imageModel"`
+	Ratio                 string                    `json:"ratio"`
+	Resolution            string                    `json:"resolution"`
+	SkuID                 string                    `json:"skuId,omitempty"`
+	TaskID                string                    `json:"taskId,omitempty"`
+	ReferenceScreen       *EcommerceReferenceScreen `json:"referenceScreen,omitempty"`
 	// RoundID is attached only when serving archived rounds, so the client can
 	// address a history edit without re-reading the whole project.
 	RoundID string `json:"roundId,omitempty" gorm:"-"`
+}
+
+// Relative percentages keep the editable copy identical across preview and export.
+type EcommerceTextLayout struct {
+	FontFamily string  `json:"fontFamily,omitempty"`
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	Width      float64 `json:"width"`
+	FontSize   float64 `json:"fontSize"`
+	Color      string  `json:"color"`
+	Background string  `json:"background"`
+	Align      string  `json:"align"`
 }
 
 type EcommerceReferenceScreen struct {

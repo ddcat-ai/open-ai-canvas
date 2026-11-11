@@ -1,5 +1,7 @@
 import { useState, type ImgHTMLAttributes } from "react";
 import "./result-image.css";
+import type { EcommerceTextLayout } from "@/services/api/ecommerce";
+import { CommerceTextOverlay } from "./text-overlay";
 
 export function CommerceProgressArtwork({ title, detail }: { title: string; detail: string }) {
     return (
@@ -47,7 +49,7 @@ export function CommerceGeneratingArtwork({ queued, label }: { queued: boolean; 
 
 /** Keyed by source in the gallery, so refresh and newly completed images have
  * their own load lifecycle without restarting generation or using fake progress. */
-export function CommerceResultImage({ ratio, rotation = 0, frameRatio, ...props }: ImgHTMLAttributes<HTMLImageElement> & { ratio: number; rotation?: number; frameRatio?: number }) {
+export function CommerceResultImage({ ratio, rotation = 0, frameRatio, copy, textLayout, ...props }: ImgHTMLAttributes<HTMLImageElement> & { ratio: number; rotation?: number; frameRatio?: number; copy?: string; textLayout?: EcommerceTextLayout }) {
     const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
     const [naturalRatio, setNaturalRatio] = useState<number>();
     const quarterTurn = Math.abs(rotation % 180) === 90;
@@ -70,6 +72,7 @@ export function CommerceResultImage({ ratio, rotation = 0, frameRatio, ...props 
                     props.onError?.(event);
                 }}
             />
+            {state === "loaded" && textLayout && copy ? <CommerceTextOverlay copy={copy} layout={textLayout} ratio={displayRatio} /> : null}
             {state !== "loaded" ? (
                 <span className="commerce-image-loading" role="status">
                     {state === "failed" ? (

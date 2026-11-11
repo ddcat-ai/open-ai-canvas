@@ -32,6 +32,7 @@ export const defaultEcommerceCreativeOptions: EcommerceCreativeOptions = {
     layoutStyle: "auto",
 };
 export type EcommerceDraft = {
+    copyBrief?: { text: string; mode: "verbatim" | "polish" };
     productName: string;
     category: string;
     brand: string;
@@ -77,6 +78,8 @@ export type EcommerceDraft = {
     layoutReferenceId?: string;
 };
 export type EcommercePlanImage = {
+    textLayout?: EcommerceTextLayout;
+    sourcePhotoResourceId?: string;
     id: string;
     imageType: string;
     platform: string;
@@ -107,6 +110,16 @@ export type EcommercePlanImage = {
     sourceDraft?: EcommerceDraft;
     /** Set only on images read from an archived round; edits must patch that round. */
     roundId?: string;
+};
+export type EcommerceTextLayout = {
+    fontFamily?: "sans" | "serif" | "rounded";
+    x: number;
+    y: number;
+    width: number;
+    fontSize: number;
+    color: string;
+    background: string;
+    align: "left" | "center" | "right";
 };
 export type EcommercePlan = {
     productSummary: string;
