@@ -2,6 +2,14 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const koKR: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        local: "기기에 저장된 기록",
+        pending: "기록 동기화 대기 중",
+        synced: "기록 동기화 완료",
+        error: "기록 동기화 실패",
+        retry: "다시 시도",
+        backup: "충돌 백업 다운로드",
+    },
     agentEntry: {
         sessionNotReady: "로그인 또는 동기화 세션이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
         canvasRestoring: "캔버스를 복원하는 중입니다. 잠시 후 다시 시도하세요.",

@@ -2,6 +2,14 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const enUS: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        local: "History saved on this device",
+        pending: "History sync pending",
+        synced: "History synced",
+        error: "History sync failed",
+        retry: "Retry",
+        backup: "Download conflict backup",
+    },
     agentEntry: {
         sessionNotReady: "Your sign-in or sync session isn't ready yet. Try again shortly.",
         canvasRestoring: "The canvas is still being restored. Try again shortly.",

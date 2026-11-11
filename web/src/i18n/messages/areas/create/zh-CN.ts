@@ -1,5 +1,13 @@
 /** 创作首页、灵感、图片/视频工作台的界面文案（源语言）。键结构是其他语言文件的约束。 */
 export const zhCN = {
+    historySync: {
+        local: "仅保存在本机",
+        pending: "历史待同步",
+        synced: "历史已同步",
+        error: "历史同步失败",
+        retry: "重试",
+        backup: "下载冲突副本",
+    },
     agentEntry: {
         sessionNotReady: "登录或同步会话尚未就绪，请稍后重试。",
         canvasRestoring: "画布还在恢复中，请稍后重试。",

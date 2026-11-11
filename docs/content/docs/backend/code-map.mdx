@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 创作对话同步
+
+- HTTP：`handler/creation_history.go` → `service/aliases_creation_history.go` → `app/creation_history.go`；持久化在 `repository/creation_history.go` 和 `model/creation_history.go`。
+- Web：`services/creation-history-sync.ts` 维护账号队列、修订合并及冲突备份；`creation-history-payload.ts` 定义可持久化字段，`creation-history-media.ts` 上传本地媒体并恢复授权路径；真实入口为 `pages/create/index.tsx`。
+- 迁移：Schema 101；资源引用保护在 `repository/resource_reference.go` 和 `resource_cleanup.go`，SQLite → PostgreSQL 复制清单登记三张历史表。
+
 ## Agent 记忆、Pi 与 MCP
 
 - 用户工作回忆：`app/cloud_agent_memory_recall.go`、`repository/agent_memory_recall.go`；长期偏好沿用 `cloud_agent_memory_document*.go`。冻结注入在 `cloud_agent_skill_catalog.go`，按需检索工具为 `memory_search`。

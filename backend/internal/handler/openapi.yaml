@@ -4353,6 +4353,110 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /creation-conversations:
+    get:
+      summary: 分页列出当前账号创作历史及永久删除标记
+      parameters:
+        - in: query
+          name: after
+          schema:
+            type: string
+            maxLength: 160
+        - $ref: "#/components/parameters/ExpectedHistoryUser"
+      responses:
+        "200":
+          description: 成功信封 data={items,next}，items 为摘要，ID 升序，每页至多 100 条；next 为空表示结束
+        "401":
+          description: 未登录
+        "403":
+          description: 预期账号与当前登录账号不符
+  "/creation-conversations/{id}":
+    get:
+      summary: 读取当前账号创作对话及逐条消息修订
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            maxLength: 160
+        - $ref: "#/components/parameters/ExpectedHistoryUser"
+      responses:
+        "200":
+          description: 成功信封，data 为完整一致性快照
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    enum:
+                      - 0
+                  msg:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/CreationHistoryDetail"
+        "401":
+          description: 未登录
+        "404":
+          description: 对话不存在或不属于当前账号
+  "/creation-conversations/{id}/sync":
+    post:
+      summary: 按稳定消息 ID 和修订增量保存或永久删除创作历史
+      description: 不覆盖整数组；metadata 与每条消息独立检查修订。成功结果 conflicts 给出采用云端版本的 metadata 或消息
+        ID；非法输入或资源/任务越权整批回滚。delete 不混合其他修改，不级联删除任务或媒体，旧设备不得复活同 ID。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            maxLength: 160
+        - $ref: "#/components/parameters/ExpectedHistoryUser"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metadata:
+                  type: object
+                  required:
+                    - revision
+                    - title
+                  properties:
+                    revision:
+                      type: integer
+                      minimum: 0
+                    title:
+                      type: string
+                      minLength: 1
+                      maxLength: 120
+                    canvasId:
+                      type: string
+                      description: 必须属于当前账号
+                messages:
+                  type: array
+                  maxItems: 100
+                  items:
+                    $ref: "#/components/schemas/CreationHistoryMessage"
+                delete:
+                  type: boolean
+                  description: 永久删除标记，可先于首次上传建立
+      responses:
+        "200":
+          description: 成功信封 data 为 CreationHistoryDetail，conflicts 非空表示部分修改冲突；删除过的 ID 返回
+            deleted=true
+        "400":
+          description: 非法字段、超限、资源/任务/画布越权或资源不可用
+        "401":
+          description: 未登录
+        "403":
+          description: 预期账号与登录账号不符
+        "500":
+          description: 持久化失败，客户端保留本机数据并可重试
 components:
   parameters:
     MCPResourceID:
@@ -4367,12 +4471,48 @@ components:
       required: true
       schema:
         type: string
+    ExpectedHistoryUser:
+      name: X-Canvas-Expected-User
+      in: header
+      description: 后台同步和媒体迁移使用的预期账号，防止 Cookie 切换后旧请求执行；不替代 Cookie 鉴权
+      schema:
+        type: string
   securitySchemes:
     sessionCookie:
       type: apiKey
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    CreationHistoryMessage:
+      type: object
+      required: [id, revision]
+      properties:
+        id: {type: string, maxLength: 160}
+        revision: {type: integer, minimum: 0}
+        deleted:
+          type: boolean
+          description: 单条消息删除标记；与非空 data 互斥，永久阻止旧设备复活同 ID
+        data:
+          type: object
+          description: 非删除消息必填，最多 256 KiB。白名单消息字段，媒体仅 resource 键，taskIds 必须属于当前账号；不接收渠道配置或临时 URL
+    CreationHistoryDetail:
+      type: object
+      properties:
+        id: {type: string}
+        title: {type: string}
+        canvasId: {type: string}
+        revision: {type: integer}
+        metadataRevision: {type: integer}
+        deleted: {type: boolean}
+        updatedAt: {type: string, format: date-time}
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreationHistoryMessage'
+        conflicts:
+          type: array
+          items: {type: string}
+          description: metadata 或采用云端版本的消息 ID
     MCPParameter:
       type: object
       additionalProperties: false

@@ -2,6 +2,14 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const deDE: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        local: "Verlauf auf diesem Gerät gespeichert",
+        pending: "Verlaufssynchronisierung ausstehend",
+        synced: "Verlauf synchronisiert",
+        error: "Verlaufssynchronisierung fehlgeschlagen",
+        retry: "Erneut versuchen",
+        backup: "Konfliktkopie herunterladen",
+    },
     agentEntry: {
         sessionNotReady: "Die Anmelde- oder Synchronisierungssitzung ist noch nicht bereit. Versuche es gleich noch einmal.",
         canvasRestoring: "Die Leinwand wird noch wiederhergestellt. Versuche es gleich noch einmal.",

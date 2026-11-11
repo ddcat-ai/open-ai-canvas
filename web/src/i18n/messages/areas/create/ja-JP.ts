@@ -2,6 +2,14 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const jaJP: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        local: "履歴はこの端末に保存されています",
+        pending: "履歴を同期待ち",
+        synced: "履歴を同期済み",
+        error: "履歴の同期に失敗",
+        retry: "再試行",
+        backup: "競合のバックアップをダウンロード",
+    },
     agentEntry: {
         sessionNotReady: "ログインまたは同期セッションの準備ができていません。しばらくしてから再試行してください。",
         canvasRestoring: "キャンバスを復元中です。しばらくしてから再試行してください。",
