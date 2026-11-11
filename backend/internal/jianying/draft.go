@@ -1,8 +1,5 @@
-// Package jianying 生成剪映（JianYing / CapCut）专业版可直接打开的草稿文件夹内容。
-//
-// 草稿结构参考 pyJianYingDraft 的模板：剪映 5.x 以及新版（6.0 起会加密自己保存的草稿）都能打开
-// 外部生成的明文草稿。素材必须是绝对路径，所以调用方要提供用户本机的剪映草稿目录；
-// 草稿文件夹解压到该目录后才能找到素材，否则剪映会提示素材丢失并允许重新链接。
+// Package jianying 生成供剪映专业版导入的明文草稿文件夹内容。
+// 素材绝对路径由用户选择的本机草稿目录生成；具体客户端版本兼容性须实际导入验收。
 package jianying
 
 import (
@@ -11,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -55,23 +54,66 @@ type Draft struct {
 
 var windowsRoot = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
 
-// NormalizeRoot 校验并规范化剪映草稿目录：必须是 macOS/Linux 或 Windows 的绝对路径，去掉末尾分隔符。
+// NormalizeRoot 不访问用户机器，只校验导入目标目录；不按服务器操作系统处理 Windows 路径。
 func NormalizeRoot(raw string) (string, error) {
 	root := strings.TrimSpace(raw)
 	if root == "" {
 		return "", errors.New("请填写剪映草稿目录")
 	}
-	if utf8.RuneCountInString(root) > 400 || strings.ContainsAny(root, "\x00\r\n\t\"") {
+	if strings.Contains(root, "你的用户名") {
+		return "", errors.New("请把路径里的「你的用户名」换成电脑上的实际用户名")
+	}
+	if utf8.RuneCountInString(root) > 400 || strings.ContainsRune(root, '"') || strings.IndexFunc(root, unicode.IsControl) >= 0 {
 		return "", errors.New("剪映草稿目录包含无效字符")
 	}
-	if !strings.HasPrefix(root, "/") && !windowsRoot.MatchString(root) {
-		return "", errors.New("剪映草稿目录必须是绝对路径，例如 /Users/你的用户名/Movies/JianyingPro/User Data/Projects/com.lveditor.draft")
+	windows := windowsRoot.MatchString(root)
+	unc := strings.HasPrefix(root, `\\`) || strings.HasPrefix(root, "//")
+	if !windows && !unc && !strings.HasPrefix(root, "/") {
+		return "", errors.New("剪映草稿目录必须是 macOS 或 Windows 的绝对路径")
 	}
-	trimmed := strings.TrimRight(root, `/\`)
-	if trimmed == "" || (windowsRoot.MatchString(root) && len(trimmed) <= 2) {
+	canonical := root
+	if windows || unc {
+		canonical = strings.ReplaceAll(root, `\`, "/")
+		body := canonical
+		if windows {
+			body = canonical[3:]
+		} else {
+			body = strings.TrimPrefix(canonical, "//")
+		}
+		if strings.ContainsAny(body, `:*?<>|`) {
+			return "", errors.New("Windows 草稿目录包含无效字符")
+		}
+		parts := strings.Split(strings.TrimRight(body, "/"), "/")
+		if unc && len(parts) < 3 {
+			return "", errors.New("请填写共享目录下的草稿文件夹，不能使用共享根目录")
+		}
+		for _, part := range parts {
+			if part == "" || strings.HasSuffix(part, ".") || strings.HasSuffix(part, " ") || reservedWindowsName(part) {
+				return "", errors.New("Windows 草稿目录包含无效的文件夹名称")
+			}
+		}
+	}
+	for _, part := range strings.Split(canonical, "/") {
+		if part == "." || part == ".." {
+			return "", errors.New("剪映草稿目录不能包含 . 或 .. 路径段")
+		}
+	}
+	trimmed := strings.TrimRight(canonical, "/")
+	if trimmed == "" || (windows && len(trimmed) <= 2) {
 		return "", errors.New("剪映草稿目录不能是磁盘根目录")
 	}
+	if windows || unc {
+		trimmed = strings.ReplaceAll(trimmed, "/", `\`)
+	}
 	return trimmed, nil
+}
+
+func reservedWindowsName(name string) bool {
+	base := strings.ToUpper(strings.Split(name, ".")[0])
+	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" {
+		return true
+	}
+	return len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9'
 }
 
 var unsafeName = regexp.MustCompile(`[\\/:*?"<>|\x00-\x1f]+`)
@@ -87,11 +129,18 @@ func SafeName(raw string, fallback string, limit int) string {
 	if len(runes) > limit {
 		name = strings.TrimSpace(string(runes[:limit]))
 	}
+	name = strings.Trim(name, ". ")
+	if name == "" {
+		name = fallback
+	}
+	if reservedWindowsName(name) {
+		name = "_" + name
+	}
 	return name
 }
 
 func (d Draft) separator() string {
-	if windowsRoot.MatchString(d.Root) {
+	if windowsRoot.MatchString(d.Root) || strings.HasPrefix(d.Root, `\\`) {
 		return `\`
 	}
 	return "/"
@@ -192,9 +241,15 @@ func emptyMaterials() map[string]any {
 
 // Build 返回 draft_content.json（Windows 读取）/ draft_info.json（macOS 读取，内容相同）与 draft_meta_info.json。
 func Build(d Draft) ([]byte, []byte, error) {
-	if d.Name == "" || d.Root == "" || len(d.Clips) == 0 || d.Width <= 0 || d.Height <= 0 {
-		return nil, nil, errors.New("草稿缺少名称、目录、尺寸或视频片段")
+	if d.Name == "" || len(d.Clips) == 0 || d.Width <= 0 || d.Height <= 0 || SafeName(d.Name, "", 120) != d.Name {
+		return nil, nil, errors.New("草稿缺少有效名称、尺寸或视频片段")
 	}
+	root, err := NormalizeRoot(d.Root)
+	if err != nil {
+		return nil, nil, err
+	}
+	d.Root = root
+	draftID := newUUID()
 	fps := d.FPS
 	if fps <= 0 {
 		fps = 30
@@ -208,10 +263,15 @@ func Build(d Draft) ([]byte, []byte, error) {
 	speeds := []any{}
 	videoSegments := []any{}
 	var cursor int64
+	fileNames := map[string]bool{}
 	for _, clip := range d.Clips {
-		if clip.DurationUs <= 0 || clip.FileName == "" {
-			return nil, nil, fmt.Errorf("视频片段 %q 缺少时长或文件名", clip.Name)
+		if clip.DurationUs <= 0 || clip.FileName == "" || SafeName(clip.FileName, "", 160) != clip.FileName || clip.DurationUs > math.MaxInt64-cursor {
+			return nil, nil, fmt.Errorf("视频片段 %q 的时长或文件名无效", clip.Name)
 		}
+		if fileNames[strings.ToLower(clip.FileName)] {
+			return nil, nil, errors.New("草稿素材文件名重复")
+		}
+		fileNames[strings.ToLower(clip.FileName)] = true
 		width, height := clip.Width, clip.Height
 		if width <= 0 || height <= 0 {
 			width, height = d.Width, d.Height
@@ -238,9 +298,10 @@ func Build(d Draft) ([]byte, []byte, error) {
 		textSegments := []any{}
 		for _, caption := range d.Captions {
 			text := strings.TrimSpace(caption.Text)
-			if text == "" || caption.DurationUs <= 0 || caption.StartUs < 0 {
+			if text == "" || caption.DurationUs <= 0 || caption.StartUs < 0 || caption.StartUs >= cursor {
 				continue
 			}
+			caption.DurationUs = min(caption.DurationUs, cursor-caption.StartUs)
 			materialID := newUUID()
 			material, err := subtitleMaterial(materialID, text)
 			if err != nil {
@@ -273,7 +334,7 @@ func Build(d Draft) ([]byte, []byte, error) {
 			"zoom_info_params": nil,
 		},
 		"cover": nil, "create_time": now.Unix(), "duration": cursor, "extra_info": nil, "fps": float64(fps),
-		"free_render_index_mode_on": false, "group_container": nil, "id": newUUID(), "keyframe_graph_list": []any{},
+		"free_render_index_mode_on": false, "group_container": nil, "id": draftID, "keyframe_graph_list": []any{},
 		"keyframes":              map[string]any{"adjusts": []any{}, "audios": []any{}, "effects": []any{}, "filters": []any{}, "handwrites": []any{}, "stickers": []any{}, "texts": []any{}, "videos": []any{}},
 		"last_modified_platform": platform, "platform": platform, "materials": materials, "mutable_config": nil, "name": d.Name,
 		"new_version": "110.0.0", "relationships": []any{}, "render_index_track_mode_on": false, "retouch_cover": nil, "source": "default",
@@ -292,7 +353,7 @@ func Build(d Draft) ([]byte, []byte, error) {
 		"draft_cloud_materials": []any{}, "draft_cloud_purchase_info": "", "draft_cloud_template_id": "", "draft_cloud_tutorial_info": "",
 		"draft_cloud_videocut_purchase_info": "", "draft_cover": cover, "draft_deeplink_url": "",
 		"draft_enterprise_info": map[string]any{"draft_enterprise_extra": "", "draft_enterprise_id": "", "draft_enterprise_name": "", "enterprise_material": []any{}},
-		"draft_fold_path":       d.FolderPath(), "draft_id": newUUID(), "draft_is_ai_packaging_used": false, "draft_is_ai_shorts": false,
+		"draft_fold_path":       d.FolderPath(), "draft_id": draftID, "draft_is_ai_packaging_used": false, "draft_is_ai_shorts": false,
 		"draft_is_ai_translate": false, "draft_is_article_video_draft": false, "draft_is_from_deeplink": "false", "draft_is_invisible": false,
 		"draft_materials": []any{
 			map[string]any{"type": 0, "value": []any{}}, map[string]any{"type": 1, "value": []any{}}, map[string]any{"type": 2, "value": []any{}},
@@ -317,7 +378,7 @@ func SRT(captions []Caption) string {
 	index := 0
 	for _, caption := range captions {
 		text := strings.TrimSpace(caption.Text)
-		if text == "" || caption.DurationUs <= 0 {
+		if text == "" || caption.DurationUs <= 0 || caption.StartUs < 0 || caption.DurationUs > math.MaxInt64-caption.StartUs {
 			continue
 		}
 		index++

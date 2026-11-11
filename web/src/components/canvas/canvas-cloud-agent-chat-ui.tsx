@@ -560,9 +560,9 @@ export const AgentChatMessage = memo(function AgentChatMessage({
     }
     const copyable = !isStreaming && !formAnswer && Boolean(item.text.trim()) && (isUser || item.role === "assistant");
     return (
-        <div className={`agent-message-row flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+        <div className={`agent-message-row flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`} data-agent-role={item.role} data-agent-interjection={item.interjection || undefined}>
             <div className={`flex min-w-0 flex-col ${isUser ? "max-w-[82%] items-end" : "max-w-full flex-1 items-stretch"}`}>
-                <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user px-4 py-3 text-right" : "max-w-full text-left"}`} style={{ color }}>
+                <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user px-3 py-2 text-left" : "max-w-full text-left"}`} style={{ color }}>
                     {item.interjection ? (
                         <span className="mb-1 inline-flex flex-wrap items-center justify-end gap-2">
                             <span
@@ -722,8 +722,8 @@ function agentReasoningPreview(items: readonly CloudAgentChatMessage[]) {
  * 推理是辅助信息，不应与正文和工具输出争夺主视觉。一个事件流里的连续摘要
  * 合并成一个入口，默认收起；需要排查时再展开查看完整内容。
  */
-export const AgentReasoningFeed = memo(function AgentReasoningFeed({ items, theme }: { items: CloudAgentChatMessage[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    const streaming = items.some((item) => item.streaming);
+export const AgentReasoningFeed = memo(function AgentReasoningFeed({ items, theme, live = true }: { items: CloudAgentChatMessage[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; live?: boolean }) {
+    const streaming = live && items.some((item) => item.streaming);
     const text = items
         .map((item) => item.text.trim())
         .filter(Boolean)
@@ -1146,19 +1146,7 @@ export const AgentOperationFeed = memo(function AgentOperationFeed({
                     {categoryIcon}
                 </span>
                 <span className="agent-activity-title">{categoryLabel}</span>
-                {/* 换步时旧文案高模糊淡出、新文案从下方上浮（先快后慢的非线性曲线）。 */}
-                <AnimatePresence mode="wait" initial={false}>
-                    <motion.span
-                        key={visibleLabel}
-                        className="agent-activity-detail agent-operation-latest"
-                        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, filter: "blur(4px)" }}
-                        animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
-                        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, filter: "blur(4px)" }}
-                        transition={reducedMotion ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                        {visibleLabel}
-                    </motion.span>
-                </AnimatePresence>
+                <span className="agent-activity-detail agent-operation-latest">{visibleLabel}</span>
                 {items.length > 1 ? <span className="agent-activity-meta">{items.length} 步</span> : null}
                 <AgentChevronGlyph className="agent-activity-chevron" />
             </button>
@@ -1191,7 +1179,6 @@ export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (t
                 <span />
             </span>
             <span>{label}</span>
-            <span className="agent-working-caption">实时处理中</span>
         </div>
     );
 }

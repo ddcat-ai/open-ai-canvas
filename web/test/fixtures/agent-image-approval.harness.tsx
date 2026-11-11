@@ -44,7 +44,12 @@ const parameters = [
 ];
 let profile = projectImageParameters(defaultImageCapabilityConfig("openai-image", "gpt-image-2"), parameters);
 profile = { ...profile, size: imageSizeConfigWithPresets(profile, presets) };
-const models = ["gpt-image-2", "gpt-image-2.5"];
+const models = ["gpt-image-2", "gpt-image-2.5", "limited-image"];
+const limitedProfile = projectImageParameters(
+    profile,
+    parameters.filter((field) => field.name !== "count" && field.name !== "transparentBackground"),
+);
+limitedProfile.size = profile.size;
 const channel = createModelChannel({
     id: "image-system",
     scope: "system",
@@ -56,7 +61,7 @@ const channel = createModelChannel({
         displayName: "GPT-Image-YC",
         capability: "image",
         protocol: "openai-image",
-        capabilityConfig: { version: 1, image: profile },
+        capabilityConfig: { version: 1, image: model === "limited-image" ? limitedProfile : profile },
         billingMode: "fixed_request",
         unitPriceMicrocredits: 10_000_000,
     })),
@@ -71,13 +76,14 @@ for (const toolName of ["generate_media", "generate_media_batch"])
         document.body.append(host);
         const root = createRoot(host);
         let submitted: AgentMediaSettings | undefined;
+        const transparentBackground = toolName === "generate_media_batch";
         const initial = {
             channelId: channel.id,
             channelModelKey: "gpt-image-2",
             size: "1024x1024",
             imageResolution: "1k",
             quality: "auto",
-            imageParameters: JSON.stringify({ seed: 42, size: "1024x1024", imageResolution: "1k", quality: "auto", count: 1, transparentBackground: false }),
+            imageParameters: JSON.stringify({ seed: 42, size: "1024x1024", imageResolution: "1k", quality: "auto", count: 1, transparentBackground }),
             prompt: "测试图片",
             referenceNodeIds: [],
         };
@@ -93,8 +99,8 @@ for (const toolName of ["generate_media", "generate_media_batch"])
         const submit = async (size: string, resolution: string, quality: string) => {
             await press("同意执行");
             expect(submitted).toMatchObject({ channelId: channel.id, channelModelKey: "gpt-image-2", size, imageResolution: resolution, quality });
-            expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground: false });
-            expect(imageParameterRequest(profile, submitted!, true)).toEqual({ size, imageResolution: resolution, quality, seed: 42, count: 1, transparentBackground: false });
+            expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground });
+            expect(imageParameterRequest(profile, submitted!, true)).toEqual({ size, imageResolution: resolution, quality, seed: 42, count: 1, transparentBackground });
         };
         const render = (submitting = false) =>
             root.render(
@@ -144,7 +150,19 @@ for (const toolName of ["generate_media", "generate_media_batch"])
             await act(async () => alternative!.click());
             await press("同意执行");
             expect(submitted).toMatchObject({ channelId: channel.id, channelModelKey: "gpt-image-2.5", size: imagePresetForRatio("4k", "9:16").size, imageResolution: "4k", quality: "high" });
-            expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground: false });
+            expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42, count: 1, transparentBackground });
+            expect(imageParameterRequest(profile, submitted!, true)).toMatchObject({ seed: 42, count: 1, transparentBackground });
+            await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!.click());
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 30));
+            });
+            const limited = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((item) => item.textContent?.includes("limited-image"));
+            expect(limited).toBeDefined();
+            await act(async () => limited!.click());
+            await press("同意执行");
+            expect(submitted?.channelModelKey).toBe("limited-image");
+            expect(JSON.parse(submitted!.imageParameters!)).toEqual({ seed: 42 });
+            expect(imageParameterRequest(limitedProfile, submitted!, true)).toEqual({ size: imagePresetForRatio("4k", "9:16").size, imageResolution: "4k", quality: "high", seed: 42 });
             submitted = undefined;
             await act(async () => render(true));
             expect(host.querySelector("fieldset")?.disabled).toBe(true);

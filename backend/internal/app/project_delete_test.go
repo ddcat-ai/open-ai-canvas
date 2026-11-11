@@ -32,6 +32,7 @@ func newProjectDeleteTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.ProjectAssetCandidate{},
 		&model.Asset{},
 		&model.Task{},
+		&model.CloudAgentExecution{},
 		&model.Shot{},
 		&model.ShotRevision{},
 		&model.ShotArtifact{},

@@ -99,7 +99,7 @@ test("confirming a look saves its editable prompt without requesting generation"
     const generate = spyOn(api, "regenerateDramaCast").mockResolvedValue({ affectedSegments: 0 });
     await renderLooks();
     await click("编辑造型 晚宴");
-    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="造型生成提示词"]')?.value).toBe("银色耳饰，柔和侧光");
+    expect(host.querySelector<HTMLTextAreaElement>('[aria-label="参考图生成提示词"]')?.value).toBe("银色耳饰，柔和侧光");
     await click("确认保存");
     expect(update).toHaveBeenCalledWith("project", "look", expect.objectContaining({ imagePrompt: "银色耳饰，柔和侧光", appearance: "黑色礼服" }));
     expect(generate).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ test("new appearance requires confirmation and saves a custom prompt without gen
     await click("添加造型");
     await fillLookField("造型名", "舞台妆");
     await fillLookField("造型外观", "红色长裙，盘发，淡金眼妆");
-    await fillLookField("造型生成提示词", "保持人物五官，红色丝绸长裙，柔和舞台光");
+    await fillLookField("参考图生成提示词", "保持人物五官，红色丝绸长裙，柔和舞台光");
     expect(add).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
     await click("确认保存");
@@ -129,6 +129,9 @@ test("new appearance requires confirmation and saves a custom prompt without gen
         lookName: "舞台妆",
         appearance: "红色长裙，盘发，淡金眼妆",
         imagePrompt: "保持人物五官，红色丝绸长裙，柔和舞台光",
+        imageStyleId: "",
+        imageStyleName: "",
+        imageStylePrompt: "",
         fromChapter: 0,
         toChapter: 0,
     });
@@ -140,7 +143,7 @@ test("editing an appearance submits the newly typed prompt and keeps generation 
     const generate = spyOn(api, "regenerateDramaCast").mockResolvedValue({ affectedSegments: 0 });
     await renderLooks();
     await click("编辑造型 晚宴");
-    await fillLookField("造型生成提示词", "珍珠耳饰，暖色逆光，保留人物面部特征");
+    await fillLookField("参考图生成提示词", "珍珠耳饰，暖色逆光，保留人物面部特征");
     expect(update).not.toHaveBeenCalled();
     await click("确认保存");
     expect(update).toHaveBeenCalledWith("project", "look", expect.objectContaining({ imagePrompt: "珍珠耳饰，暖色逆光，保留人物面部特征" }));
@@ -190,7 +193,17 @@ test("voice preview distinguishes characters with and without audio", async () =
 
 test("voice preview plays the authorized sample, pauses, and stops on unmount", async () => {
     const originalAudio = Object.getOwnPropertyDescriptor(globalThis, "Audio");
-    const audio = { src: "", play: mock(async () => {}), pause: mock(() => {}), onended: null, onerror: null };
+    const audio = {
+        src: "",
+        play: mock(async () => {}),
+        pause: mock(() => {}),
+        removeAttribute: mock((name: string) => {
+            if (name === "src") audio.src = "";
+        }),
+        load: mock(() => {}),
+        onended: null,
+        onerror: null,
+    };
     Object.defineProperty(globalThis, "Audio", {
         configurable: true,
         writable: true,
@@ -216,6 +229,11 @@ test("voice preview plays the authorized sample, pauses, and stops on unmount", 
         await click("试听主角的音频");
         await act(async () => root.render(null));
         expect(audio.pause).toHaveBeenCalledTimes(2);
+        expect(audio.removeAttribute).toHaveBeenCalledWith("src");
+        expect(audio.load).toHaveBeenCalledTimes(1);
+        expect(audio.src).toBe("");
+        expect(audio.onended).toBeNull();
+        expect(audio.onerror).toBeNull();
     } finally {
         if (originalAudio) Object.defineProperty(globalThis, "Audio", originalAudio);
         else Reflect.deleteProperty(globalThis, "Audio");

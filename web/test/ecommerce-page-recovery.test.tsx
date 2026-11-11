@@ -8,6 +8,6 @@ test("电商页面完整生命周期在独立 DOM 中通过全部用例", () => 
     const result = Bun.spawnSync([process.execPath, "test", "--timeout", "10000", "./test/fixtures/ecommerce-page-recovery.harness.tsx"], { cwd: resolve(import.meta.dir, ".."), timeout: 180000 });
     const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
     expect(result.exitCode, output).toBe(0);
-    expect(output).toContain("46 pass");
+    expect(output).toContain("48 pass");
     expect(output).toContain("0 fail");
 }, 180000);

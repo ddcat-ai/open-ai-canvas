@@ -67,5 +67,5 @@ test("底部菜单使用画布浮层管理并响应打开、鼠标和键盘交�
     const toolbar = read("components/canvas/canvas-toolbar.tsx");
     expect(toolbar).toContain('useCanvasOverlayLayer("main-toolbar", "var(--z-toolbar)")');
     expect(toolbar).toContain("if (addOpen || appearanceOpen) bringToFront()");
-    expect(toolbar).toContain("style={{ zIndex }} onPointerDownCapture={bringToFront} onFocusCapture={bringToFront}");
+    expect(flat(toolbar)).toContain("style={{ zIndex }} onPointerDownCapture={bringToFront} onFocusCapture={bringToFront}");
 });

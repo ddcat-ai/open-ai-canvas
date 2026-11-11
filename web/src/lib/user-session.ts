@@ -268,7 +268,9 @@ export function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<
         const sizePresets = concreteSizeValues.length ? concreteSizeValues : sizeAllowsCustom ? [...STANDARD_IMAGE_SIZE_VALUES] : [];
         if (sizePresets.length || sizeAllowsCustom || spec.imageSize?.presets?.length) {
             const parameter = spec.imageSize?.parameter === "aspect_ratio" || spec.imageSize?.parameter === "size" ? spec.imageSize.parameter : "size";
-            projected.image.size = { parameter, values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom };
+            const sourceSize = String(spec.imageParameters?.find((field) => field.name === "size")?.default ?? "");
+            const defaultRatio = sourceSize.includes(":") ? sourceSize : spec.imageSize?.presets?.find((preset) => preset.size === sourceSize)?.ratio;
+            projected.image.size = { parameter, values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom, defaultTier: spec.imageSize?.defaultTier, defaultRatio };
             if (spec.imageSize?.presets?.length) projected.image.size = imageSizeConfigWithPresets(projected.image, spec.imageSize.presets);
         }
         applyStringOption(spec.options?.quality, defaults.quality, (values, initial) => {

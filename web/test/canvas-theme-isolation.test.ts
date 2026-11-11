@@ -10,6 +10,15 @@ afterEach(() => {
 });
 
 describe("canvas theme ownership", () => {
+    test("default workspace aliases share the white semantic background", async () => {
+        const css = await Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text();
+        expect(css.match(/--background:\s*(#[a-f0-9]+);/i)?.[1].toUpperCase()).toBe("#FFFFFF");
+        expect(css).toContain("--user-page-bg: var(--background)");
+        expect(css).not.toContain("--workspace-canvas: #f4f4f5");
+        expect(css).toContain("--background: #0f0f11");
+        expect(css).toContain("--user-page-bg: #151517");
+    });
+
     test("defaults to black while allowing an explicit light theme", () => {
         expect(useCanvasThemeStore.getInitialState().theme).toBe("dark");
         useCanvasThemeStore.getState().setTheme("light");
@@ -36,6 +45,6 @@ describe("canvas theme ownership", () => {
     });
     test("persistence source contract excludes transient route state", async () => {
         const source = await Bun.file(new URL("../src/stores/canvas/use-canvas-theme-store.ts", import.meta.url)).text();
-        expect(source).toContain('partialize: ({ theme }) => ({ theme })');
+        expect(source).toContain("partialize: ({ theme }) => ({ theme })");
     });
 });

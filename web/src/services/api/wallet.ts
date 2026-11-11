@@ -145,6 +145,9 @@ export type CreditCostPricing = {
 
 // 系统渠道模型的写入合同。标量价格只用于兼容旧管理请求；新的后台界面只提交 priceTiers。
 export type ChannelModelMutation = {
+    expectedUpdatedAt?: string;
+    expectedPriceVersion?: number;
+    protocolSelectionExplicit?: boolean;
     modelKey: string;
     providerModelKey?: string;
     displayName?: string;
@@ -389,8 +392,37 @@ export function setAdminChannelModelEnabled(channelId: string, id: string, enabl
 }
 
 // 管理员从上游读取模型目录；确认导入后才会写入渠道模型，价格和启用仍需人工确认。
+export type ChannelCatalogDiff = {
+    models: string[];
+    added: string[];
+    retained: string[];
+    missing: string[];
+    firstRead: boolean;
+    baselineReset: boolean;
+    readAt: string;
+    previousReadAt?: string;
+};
+
+export type ChannelCatalogStatus = { models: string[]; readAt?: string; stale: boolean };
+
+export function getAdminChannelCatalogStatus(channelId: string) {
+    return http.get<ChannelCatalogStatus>(`/admin/channels/${encodeURIComponent(channelId)}/catalog-status`);
+}
+
+export type ChannelProtocolSuggestion = {
+    protocol?: string;
+    source: "selection" | "history" | "conflict" | "none" | "invalid";
+    reason?: string;
+    candidates: string[];
+    selectedAt?: string;
+};
+
+export function getAdminChannelProtocolSuggestion(channelId: string, providerModelKey: string, capability: string) {
+    return http.get<ChannelProtocolSuggestion>(`/admin/channels/${encodeURIComponent(channelId)}/protocol-suggestion`, { params: { providerModelKey, capability } });
+}
+
 export function fetchAdminChannelModels(channelId: string) {
-    return http.post<{ models: string[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`);
+    return http.post<ChannelCatalogDiff>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`);
 }
 
 export function importAdminChannelModels(channelId: string, models: string[]) {
@@ -424,7 +456,22 @@ export function deleteAdminChannelModels(channelId: string, modelIds: string[]) 
 export type ChannelModelRepriceInput = {
     modelId: string;
     priceVersion: number;
-    priceTiers: { id: string; priceVersion: number; prices: Partial<Record<"unitPriceMicrocredits" | "inputTokenPriceMicrocredits" | "outputTokenPriceMicrocredits" | "cachedTokenPriceMicrocredits" | "cacheWriteTokenPriceMicrocredits", number>> }[];
+    priceTiers: {
+        id: string;
+        priceVersion: number;
+        prices: Partial<
+            Record<
+                | "unitPriceMicrocredits"
+                | "inputTokenPriceMicrocredits"
+                | "outputTokenPriceMicrocredits"
+                | "cachedTokenPriceMicrocredits"
+                | "cacheWriteTokenPriceMicrocredits"
+                | "referenceVideoUnitPriceMicrocredits"
+                | "referenceVideoOutputTokenPriceMicrocredits",
+                number
+            >
+        >;
+    }[];
 };
 
 export function repriceAdminChannelModels(channelId: string, models: ChannelModelRepriceInput[]) {
@@ -444,6 +491,51 @@ export function updateAdminAllChannelModelsProtocol(modelIds: string[], protocol
 /** 批量切换同一系统渠道内模型的调用协议；能力配置和价格档保留，任一模型不兼容时整批拒绝。 */
 export function updateAdminChannelModelsProtocol(channelId: string, modelIds: string[], protocol: string) {
     return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-protocol`, { modelIds, protocol });
+}
+
+export type ChannelModelProtocolGroup = { modelIds: string[]; protocol: string };
+
+export function updateAdminChannelModelsProtocolGroups(channelId: string, groups: ChannelModelProtocolGroup[]) {
+    return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-protocol`, { groups });
+}
+
+export function updateAdminAllChannelModelsProtocolGroups(groups: ChannelModelProtocolGroup[]) {
+    return http.post<{ updated: number }>("/admin/channel-models/batch-protocol", { groups });
+}
+
+export type BatchChannelModelChanges = {
+    /** 仅初始化未设置类型的模型；已有类型不能跨类型修改。 */
+    capability?: Exclude<ChannelModel["capability"], "">;
+    protocol?: string;
+    displayName?: string;
+    description?: string;
+    enabled?: boolean;
+    /** 价格档的“可供用户使用”开关，应用于全部价格档，与模型启用独立。 */
+    pricingEnabled?: boolean;
+    capabilityTemplate?: {
+        capabilityConfig: NonNullable<ChannelModel["capabilityConfig"]>;
+    };
+    pricingTemplate?: {
+        priceCurrency: NonNullable<ChannelModel["priceCurrency"]>;
+        referenceVideoBilling: boolean;
+        priceTiers: NonNullable<ChannelModelMutation["priceTiers"]>;
+    };
+};
+
+export type BatchChannelModelUpdate = {
+    modelId: string;
+    priceVersion: number;
+    capabilityVersion: number;
+    updatedAt: string;
+    changes: BatchChannelModelChanges;
+};
+
+export function updateAdminChannelModels(channelId: string, models: BatchChannelModelUpdate[]) {
+    return http.post<{ updated: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/batch-update`, { models });
+}
+
+export function updateAdminAllChannelModels(models: BatchChannelModelUpdate[]) {
+    return http.post<{ updated: number }>("/admin/channel-models/batch-update", { models });
 }
 
 export type AdminFinanceListParams = { keyword?: string; status?: string; validity?: string; page?: number; pageSize?: number };

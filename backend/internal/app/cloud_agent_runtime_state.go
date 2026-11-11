@@ -152,7 +152,7 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	if len(state.SkillVersions) > cloudAgentSkillPoolMax+cloudAgentSkillPinnedMax {
 		return errors.New("Agent runtime skill pool is invalid")
 	}
-	if utf8.RuneCountInString(state.Memory.Text) > agentMemorySnapshotMaxRunes || utf8.RuneCountInString(state.SkillHints) > agentMemorySnapshotMaxRunes {
+	if utf8.RuneCountInString(state.Memory.Text) > agentMemorySnapshotMaxRunes || utf8.RuneCountInString(state.Memory.WorkText) > agentMemoryWorkSnapshotMaxRunes || utf8.RuneCountInString(state.SkillHints) > agentMemorySnapshotMaxRunes {
 		return errors.New("Agent runtime context snapshot is invalid")
 	}
 	switch state.Memory.Mode {

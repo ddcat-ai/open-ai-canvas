@@ -7,11 +7,12 @@ import (
 )
 
 type ModelChannel struct {
-	ID      string       `json:"id" gorm:"primaryKey;size:36"`
-	UserID  string       `json:"userId" gorm:"index;size:36"`
-	Scope   ChannelScope `json:"scope" gorm:"index;size:24"`
-	Enabled bool         `json:"enabled" gorm:"index"`
-	Name    string       `json:"name" gorm:"size:80"`
+	WebsiteID string       `json:"websiteId,omitempty" gorm:"size:36;index;not null;default:''"`
+	ID        string       `json:"id" gorm:"primaryKey;size:36"`
+	UserID    string       `json:"userId" gorm:"index;size:36"`
+	Scope     ChannelScope `json:"scope" gorm:"index;size:24"`
+	Enabled   bool         `json:"enabled" gorm:"index"`
+	Name      string       `json:"name" gorm:"size:80"`
 	// PublicAlias 仅保留历史列供旧迁移读取，运行时不再使用渠道级前台名称。
 	PublicAlias      string `json:"-" gorm:"size:80;not null;default:''"`
 	SortOrder        int    `json:"sortOrder" gorm:"not null;default:0"`
@@ -155,26 +156,28 @@ type ApiCallLog struct {
 	OutputTokens           int64         `json:"outputTokens"`
 	CachedTokens           int64         `json:"cachedTokens"`
 	// CacheWriteTokens 是本次写入提示词缓存的输入 Token，已计入 InputTokens。
-	CacheWriteTokens    int64     `json:"cacheWriteTokens" gorm:"not null;default:0"`
-	UsageAvailable      bool      `json:"usageAvailable"`
-	MediaCount          int       `json:"mediaCount"`
-	MediaPreviewURL     string    `json:"mediaPreviewUrl,omitempty" gorm:"-"`
-	MediaPreviewKind    string    `json:"mediaPreviewKind,omitempty" gorm:"-"`
-	VideoSeconds        int       `json:"videoSeconds"`
-	ProviderRequestID   string    `json:"providerRequestId" gorm:"size:160"`
-	EstimatedCostMicros int64     `json:"estimatedCostMicros"`
-	CostAvailable       bool      `json:"costAvailable"`
-	Currency            string    `json:"currency" gorm:"size:12"`
-	ErrorCode           string    `json:"errorCode,omitempty" gorm:"index;size:80"`
-	Error               string    `json:"error"`
-	ConcurrencyLimit    int       `json:"concurrencyLimit"`
-	UpstreamURL         string    `json:"upstreamUrl"`
-	RequestContentType  string    `json:"requestContentType,omitempty" gorm:"size:160"`
-	RequestBody         string    `json:"requestBody,omitempty" gorm:"type:text"`
-	ResponseBody        string    `json:"responseBody,omitempty" gorm:"type:text"`
-	StartedAt           time.Time `json:"startedAt"`
-	CreatedAt           time.Time `json:"createdAt" gorm:"index;index:idx_api_logs_user_created,priority:2;index:idx_api_logs_channel_created,priority:2;index:idx_api_logs_model_created,priority:2;index:idx_api_logs_status_created,priority:2;index:idx_api_logs_kind_status_created,priority:3"`
-	CreatedAtEpoch      int64     `json:"-" gorm:"index:idx_api_logs_created_epoch"`
+	CacheWriteTokens      int64                     `json:"cacheWriteTokens" gorm:"not null;default:0"`
+	UsageAvailable        bool                      `json:"usageAvailable"`
+	MediaCount            int                       `json:"mediaCount"`
+	MediaPreviewURL       string                    `json:"mediaPreviewUrl,omitempty" gorm:"-"`
+	MediaPreviewKind      string                    `json:"mediaPreviewKind,omitempty" gorm:"-"`
+	VideoSeconds          int                       `json:"videoSeconds"`
+	ProviderRequestID     string                    `json:"providerRequestId" gorm:"size:160"`
+	EstimatedCostMicros   int64                     `json:"estimatedCostMicros"`
+	CostAvailable         bool                      `json:"costAvailable"`
+	Currency              string                    `json:"currency" gorm:"size:12"`
+	ErrorCode             string                    `json:"errorCode,omitempty" gorm:"index;size:80"`
+	Error                 string                    `json:"error"`
+	ConcurrencyLimit      int                       `json:"concurrencyLimit"`
+	UpstreamURL           string                    `json:"upstreamUrl"`
+	RequestContentType    string                    `json:"requestContentType,omitempty" gorm:"size:160"`
+	RequestBody           string                    `json:"requestBody,omitempty" gorm:"type:text"`
+	ResponseBody          string                    `json:"responseBody,omitempty" gorm:"type:text"`
+	GenerationContentJSON string                    `json:"-" gorm:"type:text"`
+	GenerationContent     *APICallGenerationContent `json:"generationContent,omitempty" gorm:"-"`
+	StartedAt             time.Time                 `json:"startedAt"`
+	CreatedAt             time.Time                 `json:"createdAt" gorm:"index;index:idx_api_logs_user_created,priority:2;index:idx_api_logs_channel_created,priority:2;index:idx_api_logs_model_created,priority:2;index:idx_api_logs_status_created,priority:2;index:idx_api_logs_kind_status_created,priority:3"`
+	CreatedAtEpoch        int64                     `json:"-" gorm:"index:idx_api_logs_created_epoch"`
 }
 
 func (a *ApiCallLog) BeforeCreate(tx *gorm.DB) error {

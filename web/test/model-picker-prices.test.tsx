@@ -49,6 +49,71 @@ test("candidate rows show their configured prices instead of applying the previo
     }
 });
 
+test("video Token badges use compact units while retaining exact rates and full pricing descriptions", () => {
+    for (const [rates, expected] of [
+        [[0], "0 /M Token"],
+        [[1], "0.000001 /M Token"],
+        [[21_980_000], "21.98 /M Token"],
+        [[24_750_000, 48_510_000], "24.75-48.51 /M Token"],
+    ] as const) {
+        const config = fixture();
+        const cost = config.channels[0].modelCosts![0];
+        cost.billingMode = "token";
+        cost.referenceVideoBilling = true;
+        cost.capabilityConfig = defaultModelCapabilityConfig();
+        cost.capabilityConfig.video!.references.maxVideos = 3;
+        cost.logicalPriceTiers = rates.map((rate) => ({
+            selector: {},
+            resolution: "*",
+            videoSeconds: 0,
+            billingMode: "token",
+            unitPriceMicrocredits: 0,
+            inputTokenPriceMicrocredits: 0,
+            outputTokenPriceMicrocredits: rate,
+            cachedTokenPriceMicrocredits: 0,
+            referenceVideoOutputTokenPriceMicrocredits: 50_000_000,
+        }));
+        for (const theme of [canvasThemes.light, canvasThemes.dark]) {
+            const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={theme} creationVariant showConfiguredModelName={false} showPrice showDescription />);
+            const visibleText = markup.replace(/<[^>]*>/g, "");
+            expect(visibleText).toContain(expected);
+            expect(visibleText).not.toContain("百万视频 Token");
+            expect(visibleText).not.toContain("参考视频另计费");
+            expect(visibleText).not.toContain("参考视频不计费");
+            expect(markup).toContain('title="系统规格价格：');
+            expect(markup).toContain("积分/百万视频 Token");
+            expect(markup).toContain("优先按有效上游用量结算");
+        }
+    }
+});
+
+test("model rows omit reference video billing labels for paid and free references", () => {
+    for (const billed of [true, false]) {
+        const config = fixture();
+        const cost = config.channels[0].modelCosts![0];
+        cost.referenceVideoBilling = billed;
+        cost.capabilityConfig = defaultModelCapabilityConfig();
+        cost.capabilityConfig.video!.references.maxVideos = 3;
+        for (const tier of cost.logicalPriceTiers!) tier.referenceVideoUnitPriceMicrocredits = billed ? 2_000_000 : 0;
+        const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={canvasThemes.light} creationVariant showConfiguredModelName={false} showPrice showDescription />);
+        expect(markup).not.toContain("参考视频另计费");
+        expect(markup).not.toContain("参考视频不计费");
+        expect(markup).toContain("0.1-0.2 积分/秒");
+        expect(markup).toContain("视×3");
+    }
+});
+
+test("unified video Token pricing uses the same compact label and full unit explanation", () => {
+    const config = fixture();
+    const cost = config.channels[0].modelCosts![0];
+    cost.pricePolicy = "unified";
+    cost.billingMode = "token";
+    cost.outputTokenPriceMicrocredits = 35_240_000;
+    const markup = renderToStaticMarkup(<ModelLabel config={config} model={config.model} capability="video" theme={canvasThemes.dark} creationVariant showConfiguredModelName={false} showPrice showDescription />);
+    expect(markup.replace(/<[^>]*>/g, "")).toContain("35.24 /M Token");
+    expect(markup).toContain('title="35.24 积分/百万视频 Token；');
+});
+
 test("candidate rows do not disguise missing prices as zero", () => {
     const config = fixture();
     config.channels[0].modelCosts![0].logicalPriceTiers = [];

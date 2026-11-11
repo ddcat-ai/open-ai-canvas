@@ -19,7 +19,7 @@ import (
 
 const (
 	SchemaVersion        = 1
-	MaxRecommendedModels = 5
+	MaxRecommendedModels = 100
 	MaxProviders         = 200
 	MaxCatalogBytes      = 2 << 20
 	// 1 元 = 1 积分；积分以 microcredits 存储。
@@ -208,7 +208,7 @@ func normalizeProvider(p Provider, knownTags map[string]bool, logoBase string) (
 	seenModels := map[string]bool{}
 	for _, item := range p.Models {
 		if len(models) >= MaxRecommendedModels {
-			warnings = append(warnings, p.ID+"：推荐模型超过 5 个，其余已忽略")
+			warnings = append(warnings, fmt.Sprintf("%s：推荐模型超过 %d 个，其余已忽略", p.ID, MaxRecommendedModels))
 			break
 		}
 		normalized, modelErr := normalizeModel(item)

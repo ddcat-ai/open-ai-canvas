@@ -1,11 +1,11 @@
 import { Button } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import { Mic } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { VoiceRecordingInline } from "./voice-recording-inline";
+const VoiceRecordingInline = lazy(() => import("./voice-recording-inline").then((module) => ({ default: module.VoiceRecordingInline })));
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 
@@ -24,6 +24,9 @@ type VoiceRecordingButtonProps = {
 export function VoiceRecordingButton({ onTranscribed, disabled, className }: VoiceRecordingButtonProps) {
     const theme = canvasThemes[useActiveTheme()];
     const [open, setOpen] = useState(false);
+    useEffect(() => {
+        if (disabled) setOpen(false);
+    }, [disabled]);
 
     return (
         <>
@@ -39,14 +42,16 @@ export function VoiceRecordingButton({ onTranscribed, disabled, className }: Voi
                     aria-label="实时对话"
                 />
             </Tooltip>
-            {open ? (
-                <VoiceRecordingInline
-                    onTranscribed={(text) => {
-                        setOpen(false);
-                        onTranscribed(text);
-                    }}
-                    onCancel={() => setOpen(false)}
-                />
+            {open && !disabled ? (
+                <Suspense fallback={<span role="status">正在打开语音输入…</span>}>
+                    <VoiceRecordingInline
+                        onTranscribed={(text) => {
+                            setOpen(false);
+                            onTranscribed(text);
+                        }}
+                        onCancel={() => setOpen(false)}
+                    />
+                </Suspense>
             ) : null}
         </>
     );

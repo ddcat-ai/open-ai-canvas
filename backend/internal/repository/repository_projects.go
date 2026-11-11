@@ -73,8 +73,23 @@ func (r *Repository) DeleteProject(userID string, id string, canvasUpdates []mod
 		var canvasIDs []string
 		if err := tx.Model(&model.CanvasProject{}).
 			Where("user_id = ? AND project_id = ?", userID, id).
+			Order("id").
 			Pluck("id", &canvasIDs).Error; err != nil {
 			return err
+		}
+		// Serialize unlinking with Agent admission before checking activity.
+		// Pi carriers are text_replay tasks, so the task-status count is insufficient.
+		for _, canvasID := range canvasIDs {
+			if err := New(tx).LockCanvasMutation(userID, canvasID); err != nil {
+				return err
+			}
+			activity, err := New(tx).CanvasAgentActivity(userID, canvasID)
+			if err != nil {
+				return err
+			}
+			if activity != nil {
+				return &CanvasAgentBusyError{Activity: *activity}
+			}
 		}
 		projectScopeIDs := append([]string{id}, canvasIDs...)
 		var activeTaskCount int64

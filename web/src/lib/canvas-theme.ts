@@ -10,7 +10,7 @@ export const canvasThemes = {
             beam: "#404040",
         },
         canvas: {
-            background: "#f0f0f0",
+            background: "#FFFFFF",
             dot: "rgba(0,0,0,.80)",
             line: "rgba(0,0,0,.80)",
             selectionFill: "rgba(17,17,17,.10)",

@@ -186,6 +186,7 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "Figurenvertonung kann jeweils nur eine Figurenkarte referenzieren",
         voiceNotBound: "Dieser Figur ist keine Stimme zugeordnet, es kann keine Vertonungsaufgabe erstellt werden",
         submissionInProgress: "Für diesen Knoten wird bereits eine Generierungsanfrage gesendet oder ausgeführt. Bitte nicht erneut klicken",
+        videoRequiresReferenceImages: "Dieses Videomodell benötigt mindestens {{count}} Referenzbild(er). Verbinden Sie einen Bildknoten, bevor Sie generieren",
     },
     timelineInsert: {
         unsupportedMedia: "Bild- und Text-Assets können noch nicht direkt in die Timeline. Fügen Sie sie zuerst in die Arbeitsfläche ein",

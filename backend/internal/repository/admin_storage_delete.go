@@ -52,6 +52,13 @@ func (r *Repository) DeleteAdminResources(resources []model.Resource, deletionJo
 		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
 			return err
 		}
+		logReferences, err := New(tx).APICallLogResourceReferences("", resourceIDs)
+		if err != nil {
+			return err
+		}
+		if len(logReferences) > 0 {
+			return ErrAdminResourceStillReferenced
+		}
 		var current []model.Resource
 		query := tx.Where("id IN ?", resourceIDs)
 		if r.Dialect() == "postgres" {

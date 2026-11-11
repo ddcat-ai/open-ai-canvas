@@ -14,7 +14,7 @@
  * 只读取 Git 状态，不修改工作区、暂存区或分支；工作区有未提交改动时，格式检查用临时提交对象覆盖它们。
  */
 import { spawn, spawnSync } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { cpus, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WEB = path.join(ROOT, "web");
 const BACKEND = path.join(ROOT, "backend");
+const PI_RUNTIME = path.join(BACKEND, "agent-runtime", "pi");
 const LOG_DIR = path.join(ROOT, ".local", "cache", "verify");
 const TASK_TIMEOUT_MS = 25 * 60 * 1000;
 
@@ -129,6 +130,7 @@ if (wantBackend) {
         console.error("✗ 有后端改动，但本机没有可用的 go；请安装 backend/go.mod 要求的 Go 版本。");
         process.exit(1);
     }
+    tasks.push({ name: "backend:pi-runtime", cwd: PI_RUNTIME, cmd: "node", args: ["--test", ...readdirSync(PI_RUNTIME).filter((file) => file.endsWith(".test.mjs")).sort()], weight: 50 });
     tasks.push({
         name: "backend:gofmt",
         cwd: BACKEND,

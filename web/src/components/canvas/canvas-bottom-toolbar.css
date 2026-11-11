@@ -1,0 +1,74 @@
+/* Only the two bottom canvas bars use this solid, compact material. */
+.canvas-bottom-dock {
+    --dock-surface: var(--canvas-bottom-surface);
+    --dock-border: var(--canvas-bottom-border);
+    --dock-shadow: var(--elevation-card);
+    --dock-item-radius: var(--button-radius);
+    gap: var(--space-1);
+    min-width: 0;
+    max-width: 100%;
+    padding: var(--space-1);
+    border: 1px solid var(--dock-border);
+    border-radius: var(--r-lg);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    animation: none;
+}
+
+.canvas-main-toolbar {
+    --canvas-dock-popover-offset: calc(var(--button-height) + var(--space-4));
+}
+
+.canvas-main-toolbar > .canvas-bottom-dock {
+    max-width: min(100%, var(--canvas-main-toolbar-max-width, 100%));
+}
+
+.canvas-bottom-dock .aceternity-dock-switch {
+    gap: var(--space-1);
+    padding: 0;
+    background: transparent;
+}
+
+.canvas-bottom-dock .aceternity-dock-switch-option {
+    width: var(--dock-item-size);
+    height: var(--dock-item-size);
+    opacity: 1;
+}
+
+.canvas-bottom-dock .aceternity-dock-switch-thumb {
+    background: var(--dock-command-active);
+    box-shadow: none;
+}
+
+.canvas-bottom-dock .aceternity-dock-switch-option:hover:not([aria-checked="true"]) {
+    background: var(--dock-command-hover);
+}
+
+.canvas-bottom-dock .aceternity-dock-separator {
+    height: var(--space-4);
+    margin-inline: var(--space-1);
+    background: var(--dock-border);
+}
+
+.canvas-bottom-dock .aceternity-dock-danger-group {
+    gap: var(--space-1);
+}
+
+.canvas-bottom-dock :is(.aceternity-dock-command, .aceternity-dock-switch-option):focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.canvas-bottom-dock .aceternity-dock-command:disabled {
+    opacity: var(--button-disabled-opacity);
+}
+
+@media (pointer: coarse) {
+    .canvas-main-toolbar {
+        --canvas-dock-popover-offset: calc(var(--button-height-lg) + var(--space-4));
+    }
+}

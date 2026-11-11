@@ -1,4 +1,17 @@
 /* 生成完成通知：成功圆圈弹入、对勾描绘、外圈扩散一次；缩略图稍后浮现。只消费状态色与动效 token。 */
+
+/*
+ * 通知壳不拦截指针：antd 关闭动画偶发不结束（opacity 已为 0 但节点长时间残留 DOM），
+ * 壳层若保持可命中会挡住下方「新建画布」等控件。壳层放行后，按钮自身恢复可交互。
+ */
+.generation-success-notice {
+    pointer-events: none;
+}
+
+.generation-success-notice :is(button, a) {
+    pointer-events: auto;
+}
+
 .generation-success-mark {
     position: relative;
     display: inline-grid;

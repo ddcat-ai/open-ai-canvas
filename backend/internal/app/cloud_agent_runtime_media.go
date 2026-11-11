@@ -757,7 +757,6 @@ func (s *Service) CancelCloudAgent(ctx context.Context, userID, id string) error
 	if task.Operation != cloudAgentOperation {
 		return kernel.NotFound("Agent 运行不存在")
 	}
-	s.stopCloudAgentPi(id)
 	run, err := s.repo.CloudAgent(userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Legacy root tasks may not have an execution row yet. The normal read
@@ -827,6 +826,9 @@ func (s *Service) CancelCloudAgent(ctx context.Context, userID, id string) error
 	if errors.Is(err, repository.ErrCreationConflict) {
 		return err
 	}
+	// Publish cancellation before interrupting the process. A dying runner must
+	// observe the durable terminal state rather than mark this user stop failed.
+	s.stopCloudAgentPi(id)
 	latest, err := s.repo.CloudAgent(userID, id)
 	if err != nil {
 		return err

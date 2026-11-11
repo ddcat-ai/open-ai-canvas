@@ -312,17 +312,22 @@ func itoa(value int) string {
 	return string(encoded)
 }
 
+// 不存在与不属于当前用户使用同一响应，避免把仓库错误暴露为 500 或泄露对象归属。
+func dramaLookupError(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return NewAppError(http.StatusNotFound, "短剧作品或素材不存在")
+	}
+	return err
+}
+
 func (s *Service) dramaForUser(userID string, projectID string) (*model.Project, *model.DramaProduction, error) {
 	project, err := s.repo.ProjectForUser(userID, strings.TrimSpace(projectID))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, dramaLookupError(err)
 	}
 	productionRow, err := s.repo.DramaProduction(project.ID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, NewAppError(http.StatusNotFound, "该项目不是自动制作短剧")
-		}
-		return nil, nil, err
+		return nil, nil, dramaLookupError(err)
 	}
 	return project, productionRow, nil
 }

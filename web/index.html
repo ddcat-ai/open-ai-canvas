@@ -22,6 +22,12 @@
             html.dark body {
                 background: #0f0f11;
             }
+            #boot-recovery {
+                color: #171717;
+            }
+            html.dark #boot-recovery {
+                color: #f5f5f5;
+            }
             #root:empty {
                 min-height: 100vh;
             }
@@ -86,6 +92,38 @@
         <script>
             // 放在 #root 之后：外链样式加载完、首帧绘制前才执行，启动信号从这一刻对齐 performance.now()。
             document.getElementById("root").style.setProperty("--boot-signal-clock", performance.now() + "ms");
+            // 入口或其依赖失败时 React 尚未挂载，路由错误页无法接管；提供不依赖外链资源的退出入口。
+            var bootRoot = document.getElementById("root");
+            var bootTimer = setTimeout(function () {
+                if (bootRoot.childNodes.length) return;
+                var notice = document.createElement("section");
+                notice.id = "boot-recovery";
+                notice.setAttribute("role", "alert");
+                notice.style.cssText = "position:fixed;inset:0;display:grid;align-content:center;justify-items:center;gap:16px;padding:24px;background:inherit;font:16px/1.6 sans-serif;text-align:center";
+                var title = document.createElement("strong");
+                title.textContent = "页面资源加载时间过长";
+                var detail = document.createElement("p");
+                detail.textContent = "部分启动资源未能加载，请重试。此操作不会清除浏览器中的画布缓存。";
+                var retry = document.createElement("button");
+                retry.type = "button";
+                retry.textContent = "重新加载";
+                retry.style.cssText = "padding:10px 24px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer";
+                retry.onclick = function () {
+                    var url = new URL(location.href);
+                    url.searchParams.set("__chunk_recovery", String(Date.now()));
+                    location.replace(url.toString());
+                };
+                notice.append(title, detail, retry);
+                document.body.appendChild(notice);
+            }, 20000);
+            var bootObserver = new MutationObserver(function () {
+                if (!bootRoot.childNodes.length) return;
+                clearTimeout(bootTimer);
+                bootObserver.disconnect();
+                var notice = document.getElementById("boot-recovery");
+                if (notice) notice.remove();
+            });
+            bootObserver.observe(bootRoot, { childList: true });
         </script>
         <script type="module" src="/src/main.tsx"></script>
     </body>

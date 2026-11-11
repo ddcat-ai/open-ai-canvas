@@ -103,6 +103,147 @@ func TestDramaScriptDoesNotCreateDuplicateBaseLook(t *testing.T) {
 	}
 }
 
+// 造型在本体失败或删除时落为终态并只留一条失败作业；重试本体时联动失败造型。
+func TestDramaLookFailsOnceWithBaseAndRequeuesOnBaseRetry(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaManual, Concurrency: 16, Models: fakeDramaModels, EpisodeMode: DramaEpisodeModeChapter, ChaptersPerEpisode: 1}
+	settings.EpisodeSeconds = 60
+	settings.Storyboard.SegmentMode, settings.Storyboard.SegmentSeconds = production.SegmentFixed, 5
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "造型等本体", Start: true, Settings: settings, Chapters: []DramaChapterInput{{Title: "第一章", Text: "萧炎……"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := summary.Project.ID
+	runDramaTicks(t, svc, project, 20)
+	casts, err := svc.repo.DramaCasts(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var base *model.DramaCast
+	for i := range casts {
+		if casts[i].Kind == "character" && casts[i].ParentID == "" {
+			base = &casts[i]
+			break
+		}
+	}
+	if base == nil {
+		t.Fatalf("no base character: %+v", casts)
+	}
+	result, err := svc.AddDramaCastLook("usr-drama", project, base.ID, DramaCastLookRequest{LookName: "内门弟子", Appearance: "青色劲装"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookValue := result["look"].(model.DramaCast)
+	look := &lookValue
+	if _, err := svc.ReleaseDramaMedia("usr-drama", project, ReleaseDramaMediaRequest{Target: "assets"}); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 10)
+	base, _ = svc.repo.DramaCast(project, base.ID)
+	if base.ImageStatus != model.DramaMediaReady {
+		t.Fatalf("base assets should be generated first: base=%s", base.ImageStatus)
+	}
+	// 造型保存后是 draft，需要用户单独请求生成。
+	if _, err := svc.RegenerateDramaCast("usr-drama", project, look.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 8)
+	base, _ = svc.repo.DramaCast(project, base.ID)
+	look, _ = svc.repo.DramaCast(project, look.ID)
+	if base.ImageStatus != model.DramaMediaReady || look.ImageStatus != model.DramaMediaReady {
+		t.Fatalf("assets should be generated first: base=%s look=%s", base.ImageStatus, look.ImageStatus)
+	}
+
+	castJobs := func(status string) int64 {
+		var count int64
+		if err := fake.db.Model(&model.DramaJob{}).Where("project_id = ? AND cast_id = ? AND kind = ? AND status = ?", project, look.ID, model.DramaJobCastImage, status).Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		return count
+	}
+	// 模拟线上：本体参考图失败，造型状态为空（既不是 ready 也不是 failed）。
+	if err := fake.db.Model(&model.DramaCast{}).Where("id = ?", base.ID).Updates(map[string]any{"image_status": model.DramaMediaFailed, "image_resource_id": ""}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := fake.db.Model(&model.DramaCast{}).Where("id = ?", look.ID).Updates(map[string]any{"image_status": "", "image_resource_id": ""}).Error; err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 1)
+	look, _ = svc.repo.DramaCast(project, look.ID)
+	if look.ImageStatus != model.DramaMediaFailed {
+		t.Fatalf("look must fail with its base, got %q", look.ImageStatus)
+	}
+	if got := castJobs(model.DramaJobFailed); got != 1 {
+		t.Fatalf("failed base must leave exactly one failed look job, got %d", got)
+	}
+	var failedJob model.DramaJob
+	if err := fake.db.Where("project_id = ? AND cast_id = ? AND kind = ? AND status = ?", project, look.ID, model.DramaJobCastImage, model.DramaJobFailed).First(&failedJob).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(failedJob.Error, "角色本体参考图生成失败") {
+		t.Fatalf("failed job must explain the base failure: %q", failedJob.Error)
+	}
+	// 连续多轮巡检不能再落新作业（旧代码在这里无限重复入队）。
+	runDramaTicks(t, svc, project, 5)
+	if got := castJobs(model.DramaJobFailed); got != 1 {
+		t.Fatalf("repeated ticks must not add failed jobs, got %d", got)
+	}
+
+	// 本体生成中时造型不排队。
+	if err := fake.db.Model(&model.DramaCast{}).Where("id = ?", base.ID).Updates(map[string]any{"image_status": model.DramaMediaRunning}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := fake.db.Model(&model.DramaCast{}).Where("id = ?", look.ID).Updates(map[string]any{"image_status": model.DramaMediaQueued}).Error; err != nil {
+		t.Fatal(err)
+	}
+	before := castJobs(model.DramaJobQueued) + castJobs(model.DramaJobRunning) + castJobs(model.DramaJobFailed) + castJobs(model.DramaJobCanceled)
+	runDramaTicks(t, svc, project, 3)
+	after := castJobs(model.DramaJobQueued) + castJobs(model.DramaJobRunning) + castJobs(model.DramaJobFailed) + castJobs(model.DramaJobCanceled)
+	if after != before {
+		t.Fatalf("look must wait while its base is running: jobs %d -> %d", before, after)
+	}
+
+	// 重试本体：本体与失败的造型一起回到 queued，本体就绪后造型再出图。
+	if _, err := svc.RegenerateDramaCast("usr-drama", project, base.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	base, _ = svc.repo.DramaCast(project, base.ID)
+	look, _ = svc.repo.DramaCast(project, look.ID)
+	if base.ImageStatus != model.DramaMediaQueued || look.ImageStatus != model.DramaMediaQueued {
+		t.Fatalf("base retry must requeue its failed looks: base=%s look=%s", base.ImageStatus, look.ImageStatus)
+	}
+	runDramaTicks(t, svc, project, 8)
+	base, _ = svc.repo.DramaCast(project, base.ID)
+	look, _ = svc.repo.DramaCast(project, look.ID)
+	if base.ImageStatus != model.DramaMediaReady || look.ImageStatus != model.DramaMediaReady {
+		t.Fatalf("look must generate after the base is ready: base=%s look=%s", base.ImageStatus, look.ImageStatus)
+	}
+
+	// 本体被删除时造型同样落失败，不再空转。
+	if err := fake.db.Delete(&model.DramaCast{}, "id = ?", base.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := fake.db.Model(&model.DramaCast{}).Where("id = ?", look.ID).Updates(map[string]any{"image_status": "", "image_resource_id": ""}).Error; err != nil {
+		t.Fatal(err)
+	}
+	beforeDelete := castJobs(model.DramaJobFailed)
+	runDramaTicks(t, svc, project, 1)
+	look, _ = svc.repo.DramaCast(project, look.ID)
+	if look.ImageStatus != model.DramaMediaFailed {
+		t.Fatalf("look must fail when its base is gone, got %q", look.ImageStatus)
+	}
+	if got := castJobs(model.DramaJobFailed); got != beforeDelete+1 {
+		t.Fatalf("deleted base must leave one failed look job, jobs %d -> %d", beforeDelete, got)
+	}
+	var deletedJob model.DramaJob
+	if err := fake.db.Where("project_id = ? AND cast_id = ? AND kind = ? AND status = ?", project, look.ID, model.DramaJobCastImage, model.DramaJobFailed).Order("created_at desc").First(&deletedJob).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(deletedJob.Error, "已被删除") {
+		t.Fatalf("deleted base failure must explain itself: %q", deletedJob.Error)
+	}
+}
+
 // 角色造型的增删改走服务层：造型是角色子行，删除后镜头回退角色本体。
 func TestDramaCastLookLifecycle(t *testing.T) {
 	svc, fake := newDramaTestService(t)

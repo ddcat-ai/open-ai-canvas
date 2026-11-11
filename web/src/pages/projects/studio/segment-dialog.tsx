@@ -8,7 +8,8 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { TRANSITION_LABEL } from "@/lib/drama/storyboard";
 import type { DramaCast, DramaEpisodeDetail, DramaModelChoice, DramaSegment, DramaSegmentReferencePatch, DramaShot, DramaShotPatch, DramaTake, DramaTransition } from "@/services/api/drama";
 import { ReferenceBoard } from "./segment-references";
-import { dramaChoiceKey } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaVideoResolutionValue } from "@/lib/drama/model-choice";
+import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 
 import { DramaModelPicker, useDramaModelCatalog } from "../drama-model-picker";
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -286,6 +287,10 @@ function SegmentToolbar({
     const catalogQuery = useDramaModelCatalog();
     const chosenOption = dramaVideoOptionFor(catalogQuery.data?.options.video, choice);
     const chosenAudioLimit = changed ? chosenOption?.maxAudios : segment.request.modelMaxAudios;
+    // 本段实际出片分辨率：没换模型用服务端预演结果；换了模型且新模型给不出作品分辨率时，按模型默认。
+    const supportedResolution = dramaVideoResolutionValue(chosenOption, videoResolution);
+    const effectiveResolution = changed ? supportedResolution || chosenOption?.defaultVideoResolution || "" : segment.request.resolution || supportedResolution || chosenOption?.defaultVideoResolution || "";
+    const resolutionFallback = Boolean(changed && videoResolution && chosenOption && !supportedResolution);
     const requirements = dramaSegmentVideoRequirements(segment.request, chosenOption, changed, videoResolution);
     const quoteMissing = creditsEnabled && dramaSegmentQuoteMissing(config, choice, requirements);
     const running = mediaBusy(segment.videoStatus);
@@ -303,12 +308,15 @@ function SegmentToolbar({
     return (
         <section className="drama-sdx-toolbar" aria-label="生成设置">
             <div className="drama-sdx-toolbar-row">
-                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" aspectRatio={aspectRatio} videoResolution={videoResolution} requirements={requirements} />
+                <DramaModelPicker capability="video" size="sm" value={choice} onChange={setChoice} placeholder="视频模型" className="drama-sdx-model" aspectRatio={aspectRatio} requirements={requirements} />
                 <Tooltip title={segment.request.maxVideoSeconds ? `按本段镜头时长生成；模型单次最长 ${segment.request.maxVideoSeconds} 秒` : "按本段镜头时长生成"}>
                     <span className="drama-sdx-chip">{segment.request.seconds ? `${segment.request.seconds}s` : secondsLabel(segment.durationMs)}</span>
                 </Tooltip>
                 <Tooltip title="画幅随作品设置，开工后不能修改">
                     <span className="drama-sdx-chip">{aspectRatio}</span>
+                </Tooltip>
+                <Tooltip title="本段实际出片分辨率">
+                    <span className="drama-sdx-chip">{effectiveResolution ? formatVideoResolutionLabel(effectiveResolution) : "模型默认"}</span>
                 </Tooltip>
                 {changed ? <span className="drama-sdx-chip is-accent">本段换模型</span> : null}
             </div>
@@ -342,6 +350,11 @@ function SegmentToolbar({
             </div>
             {!promptReady(segment) && !running ? <p className="drama-sdx-hint">提示词就绪后才能生成视频</p> : null}
             {changed && chosenAudioLimit !== undefined ? <p className="drama-sdx-hint">所选模型{chosenAudioLimit ? `最多支持 ${chosenAudioLimit} 个参考音色` : "不支持参考音色"}；参考面板的发送状态在模型应用后更新。</p> : null}
+            {resolutionFallback ? (
+                <p className="drama-sdx-hint">
+                    新模型不支持 {videoResolution ? formatVideoResolutionLabel(videoResolution) : ""}，本段按模型默认{chosenOption?.defaultVideoResolution ? ` ${formatVideoResolutionLabel(chosenOption.defaultVideoResolution)}` : ""}出片。
+                </p>
+            ) : null}
             {quoteMissing && !running ? <p className="drama-sdx-hint is-error">{SEGMENT_NO_QUOTE_HINT}</p> : null}
             {segment.request.unknownReferences?.length ? <p className="drama-sdx-hint is-error">提示词里的 {segment.request.unknownReferences.join("、")} 不是本段的参考图，改正编号后才能生成视频</p> : null}
         </section>

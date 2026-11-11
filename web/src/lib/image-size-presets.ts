@@ -89,7 +89,12 @@ export function imageResolutionUsesQuality(profile: ImageCapabilityConfig) {
 }
 
 export function imageTierAvailable(profile: ImageCapabilityConfig, tier: ImageResolutionTier) {
-    if (profile.parameters) return profile.resolution.supported ? profile.resolution.values.includes(tier) : (profile.size.parameter === "size" && profile.size.allowCustom) || Boolean(profile.size.presets?.some((preset) => preset.tier === tier));
+    // 声明值可能是大写的 1K/2K/4K，档位比较忽略大小写。
+    const normalizedTier = tier.trim().toLowerCase();
+    if (profile.parameters)
+        return profile.resolution.supported
+            ? profile.resolution.values.some((value) => value.trim().toLowerCase() === normalizedTier)
+            : (profile.size.parameter === "size" && profile.size.allowCustom) || Boolean(profile.size.presets?.some((preset) => preset.tier.trim().toLowerCase() === normalizedTier));
     // 质量参数能映射档位时按上游质量裁剪；管理员尺寸预设存在时再取交集，避免默认 low/medium/high 把未启用的 1K 显示出来。
     if (profile.size.parameter !== "aspect_ratio") return profile.size.parameter !== "none";
     const configuredTiers = new Set(profile.size.presets?.map((preset) => preset.tier));
@@ -111,7 +116,7 @@ export function imageQualityForSelection(profile: ImageCapabilityConfig, tier: I
 
 export function imageSizePresets(profile: ImageCapabilityConfig): ImageResolutionOption[] {
     if (profile.size.parameter === "none") return [];
-    if (profile.parameters && !profile.resolution.supported) {
+    if (profile.parameters && !profile.resolution.supported && (profile.parameters.some((field) => field.name === "imageResolution") || profile.size.parameter !== "size")) {
         const tier = imageSingleSizeTier(profile);
         return (profile.size.presets || []).filter((preset) => preset.tier === (tier ?? ""));
     }
@@ -130,6 +135,51 @@ export function imageSizePresets(profile: ImageCapabilityConfig): ImageResolutio
         }),
     );
     return [...pixels, ...ratios];
+}
+
+/**
+ * 参数声明模型的尺寸选项：模型没有 size.presets 时，按 size 比例列表 × imageResolution 档位合成。
+ * 只由图片工作台显式启用，画布和创作页仍逐字段渲染。
+ */
+export function imageDeclaredSizePresets(profile: ImageCapabilityConfig): ImageResolutionOption[] {
+    if (!profile.parameters || profile.size.presets?.length || !profile.resolution.supported || profile.size.parameter !== "aspect_ratio") return [];
+    const sizeField = profile.parameters.find((field) => field.name === "size" && field.enabled !== false);
+    if (!sizeField?.values?.length) return [];
+    const ratios = [...new Set(sizeField.values.map((value) => String(value).trim()).filter((value) => value && value.toLowerCase() !== "auto"))];
+    const tiers = [...new Set(profile.resolution.values.map((value) => value.trim().toLowerCase()))].filter((tier) => tier === "1k" || tier === "1.5k" || tier === "2k" || tier === "4k");
+    return tiers.flatMap((tier) =>
+        ratios.flatMap((ratio) => {
+            const preset = imageDeclaredPresetForRatio(tier, ratio);
+            return preset ? [preset] : [];
+        }),
+    );
+}
+
+/** 保留声明的比例原值（9:21 不能约分成 3:7）；超过 3:1 的比例按档位像素估算换算参考。 */
+function imageDeclaredPresetForRatio(tier: ImageResolutionTier, ratio: string): ImageResolutionOption | undefined {
+    try {
+        return { ...imagePresetForRatio(tier, ratio), ratio };
+    } catch {
+        const match = ratio.match(/^(\d{1,5})\s*[:：]\s*(\d{1,5})$/);
+        const pixelTable: Record<string, number> = { "1k": 1_048_576, "1.5k": 2_359_296, "2k": 4_194_304, "4k": 8_294_400 };
+        const pixels = pixelTable[tier];
+        if (!match || !pixels) return undefined;
+        const w = Number(match[1]);
+        const h = Number(match[2]);
+        if (!w || !h) return undefined;
+        let width = Math.max(16, Math.round(Math.sqrt((pixels * w) / h) / 16) * 16);
+        let height = Math.max(16, Math.round((width * h) / w / 16) * 16);
+        while ((width * height > pixels || Math.max(width, height) > 3840) && width > 16 && height > 16) {
+            if (width >= height) {
+                width -= 16;
+                height = Math.max(16, Math.round((width * h) / w / 16) * 16);
+            } else {
+                height -= 16;
+                width = Math.max(16, Math.round((height * w) / h / 16) * 16);
+            }
+        }
+        return { tier, ratio, width, height, size: `${width}x${height}` };
+    }
 }
 
 export function imagePresetValue(profile: ImageCapabilityConfig, preset: ImageResolutionOption) {

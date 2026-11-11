@@ -64,13 +64,18 @@ type geminiImageInlineData struct {
 }
 
 type geminiImageGenerationConfig struct {
-	ResponseModalities []string           `json:"responseModalities"`
-	ImageConfig        *geminiImageConfig `json:"imageConfig,omitempty"`
+	ResponseModalities []string              `json:"responseModalities"`
+	ImageConfig        *geminiImageConfig    `json:"imageConfig,omitempty"`
+	ThinkingConfig     *geminiThinkingConfig `json:"thinkingConfig,omitempty"`
 }
 
 type geminiImageConfig struct {
 	AspectRatio string `json:"aspectRatio,omitempty"`
 	ImageSize   string `json:"imageSize,omitempty"`
+}
+
+type geminiThinkingConfig struct {
+	ThinkingLevel string `json:"thinkingLevel"`
 }
 
 type seedanceAgentPlanRequest struct {

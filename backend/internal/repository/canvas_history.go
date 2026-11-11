@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"yingce/backend/internal/assets"
+	canvasdoc "yingce/backend/internal/canvas/document"
 	"yingce/backend/internal/model"
 
 	"gorm.io/gorm"
@@ -54,6 +55,17 @@ func (r *Repository) CanvasSnapshot(userID, canvasID, id string) (*model.CanvasS
 // Snapshot creation, reference protection and retention commit with the content.
 func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapshot *model.CanvasSnapshot, resourceIDs, currentResourceIDs []string, cutoff time.Time, limit int, force bool) error {
 	next := *project
+	if snapshot != nil {
+		canonical, changed, err := canvasdoc.Canonicalize([]byte(snapshot.PayloadJSON))
+		if err != nil {
+			return err
+		}
+		if changed {
+			copy := *snapshot
+			copy.PayloadJSON, copy.PayloadBytes = string(canonical), len(canonical)
+			snapshot = &copy
+		}
+	}
 	err := r.Transaction(func(repo *Repository) error {
 		tx := repo.db
 		if err := repo.UpsertCanvasProject(&next); err != nil {

@@ -1,0 +1,185 @@
+.drama-style-composition {
+    display: grid;
+    gap: var(--space-4);
+    min-width: 0;
+}
+
+.drama-style-composition-axis {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.drama-style-composition-axis legend {
+    margin-bottom: var(--space-2);
+    padding: 0;
+    color: var(--text-primary);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+
+.drama-style-composition-axis legend span {
+    margin-left: var(--space-2);
+    color: var(--text-tertiary);
+    font-size: var(--fs-tiny);
+    font-weight: 400;
+}
+
+.drama-style-composition-forms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    gap: var(--space-2);
+}
+
+.drama-style-composition-form,
+.drama-style-composition-theme {
+    border: 0;
+    background: var(--library-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+        background-color var(--motion-state) var(--motion-ease-out),
+        color var(--motion-state) var(--motion-ease-out);
+}
+
+.drama-style-composition-form {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border-radius: var(--r-lg);
+    text-align: left;
+}
+
+.drama-style-composition-form strong {
+    color: inherit;
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+
+.drama-style-composition-form span {
+    color: var(--text-tertiary);
+    font-size: var(--fs-tiny);
+    line-height: var(--lh-body);
+}
+
+.drama-style-composition-themes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.drama-style-composition-theme {
+    min-height: var(--button-height);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--button-radius);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+
+.drama-style-composition-form:hover:not(:disabled),
+.drama-style-composition-theme:hover:not(:disabled) {
+    background: var(--library-surface-hover);
+    color: var(--text-primary);
+}
+
+.drama-style-composition-form[aria-pressed="true"],
+.drama-style-composition-theme[aria-pressed="true"] {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+
+.drama-style-composition-form[aria-pressed="true"]:hover:not(:disabled),
+.drama-style-composition-theme[aria-pressed="true"]:hover:not(:disabled) {
+    background: var(--control-selected-hover-bg);
+}
+
+.drama-style-composition :is(button, select):focus-visible,
+.drama-style-presets > summary:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+
+.drama-style-composition :is(button, select):disabled {
+    cursor: not-allowed;
+    opacity: var(--button-disabled-opacity);
+}
+
+.drama-style-composition-selection,
+.drama-style-composition-note {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-tiny);
+    line-height: var(--lh-body);
+    overflow-wrap: anywhere;
+}
+
+.drama-style-composition-selection strong {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.drama-style-composition-note {
+    color: var(--text-tertiary);
+}
+
+.drama-style-composition.is-compact {
+    gap: var(--space-2);
+}
+
+.drama-style-composition-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.drama-style-composition-field {
+    display: grid;
+    min-width: 0;
+    gap: var(--space-1);
+    color: var(--text-secondary);
+    font-size: var(--fs-tiny);
+}
+
+.drama-style-composition-field select {
+    width: 100%;
+    min-width: 0;
+    height: var(--button-height);
+    padding: 0 var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: var(--button-radius);
+    background: var(--surface);
+    color: var(--text-primary);
+    font: inherit;
+    cursor: pointer;
+    color-scheme: inherit;
+}
+
+.drama-style-presets > summary {
+    width: fit-content;
+    border-radius: var(--r-md);
+    color: var(--text-secondary);
+    font-size: var(--fs-ui);
+    cursor: pointer;
+}
+
+.drama-style-presets > summary span {
+    margin-left: var(--space-2);
+    color: var(--text-tertiary);
+    font-size: var(--fs-tiny);
+}
+
+.drama-style-presets-body {
+    display: grid;
+    min-width: 0;
+    gap: var(--space-3);
+    padding-top: var(--space-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .drama-style-composition-form,
+    .drama-style-composition-theme {
+        transition: none;
+    }
+}

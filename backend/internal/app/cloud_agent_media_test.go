@@ -1076,13 +1076,23 @@ func TestCloudAgentStopKeepsSubmittedMediaTask(t *testing.T) {
 	if !notice {
 		t.Fatal("stop did not tell the user the billed media continues")
 	}
+	var beforeBills int64
+	if err := db.Model(&model.BillingOrder{}).Count(&beforeBills).Error; err != nil {
+		t.Fatal(err)
+	}
+	var deleteError *AppError
+	if err := s.DeleteUserCanvasProject("user", "agent-canvas"); !errors.As(err, &deleteError) || deleteError.Reason != "canvas_agent_busy" {
+		t.Fatalf("submitted media did not prevent canvas deletion: %v", err)
+	}
 	if err := db.Create(&model.Resource{ID: "stop-output", UserID: "user", Kind: "video", Status: "ready", MimeType: "video/mp4"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"mode":"video","video":{"storageKey":"resource:stop-output"}}`}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+	// The production Pi recovery path, rather than the legacy scheduler, owns
+	// this terminal cleanup after a restart or interrupted cancellation request.
+	if err := s.runCloudAgentPiSession(context.Background(), "user", run.ID); err != nil {
 		t.Fatal(err)
 	}
 	run, state = agentInterjectionState(t, s, run.ID)
@@ -1094,6 +1104,19 @@ func TestCloudAgentStopKeepsSubmittedMediaTask(t *testing.T) {
 	nodes, _ := creationObjects(doc["nodes"])
 	if meta := nodes[a.NodeID]["metadata"].(map[string]any); meta["status"] != "success" {
 		t.Fatalf("finished media was not written back: %+v", meta["status"])
+	}
+	if err := s.DeleteUserCanvasProject("user", "agent-canvas"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.runCloudAgentPiSession(context.Background(), "user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.repo.CanvasProjectForUser("user", "agent-canvas"); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("late cleanup resurrected deleted canvas: %v", err)
+	}
+	var afterBills int64
+	if err := db.Model(&model.BillingOrder{}).Count(&afterBills).Error; err != nil || afterBills != beforeBills {
+		t.Fatalf("stop/recovery/delete billed twice: before=%d after=%d err=%v", beforeBills, afterBills, err)
 	}
 }
 

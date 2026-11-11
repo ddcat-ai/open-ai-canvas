@@ -13,7 +13,7 @@ import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 
 type InsertableAsset = Extract<Asset, { kind: "text" | "image" | "video" | "audio" }>;
 
-export type InsertAssetPayload =
+export type InsertAssetPayload = { originalFileName?: string } & (
     | { kind: "text"; content: string; title: string; assetId?: string }
     | { kind: "image"; dataUrl: string; title: string; url?: string; storageKey?: string; width?: number; height?: number; bytes?: number; mimeType?: string; assetId?: string }
     | { kind: "video"; url: string; title: string; storageKey?: string; width?: number; height?: number; durationMs?: number; hasAudio?: boolean; bytes?: number; mimeType?: string; assetId?: string }
@@ -32,7 +32,8 @@ export type InsertAssetPayload =
           voiceName?: string;
           voiceProfile?: { name: string; provider: string; language: string; timbre: string };
           voiceInstructions?: string;
-      };
+      }
+);
 
 type Props = {
     open: boolean;
@@ -113,7 +114,7 @@ export function assetPickerItemsToInsertPayloads(ids: string[], items: AssetLibr
         if (!asset || (asset.kind !== "text" && asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")) {
             throw new Error(translate("canvasA.assetPicker.notInsertable", { title: pickerItem.title }));
         }
-        return localAssetToInsertPayload(asset);
+        return { ...localAssetToInsertPayload(asset), originalFileName: typeof asset.metadata?.originalFileName === "string" ? asset.metadata.originalFileName : undefined };
     });
 }
 

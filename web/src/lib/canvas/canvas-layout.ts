@@ -105,8 +105,14 @@ function layoutGraphBlock(nodes: CanvasNodeData[], edges: Array<[string, string]
         }
         state.set(id, 2);
     };
-    ordered.filter((node) => !edges.some(([, to]) => to === node.id)).forEach((node) => { if (!state.has(node.id)) visit(node.id); });
-    ordered.forEach((node) => { if (!state.has(node.id)) visit(node.id); });
+    ordered
+        .filter((node) => !edges.some(([, to]) => to === node.id))
+        .forEach((node) => {
+            if (!state.has(node.id)) visit(node.id);
+        });
+    ordered.forEach((node) => {
+        if (!state.has(node.id)) visit(node.id);
+    });
 
     const layerById = new Map<string, number>();
     const pending = new Map(nodes.map((node) => [node.id, dagIn.get(node.id)!.length]));
@@ -129,10 +135,12 @@ function layoutGraphBlock(nodes: CanvasNodeData[], edges: Array<[string, string]
     const reindex = (layer: string[]) => layer.forEach((id, index) => indexInLayer.set(id, index));
     layers.forEach(reindex);
     const sortByBarycenter = (layer: string[], neighbors: Map<string, string[]>) => {
-        const score = new Map(layer.map((id) => {
-            const linked = neighbors.get(id)!;
-            return [id, linked.length ? linked.reduce((sum, other) => sum + indexInLayer.get(other)!, 0) / linked.length : indexInLayer.get(id)!];
-        }));
+        const score = new Map(
+            layer.map((id) => {
+                const linked = neighbors.get(id)!;
+                return [id, linked.length ? linked.reduce((sum, other) => sum + indexInLayer.get(other)!, 0) / linked.length : indexInLayer.get(id)!];
+            }),
+        );
         layer.sort((a, b) => score.get(a)! - score.get(b)! || indexInLayer.get(a)! - indexInLayer.get(b)!);
         reindex(layer);
     };
@@ -148,9 +156,7 @@ function layoutGraphBlock(nodes: CanvasNodeData[], edges: Array<[string, string]
         layer.forEach((id) => {
             const node = byId.get(id)!;
             const parents = dagIn.get(id)!.filter((parent) => positions.has(parent));
-            const desiredTop = parents.length
-                ? parents.reduce((sum, parent) => sum + positions.get(parent)!.y + byId.get(parent)!.height / 2, 0) / parents.length - node.height / 2
-                : Number.isFinite(previousBottom) ? previousBottom + FLOW_ROW_GAP : 0;
+            const desiredTop = parents.length ? parents.reduce((sum, parent) => sum + positions.get(parent)!.y + byId.get(parent)!.height / 2, 0) / parents.length - node.height / 2 : Number.isFinite(previousBottom) ? previousBottom + FLOW_ROW_GAP : 0;
             const y = Math.max(desiredTop, previousBottom + FLOW_ROW_GAP);
             positions.set(id, { x: columnX, y });
             previousBottom = y + node.height;
@@ -241,7 +247,12 @@ function layoutCanvasGraph(nodes: CanvasNodeData[], connections: CanvasConnectio
             return;
         }
         const memberIds = new Set(members.map((node) => node.id));
-        graphBlocks.push(layoutGraphBlock(members, edges.filter(([from]) => memberIds.has(from))));
+        graphBlocks.push(
+            layoutGraphBlock(
+                members,
+                edges.filter(([from]) => memberIds.has(from)),
+            ),
+        );
     });
     graphBlocks.sort((a, b) => a.anchor.y - b.anchor.y || a.anchor.x - b.anchor.x);
     const blocks = looseNodes.length ? [...graphBlocks, layoutMediaLaneBlock(looseNodes)] : graphBlocks;
@@ -332,7 +343,7 @@ export function spreadCanvasNodes(nodes: CanvasNodeData[], options?: { scale?: n
 export function canvasLayoutLane(node: CanvasNodeData): CanvasLayoutLane {
     if (node.type === CanvasNodeType.Video) return "video";
     if (node.type === CanvasNodeType.Audio) return "audio";
-    if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Drawing || node.type === CanvasNodeType.Panorama || node.type === CanvasNodeType.Compare || node.type === CanvasNodeType.ColorGrade) return "image";
+    if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Drawing || node.type === CanvasNodeType.Panorama || node.type === CanvasNodeType.ColorGrade) return "image";
     return "text";
 }
 

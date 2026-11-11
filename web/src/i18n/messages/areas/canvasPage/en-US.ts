@@ -186,6 +186,7 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "Character voiceover can reference only one character card at a time",
         voiceNotBound: "This character has no voice bound, so a voiceover task can't be created",
         submissionInProgress: "A generation request for this node is already being submitted or running. Please don't click again",
+        videoRequiresReferenceImages: "This video model requires at least {{count}} reference image(s). Connect an image node (or upload reference material) before generating",
     },
     timelineInsert: {
         unsupportedMedia: "Image and text assets can't go on the timeline directly yet. Insert them into the canvas first",

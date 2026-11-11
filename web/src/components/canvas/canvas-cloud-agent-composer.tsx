@@ -322,7 +322,6 @@ export function AgentChatComposer({
     const canSubmit = !disabled && !submitDisabled && !blockedReason && !(sending && submitMode === "send") && Boolean(prompt.trim() || attachments.length);
     const canPrimary = canSubmit && !primaryDisabled;
     const modifierEnter = agentModifierShortcut("Enter");
-    const wrapped = Boolean(footer || tray);
     const reducedMotion = useReducedMotion();
     const submitState = submitMode === "send" && sending ? "sending" : submitMode;
     const submitLabel = submitMode === "save" ? "保存" : submitMode === "queue" ? "排队" : sending ? "发送中" : "发送";
@@ -459,8 +458,8 @@ export function AgentChatComposer({
 
     return (
         <div className="agent-composer-wrap min-w-0 shrink-0" onWheelCapture={(event) => event.stopPropagation()}>
-            {/* 有队列条或底部附加内容时，外壳托住它们与输入卡片，形成一张整卡。 */}
-            <div className="agent-composer-shell relative" data-has-footer={wrapped ? "" : undefined}>
+            {/* 队列托盘由外壳承载；连接器并入输入卡，保持单一表面。 */}
+            <div className="agent-composer-shell relative" data-has-footer={tray ? "" : undefined}>
                 <AnimatePresence initial={false}>
                     {tray ? (
                         <motion.div
@@ -705,8 +704,8 @@ export function AgentChatComposer({
                             </button>
                         </div>
                     </div>
+                    {footer}
                 </div>
-                {footer}
             </div>
             {previewAttachment ? <AgentImagePreview attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} /> : null}
         </div>

@@ -22,6 +22,7 @@ func TestCloudAgentPiModelAttachesFrozenMemorySnapshot(t *testing.T) {
 	if _, err := s.UpdateAgentMemoryDocument("user", AgentMemoryDocUpdateRequest{Revision: doc.Revision, Entries: []AgentMemoryEntryInput{{Section: model.AgentMemorySectionUser, Text: "称呼用户为长官"}}}); err != nil {
 		t.Fatal(err)
 	}
+	seedAgentMemoryWork(t, s, "user", "prior-memory-work", "prior-conversation", "旧会话分镜", "已确认六镜头方案。", "completed", time.Now().Add(-time.Hour))
 	req := agentTestRequest()
 	req.Prompt = "以后都用竖屏 9:16"
 	root, err := s.CreateCloudAgentRun("user", req, "")
@@ -39,7 +40,10 @@ func TestCloudAgentPiModelAttachesFrozenMemorySnapshot(t *testing.T) {
 	if before.Request.MemoryMode != model.AgentMemoryDocumentModeAuto || !strings.Contains(before.Memory.Text, "称呼用户为长官") || !strings.Contains(before.Memory.Text, "memory_update 记下") {
 		t.Fatalf("run did not freeze the memory snapshot with the preference nudge: %+v", before.Memory)
 	}
-	if strings.Contains(before.Canonical.SystemPrompt, "称呼用户为长官") {
+	if !strings.Contains(before.Memory.WorkText, "六镜头方案") {
+		t.Fatal("new run did not freeze completed work from a previous conversation")
+	}
+	if strings.Contains(before.Canonical.SystemPrompt, "称呼用户为长官") || strings.Contains(before.Canonical.SystemPrompt, "六镜头方案") {
 		t.Fatal("memory leaked into the stable system prefix")
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
@@ -63,17 +67,20 @@ func TestCloudAgentPiModelAttachesFrozenMemorySnapshot(t *testing.T) {
 		t.Fatal("memory changed the stable system/cache prefix")
 	}
 	messages, _ := canonical["messages"].([]any)
-	memoryAt, userAt := -1, -1
+	memoryAt, workAt, userAt := -1, -1, -1
 	for index, value := range messages {
 		message, _ := value.(map[string]any)
 		if stringField(message, cloudAgentContextSourceKey) == cloudAgentMemoryContextSource {
 			memoryAt = index
 		}
+		if stringField(message, cloudAgentContextSourceKey) == cloudAgentMemoryWorkContextSource {
+			workAt = index
+		}
 		if stringField(message, "role") == "user" && stringField(message, "content") == req.Prompt {
 			userAt = index
 		}
 	}
-	if memoryAt < 0 || userAt < 0 || memoryAt > userAt {
+	if memoryAt < 0 || workAt < memoryAt || userAt < 0 || workAt > userAt {
 		t.Fatalf("memory snapshot must sit before the user request: memory=%d user=%d", memoryAt, userAt)
 	}
 	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"text":"好的","toolCalls":[]}`}).Error; err != nil {
@@ -96,7 +103,7 @@ func TestCloudAgentPiModelAttachesFrozenMemorySnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, message := range after.Canonical.Messages {
-		if source := stringField(message, cloudAgentContextSourceKey); source == cloudAgentMemoryContextSource || source == cloudAgentSkillHintsSource {
+		if source := stringField(message, cloudAgentContextSourceKey); source == cloudAgentMemoryContextSource || source == cloudAgentMemoryWorkContextSource || source == cloudAgentSkillHintsSource {
 			t.Fatal("ephemeral run context polluted the durable conversation")
 		}
 	}

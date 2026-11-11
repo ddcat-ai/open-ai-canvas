@@ -12,7 +12,8 @@ import { analyzeNovel, EPISODE_GROUP_CHARS, EPISODE_SOURCE_CHARS, sourceChars, t
 import { defaultChapterSelection, groupChapterEpisodes } from "@/lib/drama/chapter-selection";
 import { ApiError } from "@/services/api/request";
 import { linkCanvasToDrama } from "@/services/drama-canvas";
-import { dramaChoiceKey, dramaVideoOptionFits, dramaVideoRatioIssue, dramaVideoResolutionIssue } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaResolutionAfterModelChange, dramaVideoOptionFits, dramaVideoRatioIssue, dramaVideoResolutionIssue, dramaVideoResolutionValue } from "@/lib/drama/model-choice";
+import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 import { DEFAULT_STORYBOARD } from "@/lib/drama/storyboard";
 import {
     createDrama,
@@ -132,16 +133,19 @@ export default function DramaCreatePage() {
         if (!catalog) return undefined;
         const { defaults } = catalog;
         // 没手动选视频模型时按当前画幅与衔接方式挑：目录默认值给不出就换第一个给得出的，都不行留空并说明原因。
+        // 分辨率不参与挑选：先选模型，模型给不出旧分辨率时按模型默认出片。
         const videoOptions = catalog.options.video || [];
-        const fitting = videoOptions.filter((option) => dramaVideoOptionFits(option, aspectRatio, videoContinuity, videoResolution));
+        const fitting = videoOptions.filter((option) => dramaVideoOptionFits(option, aspectRatio, videoContinuity));
         const video = models.video || fitting.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(defaults.video))?.choice || fitting[0]?.choice || {};
         return { ...models, text: models.text || defaults.text, image: models.image || defaults.image, video };
-    }, [aspectRatio, catalogQuery.data, models, videoContinuity, videoResolution]);
+    }, [aspectRatio, catalogQuery.data, models, videoContinuity]);
     const videoOption = catalogQuery.data?.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(resolvedModels?.video));
     // 角色参考图用单独指定的模型，没有就用默认图片模型；参考图方案按它检查角色画幅。
     const characterImage = dramaChoiceKey(resolvedModels?.characterImage) ? resolvedModels?.characterImage : resolvedModels?.image;
     const imageOption = catalogQuery.data?.options.image?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(characterImage));
     const videoResolutionProblem = dramaVideoResolutionIssue(videoOption, videoResolution);
+    // 目录已加载时把旧项目里模型给不出的分辨率换成模型默认，报价与提交用同一个有效值。
+    const effectiveVideoResolution = videoResolution && catalogQuery.data ? dramaVideoResolutionValue(videoOption, videoResolution) || undefined : videoResolution;
     const missingCapabilities = (Object.keys(CAPABILITY_LABEL) as DramaCapability[]).filter((capability) => catalogQuery.data && !dramaChoiceKey(resolvedModels?.[capability]));
     // 目录里有视频模型、但没有一个能按当前画幅与衔接方式出片：说清原因，不笼统说“没有可用模型”。
     const noFittingVideo = missingCapabilities.includes("video") && Boolean(catalogQuery.data?.options.video?.length);
@@ -163,7 +167,7 @@ export default function DramaCreatePage() {
         ...(bibleSkill ? { bibleSkill } : {}),
         ...(scriptSkill ? { scriptSkill } : {}),
         ...(Object.keys(textThinking).length ? { textThinking } : {}),
-        ...(videoResolution ? { videoResolution } : {}),
+        ...(effectiveVideoResolution ? { videoResolution: effectiveVideoResolution } : {}),
         concurrency: 4,
         models: resolvedModels,
         episodeMode,
@@ -182,7 +186,7 @@ export default function DramaCreatePage() {
             videoContinuity,
             JSON.stringify(storyboard),
             [assets?.resolution, assets?.propResolution, assets?.sceneResolution, assets?.characterRatio].join("|"),
-            videoResolution || "",
+            effectiveVideoResolution || "",
             JSON.stringify(resolvedModels || {}),
         ],
         queryFn: ({ signal }) => estimateDrama({ chapterCount: selectedIndexes.length, wordCount: selectedWords, settings, episodeMode }, signal),
@@ -320,8 +324,8 @@ export default function DramaCreatePage() {
         onError: (error) => message.error(error instanceof ApiError || error instanceof Error ? error.message : "创建失败"),
     });
     const tooLong = longSelected > 0 || Boolean(oversizedGroup);
-    // 草稿不要求模型齐全（服务端只在开工时检查），但画幅、分辨率与续接方式仍会被服务端校验。
-    const canSaveDraft = Boolean(analysis && selectedIndexes.length && name.trim() && resolvedModels && !videoRatioProblem && !videoResolutionProblem && !tailFrameProblem && !tooLong && !create.isPending);
+    // 草稿不要求模型齐全（服务端只在开工时检查），但画幅与续接方式仍会被服务端校验；分辨率给不出时按模型默认。
+    const canSaveDraft = Boolean(analysis && selectedIndexes.length && name.trim() && resolvedModels && !videoRatioProblem && !tailFrameProblem && !tooLong && !create.isPending);
     const canStart = canSaveDraft && missingCapabilities.length === 0;
     const reservedCount = analysis ? analysis.chapters.length - selectedIndexes.length : 0;
     // 超长章节的提示按选择拆开：选中的必须拆开才能开工，没选中的只提醒加入制作前要拆。
@@ -531,7 +535,7 @@ export default function DramaCreatePage() {
                             ) : null}
                         </div>
                     </section>
-                    <DramaStylePicker value={styleId} onChange={setStyleId} />
+                    <DramaStylePicker value={styleId} onChange={setStyleId} disabled={create.isPending} />
                     <section>
                         <div className="drama-section-title">
                             <h2>文字步骤</h2>
@@ -672,10 +676,16 @@ export default function DramaCreatePage() {
                                         size="sm"
                                         showPrice={false}
                                         aspectRatio={aspectRatio}
-                                        videoResolution={videoResolution}
                                         value={resolvedModels?.[capability]}
                                         placeholder={`选择${CAPABILITY_LABEL[capability]}模型`}
-                                        onChange={(choice) => setModels((current) => ({ ...current, [capability]: choice }))}
+                                        onChange={(choice) => {
+                                            setModels((current) => ({ ...current, [capability]: choice }));
+                                            if (capability !== "video" || !catalogQuery.data) return;
+                                            const next = catalogQuery.data.options.video?.find((option) => dramaChoiceKey(option.choice) === dramaChoiceKey(choice));
+                                            if (!next) return;
+                                            // 模型与分辨率一起更新：新模型支持就保留，不支持就回到它的默认档。
+                                            setVideoResolution((current) => dramaResolutionAfterModelChange(next, current));
+                                        }}
                                     />
                                 </div>
                             ))}
@@ -686,6 +696,11 @@ export default function DramaCreatePage() {
                             {videoRatioProblem ? (
                                 <p className="drama-cfg-note" role="alert">
                                     当前视频模型{videoRatioProblem}，请换模型或改画幅。
+                                </p>
+                            ) : null}
+                            {videoResolutionProblem ? (
+                                <p className="drama-cfg-note">
+                                    当前视频模型{videoResolutionProblem}，实际按模型默认{videoOption?.defaultVideoResolution ? ` ${formatVideoResolutionLabel(videoOption.defaultVideoResolution)}` : ""}出片。
                                 </p>
                             ) : null}
                             {videoOption?.generateAudio === false ? <p className="drama-cfg-note">当前视频模型不同步生成声音，剧情段视频没有对白与音效。</p> : null}
@@ -707,7 +722,6 @@ export default function DramaCreatePage() {
                             <p className="flex items-start gap-2 text-[var(--fs-tiny)] leading-5 text-[var(--status-error)]">
                                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                                 {videoContinuity === "tail_frame" ? `没有能按 ${aspectRatio} 尾帧续接出片的视频模型，请换画幅、改用并行出片或联系管理员。` : `没有能按 ${aspectRatio} 出片的视频模型，请换画幅或联系管理员。`}
-                                {videoResolution ? "也可以把视频分辨率改回默认。" : ""}
                             </p>
                         ) : null}
                     </div>

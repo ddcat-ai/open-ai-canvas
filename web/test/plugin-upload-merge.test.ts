@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { registerPlugin, unregisterPlugin } from "../src/lib/plugins/plugin-registry";
+import { getRegisteredPlugin, registerPlugin, unregisterPlugin } from "../src/lib/plugins/plugin-registry";
+import { getNodeDefinition } from "../src/lib/canvas/node-registry";
 import type { PluginManifest } from "../src/lib/plugins/plugin-types";
 
 test("plugin upload caller preserves the installation promise", async () => {
@@ -28,6 +29,51 @@ test("copied guide manifest is accepted by the real plugin registry", async () =
     const manifest = { ...(JSON.parse(example!) as PluginManifest), id: "merge-test-manifest-example" };
     try {
         expect(() => registerPlugin({ manifest })).not.toThrow();
+    } finally {
+        unregisterPlugin(manifest.id);
+    }
+});
+
+test("retired editor API is rejected without registering a plugin", () => {
+    const manifest = {
+        apiVersion: "yingce.plugin/v2",
+        id: "merge-test-retired-editor",
+        name: "Retired editor",
+        version: "1.0.0",
+        description: "Retired editor API",
+        permissions: ["timeline.read"],
+        contributes: { editorSlots: [{ slot: "preview-renderer" }] },
+    } as unknown as PluginManifest;
+    try {
+        expect(() => registerPlugin({ manifest })).toThrow("不支持的插件 API 版本");
+        expect(getRegisteredPlugin(manifest.id)).toBeUndefined();
+    } finally {
+        unregisterPlugin(manifest.id);
+    }
+});
+
+test("ordinary plugin registration and removal retain canvas node ownership", () => {
+    const nodeId = "merge-test-node";
+    const manifest: PluginManifest = {
+        apiVersion: "yingce.plugin/v1",
+        id: "merge-test-node-provider",
+        name: "Canvas node provider",
+        version: "1.0.0",
+        description: "Canvas node lifecycle",
+        permissions: ["canvas.read", "canvas.write", "generation.run"],
+        contributes: {
+            canvasNodes: [{ id: nodeId, label: "Example", defaultTitle: "Example", defaultSize: { width: 320, height: 240 }, schema: {}, renderer: "declarative" }],
+        },
+    };
+    try {
+        registerPlugin({ manifest });
+        expect(getRegisteredPlugin(manifest.id)?.manifest).toBe(manifest);
+        expect(getNodeDefinition(nodeId)?.plugin?.pluginId).toBe(manifest.id);
+        expect(() => registerPlugin({ manifest: { ...manifest, version: "2.0.0" } })).toThrow("已注册其他版本");
+        expect(getRegisteredPlugin(manifest.id)?.manifest.version).toBe("1.0.0");
+        unregisterPlugin(manifest.id);
+        expect(getRegisteredPlugin(manifest.id)).toBeUndefined();
+        expect(getNodeDefinition(nodeId)).toBeUndefined();
     } finally {
         unregisterPlugin(manifest.id);
     }

@@ -1,0 +1,196 @@
+.mcp-connection-editor {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding-top: var(--space-3);
+}
+
+.mcp-connection-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr);
+    gap: var(--space-5);
+    height: min(620px, calc(100dvh - 230px));
+    min-height: 0;
+}
+
+.mcp-connection-fields {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-4);
+    overflow-y: auto;
+    padding: var(--space-1) var(--space-2) var(--space-2) 0;
+}
+
+.mcp-connection-section-title {
+    margin: 0;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.mcp-connection-tools {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+
+.mcp-tools-heading,
+.mcp-tools-selection {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.mcp-tools-heading > .ant-btn {
+    flex: none;
+}
+
+.mcp-tools-count {
+    margin: var(--space-1) 0 0;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+
+.mcp-tools-selection {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+}
+
+.mcp-tools-selection > span {
+    margin-left: auto;
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+
+.mcp-tools-options {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    overflow-y: auto;
+    padding: var(--space-1);
+    scrollbar-gutter: stable;
+}
+
+.mcp-tool-option {
+    flex: none;
+    padding: var(--space-3);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--background) 70%, transparent);
+}
+
+.mcp-tool-option.is-selected {
+    background: color-mix(in srgb, var(--foreground) 6%, var(--background));
+}
+
+.mcp-tool-option > .ant-checkbox-wrapper {
+    width: 100%;
+    align-items: flex-start;
+}
+
+.mcp-tool-option-name {
+    overflow-wrap: anywhere;
+    font-size: var(--fs-label);
+    font-weight: 500;
+}
+
+.mcp-tool-description {
+    margin-top: var(--space-1);
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.mcp-tool-description > summary {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    list-style: none;
+    cursor: pointer;
+}
+
+.mcp-tool-description > summary::-webkit-details-marker {
+    display: none;
+}
+
+.mcp-tool-description > summary > svg {
+    flex: none;
+    margin-top: var(--space-1);
+}
+
+.mcp-tool-description-preview {
+    display: -webkit-box;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.mcp-tool-description-collapse,
+.mcp-tool-description[open] .mcp-tool-description-preview {
+    display: none;
+}
+
+.mcp-tool-description[open] .mcp-tool-description-collapse {
+    display: block;
+    flex: 1;
+}
+
+.mcp-tool-description[open] > summary > svg {
+    transform: rotate(180deg);
+}
+
+.mcp-tool-description > p {
+    margin: var(--space-1) 0 0;
+    white-space: pre-wrap;
+}
+
+.mcp-tool-description > summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+.mcp-tools-footer {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: auto;
+}
+
+.mcp-tools-no-results {
+    padding: var(--space-4);
+    color: var(--muted-foreground);
+    text-align: center;
+    font-size: var(--fs-label);
+}
+
+@media (max-width: 800px), (max-height: 600px) {
+    .mcp-connection-layout {
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+        max-height: calc(100dvh - 200px);
+        overflow-y: auto;
+    }
+
+    .mcp-connection-fields {
+        overflow-y: visible;
+    }
+
+    .mcp-tools-options {
+        flex: none;
+        max-height: 50dvh;
+    }
+}

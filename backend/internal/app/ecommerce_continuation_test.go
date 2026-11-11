@@ -32,8 +32,15 @@ func TestEcommerceContinuationPreservesHistoryAndRejectsForeignTasks(t *testing.
 		t.Fatal(err)
 	}
 	var restored model.EcommercePlan
-	if err := json.Unmarshal([]byte(saved.PlanJSON), &restored); err != nil || len(restored.PreviousImages) != 1 || restored.PreviousImages[0].Prompt != "original" || len(restored.Images) != 0 {
-		t.Fatal("history lost", err, restored)
+	if err := json.Unmarshal([]byte(saved.PlanJSON), &restored); err != nil || len(restored.PreviousImages) != 0 || len(restored.Images) != 0 {
+		t.Fatal("active plan kept inline history", err, restored)
+	}
+	page, err := svc.EcommerceRoundPage("user", project.ID, 20, 0)
+	if err != nil || page.Total != 1 || len(page.Rounds) != 1 || page.Rounds[0].Plan == nil || len(page.Rounds[0].Plan.Images) != 1 {
+		t.Fatal("history lost", err, page)
+	}
+	if got := page.Rounds[0].Plan.Images[0]; got.Prompt != "original" || got.TaskID != "old-task" {
+		t.Fatal("history changed", got)
 	}
 	pending.PreviousImages[0].TaskID = "foreign-task"
 	if _, err := svc.SaveEcommerceProject("user", saved.ID, SaveEcommerceProjectRequest{Revision: saved.Revision, Draft: draft, Plan: pending}); err == nil {

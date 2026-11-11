@@ -5,6 +5,7 @@ import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { getResourceAccess, importResourceFromUrl, isResourceUrl, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
 import { getCachedResourceBlob, primeResourceBlobCache } from "@/services/resource-blob-cache";
+import { assertLocalMediaSession, localMediaSession, peekLocalMediaObjectUrl, releaseLocalMediaObjectUrls, storeLocalMediaObjectUrl } from "@/services/local-media-object-urls";
 
 export type UploadedImage = {
     url: string;
@@ -24,15 +25,16 @@ export type UploadedImage = {
 };
 
 const store = localforage.createInstance({ name: "yingce", storeName: "image_files" });
-const objectUrls = new Map<string, string>();
 
 export async function uploadImage(input: string | Blob, onProgress?: (uploadedBytes: number, totalBytes: number) => void, knownSize?: { width: number; height: number }): Promise<UploadedImage> {
     // 同一个逻辑上传在直传失败后会退回 IndexedDB，并由云端数据同步再次提交。
     // 提前生成本地 key，确保两条路径向后端发送相同的幂等标识。
-    const storageKey = `image:${getActiveUserScope()}:${nanoid()}`;
+    const session = localMediaSession();
+    const storageKey = `image:${session.scope}:${nanoid()}`;
     if (typeof input === "string" && shouldImportRemoteImage(input)) {
         try {
             const resource = await importResourceFromUrl(input, "image", { idempotencyKey: storageKey });
+            assertLocalMediaSession(session);
             return {
                 url: resource.publicUrl || resourceFileUrl(resource.id),
                 storageKey: resourceStorageKey(resource.id),
@@ -46,32 +48,39 @@ export async function uploadImage(input: string | Blob, onProgress?: (uploadedBy
         }
     }
     const blob = typeof input === "string" ? await (await fetch(input)).blob() : input;
+    assertLocalMediaSession(session);
     const previewUrl = URL.createObjectURL(blob);
-    // 调用方已解码过真实尺寸时直接复用，避免同一张大图在上传前再完整解码一次。
-    const meta = knownSize?.width && knownSize.height ? { ...knownSize, mimeType: blob.type || "image/png" } : await readImageMeta(previewUrl);
-    let remoteUploadError = "";
+    let retained = false;
     try {
-        const resource = await uploadResourceFile(blob, "image", { width: meta.width, height: meta.height, fileName: input instanceof File ? input.name : undefined, idempotencyKey: storageKey }, onProgress);
-        await primeResourceBlobCache(resourceStorageKey(resource.id), blob).catch(() => "");
-        URL.revokeObjectURL(previewUrl);
-        return {
-            url: resource.publicUrl || resourceFileUrl(resource.id),
-            storageKey: resourceStorageKey(resource.id),
-            width: resource.width || meta.width,
-            height: resource.height || meta.height,
-            bytes: resource.size || blob.size,
-            mimeType: resource.mimeType || blob.type || meta.mimeType,
-        };
-    } catch (error) {
-        // 鉴权失效、越权、体积超限这类失败重传也是同样结果，不能退化成"稍后自动同步"。
-        if (error instanceof ResourceUploadError && error.permanent) throw error;
-        remoteUploadError = error instanceof Error ? error.message : "图片直传失败";
+        // 调用方已解码过真实尺寸时直接复用，避免同一张大图在上传前再完整解码一次。
+        const meta = knownSize?.width && knownSize.height ? { ...knownSize, mimeType: blob.type || "image/png" } : await readImageMeta(previewUrl);
+        let remoteUploadError = "";
+        try {
+            const resource = await uploadResourceFile(blob, "image", { width: meta.width, height: meta.height, fileName: input instanceof File ? input.name : undefined, idempotencyKey: storageKey }, onProgress);
+            assertLocalMediaSession(session);
+            await primeResourceBlobCache(resourceStorageKey(resource.id), blob).catch(() => "");
+            return {
+                url: resource.publicUrl || resourceFileUrl(resource.id),
+                storageKey: resourceStorageKey(resource.id),
+                width: resource.width || meta.width,
+                height: resource.height || meta.height,
+                bytes: resource.size || blob.size,
+                mimeType: resource.mimeType || blob.type || meta.mimeType,
+            };
+        } catch (error) {
+            // 鉴权失效、越权、体积超限这类失败重传也是同样结果，不能退化成"稍后自动同步"。
+            if (error instanceof ResourceUploadError && error.permanent) throw error;
+            remoteUploadError = error instanceof Error ? error.message : "图片直传失败";
+        }
+        // 瞬时失败退回本机：文件仍可用，且云端数据同步会用同一幂等键重传。
+        assertLocalMediaSession(session);
+        await store.setItem(storageKey, blob);
+        const url = storeLocalMediaObjectUrl("image", storageKey, blob, session, { replace: true, url: previewUrl });
+        retained = true;
+        return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type || meta.mimeType, pendingRemoteUpload: true, remoteUploadError };
+    } finally {
+        if (!retained) URL.revokeObjectURL(previewUrl);
     }
-    // 瞬时失败退回本机：文件仍可用，且云端数据同步会用同一幂等键重传。
-    await store.setItem(storageKey, blob);
-    const url = previewUrl;
-    objectUrls.set(storageKey, url);
-    return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type || meta.mimeType, pendingRemoteUpload: true, remoteUploadError };
 }
 
 function shouldImportRemoteImage(input: string) {
@@ -85,13 +94,13 @@ export async function resolveImageUrl(storageKey?: string, fallback = "", option
         // 远程资源展示直接使用 OSS/CDN 授权地址，不把媒体内容读进浏览器 Blob。
         return resolveResourceAccessURL((await getResourceAccess(storageKey, "display")).url);
     }
-    const cached = objectUrls.get(storageKey);
+    const session = localMediaSession();
+    const cached = peekLocalMediaObjectUrl("image", storageKey);
     if (cached) return cached;
     const blob = await store.getItem<Blob>(storageKey);
+    assertLocalMediaSession(session);
     if (!blob) return fallback;
-    const url = URL.createObjectURL(blob);
-    objectUrls.set(storageKey, url);
-    return url;
+    return storeLocalMediaObjectUrl("image", storageKey, blob, session);
 }
 
 export async function getImageBlob(storageKey: string) {
@@ -101,10 +110,9 @@ export async function getImageBlob(storageKey: string) {
 
 export async function setImageBlob(storageKey: string, blob: Blob) {
     if (resourceIdFromStorageKey(storageKey)) return primeResourceBlobCache(storageKey, blob);
+    const session = localMediaSession();
     await store.setItem(storageKey, blob);
-    const url = URL.createObjectURL(blob);
-    objectUrls.set(storageKey, url);
-    return url;
+    return storeLocalMediaObjectUrl("image", storageKey, blob, session, { replace: true });
 }
 
 export async function imageToDataUrl(image: { url?: string; dataUrl?: string; storageKey?: string; name?: string; type?: string; mimeType?: string }) {
@@ -124,10 +132,8 @@ export async function deleteStoredImages(keys: Iterable<string>) {
     await Promise.all(
         Array.from(new Set(keys)).map(async (key) => {
             if (resourceIdFromStorageKey(key)) return;
-            const url = objectUrls.get(key);
-            if (url) URL.revokeObjectURL(url);
-            objectUrls.delete(key);
             await store.removeItem(key);
+            releaseLocalMediaObjectUrls("image", key);
         }),
     );
 }

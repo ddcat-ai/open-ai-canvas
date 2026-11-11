@@ -8,10 +8,12 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { buildImageResolutionOptions, formatImageResolutionSize } from "@/lib/image-resolution-tiers";
-import { modelCapabilityConfigFor, normalizeImageValue, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { preserveImageSettings as normalizeImageValue } from "@/lib/media-settings";
+import { MediaSettingsNotice } from "./media-settings-notice";
 import { mergedImageCapabilityConfig } from "@/lib/model-selection";
 import { imagePriceSelector, normalizeImagePriceSelector } from "@/lib/image-pricing";
-import { modelOptionName, resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
+import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { imageQualityLabel } from "@/lib/image-quality";
 
 export { imageQualityLabel } from "@/lib/image-quality";
@@ -48,21 +50,55 @@ type ImageSettingsPanelProps = {
     className?: string;
     maxCount?: number;
     quickCount?: number;
+    /** 画布节点的张数是拆单数，传值时按账号同时任务数取上限，不再受单模型 maxOutputs 限制。 */
+    countLimit?: number;
     /** 局部编辑等场景需要先允许选择参数，由后端负责最终计费校验。 */
     bypassPriceGuard?: boolean;
 };
 
-export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, showQuality = true, showTransparent = true, showSize = true, showCount = true, className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5", maxCount = 15, quickCount = 3, bypassPriceGuard = false }: ImageSettingsPanelProps) {
+export function ImageSettingsPanel(props: ImageSettingsPanelProps) {
+    return (
+        <>
+            <MediaSettingsNotice config={props.config} capability="image" onChange={(field, value) => props.onConfigChange(field as Parameters<ImageSettingsPanelProps["onConfigChange"]>[0], value)} />
+            <ImageSettingsControls {...props} />
+        </>
+    );
+}
+
+function ImageSettingsControls({
+    config,
+    onConfigChange,
+    theme,
+    showTitle = true,
+    showQuality = true,
+    showTransparent = true,
+    showSize = true,
+    showCount = true,
+    className = "w-[304px] space-y-3 rounded-2xl px-1 py-0.5",
+    maxCount = 15,
+    quickCount = 3,
+    countLimit,
+    bypassPriceGuard = false,
+}: ImageSettingsPanelProps) {
     const profile = mergedImageCapabilityConfig(config, config.model || config.imageModel);
-    const normalized = normalizeImageValue(profile, config);
+    const normalized = normalizeImageValue(profile, config, resolveModelRequestConfig(config, config.model || config.imageModel).interfaceType);
     const quality = normalized.quality;
     const transparentBackground = normalized.transparentBackground === "true";
-    const effectiveMaxCount = Math.min(maxCount, profile.maxOutputs);
-    const count = Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count)));
+    const effectiveMaxCount = Math.min(maxCount, countLimit === undefined ? profile.maxOutputs : countLimit);
+    // 传了 countLimit 时 config.count 是拆单数，normalized.count 已被单模型 maxOutputs 压到 1。
+    const count = countLimit === undefined ? Math.max(1, Math.min(effectiveMaxCount, Number(normalized.count))) : Math.max(1, Math.min(effectiveMaxCount, Math.floor(Number(config.count)) || 1));
     const activeSize = normalized.size;
     const activeQualityOptions = profile.quality.values.map((value) => ({ value, label: imageQualityLabel(value) }));
     const priceTiers = imageModelPriceTiers(config);
-    if (profile.parameters) return <ImageSettingsTheme theme={theme}><div className={className}>{showTitle ? <div className="mb-3 text-base font-semibold">图像设置</div> : null}<ImageParameterFields profile={profile} config={config} onChange={onConfigChange} showSize={showSize} showCount={showCount} showQuality={showQuality} showTransparent={showTransparent} /></div></ImageSettingsTheme>;
+    if (profile.parameters)
+        return (
+            <ImageSettingsTheme theme={theme}>
+                <div className={className}>
+                    {showTitle ? <div className="mb-3 text-base font-semibold">图像设置</div> : null}
+                    <ImageParameterFields profile={profile} config={config} onChange={onConfigChange} showSize={showSize} showCount={showCount} showQuality={showQuality} showTransparent={showTransparent} countLimit={countLimit} />
+                </div>
+            </ImageSettingsTheme>
+        );
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -86,38 +122,50 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                     {value}
                                 </OptionPill>
                             ))}
-                            {effectiveMaxCount >= 4 ? (
-                                <CountStepperInput value={count} max={effectiveMaxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value))} />
-                            ) : null}
+                            {effectiveMaxCount >= 4 ? <CountStepperInput value={count} max={effectiveMaxCount} theme={theme} onChange={(value) => onConfigChange("count", String(value))} /> : null}
                         </div>
                     </div>
                 ) : null}
-                {showTransparent && profile.transparentBackground.supported ? <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <SettingTitle color={theme.node.muted}>透明背景</SettingTitle>
-                        <div className="mt-1 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                            请求模型输出保留 Alpha 通道的 PNG
+                {showTransparent && profile.transparentBackground.supported ? (
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <SettingTitle color={theme.node.muted}>透明背景</SettingTitle>
+                            <div className="mt-1 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
+                                请求模型输出保留 Alpha 通道的 PNG
+                            </div>
+                        </div>
+                        <span title="是否支持透明背景由当前模型接口决定" onMouseDown={(event) => event.stopPropagation()}>
+                            <Switch size="sm" checked={transparentBackground} onChange={(checked) => onConfigChange("transparentBackground", checked ? "true" : "false")} />
+                        </span>
+                    </div>
+                ) : null}
+                {showQuality && profile.quality.supported && !imageResolutionUsesQuality(profile) ? (
+                    <div className="space-y-2">
+                        <SettingTitle color={theme.node.muted}>{isGrokResolutionQuality(profile) ? "分辨率" : "质量"}</SettingTitle>
+                        <div className={`grid gap-2 ${activeQualityOptions.length <= 2 ? "grid-cols-2" : "grid-cols-4"}`}>
+                            {activeQualityOptions.map((item) => (
+                                <OptionPill
+                                    key={item.value}
+                                    selected={quality === item.value}
+                                    disabled={!bypassPriceGuard && !hasPriceTierForImageSelection(priceTiers, item.value, activeSize)}
+                                    theme={theme}
+                                    onClick={() => onConfigChange("quality", item.value)}
+                                >
+                                    {item.label}
+                                </OptionPill>
+                            ))}
                         </div>
                     </div>
-                    <span title="是否支持透明背景由当前模型接口决定" onMouseDown={(event) => event.stopPropagation()}>
-                        <Switch
-                            size="sm"
-                            checked={transparentBackground}
-                            onChange={(checked) => onConfigChange("transparentBackground", checked ? "true" : "false")}
-                        />
-                    </span>
-                </div> : null}
-                {showQuality && profile.quality.supported && !imageResolutionUsesQuality(profile) ? <div className="space-y-2">
-                    <SettingTitle color={theme.node.muted}>{isGrokResolutionQuality(profile) ? "分辨率" : "质量"}</SettingTitle>
-                    <div className={`grid gap-2 ${activeQualityOptions.length <= 2 ? "grid-cols-2" : "grid-cols-4"}`}>
-						{activeQualityOptions.map((item) => (
-                            <OptionPill key={item.value} selected={quality === item.value} disabled={!bypassPriceGuard && !hasPriceTierForImageSelection(priceTiers, item.value, activeSize)} theme={theme} onClick={() => onConfigChange("quality", item.value)}>
-                                {item.label}
-                            </OptionPill>
-                        ))}
-                    </div>
-                </div> : null}
-                {showSize ? <ImageSizePicker profile={profile} size={activeSize} quality={quality} imageResolution={normalized.imageResolution} onChange={(size, nextQuality, nextResolution) => applyImageSizeSelection(onConfigChange, size, nextQuality, nextResolution)} /> : null}
+                ) : null}
+                {showSize ? (
+                    <ImageSizePicker
+                        profile={profile}
+                        size={activeSize}
+                        quality={quality}
+                        imageResolution={normalized.imageResolution}
+                        onChange={(size, nextQuality, nextResolution) => applyImageSizeSelection(onConfigChange, size, nextQuality, nextResolution)}
+                    />
+                ) : null}
             </div>
         </ImageSettingsTheme>
     );
@@ -154,9 +202,9 @@ export function imageSizeLabel(size: string) {
 }
 
 function imageModelPriceTiers(config: AiConfig) {
-	const channel = resolveModelChannel(config, config.model || config.imageModel);
-	const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model || config.imageModel));
-	return cost?.logicalPriceTiers || [];
+    const channel = resolveModelChannel(config, config.model || config.imageModel);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model || config.imageModel));
+    return cost?.logicalPriceTiers || [];
 }
 
 function hasPriceTierForImageSelection(tiers: ReturnType<typeof imageModelPriceTiers>, quality: string, size: string) {
@@ -172,9 +220,9 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
     return (
         <button
             type="button"
-			className="h-8 cursor-pointer rounded-full px-2 text-xs transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
-			style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
-			disabled={disabled}
+            className="h-8 cursor-pointer rounded-full px-2 text-xs transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
+            disabled={disabled}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
         >
@@ -183,17 +231,7 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
     );
 }
 
-function CountStepperInput({
-    value,
-    max,
-    theme,
-    onChange,
-}: {
-    value: number;
-    max: number;
-    theme: CanvasTheme;
-    onChange: (value: number) => void;
-}) {
+function CountStepperInput({ value, max, theme, onChange }: { value: number; max: number; theme: CanvasTheme; onChange: (value: number) => void }) {
     const isSelected = value >= 4;
     const [draftValue, setDraftValue] = useState(() => (value >= 4 ? String(value) : "4"));
 
@@ -210,7 +248,7 @@ function CountStepperInput({
 
     const handleStepUp = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+        const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
         const next = Math.min(max, base + 1);
         setDraftValue(String(next));
         onChange(next);
@@ -218,7 +256,7 @@ function CountStepperInput({
 
     const handleStepDown = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+        const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
         const next = Math.max(1, base - 1);
         setDraftValue(String(next));
         onChange(next);
@@ -239,13 +277,13 @@ function CountStepperInput({
             e.currentTarget.blur();
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+            const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
             const next = Math.min(max, base + 1);
             setDraftValue(String(next));
             onChange(next);
         } else if (e.key === "ArrowDown") {
             e.preventDefault();
-            const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+            const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
             const next = Math.max(1, base - 1);
             setDraftValue(String(next));
             onChange(next);
@@ -279,10 +317,7 @@ function CountStepperInput({
                 className="w-full min-w-0 flex-1 bg-transparent pl-2 pr-0.5 text-center font-medium text-xs outline-none"
                 style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
             />
-            <div
-                className="flex flex-col h-full w-4.5 shrink-0 border-l justify-center items-center divide-y"
-                style={{ borderColor: `${theme.toolbar.border}80` }}
-            >
+            <div className="flex flex-col h-full w-4.5 shrink-0 border-l justify-center items-center divide-y" style={{ borderColor: `${theme.toolbar.border}80` }}>
                 <button
                     type="button"
                     tabIndex={-1}

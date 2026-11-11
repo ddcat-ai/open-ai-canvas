@@ -1,3 +1,4 @@
+import { resolvedMediaConfig } from "@/lib/media-settings";
 import { type GenerationTask } from "@/services/api/task-center";
 import { backendProviderConfig, logicalModelIDForConfig, runBackendGenerationTask, type GenerationTaskDependencies } from "@/services/api/generation-task";
 import { configuredModelMatchesCapability, defaultConfig, normalizeModelOptionValue, normalizeRunningHubCapability, type AiConfig, type WorkflowFieldMapping } from "@/stores/use-config-store";
@@ -8,6 +9,7 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
+import { currentGenerationBatchLimit } from "@/lib/generation-batch-limit";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
@@ -398,7 +400,8 @@ export async function hydrateAssistantImages(sessions: CanvasAssistantSession[])
 }
 
 export function getGenerationCount(count: string) {
-    return Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
+    // 画布张数是拆单数，上限不超过账号同时任务数。
+    return Math.max(1, Math.min(15, currentGenerationBatchLimit(), Math.floor(Math.abs(Number(count)) || 1)));
 }
 
 export function generationWorkflowMetadata(config: AiConfig): Pick<CanvasNodeMetadata, "workflowProvider" | "runningHubWorkflowId" | "runningHubWorkflowKind"> {
@@ -465,8 +468,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         count: String(node?.metadata?.count ?? (mode === "image" ? config.canvasImageCount || config.count || defaultConfig.count : config.count || defaultConfig.count)),
     };
     const imageSize = mode === "image" ? requestedConfig.size : undefined;
-    // 无 requirements 的调用（重试、媒体工具等）也按当前能力与尺寸路由到组内最低价兼容模型，
-    // 避免旧 metadata.model 不支持当前尺寸导致生成时被 normalize 回退。
+    // 当前模型保持用户选择；图片/视频旧参数在共同配置层按目标能力适配。
     const liveOptions = modelRequestOptions(requestedConfig, mode);
     const baseRequirements = requirements?.capability ? { ...requirements, options: { ...liveOptions, ...(requirements.options || {}) } } : { capability: mode, options: liveOptions };
     const model = workflowProvider === "model" ? resolveCompatibleModel(config, preferredModel, imageSize ? { ...baseRequirements, imageSize } : baseRequirements) || preferredModel : preferredModel;
@@ -523,13 +525,13 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
                   )
                 : config.runningHub.workflows,
     };
-    return {
+    const result: AiConfig = {
         ...requestedConfig,
         taskWorkflowProvider: workflowProvider,
         runningHub,
         model,
-        quality: generationDefaults.quality || requestedConfig.quality,
-        imageResolution: generationDefaults.imageResolution || requestedConfig.imageResolution,
+        quality: generationDefaults.quality ?? requestedConfig.quality,
+        imageResolution: generationDefaults.imageResolution ?? requestedConfig.imageResolution,
         imageParameters: generationDefaults.imageParameters ?? requestedConfig.imageParameters,
         size: generationDefaults.size ?? requestedConfig.size,
         transparentBackground: generationDefaults.transparentBackground || (requestedConfig.transparentBackground === "true" ? "true" : "false"),
@@ -540,6 +542,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         videoArkPrivateAssetUpload: requestedConfig.videoArkPrivateAssetUpload,
         count: generationDefaults.count || requestedConfig.count,
     };
+    return workflowProvider === "model" ? resolvedMediaConfig(result, mode) : result;
 }
 
 export function resolveCanvasGenerationModel(config: AiConfig, model: string | undefined, mode: CanvasNodeGenerationMode): string {

@@ -5,9 +5,11 @@
   "pages": [
     "local-development",
     "canvas-agent-appearance",
+    "agent-mcp",
     "http-api",
     "code-map",
     "backend-database",
+    "channel-configuration",
     "ecommerce-agent",
     "video-token-billing",
     "credit-rewards",

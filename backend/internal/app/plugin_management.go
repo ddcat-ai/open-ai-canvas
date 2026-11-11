@@ -14,7 +14,6 @@ const (
 	PluginPortraitClearance   = "portrait-clearance"
 	PluginAIArtCritique       = "ai-art-critique"
 	PluginMediaConversion     = "media-conversion"
-	PluginEditorShell         = "editor-shell"
 	PluginUserFeedback        = "user-feedback"
 
 	PluginOriginOfficial = "official"
@@ -81,10 +80,6 @@ var officialApplicationPolicies = map[string]PluginManagementView{
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},
 	PluginMediaConversion: {
-		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
-		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
-	},
-	PluginEditorShell: {
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationNone,
 	},

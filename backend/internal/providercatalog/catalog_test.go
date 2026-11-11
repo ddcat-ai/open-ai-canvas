@@ -2,6 +2,8 @@ package providercatalog
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -50,8 +52,8 @@ func TestParseNormalizesAndDropsInvalidEntries(t *testing.T) {
 	if acme.Logo != "https://ai.yingce.tv/v1/logos/acme.svg" {
 		t.Fatalf("logo = %q", acme.Logo)
 	}
-	if len(acme.Models) != MaxRecommendedModels {
-		t.Fatalf("models = %d, want capped to 5", len(acme.Models))
+	if len(acme.Models) != 6 {
+		t.Fatalf("models = %d, want all 6", len(acme.Models))
 	}
 	if len(acme.Tags) != 1 || acme.Tags[0] != "relay" {
 		t.Fatalf("tags = %#v", acme.Tags)
@@ -61,6 +63,61 @@ func TestParseNormalizesAndDropsInvalidEntries(t *testing.T) {
 	}
 	if len(warnings) == 0 {
 		t.Fatal("expected warnings for dropped entries")
+	}
+}
+
+func TestParseRecommendedModelLimitPerProvider(t *testing.T) {
+	for _, count := range []int{5, 6, 99, 100, 101} {
+		t.Run(fmt.Sprintf("%d models", count), func(t *testing.T) {
+			var raw Catalog
+			if err := json.Unmarshal([]byte(sampleCatalog), &raw); err != nil {
+				t.Fatal(err)
+			}
+			raw.Tags = raw.Tags[:1]
+			raw.Providers = raw.Providers[:2]
+			for index := range raw.Providers {
+				provider := &raw.Providers[index]
+				provider.Models = make([]Model, count)
+				for modelIndex := range provider.Models {
+					provider.Models[modelIndex] = Model{
+						ModelKey: fmt.Sprintf("model-%03d", modelIndex+1), Capability: "text", Protocol: "chat-completion",
+						PriceTiers: []PriceTier{{BillingMode: "token", InputPerMillion: 2, OutputPerMillion: 8}},
+					}
+				}
+			}
+			body, err := json.Marshal(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			catalog, warnings, err := Parse(body, "https://ai.yingce.tv")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(catalog.Providers) != 2 {
+				t.Fatalf("providers = %d, want 2", len(catalog.Providers))
+			}
+			wantCount := min(count, 100)
+			for _, provider := range catalog.Providers {
+				if len(provider.Models) != wantCount {
+					t.Fatalf("%s models = %d, want %d", provider.ID, len(provider.Models), wantCount)
+				}
+				for index, item := range provider.Models {
+					if want := fmt.Sprintf("model-%03d", index+1); item.ModelKey != want {
+						t.Fatalf("%s model %d = %q, want %q", provider.ID, index, item.ModelKey, want)
+					}
+				}
+				if count > 100 && !contains(warnings, provider.ID+"：推荐模型超过 100 个，其余已忽略") {
+					t.Fatalf("missing overflow warning for %s: %v", provider.ID, warnings)
+				}
+			}
+			wantWarnings := 0
+			if count > 100 {
+				wantWarnings = 2
+			}
+			if len(warnings) != wantWarnings {
+				t.Fatalf("warnings = %v, want %d", warnings, wantWarnings)
+			}
+		})
 	}
 }
 

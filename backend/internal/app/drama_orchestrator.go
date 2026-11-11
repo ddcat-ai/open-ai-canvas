@@ -517,9 +517,35 @@ func (r *dramaRun) plan() error {
 		cast := &r.casts[i]
 		// "" 表示从未请求，只有放行后才自动生成；queued 是用户明确请求（重做、重试或按集放行）。
 		requested := cast.ImageStatus == model.DramaMediaQueued || (cast.ImageStatus == "" && r.assetsReleased())
-		if requested && !cast.Locked && dramaCastHasImageBrief(*cast) {
-			r.enqueue(model.DramaJobCastImage, "", "", cast.ID, castImagePriority(cast.Position), "参考图："+cast.Name, nil)
+		if !requested || cast.Locked {
+			continue
 		}
+		if !dramaCastHasImageBrief(*cast) {
+			// 没有外貌或外形描述时不凭名字和画风编造参考图，等补全后再生成。
+			continue
+		}
+		// 造型以角色本体参考图为底图：本体失败或已删除时直接落失败，避免每轮重复排队又被取消。
+		if cast.ParentID != "" {
+			base, baseErr := r.s.repo.DramaCast(r.project.ID, cast.ParentID)
+			switch {
+			case errors.Is(baseErr, gorm.ErrRecordNotFound):
+				if err := r.failCastLook(cast, "角色本体已被删除，无法生成造型参考图"); err != nil {
+					return err
+				}
+				continue
+			case baseErr != nil:
+				return baseErr
+			case base.ImageStatus == model.DramaMediaFailed:
+				if err := r.failCastLook(cast, "角色本体参考图生成失败，请先重试本体"); err != nil {
+					return err
+				}
+				continue
+			case base.ImageStatus != model.DramaMediaReady:
+				// 本体排队、生成中或尚未请求：造型先不排队，等本体就绪后的下一轮再排。
+				continue
+			}
+		}
+		r.enqueue(model.DramaJobCastImage, "", "", cast.ID, castImagePriority(cast.Position), "参考图："+cast.Name, nil)
 	}
 	episodes, err := r.s.repo.DramaEpisodes(r.project.ID)
 	if err != nil {
@@ -568,6 +594,24 @@ func (r *dramaRun) plan() error {
 	if allDone {
 		p.Status, p.Stage = model.DramaStatusCompleted, model.DramaStageDone
 	}
+	return nil
+}
+
+// failCastLook 把等待本体的造型落为失败，并写一条失败作业供「待处理」展示原因；
+// 按造型版本号更新，同一次失败只落一条记录。
+func (r *dramaRun) failCastLook(cast *model.DramaCast, reason string) error {
+	applied, err := r.s.repo.UpdateDramaCastRevision(cast.ID, cast.Revision, map[string]any{"image_status": model.DramaMediaFailed})
+	if err != nil || !applied {
+		return err
+	}
+	cast.ImageStatus = model.DramaMediaFailed
+	now := time.Now()
+	job := model.DramaJob{
+		ID: newID(), ProjectID: r.project.ID, Status: model.DramaJobFailed, Kind: model.DramaJobCastImage, CastID: cast.ID,
+		Priority: castImagePriority(cast.Position), Label: truncateRunes("参考图："+cast.Name, 200), Error: truncateRunes(reason, 500),
+		CreatedAt: now, UpdatedAt: now, FinishedAt: &now,
+	}
+	r.newJobs = append(r.newJobs, job)
 	return nil
 }
 
@@ -895,27 +939,74 @@ func (r *dramaRun) applyBible(task *model.Task) error {
 	if err != nil {
 		return err
 	}
-	if len(existing) == 0 {
-		now := time.Now()
-		casts := make([]model.DramaCast, 0, len(bible.Characters)+len(bible.Props)+len(bible.Scenes))
-		for index, character := range bible.Characters {
-			instructions := strings.TrimSpace(strings.Join(nonEmpty(character.Gender, character.Age, character.Voice), "，"))
-			characterID := newID()
-			casts = append(casts, model.DramaCast{ID: characterID, ProjectID: r.project.ID, Kind: "character", Name: truncateRunes(character.Name, 60), AliasesJSON: encodeStringList(character.Aliases), Role: truncateRunes(character.Role, 60), Description: truncateRunes(character.Description, 1000), Appearance: truncateRunes(strings.Join(nonEmpty(character.Gender, character.Age, character.Appearance), "，"), 1000), VoiceInstructions: truncateRunes(instructions, 500), Importance: len(bible.Characters) - index, Position: index, CreatedAt: now, UpdatedAt: now})
-			// 造型是角色的子行：承载这套造型的名称、外观与默认适用章节，名称/别名/声音沿用所属角色。
-			for lookIndex, look := range character.Looks {
-				casts = append(casts, model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "character", ParentID: characterID, Name: truncateRunes(character.Name, 60), LookName: truncateRunes(look.Name, 60), Appearance: truncateRunes(look.Appearance, 1000), LookFromChapter: int(look.FromChapter), LookToChapter: int(look.ToChapter), Position: index*100 + lookIndex + 1, CreatedAt: now, UpdatedAt: now})
+	// 提前手动创建或跨季导入的设定不能阻止本季提取其余素材；同类型同名只补缺失项。
+	// 重名角色存在歧义时保留现状，不把模型提取的造型挂到任意一条角色上。
+	byName := map[string][]model.DramaCast{}
+	lookNames, lookCounts := map[string]map[string]bool{}, map[string]int{}
+	positions := map[string]int{}
+	for _, cast := range existing {
+		if cast.ParentID == "" {
+			key := cast.Kind + "|" + production.NormalizeName(cast.Name)
+			byName[key] = append(byName[key], cast)
+			positions[cast.Kind] = max(positions[cast.Kind], cast.Position+1)
+		} else {
+			if lookNames[cast.ParentID] == nil {
+				lookNames[cast.ParentID] = map[string]bool{}
 			}
+			lookNames[cast.ParentID][production.NormalizeName(cast.LookName)] = true
+			lookCounts[cast.ParentID]++
 		}
-		for index, prop := range bible.Props {
-			casts = append(casts, model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "prop", Name: truncateRunes(prop.Name, 60), AliasesJSON: "[]", Description: truncateRunes(prop.Description, 1000), Appearance: truncateRunes(prop.Appearance, 1000), Position: index, CreatedAt: now, UpdatedAt: now})
+	}
+	now := time.Now()
+	casts := make([]model.DramaCast, 0, len(bible.Characters)+len(bible.Props)+len(bible.Scenes))
+	addBase := func(cast model.DramaCast) model.DramaCast {
+		cast.Position = positions[cast.Kind]
+		positions[cast.Kind]++
+		casts = append(casts, cast)
+		key := cast.Kind + "|" + production.NormalizeName(cast.Name)
+		byName[key] = append(byName[key], cast)
+		return cast
+	}
+	for index, character := range bible.Characters {
+		name := truncateRunes(character.Name, 60)
+		matches := byName["character|"+production.NormalizeName(name)]
+		if len(matches) > 1 {
+			continue
 		}
-		for index, scene := range bible.Scenes {
-			casts = append(casts, model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "scene", Name: truncateRunes(scene.Name, 60), AliasesJSON: "[]", Description: truncateRunes(scene.Description, 1000), Appearance: truncateRunes(scene.Appearance, 1000), Position: index, CreatedAt: now, UpdatedAt: now})
+		var base model.DramaCast
+		if len(matches) == 1 {
+			base = matches[0]
+		} else {
+			instructions := strings.TrimSpace(strings.Join(nonEmpty(character.Gender, character.Age, character.Voice), "，"))
+			base = addBase(model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "character", Name: name, AliasesJSON: encodeStringList(character.Aliases), Role: truncateRunes(character.Role, 60), Description: truncateRunes(character.Description, 1000), Appearance: truncateRunes(strings.Join(nonEmpty(character.Gender, character.Age, character.Appearance), "，"), 1000), VoiceInstructions: truncateRunes(instructions, 500), Importance: len(bible.Characters) - index, CreatedAt: now, UpdatedAt: now})
 		}
-		if err := r.s.repo.CreateDramaCasts(casts); err != nil {
-			return err
+		if lookNames[base.ID] == nil {
+			lookNames[base.ID] = map[string]bool{}
 		}
+		for _, look := range character.Looks {
+			key := production.NormalizeName(look.Name)
+			if lookNames[base.ID][key] || lookCounts[base.ID] >= production.MaxCharacterLooks {
+				continue
+			}
+			lookCounts[base.ID]++
+			lookNames[base.ID][key] = true
+			casts = append(casts, model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "character", ParentID: base.ID, Name: base.Name, LookName: truncateRunes(look.Name, 60), Appearance: truncateRunes(look.Appearance, 1000), LookFromChapter: int(look.FromChapter), LookToChapter: int(look.ToChapter), Position: base.Position*100 + lookCounts[base.ID], CreatedAt: now, UpdatedAt: now})
+		}
+	}
+	for _, prop := range bible.Props {
+		name := truncateRunes(prop.Name, 60)
+		if len(byName["prop|"+production.NormalizeName(name)]) == 0 {
+			addBase(model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "prop", Name: name, AliasesJSON: "[]", Description: truncateRunes(prop.Description, 1000), Appearance: truncateRunes(prop.Appearance, 1000), CreatedAt: now, UpdatedAt: now})
+		}
+	}
+	for _, scene := range bible.Scenes {
+		name := truncateRunes(scene.Name, 60)
+		if len(byName["scene|"+production.NormalizeName(name)]) == 0 {
+			addBase(model.DramaCast{ID: newID(), ProjectID: r.project.ID, Kind: "scene", Name: name, AliasesJSON: "[]", Description: truncateRunes(scene.Description, 1000), Appearance: truncateRunes(scene.Appearance, 1000), CreatedAt: now, UpdatedAt: now})
+		}
+	}
+	if err := r.s.repo.CreateDramaCasts(casts); err != nil {
+		return err
 	}
 	meta, _ := json.Marshal(dramaBibleMeta{Logline: bible.Logline, Tone: bible.Tone, VisualRules: bible.VisualRules})
 	r.production.BibleJSON = string(meta)
@@ -1111,7 +1202,7 @@ func (r *dramaRun) applyScriptShots(episode *model.DramaEpisode, scripted []prod
 			return id
 		}
 		name := strings.TrimSpace(chosen)
-		if name == "" || production.IsBaseLookName(name) {
+		if name == "" || production.IsBaseLookName(name) || len(existing) >= production.MaxCharacterLooks {
 			return ""
 		}
 		hint, ok := lookHints[dramaLookHintKey(casts, characterID)+"|"+production.NormalizeName(name)]
@@ -1699,8 +1790,8 @@ func (r *dramaRun) submitScript(job *model.DramaJob) (*model.Task, bool, error) 
 
 func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, error) {
 	cast, err := r.s.repo.DramaCast(r.project.ID, job.CastID)
-	// 槽位处于 running 可能是本工作的上一轮尝试，只有已就绪或锁定时才不再需要。
-	if err != nil || cast.Locked || cast.ImageStatus == model.DramaMediaReady || cast.ImageStatus == model.DramaMediaDraft {
+	// 槽位处于 running 可能是本工作的上一轮尝试，只有已就绪、已失败（终态）或锁定时才不再需要。
+	if err != nil || cast.Locked || cast.ImageStatus == model.DramaMediaReady || cast.ImageStatus == model.DramaMediaDraft || cast.ImageStatus == model.DramaMediaFailed {
 		return nil, true, nil
 	}
 	if !dramaCastHasImageBrief(*cast) {
@@ -1712,9 +1803,8 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 		}
 		return nil, true, nil
 	}
-	appearance := firstNonEmpty(cast.Appearance, cast.Description, cast.ImagePrompt, cast.Role)
 	assets := r.settings.Assets
-	// 造型行：以所属角色的参考图为底图做图生图，保持五官、脸型一致，只换服装、发型与妆容。
+	// 造型以所属角色参考图识别身份，年龄、体态和服装按本次造型，仍使用作品的参考图方案。
 	var baseImage *model.DramaCast
 	operation := "text_to_image"
 	if cast.ParentID != "" {
@@ -1729,19 +1819,11 @@ func (r *dramaRun) submitCastImage(job *model.DramaJob) (*model.Task, bool, erro
 		baseImage = base
 		operation = "image_to_image"
 	}
-	// 画风与画面规则写的是成片画幅，设定图有自己的画幅：带入前去掉其中的画幅与横竖构图要求，
-	// 设定和方案模板的文字不动。
-	stylePrompt := production.StripFrameDirectives(r.settings.StylePrompt)
-	visualRules := production.StripFrameDirectives(r.meta.VisualRules)
-	prompt := production.CastImagePrompt(assets, cast.Kind, cast.Name, appearance, stylePrompt, visualRules)
-	if baseImage != nil {
-		prompt = "参考图1是角色" + cast.Name + "的既有形象。保持五官、脸型、体态与参考图1完全一致。" + firstNonEmpty(strings.TrimSpace(cast.ImagePrompt), "只把造型改为："+appearance+"。"+stylePrompt)
-	}
+	prompt := buildDramaCastImagePrompt(r.settings, r.meta, *cast)
 	// 资产参考图统一横版 16:9，与作品画幅无关：场景要容纳完整空间，道具要留足展示余量。
 	// 角色按参考图方案的画幅（内置方案均为 16:9，自定义方案可改）。画幅通过尺寸参数约束，
 	// 不只靠提示词；模型给不出接近的尺寸时直接失败并说明原因，不退回模型默认的方图。
 	ratio := r.castImageRatio(cast.Kind)
-	prompt = production.WithAssetRatio(prompt, ratio)
 	request := r.imageRequest(cast.Kind)
 	if request.Issue != "" {
 		return nil, false, errors.New(request.Issue)

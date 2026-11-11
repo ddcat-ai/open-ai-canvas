@@ -185,6 +185,7 @@ export const zhCN = {
         voiceOneCharacter: "角色配音一次只能引用一个角色卡",
         voiceNotBound: "角色尚未绑定可用声音，无法创建角色配音任务",
         submissionInProgress: "该节点已有生成请求正在提交或执行，请勿重复点击",
+        videoRequiresReferenceImages: "当前视频模型至少需要 {{count}} 张参考图，请连线图片节点（或上传参考素材）后再生成",
     },
     timelineInsert: {
         unsupportedMedia: "图片和文本素材暂不支持直接入轨，请先插入画布",

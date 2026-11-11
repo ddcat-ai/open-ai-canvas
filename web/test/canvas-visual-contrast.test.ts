@@ -3,15 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { canvasThemes } from "../src/lib/canvas-theme";
 
 describe("canvas visual contrast", () => {
-    test("keeps the canvas substrate distinct from node surfaces in both themes", () => {
-        for (const theme of Object.values(canvasThemes)) {
-            expect(theme.canvas.background).not.toBe(theme.node.fill);
-            expect(theme.node.panel).not.toBe(theme.canvas.background);
-        }
+    test("uses white light surfaces and contrasting dark canvas surfaces", () => {
+        expect(canvasThemes.light.canvas.background.toLowerCase()).toBe(canvasThemes.light.node.fill.toLowerCase());
+        expect(canvasThemes.dark.canvas.background.toLowerCase()).not.toBe(canvasThemes.dark.node.fill.toLowerCase());
+        expect(canvasThemes.light.node.panel.toLowerCase()).toBe(canvasThemes.light.canvas.background.toLowerCase());
+        expect(canvasThemes.dark.node.panel.toLowerCase()).not.toBe(canvasThemes.dark.canvas.background.toLowerCase());
     });
 
     test("changes only the canvas substrate while retaining original surfaces", () => {
-        expect(canvasThemes.light.canvas.background).toBe("#f0f0f0");
+        expect(canvasThemes.light.canvas.background).toBe("#FFFFFF");
         expect(canvasThemes.light.node.fill).toBe("#ffffff");
         expect(canvasThemes.light.node.edge).toBe("rgba(15,23,42,.16)");
         expect(canvasThemes.light.node.shadow).toBe("0 6px 18px rgba(15,23,42,.08)");

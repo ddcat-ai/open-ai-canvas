@@ -20,16 +20,35 @@ type CanvasProjectSelectionToolbarProps = {
     onCreateStoryboard: () => void;
     onCreateReferenceGroup: () => void;
     onBatchConnect: () => void;
-    onMergeVideos: () => void;
+    onCompareImages?: () => void;
     onSendSelectionToAgent: () => void;
 };
 
-export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, selectedVideoCount, mergingVideos, onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent }: CanvasProjectSelectionToolbarProps) {
+export function CanvasProjectSelectionToolbar({
+    anchorRef,
+    containerRef,
+    count,
+    selectedVideoCount,
+    mergingVideos,
+    onAlign,
+    onArrange,
+    onCreateStoryboard,
+    onCreateReferenceGroup,
+    onBatchConnect,
+    onCompareImages,
+    onSendSelectionToAgent,
+}: CanvasProjectSelectionToolbarProps) {
     const { t } = useTranslation();
     const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
 
     const handlers = {
-        onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent,
+        onAlign,
+        onArrange,
+        onCreateStoryboard,
+        onCreateReferenceGroup,
+        onBatchConnect,
+        onCompareImages,
+        onSendSelectionToAgent,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
 
     const ctx: ToolContext = {

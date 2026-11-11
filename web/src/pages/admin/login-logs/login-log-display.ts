@@ -1,4 +1,4 @@
-export const loginMethodLabels: Record<string, string> = { password: "密码", email: "邮箱验证码", sms: "短信验证码", linuxdo: "Linux.do", verification: "验证码（方式未识别）", unknown: "未记录" };
+export const loginMethodLabels: Record<string, string> = { password: "密码", email: "邮箱验证码", sms: "短信验证码", linuxdo: "Linux.do", oidc: "OIDC", verification: "验证码（方式未识别）", unknown: "未记录" };
 export const loginEventLabels: Record<string, string> = { login: "登录", logout: "主动退出" };
 export const loginSourceLabels: Record<string, string> = { login: "用户登录", registration: "注册后自动登录", logout: "主动退出" };
 

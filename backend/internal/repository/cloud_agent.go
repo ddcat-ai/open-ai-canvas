@@ -2,9 +2,12 @@ package repository
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -58,8 +61,24 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 		}
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(run).Error; err != nil {
-			return err
+		// GORM saves associations even when the parent INSERT loses its conflict.
+		// A late initializer must not reinsert transcript rows removed by a newer
+		// checkpoint, or append journal rows outside the revision/CAS transition.
+		created := tx.Omit("Journal", "Transcript").Clauses(clause.OnConflict{DoNothing: true}).Create(run)
+		if created.Error != nil {
+			return created.Error
+		}
+		if created.RowsAffected == 1 {
+			if len(run.Journal) > 0 {
+				if err := tx.Create(&run.Journal).Error; err != nil {
+					return err
+				}
+			}
+			if len(run.Transcript) > 0 {
+				if err := tx.Create(&run.Transcript).Error; err != nil {
+					return err
+				}
+			}
 		}
 		// The marker excludes completed Pi carriers (still text_replay) from
 		// reservation scans. It is not a cached busy/idle or permission flag.
@@ -69,9 +88,9 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 	})
 }
 
-// CloudAgent 在同一个只读事务里读取执行行和它的事件/消息行。分开读的话，并发写入
-// （运行时事件、工具结果）可能落在两次查询之间：读到旧的计数配新的行，解码时会被
-// 当成"记录不完整"而把一次正常运行判死。
+// PostgreSQL 的默认 READ COMMITTED 会让同一事务里的 SELECT 看到不同版本。
+// 执行行、journal 和可压缩 transcript 必须共享快照，否则正常并发 checkpoint
+// 会被解码器当成历史损坏。写事务内的嵌套调用已经持有执行行锁。
 func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, error) {
 	var run model.CloudAgentExecution
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -79,7 +98,7 @@ func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, 
 			return err
 		}
 		return New(tx).hydrateCloudAgent(&run)
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return &run, err
 }
 
@@ -156,7 +175,7 @@ func (r *Repository) CloudAgentForActiveTask(userID, taskID string) (*model.Clou
 			return err
 		}
 		return New(tx).hydrateCloudAgent(&run)
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return &run, err
 }
 
@@ -193,7 +212,7 @@ func (r *Repository) ActiveCloudAgentsAfter(after string, limit int) ([]model.Cl
 			}
 		}
 		return nil
-	})
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return runs, err
 }
 
@@ -354,10 +373,20 @@ func sameJSONDocument(left, right string) bool {
 func canonicalJSONValue(value any) any {
 	switch typed := value.(type) {
 	case json.Number:
-		if rational, ok := new(big.Rat).SetString(typed.String()); ok {
+		raw := typed.String()
+		// 工具参数里的浮点原文（模型给出）与 float64 的最短表示可能不同，
+		// 例如 4140.7990379296753 与 4140.799037929675 是同一 float64 值。
+		// 写库前会按 float64 重新编码事件体，若仍用精确有理数比较，会把这种
+		// 等价数值误判成"历史事件被改写"。小数/科学计数按 float64 归一，整数仍精确。
+		if strings.ContainsAny(raw, ".eE") {
+			if f, err := strconv.ParseFloat(raw, 64); err == nil {
+				return strconv.FormatFloat(f, 'g', -1, 64)
+			}
+		}
+		if rational, ok := new(big.Rat).SetString(raw); ok {
 			return rational.RatString()
 		}
-		return typed.String()
+		return raw
 	case []any:
 		for index := range typed {
 			typed[index] = canonicalJSONValue(typed[index])
@@ -371,6 +400,9 @@ func canonicalJSONValue(value any) any {
 }
 
 func (r *Repository) CreateCloudAgentCanvasMutation(mutation *model.CloudAgentCanvasMutation) error {
+	if err := canonicalizeCanvasUndoSnapshot(mutation); err != nil {
+		return err
+	}
 	return r.db.Create(mutation).Error
 }
 

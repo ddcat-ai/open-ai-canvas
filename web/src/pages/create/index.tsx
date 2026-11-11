@@ -8,15 +8,17 @@ import { useTranslation } from "react-i18next";
 
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
+import { useGenerationBatchLimit } from "@/lib/generation-batch-limit";
 import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
-import { imageParameterRequest, normalizeImageParameters } from "@/lib/image-parameters";
+import { imageParameterRequest } from "@/lib/image-parameters";
 import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { continueCreationConversationOnCanvas } from "@/services/creation-canvas-conversation";
 import { useAuthEntry } from "@/hooks/use-auth-entry";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { LEGACY_TEXT_THINKING_CONFIG, isThinkingLevel, resolveThinkingLevel, thinkingLevelsFor, type ThinkingLevel, type ThinkingRequest } from "@/lib/text-thinking";
-import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, videoDurationAllowed, videoDurationOptions } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, videoDurationAllowed, videoDurationOptions } from "@/lib/model-capabilities";
+import { preserveImageSettings as normalizeImageValue, mediaSettingIssues } from "@/lib/media-settings";
 import { inferVideoOperation, modelGroupReferenceLimits, resolveCompatibleModel, mergedImageCapabilityConfig, type ModelRequirements } from "@/lib/model-selection";
 import type { BackendGenerationResult } from "@/services/api/generation-task";
 import type { Skill } from "@/services/api/skills";
@@ -28,6 +30,7 @@ import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-s
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { loadAssetsForUse, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useThemePack } from "@/themes/use-theme-pack";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
@@ -83,7 +86,9 @@ import { fillablePrompt } from "@/lib/inspirations/resolve";
 import { CreationRecentCanvases } from "./creation-recent-canvases";
 import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
-import { creationVideoConfig } from "./creation-generation-config";
+import { useCreationConversationRoute } from "./use-creation-conversation-route";
+import { creationVideoConfig, creationVideoSettings } from "./creation-generation-config";
+import { trackSiteTrafficAction } from "@/services/site-traffic";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const InspirationHall = lazy(() => import("@/pages/inspirations"));
@@ -135,6 +140,7 @@ export default function CreatePage() {
     const [openingCanvas, setOpeningCanvas] = useState(false);
     const openingCanvasRef = useRef(false);
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    const themeHomeHeading = useThemePack()?.copy?.homeHeading;
     const config = useEffectiveConfig();
     const composerPreferencesHydrated = useCreationPreferencesStore((state) => state.hydrated);
     const rememberMode = useCreationPreferencesStore((state) => state.rememberMode);
@@ -152,6 +158,8 @@ export default function CreatePage() {
     const addAsset = useAssetStore((state) => state.addAsset);
     const userId = useUserStore((state) => state.user?.id || null);
     const userSessionHydrated = useUserStore((state) => state.hydrated);
+    // 一次可选张数按账号同时任务数，硬上限仍为 15；每张图仍拆成独立任务提交。
+    const imageBatchLimit = Math.min(15, useGenerationBatchLimit());
     const activeConversationScope = getActiveUserScope();
     const initialConversationSnapshot = userSessionHydrated ? readCreationConversationSnapshot<CreationConversation>(activeConversationScope) : null;
     const [conversations, setConversations] = useState<CreationConversation[]>(() => initialConversationSnapshot || []);
@@ -186,6 +194,16 @@ export default function CreatePage() {
     const [historyOpen, setHistoryOpen] = useState(false);
     const { openAuth } = useAuthEntry();
     const [libraryOpen, setLibraryOpen] = useState(false);
+    const requireCreationLogin = useCallback(() => {
+        if (useUserStore.getState().user) return true;
+        setLibraryOpen(false);
+        openAuth({ preferDialog: true });
+        return false;
+    }, [openAuth]);
+    const openReferenceLibrary = () => {
+        if (!requireCreationLogin()) return;
+        setLibraryOpen(true);
+    };
     const externalAssetSources = useExternalAssetSources(libraryOpen);
     const abortRef = useRef<AbortController | null>(null);
     const composerFocusRef = useRef<HTMLTextAreaElement>(null);
@@ -244,7 +262,15 @@ export default function CreatePage() {
         [attachments, config, preferredModel, count, hasPrompt, imageResolution, imageParameters, mode, quality, ratio, seconds, videoQuality],
     );
     const selectedModel = resolveCompatibleModel(config, preferredModel, modelRequirements) || preferredModel;
-    const generationConfig = useMemo(() => (mode === "video" ? creationVideoConfig(config, selectedModel, { ratio, seconds, videoQuality }) : config), [config, mode, ratio, seconds, selectedModel, videoQuality]);
+    const generationConfig = useMemo(
+        () =>
+            mode === "video"
+                ? creationVideoConfig(config, selectedModel, { ratio, seconds, videoQuality })
+                : mode === "image"
+                  ? { ...config, model: selectedModel, imageModel: selectedModel, size: ratio, quality, imageResolution, imageParameters, count }
+                  : config,
+        [config, mode, ratio, seconds, selectedModel, videoQuality, quality, imageResolution, imageParameters, count],
+    );
     const imageProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).image!, [config, selectedModel]);
     const videoProfile = useMemo(() => modelCapabilityConfigFor(config, selectedModel).video!, [config, selectedModel]);
     const textThinkingConfig = useMemo(() => (mode === "text" ? modelCapabilityConfigFor(config, selectedModel).text?.thinking || LEGACY_TEXT_THINKING_CONFIG : undefined), [config, mode, selectedModel]);
@@ -319,32 +345,33 @@ export default function CreatePage() {
         if (!composerPreferencesHydrated || !composerPreferencesInitialized || mode !== "image") return;
         const saved = useCreationPreferencesStore.getState().preferences.image;
         // 优先恢复用户上次选择；只有当前模型不支持该值时，normalizeImageValue 才回退到模型默认值。
-        const normalized = normalizeImageValue(imageProfile, {
-            size: saved?.ratio || imageProfile.size.default,
-            quality: saved?.quality || imageProfile.quality.default,
-            imageResolution: saved?.imageResolution || imageProfile.resolution.default,
-            imageParameters: saved?.model === selectedModel ? saved.imageParameters : undefined,
-            count: saved?.count || count,
-        });
+        const normalized = normalizeImageValue(
+            imageProfile,
+            {
+                size: saved?.ratio || imageProfile.size.default,
+                quality: saved?.quality || imageProfile.quality.default,
+                imageResolution: saved?.imageResolution,
+                imageParameters: saved?.imageParameters,
+                count: saved?.count || count,
+            },
+            resolveModelRequestConfig(config, selectedModel).interfaceType,
+        );
         setRatio(normalized.size);
         setQuality(normalized.quality);
         setImageResolution(normalized.imageResolution || imageProfile.resolution.default);
-        setImageParameters(JSON.stringify(normalizeImageParameters(imageProfile.parameters, saved?.model === selectedModel ? saved.imageParameters : undefined)));
-        setCount(normalized.count);
+        setImageParameters(normalized.imageParameters || "{}");
+        // 恢复上次张数时按账号同时任务数 clamp，不再被单模型 maxOutputs(=1) 压回 1。
+        setCount(String(Math.max(1, Math.min(imageBatchLimit, Math.floor(Number(saved?.count || count)) || 1))));
     }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, imageProfile]);
 
     useEffect(() => {
         if (!composerPreferencesHydrated || !composerPreferencesInitialized || mode !== "video") return;
         const saved = useCreationPreferencesStore.getState().preferences.video;
-        // 优先恢复用户上次选择；只有当前模型不支持该值时，normalizeVideoValue 才回退到模型默认值。
-        const normalized = normalizeVideoValue(videoProfile, {
-            seconds: saved?.seconds || String(videoProfile.duration.default),
-            ratio: saved?.ratio || videoProfile.defaultRatio,
-            resolution: saved?.videoQuality || videoProfile.defaultResolution,
-        });
+        // 恢复旧消息或偏好时使用与最终提交相同的目标协议适配。
+        const normalized = creationVideoSettings(config, selectedModel, saved);
         setSeconds(normalized.seconds);
         setRatio(normalized.ratio);
-        setVideoQuality(normalized.resolution.replace(/p$/i, ""));
+        setVideoQuality(normalized.videoQuality);
     }, [composerPreferencesHydrated, composerPreferencesInitialized, mode, selectedModel, videoProfile]);
 
     useEffect(() => {
@@ -711,6 +738,7 @@ export default function CreatePage() {
         };
     };
     const uploadLibraryAssets = async (files: FileList | File[]) => {
+        if (!requireCreationLogin()) return [];
         const next = Array.from(files).filter((file) => creationFileAccepted(mode, file));
         if (!next.length) return [];
         const settled = await Promise.allSettled(
@@ -727,6 +755,7 @@ export default function CreatePage() {
     };
 
     const handleLibrarySelect = async (selectedIds: string[], pickedItems = libraryItems) => {
+        if (!requireCreationLogin()) return;
         const next = creationLibrarySelectionToAttachments(selectedIds, pickedItems, mode, videoReferenceLimits);
         if (!next.length) return;
         const selected = new Set(selectedIds);
@@ -797,6 +826,7 @@ export default function CreatePage() {
 
     const replaceReferenceFromFiles = useCallback(
         async (targetAttachmentId: string, files: File[]) => {
+            if (!requireCreationLogin()) return;
             if (busy || referenceReplacementBusy) return;
             const file = files.find((item) => item.type.startsWith("image/"));
             if (!file) {
@@ -815,7 +845,7 @@ export default function CreatePage() {
                 setReferenceReplacementBusy(false);
             }
         },
-        [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, toast],
+        [addAsset, busy, referenceReplacementBusy, replaceAttachmentReference, requireCreationLogin, toast],
     );
 
     const submit = async (retryContext?: CreationRetryContext, retryLockKey?: string) => {
@@ -849,7 +879,16 @@ export default function CreatePage() {
             releaseSubmitGate();
             return;
         }
-        if (mode === "video" && !videoDurationAllowed(videoProfile, Number(seconds))) {
+        const settingsError = mediaSettingIssues(generationConfig, mode, selectedModel)
+            .map((item) => item.message)
+            .join("；");
+        if (settingsError) {
+            toast.error(settingsError);
+            releaseRetryLock();
+            releaseSubmitGate();
+            return;
+        }
+        if (mode === "video" && videoProfile.durationSupported !== false && !videoDurationAllowed(videoProfile, Number(generationConfig.videoSeconds))) {
             toast.error(t("create.page.durationUnsupported"));
             releaseRetryLock();
             releaseSubmitGate();
@@ -987,7 +1026,7 @@ export default function CreatePage() {
                 if (!result.text?.trim()) throw new Error(t("create.page.noTextResult"));
                 updateOriginAssistant((item) => ({ ...item, content: result.text || "", reasoning: result.reasoning }));
             } else if (mode === "image") {
-                const taskCount = Math.max(1, Math.min(imageProfile.maxOutputs, Math.floor(Number(count) || 1)));
+                const taskCount = Math.max(1, Math.min(imageBatchLimit, Math.floor(Number(count) || 1)));
                 const settled = await runtime.runGenerationOperationOnce(retryContext?.clientOperationId, () =>
                     runtime.runBackendGenerationTaskBatch({
                         mode: "image",
@@ -1149,7 +1188,9 @@ export default function CreatePage() {
     }, [retrySequence]);
 
     const startNewConversation = () => {
+        if (busy || openingCanvas || !conversationStorageReady) return activeId;
         const next = newConversation();
+        setAgentMode(false);
         followLatestMessageRef.current = true;
         setConversations((current) => [next, ...current]);
         setActiveId(next.id);
@@ -1157,6 +1198,7 @@ export default function CreatePage() {
         setAttachments([]);
         setDraftReferences([]);
         setHistoryOpen(false);
+        return next.id;
     };
 
     const continueOnCanvas = async (selectedAssetIds?: string[]) => {
@@ -1204,12 +1246,33 @@ export default function CreatePage() {
     };
 
     const selectConversation = (conversation: CreationConversation) => {
+        if (busy || openingCanvas || !conversationStorageReady) return;
+        setAgentMode(false);
         followLatestMessageRef.current = true;
         setActiveId(conversation.id);
         setPrompt("");
         setAttachments([]);
         setDraftReferences([]);
         setHistoryOpen(false);
+    };
+
+    const selectConversationRoute = useCreationConversationRoute({
+        scope: activeConversationScope,
+        ready: userSessionHydrated && hydrated && conversationStorageReady && conversationScope === activeConversationScope,
+        activeId,
+        canSelect: !busy && !openingCanvas,
+        ids: conversations.map((conversation) => conversation.id),
+        onSelect: (id) => {
+            const conversation = conversationsRef.current.find((item) => item.id === id);
+            if (conversation) selectConversation(conversation);
+        },
+        onNew: startNewConversation,
+    });
+    const startNewConversationFromHistory = () => selectConversationRoute(startNewConversation());
+    const selectConversationFromHistory = (conversation: CreationConversation) => {
+        if (busy || openingCanvas || !conversationStorageReady) return;
+        selectConversation(conversation);
+        selectConversationRoute(conversation.id);
     };
 
     const confirmDeleteConversation = (conversation: CreationConversation) => {
@@ -1235,6 +1298,7 @@ export default function CreatePage() {
                         followLatestMessageRef.current = true;
                         activeIdRef.current = fallback.id;
                         setActiveId(fallback.id);
+                        selectConversationRoute(fallback.id);
                         setPrompt("");
                         setAttachments([]);
                         setDraftReferences([]);
@@ -1402,7 +1466,7 @@ export default function CreatePage() {
         onReorderAttachments: reorderAttachments,
         onReplaceAttachment: replaceReferenceFromTrack,
         onReplaceReferenceFiles: replaceReferenceFromFiles,
-        onOpenLibrary: () => setLibraryOpen(true),
+        onOpenLibrary: openReferenceLibrary,
         onModeChange: selectMode,
         model: selectedModel,
         modelRequirements,
@@ -1437,7 +1501,10 @@ export default function CreatePage() {
         promptOptimizerProvider,
         composerFocusRef,
         onPromptFocus: loadAddedSkills,
-        onSubmit: () => void submit(),
+        onSubmit: () => {
+            if (prompt.trim() && !busy && !referenceReplacementBusy) trackSiteTrafficAction(mode === "text" ? "creation_submit_text" : mode === "image" ? "creation_submit_image" : "creation_submit_video");
+            void submit();
+        },
     };
 
     return (
@@ -1492,7 +1559,7 @@ export default function CreatePage() {
                             <section ref={launchpadRef} className="creation-launchpad" aria-label={t("create.page.launchpadLabel")}>
                                 <header className="creation-start-heading">
                                     <div>
-                                        <h1>{t("create.page.heading", { brand: brandName })}</h1>
+                                        <h1>{themeHomeHeading || t("create.page.heading", { brand: brandName })}</h1>
                                         <p>{t("create.page.subheading")}</p>
                                     </div>
                                     <button type="button" className="creation-history-entry" aria-label={t("create.page.viewHistory")} aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}>
@@ -1522,6 +1589,7 @@ export default function CreatePage() {
                                 <CreationEmptySuggest
                                     onStartPrompt={startPrompt}
                                     onOpenLibrary={() => {
+                                        if (!requireCreationLogin()) return;
                                         setAgentMode(false);
                                         selectMode("image");
                                         setLibraryOpen(true);
@@ -1563,7 +1631,7 @@ export default function CreatePage() {
                 ) : (
                     <div className="creation-thread-workbench">
                         <CreationWorkspaceToolbar
-                            onNewConversation={startNewConversation}
+                            onNewConversation={startNewConversationFromHistory}
                             onOpenHistory={() => setHistoryOpen(true)}
                             shots={videoShots}
                             onJumpToShot={jumpToShot}
@@ -1605,9 +1673,9 @@ export default function CreatePage() {
                 open={historyOpen}
                 conversations={historyConversations}
                 activeId={activeConversation.id}
-                onNew={startNewConversation}
+                onNew={startNewConversationFromHistory}
                 onClose={() => setHistoryOpen(false)}
-                onSelect={selectConversation}
+                onSelect={selectConversationFromHistory}
                 onDelete={confirmDeleteConversation}
                 onRename={renameConversationTitle}
             />
@@ -1626,7 +1694,14 @@ export default function CreatePage() {
                             accept: creationUploadAccept(mode),
                             description: mode === "text" ? t("create.page.uploadHintText") : mode === "video" ? t("create.page.uploadHintVideo") : t("create.page.uploadHintImage"),
                             onUpload: uploadLibraryAssets,
-                            external: { accept: "image/*", description: t("create.page.uploadHintEagle"), onUpload: (files, folderId) => externalAssetSources.uploadExternalFiles(files, folderId) },
+                            external: {
+                                accept: "image/*",
+                                description: t("create.page.uploadHintEagle"),
+                                onUpload: (files, folderId) => {
+                                    if (!requireCreationLogin()) return Promise.resolve([]);
+                                    return externalAssetSources.uploadExternalFiles(files, folderId);
+                                },
+                            },
                         }}
                         onClose={() => setLibraryOpen(false)}
                         onConfirm={handleLibrarySelect}

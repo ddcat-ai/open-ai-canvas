@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -145,7 +146,7 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 		if err != nil {
 			return fmt.Errorf("校验官方插件包 %s：%w", entry.Name(), err)
 		}
-		packageData, pkg := official.data, official.info
+		pkg := official.info
 		if strings.HasPrefix(strings.TrimSpace(pkg.Manifest.Runtime.Backend), "host:") {
 			return fmt.Errorf("官方插件 %q 不能依赖 host 执行器", pkg.Manifest.Metadata.ID)
 		}
@@ -173,7 +174,7 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 		}
 		hash := official.hash
 		packageName := hash + ".yingce-plugin"
-		if err := cachePluginPackage(filepath.Join(c.packageDir, packageName), packageData, official.path); err != nil {
+		if err := cachePluginPackage(filepath.Join(c.packageDir, packageName), official); err != nil {
 			return fmt.Errorf("缓存官方插件 %q：%w", id, err)
 		}
 		now := time.Now().UTC()
@@ -243,57 +244,75 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 	return c.writeRegistry(result)
 }
 
-// officialPluginPackage 是一次读取官方插件包得到的全部结果：原始字节、摘要与清单。
+// 检查结果只携带清单和源文件身份，整包字节在本次校验后即可回收。
 type officialPluginPackage struct {
-	path string
-	data []byte
-	hash string
-	info protocol.PluginPackageInfo
+	path   string
+	source os.FileInfo
+	hash   string
+	info   protocol.PluginPackageInfo
 }
 
-type officialPluginPackageKey struct {
-	path    string
-	size    int64
-	modTime int64
+type officialPluginPackageMetadata struct {
+	source   os.FileInfo
+	hash     string
+	manifest string
 }
 
-// officialPluginPackageCache 在进程内缓存官方插件包的读取结果。
-//
-// 官方包随镜像发布、运行期间不会变化；以路径 + 大小 + 修改时间作键，文件被替换时
-// 自然失效。生产环境每个进程只构造一次 Service，缓存几乎无收益；但测试会构造上千个
-// Service，每次重新读取、哈希、解析 85MB 的官方包会让后端测试慢数分钟。
-var officialPluginPackageCache sync.Map // officialPluginPackageKey -> officialPluginPackage
+// 重复构造 Service 仍复用包校验结果；每个路径只保留最新的小型元数据，
+// 不为测试提速在生产中常驻所有平台的支付 ZIP。锁也避免并发冷启动重复读入大包。
+var officialPluginPackageCache = struct {
+	sync.Mutex
+	entries map[string]officialPluginPackageMetadata
+}{entries: make(map[string]officialPluginPackageMetadata)}
 
 func inspectOfficialPluginPackage(path string) (officialPluginPackage, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return officialPluginPackage{}, err
+	}
+	officialPluginPackageCache.Lock()
+	defer officialPluginPackageCache.Unlock()
 	info, err := os.Stat(path)
 	if err != nil {
+		delete(officialPluginPackageCache.entries, path)
 		return officialPluginPackage{}, err
 	}
-	key := officialPluginPackageKey{path: path, size: info.Size(), modTime: info.ModTime().UnixNano()}
-	if cached, ok := officialPluginPackageCache.Load(key); ok {
-		result := cached.(officialPluginPackage)
-		// Manifest 含指针与切片字段；每个调用方拿到独立解码的副本，缓存条目永远不会被共享修改。
-		// 清单只有几 KB，重新解码的成本可以忽略，昂贵的是读包、哈希与 zip 结构校验。
-		var manifest protocol.Manifest
-		if err := json.Unmarshal(result.info.ManifestRaw, &manifest); err != nil {
+	cached, ok := officialPluginPackageCache.entries[path]
+	if !ok || !sameOfficialPluginFile(cached.source, info) {
+		delete(officialPluginPackageCache.entries, path)
+		if !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > protocol.PluginPackageMaxBytes {
+			return officialPluginPackage{}, errors.New("官方插件包不是有效大小的普通文件")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
 			return officialPluginPackage{}, err
 		}
-		result.info.Manifest = manifest
-		return result, nil
+		// 只解压清单，保留协议包的完整结构校验；执行时仍校验摘要并解压本机平台。
+		pkg, err := protocol.InspectPluginPackage(data)
+		if err != nil {
+			return officialPluginPackage{}, err
+		}
+		after, err := os.Stat(path)
+		if err != nil {
+			return officialPluginPackage{}, err
+		}
+		if !sameOfficialPluginFile(info, after) || int64(len(data)) != info.Size() {
+			return officialPluginPackage{}, errors.New("官方插件包在校验期间发生变化")
+		}
+		cached = officialPluginPackageMetadata{source: info, hash: pluginHash(data), manifest: string(pkg.ManifestRaw)}
+		officialPluginPackageCache.entries[path] = cached
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
+	// 冷、热路径均独立解码，也不把缓存的原始清单切片暴露给调用方。
+	raw := []byte(cached.manifest)
+	var manifest protocol.Manifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return officialPluginPackage{}, err
 	}
-	// 启动只需要清单：支付插件包内含多平台可执行文件（解压约 44MB/个），
-	// 真正落盘执行时 reload 会按摘要校验并只解压本机平台需要的文件。
-	pkg, err := protocol.InspectPluginPackage(data)
-	if err != nil {
-		return officialPluginPackage{}, err
-	}
-	result := officialPluginPackage{path: path, data: data, hash: pluginHash(data), info: pkg}
-	officialPluginPackageCache.Store(key, result)
-	return result, nil
+	return officialPluginPackage{path: path, source: cached.source, hash: cached.hash, info: protocol.PluginPackageInfo{Manifest: manifest, ManifestRaw: raw}}, nil
+}
+
+func sameOfficialPluginFile(left, right os.FileInfo) bool {
+	return left != nil && right != nil && os.SameFile(left, right) && left.Size() == right.Size() && left.ModTime().Equal(right.ModTime())
 }
 
 func isSystemPaymentPluginID(id string) bool {
@@ -916,20 +935,59 @@ func (c *pluginRuntime) writeRegistry(records []pluginRegistryRecord) error {
 	return writePluginFile(c.registryPath, data)
 }
 
-// cachePluginPackage 写入以内容摘要命名的插件包缓存。文件名即摘要，且 writePluginFile
-// 通过临时文件 + rename 原子发布，所以同名文件存在且大小一致就是同一份内容，无需重写。
-//
-// source 非空时先尝试硬链接到官方包原文件（同一文件系统内零拷贝）；跨文件系统
-// （生产环境镜像目录与 /data 卷）会失败并回退为普通写入。即使链接到的内容与摘要
-// 不一致，reload 也会按摘要校验并把插件标为 invalid，不会放过错误的包。
-func cachePluginPackage(path string, data []byte, source string) error {
-	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Size() == int64(len(data)) {
+// 官方包随镜像不可变发布。已存在的摘要文件和同文件系统硬链接继续复用，
+// 跨文件系统则流式复制并校验摘要后原子发布，不需要把整包再次读入内存。
+func cachePluginPackage(path string, official officialPluginPackage) error {
+	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() && info.Size() == official.source.Size() {
 		return nil
 	}
-	if source != "" && os.Link(source, path) == nil {
-		return nil
+	source, err := os.Open(official.path)
+	if err != nil {
+		return err
 	}
-	return writePluginFile(path, data)
+	defer source.Close()
+	info, err := source.Stat()
+	if err != nil {
+		return err
+	}
+	if !sameOfficialPluginFile(official.source, info) {
+		return errors.New("官方插件包在缓存落盘前发生变化")
+	}
+	if os.Link(official.path, path) == nil {
+		linked, err := os.Stat(path)
+		if err == nil && sameOfficialPluginFile(official.source, linked) {
+			return nil
+		}
+		if removeErr := os.Remove(path); removeErr != nil {
+			return fmt.Errorf("清理变化的官方插件包缓存失败：%w", removeErr)
+		}
+		return errors.New("官方插件包在缓存链接期间发生变化")
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".plugin-*.tmp")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	defer temporary.Close()
+	if err := temporary.Chmod(0o600); err != nil {
+		return err
+	}
+	digest := sha256.New()
+	written, err := io.Copy(io.MultiWriter(temporary, digest), io.LimitReader(source, official.source.Size()+1))
+	if err != nil {
+		return err
+	}
+	if written != official.source.Size() || hex.EncodeToString(digest.Sum(nil)) != official.hash {
+		return errors.New("官方插件包缓存完整性校验失败")
+	}
+	if err := temporary.Sync(); err != nil {
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, path)
 }
 
 func writePluginFile(path string, data []byte) error {

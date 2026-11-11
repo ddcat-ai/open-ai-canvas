@@ -635,13 +635,14 @@ func TestCloudAgentToolLoopPersistsApprovalAndAppliesCanvasWrite(t *testing.T) {
 func TestCloudAgentNodeTypesExposeExecutableAllowList(t *testing.T) {
 	result := cloudAgentNodeTypes()
 	nodes, ok := result["nodes"].([]map[string]any)
-	if !ok || len(nodes) != 10 {
+	if !ok || len(nodes) != 9 {
 		t.Fatalf("unexpected node registry: %#v", result)
 	}
 	var character map[string]any
 	for _, node := range nodes {
-		if node["type"] == "panorama" {
-			t.Fatal("UI-only node must not be exposed")
+		switch node["type"] {
+		case "panorama", "markdown", "html", "svg", "chart", "compare":
+			t.Fatalf("retired or UI-only node must not be exposed: %s", node["type"])
 		}
 		if node["type"] == "character" {
 			character = node

@@ -8,6 +8,7 @@ import { canonicalGenerationMetadata } from "@/lib/canvas/generation-contract";
 import { resolveCanvasGenerationModel } from "@/lib/canvas/canvas-project-generation";
 import { withReferenceImageSize, type ImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import { resolvedMediaConfig } from "@/lib/media-settings";
 import type { CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
 import type { CanvasNodeGenerationMode } from "./canvas-node-prompt-panel";
 
@@ -64,7 +65,7 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
             videoWatermark: globalConfig.videoWatermark || defaultConfig.videoWatermark,
         },
     );
-    return {
+    const result: AiConfig = {
         ...globalConfig,
         model,
         quality: defaults.quality ?? globalConfig.quality ?? defaultConfig.quality,
@@ -76,6 +77,7 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
         vquality: defaults.vquality ?? normalizeVideoResolution(globalConfig.vquality || defaultConfig.vquality),
         videoGenerateAudio: defaults.videoGenerateAudio ?? globalConfig.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: defaults.videoWatermark ?? globalConfig.videoWatermark ?? defaultConfig.videoWatermark,
+        videoArkPrivateAssetUpload: node.metadata?.arkPrivateAssetUpload ?? globalConfig.videoArkPrivateAssetUpload ?? defaultConfig.videoArkPrivateAssetUpload,
         audioVoice: node.metadata?.audioVoice ?? globalConfig.audioVoice ?? defaultConfig.audioVoice,
         audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat || defaultConfig.audioFormat,
         audioSpeed: node.metadata?.audioSpeed || globalConfig.audioSpeed || defaultConfig.audioSpeed,
@@ -94,6 +96,7 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
         audioEmotionCalm: node.metadata?.audioEmotionCalm || globalConfig.audioEmotionCalm || defaultConfig.audioEmotionCalm,
         count: defaults.count ?? String(node.metadata?.count || (mode === "image" ? globalConfig.canvasImageCount || globalConfig.count : globalConfig.count) || defaultConfig.count),
     };
+    return resolvedMediaConfig(result, mode);
 }
 
 export function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageContent: boolean, hasTextContent: boolean) {

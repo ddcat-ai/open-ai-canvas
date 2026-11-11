@@ -111,19 +111,20 @@ const videoPollTimeout = time.Hour
 const maxProviderResponseBytes int64 = 64 << 20
 
 type providerMedia struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	DataURL    string `json:"dataUrl"`
-	URL        string `json:"url"`
-	StorageKey string `json:"storageKey"`
-	Role       string `json:"role,omitempty"`
-	SlotKey    string `json:"slotKey,omitempty"`
-	MimeType   string `json:"mimeType"`
-	Bytes      int64  `json:"bytes"`
-	Width      int    `json:"width"`
-	Height     int    `json:"height"`
-	DurationMs int64  `json:"durationMs"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Type             string `json:"type"`
+	DataURL          string `json:"dataUrl"`
+	URL              string `json:"url"`
+	StorageKey       string `json:"storageKey"`
+	SourceResourceID string `json:"sourceResourceId,omitempty"`
+	Role             string `json:"role,omitempty"`
+	SlotKey          string `json:"slotKey,omitempty"`
+	MimeType         string `json:"mimeType"`
+	Bytes            int64  `json:"bytes"`
+	Width            int    `json:"width"`
+	Height           int    `json:"height"`
+	DurationMs       int64  `json:"durationMs"`
 }
 
 type imageResponse struct {
@@ -169,6 +170,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		return nil, err
 	}
 	input.Config = config
+	ctx = s.withGenerationSnapshot(ctx, userID, input)
 	if input.Mode == "text" && input.Config.CapabilityConfig != nil && input.Config.CapabilityConfig.Text != nil {
 		// The same capability contract drives provider output limits, billing
 		// estimates and Agent context budgeting. Never silently fall back to a

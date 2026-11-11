@@ -3,7 +3,7 @@ import { App, Button } from "antd";
 import { Check, ChevronLeft, ChevronRight, Copy, Flame, X } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
-import { DRAMA_STYLE_CATEGORIES, findDramaStyle, styleCoverBackground } from "@/lib/drama/drama-styles";
+import { DRAMA_STYLE_CATEGORIES, DRAMA_STYLE_FORMS, findDramaStyle, parseDramaStyleId, styleCoverBackground } from "@/lib/drama/drama-styles";
 
 const DETAIL_ROWS = [
     { key: "medium", label: "画面媒介" },
@@ -21,6 +21,7 @@ export function DramaStyleDetailModal({
     onNavigate,
     onUse,
     onClose,
+    disabled = false,
 }: {
     styleId: string | null;
     selectedId: string;
@@ -28,6 +29,7 @@ export function DramaStyleDetailModal({
     onNavigate: (id: string) => void;
     onUse: (id: string) => void;
     onClose: () => void;
+    disabled?: boolean;
 }) {
     const { message } = App.useApp();
     const style = styleId ? findDramaStyle(styleId) : undefined;
@@ -57,7 +59,8 @@ export function DramaStyleDetailModal({
     };
 
     const active = style?.id === selectedId;
-    const categoryLabel = style ? DRAMA_STYLE_CATEGORIES.find((item) => item.key === style.category)?.label : "";
+    const composition = style ? parseDramaStyleId(style.id) : undefined;
+    const categoryLabel = composition ? `${DRAMA_STYLE_FORMS.find((form) => form.id === composition.formId)?.name} · 自由组合` : style ? DRAMA_STYLE_CATEGORIES.find((item) => item.key === style.category)?.label : "";
 
     return (
         <AppModal open={Boolean(style)} onCancel={onClose} footer={null} title={null} closable={false} flush centered width="min(880px, calc(100vw - 48px))" rootClassName="drama-root" aria-label="风格详情">
@@ -126,7 +129,7 @@ export function DramaStyleDetailModal({
                             <Button icon={<ChevronRight className="size-4" />} disabled={!nextId} onClick={() => nextId && onNavigate(nextId)} aria-label="下一个风格" />
                             <span className="flex-1" />
                             <Button onClick={onClose}>关闭</Button>
-                            <Button type="primary" icon={active ? <Check className="size-4" /> : undefined} disabled={active} onClick={() => onUse(style.id)}>
+                            <Button type="primary" icon={active ? <Check className="size-4" /> : undefined} disabled={active || disabled} title={disabled ? "正在保存，请稍候再调整风格" : undefined} onClick={() => onUse(style.id)}>
                                 {active ? "当前已选" : "使用此风格"}
                             </Button>
                         </footer>

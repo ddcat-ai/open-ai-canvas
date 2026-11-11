@@ -367,7 +367,7 @@ function syncSelection(rect: Rect, selection: SelectionBox, theme: CanvasTheme) 
         y: Math.min(selection.startWorldY, selection.currentWorldY),
         width: Math.abs(selection.currentWorldX - selection.startWorldX),
         height: Math.abs(selection.currentWorldY - selection.startWorldY),
-        fill: "transparent",
+        fill: theme.canvas.selectionFill,
         stroke: theme.node.label,
         opacity: selection.hitMode === "intersect" ? 0.82 : 0.68,
     });

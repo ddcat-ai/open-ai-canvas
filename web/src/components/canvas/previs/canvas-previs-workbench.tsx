@@ -93,7 +93,7 @@ import { usePrevisWorkbenchStore } from "@/stores/canvas/use-previs-workbench-st
 import { PREVIS_MODES, previsModeCapabilities } from "@/lib/canvas/previs/previs-modes";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
-import type { PrevisCameraMove, PrevisRenderMode, PrevisScene, PrevisSceneOutput, PrevisTransform, PrevisVec3 } from "@/types/previs";
+import type { PrevisCameraMove, PrevisCanvasExport, PrevisRenderMode, PrevisScene, PrevisSceneOutput, PrevisTransform, PrevisVec3 } from "@/types/previs";
 export { cameraMoveOptions, poseOptions, shotSizeOptions } from "./previs-inspectors";
 
 export function CanvasPrevisWorkbench({
@@ -105,6 +105,7 @@ export function CanvasPrevisWorkbench({
     onClose,
     onChange,
     onApply,
+    onAddToCanvas,
     onDeleteImageNode,
     onFlush,
 }: {
@@ -116,6 +117,7 @@ export function CanvasPrevisWorkbench({
     onClose: () => void;
     onChange: (scene: PrevisScene) => void;
     onApply: (output: PrevisSceneOutput) => Promise<void>;
+    onAddToCanvas: (output: PrevisCanvasExport) => Promise<void>;
     onDeleteImageNode: (nodeId: string) => void;
     onFlush?: () => void | Promise<void>;
 }) {
@@ -135,6 +137,23 @@ export function CanvasPrevisWorkbench({
     const [history, setHistory] = useState<PrevisScene[]>([]);
     const [future, setFuture] = useState<PrevisScene[]>([]);
     const [saving, setSaving] = useState(false);
+    const [screenshot, setScreenshot] = useState<{ output: Extract<PrevisCanvasExport, { kind: "screenshot" }>; url: string; added: boolean } | null>(null);
+    const [capturing, setCapturing] = useState(false);
+    const captureRequestRef = useRef<AbortController | null>(null);
+    const [addingToCanvas, setAddingToCanvas] = useState(false);
+    const addingToCanvasRef = useRef(false);
+    useEffect(
+        () => () => {
+            if (screenshot) URL.revokeObjectURL(screenshot.url);
+        },
+        [screenshot?.url],
+    );
+    useEffect(() => {
+        setScreenshot(null);
+        return () => {
+            captureRequestRef.current?.abort();
+        };
+    }, [effectiveCanvasId, scene?.id, open]);
     const [recording, setRecording] = useState(false);
     const [lastClayExport, setLastClayExport] = useState<{ shotId: string; at: number } | null>(null);
     const [depthExporting, setDepthExporting] = useState(false);
@@ -654,6 +673,29 @@ export function CanvasPrevisWorkbench({
         }
     };
 
+    const addToCanvas = async (output: PrevisCanvasExport) => {
+        if (addingToCanvasRef.current) return;
+        addingToCanvasRef.current = true;
+        setAddingToCanvas(true);
+        try {
+            await onAddToCanvas(output);
+            if (output.kind === "screenshot") setScreenshot((current) => (current?.output === output ? { ...current, added: true } : current));
+            message.success(output.kind === "prompt" ? "提示词已加入画布" : output.renderMode === "beauty" || output.renderMode === "clay" ? "截图与图生视频节点已加入画布，返回画布后选择模型生成" : "控制图已加入画布，可连接到支持该控制类型的模型");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "加入画布失败，请重试");
+        } finally {
+            addingToCanvasRef.current = false;
+            setAddingToCanvas(false);
+        }
+    };
+    const addPromptToCanvas = () => {
+        stagedTransaction.end("commit");
+        const current = draftRef.current;
+        const shot = current?.shots.find((item) => item.id === current.activeShotId) || current?.shots[0];
+        if (!current || !shot) return;
+        void addToCanvas({ kind: "prompt", sceneId: current.id, shotId: shot.id, title: shot.name, prompt: compilePrevisPrompt(current, shot) });
+    };
+
     /** 统一的「添加到场景」弹窗：选项 + 实时预览，确认后才写入场景。 */
     const [addDialog, setAddDialog] = useState<{ open: boolean; kind: PrevisAddKind }>({ open: false, kind: "actor" });
     const openAddDialog = (kind: PrevisAddKind) => setAddDialog({ open: true, kind });
@@ -1008,16 +1050,32 @@ export function CanvasPrevisWorkbench({
     const renderModeFileLabel = () => PREVIS_RENDER_MODE_LABELS.find((item) => item.value === renderMode)?.label || "预览";
     const outputFileName = (suffix: string, extension: string) => `${(draftRef.current?.title || "预演").replace(/[\\/:*?"<>|]/g, "_")}-${activeShot?.name || "镜头"}-${suffix}.${extension}`;
 
-    /** 内置截图：当前渲染模式、镜头摄影机、镜头画幅，直接下载。 */
+    /** 下载与侧栏共用同一帧；提示词、镜头和时间码在捕捉时冻结。 */
     async function downloadShotScreenshot() {
-        if (!viewportRef.current || !activeShot) return;
+        stagedTransaction.end("commit");
+        const current = draftRef.current;
+        if (!viewportRef.current || !current || !activeShot || captureRequestRef.current) return;
+        const controller = new AbortController();
+        captureRequestRef.current = controller;
+        setCapturing(true);
+        const timecode = formatPrevisTimecode(playhead, activeShot.fps);
+        const prompt = compilePrevisPrompt(current, activeShot);
+        const title = `${activeShot.name} · ${renderModeFileLabel()}`;
+        const fileName = outputFileName(`${renderModeFileLabel()}-${timecode.replaceAll(":", "")}`, "png");
         try {
             const range = renderMode === "depth" ? resolveShotDepthRange() : null;
-            const blob = await viewportRef.current.capture(renderMode, { depthNear: range?.near, depthFar: range?.far });
-            saveAs(blob, outputFileName(`${renderModeFileLabel()}-${formatPrevisTimecode(playhead, activeShot.fps).replaceAll(":", "")}`, "png"));
-            message.success("已保存当前镜头截图");
+            const blob = await viewportRef.current.capture(renderMode, { depthNear: range?.near, depthFar: range?.far, signal: controller.signal });
+            controller.signal.throwIfAborted();
+            setScreenshot({ output: { kind: "screenshot", sceneId: current.id, shotId: activeShot.id, title, prompt, image: blob, renderMode, timecode, duration: activeShot.duration }, url: URL.createObjectURL(blob), added: false });
+            setInspectorOpen(true);
+            setInspectorDocked(true);
+            saveAs(blob, fileName);
+            message.success("截图已下载，并保留在右侧预览");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "截图失败");
+            if (!controller.signal.aborted) message.error(error instanceof Error ? error.message : "截图失败");
+        } finally {
+            captureRequestRef.current = null;
+            setCapturing(false);
         }
     }
 
@@ -1376,7 +1434,7 @@ export function CanvasPrevisWorkbench({
                     </button>
                 ) : null}
                 <Select className="previs-desk-header-select" aria-label="预览模式" value={renderMode} options={renderModeOptions} onChange={(value: PrevisRenderMode) => setRenderMode(value)} size="small" />
-                <button type="button" className="previs-desk-header-action" title="截图：当前渲染模式 · 镜头摄影机 (P)" onClick={() => void downloadShotScreenshot()}>
+                <button type="button" className="previs-desk-header-action" title="截图：当前渲染模式 · 镜头摄影机 (P)" disabled={capturing} onClick={() => void downloadShotScreenshot()}>
                     <Aperture className="size-3.5" />
                     截图
                 </button>
@@ -1796,6 +1854,19 @@ export function CanvasPrevisWorkbench({
                         </div>
                     </div>
 
+                    {screenshot ? (
+                        <section className="pv-screenshot" aria-label="最新镜头截图" data-canvas-no-zoom>
+                            <div className="pv-screenshot__heading">
+                                <span>最新截图</span>
+                                <span>{screenshot.output.timecode}</span>
+                            </div>
+                            <img src={screenshot.url} alt={`${screenshot.output.title}，${screenshot.output.timecode}`} />
+                            <div className="pv-screenshot__caption">{screenshot.output.title}</div>
+                            <Button size="small" block disabled={screenshot.added || addingToCanvas} loading={addingToCanvas && !screenshot.added} onClick={() => void addToCanvas(screenshot.output)}>
+                                {screenshot.added ? "已加入画布" : screenshot.output.renderMode === "beauty" || screenshot.output.renderMode === "clay" ? "加入画布做图生视频" : "加入画布"}
+                            </Button>
+                        </section>
+                    ) : null}
                     <div className="pv-detail-block">
                         {selectedObject ? (
                             <ObjectInspector
@@ -1878,6 +1949,18 @@ export function CanvasPrevisWorkbench({
                                     }}
                                 >
                                     复制
+                                </button>
+                                <button
+                                    type="button"
+                                    className="pv-prompt-copy"
+                                    aria-label="将镜头提示词加入画布"
+                                    disabled={!compiledPrompt || addingToCanvas}
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        addPromptToCanvas();
+                                    }}
+                                >
+                                    加入画布
                                 </button>
                             </summary>
                             <div className="pv-prompt-preview__text">{compiledPrompt || "提示词将在生成时自动编译"}</div>
