@@ -1,5 +1,6 @@
 [data-admin-root] .admin-global-search-bar {
-    display: flex;
+    /* 暂时隐藏全局搜索栏，释放内容区高度。 */
+    display: none;
     flex-shrink: 0;
     justify-content: flex-end;
     padding: var(--admin-space) calc(var(--admin-space) * 2);

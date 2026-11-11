@@ -36,6 +36,32 @@ func imageParameterTestAdapter(t *testing.T, packageID, providerID string) proto
 	return nil
 }
 
+// 插件声明大写档位时，小写输入也应通过，并在服务端与价格档里回填声明写法。
+func TestImageParameterResolutionCanonicalizesDeclaredCasing(t *testing.T) {
+	parameters := []protocol.ImageParameter{{Name: "imageResolution", Label: "分辨率", Type: "string", Values: []any{"1K", "2K", "4K"}, Default: "1K", Pricing: true}}
+	resolved, err := resolveImageParameterValues(parameters, map[string]any{"imageResolution": "2k"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved["imageResolution"] != "2K" {
+		t.Fatalf("resolved value = %#v, want declared 2K", resolved["imageResolution"])
+	}
+	config := providerConfig{ImageResolution: "4k"}
+	if err := applyImageParameterValues(&config, &ImageCapabilityConfig{Parameters: parameters}); err != nil {
+		t.Fatal(err)
+	}
+	if config.ImageResolution != "4K" || config.ImageParameters["imageResolution"] != "4K" {
+		t.Fatalf("outbound config kept lowercase: %+v", config)
+	}
+	selector := map[string]string{"imageResolution": "2k"}
+	if err := validateImageParameterPriceSelector(parameters, selector); err != nil {
+		t.Fatal(err)
+	}
+	if selector["imageResolution"] != "2K" {
+		t.Fatalf("price selector kept lowercase: %v", selector)
+	}
+}
+
 func TestImageParameterRatioUsesDeclaredPixelPreset(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("openai-image", "GPT Image 2.5")
 	profile.Image.Parameters = []protocol.ImageParameter{{
@@ -321,6 +347,10 @@ func TestImageParametersPixelSelectionKeepsExactSizeWithoutResolution(t *testing
 	profile.Image.Size.Presets = []ImageSizePreset{{Tier: "1k", Ratio: "1:1", Width: 1024, Height: 1024, Size: "1024x1024"}, {Tier: "2k", Ratio: "1:1", Width: 2048, Height: 2048, Size: "2048x2048"}}
 	if err := projectImageParameters(profile.Image); err != nil {
 		t.Fatal(err)
+	}
+	spec, err := CapabilitySpecFromModelCapabilityConfig(profile, "image")
+	if err != nil || spec.ImageSize == nil || len(spec.ImageSize.Presets) != 2 {
+		t.Fatalf("pixel-only public projection lost configured groups: %#v %v", spec.ImageSize, err)
 	}
 	config := providerConfig{InterfaceType: "opaque-provider", Size: "2048x2048", ImageParameters: map[string]any{"size": "2048x2048"}}
 	if err := applyImageParameterValues(&config, profile.Image); err != nil {

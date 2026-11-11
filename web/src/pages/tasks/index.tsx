@@ -129,7 +129,9 @@ export default function TasksPage() {
             tasks
                 .filter((task) => {
                     if (statusFilter === "all") return true;
-                    if (statusFilter === "active") return task.status === "queued" || task.status === "running";
+                    // 非终态一律视作进行中：后端可能出现枚举之外的中间态（如 Agent 控制面超时任务），
+                    // 按白名单匹配会让这些任务既不在任何 tab 里、总数也对不上。
+                    if (statusFilter === "active") return task.status !== "succeeded" && task.status !== "failed" && task.status !== "cancelled";
                     if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
                     if (statusFilter === "succeeded") return task.status === "succeeded";
                     return false;
@@ -156,9 +158,10 @@ export default function TasksPage() {
                 const created = new Date(task.createdAt);
                 if (!Number.isNaN(created.getTime()) && created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth() && created.getDate() === now.getDate()) today += 1;
             }
-            if (task.status === "queued" || task.status === "running") active += 1;
-            else if (task.status === "succeeded") succeeded += 1;
+            // 与筛选保持一致：非终态（含未知中间态）都计入「进行中」，保证各 tab 之和等于总数。
+            if (task.status === "succeeded") succeeded += 1;
             else if (task.status === "failed" || task.status === "cancelled") failed += 1;
+            else active += 1;
         }
         return { total: tasks.length, today, active, succeeded, failed };
     }, [tasks]);

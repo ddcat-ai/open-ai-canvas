@@ -105,6 +105,8 @@ export type EcommercePlanImage = {
     deliveryStatus?: "pending" | "delivered";
     referenceScreen?: EcommerceReferenceScreen;
     sourceDraft?: EcommerceDraft;
+    /** Set only on images read from an archived round; edits must patch that round. */
+    roundId?: string;
 };
 export type EcommercePlan = {
     productSummary: string;
@@ -154,9 +156,25 @@ export type EcommerceProject = {
     revision: number;
     draftJson: string;
     planJson: string;
+    activeRoundId?: string;
+    roundCount?: number;
+    coverTaskIds?: string[];
     createdAt: string;
     updatedAt: string;
 };
+export type EcommerceRound = {
+    id: string;
+    projectId: string;
+    ordinal: number;
+    imageCount: number;
+    version: number;
+    createdAt: string;
+    updatedAt: string;
+    plan: EcommercePlan | null;
+};
+export type EcommerceRoundPage = { rounds: EcommerceRound[]; total: number; hasMore: boolean };
+export type EcommerceRoundConversion = { createdRounds: number; totalRounds: number; totalImages: number };
+export type EcommerceSaveOptions = { historyMode?: "rounds"; advanceRound?: boolean; activeRoundId?: string };
 
 export const emptyEcommerceDraft = (): EcommerceDraft => ({
     productName: "",
@@ -232,16 +250,34 @@ export function deleteEcommerceProjects(request: { ids?: string[]; all?: boolean
 export function createEcommerceProject() {
     return http.post<EcommerceProject>("/ecommerce/projects", {});
 }
-export function getEcommerceProject(id: string) {
-    return http.get<EcommerceProject>(`/ecommerce/projects/${encodeURIComponent(id)}`);
+export function getEcommerceProject(id: string, options?: { history?: "active" }) {
+    const suffix = options?.history ? `?history=${encodeURIComponent(options.history)}` : "";
+    return http.get<EcommerceProject>(`/ecommerce/projects/${encodeURIComponent(id)}${suffix}`);
 }
-export function saveEcommerceProject(project: EcommerceProject, draft: EcommerceDraft, plan: EcommercePlan | null) {
+export function saveEcommerceProject(project: EcommerceProject, draft: EcommerceDraft, plan: EcommercePlan | null, options?: EcommerceSaveOptions) {
     return http.put<EcommerceProject>(`/ecommerce/projects/${encodeURIComponent(project.id)}`, {
         revision: project.revision,
         name: draft.productName || project.name,
         draft,
-        ...(plan ? { plan } : {}),
+        // Round-mode saves never upload archived rounds. The active plan is the
+        // only plan the server stores on the project row.
+        ...(plan ? { plan: options?.historyMode === "rounds" ? { ...plan, previousImages: undefined } : plan } : {}),
+        ...(options?.historyMode ? { historyMode: options.historyMode, advanceRound: Boolean(options.advanceRound), ...(options.activeRoundId ? { activeRoundId: options.activeRoundId } : {}) } : {}),
     });
+}
+/** Idempotently converts legacy inline history into round rows. 404 on older servers. */
+export function convertEcommerceProjectRounds(id: string, revision: number) {
+    return http.post<{ project: EcommerceProject; conversion: EcommerceRoundConversion }>(`/ecommerce/projects/${encodeURIComponent(id)}/rounds-convert`, { revision });
+}
+export function listEcommerceRounds(id: string, options?: { limit?: number; before?: number }) {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.before) params.set("before", String(options.before));
+    const query = params.toString();
+    return http.get<EcommerceRoundPage>(`/ecommerce/projects/${encodeURIComponent(id)}/rounds${query ? `?${query}` : ""}`);
+}
+export function patchEcommerceRoundImage(projectId: string, roundId: string, imageId: string, update: { version: number; image?: EcommercePlanImage; remove?: boolean }) {
+    return http.patch<EcommerceRound>(`/ecommerce/projects/${encodeURIComponent(projectId)}/rounds/${encodeURIComponent(roundId)}/images/${encodeURIComponent(imageId)}`, update);
 }
 
 export function getEcommerceSkillPrompt(skillIds: string[]) {

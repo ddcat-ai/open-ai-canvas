@@ -467,14 +467,14 @@ func TestCloudAgentReadTextLoadsOwnedResource(t *testing.T) {
 
 func TestCloudAgentCanvasStateBoundsDefaultBodyProjection(t *testing.T) {
 	body := strings.Repeat("长正文 ", 999) + "长正文"
-	doc := map[string]any{"nodes": []map[string]any{{"id": "markdown", "type": "markdown", "title": "长文档", "metadata": map[string]any{"content": body}}}, "connections": []map[string]any{}}
+	doc := map[string]any{"nodes": []map[string]any{{"id": "markdown", "type": "text", "title": "长文档", "metadata": map[string]any{"content": body, "textFormat": "markdown"}}}, "connections": []map[string]any{}}
 	view, err := cloudAgentCanvasState(nil, "user", "agent-canvas", doc, 0, nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	item := view.(map[string]any)["nodes"].([]any)[0].(map[string]any)
 	content := stringValue(item["content"])
-	if len([]rune(content)) > 323 || item["contentTruncated"] != true {
+	if len([]rune(content)) > 323 || item["contentTruncated"] != true || item["textFormat"] != "markdown" {
 		t.Fatalf("default canvas read was not bounded: len=%d item=%v", len([]rune(content)), item)
 	}
 	precise, err := cloudAgentCanvasState(nil, "user", "agent-canvas", doc, 0, []string{"markdown"}, 0)
@@ -482,7 +482,7 @@ func TestCloudAgentCanvasStateBoundsDefaultBodyProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	preciseItem := precise.(map[string]any)["nodes"].([]any)[0].(map[string]any)
-	if stringValue(preciseItem["content"]) != body || preciseItem["contentTruncated"] != nil {
+	if stringValue(preciseItem["content"]) != body || preciseItem["contentTruncated"] != nil || preciseItem["textFormat"] != "markdown" {
 		t.Fatalf("precise canvas read lost full content: got=%d want=%d item=%v", len([]rune(stringValue(preciseItem["content"]))), len([]rune(body)), preciseItem)
 	}
 }

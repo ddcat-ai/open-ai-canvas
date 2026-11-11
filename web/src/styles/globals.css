@@ -931,7 +931,7 @@
     --border: oklch(0.2 0.01 286 / 0.1);
     /* 焦点环跟随主操作色（皮肤会覆盖 --workspace-accent / --ring）。 */
     --ring: color-mix(in srgb, var(--workspace-accent) 55%, transparent);
-    --background: oklch(0.993 0.002 286);
+    --background: #ffffff;
     --foreground: oklch(0.17 0.006 286);
     /* 文字三级：同一色相，不同透明度。 */
     --text-primary: var(--foreground);
@@ -2001,11 +2001,11 @@
     }
 
     .app-user-workspace {
-        /* 用户端工作区：浅灰画布 + 白色内容面，弱化后台式分隔线。 */
-        --workspace-canvas: #f4f4f5;
+        /* 页面、导航和内容共用默认背景；用户皮肤仍可覆盖语义源。 */
+        --workspace-canvas: var(--background);
         --workspace-page: var(--workspace-canvas);
-        --workspace-navigation: #efeff0;
-        --workspace-content: #f8f8f9;
+        --workspace-navigation: var(--workspace-page);
+        --workspace-content: var(--workspace-page);
         --workspace-sidebar: var(--workspace-navigation);
         --workspace-surface: #ffffff;
         --workspace-surface-strong: #ffffff;
@@ -10967,7 +10967,7 @@
     }
 
     /* 底部 dock：细描边 + 柔和双层阴影，与顶部 cluster 同一表面语言。 */
-    .canvas-floating-dock {
+    .canvas-floating-dock:not(.canvas-bottom-dock) {
         border: 1px solid color-mix(in srgb, currentColor 8%, transparent) !important;
         border-radius: var(--r-xl) !important;
         background: color-mix(in srgb, var(--dock-surface) 82%, transparent) !important;
@@ -19098,6 +19098,22 @@ html:not(.dark) .creation-custom-value {
     grid-template-rows: minmax(0, 1fr);
 }
 
+/* 版本预览的网格轨道必须可收缩，否则竖图的原始尺寸会撑破固定预览高度。 */
+.canvas-version-image > .cached-resource-image-shell {
+    min-width: 0;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+}
+.canvas-version-image > img,
+.canvas-version-image > .cached-resource-image-shell > img {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    object-fit: contain;
+}
+
 @media (max-width: 680px) {
     .creation-empty-workspace {
         width: calc(100% - 28px);
@@ -23534,12 +23550,12 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
 
 /* ===== 2026-09 user workspace alignment =====
    这一组规则只作用于真实用户端壳层和首页，后台与画布编辑器保持原有职责和交互。
-   几何基准：侧栏 200px、顶部 56px、导航行 40px、首页内容最大宽度 1180px。 */
+   几何基准：侧栏 224px、顶部 56px、导航行 36px、首页内容最大宽度 1180px。 */
 .app-user-workspace {
-    --workspace-reference-sidebar: 200px;
+    --workspace-reference-sidebar: 224px;
     --workspace-reference-collapsed: 64px;
     --workspace-reference-topbar: 56px;
-    --workspace-reference-row: 40px;
+    --workspace-reference-row: 36px;
     --workspace-reference-page-bg: #ffffff;
     background: var(--workspace-reference-page-bg);
 }
@@ -23730,11 +23746,11 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
 }
 
 .app-user-workspace .app-workspace-nav-group-toggle > svg {
-    display: none;
+    display: block;
 }
 
 .app-user-workspace .app-workspace-nav-group-label {
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .app-user-workspace .app-workspace-nav-group[data-nav-group-heading=""] + .app-workspace-nav-group[data-nav-group-heading=""] {
@@ -26436,7 +26452,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
    ======================================================================== */
 .app-user-workspace,
 .app-user-overlays {
-    --user-page-bg: #f8f8fa;
+    --user-page-bg: var(--background);
     --user-surface: #ffffff;
     --user-surface-raised: #ffffff;
     --user-surface-muted: #f1f1f3;
@@ -26496,7 +26512,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     background: var(--user-page-bg);
 }
 
-/* Navigation rail: 20% wider than the previous 180 / 58 compact track. */
+/* 导航为最近记录预留标题宽度，折叠时保留原图标轨。 */
 .app-user-workspace .app-workspace-sidebar {
     width: var(--workspace-reference-sidebar) !important;
     flex-basis: var(--workspace-reference-sidebar) !important;
@@ -26509,8 +26525,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     flex-basis: var(--workspace-reference-collapsed) !important;
 }
 .app-user-workspace .app-workspace-sidebar-scroll-area {
-    padding: 24px 12px 12px !important;
-    gap: 24px !important;
+    padding: var(--space-4) var(--space-3) var(--space-3) !important;
+    gap: var(--space-4) !important;
 }
 .app-user-workspace .app-workspace-sidebar-footer {
     padding: 12px 12px 16px !important;
@@ -26518,28 +26534,28 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
 }
 .app-user-workspace .app-workspace-nav-link {
     min-height: var(--workspace-reference-row) !important;
-    padding: 4px 8px !important;
-    border-radius: 12px !important;
-    color: var(--user-ink-muted) !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
+    padding: var(--space-1) var(--space-2) !important;
+    border-radius: var(--r-md) !important;
+    color: var(--user-ink) !important;
+    font-size: var(--fs-body) !important;
+    font-weight: 600 !important;
     transition:
         background var(--user-motion),
         color var(--user-motion),
         transform var(--user-motion);
 }
 .app-user-workspace .app-workspace-nav-link .app-workspace-nav-main {
-    gap: 8px !important;
+    gap: calc(var(--space-2) - var(--space-half)) !important;
 }
 .app-user-workspace .app-workspace-nav-link .app-workspace-nav-icon svg,
 .app-user-workspace .app-workspace-nav-link .app-workspace-nav-main > svg {
-    width: 16px !important;
-    height: 16px !important;
+    width: 18px !important;
+    height: 18px !important;
 }
 .app-user-workspace .app-workspace-nav-link.is-active {
     background: transparent !important;
     color: var(--user-ink) !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
 }
 .app-user-workspace .app-workspace-nav-link:hover:not(.is-active),
 .app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) {
@@ -27543,4 +27559,49 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     border: 0 !important;
     background: color-mix(in srgb, var(--popover-foreground) 10%, var(--popover)) !important;
     color: var(--popover-foreground) !important;
+}
+
+/* 图片浮层保留透明外壳，使原图缩放和拖动不被内容面板裁切。 */
+.canvas-image-preview-modal {
+    width: fit-content !important;
+    max-width: calc(100vw - 24px);
+}
+
+.canvas-image-preview-modal .ant-modal-container,
+.canvas-image-preview-modal .ant-modal-content {
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+.canvas-image-preview-modal .ant-modal-container,
+.canvas-image-preview-modal .ant-modal-body {
+    padding: 0 !important;
+}
+
+.canvas-image-preview-modal .ant-modal-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.canvas-image-preview-modal .ant-modal-close {
+    top: -40px !important;
+    inset-inline-end: 0 !important;
+    border-radius: 9999px;
+    background: color-mix(in srgb, black 58%, transparent);
+    color: white;
+}
+
+.canvas-image-preview-modal .ant-modal-close:hover {
+    background: color-mix(in srgb, black 78%, transparent) !important;
+    color: white !important;
 }

@@ -5,7 +5,7 @@ import { mergeAgentCanvasEditor } from "@/lib/canvas/agent-canvas-patch";
 import { rebaseCanvasLocalEdits } from "@/lib/canvas/canvas-sync-rebase";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { App } from "antd";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BACKGROUND_MODE, normalizeCanvasAppearance, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
@@ -14,19 +14,20 @@ import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestam
 import { canvasPersistentNodes } from "@/lib/canvas/canvas-persistent-nodes";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, prepareCanvasForCloudAction, subscribeAgentCanvasRefresh, refreshCanvasAfterAgent } from "@/services/user-data-sync";
+import { deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, prepareCanvasForCloudAction, subscribeAgentCanvasRefresh, refreshCanvasAfterAgent } from "@/services/user-data-sync";
 import { getCanvasSyncStatus } from "@/services/api/user-data";
 import { canvasEditLeases } from "@/services/canvas-edit-leases";
 import { startCanvasSyncPolling } from "@/services/canvas-sync-polling";
 import { subscribeCanvasRealtime } from "@/services/canvas-realtime";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { waitForCanvasSync } from "@/lib/canvas/sync-recovery";
-import { flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
+import { canvasDraftNavigationState, flushCanvasStorePersistence, useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "@/types/canvas";
 import type { CanvasHistorySnapshot } from "./use-canvas-history";
+import { trackSiteTrafficAction } from "@/services/site-traffic";
 
 type UseCanvasProjectLifecycleOptions = {
     projectId: string;
@@ -91,13 +92,16 @@ export function useCanvasProjectLifecycle({
 }: UseCanvasProjectLifecycleOptions) {
     const { message } = App.useApp();
     const navigate = useNavigate();
+    const location = useLocation();
+    const draftIntent = location.state?.canvasDraft;
     const hydrated = useCanvasStore((state) => state.hydrated);
     const sessionHydrated = useUserStore((state) => state.hydrated);
     const userId = useUserStore((state) => state.user?.id);
     const openProject = useCanvasStore((state) => state.openProject);
     const updateProject = useCanvasStore((state) => state.updateProject);
     const renameProject = useCanvasStore((state) => state.renameProject);
-    const currentProject = useCanvasStore((state) => state.projects.find((project) => project.id === projectId));
+    const currentProject = useCanvasStore((state) => state.openProject(projectId));
+    const isDraft = useCanvasStore((state) => Boolean(state.getDraftProject(projectId)));
     const [addedSkills, setAddedSkills] = useState<Skill[]>([]);
     const [loadError, setLoadError] = useState("");
     const [loadAttempt, setLoadAttempt] = useState(0);
@@ -163,7 +167,16 @@ export function useCanvasProjectLifecycle({
         };
 
         const load = async () => {
-            const cachedProject = useCanvasStore.getState().projects.find((p) => p.id === projectId);
+            const store = useCanvasStore.getState();
+            if (!store.openProject(projectId) && draftIntent?.id === projectId && draftIntent.scope === getActiveUserScope() && typeof draftIntent.title === "string") {
+                store.createDraftProject(draftIntent.title, projectId);
+            }
+            const draft = store.getDraftProject(projectId);
+            if (draft) {
+                applyRestoredProject(draft);
+                return;
+            }
+            const cachedProject = store.projects.find((p) => p.id === projectId);
             if (cachedProject) {
                 // 本地已有该画布的持久化缓存：先以本地数据秒开渲染，彻底消除白屏与等待
                 applyRestoredProject(cachedProject);
@@ -327,7 +340,13 @@ export function useCanvasProjectLifecycle({
     );
 
     useEffect(() => {
-        if (!projectLoaded || !sessionHydrated) return;
+        if (isDraft || !currentProject || !draftIntent) return;
+        const { canvasDraft: _draft, ...state } = location.state;
+        navigate(`${location.pathname}${location.search}${location.hash}`, { replace: true, state });
+    }, [currentProject, draftIntent, isDraft, location, navigate]);
+
+    useEffect(() => {
+        if (!projectLoaded || !sessionHydrated || isDraft) return;
         const scope = getActiveUserScope();
         let connected = false;
         let agentActive = false;
@@ -373,7 +392,7 @@ export function useCanvasProjectLifecycle({
             stop();
             clearInterval(leaseTimer);
         };
-    }, [projectId, projectLoaded, sessionHydrated, userId]);
+    }, [isDraft, projectId, projectLoaded, sessionHydrated, userId]);
 
     useEffect(() => {
         if (!projectLoaded || historyPausedRef.current) return;
@@ -409,10 +428,9 @@ export function useCanvasProjectLifecycle({
     );
 
     const createAndOpenProject = useCallback(() => {
-        void createCanvasProjectWithRemoteSync(translate("canvasPage.lifecycle.defaultCanvasName", { index: useCanvasStore.getState().projects.length + 1 })).then(({ id, syncError }) => {
-            if (syncError) console.warn("新画布等待后台同步", syncError);
-            navigate(`/canvas/${id}`);
-        });
+        trackSiteTrafficAction("new_canvas");
+        const id = useCanvasStore.getState().createDraftProject(translate("canvasPage.lifecycle.defaultCanvasName", { index: useCanvasStore.getState().projects.length + 1 }));
+        navigate(`/canvas/${id}`, { state: canvasDraftNavigationState(id) });
     }, [message, navigate]);
 
     const deleteCurrentProject = useCallback(async () => {
@@ -433,6 +451,7 @@ export function useCanvasProjectLifecycle({
     const renameCurrentProject = useCallback(
         (title: string) => {
             renameProject(projectId, title);
+            if (useCanvasStore.getState().getDraftProject(projectId)) return;
             // 标题是画布列表和分享入口的元数据，重命名后立即提交，避免只停留在浏览器缓存。
             void saveRemoteUserDataNow(projectId).catch((error) => {
                 // 后台同步状态统一显示在同步面板，避免每次重试都打断编辑。
@@ -468,7 +487,9 @@ export function useCanvasProjectLifecycle({
     const saveCanvasProject = useCallback(
         async (options: { requireRemote?: boolean } = {}): Promise<boolean> => {
             try {
-                await persistLocalEdits();
+                await persistLocalEdits({ flush: false });
+                useCanvasStore.getState().materializeDraft(projectId);
+                await waitForCanvasSync(flushCanvasStorePersistence());
             } catch (error) {
                 console.warn("画布本地持久化暂未完成", error);
             }

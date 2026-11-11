@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"strings"
@@ -17,7 +18,7 @@ func (s *Service) ensureFailedProviderAttemptLogged(task model.Task, taskErr err
 	if s == nil || s.repo == nil || strings.TrimSpace(task.ID) == "" || taskErr == nil {
 		return
 	}
-	hasVisibleFailure, err := s.repo.HasVisibleFailedAPICallLogForTask(task.ID)
+	hasVisibleFailure, err := s.repo.HasVisibleFailedAPICallLogForAttempt(task)
 	if err != nil {
 		log.Printf("provider attempt log lookup failed: task_id=%s error=%v", task.ID, err)
 		return
@@ -88,6 +89,18 @@ func (s *Service) ensureFailedProviderAttemptLogged(task model.Task, taskErr err
 		Error:             truncateRunes(withUserVisibleLogError(taskErr, s.UserFacingErrorMessage(taskErr)), 2_000),
 		StartedAt:         startedAt,
 		CreatedAt:         now,
+	}
+	if callLog.Capability == "video" {
+		var input canvasGenerationInput
+		if json.Unmarshal([]byte(decodedTask.InputJSON), &input) == nil {
+			if input.Prompt == "" {
+				input.Prompt = task.Prompt
+			}
+			if resolved, err := s.ResolveToolMentionTokens(task.UserID, "video", input.Prompt); err == nil {
+				input.Prompt = resolved
+			}
+			callLog.GenerationContentJSON = encodeGenerationSnapshot(s.generationSnapshot(task.UserID, newID(), input))
+		}
 	}
 	if err := s.LogAPICall(callLog); err != nil {
 		log.Printf("provider attempt log write failed: task_id=%s error=%v", task.ID, err)

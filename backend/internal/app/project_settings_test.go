@@ -22,7 +22,7 @@ func newProjectSettingsTestService(t *testing.T) (*Service, *gorm.DB) {
 		&model.CanvasProject{}, &model.EcommerceProject{}, &model.StyleProfile{}, &model.ProjectAssetCandidate{}, &model.WorkflowInstance{}, &model.WorkflowStepInstance{},
 		&model.CanvasSnapshot{}, &model.CanvasSnapshotResource{},
 		&model.Shot{}, &model.ShotArtifact{}, &model.VoiceProfile{},
-		&model.Task{}, &model.TaskLog{}, &model.Result{},
+		&model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{},
 		&model.CreationRun{}, &model.CreationSubmission{},
 		&model.CloudAgentResourceLease{}, &model.Tool{}, &model.WorkbenchTool{},
 		&model.Announcement{}, &model.AnnouncementImageDraft{},

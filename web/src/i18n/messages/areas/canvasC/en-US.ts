@@ -1,13 +1,6 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 export const enUS: DeepStringRecord<typeof zhCN> = {
-    timelinePreview: {
-        pause: "Pause preview",
-        play: "Play preview",
-        noClipHere: "No video clip at this position",
-        noClip: "No video clip",
-        noSubtitle: "No subtitle here. Select a subtitle clip to edit it below.",
-    },
     toolbar: {
         appearance: "Canvas appearance",
         appearanceSubtitle: "Colors and grid",

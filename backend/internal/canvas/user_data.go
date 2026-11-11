@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+	canvasdoc "yingce/backend/internal/canvas/document"
 	"yingce/backend/internal/kernel"
 
 	"yingce/backend/internal/model"
@@ -394,7 +395,7 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 			if existing != nil {
 				existingPayload = existing.PayloadJSON
 			}
-			if err := quota(tx, existing == nil, int64(len(raw)-len(existingPayload))); err != nil {
+			if err := quota(tx, existing == nil, int64(len(project.PayloadJSON)-len(existingPayload))); err != nil {
 				return err
 			}
 			if err := tx.UpsertCanvasProject(&project); err != nil {
@@ -450,6 +451,7 @@ func (s *Service) upsertUserCanvasProjectWithHistory(userID string, raw json.Raw
 	if err != nil {
 		return UserDataSummary{}, err
 	}
+	raw = json.RawMessage(project.PayloadJSON)
 	var audit CanvasSaveAudit
 	err = s.host.WithStorageLock(func() error {
 		if err := s.ValidateCanvasMediaAssets(userID, raw); err != nil {
@@ -522,6 +524,11 @@ func (s *Service) upsertUserCanvasProjectWithHistory(userID string, raw json.Raw
 
 func (s *Service) DeleteUserCanvasProject(userID string, id string) error {
 	err := s.repo.DeleteCanvasProject(userID, id)
+	var busy *repository.CanvasAgentBusyError
+	if errors.As(err, &busy) {
+		return &kernel.AppError{Status: 409, Code: 409, Reason: "canvas_agent_busy", Message: "画布 Agent 仍在执行或收尾，请先停止并等待任务完成后再删除",
+			Details: map[string]any{"canvasId": id, "agent": busy.Activity}}
+	}
 	if errors.Is(err, repository.ErrCanvasEditLease) {
 		return canvasMutationError("canvas_edit_lease_conflict", err.Error())
 	}
@@ -588,6 +595,11 @@ func canvasProjectFromJSON(userID string, raw json.RawMessage) (model.CanvasProj
 }
 
 func canvasProjectFromJSONWithValidation(userID string, raw json.RawMessage, validate bool) (model.CanvasProject, error) {
+	canonical, _, err := canvasdoc.Canonicalize(raw)
+	if err != nil {
+		return model.CanvasProject{}, kernel.BadAuthRequest(err.Error())
+	}
+	raw = canonical
 	if validate {
 		if err := ValidateSyncedPayload(raw, "画布"); err != nil {
 			return model.CanvasProject{}, err

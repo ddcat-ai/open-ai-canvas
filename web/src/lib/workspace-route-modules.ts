@@ -1,6 +1,6 @@
-import { preloadableLazy, preloadWhenIdle } from "@/lib/preloadable-lazy";
+import { preloadableLazy } from "@/lib/preloadable-lazy";
 
-// 用户端页面统一在这里声明：路由渲染和悬停/空闲预取用同一个组件实例，
+// 用户端页面统一在这里声明：路由渲染和导航意图预取用同一个组件实例，
 // 预取完成后切换页面同步渲染，不再闪出加载提示。
 export const workspaceRoutePages = {
     assets: preloadableLazy(() => import("@/pages/assets")),
@@ -14,7 +14,7 @@ export const workspaceRoutePages = {
     projectDetail: preloadableLazy(() => import("@/pages/projects/detail")),
     projectCreate: preloadableLazy(() => import("@/pages/projects/create")),
     skills: preloadableLazy(() => import("@/pages/skills")),
-    skillWorkbench: preloadableLazy(() => import("@/pages/skills/workbench")),
+    skillWorkbench: preloadableLazy(() => import("@/pages/skills/skill-workbench-route")),
     plugins: preloadableLazy(() => import("@/pages/plugins")),
     eagleLibrary: preloadableLazy(() => import("@/pages/plugins/eagle")),
     tasks: preloadableLazy(() => import("@/pages/tasks")),
@@ -23,29 +23,6 @@ export const workspaceRoutePages = {
 };
 
 export const loadCanvasProjectPage = workspaceRoutePages.canvasProject.preload;
-
-// 侧栏一级入口对应的页面；画布编辑器、作品详情等二级页面仍在悬停或进入列表时预取。
-const workspaceNavigationPages = [
-    workspaceRoutePages.create,
-    workspaceRoutePages.canvas,
-    workspaceRoutePages.assets,
-    workspaceRoutePages.projects,
-    workspaceRoutePages.tasks,
-    workspaceRoutePages.skills,
-    workspaceRoutePages.imageWorkbench,
-    workspaceRoutePages.videoWorkbench,
-    workspaceRoutePages.plugins,
-    workspaceRoutePages.settings,
-];
-
-let navigationPreloadStarted = false;
-
-/** 进入工作区后空闲预取侧栏页面，首次点击侧栏也直接渲染。 */
-export function preloadWorkspaceNavigationPages() {
-    if (navigationPreloadStarted) return;
-    navigationPreloadStarted = true;
-    preloadWhenIdle(workspaceNavigationPages.map((page) => page.preload));
-}
 
 const workspaceRouteSlugs: Record<string, keyof typeof workspaceRoutePages> = {
     create: "create",

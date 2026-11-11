@@ -705,8 +705,6 @@ export default function DramaStudioPage() {
                                         detail={detail}
                                         aspectRatio={aspectRatio}
                                         onOpenSegment={(index) => setParams({ tab: null, segment: String(index), shot: null })}
-                                        onOpenCut={() => void canvas.open({ kind: "cut", episodeId: detail.episode.id })}
-                                        cutOpening={canvas.opening === `cut:${detail.episode.id}`}
                                         onCompose={() => composeFinal.mutate()}
                                         composing={composeFinal.isPending}
                                     />

@@ -34,12 +34,7 @@ export enum CanvasNodeType {
     Video = "video",
     Audio = "audio",
     Frame = "frame",
-    Markdown = "markdown",
-    Svg = "svg",
-    Html = "html",
     Panorama = "panorama",
-    Compare = "compare",
-    Chart = "chart",
     ColorGrade = "colorgrade",
     MediaConversion = "media-conversion",
     BatchTable = "batch-table",
@@ -329,6 +324,7 @@ export type CanvasNodeMetadata = {
         mimeType?: string;
     };
     richText?: Record<string, unknown>;
+    textFormat?: "plain" | "markdown";
     composerContent?: string;
     prompt?: string;
     /** 文本节点是否处于列表模式；用于触发多模态分析并创建多维表格。 */
@@ -339,6 +335,8 @@ export type CanvasNodeMetadata = {
     /** 浏览器文件上传，与模型生成任务状态独立。 */
     fileUpload?: "uploading" | "error";
     fileUploadProgress?: number;
+    /** Original local filename, including its extension; never a physical storage key. */
+    originalFileName?: string;
     locked?: boolean;
     errorDetails?: string;
     generationErrorCode?: string;
@@ -575,8 +573,6 @@ export type CanvasNodeMetadata = {
     skillId?: string;
     skillVersion?: number;
     skillSnapshot?: CanvasSkillSnapshot;
-    /** 图表节点的图形类型，缺省柱状图。落盘字段——新增扩展节点的自有字段都要在这里声明。 */
-    chartKind?: "bar" | "line";
     /** 调色节点的参数；缺省视为未调色。 */
     colorGrade?: CanvasColorGrade;
     mediaConversion?: MediaConversionNodeState;

@@ -4,6 +4,35 @@ export type CreationConversationSnapshot<T extends StoredCreationConversation> =
 
 type TimestampedConversation = StoredCreationConversation & { updatedAt?: string };
 let snapshot: CreationConversationSnapshot<TimestampedConversation> | null = null;
+let navigation: { scope: string; activeId: string; canSelect: boolean } | null = null;
+const listeners = new Set<() => void>();
+
+export function subscribeCreationConversationSnapshot(listener: () => void) {
+    listeners.add(listener);
+    return () => {
+        listeners.delete(listener);
+    };
+}
+
+function notifySnapshot() {
+    for (const listener of listeners) listener();
+}
+
+export function readCreationConversationNavigation(scope: string) {
+    return navigation?.scope === scope ? navigation : null;
+}
+
+export function publishCreationConversationNavigation(scope: string, activeId: string, canSelect: boolean) {
+    if (navigation?.scope === scope && navigation.activeId === activeId && navigation.canSelect === canSelect) return;
+    navigation = { scope, activeId, canSelect };
+    notifySnapshot();
+}
+
+export function clearCreationConversationNavigation(scope: string) {
+    if (navigation?.scope !== scope) return;
+    navigation = null;
+    notifySnapshot();
+}
 
 export function readCreationConversationSnapshot<T extends StoredCreationConversation>(scope: string): T[] | null {
     return snapshot?.scope === scope ? (snapshot.conversations as T[]) : null;
@@ -11,6 +40,7 @@ export function readCreationConversationSnapshot<T extends StoredCreationConvers
 
 export function writeCreationConversationSnapshot<T extends StoredCreationConversation>(scope: string, conversations: T[]) {
     snapshot = { scope, conversations: [...conversations] as TimestampedConversation[] };
+    notifySnapshot();
 }
 
 export function mergeCreationConversationSnapshot<T extends TimestampedConversation>(cached: T[], persisted: T[]) {
@@ -27,4 +57,6 @@ export function mergeCreationConversationSnapshot<T extends TimestampedConversat
 
 export function clearCreationConversationSnapshot() {
     snapshot = null;
+    navigation = null;
+    notifySnapshot();
 }

@@ -6,6 +6,8 @@ import { AlertTriangle, FileArchive, X } from "lucide-react";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import type { DramaEpisodeRow } from "@/services/api/drama";
+import { previewDramaJianyingDraft, type JianyingDraftPreview } from "@/services/api/drama-export";
+import { formatBytes } from "@/lib/image-utils";
 import { applyDramaAssetImport, openDramaAssetPackage, planDramaAssetImport, type DramaAssetImportOptions, type DramaAssetImportPlan, type DramaAssetImportResult, type DramaAssetPackage } from "@/services/drama-asset-import";
 import { defaultJianyingDraftRoot, exportDramaAssetPackage, exportDramaJianyingDraft, jianyingDraftRootProblem, savedJianyingDraftRoot, saveJianyingDraftRoot } from "@/services/drama-export";
 
@@ -293,52 +295,224 @@ export function AssetImportModal({ open, projectId, onClose }: { open: boolean; 
     );
 }
 
-/** 导出剪映草稿：素材按用户本机的剪映草稿目录写成绝对路径，解压到该目录后剪映首页即可打开。 */
-export function JianyingDraftModal({ open, projectId, episodeId, episodeLabel, readySegments, onClose }: { open: boolean; projectId: string; episodeId: string; episodeLabel: string; readySegments: number; onClose: () => void }) {
-    const { message } = App.useApp();
+/** 先检查媒体与导入目录，再交给浏览器流式下载；页面无法观察附件下载完成。 */
+export function JianyingDraftModal({ open, projectId, episodeId, episodeLabel, onClose }: { open: boolean; projectId: string; episodeId: string; episodeLabel: string; onClose: () => void }) {
     const [root, setRoot] = useState(() => savedJianyingDraftRoot() || defaultJianyingDraftRoot());
     const [captions, setCaptions] = useState(true);
+    const [preview, setPreview] = useState<JianyingDraftPreview | null>(null);
+    const [checking, setChecking] = useState(false);
+    const [requested, setRequested] = useState(false);
+    const [error, setError] = useState("");
+    const [allowIncomplete, setAllowIncomplete] = useState(false);
+    const [allowStale, setAllowStale] = useState(false);
+    const lock = useRef(false);
+    const submitted = useRef(false);
+    const request = useRef<AbortController | null>(null);
+    const download = useRef<ReturnType<typeof exportDramaJianyingDraft> | null>(null);
+    const alive = useRef(true);
+    useEffect(() => {
+        alive.current = true;
+        setPreview(null);
+        setRequested(false);
+        setChecking(false);
+        setError("");
+        lock.current = false;
+        submitted.current = false;
+        return () => {
+            alive.current = false;
+            request.current?.abort();
+            download.current?.stopObserving();
+        };
+    }, [projectId, episodeId, open]);
     const problem = jianyingDraftRootProblem(root);
+    const invalidate = () => {
+        submitted.current = false;
+        setPreview(null);
+        setRequested(false);
+        setError("");
+        setAllowIncomplete(false);
+        setAllowStale(false);
+    };
+    const inspect = async () => {
+        if (problem || lock.current) return;
+        lock.current = true;
+        setChecking(true);
+        invalidate();
+        download.current?.stopObserving();
+        const controller = new AbortController();
+        request.current?.abort();
+        request.current = controller;
+        try {
+            const result = await previewDramaJianyingDraft(projectId, episodeId, { draftRoot: root.trim(), captions }, controller.signal);
+            if (controller.signal.aborted || !alive.current) return;
+            setRoot(result.draftRoot);
+            setPreview(result);
+        } catch (cause) {
+            if (!controller.signal.aborted && alive.current) setError(cause instanceof Error ? cause.message : "检查失败，请重试");
+        } finally {
+            if (request.current === controller) {
+                lock.current = false;
+                if (alive.current) setChecking(false);
+            }
+        }
+    };
+    const canDownload = Boolean(preview?.availableSegments && (!preview.missingSegments || allowIncomplete) && (!preview.staleSegments || allowStale));
     const submit = () => {
-        if (problem) return;
+        if (problem || !preview || !canDownload || submitted.current || lock.current) return;
+        lock.current = true;
+        submitted.current = true;
+        setRequested(true);
+        setError("");
         saveJianyingDraftRoot(root);
-        exportDramaJianyingDraft(projectId, episodeId, { draftRoot: root, captions }, (text) => message.error(text));
-        message.info("正在生成剪映草稿，浏览器会开始下载");
-        onClose();
+        const fail = (text: string) => {
+            if (!alive.current) return;
+            setError(text);
+            setRequested(false);
+            setPreview(null);
+            lock.current = false;
+            submitted.current = false;
+        };
+        try {
+            download.current = exportDramaJianyingDraft(projectId, episodeId, { draftRoot: preview.draftRoot, captions, revision: preview.revision, allowIncomplete, allowStale }, fail);
+        } catch (cause) {
+            fail(cause instanceof Error ? cause.message : "浏览器没有提交下载，请重新检查后重试");
+        } finally {
+            lock.current = false;
+        }
     };
     return (
-        <AppModal open={open} onCancel={onClose} footer={null} title={null} closable={false} flush centered width="min(640px, calc(100vw - 32px))" rootClassName="drama-root" aria-label="导出剪映草稿">
+        <AppModal open={open} onCancel={onClose} footer={null} title={null} closable={false} flush centered width="min(720px, calc(100vw - 32px))" rootClassName="drama-root" aria-label="导出剪映草稿">
             <div className="drama-composer drama-transfer">
                 <header className="drama-composer-head">
                     <div className="min-w-0">
                         <strong>导出剪映草稿 · {episodeLabel}</strong>
-                        <span>{readySegments} 个剧情段视频按成片顺序排在主轨上，下载后解压到剪映草稿目录即可直接打开。</span>
+                        <span>先检查可用视频、缺段和旧版本，再按剧情段顺序交给剪映继续剪辑。</span>
                     </div>
                     <Button type="text" icon={<X className="size-4" />} aria-label="关闭" onClick={onClose} />
                 </header>
                 <div className="drama-transfer-body thin-scrollbar">
                     <label className="drama-composer-field">
-                        <span className="drama-composer-label">剪映草稿目录</span>
-                        <Input value={root} onChange={(event) => setRoot(event.target.value)} status={problem ? "warning" : undefined} spellCheck={false} />
-                        <span className={problem ? "drama-transfer-problem" : "drama-transfer-note"}>{problem || "在剪映专业版「全局设置 → 草稿位置」查看。素材路径按这个目录写入草稿，只保存在本机浏览器。"}</span>
+                        <span className="drama-composer-label">本机剪映草稿目录</span>
+                        <Input
+                            aria-label="本机剪映草稿目录"
+                            value={root}
+                            disabled={checking || requested}
+                            onChange={(event) => {
+                                setRoot(event.target.value);
+                                invalidate();
+                            }}
+                            status={problem ? "warning" : undefined}
+                            spellCheck={false}
+                        />
+                        <span className={problem ? "drama-transfer-problem" : "drama-transfer-note"}>{problem || "从剪映设置中复制实际草稿位置。此路径会随导出请求发送，用于生成素材引用；服务器不会访问你的电脑，也不保存该目录配置。"}</span>
                     </label>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            size="small"
+                            disabled={checking || requested}
+                            onClick={() => {
+                                setRoot(defaultJianyingDraftRoot("windows"));
+                                invalidate();
+                            }}
+                        >
+                            Windows 路径示例
+                        </Button>
+                        <Button
+                            size="small"
+                            disabled={checking || requested}
+                            onClick={() => {
+                                setRoot(defaultJianyingDraftRoot("macos"));
+                                invalidate();
+                            }}
+                        >
+                            macOS 路径示例
+                        </Button>
+                    </div>
                     <div className="drama-transfer-options">
-                        <Checkbox checked={captions} onChange={(event) => setCaptions(event.target.checked)}>
-                            附带台词字幕轨（按分镜时长估算，同时附 SRT 文件）
+                        <Checkbox
+                            checked={captions}
+                            disabled={checking || requested}
+                            onChange={(event) => {
+                                setCaptions(event.target.checked);
+                                invalidate();
+                            }}
+                        >
+                            附带台词字幕轨及 SRT（分镜估时，导入后需核对）
                         </Checkbox>
                     </div>
+                    {error ? (
+                        <p className="drama-transfer-problem" role="alert">
+                            {error}
+                        </p>
+                    ) : null}
+                    {preview ? (
+                        <div className="drama-transfer-plan" role="status">
+                            <strong>
+                                可导出 {preview.availableSegments} / {preview.totalSegments} 段 · {(preview.durationMs / 1000).toFixed(1)} 秒 · 媒体约 {formatBytes(preview.mediaBytes)}
+                            </strong>
+                            {!preview.availableSegments ? <p className="drama-transfer-problem">没有可导出的视频，请先生成或修复下列素材后重新检查。</p> : null}
+                            {preview.warnings.length ? (
+                                <ul>
+                                    {preview.warnings.map((warning) => (
+                                        <li key={warning}>{warning}</li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p>已检查所选视频的资源记录与读取状态。下载时仍会再次核对。</p>
+                            )}
+                            <details open={preview.missingSegments > 0 || preview.staleSegments > 0}>
+                                <summary>查看剧情段清单</summary>
+                                <ul>
+                                    {preview.segments.map((segment) => (
+                                        <li key={segment.index}>
+                                            第 {segment.index + 1} 段 · {segment.title}：
+                                            {segment.included ? `${(segment.durationMs / 1000).toFixed(1)} 秒${segment.stale ? " · 旧版本" : ""}${segment.durationEstimated ? " · 时长估算" : ""}` : segment.reason}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </details>
+                            <div className="drama-transfer-options">
+                                {preview.missingSegments > 0 ? (
+                                    <Checkbox checked={allowIncomplete} disabled={requested} onChange={(event) => setAllowIncomplete(event.target.checked)}>
+                                        确认跳过 {preview.missingSegments} 个不可用剧情段，仅导出当前可用片段
+                                    </Checkbox>
+                                ) : null}
+                                {preview.staleSegments > 0 ? (
+                                    <Checkbox checked={allowStale} disabled={requested} onChange={(event) => setAllowStale(event.target.checked)}>
+                                        确认使用 {preview.staleSegments} 个剧情段的旧版本视频
+                                    </Checkbox>
+                                ) : null}
+                            </div>
+                        </div>
+                    ) : null}
+                    {requested ? (
+                        <p className="drama-transfer-note" role="status">
+                            已提交下载请求。请在浏览器下载列表确认是否开始、进度和最终结果；页面无法确认文件已下载完成。可以关闭此窗口，下载仍由浏览器处理。
+                        </p>
+                    ) : null}
                     <ol className="drama-transfer-steps">
-                        <li>关闭剪映，把下载的压缩包解压到上面的目录，草稿文件夹要直接位于该目录下，不要改名。</li>
-                        <li>重新打开剪映，在首页草稿列表里打开同名草稿。</li>
-                        <li>素材显示丢失时，说明解压位置与目录不一致，可在剪映里重新链接草稿内 materials 目录的视频。</li>
+                        <li>下载完成后关闭剪映，将 ZIP 解压到填写的目录；导出的草稿文件夹直接放在该目录下，不要改名，也不要多套一层文件夹。</li>
+                        <li>重新打开剪映，尝试从草稿列表打开同名草稿。不同客户端版本可能不识别外部草稿，尚未保证全部版本兼容。</li>
+                        <li>若提示素材丢失，重新链接草稿内 materials 文件夹；若草稿无法识别，仍可按文件名顺序导入其中的视频及台词字幕.srt。</li>
                     </ol>
                 </div>
                 <footer className="drama-composer-foot">
                     <span className="flex-1" />
-                    <Button onClick={onClose}>取消</Button>
-                    <Button type="primary" disabled={Boolean(problem) || !readySegments} onClick={submit}>
-                        导出草稿
-                    </Button>
+                    <Button onClick={onClose}>{requested ? "关闭" : "取消"}</Button>
+                    {requested ? (
+                        <Button onClick={() => void inspect()}>未收到下载，重新检查</Button>
+                    ) : preview ? (
+                        <>
+                            <Button onClick={() => void inspect()}>重新检查</Button>
+                            <Button type="primary" disabled={!canDownload} onClick={submit}>
+                                确认并请求下载
+                            </Button>
+                        </>
+                    ) : (
+                        <Button type="primary" loading={checking} disabled={Boolean(problem)} onClick={() => void inspect()}>
+                            检查导出内容
+                        </Button>
+                    )}
                 </footer>
             </div>
         </AppModal>

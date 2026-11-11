@@ -32,7 +32,10 @@ export const AGENT_TOOL_NAMES = [
     "image_annotation_render",
     "image_layer_split",
     "image_text_detect",
+    "mcp_call_tool",
+    "mcp_list_tools",
     "media_batch_control",
+    "memory_search",
     "memory_update",
     "model_list",
     "plan_update",
@@ -56,6 +59,9 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
     // 清单 ≠ 画面：这个工具只读到节点存在/类型/标题/规模。说成"已读取当前画布"会被读成看过图。
     canvas_get_state: { summary: "已读取画布清单（未查看画面）", failureMessage: "获取画布清单失败" },
     task_get: { summary: "已查询任务状态", failureMessage: "查询任务状态失败" },
+    mcp_list_tools: { summary: ({ pending }) => (pending ? "准备查找可用 MCP 工具" : "已读取可用 MCP 连接与工具"), failureMessage: "获取 MCP 工具失败" },
+    mcp_call_tool: { summary: ({ pending }) => (pending ? "准备调用外部 MCP 工具" : "外部 MCP 工具已返回结果"), failureMessage: "外部 MCP 工具调用未完成" },
+    memory_search: { summary: ({ pending }) => (pending ? "准备检索个人记忆与历史会话" : "已检索个人记忆与历史会话"), failureMessage: "个人记忆检索失败" },
     canvas_apply_ops: { summary: ({ pending }) => (pending ? "准备更新画布内容" : "画布内容已保存至服务端"), failureMessage: "更新画布内容失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
     canvas_create_character: { summary: ({ pending }) => (pending ? "准备创建角色卡" : "角色卡已创建并放到画布"), failureMessage: "创建角色卡失败" },
@@ -142,7 +148,7 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
 /** 画布上"读到清单"的只读工具：无像素，chip 必须是存在式。 */
 const AGENT_CANVAS_READ_TOOLS = new Set(["canvas_get_state", "canvas_list_node_types", "canvas_read_storyboard", "canvas_read_batch_table"]);
 /** 非画布信息的只读工具（模型、任务、技能、偏好）。`skills_load` 是历史事件名，保留兼容。 */
-const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_market_search", "skill_read_file", "skills_load", "agent_profile_read", "drama_get_context", "canvas_preflight"]);
+const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_market_search", "skill_read_file", "skills_load", "agent_profile_read", "drama_get_context", "canvas_preflight", "memory_search", "mcp_list_tools"]);
 const AGENT_VISION_TOOLS = new Set(["canvas_inspect_image"]);
 const AGENT_CREATE_TOOLS = new Set(["generate_media", "generate_media_batch", "canvas_build_board", "canvas_create_storyboard", "canvas_create_character", "image_annotation_render"]);
 const AGENT_OPERATE_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_edit_storyboard", "canvas_edit_batch_table", "image_layer_split", "image_text_detect", "media_batch_control"]);
@@ -207,6 +213,7 @@ function field(value: unknown, key: string): unknown {
 
 export function agentToolStatus(title: string, text: string, detail?: unknown): ToolStatus {
     const event = field(detail, "eventType");
+    if ((title === "mcp_call_tool" || field(detail, "toolName") === "mcp_call_tool") && field(field(detail, "result"), "isError") === true) return "failed";
     const retry = agentToolRetry(detail);
     if (retry?.status === "retrying") return "retrying";
     if (retry?.status === "recovered") return "completed";
@@ -314,6 +321,7 @@ export const AGENT_TOOL_ERROR_CLASS_LABELS: Record<string, string> = {
     state_conflict: "画布状态已变化",
     permission_violation: "超出本轮权限",
     upstream_failure: "上游故障",
+    external_result_uncertain: "外部操作结果待核对",
     admission_failure: "媒体生成准入失败",
     tool_error: "工具执行失败",
 };

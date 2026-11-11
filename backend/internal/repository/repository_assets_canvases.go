@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	canvasdoc "yingce/backend/internal/canvas/document"
 	"yingce/backend/internal/model"
 )
 
@@ -101,6 +102,13 @@ func (r *Repository) CanvasProjectForUser(userID string, id string) (*model.Canv
 }
 
 func (r *Repository) UpsertCanvasProject(project *model.CanvasProject) error {
+	canonical, changed, err := canvasdoc.Canonicalize([]byte(project.PayloadJSON))
+	if err != nil {
+		return err
+	}
+	if changed {
+		project.PayloadJSON = string(canonical)
+	}
 	return r.Transaction(func(tx *Repository) error {
 		if project.Revision > 0 {
 			if err := tx.LockCanvasMutation(project.UserID, project.ID); err != nil {
@@ -171,6 +179,15 @@ func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 		if err != nil {
 			return err
 		}
+		// Admission locks this same canvas before reserving a root task. Include
+		// text_replay carriers, approval waits and terminal runs still cleaning up.
+		activity, err := repo.CanvasAgentActivity(userID, id)
+		if err != nil {
+			return err
+		}
+		if activity != nil {
+			return &CanvasAgentBusyError{Activity: *activity}
+		}
 		if err := New(tx).checkCanvasEditLeases(before, nil); err != nil {
 			return err
 		}
@@ -189,8 +206,9 @@ func (r *Repository) DeleteCanvasProject(userID string, id string) error {
 		if err := tx.Where("canvas_id = ?", id).Delete(&model.CanvasUnitLink{}).Error; err != nil {
 			return err
 		}
-		// 任务和会话是审计记录，不随独立画布实体保留归属 ID，避免删除后继续挂住画布上下文。
-		if err := tx.Model(&model.Task{}).Where("user_id = ? AND project_id = ?", userID, id).Update("project_id", "").Error; err != nil {
+		// Agent 根任务的画布 ID 是冻结请求身份的一部分；保留它才能查询历史、
+		// 核对原幂等请求和在其他画布续轮。已删除的实体不能由该 ID 重新创建。
+		if err := tx.Model(&model.Task{}).Where("user_id = ? AND project_id = ? AND operation <> ?", userID, id, "cloud_agent").Update("project_id", "").Error; err != nil {
 			return err
 		}
 		if err := tx.Delete(&model.CanvasProject{}, "id = ? AND user_id = ?", id, userID).Error; err != nil {

@@ -373,12 +373,13 @@ func insertCloudAgentContextMessage(canonical *canonicalAgentRequest, source, co
 	canonical.Messages = append(messages[:insertAt:insertAt], append([]map[string]any{entry}, messages[insertAt:]...)...)
 }
 
-// cloudAgentAttachRunContext 在每次模型请求前插入本轮冻结的长期记忆快照与技能提示。
-// 两条消息都只进模型请求、不进对话历史；内容在一轮内不变，前缀缓存不受影响。
+// cloudAgentAttachRunContext 在模型请求前分别插入本轮冻结的长期记忆、历史工作与技能提示。
+// 数据消息只进模型请求、不进对话历史；同一轮内保持不变。
 func cloudAgentAttachRunContext(canonical *canonicalAgentRequest, state *cloudAgentRuntime) {
 	if canonical == nil || state == nil {
 		return
 	}
 	insertCloudAgentContextMessage(canonical, cloudAgentMemoryContextSource, state.Memory.Text)
+	insertCloudAgentContextMessage(canonical, cloudAgentMemoryWorkContextSource, state.Memory.WorkText)
 	insertCloudAgentContextMessage(canonical, cloudAgentSkillHintsSource, state.SkillHints)
 }

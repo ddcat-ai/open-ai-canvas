@@ -18,10 +18,12 @@ var storageReadOnlyExemptPrefixes = []string{
 	"/admin/",
 	"/settings/",
 	"/diagnostics/",
+	"/integrations/feishu/",
 	"/model-catalog/",
 }
 
 var storageReadOnlyExemptRoutes = map[string]struct{}{
+	"/traffic/events":                 {},
 	"/assets/batch-delete":            {},
 	"/assets/batch":                   {},
 	"/resources/access":               {},

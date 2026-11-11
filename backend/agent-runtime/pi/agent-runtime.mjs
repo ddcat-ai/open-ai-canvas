@@ -273,11 +273,13 @@ async function run() {
   // 技能由服务端的读取工具提供，这里不再按路径加载；projectTrusted=false 让 SDK
   // 不读取 <cwd>/.pi 设置，也不向上层目录收集 .agents/skills。
   // 同一个设置管理器也交给 createAgentSession，否则 SDK 会另建一个读文件的实例。
-  const settingsManager = SettingsManager.inMemory({}, { projectTrusted: false });
+  const settingsManager = SettingsManager.inMemory({ cacheWarming: "off" }, { projectTrusted: false });
   const resourceLoader = new DefaultResourceLoader({
     cwd: workDir,
     agentDir,
     noExtensions: true,
+    // Platform connections are governed by the Go bridge; never discover host MCP servers.
+    disabledBuiltinExtensions: ["mcp", "codemode", "tool-search"],
     noSkills: true,
     noPromptTemplates: true,
     noThemes: true,
@@ -328,7 +330,6 @@ async function run() {
 
   const compactionConfig = request.compaction || {
     enabled: true,
-    strategy: "balanced",
     reserveTokens: Math.max(1024, Math.ceil(contextWindow * 0.2)),
     keepRecentTokens: Math.min(20000, Math.max(1024, Math.floor(contextWindow * 0.2))),
   };
@@ -407,6 +408,9 @@ async function run() {
         runtimeError = new Error(message.errorMessage || "Agent assistant message failed");
         return;
       }
+      // Pi may compact and retry a context-overflow error within this prompt.
+      // A later successful response settles that recovered error.
+      runtimeError = null;
       enqueueEvent({
         type: "message_end",
         message,

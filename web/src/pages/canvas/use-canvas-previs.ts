@@ -6,6 +6,8 @@ import { nanoid } from "nanoid";
 import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { fitImageNodeSize, preserveImageNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
+import { findAvailableGenerationGroupPosition } from "@/lib/canvas/canvas-generation-layout";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { createPrevisSceneFromTemplate, type PrevisTemplateId } from "@/lib/canvas/previs/previs-templates";
 import { mergePrevisOutputPreview, upsertPrevisSceneById } from "@/lib/canvas/previs/previs-session";
 import { uploadImage } from "@/services/image-storage";
@@ -13,7 +15,7 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
-import type { PrevisScene, PrevisSceneOutput } from "@/types/previs";
+import type { PrevisCanvasExport, PrevisScene, PrevisSceneOutput } from "@/types/previs";
 
 type UseCanvasPrevisOptions = {
     projectId: string;
@@ -311,5 +313,82 @@ export function useCanvasPrevis({
         [connectionsRef, previsNodeId, domainProjectId, nodesRef, projectId, savePrevisScene, setConnections, setNodes],
     );
 
-    return { applyPrevisOutput, createPrevisShot, openPrevisWorkbench, savePrevisScene };
+    const addPrevisToCanvas = useCallback(
+        async (output: PrevisCanvasExport) => {
+            const scope = getActiveUserScope();
+            const sourceNodeId = previsNodeId;
+            const validateSource = () => {
+                if (projectIdRef.current !== projectId || getActiveUserScope() !== scope) throw new Error(translate("canvasPage.previs.projectSwitched"));
+                const project = useCanvasStore.getState().projects.find((item) => item.id === projectId);
+                const source = nodesRef.current.find((item) => item.id === sourceNodeId);
+                const currentScene = project?.previsScenes.find((item) => item.id === output.sceneId);
+                if (!source || source.metadata?.previsSceneId !== output.sceneId || !currentScene?.shots.some((shot) => shot.id === output.shotId)) throw new Error(translate("canvasPage.previs.shotMissing"));
+                return source;
+            };
+            validateSource();
+            const added: CanvasNodeData[] = [];
+            const links: CanvasConnection[] = [];
+            if (output.kind === "prompt") {
+                if (!output.prompt.trim()) throw new Error("当前镜头没有可加入画布的提示词");
+                const text = createCanvasNode(CanvasNodeType.Text, { x: 0, y: 0 }, { content: output.prompt, status: "success" });
+                text.title = `${output.title} · 提示词`;
+                added.push(text);
+            } else {
+                const image = await uploadImage(output.image);
+                validateSource();
+                const picture = createCanvasNode(CanvasNodeType.Image, { x: 0, y: 0 }, { ...imageMetadata(image), prompt: output.prompt, assetTags: ["预演台截图"] });
+                picture.title = `${output.title} · ${output.timecode}`;
+                Object.assign(picture, fitImageNodeSize(image.width, image.height));
+                const asset = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: picture, source: "canvas-manual" });
+                validateSource();
+                picture.metadata = { ...picture.metadata, assetId: asset.assetId };
+                added.push(picture);
+                // 深度、法线和骨架截图仅作为控制素材，避免误当普通首帧提交。
+                if (output.renderMode === "beauty" || output.renderMode === "clay") {
+                    const video = createCanvasNode(
+                        CanvasNodeType.Video,
+                        { x: 0, y: 0 },
+                        {
+                            generationMode: "video",
+                            videoEditOperation: "image_to_video",
+                            videoStartFrameNodeId: picture.id,
+                            referenceAssetNodeIds: [picture.id],
+                            prompt: output.prompt,
+                            composerContent: output.prompt,
+                            seconds: String(output.duration),
+                            status: NODE_STATUS_IDLE,
+                        },
+                    );
+                    video.title = `${output.title} · 图生视频`;
+                    added.push(video);
+                    links.push({ id: nanoid(), fromNodeId: picture.id, toNodeId: video.id });
+                }
+                if (asset.syncPending) message.warning("截图已保存到本机素材库，云端同步待完成");
+            }
+            // 所有异步操作结束后再读取节点与连线，保留上传期间的新增、移动和删除。
+            const source = validateSource();
+            const position = findAvailableGenerationGroupPosition(
+                nodesRef.current,
+                { x: source.position.x + source.width + 48, y: source.position.y },
+                {
+                    width: added.reduce((sum, node) => sum + node.width, 0) + (added.length - 1) * 48,
+                    height: Math.max(...added.map((node) => node.height)),
+                },
+            );
+            let x = position.x;
+            for (const node of added) {
+                node.position = { x, y: position.y };
+                x += node.width + 48;
+            }
+            nodesRef.current = [...nodesRef.current, ...added];
+            connectionsRef.current = [...connectionsRef.current, ...links];
+            setNodes(nodesRef.current);
+            setConnections(connectionsRef.current);
+            setSelectedNodeIds(new Set(added.map((node) => node.id)));
+            setSelectedConnectionId(null);
+        },
+        [connectionsRef, domainProjectId, message, nodesRef, previsNodeId, projectId, setConnections, setNodes, setSelectedConnectionId, setSelectedNodeIds],
+    );
+
+    return { addPrevisToCanvas, applyPrevisOutput, createPrevisShot, openPrevisWorkbench, savePrevisScene };
 }

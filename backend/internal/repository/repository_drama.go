@@ -938,8 +938,8 @@ func (r *Repository) UpdateDramaCastFields(id string, fields map[string]any) err
 		if err := tx.First(&cast, "id = ?", id).Error; err != nil {
 			return err
 		}
-		var shots []model.DramaShot
-		if err := tx.Where("project_id = ? AND (scene_cast_id = ? OR cast_ids_json LIKE ?)", cast.ProjectID, id, fmt.Sprintf("%%%q%%", id)).Find(&shots).Error; err != nil {
+		shots, err := (&Repository{db: tx}).DramaShotsReferencingCast(cast.ProjectID, id)
+		if err != nil {
 			return err
 		}
 		seen := map[string]bool{}
@@ -1081,7 +1081,8 @@ func (r *Repository) MarkDramaSegmentVideoStale(episodeID string, index int) (bo
 			return err
 		}
 		marked = true
-		return markLaterSegmentsStale(tx, segment.ProjectID, segment.EpisodeID, segment.SegmentIndex)
+		_, err := markLaterSegmentsStale(tx, segment.EpisodeID, segment.SegmentIndex)
+		return err
 	})
 	return marked, err
 }
@@ -1221,32 +1222,30 @@ func (r *Repository) SetDramaSegmentTail(id string, revision int64, videoResourc
 	return result.RowsAffected > 0, result.Error
 }
 
-// dramaProductionParallelVideo 读取作品制作设置：并行出片（videoContinuity=parallel）时各段不依赖上一段尾帧。
-func dramaProductionParallelVideo(tx *gorm.DB, projectID string) (bool, error) {
-	var settingsJSON string
-	if err := tx.Model(&model.DramaProduction{}).Select("settings_json").Where("project_id = ?", projectID).Scan(&settingsJSON).Error; err != nil {
+// markLaterSegmentsStale returns whether later segments depend on the edited
+// segment. Independent videos keep their revisions and in-flight result slots.
+// 并行出片各段互不依赖，跳过级联，避免重做一段误标后续段「视频需重新生成」。
+func markLaterSegmentsStale(tx *gorm.DB, episodeID string, index int) (bool, error) {
+	var production model.DramaProduction
+	if err := tx.Select("drama_productions.settings_json").
+		Joins("JOIN drama_episodes ON drama_episodes.project_id = drama_productions.project_id").
+		Where("drama_episodes.id = ?", episodeID).First(&production).Error; err != nil {
 		return false, err
 	}
 	var settings struct {
 		VideoContinuity string `json:"videoContinuity"`
 	}
-	_ = json.Unmarshal([]byte(settingsJSON), &settings)
-	return settings.VideoContinuity == "parallel", nil
-}
-
-// markLaterSegmentsStale 在尾帧续接模式下，让同集后续段的已生成/生成中视频过期并递增版本，等待新的首帧。
-// 并行出片各段互不依赖，跳过级联，避免重做一段误标后续段「视频需重新生成」。
-func markLaterSegmentsStale(tx *gorm.DB, projectID, episodeID string, index int) error {
-	parallel, err := dramaProductionParallelVideo(tx, projectID)
-	if err != nil {
-		return err
+	if strings.TrimSpace(production.SettingsJSON) != "" {
+		if err := json.Unmarshal([]byte(production.SettingsJSON), &settings); err != nil {
+			return false, err
+		}
 	}
-	if parallel {
-		return nil
+	if settings.VideoContinuity == "parallel" {
+		return false, nil
 	}
 	// Queued descendants remain requested, but receive a new revision and wait for the new tail.
 	// The new revision also voids running prompt jobs, so those segments go back to pending instead of staying "running".
-	return tx.Model(&model.DramaSegment{}).Where("episode_id = ? AND segment_index > ?", episodeID, index).
+	return true, tx.Model(&model.DramaSegment{}).Where("episode_id = ? AND segment_index > ?", episodeID, index).
 		Updates(map[string]any{
 			"video_status":  gorm.Expr("CASE WHEN video_status IN ? THEN ? ELSE video_status END", []string{"ready", "running"}, "stale"),
 			"prompt_status": gorm.Expr("CASE WHEN prompt_status = ? THEN '' ELSE prompt_status END", model.DramaMediaRunning),
@@ -1267,7 +1266,8 @@ func invalidateDramaSegment(tx *gorm.DB, segment model.DramaSegment, fields map[
 	if err := tx.Model(&model.DramaSegment{}).Where("id = ?", segment.ID).Updates(fields).Error; err != nil {
 		return err
 	}
-	if err := markLaterSegmentsStale(tx, segment.ProjectID, segment.EpisodeID, segment.SegmentIndex); err != nil {
+	cascade, err := markLaterSegmentsStale(tx, segment.EpisodeID, segment.SegmentIndex)
+	if err != nil {
 		return err
 	}
 	stage := "video"
@@ -1277,7 +1277,11 @@ func invalidateDramaSegment(tx *gorm.DB, segment model.DramaSegment, fields map[
 	if err := tx.Model(&model.DramaEpisode{}).Where("id = ?", segment.EpisodeID).Updates(map[string]any{"stage": stage, "approved": false, "final_stale": true, "error": "", "revision": gorm.Expr("revision + 1"), "updated_at": time.Now()}).Error; err != nil {
 		return err
 	}
-	return tx.Model(&model.DramaJob{}).Where("episode_id = ? AND status = ? AND kind IN ?", segment.EpisodeID, "queued", []string{"segment_prompt", "segment_video", "render"}).Updates(map[string]any{"status": "canceled", "updated_at": time.Now()}).Error
+	jobs := tx.Model(&model.DramaJob{}).Where("episode_id = ? AND status = ? AND kind IN ?", segment.EpisodeID, "queued", []string{"segment_prompt", "segment_video", "render"})
+	if !cascade {
+		jobs = jobs.Where("shot_id = ? OR kind = ?", segment.ID, model.DramaJobRender)
+	}
+	return jobs.Updates(map[string]any{"status": "canceled", "updated_at": time.Now()}).Error
 }
 
 func (r *Repository) UpdateDramaShotScript(shot model.DramaShot, fields map[string]any) error {

@@ -1,0 +1,128 @@
+[
+  {
+    "name": "free-request",
+    "apply": {
+      "models": [
+        {
+          "modelId": "model-1",
+          "priceVersion": 9,
+          "capabilityVersion": 3,
+          "updatedAt": "2026-11-09T02:00:00.123456789Z",
+          "changes": {
+            "pricingEnabled": false,
+            "pricingTemplate": {
+              "priceCurrency": "credits",
+              "referenceVideoBilling": false,
+              "priceTiers": [
+                {
+                  "tokenPriceRulesEnabled": false,
+                  "tokenPriceRules": [],
+                  "selector": {},
+                  "resolution": "*",
+                  "videoSeconds": 0,
+                  "providerModelKey": "",
+                  "billingMode": "fixed_request",
+                  "unitPriceMicrocredits": 0,
+                  "inputTokenPriceMicrocredits": 0,
+                  "outputTokenPriceMicrocredits": 0,
+                  "cachedTokenPriceMicrocredits": 0,
+                  "cacheWriteTokenPriceMicrocredits": 0,
+                  "referenceVideoUnitPriceMicrocredits": 0,
+                  "referenceVideoOutputTokenPriceMicrocredits": 0,
+                  "costPricing": {
+                    "configured": true,
+                    "unitPriceMicrocredits": 250000,
+                    "inputTokenPriceMicrocredits": 100000,
+                    "outputTokenPriceMicrocredits": 200000,
+                    "cachedTokenPriceMicrocredits": 0,
+                    "cacheWriteTokenPriceMicrocredits": 0,
+                    "referenceVideoUnitPriceMicrocredits": 0,
+                    "referenceVideoOutputTokenPriceMicrocredits": 0
+                  },
+                  "priceConfigured": true,
+                  "enabled": false
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "reenable": {
+      "models": [
+        {
+          "modelId": "model-1",
+          "priceVersion": 9,
+          "capabilityVersion": 3,
+          "updatedAt": "2026-11-09T02:00:00.123456789Z",
+          "changes": {
+            "pricingEnabled": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "zero-token-cache",
+    "apply": {
+      "models": [
+        {
+          "modelId": "model-1",
+          "priceVersion": 9,
+          "capabilityVersion": 3,
+          "updatedAt": "2026-11-09T02:00:00.123456789Z",
+          "changes": {
+            "pricingEnabled": false,
+            "pricingTemplate": {
+              "priceCurrency": "credits",
+              "referenceVideoBilling": false,
+              "priceTiers": [
+                {
+                  "tokenPriceRulesEnabled": false,
+                  "tokenPriceRules": [],
+                  "selector": {},
+                  "resolution": "*",
+                  "videoSeconds": 0,
+                  "providerModelKey": "",
+                  "billingMode": "token",
+                  "unitPriceMicrocredits": 0,
+                  "inputTokenPriceMicrocredits": 1000000,
+                  "outputTokenPriceMicrocredits": 2000000,
+                  "cachedTokenPriceMicrocredits": 0,
+                  "cacheWriteTokenPriceMicrocredits": 0,
+                  "referenceVideoUnitPriceMicrocredits": 0,
+                  "referenceVideoOutputTokenPriceMicrocredits": 0,
+                  "costPricing": {
+                    "configured": true,
+                    "unitPriceMicrocredits": 250000,
+                    "inputTokenPriceMicrocredits": 100000,
+                    "outputTokenPriceMicrocredits": 200000,
+                    "cachedTokenPriceMicrocredits": 0,
+                    "cacheWriteTokenPriceMicrocredits": 0,
+                    "referenceVideoUnitPriceMicrocredits": 0,
+                    "referenceVideoOutputTokenPriceMicrocredits": 0
+                  },
+                  "priceConfigured": true,
+                  "enabled": false
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "reenable": {
+      "models": [
+        {
+          "modelId": "model-1",
+          "priceVersion": 9,
+          "capabilityVersion": 3,
+          "updatedAt": "2026-11-09T02:00:00.123456789Z",
+          "changes": {
+            "pricingEnabled": true
+          }
+        }
+      ]
+    }
+  }
+]

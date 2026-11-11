@@ -2,6 +2,7 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { AgentEvent, AgentRun } from "@/services/api/agent";
 import type { CloudAgentConversation, CloudAgentPendingSubmission } from "@/services/cloud-agent-conversations";
+import type { TextThinkingConfig } from "@/lib/text-thinking";
 
 const dom = new Window({ url: "http://localhost/" });
 for (const [key, value] of Object.entries({
@@ -30,6 +31,7 @@ const history = await import("@/services/cloud-agent-conversations");
 const awaitImportHistory = await import("@/services/cloud-agent-history");
 const skillsApi = await import("@/services/api/skills");
 const { setActiveUserScope } = await import("@/lib/user-scope");
+const { defaultModelCapabilityConfig } = await import("@/lib/model-capabilities");
 const { useUserStore } = await import("@/stores/use-user-store");
 const { useGlobalAgentStore } = await import("@/stores/use-global-agent-store");
 const { createModelChannel, defaultConfig, normalizeConfigSnapshot, useConfigStore } = await import("@/stores/use-config-store");
@@ -261,9 +263,23 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     };
 }
 afterAll(() => dom.happyDOM.abort());
-function configureModels(ambiguous: boolean) {
+function configureModels(ambiguous: boolean, thinking?: TextThinkingConfig) {
     const entry = (id: string, model: string, price: number) =>
-        createModelChannel({ id, scope: "system", models: [model], modelCosts: [{ model, channelModelId: `${id}-${model}`, capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: price }] });
+        createModelChannel({
+            id,
+            scope: "system",
+            models: [model],
+            modelCosts: [
+                {
+                    model,
+                    channelModelId: `${id}-${model}`,
+                    capability: "text",
+                    billingMode: "fixed_request",
+                    unitPriceMicrocredits: price,
+                    capabilityConfig: thinking ? { version: 1, text: { ...defaultModelCapabilityConfig().text!, thinking } } : undefined,
+                },
+            ],
+        });
     const channels = [entry("paid-channel", "paid-model", 10_000_000), entry("local-test", "local-agent-test", 0), ...(ambiguous ? [entry("another-test", "local-agent-test", 0)] : [])];
     const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels, textModel: "paid-channel::paid-model", model: "paid-channel::paid-model" } }).config;
     useConfigStore.setState({ config });
@@ -653,6 +669,142 @@ test("原样重试未知 POST 后得到明确 stale_parent 可解除旧身份，
         expect(conversationUI.messages.some((item: any) => item.text === "结果-other-device-child")).toBe(true);
         expect(generated).toBe(0);
     } finally {
+        await mounted.close();
+    }
+});
+
+test("思考期间快速切换模型只改变下一轮设置，当前订阅和历史连续", async () => {
+    const current = chat("local", { ...makeRun("thinking", "running"), model: "paid-model" });
+    const mounted = await mount(current, [current]);
+    try {
+        const observation = subscriptions.at(-1)!;
+        const subscriptionCount = subscriptions.length;
+        for (const model of ["local-test::local-agent-test", "paid-channel::paid-model", "local-test::local-agent-test"]) {
+            await act(async () => controls.onModelChange(model));
+        }
+        expect(controls.selectedModel).toBe("local-test::local-agent-test");
+        expect(subscriptions).toHaveLength(subscriptionCount);
+        expect(observation.closed).toBe(false);
+        await act(async () => {
+            observation.event({ eventId: "thinking:5", runId: "thinking", seq: 5, type: "assistant_delta", payload: { messageId: "thinking-answer", text: "思考中的模型继续回答" }, createdAt: current.updatedAt });
+        });
+        expect(conversationUI.messages.some((item: any) => item.text === "结果-thinking")).toBe(true);
+        expect(conversationUI.messages.find((item: any) => item.id === "thinking-answer")?.text).toBe("思考中的模型继续回答");
+        await persist();
+        expect(local.find((item) => item.id === activeId)?.run).toMatchObject({ id: "thinking", status: "running", model: "paid-model" });
+        expect(sent).toHaveLength(0);
+        expect(generated).toBe(0);
+    } finally {
+        await mounted.close();
+    }
+});
+
+const alwaysThinking: TextThinkingConfig = { mode: "always", levels: ["low", "medium", "high"], default: "medium", switch: { kind: "none" }, intensity: { kind: "effort" } };
+
+test("Agent 推理档位按账号和模型保存，面板重建后恢复并用于下一轮", async () => {
+    const initial = chat("reasoning-preference", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, alwaysThinking));
+        expect(controls.reasoningMode).toBe("auto");
+        await act(async () => controls.onReasoningModeChange("high"));
+        await act(async () => controls.onModelChange("local-test::local-agent-test"));
+        expect(controls.reasoningMode).toBe("auto");
+        await act(async () => controls.onReasoningModeChange("low"));
+    } finally {
+        await mounted.close();
+    }
+
+    const reloaded = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, alwaysThinking));
+        expect(controls.reasoningMode).toBe("high");
+        await act(async () => controls.onModelChange("local-test::local-agent-test"));
+        expect(controls.reasoningMode).toBe("low");
+        await act(async () => controls.onModelChange("paid-channel::paid-model"));
+        expect(controls.reasoningMode).toBe("high");
+        await act(async () => composer.onPromptChange("沿用上次的推理档位"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].reasoningMode).toBe("high");
+
+        await act(async () => {
+            setActiveUserScope("other-user");
+            useUserStore.setState({ user: { id: "other-user", username: "other", displayName: "other", role: "user", status: "active" } });
+            await settle();
+        });
+        expect(controls.reasoningMode).toBe("auto");
+    } finally {
+        await reloaded.close();
+    }
+});
+
+test("后台取消关闭档位后，Agent 读取和提交模型默认档", async () => {
+    const initial = chat("reasoning-default", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, { ...alwaysThinking, mode: "levels", levels: ["off", "low", "medium", "high"] }));
+        await act(async () => controls.onReasoningModeChange("off"));
+        expect(controls.reasoningMode).toBe("off");
+    } finally {
+        await mounted.close();
+    }
+
+    const reloaded = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, alwaysThinking));
+        expect(controls.reasoningMode).toBe("auto");
+        await act(async () => composer.onPromptChange("使用模型默认的推理档位"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].reasoningMode).toBe("auto");
+    } finally {
+        await reloaded.close();
+    }
+});
+
+test("提交等待与未确认重试之间切换模型，原请求正文、渠道和幂等键保持冻结", async () => {
+    const initial = chat("original", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    let release: ((value: unknown) => void) | undefined;
+    try {
+        capabilitiesOverride = () => new Promise((resolve) => (release = resolve));
+        sendFailure = new TypeError("network failed after POST");
+        await act(async () => composer.onPromptChange("冻结提交时选择的模型"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(release).toBeDefined();
+        await act(async () => controls.onModelChange("local-test::local-agent-test"));
+        await act(async () => {
+            release!({ permissionModes: ["request_approval"], skills: true });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        const frozen = structuredClone(sendInputs[0]);
+        expect(frozen).toMatchObject({ model: "paid-model", channelId: "paid-channel", channelModelKey: "paid-model", prompt: "冻结提交时选择的模型" });
+        expect(pending?.request).toEqual(frozen);
+        expect(composer.prompt).toBe("冻结提交时选择的模型");
+        await act(async () => controls.onModelChange("paid-channel::paid-model"));
+        await act(async () => controls.onModelChange("local-test::local-agent-test"));
+        sendFailure = undefined;
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toEqual(["first", "first"]);
+        expect(sendInputs[1]).toEqual(frozen);
+        expect(pending).toBeNull();
+        expect(generated).toBe(0);
+    } finally {
+        release?.({ permissionModes: ["request_approval"], skills: true });
         await mounted.close();
     }
 });

@@ -30,7 +30,7 @@ func seedTransferChannel(t *testing.T, svc *Service, admin *model.User) string {
 
 func TestExportSystemChannelsOmitsSecrets(t *testing.T) {
 	svc, _ := newChannelModelTestService(t)
-	svc.dataDir = t.TempDir()
+	svc.dataDir = channelTestDataDir(t)
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
 	seedTransferChannel(t, svc, admin)
 	exported, err := svc.ExportSystemChannels(admin, nil)
@@ -57,7 +57,7 @@ func TestExportSystemChannelsOmitsSecrets(t *testing.T) {
 
 func TestImportSystemChannelsCreatesDisabledAndKeepsExistingSecrets(t *testing.T) {
 	source, _ := newChannelModelTestService(t)
-	source.dataDir = t.TempDir()
+	source.dataDir = channelTestDataDir(t)
 	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
 	seedTransferChannel(t, source, admin)
 	exported, err := source.ExportSystemChannels(admin, nil)
@@ -72,7 +72,7 @@ func TestImportSystemChannelsCreatesDisabledAndKeepsExistingSecrets(t *testing.T
 
 	// 新环境：渠道新建为停用、无密钥，模型与价格档完整还原。
 	target, _ := newChannelModelTestService(t)
-	target.dataDir = t.TempDir()
+	target.dataDir = channelTestDataDir(t)
 	result, err := target.ImportSystemChannels(admin, payload)
 	if err != nil {
 		t.Fatal(err)
@@ -115,5 +115,32 @@ func TestImportSystemChannelsCreatesDisabledAndKeepsExistingSecrets(t *testing.T
 
 	if _, err := target.ImportSystemChannels(admin, SystemChannelExport{Format: "other", Version: 1}); err == nil {
 		t.Fatal("foreign file accepted")
+	}
+}
+
+func TestImportSystemChannelsPreservesWebsiteGroups(t *testing.T) {
+	svc, _ := newChannelModelTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	format := "gemini"
+	payload := SystemChannelExport{Format: SystemChannelExportFormat, Version: SystemChannelExportVersion, Channels: []SystemChannelExportChannel{
+		{Name: "First key", WebsiteName: "Shared website", BaseURL: "https://8.8.8.8/v1beta", APIFormat: &format},
+		{Name: "Second key", WebsiteName: "Shared website", BaseURL: "https://8.8.8.8/v1beta", APIFormat: &format},
+	}}
+	for attempt := 0; attempt < 2; attempt++ {
+		result, err := svc.ImportSystemChannels(admin, payload)
+		if err != nil || len(result.Errors) != 0 {
+			t.Fatalf("import result=%+v err=%v", result, err)
+		}
+	}
+	channels, err := svc.repo.SystemChannels(true)
+	if err != nil || len(channels) != 2 {
+		t.Fatalf("channels=%+v err=%v", channels, err)
+	}
+	if channels[0].WebsiteID == "" || channels[0].WebsiteID != channels[1].WebsiteID || channels[0].Enabled || channels[1].Enabled || channels[0].APIFormat != format || channels[1].APIFormat != format {
+		t.Fatal("import did not preserve the disabled keys and shared connection")
+	}
+	sites, err := svc.repo.ChannelWebsites()
+	if err != nil || len(sites) != 1 || sites[0].Name != "Shared website" {
+		t.Fatalf("websites=%+v err=%v", sites, err)
 	}
 }

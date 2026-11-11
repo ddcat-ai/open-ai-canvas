@@ -3,6 +3,7 @@ import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import type { ModelProtocolDefinition } from "../src/lib/model-protocols";
 import {
     changeChannelModelCapability,
+    changeChannelModelProtocol,
     duplicateChannelModelValues,
     editorSectionForField,
     initialChannelModelValues,
@@ -10,10 +11,114 @@ import {
     validateChannelModelPrices,
     validateChannelModelProtocol,
 } from "../src/pages/admin/components/channel-model-editor-form";
-import { defaultPriceTier } from "../src/pages/admin/components/channel-model-price-tier-form";
+import { defaultPriceTier, skuSelectorFromForm } from "../src/pages/admin/components/channel-model-price-tier-form";
 import type { ChannelModel, ChannelModelPriceTier } from "../src/services/api/wallet";
+import { projectImageParameters, resolveImageParameters, type ImageParameter } from "../src/lib/image-parameters";
 
 const definition = (value: string, capability: ModelProtocolDefinition["capability"], enabled = true): ModelProtocolDefinition => ({ value, capability, enabled, label: value, create: "POST /test", contentType: "application/json", media: "url" });
+
+for (const shape of ["nil", "empty", "missing-size", "missing-encoding"] as const) {
+    for (const pixelsToRatio of [true, false]) {
+        test(`${shape} 参数声明，${pixelsToRatio ? "像素转比例" : "比例转像素"} 按目标端点编码并保留能力和价格`, () => {
+            const size = pixelsToRatio ? "2560x1440" : "16:9";
+            const encoding = pixelsToRatio ? "ratio" : "pixels";
+            const fields: ImageParameter[] = [
+                { name: "size", label: "尺寸", type: "string", encoding: pixelsToRatio ? "pixels" : "ratio", values: [size], default: size, pricing: true },
+                { name: "imageResolution", label: "分辨率", type: "string", values: ["2k"], default: "2k", pricing: true },
+            ];
+            const profile = defaultModelCapabilityConfig("openai-image", "fixture");
+            profile.image = projectImageParameters(profile.image!, fields);
+            profile.image.size.presets = [{ tier: "2k", ratio: "16:9", size: "2560x1440", width: 2560, height: 1440 }];
+            profile.image.references.maxImageBytes = 10 * 1024 * 1024;
+            const target = {
+                ...definition("opaque-target", "image"),
+                create: pixelsToRatio ? "POST /v1beta/models/{model}:generateContent" : "POST /v1/images/generations",
+                imageParameters: shape === "nil" ? undefined : shape === "empty" ? [] : shape === "missing-encoding" ? [{ ...fields[0], encoding: undefined }, fields[1]] : [fields[1]],
+            };
+            const values = {
+                ...initialChannelModelValues(null, []),
+                capability: "image" as const,
+                protocol: "source",
+                modelKey: "fixture",
+                capabilityConfig: profile,
+                priceTiers: [{ ...defaultPriceTier("advanced"), unitPrice: 12, imageSelector: { size, imageResolution: "2k" } }],
+            };
+            const next = changeChannelModelProtocol(values, target.value, [target]);
+            expect(next.capabilityConfig!.image!.parameters!.find((p) => p.name === "size")!.encoding).toBe(encoding);
+            expect(next.capabilityConfig!.image!.size.values).toEqual([size]);
+            expect(next.capabilityConfig!.image!.size.default).toBe(size);
+            expect(next.capabilityConfig!.image!.size.presets).toEqual(profile.image.size.presets);
+            expect(next.capabilityConfig!.image!.references.maxImageBytes).toBe(10 * 1024 * 1024);
+            expect(next.priceTiers).toEqual(values.priceTiers);
+            expect(skuSelectorFromForm("image", next.priceTiers[0], next.capabilityConfig)).toEqual(values.priceTiers[0].imageSelector);
+            // Repeated component projection must retain the resolved wire encoding.
+            expect(resolveImageParameters(next.capabilityConfig!.image!, target.imageParameters || [], "fixture", target.value).parameters!.find((p) => p.name === "size")!.encoding).toBe(encoding);
+            const legacy = structuredClone(values);
+            delete legacy.capabilityConfig.image!.parameters;
+            expect(changeChannelModelProtocol(legacy, target.value, [target]).capabilityConfig!.image!.parameters!.find((p) => p.name === "size")!.encoding).toBe(encoding);
+        });
+    }
+}
+
+test("切换兼容图片协议保留能力、引用限制与价格选择器", async () => {
+    const profile = defaultModelCapabilityConfig("openai-image", "fixture-model");
+    profile.image = projectImageParameters(profile.image!, [
+        { name: "size", label: "尺寸", type: "string", encoding: "pixels", values: ["16:9"], default: "16:9", pricing: true },
+        { name: "imageResolution", label: "分辨率", type: "string", values: ["2k"], default: "2k", pricing: true },
+        { name: "quality", label: "质量", type: "string", values: ["xhigh"], default: "xhigh", pricing: true },
+        { name: "count", label: "张数", type: "integer", min: 1, max: 4, default: 1 },
+        { name: "responseFormat", label: "响应格式", type: "string", values: ["url"], default: "url", enabled: false },
+    ]);
+    profile.image.size.presets = [{ tier: "2k", ratio: "16:9", size: "2752x1536", width: 2752, height: 1536 }];
+    const manifest = await Bun.file(new URL("../../plugin-packages/openai-images/manifest.json", import.meta.url)).json();
+    profile.image.references.maxImageBytes = 10 * 1024 * 1024;
+    profile.image.maxOutputs = 4;
+    const values = {
+        ...initialChannelModelValues(null, []),
+        capability: "image" as const,
+        protocol: "custom-source-image",
+        modelKey: "fixture-model",
+        providerModelKey: "fixture-upstream-model",
+        capabilityConfig: profile,
+        priceTiers: [{ ...defaultPriceTier("advanced"), unitPrice: 12, imageSelector: { imageResolution: "2k", quality: "xhigh", size: "16:9" } }],
+    };
+    const next = changeChannelModelProtocol(values, "custom-target-image", [{ ...definition("custom-target-image", "image"), create: "POST /v1/images/generations", imageParameters: manifest.contributes.providers[0].imageParameters }]);
+    expect(next.capabilityConfig!.image!.references.maxImageBytes).toBe(10 * 1024 * 1024);
+    expect(next.capabilityConfig!.image!.maxOutputs).toBe(4);
+    expect(next.capabilityConfig!.image!.size.presets).toEqual(profile.image.size.presets);
+    expect(next.capabilityConfig!.image!.parameters!.find((p) => p.name === "quality")!.values).toContain("xhigh");
+    expect(next.capabilityConfig!.image!.parameters!.find((p) => p.name === "responseFormat")!.enabled).toBe(false);
+    expect(next.priceTiers).toEqual(values.priceTiers);
+    expect(skuSelectorFromForm("image", next.priceTiers[0], next.capabilityConfig)).toEqual(values.priceTiers[0].imageSelector);
+    const legacy = structuredClone(values);
+    delete legacy.capabilityConfig.image!.parameters;
+    legacy.priceTiers = [{ ...defaultPriceTier("advanced"), unitPrice: 12, imageResolution: "2k", quality: "xhigh", size: "16:9" }];
+    const migrated = changeChannelModelProtocol(legacy, "custom-target-image", [{ ...definition("custom-target-image", "image"), create: "POST /v1/images/generations", imageParameters: manifest.contributes.providers[0].imageParameters }]);
+    expect(skuSelectorFromForm("image", migrated.priceTiers[0], migrated.capabilityConfig)).toEqual({ imageResolution: "2k", quality: "xhigh", size: "16:9" });
+    const pixel = structuredClone(values);
+    Object.assign(
+        pixel.capabilityConfig.image!.parameters!.find((p: { name: string }) => p.name === "size")!,
+        { values: ["2752x1536"], default: "2752x1536" },
+    );
+    pixel.priceTiers[0].imageSelector.size = "2752x1536";
+    const gemini = await Bun.file(new URL("../../plugin-packages/google-gemini-image/manifest.json", import.meta.url)).json();
+    const ratio = changeChannelModelProtocol(pixel, "gemini-image", [{ ...definition("gemini-image", "image"), imageParameters: gemini.contributes.providers[0].imageParameters }]);
+    expect(ratio.capabilityConfig!.image!.size.parameter).toBe("size");
+    expect(ratio.capabilityConfig!.image!.size.values).toEqual(["2752x1536"]);
+    expect(ratio.capabilityConfig!.image!.size.presets).toContainEqual(profile.image.size.presets.find((p: { size: string }) => p.size === "2752x1536"));
+    expect(ratio.priceTiers).toEqual(pixel.priceTiers);
+    expect(ratio.capabilityConfig!.image!.maxOutputs).toBe(4);
+});
+
+test("仅切换视频协议保留显式能力和已有价格", () => {
+    const config = defaultModelCapabilityConfig("agnes-video", "agnes-video-2.5");
+    config.video!.references.maxImages = 1;
+    config.video!.duration.default = 8;
+    const values = { ...initialChannelModelValues(null, []), capability: "video" as const, capabilityConfig: config, protocol: "agnes-video" };
+    const next = changeChannelModelProtocol(values, "newapi", [definition("newapi", "video")]);
+    expect(next.capabilityConfig).toEqual(config);
+    expect(next.priceTiers).toEqual(values.priceTiers);
+});
 const protocols = [definition("disabled-text", "text", false), definition("text", "text"), definition("image", "image"), definition("video", "video")];
 const protocolsWithAudio = [...protocols, definition("audio", "audio")];
 

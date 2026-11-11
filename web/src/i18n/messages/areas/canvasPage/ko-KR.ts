@@ -186,6 +186,7 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "캐릭터 더빙은 한 번에 캐릭터 카드 하나만 참조할 수 있습니다",
         voiceNotBound: "캐릭터에 사용 가능한 음성이 연결되지 않아 더빙 작업을 만들 수 없습니다",
         submissionInProgress: "이 노드의 생성 요청이 이미 제출 중이거나 실행 중입니다. 다시 클릭하지 마세요",
+        videoRequiresReferenceImages: "이 영상 모델은 참조 이미지가 최소 {{count}}장 필요합니다. 이미지 노드를 연결한 후 생성해 주세요",
     },
     timelineInsert: {
         unsupportedMedia: "이미지와 텍스트 에셋은 아직 타임라인에 바로 넣을 수 없습니다. 먼저 캔버스에 삽입하세요",

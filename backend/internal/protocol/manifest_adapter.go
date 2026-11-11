@@ -69,7 +69,11 @@ func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (Reque
 	if err := validateManifestRequest(a.manifest.Validations, request); err != nil {
 		return RequestSpec{}, err
 	}
-	return buildManifestOperation(a.manifest.Create, a.manifest.Auth, request, "")
+	spec, err := buildManifestOperation(a.manifest.Create, a.manifest.Auth, request, "")
+	if err != nil {
+		return RequestSpec{}, err
+	}
+	return completeCommonImageRequest(spec, a.manifest.Create, request)
 }
 
 func (a manifestAdapter) BuildAgent(_ context.Context, c AgentRequestContext) (RequestSpec, error) {
@@ -393,7 +397,9 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	if status == StatusPending && (result.Text != "" || len(result.Images) > 0 || len(result.Videos) > 0 || len(result.Audios) > 0) {
 		status = StatusSucceeded
 	}
-	if result.Text == "" && result.Reasoning == "" && len(result.Images) == 0 && len(result.Videos) == 0 && len(result.Audios) == 0 {
+	// 独立下载接口稍后提供媒体时，保留轮询中的实际时长和清晰度。
+	keepUsageForDownload := a.manifest.ResultOperation != nil && len(result.Usage) > 0
+	if result.Text == "" && result.Reasoning == "" && len(result.Images) == 0 && len(result.Videos) == 0 && len(result.Audios) == 0 && !keepUsageForDownload {
 		result = nil
 	}
 	return CreateResult{TaskID: id, Status: status, Result: result, Message: message, Stage: stage, QueueAhead: queueAhead}

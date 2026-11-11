@@ -113,15 +113,15 @@ export type PriceTierFormValues = {
     imageCount: number;
     providerModelKey?: string;
     billingMode: ChannelModel["billingMode"];
-    unitPrice: number;
-    inputTokenPrice: number;
-    outputTokenPrice: number;
-    cachedTokenPrice: number;
+    unitPrice: number | null;
+    inputTokenPrice: number | null;
+    outputTokenPrice: number | null;
+    cachedTokenPrice: number | null;
     /** 缓存写入（创建提示词缓存）的每百万 Token 价格，0 表示不单独收费。 */
-    cacheWriteTokenPrice: number;
+    cacheWriteTokenPrice: number | null;
     /** 带参考视频的每秒价格（按秒档）与视频 Token 价格（Token 档），仅模型开启参考视频计费时使用。 */
-    referenceVideoUnitPrice: number;
-    referenceVideoOutputTokenPrice: number;
+    referenceVideoUnitPrice: number | null;
+    referenceVideoOutputTokenPrice: number | null;
     costConfigured: boolean;
     costUnitPrice: number;
     costInputTokenPrice: number;
@@ -175,6 +175,7 @@ export function defaultPriceTier(matchMode: PriceTierMatchMode = "default"): Pri
 }
 
 export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabilityConfig, protocol?: string): PriceTierFormValues {
+    const salePrice = (amount: number | undefined) => (tier.priceConfigured === false && tier.enabled === false && !amount ? null : (amount || 0) / 1_000_000);
     const selector = { ...(tier.selector || {}) };
     // 旧定价把分辨率档位存在 quality / resolution 里；统一迁移到 imageResolution，
     // 1.5K 也走这条路径，避免重复档位。
@@ -201,13 +202,13 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
         imageCount: Number(selector.imageCount || 0),
         providerModelKey: tier.providerModelKey || "",
         billingMode: tier.billingMode,
-        unitPrice: tier.unitPriceMicrocredits / 1_000_000,
-        inputTokenPrice: tier.inputTokenPriceMicrocredits / 1_000_000,
-        outputTokenPrice: tier.outputTokenPriceMicrocredits / 1_000_000,
-        cachedTokenPrice: tier.cachedTokenPriceMicrocredits / 1_000_000,
-        cacheWriteTokenPrice: (tier.cacheWriteTokenPriceMicrocredits ?? 0) / 1_000_000,
-        referenceVideoUnitPrice: (tier.referenceVideoUnitPriceMicrocredits ?? 0) / 1_000_000,
-        referenceVideoOutputTokenPrice: (tier.referenceVideoOutputTokenPriceMicrocredits ?? 0) / 1_000_000,
+        unitPrice: salePrice(tier.unitPriceMicrocredits),
+        inputTokenPrice: salePrice(tier.inputTokenPriceMicrocredits),
+        outputTokenPrice: salePrice(tier.outputTokenPriceMicrocredits),
+        cachedTokenPrice: salePrice(tier.cachedTokenPriceMicrocredits),
+        cacheWriteTokenPrice: salePrice(tier.cacheWriteTokenPriceMicrocredits),
+        referenceVideoUnitPrice: salePrice(tier.referenceVideoUnitPriceMicrocredits),
+        referenceVideoOutputTokenPrice: salePrice(tier.referenceVideoOutputTokenPriceMicrocredits),
         costConfigured: tier.costPricing?.configured === true,
         costUnitPrice: (tier.costPricing?.unitPriceMicrocredits ?? 0) / 1_000_000,
         costInputTokenPrice: (tier.costPricing?.inputTokenPriceMicrocredits ?? 0) / 1_000_000,
@@ -261,7 +262,8 @@ export function skuSelectorFromForm(capability: ModelCapabilityChoice, tier: Pri
         } else if (capabilityConfig?.image?.resolution?.supported && tier.quality && ["1k", "1.5k", "2k", "4k"].includes(tier.quality.toLowerCase())) {
             // 旧定价把档位存在 quality 时，写入 imageResolution 以匹配新选择器。
             selector.imageResolution = tier.quality.toLowerCase();
-        } else if (tier.quality && tier.quality !== "*") {
+        }
+        if (tier.quality && tier.quality !== "*" && !(capabilityConfig?.image?.resolution?.supported && ["1k", "1.5k", "2k", "4k"].includes(tier.quality.toLowerCase()))) {
             selector.quality = tier.quality;
         }
         if (tier.size && tier.size !== "*") selector.size = tier.size;
@@ -280,6 +282,7 @@ export function priceTierVideoSecondsFromForm(capability: ModelCapabilityChoice,
 }
 
 export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier: PriceTierFormValues, upstreamModel: string, capabilityConfig?: ModelCapabilityConfig) {
+    if ((tier.priceConfigured !== false || tier.enabled !== false) && !priceTierAmountsComplete(capability, tier)) throw new Error("请填写价格后再启用价格档；空金额不等于免费");
     const videoTokens = capability === "video" && tier.billingMode === "token";
     // 规则只属于文本 Token 档；切换能力或计费方式后不提交残留规则，后端也会拒绝。
     const tokenRules = capability === "text" && tier.billingMode === "token" ? (tier.tokenRules || []).map(tokenPriceRulePayload) : [];
@@ -312,4 +315,10 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
         priceConfigured: tier.priceConfigured !== false,
         enabled: tier.enabled !== false,
     };
+}
+
+export function priceTierAmountsComplete(capability: ModelCapabilityChoice | undefined, tier: PriceTierFormValues, referenceVideoBilling = false) {
+    const prices = tier.billingMode !== "token" ? [tier.unitPrice] : capability === "video" ? [tier.outputTokenPrice] : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice, tier.cacheWriteTokenPrice];
+    if (capability === "video" && referenceVideoBilling && tier.billingMode !== "fixed_request") prices.push(tier.billingMode === "token" ? tier.referenceVideoOutputTokenPrice : tier.referenceVideoUnitPrice);
+    return prices.every((price) => typeof price === "number" && Number.isFinite(price) && price >= 0 && price <= 1_000_000);
 }

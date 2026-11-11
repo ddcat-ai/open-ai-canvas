@@ -284,6 +284,8 @@ func TestCloudAgentCanvasOperationTraceSharesToolCallID(t *testing.T) {
 
 func TestCloudAgentMissingCanvasStillCheckpointsMediaFailure(t *testing.T) {
 	s, db, args := agentMediaFixture(t)
+	// This test advances checkpoints itself; the approval waiter must not race its revision CAS.
+	s.closeApprovedCloudAgentMediaWaiters()
 	run, _ := agentMediaRun(t, s, args, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)

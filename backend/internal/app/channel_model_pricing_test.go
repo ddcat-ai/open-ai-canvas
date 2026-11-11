@@ -34,6 +34,63 @@ func repricingRequest(id string, price int64) ChannelModelRepriceRequest {
 	return ChannelModelRepriceRequest{ModelID: id, PriceVersion: 1, PriceTiers: []ChannelModelTierRepriceRequest{{ID: "tier-" + id, PriceVersion: 1, Prices: map[string]*int64{"unitPriceMicrocredits": &price}}}}
 }
 
+func TestRepriceReferenceVideoPricesAreAtomicAndPreserveCosts(t *testing.T) {
+	for _, mode := range []string{"per_second", "token"} {
+		t.Run(mode, func(t *testing.T) {
+			svc, db, admin := seedRepricingModels(t)
+			if err := db.Model(&model.ChannelModel{}).Where("id = ?", "b").Updates(map[string]any{"capability": "video", "protocol": model.ChannelInterfaceNewAPIVideo, "reference_video_billing": true}).Error; err != nil {
+				t.Fatal(err)
+			}
+			cost := model.CreditCostPricing{Configured: true}
+			var storedTier model.ChannelModelPriceTier
+			if err := db.First(&storedTier, "id = ?", "tier-b").Error; err != nil {
+				t.Fatal(err)
+			}
+			storedTier.BillingMode, storedTier.UnitPriceMicrocredits, storedTier.CostPricing = mode, 0, cost
+			if err := db.Save(&storedTier).Error; err != nil {
+				t.Fatal(err)
+			}
+			baseKey, refKey := "unitPriceMicrocredits", "referenceVideoUnitPriceMicrocredits"
+			if mode == "token" {
+				baseKey, refKey = "outputTokenPriceMicrocredits", "referenceVideoOutputTokenPriceMicrocredits"
+			}
+			zero, paid, reference := int64(0), int64(20), int64(30)
+			req := repricingRequest("b", 0)
+			req.PriceTiers[0].Prices = map[string]*int64{baseKey: &paid, refKey: &zero}
+			if n, err := svc.RepriceAdminChannelModels(admin, "channel", []ChannelModelRepriceRequest{repricingRequest("a", 42), req}); err == nil || n != 0 {
+				t.Fatalf("paid base without reference accepted: %d %v", n, err)
+			}
+			a, _ := svc.repo.ChannelModelByID("channel", "a")
+			if a.UnitPriceMicrocredits != 9 || a.PriceVersion != 1 {
+				t.Fatal("failed batch partially wrote sibling")
+			}
+			req.PriceTiers[0].Prices[baseKey] = &zero
+			if _, err := svc.RepriceAdminChannelModels(admin, "channel", []ChannelModelRepriceRequest{req}); err != nil {
+				t.Fatalf("free reference rejected: %v", err)
+			}
+			req.PriceVersion, req.PriceTiers[0].PriceVersion = 2, 2
+			req.PriceTiers[0].Prices = map[string]*int64{baseKey: &paid, refKey: &reference}
+			if _, err := svc.RepriceAdminChannelModels(admin, "channel", []ChannelModelRepriceRequest{req}); err != nil {
+				t.Fatal(err)
+			}
+			item, err := svc.repo.ChannelModelByID("channel", "b")
+			if err != nil {
+				t.Fatal(err)
+			}
+			tier := item.PriceTiers[0]
+			if tier.CostPricing != cost || tier.PriceVersion != 3 || item.PriceVersion != 3 {
+				t.Fatalf("cost/version changed unexpectedly: %#v", tier)
+			}
+			if (mode == "per_second" && (tier.UnitPriceMicrocredits != paid || tier.ReferenceVideoUnitPriceMicrocredits != reference)) || (mode == "token" && (tier.OutputTokenPriceMicrocredits != paid || tier.ReferenceVideoOutputTokenPriceMicrocredits != reference)) {
+				t.Fatalf("reference price not persisted: %#v", tier)
+			}
+			if _, err := svc.RepriceAdminChannelModels(admin, "channel", []ChannelModelRepriceRequest{req}); err == nil {
+				t.Fatal("stale reprice accepted")
+			}
+		})
+	}
+}
+
 func TestRepriceAdminChannelModelsPreservesFinalManualPrices(t *testing.T) {
 	svc, db, admin := seedRepricingModels(t)
 	disabled := model.ChannelModelPriceTier{ID: "disabled", ChannelModelID: "a", SelectorKey: `{"quality":"high"}`, Enabled: false, UnitPriceMicrocredits: 99, PriceVersion: 7}
@@ -207,7 +264,7 @@ func TestRepriceTierFieldValidation(t *testing.T) {
 			prices["cachedTokenPriceMicrocredits"] = &zero
 			prices["cacheWriteTokenPriceMicrocredits"] = &input
 		}
-		if err := applyChannelModelTierPrices(&tier, capability, protocol, prices); err != nil {
+		if err := applyChannelModelTierPrices(&tier, capability, protocol, false, prices); err != nil {
 			t.Fatal(err)
 		}
 		wantCacheWrite := int64(0)
@@ -218,7 +275,7 @@ func TestRepriceTierFieldValidation(t *testing.T) {
 			t.Fatalf("tier=%+v", tier)
 		}
 		output = 1_000_000_000_001
-		if err := applyChannelModelTierPrices(&tier, capability, protocol, prices); err == nil {
+		if err := applyChannelModelTierPrices(&tier, capability, protocol, false, prices); err == nil {
 			t.Fatal("token price limit missing")
 		}
 	}

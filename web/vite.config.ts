@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+import { startupChunks } from "./build/startup-chunks";
+import { resilientPreload } from "./build/resilient-preload";
+
 const webDir = dirname(fileURLToPath(import.meta.url));
 const appVersion = process.env.CANVAS_BUILD_VERSION?.trim() || readFileSync(resolve(webDir, "../VERSION"), "utf8").trim();
 const buildCommit = process.env.CANVAS_BUILD_COMMIT?.trim() || process.env.VITE_BUILD_COMMIT?.trim() || "unknown";
@@ -12,7 +15,7 @@ const appChangelog = readFileSync(resolve(webDir, "../CHANGELOG.md"), "utf8");
 const apiProxyTarget = process.env.VITE_API_PROXY_TARGET?.trim() || "http://127.0.0.1:8080";
 
 export default defineConfig({
-    plugins: [react()],
+    plugins: [react(), resilientPreload(), startupChunks()],
     define: {
         __APP_VERSION__: JSON.stringify(appVersion),
         __APP_CHANGELOG__: JSON.stringify(appChangelog),

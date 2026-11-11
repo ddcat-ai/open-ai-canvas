@@ -20,8 +20,11 @@ const statusLabels: Record<string, string> = {
 };
 
 export function ecommerceHistoryCovers(project: EcommerceProject, tasks: Record<string, GenerationTask>): string[] {
-    const generated = (projectPlan(project)?.images || []).flatMap((image) => {
-        const task = image.taskId ? tasks[image.taskId] : undefined;
+    // Archived rounds are not embedded in the project row; the server sends a
+    // bounded set of their task IDs so covers still work without reading history.
+    const taskIds = [...new Set([...(project.coverTaskIds || []), ...(projectPlan(project)?.images || []).map((image) => image.taskId).filter((id): id is string => Boolean(id))])];
+    const generated = taskIds.flatMap((taskId) => {
+        const task = tasks[taskId];
         if (task?.status !== "succeeded") return [];
         let output;
         try {

@@ -1319,8 +1319,12 @@ func TestRunGeminiImageTaskUsesInlineDataAndImageConfig(t *testing.T) {
 			t.Errorf("responseModalities = %#v", modalities)
 		}
 		imageConfig, _ := generationConfig["imageConfig"].(map[string]interface{})
-		if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "4K" {
+		if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "1K" {
 			t.Errorf("imageConfig = %#v", imageConfig)
+		}
+		thinkingConfig, _ := generationConfig["thinkingConfig"].(map[string]interface{})
+		if thinkingConfig["thinkingLevel"] != "LOW" {
+			t.Errorf("thinkingConfig = %#v", thinkingConfig)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}]}`))
@@ -1329,7 +1333,7 @@ func TestRunGeminiImageTaskUsesInlineDataAndImageConfig(t *testing.T) {
 
 	result, err := runImageTask(context.Background(), canvasGenerationInput{
 		Prompt:          "edit this image",
-		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image", Size: "16:9", Quality: "high"},
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image", Size: "16:9", Quality: "high", ImageResolution: "1K", ImageParameters: map[string]any{"thinkingLevel": "low"}},
 		ReferenceImages: []providerMedia{{DataURL: testGeminiReferenceImageDataURL}},
 	})
 	if err != nil {

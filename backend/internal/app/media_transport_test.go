@@ -37,7 +37,7 @@ func TestReferenceTransportInheritanceAndValidation(t *testing.T) {
 
 func TestReferenceTransportChannelPersistenceAtomicityAndAdminAuthority(t *testing.T) {
 	s, db := newChannelModelTestService(t)
-	s.dataDir = t.TempDir()
+	s.dataDir = channelTestDataDir(t)
 	admin := &model.User{ID: "synthetic-admin", Role: model.UserRoleAdmin}
 	channel, err := s.CreateSystemChannel(admin, ChannelRequest{Name: "Synthetic transport", BaseURL: "https://8.8.8.8/v1", APIKey: "synthetic-key", MediaTransport: &ReferenceMediaTransport{Image: "url", Audio: "base64"}})
 	if err != nil {
@@ -46,7 +46,7 @@ func TestReferenceTransportChannelPersistenceAtomicityAndAdminAuthority(t *testi
 	if channel.MediaTransport == nil || channel.MediaTransport.Image != "url" {
 		t.Fatal("created response lost policy")
 	}
-	if _, err = s.UpdateSystemChannel(admin, channel.ID, ChannelRequest{Name: "Synthetic renamed"}); err != nil {
+	if channel, err = s.UpdateSystemChannel(admin, channel.ID, ChannelRequest{ExpectedUpdatedAt: channel.UpdatedAt, Name: "Synthetic renamed"}); err != nil {
 		t.Fatal(err)
 	}
 	value, err := s.channelMediaTransport(channel.ID)
@@ -72,7 +72,7 @@ func TestReferenceTransportChannelPersistenceAtomicityAndAdminAuthority(t *testi
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.UpdateSystemChannel(admin, channel.ID, ChannelRequest{Name: "Must roll back", MediaTransport: &ReferenceMediaTransport{Image: "base64"}}); !errors.Is(err, marker) {
+	if _, err = s.UpdateSystemChannel(admin, channel.ID, ChannelRequest{ExpectedUpdatedAt: channel.UpdatedAt, Name: "Must roll back", MediaTransport: &ReferenceMediaTransport{Image: "base64"}}); !errors.Is(err, marker) {
 		t.Fatal("expected transactional error", err)
 	}
 	db.Callback().Update().Remove("synthetic:transport-failure")
@@ -80,7 +80,7 @@ func TestReferenceTransportChannelPersistenceAtomicityAndAdminAuthority(t *testi
 	if err != nil || stored.Name != "Synthetic renamed" {
 		t.Fatal("channel changed without its policy", err)
 	}
-	if _, err = s.UpdateSystemChannel(admin, channel.ID, ChannelRequest{MediaTransport: &ReferenceMediaTransport{}}); err != nil {
+	if _, err = s.UpdateSystemChannel(admin, channel.ID, ChannelRequest{ExpectedUpdatedAt: stored.UpdatedAt, MediaTransport: &ReferenceMediaTransport{}}); err != nil {
 		t.Fatal(err)
 	}
 	value, err = s.channelMediaTransport(channel.ID)
@@ -91,10 +91,14 @@ func TestReferenceTransportChannelPersistenceAtomicityAndAdminAuthority(t *testi
 
 func TestReferenceTransportResolutionDoesNotTrustTaskConfig(t *testing.T) {
 	s, _ := newChannelModelTestService(t)
-	s.dataDir = t.TempDir()
+	s.dataDir = channelTestDataDir(t)
 	admin := &model.User{ID: "synthetic-admin", Role: model.UserRoleAdmin}
 	channelID := seedTransferChannel(t, s, admin)
-	if _, err := s.UpdateSystemChannel(admin, channelID, ChannelRequest{MediaTransport: &ReferenceMediaTransport{Image: "url", Audio: "base64"}}); err != nil {
+	channel, err := s.repo.AdminSystemChannel(channelID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateSystemChannel(admin, channelID, ChannelRequest{ExpectedUpdatedAt: channel.UpdatedAt, MediaTransport: &ReferenceMediaTransport{Image: "url", Audio: "base64"}}); err != nil {
 		t.Fatal(err)
 	}
 	config := providerConfig{ChannelID: channelID, Model: "gpt-test", CapabilityConfig: &ModelCapabilityConfig{MediaTransport: &ReferenceMediaTransport{Image: "base64"}}}

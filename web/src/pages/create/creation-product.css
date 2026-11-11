@@ -1,75 +1,399 @@
 /* Creation-specific geometry. Shared controls still use the workspace tokens. */
-.creation-home-scroll { display: block; width: 100%; min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; padding: var(--space-6) var(--space-8) var(--space-12); }
-.creation-home-scroll > * { width: 100%; max-width: 1280px; margin-inline: auto; }
-.creation-home-scroll > .creation-launchpad { width: min(960px, 100%); margin-inline: auto; }
-.creation-start-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); }
-.creation-start-heading h1 { margin: 0; color: var(--user-ink); font-size: var(--typ-display-sm); font-weight: 600; letter-spacing: -.025em; line-height: 1.3; }
-.creation-start-heading p { margin: var(--space-1) 0 0; color: var(--user-ink-muted); font-size: var(--fs-caption); line-height: 1.6; }
+/* 渐变铺满滚动背景，椭圆在四边内完全淡出，避免固定图片尺寸被截成矩形色块。 */
+.creation-home-scroll {
+    --creation-ambient-tint: color-mix(in srgb, var(--product-accent-blue) 7%, transparent);
+    display: block;
+    width: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-6) var(--space-8) var(--space-12);
+    background-image: radial-gradient(ellipse 46% 240px at 50% 260px, var(--creation-ambient-tint), transparent);
+    background-repeat: no-repeat;
+    background-attachment: local;
+}
+.dark .creation-home-scroll {
+    --creation-ambient-tint: color-mix(in srgb, var(--product-accent-blue) 9%, transparent);
+}
+.creation-home-scroll > * {
+    width: 100%;
+    max-width: 1280px;
+    margin-inline: auto;
+}
+.creation-home-scroll > .creation-launchpad {
+    width: min(960px, 100%);
+    margin-inline: auto;
+}
+.creation-start-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+}
+.creation-start-heading h1 {
+    margin: 0;
+    color: var(--user-ink);
+    font-size: var(--typ-display-sm);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.3;
+}
+.creation-start-heading p {
+    margin: var(--space-1) 0 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+}
 /* 与工作台文字按钮同一语言：透明底、弱化文字，hover 只换表面。 */
-.creation-history-entry { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; height: var(--user-control-height); border: 0; border-radius: var(--user-radius-button); padding: 0 var(--space-3); background: transparent; color: var(--user-ink-muted); font-size: var(--user-button-font-size); font-weight: var(--user-button-font-weight); cursor: pointer; transition: background var(--user-motion), color var(--user-motion); }
-.creation-history-entry:hover { background: var(--user-surface-muted); color: var(--user-ink); }
-.creation-history-entry svg { width: var(--user-button-icon-size); height: var(--user-button-icon-size); stroke-width: var(--user-button-icon-stroke); }
-.creation-recent-canvases { margin-top: var(--space-6); }
-.creation-section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
-.creation-section-heading h2 { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--user-ink); font-size: var(--fs-body); font-weight: 600; }
-.creation-section-heading h2 svg { width: var(--user-icon-size); height: var(--user-icon-size); color: var(--user-ink-muted); }
-.creation-section-link { display: inline-flex; height: var(--user-control-height-sm); align-items: center; gap: var(--space-1); border-radius: var(--user-radius-button-sm); padding: 0 var(--space-2); color: var(--user-ink-muted); font-size: var(--fs-caption); font-weight: var(--user-button-font-weight); transition: background var(--user-motion), color var(--user-motion); }
-.creation-section-link:hover { background: var(--user-surface-muted); color: var(--user-ink); }
-.creation-section-link svg { width: 14px; height: 14px; }
-.creation-canvas-strip { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-1) var(--space-1) var(--space-2); margin-inline: calc(-1 * var(--space-1)); scroll-snap-type: x proximity; }
-.creation-canvas-strip-item { min-width: 200px; flex: 1 0 200px; scroll-snap-align: start; }
+.creation-history-entry {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    height: var(--user-control-height);
+    border: 0;
+    border-radius: var(--user-radius-button);
+    padding: 0 var(--space-3);
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: var(--user-button-font-size);
+    font-weight: var(--user-button-font-weight);
+    cursor: pointer;
+    transition:
+        background var(--user-motion),
+        color var(--user-motion);
+}
+.creation-history-entry:hover {
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+}
+.creation-history-entry svg {
+    width: var(--user-button-icon-size);
+    height: var(--user-button-icon-size);
+    stroke-width: var(--user-button-icon-stroke);
+}
+.creation-recent-canvases {
+    margin-top: var(--space-6);
+}
+.creation-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+.creation-section-heading h2 {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--user-ink);
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+.creation-section-heading h2 svg {
+    width: var(--user-icon-size);
+    height: var(--user-icon-size);
+    color: var(--user-ink-muted);
+}
+.creation-section-link {
+    display: inline-flex;
+    height: var(--user-control-height-sm);
+    align-items: center;
+    gap: var(--space-1);
+    border-radius: var(--user-radius-button-sm);
+    padding: 0 var(--space-2);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    font-weight: var(--user-button-font-weight);
+    transition:
+        background var(--user-motion),
+        color var(--user-motion);
+}
+.creation-section-link:hover {
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+}
+.creation-section-link svg {
+    width: 14px;
+    height: 14px;
+}
+.creation-canvas-strip {
+    display: flex;
+    gap: var(--space-3);
+    overflow-x: auto;
+    padding: var(--space-1) var(--space-1) var(--space-2);
+    margin-inline: calc(-1 * var(--space-1));
+    scroll-snap-type: x proximity;
+}
+.creation-canvas-strip-item {
+    min-width: 200px;
+    flex: 1 0 200px;
+    scroll-snap-align: start;
+}
 /* 最近画布与创建入口是同一种紧凑卡：同高、同内边距、同媒体圆角；hover 只换表面。 */
-.creation-canvas-tile { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-width: 0; height: 72px; border: 0; border-radius: var(--user-radius-card); padding: var(--space-2); background: var(--library-surface); color: var(--user-ink); text-align: left; cursor: pointer; transition: background var(--user-motion); }
-.creation-canvas-tile:hover, .creation-canvas-tile:focus-visible { background: var(--library-surface-hover); }
-.creation-canvas-tile:disabled { cursor: wait; opacity: .5; }
-.creation-canvas-thumbnail { display: block; width: 56px; height: 56px; flex: 0 0 56px; overflow: hidden; border-radius: var(--user-radius-media); background: var(--library-cover-surface); }
-.creation-canvas-thumbnail.is-create { display: grid; place-items: center; background: var(--library-icon-surface); color: var(--user-ink-muted); transition: color var(--user-motion); }
-.creation-canvas-tile:hover .creation-canvas-thumbnail.is-create { color: var(--user-ink); }
-.creation-canvas-thumbnail.is-create svg { width: 18px; height: 18px; stroke-width: var(--user-button-icon-stroke); }
-.creation-canvas-thumbnail .canvas-project-empty { background: var(--library-cover-surface); }
-.creation-canvas-thumbnail .canvas-project-empty-icon { width: var(--space-5); height: var(--space-5); margin: 0; }
-.creation-canvas-thumbnail .canvas-project-empty :is(span, small) { display: none; }
-.creation-canvas-copy { display: flex; min-width: 0; flex-direction: column; gap: var(--space-1); padding-right: var(--space-1); }
-.creation-canvas-copy strong { overflow: hidden; color: var(--user-ink); font-size: 13px; font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.creation-canvas-copy small { overflow: hidden; color: var(--user-ink-soft); font-size: var(--fs-caption); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.creation-canvas-strip-state { display: flex; min-width: 0; flex: 4 0 240px; align-items: center; gap: var(--space-3); border-radius: var(--user-radius-card); padding: var(--space-4); color: var(--user-ink-muted); background: var(--library-surface); font-size: var(--fs-caption); }
-.creation-canvas-strip-state > svg { width: var(--space-5); height: var(--space-5); flex-shrink: 0; }
-.creation-canvas-strip-state button { flex: 0 0 auto; height: var(--user-control-height-sm); margin-left: auto; border: 1px solid var(--user-border); border-radius: var(--user-radius-button-sm); padding: 0 var(--space-2); background: transparent; color: var(--user-ink); font-size: var(--fs-caption); font-weight: var(--user-button-font-weight); cursor: pointer; transition: background var(--user-motion), border-color var(--user-motion); }
-.creation-canvas-strip-state button:hover:not(:disabled) { border-color: var(--user-border-strong); background: var(--user-surface-muted); }
-.creation-canvas-skeleton { display: flex; height: 72px; align-items: center; gap: var(--space-3); border-radius: var(--user-radius-card); padding: var(--space-2); background: var(--library-surface); }
-.creation-canvas-skeleton > span { width: 56px; height: 56px; flex: 0 0 56px; border-radius: var(--user-radius-media); background: var(--library-cover-surface); }
-.creation-canvas-skeleton > span:last-child { width: 60%; height: var(--space-5); flex: 1; }
-.creation-hall-loading { margin-top: var(--space-8); padding: var(--space-6); border-radius: var(--user-radius-card); background: var(--library-surface); color: var(--user-ink-muted); font-size: var(--fs-caption); }
-.creation-source-notice { margin-top: var(--space-5); color: var(--user-ink-muted); font-size: var(--fs-caption); line-height: 1.7; }
-.creation-source-notice summary { width: fit-content; padding-block: var(--space-2); cursor: pointer; }
-.creation-source-notice p { margin: var(--space-2) 0; }
-.creation-source-notice a { color: var(--user-ink); text-decoration: underline; text-underline-offset: var(--space-half); }
-:is(.creation-history-entry, .creation-section-link, .creation-canvas-tile, .creation-canvas-strip-state button):focus-visible { outline: 2px solid var(--control-focus-ring); outline-offset: 2px; }
+.creation-canvas-tile {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    min-width: 0;
+    height: 72px;
+    border: 0;
+    border-radius: var(--user-radius-card);
+    padding: var(--space-2);
+    background: var(--library-surface);
+    color: var(--user-ink);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--user-motion);
+}
+.creation-canvas-tile:hover,
+.creation-canvas-tile:focus-visible {
+    background: var(--library-surface-hover);
+}
+.creation-canvas-tile:disabled {
+    cursor: wait;
+    opacity: 0.5;
+}
+.creation-canvas-thumbnail {
+    display: block;
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    overflow: hidden;
+    border-radius: var(--user-radius-media);
+    background: var(--library-cover-surface);
+}
+.creation-canvas-thumbnail.is-create {
+    display: grid;
+    place-items: center;
+    background: var(--library-icon-surface);
+    color: var(--user-ink-muted);
+    transition: color var(--user-motion);
+}
+.creation-canvas-tile:hover .creation-canvas-thumbnail.is-create {
+    color: var(--user-ink);
+}
+.creation-canvas-thumbnail.is-create svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: var(--user-button-icon-stroke);
+}
+.creation-canvas-thumbnail .canvas-project-empty {
+    background: var(--library-cover-surface);
+}
+.creation-canvas-thumbnail .canvas-project-empty-icon {
+    width: var(--space-5);
+    height: var(--space-5);
+    margin: 0;
+}
+.creation-canvas-thumbnail .canvas-project-empty :is(span, small) {
+    display: none;
+}
+.creation-canvas-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-right: var(--space-1);
+}
+.creation-canvas-copy strong {
+    overflow: hidden;
+    color: var(--user-ink);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.creation-canvas-copy small {
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.creation-canvas-strip-state {
+    display: flex;
+    min-width: 0;
+    flex: 4 0 240px;
+    align-items: center;
+    gap: var(--space-3);
+    border-radius: var(--user-radius-card);
+    padding: var(--space-4);
+    color: var(--user-ink-muted);
+    background: var(--library-surface);
+    font-size: var(--fs-caption);
+}
+.creation-canvas-strip-state > svg {
+    width: var(--space-5);
+    height: var(--space-5);
+    flex-shrink: 0;
+}
+.creation-canvas-strip-state button {
+    flex: 0 0 auto;
+    height: var(--user-control-height-sm);
+    margin-left: auto;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-button-sm);
+    padding: 0 var(--space-2);
+    background: transparent;
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: var(--user-button-font-weight);
+    cursor: pointer;
+    transition:
+        background var(--user-motion),
+        border-color var(--user-motion);
+}
+.creation-canvas-strip-state button:hover:not(:disabled) {
+    border-color: var(--user-border-strong);
+    background: var(--user-surface-muted);
+}
+.creation-canvas-skeleton {
+    display: flex;
+    height: 72px;
+    align-items: center;
+    gap: var(--space-3);
+    border-radius: var(--user-radius-card);
+    padding: var(--space-2);
+    background: var(--library-surface);
+}
+.creation-canvas-skeleton > span {
+    width: 56px;
+    height: 56px;
+    flex: 0 0 56px;
+    border-radius: var(--user-radius-media);
+    background: var(--library-cover-surface);
+}
+.creation-canvas-skeleton > span:last-child {
+    width: 60%;
+    height: var(--space-5);
+    flex: 1;
+}
+.creation-hall-loading {
+    margin-top: var(--space-8);
+    padding: var(--space-6);
+    border-radius: var(--user-radius-card);
+    background: var(--library-surface);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+}
+.creation-source-notice {
+    margin-top: var(--space-5);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.7;
+}
+.creation-source-notice summary {
+    width: fit-content;
+    padding-block: var(--space-2);
+    cursor: pointer;
+}
+.creation-source-notice p {
+    margin: var(--space-2) 0;
+}
+.creation-source-notice a {
+    color: var(--user-ink);
+    text-decoration: underline;
+    text-underline-offset: var(--space-half);
+}
+:is(.creation-history-entry, .creation-section-link, .creation-canvas-tile, .creation-canvas-strip-state button):focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
 @media (max-width: 720px) {
-    .creation-home-scroll { padding: var(--space-4) var(--space-4) var(--space-8); }
-    .creation-start-heading { align-items: flex-start; margin-bottom: var(--space-4); gap: var(--space-2); }
-    .creation-start-heading h1 { font-size: var(--fs-title); }
-    .creation-history-entry { padding: var(--space-2); }
-    .creation-history-entry span { display: none; }
-    .creation-canvas-strip-item { min-width: 220px; flex-basis: 220px; }
+    .creation-home-scroll {
+        padding: var(--space-4) var(--space-4) var(--space-8);
+    }
+    .creation-start-heading {
+        align-items: flex-start;
+        margin-bottom: var(--space-4);
+        gap: var(--space-2);
+    }
+    .creation-start-heading h1 {
+        font-size: var(--fs-title);
+    }
+    .creation-history-entry {
+        padding: var(--space-2);
+    }
+    .creation-history-entry span {
+        display: none;
+    }
+    .creation-canvas-strip-item {
+        min-width: 220px;
+        flex-basis: 220px;
+    }
 }
 @media (prefers-reduced-motion: reduce) {
-    .creation-canvas-tile { transition: none; }
+    .creation-canvas-tile {
+        transition: none;
+    }
 }
 /* 创作模式切换是分段控件：12px 轨道 + 4px 内衬 + 8px 选中块（同心），选中只换表面与文字颜色，不改字重。 */
-.creation-mode-tabs { position: relative; isolation: isolate; display: grid; width: min(456px, 100%); margin: 0 auto 20px; padding: 4px; border-radius: 12px; background: var(--user-surface-muted); }
-.creation-mode-indicator { position: absolute; z-index: -1; inset: 0; border-radius: var(--button-radius); background: var(--user-surface); box-shadow: var(--button-secondary-shadow); }
-.creation-mode-button { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: var(--button-gap); min-width: 0; height: 44px; padding: 0 12px; border: 0; border-radius: var(--button-radius); background: transparent; color: var(--user-ink-muted); font-size: 14px; font-weight: var(--button-font-weight); cursor: pointer; transition: color var(--button-motion); }
-.creation-mode-button svg { width: var(--button-icon-size); height: var(--button-icon-size); stroke-width: var(--button-icon-stroke); color: currentColor; }
-.creation-mode-button[aria-pressed="true"], .creation-mode-button:hover { color: var(--user-ink); }
-.creation-mode-button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
+.creation-mode-tabs {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    width: min(456px, 100%);
+    margin: 0 auto 20px;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--user-surface-muted);
+}
+.creation-mode-indicator {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    border-radius: var(--button-radius);
+    background: var(--user-surface);
+    box-shadow: var(--button-secondary-shadow);
+}
+.creation-mode-button {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--button-gap);
+    min-width: 0;
+    height: 44px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--button-radius);
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: 14px;
+    font-weight: var(--button-font-weight);
+    cursor: pointer;
+    transition: color var(--button-motion);
+}
+.creation-mode-button svg {
+    width: var(--button-icon-size);
+    height: var(--button-icon-size);
+    stroke-width: var(--button-icon-stroke);
+    color: currentColor;
+}
+.creation-mode-button[aria-pressed="true"],
+.creation-mode-button:hover {
+    color: var(--user-ink);
+}
+.creation-mode-button:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 2px;
+}
 /* Agent 入口的提示点：随文字颜色的静态小圆点，不发光、不呼吸。 */
 .creation-mode-spark {
     width: 5px;
     height: 5px;
     border-radius: 50%;
     background: currentColor;
-    opacity: .55;
+    opacity: 0.55;
 }
 /* 首页创作卡：文件夹页签贴在卡片顶部。轨道是 --user-surface-muted，选中页签与内容面同为 --user-surface，
    两侧 S 形翼片把页签平滑落到内容面上；首尾页签的外侧翼片被轨道圆角裁掉，正好贴齐卡片边缘。
@@ -83,68 +407,342 @@
     background: transparent;
     box-shadow: 0 6px 16px color-mix(in srgb, var(--user-ink) 8%, transparent);
 }
-.dark .creation-mode-card { box-shadow: 0 1px 2px color-mix(in srgb, rgba(0, 0, 0, .28) 50%, transparent), 0 6px 16px rgba(0, 0, 0, .28); }
-.creation-mode-card-inner { display: flex; flex-direction: column; min-width: 0; }
-.creation-mode-folder { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(var(--creation-mode-count), minmax(0, 1fr)); height: var(--creation-mode-rail-height); overflow: hidden; border-radius: var(--creation-mode-inner-radius) var(--creation-mode-inner-radius) 0 0; background: var(--user-surface-muted); }
-.creation-mode-folder-tab { position: absolute; z-index: 0; top: 0; bottom: 0; background: var(--user-surface); pointer-events: none; }
-.creation-mode-folder-wing { position: absolute; top: 0; width: var(--creation-mode-wing); height: 100%; fill: var(--user-surface); }
-.creation-mode-folder-wing.is-start { right: calc(100% - 1px); }
-.creation-mode-folder-wing.is-end { left: calc(100% - 1px); transform: scaleX(-1); }
-.creation-mode-folder-button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--button-gap); min-width: 0; height: 100%; padding: 0 12px; border: 0; background: transparent; color: var(--user-ink-muted); font-size: 14px; font-weight: var(--button-font-weight); white-space: nowrap; cursor: pointer; transition: color var(--user-motion); }
-.creation-mode-folder-button > svg { flex: 0 0 auto; width: var(--button-icon-size); height: var(--button-icon-size); stroke-width: var(--button-icon-stroke); color: currentColor; }
-.creation-mode-folder-button[aria-pressed="true"], .creation-mode-folder-button:hover { color: var(--user-ink); }
+.dark .creation-mode-card {
+    box-shadow:
+        0 1px 2px color-mix(in srgb, rgba(0, 0, 0, 0.28) 50%, transparent),
+        0 6px 16px rgba(0, 0, 0, 0.28);
+}
+.creation-mode-card-inner {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.creation-mode-folder {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: repeat(var(--creation-mode-count), minmax(0, 1fr));
+    height: var(--creation-mode-rail-height);
+    overflow: hidden;
+    border-radius: var(--creation-mode-inner-radius) var(--creation-mode-inner-radius) 0 0;
+    background: var(--user-surface-muted);
+}
+.creation-mode-folder-tab {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--user-surface);
+    pointer-events: none;
+}
+.creation-mode-folder-wing {
+    position: absolute;
+    top: 0;
+    width: var(--creation-mode-wing);
+    height: 100%;
+    fill: var(--user-surface);
+}
+.creation-mode-folder-wing.is-start {
+    right: calc(100% - 1px);
+}
+.creation-mode-folder-wing.is-end {
+    left: calc(100% - 1px);
+    transform: scaleX(-1);
+}
+.creation-mode-folder-button {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--button-gap);
+    min-width: 0;
+    height: 100%;
+    padding: 0 12px;
+    border: 0;
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: 14px;
+    font-weight: var(--button-font-weight);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color var(--user-motion);
+}
+.creation-mode-folder-button > svg {
+    flex: 0 0 auto;
+    width: var(--button-icon-size);
+    height: var(--button-icon-size);
+    stroke-width: var(--button-icon-stroke);
+    color: currentColor;
+}
+.creation-mode-folder-button[aria-pressed="true"],
+.creation-mode-folder-button:hover {
+    color: var(--user-ink);
+}
 /* 轨道裁切了溢出，焦点环画在页签内侧。 */
-.creation-mode-folder-button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: -6px; border-radius: var(--user-radius-control); }
-.creation-mode-panel { overflow: hidden; border-radius: 0 0 var(--creation-mode-inner-radius) var(--creation-mode-inner-radius); }
-.creation-agent-entry { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 16px 24px; padding: 28px; background: var(--user-surface); animation: product-card-enter var(--product-enter) var(--product-ease) backwards; }
-.creation-agent-orb { grid-row: span 2; }
-.creation-agent-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .14em; color: var(--user-accent); }
-.creation-agent-copy h2 { margin: 4px 0 8px; font-size: 22px; font-weight: 600; color: var(--user-ink); }
-.creation-agent-copy p { margin: 0; max-width: 62ch; font-size: 13px; line-height: 1.8; color: var(--user-ink-muted); }
-.creation-agent-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.creation-agent-error { grid-column: 1 / -1; color: var(--status-error); font-size: 12px; margin: 0; }
-.creation-home .creation-empty-composer[hidden] { display: none; }
-.creation-submit { margin-left: auto; flex: 0 0 auto; display: inline-flex; gap: 8px; }
-.creation-submit-cost { display: inline-flex; align-items: center; gap: 4px; color: var(--user-ink-muted); font-size: 12px; padding-inline: 8px; }
-.creation-submit-cost svg { width: 14px; height: 14px; }
+.creation-mode-folder-button:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: -6px;
+    border-radius: var(--user-radius-control);
+}
+.creation-mode-panel {
+    overflow: hidden;
+    border-radius: 0 0 var(--creation-mode-inner-radius) var(--creation-mode-inner-radius);
+}
+.creation-agent-entry {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    align-items: center;
+    gap: 16px 24px;
+    padding: 28px;
+    background: var(--user-surface);
+    animation: product-card-enter var(--product-enter) var(--product-ease) backwards;
+}
+.creation-agent-orb {
+    grid-row: span 2;
+}
+.creation-agent-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--user-accent);
+}
+.creation-agent-copy h2 {
+    margin: 4px 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--user-ink);
+}
+.creation-agent-copy p {
+    margin: 0;
+    max-width: 62ch;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--user-ink-muted);
+}
+.creation-agent-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.creation-agent-error {
+    grid-column: 1 / -1;
+    color: var(--status-error);
+    font-size: 12px;
+    margin: 0;
+}
+.creation-home .creation-empty-composer[hidden] {
+    display: none;
+}
+.creation-submit {
+    margin-left: auto;
+    flex: 0 0 auto;
+    display: inline-flex;
+    gap: 8px;
+}
+.creation-submit-cost {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    padding-inline: 8px;
+}
+.creation-submit-cost svg {
+    width: 14px;
+    height: 14px;
+}
 /* 开始创作：与 composer 里其他控件同高（34px）的统一主按钮，墨色实底 + 内高光，不做胶囊、扫光或加粗。
    外层 antd 文字按钮只负责点击与禁用语义，视觉全部画在 .creation-submit-action 上。 */
 @layer utilities {
-    .app-product-workspace .creation-home .creation-submit.ant-btn { height: auto; min-height: var(--button-height); padding: 0; border: 0; background: transparent !important; box-shadow: none; border-radius: var(--button-radius); opacity: 1; }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; gap: var(--button-gap); width: auto; height: var(--button-height); padding: 0 14px 0 12px; border-radius: var(--button-radius); background: var(--button-primary-bg); color: var(--button-primary-fg); box-shadow: var(--button-primary-shadow); transition: background-color var(--button-motion), box-shadow var(--button-motion), opacity var(--button-motion); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action span { font-size: var(--button-font-size); font-weight: var(--button-font-weight); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action svg { width: var(--button-icon-size); height: var(--button-icon-size); stroke-width: var(--button-icon-stroke); color: currentColor; }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:disabled .creation-submit-action { box-shadow: none; opacity: var(--button-disabled-opacity); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action { background: var(--button-primary-hover-bg); }
-    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):active .creation-submit-action { background: var(--button-primary-active-bg); box-shadow: var(--button-primary-active-shadow); }
+    .app-product-workspace .creation-home .creation-submit.ant-btn {
+        height: auto;
+        min-height: var(--button-height);
+        padding: 0;
+        border: 0;
+        background: transparent !important;
+        box-shadow: none;
+        border-radius: var(--button-radius);
+        opacity: 1;
+    }
+    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        gap: var(--button-gap);
+        width: auto;
+        height: var(--button-height);
+        padding: 0 14px 0 12px;
+        border-radius: var(--button-radius);
+        background: var(--button-primary-bg);
+        color: var(--button-primary-fg);
+        box-shadow: var(--button-primary-shadow);
+        transition:
+            background-color var(--button-motion),
+            box-shadow var(--button-motion),
+            opacity var(--button-motion);
+    }
+    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action span {
+        font-size: var(--button-font-size);
+        font-weight: var(--button-font-weight);
+    }
+    .app-product-workspace .creation-home .creation-submit.ant-btn .creation-submit-action svg {
+        width: var(--button-icon-size);
+        height: var(--button-icon-size);
+        stroke-width: var(--button-icon-stroke);
+        color: currentColor;
+    }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:disabled .creation-submit-action {
+        box-shadow: none;
+        opacity: var(--button-disabled-opacity);
+    }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):hover .creation-submit-action {
+        background: var(--button-primary-hover-bg);
+    }
+    .app-product-workspace .creation-home .creation-submit.ant-btn:not(:disabled):active .creation-submit-action {
+        background: var(--button-primary-active-bg);
+        box-shadow: var(--button-primary-active-shadow);
+    }
 }
-.creation-inspiration-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-.creation-inspiration-filters button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; min-height: 36px; border: 0; border-radius: 999px; color: var(--user-ink-muted); background: transparent; font-size: 13px; transition: background var(--user-motion), color var(--user-motion); }
-.creation-inspiration-filters button span { font-size: 11px; opacity: .65; font-variant-numeric: tabular-nums; }
-.creation-inspiration-filters button:hover { background: var(--user-surface-hover); }
-.creation-inspiration-filters button[aria-pressed="true"] { background: var(--user-ink); color: var(--user-surface); }
-.creation-inspiration-filters button:focus-visible { outline: 2px solid var(--user-accent); outline-offset: 2px; }
-.creation-inspiration-overlay { position: absolute; inset: auto 12px 12px; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; border-radius: var(--user-radius-control); background: var(--user-surface); color: var(--user-ink); font-size: 12px; transform: translateY(6px); opacity: 0; transition: opacity var(--user-motion), transform var(--user-motion); }
-.creation-inspiration-overlay svg { width: 14px; height: 14px; transform: rotate(45deg); }
-.creation-featured-card:hover .creation-inspiration-overlay, .creation-featured-card:focus-visible .creation-inspiration-overlay { opacity: 1; transform: translateY(0); }
-.creation-inspiration-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-top: 24px; color: var(--user-ink-muted); font-size: 12px; }
-.creation-inspiration-footer details { max-width: 60ch; }
-.creation-inspiration-footer summary { cursor: pointer; padding-block: 8px; }
-.creation-inspiration-footer p { line-height: 1.7; margin: 8px 0; }
-.creation-inspiration-footer a { color: var(--user-accent); }
+.creation-inspiration-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.creation-inspiration-filters button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    min-height: 36px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--user-ink-muted);
+    background: transparent;
+    font-size: 13px;
+    transition:
+        background var(--user-motion),
+        color var(--user-motion);
+}
+.creation-inspiration-filters button span {
+    font-size: 11px;
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+}
+.creation-inspiration-filters button:hover {
+    background: var(--user-surface-hover);
+}
+.creation-inspiration-filters button[aria-pressed="true"] {
+    background: var(--user-ink);
+    color: var(--user-surface);
+}
+.creation-inspiration-filters button:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 2px;
+}
+.creation-inspiration-overlay {
+    position: absolute;
+    inset: auto 12px 12px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--user-radius-control);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    font-size: 12px;
+    transform: translateY(6px);
+    opacity: 0;
+    transition:
+        opacity var(--user-motion),
+        transform var(--user-motion);
+}
+.creation-inspiration-overlay svg {
+    width: 14px;
+    height: 14px;
+    transform: rotate(45deg);
+}
+.creation-featured-card:hover .creation-inspiration-overlay,
+.creation-featured-card:focus-visible .creation-inspiration-overlay {
+    opacity: 1;
+    transform: translateY(0);
+}
+.creation-inspiration-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 24px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+}
+.creation-inspiration-footer details {
+    max-width: 60ch;
+}
+.creation-inspiration-footer summary {
+    cursor: pointer;
+    padding-block: 8px;
+}
+.creation-inspiration-footer p {
+    line-height: 1.7;
+    margin: 8px 0;
+}
+.creation-inspiration-footer a {
+    color: var(--user-accent);
+}
 @media (max-width: 620px) {
-    .creation-mode-button { padding-inline: 8px; font-size: 12px; gap: 8px; }
-    .creation-mode-card { --creation-mode-rail-height: 44px; --creation-mode-wing: 20px; }
-    .creation-mode-folder-button { padding-inline: 4px; gap: 4px; font-size: 12px; }
-    .creation-agent-entry { grid-template-columns: 1fr; padding: 20px; gap: 12px; }
-    .creation-agent-orb { display: none; }
-    .creation-agent-copy h2 { font-size: 16px; }
-    .creation-agent-actions > .ant-btn { width: 100%; }
-    .creation-inspiration-filters { gap: 4px; }
-    .creation-inspiration-filters button { padding-inline: 8px; }
-    .creation-inspiration-footer { align-items: flex-start; flex-direction: column; }
-    .creation-home .creation-chat-dock { flex-wrap: wrap; gap: 12px; }
-    .creation-home .creation-chat-controls { flex: 1 1 100%; width: 100%; }
+    .creation-mode-button {
+        padding-inline: 8px;
+        font-size: 12px;
+        gap: 8px;
+    }
+    .creation-mode-card {
+        --creation-mode-rail-height: 44px;
+        --creation-mode-wing: 20px;
+    }
+    .creation-mode-folder-button {
+        padding-inline: 4px;
+        gap: 4px;
+        font-size: 12px;
+    }
+    .creation-agent-entry {
+        grid-template-columns: 1fr;
+        padding: 20px;
+        gap: 12px;
+    }
+    .creation-agent-orb {
+        display: none;
+    }
+    .creation-agent-copy h2 {
+        font-size: 16px;
+    }
+    .creation-agent-actions > .ant-btn {
+        width: 100%;
+    }
+    .creation-inspiration-filters {
+        gap: 4px;
+    }
+    .creation-inspiration-filters button {
+        padding-inline: 8px;
+    }
+    .creation-inspiration-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .creation-home .creation-chat-dock {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .creation-home .creation-chat-controls {
+        flex: 1 1 100%;
+        width: 100%;
+    }
 }
 /* 语音输入与 composer 其他控件同为 34px 浅底按钮（同 8px 圆角），只在悬停时加深表面。 */
 .app-user-workspace .creation-voice-trigger.ant-btn {
@@ -154,16 +752,26 @@
     border-radius: var(--button-radius) !important;
     background: var(--button-tonal-bg) !important;
     color: var(--button-ghost-fg) !important;
-    transition: background-color var(--button-motion), color var(--button-motion) !important;
+    transition:
+        background-color var(--button-motion),
+        color var(--button-motion) !important;
 }
 .app-user-workspace .creation-voice-trigger.ant-btn:hover,
 .app-user-workspace .creation-voice-trigger.ant-btn:focus-visible {
     background: var(--button-tonal-hover-bg) !important;
     color: var(--button-ghost-hover-fg) !important;
 }
-.app-user-workspace .creation-chat-control > svg:first-child { transition: color var(--button-motion); color: currentColor; }
-.app-user-workspace .creation-model-picker .canvas-model-picker-trigger-icon { color: currentColor; }
-.app-user-workspace .creation-chat-control.is-clear:hover { background: color-mix(in srgb, var(--status-error, #c45b5b) 12%, var(--user-surface)) !important; color: var(--status-error, #c45b5b) !important; }
+.app-user-workspace .creation-chat-control > svg:first-child {
+    transition: color var(--button-motion);
+    color: currentColor;
+}
+.app-user-workspace .creation-model-picker .canvas-model-picker-trigger-icon {
+    color: currentColor;
+}
+.app-user-workspace .creation-chat-control.is-clear:hover {
+    background: color-mix(in srgb, var(--status-error, #c45b5b) 12%, var(--user-surface)) !important;
+    color: var(--status-error, #c45b5b) !important;
+}
 
 /* 思考、流式等持久开关：开启态用主色浅底 + 主色文字表达"已开启"，不发光、不放大图标。
    颜色跟随皮肤主色，明暗主题共用一套规则。 */
@@ -191,13 +799,23 @@
     color: var(--button-ghost-hover-fg);
 }
 @media (prefers-reduced-motion: reduce) {
-    .creation-mode-button:active, .creation-mode-folder-button:active { transform: none; }
-    .creation-mode-folder-button { transition: none; }
-    .creation-agent-entry { animation: none; }
+    .creation-mode-button:active,
+    .creation-mode-folder-button:active {
+        transform: none;
+    }
+    .creation-mode-folder-button {
+        transition: none;
+    }
+    .creation-agent-entry {
+        animation: none;
+    }
     .app-user-workspace .creation-chat-composer,
     .app-user-workspace .creation-chat-control,
     .app-user-workspace .creation-voice-trigger.ant-btn,
-    .app-user-workspace .creation-submit-action { transition: none !important; transform: none !important; }
+    .app-user-workspace .creation-submit-action {
+        transition: none !important;
+        transform: none !important;
+    }
 }
 
 /* 参数弹窗挂在 body overlays，必须直接用用户表面 token；描边由 Ant inner 的 1px border 造成。 */
@@ -213,7 +831,9 @@
 }
 
 .app-user-overlays .creation-control-popover .ant-popover-arrow,
-.app-product-overlays .creation-control-popover .ant-popover-arrow { display: none; }
+.app-product-overlays .creation-control-popover .ant-popover-arrow {
+    display: none;
+}
 
 .app-user-overlays .creation-control-popover.ant-popover,
 .app-user-overlays .creation-control-popover .ant-popover-container,
@@ -227,7 +847,9 @@
     outline: 0 !important;
     background: var(--user-surface-raised) !important;
     background-image: none !important;
-    box-shadow: 0 1px 2px color-mix(in srgb, rgba(0, 0, 0, .36) 50%, transparent), 0 18px 40px rgba(0, 0, 0, .36) !important;
+    box-shadow:
+        0 1px 2px color-mix(in srgb, rgba(0, 0, 0, 0.36) 50%, transparent),
+        0 18px 40px rgba(0, 0, 0, 0.36) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     border-radius: 16px !important;
@@ -240,20 +862,28 @@
 }
 
 .app-user-overlays .creation-parameter-menu,
-.app-product-overlays .creation-parameter-menu { padding: 12px !important; }
+.app-product-overlays .creation-parameter-menu {
+    padding: 12px !important;
+}
 
 .app-user-overlays .creation-parameter-section h3,
 .app-user-overlays .creation-duration-heading > span,
 .app-product-overlays .creation-parameter-section h3,
-.app-product-overlays .creation-duration-heading > span { color: var(--user-ink-muted) !important; }
+.app-product-overlays .creation-duration-heading > span {
+    color: var(--user-ink-muted) !important;
+}
 
 .app-user-overlays .creation-parameter-section > header > span,
 .app-user-overlays .creation-duration-heading strong,
 .app-product-overlays .creation-parameter-section > header > span,
-.app-product-overlays .creation-duration-heading strong { color: var(--user-ink) !important; }
+.app-product-overlays .creation-duration-heading strong {
+    color: var(--user-ink) !important;
+}
 
 .app-user-overlays .creation-choice-grid,
-.app-product-overlays .creation-choice-grid { gap: 8px !important; }
+.app-product-overlays .creation-choice-grid {
+    gap: 8px !important;
+}
 
 .app-user-overlays .creation-choice-grid button,
 .app-user-overlays .creation-duration-choices button,
@@ -274,7 +904,9 @@
 .app-product-overlays .creation-choice-grid.is-resolution button,
 .app-product-overlays .creation-choice-grid.is-quality button,
 .app-product-overlays .creation-choice-grid.is-count button,
-.app-product-overlays .creation-duration-choices button { min-height: 34px !important; }
+.app-product-overlays .creation-duration-choices button {
+    min-height: 34px !important;
+}
 
 .app-user-overlays .creation-choice-grid button:hover,
 .app-user-overlays .creation-duration-choices button:hover,
@@ -297,11 +929,13 @@
     border: 0 !important;
     border-radius: 4px !important;
     background: currentColor;
-    opacity: .55;
+    opacity: 0.55;
 }
 
 .app-user-overlays .creation-choice-grid button.is-selected .creation-ratio-preview > span,
-.app-product-overlays .creation-choice-grid button.is-selected .creation-ratio-preview > span { opacity: .92; }
+.app-product-overlays .creation-choice-grid button.is-selected .creation-ratio-preview > span {
+    opacity: 0.92;
+}
 
 .app-user-overlays .creation-custom-value,
 .app-product-overlays .creation-custom-value {
@@ -337,7 +971,7 @@
 .app-product-overlays .creation-parameter-menu .image-size-ratio-icon {
     border: 0 !important;
     background: currentColor;
-    opacity: .55;
+    opacity: 0.55;
 }
 
 /* Keep the settings popover inside the viewport and preserve every option label. */
@@ -418,7 +1052,9 @@ html:not(.dark) .app-product-overlays .creation-control-popover.ant-popover,
 html:not(.dark) .app-product-overlays .creation-control-popover .ant-popover-container,
 html:not(.dark) .app-product-overlays .creation-control-popover .ant-popover-inner,
 html:not(.dark) .app-product-overlays .creation-control-popover-surface {
-    box-shadow: 0 1px 2px color-mix(in srgb, rgba(25, 25, 30, .12) 50%, transparent), 0 16px 40px rgba(25, 25, 30, .12) !important;
+    box-shadow:
+        0 1px 2px color-mix(in srgb, rgba(25, 25, 30, 0.12) 50%, transparent),
+        0 16px 40px rgba(25, 25, 30, 0.12) !important;
 }
 
 /* 长提示词保持编辑器可控：按当前字号最多展示约 12 行，继续输入时只在编辑区内部滚动。 */

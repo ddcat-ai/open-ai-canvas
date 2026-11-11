@@ -24,7 +24,7 @@ export function clampAgentDockWidth(width: number, viewportWidth: number) {
 }
 
 export function restoreAgentPanelDock(raw: string | null): AgentPanelDockPreference {
-    const fallback = { docked: false, width: AGENT_DOCK_DEFAULT_WIDTH };
+    const fallback = { docked: true, width: AGENT_DOCK_DEFAULT_WIDTH };
     if (!raw) return fallback;
     try {
         const parsed: unknown = JSON.parse(raw);
@@ -33,7 +33,7 @@ export function restoreAgentPanelDock(raw: string | null): AgentPanelDockPrefere
             if (typeof docked === "boolean" && typeof width === "number" && Number.isFinite(width)) return { docked, width };
         }
     } catch {
-        // UI 偏好损坏不影响对话，回到默认浮动窗口。
+        // UI 偏好损坏不影响对话，回到默认侧栏；窄屏由布局层处理。
     }
     return fallback;
 }

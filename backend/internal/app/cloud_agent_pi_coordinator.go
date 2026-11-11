@@ -191,6 +191,7 @@ func (s *Service) failPiRunner(runID, userID string, cause error) {
 				return nil
 			}
 			current.Status = "failed"
+			current.CleanupPending = true
 			current.FailureMessage = cause.Error()
 			state, decodeErr := cloudAgentDecode(current)
 			if decodeErr == nil {
@@ -231,6 +232,14 @@ func (s *Service) recoverCloudAgentPiRunners() {
 
 		for _, run := range runs {
 			cursor = run.ID
+			if cloudAgentRunTerminal(run.Status) {
+				// Cleanup is resumable after HTTP cancellation times out or a worker
+				// exits. The terminal branch never starts a model/session again.
+				if run.CleanupPending {
+					s.startCloudAgentPi(run.UserID, run.ID)
+				}
+				continue
+			}
 			// 跳过等待状态
 			if run.Status == "waiting_approval" || run.Status == "waiting_user" {
 				continue
@@ -258,19 +267,17 @@ func (s *Service) recoverCloudAgentPiRunners() {
 
 // runCloudAgentPiSession 核心会话管理
 func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID string) error {
-	// 1. 加载运行状态
-	task, state, err := s.cloudAgentTask(userID, runID)
-	if err != nil {
-		return fmt.Errorf("load task: %w", err)
-	}
-
+	// Terminal cleanup must also work when the runtime/input cannot be decoded.
 	run, err := s.repo.CloudAgent(userID, runID)
 	if err != nil {
 		return fmt.Errorf("load run: %w", err)
 	}
-
 	if cloudAgentRunTerminal(run.Status) {
-		return nil
+		return s.finishCloudAgentCleanup(ctx, run)
+	}
+	task, state, err := s.cloudAgentTask(userID, runID)
+	if err != nil {
+		return fmt.Errorf("load task: %w", err)
 	}
 
 	runtimeState, err := cloudAgentDecode(run)

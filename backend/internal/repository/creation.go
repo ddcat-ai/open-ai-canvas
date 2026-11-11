@@ -46,6 +46,9 @@ func (r *Repository) CreationRuns(userID string) ([]model.CreationRun, error) {
 	return items, err
 }
 func (r *Repository) CreateCreationRun(run *model.CreationRun) error {
+	if err := canonicalizeCreationCanvasBaseline(run); err != nil {
+		return err
+	}
 	var old model.CreationRun
 	if err := r.db.First(&old, "user_id = ? AND client_key = ?", run.UserID, run.ClientKey).Error; err == nil {
 		if old.CreateHash != run.CreateHash {
@@ -83,6 +86,9 @@ func (r *Repository) MutateCreationRun(userID, id string, fn func(*model.Creatio
 			return err
 		}
 		if err := fn(run, scoped); err != nil {
+			return err
+		}
+		if err := canonicalizeCreationCanvasBaseline(run); err != nil {
 			return err
 		}
 		return tx.Save(run).Error

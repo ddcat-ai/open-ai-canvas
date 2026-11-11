@@ -389,6 +389,9 @@ func (s *Service) DeleteProject(userID string, id string) error {
 		return BadAuthRequest("项目仍有进行中的生成任务，请等待任务完成或取消后再删除")
 	}
 	if err := s.repo.DeleteProject(userID, id, canvasUpdates); err != nil {
+		if errors.Is(err, repository.ErrCanvasAgentBusy) {
+			return &AppError{Status: 409, Code: 409, Reason: "canvas_agent_busy", Message: "项目画布的 Agent 仍在执行或收尾，请先停止并等待任务完成后再删除"}
+		}
 		if errors.Is(err, repository.ErrProjectHasActiveTasks) {
 			return BadAuthRequest("项目仍有进行中的生成任务，请等待任务完成或取消后再删除")
 		}

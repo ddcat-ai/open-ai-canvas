@@ -124,6 +124,9 @@ const (
 	TaskGet                = "task_get"
 	CanvasInspectImage     = "canvas_inspect_image"
 	MemoryUpdate           = "memory_update"
+	MemorySearch           = "memory_search"
+	MCPListTools           = "mcp_list_tools"
+	MCPCallTool            = "mcp_call_tool"
 	ImageLayerSplit        = "image_layer_split"
 	ModelList              = "model_list"
 	CanvasCreateStoryboard = "canvas_create_storyboard"
@@ -161,6 +164,9 @@ func init() {
 func policies() []Policy {
 	return []Policy{
 		{Name: AgentProfileRead, Kind: KindRead, Cacheable: true},
+		{Name: MemorySearch, Kind: KindRead, RequiresMemory: true, OutsideTransaction: true},
+		{Name: MCPListTools, Kind: KindRead, OutsideTransaction: true},
+		{Name: MCPCallTool, Kind: KindWrite, AlwaysApprove: true, OutsideTransaction: true},
 		{Name: PlanUpdate, Kind: KindControl},
 		{Name: AskUser, Kind: KindControl},
 		{Name: PrevisSceneRead, Kind: KindRead, Cacheable: true, CacheScope: CacheCanvasRevision, RequiresCanvas: true},

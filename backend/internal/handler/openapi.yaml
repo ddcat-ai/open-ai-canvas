@@ -24,11 +24,17 @@ tags:
   - name: assets
   - name: models
   - name: agent
+  - name: mcp
+    description: Agent 个人及平台 MCP 连接、工具发现与市场配置
   - name: admin
   - name: skills
   - name: workbench
+  - name: dramas
+    description: 短剧作品与角色、场景、道具设定
   - name: feedback
     description: 用户反馈与管理员收件箱
+  - name: integration
+    description: 外部平台事件与消息集成
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
   - name: inspirations
@@ -36,6 +42,309 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /admin/api-logs/{id}:
+    get:
+      tags: [admin]
+      summary: 管理员读取单条模型请求详情
+      description: 仅管理员可读。视频 create 根日志提供 generationContent；优先使用请求时白名单快照，旧日志只按可证明属于该次请求的任务输入或请求正文降级。列表和 CSV 不返回生成内容。媒体缺失时 available 为 false，不提供外链。
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: 请求详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          log:
+                            type: object
+                            properties:
+                              generationContent: { $ref: "#/components/schemas/APICallGenerationContent" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /admin/api-logs/{id}/references/{refId}/media:
+    get:
+      tags: [admin]
+      summary: 管理员读取该次视频请求的原始参考媒体
+      description: 校验管理员、日志用户、引用和资源归属。refId 必须来自该日志生成内容；固定 original，通过后端流返回，不重定向、不返回存储 URL。不接受任何查询参数（包括 url、variant、access）。响应带 private,no-store、no-referrer 和 nosniff；支持单段 Range。
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: refId, required: true, schema: { type: string } }
+        - { in: header, name: Range, schema: { type: string }, description: 例如 bytes=0-1023 }
+      responses:
+        "200":
+          description: 原始媒体完整字节
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "206":
+          description: 原始媒体部分字节
+          headers:
+            Content-Range: { schema: { type: string } }
+            Accept-Ranges: { schema: { type: string, enum: [bytes] } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "416": { description: Range 不满足原始媒体长度 }
+  /dramas/{id}/episodes/{episodeId}/jianying-draft/preview:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: episodeId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 预检剪映草稿的目录与可用素材
+      description: 只校验当前用户的作品/剧集归属、资源记录和媒体首字节，不生成 ZIP、不保存目录配置。返回缺段、旧版本、估时提示及交付指纹；目录只在 POST 正文中传递。响应 private,no-store，请求最多 16 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [draftRoot, captions]
+              properties:
+                draftRoot: { type: string, maxLength: 400, description: Windows/macOS 本机绝对草稿目录；支持共享目录下的子文件夹 }
+                captions: { type: boolean, description: 是否按分镜估时附带字幕轨与 SRT }
+      responses:
+        "200":
+          description: 预检结果；availableSegments 为零时不得提交下载
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: integer, enum: [0] }
+                  msg: { type: string }
+                  data:
+                    type: object
+                    required: [draftRoot, revision, totalSegments, availableSegments, missingSegments, staleSegments, durationMs, mediaBytes, captionCount, segments, warnings]
+                    properties:
+                      draftRoot: { type: string, description: 规范化后的本机目录 }
+                      revision: { type: string, pattern: '^[a-f0-9]{64}$', description: 实际交付相关数据的指纹，无服务器持久化令牌 }
+                      totalSegments: { type: integer }
+                      availableSegments: { type: integer }
+                      missingSegments: { type: integer }
+                      staleSegments: { type: integer }
+                      durationMs: { type: integer, format: int64 }
+                      mediaBytes: { type: integer, format: int64, description: 媒体字节估计，不包含 ZIP 目录和草稿文本 }
+                      captionCount: { type: integer }
+                      warnings: { type: array, items: { type: string } }
+                      segments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            index: { type: integer, description: 从 0 开始的剧情段序号 }
+                            title: { type: string }
+                            included: { type: boolean }
+                            stale: { type: boolean }
+                            reason: { type: string, description: 不可用原因，不包含敏感存储地址 }
+                            durationMs: { type: integer, format: int64 }
+                            durationEstimated: { type: boolean }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/episodes/{episodeId}/jianying-draft:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: episodeId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 按已确认的预检结果流式下载剪映草稿
+      description: 再次校验归属、文件读取状态和交付指纹；缺少或过期 revision 返回 409。缺段/旧版本必须分别明确确认。通过后流式 ZIP 交给浏览器，不代表客户端下载完成；传输中断不补写 JSON 或完整 ZIP 目录。具体剪映版本兼容性需要实际验收。
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [draftRoot, captions, revision]
+              properties:
+                draftRoot: { type: string, maxLength: 400 }
+                captions: { type: string, enum: ["0", "1"] }
+                revision: { type: string, pattern: '^[a-f0-9]{64}$' }
+                allowIncomplete: { type: string, enum: ["0", "1"], default: "0" }
+                allowStale: { type: string, enum: ["0", "1"], default: "0" }
+      responses:
+        "200":
+          description: 流式 ZIP 附件；包含视频、草稿、可选字幕与导入说明
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 手动创建角色、场景或道具草稿
+      description: 校验当前用户的作品归属；保存 imageStatus=draft，不创建作业、不调用模型、不扣费。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateDramaCastRequest" }
+      responses:
+        "200":
+          description: 已创建独立设定草稿
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/{castId}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: castId, required: true, schema: { type: string } }
+    patch:
+      tags: [dramas]
+      summary: 保存设定文字、图片提示词与独立画风
+      description: 省略字段保持原值；imagePrompt 和画风字段传空串清空。保存保留当前参考图，不自动生成。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateDramaCastRequest" }
+      responses:
+        "200":
+          description: 已保存设定
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/{castId}/image-prompt:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: castId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 按当前外观和画风重新编排参考图提示词
+      description: 省略字段使用已保存值；覆盖字段仅供本次预览。使用真实生成入口的编排函数和作品参考图方案，忽略旧 imagePrompt，不调用收费模型、不保存、不递归嵌入旧提示词。适用于基础设定和造型。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DramaCastImagePromptRequest" }
+      responses:
+        "200":
+          description: 可编辑的完整图片提示词
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [imagePrompt]
+                        properties:
+                          imagePrompt: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/import:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 从当前用户的另一部作品关联导入设定
+      description: |
+        只选择基础设定 ID，角色自动携带造型、当前图片和声音。原子事务创建独立目标记录并保存来源 ID，图片与声音资源必须归当前用户且已就绪；无图片可导入草稿，不复制生成中状态或作业、不触发生成或收费。
+        同类型同名仅唯一匹配；已有来源优先匹配。同名命中有图且未允许替换时只关联来源并计入 skipped，原图与本季设定保留。重复导入默认保持本季编辑。显式 replaceExisting=true 可更新设定并替换已有图片，旧图保留在 takes，相关下游内容标记过期。来源无图不会清除目标已有图。
+        造型 parentId 重映射到本季角色，复制的默认章节范围重置不限，每个角色最多 6 套造型。冲突、歧义或生成中的目标返回 409，reason=drama_cast_import_conflict，整个导入回滚。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportDramaCastRequest" }
+      responses:
+        "200":
+          description: imported/skipped 按基础设定与造型记录合计；cast 返回本次关联到的目标记录（包括 skipped）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [imported, skipped, cast]
+                        properties:
+                          imported: { type: integer, minimum: 0 }
+                          skipped: { type: integer, minimum: 0 }
+                          cast:
+                            type: array
+                            items: { $ref: "#/components/schemas/DramaCast" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/cast/{castId}/looks:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: castId, required: true, schema: { type: string } }
+    post:
+      tags: [dramas]
+      summary: 新增角色造型草稿
+      description: 仅基础角色可以新增造型，每个角色最多 6 套。保存不生成；图片提示词和画风按造型独立选择，三项画风字段全空时继承作品画风。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/DramaCastLookRequest" }
+                - type: object
+                  required: [lookName, appearance]
+      responses:
+        "200":
+          description: 已创建造型草稿
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastLookEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /dramas/{id}/looks/{lookId}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+      - { in: path, name: lookId, required: true, schema: { type: string } }
+    patch:
+      tags: [dramas]
+      summary: 保存角色造型与独立画风
+      description: imagePrompt 和三项画风字段省略时不变、空串清空；造型生成中不可修改。保存保留旧图，不自动生成。请求体最多 128 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DramaCastLookRequest" }
+      responses:
+        "200":
+          description: 已保存造型，data.affectedSegments 返回按请求标记过期的剧情段数量
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DramaCastLookEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /admin/ecommerce/skills/install:
     post:
       tags: [admin]
@@ -368,7 +677,7 @@ paths:
             schema:
               {
                 type: string,
-                enum: [password, email, sms, linuxdo, verification, unknown],
+                enum: [password, email, sms, linuxdo, oidc, verification, unknown],
               },
           }
         - {
@@ -522,6 +831,83 @@ paths:
                       data: { $ref: "#/components/schemas/FeedbackAttachment" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /integrations/feishu/events:
+    post:
+      tags: [integration, feedback]
+      summary: 接收飞书事件回调
+      description: 校验 verification token；配置 EncryptKey 时同时校验签名。首版只接受明文 text 事件，重复事件按事件 ID 幂等确认。
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { type: object, additionalProperties: true } }
+      responses:
+        "200":
+          description: URL verification 返回 challenge，普通事件返回接收状态
+          content:
+            application/json: { schema: { type: object, additionalProperties: true } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/integrations/feishu:
+    get:
+      tags: [integration, admin]
+      summary: 读取飞书反馈接入配置
+      responses:
+        "200":
+          description: 成功信封，密钥只返回是否已配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/FeishuFeedbackSettings" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [integration, admin]
+      summary: 保存飞书反馈接入配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeishuFeedbackSettingsInput" }
+      responses:
+        "200":
+          description: 成功信封，密钥只返回是否已配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/FeishuFeedbackSettings" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/integrations/feishu/digest:
+    post:
+      tags: [integration, feedback, admin]
+      summary: 手动发送当日飞书反馈日报
+      description: 同一自然日已发送的日报不会自动重复发送；不确定结果需要管理员核对后再决定是否重试。
+      responses:
+        "200":
+          description: 成功信封，data 为日报投递状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/FeishuDigestState" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /admin/feedbacks:
     get:
@@ -1767,6 +2153,228 @@ paths:
           description: 返回更新后的生效偏好视图
         "409":
           description: 偏好 revision 已变化，须重新读取后保存
+  /agent/mcp/catalog:
+    get:
+      tags: [agent, mcp]
+      operationId: listAgentMCPCatalog
+      summary: 读取已发布的 MCP 市场条目
+      description: 需要登录。条目仅包含远端服务和用户参数的定义，不包含任何已安装连接的凭据。
+      responses:
+        "200": { $ref: "#/components/responses/MCPCatalog" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /agent/mcp/connections:
+    get:
+      tags: [agent, mcp]
+      operationId: listAgentMCPConnections
+      summary: 读取个人连接及已启用的平台连接
+      description: 个人连接只返回非密钥参数及已配置密钥的名称；平台连接不返回参数和密钥名称，工具仅包含已授权项。普通用户不能编辑、检测或删除平台连接。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnections" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [agent, mcp]
+      operationId: createAgentMCPConnection
+      summary: 安装或创建个人 MCP 连接
+      description: 请求最多 128 KiB。每个用户最多 30 个个人连接。省略 templateId 表示自定义远端服务，可配置 token 作为 Bearer 密钥。创建时必须停用且 allowedTools 为空；保存不代表连接检测成功。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /agent/mcp/connections/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    put:
+      tags: [agent, mcp]
+      operationId: updateAgentMCPConnection
+      summary: 更新本人 MCP 参数、工具授权和启用状态
+      description: 请求最多 128 KiB。修改地址、连接方式、模板或参数时必须停用并清空 allowedTools，随后重新检测。更换地址或模板不会转移旧凭据；其他情况下省略参数或将密钥设为空串保留已有值。启用要求已有检测结果且至少授权一个已发现工具。配置更新递增服务端 revision，使旧审批失效。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [agent, mcp]
+      operationId: deleteAgentMCPConnection
+      summary: 移除本人 MCP 连接
+      description: 不接受平台连接或其他用户的连接；移除后旧工具调用不能继续通过授权校验。
+      responses:
+        "200": { $ref: "#/components/responses/MCPDeleted" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /agent/mcp/connections/{id}/test:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    post:
+      tags: [agent, mcp]
+      operationId: testAgentMCPConnection
+      summary: 检测本人 MCP 连接并发现工具
+      description: 不需要请求正文。使用服务端保存的参数进行真实握手和工具发现，不执行工具。成功后更新 tools、lastTestAt 和 revision，清空 allowedTools 并停用连接，需重新选择工具和启用；失败不伪造可用工具清单。最多发现 128 个工具。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /admin/mcp/catalog:
+    get:
+      tags: [admin, mcp]
+      operationId: listAdminMCPCatalog
+      summary: 管理员读取全部 MCP 市场条目
+      description: 仅管理员可读，包含已发布和未发布条目。
+      responses:
+        "200": { $ref: "#/components/responses/MCPCatalog" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin, mcp]
+      operationId: createAdminMCPTemplate
+      summary: 管理员创建 MCP 市场条目
+      description: 请求最多 64 KiB，ID 由服务端生成。市场模板不能保存真实凭据；敏感请求头必须引用 secret 参数。published 控制用户市场可见性。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPTemplateInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPTemplate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/catalog/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    put:
+      tags: [admin, mcp]
+      operationId: updateAdminMCPTemplate
+      summary: 管理员更新或上下架 MCP 市场条目
+      description: 请求最多 64 KiB。任何模板更新都会清空已安装连接的参数和凭据、停用连接、清除工具发现与授权并递增连接版本；安装者需重新填写参数、检测和授权。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPTemplateInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPTemplate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin, mcp]
+      operationId: deleteAdminMCPTemplate
+      summary: 管理员删除 MCP 市场条目
+      description: 仍被连接引用的条目不能删除，返回冲突；应先处理引用连接或下架条目。
+      responses:
+        "200": { $ref: "#/components/responses/MCPDeleted" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/connections:
+    get:
+      tags: [admin, mcp]
+      operationId: listAdminMCPConnections
+      summary: 管理员读取全部平台 MCP 连接
+      description: 仅管理员可读，包含未启用的平台连接；不返回个人连接或密钥原文。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnections" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin, mcp]
+      operationId: createAdminMCPConnection
+      summary: 管理员创建平台 MCP 连接
+      description: 请求最多 128 KiB，最多配置 30 个平台连接。创建时必须停用且 allowedTools 为空；检测并授权启用后向平台用户开放。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/connections/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    put:
+      tags: [admin, mcp]
+      operationId: updateAdminMCPConnection
+      summary: 管理员更新平台 MCP 连接与工具授权
+      description: 请求最多 128 KiB。参数变更须停用、清空授权并重新检测；更换地址或模板不转移旧凭据。启用后用户只能调用已授权工具，且每次仍需审批。更新递增连接版本，使旧审批失效。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MCPConnectionInput" }
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [admin, mcp]
+      operationId: deleteAdminMCPConnection
+      summary: 管理员移除平台 MCP 连接
+      responses:
+        "200": { $ref: "#/components/responses/MCPDeleted" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /admin/mcp/connections/{id}/test:
+    parameters:
+      - { $ref: "#/components/parameters/MCPResourceID" }
+    post:
+      tags: [admin, mcp]
+      operationId: testAdminMCPConnection
+      summary: 管理员检测平台 MCP 连接并发现工具
+      description: 不需要请求正文。实际握手与发现成功后更新工具和 lastTestAt，清空旧授权、停用连接并递增 revision，需重新选择工具及启用；不执行任何外部工具。
+      responses:
+        "200": { $ref: "#/components/responses/MCPConnection" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
   /agent/memory:
     get:
       tags: [agent]
@@ -2561,6 +3169,134 @@ paths:
             application/yaml:
               schema:
                 type: string
+  /admin/channel-websites:
+    get:
+      tags: [admin]
+      summary: 列出系统渠道网站及 Key 分组数量
+      responses:
+        "200":
+          description: 信封 data.websites 数组；每项包含 id、name、baseUrl、apiFormat、proxyUrl、headers、keyCount、createdAt、updatedAt，不包含 Key 密钥
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [admin]
+      summary: 新建系统渠道网站
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChannelWebsiteRequest"}
+      responses:
+        "200": {description: 信封 data.website 为新建网站及 keyCount}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channel-websites/{id}:
+    parameters:
+      - {in: path, name: id, required: true, schema: {type: string}}
+    patch:
+      tags: [admin]
+      summary: 保存网站及共享连接配置
+      description: |
+        提交完整网站字段和原 updatedAt 作为 expectedUpdatedAt；版本过期时整批拒绝。
+        同事务同步所属 Key 的连接与公共头，保留每个 Key 的密钥和私有头；连接变化后原目录快照标记 stale。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: "#/components/schemas/ChannelWebsiteRequest"}
+                - {type: object, required: [expectedUpdatedAt]}
+      responses:
+        "200": {description: 信封 data.website 为更新后的网站及 keyCount}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+    delete:
+      tags: [admin]
+      summary: 删除空网站
+      description: 仅允许删除没有所属 Key 分组的网站。
+      responses:
+        "200": {description: 信封 data.ok 为 true}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/catalog-status:
+    get:
+      tags: [admin]
+      summary: 查看当前 Key 的最近成功目录快照
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: 信封 data 包含 models 字符串数组、可选 readAt 和 stale；从未读取时 models 为空且无 readAt，连接或凭据变化后 stale 为 true
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/models/fetch:
+    post:
+      tags: [admin]
+      summary: 读取当前 Key 的上游目录并比较快照
+      description: |
+        仅保存成功完整读取的目录快照，不创建渠道模型；需通过原 models/import 接口确认导入。
+        失败、不完整分页或读取期间连接变化均不替换旧快照。连接变化后的首次成功读取重置比较基准。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: 信封 data 包含 models、added、retained、missing 字符串数组，firstRead、baselineReset 布尔值，readAt 和可选 previousReadAt；首次读取或重置时全部模型归入 added
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/protocol-suggestion:
+    get:
+      tags: [admin]
+      summary: 查询同网站、上游模型与能力的协议建议
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: query, name: providerModelKey, schema: {type: string}}
+        - {in: query, name: capability, schema: {type: string, enum: [text, image, video]}}
+      responses:
+        "200":
+          description: 信封 data 包含 source（none、selection、history、conflict 或 invalid）、candidates 数组及可选 protocol、reason、selectedAt；冲突或失效时不自动选协议
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/models/batch-update:
+    post:
+      tags: [admin]
+      summary: 同 Key 统一批量修改模型配置
+      description: |
+        仅管理员可用，请求上限 2 MiB、1–100 个模型。按三项版本校验后，将协议、能力模板、积分模板和稀疏修改合并为最终状态再完整校验。
+        任一模型失效、归属不符、版本过期或配置不兼容均整批拒绝；模型、价格档、显式协议记忆与审计同事务提交。
+        只修改启停时保留现有成本、售价、SKU 和规则。能力模板不选择协议；无类型模型初始化必须明确提交 capability 与 protocol。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChannelModelBatchUpdateRequest"}
+      responses:
+        "200": {description: 信封 data.updated 为修改的模型数量}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channel-models/batch-update:
+    post:
+      tags: [admin]
+      summary: 跨 Key 统一批量修改系统模型配置
+      description: 规则同同 Key batch-update；各模型按所属系统渠道的凭据与能力校验，整批原子提交。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ChannelModelBatchUpdateRequest"}
+      responses:
+        "200": {description: 信封 data.updated 为修改的模型数量}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/channels/{id}/duplicate:
     post:
       tags: [admin]
@@ -2705,8 +3441,9 @@ paths:
       tags: [admin]
       summary: 批量修改系统渠道模型的调用协议
       description: |
-        仅管理员可用。把同一系统渠道内所选模型切换到同一调用协议；协议能力必须与每个模型的能力一致。
-        保留原能力配置与价格档，只按新协议重新规范化并校验；任一模型不兼容、已删除或被并发修改时整批拒绝。
+        仅管理员可用。兼容原 modelIds + protocol 单协议请求，也接受 groups 分组协议请求；两种格式互斥，最多共 100 个模型，请求上限 32 KiB。
+        每组按原能力选择兼容协议，模型不能重复；保留原能力配置与价格档，只按新协议重新规范化并校验。
+        任一模型不兼容、已删除或被并发修改时整批拒绝；显式协议记忆与模型同事务更新。
       parameters:
         - in: path
           name: id
@@ -2717,15 +3454,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [modelIds, protocol]
-              properties:
-                modelIds:
-                  type: array
-                  minItems: 1
-                  maxItems: 100
-                  items: { type: string, minLength: 1 }
-                protocol: { type: string, minLength: 1 }
+              $ref: "#/components/schemas/ChannelModelBatchProtocolRequest"
       responses:
         "200":
           description: 更新成功，data.updated 为更新的模型数量
@@ -2758,15 +3487,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [modelIds, protocol]
-              properties:
-                modelIds:
-                  type: array
-                  minItems: 1
-                  maxItems: 100
-                  items: { type: string, minLength: 1 }
-                protocol: { type: string, minLength: 1 }
+              $ref: "#/components/schemas/ChannelModelBatchProtocolRequest"
       responses:
         "200":
           description: 更新成功，data.updated 为更新的模型数量
@@ -3234,6 +3955,36 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /auth/oidc/start:
+    get:
+      tags: [auth]
+      security: []
+      summary: 发起 OIDC 登录
+      parameters:
+        - { name: next, in: query, schema: { type: string } }
+        - { name: acceptedTerms, in: query, schema: { type: boolean } }
+      responses:
+        "302":
+          description: 设置一次性状态 Cookie 并重定向到 OIDC 提供方
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /auth/oidc/callback:
+    get:
+      tags: [auth]
+      security: []
+      summary: 处理 OIDC 授权码回调
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+      responses:
+        "302":
+          description: 登录后设置会话 Cookie 并跳转，或返回登录页显示认证错误
+        "400":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
   /projects:
     get:
       tags: [projects]
@@ -3604,6 +4355,12 @@ paths:
           $ref: "#/components/responses/Error"
 components:
   parameters:
+    MCPResourceID:
+      name: id
+      in: path
+      required: true
+      description: MCP 连接或市场条目的 ID
+      schema: { type: string }
     AgentRunID:
       name: id
       in: path
@@ -3616,6 +4373,435 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    MCPParameter:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name:
+          {
+            type: string,
+            pattern: "^[a-zA-Z][a-zA-Z0-9_]{0,63}$",
+            description: 条目内唯一的参数名称,
+          }
+        label: { type: string, description: 显示名称，最多 300 字节 }
+        description: { type: string, description: 参数说明，最多 3000 字节 }
+        type: { type: string, enum: [string, secret] }
+        required: { type: boolean, default: false }
+        defaultValue:
+          {
+            type: string,
+            description: 普通参数的可选默认值，最多 4096 字节；secret 不得设置非空默认值,
+          }
+    MCPTemplateInput:
+      type: object
+      additionalProperties: false
+      required: [name, transport]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 3000 }
+        homepage:
+          {
+            type: string,
+            description: 可选官网或使用文档地址；不能携带认证、查询参数或片段,
+          }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl:
+          {
+            type: string,
+            description: 默认远端地址；需要用户自部署时可为空。禁止账号密码、查询参数、片段和参数占位符,
+          }
+        headers:
+          type: object
+          maxProperties: 16
+          additionalProperties: { type: string }
+          description: 请求头模板，可使用双花括号引用已声明参数。Authorization 及名称含 key/token 的请求头必须引用 secret 参数；禁止覆盖协议请求头、Cookie、代理头及大小写重复头。
+        parameters:
+          type: array
+          maxItems: 24
+          items: { $ref: "#/components/schemas/MCPParameter" }
+        published:
+          {
+            type: boolean,
+            default: false,
+            description: 是否发布到用户 MCP 市场,
+          }
+    MCPTemplate:
+      type: object
+      required:
+        [
+          id,
+          name,
+          description,
+          homepage,
+          transport,
+          serverUrl,
+          headers,
+          parameters,
+          published,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        homepage: { type: string }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl: { type: string, description: 默认远端地址，可为空 }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          description: 仅参数占位模板，不包含安装后的凭据
+        parameters:
+          type: array
+          items: { $ref: "#/components/schemas/MCPParameter" }
+        published: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MCPConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [name, transport, serverUrl]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        templateId:
+          {
+            type: string,
+            description: 可选市场条目 ID；省略或空串表示自定义连接，仅支持可选 token 参数作为 Bearer 密钥,
+          }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl:
+          {
+            type: string,
+            format: uri,
+            description: 完整 HTTP/HTTPS 远端地址。禁止账号密码、查询参数、片段和参数占位符，遵守服务端出站限制,
+          }
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+          description: 参数值最多 8192 字节且不能含非法请求头字符。更新时省略参数或密钥为空串保留已有值；普通参数空串清空。更换地址或模板不转移已有凭据。密钥仅写入加密存储，不回显。
+        enabled:
+          {
+            type: boolean,
+            default: false,
+            description: 启用需要成功检测且 allowedTools 非空；新建或参数变更时必须为 false,
+          }
+        allowedTools:
+          type: array
+          uniqueItems: true
+          maxItems: 128
+          items: { type: string }
+          description: 必须来自本连接最近检测结果；空数组不允许调用任何工具。新建或参数变更时必须为空。
+    MCPTool:
+      type: object
+      required: [name, description, inputSchema, readOnly]
+      properties:
+        name: { type: string, description: 工具名称，最多 128 字节 }
+        description:
+          { type: string, description: 远端工具说明，按服务端展示上限截断 }
+        inputSchema:
+          type: object
+          additionalProperties: true
+          description: 工具输入的对象 JSON Schema，最多 32 KiB；发现时验证并拒绝外部引用。
+        readOnly:
+          { type: boolean, description: 远端的只读提示，不授予权限也不豁免审批 }
+    MCPConnection:
+      type: object
+      required:
+        [
+          id,
+          scope,
+          name,
+          transport,
+          serverUrl,
+          enabled,
+          parameters,
+          configuredSecrets,
+          tools,
+          allowedTools,
+          revision,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        scope: { type: string, enum: [user, platform] }
+        templateId: { type: string }
+        name: { type: string }
+        transport: { type: string, enum: [streamable_http, sse] }
+        serverUrl: { type: string, format: uri }
+        enabled: { type: boolean }
+        parameters:
+          type: object
+          additionalProperties: { type: string }
+          description: 仅非密钥参数；普通用户查看平台连接时为空对象
+        configuredSecrets:
+          type: array
+          items: { type: string }
+          description: 已配置密钥的名称，不返回原值；普通用户查看平台连接时为空数组
+        tools:
+          type: array
+          maxItems: 128
+          items: { $ref: "#/components/schemas/MCPTool" }
+          description: 最近检测发现的工具；普通用户查看平台连接时只返回已授权项
+        allowedTools:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+        revision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            description: 配置与授权版本，外部工具审批和执行时必须与当前版本一致,
+          }
+        lastTestAt:
+          {
+            type: string,
+            format: date-time,
+            description: 最近成功检测时间；未检测或配置变化后不返回此字段,
+          }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    APICallGenerationContent:
+      type: object
+      required: [prompt, references, source, incomplete]
+      properties:
+        prompt: { type: string, description: 当次请求提示词；工具引用已展开，图片视频音频编号按各请求数组顺序，敏感地址与凭据已脱敏 }
+        references:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/APICallGenerationReference" }
+        source: { type: string, enum: [snapshot, task, request] }
+        incomplete: { type: boolean }
+        note: { type: string }
+    APICallGenerationReference:
+      type: object
+      required: [id, kind, label, name, available]
+      properties:
+        id: { type: string, description: 日志内稳定引用标识，不是资源 ID 或画布节点 ID }
+        kind: { type: string, enum: [image, video, audio] }
+        label: { type: string, description: 图片1、视频1、音频1 等 }
+        name: { type: string, description: 请求时媒体名称，已脱敏 }
+        role: { type: string, enum: [reference, first_frame, last_frame] }
+        available: { type: boolean }
+        unavailableReason: { type: string }
+        mediaUrl: { type: string, description: 仅 available=true 提供的同源管理员媒体路径，不包含外部 URL 或访问凭据 }
+    DramaCastImageSettings:
+      type: object
+      description: 图片提示词与画风独立于作品；三项画风字段全空时继承作品，任一非空时覆盖作品画风和 visualRules。更新传空串清空，省略保持原值。
+      properties:
+        imagePrompt: { type: string, maxLength: 12000, description: 完整自定义图片提示词；空串使用作品参考图方案重新编排 }
+        imageStyleId: { type: string, maxLength: 64 }
+        imageStyleName: { type: string, maxLength: 120 }
+        imageStylePrompt: { type: string, maxLength: 4000 }
+    CreateDramaCastRequest:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          required: [kind, name, appearance]
+          properties:
+            kind: { type: string, enum: [character, scene, prop] }
+            name: { type: string, minLength: 1, maxLength: 60 }
+            appearance: { type: string, minLength: 1, maxLength: 1000 }
+            description: { type: string, maxLength: 1000 }
+    UpdateDramaCastRequest:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          properties:
+            name: { type: string, minLength: 1, maxLength: 60 }
+            appearance: { type: string, minLength: 1, maxLength: 1000 }
+            description: { type: string, maxLength: 1000 }
+            aliases:
+              type: array
+              items: { type: string }
+            voiceInstructions: { type: string, maxLength: 500 }
+            locked: { type: boolean }
+    DramaCastLookRequest:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          properties:
+            lookName: { type: string, minLength: 1, maxLength: 60 }
+            appearance: { type: string, minLength: 1, maxLength: 1000 }
+            fromChapter: { type: integer, description: 原著章节号，从 1 起；0 或空表示不限，负数归零，起止颠倒会交换 }
+            toChapter: { type: integer }
+            restyleSegments: { type: boolean, default: false }
+    DramaCastImagePromptRequest:
+      type: object
+      properties:
+        appearance: { type: string, minLength: 1, maxLength: 1000 }
+        imageStyleId: { type: string, maxLength: 64 }
+        imageStyleName: { type: string, maxLength: 120 }
+        imageStylePrompt: { type: string, maxLength: 4000 }
+    ImportDramaCastRequest:
+      type: object
+      required: [sourceProjectId, castIds]
+      properties:
+        sourceProjectId: { type: string, minLength: 1, maxLength: 36, description: 当前用户的另一部作品 ID }
+        castIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          description: 来源基础设定 ID，不可直接选择造型；重复 ID 合并处理
+          items: { type: string, minLength: 1, maxLength: 36 }
+        matchByName: { type: boolean, default: false }
+        replaceExisting: { type: boolean, default: false }
+    DramaCast:
+      allOf:
+        - { $ref: "#/components/schemas/DramaCastImageSettings" }
+        - type: object
+          required: [id, projectId, kind, name, appearance, imageStatus, imageVersion, revision]
+          properties:
+            id: { type: string }
+            projectId: { type: string }
+            kind: { type: string, enum: [character, scene, prop] }
+            name: { type: string }
+            aliasesJson: { type: string, description: 别名数组的 JSON 字符串 }
+            role: { type: string }
+            description: { type: string }
+            appearance: { type: string }
+            voiceInstructions: { type: string }
+            voiceProfileId: { type: string }
+            voiceSampleResourceId: { type: string }
+            parentId: { type: string, description: 非空表示该行是角色的造型，指向本作品基础角色 }
+            lookName: { type: string }
+            lookFromChapter: { type: integer }
+            lookToChapter: { type: integer }
+            sourceProjectId: { type: string, description: 复制时的来源作品 ID，仅记录来源，之后两季编辑相互独立 }
+            sourceCastId: { type: string, description: 来源设定或造型 ID，在目标作品内唯一，避免重复导入 }
+            importance: { type: integer }
+            imageResourceId: { type: string }
+            imageStatus: { type: string, enum: ["", draft, queued, running, ready, failed, stale, skipped] }
+            imageVersion: { type: integer }
+            locked: { type: boolean }
+            position: { type: integer }
+            revision: { type: integer, format: int64 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    DramaCastEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [cast]
+              properties:
+                cast: { $ref: "#/components/schemas/DramaCast" }
+    DramaCastLookEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [look]
+              properties:
+                look: { $ref: "#/components/schemas/DramaCast" }
+                affectedSegments: { type: integer, minimum: 0 }
+
+    ChannelWebsiteRequest:
+      type: object
+      required: [name, baseUrl]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        baseUrl: {type: string, format: uri}
+        apiFormat: {type: string, enum: [openai, gemini], default: openai}
+        proxyUrl: {type: string, description: 可为空；网站共享代理地址}
+        headers:
+          type: array
+          description: 仅允许 Anthropic-Version、OpenAI-Beta（名称不区分大小写）；鉴权和其他私有头只能保存在 Key 分组
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name: {type: string}
+              value: {type: string}
+        expectedUpdatedAt: {type: string, format: date-time, description: 更新必填，取自最近读取的网站 updatedAt}
+    ChannelModelProtocolGroup:
+      type: object
+      additionalProperties: false
+      required: [modelIds, protocol]
+      properties:
+        modelIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {type: string, minLength: 1}
+        protocol: {type: string, minLength: 1}
+    ChannelModelBatchProtocolRequest:
+      oneOf:
+        - {$ref: "#/components/schemas/ChannelModelProtocolGroup"}
+        - type: object
+          additionalProperties: false
+          required: [groups]
+          properties:
+            groups:
+              type: array
+              minItems: 1
+              maxItems: 100
+              items: {$ref: "#/components/schemas/ChannelModelProtocolGroup"}
+    ChannelModelBatchUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [models]
+      properties:
+        models:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [modelId, priceVersion, capabilityVersion, updatedAt, changes]
+            properties:
+              modelId: {type: string, minLength: 1}
+              priceVersion: {type: integer, format: int64, minimum: 0}
+              capabilityVersion: {type: integer, format: int64, minimum: 0}
+              updatedAt: {type: string, format: date-time}
+              changes:
+                type: object
+                minProperties: 1
+                additionalProperties: false
+                description: 仅提交需要修改的字段；缺省保留原值，不接受 null
+                properties:
+                  capability: {type: string, enum: [text, image, video]}
+                  protocol: {type: string}
+                  displayName: {type: string, maxLength: 160}
+                  description: {type: string, maxLength: 500}
+                  enabled: {type: boolean}
+                  pricingEnabled: {type: boolean, description: 统一切换各价格档的 enabled；停用保留 priceConfigured、金额、成本、SKU 和规则，启用前校验金额完整性}
+                  capabilityTemplate:
+                    type: object
+                    additionalProperties: false
+                    required: [capabilityConfig]
+                    properties:
+                      protocol: {type: string, deprecated: true, description: 兼容字段，不参与协议选择；仅 changes.protocol 可指定协议}
+                      capabilityConfig:
+                        type: object
+                        description: 与模型编辑的 ModelCapabilityConfig 相同，包含 version 及对应 text/image/video 和可选 mediaTransport；最终按目标模型协议完整校验，标量不接受 null
+                  pricingTemplate:
+                    type: object
+                    additionalProperties: false
+                    required: [priceCurrency, referenceVideoBilling, priceTiers]
+                    properties:
+                      priceCurrency: {type: string, enum: [credits, USD, CNY]}
+                      referenceVideoBilling: {type: boolean}
+                      priceTiers:
+                        type: array
+                        minItems: 1
+                        maxItems: 48
+                        description: 完整替换价格档；与模型编辑的 ChannelModelPriceTierRequest 相同。每档必填 billingMode、priceConfigured、enabled，以及对应计费模式的全部金额字段；缺失金额不能视为免费，所有字段拒绝 null。支持 selector、resolution、videoSeconds、providerModelKey、costPricing、Token 规则和参考视频价。
+                        items:
+                          type: object
+                          required: [billingMode, priceConfigured, enabled]
+                          properties:
+                            billingMode: {type: string}
+                            priceConfigured: {type: boolean}
+                            enabled: {type: boolean}
     ThinkingRequest:
       type: string
       enum: ["", auto, deep, off, minimal, low, medium, high, max]
@@ -3735,6 +4921,45 @@ components:
         total: { type: integer, format: int64 }
         page: { type: integer, minimum: 1 }
         limit: { type: integer, minimum: 1, maximum: 100 }
+    FeishuFeedbackSettings:
+      type: object
+      required: [enabled, appId, baseUrl, adminChatId, timezone, digestHour, digestMinute, appSecretSet, verificationTokenSet, encryptKeySet]
+      properties:
+        enabled: { type: boolean }
+        appId: { type: string }
+        baseUrl: { type: string, format: uri }
+        adminChatId: { type: string }
+        timezone: { type: string, example: Asia/Shanghai }
+        digestHour: { type: integer, minimum: 0, maximum: 23 }
+        digestMinute: { type: integer, minimum: 0, maximum: 59 }
+        appSecretSet: { type: boolean }
+        verificationTokenSet: { type: boolean }
+        encryptKeySet: { type: boolean }
+    FeishuFeedbackSettingsInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        appId: { type: string }
+        appSecret: { type: string }
+        verificationToken: { type: string }
+        encryptKey: { type: string }
+        baseUrl: { type: string, format: uri }
+        adminChatId: { type: string }
+        timezone: { type: string }
+        digestHour: { type: integer, minimum: 0, maximum: 23 }
+        digestMinute: { type: integer, minimum: 0, maximum: 59 }
+        clearSecrets: { type: boolean, default: false }
+    FeishuDigestState:
+      type: object
+      required: [date, status, count, attemptedAt]
+      properties:
+        date: { type: string, format: date }
+        status: { type: string, enum: [running, sent, uncertain] }
+        count: { type: integer, minimum: 0 }
+        attemptedAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time, nullable: true }
+        error: { type: string }
 
     LoginLog:
       type: object
@@ -3748,7 +4973,7 @@ components:
         method:
           {
             type: string,
-            enum: [password, email, sms, linuxdo, verification, unknown],
+            enum: [password, email, sms, linuxdo, oidc, verification, unknown],
           }
         source: { type: string, enum: [login, registration, logout] }
         result: { type: string, enum: [success, failed] }
@@ -4312,6 +5537,86 @@ components:
                 - model_catalog_mismatch
                 - invalid_model_selection
   responses:
+    MCPCatalog:
+      description: MCP 市场条目列表；空列表返回 items 数组
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/MCPTemplate" },
+                        }
+    MCPTemplate:
+      description: 已保存的 MCP 市场条目，位于信封 data
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/MCPTemplate" }
+    MCPConnections:
+      description: 当前调用方可见的 MCP 连接列表；不返回密钥原文
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        {
+                          type: array,
+                          items: { $ref: "#/components/schemas/MCPConnection" },
+                        }
+    MCPConnection:
+      description: 已保存或检测完成的 MCP 连接，位于信封 data；不返回密钥原文
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/MCPConnection" }
+    MCPDeleted:
+      description: 已删除 MCP 连接或市场条目
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data:
+                    type: object
+                    required: [deleted]
+                    properties:
+                      deleted: { type: boolean, enum: [true] }
     ModelQuote:
       description: 当前参数对应的费用报价，位于信封 data.quote
       content:

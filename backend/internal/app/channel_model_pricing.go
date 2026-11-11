@@ -124,12 +124,15 @@ func (s *Service) applyChannelModelReprice(items []model.ChannelModel, selected 
 			if !exists || input.PriceVersion != tier.PriceVersion {
 				return 0, BadAuthRequest("规格价格已变化或提交不完整，请刷新后重新调价")
 			}
-			if err := applyChannelModelTierPrices(tier, item.Capability, item.Protocol, input.Prices); err != nil {
+			if err := applyChannelModelTierPrices(tier, item.Capability, item.Protocol, item.ReferenceVideoBilling, input.Prices); err != nil {
 				return 0, BadAuthRequest(fmt.Sprintf("模型 %s（规格 %s）：%s；本次未修改任何价格", item.ModelKey, tier.SelectorKey, err.Error()))
 			}
 		}
 		if active == 0 || active != len(tiers) {
 			return 0, BadAuthRequest("模型 " + item.ModelKey + " 的规格提交不完整或包含无效规格；本次未修改任何价格")
+		}
+		if err := validateReferenceVideoTierPrices(item.ReferenceVideoBilling, item.PriceTiers); err != nil {
+			return 0, BadAuthRequest(fmt.Sprintf("模型 %s：%s；本次未修改任何价格", item.ModelKey, err.Error()))
 		}
 		s.applyChannelModelPriceTierSummary(&item, item.PriceTiers)
 		updates = append(updates, item)
@@ -149,7 +152,7 @@ func (s *Service) applyChannelModelReprice(items []model.ChannelModel, selected 
 	return len(updates), nil
 }
 
-func applyChannelModelTierPrices(tier *model.ChannelModelPriceTier, capability string, protocol model.ChannelInterfaceType, prices map[string]*int64) error {
+func applyChannelModelTierPrices(tier *model.ChannelModelPriceTier, capability string, protocol model.ChannelInterfaceType, referenceVideoBilling bool, prices map[string]*int64) error {
 	if tier.ID == "" || !tier.PriceConfigured || !tier.CostPricing.Configured {
 		return BadAuthRequest("请先保存完整的规格成本价和销售价配置")
 	}
@@ -163,6 +166,14 @@ func applyChannelModelTierPrices(tier *model.ChannelModelPriceTier, capability s
 			fields["inputTokenPriceMicrocredits"] = &tier.InputTokenPriceMicrocredits
 			fields["cachedTokenPriceMicrocredits"] = &tier.CachedTokenPriceMicrocredits
 			fields["cacheWriteTokenPriceMicrocredits"] = &tier.CacheWriteTokenPriceMicrocredits
+		}
+	}
+	if capability == "video" && referenceVideoBilling {
+		switch tier.BillingMode {
+		case "per_second":
+			fields["referenceVideoUnitPriceMicrocredits"] = &tier.ReferenceVideoUnitPriceMicrocredits
+		case "token":
+			fields["referenceVideoOutputTokenPriceMicrocredits"] = &tier.ReferenceVideoOutputTokenPriceMicrocredits
 		}
 	}
 	if len(prices) != len(fields) {
@@ -179,5 +190,7 @@ func applyChannelModelTierPrices(tier *model.ChannelModelPriceTier, capability s
 		CostPricing: tier.CostPricing, UnitPriceMicrocredits: tier.UnitPriceMicrocredits,
 		InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits,
 		CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,
+		ReferenceVideoUnitPriceMicrocredits:        tier.ReferenceVideoUnitPriceMicrocredits,
+		ReferenceVideoOutputTokenPriceMicrocredits: tier.ReferenceVideoOutputTokenPriceMicrocredits,
 	})
 }

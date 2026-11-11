@@ -67,6 +67,13 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 				}
 			}
 		}
+		logReferences, err := New(tx).APICallLogResourceReferences("", resourceIDs)
+		if err != nil {
+			return err
+		}
+		if len(logReferences) > 0 {
+			return ErrResourceCleanupStillReferenced
+		}
 		for _, check := range []struct {
 			model any
 			query string

@@ -636,10 +636,10 @@ func newChannelModelTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}, &model.LogicalModel{}, &model.LogicalModelRevision{}, &model.LogicalModelRoute{}, &model.Task{}, &model.IDSequence{}, &model.User{}, &model.UserGroup{}, &model.UserGroupChannel{}, &model.SystemSetting{}); err != nil {
+	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}, &model.LogicalModel{}, &model.LogicalModelRevision{}, &model.LogicalModelRoute{}, &model.Task{}, &model.IDSequence{}, &model.User{}, &model.UserGroup{}, &model.UserGroupChannel{}, &model.SystemSetting{}, &model.ChannelWebsite{}, &model.ChannelCatalogSnapshot{}, &model.ChannelProtocolSelection{}); err != nil {
 		t.Fatal(err)
 	}
-	return &Service{repo: repository.New(db)}, db
+	return &Service{repo: repository.New(db), dataDir: channelTestDataDir(t)}, db
 }
 
 func intPtr(value int) *int { return &value }

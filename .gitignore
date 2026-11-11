@@ -21,10 +21,12 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/skill-curation.mdx
 !docs/content/docs/backend/task-runtime-stability.mdx
 !docs/content/docs/backend/agent-prompt-policy.mdx
+!docs/content/docs/backend/agent-mcp.mdx
 !docs/content/docs/backend/canvas-agent-appearance.mdx
 !docs/content/docs/backend/update-announcements.mdx
 !docs/content/docs/backend/http-api.mdx
 !docs/content/docs/backend/code-map.mdx
+!docs/content/docs/backend/channel-configuration.mdx
 !docs/content/docs/backend/newapi-channel-2.mdx
 !docs/content/docs/backend/newapi-video-tasks.mdx
 !docs/content/docs/backend/bailian-minimax-video.mdx
@@ -40,6 +42,14 @@ docs/content/docs/canvas/*
 docs/content/docs/overview/*
 !docs/content/docs/overview/creative-agent-design.mdx
 !docs/content/docs/overview/ecommerce-platform-rules.mdx
+# Screenshots in the channel configuration guide use isolated sample data.
+!docs/public/
+docs/public/*
+!docs/public/images/
+docs/public/images/*
+!docs/public/images/channel-website-groups.png
+!docs/public/images/channel-batch-configuration.png
+!docs/public/images/canvas-image-version-ratio.png
 .env*
 !.env.example
 data/
@@ -89,3 +99,5 @@ backend/tmp_*
 # Keep the runtime in source control; its optional debug map is not deployed.
 /web/public/live2d/live2dcubismcore.min.js.map
 .zocde/
+# Generated locally by scripts/export-theme-skins.ts.
+/web/theme-skins-install.js

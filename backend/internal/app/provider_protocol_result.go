@@ -173,6 +173,9 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 	}
 	reference := protocol.MediaReference{DataURL: dataURL(mimeType, data), MIMEType: mimeType}
 	downloaded := &protocol.Result{}
+	if result != nil {
+		downloaded.Usage = result.Usage
+	}
 	switch input.Mode {
 	case "image":
 		downloaded.Images = []protocol.MediaReference{reference}
@@ -278,8 +281,38 @@ func protocolMediaBytesOnce(ctx context.Context, config providerConfig, referenc
 	if value == "" {
 		return nil, "", errors.New("声明式协议媒体结果地址为空")
 	}
+	value, err := resolveProtocolMediaURL(config.BaseURL, value)
+	if err != nil {
+		return nil, "", err
+	}
 	data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
 	return data, normalizedMediaMimeType(mimeType, data), err
+}
+
+func resolveProtocolMediaURL(baseURL, rawURL string) (string, error) {
+	reference, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", fmt.Errorf("解析声明式协议媒体结果地址失败：%w", err)
+	}
+	if reference.IsAbs() {
+		if (reference.Scheme != "http" && reference.Scheme != "https") || reference.Host == "" {
+			return "", errors.New("声明式协议媒体结果地址只支持完整的 HTTP 或 HTTPS URL")
+		}
+		return reference.String(), nil
+	}
+	if reference.Host != "" {
+		return "", errors.New("声明式协议媒体结果地址不能使用 scheme-relative URL")
+	}
+
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || !base.IsAbs() || base.Host == "" || (base.Scheme != "http" && base.Scheme != "https") {
+		return "", errors.New("解析声明式协议媒体结果地址失败：渠道 Base URL 无效")
+	}
+	resolved := base.ResolveReference(reference)
+	if !sameProviderOrigin(baseURL, resolved.String()) {
+		return "", errors.New("声明式协议媒体结果地址超出渠道来源")
+	}
+	return resolved.String(), nil
 }
 
 func retryableProtocolMediaDownload(err error) bool {

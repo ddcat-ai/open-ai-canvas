@@ -102,6 +102,10 @@ func supportsTokenBilling(capability string, _ model.ChannelInterfaceType) bool 
 }
 
 func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string) ([]model.ChannelModelPriceTier, error) {
+	return normalizeChannelModelPriceTiersWithIDs(req, capability, protocol, fallbackProviderModelKey, s.repo.NextPrefixedID)
+}
+
+func normalizeChannelModelPriceTiersWithIDs(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string, nextID func(string) (string, error)) ([]model.ChannelModelPriceTier, error) {
 	inputs := req.PriceTiers
 	// 兼容旧管理 API：没有 priceTiers 的请求等价于一个默认价格档。
 	if len(inputs) == 0 {
@@ -144,7 +148,7 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		if rulesErr != nil {
 			return nil, rulesErr
 		}
-		id, idErr := s.repo.NextPrefixedID("PTIER")
+		id, idErr := nextID("PTIER")
 		if idErr != nil {
 			return nil, idErr
 		}

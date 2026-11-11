@@ -10,7 +10,7 @@ func TestLoadAgentPoliciesUsesSingleVersionedContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if system.ID != "cloud-agent-system" || system.Version != 20 || media.ID != "cloud-agent-media" || media.Version != system.Version {
+	if system.ID != "cloud-agent-system" || system.Version != 21 || media.ID != "cloud-agent-media" || media.Version != system.Version {
 		t.Fatalf("unexpected policy metadata: system=%+v media=%+v", system, media)
 	}
 	if strings.Contains(system.Text, "id: cloud-agent-system") || !strings.HasPrefix(system.Text, "# Cloud Agent") {

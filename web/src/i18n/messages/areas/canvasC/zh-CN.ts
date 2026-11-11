@@ -1,12 +1,5 @@
 /** 画布组件第三组（components/canvas 后段 + previs）的界面文案（源语言）。键结构是其他语言文件的约束。 */
 export const zhCN = {
-    timelinePreview: {
-        pause: "暂停预览",
-        play: "播放预览",
-        noClipHere: "该位置无视频片段",
-        noClip: "无视频片段",
-        noSubtitle: "此处无字幕，点选字幕片段后在下方编辑",
-    },
     toolbar: {
         appearance: "画布外观",
         appearanceSubtitle: "配色与网格",

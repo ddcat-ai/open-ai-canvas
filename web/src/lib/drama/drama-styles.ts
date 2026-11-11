@@ -1,6 +1,8 @@
-// 短剧风格库：按“爆款题材 × 视觉媒介”组织。每个风格的 prompt 只描述全剧长期稳定的美术基线
-// （媒介、题材场景、色彩光影、服化道、禁用项），具体构图与动作由分镜决定。
-// 只有与题材确实匹配的内置样图才作为封面，其余使用风格主色生成的海报占位，避免误导。
+import { composeDramaStyleId, DEFAULT_DRAMA_STYLE_ID, findComposedDramaStyle, parseDramaStyleId, type DramaStyleComposition, type DramaStyleFormId, type DramaStyleThemeId } from "./style-composition";
+
+export { composeDramaStyleId, DEFAULT_DRAMA_STYLE_ID, DRAMA_STYLE_FORMS, DRAMA_STYLE_THEMES, parseDramaStyleId, type DramaStyleComposition, type DramaStyleFormId, type DramaStyleThemeId } from "./style-composition";
+
+// 自由组合优先；既有风格保留为可选预设。风格只描述长期稳定的美术基线，画幅、构图与动作由作品设置和分镜决定。
 
 export type DramaStyleCategory = "live" | "3d" | "2d" | "art";
 
@@ -30,7 +32,7 @@ export const DRAMA_STYLE_CATEGORIES: Array<{ key: "all" | "hot" | DramaStyleCate
 ];
 
 const MEDIUM: Record<DramaStyleCategory, string> = {
-    live: "真人实拍短剧质感，电影级布光，真实皮肤纹理与毛孔，自然景深，竖屏构图主体突出，人物面部清晰可读、表情自然生动",
+    live: "真人实拍短剧质感，电影级布光，真实皮肤纹理与毛孔，自然景深，人物面部清晰可读、表情自然生动",
     "3d": "高品质 3D 动画渲染，建模精致，材质与光照物理可信，角色表情生动",
     "2d": "高品质 2D 动画漫剧，线稿清晰流畅，上色干净，角色五官稳定",
     art: "具有鲜明艺术语言的风格化画面，全剧统一笔触与材质",
@@ -939,10 +941,43 @@ function compile(spec: Spec): DramaStyle {
 
 export const DRAMA_STYLES: DramaStyle[] = SPECS.map(compile);
 
-export const DEFAULT_DRAMA_STYLE_ID = "live-ceo";
+export function findDramaStyle(id: string): DramaStyle | undefined {
+    return findComposedDramaStyle(id) || DRAMA_STYLES.find((style) => style.id === id);
+}
 
-export function findDramaStyle(id: string) {
-    return DRAMA_STYLES.find((style) => style.id === id);
+const PRESET_THEME_GROUPS: Array<{ themeId: DramaStyleThemeId; ids: string[] }> = [
+    {
+        themeId: "urban",
+        ids: ["live-ceo", "live-heiress", "live-rebirth", "live-warlord", "live-doctor", "live-workplace", "live-family", "live-neo-chinese", "live-food", "3d-pixar", "3d-pet", "2d-webtoon", "2d-manhua", "2d-comic", "2d-flat", "2d-chibi"],
+    },
+    { themeId: "romance", ids: ["live-sweet", "live-flash", "live-baby", "live-tearjerker", "2d-ancient-sweet", "2d-shoujo"] },
+    { themeId: "xuanhuan", ids: ["live-xianxia", "3d-guoman", "3d-xuanhuan", "3d-myth", "2d-guofeng", "art-papercut", "art-guochao-landscape"] },
+    { themeId: "apocalypse", ids: ["live-apocalypse"] },
+    { themeId: "palace", ids: ["live-palace", "art-gongbi", "art-oil"] },
+    { themeId: "wuxia", ids: ["live-wuxia", "3d-wuxia-game", "art-ink"] },
+    { themeId: "campus", ids: ["live-campus", "3d-toon"] },
+    { themeId: "suspense", ids: ["live-suspense", "live-horror", "art-noir"] },
+    { themeId: "scifi", ids: ["live-cyber", "live-scifi", "3d-mecha", "2d-cyber-anime", "art-tech"] },
+    { themeId: "rural", ids: ["live-farm", "live-rural", "2d-healing"] },
+    { themeId: "historical", ids: ["live-republic", "live-era", "live-hk", "art-film", "art-wes", "art-ukiyoe"] },
+    { themeId: "fantasy", ids: ["live-western-fantasy", "2d-anime", "2d-painterly", "2d-dark", "2d-fantasy-adventure", "art-dream", "art-storybook"] },
+];
+const presetThemes = new Map(PRESET_THEME_GROUPS.flatMap(({ themeId, ids }) => ids.map((id) => [id, themeId] as const)));
+const CATEGORY_FORM: Record<DramaStyleCategory, DramaStyleFormId> = { live: "realistic", "3d": "3d", "2d": "2d", art: "semi-realistic" };
+
+/** 预设只提供开始自由组合时的轴选项；未操作时仍保留原预设的完整提示词。 */
+export function getDramaStyleComposition(id: string): DramaStyleComposition | undefined {
+    const composition = parseDramaStyleId(id);
+    if (composition) return composition;
+    const preset = DRAMA_STYLES.find((style) => style.id === id);
+    if (!preset) return undefined;
+    const photographic = ["art-noir", "art-film", "art-wes"].includes(id);
+    return { formId: photographic ? "realistic" : CATEGORY_FORM[preset.category], themeId: presetThemes.get(id) || "story" };
+}
+
+export function updateDramaStyleComposition(id: string, patch: Partial<DramaStyleComposition>): string {
+    const current = getDramaStyleComposition(id) || parseDramaStyleId(DEFAULT_DRAMA_STYLE_ID)!;
+    return composeDramaStyleId(patch.formId ?? current.formId, patch.themeId ?? current.themeId);
 }
 
 export function styleCoverBackground(style: Pick<DramaStyle, "cover" | "palette">) {

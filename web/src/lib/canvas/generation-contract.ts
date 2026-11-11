@@ -55,7 +55,11 @@ export function validateGenerationSpec(value: unknown): GenerationSpec {
         } else fieldError("modelSelection.kind", "未知模型选择类型");
     }
     const rawOptions = object(raw.options, "options");
-    allowKeys(rawOptions, GENERATION_OPTION_FIELDS.map((field) => field.name), "options");
+    allowKeys(
+        rawOptions,
+        GENERATION_OPTION_FIELDS.map((field) => field.name),
+        "options",
+    );
     const options: Record<string, unknown> = {};
     for (const field of GENERATION_OPTION_FIELDS) {
         const current = rawOptions[field.name];
@@ -82,7 +86,8 @@ export function validateGenerationSpec(value: unknown): GenerationSpec {
         if (ref.role === "source-text" && ref.mediaType !== "text") fieldError("referenceBindings.role", "文本来源必须引用文本");
         if (["first-frame", "last-frame", "mask"].includes(String(ref.role)) && ref.mediaType !== "image") fieldError("referenceBindings.role", "帧和遮罩必须引用图片");
         if (ref.resolution !== "latest" && ref.resolution !== "snapshot") fieldError("referenceBindings.resolution", "未知解析策略");
-        ids.add(ref.id); orders.add(ref.order);
+        ids.add(ref.id);
+        orders.add(ref.order);
         return ref as unknown as ReferenceBinding;
     });
     return { version: GENERATION_CONTRACT_VERSION, mode, prompt: raw.prompt, options, modelSelection, referenceBindings, textInputMode: raw.textInputMode } as GenerationSpec;
@@ -107,18 +112,27 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
             else options[field.name] = optionValue(value, field.kind, field.node);
         }
     }
-    const modelSelection = stored?.modelSelection
-        || (typeof metadata.logicalModelId === "string" && metadata.logicalModelId ? { kind: "logical", logicalModelId: metadata.logicalModelId } as const : undefined)
-        || (typeof metadata.channelId === "string" && typeof metadata.channelModelKey === "string" ? { kind: "channel", channelId: metadata.channelId, modelKey: metadata.channelModelKey } as const : undefined)
-        || (typeof metadata.model === "string" ? (() => {
-            const model = decodeChannelModel(metadata.model);
-            return model ? { kind: "channel", channelId: model.channelId, modelKey: model.model } as const : undefined;
-        })() : undefined);
-    const prompt = stored?.prompt
-        ?? (typeof metadata.composerContent === "string" ? metadata.composerContent : typeof metadata.prompt === "string" ? metadata.prompt : "");
-    return validateGenerationSpec({ version: GENERATION_CONTRACT_VERSION, mode, prompt, options, ...(modelSelection ? { modelSelection } : {}), referenceBindings: stored?.referenceBindings || [], textInputMode: stored?.textInputMode || (mode === "video" ? "prompt-only" : "append-sources") });
+    const modelSelection =
+        stored?.modelSelection ||
+        (typeof metadata.logicalModelId === "string" && metadata.logicalModelId ? ({ kind: "logical", logicalModelId: metadata.logicalModelId } as const) : undefined) ||
+        (typeof metadata.channelId === "string" && typeof metadata.channelModelKey === "string" ? ({ kind: "channel", channelId: metadata.channelId, modelKey: metadata.channelModelKey } as const) : undefined) ||
+        (typeof metadata.model === "string"
+            ? (() => {
+                  const model = decodeChannelModel(metadata.model);
+                  return model ? ({ kind: "channel", channelId: model.channelId, modelKey: model.model } as const) : undefined;
+              })()
+            : undefined);
+    const prompt = stored?.prompt ?? (typeof metadata.composerContent === "string" ? metadata.composerContent : typeof metadata.prompt === "string" ? metadata.prompt : "");
+    return validateGenerationSpec({
+        version: GENERATION_CONTRACT_VERSION,
+        mode,
+        prompt,
+        options,
+        ...(modelSelection ? { modelSelection } : {}),
+        referenceBindings: stored?.referenceBindings || [],
+        textInputMode: stored?.textInputMode || (mode === "video" ? "prompt-only" : "append-sources"),
+    });
 }
-
 
 export function nodeGenerationPrompt(node: Pick<CanvasNodeData, "type" | "metadata">): string {
     const mode = canvasGenerationMode(node.type);
@@ -199,7 +213,6 @@ export function synchronizeGenerationSpec(node: CanvasNodeData, patch: Partial<C
     if (Object.prototype.hasOwnProperty.call(patch, "composerContent") && typeof patch.composerContent === "string") next.prompt = patch.composerContent;
     else if (Object.prototype.hasOwnProperty.call(patch, "prompt") && typeof patch.prompt === "string") next.prompt = patch.prompt;
     if (Object.prototype.hasOwnProperty.call(patch, "model")) {
-        if (patch.model !== node.metadata?.model && !Object.prototype.hasOwnProperty.call(patch, "imageParameters")) delete next.options.imageParameters;
         const model = patch.model ? decodeChannelModel(patch.model) : null;
         next.modelSelection = model ? { kind: "channel", channelId: model.channelId, modelKey: model.model } : undefined;
         delete (metadata as Record<string, unknown>).logicalModelId;
@@ -210,7 +223,7 @@ export function synchronizeGenerationSpec(node: CanvasNodeData, patch: Partial<C
 }
 
 export function bindingForNode(node: CanvasNodeData, order: number, previous?: ReferenceBinding): ReferenceBinding | undefined {
-    const mediaType = node.type === "text" || node.type === "markdown" ? "text" : canvasGenerationMode(node.type);
+    const mediaType = node.type === "text" ? "text" : canvasGenerationMode(node.type);
     if (!mediaType) return undefined;
     return { id: previous?.id || `node:${node.id}`, nodeId: node.id, mediaType, role: previous?.role || (mediaType === "text" ? "source-text" : "reference"), order, resolution: "latest" };
 }

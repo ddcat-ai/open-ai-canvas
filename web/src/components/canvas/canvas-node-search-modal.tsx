@@ -46,7 +46,10 @@ export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open:
             footer={null}
             width="min(760px, calc(100vw - 32px))"
             onCancel={onClose}
-            afterClose={() => { setQuery(""); setActiveIndex(0); }}
+            afterClose={() => {
+                setQuery("");
+                setActiveIndex(0);
+            }}
             styles={{ body: { paddingTop: 8 } }}
             centered
         >
@@ -67,16 +70,11 @@ export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open:
                 <span className="hidden sm:inline">↑↓ 选择 · Enter 定位 · Esc 关闭</span>
             </div>
             <div id={RESULT_LIST_ID} role="listbox" aria-label="画布节点搜索结果" className="thin-scrollbar max-h-[54vh] overflow-y-auto overscroll-contain py-2">
-                {results.length ? results.map((node, index) => (
-                    <CanvasNodeSearchResult
-                        key={node.id}
-                        node={node}
-                        config={config}
-                        active={index === activeIndex}
-                        onActivate={() => setActiveIndex(index)}
-                        onSelect={() => focusNode(node)}
-                    />
-                )) : <WorkspaceState icon="canvas" compact title="没有匹配节点" description="换一个节点、章节、镜头、模型或标签继续搜索。" />}
+                {results.length ? (
+                    results.map((node, index) => <CanvasNodeSearchResult key={node.id} node={node} config={config} active={index === activeIndex} onActivate={() => setActiveIndex(index)} onSelect={() => focusNode(node)} />)
+                ) : (
+                    <WorkspaceState icon="canvas" compact title="没有匹配节点" description="换一个节点、章节、镜头、模型或标签继续搜索。" />
+                )}
             </div>
         </Modal>
     );
@@ -106,21 +104,43 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, conf
             <CanvasNodeSearchThumbnail node={node} />
             <span className="min-w-0 self-center">
                 <span className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 truncate text-[var(--fs-ui)] font-medium leading-5 text-foreground" title={node.title}>{node.title || getNodeListLabel(node.type)}</span>
-                    <span className="max-w-[210px] shrink truncate rounded-full bg-foreground/[0.055] px-2 py-0.5 text-[var(--fs-label)] font-medium tracking-[0.02em] text-foreground/50" title={materialSummary}>{materialSummary}</span>
+                    <span className="min-w-0 truncate text-[var(--fs-ui)] font-medium leading-5 text-foreground" title={node.title}>
+                        {node.title || getNodeListLabel(node.type)}
+                    </span>
+                    <span className="max-w-[210px] shrink truncate rounded-full bg-foreground/[0.055] px-2 py-0.5 text-[var(--fs-label)] font-medium tracking-[0.02em] text-foreground/50" title={materialSummary}>
+                        {materialSummary}
+                    </span>
                 </span>
                 <span className="mt-0.5 flex min-w-0 items-center gap-2 text-[var(--fs-label)] leading-4 text-foreground/45">
                     {node.metadata?.chapterTitle ? <BookOpenText className="size-3 shrink-0" /> : null}
-                    <span className="truncate" title={context}>{context}</span>
+                    <span className="truncate" title={context}>
+                        {context}
+                    </span>
                 </span>
                 <span className="mt-1 hidden items-center gap-3 text-[var(--fs-label)] tabular-nums tracking-[0.015em] text-foreground/40 max-sm:flex">
-                    <time dateTime={times.createdAt} title={fullTime(times.createdAt)}>创建 {times.createdLabel}</time>
-                    <time dateTime={times.updatedAt} title={fullTime(times.updatedAt)}>编辑 {times.updatedLabel}</time>
+                    <time dateTime={times.createdAt} title={fullTime(times.createdAt)}>
+                        创建 {times.createdLabel}
+                    </time>
+                    <time dateTime={times.updatedAt} title={fullTime(times.updatedAt)}>
+                        编辑 {times.updatedLabel}
+                    </time>
                 </span>
             </span>
             <span className="grid min-w-[112px] gap-0.5 border-l pl-3 text-[var(--fs-label)] tabular-nums tracking-[0.015em] text-foreground/40 max-sm:hidden" style={{ borderColor: "color-mix(in srgb, var(--foreground) 8%, transparent)" }}>
-                <span className="flex items-center gap-2"><Clock3 className="size-3" /><span>创建</span><time className="ml-auto" dateTime={times.createdAt} title={fullTime(times.createdAt)}>{times.createdLabel}</time></span>
-                <span className="flex items-center gap-2"><Pencil className="size-3" /><span>编辑</span><time className="ml-auto" dateTime={times.updatedAt} title={fullTime(times.updatedAt)}>{times.updatedLabel}</time></span>
+                <span className="flex items-center gap-2">
+                    <Clock3 className="size-3" />
+                    <span>创建</span>
+                    <time className="ml-auto" dateTime={times.createdAt} title={fullTime(times.createdAt)}>
+                        {times.createdLabel}
+                    </time>
+                </span>
+                <span className="flex items-center gap-2">
+                    <Pencil className="size-3" />
+                    <span>编辑</span>
+                    <time className="ml-auto" dateTime={times.updatedAt} title={fullTime(times.updatedAt)}>
+                        {times.updatedLabel}
+                    </time>
+                </span>
             </span>
         </button>
     );
@@ -128,15 +148,20 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, conf
 
 function CanvasNodeSearchThumbnail({ node }: { node: CanvasNodeData }) {
     const [failed, setFailed] = useState(false);
-    const mediaSource = node.metadata?.drawingPreviewUrl
-        || node.metadata?.characterCoverUrl
-        || node.metadata?.folder?.themeCover
-        || ((node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Panorama || node.type === CanvasNodeType.ColorGrade) ? node.metadata?.content : undefined);
+    const mediaSource =
+        node.metadata?.drawingPreviewUrl ||
+        node.metadata?.characterCoverUrl ||
+        node.metadata?.folder?.themeCover ||
+        (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Panorama || node.type === CanvasNodeType.ColorGrade ? node.metadata?.content : undefined);
     const commonClass = "h-11 w-16 rounded-[var(--r-sm)] border object-cover";
     const commonStyle = { borderColor: "color-mix(in srgb, var(--foreground) 9%, transparent)", background: "color-mix(in srgb, var(--foreground) 5%, transparent)" };
 
     if (node.type === CanvasNodeType.Video) {
-        const fallback = <span aria-hidden="true" className="grid h-11 w-16 place-items-center rounded-[var(--r-sm)] border text-foreground/48" style={commonStyle}><Video className="size-4" /></span>;
+        const fallback = (
+            <span aria-hidden="true" className="grid h-11 w-16 place-items-center rounded-[var(--r-sm)] border text-foreground/48" style={commonStyle}>
+                <Video className="size-4" />
+            </span>
+        );
         return <CanvasVideoPreviewImage node={node} alt="" width={64} height={44} loading="lazy" decoding="async" className={commonClass} style={commonStyle} fallback={fallback} />;
     }
 
@@ -145,17 +170,27 @@ function CanvasNodeSearchThumbnail({ node }: { node: CanvasNodeData }) {
     }
 
     const textPreview = node.metadata?.previewContent || node.metadata?.composerContent || node.metadata?.prompt || node.metadata?.content;
-    if (textPreview && (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Markdown || node.type === CanvasNodeType.Script)) {
-        return <span aria-hidden="true" className="line-clamp-3 h-11 w-16 overflow-hidden rounded-[var(--r-sm)] border px-2 py-1 text-[var(--fs-label)] leading-[11px] text-foreground/55" style={commonStyle}>{textPreview}</span>;
+    if (textPreview && (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Script)) {
+        return (
+            <span aria-hidden="true" className="line-clamp-3 h-11 w-16 overflow-hidden rounded-[var(--r-sm)] border px-2 py-1 text-[var(--fs-label)] leading-[11px] text-foreground/55" style={commonStyle}>
+                {textPreview}
+            </span>
+        );
     }
 
     return (
         <span aria-hidden="true" className="grid h-11 w-16 place-items-center rounded-[var(--r-sm)] border text-foreground/48" style={commonStyle}>
-            {node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Panorama ? <Image className="size-4" />
-                : node.type === CanvasNodeType.Video ? <Video className="size-4" />
-                    : node.type === CanvasNodeType.Audio ? <AudioLines className="size-4" />
-                        : node.type === CanvasNodeType.Drawing ? <Pencil className="size-4" />
-                            : <FileText className="size-4" />}
+            {node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Panorama ? (
+                <Image className="size-4" />
+            ) : node.type === CanvasNodeType.Video ? (
+                <Video className="size-4" />
+            ) : node.type === CanvasNodeType.Audio ? (
+                <AudioLines className="size-4" />
+            ) : node.type === CanvasNodeType.Drawing ? (
+                <Pencil className="size-4" />
+            ) : (
+                <FileText className="size-4" />
+            )}
         </span>
     );
 }

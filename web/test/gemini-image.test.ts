@@ -12,6 +12,20 @@ describe("Gemini Images request helpers", () => {
         expect(() => parseGeminiImageDataUrl("data:text/plain;base64,aGVsbG8=")).toThrow("MIME 类型无效");
     });
 
+    test("分辨率优先于质量且与思考等级独立，auto 保留旧质量映射", () => {
+        expect(buildGeminiImageGenerationConfig("16:9", "high", "low", "1K")).toEqual({
+            responseModalities: ["TEXT", "IMAGE"],
+            imageConfig: { aspectRatio: "16:9", imageSize: "1K" },
+            thinkingConfig: { thinkingLevel: "LOW" },
+        });
+        expect(buildGeminiImageGenerationConfig("auto", "medium", "HIGH", "auto")).toEqual({
+            responseModalities: ["TEXT", "IMAGE"],
+            imageConfig: { imageSize: "2K" },
+            thinkingConfig: { thinkingLevel: "HIGH" },
+        });
+        expect(buildGeminiImageGenerationConfig("auto", "auto", "auto", "auto")).toEqual({ responseModalities: ["TEXT", "IMAGE"] });
+    });
+
     test("把统一图片选项映射到 Gemini imageConfig", () => {
         expect(buildGeminiImageGenerationConfig("16:9", "high")).toEqual({
             responseModalities: ["TEXT", "IMAGE"],

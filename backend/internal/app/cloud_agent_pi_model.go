@@ -280,10 +280,8 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		}
 		if !compactionSummary {
 			cloudAgentAttachRunContext(&canonical, &state)
-			budget := s.cloudAgentContextBudgetForRequest(state.Request)
-			if err := fitCloudAgentModelContext(&canonical, budget.InputBudgetTokens); err != nil {
-				return nil, false, err
-			}
+			// Pi owns history compaction. Trimming a second transcript here would
+			// discard tool evidence without updating its durable session or cache prefix.
 		}
 		// 看图后的历史里有 resource: 图片占位，必须随请求带上获准图片清单，
 		// 否则预检以「模型协议引用了未获准的图片」拒绝（见 cloud_agent_pi_image_references.go）。
@@ -350,6 +348,20 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 	taskID := state.ActiveTaskID
 	task, err := s.waitCloudAgentTask(ctx, taskID)
 	if err != nil {
+		if ctx.Err() == nil {
+			call, lookupErr := s.repo.LatestAPICallForTask(taskID)
+			if lookupErr != nil {
+				return nil, false, lookupErr
+			}
+			if cloudAgentPiContextOverflow(call) {
+				if releaseErr := s.finishCloudAgentPiModelStep(userID, runID, taskID, "", cloudAgentStepReasoning{}); releaseErr != nil {
+					return nil, false, releaseErr
+				}
+				// Pi recognizes this marker and compacts before retrying. Do not
+				// expose provider bodies or retry the same oversized input in Go.
+				return nil, false, errors.New("Agent request exceeds the context window; compact the conversation before retrying")
+			}
+		}
 		truncated := false
 		if failed, lookupErr := s.repo.Task(taskID); lookupErr == nil && failed != nil && failed.Status != model.TaskStatusSucceeded {
 			truncated = cloudAgentTruncatedToolArguments(failed)
@@ -416,6 +428,20 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		return nil, false, err
 	}
 	delivered := map[string]any{"text": result.Text, "reasoning": result.Reasoning, "toolCalls": runtimeToolCalls(result.ToolCalls)}
+	if usage, available, usageErr := s.repo.APICallLogUsageForTask(userID, task.ID); usageErr != nil {
+		log.Printf("[Agent] Pi model usage unavailable run=%s task=%s: %v", runID, task.ID, usageErr)
+	} else if available {
+		if usage.InputTokens >= usage.CachedTokens+usage.CacheWriteTokens && usage.OutputTokens >= 0 && usage.CachedTokens >= 0 && usage.CacheWriteTokens >= 0 {
+			// Platform input includes cached tokens; Pi's buckets are disjoint.
+			delivered["usage"] = map[string]int64{
+				"input":  usage.InputTokens - usage.CachedTokens - usage.CacheWriteTokens,
+				"output": usage.OutputTokens, "cacheRead": usage.CachedTokens, "cacheWrite": usage.CacheWriteTokens,
+				"totalTokens": usage.InputTokens + usage.OutputTokens,
+			}
+		} else {
+			log.Printf("[Agent] invalid upstream token usage run=%s task=%s", runID, task.ID)
+		}
+	}
 	// 思考回传内容交给 Pi 存进 thinking 块的签名字段，下一步还原，见 canonicalFromRuntimeMessages。
 	if passback := cloudAgentPiReasoningPassback(finishReasoning, len(result.ToolCalls)); passback != "" {
 		delivered["reasoningPassback"] = passback
@@ -424,6 +450,25 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		delivered["steeringMessages"] = steeringMessages
 	}
 	return delivered, false, nil
+}
+
+func cloudAgentPiContextOverflow(call model.ApiCallLog) bool {
+	if call.Status != model.ApiCallStatusFailed {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(call.ErrorCode))
+	for _, marker := range []string{"context_length_exceeded", "context_window_exceeded", "prompt_too_long", "input_too_long"} {
+		if code == marker {
+			return true
+		}
+	}
+	text := strings.ToLower(call.Error)
+	for _, marker := range []string{"exceeds the context window", "maximum context length", "context length exceeded", "prompt is too long", "prompt too long", "input is too long", "input token count exceeds"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // adoptCloudAgentPiModelStep 判断挂着的活动任务能否作为本步结果直接接手。
@@ -459,6 +504,17 @@ func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing ca
 	// 工具调用与结果的配对问题在这里修平（见 cloud_agent_pi_unanswered_calls.go）。
 	// 运行时历史仍不可用时退回服务端历史，不能让整轮失败：失败的会话会被下一轮继承。
 	messages = repairRuntimeUnansweredCalls(messages, existing.Messages)
+	runtimeMessageCount := len(messages)
+	// Pi adds host metadata (including its per-process temporary cwd) to system
+	// entries. The server owns the frozen policy and tools, so replaying those
+	// entries would change the provider cache prefix on every runtime restart.
+	conversation := make([]map[string]any, 0, len(messages))
+	for _, message := range messages {
+		if stringField(message, "role") != "system" {
+			conversation = append(conversation, message)
+		}
+	}
+	messages = conversation
 	canonical, runtimeErr := canonicalFromRuntimeMessages(messages, existing.Tools, existing.SystemPrompt)
 	if runtimeErr == nil {
 		runtimeErr = validateRuntimeMessagesForModel(messages)
@@ -473,7 +529,7 @@ func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing ca
 	}
 	// A projected Pi transcript containing a compaction summary is authoritative,
 	// even though it is shorter than the server's pre-compaction canonical history.
-	if !cloudAgentPiHasCompactionSummary(messages) && len(existing.Messages) > len(messages) {
+	if !cloudAgentPiHasCompactionSummary(messages) && len(existing.Messages) > runtimeMessageCount {
 		existing.Messages = repairCanonicalUnansweredCalls(existing.Messages)
 		return existing, nil
 	}

@@ -1,6 +1,6 @@
 // 剧情段视频的报价检查：与 ModelPicker「当前规格无报价」同一判断（priceTiersForCurrentSelection），
 // 只是把规格换成本段实际发送的时长、分辨率、声音与参考图，而不是创作端的全局参数。
-import { dramaChoiceKey, dramaChoiceToModel } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaChoiceToModel, dramaVideoResolutionValue } from "@/lib/drama/model-choice";
 import { priceTiersForCurrentSelection } from "@/lib/model-pricing";
 import type { ModelRequirements } from "@/lib/model-selection";
 import type { DramaModelChoice, DramaModelOption, DramaSegmentRequest } from "@/services/api/drama";
@@ -19,7 +19,9 @@ export function dramaSegmentVideoRequirements(request: DramaSegmentRequest, opti
     // 换了模型时服务端会按新模型重新换算分辨率；用横竖标签（如 768p竖）表达画幅的模型前端算不准，不判定。
     const resolutions = option?.videoResolutions || [];
     if (changed && !(resolutions.length && resolutions.every((value) => PLAIN_RESOLUTION.test(videoResolutionComparisonKey(value))))) return undefined;
-    const resolution = (changed ? "" : request.resolution) || videoResolution || option?.defaultVideoResolution || "";
+    // 新模型给不出作品分辨率时按模型默认提交，报价也用同一个默认档，不能用旧分辨率的价格档。
+    const supported = dramaVideoResolutionValue(option, videoResolution);
+    const resolution = changed ? supported || option?.defaultVideoResolution || "" : request.resolution || supported || option?.defaultVideoResolution || "";
     const generateAudio = changed ? option?.generateAudio : request.generateAudio;
     if (!resolution || generateAudio === undefined) return undefined;
     // 首帧与随请求发送的参考图都按图片输入计价，口径与服务端一致。

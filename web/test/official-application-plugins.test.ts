@@ -3,12 +3,14 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { OFFICIAL_APPLICATION_PLUGIN_IDS, isOfficialApplicationPluginId } from "../src/lib/plugins/official-applications";
+import { getRegisteredPlugin } from "../src/lib/plugins/plugin-registry";
+import "../src/lib/plugins/builtin";
 
 describe("official application plugin classification", () => {
-    test("covers every built-in application plugin, including editor and art critique", () => {
-        // Regression: the admin plugin page kept its own list and missed these
-        // two, so both rendered as disabled system protocols.
-        expect(isOfficialApplicationPluginId("editor-shell")).toBe(true);
+    test("classifies the remaining built-in application plugins", () => {
+        expect(isOfficialApplicationPluginId("editor-shell")).toBe(false);
+        expect(getRegisteredPlugin("editor-shell")).toBeUndefined();
+        for (const id of OFFICIAL_APPLICATION_PLUGIN_IDS) expect(getRegisteredPlugin(id)?.manifest.apiVersion).toBe("yingce.plugin/v1");
         expect(isOfficialApplicationPluginId("ai-art-critique")).toBe(true);
         expect(isOfficialApplicationPluginId("prompt-optimizer")).toBe(true);
         expect(isOfficialApplicationPluginId("eagle-asset-connector")).toBe(true);
@@ -26,7 +28,7 @@ describe("official application plugin classification", () => {
     test("exposes a single de-duplicated id list", () => {
         const ids = [...OFFICIAL_APPLICATION_PLUGIN_IDS];
         expect(new Set(ids).size).toBe(ids.length);
-        expect(ids).toHaveLength(6);
+        expect(ids).toHaveLength(5);
         expect(ids).toContain("user-feedback");
     });
 

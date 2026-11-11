@@ -122,7 +122,7 @@ func (r *Repository) ApiCallLogs(userID string, admin bool, limit int) ([]model.
 	if !admin {
 		query = query.Where("user_id = ?", userID)
 	}
-	err := query.Omit("RequestBody", "ResponseBody").Find(&logs).Error
+	err := query.Omit("RequestBody", "ResponseBody", "GenerationContentJSON").Find(&logs).Error
 	return logs, err
 }
 

@@ -15,7 +15,9 @@ import { createClientUUID } from "@/lib/client-id";
 import { togglePromptPhrase } from "@/lib/prompt-phrases";
 import { imageQualityLabel } from "@/lib/image-quality";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
-import { modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { preserveImageSettings as normalizeImageValue, preserveVideoSettings as normalizeVideoValue, mediaSettingIssues } from "@/lib/media-settings";
+import { MediaSettingsNotice } from "@/components/media-settings-notice";
 import { modelQuoteRequest, requestCreditCost } from "@/lib/model-pricing";
 import { creationVideoConfig } from "@/pages/create/creation-generation-config";
 import { resolveBrowserMediaDownloadHref, startBrowserDownload } from "@/services/browser-download";
@@ -25,7 +27,7 @@ import { resourceStorageKey, uploadResourceFile } from "@/services/api/resources
 import { cancelGenerationTask, createGenerationTask, queryGenerationTask, retryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { capabilitySupportedModes, createWorkbenchTask, listWorkbenchTasks, listWorkbenchTools, resolveWorkbenchResourceURL, type WorkbenchKind, type WorkbenchPromptPreset, type WorkbenchReferenceSlot, type WorkbenchTool } from "@/services/api/workbench";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
-import { logicalModelIDForConfig, modelDisplayName, modelOptionName, resolveModelChannel, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
+import { logicalModelIDForConfig, modelDisplayName, modelOptionName, resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 import {
@@ -211,7 +213,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     const [filter, setFilter] = useState<GalleryFilter>("all");
     const [query, setQuery] = useState("");
     const [mobileTab, setMobileTab] = useState<"compose" | "gallery">("compose");
-    const [estimate, setEstimate] = useState<{ credits: number | null; estimated: boolean; tone: "quote" | "local" | "usage" | "loading" | "unavailable" }>({ credits: null, estimated: false, tone: "unavailable" });
+    const [estimateState, setEstimateState] = useState<{ key?: string; credits: number | null; estimated: boolean; tone: "quote" | "local" | "usage" | "loading" | "unavailable" }>({ credits: null, estimated: false, tone: "unavailable" });
 
     const capability = kind;
     const configuredModel = kind === "image" ? config.imageModel || config.model : config.videoModel || config.model;
@@ -278,28 +280,36 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         return () => controller.abort();
     }, [loadDirectory]);
 
-    // ---------- 设置恢复：模型能力变化时把参数收敛到新模型支持的值 ----------
+    // ---------- 设置恢复：保留兼容值，按所选模型自动适配 ----------
     useEffect(() => {
         if (!preferencesHydrated || settingsReady || !imageProfile || !videoProfile) return;
         const saved = useCreationPreferencesStore.getState().preferences;
         if (kind === "image") {
-            const normalized = normalizeImageValue(imageProfile, {
-                size: saved.image?.ratio || imageProfile.size.default,
-                quality: saved.image?.quality || imageProfile.quality.default,
-                imageResolution: saved.image?.imageResolution || imageProfile.resolution.default,
-                count: "1",
-            });
+            const normalized = normalizeImageValue(
+                imageProfile,
+                {
+                    size: saved.image?.ratio || imageProfile.size.default,
+                    quality: saved.image?.quality || imageProfile.quality.default,
+                    imageResolution: saved.image?.imageResolution,
+                    count: "1",
+                },
+                resolveModelRequestConfig(config, selectedModel).interfaceType,
+            );
             setRatio(normalized.size);
             setQuality(normalized.quality);
             setImageResolution(normalized.imageResolution || imageProfile.resolution.default || "auto");
             // 批量数量可以超过模型单次张数（会拆成多个任务），不能用单任务上限收敛。
             setCount(Math.max(1, Math.floor(Number(saved.image?.count)) || 1));
         } else {
-            const normalized = normalizeVideoValue(videoProfile, {
-                seconds: saved.video?.seconds || String(videoProfile.duration.default),
-                ratio: saved.video?.ratio || videoProfile.defaultRatio,
-                resolution: saved.video?.videoQuality || videoProfile.defaultResolution,
-            });
+            const normalized = normalizeVideoValue(
+                videoProfile,
+                {
+                    seconds: saved.video?.seconds || String(videoProfile.duration.default),
+                    ratio: saved.video?.ratio || videoProfile.defaultRatio,
+                    resolution: saved.video?.videoQuality || videoProfile.defaultResolution,
+                },
+                resolveModelRequestConfig(config, selectedModel).interfaceType,
+            );
             setSeconds(normalized.seconds);
             setRatio(normalized.ratio);
             setVideoQuality(normalized.resolution.replace(/p$/i, ""));
@@ -310,12 +320,16 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     useEffect(() => {
         if (!settingsReady || kind !== "image" || !imageProfile) return;
         const saved = useCreationPreferencesStore.getState().preferences.image;
-        const normalized = normalizeImageValue(imageProfile, {
-            size: saved?.ratio || imageProfile.size.default,
-            quality: saved?.quality || imageProfile.quality.default,
-            imageResolution: saved?.imageResolution || imageProfile.resolution.default,
-            count: "1",
-        });
+        const normalized = normalizeImageValue(
+            imageProfile,
+            {
+                size: saved?.ratio || imageProfile.size.default,
+                quality: saved?.quality || imageProfile.quality.default,
+                imageResolution: saved?.imageResolution,
+                count: "1",
+            },
+            resolveModelRequestConfig(config, selectedModel).interfaceType,
+        );
         setRatio(normalized.size);
         setQuality(normalized.quality);
         setImageResolution(normalized.imageResolution || imageProfile.resolution.default || "auto");
@@ -325,11 +339,15 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     useEffect(() => {
         if (!settingsReady || kind !== "video" || !videoProfile) return;
         const saved = useCreationPreferencesStore.getState().preferences.video;
-        const normalized = normalizeVideoValue(videoProfile, {
-            seconds: saved?.seconds || String(videoProfile.duration.default),
-            ratio: saved?.ratio || videoProfile.defaultRatio,
-            resolution: saved?.videoQuality || videoProfile.defaultResolution,
-        });
+        const normalized = normalizeVideoValue(
+            videoProfile,
+            {
+                seconds: saved?.seconds || String(videoProfile.duration.default),
+                ratio: saved?.ratio || videoProfile.defaultRatio,
+                resolution: saved?.videoQuality || videoProfile.defaultResolution,
+            },
+            resolveModelRequestConfig(config, selectedModel).interfaceType,
+        );
         setSeconds(normalized.seconds);
         setRatio(normalized.ratio);
         setVideoQuality(normalized.resolution.replace(/p$/i, ""));
@@ -354,9 +372,12 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         [capability, imageProfile, imageResolution, kind, prompt, quality, ratio, references, seconds, videoQuality],
     );
     const pickerRequirements = useMemo(() => quoteRequirementsFor(plan[0] || 1), [plan, quoteRequirementsFor]);
+    const estimateKey = JSON.stringify([composerConfig.model, pickerRequirements, plan, composerConfig.videoGenerateAudio, composerConfig.videoWatermark, composerConfig.imageParameters, config.channels]);
+    const estimate = estimateState.key === estimateKey ? estimateState : { credits: null, estimated: false, tone: "loading" as const };
 
     useEffect(() => {
-        if (!creditsEnabled || !selectedModel) {
+        const setEstimate = (value: Omit<typeof estimateState, "key">) => setEstimateState({ ...value, key: estimateKey });
+        if (!creditsEnabled || !selectedModel || mediaSettingIssues(composerConfig, kind, selectedModel).length) {
             setEstimate({ credits: null, estimated: false, tone: "unavailable" });
             return;
         }
@@ -384,6 +405,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         setEstimate(localTotal === null ? { credits: null, estimated: false, tone: "loading" } : { credits: localTotal, estimated: false, tone: "local" });
         Promise.all(requests.map(async (item) => ({ outputs: item.outputs, quote: (await quoteModel(item.request!, controller.signal)).quote })))
             .then((quotes) => {
+                if (controller.signal.aborted) return;
                 const byOutputs = new Map(quotes.map((item) => [item.outputs, item.quote]));
                 const total = plan.reduce((sum, outputs) => sum + (byOutputs.get(outputs)?.amountMicrocredits || 0), 0) / 1_000_000;
                 setEstimate({ credits: total, estimated: quotes.some((item) => item.quote.estimated === true), tone: "quote" });
@@ -393,7 +415,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                 setEstimate({ credits: localTotal, estimated: false, tone: localTotal === null ? "unavailable" : "local" });
             });
         return () => controller.abort();
-    }, [capability, composerConfig, config, creditsEnabled, kind, plan, quoteRequirementsFor, seconds, selectedModel]);
+    }, [capability, composerConfig, config, creditsEnabled, kind, plan, quoteRequirementsFor, seconds, selectedModel, estimateKey]);
 
     // ---------- 任务列表轮询 ----------
     const loadFailedRef = useRef(false);
@@ -897,19 +919,25 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     };
 
     // ---------- 提交 ----------
-    const disabledReason = !selectedModel
-        ? `先选择${kindLabel}模型`
-        : missingInput
-          ? `请上传“${missingInput.name || "必填素材"}”`
-          : references.some((reference) => reference.uploading)
-            ? "素材上传中，请稍候"
-            : references.some((reference) => reference.error)
-              ? "请移除上传失败的素材"
-              : promptRequired && !prompt.trim()
-                ? "请填写画面描述"
-                : undefined;
+    const settingsError = mediaSettingIssues(composerConfig, kind, selectedModel)
+        .map((item) => item.message)
+        .join("；");
+    const disabledReason = settingsError
+        ? settingsError
+        : !selectedModel
+          ? `先选择${kindLabel}模型`
+          : missingInput
+            ? `请上传“${missingInput.name || "必填素材"}”`
+            : references.some((reference) => reference.uploading)
+              ? "素材上传中，请稍候"
+              : references.some((reference) => reference.error)
+                ? "请移除上传失败的素材"
+                : promptRequired && !prompt.trim()
+                  ? "请填写画面描述"
+                  : undefined;
 
     const buildBatchRequest = (): BatchRequest | string => {
+        if (settingsError) return settingsError;
         const submittedPrompt = normalizeCanvasNodeMentionTokens(prompt.trim(), promptReferences);
         if (promptRequired && !submittedPrompt) return "请填写画面描述";
         const missing = missingWorkbenchInput(tool, references);
@@ -920,16 +948,27 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         if (submittedPrompt.length > promptMaxChars) return "描述超过当前模型支持的长度";
         const logicalModelId = logicalModelIDForConfig({ ...composerConfig, model: selectedModel });
         const channel = resolveModelChannel(config, selectedModel);
-        const imageRequest = kind === "image" && imageProfile ? normalizeImageValue(imageProfile, { size: ratio, quality, imageResolution, imageParameters: config.imageParameters, count: "1", transparentBackground: config.transparentBackground }) : null;
-        const videoRequest = kind === "video" && videoProfile ? normalizeVideoValue(videoProfile, { seconds, ratio, resolution: videoQuality }) : null;
+        const imageRequest =
+            kind === "image" && imageProfile
+                ? normalizeImageValue(
+                      imageProfile,
+                      { size: ratio, quality, imageResolution, imageParameters: config.imageParameters, count: "1", transparentBackground: config.transparentBackground },
+                      resolveModelRequestConfig(config, selectedModel).interfaceType,
+                  )
+                : null;
+        const videoRequest = kind === "video" && videoProfile ? normalizeVideoValue(videoProfile, { seconds, ratio, resolution: videoQuality }, resolveModelRequestConfig(config, selectedModel).interfaceType) : null;
         const parameters: Record<string, unknown> = imageRequest
-            ? { size: imageRequest.size, quality: imageRequest.quality, ...(imageRequest.imageResolution ? { imageResolution: imageRequest.imageResolution } : {}) }
+            ? {
+                  ...(imageProfile?.size.parameter !== "none" ? { size: imageRequest.size } : {}),
+                  ...(imageRequest.quality && !["auto", "any"].includes(imageRequest.quality.toLowerCase()) ? { quality: imageRequest.quality } : {}),
+                  ...(imageRequest.imageResolution && !["auto", "any"].includes(imageRequest.imageResolution.toLowerCase()) ? { imageResolution: imageRequest.imageResolution } : {}),
+              }
             : {
-                  seconds: Number(videoRequest?.seconds || seconds),
-                  ratio: videoRequest?.ratio || ratio,
-                  resolution: videoRequest?.resolution || videoQuality,
-                  generateAudio: composerConfig.videoGenerateAudio === "true",
-                  watermark: composerConfig.videoWatermark === "true",
+                  ...(videoProfile?.durationSupported !== false ? { seconds: Number(videoRequest?.seconds || seconds) } : {}),
+                  ...(videoProfile?.ratios.length ? { ratio: videoRequest?.ratio || ratio } : {}),
+                  ...(videoProfile?.resolutions.length ? { resolution: videoRequest?.resolution || videoQuality } : {}),
+                  ...(videoProfile?.generateAudio.supported ? { generateAudio: composerConfig.videoGenerateAudio === "true" } : {}),
+                  ...(videoProfile?.watermark.supported ? { watermark: composerConfig.videoWatermark === "true" } : {}),
               };
         const generationConfig = {
             ...composerConfig,
@@ -1359,7 +1398,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     const specControls =
         kind === "image" && imageProfile ? (
             <>
-                <ImageSizePicker profile={imageProfile} size={ratio} quality={quality} imageResolution={imageResolution} ratioHint={(value) => workbenchRatioUsage("image", value)} onChange={updateImageSettings} />
+                <ImageSizePicker profile={imageProfile} size={ratio} quality={quality} imageResolution={imageResolution} declaredSizeOptions ratioHint={(value) => workbenchRatioUsage("image", value)} onChange={updateImageSettings} />
                 {imageProfile.quality.supported && !imageResolutionUsesQuality(imageProfile) && imageProfile.quality.values.length > 1 ? (
                     <ChoiceChips
                         label="画质"
@@ -1531,7 +1570,33 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                                     </a>
                                 </div>
                             )}
-                            {selectedModel ? specControls : null}
+                            {selectedModel ? (
+                                <>
+                                    <MediaSettingsNotice
+                                        config={composerConfig}
+                                        capability={kind}
+                                        onChange={(field, value) => {
+                                            if (field === "size") {
+                                                setRatio(value);
+                                                kind === "image" ? rememberImageSettings({ ratio: value }) : rememberVideoSettings({ ratio: value });
+                                            } else if (field === "quality") {
+                                                setQuality(value);
+                                                rememberImageSettings({ quality: value });
+                                            } else if (field === "imageResolution") {
+                                                setImageResolution(value);
+                                                rememberImageSettings({ imageResolution: value });
+                                            } else if (field === "videoSeconds") {
+                                                setSeconds(value);
+                                                rememberVideoSettings({ seconds: value });
+                                            } else if (field === "vquality") {
+                                                setVideoQuality(value);
+                                                rememberVideoSettings({ videoQuality: value });
+                                            } else updateConfig(field as keyof typeof config, value);
+                                        }}
+                                    />
+                                    {specControls}
+                                </>
+                            ) : null}
                             {selectedModel ? <p className="wb-muted-note">{WORKBENCH_SPEC_TIPS[kind]}</p> : null}
                         </ComposerSection>
                         <ComposerSection title="生成数量" hint={limitHint ? `${countHint} · ${limitHint}` : countHint}>
