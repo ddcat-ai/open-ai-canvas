@@ -253,13 +253,15 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(interceptionSource).not.toContain('className="admin-intercept-overview"');
     expect(sourceSection(interceptionSource, "const changeEnabled", "if (loading")).not.toContain("save(");
 
-    expect(thirdPartySource).toContain('title="1. 配置 LibTV 服务端访问凭据"');
+    expect(thirdPartySource).toContain('title="1. 连接 LibTV 账号"');
     expect(thirdPartySource).toContain('title="2. 是否开放用户导入 LibTV 画布"');
-    expect(thirdPartySource).toContain('title="3. 验证已保存的 LibTV 凭据"');
-    expect(thirdPartySource).toContain("{draftHasToken ? (");
-    expect(thirdPartySource).toContain("{setting.hasToken && !clearTokenDraft ? (");
+    expect(thirdPartySource).toContain('title="3. 验证已连接的 LibTV 账号"');
+    expect(thirdPartySource).toContain("{connected ? (");
+    expect(thirdPartySource).toContain("连接 LibTV 账号");
+    expect(thirdPartySource).not.toContain("输入 LibTV Token");
+    expect(thirdPartySource).not.toContain("请先填写 LibTV Token");
     expect(thirdPartySource).not.toContain('className="admin-third-party-overview"');
-    expect(sourceSection(thirdPartySource, "const changeEnabled", "const markTokenForRemoval")).not.toContain("save(");
+    expect(sourceSection(thirdPartySource, "const changeEnabled", "async function save")).not.toContain("save(");
 
     expect(compactSource(cssSource)).toContain(".admin-feature-board { width: 100%; max-width: none; grid-template-columns: minmax(0, 1fr);");
 });

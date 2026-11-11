@@ -54,6 +54,8 @@ type Service struct {
 	mailSender     func(EmailSettingValue, string, string, string) error
 	emailCodeMu    sync.Mutex
 	registrationMu sync.Mutex
+	libtvMu        sync.Mutex
+	libtv          *libTVRuntime
 	sms            SMSDelivery
 }
 
