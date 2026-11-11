@@ -5,6 +5,12 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 电商文案配图与实拍排版
+
+沿用 `/ecommerce/projects` 项目保存及 `/ecommerce/projects/:id/rounds/:roundId/images/:imageId` 历史图片修改接口。草稿新增可选 `copyBrief: {text, mode}`（最多 8000 字，`verbatim` / `polish`）；计划图片新增可选 `textLayout` 和 `sourcePhotoResourceId`。项目保存校验 revision，历史修改校验 version；实拍来源逐次校验资源归属和 ready 状态。
+
+文字布局为 `x/y/width/fontSize/color/background/align`，位置和宽度使用百分比，字号按图片宽度百分比；可选 `fontFamily` 为 `sans/serif/rounded`，缺省为 `sans`。颜色为六位 HEX，背景另支持 `transparent`，对齐为 `left/center/right`。服务端限制数值范围，客户端预览和导出拒绝溢出，不能裁掉文案。按原文模式策划时，服务端与客户端核对完整文字和分页面顺序；进入人工审阅后可以主动修改文案。文字编辑和直接实拍排版只保存项目，不创建计费生成任务。
+
 ## Agent MCP
 
 所有接口使用登录 Cookie、统一业务信封和严格 JSON 入参。个人连接归属、平台管理员权限、连接启用状态和工具授权均在 service 层校验。

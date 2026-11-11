@@ -11,7 +11,7 @@ export function archiveCommercePlan(plan: EcommercePlan | null, source?: Ecommer
     const previousImages = [
         ...new Map(
             commerceCanvasImages(plan)
-                .filter((image) => image.taskId)
+                .filter((image) => image.taskId || image.sourcePhotoResourceId)
                 .map((image) => [image.id, image.sourceDraft || !source ? image : { ...image, sourceDraft: source }]),
         ).values(),
     ];

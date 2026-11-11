@@ -34,6 +34,7 @@ type EcommerceSku struct {
 }
 
 type EcommerceDraft struct {
+	CopyBrief                *EcommerceCopyBrief       `json:"copyBrief,omitempty"`
 	ProductName              string                    `json:"productName"`
 	Category                 string                    `json:"category"`
 	Brand                    string                    `json:"brand"`
@@ -353,6 +354,9 @@ func (s *Service) SaveEcommerceProject(userID, id string, req SaveEcommerceProje
 	if err := validateEcommerceCreativeOptions(req.Draft.CreativeOptions); err != nil {
 		return nil, err
 	}
+	if err := validateEcommerceCopyBrief(req.Draft.CopyBrief); err != nil {
+		return nil, err
+	}
 	if err := s.validateEcommerceReferenceDraft(userID, &req.Draft, req.Plan != nil); err != nil {
 		return nil, err
 	}
@@ -467,8 +471,14 @@ func (s *Service) SaveEcommerceProject(userID, id string, req SaveEcommerceProje
 				seen[image.ID] = true
 			}
 			for _, image := range req.Plan.PreviousImages {
+				if err := s.validateEcommerceTextImage(userID, image); err != nil {
+					return nil, err
+				}
 				if len(image.SourceDraft) > 128<<10 {
 					return nil, BadAuthRequest("历史图片参数快照过长")
+				}
+				if image.SourcePhotoResourceID != "" && image.TaskID == "" {
+					continue
 				}
 				task, err := s.repo.TaskForUser(userID, image.TaskID)
 				if image.TaskID == "" || err != nil || task.Type != "canvas_image" {
@@ -666,6 +676,9 @@ func (s *Service) validateEcommercePlan(userID string, plan *model.EcommercePlan
 	seen := make(map[string]bool, len(plan.Images))
 	seenTasks := make(map[string]bool, len(plan.Images))
 	for index, image := range plan.Images {
+		if err := s.validateEcommerceTextImage(userID, image); err != nil {
+			return err
+		}
 		if image.ID == "" || seen[image.ID] {
 			return BadAuthRequest(fmt.Sprintf("第%d张图片的策划ID无效", index+1))
 		}
