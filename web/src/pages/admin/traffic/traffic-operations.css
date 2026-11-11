@@ -1,0 +1,355 @@
+.admin-traffic-ops,
+.admin-traffic-ops-grid {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: calc(var(--admin-space) * 1.75);
+    color: var(--admin-text);
+}
+
+.admin-traffic-ops-panel {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: calc(var(--admin-space) * 1.25);
+    padding: calc(var(--admin-space) * 2);
+    border: 0;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    box-shadow: none;
+}
+
+.admin-traffic-ops-heading,
+.admin-traffic-ops-heading > div:first-child {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-ops-heading {
+    flex-wrap: wrap;
+    justify-content: space-between;
+}
+
+.admin-traffic-ops-heading h2 {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: inherit;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-ops-icon {
+    --traffic-ops-accent: var(--admin-perf-accent-indigo);
+    display: inline-flex;
+    width: calc(var(--admin-space) * 4);
+    height: calc(var(--admin-space) * 4);
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--admin-radius);
+    background: color-mix(in srgb, var(--traffic-ops-accent) 12%, var(--admin-surface));
+    color: var(--traffic-ops-accent);
+}
+
+.admin-traffic-ops-icon[data-accent="cyan"] {
+    --traffic-ops-accent: var(--admin-perf-accent-cyan);
+}
+
+.admin-traffic-ops-icon[data-accent="amber"] {
+    --traffic-ops-accent: var(--admin-perf-accent-amber);
+}
+
+.admin-traffic-ops-help,
+.admin-traffic-ops-note,
+.admin-traffic-ops-notice {
+    margin: 0;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-ops-help {
+    color: var(--admin-text);
+    font-weight: 500;
+}
+
+.admin-traffic-ops-note {
+    color: var(--admin-text-secondary);
+    font-size: 0.925em;
+}
+
+.admin-traffic-ops-notice {
+    padding: var(--admin-space);
+    border-radius: var(--admin-radius);
+    background: color-mix(in srgb, var(--admin-status-warning) 10%, var(--admin-surface));
+    color: var(--admin-status-warning);
+    font-size: 0.925em;
+}
+
+.admin-traffic-ops-badge {
+    display: inline-block;
+    max-width: 100%;
+    padding: calc(var(--admin-space) * 0.375) calc(var(--admin-space) * 0.75);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+    color: var(--admin-text-secondary);
+    font-size: 0.925em;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-ops-badge[data-tone="warning"] {
+    background: color-mix(in srgb, var(--admin-status-warning) 10%, var(--admin-surface));
+    color: var(--admin-status-warning);
+}
+
+.admin-traffic-ops-mix {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--admin-space) * 2);
+    margin: var(--admin-space) 0 0;
+}
+
+.admin-traffic-ops-mix > div {
+    display: grid;
+    min-width: 0;
+    gap: calc(var(--admin-space) * 0.5);
+}
+
+.admin-traffic-ops-mix dt {
+    color: var(--admin-text-secondary);
+    font-size: 0.925em;
+}
+
+.admin-traffic-ops-mix dd {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--admin-space);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-ops-mix dd strong {
+    color: var(--admin-perf-accent-indigo);
+    font-size: 2em;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.admin-traffic-ops-mix > div:last-child dd strong {
+    color: var(--admin-perf-accent-cyan);
+}
+
+.admin-traffic-ops-mix dd small {
+    color: var(--admin-text-secondary);
+    font-size: 0.925em;
+}
+
+.admin-traffic-ops-mix-track {
+    display: flex;
+    height: calc(var(--admin-space) * 0.75);
+    overflow: hidden;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface-2);
+}
+
+.admin-traffic-ops-mix-track > span:first-child {
+    background: var(--admin-perf-accent-indigo);
+}
+
+.admin-traffic-ops-mix-track > span:last-child {
+    background: var(--admin-perf-accent-cyan);
+}
+
+.admin-traffic-ops-cell-stack {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.25);
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-traffic-ops-cell-stack small {
+    color: var(--admin-text-secondary);
+    font-size: 0.925em;
+}
+
+.admin-traffic-ops-path {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-ops-rank {
+    display: inline-grid;
+    width: calc(var(--admin-space) * 2.5);
+    height: calc(var(--admin-space) * 2.5);
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-perf-panel-surface);
+    color: var(--admin-text-secondary);
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+.admin-traffic-ops-name {
+    display: block;
+    min-width: 0;
+    color: var(--admin-text);
+    font-weight: 550;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.admin-traffic-ops-route {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.5);
+}
+
+.admin-traffic-ops-route > svg {
+    color: var(--admin-text-muted);
+}
+
+.admin-traffic-ops-toggle {
+    display: flex;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: calc(var(--admin-space) * 0.5);
+    padding: calc(var(--admin-space) * 0.5);
+    border-radius: var(--admin-radius);
+    background: var(--admin-perf-panel-surface);
+}
+
+.admin-traffic-ops-toggle button {
+    display: inline-flex;
+    min-height: var(--admin-control-h);
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.5);
+    padding: calc(var(--admin-space) * 0.5) var(--admin-space);
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: transparent;
+    color: var(--admin-text-secondary);
+    font: inherit;
+    font-size: 0.925em;
+    cursor: pointer;
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion);
+}
+
+.admin-traffic-ops-toggle button:hover {
+    background: var(--admin-perf-panel-hover);
+    color: var(--admin-text);
+}
+
+.admin-traffic-ops-toggle button[aria-pressed="true"] {
+    background: var(--admin-nav-active);
+    color: var(--admin-text);
+    font-weight: 650;
+}
+
+.admin-traffic-ops-details {
+    min-width: 0;
+    margin-block-start: auto;
+    color: var(--admin-text-secondary);
+    font-size: 0.925em;
+    line-height: 1.65;
+}
+
+.admin-traffic-ops-details summary,
+.admin-traffic-ops-details summary > span {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+}
+
+.admin-traffic-ops-details summary {
+    min-height: var(--admin-control-h);
+    justify-content: space-between;
+    list-style: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.admin-traffic-ops-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-traffic-ops-details summary > svg {
+    flex: 0 0 auto;
+    color: var(--admin-text-muted);
+    transition: transform var(--admin-motion);
+}
+
+.admin-traffic-ops-details[open] summary > svg {
+    transform: rotate(180deg);
+}
+
+.admin-traffic-ops-details ul {
+    margin: var(--admin-space) 0 0;
+    padding-inline-start: calc(var(--admin-space) * 2.5);
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-ops-details li + li {
+    margin-block-start: calc(var(--admin-space) * 0.75);
+}
+
+.admin-traffic-ops-definition {
+    cursor: help;
+}
+
+.admin-traffic-ops :is(.admin-traffic-ops-toggle button, .admin-traffic-ops-details summary, .admin-traffic-ops-definition):focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+}
+
+.admin-traffic-ops :is(.admin-traffic-ops-toggle button, .admin-traffic-ops-details summary, .admin-traffic-ops-definition):focus-visible {
+    outline: calc(var(--admin-space) * 0.25) solid var(--admin-focus);
+    outline-offset: calc(var(--admin-space) * 0.25);
+}
+
+[data-admin-root] .admin-traffic-ops .admin-data-table {
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+[data-admin-root] .admin-traffic-ops :is(.admin-table-frame, .admin-table-surface, .admin-table-scroll) {
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (min-width: 1280px) {
+    .admin-traffic-ops-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .admin-traffic-ops-panel {
+        padding: calc(var(--admin-space) * 1.5);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-traffic-ops-toggle button,
+    .admin-traffic-ops-details summary > svg {
+        transition: none;
+    }
+}

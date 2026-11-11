@@ -5,6 +5,30 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 网站访问统计
+
+| 接口 | 合同 |
+| --- | --- |
+| `POST /api/traffic/events` | 匿名写入 `{events:[{id,visitorId,sessionId,type,page,action?}]}`；返回 `{accepted}`，重复事件不重复计数 |
+| `GET /api/admin/traffic/overview?from=YYYY-MM-DD&to=YYYY-MM-DD` | 登录管理员读取范围概览；省略日期使用默认范围，`to` 为所选最后自然日 |
+| `GET /api/admin/traffic/today` | 登录管理员读取今日逐小时统计及近 300 秒活跃访客 |
+
+响应沿用统一信封，管理员权限在服务层复核。匿名入口要求通过全局 CORS 的明确 Origin，接受 UTF-8 `application/json`，请求体最多 16 KiB、每批 1–20 条；拒绝未知字段、额外 JSON 和非法类型。事件、访客、会话 ID 均须为规范随机 UUIDv4。全站每分钟 3000 次、固定 IP 散列桶每分钟 120 次限流，桶碰撞共享额度。`page_view` 不携带操作，`action` 必须使用登记操作键。
+
+页面键登记 13 类：`inspirations/create/canvas_list/canvas/assets/history/ecommerce/ecommerce_pipeline/drama/skills/referral/tools_image/tools_video`；上游当前路由覆盖其中 11 类，尚无独立 `inspirations` 与 `ecommerce_pipeline` 路由，`/` 和 `/create` 都计为创作页。登录注册、账号设置、欢迎页和未知路径不采集。七个操作键为 `open_create/new_canvas/open_ecommerce/creation_submit_text/creation_submit_image/creation_submit_video/creation_submit_agent`，`page` 表示操作来源。当前上游只接入前三项和文本、图片、视频提交意图，Agent 动作仅保留登记，零值不能证明没有 Agent 使用。
+
+统计按 `Asia/Shanghai` 自然日及服务端接收时间计算，保留含今日 365 天；有效窗口为半开区间，截止服务端当前整秒，不含当前秒。概览包含 UV、PV、会话、操作、同长度上期对比、日趋势与明细、页面及功能排行、星期×24 小时热力、操作趋势、页面参与度和访问深度。各 SQL 聚合使用同一截止时间，但不是跨查询冻结快照，不强行把不同聚合的分母互相校正。`availableFrom` 只证明保留事件中最早观测，不证明启用时间或此前完整采集；不可计算的比例为 `null`，空列表为 `[]`。
+
+`insights.operations` 提供五项运营分析：
+
+- `visitorMix`：只按合法 PV 判断首次观测和回访；保留窗内、当期之前的 PV 才是回访证据。没有回看窗口时为 `no_lookback`，分类及比例为 `null`。
+- `endpoints`：每个会话首末接收秒只有一个不同页面才分配，同秒多页计入待定。末观测页不等于退出页，不推断停留或跳出。
+- `paths`：接收秒分桶后取相邻唯一页面，保留歧义桶以阻止跨桶桥接；同会话同页面对去重，返回稳定 Top 10。不同路径可重叠，不证明直接跳转或因果。
+- `funnel`：同会话按“灵感 PV → 灵感页打开创作 → 创作 PV → 创作提交意图”有序匹配；严格链使用后继秒大于前项，可能链允许同秒，差额单独展示。上游灵感嵌在创作页，没有独立起点 PV，完整漏斗保持零起点空态，直接创作不补入完整链。提交意图不等于任务创建、生成或支付成功。
+- `anomalies`：复用上期对比四项 KPI；基数至少 30、绝对变化至少 10 且相对变化至少 30% 才提示增减。零基数、小样本及不可比较分别说明；未触发规则不代表系统无故障。
+
+浏览器使用随机匿名身份，跨标签共享，连续 30 分钟无活动后更换会话；尊重 DNT/GPC，禁用存储时退化为本页内存身份，不尝试指纹识别或关联账号。清缓存、多设备、合批、网络重试及跨标签会影响覆盖和观测顺序，不提供账号、IP、原始事件、哈希或个人轨迹查询。CSV 由前端使用已成功应用的完整聚合快照生成每日、页面、功能三类导出，保留范围和截止元数据，并进行 CSV 转义及公式注入防护；来源筛选仅影响功能排行与功能 CSV。
+
 ## 网站、Key 分组与模型批量配置
 
 以下接口沿用登录 Cookie、Origin 检查及 `{ code, data, msg, reason }` 信封，服务层要求管理员权限。网站公共连接与各 Key 的凭据分开维护；网站响应不包含 Key。

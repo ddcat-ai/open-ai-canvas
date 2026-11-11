@@ -5,6 +5,21 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 网站访问统计（Schema 99）
+
+版本 99 `site_traffic_events` 新建匿名事件表，保留 1–98 的迁移名称及校验和，不回填历史访问。模型清单及 SQLite → PostgreSQL 复制清单均登记此表。
+
+| 列 | 含义 |
+| --- | --- |
+| `id` | 随机 UUIDv4 事件主键；重试按此键幂等 |
+| `visitor_hash`、`session_hash` | 浏览器随机访客、会话 UUID 的 SHA-256；不关联账号 |
+| `received_at_epoch` | 服务端接收秒，同一批次使用同一时间 |
+| `type`、`page`、`action` | 固定白名单的事件类型、页面和操作键 |
+
+表仅包含以上七列，建立 `idx_site_traffic_received_at` 与 `idx_site_traffic_type_received_at` 索引，不保存 IP、完整 URL、提示词或客户端时间。IP 只临时用于匿名写入限流的固定散列桶，不写入事件表。匿名哈希仍属于可关联的浏览器标识，不能视为真实人数或账号统计。
+
+按 `Asia/Shanghai` 保留含今日的 365 个自然日。Worker 启动时及每小时通过独立单槽租约清理过期事件，分批删除；查询同时限定保留窗口，清理延迟不会扩展可查范围。无历史迁写或旧工具事件拆分。升级前按部署流程备份并执行 schema 迁移与校验；旧版后端可能拒绝更高 schema，回滚应恢复匹配版本的备份，不能直接改写迁移账本。
+
 ## 视频请求生成快照（Schema 98）
 
 版本 98 `api_log_generation_content` 为 `api_call_logs` 增加 `generation_content_json`（text）。只为新视频生成根请求保存脱敏提示词，以及按图片、视频、音频各自顺序编号的原始资源引用、名称和角色。快照不包含请求头、模型配置、密钥、外部 URL、签名 URL 或内嵌媒体，不自动回填无法证明来源的历史素材。

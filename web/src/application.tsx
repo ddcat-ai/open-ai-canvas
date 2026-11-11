@@ -11,6 +11,7 @@ import { RouterProvider } from "react-router";
 import { AuthDialogHost } from "@/components/auth/auth-dialog-host";
 import { AppProviders } from "@/components/layout/app-providers";
 import { router } from "@/router";
+import { installSiteTrafficCollector } from "@/services/site-traffic";
 
 // 登录弹窗渲染在路由之外（分享页等路由也要能打开），导航直接交给 router。
 const navigateFromAuthDialog = (to: string) => void router.navigate(to);
@@ -25,3 +26,7 @@ createRoot(document.getElementById("root")!).render(
         </AppProviders>
     </React.StrictMode>,
 );
+
+// 在 React 生命周期外安装，游客与 StrictMode 都共用一次路由订阅。
+const disposeTraffic = installSiteTrafficCollector(router);
+if (import.meta.hot) import.meta.hot.dispose(disposeTraffic);

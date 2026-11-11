@@ -14,7 +14,7 @@ test("Create exposes one accessible copy action beside each displayed user promp
 
 test("Create submit button does not forward the browser click event as retry context", async () => {
     const source = await Bun.file(new URL("../src/pages/create/index.tsx", import.meta.url)).text();
-    expect(source).toContain("onSubmit: () => void submit()");
+    expect(source).toMatch(/onSubmit:\s*\(\)\s*=>\s*\{[^}]*\bvoid submit\(\);\s*\}/);
     expect(source).not.toContain("onSubmit: submit,");
 });
 

@@ -22,6 +22,7 @@ var storageReadOnlyExemptPrefixes = []string{
 }
 
 var storageReadOnlyExemptRoutes = map[string]struct{}{
+	"/traffic/events":                 {},
 	"/assets/batch-delete":            {},
 	"/assets/batch":                   {},
 	"/resources/access":               {},
