@@ -33,6 +33,7 @@ type AdminSystemPerformance struct {
 	Database    repository.DatabaseRuntimeStats `json:"database"`
 	Redis       SystemPerformanceRedis          `json:"redis"`
 	Agents      []SystemPerformanceAgent        `json:"agents"`
+	Rainyun     SystemPerformanceRainyun        `json:"rainyun"`
 	Build       buildinfo.Info                  `json:"build"`
 }
 
@@ -50,17 +51,18 @@ type SystemPerformanceAgent struct {
 }
 
 type SystemPerformanceHost struct {
-	Hostname             string     `json:"hostname"`
-	OS                   string     `json:"os"`
-	Arch                 string     `json:"arch"`
-	CPUCores             int        `json:"cpuCores"`
-	GOMAXPROCS           int        `json:"gomaxprocs"`
-	ProcessID            int        `json:"processId"`
-	UptimeSeconds        int64      `json:"uptimeSeconds"`
-	Goroutines           int        `json:"goroutines"`
-	ActiveWorkerTasks    int64      `json:"activeWorkerTasks"`
-	LoadAverage          [3]float64 `json:"loadAverage"`
-	LoadAverageAvailable bool       `json:"loadAverageAvailable"`
+	Hostname             string               `json:"hostname"`
+	OS                   string               `json:"os"`
+	Arch                 string               `json:"arch"`
+	CPUCores             int                  `json:"cpuCores"`
+	CPU                  SystemPerformanceCPU `json:"cpu"`
+	GOMAXPROCS           int                  `json:"gomaxprocs"`
+	ProcessID            int                  `json:"processId"`
+	UptimeSeconds        int64                `json:"uptimeSeconds"`
+	Goroutines           int                  `json:"goroutines"`
+	ActiveWorkerTasks    int64                `json:"activeWorkerTasks"`
+	LoadAverage          [3]float64           `json:"loadAverage"`
+	LoadAverageAvailable bool                 `json:"loadAverageAvailable"`
 }
 
 type SystemPerformanceMemory struct {
@@ -161,21 +163,26 @@ func (s *Service) AdminSystemPerformance(ctx context.Context, actor *model.User)
 	ctx, cancel := context.WithTimeout(ctx, systemPerformanceTimeout)
 	defer cancel()
 
+	// 外部监控使用独立两秒子预算，与原系统采集并行，失败不丢失其他性能数据。
+	rainyunResult := make(chan SystemPerformanceRainyun, 1)
+	go func() { rainyunResult <- s.collectRainyunPerformance(ctx) }()
 	hostname, _ := os.Hostname()
 	load, loadAvailable := platformLoadAverage()
+	cpu := collectSystemCPU()
 	memory := collectSystemMemory()
 	disk := collectSystemDisk(s.dataDir)
 	databaseStats, databaseErr := s.repo.DatabaseRuntimeStats(ctx)
 	redisStats := s.collectRedisPerformance(ctx)
 	agents := s.collectAgentServices(ctx)
+	rainyun := <-rainyunResult
 	status := "healthy"
-	if databaseErr != nil || !databaseStats.Connected || !disk.Available || !disk.Writable || s.ValidateRuntime() != nil || (redisStats.Configured && !redisStats.Connected) || agentServicesDegraded(agents) {
+	if databaseErr != nil || !databaseStats.Connected || !disk.Available || !disk.Writable || s.ValidateRuntime() != nil || (redisStats.Configured && !redisStats.Connected) || agentServicesDegraded(agents) || rainyunPerformanceDegraded(rainyun) {
 		status = "degraded"
 	}
 	return &AdminSystemPerformance{
 		CollectedAt: time.Now(), Status: status,
-		Host:   SystemPerformanceHost{Hostname: hostname, OS: runtime.GOOS, Arch: runtime.GOARCH, CPUCores: runtime.NumCPU(), GOMAXPROCS: runtime.GOMAXPROCS(0), ProcessID: os.Getpid(), UptimeSeconds: int64(time.Since(systemProcessStartedAt).Seconds()), Goroutines: runtime.NumGoroutine(), ActiveWorkerTasks: s.ActiveWorkerTasks(), LoadAverage: load, LoadAverageAvailable: loadAvailable},
-		Memory: memory, Disk: disk, Database: databaseStats, Redis: redisStats, Agents: agents, Build: buildinfo.Current(),
+		Host:   SystemPerformanceHost{Hostname: hostname, OS: runtime.GOOS, Arch: runtime.GOARCH, CPUCores: runtime.NumCPU(), CPU: cpu, GOMAXPROCS: runtime.GOMAXPROCS(0), ProcessID: os.Getpid(), UptimeSeconds: int64(time.Since(systemProcessStartedAt).Seconds()), Goroutines: runtime.NumGoroutine(), ActiveWorkerTasks: s.ActiveWorkerTasks(), LoadAverage: load, LoadAverageAvailable: loadAvailable},
+		Memory: memory, Disk: disk, Database: databaseStats, Redis: redisStats, Agents: agents, Rainyun: rainyun, Build: buildinfo.Current(),
 	}, nil
 }
 
@@ -263,6 +270,9 @@ func collectSystemMemory() SystemPerformanceMemory {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
 	total, available, ok := platformMemory()
+	if !ok || total == 0 || available > total {
+		total, available, ok = 0, 0, false
+	}
 	used := uint64(0)
 	percentage := float64(0)
 	if ok && total >= available {

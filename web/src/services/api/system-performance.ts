@@ -1,5 +1,50 @@
 import { http } from "./request";
 
+export type RainyunMonitorSetting = {
+    enabled: boolean;
+    instanceId: number;
+    hasApiKey: boolean;
+};
+
+export type RainyunMonitorInput = Omit<RainyunMonitorSetting, "hasApiKey"> & { apiKey: string };
+
+export type RainyunPerformance = {
+    enabled: boolean;
+    configured: boolean;
+    status: "disabled" | "unconfigured" | "healthy" | "warning" | "error" | "unknown";
+    statusMessage: string;
+    checkedAt?: string;
+    latencyMs?: number;
+    instanceId?: number;
+    planName?: string;
+    cloudStatus?: string;
+    expiresAt?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    extraAccounting?: boolean;
+    storageUsedBytes?: number;
+    storageQuotaBytes?: number;
+    trafficUsedBytes?: number;
+    trafficQuotaBytes?: number;
+    statisticsMessage?: string;
+    sourceStatus: "disabled" | "unconfigured" | "healthy" | "error" | "unknown";
+    sourceMessage: string;
+    sourceLatencyMs?: number;
+};
+
+export type RainyunRealtimePoint = {
+    time: string;
+    receivedBytesPerSecond?: number;
+    sentBytesPerSecond?: number;
+    requestsTotal?: number;
+};
+
+export type RainyunRealtime = Pick<RainyunPerformance, "enabled" | "configured" | "status" | "statusMessage" | "instanceId" | "checkedAt"> & {
+    sampleIntervalSeconds?: number;
+    retryAfterSeconds: number;
+    points: RainyunRealtimePoint[];
+};
+
 export type DatabasePoolStats = {
     maxOpenConnections: number;
     openConnections: number;
@@ -26,6 +71,12 @@ export type SystemPerformance = {
         os: string;
         arch: string;
         cpuCores: number;
+        cpu: {
+            status: "ready" | "sampling" | "unavailable";
+            usagePercent: number | null;
+            sampledAt?: string;
+            sampleSeconds: number;
+        };
         gomaxprocs: number;
         processId: number;
         uptimeSeconds: number;
@@ -106,6 +157,7 @@ export type SystemPerformance = {
         statusMessage?: string;
     };
     agents: SystemPerformanceAgent[];
+    rainyun: RainyunPerformance;
     build: { version: string; commit: string; buildTime: string; goVersion: string };
 };
 
@@ -134,10 +186,29 @@ export function getSystemPerformance(signal?: AbortSignal) {
     return http.get<SystemPerformance>("/admin/system-performance", { signal });
 }
 
+export function getRainyunRealtime(signal?: AbortSignal) {
+    return http.get<RainyunRealtime>("/admin/system-performance/rainyun-realtime", { signal, timeout: 5_000 });
+}
+
 export function updateAgentSessionLimit(maxSessions: number) {
     return http.put<SystemPerformanceAgent>("/admin/system-performance/agent-limit", { maxSessions });
 }
 
 export function clearRuntimeCache() {
     return http.post<RuntimeCacheClearResult>("/admin/system-performance/cache/clear", { scope: "runtime" });
+}
+
+function rainyunMonitorSetting(value: RainyunMonitorSetting): RainyunMonitorSetting {
+    if (!value || typeof value.enabled !== "boolean" || typeof value.hasApiKey !== "boolean" || !Number.isSafeInteger(value.instanceId) || value.instanceId < 0 || (value.enabled && (!value.hasApiKey || value.instanceId === 0))) {
+        throw new Error("服务端返回的雨云监控配置格式无效");
+    }
+    return { enabled: value.enabled, instanceId: value.instanceId, hasApiKey: value.hasApiKey };
+}
+
+export async function getRainyunMonitorSetting(signal?: AbortSignal) {
+    return rainyunMonitorSetting(await http.get<RainyunMonitorSetting>("/admin/settings/rainyun-monitor", { signal }));
+}
+
+export async function updateRainyunMonitorSetting(input: RainyunMonitorInput) {
+    return rainyunMonitorSetting(await http.patch<RainyunMonitorSetting>("/admin/settings/rainyun-monitor", input));
 }

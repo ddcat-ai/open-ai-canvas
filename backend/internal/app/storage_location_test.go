@@ -77,6 +77,54 @@ func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 	}
 }
 
+func TestRainyunOSSConnectionTestUsesS3ForCleanup(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	var methods []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method)
+		if r.URL.Path != "/example/open-ai-canvas/.yingce-tests/platform/test-id" {
+			t.Errorf("unexpected storage path %q", r.URL.Path)
+		}
+		if r.URL.Query().Get("X-Amz-Algorithm") != "AWS4-HMAC-SHA256" || r.URL.Query().Get("X-Amz-Signature") == "" {
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, `<Error><Code>SignatureDoesNotMatch</Code><Message>wrong protocol</Message></Error>`)
+			return
+		}
+		switch r.Method {
+		case http.MethodPut:
+			payload, err := io.ReadAll(r.Body)
+			if err != nil || string(payload) != "yingce-storage-test" {
+				t.Error("unexpected upload payload")
+			}
+			w.Header().Set("ETag", `"test-etag"`)
+		case http.MethodGet:
+			if r.Header.Get("Range") != "bytes=0-3" {
+				t.Error("missing range header")
+			}
+			w.Header().Set("Content-Range", "bytes 0-3/19")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = io.WriteString(w, "ying")
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected method %s", r.Method)
+		}
+	}))
+	defer server.Close()
+	err := verifyOSSConnection(ossSettingValue{
+		Provider: rainyunOSSProvider, Region: "rainyun", Endpoint: server.URL,
+		Bucket: "example", AccessKeyID: "test-id", AccessKeySecret: "test-secret",
+		CDNBaseURL: "https://media.example.com", PathPrefix: defaultOSSPathPrefix,
+	}, defaultOSSPathPrefix+"/.yingce-tests/platform/test-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(methods, ",") != "PUT,GET,DELETE" {
+		t.Fatalf("methods = %v", methods)
+	}
+}
+
 func TestOSSConnectionReadAcceptsFullObjectWhenRangeIsIgnored(t *testing.T) {
 	payload := []byte("yingce-storage-test")
 	stream := &ossObjectStream{

@@ -5,6 +5,12 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 雨云监控设置（无结构迁移）
+
+监控设置复用 `system_settings` 的独立键 `rainyun_monitor`，保存 `{enabled,instanceId,apiKey}`；`apiKey` 使用现有设置密钥加密为 `enc:v1:` 值，不保存到浏览器或日志。管理员查询只返回 `{enabled,instanceId,hasApiKey}`，更新时空密钥保留原值。备份与恢复数据库时仍须保留匹配的 `.settings-key`。
+
+该设置与平台存储的 S3 AK/SK 独立，保存不改变存储服务，也不调用雨云或产生业务账单。CPU 差分采样、雨云套餐快照和实时时序只使用进程内有界状态，不新增监控表、不持久化时序，也不增加 Schema 迁移。指标范围、缓存和失败语义见 [HTTP API](/docs/backend/http-api)。
+
 ## Agent MCP（Schema 100）
 
 版本 100 `agent_mcp_connections` 只新增三张表及 GitHub、飞书两个市场配置模板，不改写既有业务数据。模板不代表连接已配置、检测通过或工具已授权。

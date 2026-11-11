@@ -1,4 +1,4 @@
-export type OSSProvider = "aliyun" | "tencent" | "qiniu" | "volcengine" | "s3";
+export type OSSProvider = "aliyun" | "tencent" | "qiniu" | "volcengine" | "s3" | "rainyun";
 
 export type S3Preset = "aws" | "r2" | "b2" | "rustfs" | "custom";
 
@@ -124,7 +124,7 @@ export function normalizeOSSConnectionTestInput(input: OSSConnectionTestDraft): 
     return {
         provider: input.provider,
         s3Preset: input.s3Preset || "custom",
-        region: trimConnectionValue(input.region),
+        region: trimConnectionValue(input.region) || (input.provider === "rainyun" ? "rainyun" : ""),
         endpoint: trimConnectionURL(input.endpoint),
         cdnBaseUrl: trimConnectionURL(input.cdnBaseUrl),
         bucket: trimConnectionValue(input.bucket),

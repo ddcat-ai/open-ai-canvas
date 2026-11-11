@@ -3,10 +3,12 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 	"yingce/backend/internal/kernel"
@@ -61,7 +63,7 @@ func NewS3Client(setting Settings, timeout time.Duration) (*awss3.S3, error) {
 	if setting.Region == "" || setting.Bucket == "" || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return nil, fmt.Errorf("%s Region、Bucket 或访问密钥不完整", s3ServiceName(setting))
 	}
-	forcePathStyle := setting.PathStyle || !StandardAWSS3Endpoint(endpoint.String())
+	forcePathStyle := setting.Provider == rainyunOSSProvider || setting.PathStyle || !StandardAWSS3Endpoint(endpoint.String())
 	sessionToken := setting.SessionToken
 	if setting.Provider == volcengineTOSProvider {
 		// TOS 的 S3 兼容域名按 virtual-hosted 访问 Bucket；平台只保存长期 AK/SK。
@@ -69,6 +71,11 @@ func NewS3Client(setting Settings, timeout time.Duration) (*awss3.S3, error) {
 		sessionToken = ""
 	}
 	httpClient := outbound.OutboundHTTPClient(timeout)
+	if setting.Provider == rainyunOSSProvider {
+		httpClient = outbound.StorageHTTPClient(timeout)
+		// 预签名绑定当前目标，不跟随重定向。
+		httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	}
 	config := aws.NewConfig().
 		WithRegion(setting.Region).
 		WithEndpoint(endpoint.String()).
@@ -93,9 +100,29 @@ func putS3Object(ctx context.Context, setting Settings, objectKey string, mimeTy
 	if err != nil {
 		return "", err
 	}
+	if setting.Provider == rainyunOSSProvider && size <= 0 {
+		return "", errors.New("雨云 OSS 上传大小必须大于 0")
+	}
 	var seekable io.ReadSeeker
 	if reader, ok := body.(io.ReadSeeker); ok {
 		seekable = reader
+	} else if setting.Provider == rainyunOSSProvider {
+		file, err := os.CreateTemp("", "canvas-rainyun-upload-*")
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = file.Close(); _ = os.Remove(file.Name()) }()
+		written, err := io.Copy(file, io.LimitReader(body, size+1))
+		if err != nil {
+			return "", err
+		}
+		if written != size {
+			return "", errors.New("雨云 OSS 上传内容大小不匹配")
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
+		seekable = file
 	} else {
 		limit := maxBufferedUploadSize(setting) + 1
 		if size >= 0 && size < limit {
@@ -111,11 +138,50 @@ func putS3Object(ctx context.Context, setting Settings, objectKey string, mimeTy
 		seekable = bytes.NewReader(data)
 	}
 	input := &awss3.PutObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/")), Body: seekable}
+	if setting.Provider == rainyunOSSProvider {
+		start, err := seekable.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return "", err
+		}
+		end, err := seekable.Seek(0, io.SeekEnd)
+		if err != nil {
+			return "", err
+		}
+		if _, err := seekable.Seek(start, io.SeekStart); err != nil {
+			return "", err
+		}
+		if end-start != size {
+			return "", errors.New("雨云 OSS 上传内容大小不匹配")
+		}
+		input.Body = nil
+	}
 	if mimeType != "" {
 		input.ContentType = aws.String(mimeType)
 	}
 	if size >= 0 {
 		input.ContentLength = aws.Int64(size)
+	}
+	if setting.Provider == rainyunOSSProvider {
+		request, _ := client.PutObjectRequest(input)
+		resp, err := rainyunRequest(ctx, request, seekable, size)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
+			failure := newHTTPStatusError(setting.Provider, resp, detail)
+			// 保留重试分类所需的状态和错误码，不向持久化错误透传上游正文。
+			failure.Code = sanitizeCode(failure.Code)
+			failure.Status = fmt.Sprintf("HTTP %d", resp.StatusCode)
+			failure.Detail = failure.Code
+			return "", fmt.Errorf("雨云 %w", failure)
+		}
+		etag := strings.Trim(resp.Header.Get("ETag"), `"`)
+		if etag == "" {
+			return "", errors.New("雨云 OSS 上传成功但未返回 ETag")
+		}
+		return etag, nil
 	}
 	output, err := client.PutObjectWithContext(ctx, input)
 	if err != nil {
@@ -133,6 +199,22 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 	input := &awss3.GetObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))}
 	if rangeHeader != "" {
 		input.Range = aws.String(rangeHeader)
+	}
+	if setting.Provider == rainyunOSSProvider {
+		request, _ := client.GetObjectRequest(input)
+		resp, err := rainyunRequest(context.Background(), request, nil, 0)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+			resp.Body.Close()
+			return &ObjectStream{Body: io.NopCloser(bytes.NewReader(nil)), StatusCode: resp.StatusCode, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: "bytes"}, nil
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			defer resp.Body.Close()
+			return nil, fmt.Errorf("雨云 OSS 读取失败：HTTP %d", resp.StatusCode)
+		}
+		return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 	}
 	output, err := client.GetObjectWithContext(context.Background(), input)
 	if err != nil {
@@ -182,13 +264,98 @@ func signedS3ObjectURL(setting Settings, objectKey string, signing objectURLSign
 	return value, nil
 }
 
+// 雨云对预签名 S3 请求的兼容性比 Authorization Header 稳定，重试必须回到完整请求体起点。
+func rainyunRequest(ctx context.Context, request *request.Request, body io.ReadSeeker, size int64) (*http.Response, error) {
+	value, headers, err := request.PresignRequest(15 * time.Minute)
+	if err != nil {
+		return nil, errors.New("雨云 OSS 请求签名失败")
+	}
+	var start int64
+	if body != nil {
+		start, err = body.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			if body != nil {
+				if _, err := body.Seek(start, io.SeekStart); err != nil {
+					return nil, err
+				}
+			}
+			select {
+			case <-time.After(time.Duration(attempt) * 500 * time.Millisecond):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		var requestBody io.Reader
+		if body != nil {
+			requestBody = io.NopCloser(body)
+		}
+		req, err := http.NewRequestWithContext(ctx, request.Operation.HTTPMethod, value, requestBody)
+		if err != nil {
+			return nil, errors.New("雨云 OSS 请求无效")
+		}
+		for key, values := range headers {
+			for _, header := range values {
+				req.Header.Add(key, header)
+			}
+		}
+		if size > 0 {
+			req.ContentLength = size
+		}
+		outbound.ApplyDefaultOutboundHeaders(req)
+		resp, err := request.Config.HTTPClient.Do(req)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if errors.Is(err, context.Canceled) {
+				return nil, context.Canceled
+			}
+			if timeoutCause(err) {
+				return nil, fmt.Errorf("雨云 OSS 请求超时：%w", context.DeadlineExceeded)
+			}
+			if attempt < 2 && (errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(strings.ToLower(err.Error()), "connection reset")) {
+				continue
+			}
+			// HTTP 客户端错误可能包含完整预签名 URL，不能返回给调用方落库。
+			return nil, awserr.New("RequestError", "雨云 OSS 网络请求失败", nil)
+		}
+		switch resp.StatusCode {
+		case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			if attempt < 2 {
+				resp.Body.Close()
+				continue
+			}
+		}
+		return resp, nil
+	}
+	return nil, errors.New("雨云 OSS 重试次数已耗尽")
+}
+
 func DeleteS3Object(setting Settings, objectKey string) error {
 	setting = NormalizeSettings(setting)
 	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
 		return err
 	}
-	_, err = client.DeleteObjectWithContext(context.Background(), &awss3.DeleteObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))})
+	input := &awss3.DeleteObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))}
+	if setting.Provider == rainyunOSSProvider {
+		request, _ := client.DeleteObjectRequest(input)
+		resp, err := rainyunRequest(context.Background(), request, nil, 0)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("删除雨云 OSS 对象失败：HTTP %d", resp.StatusCode)
+		}
+		return nil
+	}
+	_, err = client.DeleteObjectWithContext(context.Background(), input)
 	if requestFailure, ok := err.(awserr.RequestFailure); ok && requestFailure.StatusCode() == http.StatusNotFound {
 		return nil
 	}

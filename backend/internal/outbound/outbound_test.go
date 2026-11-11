@@ -1,6 +1,8 @@
 package outbound
 
 import (
+	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"net"
 	"net/http"
@@ -10,6 +12,79 @@ import (
 	"testing"
 	"time"
 )
+
+func TestStorageTransportDisablesHTTP2(t *testing.T) {
+	transport := newStorageTransport(resolveOutboundHost)
+	if transport.ForceAttemptHTTP2 {
+		t.Fatal("storage transport must disable HTTP/2")
+	}
+	if transport.TLSClientConfig == nil || len(transport.TLSClientConfig.NextProtos) != 1 || transport.TLSClientConfig.NextProtos[0] != "http/1.1" {
+		t.Fatalf("TLS NextProtos = %v, want [http/1.1]", transport.TLSClientConfig.NextProtos)
+	}
+}
+
+func TestStorageTransportKeepsOutboundProxyAndSSRF(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://172.24.176.1:10808")
+	t.Setenv("HTTPS_PROXY", "http://172.24.176.1:10808")
+	t.Setenv("NO_PROXY", ".se7endot.top,100.64.0.0/10")
+	transport := newStorageTransport(resolveOutboundHost)
+
+	proxiedRequest, _ := http.NewRequest(http.MethodGet, "https://api.mikoto.vip/v1/models", nil)
+	proxyURL, err := transport.Proxy(proxiedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantProxy, _ := url.Parse("http://172.24.176.1:10808")
+	if proxyURL == nil || proxyURL.String() != wantProxy.String() {
+		t.Fatalf("proxy = %v, want %v", proxyURL, wantProxy)
+	}
+
+	directRequest, _ := http.NewRequest(http.MethodGet, "https://api.se7endot.top/v1/models", nil)
+	proxyURL, err = transport.Proxy(directRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if proxyURL != nil {
+		t.Fatalf("NO_PROXY request proxy = %v, want nil", proxyURL)
+	}
+
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "false")
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "")
+	if _, err := ValidateOutboundURL("http://127.0.0.1:8080"); err == nil {
+		t.Fatal("storage transport must keep SSRF validation")
+	}
+	if _, err := transport.DialContext(context.Background(), "tcp", "localhost:443"); err == nil {
+		t.Fatal("storage transport unexpectedly dialed localhost")
+	}
+}
+
+func TestStorageHTTPClientNegotiatesHTTP11(t *testing.T) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Proto != "HTTP/1.1" {
+			t.Errorf("request protocol = %s, want HTTP/1.1", r.Proto)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	defer server.Close()
+
+	transport := newStorageTransport(func(context.Context, string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("127.0.0.1")}, nil
+	})
+	pool := x509.NewCertPool()
+	pool.AddCert(server.Certificate())
+	transport.TLSClientConfig.RootCAs = pool
+	client := outboundClientWithTransport(transport, time.Second)
+	response, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.Proto != "HTTP/1.1" {
+		t.Fatalf("response protocol = %s, want HTTP/1.1", response.Proto)
+	}
+}
 
 func TestOutboundTransportUsesEnvironmentProxyAndHonorsNoProxy(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://172.24.176.1:10808")

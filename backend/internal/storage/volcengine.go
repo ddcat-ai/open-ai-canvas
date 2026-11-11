@@ -132,7 +132,7 @@ func volcengineTOSInternalEndpoint(endpoint string) bool {
 }
 
 func usesS3Protocol(provider string) bool {
-	return provider == s3Provider || provider == volcengineTOSProvider
+	return provider == s3Provider || provider == rainyunOSSProvider || provider == volcengineTOSProvider
 }
 
 func s3ServiceName(setting Settings) string {

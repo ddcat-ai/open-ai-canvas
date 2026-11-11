@@ -9,6 +9,7 @@ const (
 	aliyunOSSProvider     = "aliyun"
 	tencentCOSProvider    = "tencent"
 	qiniuKodoProvider     = "qiniu"
+	rainyunOSSProvider    = "rainyun"
 	volcengineTOSProvider = "volcengine"
 	s3Provider            = "s3"
 	defaultOSSPathPrefix  = "open-ai-canvas"
@@ -70,6 +71,9 @@ func NormalizeSettings(value Settings) Settings {
 		value.Provider = aliyunOSSProvider
 	}
 	value.Region = strings.TrimSpace(value.Region)
+	if value.Provider == rainyunOSSProvider && value.Region == "" {
+		value.Region = "rainyun"
+	}
 	value.Endpoint = strings.TrimRight(strings.TrimSpace(value.Endpoint), "/")
 	if value.Provider == tencentCOSProvider && value.Endpoint == "" && value.Region != "" {
 		value.Endpoint = "https://cos." + value.Region + ".myqcloud.com"

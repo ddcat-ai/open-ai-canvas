@@ -1,6 +1,7 @@
 package app
 
 import (
+	"net/url"
 	"time"
 
 	"yingce/backend/internal/storage"
@@ -9,6 +10,17 @@ import (
 type ossSettingValue = storage.Settings
 type ossProviderCredentials = storage.Credentials
 type ossObjectStream = storage.ObjectStream
+
+func validateRainyunEndpoint(raw string) (*url.URL, error) {
+	endpoint, err := storage.ValidateStorageEndpoint(raw)
+	if err != nil {
+		return nil, err
+	}
+	if endpoint.Scheme != "https" && !(endpoint.Scheme == "http" && AllowedPrivateUpstreamHost(endpoint.Hostname())) {
+		return nil, BadAuthRequest("雨云 OSS Endpoint 必须使用 HTTPS")
+	}
+	return endpoint, nil
+}
 
 func (s *Service) storageSettingWithRuntimePolicy(setting ossSettingValue) ossSettingValue {
 	setting = normalizeOSSSetting(setting)

@@ -45,6 +45,9 @@ func TestAdminSystemPerformanceReportsSQLiteWithoutRedis(t *testing.T) {
 	if result.Status != "healthy" {
 		t.Fatalf("status = %q, want healthy", result.Status)
 	}
+	if result.Rainyun.Enabled || result.Rainyun.Status != "disabled" || result.Rainyun.CheckedAt != nil {
+		t.Fatalf("rainyun = %#v, want stable disabled snapshot", result.Rainyun)
+	}
 	if result.Database.Driver != "sqlite" || !result.Database.Connected || result.Database.Postgres != nil {
 		t.Fatalf("database = %#v", result.Database)
 	}
@@ -73,6 +76,60 @@ func TestAdminSystemPerformanceReportsSQLiteWithoutRedis(t *testing.T) {
 	}
 	if stats := sqlDB.Stats(); result.Database.Pool.OpenConnections != stats.OpenConnections {
 		t.Fatalf("pool open connections = %d, want %d", result.Database.Pool.OpenConnections, stats.OpenConnections)
+	}
+}
+
+func TestSystemCPUSamplerPreservesUnknownZeroAndSamplingWindow(t *testing.T) {
+	var sampler systemCPUSampler
+	start := time.Unix(1_700_000_000, 0)
+	first := sampler.sample(100, 40, true, start)
+	if first.Status != "sampling" || first.UsagePercent != nil || first.SampledAt != nil {
+		t.Fatalf("first sample = %#v, want unknown baseline", first)
+	}
+	ready := sampler.sample(200, 80, true, start.Add(15*time.Second))
+	if ready.Status != "ready" || ready.UsagePercent == nil || *ready.UsagePercent != 60 || ready.SampleSeconds != 15 || ready.SampledAt == nil || !ready.SampledAt.Equal(start.Add(15*time.Second)) {
+		t.Fatalf("ready sample = %#v, want 60%% over 15 seconds", ready)
+	}
+	cached := sampler.sample(205, 82, true, start.Add(15*time.Second+100*time.Millisecond))
+	if cached.UsagePercent != ready.UsagePercent || cached.SampledAt != ready.SampledAt || cached.SampleSeconds != 15 {
+		t.Fatalf("rapid refresh replaced sampling window: %#v", cached)
+	}
+	zero := sampler.sample(300, 180, true, start.Add(30*time.Second))
+	if zero.Status != "ready" || zero.UsagePercent == nil || *zero.UsagePercent != 0 || zero.SampleSeconds != 15 {
+		t.Fatalf("idle sample = %#v, want a real zero", zero)
+	}
+	failed := sampler.sample(0, 0, false, start.Add(45*time.Second))
+	if failed.Status != "unavailable" || failed.UsagePercent != nil || failed.SampledAt != nil || failed.SampleSeconds != 0 {
+		t.Fatalf("failed sample retained old usage: %#v", failed)
+	}
+	recovered := sampler.sample(400, 200, true, start.Add(60*time.Second))
+	if recovered.Status != "sampling" || recovered.UsagePercent != nil {
+		t.Fatalf("recovery must establish a new baseline: %#v", recovered)
+	}
+}
+
+func TestSystemCPUSamplerRejectsInvalidDeltas(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		total, idle uint64
+		elapsed     time.Duration
+	}{
+		{"total counter reset", 90, 50, 15 * time.Second},
+		{"idle counter reset", 150, 39, 15 * time.Second},
+		{"idle delta exceeds total delta", 120, 80, 15 * time.Second},
+		{"no counter progress", 100, 40, 15 * time.Second},
+		{"time did not advance", 200, 80, 0},
+		{"time moved backwards", 200, 80, -time.Second},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var sampler systemCPUSampler
+			start := time.Unix(1_700_000_000, 0)
+			sampler.sample(100, 40, true, start)
+			result := sampler.sample(test.total, test.idle, true, start.Add(test.elapsed))
+			if result.Status != "sampling" || result.UsagePercent != nil || result.SampledAt != nil {
+				t.Fatalf("invalid interval became valid usage: %#v", result)
+			}
+		})
 	}
 }
 
@@ -182,7 +239,7 @@ func newSystemPerformanceTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.AdminAuditEvent{}); err != nil {
+	if err := db.AutoMigrate(&model.AdminAuditEvent{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	if sqlDB, err := db.DB(); err == nil {
