@@ -187,7 +187,7 @@ export function ImageSizePicker({
                         ))}
                     </div>
                 </>
-            ) : !ungrouped && visibleTiers.length && (profile.size.parameter === "size" || !profile.quality.supported || imageResolutionUsesQuality(profile)) ? (
+            ) : (!ungrouped || imageResolutionUsesQuality(profile)) && visibleTiers.length && (profile.size.parameter === "size" || !profile.quality.supported || imageResolutionUsesQuality(profile)) ? (
                 <>
                     <div className="image-size-label">分辨率</div>
                     <div className="image-size-tiers">
