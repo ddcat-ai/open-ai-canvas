@@ -130,6 +130,7 @@ description: 从产品功能快速定位主要代码入口
 
 - 对话呈现：`web/src/components/canvas/canvas-cloud-agent-panel-parts.tsx` 管理可点击的对话标题、历史入口及唯一主要执行状态；`canvas-cloud-agent-chat-ui.tsx` 管理正文、折叠过程、审批与错误。`AgentConversation` 在历史恢复完成的空会话内挂载原版 `canvas-agent-welcome.tsx`，使用 `agent-welcome` 光球、居中欢迎文案与三个入口；创作入口只填草稿，技能入口打开真实技能库；场景技能组合在 `canvas-agent-skill-library-modal.tsx` 的 `presets` 插槽中，仅主动打开技能库时呈现。
 - 默认停靠：`lib/canvas/agent-panel-dock.ts` 默认选择右侧栏；`components/canvas/use-agent-panel-dock.ts` 与 `layouts/user-layout.tsx` 共用可用宽度条件，保留已保存的浮窗偏好和窄屏回退。
+- 推理档位：`web/src/components/canvas/use-agent-reasoning-preference.ts` 按账号与模型保存 Agent 档位，面板恢复时根据当前模型能力校验。没有有效选择时提交 `auto`，由模型配置决定默认档位。
 - 底部工具条：`canvas-toolbar.tsx`、`canvas-zoom-controls.tsx` 使用 `FloatingDock` 的局部 `toolbar` 变体；`canvas-bottom-toolbar.css` 负责紧凑实色外观，缩放控件按主条实测宽高和侧栏占位避让；节点/连线计数与镜头跟随浮条已移除。
 - 默认纯白：`styles/globals.css` 的 `--background`、`lib/canvas-theme.ts` 的浅色画布及 `lib/canvas/canvas-appearance.ts` 的经典浅色预设统一为 `#FFFFFF`。已有自定义配色和暗色独立保留。
 - 交互回归：`web/test/agent-sidebar-presentation.test.tsx` 的独立 DOM 用例覆盖停靠、草稿、单一执行状态和审批边界；底部控件真实组件用例在 `web/test/fixtures/canvas-bottom-controls.harness.tsx`。
