@@ -3,6 +3,20 @@ import type { zhCN } from "./zh-CN";
 
 export const jaJP: DeepStringRecord<typeof zhCN> = {
     historySync: {
+        manage: "履歴のコピーを確認（{{count}}）",
+        backupsTitle: "履歴の競合コピー",
+        backupsDescription: "同時編集時はこの端末の内容を保存します。現在の内容を保持するか、コピーを別の会話として復元できます。処理後も元のコピーは端末に残り、ダウンロードできます。復元による再生成や課金はありません。",
+        keep: "現在の内容を保持",
+        restore: "新しい会話として復元",
+        restored: "新しい会話に復元済み",
+        resolved: "処理済み・コピー保持",
+        unresolved: "未処理",
+        preview: "{{count}} 件のメッセージを確認",
+        mediaMessage: "メディアメッセージ（完全なデータはダウンロード）",
+        restoredTitle: "{{title}}（復元コピー）",
+        restoredNotice: "この端末に復元し、同期を試行中です。上部の同期状態をご確認ください。元の会話とコピーは保持されています。",
+        keptNotice: "現在の内容を保持しました。元のコピーは引き続き確認、復元、ダウンロードできます。",
+        resolveFailed: "処理できませんでした。コピーは保持されています。再試行してください。",
         conflict: "履歴を同期済み・競合のコピーがあります",
         local: "履歴はこの端末に保存されています",
         pending: "履歴を同期待ち",

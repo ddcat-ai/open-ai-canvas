@@ -66,7 +66,7 @@ function server() {
     };
     return { rows, api, calls: () => calls };
 }
-function device(remote: ReturnType<typeof server>, legacy: CreationConversation[] = [], options: { cloud?: boolean; initial?: string; prepare?: (m: CreationMessage) => Promise<Record<string, unknown>> } = {}) {
+function device(remote: ReturnType<typeof server>, legacy: CreationConversation[] = [], options: { cloud?: boolean; initial?: string; prepare?: (m: CreationMessage) => Promise<Record<string, unknown>>; write?: (value: string) => Promise<void> } = {}) {
     let disk = options.initial || "";
     let current: CreationConversation[] = [];
     let status: HistorySyncStatus = { phase: "local" };
@@ -85,6 +85,7 @@ function device(remote: ReturnType<typeof server>, legacy: CreationConversation[
         read: async () => disk || null,
         readLegacy: async () => copy(legacy),
         write: async (value) => {
+            await options.write?.(value);
             disk = value;
         },
         api,
@@ -131,6 +132,157 @@ function device(remote: ReturnType<typeof server>, legacy: CreationConversation[
 }
 
 describe("创作历史离线队列与修订合并", () => {
+    async function conflictingDevices(options: Parameters<typeof device>[2] = {}) {
+        const remote = server();
+        const a = device(remote, [conversation("c")]);
+        await a.load();
+        await a.sync.sync();
+        const b = device(remote, [], { ...options, initial: a.disk() });
+        await b.load();
+        await a.save([{ ...a.value()[0], title: "server title" }]);
+        await a.sync.sync();
+        await b.save([{ ...b.value()[0], title: "local title" }]);
+        await b.sync.sync();
+        return { remote, a, b };
+    }
+    test("处理指定冲突后刷新不再报警，原始副本仍可导出和恢复", async () => {
+        const { remote, b } = await conflictingDevices();
+        const backup = b.sync.conflictBackups()[0];
+        expect(b.status().phase).toBe("conflict");
+        await b.sync.resolveConflict(backup.key, "keep");
+        expect(b.status()).toMatchObject({ phase: "synced", backupCount: 1, unresolvedCount: 0 });
+        const reloaded = device(remote, [], { initial: b.disk() });
+        await reloaded.load();
+        await reloaded.sync.sync();
+        expect(reloaded.status().phase).toBe("synced");
+        expect(JSON.parse(reloaded.sync.conflictBackup())[0].local).toEqual(backup.local);
+        expect(reloaded.sync.conflictBackups()[0].resolvedAt).toBeTruthy();
+        expect(reloaded.value()[0].title).toBe("server title");
+    });
+    test("恢复已删除对话的副本使用新 ID，保留 tombstone、原消息及副本，重复操作幂等", async () => {
+        const { remote, a, b } = await conflictingDevices();
+        await a.remove("c");
+        await a.sync.sync();
+        await b.sync.sync();
+        const backup = b.sync.conflictBackups()[0];
+        const id = await b.sync.resolveConflict(backup.key, "restore", "恢复对话".repeat(60));
+        expect(id).not.toBe("c");
+        expect(b.status().phase).toBe("pending");
+        expect(b.value()[0].messages).toEqual(backup.local.messages);
+        expect(Array.from(b.value()[0].title)).toHaveLength(120);
+        expect(await b.sync.resolveConflict(backup.key, "restore")).toBe(id);
+        await b.sync.sync();
+        expect(remote.rows.get("c")?.deleted).toBe(true);
+        expect(remote.rows.get(id!)?.messages).toHaveLength(1);
+        expect(JSON.parse(b.sync.conflictBackup())[0].local).toEqual(backup.local);
+        const reloaded = device(remote, [], { initial: b.disk() });
+        await reloaded.load();
+        expect(await reloaded.sync.resolveConflict(backup.key, "restore")).toBe(id);
+        expect(reloaded.value().filter((c) => c.id === id)).toHaveLength(1);
+    });
+    test("落盘失败时不确认冲突、不添加恢复对话，重试后才更新状态", async () => {
+        let fail = false;
+        const { b } = await conflictingDevices({
+            write: async () => {
+                if (fail) throw new Error("disk full");
+            },
+        });
+        const backup = b.sync.conflictBackups()[0];
+        const before = b.disk();
+        fail = true;
+        await expect(b.sync.resolveConflict(backup.key, "keep")).rejects.toThrow("disk full");
+        await expect(b.sync.resolveConflict(backup.key, "restore")).rejects.toThrow("disk full");
+        expect(b.disk()).toBe(before);
+        expect(b.value()).toHaveLength(1);
+        expect(b.sync.conflictBackups()[0].resolvedAt).toBeUndefined();
+        expect(b.status().phase).toBe("conflict");
+        fail = false;
+        await b.sync.resolveConflict(backup.key, "restore");
+        expect(b.value()).toHaveLength(2);
+    });
+    test("处理旧快照不会吞掉同一对话的新冲突", async () => {
+        const { a, b } = await conflictingDevices();
+        const old = b.sync.conflictBackups()[0];
+        await a.save([{ ...a.value()[0], messages: [message("m1", "server edit")] }]);
+        await a.sync.sync();
+        await b.save([{ ...b.value()[0], messages: [message("m1", "local edit")] }]);
+        await b.sync.sync();
+        expect(b.sync.conflictBackups()).toHaveLength(2);
+        await b.sync.resolveConflict(old.key, "keep");
+        expect(b.status()).toMatchObject({ phase: "conflict", unresolvedCount: 1 });
+        expect(b.sync.conflictBackups()[1].resolvedAt).toBeUndefined();
+    });
+    test("恢复落盘期间的新消息与恢复副本一起保存，刷新不丢失", async () => {
+        let unblock: (() => void) | undefined;
+        let started: (() => void) | undefined;
+        let block = false;
+        const { remote, b } = await conflictingDevices({
+            write: async () => {
+                if (block) {
+                    block = false;
+                    started?.();
+                    await new Promise<void>((resolve) => {
+                        unblock = resolve;
+                    });
+                }
+            },
+        });
+        const ready = new Promise<void>((resolve) => {
+            started = resolve;
+        });
+        block = true;
+        const restoring = b.sync.resolveConflict(b.sync.conflictBackups()[0].key, "restore");
+        await ready;
+        const saving = b.save([{ ...b.value()[0], messages: [...b.value()[0].messages, message("during-restore")] }]);
+        unblock!();
+        const restoredId = await restoring;
+        await saving;
+        const reloaded = device(remote, [], { initial: b.disk() });
+        await reloaded.load();
+        expect(
+            reloaded
+                .value()
+                .find((c) => c.id === "c")
+                ?.messages.map((m) => m.id),
+        ).toEqual(["m1", "during-restore"]);
+        expect(reloaded.value().find((c) => c.id === restoredId)?.messages).toHaveLength(1);
+        expect(reloaded.sync.conflictBackups()[0].restoredConversationId).toBe(restoredId);
+    });
+    test("已处理后再次发生相同内容的冲突，仍保留新的待处理快照", async () => {
+        const { a, b } = await conflictingDevices();
+        const old = b.sync.conflictBackups()[0];
+        await b.sync.resolveConflict(old.key, "keep");
+        await a.save([{ ...a.value()[0], title: "server title 2" }]);
+        await a.sync.sync();
+        await b.save([old.local]);
+        await b.sync.sync();
+        expect(b.status()).toMatchObject({ phase: "conflict", backupCount: 2, unresolvedCount: 1 });
+        expect(b.sync.conflictBackups()[1].key).not.toBe(old.key);
+    });
+    test("处理副本时账号切换不会发布旧账号状态，停止后不能查看或处理副本", async () => {
+        let release: (() => void) | undefined;
+        let wait = false;
+        const { b } = await conflictingDevices({
+            write: async () => {
+                if (wait)
+                    await new Promise<void>((resolve) => {
+                        release = resolve;
+                    });
+            },
+        });
+        const backup = b.sync.conflictBackups()[0];
+        wait = true;
+        const resolving = b.sync.resolveConflict(backup.key, "restore");
+        await Promise.resolve();
+        await Promise.resolve();
+        b.stop();
+        release!();
+        await expect(resolving).rejects.toThrow("账号已切换");
+        expect(b.value()).toHaveLength(1);
+        expect(b.status().phase).toBe("conflict");
+        expect(() => b.sync.conflictBackups()).toThrow("账号已切换");
+        expect(() => b.sync.resolveConflict(backup.key, "keep")).toThrow("账号已切换");
+    });
     test("旧渲染快照缺少新拉取消息时不会生成删除命令", async () => {
         const remote = server();
         const a = device(remote, [conversation("c", [message("one")])]);

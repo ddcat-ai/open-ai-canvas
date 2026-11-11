@@ -2,16 +2,19 @@ import type { CreationConversation, CreationMessage } from "@/pages/create/creat
 import type { HistoryDetail, HistoryMutation, HistorySummary } from "./api/creation-history";
 import { conversationFromHistory, historyFingerprint as fingerprint, historyMessagePayload, historyMetadata } from "./creation-history-payload";
 import { persistableCreationConversations } from "./creation-conversation-store";
+import { createClientId } from "@/lib/client-id";
 
 export const CREATION_HISTORY_SYNC_KEY = "creation-history-sync-v1";
-export type HistorySyncStatus = { phase: "local" | "pending" | "synced" | "conflict" | "error"; message?: string };
+export type HistorySyncStatus = { phase: "local" | "pending" | "synced" | "conflict" | "error"; message?: string; backupCount?: number; unresolvedCount?: number };
+type ConflictBackup = { id: string; local: CreationConversation; at: string; snapshotId?: string; resolvedAt?: string; restoredConversationId?: string };
+export type HistoryConflictBackup = ConflictBackup & { key: string };
 type Cache = {
     version: 1;
     conversations: CreationConversation[];
     bases: Record<string, HistoryDetail>;
     deleted: string[];
     removedMessages: Record<string, Record<string, number>>;
-    conflicts: Array<{ id: string; local: CreationConversation; at: string }>;
+    conflicts: ConflictBackup[];
 };
 type Dependencies = {
     read: () => Promise<string | null>;
@@ -28,10 +31,11 @@ type Dependencies = {
 // One scoped session owns the cache and serializes durable writes. No global array replacement.
 export class CreationHistorySync {
     private cache: Cache = { version: 1, conversations: [], bases: Object.create(null), deleted: [], removedMessages: Object.create(null), conflicts: [] };
-    private writes: Promise<void> = Promise.resolve();
+    private writes: Promise<unknown> = Promise.resolve();
     private running: Promise<void> | null = null;
     private again = false;
     private disposed = false;
+    private status: HistorySyncStatus = { phase: "local" };
     constructor(private readonly deps: Dependencies) {}
     private assertActive() {
         if (this.disposed || !this.deps.active()) throw new DOMException("账号已切换", "AbortError");
@@ -42,6 +46,62 @@ export class CreationHistorySync {
     conflictBackup() {
         this.assertActive();
         return JSON.stringify(this.cache.conflicts, null, 2);
+    }
+    conflictBackups(): HistoryConflictBackup[] {
+        this.assertActive();
+        return this.cache.conflicts.map((item) => ({ ...structuredClone(item), key: this.conflictKey(item) }));
+    }
+    private conflictKey(item: ConflictBackup) {
+        return item.snapshotId || fingerprint({ id: item.id, at: item.at, local: item.local });
+    }
+    private publishStatus(status: HistorySyncStatus) {
+        const unresolvedCount = this.cache.conflicts.filter((item) => !item.resolvedAt).length;
+        const phase = status.phase === "synced" || status.phase === "conflict" ? (unresolvedCount ? "conflict" : "synced") : status.phase;
+        this.status = { ...status, phase, backupCount: this.cache.conflicts.length, unresolvedCount };
+        this.deps.onStatus(this.status);
+    }
+    // Resolving a snapshot never deletes it or overwrites the original server conversation.
+    resolveConflict(key: string, action: "keep" | "restore", title?: string): Promise<string | undefined> {
+        this.assertActive();
+        const operation = this.writes
+            .catch(() => {})
+            .then(async () => {
+                this.assertActive();
+                const item = this.cache.conflicts.find((candidate) => this.conflictKey(candidate) === key);
+                if (!item) throw new Error("冲突副本不存在，请重新打开列表");
+                if (action === "restore" && item.restoredConversationId) return item.restoredConversationId;
+                if (action === "keep" && item.resolvedAt) return;
+                const restored =
+                    action === "restore"
+                        ? {
+                              ...structuredClone(item.local),
+                              id: createClientId(),
+                              title: Array.from(title || item.local.title)
+                                  .slice(0, 120)
+                                  .join(""),
+                              updatedAt: new Date().toISOString(),
+                          }
+                        : undefined;
+                const resolved = { ...item, resolvedAt: new Date().toISOString(), ...(restored ? { restoredConversationId: restored.id } : {}) };
+                const proposed = {
+                    ...this.cache,
+                    conflicts: this.cache.conflicts.map((candidate) => (candidate === item ? resolved : candidate)),
+                    conversations: restored ? [restored, ...this.cache.conversations] : this.cache.conversations,
+                };
+                // Commit only after storage succeeds. A concurrent pull/save queues a fresh snapshot.
+                await this.deps.write(this.serialize(proposed));
+                this.assertActive();
+                this.cache.conflicts = this.cache.conflicts.map((candidate) => (candidate === item ? resolved : candidate));
+                if (restored) {
+                    this.cache.conversations = [restored, ...this.cache.conversations];
+                    if (this.running) this.again = true;
+                    this.deps.onChange(this.cache.conversations);
+                }
+                this.publishStatus(restored ? { phase: this.deps.cloud ? "pending" : "local" } : this.status);
+                return restored?.id;
+            });
+        this.writes = operation;
+        return operation;
     }
     async load() {
         const stored = await this.deps.read();
@@ -58,7 +118,7 @@ export class CreationHistorySync {
             this.assertActive();
             await this.persist(); // The legacy key remains untouched, including on migration failure.
         }
-        this.deps.onStatus({ phase: this.deps.cloud ? "pending" : "local" });
+        this.publishStatus({ phase: this.deps.cloud ? "pending" : "local" });
         return this.cache.conversations;
     }
     save(value: CreationConversation[]) {
@@ -75,7 +135,7 @@ export class CreationHistorySync {
         });
         this.cache.conversations = [...merged, ...this.cache.conversations.filter((item) => !ids.has(item.id))].filter((item) => !this.cache.bases[item.id]?.deleted && !this.cache.deleted.includes(item.id));
         if (merged.some((item, index) => item.messages.length !== value[index].messages.length)) this.deps.onChange(this.cache.conversations);
-        this.deps.onStatus({ phase: this.deps.cloud ? "pending" : "local" });
+        this.publishStatus({ phase: this.deps.cloud ? "pending" : "local" });
         return this.persist();
     }
     remove(id: string, remaining: CreationConversation[]) {
@@ -90,15 +150,17 @@ export class CreationHistorySync {
         for (const messageID of messageIDs) pending[messageID] = this.cache.bases[id]?.messages.find((m) => m.id === messageID)?.revision || 0;
         return this.save(this.cache.conversations.map((c) => (c.id === id ? { ...c, messages: c.messages.filter((m) => !messageIDs.includes(m.id)) } : c)));
     }
+    private serialize(cache: Cache) {
+        return JSON.stringify({ ...cache, conversations: persistableCreationConversations(cache.conversations), conflicts: cache.conflicts.map((item) => ({ ...item, local: persistableCreationConversations([item.local])[0] })) });
+    }
     private persist() {
-        const value = JSON.stringify({ ...this.cache, conversations: persistableCreationConversations(this.cache.conversations), conflicts: this.cache.conflicts.map((item) => ({ ...item, local: persistableCreationConversations([item.local])[0] })) });
-        const next = this.writes.catch(() => {}).then(() => this.deps.write(value));
+        const next = this.writes.catch(() => {}).then(() => this.deps.write(this.serialize(this.cache)));
         this.writes = next;
         return next;
     }
     private backup(id: string, local: CreationConversation) {
         const hash = fingerprint(local);
-        if (!this.cache.conflicts.some((item) => item.id === id && fingerprint(item.local) === hash)) this.cache.conflicts.push({ id, local, at: new Date().toISOString() });
+        if (!this.cache.conflicts.some((item) => !item.resolvedAt && item.id === id && fingerprint(item.local) === hash)) this.cache.conflicts.push({ id, local, at: new Date().toISOString(), snapshotId: createClientId() });
     }
     private async apply(detail: HistoryDetail, sent?: CreationConversation) {
         this.assertActive();
@@ -258,9 +320,9 @@ export class CreationHistorySync {
                 } while (after);
             } while (this.again);
             this.assertActive();
-            this.deps.onStatus(failure ? { phase: "error", message: failure } : hadConflict || this.cache.conflicts.length ? { phase: "conflict" } : { phase: "synced" });
+            this.publishStatus(failure ? { phase: "error", message: failure } : { phase: hadConflict ? "conflict" : "synced" });
         } catch (error) {
-            if (!this.disposed && this.deps.active()) this.deps.onStatus({ phase: "error", message: error instanceof Error ? error.message : "历史同步失败，本机记录已保留" });
+            if (!this.disposed && this.deps.active()) this.publishStatus({ phase: "error", message: error instanceof Error ? error.message : "历史同步失败，本机记录已保留" });
         }
     }
 }

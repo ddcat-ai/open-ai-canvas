@@ -89,6 +89,7 @@ import { declaredInspirationSources } from "@/lib/inspirations/catalog";
 import { fillablePrompt } from "@/lib/inspirations/resolve";
 import { CreationRecentCanvases } from "./creation-recent-canvases";
 import { CreationAgentEntry } from "./creation-agent-entry";
+import { CreationHistoryConflicts } from "./creation-history-conflicts";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { useCreationConversationRoute } from "./use-creation-conversation-route";
 import { creationVideoConfig, creationVideoSettings } from "./creation-generation-config";
@@ -1573,24 +1574,7 @@ export default function CreatePage() {
                             {t("create.historySync.retry")}
                         </button>
                     ) : null}
-                    {historySync.phase === "conflict" ? (
-                        <button
-                            type="button"
-                            className="ml-2 underline"
-                            onClick={() => {
-                                const backup = historySessionRef.current?.conflictBackup();
-                                if (!backup || backup === "[]") return;
-                                const url = URL.createObjectURL(new Blob([backup], { type: "application/json" }));
-                                const link = document.createElement("a");
-                                link.href = url;
-                                link.download = "conversation-conflicts.json";
-                                link.click();
-                                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-                            }}
-                        >
-                            {t("create.historySync.backup")}
-                        </button>
-                    ) : null}
+                    <CreationHistoryConflicts key={activeConversationScope} session={historySessionRef.current} status={historySync} busy={busy} />
                 </p>
                 {conversationStorageError ? (
                     <p role="status" className="mx-auto mb-3 max-w-3xl px-4 text-xs text-foreground/55">
