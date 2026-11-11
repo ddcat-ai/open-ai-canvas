@@ -67,7 +67,7 @@ func TestDramaDurationOptionsFollowDeclaredSelection(t *testing.T) {
 	if seconds := production.SnapVideoSeconds(3500, options); seconds != 6 || dramaMaxVideoSeconds(options) != 12 {
 		t.Fatalf("enum contract snapped to %d (max %d) using stale range fields", seconds, dramaMaxVideoSeconds(options))
 	}
-	if limits := (production.StoryboardSettings{}).SegmentLimits(options); limits.MinMs != 6000 || limits.MaxMs != 12000 {
+	if limits := (production.StoryboardSettings{SegmentMode: production.SegmentAuto}).SegmentLimits(options); limits.MinMs != 6000 || limits.MaxMs != 12000 {
 		t.Fatalf("auto segment limits must follow the model range: %+v", limits)
 	}
 }

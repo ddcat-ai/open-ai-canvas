@@ -287,7 +287,9 @@ func retryableMediaRecovery(err error) bool {
 	if errors.Is(err, errMediaStagingFull) {
 		return true
 	}
-	if retryableProtocolMediaDownload(err) || errors.Is(err, context.DeadlineExceeded) {
+	// 作品暂停、租约轮换等会取消 worker context；上游已出图时必须重试下载，不能当成不可恢复失败。
+	// 用户主动取消时任务状态已是 cancelled，handleMediaRecoveryFailure 会因状态冲突退出，不会误重试。
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || retryableProtocolMediaDownload(err) {
 		return true
 	}
 	// 对象存储的 503 / 限流 / 超时由各家 SDK 的错误类型表达，不是 providerHTTPError。

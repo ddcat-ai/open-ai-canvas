@@ -20,7 +20,7 @@ export function useAssetSchemes() {
 }
 
 export function defaultAssetSettings(catalog?: DramaAssetSchemeCatalog): DramaAssetSettings | undefined {
-    const scheme = catalog?.schemes[0];
+    const scheme = catalog?.schemes.find((item) => item.mode === "fourview") || catalog?.schemes[0];
     if (!catalog || !scheme) return undefined;
     return { mode: scheme.mode, characterPrompt: scheme.characterPrompt, scenePrompt: catalog.scenePrompt, characterRatio: scheme.ratio };
 }

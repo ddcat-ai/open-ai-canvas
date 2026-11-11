@@ -288,7 +288,7 @@ test("browser generation asset writes use the storage-level Web Locks boundary",
     }
 });
 
-test("competing browser generation asset writes fail closed before entering storage without Web Locks", async () => {
+test("competing browser generation asset writes fall back to in-process serialization without Web Locks", async () => {
     const originalWindow = (globalThis as { window?: unknown }).window;
     const originalDocument = (globalThis as { document?: unknown }).document;
     const originalNavigator = (globalThis as { navigator?: unknown }).navigator;
@@ -296,6 +296,8 @@ test("competing browser generation asset writes fail closed before entering stor
     Object.defineProperty(globalThis, "document", { configurable: true, value: {} });
     Object.defineProperty(globalThis, "navigator", { configurable: true, value: {} });
     let entered = 0;
+    let concurrent = 0;
+    let maxConcurrent = 0;
 
     try {
         const compete = () =>
@@ -303,11 +305,16 @@ test("competing browser generation asset writes fail closed before entering stor
                 "account-no-web-locks",
                 async () => {
                     entered += 1;
+                    concurrent += 1;
+                    maxConcurrent = Math.max(maxConcurrent, concurrent);
+                    await Promise.resolve();
+                    concurrent -= 1;
                 },
                 { requireCrossRealmLock: true },
             );
-        await Promise.all([assert.rejects(compete(), /跨标签存储锁/), assert.rejects(compete(), /跨标签存储锁/)]);
-        assert.equal(entered, 0, "neither competing generation write may enter the critical section without a cross-tab lock");
+        await Promise.all([compete(), compete()]);
+        assert.equal(entered, 2, "single-tab fallback must still allow generation writes without Web Locks");
+        assert.equal(maxConcurrent, 1, "in-process queue must keep competing writes serial");
     } finally {
         if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
         else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });

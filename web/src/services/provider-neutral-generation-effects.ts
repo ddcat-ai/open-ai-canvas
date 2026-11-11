@@ -50,11 +50,21 @@ function effectStorage(scope: string): EffectStorage {
     };
 }
 
+let warnedMissingGenerationEffectLock = false;
+
+function warnMissingCrossRealmGenerationEffectLock() {
+    if (warnedMissingGenerationEffectLock) return;
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    warnedMissingGenerationEffectLock = true;
+    console.warn("当前页面非安全上下文，生成副作用已降级为单标签互斥；多标签同时处理同一任务可能重复落库。建议改用 HTTPS 或 localhost。");
+}
+
 function effectLock(requireCrossRealmLock: boolean): AsyncLock {
     const locks = typeof window !== "undefined" && typeof navigator !== "undefined" ? navigator.locks : undefined;
     if (locks) return locks;
+    // http://IP:port 等非安全上下文没有 Web Locks；改为进程内互斥，保证单标签可用。
     if (requireCrossRealmLock && typeof window !== "undefined" && typeof document !== "undefined") {
-        throw new Error("当前浏览器不支持跨页面生成副作用互斥");
+        warnMissingCrossRealmGenerationEffectLock();
     }
     return {
         async request<T>(name: string, callback: () => Promise<T>) {

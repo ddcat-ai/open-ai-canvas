@@ -139,9 +139,36 @@ export function CastLooks({ projectId, character, looks, restyle, onChanged }: {
                                 <span className="drama-look-body">
                                     <b className="truncate">{look.lookName || "未命名造型"}</b>
                                     <small>{chapterLabel(look.lookFromChapter, look.lookToChapter)}</small>
-                                    <small>{look.imageStatus === "draft" ? "已保存，待生成或上传" : look.locked ? "自定义图已锁定" : look.imagePrompt ? "使用自定义提示词" : "按外观描述生成"}</small>
+                                    <small>
+                                        {look.imageStatus === "draft"
+                                            ? "已保存，待生成或上传"
+                                            : look.imageStatus === ""
+                                              ? "还没有造型图，点右侧生成或上传"
+                                              : look.imageStatus === "failed"
+                                                ? "造型图失败，可重试生成"
+                                                : look.locked
+                                                  ? "自定义图已锁定"
+                                                  : look.imagePrompt
+                                                    ? "使用自定义提示词"
+                                                    : "按外观描述生成"}
+                                    </small>
                                 </span>
                                 <span className="drama-look-actions">
+                                    <Button
+                                        size="small"
+                                        type="primary"
+                                        icon={<Play className="size-3.5" />}
+                                        loading={generate.isPending && generate.variables?.id === look.id}
+                                        disabled={busy || mediaBusy(look.imageStatus) || character.imageStatus !== "ready" || !character.imageResourceId}
+                                        title={!character.imageResourceId || character.imageStatus !== "ready" ? "请先生成或上传角色本体参考图，造型图需要以它为底图" : look.imageResourceId ? "按已保存提示词重新生成造型图" : "生成这套造型的参考图"}
+                                        aria-label={`${look.imageResourceId ? "重新生成" : "生成"}造型图 ${look.lookName || ""}`}
+                                        onClick={() => {
+                                            if (look.locked) modal.confirm({ title: "重新生成造型图？", content: "将解锁当前自定义图，并按已保存的提示词生成新图。", okText: "解锁并生成", cancelText: "取消", onOk: () => generate.mutateAsync(look) });
+                                            else generate.mutate(look);
+                                        }}
+                                    >
+                                        {look.imageResourceId ? "重新生成" : "生成造型图"}
+                                    </Button>
                                     <Button size="small" type="text" icon={<Pencil className="size-3.5" />} aria-label={`编辑造型 ${look.lookName}`} disabled={busy || mediaBusy(look.imageStatus)} onClick={() => setEditingId(look.id)} />
                                     <Button size="small" type="text" icon={<Trash2 className="size-3.5" />} aria-label={`删除造型 ${look.lookName}`} disabled={busy} onClick={() => remove.mutate(look.id)} />
                                 </span>
@@ -160,18 +187,6 @@ export function CastLooks({ projectId, character, looks, restyle, onChanged }: {
                                     }}
                                 >
                                     自定义图
-                                </Button>
-                                <Button
-                                    size="small"
-                                    icon={<Play className="size-3.5" />}
-                                    disabled={busy || mediaBusy(look.imageStatus) || character.imageStatus !== "ready" || !character.imageResourceId}
-                                    title={!character.imageResourceId ? "请先生成或上传角色本体图" : undefined}
-                                    onClick={() => {
-                                        if (look.locked) modal.confirm({ title: "重新生成造型图？", content: "将解锁当前自定义图，并按已保存的提示词生成新图。", okText: "解锁并生成", cancelText: "取消", onOk: () => generate.mutateAsync(look) });
-                                        else generate.mutate(look);
-                                    }}
-                                >
-                                    {look.imageResourceId ? "重新生成" : "生成造型图"}
                                 </Button>
                             </div>
                         </div>

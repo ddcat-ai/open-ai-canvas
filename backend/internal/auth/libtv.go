@@ -3,25 +3,15 @@ package auth
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"strings"
 	"time"
 	"yingce/backend/internal/kernel"
-
 	"yingce/backend/internal/model"
-	"yingce/backend/internal/outbound"
 
 	"gorm.io/gorm"
 )
 
-const (
-	libTVSettingKey       = "libtv"
-	libTVDetailURL        = "https://api.liblib.tv/api/canvas/project/detail"
-	libTVMaxResponseBytes = 8 << 20
-)
+const libTVSettingKey = "libtv"
 
 type LibTVSettingRequest struct {
 	Enabled    bool   `json:"enabled"`
@@ -30,14 +20,56 @@ type LibTVSettingRequest struct {
 }
 
 type PublicLibTVSetting struct {
-	Enabled   bool      `json:"enabled"`
-	HasToken  bool      `json:"hasToken"`
-	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	Enabled                 bool      `json:"enabled"`
+	Connected               bool      `json:"connected"`
+	HasToken                bool      `json:"hasToken"`
+	AccountName             string    `json:"accountName,omitempty"`
+	AccountID               string    `json:"accountId,omitempty"`
+	Warning                 string    `json:"warning,omitempty"`
+	UpdatedAt               time.Time `json:"updatedAt,omitempty"`
+	PreferredCallbackMode   string    `json:"preferredCallbackMode,omitempty"`
+	PreferredRedirectURI    string    `json:"preferredRedirectUri,omitempty"`
+	PublicBaseURLConfigured string    `json:"publicBaseUrlConfigured,omitempty"`
+}
+
+type LibTVConnectStartRequest struct {
+	Origin string `json:"origin"`
+}
+
+type LibTVConnectStartResult struct {
+	AuthorizeURL string    `json:"authorizeUrl"`
+	RedirectURI  string    `json:"redirectUri"`
+	CallbackMode string    `json:"callbackMode"`
+	ExpiresAt    time.Time `json:"expiresAt"`
+	Hint         string    `json:"hint"`
+}
+
+type LibTVConnectCompleteRequest struct {
+	CallbackURL string `json:"callbackUrl"`
+	Code        string `json:"code"`
+	State       string `json:"state"`
 }
 
 type libTVSettingValue struct {
-	Enabled bool   `json:"enabled"`
-	Token   string `json:"token"`
+	Enabled      bool      `json:"enabled"`
+	Token        string    `json:"token,omitempty"`
+	ClientID     string    `json:"clientId,omitempty"`
+	ClientSecret string    `json:"clientSecret,omitempty"`
+	RedirectURI  string    `json:"redirectUri,omitempty"`
+	Issuer       string    `json:"issuer,omitempty"`
+	AccessToken  string    `json:"accessToken,omitempty"`
+	RefreshToken string    `json:"refreshToken,omitempty"`
+	TokenType    string    `json:"tokenType,omitempty"`
+	Scope        string    `json:"scope,omitempty"`
+	ExpiresAt    time.Time `json:"expiresAt,omitempty"`
+	AccountName  string    `json:"accountName,omitempty"`
+	AccountID    string    `json:"accountId,omitempty"`
+}
+
+type libTVOAuthPending struct {
+	RedirectURI string `json:"redirectUri"`
+	ClientID    string `json:"clientId"`
+	ActorID     string `json:"actorId"`
 }
 
 type LibTVImportRequest struct {
@@ -111,12 +143,6 @@ type LibTVImportWarning struct {
 	Message string `json:"message"`
 }
 
-type libTVEnvelope struct {
-	Code int             `json:"code"`
-	Data json.RawMessage `json:"data"`
-	Msg  string          `json:"msg"`
-}
-
 type libTVDetail struct {
 	ProjectMeta struct {
 		UUID      string `json:"uuid"`
@@ -128,6 +154,8 @@ type libTVDetail struct {
 	} `json:"projectMeta"`
 	NodeList       []libTVRawNode       `json:"nodeList"`
 	ConnectionList []libTVRawConnection `json:"connectionList"`
+	copyChecked    bool
+	copyAllowed    bool
 }
 
 type libTVRawNode struct {
@@ -185,44 +213,28 @@ func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, err
 	if err != nil {
 		return nil, err
 	}
-	return publicLibTVSetting(setting, value), nil
+	return s.publicLibTVSetting(setting, value, ""), nil
 }
 
 func (s *Service) UpdateLibTVSetting(actor *model.User, req LibTVSettingRequest) (*PublicLibTVSetting, error) {
 	if err := s.host.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	s.libtvMu.Lock()
+	defer s.libtvMu.Unlock()
 	_, current, err := s.readLibTVSetting()
 	if err != nil {
 		return nil, err
 	}
-	token := strings.TrimSpace(req.Token)
-	if req.ClearToken {
-		token = ""
-	} else if token == "" {
-		token = current.Token
+	if req.Enabled && !libTVSettingConnected(current) {
+		return nil, kernel.BadAuthRequest("启用 LibTV 画布导入前请先连接 LibTV 账号")
 	}
-	if req.Enabled && token == "" {
-		return nil, kernel.BadAuthRequest("启用 LibTV 前请先配置 Token")
-	}
-	protected, err := s.host.EncryptSecret(token)
+	current.Enabled = req.Enabled
+	setting, err := s.persistLibTVSetting(actor.ID, current)
 	if err != nil {
 		return nil, err
 	}
-	valueJSON, err := json.Marshal(libTVSettingValue{Enabled: req.Enabled, Token: protected})
-	if err != nil {
-		return nil, err
-	}
-	setting := &model.SystemSetting{Key: libTVSettingKey, ValueJSON: string(valueJSON), UpdatedBy: actor.ID}
-	if existing, lookupErr := s.repo.SystemSetting(libTVSettingKey); lookupErr == nil {
-		setting.CreatedAt = existing.CreatedAt
-	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-		return nil, lookupErr
-	}
-	if err := s.repo.SaveSystemSetting(setting); err != nil {
-		return nil, err
-	}
-	return publicLibTVSetting(setting, libTVSettingValue{Enabled: req.Enabled, Token: token}), nil
+	return s.publicLibTVSetting(setting, current, ""), nil
 }
 
 func (s *Service) TestLibTV(actor *model.User, projectUUID string) error {
@@ -236,10 +248,10 @@ func (s *Service) TestLibTV(actor *model.User, projectUUID string) error {
 	if err != nil {
 		return err
 	}
-	if value.Token == "" {
-		return kernel.BadAuthRequest("尚未配置 LibTV Token")
+	if !libTVSettingConnected(value) {
+		return kernel.BadAuthRequest("尚未连接 LibTV 账号")
 	}
-	_, err = s.fetchLibTVDetail(strings.TrimSpace(projectUUID), value.Token)
+	_, err = s.fetchLibTVProjectDetail(strings.TrimSpace(projectUUID))
 	return err
 }
 
@@ -256,10 +268,10 @@ func (s *Service) ImportLibTV(userID, canvasProjectID, projectUUID string) (*Lib
 	if err != nil {
 		return nil, err
 	}
-	if !value.Enabled || value.Token == "" {
-		return nil, kernel.BadAuthRequest("LibTV 尚未启用或未配置 Token")
+	if !value.Enabled || !libTVSettingConnected(value) {
+		return nil, kernel.BadAuthRequest("LibTV 尚未启用或未连接账号")
 	}
-	detail, err := s.fetchLibTVDetail(strings.TrimSpace(projectUUID), value.Token)
+	detail, err := s.fetchLibTVProjectDetail(strings.TrimSpace(projectUUID))
 	if err != nil {
 		return nil, err
 	}
@@ -278,83 +290,91 @@ func (s *Service) readLibTVSetting() (*model.SystemSetting, libTVSettingValue, e
 	if err := json.Unmarshal([]byte(setting.ValueJSON), &value); err != nil {
 		return nil, value, errors.New("LibTV 配置格式无效")
 	}
-	if value.Token != "" {
-		plain, err := s.host.DecryptSecret(value.Token)
-		if err != nil {
-			return nil, value, err
-		}
-		value.Token = plain
+	if value.Token, err = s.revealLibTVSecret(value.Token); err != nil {
+		return nil, value, err
+	}
+	if value.ClientSecret, err = s.revealLibTVSecret(value.ClientSecret); err != nil {
+		return nil, value, err
+	}
+	if value.AccessToken, err = s.revealLibTVSecret(value.AccessToken); err != nil {
+		return nil, value, err
+	}
+	if value.RefreshToken, err = s.revealLibTVSecret(value.RefreshToken); err != nil {
+		return nil, value, err
 	}
 	return setting, value, nil
 }
 
-func publicLibTVSetting(setting *model.SystemSetting, value libTVSettingValue) *PublicLibTVSetting {
-	result := &PublicLibTVSetting{Enabled: value.Enabled, HasToken: strings.TrimSpace(value.Token) != ""}
+func (s *Service) persistLibTVSetting(actorID string, value libTVSettingValue) (*model.SystemSetting, error) {
+	stored := value
+	var err error
+	if stored.Token, err = s.protectLibTVSecret(stored.Token); err != nil {
+		return nil, err
+	}
+	if stored.ClientSecret, err = s.protectLibTVSecret(stored.ClientSecret); err != nil {
+		return nil, err
+	}
+	if stored.AccessToken, err = s.protectLibTVSecret(stored.AccessToken); err != nil {
+		return nil, err
+	}
+	if stored.RefreshToken, err = s.protectLibTVSecret(stored.RefreshToken); err != nil {
+		return nil, err
+	}
+	valueJSON, err := json.Marshal(stored)
+	if err != nil {
+		return nil, err
+	}
+	setting := &model.SystemSetting{Key: libTVSettingKey, ValueJSON: string(valueJSON), UpdatedBy: actorID}
+	if existing, lookupErr := s.repo.SystemSetting(libTVSettingKey); lookupErr == nil {
+		setting.CreatedAt = existing.CreatedAt
+	} else if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+		return nil, lookupErr
+	}
+	if err := s.repo.SaveSystemSetting(setting); err != nil {
+		return nil, err
+	}
+	return setting, nil
+}
+
+func (s *Service) publicLibTVSetting(setting *model.SystemSetting, value libTVSettingValue, originHint string) *PublicLibTVSetting {
+	connected := libTVSettingConnected(value)
+	result := &PublicLibTVSetting{
+		Enabled:     value.Enabled,
+		Connected:   connected,
+		HasToken:    connected,
+		AccountName: strings.TrimSpace(value.AccountName),
+		AccountID:   strings.TrimSpace(value.AccountID),
+	}
+	if strings.TrimSpace(value.Token) != "" && !connected {
+		result.Warning = "此前保存的 LibTV Token 已无法使用，请重新连接账号。"
+	}
 	if setting != nil {
 		result.UpdatedAt = setting.UpdatedAt
+	}
+	preferred, mode := preferredLibTVRedirectURI(originHint)
+	result.PreferredCallbackMode = mode
+	result.PreferredRedirectURI = preferred
+	if base := libTVPublicBaseURL(); base != "" {
+		result.PublicBaseURLConfigured = base
 	}
 	return result
 }
 
-func (s *Service) fetchLibTVDetail(projectUUID, token string) (*libTVDetail, error) {
-	projectUUID = strings.TrimSpace(projectUUID)
-	if !isLibTVProjectUUID(projectUUID) {
-		return nil, kernel.BadAuthRequest("LibTV 画布 UUID 格式无效")
+func libTVSettingConnected(value libTVSettingValue) bool {
+	return strings.TrimSpace(value.RefreshToken) != ""
+}
+
+func (s *Service) protectLibTVSecret(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
 	}
-	u, err := url.Parse(libTVDetailURL)
-	if err != nil {
-		return nil, err
+	return s.host.EncryptSecret(value)
+}
+
+func (s *Service) revealLibTVSecret(value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
 	}
-	query := u.Query()
-	query.Set("uuid", projectUUID)
-	u.RawQuery = query.Encode()
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("token", token)
-	outbound.ApplyDefaultOutboundHeaders(req)
-	client := outbound.OutboundHTTPClient(20 * time.Second)
-	// Token 是 LibTV 专用凭证，禁止重定向以避免自定义请求头被带到其他主机。
-	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
-		return errors.New("LibTV API 不允许重定向")
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, errors.New("LibTV 请求失败，请检查网络或 Token")
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, libTVMaxResponseBytes+1))
-	if err != nil {
-		return nil, errors.New("读取 LibTV 响应失败")
-	}
-	if len(body) > libTVMaxResponseBytes {
-		return nil, errors.New("LibTV 响应过大")
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("LibTV 请求失败（HTTP %d）", resp.StatusCode)
-	}
-	var envelope libTVEnvelope
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, errors.New("LibTV 响应格式无效")
-	}
-	if envelope.Code != 0 {
-		msg := strings.TrimSpace(envelope.Msg)
-		if msg == "" {
-			msg = "LibTV 返回业务错误"
-		}
-		return nil, errors.New(msg)
-	}
-	var detail libTVDetail
-	if err := json.Unmarshal(envelope.Data, &detail); err != nil {
-		return nil, errors.New("LibTV 画布数据格式无效")
-	}
-	if strings.TrimSpace(detail.ProjectMeta.UUID) == "" {
-		detail.ProjectMeta.UUID = projectUUID
-	}
-	if !detail.ProjectMeta.Effective.CanRead || !detail.ProjectMeta.Effective.CanCopy {
-		return nil, errors.New("当前 LibTV 画布不允许复制")
-	}
-	return &detail, nil
+	return s.host.DecryptSecret(value)
 }

@@ -216,6 +216,9 @@ type (
 	LibTVImportMetadata                    = app.LibTVImportMetadata
 	LibTVImportWarning                     = app.LibTVImportWarning
 	LibTVSettingRequest                    = app.LibTVSettingRequest
+	LibTVConnectStartRequest               = app.LibTVConnectStartRequest
+	LibTVConnectStartResult                = app.LibTVConnectStartResult
+	LibTVConnectCompleteRequest            = app.LibTVConnectCompleteRequest
 	LinkCanvasUnitRequest                  = app.LinkCanvasUnitRequest
 	LinkProjectAssetRequest                = app.LinkProjectAssetRequest
 	LinkShotAssetRequest                   = app.LinkShotAssetRequest

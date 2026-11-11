@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/production"
+	"yingce/backend/internal/protocol"
 )
 
 // fakeDramaModels uses a persisted capability contract; only upstream execution is replaced.
@@ -58,6 +59,9 @@ func (f *fakeDramaBackend) submit(userID string, req CreateTaskRequest, timeline
 			system, _ = config["systemPrompt"].(string)
 		}
 		switch {
+		case strings.Contains(system, "尚未写清外貌的新角色"):
+			f.byKind["cast_extract"]++
+			result = map[string]any{"mode": "text", "text": `{"characters":[],"props":[],"scenes":[]}`}
 		case strings.Contains(system, "作品圣经"):
 			f.byKind["bible"]++
 			result = map[string]any{"mode": "text", "text": `{"logline":"退婚少年逆袭","visualRules":"冷色调","characters":[{"name":"萧炎","aliases":["炎儿"],"appearance":"黑发少年"},{"name":"纳兰嫣然","appearance":"白衣少女"}],"props":[{"name":"退婚书","appearance":"烫金红纸卷轴"}],"scenes":[{"name":"萧家大厅","appearance":"古朴大厅"}]}`}
@@ -549,5 +553,134 @@ func TestDramaVideoOptionsReportRatiosAndAudio(t *testing.T) {
 	vertical.VideoContinuity = DramaContinuityParallel
 	if picked, ok := preferredDramaOption([]DramaModelOption{wide, parallelOnly}, vertical); !ok || picked.Choice.ChannelID != "vertical" {
 		t.Fatalf("a parallel vertical work must pick the vertical model: %+v %v", picked, ok)
+	}
+}
+
+func TestComposeDramaEpisodeRequeuesFinalRender(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	project := createTestDrama(t, svc, DramaReviewAuto).Project.ID
+	runDramaTicks(t, svc, project, 40)
+	summary, err := svc.DramaSummary("usr-drama", project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	episodeID := summary.Episodes[0].ID
+	if summary.Episodes[0].Stage != model.DramaEpisodeDone || summary.Episodes[0].FinalResourceID == "" || summary.Episodes[0].FinalStale {
+		t.Fatalf("sample must finish first: %+v", summary.Episodes[0])
+	}
+	rendersBefore := fake.byKind["render"]
+
+	if _, err := svc.ComposeDramaEpisode("someone", project, episodeID); err == nil {
+		t.Fatal("ownership")
+	}
+	detail, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Episode.Stage != model.DramaEpisodeRender || !detail.Episode.FinalStale || detail.Episode.FinalResourceID == "" {
+		t.Fatalf("compose must mark final stale and enter render: %+v", detail.Episode)
+	}
+
+	// 合成中再次点击：幂等，不报错。
+	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err != nil {
+		t.Fatal(err)
+	}
+
+	runDramaTicks(t, svc, project, 12)
+	detail, err = svc.DramaEpisodeDetail("usr-drama", project, episodeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Episode.Stage != model.DramaEpisodeDone || detail.Episode.FinalStale || detail.Episode.FinalResourceID == "" {
+		t.Fatalf("compose must finish a new final: %+v", detail.Episode)
+	}
+	if fake.byKind["render"] <= rendersBefore {
+		t.Fatalf("expected a new render job, before=%d after=%d", rendersBefore, fake.byKind["render"])
+	}
+
+	// 段视频未就绪时拒绝。
+	rows, _ := svc.repo.DramaSegments(episodeID)
+	if _, err := svc.repo.UpdateDramaSegmentRevision(rows[0].ID, rows[0].Revision, map[string]any{"video_status": model.DramaMediaStale}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err == nil || !strings.Contains(err.Error(), "就绪") {
+		t.Fatalf("must reject incomplete segments: %v", err)
+	}
+}
+
+func TestDramaPausedKeepsRecoverableCastImageJob(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	svc.dataDir = t.TempDir()
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaAuto, Concurrency: 16, Models: fakeDramaModels, EpisodeMode: DramaEpisodeModeChapter, ChaptersPerEpisode: 1}
+	settings.EpisodeSeconds = 60
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "暂停仍下载", Start: true, Settings: settings, Chapters: []DramaChapterInput{{Title: "第一章", Text: "萧炎……"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := summary.Project.ID
+	runDramaTicks(t, svc, project, 12)
+	casts, err := svc.repo.DramaCasts(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var castID string
+	for _, cast := range casts {
+		if cast.Kind == "prop" || (cast.Kind == "character" && cast.ParentID == "") {
+			castID = cast.ID
+			break
+		}
+	}
+	if castID == "" {
+		t.Fatal("no cast")
+	}
+	checkpoint := mediaCheckpoint{Mode: "image", Items: []mediaCheckpointItem{{Reference: protocol.MediaReference{URL: "https://example.invalid/a.png"}}}, StartedAt: time.Now()}
+	encoded, err := json.Marshal(checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret, err := svc.encryptSettingSecret(string(encoded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: newID(), UserID: "usr-drama", ProjectID: project, Type: "canvas_image", Status: model.TaskStatusFailed, Error: "作品已生成，但保存未完成：下载结果失败", MediaRecoveryJSON: secret, MediaStage: "download", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := fake.db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	job := model.DramaJob{ID: newID(), ProjectID: project, Kind: model.DramaJobCastImage, CastID: castID, TaskID: task.ID, Status: model.DramaJobRunning, Label: "参考图：测试", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := fake.db.Create(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.repo.UpdateDramaProduction(project, map[string]any{"status": model.DramaStatusPaused}); err != nil {
+		t.Fatal(err)
+	}
+	productions, err := svc.repo.RunningDramaProductions(20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range productions {
+		if item.ProjectID == project {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("paused production with running cast-image job must still be scheduled")
+	}
+	if err := svc.tickDrama(&model.DramaProduction{ProjectID: project}); err != nil {
+		t.Fatal(err)
+	}
+	var saved model.DramaJob
+	if err := fake.db.First(&saved, "id = ?", job.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if saved.Status != model.DramaJobRunning {
+		t.Fatalf("recoverable download failure must keep drama job running while paused, got %s err=%q", saved.Status, saved.Error)
+	}
+	var savedTask model.Task
+	if err := fake.db.First(&savedTask, "id = ?", task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if savedTask.Status != model.TaskStatusQueued {
+		t.Fatalf("paused sync must requeue media recovery, got %s", savedTask.Status)
 	}
 }

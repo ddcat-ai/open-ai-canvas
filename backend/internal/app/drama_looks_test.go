@@ -288,21 +288,17 @@ func TestDramaCastLookLifecycle(t *testing.T) {
 	if look.ParentID != hero.ID || look.LookName != "内门弟子" || look.LookFromChapter != 2 || look.LookToChapter != 5 {
 		t.Fatalf("look not stored right: %+v", look)
 	}
-	// 造型以角色本体参考图为底图生成（image_to_image），保持同一张脸。
-	if _, err := svc.ReleaseDramaMedia("usr-drama", project, ReleaseDramaMediaRequest{Target: "assets"}); err != nil {
-		t.Fatal(err)
-	}
-	runDramaTicks(t, svc, project, 8)
-	saved, err := svc.repo.DramaCast(project, look.ID)
-	if err != nil || saved.ImageStatus != model.DramaMediaDraft || saved.ImageResourceID != "" {
-		t.Fatalf("release assets must not generate an unconfirmed look: %+v %v", saved, err)
-	}
+	// 「生成全部参考图」也应把草稿造型排进队列；以角色本体参考图为底图生成，保持同一张脸。
 	prompt := "青色丝绸长袍，银色发簪，柔和侧光"
 	if _, err := svc.UpdateDramaCastLook("usr-drama", project, look.ID, DramaCastLookRequest{ImagePrompt: &prompt}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.RegenerateDramaCast("usr-drama", project, look.ID, false); err != nil {
+	if _, err := svc.ReleaseDramaMedia("usr-drama", project, ReleaseDramaMediaRequest{Target: "assets"}); err != nil {
 		t.Fatal(err)
+	}
+	queued, err := svc.repo.DramaCast(project, look.ID)
+	if err != nil || queued.ImageStatus != model.DramaMediaQueued {
+		t.Fatalf("release assets must queue draft looks: %+v %v", queued, err)
 	}
 	runDramaTicks(t, svc, project, 8)
 	imageOps := map[string]int{}
@@ -386,5 +382,38 @@ func TestDramaCastLookLifecycle(t *testing.T) {
 	detail, err := svc.DramaEpisodeDetail("usr-drama", project, episodeID)
 	if err != nil || len(detail.Segments[0].Request.References) != 1 || detail.Segments[0].Request.References[0].CastID != hero.ID {
 		t.Fatalf("deleting a look must restore its base character reference: %+v %v", detail, err)
+	}
+}
+
+func TestDramaShotCastIDsIncludeLooks(t *testing.T) {
+	shot := model.DramaShot{
+		CastIDsJSON:     `["char-1"]`,
+		LookCastIDsJSON: `["look-1"]`,
+		PropIDsJSON:     `["prop-1"]`,
+		SceneCastID:     "scene-1",
+	}
+	ids := dramaShotCastIDs(shot)
+	for _, want := range []string{"char-1", "look-1", "prop-1", "scene-1"} {
+		if !containsString(ids, want) {
+			t.Fatalf("dramaShotCastIDs missing %s: %v", want, ids)
+		}
+	}
+}
+
+func TestDramaReferencesInProgressWaitsForDraftLooks(t *testing.T) {
+	look := model.DramaCast{ID: "look-1", Name: "萧炎", LookName: "内门弟子", ParentID: "char-1", Appearance: "青色劲装", ImageStatus: model.DramaMediaDraft}
+	shots := []model.DramaShot{{SegmentIndex: 0, LookCastIDsJSON: `["look-1"]`, CastIDsJSON: `["char-1"]`}}
+	lookup := func(id string) (model.DramaCast, bool) {
+		if id == look.ID {
+			return look, true
+		}
+		return model.DramaCast{}, false
+	}
+	names := dramaReferencesInProgress(0, shots, lookup, true)
+	if len(names) != 1 || names[0] != "萧炎·内门弟子" {
+		t.Fatalf("expected draft look wait name, got %v", names)
+	}
+	if names := dramaReferencesInProgress(0, shots, lookup, false); len(names) != 0 {
+		t.Fatalf("unrequested draft should not block when not queued: %v", names)
 	}
 }

@@ -28,11 +28,19 @@ func (r *Repository) DramaProduction(projectID string) (*model.DramaProduction, 
 }
 
 // RunningDramaProductions 返回需要调度循环推进的项目：运行中的项目，以及暂停或已完成但仍有已派发任务的项目。
-// 后者只回收任务结果（已付费的视频、尾帧），不再派发新工作。
+// 后者只回收任务结果（已付费的视频、尾帧、参考图下载），不再派发新工作。
+// 含“上游已成功、本地保存失败且仍有恢复检查点”的失败作业，避免暂停后项目掉出调度、已出图无法落库。
 func (r *Repository) RunningDramaProductions(limit int) ([]model.DramaProduction, error) {
 	var productions []model.DramaProduction
 	pending := r.db.Model(&model.DramaJob{}).Select("project_id").Where("status = ?", model.DramaJobRunning)
-	err := r.db.Where("status = ? OR project_id IN (?)", model.DramaStatusRunning, pending).Order("updated_at asc").Limit(limit).Find(&productions).Error
+	recoverable := r.db.Model(&model.DramaJob{}).Select("project_id").Where(
+		"status = ? AND updated_at > ? AND task_id IN (?)",
+		model.DramaJobFailed,
+		time.Now().Add(-24*time.Hour),
+		r.db.Model(&model.Task{}).Select("id").Where("status = ? AND media_recovery_json <> '' AND media_recovery_json IS NOT NULL", model.TaskStatusFailed),
+	)
+	err := r.db.Where("status = ? OR project_id IN (?) OR project_id IN (?)", model.DramaStatusRunning, pending, recoverable).
+		Order("updated_at asc").Limit(limit).Find(&productions).Error
 	return productions, err
 }
 
@@ -585,6 +593,15 @@ func (r *Repository) CreateDramaTake(take *model.DramaTake) error {
 		take.Version = current + 1
 		return tx.Create(take).Error
 	})
+}
+
+// DramaTake 按作品读取一条产物版本；找不到时返回 gorm.ErrRecordNotFound。
+func (r *Repository) DramaTake(projectID, id string) (*model.DramaTake, error) {
+	var take model.DramaTake
+	if err := r.db.First(&take, "id = ? AND project_id = ?", id, projectID).Error; err != nil {
+		return nil, err
+	}
+	return &take, nil
 }
 
 func (r *Repository) DramaJobsByStatus(projectID string, statuses ...string) ([]model.DramaJob, error) {
@@ -1168,9 +1185,21 @@ func (r *Repository) DramaSegmentStats(projectID string) (map[string]DramaSegmen
 // FailedDramaSegments 返回提示词或视频失败的剧情段，供待处理与一键重试使用。
 func (r *Repository) FailedDramaSegments(projectID string, limit int) ([]model.DramaSegment, error) {
 	var segments []model.DramaSegment
-	err := r.db.Where("project_id = ? AND (prompt_status = ? OR video_status = ?)", projectID, model.DramaMediaFailed, model.DramaMediaFailed).
-		Order("updated_at desc").Limit(limit).Find(&segments).Error
+	query := r.db.Where("project_id = ? AND (prompt_status = ? OR video_status = ?)", projectID, model.DramaMediaFailed, model.DramaMediaFailed).
+		Order("updated_at desc")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	err := query.Find(&segments).Error
 	return segments, err
+}
+
+func (r *Repository) CountFailedDramaSegments(projectID string) (int, error) {
+	var total int64
+	err := r.db.Model(&model.DramaSegment{}).
+		Where("project_id = ? AND (prompt_status = ? OR video_status = ?)", projectID, model.DramaMediaFailed, model.DramaMediaFailed).
+		Count(&total).Error
+	return int(total), err
 }
 
 func (r *Repository) UpdateDramaSegmentFields(id string, fields map[string]any) error {
@@ -1195,6 +1224,7 @@ func (r *Repository) SetDramaSegmentTail(id string, revision int64, videoResourc
 
 // markLaterSegmentsStale returns whether later segments depend on the edited
 // segment. Independent videos keep their revisions and in-flight result slots.
+// 并行出片各段互不依赖，跳过级联，避免重做一段误标后续段「视频需重新生成」。
 func markLaterSegmentsStale(tx *gorm.DB, episodeID string, index int) (bool, error) {
 	var production model.DramaProduction
 	if err := tx.Select("drama_productions.settings_json").

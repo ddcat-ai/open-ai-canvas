@@ -9,6 +9,7 @@ import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { WorkspaceErrorState, WorkspaceLoadingState } from "@/components/layout/workspace-state";
 import {
     approveDramaEpisode,
+    composeDramaEpisode,
     deleteDramaShot,
     generateDramaSegments,
     insertDramaShot,
@@ -25,6 +26,7 @@ import {
     writeDramaSegmentPrompts,
     updateDramaShot,
     type DramaEpisodeRow,
+    formatDramaInboxCount,
     type DramaInboxItem,
     type DramaJob,
     type DramaModelChoice,
@@ -230,6 +232,17 @@ export default function DramaStudioPage() {
             errorMessage(error, "操作失败");
         },
     });
+    const composeFinal = useMutation({
+        mutationFn: () => composeDramaEpisode(projectId, episodeId),
+        onSuccess: () => {
+            invalidate(episodeId);
+            message.success(running ? "已开始合成成品" : "已继续制作，正在合成成品");
+        },
+        onError: (error) => {
+            invalidate(episodeId);
+            errorMessage(error, "合成失败");
+        },
+    });
     const retry = useMutation({
         mutationFn: () => retryFailedDrama(projectId),
         onSuccess: (result) => {
@@ -398,7 +411,7 @@ export default function DramaStudioPage() {
                         </button>
                         <button type="button" className="drama-nav-item" aria-current={view === "inbox" ? "page" : undefined} onClick={() => openView("inbox")}>
                             <Inbox className="size-4" />
-                            待处理{summary.inbox.length ? <span className="drama-nav-count is-alert">{summary.inbox.length > 99 ? "99+" : summary.inbox.length}</span> : null}
+                            待处理{(summary.inboxCount ?? summary.inbox.length) ? <span className="drama-nav-count is-alert">{formatDramaInboxCount(summary.inboxCount ?? summary.inbox.length)}</span> : null}
                         </button>
                         <button type="button" className="drama-nav-item" aria-current={view === "settings" ? "page" : undefined} onClick={() => openView("settings")}>
                             <Settings2 className="size-4" />
@@ -463,6 +476,7 @@ export default function DramaStudioPage() {
                 ) : view === "inbox" ? (
                     <InboxPanel
                         items={summary.inbox}
+                        failureCount={summary.inboxFailureCount ?? summary.inbox.filter((item) => item.severity === "error").length}
                         castById={castById}
                         retrying={retry.isPending}
                         retryingGroup={retryingGroup}
@@ -685,7 +699,15 @@ export default function DramaStudioPage() {
                                         empty={episodeEmpty}
                                     />
                                 ) : (
-                                    <FinalView projectId={projectId} title={summary.project.name} detail={detail} aspectRatio={aspectRatio} onOpenSegment={(index) => setParams({ tab: null, segment: String(index), shot: null })} />
+                                    <FinalView
+                                        projectId={projectId}
+                                        title={summary.project.name}
+                                        detail={detail}
+                                        aspectRatio={aspectRatio}
+                                        onOpenSegment={(index) => setParams({ tab: null, segment: String(index), shot: null })}
+                                        onCompose={() => composeFinal.mutate()}
+                                        composing={composeFinal.isPending}
+                                    />
                                 )}
                             </div>
                         </main>

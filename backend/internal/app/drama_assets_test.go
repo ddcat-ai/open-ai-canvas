@@ -138,7 +138,7 @@ func TestDramaAssetPromptsEnforceRatio(t *testing.T) {
 		if !strings.Contains(req.Prompt, "最终输出画幅必须为 16:9，横版，宽度大于高度") {
 			t.Fatalf("asset ratio missing from submission: %s", req.Prompt)
 		}
-		for kind, marker := range map[string]string{"character": "角色定妆照", "prop": "道具设定图", "scene": "场景概念设定图"} {
+		for kind, marker := range map[string]string{"character": "角色四格资产参考图", "prop": "道具设定图", "scene": "场景概念设定图"} {
 			if strings.Contains(req.Prompt, marker) {
 				seen[kind] = true
 			}

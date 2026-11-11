@@ -43,7 +43,7 @@ func dramaSegmentVideoDone(segment model.DramaSegment) bool {
 }
 
 // dramaVideoWaitReason 说明第 index 段视频为何还不能提交；空串表示调度会提交它。调度与详情页共用。
-func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *model.DramaEpisode, segments []model.DramaSegment, index int, shots []model.DramaShot, lookup func(string) (model.DramaCast, bool)) string {
+func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *model.DramaEpisode, segments []model.DramaSegment, index int, shots []model.DramaShot, lookup func(string) (model.DramaCast, bool), extractPending bool) string {
 	if wait := dramaProductionWait(p); wait != "" {
 		return wait
 	}
@@ -61,7 +61,11 @@ func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *m
 	if !dramaPromptReady(segments[index]) {
 		return "等待本段视频提示词撰写完成"
 	}
-	// 未生成的参考图在自动生图或已放行时会被调度排队，同样要等。
+	if extractPending {
+		return "等待补全后出现角色、道具或场景的外貌"
+	}
+	// 未生成的参考图在自动生图或已放行、且已有外貌依据时会被调度排队，同样要等。
+	// 没有外貌的后出现设定不会自动生图，不能一直卡住出片。
 	requested := settings.MediaMode != DramaMediaManual || p.AssetsReleased
 	if names := dramaReferencesInProgress(segments[index].SegmentIndex, shots, lookup, requested); len(names) > 0 {
 		return "等待参考图生成：" + strings.Join(names, "、")
@@ -71,6 +75,7 @@ func dramaVideoWaitReason(settings DramaSettings, p *model.DramaProduction, e *m
 
 // dramaReferencesInProgress 返回本段引用、仍在生成的参考图名称。等它们能提升角色一致性；
 // 失败、锁定或从未请求的参考图不再等待，提交时改用文字设定（见 prepareDramaSegment）。
+// 造型行与本体一样参与等待；草稿/空状态在已放行自动排队时也算“进行中”，避免出片只带文字外观。
 func dramaReferencesInProgress(segmentIndex int, shots []model.DramaShot, lookup func(string) (model.DramaCast, bool), unrequestedQueued bool) []string {
 	names := []string{}
 	seen := map[string]bool{}
@@ -84,9 +89,17 @@ func dramaReferencesInProgress(segmentIndex int, shots []model.DramaShot, lookup
 				continue
 			}
 			seen[id] = true
-			if cast.ImageStatus == model.DramaMediaQueued || cast.ImageStatus == model.DramaMediaRunning || (cast.ImageStatus == "" && unrequestedQueued) {
-				names = append(names, cast.Name)
+			hasBrief := dramaCastHasImageBrief(cast)
+			pending := hasBrief && (cast.ImageStatus == model.DramaMediaQueued || cast.ImageStatus == model.DramaMediaRunning ||
+				((cast.ImageStatus == "" || cast.ImageStatus == model.DramaMediaDraft) && unrequestedQueued))
+			if !pending {
+				continue
 			}
+			name := cast.Name
+			if cast.ParentID != "" && strings.TrimSpace(cast.LookName) != "" {
+				name = cast.Name + "·" + cast.LookName
+			}
+			names = append(names, name)
 		}
 	}
 	return names
@@ -487,6 +500,15 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return err
 	}
+	// 入库秒数与成片拼接优先跟资源实测时长对齐（与画布采用路径一致）；探测不到时回退请求秒数。
+	durationMs := int64(payload.Seconds) * 1000
+	seconds := payload.Seconds
+	if resource, resErr := r.s.repo.ResourceForUser(r.project.UserID, resourceID); resErr == nil && resource != nil && resource.DurationMs > 0 {
+		durationMs = resource.DurationMs
+		if calibrated := int((resource.DurationMs + 999) / 1000); calibrated > 0 {
+			seconds = calibrated
+		}
+	}
 	segment, err := r.s.repo.DramaSegment(r.project.ID, job.ShotID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -494,7 +516,7 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 	current := err == nil && segment.Revision == payload.Revision
 	// 抽尾帧在后台进行，本函数每轮都会重入：段视频已是这条结果时说明版本记录与入库已经做过。
 	if !current || segment.VideoResourceID != resourceID {
-		if err := r.s.repo.CreateDramaTake(&model.DramaTake{ID: newID(), ProjectID: r.project.ID, OwnerID: job.ShotID, Kind: "video", ResourceID: resourceID, TaskID: task.ID, Prompt: task.Prompt, DurationMs: int64(payload.Seconds) * 1000, CreatedAt: time.Now()}); err != nil {
+		if err := r.s.repo.CreateDramaTake(&model.DramaTake{ID: newID(), ProjectID: r.project.ID, OwnerID: job.ShotID, Kind: "video", ResourceID: resourceID, TaskID: task.ID, Prompt: task.Prompt, DurationMs: durationMs, CreatedAt: time.Now()}); err != nil {
 			return err
 		}
 	}
@@ -504,7 +526,7 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 	if segment.VideoResourceID != resourceID {
 		// Persist the paid output before local post-processing. Retrying only reopens this task's result.
 		// 换成新视频时清掉旧尾帧，旧尾帧不能当作新视频的最后一帧。
-		if _, err := r.s.repo.UpdateDramaSegmentRevision(segment.ID, payload.Revision, map[string]any{"video_resource_id": resourceID, "video_seconds": payload.Seconds, "tail_frame_resource_id": ""}); err != nil {
+		if _, err := r.s.repo.UpdateDramaSegmentRevision(segment.ID, payload.Revision, map[string]any{"video_resource_id": resourceID, "video_seconds": seconds, "tail_frame_resource_id": ""}); err != nil {
 			return err
 		}
 		segment.VideoResourceID, segment.TailFrameResourceID = resourceID, ""

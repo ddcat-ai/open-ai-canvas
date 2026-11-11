@@ -20,7 +20,7 @@ const (
 	dramaMaxChapters      = 3000
 	dramaMaxChapterRunes  = 60000
 	dramaMaxNovelRunes    = 6_000_000
-	dramaInboxShotLimit   = 60
+	dramaInboxItemLimit   = 99
 	dramaEpisodeJobsLimit = 40
 )
 
@@ -497,9 +497,17 @@ func (s *Service) DramaSummary(userID string, projectID string) (DramaSummary, e
 		// Title 只放名称，前端按原因把同类失败折叠成一组，不再逐条重复“参考图生成失败”。
 		summary.Inbox = append(summary.Inbox, DramaInboxItem{ID: "cast:" + cast.ID, Kind: "cast_failed", Severity: "error", Title: cast.Name, Detail: firstNonEmpty(truncateRunes(castErrors[cast.ID], 240), "参考图生成失败"), CastID: cast.ID, CastKind: cast.Kind})
 	}
-	failedSegments, err := s.repo.FailedDramaSegments(project.ID, dramaInboxShotLimit)
+	failedSegmentTotal, err := s.repo.CountFailedDramaSegments(project.ID)
 	if err != nil {
 		return DramaSummary{}, err
+	}
+	listLimit := dramaInboxSegmentListLimit(len(summary.Inbox), dramaInboxItemLimit)
+	var failedSegments []model.DramaSegment
+	if listLimit > 0 {
+		failedSegments, err = s.repo.FailedDramaSegments(project.ID, listLimit)
+		if err != nil {
+			return DramaSummary{}, err
+		}
 	}
 	numberByEpisode := map[string]int{}
 	for _, episode := range episodes {
@@ -514,6 +522,12 @@ func (s *Service) DramaSummary(userID string, projectID string) (DramaSummary, e
 		}
 		summary.Inbox = append(summary.Inbox, DramaInboxItem{ID: "segment:" + segment.ID, Kind: "segment_failed", Severity: "error", Title: fmt.Sprintf("第 %d 集 · 第 %d 段", numberByEpisode[segment.EpisodeID], segment.SegmentIndex+1), Detail: reason, EpisodeID: segment.EpisodeID, EpisodeNumber: numberByEpisode[segment.EpisodeID], SegmentIndex: segment.SegmentIndex, Media: media})
 	}
+	failures := 0
+	for _, item := range summary.Inbox {
+		if item.Severity == "error" && item.Kind != "segment_failed" {
+			failures++
+		}
+	}
 	if settings.ReviewMode == DramaReviewSample && !productionRow.SampleApproved {
 		for _, episode := range episodes {
 			if episode.Number == 1 && episode.Stage == model.DramaEpisodeDone && !episode.FinalStale {
@@ -521,6 +535,8 @@ func (s *Service) DramaSummary(userID string, projectID string) (DramaSummary, e
 			}
 		}
 	}
+	summary.InboxFailureCount = failures + failedSegmentTotal
+	summary.InboxCount = len(summary.Inbox) - len(failedSegments) + failedSegmentTotal
 
 	return summary, nil
 }
@@ -923,7 +939,7 @@ func (s *Service) fillDramaSegmentViews(projectID string, p *model.DramaProducti
 			view.VideoWait = job.Wait
 			continue
 		}
-		view.VideoWait = firstNonEmpty(dramaVideoWaitReason(settings, p, &detail.Episode, rows, i, detail.Shots, lookup), "排队中，等待调度提交")
+		view.VideoWait = firstNonEmpty(dramaVideoWaitReason(settings, p, &detail.Episode, rows, i, detail.Shots, lookup, dramaJobListExtractPending(detail.Jobs, detail.Episode.ID)), "排队中，等待调度提交")
 	}
 	return nil
 }
@@ -1208,11 +1224,21 @@ func (s *Service) dramaSegmentReferenceIDs(projectID string, ids []string) ([]st
 	return result, nil
 }
 
-// dramaShotCastIDs 返回镜头引用的全部设定：出场角色、关键道具与场景。
+// dramaShotCastIDs 返回镜头引用的全部设定：出场角色、关键道具、场景与造型行。
+// 出视频时造型会替换本体参考图；放行/等待参考图时也必须包含造型，否则只带文字外观。
 func dramaShotCastIDs(shot model.DramaShot) []string {
 	ids := append(decodeStringList(shot.CastIDsJSON), decodeStringList(shot.PropIDsJSON)...)
+	ids = append(ids, decodeStringList(shot.LookCastIDsJSON)...)
 	if shot.SceneCastID != "" {
 		ids = append(ids, shot.SceneCastID)
 	}
 	return ids
+}
+
+// dramaInboxSegmentListLimit 在已有待处理条目之外，最多再列出多少条失败剧情段，使列表总数不超过 limit。
+func dramaInboxSegmentListLimit(existing, limit int) int {
+	if limit <= 0 || existing >= limit {
+		return 0
+	}
+	return limit - existing
 }

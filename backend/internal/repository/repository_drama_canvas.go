@@ -42,6 +42,27 @@ func (r *Repository) TaskProjectIDs(userID string, ids []string) (map[string]str
 	return result, nil
 }
 
+// TaskModels 返回用户任务的模型标识（上游 model key），供版本记录展示；找不到的任务不在结果里。
+func (r *Repository) TaskModels(userID string, ids []string) (map[string]string, error) {
+	result := make(map[string]string, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var rows []struct {
+		ID    string
+		Model string
+	}
+	if err := r.db.Model(&model.Task{}).Select("id", "model").Where("user_id = ? AND id IN ?", userID, ids).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.Model != "" {
+			result[row.ID] = row.Model
+		}
+	}
+	return result, nil
+}
+
 // RunningTaskStages 返回用户在途任务里、已被上游接收的任务的进度文案（如“候车 · 前面 3 条”），
 // 只用于调度视图展示；没有上游任务 ID 的任务不返回。
 func (r *Repository) RunningTaskStages(userID string, ids []string) (map[string]string, error) {
