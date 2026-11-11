@@ -25,7 +25,7 @@ const (
 	dramaTickInterval      = 3 * time.Second
 	dramaLeaseTTL          = 2 * time.Minute
 	dramaProjectsPerTick   = 20
-	dramaEpisodeWindow     = 6
+	dramaEpisodeWindow     = 12
 	dramaPlanBatchRunes    = 30000
 	dramaPlanBatchChapters = 12
 	dramaBibleSampleRunes  = 40000
