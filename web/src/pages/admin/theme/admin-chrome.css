@@ -32,7 +32,8 @@
 }
 
 [data-admin-root] .admin-sidebar-identity {
-    display: flex;
+    /* 暂时隐藏品牌和版本区，让侧栏导航从顶部开始。 */
+    display: none;
     min-height: 54px;
     align-items: center;
     padding: 8px 8px 0;
