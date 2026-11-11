@@ -33,14 +33,14 @@ let cacheGeneration = 0;
 const MAX_CACHE_BYTES = 2 * 1024 * 1024 * 1024;
 const FALLBACK_CACHE_BYTES = 512 * 1024 * 1024;
 const MIN_CACHE_BYTES = 64 * 1024 * 1024;
-const MAX_CACHE_ENTRIES = 500;
+const MAX_CACHE_ENTRIES = 1500;
 // 只限制可丢弃的内存加速层；正在解码/播放的调用方持有自己的 Blob 或 URL 租约。
 const MAX_SESSION_BYTES = 64 * 1024 * 1024;
 const MAX_SESSION_ENTRIES = 128;
 const MAX_PENDING_PERSIST_BYTES = 64 * 1024 * 1024;
 const TOUCH_INTERVAL_MS = 10 * 60 * 1000;
 const BUDGET_REFRESH_MS = 5 * 60 * 1000;
-const MAX_CONCURRENT_DOWNLOADS = 16;
+const MAX_CONCURRENT_DOWNLOADS = 6;
 
 /** Account/logout transitions invalidate pending readers as well as current leases. */
 export function clearResourceBlobCache() {
