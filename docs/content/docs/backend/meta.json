@@ -6,6 +6,7 @@
     "local-development",
     "canvas-agent-appearance",
     "http-api",
+    "external-model-api",
     "code-map",
     "backend-database",
     "channel-configuration",

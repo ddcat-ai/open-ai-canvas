@@ -1,5 +1,5 @@
 import { App, Button } from "antd";
-import { ArrowLeft, Boxes, Bug, Cloud, Inbox, MessageSquareText, RadioTower, ShieldCheck, SlidersHorizontal, UserRound, Workflow, BookMarked } from "lucide-react";
+import { ArrowLeft, Boxes, Bug, Cloud, Inbox, MessageSquareText, RadioTower, ShieldCheck, SlidersHorizontal, UserRound, Workflow, BookMarked, KeyRound } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -19,13 +19,14 @@ const RunningHubSettingsPane = lazy(() => import("./runninghub-settings-pane").t
 import { RUNNINGHUB_PLUGIN_ID } from "@/lib/plugins/builtin/workflows";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { ProfilePane } from "./profile-pane";
+import { APIKeysPane } from "./api-keys-pane";
 import { FeedbackInboxPane } from "./feedback-inbox-pane";
 import { ArkAssetsPane } from "./ark-assets-pane";
 import { PreferencesPane } from "./preferences-pane";
 import { arkPortraitOverviewQueryKey, getArkPortraitOverview } from "@/services/api/ark-portraits";
 import "./settings-page.css";
 
-type ConfigSectionKey = "profile" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "ark-assets" | "diagnostics" | "feedbacks";
+type ConfigSectionKey = "profile" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "ark-assets" | "diagnostics" | "feedbacks" | "api-keys";
 type ConfigSectionGroup = "general" | "creation" | "integrations" | "support";
 
 const configSectionGroups: ConfigSectionGroup[] = ["general", "creation", "integrations", "support"];
@@ -34,8 +35,9 @@ const configSectionGroups: ConfigSectionGroup[] = ["general", "creation", "integ
  * 分类按用途分组：账户与通用 → 创作 → 渠道与存储 → 帮助与反馈。
  * 分组名在 settings.groups.<group>，分类名称与说明在 settings.sections.<key>。
  */
-const configSections: Array<{ key: ConfigSectionKey; group: ConfigSectionGroup; icon: ReactNode }> = [
+const configSections: Array<{ key: ConfigSectionKey; group: ConfigSectionGroup; icon: ReactNode; label?: string; description?: string }> = [
     { key: "profile", group: "general", icon: <UserRound className="size-4" /> },
+    { key: "api-keys", group: "general", icon: <KeyRound className="size-4" />, label: "API 访问", description: "密钥管理与接入说明" },
     { key: "preferences", group: "general", icon: <SlidersHorizontal className="size-4" /> },
     { key: "models", group: "creation", icon: <Boxes className="size-4" /> },
     { key: "prompts", group: "creation", icon: <MessageSquareText className="size-4" /> },
@@ -134,6 +136,11 @@ export default function SettingsPage() {
         profile: (
             <SettingsPane>
                 <ProfilePane key={userId} />
+            </SettingsPane>
+        ),
+        "api-keys": (
+            <SettingsPane>
+                <APIKeysPane key={userId} />
             </SettingsPane>
         ),
         channels: (
@@ -245,8 +252,8 @@ export default function SettingsPage() {
                                             >
                                                 <span className={`shrink-0 md:mt-0.5 ${selected ? "text-[var(--workspace-accent)]" : ""}`}>{item.icon}</span>
                                                 <span className="min-w-0">
-                                                    <span className="block whitespace-nowrap text-sm font-medium">{t(`settings.sections.${item.key}.label`)}</span>
-                                                    <span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{t(`settings.sections.${item.key}.description`)}</span>
+                                                    <span className="block whitespace-nowrap text-sm font-medium">{item.label ?? t(`settings.sections.${item.key}.label`)}</span>
+                                                    <span className="mt-1 hidden text-[var(--fs-label)] leading-4 text-current opacity-65 md:block">{item.description ?? t(`settings.sections.${item.key}.description`)}</span>
                                                 </span>
                                             </button>
                                         );

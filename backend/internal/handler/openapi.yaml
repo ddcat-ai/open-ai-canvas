@@ -38,6 +38,115 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /api-keys:
+    post:
+      tags: [auth]
+      summary: 签发账号模型 API Key（仅本次返回明文，最大 8 KiB）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 80}
+                expiresAt: {type: string, format: date-time, nullable: true}
+      responses:
+        "201": {description: "信封 data 含 id/name/prefix/expiresAt/revokedAt/createdAt 和一次性 key"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+    get:
+      tags: [auth]
+      summary: 列出当前登录账号的 Key 元数据，不返回明文或散列
+      responses:
+        "200": {description: "信封 data.keys 为 Key 元数据数组"}
+        "401": {$ref: "#/components/responses/Error"}
+  /api-keys/{id}:
+    delete:
+      tags: [auth]
+      summary: 吊销自己的 Key，幂等；不取消已提交任务
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: "信封 data.revoked 为 true"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /model-calls/models:
+    get:
+      tags: [models]
+      summary: Key 所属账号可用的模型目录
+      description: 返回规范化能力配置中外部调用支持的参数规格。站内文档可使用登录 Cookie；提供 Authorization 时仅验证 Bearer Key，不回退 Cookie。
+      security: [{modelAPIKey: []}, {sessionCookie: []}]
+      responses:
+        "200":
+          description: 账号可用模型；limitation 非空表示当前外部 API 无法调用
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: integer, enum: [0]}
+                  msg: {type: string}
+                  data:
+                    type: object
+                    properties:
+                      models:
+                        type: array
+                        items: {$ref: "#/components/schemas/ExternalModel"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /model-calls:
+    post:
+      tags: [models]
+      summary: 用 Bearer Key 创建异步模型调用
+      description: 最多 1 MiB，复用账号目录、额度、计费和 Worker。只支持纯文本消息，不接受渠道凭证、地址或工具调用。
+      security: [{modelAPIKey: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ExternalModelCallRequest"}
+      responses:
+        "202":
+          description: "信封 data 含 id/model/capability/status；状态 pending/processing/succeeded/failed/cancelled"
+          headers:
+            Location: {description: 调用查询路径, schema: {type: string}}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "413": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        "503": {$ref: "#/components/responses/Error"}
+  /model-calls/{id}:
+    get:
+      tags: [models]
+      summary: 查询当前账号的模型生成任务
+      security: [{modelAPIKey: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: "信封 data 含 id/model/capability/status；成功含 result（text/reasoning/images/videos/audios），失败含脱敏 reason"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /model-calls/{id}/media/{resourceId}:
+    get:
+      tags: [models]
+      summary: 获取当前账号模型生成任务的媒体产物
+      security: [{modelAPIKey: []}]
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: path, name: resourceId, required: true, schema: {type: string}}
+        - {in: header, name: Range, schema: {type: string}}
+      responses:
+        "200": {description: 媒体字节流}
+        "206": {description: 部分媒体字节流}
+        "307": {description: 临时对象存储重定向，客户端不可跨域转发本站 Key}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
   /admin/api-logs/{id}:
     get:
       tags: [admin]
@@ -4059,11 +4168,73 @@ components:
       schema:
         type: string
   securitySchemes:
+    modelAPIKey:
+      type: http
+      scheme: bearer
+      bearerFormat: yc_ secret
+      description: 仅用于模型接口；Key 管理和站内接口继续使用登录 Cookie。
     sessionCookie:
       type: apiKey
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    ExternalModel:
+      type: object
+      required: [id, name, capability, parameters]
+      properties:
+        id: {type: string, description: channelId::modelKey}
+        name: {type: string}
+        description: {type: string}
+        capability: {type: string, enum: [text, image, video, audio]}
+        outputTokenLimit: {type: integer, description: 文本模型配置的输出上限，只读展示}
+        limitation: {type: string, description: 当前外部 API 不支持此模型的原因}
+        parameters:
+          type: object
+          description: parameters 下的字段规格，仅包含外部 API 可接收的字段
+          additionalProperties:
+            type: object
+            required: [type]
+            properties:
+              type: {type: string, enum: [string, integer, number, boolean]}
+              default: {description: 模型声明的默认值；省略表示未声明}
+              enum: {type: array, items: {}}
+              minimum: {type: number}
+              maximum: {type: number}
+              step: {type: number}
+              required: {type: boolean}
+              description: {type: string}
+    ExternalModelCallRequest:
+      type: object
+      additionalProperties: false
+      required: [model]
+      properties:
+        model: {type: string, description: /model-calls/models 返回的 channelId::modelKey}
+        capability: {type: string, enum: [text, image, video, audio], default: text}
+        prompt: {type: string}
+        messages:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [role, content]
+            properties:
+              role: {type: string, enum: [system, user, assistant]}
+              content: {type: string, minLength: 1}
+        parameters:
+          type: object
+          additionalProperties: false
+          properties:
+            thinking: {type: boolean}
+            aspectRatio: {type: string}
+            resolution: {type: string}
+            quality: {type: string}
+            count: {type: integer, minimum: 0, maximum: 100}
+            duration: {type: integer, minimum: 0, maximum: 3600}
+            generateAudio: {type: boolean}
+            watermark: {type: boolean}
+            voice: {type: string}
+            audioFormat: {type: string}
+            audioSpeed: {type: string}
     APICallGenerationContent:
       type: object
       required: [prompt, references, source, incomplete]

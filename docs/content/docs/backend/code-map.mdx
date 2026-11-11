@@ -36,6 +36,15 @@ description: 从产品功能快速定位主要代码入口
 - 图片 / 视频设置适配入口：`web/src/lib/media-settings.ts`，调用方在画布生成、创作表单和工作台；生成请求在 `services/generation-task.ts`。版本预览沿用画布媒体历史及 `CanvasImagePreview` 组件。
 - 用户合同、并发和迁移说明见[渠道、模板与批量配置](/docs/backend/channel-configuration)、[HTTP API](/docs/backend/http-api)及[后端数据库](/docs/backend/backend-database)。
 
+## 对外模型 API 与 API Key
+
+- 站内入口：`web/src/pages/settings/api-keys-pane.tsx`、`services/api/api-keys.ts`；公开说明页 `/api-docs` 在 `web/src/pages/api-docs/`，设置页可跳转。
+
+- 路由：`backend/internal/handler/external_model_api.go`，由 `RegisterCanvasAPI` 注册。
+- 业务：`internal/app/api_keys.go`（签发、鉴权、吊销）、`external_model_api.go`（目录、请求转换、结果投影、产物访问）、`external_model_catalog.go`（从规范化能力配置投影外部参数规格，供文档与示例共用）。
+- 持久化：`internal/model/api_key.go`、`internal/repository/api_keys.go`；迁移 100 仅新增密钥表。
+- 执行复用 `app/task_creation.go` → `task_worker.go` → `task_execution.go` → `provider*.go` / `internal/protocol/`；curl 见[对外模型 API](./external-model-api)。
+
 ## 电商 Agent 与后台知识库
 
 - 页面：`web/src/pages/ecommerce/`；后台：`web/src/pages/admin/ecommerce-agent-config-page.tsx`（上线检查、阶段模型 `ecommerce-stage-models.tsx` 与目录换算 `ecommerce-model-catalog.ts`）；`ecommerce-management-page.tsx`（知识与技能标签页：`ecommerce-knowledge-page.tsx`、`ecommerce-skills-page.tsx`、`ecommerce-categories-page.tsx`，内容头 `ecommerce-library-panel.tsx`）；`knowledge-domain-coverage.ts`。
