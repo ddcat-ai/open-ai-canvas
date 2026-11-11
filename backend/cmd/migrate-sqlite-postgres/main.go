@@ -404,6 +404,7 @@ func migrations() []tableMigration {
 		migrateTable[model.LogicalModelRoute]("logical_model_routes"),
 		migrateTable[model.RouteAttempt]("route_attempts"),
 		migrateTable[model.ApiCallLog]("api_call_logs"),
+		migrateTable[model.SiteTrafficEvent]("site_traffic_events"),
 		migrateTable[model.ModelPricing]("model_pricings"),
 		migrateTable[model.CreditAccount]("credit_accounts"),
 		migrateTable[model.CreditLedgerEntry]("credit_ledger_entries"),

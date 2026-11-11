@@ -32,6 +32,7 @@ import { primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { useSyncProgressStore } from "@/stores/use-sync-progress-store";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { trackSiteTrafficAction } from "@/services/site-traffic";
 
 const CanvasDeleteProjectsDialog = lazy(() => import("@/components/canvas/canvas-delete-projects-dialog").then((module) => ({ default: module.CanvasDeleteProjectsDialog })));
 
@@ -102,6 +103,7 @@ export default function CanvasPage() {
         [forwardedQuery, navigate, preloadProject],
     );
     const createAndEnter = () => {
+        trackSiteTrafficAction("new_canvas");
         const id = useCanvasStore.getState().createDraftProject(`自由画布 ${projects.length + 1}`);
         enterProject(id);
     };
