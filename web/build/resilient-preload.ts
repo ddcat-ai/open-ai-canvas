@@ -10,9 +10,15 @@ export function resilientPreload(): Plugin {
             const entry = "function preload(baseModule, deps, importerUrl) {";
             if (!code.includes(entry)) throw new Error("Vite preload helper changed; update the bounded preload adapter");
             return {
-                code: 'import { warmPreloadResources } from "@/lib/module-preload";\n' + code.replace(entry,
-                    'async function preload(baseModule, deps, importerUrl) {\n' +
-                    'await warmPreloadResources((deps || []).map(dep => new URL(assetsURL(dep, importerUrl), importerUrl || import.meta.url).href));\n'),
+                code:
+                    'import { warmPreloadResources } from "@/lib/module-preload";\n' +
+                    code.replace(
+                        entry,
+                        "async function preload(baseModule, deps, importerUrl) {\n" +
+                            "try {\n" +
+                            "await warmPreloadResources((deps || []).map(dep => new URL(assetsURL(dep, importerUrl), importerUrl || import.meta.url).href));\n" +
+                            "} catch (error) { return handlePreloadError(error); }\n",
+                    ),
                 map: null,
             };
         },

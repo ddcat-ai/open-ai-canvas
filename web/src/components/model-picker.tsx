@@ -88,12 +88,7 @@ export function ModelPicker({
     const isCurrentCustomChannel = Boolean(current && currentChannel && currentChannel.scope !== "system");
     const currentChannelLabel = current ? modelChannelLabel(config, current) : "";
     const currentModelName = current ? modelOptionName(current) : "";
-    const showChannelBadge = Boolean(
-        currentChannelLabel &&
-        currentChannelLabel !== currentModelName &&
-        currentChannelLabel !== modelDisplayName(config, current) &&
-        !isCurrentCustomChannel
-    );
+    const showChannelBadge = Boolean(currentChannelLabel && currentChannelLabel !== currentModelName && currentChannelLabel !== modelDisplayName(config, current) && !isCurrentCustomChannel);
 
     useLayoutEffect(() => {
         if (!open) return;

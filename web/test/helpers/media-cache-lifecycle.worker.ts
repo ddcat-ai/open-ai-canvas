@@ -169,14 +169,14 @@ async function run(scenario: string) {
         const meta = stored("resource_blob_meta");
         const blobs = stored("resource_blobs");
         (meta.get("owner:old:file") as any).lastAccessedAt = 0;
-        for (let i = 0; i < 499; i++) {
+        for (let i = 0; i < 1499; i++) {
             const key = `owner:disk-${i}:file`;
             meta.set(key, { key, size: 1, lastAccessedAt: i + 1 });
             blobs.set(key, blob);
         }
         await cache.primeResourceBlobCache("resource:new", blob);
         await tick();
-        assert.equal(meta.size, 500);
+        assert.equal(meta.size, 1500);
         assert.equal(blobs.has("owner:old:file"), false);
         assert.deepEqual(revoked, []);
         lease.release();

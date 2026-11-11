@@ -22,6 +22,12 @@
             html.dark body {
                 background: #0f0f11;
             }
+            #boot-recovery {
+                color: #171717;
+            }
+            html.dark #boot-recovery {
+                color: #f5f5f5;
+            }
             #root:empty {
                 min-height: 100vh;
             }
@@ -93,7 +99,7 @@
                 var notice = document.createElement("section");
                 notice.id = "boot-recovery";
                 notice.setAttribute("role", "alert");
-                notice.style.cssText = "position:fixed;inset:0;display:grid;align-content:center;justify-items:center;gap:16px;padding:24px;background:inherit;color:inherit;font:16px/1.6 sans-serif;text-align:center";
+                notice.style.cssText = "position:fixed;inset:0;display:grid;align-content:center;justify-items:center;gap:16px;padding:24px;background:inherit;font:16px/1.6 sans-serif;text-align:center";
                 var title = document.createElement("strong");
                 title.textContent = "页面资源加载时间过长";
                 var detail = document.createElement("p");
@@ -101,7 +107,7 @@
                 var retry = document.createElement("button");
                 retry.type = "button";
                 retry.textContent = "重新加载";
-                retry.style.cssText = "padding:10px 24px;border:1px solid #888;border-radius:8px;background:currentColor;color:inherit;font:inherit;cursor:pointer";
+                retry.style.cssText = "padding:10px 24px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer";
                 retry.onclick = function () {
                     var url = new URL(location.href);
                     url.searchParams.set("__chunk_recovery", String(Date.now()));
