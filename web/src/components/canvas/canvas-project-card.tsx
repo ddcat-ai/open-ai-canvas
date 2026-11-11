@@ -293,7 +293,7 @@ export function projectPreviewMediaList(nodes: CanvasNodeData[], limit: number, 
 
 function ProjectPreviewTile({ media }: { media: ProjectPreviewMedia }) {
     if (media.node.type !== CanvasNodeType.Video) {
-        return <CachedResourceImage storageKey={media.storageKey} src={media.url} alt="" loading="lazy" decoding="async" fallback={<MediaPlaceholder failed />} loadingFallback={<span className="canvas-project-mosaic-loading" />} />;
+        return <CachedResourceImage storageKey={media.storageKey} src={media.url} variant="thumbnail" alt="" loading="lazy" decoding="async" fallback={<MediaPlaceholder failed />} loadingFallback={<span className="canvas-project-mosaic-loading" />} />;
     }
     return <ProjectPreviewVideoFrame media={media} />;
 }
