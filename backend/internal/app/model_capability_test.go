@@ -128,7 +128,6 @@ func TestValidateImageTaskEnforcesGPTImage2CustomSizeLimits(t *testing.T) {
 func TestDefaultVideoCapabilityUsesProtocolSpecificResolutionTiers(t *testing.T) {
 	tests := map[string][]string{
 		"newapi-channel-2":        {"480p", "720p", "1080p", "1440p", "2160p"},
-		"newapi-video-tasks":      {"480p", "720p", "1080p", "1440p", "2160p"},
 		"volcengine-ark-video":    {"480p", "720p", "1080p"},
 		"volcengine-jimeng-video": {"720p"},
 		"gemini-veo":              {"720p", "1080p"},

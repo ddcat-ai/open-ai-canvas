@@ -570,30 +570,6 @@ add({
 });
 
 add({
-  id: "newapi-video-tasks-v1", providerId: "newapi-video-tasks", name: "NewAPI Video Tasks（/v1/video/tasks 查询）", vendor: "NewAPI", capability: "video",
-  baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
-  notes: "该协议创建路径与 NewAPI Video Generations Channel 2 相同（POST /v1/video/generations），但查询走 GET /v1/video/tasks/{taskId}，适用于小力孩等使用该查询路径的网关。不能与 newapi-channel-2 混用，也不能根据模型名猜测。",
-  create: jsonCreate("/v1/video/generations", {
-    model: ref("request.model"), prompt: ref("request.prompt"), seconds: { $toString: ref("request.duration") },
-    aspect_ratio: coalesce(ref("request.aspectRatio"), "16:9"), resolution: omit(ref("request.resolution")), generate_audio: ref("request.generateAudio"),
-    image_urls: omit(map({ $sortByOrder: ref("request.images") }, "media", ref("media.value"))),
-    video_urls: omit(map({ $sortByOrder: ref("request.videos") }, "media", ref("media.value"))),
-    audio_urls: omit(map({ $sortByOrder: ref("request.audios") }, "media", ref("media.value")))
-  }),
-  poll: { method: "GET", path: "/v1/video/tasks/{{taskId}}" },
-  response: asyncResponse("video", {
-    taskId: coalesce(ref("response.data.task_id"), ref("response.data.taskId"), ref("response.task_id"), ref("response.taskId"), ref("response.data.id"), ref("response.id"), ref("taskId")),
-    message: newAPITaskMessage,
-    videos: coalesce(
-      map(ref("response.data"), "item", coalesce(ref("item.url"), ref("item.video_url"), ref("item.videoUrl"), ref("item.output_url"), ref("item.outputUrl"))),
-      ref("response.data.result_url"), ref("response.data.video_url"), ref("response.data.output_url"), ref("response.data.url"), ref("response.data.metadata.url"),
-      ref("response.data.data.video_url"), ref("response.data.data.output_url"), ref("response.data.data.result_url"), ref("response.data.data.url"), ref("response.data.data.metadata.url"),
-      ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.output_url"), ref("response.url"), ref("response.metadata.url"), ref("response.output.url")
-    )
-  })
-});
-
-add({
   id: "rolldek-wan-video", providerId: "rolldek-wan-video", name: "RollDek WAN 3.0 Video", vendor: "RollDek", capability: "video",
   baseUrl: "https://rolldek.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   notes: "该协议严格对应 RollDek WAN 3.0 的 JSON /v1/videos 合同。RollDek 同时暴露的其他兼容创建入口不共享任务查询路径，不能与 NewAPI Video Generations Channel 2 混用。",

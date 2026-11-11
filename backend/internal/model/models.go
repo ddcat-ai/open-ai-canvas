@@ -73,7 +73,6 @@ const (
 	ChannelInterfaceNewAPIVideo                 ChannelInterfaceType = "newapi"
 	ChannelInterfaceNewAPIChannel1              ChannelInterfaceType = "newapi-channel-1"
 	ChannelInterfaceNewAPIChannel2              ChannelInterfaceType = "newapi-channel-2"
-	ChannelInterfaceNewAPIVideoTasks            ChannelInterfaceType = "newapi-video-tasks"
 	ChannelInterfaceXAIVideo                    ChannelInterfaceType = "xai-video"
 	ChannelInterfaceVolcengineArkVideo          ChannelInterfaceType = "volcengine-ark-video"
 	ChannelInterfaceVolcengineArkAgentPlanVideo ChannelInterfaceType = "volcengine-ark-agent-plan-video"

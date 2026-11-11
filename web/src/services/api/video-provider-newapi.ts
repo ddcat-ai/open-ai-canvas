@@ -43,13 +43,13 @@ export async function createVideoGenerationsTask(deps: VideoProviderDeps, config
     }
 }
 
-export async function pollVideoGenerationsTask(deps: VideoProviderDeps, task: VideoGenerationTask, options?: RequestOptions, pollPath?: string): Promise<VideoGenerationTaskState> {
+export async function pollVideoGenerationsTask(deps: VideoProviderDeps, task: VideoGenerationTask, options?: RequestOptions): Promise<VideoGenerationTaskState> {
     try {
-        const raw = await deps.transport.get<ApiEnvelope<Record<string, unknown>>>(deps.transport.apiUrl(pollPath || `/video/generations/${encodeURIComponent(task.id)}`), options);
+        const raw = await deps.transport.get<ApiEnvelope<Record<string, unknown>>>(deps.transport.apiUrl(`/video/generations/${encodeURIComponent(task.id)}`), options);
         const state = deps.response.unwrapEnvelopeRecord(raw);
         const status = String(state.status || "").toUpperCase();
         if (status === "SUCCESS" || status === "SUCCEEDED" || status === "COMPLETED") {
-            const url = String(state.result_url || state.video_url || state.url || firstArrayMediaUrl(state.data) || "");
+            const url = String(state.result_url || state.video_url || state.url || "");
             if (!url) return { status: "failed", error: "视频任务已完成但没有返回视频地址" };
             return { status: "completed", result: await deps.response.videoResultFromUrl(url, options) };
         }
@@ -73,15 +73,4 @@ async function resolveVideoGenerationsUrl(value: string | undefined, storageKey?
 
 function isPublicMediaUrl(value: string) {
     return /^https?:\/\//i.test(value || "");
-}
-
-function firstArrayMediaUrl(value: unknown) {
-    if (!Array.isArray(value)) return "";
-    for (const item of value) {
-        if (!item || typeof item !== "object") continue;
-        const record = item as Record<string, unknown>;
-        const url = String(record.url || record.video_url || record.videoUrl || record.output_url || record.outputUrl || "");
-        if (url) return url;
-    }
-    return "";
 }
