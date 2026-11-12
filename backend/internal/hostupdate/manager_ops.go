@@ -31,27 +31,13 @@ type githubRelease struct {
 	Prerelease  bool      `json:"prerelease"`
 }
 
-func (m *Manager) latestRelease(ctx context.Context) (*Release, error) {
+func (m *Manager) latestRelease(ctx context.Context, sources Sources) (*Release, error) {
 	url := "https://api.github.com/repos/" + m.config.Repository + "/releases?per_page=30"
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("User-Agent", "open-ai-canvas-host-updater")
-	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	if m.config.GitHubToken != "" {
-		request.Header.Set("Authorization", "Bearer "+m.config.GitHubToken)
-	}
-	response, err := m.httpClient.Do(request)
+	response, err := m.githubGet(ctx, url, sources, "application/vnd.github+json")
 	if err != nil {
 		return nil, fmt.Errorf("请求 GitHub Release：%w", err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
-		return nil, fmt.Errorf("GitHub Release 返回 HTTP %d", response.StatusCode)
-	}
 	var releases []githubRelease
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxReleaseResponseBytes))
 	if err := decoder.Decode(&releases); err != nil {
@@ -59,7 +45,7 @@ func (m *Manager) latestRelease(ctx context.Context) (*Release, error) {
 	}
 	filtered := make([]githubRelease, 0, len(releases))
 	for _, release := range releases {
-		if !release.Draft && strings.HasPrefix(release.TagName, "v") {
+		if !release.Draft && strings.HasPrefix(release.TagName, "v") && IsReleaseVersion(release.TagName) {
 			filtered = append(filtered, release)
 		}
 	}
@@ -86,28 +72,24 @@ func (m *Manager) currentVersion() (string, error) {
 	return version, nil
 }
 
-func (m *Manager) prepareTargetCompose(targetVersion string) (string, error) {
+func (m *Manager) prepareTargetCompose(targetVersion string, sources Sources) (string, error) {
 	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s", m.config.Repository, targetVersion, m.config.ComposeFile)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	response, err := m.httpClient.Do(request)
+	response, err := m.githubGet(ctx, url, sources, "")
 	if err != nil {
 		return "", fmt.Errorf("下载目标 Compose：%w", err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("下载目标 Compose 返回 HTTP %d", response.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, 2<<20))
+	data, err := io.ReadAll(io.LimitReader(response.Body, (2<<20)+1))
 	if err != nil {
 		return "", err
 	}
 	if len(data) == 0 {
 		return "", errors.New("目标 Compose 文件为空")
+	}
+	if len(data) > 2<<20 {
+		return "", errors.New("目标 Compose 文件超过允许大小")
 	}
 	path := filepath.Join(m.config.StateDir, "compose-"+strings.TrimPrefix(targetVersion, "v")+".next.yml")
 	if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -116,7 +98,7 @@ func (m *Manager) prepareTargetCompose(targetVersion string) (string, error) {
 	return path, nil
 }
 
-func (m *Manager) preflight(composePath, targetVersion string) error {
+func (m *Manager) preflight(composePath, targetVersion string, sources Sources) error {
 	if _, err := os.Stat(m.composePath()); err != nil {
 		return fmt.Errorf("读取当前 Compose：%w", err)
 	}
@@ -134,7 +116,7 @@ func (m *Manager) preflight(composePath, targetVersion string) error {
 	if err := checkBackupDiskSpace(m.config.BackupDir); err != nil {
 		return err
 	}
-	if err := m.composeWithImages(composePath, targetVersion, immutableImageRefs(m.config.Repository, targetVersion), 2*time.Minute, nil, "config", "--quiet"); err != nil {
+	if err := m.composeWithImages(composePath, targetVersion, sources.images(m.config.Repository, targetVersion), 2*time.Minute, nil, "config", "--quiet"); err != nil {
 		return fmt.Errorf("目标 Compose 校验失败：%w", err)
 	}
 	current, err := m.currentVersion()
@@ -167,7 +149,7 @@ func checkWritableDirectory(directory string) error {
 	return nil
 }
 
-func (m *Manager) prepareUpdaterBinary(targetVersion string) (string, error) {
+func (m *Manager) prepareUpdaterBinary(targetVersion string, sources Sources) (string, error) {
 	if !m.config.SelfUpdate {
 		return "", nil
 	}
@@ -179,22 +161,15 @@ func (m *Manager) prepareUpdaterBinary(targetVersion string) (string, error) {
 	}
 	baseURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/", m.config.Repository, targetVersion)
 	asset := "open-ai-canvas-host-updater-linux-" + runtime.GOARCH
-	checksums, err := m.downloadReleaseAsset(baseURL+"SHA256SUMS", 1<<20)
+	checksums, err := m.downloadReleaseAsset(baseURL+"SHA256SUMS", 1<<20, sources)
 	if err != nil {
 		return "", fmt.Errorf("下载 Host Updater 校验清单：%w", err)
 	}
-	expected := ""
-	for _, line := range strings.Split(string(checksums), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[1] == asset {
-			expected = fields[0]
-			break
-		}
+	expected, err := releaseChecksum(checksums, asset)
+	if err != nil {
+		return "", err
 	}
-	if len(expected) != 64 {
-		return "", fmt.Errorf("目标 Release 的 SHA256SUMS 缺少 %s", asset)
-	}
-	binary, err := m.downloadReleaseAsset(baseURL+asset, 128<<20)
+	binary, err := m.downloadReleaseAsset(baseURL+asset, 128<<20, sources)
 	if err != nil {
 		return "", fmt.Errorf("下载目标 Host Updater：%w", err)
 	}
@@ -210,22 +185,14 @@ func (m *Manager) prepareUpdaterBinary(targetVersion string) (string, error) {
 	return path, nil
 }
 
-func (m *Manager) downloadReleaseAsset(url string, limit int64) ([]byte, error) {
+func (m *Manager) downloadReleaseAsset(url string, limit int64, sources Sources) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("User-Agent", "open-ai-canvas-host-updater")
-	response, err := m.httpClient.Do(request)
+	response, err := m.githubGet(ctx, url, sources, "")
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", response.StatusCode)
-	}
 	reader := io.LimitReader(response.Body, limit+1)
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -235,6 +202,21 @@ func (m *Manager) downloadReleaseAsset(url string, limit int64) ([]byte, error) 
 		return nil, errors.New("Release 资产超过允许大小")
 	}
 	return data, nil
+}
+
+func releaseChecksum(data []byte, asset string) (string, error) {
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || strings.TrimPrefix(fields[1], "*") != asset {
+			continue
+		}
+		digest, err := hex.DecodeString(fields[0])
+		if err == nil && len(digest) == sha256.Size {
+			return strings.ToLower(fields[0]), nil
+		}
+		break
+	}
+	return "", fmt.Errorf("目标 Release 的 SHA256SUMS 缺少有效的 %s 校验值", asset)
 }
 
 func (m *Manager) restartSelf() {
@@ -283,7 +265,17 @@ func (m *Manager) composeWithImages(composePath, imageTag string, images deploym
 		stdout = io.Discard
 	}
 	environment := []string{"CANVAS_IMAGE_TAG=" + strings.TrimPrefix(imageTag, "v")}
-	err := m.runner.Run(ctx, "docker", args, environment, stdout, &stderr)
+	// Shell 环境优先于 --env-file，必须显式覆盖，防止已导出的旧镜像绕过所选来源。
+	values, err := readEnvFile(envFile)
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{"CANVAS_BACKEND_IMAGE", "CANVAS_WEB_IMAGE", "CANVAS_YINGCE_AGENT_IMAGE"} {
+		if value := values[key]; value != "" {
+			environment = append(environment, key+"="+value)
+		}
+	}
+	err = m.runner.Run(ctx, "docker", args, environment, stdout, &stderr)
 	if err != nil {
 		message := strings.TrimSpace(stderr.String())
 		if len(message) > 1000 {
@@ -339,8 +331,7 @@ func (m *Manager) writeComposeEnvOverride(images deploymentImages) (string, erro
 	return path, nil
 }
 
-func (m *Manager) verifyImages(targetVersion string) (deploymentImages, error) {
-	images := immutableImageRefs(m.config.Repository, targetVersion)
+func (m *Manager) verifyImages(images deploymentImages) (deploymentImages, error) {
 	refs := []string{images.backend, images.web, images.agent}
 	digests := make([]string, 0, len(refs))
 	for _, image := range refs {
@@ -360,6 +351,10 @@ func (m *Manager) verifyImages(targetVersion string) (deploymentImages, error) {
 		var digest string
 		for _, candidate := range repositoryDigests {
 			if strings.HasPrefix(candidate, repository+"@sha256:") {
+				decoded, err := hex.DecodeString(strings.TrimPrefix(candidate, repository+"@sha256:"))
+				if err != nil || len(decoded) != sha256.Size {
+					continue
+				}
 				digest = candidate
 				break
 			}

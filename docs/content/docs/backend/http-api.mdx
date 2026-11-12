@@ -5,6 +5,18 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 系统更新来源
+
+以下接口仅管理员可用，使用登录 Cookie 和统一业务信封，由 Backend 通过已认证 Unix Socket 调用宿主机 Host Updater。
+
+| 接口 | 合同 |
+| --- | --- |
+| `GET /api/admin/system-update` | 返回更新状态，含 `sources`、可选 `sourceProbe` 和 `operation.sources` |
+| `PUT /api/admin/system-update/sources` | 完整写入 `{githubSource:"direct"\|"gh_proxy",imageSource:"ghcr"\|"nju"}`，返回更新状态；非法值 400，任务忙碌 409；持久化成功后才返回成功 |
+| `POST /api/admin/system-update/sources/test` | 为当前已保存来源创建异步检测任务，立即返回更新状态；通过 GET 轮询结果，任务忙碌 409 |
+
+`sourceProbe` 含 `id/status/sources/targetVersion?/checks/startedAt/finishedAt?`；`status` 为 `running/succeeded/failed`，`checks[]` 含 `key/label/status/detail/blocking`，检查状态为 `pending/passed/failed`。版本检查、来源检测、更新和回退互斥。检测结果不替代显式版本检查；切换来源后必须重新检查版本才能开始更新。宿主机协议对应 `PUT /v1/sources`、`POST /v1/sources/test`，只允许既定来源枚举，不接受任意下载地址。
+
 ## 创作对话同步
 
 - `GET /creation-conversations?after=<id>`：当前账号摘要（含永久删除标记），按 ID 升序每页 100 条；`next=""` 表示结束。列表缺项不是删除命令。

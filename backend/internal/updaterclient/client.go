@@ -20,6 +20,14 @@ type Client struct {
 	http    *http.Client
 }
 
+type ResponseError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *ResponseError) Error() string   { return "Host Updater：" + e.Message }
+func (e *ResponseError) HTTPStatus() int { return e.StatusCode }
+
 func New(socketPath, token string) *Client {
 	dialer := &net.Dialer{Timeout: 3 * time.Second}
 	transport := &http.Transport{
@@ -37,6 +45,14 @@ func (c *Client) Status(ctx context.Context) (hostupdate.Status, error) {
 
 func (c *Client) Check(ctx context.Context) (hostupdate.Status, error) {
 	return c.request(ctx, http.MethodPost, "/v1/check", struct{}{})
+}
+
+func (c *Client) SaveSources(ctx context.Context, sources hostupdate.Sources) (hostupdate.Status, error) {
+	return c.request(ctx, http.MethodPut, "/v1/sources", sources)
+}
+
+func (c *Client) TestSources(ctx context.Context) (hostupdate.Status, error) {
+	return c.request(ctx, http.MethodPost, "/v1/sources/test", struct{}{})
 }
 
 func (c *Client) Start(ctx context.Context, targetVersion string) (hostupdate.Status, error) {
@@ -77,7 +93,7 @@ func (c *Client) request(ctx context.Context, method, path string, payload any) 
 			Data  hostupdate.Status `json:"data"`
 		}
 		if err := json.NewDecoder(limited).Decode(&failure); err == nil && failure.Error != "" {
-			return failure.Data, fmt.Errorf("Host Updater：%s", failure.Error)
+			return failure.Data, &ResponseError{StatusCode: response.StatusCode, Message: failure.Error}
 		}
 		return hostupdate.Status{}, fmt.Errorf("Host Updater 返回 HTTP %d", response.StatusCode)
 	}

@@ -1,0 +1,131 @@
+[data-admin-root] .admin-update-sources-body {
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+
+[data-admin-root] .admin-update-sources-presets,
+[data-admin-root] .admin-update-sources-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+[data-admin-root] .admin-update-sources-presets button {
+    display: grid;
+    gap: 4px;
+    padding: 12px 16px;
+    text-align: left;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    color: var(--admin-text);
+    transition:
+        background-color 120ms,
+        border-color 120ms;
+}
+
+[data-admin-root] .admin-update-sources-presets button[aria-pressed="true"] {
+    background: var(--admin-nav-active);
+    border-color: var(--admin-text-secondary);
+}
+
+[data-admin-root] .admin-update-sources-presets button:disabled {
+    opacity: 0.6;
+}
+
+[data-admin-root] .admin-update-sources-presets button:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+[data-admin-root] .admin-update-sources-presets strong {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+[data-admin-root] .admin-update-sources-presets span,
+[data-admin-root] .admin-update-sources-note,
+[data-admin-root] .admin-update-sources-results p {
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--admin-text-muted);
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+[data-admin-root] .admin-update-sources-routes {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px 16px;
+    font-size: 12px;
+    margin: 0;
+}
+
+[data-admin-root] .admin-update-sources-routes dt {
+    color: var(--admin-text-muted);
+}
+
+[data-admin-root] .admin-update-sources-routes dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+[data-admin-root] .admin-update-sources-advanced summary {
+    font-size: 12px;
+    color: var(--admin-text-secondary);
+}
+
+[data-admin-root] .admin-update-sources-fields {
+    margin-top: 12px;
+}
+
+[data-admin-root] .admin-update-sources-fields label {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--admin-text-secondary);
+}
+
+[data-admin-root] .admin-update-sources-results ul {
+    list-style: none;
+    margin: 8px 0;
+    padding: 0;
+}
+
+[data-admin-root] .admin-update-sources-results li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--admin-border);
+}
+
+[data-admin-root] .admin-update-sources-results li > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+}
+
+[data-admin-root] .admin-update-sources-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+    [data-admin-root] .admin-update-sources-presets,
+    [data-admin-root] .admin-update-sources-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    [data-admin-root] .admin-update-sources-routes {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-admin-root] .admin-update-sources-presets button {
+        transition: none;
+    }
+}

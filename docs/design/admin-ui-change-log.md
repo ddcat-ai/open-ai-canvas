@@ -2,6 +2,14 @@
 
 本文档是管理后台 UI 的追踪与回滚台账。后续每批 UI 调整都必须在实施时追加，不覆盖历史记录。
 
+## 系统更新来源选择
+
+- 目的：在系统更新页选择官方直连或 GH-Proxy + 南大 GHCR 镜像源，并允许分别设置两类来源。
+- 调整：新增页面私有来源卡、未保存提示、异步检测分项结果；保存成功后重新检查版本，检测或更新期间锁定控件。复用后台设置卡、状态和主题 token。
+- 文件：`web/src/pages/admin/settings/system-update-page.tsx`、`components/system-update-sources.tsx`、`components/system-update-sources.css`、`web/src/services/api/system-update.ts`。
+- 可验证原始基线：提交 `bae6a36c` 的 `system-update-page.tsx`，SHA-256 `7b8aab14d4453f5f4ba5b752e5415ab05ba2585cfbc0c2558cfb5c619cdc8172`；原始内容已保存到 `.local/ui-change-backups/update-sources/system-update-page.tsx`。来源组件和样式为新增文件。
+- 验证：真实组件 DOM 与 API 合同专项覆盖范围见待测试清单和交付；真实登录态、明暗主题和窄屏视觉仍需部署验收。
+
 ## 用户登录日志筛选布局收敛
 
 - 问题：用户搜索与嵌套筛选容器分别换行，IP 输入被基础样式撑满一行，实际 1280px 视口占四排、工具栏高 168px。

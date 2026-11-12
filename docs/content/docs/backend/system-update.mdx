@@ -11,6 +11,25 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 管理员浏览器 → Backend 管理 API → 带 Token 的 Unix Socket → Host Updater → Docker Compose
 ```
 
+## 更新来源
+
+在系统更新页面选择并保存来源，随后重新检查版本：
+
+| 预设 | GitHub 版本与更新文件 | 容器镜像 |
+| --- | --- | --- |
+| 官方直连（默认） | GitHub API、Release、Raw | `ghcr.io` |
+| 镜像加速 | `https://gh-proxy.com/` 加原始 HTTPS 地址 | `ghcr.nju.edu.cn` |
+
+展开“分别设置 GitHub 与容器镜像来源”可使用混合配置。GitHub 来源覆盖 Release 列表、目标版本 Compose、Host Updater 二进制和 `SHA256SUMS`；容器来源覆盖 backend、web、yingce-agent，迁移服务复用 backend 镜像。
+
+来源配置保存在宿主机更新器的 `state.json`，独立于部署 `.env`，重启和应用回退不会重置选择。保存新来源会清除上次版本检查及来源检测结果。检查、检测、更新和回退互斥，更新任务记录并固定自己的来源快照；请求失败不会自动切换到其他来源。GitHub Token 只用于官方 API 直连，不发送给 GH-Proxy。
+
+“测试连通性”在宿主机异步执行，页面关闭后仍会继续。检测会查询目标 Release、下载并校验 Compose 配置、验证当前 CPU 架构的更新器校验条目，并读取三个镜像的多架构清单，确认包含当前 `linux/amd64` 或 `linux/arm64`。每项单独显示失败详情，HTTP 403/429 提示拒绝或限流，404 提示版本不存在或镜像尚未同步。
+
+检测不下载完整容器层，也不安装更新器，不能替代更新前的完整拉取与 SHA-256 校验。正式更新在全部准备成功后才停服；通过所选镜像源拉取后，实际 `仓库@sha256:...` 写入 `.env`，不会再因仓库名固定为 `ghcr.io` 而拒绝南大源摘要。回退恢复原 `.env` 和本地旧镜像，使用 `--pull never`；旧镜像被清理时会报错。
+
+镜像服务属于第三方公共服务，其可用性以目标服务器实测为准。SHA-256 与 digest 验证内容完整性，不能单独证明第三方源的发布者身份。
+
 ## 安全更新顺序
 
 1. 从 GitHub Releases 读取包含预览版在内的最高语义版本，并与 `.env` 中固定的 `CANVAS_IMAGE_TAG` 比较。`sha-*` 这类非正式镜像标签一律视为低于正式 Release，避免把 `vsha-5509b17` 字典序比较成比 `v1.5.0` 更新。
@@ -45,7 +64,7 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 
 ## 安装与升级约束
 
-GHCR 镜像部署必须把 `CANVAS_IMAGE_TAG` 固定到具体 Release，并把 `CANVAS_BACKEND_IMAGE`、`CANVAS_WEB_IMAGE` 固定到对应 GHCR digest，不可使用 `latest` 或仅使用可变 tag。首次安装时显式指定 Release：
+GHCR 镜像部署必须把 `CANVAS_IMAGE_TAG` 固定到具体 Release，并把 `CANVAS_BACKEND_IMAGE`、`CANVAS_WEB_IMAGE` 固定到所选 GHCR 或南大源的 digest，不可使用 `latest` 或仅使用可变 tag。首次安装时显式指定 Release：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh \

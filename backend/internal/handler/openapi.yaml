@@ -42,6 +42,56 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /admin/system-update:
+    get:
+      tags: [admin]
+      summary: 管理员读取系统更新与来源检测状态
+      responses:
+        "200":
+          description: 更新状态，sourceProbe 为异步来源检测快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemUpdateEnvelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/system-update/sources:
+    put:
+      tags: [admin]
+      summary: 管理员保存系统更新来源
+      description: 宿主机持久化成功后返回；改变来源清除版本与检测缓存。与检查、检测、更新和回退互斥。不接收任意代理或仓库地址。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemUpdateSources" }
+      responses:
+        "200":
+          description: 已保存来源后的更新状态
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemUpdateEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /admin/system-update/sources/test:
+    post:
+      tags: [admin]
+      summary: 管理员启动已保存更新来源的异步检测
+      description: 立即返回 sourceProbe.status=running，之后轮询 GET /admin/system-update。检测版本、Compose、更新器校验清单与镜像架构清单，不下载完整镜像层或安装更新器。
+      responses:
+        "200":
+          description: 来源检测已启动
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemUpdateEnvelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /admin/api-logs/{id}:
     get:
       tags: [admin]
@@ -4483,6 +4533,57 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    SystemUpdateSources:
+      type: object
+      required: [githubSource, imageSource]
+      additionalProperties: false
+      properties:
+        githubSource: { type: string, enum: [direct, gh_proxy] }
+        imageSource: { type: string, enum: [ghcr, nju] }
+    SystemUpdateSourceProbe:
+      type: object
+      required: [id, status, sources, checks, startedAt]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [running, succeeded, failed] }
+        sources: { $ref: "#/components/schemas/SystemUpdateSources" }
+        targetVersion: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [key, label, status, blocking]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              status: { type: string, enum: [pending, passed, failed] }
+              detail: { type: string }
+              blocking: { type: boolean }
+    SystemUpdateEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data:
+              type: object
+              description: 既有更新状态附带来源与检测快照；不支持来源配置的更新器可省略 sources。
+              properties:
+                supported: { type: boolean }
+                connected: { type: boolean }
+                repository: { type: string }
+                deployment: { type: string }
+                currentVersion: { type: string }
+                updateAvailable: { type: boolean }
+                sources: { $ref: "#/components/schemas/SystemUpdateSources" }
+                sourceProbe: { $ref: "#/components/schemas/SystemUpdateSourceProbe" }
+                operation:
+                  type: object
+                  properties:
+                    sources: { $ref: "#/components/schemas/SystemUpdateSources" }
+                    phase: { type: string }
+                    targetVersion: { type: string }
     CreationHistoryMessage:
       type: object
       required: [id, revision]
