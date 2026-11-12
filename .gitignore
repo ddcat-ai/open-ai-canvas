@@ -29,6 +29,7 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/channel-configuration.mdx
 !docs/content/docs/backend/newapi-channel-2.mdx
 !docs/content/docs/backend/bailian-minimax-video.mdx
+!docs/content/docs/backend/minimax-h3-image.mdx
 !docs/content/docs/backend/video-token-billing.mdx
 !docs/content/docs/backend/credit-rewards.mdx
 !docs/content/docs/backend/creative-agent-runtime.mdx

@@ -1,0 +1,49 @@
+---
+title: MiniMax H3 图片
+description: MiniMax H3 Image 图片协议的渠道配置、参数映射、参考图编辑与失败语义
+---
+
+# MiniMax H3 图片
+
+`minimax-h3-image` 是独立声明式协议插件，接入 MiniMax 开放平台的 `MiniMax-H3-Image` 与 `MiniMax-H3-Image-Highspeed`。它使用 `/v1/images/generations` 与 `/v1/images/edits`，与旧 `minimax-image`（`/v1/image_generation`，`image-01`）是不同请求合同；两个插件并存，已配置的旧渠道不受影响，不按模型名称自动切换协议。
+
+## 渠道配置
+
+| 配置 | 值 |
+| --- | --- |
+| 协议 | MiniMax H3 Image（`minimax-h3-image`） |
+| Base URL | 国内站 `https://api.minimax.cn`（默认）；国际站 `https://api.minimax.io` |
+| API Key | 与所选站点对应的 MiniMax API Key，按 Bearer 发送 |
+| 模型 ID | `MiniMax-H3-Image`、`MiniMax-H3-Image-Highspeed` |
+
+插件源码位于 `plugin-packages/minimax-h3-image/`，运行时从随应用分发的 `minimax-h3-image.yingce-plugin` 自动安装。更新包后重启后端；管理员停用的插件不会被更新过程自动启用。
+
+插件声明了图片参数合同（比例、1K/2K/4K 分辨率默认 2K、1–10 张、质量与透明背景停用、输出格式与压缩质量默认停用）。宿主尚未为该协议内置默认能力，新建渠道模型后请在「能力与参数」中按上述范围启用分辨率、关闭质量与透明背景、将生成数量上限设为 10，并关闭蒙版。
+
+## 请求映射
+
+- 无参考图：`POST /v1/images/generations`；有参考图：`POST /v1/images/edits`，均为 JSON。
+- 提示词：必填，去除首尾空白后 1–32000 个字符。
+- 比例：`X:Y`（1–300 的整数，介于 1:3 与 3:1 之间）映射为 `aspect_ratio`，同时发送 `size=auto` 与 `area`。
+- 像素尺寸：`宽x高` 只发送 `size`，总像素 655360–20000000、比例 1:3–3:1；按上游规定不再发送 `aspect_ratio` 和 `area`。
+- 分辨率：`1K`、`2K`、`4K` 映射为 `area`，请求时规范为大写；未设置时发送 `2K`，避免落到上游默认的 `4K`。
+- 数量：`n`，1–10，未设置时为 1。
+- 参考图：1–16 张，按显式 `order` 映射为 `images[].image_url`，支持公网 URL 或 `data:image/...;base64,` Data URI；请求体总大小上限 64 MiB。
+- `response_format` 固定为 `url`。`output_format`（jpeg/png/webp）与 `output_compression`（0–100）只能通过 `providerOptions.minimax-h3-image` 设置，默认不发送。
+
+不支持：蒙版（`mask` 角色在校验阶段明确拒绝）、透明背景、质量档位、流式输出和 `disable_prompt_enhanced`。`quality`、`background` 在模板中显式占位但不发送，防止宿主按 OpenAI 规则补全。区域改色等局部修改只能通过提示词描述。
+
+## 响应与失败
+
+同步返回。`data[].url` 与 `data[].b64_json` 映射为图片结果，`b64_json` 按响应 `output_format` 生成 Data URL；结果 URL 不保证长期可用，插件声明 `resultEphemeral`，宿主立即下载并持久化。
+
+- `data[]` 中只有 `error` 的失败项被跳过，至少一张成功即任务成功。
+- HTTP 200 但没有可用图片时任务失败，提示上游单张错误信息或“没有返回可用图片”。
+- 全部失败、参数错误、鉴权、余额与限流返回 400/401/402/422/429/500，宿主按 HTTP 错误失败并保留 `error.message`（末尾括号为 MiniMax 内部错误码）。
+- `usage` 原样保留供核对，不直接替换本地计费规则；系统模型价格仍由管理员配置。
+
+## 费用与超时风险
+
+上游接口不幂等：请求发出后即使客户端超时或断开，上游仍会完成生成并对成功图片扣费，重试会再次生成并扣费。MiniMax 建议客户端超时不少于 600 秒，而宿主同步请求超时固定为 5 分钟，4K 多图可能先在本地超时；遇到超时请先在 MiniMax 控制台核对用量再决定是否重试。
+
+接口依据：[文生图](https://platform.minimax.io/docs/api-reference/image-generation-h3-generations)、[图片编辑](https://platform.minimax.io/docs/api-reference/image-generation-h3-edits)、[国内站图片生成指南](https://platform.minimax.cn/docs/guides/image-generation)。

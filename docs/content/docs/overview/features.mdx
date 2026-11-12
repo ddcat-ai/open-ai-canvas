@@ -158,6 +158,10 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 详见[生图与视频工作台](./workbench)。
 
+## MiniMax H3 图片
+
+`minimax-h3-image` 独立插件接入 MiniMax `MiniMax-H3-Image` 与 `MiniMax-H3-Image-Highspeed`，无参考图走 `/v1/images/generations`，有 1–16 张参考图时走 `/v1/images/edits` 并保持参考图顺序。支持比例或像素尺寸、1K/2K/4K（默认 2K）和 1–10 张输出；蒙版、透明背景和质量档位不支持。与旧 `minimax-image` 插件并存，结果由宿主下载持久化。配置见[MiniMax H3 图片](/docs/backend/minimax-h3-image)。
+
 ## 百炼 MiniMax 视频
 
 `dashscope-minimax-video` 独立插件接入百炼 `MiniMax/MiniMax-H3`，支持文生视频、首帧、仅尾帧、首尾帧与图像/视频/音频多模态参考。插件校验 4–15 秒、768P/2K、7000 字符提示词及媒体角色和数量，模型能力由渠道配置。任务经统一宿主鉴权、轮询与结果持久化，恢复时查询原任务；真实文生视频创建、轮询与下载已验证，多模态及应用内完整链路仍待验收。配置见[百炼 MiniMax 视频](/docs/backend/bailian-minimax-video)。
