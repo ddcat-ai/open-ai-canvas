@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"yingce/backend/internal/canvas/contract"
 )
@@ -25,10 +26,13 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 		}
 	}
 	byID := map[string]contract.ReferenceBinding{}
-	for _, media := range []struct{ field, kind string }{{"referenceImages", "image"}, {"referenceVideos", "video"}, {"referenceAudios", "audio"}} {
+	for _, media := range []struct{ field, kind string }{{"referenceImages", "image"}, {"referenceVideos", "video"}, {"referenceAudios", "audio"}, {"referenceCharacters", "text"}} {
 		for _, ref := range creationMaps(refs[media.field]) {
 			id := stringValue(ref["id"])
 			binding := contract.ReferenceBinding{ID: "node:" + id, NodeID: id, MediaType: media.kind, Role: "reference", Resolution: "latest"}
+			if media.field == "referenceCharacters" {
+				binding.Role = "source-text"
+			}
 			if key := stringValue(ref["storageKey"]); strings.HasPrefix(key, "resource:") {
 				binding.ResourceID = strings.TrimPrefix(key, "resource:")
 			}
@@ -95,5 +99,40 @@ func cloudAgentMediaOptions(a cloudAgentMediaArgs) contract.Options {
 			options.Quality = &a.Quality
 		}
 	}
+	if a.Mode == "audio" && strings.TrimSpace(a.AudioMode) != "" {
+		options.AudioMode = &a.AudioMode
+	}
 	return options
+}
+
+func compileCloudAgentAudioVoiceBindings(prompt string, bindings []cloudAgentAudioVoiceBinding, refs map[string]any) (string, error) {
+	if len(bindings) == 0 {
+		return prompt, nil
+	}
+	audios := creationMaps(refs["referenceAudios"])
+	characters := creationMaps(refs["referenceCharacters"])
+	blocks := make([]string, 0, len(bindings))
+	seen := map[string]bool{}
+	for _, binding := range bindings {
+		if seen[binding.CharacterNodeID] || binding.CharacterNodeID == "" || binding.AudioNodeID == "" {
+			return "", cloudAgentFieldError("audioVoiceBindings", "invalid_value", "每个角色只能绑定一段参考音频，角色与音频节点 ID 不能为空或重复")
+		}
+		seen[binding.CharacterNodeID] = true
+		characterName, audioIndex := "", -1
+		for _, ref := range characters {
+			if stringValue(ref["id"]) == binding.CharacterNodeID && stringValue(ref["canvasReferenceKind"]) == "character" {
+				characterName = stringValue(ref["name"])
+			}
+		}
+		for index, ref := range audios {
+			if stringValue(ref["id"]) == binding.AudioNodeID {
+				audioIndex = index + 1
+			}
+		}
+		if characterName == "" || audioIndex < 1 {
+			return "", cloudAgentFieldError("audioVoiceBindings", "invalid_value", "角色音色对应必须引用 referenceNodeIds 中已连接的角色和音频节点")
+		}
+		blocks = append(blocks, fmt.Sprintf("【角色音色对应】%s → @音频%d", characterName, audioIndex))
+	}
+	return strings.TrimSpace(prompt) + "\n\n" + strings.Join(blocks, "\n"), nil
 }

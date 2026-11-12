@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -29,6 +30,24 @@ func (r *Repository) UserCharacterAsset(userID string, assetID string) (*model.A
 		return nil, err
 	}
 	return &asset, nil
+}
+
+// UserCharacterReferencesResource also checks historical versions, which can be pinned by a canvas.
+func (r *Repository) UserCharacterReferencesResource(userID, resourceID string) (bool, error) {
+	var count int64
+	err := r.db.Table("asset_representations AS reps").
+		Joins("JOIN asset_versions AS versions ON versions.id = reps.asset_version_id").
+		Joins("JOIN assets ON assets.id = versions.asset_id").
+		Where("assets.user_id = ? AND assets.kind = ? AND assets.category = ? AND reps.resource_id = ?", userID, "entity", model.AssetCategoryCharacter, resourceID).Count(&count).Error
+	if err != nil || count > 0 {
+		return count > 0, err
+	}
+	err = r.db.Table("character_voice_bindings AS bindings").
+		Joins("JOIN asset_versions AS versions ON versions.id = bindings.asset_version_id").
+		Joins("JOIN assets ON assets.id = versions.asset_id").
+		Joins("JOIN voice_profiles AS profiles ON profiles.id = bindings.voice_profile_id").
+		Where("assets.user_id = ? AND assets.kind = ? AND assets.category = ? AND profiles.sample_resource_id = ?", userID, "entity", model.AssetCategoryCharacter, resourceID).Count(&count).Error
+	return count > 0, err
 }
 
 func (r *Repository) characterAssetQuery(userID string, query string) *gorm.DB {
@@ -159,6 +178,44 @@ func (r *Repository) CreateUserCharacter(asset *model.Asset, version *model.Asse
 		if len(representations) > 0 {
 			if err := tx.Create(&representations).Error; err != nil {
 				return err
+			}
+		}
+		if voice != nil {
+			if err := tx.Create(voice).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// CreateOfficialCharacterCopy persists the new personal card and its voice identity atomically.
+func (r *Repository) CreateOfficialCharacterCopy(asset *model.Asset, version *model.AssetVersion, representations []model.AssetRepresentation, profile *model.VoiceProfile, voice *model.CharacterVoiceBinding) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(asset).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(version).Error; err != nil {
+			return err
+		}
+		if len(representations) > 0 {
+			if err := tx.Create(&representations).Error; err != nil {
+				return err
+			}
+		}
+		if profile != nil {
+			if err := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "user_id"}, {Name: "provider"}, {Name: "voice_key"}}, DoNothing: true}).Create(profile).Error; err != nil {
+				return err
+			}
+			var existing model.VoiceProfile
+			if err := tx.Where("user_id = ? AND provider = ? AND voice_key = ?", profile.UserID, profile.Provider, profile.VoiceKey).First(&existing).Error; err != nil {
+				return err
+			}
+			if existing.SampleResourceID != profile.SampleResourceID || existing.Status != "active" {
+				return fmt.Errorf("官方声音身份与已有声音不一致")
+			}
+			if voice != nil {
+				voice.VoiceProfileID = existing.ID
 			}
 		}
 		if voice != nil {

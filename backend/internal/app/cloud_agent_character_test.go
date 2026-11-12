@@ -40,6 +40,36 @@ func seedCloudAgentCharacter(t *testing.T, db *gorm.DB, canvasID string) map[str
 	return node
 }
 
+func TestCloudAgentAudioCharacterUsesTextWithoutImage(t *testing.T) {
+	service, db, _, _ := creationTestService(t)
+	if err := db.Create(&model.CanvasProject{ID: "audio-canvas", UserID: "user", PayloadJSON: `{}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	node := seedCloudAgentCharacter(t, db, "audio-canvas")
+	ref, field, err := cloudAgentMediaReference(service.repo, "user", "character-project", node, "audio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if field != "referenceCharacters" || stringValue(ref["storageKey"]) != "" {
+		t.Fatalf("audio character leaked image: %s %#v", field, ref)
+	}
+	refs := map[string]any{field: []any{ref}, "referenceAudios": []any{map[string]any{"id": "voice"}}}
+	if err := validateCloudAgentMediaReferences("audio", refs, "unified_edit", nil); err != nil {
+		t.Fatal(err)
+	}
+	bindings := []cloudAgentAudioVoiceBinding{{CharacterNodeID: "character-card", AudioNodeID: "voice"}}
+	if _, err := compileCloudAgentAudioVoiceBindings("台词", bindings, refs); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := cloudAgentGenerationSpec(cloudAgentMediaArgs{Mode: "audio", AudioMode: "unified_edit", ChannelID: "ch", ChannelModelKey: "audio", ReferenceNodeIDs: []string{"character-card", "voice"}}, refs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.ReferenceBindings[0].MediaType != "text" {
+		t.Fatal("character must remain a text binding")
+	}
+}
+
 func TestCloudAgentCharacterReadUsesAuthorizedAssetNotEmptyTextContent(t *testing.T) {
 	service, db, _, _ := creationTestService(t)
 	if err := db.Create(&model.CanvasProject{ID: "agent-canvas", UserID: "user", PayloadJSON: `{}`}).Error; err != nil {

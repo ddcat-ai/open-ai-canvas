@@ -1,6 +1,7 @@
 import { resourceFileUrl } from "@/services/api/resources";
 import type { ProjectAsset } from "@/services/api/projects";
 import type { CanvasNodeData } from "@/types/canvas";
+import { applyCharacterOutfitDefinition, characterOutfitCoverUrl, resolveLockedNodeOutfitId } from "@/components/canvas/character-outfits";
 
 export type CharacterBreakdown = {
     name: string;
@@ -26,7 +27,7 @@ export function normalizeCharacterImageMentions(prompt: string, imageCount: numb
     });
 }
 
-export function refreshCanvasCharacterReferenceNodes(nodes: CanvasNodeData[], assets: ProjectAsset[]) {
+export function refreshCanvasCharacterReferenceNodes(nodes: CanvasNodeData[], assets: ProjectAsset[], targetNodeOutfit?: { nodeId?: string; outfitId?: string }) {
     const characters = new Map(assets.filter((asset) => asset.category === "character" && asset.character).map((asset) => [asset.id, asset]));
     let changed = false;
     const next = nodes.map((node) => {
@@ -37,13 +38,20 @@ export function refreshCanvasCharacterReferenceNodes(nodes: CanvasNodeData[], as
         const card = asset.character;
         const cover = card.representations.find((item) => item.role === "turnaround_sheet") || card.representations.find((item) => item.role === "primary") || card.representations.find((item) => item.role === "front");
         const aliases = Array.isArray(card.definition.aliases) ? card.definition.aliases.filter((value): value is string => typeof value === "string") : [];
+        const selectedOutfitId =
+            targetNodeOutfit?.nodeId && targetNodeOutfit.nodeId === node.id && targetNodeOutfit.outfitId
+                ? targetNodeOutfit.outfitId
+                : resolveLockedNodeOutfitId(metadata.selectedOutfitId, metadata.characterCoverUrl, metadata.characterDefinition, card.definition, card.representations);
+        const effectiveDefinition = applyCharacterOutfitDefinition(card.definition, selectedOutfitId, card.representations);
+        const coverUrl = characterOutfitCoverUrl(card.definition, card.representations, selectedOutfitId, cover ? resourceFileUrl(cover.resourceId) : undefined);
         const patch = {
             characterVersionId: card.versionId,
             characterName: asset.title,
-            characterPrompt: compileCharacterReferencePrompt(asset.title, card.definition),
+            characterPrompt: compileCharacterReferencePrompt(asset.title, effectiveDefinition),
             characterAliases: aliases,
             characterDefinition: card.definition,
-            characterCoverUrl: cover ? resourceFileUrl(cover.resourceId) : undefined,
+            characterCoverUrl: coverUrl,
+            selectedOutfitId,
             characterVisualStatus: card.visualStatus,
             characterVoiceStatus: card.voiceStatus,
             characterVoiceName: card.voice?.profile.name,
@@ -59,6 +67,7 @@ export function refreshCanvasCharacterReferenceNodes(nodes: CanvasNodeData[], as
             && metadata.characterVersionId === patch.characterVersionId
             && metadata.characterPrompt === patch.characterPrompt
             && metadata.characterCoverUrl === patch.characterCoverUrl
+            && metadata.selectedOutfitId === patch.selectedOutfitId
             && metadata.characterVisualStatus === patch.characterVisualStatus
             && metadata.characterVoiceStatus === patch.characterVoiceStatus
             && metadata.characterVoiceName === patch.characterVoiceName
@@ -73,7 +82,8 @@ export function refreshCanvasCharacterReferenceNodes(nodes: CanvasNodeData[], as
 }
 
 export function compileCharacterReferencePrompt(name: string, definition: Record<string, unknown>) {
-    const parts = [definition.role, definition.appearance, definition.physique, definition.clothing, definition.personality, definition.props, definition.consistencyPrompt]
+    const effective = applyCharacterOutfitDefinition(definition);
+    const parts = [effective.role, effective.appearance, effective.physique, effective.clothing, effective.personality, effective.props, effective.consistencyPrompt]
         .map((value) => typeof value === "string" ? value.trim() : "")
         .filter(Boolean);
     return [`【角色卡：${name}】`, ...parts].join("\n");

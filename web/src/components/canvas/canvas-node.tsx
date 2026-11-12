@@ -326,7 +326,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onOpenDrawing?.(data);
                         return;
                     }
-                    if (!readOnly && data.type === CanvasNodeType.Text && data.metadata?.workflowKind === "character" && data.metadata.characterAssetId) {
+                    if (!readOnly && data.type === CanvasNodeType.Text && data.metadata?.workflowKind === "character" && (data.metadata.characterAssetId || data.metadata.officialAssetId)) {
                         event.stopPropagation();
                         onOpenTextEditor?.(data);
                         return;

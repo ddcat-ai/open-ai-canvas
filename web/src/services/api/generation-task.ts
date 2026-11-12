@@ -254,9 +254,12 @@ async function prepareGenerationReferences({
 }: Pick<BackendGenerationTaskOptions, "config" | "mode" | "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
     // asset:// 仅视频生成可用；Agent Plan Seedream 与 Seedance 共用 /api/plan/v3，不能按 BaseURL 误判。
     const preferArkAssetUrl = mode === "video" && usesArkVideoAssetReference(config);
+    const requiresAudioReference = mode === "audio" && (config.audioMode === "unified_edit" || config.audioMode !== "tts" && referenceAudios.length > 0);
+    if (requiresAudioReference && referenceAudios.length === 0) throw new Error("全能配音需要连接参考音频；请检查音频是否已连接，或切换为文本朗读");
     const preparedImages = await Promise.all(referenceImages.map((image) => prepareBackendImageReference(image, preferArkAssetUrl)));
     const preparedVideos = await Promise.all(referenceVideos.map(prepareBackendMediaReference));
-    const preparedAudios = await Promise.all(referenceAudios.map(prepareBackendMediaReference));
+    const effectiveAudios = mode === "audio" && config.audioMode === "tts" ? [] : referenceAudios;
+    const preparedAudios = await Promise.all(effectiveAudios.map(prepareBackendMediaReference));
     const preparedMask = mask ? await prepareBackendImageReference(mask, false) : undefined;
     return { referenceImages: preparedImages, referenceVideos: preparedVideos, referenceAudios: preparedAudios, mask: preparedMask };
 }
@@ -432,6 +435,7 @@ export function backendProviderConfig(config: AiConfig, mode: BackendGenerationM
         videoGenerateAudio: mode === "video" && !profile.video?.generateAudio.supported ? undefined : config.videoGenerateAudio,
         videoWatermark: mode === "video" && !profile.video?.watermark.supported ? undefined : config.videoWatermark,
         videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload,
+        audioMode: config.audioMode,
         audioVoice: normalizeAudioVoiceForConfig(config, config.audioVoice),
         audioFormat: normalizeAudioFormatForConfig(config, config.audioFormat),
         audioSpeed: config.audioSpeed,
@@ -476,6 +480,7 @@ function workflowProviderConfig(config: AiConfig, requestConfig: ReturnType<type
         videoGenerateAudio: config.videoGenerateAudio,
         videoWatermark: config.videoWatermark,
         videoArkPrivateAssetUpload: config.videoArkPrivateAssetUpload,
+        audioMode: config.audioMode,
         audioVoice: normalizeAudioVoiceForConfig(config, config.audioVoice),
         audioFormat: normalizeAudioFormatForConfig(config, config.audioFormat),
         audioSpeed: config.audioSpeed,

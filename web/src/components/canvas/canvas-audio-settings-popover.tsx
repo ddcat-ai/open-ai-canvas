@@ -27,7 +27,7 @@ export type CanvasAudioSettingKey =
     | "audioEmotionSurprised"
     | "audioEmotionCalm";
 type AudioPopoverProps = {
-    config: AiConfig;
+    config: AiConfig & { audioVoiceBindings?: CanvasAudioVoiceBinding[] };
     referenceAudioLabels?: string[];
     references?: CanvasResourceReference[];
     onBindingsChange?: (bindings: CanvasAudioVoiceBinding[]) => void;

@@ -21,6 +21,7 @@ import {
     Infinity as InfinityIcon,
     KeyRound,
     Layers3,
+    LibraryBig,
     LogIn,
     MailSearch,
     Mail,
@@ -131,6 +132,8 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/skills", keywords: "技能 skill", label: "技能管理", shortLabel: "技能", icon: <Wand2 className="size-4" /> },
             { path: "/admin/skill-curation", keywords: "技能 分类 推荐", label: "技能分类", shortLabel: "分类", icon: <Sparkles className="size-4" /> },
             { path: "/admin/resources", keywords: "资源 文件 素材 存储 清理", label: "存储资源", shortLabel: "资源", icon: <Database className="size-4" /> },
+            { path: "/admin/official-assets", keywords: "官方 素材 角色卡 预设 公共资产", label: "官方素材库", shortLabel: "素材", icon: <LibraryBig className="size-4" /> },
+            { path: "/admin/official-asset-recommendations", keywords: "素材 推荐 审核 角色卡 退回 发布", label: "素材推荐审核", shortLabel: "审核", icon: <Inbox className="size-4" /> },
         ],
     },
     {

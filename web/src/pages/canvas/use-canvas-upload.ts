@@ -739,7 +739,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     workflowKind: "character",
                     characterAssetId: payload.assetId,
                     characterVersionId: payload.versionId,
-                    characterVersionPolicy: "current",
+                    characterVersionPolicy: payload.officialAssetId ? "pinned" : "current",
                     characterName: payload.title,
                     characterPrompt: payload.prompt,
                     characterAliases: payload.aliases,
@@ -748,9 +748,12 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     characterVisualStatus: payload.visualStatus,
                     characterVoiceStatus: payload.voiceStatus,
                     characterVoiceName: payload.voiceName,
+                    characterVoiceSampleResourceId: payload.voiceSampleResourceId,
                     characterVoiceProfile: payload.voiceProfile,
                     characterVoiceInstructions: payload.voiceInstructions,
                     assetId: payload.assetId,
+                    officialAssetId: payload.officialAssetId,
+                    officialCharacterSnapshot: payload.officialCharacterSnapshot,
                     status: NODE_STATUS_SUCCESS,
                     fontSize: 14,
                 },
@@ -781,6 +784,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     bytes: payload.bytes,
                     mimeType: payload.mimeType || "audio/mpeg",
                     assetId: payload.assetId,
+                    officialAssetId: payload.officialAssetId,
                     status: NODE_STATUS_SUCCESS,
                 },
             } satisfies CanvasNodeData;
@@ -808,6 +812,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     bytes: payload.bytes,
                     mimeType: payload.mimeType || "video/mp4",
                     assetId: payload.assetId,
+                    officialAssetId: payload.officialAssetId,
                 },
             } satisfies CanvasNodeData;
         }
@@ -829,7 +834,7 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
             position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
             width: size.width,
             height: size.height,
-            metadata: { ...metadata, prompt: payload.title, assetId: payload.assetId, originalFileName: payload.originalFileName },
+            metadata: { ...metadata, prompt: payload.title, assetId: payload.assetId, officialAssetId: payload.officialAssetId, originalFileName: payload.originalFileName },
         } satisfies CanvasNodeData;
     }, []);
 

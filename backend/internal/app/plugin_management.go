@@ -59,6 +59,10 @@ type AdminPluginStateView struct {
 }
 
 var officialApplicationPolicies = map[string]PluginManagementView{
+	PluginOfficialAssetLibrary: {
+		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
+		ActivationScope: PluginScopeSystem, ConfigurationScope: PluginConfigurationSystem,
+	},
 	WorkflowPluginRunningHub: {
 		Origin: PluginOriginOfficial, Kind: PluginKindApplication,
 		ActivationScope: PluginScopeUser, ConfigurationScope: PluginConfigurationUser,
@@ -317,7 +321,7 @@ func (s *Service) SetPluginPlatformAvailability(actor *model.User, pluginID stri
 	policy := pluginManagement(pluginID, source)
 	previousRuntimeEnabled := false
 	runtimeChanged := false
-	if policy.ActivationScope == PluginScopeSystem {
+	if policy.ActivationScope == PluginScopeSystem && (hasRuntime || pluginID != PluginOfficialAssetLibrary) {
 		if !hasRuntime {
 			return AdminPluginStateView{}, fmt.Errorf("插件 %q 缺少运行时", pluginID)
 		}

@@ -45,6 +45,7 @@ type CharacterRepresentationInput struct {
 
 type ReplaceCharacterRepresentationsRequest struct {
 	Representations []CharacterRepresentationInput `json:"representations"`
+	Definition      map[string]any                 `json:"definition,omitempty"`
 }
 
 type BindCharacterVoiceRequest struct {
@@ -248,11 +249,19 @@ func (s *Service) ReplaceCharacterRepresentations(userID string, assetID string,
 	if err != nil {
 		return CharacterAssetSummary{}, err
 	}
+	var definitionJSON string
+	if req.Definition != nil {
+		encoded, defErr := normalizedCharacterDefinition(req.Definition)
+		if defErr != nil {
+			return CharacterAssetSummary{}, defErr
+		}
+		definitionJSON = string(encoded)
+	}
 	representations, err := s.characterRepresentationsForInputs(userID, req.Representations, newID(), time.Now())
 	if err != nil {
 		return CharacterAssetSummary{}, err
 	}
-	if _, err := s.createNextCharacterVersion("", asset, asset.Title, "", representations, nil, false); err != nil {
+	if _, err := s.createNextCharacterVersion("", asset, asset.Title, definitionJSON, representations, nil, false); err != nil {
 		return CharacterAssetSummary{}, err
 	}
 	return s.Character(userID, asset.ID)
@@ -360,8 +369,16 @@ func (s *Service) ReplaceProjectCharacterRepresentations(userID string, projectI
 	if err != nil {
 		return ProjectCharacterDetail{}, err
 	}
-	if len(req.Representations) == 0 || len(req.Representations) > 8 {
-		return ProjectCharacterDetail{}, BadAuthRequest("角色形象数量必须在 1 到 8 之间")
+	var definitionJSON string
+	if req.Definition != nil {
+		encoded, defErr := normalizedCharacterDefinition(req.Definition)
+		if defErr != nil {
+			return ProjectCharacterDetail{}, defErr
+		}
+		definitionJSON = string(encoded)
+	}
+	if len(req.Representations) == 0 || len(req.Representations) > 24 {
+		return ProjectCharacterDetail{}, BadAuthRequest("角色形象数量必须在 1 到 24 之间")
 	}
 	roles := make(map[string]struct{}, len(req.Representations))
 	representations := make([]model.AssetRepresentation, 0, len(req.Representations))
@@ -386,7 +403,7 @@ func (s *Service) ReplaceProjectCharacterRepresentations(userID string, projectI
 		}
 		representations = append(representations, model.AssetRepresentation{ID: newID(), TaskID: operationID, ResourceID: resourceID, MediaType: "image", Role: role, MetadataJSON: string(metadata), CreatedAt: time.Now()})
 	}
-	if _, err := s.createNextCharacterVersion(projectID, asset, asset.Title, "", representations, nil, false); err != nil {
+	if _, err := s.createNextCharacterVersion(projectID, asset, asset.Title, definitionJSON, representations, nil, false); err != nil {
 		return ProjectCharacterDetail{}, err
 	}
 	return s.ProjectCharacter(userID, projectID, asset.ID)
@@ -770,8 +787,8 @@ func (s *Service) characterRepresentationsForResources(userID, taskID, imageReso
 }
 
 func (s *Service) characterRepresentationsForInputs(userID string, inputs []CharacterRepresentationInput, taskID string, now time.Time) ([]model.AssetRepresentation, error) {
-	if len(inputs) == 0 || len(inputs) > 8 {
-		return nil, BadAuthRequest("角色形象数量必须在 1 到 8 之间")
+	if len(inputs) == 0 || len(inputs) > 24 {
+		return nil, BadAuthRequest("角色形象数量必须在 1 到 24 之间")
 	}
 	roles := make(map[string]struct{}, len(inputs))
 	result := make([]model.AssetRepresentation, 0, len(inputs))
@@ -881,6 +898,9 @@ func voiceProfileSummary(profile model.VoiceProfile) VoiceProfileSummary {
 }
 
 func validCharacterRepresentationRole(role string) bool {
+	if strings.HasPrefix(role, "outfit:") && len(strings.TrimSpace(strings.TrimPrefix(role, "outfit:"))) > 0 && len(role) <= 64 {
+		return true
+	}
 	switch role {
 	case "primary", "front", "side", "back", "turnaround_sheet", "expression_sheet":
 		return true

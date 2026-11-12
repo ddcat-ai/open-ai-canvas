@@ -63,7 +63,7 @@ export function canvasNodeUsesCustomContent(node: CanvasNodeData, isEditingConte
         node.type === CanvasNodeType.Script ||
         node.type === CanvasNodeType.BatchTable ||
         Boolean(node.metadata?.previsSceneId) ||
-        (node.metadata?.workflowKind === "character" && Boolean(node.metadata.characterAssetId)) ||
+        (node.metadata?.workflowKind === "character" && Boolean(node.metadata.characterAssetId || node.metadata.officialAssetId || node.metadata.sharedCharacter)) ||
         (node.metadata?.workflowKind === "story_input" && !isEditingContent) ||
         (node.metadata?.workflowKind === "styleboard" && !node.metadata.content)
     );
