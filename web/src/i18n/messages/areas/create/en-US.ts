@@ -2,6 +2,30 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const enUS: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        manage: "View history backups ({{count}})",
+        backupsTitle: "History conflict backups",
+        backupsDescription:
+            "Concurrent edits keep a copy of this device's version. Keep the current version or restore a backup as a separate conversation. Original backups stay on this device and remain downloadable. Restoring history does not generate content or charge credits.",
+        keep: "Keep current version",
+        restore: "Restore as new conversation",
+        restored: "Restored as new conversation",
+        resolved: "Resolved · backup retained",
+        unresolved: "Needs review",
+        preview: "View {{count}} messages",
+        mediaMessage: "Media message (download the backup for complete data)",
+        restoredTitle: "{{title}} (restored copy)",
+        restoredNotice: "Restored on this device; sync is being attempted. Check the sync status above. The original conversation and backup are retained.",
+        keptNotice: "Current version kept. The original backup remains available to view, restore and download.",
+        resolveFailed: "Couldn't resolve this backup. It has been retained; please retry.",
+        conflict: "History synced; conflict backup available",
+        local: "History saved on this device",
+        pending: "History sync pending",
+        synced: "History synced",
+        error: "History sync failed",
+        retry: "Retry",
+        backup: "Download conflict backup",
+    },
     agentEntry: {
         sessionNotReady: "Your sign-in or sync session isn't ready yet. Try again shortly.",
         canvasRestoring: "The canvas is still being restored. Try again shortly.",

@@ -2,6 +2,30 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const frFR: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        manage: "Voir les copies de l’historique ({{count}})",
+        backupsTitle: "Copies des conflits de l’historique",
+        backupsDescription:
+            "Les modifications simultanées conservent une copie de la version de cet appareil. Gardez la version actuelle ou restaurez une copie dans une nouvelle conversation. Les copies originales restent sur cet appareil et peuvent être téléchargées. La restauration ne génère aucun contenu et ne débite aucun crédit.",
+        keep: "Garder la version actuelle",
+        restore: "Restaurer dans une nouvelle conversation",
+        restored: "Restauré dans une nouvelle conversation",
+        resolved: "Traité · copie conservée",
+        unresolved: "À examiner",
+        preview: "Voir {{count}} messages",
+        mediaMessage: "Message média (données complètes dans le téléchargement)",
+        restoredTitle: "{{title}} (copie restaurée)",
+        restoredNotice: "Restauré sur cet appareil ; synchronisation en cours de tentative. Consultez l’état ci-dessus. La conversation et la copie originales sont conservées.",
+        keptNotice: "Version actuelle conservée. La copie originale peut toujours être consultée, restaurée et téléchargée.",
+        resolveFailed: "Échec du traitement. La copie est conservée. Réessayez.",
+        conflict: "Historique synchronisé ; copie en conflit disponible",
+        local: "Historique enregistré sur cet appareil",
+        pending: "Synchronisation en attente",
+        synced: "Historique synchronisé",
+        error: "Échec de synchronisation",
+        retry: "Réessayer",
+        backup: "Télécharger la copie en conflit",
+    },
     agentEntry: {
         sessionNotReady: "La session de connexion ou de synchronisation n'est pas prête. Réessayez dans un instant.",
         canvasRestoring: "Le canevas est en cours de restauration. Réessayez dans un instant.",

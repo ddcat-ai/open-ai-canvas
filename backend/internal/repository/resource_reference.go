@@ -141,6 +141,13 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 		return snapshot, err
 	}
 	snapshot.Direct = append(snapshot.Direct, history...)
+	var links []model.CreationConversationResource
+	if err := r.db.Where("user_id = ? AND resource_id IN ?", userID, resourceIDs).Find(&links).Error; err != nil {
+		return snapshot, err
+	}
+	for _, link := range links {
+		snapshot.Direct = append(snapshot.Direct, ResourceDirectReference{Kind: "创作对话", ID: link.ConversationID, Title: "创作历史中的媒体", ResourceID: link.ResourceID})
+	}
 	dramaReferences, err := r.DramaResourceReferences(userID, resourceIDs)
 	if err != nil {
 		return snapshot, err

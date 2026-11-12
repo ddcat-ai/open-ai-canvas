@@ -5,6 +5,20 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 创作对话同步（Schema 101）
+
+版本 101 `creation_conversation_history` 新增三张表，既有迁移账本保持不变。浏览器旧历史仅在原账号 scope 下补传，保留旧缓存；游客历史不自动合并到登录账号。
+
+| 表 | 合同 |
+| --- | --- |
+| `creation_conversations` | `user_id + id` 主键；独立的 metadata_revision 与整体 revision。永久 deleted 标记阻止旧设备复活对话 |
+| `creation_conversation_messages` | `user_id + conversation_id + id` 主键；逐条 revision 和稳定 sequence。删除清空正文并保留消息 tombstone |
+| `creation_conversation_resources` | 媒体归属校验后与消息同事务更新，保护仅被对话引用的资源不被孤儿清理 |
+
+SQLite 写事务与 PostgreSQL 行锁串行化同一对话的修订检查；读取使用一致性快照。重复提交相同正文不递增修订，不同消息可独立追加，同一消息冲突采用云端版本，浏览器保留可下载的冲突副本。删除历史不会取消任务、删除素材或触发计费。
+
+媒体仅保存 `resource:<id>`，不存临时访问地址或渠道配置；关联画布、任务及资源必须属于当前账号。单次请求最多 100 条、2 MiB，单条正文 256 KiB，对话最多 5000 条（含删除标记）、16 MiB 正文。清理资源与新增对话媒体引用使用同一资源锁。
+
 ## Agent MCP（Schema 100）
 
 版本 100 `agent_mcp_connections` 只新增三张表及 GitHub、飞书两个市场配置模板，不改写既有业务数据。模板不代表连接已配置、检测通过或工具已授权。

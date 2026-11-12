@@ -81,6 +81,7 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 			{&model.Announcement{}, "image_resource_id IN ?"},
 			{&model.AnnouncementImageDraft{}, "resource_id IN ?"},
 			{&model.AssetRepresentation{}, "resource_id IN ?"},
+			{&model.CreationConversationResource{}, "resource_id IN ?"},
 			{&model.VoiceProfile{}, "sample_resource_id IN ?"},
 			{&model.ShotArtifact{}, "resource_id IN ?"},
 			// 短剧表直接持有参考图、段视频、尾帧、成片与历史版本，不出现在任何 JSON 文档里。

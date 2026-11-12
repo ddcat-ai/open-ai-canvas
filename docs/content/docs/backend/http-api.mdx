@@ -5,6 +5,16 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 创作对话同步
+
+- `GET /creation-conversations?after=<id>`：当前账号摘要（含永久删除标记），按 ID 升序每页 100 条；`next=""` 表示结束。列表缺项不是删除命令。
+- `GET /creation-conversations/:id`：一致性快照，含整体 revision、metadataRevision、逐条消息的 revision 和 deleted。
+- `POST /creation-conversations/:id/sync`：`{metadata?:{revision,title,canvasId?},messages?:[{id,revision,data?,deleted?}],delete?:boolean}`。成功结果的 conflicts 列出采用云端版本的 metadata 或消息 ID；冲突不阻止不同消息追加，非法字段或越权则整批回滚。
+
+同步与附件上传携带 `X-Canvas-Expected-User`；该值必须匹配 Cookie 身份，否则返回 403，不能用 Header 代替身份认证。单条消息删除清空正文、保留永久标记；整段对话删除清空消息及资源索引，均不取消任务或删除素材。相同正文的重试幂等；过期修订不会覆盖新正文，已完成消息不会退回等待状态。
+
+浏览器在同一个账号缓存信封中保存正文、已确认修订、待删记录和冲突副本；恢复旧本地历史时保留旧键。断网失败显示未同步，可重试；在线、窗口聚焦及可见时定期拉取。多端冲突保留服务端版本，可在“查看历史副本”中查看消息、下载原始备份、保留当前版本或恢复为独立新对话。处理状态在本机成功落盘后更新，已处理副本继续保留，不再使同步状态持续报警；同一对话的新冲突仍独立提示。恢复不覆盖原对话或删除标记，也不重新生成内容或扣费；恢复后仍需检查同步结果。副本及其处理状态属于当前账号、当前浏览器缓存，不随服务端历史跨设备分发。游客记录仅在本机保存。
+
 ## Agent MCP
 
 所有接口使用登录 Cookie、统一业务信封和严格 JSON 入参。个人连接归属、平台管理员权限、连接启用状态和工具授权均在 service 层校验。
