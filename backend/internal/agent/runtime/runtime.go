@@ -71,6 +71,15 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	if err != nil {
 		return err
 	}
+	nodePath, err := agentNodePath()
+	if err != nil {
+		return err
+	}
+	configDir, err := os.MkdirTemp("", "yingce-agent-config-")
+	if err != nil {
+		return fmt.Errorf("create isolated Agent config directory: %w", err)
+	}
+	defer os.RemoveAll(configDir)
 	server, err := StartBridge("127.0.0.1:0", "127.0.0.1", bridge)
 	if err != nil {
 		return err
@@ -82,13 +91,15 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	if err != nil {
 		return fmt.Errorf("encode Agent runtime request: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, "node", "--max-old-space-size="+nodeMemoryMB(), filepath.Join(runtimeDir, "agent-runtime.mjs"))
+	cmd := exec.CommandContext(ctx, nodePath, "--max-old-space-size="+nodeMemoryMB(), filepath.Join(runtimeDir, "agent-runtime.mjs"))
 	cmd.Dir = runtimeDir
 	cmd.Stdin = strings.NewReader(string(payload))
-	// 环境变量白名单：只传 Node 运行所需的最少变量。HOME 与会话、工作目录
-	// 由运行时自己建的临时隔离目录提供，不使用服务端数据目录。
+	// SDK 在模块导入时就读取 HOME；子进程必须先拿到空的临时配置目录。
+	// 运行时再为本轮会话与工作目录建立独立隔离目录，不读取宿主配置。
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + configDir,
+		"PI_CODING_AGENT_DIR=" + configDir,
 		"NODE_ENV=production",
 		"PI_OFFLINE=1",
 	}
@@ -114,6 +125,22 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		return fmt.Errorf("agent runtime exited: %w", waitErr)
 	}
 	return nil
+}
+
+func agentNodePath() (string, error) {
+	// Version-manager shims may need the host HOME to locate Node. Resolve the
+	// real binary before launching the Agent with its isolated HOME.
+	probe := exec.Command("node", "-p", "process.execPath")
+	probe.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
+	output, err := probe.Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve Agent Node runtime: %w", err)
+	}
+	path := strings.TrimSpace(string(output))
+	if !filepath.IsAbs(path) {
+		return "", errors.New("Agent Node runtime did not resolve to an absolute path")
+	}
+	return path, nil
 }
 
 func StartBridge(listenAddr, advertiseHost string, bridge Bridge) (*BridgeServer, error) {

@@ -90,6 +90,10 @@ if (process.env.DATABASE_URL) {
   process.stdout.write(JSON.stringify({ event: "runtime_error", message: "leaked" }) + "\n");
   process.exitCode = 1;
 }
+if (!process.env.HOME?.includes("yingce-agent-config-") || process.env.PI_CODING_AGENT_DIR !== process.env.HOME) {
+  process.stdout.write(JSON.stringify({ event: "runtime_error", message: "invalid isolated home" }) + "\n");
+  process.exitCode = 1;
+}
 `)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
