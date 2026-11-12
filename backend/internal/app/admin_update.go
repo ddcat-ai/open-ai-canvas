@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -14,6 +15,48 @@ type UpdateManager interface {
 	Check(context.Context) (hostupdate.Status, error)
 	Start(context.Context, string) (hostupdate.Status, error)
 	Rollback(context.Context, string) (hostupdate.Status, error)
+	SaveSources(context.Context, hostupdate.Sources) (hostupdate.Status, error)
+	TestSources(context.Context) (hostupdate.Status, error)
+}
+
+func (s *Service) AdminSaveUpdateSources(ctx context.Context, actor *model.User, sources hostupdate.Sources) (hostupdate.Status, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return hostupdate.Status{}, err
+	}
+	if err := sources.Validate(); err != nil {
+		return hostupdate.Status{}, NewAppError(http.StatusBadRequest, err.Error())
+	}
+	if s.updateManager == nil {
+		return hostupdate.Status{}, NewAppError(http.StatusServiceUnavailable, "当前部署未安装 Host Updater")
+	}
+	status, err := s.updateManager.SaveSources(ctx, sources)
+	if err != nil {
+		return status, updateSourceError("保存更新来源失败，请检查更新器状态和日志", err)
+	}
+	return status, nil
+}
+
+func (s *Service) AdminTestUpdateSources(ctx context.Context, actor *model.User) (hostupdate.Status, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return hostupdate.Status{}, err
+	}
+	if s.updateManager == nil {
+		return hostupdate.Status{}, NewAppError(http.StatusServiceUnavailable, "当前部署未安装 Host Updater")
+	}
+	status, err := s.updateManager.TestSources(ctx)
+	if err != nil {
+		return status, updateSourceError("无法开始更新来源检测，请检查更新器状态和日志", err)
+	}
+	return status, nil
+}
+
+func updateSourceError(message string, err error) error {
+	status := http.StatusBadGateway
+	var upstream interface{ HTTPStatus() int }
+	if errors.As(err, &upstream) && (upstream.HTTPStatus() == http.StatusBadRequest || upstream.HTTPStatus() == http.StatusConflict) {
+		status = upstream.HTTPStatus()
+	}
+	return WrapAppError(status, message, err)
 }
 
 func (s *Service) ConfigureUpdateManager(manager UpdateManager) {
