@@ -125,7 +125,8 @@ export function SegmentDialog({
             aria-label={segment ? `第 ${segment.index + 1} 段` : "剧情段"}
         >
             {segment && detail ? (
-                <div className="drama-sd">
+                // 整棵内容树用本段 id 做 key：左右切换时一次卸掉旧段。不要给同级子组件复用同一个 segment.id，React 会把旧卡片留在树上。
+                <div className="drama-sd" key={segment.id}>
                     <header className="drama-sd-head">
                         <div className="min-w-0">
                             <div className="drama-eyebrow">
@@ -153,7 +154,6 @@ export function SegmentDialog({
                     <div className="drama-sdx-body">
                         <main className="drama-sdx-main thin-scrollbar">
                             <SegmentToolbar
-                                key={segment.id}
                                 segment={segment}
                                 aspectRatio={aspectRatio}
                                 busy={busy}
@@ -164,7 +164,7 @@ export function SegmentDialog({
                                 onWritePrompt={() => onWritePrompt(segment)}
                             />
                             <SegmentPrompt segment={segment} castById={castById} writing={writing} onSave={(override) => onSavePrompt(segment, override)} onWrite={() => onWritePrompt(segment)} />
-                            <ReferenceBoard key={segment.id} segment={segment} shots={shots} castById={castById} busy={busy} onSave={(patch) => onSaveReferences(segment, patch)} onOpenCast={onOpenCast} />
+                            <ReferenceBoard segment={segment} shots={shots} castById={castById} busy={busy} onSave={(patch) => onSaveReferences(segment, patch)} onOpenCast={onOpenCast} />
                             <SegmentReceipt segment={segment} />
                             <section className="drama-sdx-section" aria-label="本段镜头">
                                 <div className="drama-sdx-section-head">
