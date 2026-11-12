@@ -6299,6 +6299,7 @@
 .admin-email-delivery-section,
 .admin-access-registration-section,
 .admin-access-linuxdo-section,
+.admin-access-wechat-section,
 .admin-access-agreement-section,
 .admin-intercept-policy-section,
 .admin-third-party-credential-section {
@@ -6309,20 +6310,39 @@
 .admin-email-delivery-section > .admin-settings-section-summary,
 .admin-access-registration-section > .admin-settings-section-summary,
 .admin-access-linuxdo-section > .admin-settings-section-summary,
+.admin-access-wechat-section > .admin-settings-section-summary,
 .admin-access-agreement-section > .admin-settings-section-summary,
 .admin-intercept-policy-section > .admin-settings-section-summary,
 .admin-third-party-credential-section > .admin-settings-section-summary {
     background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section)
+:is(
+        .admin-storage-mode-section,
+        .admin-email-delivery-section,
+        .admin-access-registration-section,
+        .admin-access-linuxdo-section,
+        .admin-access-wechat-section,
+        .admin-access-agreement-section,
+        .admin-intercept-policy-section,
+        .admin-third-party-credential-section
+    )
     > .admin-settings-section-summary
     h2 {
     font-size: 16px;
     letter-spacing: -0.01em;
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section)
+:is(
+        .admin-storage-mode-section,
+        .admin-email-delivery-section,
+        .admin-access-registration-section,
+        .admin-access-linuxdo-section,
+        .admin-access-wechat-section,
+        .admin-access-agreement-section,
+        .admin-intercept-policy-section,
+        .admin-third-party-credential-section
+    )
     > .admin-settings-section-summary
     p {
     max-width: 760px;

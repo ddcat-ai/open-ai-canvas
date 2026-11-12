@@ -677,7 +677,7 @@ paths:
             schema:
               {
                 type: string,
-                enum: [password, email, sms, linuxdo, oidc, verification, unknown],
+                enum: [password, email, sms, linuxdo, wechat, oidc, verification, unknown],
               },
           }
         - {
@@ -3626,7 +3626,7 @@ paths:
     get:
       tags: [auth]
       summary: 当前用户个人信息及安全能力
-      description: 返回 user、hasPassword、emailEnabled、linuxdoEnabled 和可选 reauthenticatedUntil；个人头像选择覆盖第三方头像。内部密码散列与头像版本字段不返回。
+      description: 返回 user、hasPassword、emailEnabled、linuxdoEnabled、linuxdoBound、wechatEnabled、wechatBound 和可选 reauthenticatedUntil；个人头像选择覆盖第三方头像。内部密码散列与头像版本字段不返回。
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -3731,7 +3731,7 @@ paths:
     post:
       tags: [auth]
       summary: 修改或设置本地密码并撤销所有会话
-      description: 已有密码必须校验 currentPassword；纯第三方账号须在当前会话完成5分钟内的Linux.do重新授权核验。成功返回 data.changed=true 并清除会话 Cookie。
+      description: 已有密码必须校验 currentPassword；纯第三方账号须在当前会话完成5分钟内的已绑定Linux.do或微信重新授权核验。成功返回 data.changed=true 并清除会话 Cookie。
       requestBody:
         required: true
         content:
@@ -3760,7 +3760,7 @@ paths:
     post:
       tags: [auth]
       summary: 向新邮箱发送专用验证码
-      description: 验证当前密码或当前会话最近的Linux.do核验；新地址未被占用且不同于旧地址。返回 ticket、expiresIn=600、retryAfter=60；票据绑定用户/会话/凭据，仅profile_email用途有效。发送失败显式报错。
+      description: 验证当前密码或当前会话最近的已绑定Linux.do或微信核验；新地址未被占用且不同于旧地址。返回 ticket、expiresIn=600、retryAfter=60；票据绑定用户/会话/凭据，仅profile_email用途有效。发送失败显式报错。
       requestBody:
         required: true
         content:
@@ -3955,6 +3955,119 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /admin/settings/wechat:
+    get:
+      tags: [admin]
+      summary: 读取微信网站应用登录配置
+      description: 仅管理员。data.setting 包含 enabled、appId、hasAppSecret、redirectUrl、updatedAt；不返回密钥。
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: 更新微信网站应用登录配置
+      description: AppSecret 加密保存，留空保留；回调使用 HTTPS，路径固定为 /api/auth/wechat/callback。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, appId, redirectUrl]
+              properties:
+                enabled: { type: boolean }
+                appId: { type: string }
+                appSecret: { type: string, writeOnly: true }
+                redirectUrl: { type: string, format: uri }
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /auth/wechat/start:
+    get:
+      tags: [auth]
+      security: []
+      summary: 发起微信网站应用登录
+      parameters:
+        - { name: next, in: query, schema: { type: string } }
+        - { name: acceptedTerms, in: query, schema: { type: boolean } }
+      responses:
+        "302": { description: 写入十分钟有效的 Secure HttpOnly 状态 Cookie，跳转微信官方授权页 }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /auth/wechat/callback:
+    get:
+      tags: [auth]
+      security: []
+      summary: 处理微信授权回调
+      description: 同时验证浏览器 Cookie 与一次性 state；已有身份登录，新身份进入注册补全。绑定和重新核验检查原账号与原会话。Token 不进入浏览器或重定向 URL。
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: 返回原页面、个人设置或注册补全页；授权失败返回对应入口 }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /auth/wechat/registration:
+    get:
+      tags: [auth]
+      security: []
+      summary: 读取微信首次注册补全信息
+      description: 根据 HttpOnly Cookie 返回 displayName、next、acceptedTerms，不返回注册票据或微信身份标识。
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "400": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [auth]
+      security: []
+      summary: 完成微信注册并登录
+      description: 按本站策略验证联系方式与服务协议；同一事务消费票据和验证码、创建用户和身份。返回 user、next，写入会话 Cookie；无需用户名和密码。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acceptedTerms]
+              properties:
+                acceptedTerms: { type: boolean }
+                email: { type: string }
+                phone: { type: string }
+                ticket: { type: string }
+                emailCode: { type: string }
+                smsCode: { type: string }
+                referralCode: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [auth]
+      security: []
+      summary: 退出注册补全并清除浏览器票据
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /auth/profile/wechat/bind:
+    get:
+      tags: [auth]
+      summary: 发起当前登录账号的微信绑定
+      description: state 绑定当前账号与会话。已有绑定或微信属于其他账号时拒绝，不能替换已有身份。
+      responses:
+        "302": { description: 写入浏览器状态 Cookie 并跳转微信授权页 }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /auth/profile/wechat/start:
+    get:
+      tags: [auth]
+      summary: 发起当前账号微信身份重新核验
+      description: 仅接受原绑定身份与原会话。核验有效期五分钟，不创建账号或新登录会话。
+      responses:
+        "302": { description: 写入浏览器状态 Cookie 并跳转微信授权页 }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /auth/oidc/start:
     get:
       tags: [auth]
@@ -5113,7 +5226,7 @@ components:
         method:
           {
             type: string,
-            enum: [password, email, sms, linuxdo, oidc, verification, unknown],
+            enum: [password, email, sms, linuxdo, wechat, oidc, verification, unknown],
           }
         source: { type: string, enum: [login, registration, logout] }
         result: { type: string, enum: [success, failed] }

@@ -7,7 +7,7 @@ export type LoginLog = {
     displayName: string;
     account: string;
     event: "login" | "logout";
-    method: "password" | "email" | "sms" | "linuxdo" | "oidc" | "verification" | "unknown";
+    method: "password" | "email" | "sms" | "linuxdo" | "wechat" | "oidc" | "verification" | "unknown";
     source: "login" | "registration" | "logout";
     result: "success" | "failed";
     ip: string;

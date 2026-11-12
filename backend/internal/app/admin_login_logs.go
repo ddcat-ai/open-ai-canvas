@@ -31,7 +31,7 @@ func (s *Service) AdminLoginLogs(actor *model.User, query LoginLogQuery, page, p
 	}{
 		{filter.Event, []string{"", "login", "logout"}},
 		{filter.Result, []string{"", "success", "failed"}},
-		{filter.Method, []string{"", "password", "email", "sms", "linuxdo", "oidc", "verification", "unknown"}},
+		{filter.Method, []string{"", "password", "email", "sms", "linuxdo", "wechat", "oidc", "verification", "unknown"}},
 	} {
 		valid := false
 		for _, option := range enum.options {

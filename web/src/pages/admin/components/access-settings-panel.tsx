@@ -11,6 +11,8 @@ import type { AuthLoginMode } from "@/services/api/auth";
 import { useAuthSettingsStore } from "@/stores/use-auth-settings-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 import { Select } from "@/components/ui/base/select";
+import { getAdminWechatSetting, type WechatSetting } from "@/services/api/wechat";
+import { WechatSettingsSection } from "./wechat-settings-section";
 
 const LOGIN_MODES: Array<{ mode: AuthLoginMode; label: string; description: string; short: string }> = [
     { mode: "modal", label: "弹窗登录（默认）", description: "在当前页面弹出登录框，登录后留在原页面继续操作；直达 /login 的链接也会改为弹窗。", short: "左侧品牌介绍 + 右侧登录表单" },
@@ -41,6 +43,9 @@ export default function AccessSettingsPanel() {
     const { message, modal } = App.useApp();
     const brandName = useAppearanceStore((state) => state.appearance.brandName) || "平台";
     const [linuxdo, setLinuxdo] = useState<LinuxDOSetting | null>(null);
+    const [wechat, setWechat] = useState<WechatSetting | null>(null);
+    const [wechatDirty, setWechatDirty] = useState(false);
+    const [wechatSaving, setWechatSaving] = useState(false);
     const [registration, setRegistration] = useState<RegistrationSetting | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -68,9 +73,10 @@ export default function AccessSettingsPanel() {
             else setRefreshing(true);
             setLoadError("");
             try {
-                const [linuxdoData, registrationData] = await Promise.all([getAdminLinuxDOSetting(), getAdminRegistrationSetting()]);
+                const [linuxdoData, registrationData, wechatData] = await Promise.all([getAdminLinuxDOSetting(), getAdminRegistrationSetting(), getAdminWechatSetting()]);
                 if (requestVersion !== requestVersionRef.current) return;
                 setLinuxdo(linuxdoData.setting);
+                setWechat(wechatData.setting);
                 setRegistration(registrationData.setting);
                 setAgreementTitle(registrationData.setting.agreementTitle || "");
                 setAgreementContent(registrationData.setting.agreementContent || "");
@@ -106,7 +112,7 @@ export default function AccessSettingsPanel() {
         setDraftLinuxDOEnabled(linuxdo.enabled);
     }, [form, linuxdo, loading, registration]);
 
-    const unsaved = (dirty && !savingLinuxDO) || (agreementDirty && !savingAgreement);
+    const unsaved = (dirty && !savingLinuxDO) || (agreementDirty && !savingAgreement) || wechatDirty || wechatSaving;
     const blocker = useBlocker(unsaved);
 
     // 条款编辑区下方的字数与段落提示：与注册页的分段规则保持一致（按空行分段），
@@ -193,7 +199,8 @@ export default function AccessSettingsPanel() {
     };
 
     const requestRefresh = () => {
-        if (!dirty && !agreementDirty) {
+        if (wechatSaving) return;
+        if (!dirty && !agreementDirty && !wechatDirty) {
             void load(false, true);
             return;
         }
@@ -318,7 +325,7 @@ export default function AccessSettingsPanel() {
         );
     }
 
-    if (!linuxdo || !registration) {
+    if (!linuxdo || !registration || !wechat) {
         return (
             <div className="admin-settings-stack admin-access-settings">
                 <div className="admin-access-load-error" role="alert">
@@ -339,17 +346,17 @@ export default function AccessSettingsPanel() {
 
     return (
         <div className="admin-settings-stack admin-access-settings">
-            <div className={cn("admin-access-command-bar", dirty && "is-dirty")}>
+            <div className={cn("admin-access-command-bar", (dirty || wechatDirty) && "is-dirty")}>
                 <div className="admin-access-command-copy" aria-live="polite">
                     <span className="admin-access-command-icon">
                         <ShieldCheck className="size-4" aria-hidden="true" />
                     </span>
                     <div>
-                        <strong>{dirty ? "Linux.do 有未保存的调整" : "登录与注册设置"}</strong>
+                        <strong>{dirty || wechatDirty ? "登录方式有未保存的调整" : "登录与注册设置"}</strong>
                         <p>
-                            {dirty
+                            {dirty || wechatDirty
                                 ? "完成接入信息后保存生效。"
-                                : `新用户注册${registration.enabled ? "已开放" : "已关闭"} · Linux.do ${linuxdo.enabled ? "已启用" : "未启用"} · ${(registration.loginMode ?? "modal") === "page" ? "独立页面登录" : "弹窗登录"}`}
+                                : `新用户注册${registration.enabled ? "已开放" : "已关闭"} · Linux.do ${linuxdo.enabled ? "已启用" : "未启用"} · 微信 ${wechat.enabled ? "已启用" : "未启用"} · ${(registration.loginMode ?? "modal") === "page" ? "独立页面登录" : "弹窗登录"}`}
                         </p>
                     </div>
                 </div>
@@ -359,7 +366,7 @@ export default function AccessSettingsPanel() {
                             撤销调整
                         </Button>
                     ) : null}
-                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={savingLinuxDO || savingRegistration || savingLoginMode} onClick={requestRefresh}>
+                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={savingLinuxDO || savingRegistration || savingLoginMode || wechatSaving} onClick={requestRefresh}>
                         刷新状态
                     </Button>
                 </div>
@@ -389,7 +396,7 @@ export default function AccessSettingsPanel() {
                                 <strong>允许创建新账号</strong>
                                 <AdminStatusBadge label="切换即保存" tone="info" />
                             </div>
-                            <p>关闭后，本地注册和未绑定账号的 Linux.do 首次登录都会被拒绝；已有账号及已绑定身份仍可继续登录。</p>
+                            <p>关闭后，本地注册和未绑定账号的第三方首次登录都会被拒绝；已有账号及已绑定身份仍可继续登录。</p>
                             <span>{formatSettingTime(registration.updatedAt, "当前来自部署环境默认值")}</span>
                         </div>
                         <Switch checked={registration.enabled} loading={savingRegistration} disabled={loading || refreshing || savingLinuxDO} onChange={requestRegistrationChange} aria-label="允许创建新账号，切换后立即生效" />
@@ -569,11 +576,13 @@ export default function AccessSettingsPanel() {
                 </SettingsSectionCard>
             </div>
 
+            <WechatSettingsSection setting={wechat} refreshing={refreshing || savingLinuxDO} onSaved={setWechat} onDirtyChange={setWechatDirty} onSavingChange={setWechatSaving} onRefresh={requestRefresh} />
+
             <div id="admin-access-agreement" className="admin-settings-anchor">
                 <SettingsSectionCard
                     className="admin-access-section admin-access-agreement-section"
                     icon={<FileText className="size-4" aria-hidden="true" />}
-                    title="3. 服务协议名称与条款"
+                    title="4. 服务协议名称与条款"
                     description="注册页勾选框与弹窗展示的内容。协议名称留空时自动跟随品牌名生成，条款留空时注册页给出待补充提示。"
                     status={<AdminStatusBadge label={agreementDirty ? "待保存" : agreementContent.trim() ? "已自定义" : "待补充"} tone={agreementDirty ? "warning" : agreementContent.trim() ? "success" : "neutral"} />}
                     footer={
@@ -660,7 +669,7 @@ export default function AccessSettingsPanel() {
                 <SettingsSectionCard
                     className="admin-access-section admin-access-login-mode-section"
                     icon={<AppWindow className="size-4" aria-hidden="true" />}
-                    title="4. 登录与注册的打开方式"
+                    title="5. 登录与注册的打开方式"
                     description="决定用户点击「登录」或访问需要登录的页面时，登录与注册界面以弹窗还是独立页面呈现。"
                     status={<AdminStatusBadge label="切换即保存" tone="info" />}
                 >

@@ -25,6 +25,7 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/canvas-agent-appearance.mdx
 !docs/content/docs/backend/update-announcements.mdx
 !docs/content/docs/backend/http-api.mdx
+!docs/content/docs/backend/wechat-login.mdx
 !docs/content/docs/backend/code-map.mdx
 !docs/content/docs/backend/channel-configuration.mdx
 !docs/content/docs/backend/newapi-channel-2.mdx

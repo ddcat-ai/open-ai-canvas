@@ -23,6 +23,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerChannelOrderRoutes(r, svc)
 	registerNotificationRoutes(r, svc)
 	registerAuthProfileRoutes(r, svc)
+	registerWechatRoutes(r, svc)
 	r.GET("/auth/settings", func(c *gin.Context) {
 		settings, err := svc.PublicAuthSettings()
 		if err != nil {

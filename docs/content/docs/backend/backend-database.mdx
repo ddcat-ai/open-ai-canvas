@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 微信登录（Schema 102）
+
+版本 102 `wechat_oauth` 为 `o_auth_states` 增加 `purpose`（登录、绑定、重新核验用途）、`client_id`（发起时的网站应用 AppID）和 `profile_json`（首次微信注册的临时昵称、头像及身份标识）。旧状态的这些字段为空，不改变 Linux.do 与 OIDC 的处理。
+
+`provider=wechat` 用于授权状态，`provider=wechat_registration` 用于十分钟有效的一次性注册补全票据；票据明文仅存在于 HttpOnly Cookie，数据库保存哈希。注册事务同时消费票据与验证码、创建用户和 `provider=wechat / subject=AppID:OpenID` 的身份，失败回滚；成功消费时清空 `profile_json`。该临时资料不保存微信 Token 或 AppSecret。绑定操作锁定当前账号和会话后检查身份唯一性，禁止替换或跨账号抢占。
+
+`system_settings.wechat_oauth` 保存独立的微信配置 JSON，AppSecret 使用系统设置密钥加密；对外管理响应仅含密钥存在标志。接入步骤见[微信网站应用登录](/docs/backend/wechat-login)。
+
 ## 创作对话同步（Schema 101）
 
 版本 101 `creation_conversation_history` 新增三张表，既有迁移账本保持不变。浏览器旧历史仅在原账号 scope 下补传，保留旧缓存；游客历史不自动合并到登录账号。
