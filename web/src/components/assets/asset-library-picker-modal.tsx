@@ -90,7 +90,10 @@ type AssetPickerSurfaceTone = "light" | "dark";
 function cssColorLuminance(value: string): number | undefined {
     const match = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
     if (!match) return undefined;
-    const channels = match.slice(1, 4).map((channel) => Number(channel) / 255).map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+    const channels = match
+        .slice(1, 4)
+        .map((channel) => Number(channel) / 255)
+        .map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
     return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
 }
 
@@ -239,13 +242,17 @@ export function AssetLibraryPickerModal({
     useEffect(() => setOfficialPage(1), [category, mediaKind, remoteKeyword, open]);
     const officialQuery = useQuery({
         queryKey: ["official-assets-picker", userId, officialPage, officialPageSize, category, mediaKind, remoteKeyword],
-        queryFn: ({ signal }) => fetchOfficialAssets({
-            page: officialPage,
-            pageSize: officialPageSize,
-            q: remoteKeyword || undefined,
-            mediaType: mediaKind === "all" ? undefined : (mediaKind as "image" | "video" | "audio" | "entity"),
-            category: category === "all" || category === "archived" ? undefined : category as "character" | "environment" | "prop" | "material" | "other",
-        }, signal),
+        queryFn: ({ signal }) =>
+            fetchOfficialAssets(
+                {
+                    page: officialPage,
+                    pageSize: officialPageSize,
+                    q: remoteKeyword || undefined,
+                    mediaType: mediaKind === "all" ? undefined : (mediaKind as "image" | "video" | "audio" | "entity"),
+                    category: category === "all" || category === "archived" ? undefined : (category as "character" | "environment" | "prop" | "material" | "other"),
+                },
+                signal,
+            ),
         enabled: officialEnabled,
         placeholderData: keepPreviousData,
     });
@@ -317,11 +324,16 @@ export function AssetLibraryPickerModal({
     const hasPluginSource = useMemo(() => Object.keys(categoryLabels).some((value) => value.startsWith("external:")) || pluginItems.some((item) => item.category.startsWith("external:")), [categoryLabels, pluginItems]);
     // 媒体类型在分类之前收窄数据源，让左侧分类计数、网格和分页始终描述同一批素材。
     const sourceItems = useMemo(() => {
-        const base = source === "official" ? importedPickerItems : source === "plugin" ? pluginItems : useRemoteItems
-            ? includeLocalItemsWithRemote
-                ? [...remoteItems, ...localItems.filter((local) => !remoteItems.some((remote) => remote.id === local.id))]
-                : remoteItems
-            : localItems;
+        const base =
+            source === "official"
+                ? importedPickerItems
+                : source === "plugin"
+                  ? pluginItems
+                  : useRemoteItems
+                    ? includeLocalItemsWithRemote
+                        ? [...remoteItems, ...localItems.filter((local) => !remoteItems.some((remote) => remote.id === local.id))]
+                        : remoteItems
+                    : localItems;
         if (mediaKind === "all") return base;
         return base.filter((item) => pickerItemMediaKind(item) === mediaKind);
     }, [includeLocalItemsWithRemote, importedPickerItems, localItems, mediaKind, pluginItems, useRemoteItems, remoteItems, source]);
@@ -334,7 +346,9 @@ export function AssetLibraryPickerModal({
         () =>
             useRemoteItems
                 ? Object.keys(categoryLabels).filter((value) => value !== "archived" && !value.startsWith("external:"))
-                : source === "official" ? ["all", ...Object.keys(officialQuery.data?.categoryCounts || {})] : ["all", ...Array.from(new Set(activeSourceItems.map((item) => item.category || "other"))).filter((value) => value !== "all")],
+                : source === "official"
+                  ? ["all", ...Object.keys(officialQuery.data?.categoryCounts || {})]
+                  : ["all", ...Array.from(new Set(activeSourceItems.map((item) => item.category || "other"))).filter((value) => value !== "all")],
         [activeSourceItems, categoryLabels, officialQuery.data, source, useRemoteItems],
     );
     const archivedCount = archivedItems.length;
@@ -421,7 +435,15 @@ export function AssetLibraryPickerModal({
             await loadAssetsForUse([result.asset.id], { refresh: true });
             const asset = useAssetStore.getState().assets.find((entry) => entry.id === result.asset.id);
             if (!asset) throw new Error("官方素材已导入，但本地素材记录尚未可用");
-            const pickerItem: AssetLibraryPickerItem = { id: asset.id, title: asset.title, category: asset.category || item.category, kindLabel: item.mediaType === "video" ? "视频" : "图片", asset, description: asset.note || item.description, searchText: item.tags.join(" ") };
+            const pickerItem: AssetLibraryPickerItem = {
+                id: asset.id,
+                title: asset.title,
+                category: asset.category || item.category,
+                kindLabel: item.mediaType === "video" ? "视频" : "图片",
+                asset,
+                description: asset.note || item.description,
+                searchText: item.tags.join(" "),
+            };
             setImportedPickerItems((current) => [...current.filter((entry) => entry.id !== pickerItem.id), pickerItem]);
             setImportedOfficialIds((current) => new Set(current).add(item.id));
             setSelected((current) => new Set(multiple ? [...current, pickerItem.id] : [pickerItem.id]));
@@ -553,7 +575,7 @@ export function AssetLibraryPickerModal({
     const countFor = (value: string) => {
         if (source === "official") {
             const counts = officialQuery.data?.categoryCounts || {};
-            return value === "all" ? officialQuery.data?.total ?? 0 : counts[value] || 0;
+            return value === "all" ? (officialQuery.data?.total ?? 0) : counts[value] || 0;
         }
         if (remoteCategoryCounts) return value === "all" ? Object.values(remoteCategoryCounts).reduce((sum, count) => sum + count, 0) : remoteCategoryCounts[value] || 0;
         return value === "all" ? activeSourceItems.length : activeSourceItems.filter((item) => item.category === value).length;
@@ -627,12 +649,27 @@ export function AssetLibraryPickerModal({
                                     onOpenChange={setSourceMenuOpen}
                                     menu={{
                                         selectedKeys: source === "plugin" ? [source] : [],
-                                        items: [{ key: "plugin", icon: <Puzzle aria-hidden="true" />, label: <span className="asset-picker-source-menu-label"><span>{t("library.picker.sourcePlugin")}</span><em>{pluginItems.length}</em></span> }],
-                                        onClick: ({ key }) => { if (key === "plugin") selectSource("plugin"); },
+                                        items: [
+                                            {
+                                                key: "plugin",
+                                                icon: <Puzzle aria-hidden="true" />,
+                                                label: (
+                                                    <span className="asset-picker-source-menu-label">
+                                                        <span>{t("library.picker.sourcePlugin")}</span>
+                                                        <em>{pluginItems.length}</em>
+                                                    </span>
+                                                ),
+                                            },
+                                        ],
+                                        onClick: ({ key }) => {
+                                            if (key === "plugin") selectSource("plugin");
+                                        },
                                     }}
                                 >
                                     <button type="button" className={cn("asset-picker-source-tab asset-picker-source-tab-secondary", source === "plugin" && "is-active")} aria-haspopup="menu" aria-expanded={sourceMenuOpen}>
-                                        <Puzzle aria-hidden="true" /><span>{t("library.picker.sourcePlugin")}</span><ChevronDown aria-hidden="true" />
+                                        <Puzzle aria-hidden="true" />
+                                        <span>{t("library.picker.sourcePlugin")}</span>
+                                        <ChevronDown aria-hidden="true" />
                                     </button>
                                 </Dropdown>
                             ) : null}
@@ -690,12 +727,22 @@ export function AssetLibraryPickerModal({
                                     <Button onClick={() => void officialQuery.refetch()}>重试</Button>
                                 </div>
                             ) : source === "official" && officialQuery.isFetching ? (
-                                <div className="asset-picker-empty"><LoaderCircle className="animate-spin" /><strong>正在读取官方素材</strong><span>官方图片和视频会按页加载。</span></div>
+                                <div className="asset-picker-empty">
+                                    <LoaderCircle className="animate-spin" />
+                                    <strong>正在读取官方素材</strong>
+                                    <span>官方图片和视频会按页加载。</span>
+                                </div>
                             ) : source === "official" && officialQuery.data?.items?.length ? (
-                                <div className="asset-picker-grid">{officialQuery.data.items.map((item) => {
-                                    const imported = importedOfficialIds.has(item.id) ? importedPickerItems.find((entry) => entry.officialAsset?.id === item.id || (entry.asset?.metadata?.officialAssetId || entry.id) === item.id) : undefined;
-                                    return imported ? <PickerCard key={item.id} item={imported} selected={selected.has(imported.id)} onToggle={() => toggle(imported)} /> : <OfficialPickerCard key={item.id} item={item} importing={importingOfficialId === item.id} onImport={() => void handleOfficialImport(item)} projectId={projectId} />;
-                                })}</div>
+                                <div className="asset-picker-grid">
+                                    {officialQuery.data.items.map((item) => {
+                                        const imported = importedOfficialIds.has(item.id) ? importedPickerItems.find((entry) => entry.officialAsset?.id === item.id || (entry.asset?.metadata?.officialAssetId || entry.id) === item.id) : undefined;
+                                        return imported ? (
+                                            <PickerCard key={item.id} item={imported} selected={selected.has(imported.id)} onToggle={() => toggle(imported)} />
+                                        ) : (
+                                            <OfficialPickerCard key={item.id} item={item} importing={importingOfficialId === item.id} onImport={() => void handleOfficialImport(item)} projectId={projectId} />
+                                        );
+                                    })}
+                                </div>
                             ) : remoteEnabled && remoteQuery.isError && !localItems.length ? (
                                 <div className="asset-picker-empty" role="alert">
                                     <FolderOpen />
@@ -726,9 +773,30 @@ export function AssetLibraryPickerModal({
                             )}
                         </div>
                         {source === "official" ? (
-                            <PaginationBar alwaysShow className="asset-picker-pagination" current={officialPage} pageSize={officialPageSize} total={officialQuery.data?.total ?? 0} itemLabel={t("library.picker.itemUnit")} pageSizeOptions={[20, 40, 80]} onChange={(nextPage, nextPageSize) => { setOfficialPage(nextPage); setOfficialPageSize(nextPageSize); }} />
+                            <PaginationBar
+                                alwaysShow
+                                className="asset-picker-pagination"
+                                current={officialPage}
+                                pageSize={officialPageSize}
+                                total={officialQuery.data?.total ?? 0}
+                                itemLabel={t("library.picker.itemUnit")}
+                                pageSizeOptions={[20, 40, 80]}
+                                onChange={(nextPage, nextPageSize) => {
+                                    setOfficialPage(nextPage);
+                                    setOfficialPageSize(nextPageSize);
+                                }}
+                            />
                         ) : effectivePagination ? (
-                            <PaginationBar alwaysShow className="asset-picker-pagination" current={effectivePagination.current} pageSize={effectivePagination.pageSize} total={effectivePagination.total} itemLabel={t("library.picker.itemUnit")} pageSizeOptions={[20, 40, 80]} onChange={effectivePagination.onChange} />
+                            <PaginationBar
+                                alwaysShow
+                                className="asset-picker-pagination"
+                                current={effectivePagination.current}
+                                pageSize={effectivePagination.pageSize}
+                                total={effectivePagination.total}
+                                itemLabel={t("library.picker.itemUnit")}
+                                pageSizeOptions={[20, 40, 80]}
+                                onChange={effectivePagination.onChange}
+                            />
                         ) : null}
                     </div>
                 </div>
@@ -865,15 +933,27 @@ function OfficialPickerCard({ item, importing, onImport, projectId }: { item: Of
             <div className="assets-cover asset-picker-card-media">
                 <CachedResourceImage eager storageKey={item.coverStorageKey} alt={item.title} decoding="async" fallback={<div className="assets-cover-fallback">{item.mediaType === "video" ? <Video /> : <ImageIcon />}</div>} />
                 <span className="assets-cover-vignette" aria-hidden="true" />
-                <span className="assets-cover-badges"><span className="assets-cover-badge is-kind">官方{item.mediaType === "video" ? "视频" : "图片"}</span></span>
+                <span className="assets-cover-badges">
+                    <span className="assets-cover-badge is-kind">官方{item.mediaType === "video" ? "视频" : "图片"}</span>
+                </span>
             </div>
             <div className="asset-picker-card-copy">
                 <strong>{item.title}</strong>
-                <span>{assetCategoryLabel(item.category)}{item.sourceName ? ` · ${item.sourceName}` : ""}</span>
-                {item.licenseNote || item.usageNote ? <span className="flex items-center gap-1"><Info className="size-3" />{item.licenseNote || item.usageNote}</span> : null}
+                <span>
+                    {assetCategoryLabel(item.category)}
+                    {item.sourceName ? ` · ${item.sourceName}` : ""}
+                </span>
+                {item.licenseNote || item.usageNote ? (
+                    <span className="flex items-center gap-1">
+                        <Info className="size-3" />
+                        {item.licenseNote || item.usageNote}
+                    </span>
+                ) : null}
             </div>
             <div className="flex gap-2 px-3 pb-3">
-                <Button type="primary" size="small" loading={importing} onClick={onImport}>{projectId ? "加入当前项目" : "加入素材库"}</Button>
+                <Button type="primary" size="small" loading={importing} onClick={onImport}>
+                    {projectId ? "加入当前项目" : "加入素材库"}
+                </Button>
             </div>
         </AssetLibraryCard>
     );
@@ -882,7 +962,6 @@ function OfficialPickerCard({ item, importing, onImport, projectId }: { item: Of
 type PickerMediaState = "loading" | "loaded" | "error";
 
 function PickerCard({ item, categoryLabel, selected, onToggle }: { item: AssetLibraryPickerItem; categoryLabel?: string; selected: boolean; onToggle: () => void }) {
-
     const { t } = useTranslation();
     const disabled = Boolean(item.disabledReason);
     const hasImage = Boolean(item.imageUrl || item.imageStorageKey);

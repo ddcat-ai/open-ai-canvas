@@ -18,7 +18,10 @@ function VideoFrame({ storageKey, url }: { storageKey?: string; url?: string }) 
     const [failed, setFailed] = useState(false);
     useEffect(() => {
         const element = target.current;
-        if (!element || typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+        if (!element || typeof IntersectionObserver === "undefined") {
+            setVisible(true);
+            return;
+        }
         const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { rootMargin: "80px" });
         observer.observe(element);
         return () => observer.disconnect();
@@ -28,8 +31,39 @@ function VideoFrame({ storageKey, url }: { storageKey?: string; url?: string }) 
         setFailed(false);
         if (!visible || (!storageKey && !url)) return;
         let cancelled = false;
-        void resolveVideoMediaUrl(storageKey, url || "").then((value) => { if (!cancelled) { setSrc(value); setFailed(!value); } }).catch(() => { if (!cancelled) setFailed(true); });
-        return () => { cancelled = true; };
+        void resolveVideoMediaUrl(storageKey, url || "")
+            .then((value) => {
+                if (!cancelled) {
+                    setSrc(value);
+                    setFailed(!value);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setFailed(true);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [storageKey, url, visible]);
-    return <span ref={target} className="grid h-full w-full place-items-center">{src && !failed ? <video src={src} muted playsInline preload="metadata" aria-hidden className="h-full w-full object-cover" onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.currentTime === 0 && video.duration > 0) video.currentTime = Math.min(0.001, video.duration); }} onError={() => setFailed(true)} /> : <Video className="size-4 text-muted-foreground" />}</span>;
+    return (
+        <span ref={target} className="grid h-full w-full place-items-center">
+            {src && !failed ? (
+                <video
+                    src={src}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    aria-hidden
+                    className="h-full w-full object-cover"
+                    onLoadedMetadata={(event) => {
+                        const video = event.currentTarget;
+                        if (video.currentTime === 0 && video.duration > 0) video.currentTime = Math.min(0.001, video.duration);
+                    }}
+                    onError={() => setFailed(true)}
+                />
+            ) : (
+                <Video className="size-4 text-muted-foreground" />
+            )}
+        </span>
+    );
 }

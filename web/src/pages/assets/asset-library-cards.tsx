@@ -81,7 +81,9 @@ export function AssetCard({
               ...(asset.kind === "text" || asset.kind === "image" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: "编辑", onClick: onEdit }] : []),
               ...(asset.kind === "text" ? [{ key: "copy", icon: <Copy className="size-3.5" />, label: "复制文本", onClick: () => void onCopy(asset) }] : []),
               ...(asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? [{ key: "download", icon: <Download className="size-3.5" />, label: "下载", onClick: () => onDownload(asset) }] : []),
-              ...(onRecommend && (asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "entity") ? [{ key: "recommend", icon: <Send className="size-3.5" />, label: "推荐为官方素材", onClick: () => onRecommend(asset) }] : []),
+              ...(onRecommend && (asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "entity")
+                  ? [{ key: "recommend", icon: <Send className="size-3.5" />, label: "推荐为官方素材", onClick: () => onRecommend(asset) }]
+                  : []),
               { key: "move", icon: <FolderOpen className="size-3.5" />, label: "移动到分类", children: folderOptions.map((folder) => ({ key: folder.value || "uncategorized", label: folder.label, onClick: () => onMoveToFolder(folder.value) })) },
               { type: "divider" as const },
               { key: "archive", icon: <Trash2 className="size-3.5 text-amber-500" />, label: "移入回收站", onClick: onArchive },

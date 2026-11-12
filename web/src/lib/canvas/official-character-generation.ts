@@ -21,7 +21,22 @@ export async function loadOfficialCharacterForGeneration(id: string): Promise<Pr
             representations,
             visualStatus: character.visualStatus || "missing",
             voiceStatus: character.voiceStatus || "missing",
-            voice: profile ? { profile: { id: "", name: profile.name || "", provider: profile.provider || "", voiceKey: "", language: profile.language || "", timbre: profile.timbre || "", sampleResourceId: profile.sampleResourceId, compatibleModels: [], status: "ready" }, instructions: character.voice?.instructions || "" } : undefined,
+            voice: profile
+                ? {
+                      profile: {
+                          id: "",
+                          name: profile.name || "",
+                          provider: profile.provider || "",
+                          voiceKey: "",
+                          language: profile.language || "",
+                          timbre: profile.timbre || "",
+                          sampleResourceId: profile.sampleResourceId,
+                          compatibleModels: [],
+                          status: "ready",
+                      },
+                      instructions: character.voice?.instructions || "",
+                  }
+                : undefined,
         },
     };
 }

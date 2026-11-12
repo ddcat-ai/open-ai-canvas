@@ -25,7 +25,17 @@ export type OfficialAssetRecommendation = {
     assetResourceId?: string;
     assetPreviewUrl?: string;
     characterSnapshotSource?: "submitted" | "current";
-    characterSnapshot?: { versionId?: string; version?: number; definition: Record<string, unknown>; images: Array<{ resourceId?: string; role?: string }>; representations?: Array<{ id?: string; resourceId?: string; mediaType?: string; role?: string; status?: string; failureReason?: string }>; voice?: { profile: { name: string; language: string; timbre: string; sampleResourceId?: string }; instructions?: string }; visualStatus?: string; voiceStatus?: string; partialReasons?: string[] };
+    characterSnapshot?: {
+        versionId?: string;
+        version?: number;
+        definition: Record<string, unknown>;
+        images: Array<{ resourceId?: string; role?: string }>;
+        representations?: Array<{ id?: string; resourceId?: string; mediaType?: string; role?: string; status?: string; failureReason?: string }>;
+        voice?: { profile: { name: string; language: string; timbre: string; sampleResourceId?: string }; instructions?: string };
+        visualStatus?: string;
+        voiceStatus?: string;
+        partialReasons?: string[];
+    };
 };
 
 export type OfficialAssetRecommendationPage = {
@@ -49,18 +59,21 @@ export async function fetchAdminOfficialAssetRecommendations(params: { status?: 
     });
 }
 
-export async function reviewOfficialAssetRecommendation(id: string, body: {
-    action: "approve" | "reject" | "changes_requested";
-    reviewerNote?: string;
-    title?: string;
-    description?: string;
-    category?: string;
-    tags?: string[];
-    sourceName?: string;
-    sourceUrl?: string;
-    licenseNote?: string;
-    usageNote?: string;
-}) {
+export async function reviewOfficialAssetRecommendation(
+    id: string,
+    body: {
+        action: "approve" | "reject" | "changes_requested";
+        reviewerNote?: string;
+        title?: string;
+        description?: string;
+        category?: string;
+        tags?: string[];
+        sourceName?: string;
+        sourceUrl?: string;
+        licenseNote?: string;
+        usageNote?: string;
+    },
+) {
     return http.patch<OfficialAssetRecommendation>(`/admin/official-asset-recommendations/${encodeURIComponent(id)}/review`, body);
 }
 

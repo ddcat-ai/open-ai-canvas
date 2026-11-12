@@ -66,7 +66,14 @@ function formatDurationMs(value: number) {
 }
 
 function parseTagsText(value: string) {
-    return Array.from(new Set(value.split(/[,，\n]/).map((tag) => tag.trim()).filter(Boolean)));
+    return Array.from(
+        new Set(
+            value
+                .split(/[,，\n]/)
+                .map((tag) => tag.trim())
+                .filter(Boolean),
+        ),
+    );
 }
 
 type OfficialAssetFormValues = {
@@ -186,11 +193,7 @@ export default function AdminOfficialAssetsPage() {
 
     const handleUploadFile = async (file: File | null) => {
         if (!file || uploading) return;
-        const kind: OfficialAssetMediaType | null = file.type.startsWith("video/")
-            ? "video"
-            : file.type.startsWith("image/")
-              ? "image"
-              : null;
+        const kind: OfficialAssetMediaType | null = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : null;
         if (!kind) {
             message.error("只支持图片或视频文件");
             return;
@@ -326,17 +329,9 @@ export default function AdminOfficialAssetsPage() {
                         eager
                         decoding="async"
                         className="h-full w-full object-cover"
-                        fallback={
-                            <div className="grid h-full w-full place-items-center text-foreground/40">
-                                {mediaTypeIcon(record.mediaType)}
-                            </div>
-                        }
+                        fallback={<div className="grid h-full w-full place-items-center text-foreground/40">{mediaTypeIcon(record.mediaType)}</div>}
                     />
-                    {record.mediaType === "video" && record.durationMs > 0 ? (
-                        <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] leading-4 text-white">
-                            {formatDurationMs(record.durationMs)}
-                        </span>
-                    ) : null}
+                    {record.mediaType === "video" && record.durationMs > 0 ? <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] leading-4 text-white">{formatDurationMs(record.durationMs)}</span> : null}
                 </div>
             ),
         },
@@ -559,13 +554,7 @@ export default function AdminOfficialAssetsPage() {
                     if (!formSaving && !uploading) setFormOpen(false);
                 }}
             >
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    hidden
-                    accept="image/*,video/*"
-                    onChange={(event) => void handleUploadFile(event.target.files?.[0] ?? null)}
-                />
+                <input ref={fileInputRef} type="file" hidden accept="image/*,video/*" onChange={(event) => void handleUploadFile(event.target.files?.[0] ?? null)} />
                 <Form form={form} layout="vertical" onFinish={(values) => void submitForm(values)} initialValues={{ mediaType: "image", category: "material", sortOrder: 0 }}>
                     <Form.Item label="文件">
                         <div className="flex flex-wrap items-center gap-2">
@@ -579,7 +568,14 @@ export default function AdminOfficialAssetsPage() {
                     <Form.Item label="资源 ID" name="resourceId" rules={[{ required: true, message: "请先上传文件或填写资源 ID" }]}>
                         <Input placeholder="上传文件后自动填入，或粘贴已有资源的 ID" />
                     </Form.Item>
-                    <Form.Item label="标题" name="title" rules={[{ required: true, message: "请填写标题" }, { max: 120, message: "标题最多 120 字" }]}>
+                    <Form.Item
+                        label="标题"
+                        name="title"
+                        rules={[
+                            { required: true, message: "请填写标题" },
+                            { max: 120, message: "标题最多 120 字" },
+                        ]}
+                    >
                         <Input placeholder="给用户看的标题" maxLength={120} showCount />
                     </Form.Item>
                     <Form.Item label="介绍" name="description">
@@ -636,7 +632,9 @@ export default function AdminOfficialAssetsPage() {
                             {preview.mediaType === "video" ? (
                                 <video className="max-h-96 w-full" controls preload="metadata" src={resourceFileUrl(preview.resourceId)} />
                             ) : preview.mediaType === "audio" ? (
-                                <div className="grid min-h-32 place-items-center p-6"><audio className="w-full" controls preload="metadata" src={resourceFileUrl(preview.resourceId)} /></div>
+                                <div className="grid min-h-32 place-items-center p-6">
+                                    <audio className="w-full" controls preload="metadata" src={resourceFileUrl(preview.resourceId)} />
+                                </div>
                             ) : (
                                 <CachedResourceImage
                                     storageKey={preview.coverStorageKey}
@@ -699,15 +697,6 @@ function SortOrderCell({ value, disabled, onSave }: { value: number; disabled: b
     const [current, setCurrent] = useState(value);
     useEffect(() => setCurrent(value), [value]);
     return (
-        <InputNumber
-            min={0}
-            value={current}
-            disabled={disabled}
-            aria-label="排序"
-            className="w-20"
-            onChange={(next) => setCurrent(typeof next === "number" ? next : value)}
-            onBlur={() => void onSave(current)}
-            onPressEnter={() => void onSave(current)}
-        />
+        <InputNumber min={0} value={current} disabled={disabled} aria-label="排序" className="w-20" onChange={(next) => setCurrent(typeof next === "number" ? next : value)} onBlur={() => void onSave(current)} onPressEnter={() => void onSave(current)} />
     );
 }
