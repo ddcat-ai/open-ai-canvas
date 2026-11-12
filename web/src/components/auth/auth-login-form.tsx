@@ -1,12 +1,13 @@
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { App, Button, Checkbox, Divider, Input } from "antd";
-import { Info, TriangleAlert } from "lucide-react";
+import { Info, TriangleAlert, MessageCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { VerificationFields } from "@/components/auth/verification-fields";
 import { clearReferralCode, readReferralCode, type AuthView } from "@/lib/auth-entry";
 import { getAuthSession, linuxDOLoginURL, login, oidcLoginURL, register, type AuthSettings } from "@/services/api/auth";
 import { ApiError } from "@/services/api/request";
+import { wechatLoginURL } from "@/services/api/wechat";
 import { emptyVerification, loginVerification, registrationVerificationRequired, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 import { AuthAgreementDialog, AuthNotice, AuthTabs, LinuxDOIcon, authTabId, authTabPanelId, useAuthAgreement } from "./auth-form-parts";
 
@@ -54,6 +55,7 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
     const canRegister = Boolean(settings && (settings.firstUser || settings.registrationEnabled));
     const showLinuxDO = Boolean(settings?.linuxdoEnabled && !settings.smsAndEmailRegistration && !pending);
     const showOIDC = Boolean(settings?.oidcEnabled && !pending);
+    const showWechat = Boolean(settings?.wechatEnabled && !pending);
     const showAgreement = Boolean(settings && (pending || canRegister || showOIDC));
     const verificationRequired = Boolean(settings && registrationVerificationRequired(settings));
     const registerMethods = settings && verificationRequired ? verificationMethods(settings, "register") : [];
@@ -283,7 +285,7 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
                 {retryCountdown > 0 ? t("auth.register.retryIn", { seconds: retryCountdown }) : pending ? t("auth.login.createAndLogin") : canRegister && method === "password" ? t("auth.login.submitOrRegister") : t("auth.login.submit")}
             </Button>
             {!pending && canRegister && method === "password" ? <p className="auth-form-switch">{t("auth.login.autoRegisterHint")}</p> : null}
-            {showLinuxDO || showOIDC ? (
+            {showLinuxDO || showOIDC || showWechat ? (
                 <>
                     <Divider plain className="auth-scene-divider auth-form-divider">
                         {t("common.or")}
@@ -297,6 +299,11 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
                     {showOIDC ? (
                         <Button size="large" block href={oidcLoginURL(next, agreementAccepted)}>
                             {t("auth.login.oidc")}
+                        </Button>
+                    ) : null}
+                    {showWechat ? (
+                        <Button size="large" block icon={<MessageCircle className="size-4" aria-hidden="true" />} href={wechatLoginURL(next, agreementAccepted)}>
+                            {t("auth.login.wechat", { defaultValue: "使用微信登录" })}
                         </Button>
                     ) : null}
                 </>

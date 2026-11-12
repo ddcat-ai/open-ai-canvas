@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 微信登录
+
+- HTTP：`handler/auth_wechat.go` → `service/aliases_wechat.go` → `app/auth_wechat.go` → `auth/wechat.go`。账号会话复用 `auth/linuxdo.go` 的公共 OAuth 收尾，首次注册复用 `auth/auth.go` 的验证与事务流程。
+- 持久化：`repository/oauth.go` 的一次性状态与身份，`repository/account.go` 的绑定与通用重新核验；迁移版本 102。
+- Web：`services/api/wechat.ts`；后台 `pages/admin/components/wechat-settings-section.tsx` 嵌入访问设置；登录入口 `auth-login-form.tsx`，首次注册 `wechat-registration-form.tsx`，个人设置 `profile-pane.tsx`。
+
 ## 创作对话同步
 
 - HTTP：`handler/creation_history.go` → `service/aliases_creation_history.go` → `app/creation_history.go`；持久化在 `repository/creation_history.go` 和 `model/creation_history.go`。

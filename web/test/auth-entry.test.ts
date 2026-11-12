@@ -58,7 +58,8 @@ describe("登录入口打开方式", () => {
 
     test("后台登录与注册页提供打开方式选择并保留原有分区", () => {
         const panel = source("pages/admin/components/access-settings-panel.tsx");
-        expect(panel).toContain('title="4. 登录与注册的打开方式"');
+        expect(panel).toContain('title="5. 登录与注册的打开方式"');
+        expect(panel).toContain("<WechatSettingsSection");
         expect(panel).toContain("updateAdminRegistrationSetting({ enabled: registration.enabled, loginMode })");
         expect(panel).toContain('role="radiogroup"');
         expect(source("services/api/wallet.ts")).toContain("loginMode?: AuthLoginMode");

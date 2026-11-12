@@ -458,6 +458,7 @@ export type AuthSettings = VerificationPolicy & {
     firstUser: boolean;
     registrationEnabled: boolean;
     linuxdoEnabled: boolean;
+    wechatEnabled?: boolean;
     oidcEnabled?: boolean;
     emailEnabled: boolean;
     emailCodeRequired: boolean;

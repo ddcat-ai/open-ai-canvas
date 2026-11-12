@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -49,14 +50,15 @@ func (nopHost) RequestRetryAfter(context.Context, string, time.Duration) time.Du
 }
 
 type Service struct {
-	repo           *repository.Repository
-	host           Host
-	mailSender     func(EmailSettingValue, string, string, string) error
-	emailCodeMu    sync.Mutex
-	registrationMu sync.Mutex
-	libtvMu        sync.Mutex
-	libtv          *libTVRuntime
-	sms            SMSDelivery
+	repo             *repository.Repository
+	host             Host
+	mailSender       func(EmailSettingValue, string, string, string) error
+	emailCodeMu      sync.Mutex
+	registrationMu   sync.Mutex
+	libtvMu          sync.Mutex
+	libtv            *libTVRuntime
+	sms              SMSDelivery
+	wechatHTTPClient *http.Client
 }
 
 type SMSDelivery interface {

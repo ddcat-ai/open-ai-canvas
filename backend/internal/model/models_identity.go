@@ -46,6 +46,9 @@ type UserIdentity struct {
 }
 
 type OAuthState struct {
+	Purpose         string     `json:"-" gorm:"size:16"`
+	ClientID        string     `json:"-" gorm:"size:80"`
+	ProfileJSON     string     `json:"-"`
 	ReauthUserID    string     `json:"-" gorm:"size:36"`
 	ReauthSessionID string     `json:"-" gorm:"size:36"`
 	ID              string     `json:"id" gorm:"primaryKey;size:36"`

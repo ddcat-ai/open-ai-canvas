@@ -310,6 +310,9 @@ func (s *Service) finishOAuthLogin(state *model.OAuthState, event *model.LoginLo
 			return nil, err
 		}
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		if profile.provider == "wechat" {
+			return nil, kernel.BadAuthRequest("微信身份尚未绑定，请重新授权并完成注册")
+		}
 		event.Source = "registration"
 		policy, policyErr := s.verificationPolicy()
 		if policyErr != nil {

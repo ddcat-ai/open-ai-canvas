@@ -7,6 +7,7 @@
     "canvas-agent-appearance",
     "agent-mcp",
     "http-api",
+    "wechat-login",
     "code-map",
     "backend-database",
     "channel-configuration",

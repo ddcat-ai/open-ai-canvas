@@ -18,6 +18,7 @@ import { applyUserSession } from "@/lib/user-session";
 import { invalidateAuthSessionCache, type LocalUser } from "@/services/api/auth";
 import { changeProfileEmail, changeProfilePassword, profileLinuxDOReauthURL, requestProfileEmailCode, selectDefaultProfileAvatar, uploadProfileAvatar, type UserProfile } from "@/services/api/profile";
 import { ApiError } from "@/services/api/request";
+import { profileWechatURL } from "@/services/api/wechat";
 import { getNotificationSettings, updateNotificationSettings } from "@/services/api/email";
 import { Switch } from "@/components/ui/base/switch";
 import { useUserStore } from "@/stores/use-user-store";
@@ -58,6 +59,7 @@ export function ProfilePane() {
     const [retryAt, setRetryAt] = useState(0);
     const [now, setNow] = useState(Date.now());
     const oauthResult = searchParams.get("reauth");
+    const bindResult = searchParams.get("bind");
     const [reauthResult] = useState(oauthResult);
     const reauthReady = profileReauthReady(profile?.reauthenticatedUntil, now);
     const identityReady = !!profile?.hasPassword || reauthReady;
@@ -65,11 +67,13 @@ export function ProfilePane() {
     const ticketSeconds = emailTicket ? profileSecondsRemaining(emailTicket.expiresAt, now) : 0;
 
     useEffect(() => {
-        if (!oauthResult) return;
+        if (!oauthResult && !bindResult) return;
+        if (bindResult) message[bindResult === "success" ? "success" : "error"](bindResult === "success" ? t("auth.wechat.bound") : t("auth.wechat.bindFailed"));
         const next = new URLSearchParams(searchParams);
         next.delete("reauth");
+        next.delete("bind");
         setSearchParams(next, { replace: true });
-    }, [oauthResult, searchParams, setSearchParams]);
+    }, [oauthResult, bindResult, message, t, searchParams, setSearchParams]);
 
     useEffect(() => {
         const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -324,13 +328,33 @@ export function ProfilePane() {
                         </div>
                     </section>
 
+                    {profile.wechatEnabled || profile.wechatBound ? (
+                        <Callout
+                            title={t("auth.wechat.title")}
+                            icon={ShieldCheck}
+                            action={
+                                !profile.wechatBound ? (
+                                    <Button disabled={!!pending || !profile.wechatEnabled} onClick={() => window.location.assign(profileWechatURL("bind"))}>
+                                        {t("auth.wechat.bind")}
+                                    </Button>
+                                ) : undefined
+                            }
+                        >
+                            {profile.wechatBound ? t("auth.wechat.boundHint") : t("auth.wechat.bindHint")}
+                        </Callout>
+                    ) : null}
+
                     {!profile.hasPassword ? (
                         <Callout
                             tone={reauthReady ? "success" : "info"}
                             title={t("account.settings.profile.verifyTitle")}
                             icon={ShieldCheck}
                             action={
-                                profile.linuxdoEnabled ? (
+                                profile.wechatEnabled && profile.wechatBound ? (
+                                    <Button disabled={!!pending} onClick={() => window.location.assign(profileWechatURL("reauth"))}>
+                                        {t("auth.wechat.verify")}
+                                    </Button>
+                                ) : profile.linuxdoEnabled && profile.linuxdoBound ? (
                                     <Button disabled={!!pending} onClick={() => window.location.assign(profileLinuxDOReauthURL())}>
                                         {reauthReady ? t("account.settings.profile.reverify") : t("account.settings.profile.verifyLinuxdo")}
                                     </Button>
@@ -339,8 +363,8 @@ export function ProfilePane() {
                         >
                             {reauthReady
                                 ? t("account.settings.profile.verified", { seconds: profileSecondsRemaining(Date.parse(profile.reauthenticatedUntil!), now) })
-                                : profile.linuxdoEnabled
-                                  ? t("account.settings.profile.verifyHint")
+                                : (profile.wechatEnabled && profile.wechatBound) || (profile.linuxdoEnabled && profile.linuxdoBound)
+                                  ? t("auth.wechat.verifyHint")
                                   : t("account.settings.profile.verifyUnavailable")}
                             {reauthResult === "error" && !reauthReady ? (
                                 <p className="profile-reauth-error" role="alert">

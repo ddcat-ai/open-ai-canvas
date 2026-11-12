@@ -5,6 +5,17 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 微信登录
+
+- `GET/PATCH /admin/settings/wechat`：仅管理员；读取 `data.setting`，保存 `{enabled, appId, appSecret, redirectUrl}`。读取仅返回 `hasAppSecret`；密钥留空保留。回调须为 HTTPS 且路径固定为 `/api/auth/wechat/callback`。
+- `GET /auth/wechat/start?next=...&acceptedTerms=true`：写入一次性浏览器状态 Cookie 并跳转微信官方授权页。
+- `GET /auth/wechat/callback?state=...&code=...`：校验浏览器 Cookie 与一次性 state；已有绑定签发本站会话，新身份写入注册补全 Cookie 并跳转 `/login?wechat_register=1`。敏感凭证不进入重定向 URL。
+- `GET /auth/wechat/registration`：根据 HttpOnly Cookie 返回 `{displayName, next, acceptedTerms}`，不返回身份标识或票据。`POST` 接收与普通注册相同的邮箱／短信验证码、验证 ticket、服务协议和可选推广码，创建并登录后返回 `{user, next}`；无需密码或客户端指定用户名。`DELETE` 清除浏览器中的待注册票据。
+- `GET /auth/profile/wechat/bind`：已登录用户发起绑定；原账号、原会话及身份唯一性在回调中再次校验。
+- `GET /auth/profile/wechat/start`：已登录且已绑定的用户发起五分钟身份核验；只更新原会话，不创建账号或新登录会话。
+
+公开 `/auth/settings` 增加 `wechatEnabled`；`/auth/profile` 增加 `linuxdoBound`、`wechatEnabled`、`wechatBound`。登录日志方式新增 `wechat`。微信 API 的业务错误必须同时解析 `errcode`，不能只依据 HTTP 200；外部网络错误不得原样返回。
+
 ## 创作对话同步
 
 - `GET /creation-conversations?after=<id>`：当前账号摘要（含永久删除标记），按 ID 升序每页 100 条；`next=""` 表示结束。列表缺项不是删除命令。
