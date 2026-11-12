@@ -138,7 +138,7 @@ func agentNodePath() (string, error) {
 	}
 	path := strings.TrimSpace(string(output))
 	if !filepath.IsAbs(path) {
-		return "", errors.New("Agent Node runtime did not resolve to an absolute path")
+		return "", errors.New("agent Node runtime did not resolve to an absolute path")
 	}
 	return path, nil
 }
