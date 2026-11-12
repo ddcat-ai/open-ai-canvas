@@ -11,6 +11,8 @@ describe("Agent tool presentation", () => {
         expect(agentToolCategory("canvas_apply_ops", { eventType: "canvas_updated", actions: [{ action: "updated" }] })).toBe("operate");
         expect(agentToolCategoryLabel("canvas_apply_ops", "operate")).toBe("修改画布");
         expect(agentToolCategory("canvas_apply_ops", { eventType: "canvas_updated", actions: [{ action: "created" }] })).toBe("create");
+        expect(agentToolCategory("canvas_merge_text", { eventType: "tool_completed" })).toBe("create");
+        expect(friendlyAgentToolSummary("canvas_merge_text", "", { eventType: "tool_completed" })).toBe("完整文本已合并并校验");
     });
 
     it("keeps the canvas listing distinct from actually seeing a picture", () => {

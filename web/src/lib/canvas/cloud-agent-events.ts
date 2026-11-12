@@ -17,6 +17,7 @@ export type ApprovalState = { approvalId: string; detail: Record<string, unknown
 
 const CANVAS_MUTATION_TOOLS = new Set([
     "canvas_apply_ops",
+    "canvas_merge_text",
     "canvas_arrange_nodes",
     "canvas_build_board",
     "canvas_create_storyboard",
@@ -362,7 +363,15 @@ export function applyAgentEvent(
         if (payload.operation === "generate_media_submit" || payload.operation === "generate_media_complete") return;
         const { canvasPatch: _patch, ...detail } = payload;
         const id = payload.callId ? `canvas-${event.runId}-${payload.callId}` : event.eventId;
-        setMessages((current) => upsertCloudAgentCanvasMutation(current, { id, role: "tool", title: "canvas_apply_ops", text: String(payload.text || "画布操作已完成"), detail: { ...detail, runId: event.runId, eventType: event.type } }));
+        setMessages((current) =>
+            upsertCloudAgentCanvasMutation(current, {
+                id,
+                role: "tool",
+                title: payload.operation === "canvas_merge_text" ? "canvas_merge_text" : "canvas_apply_ops",
+                text: String(payload.text || "画布操作已完成"),
+                detail: { ...detail, runId: event.runId, eventType: event.type },
+            }),
+        );
         return;
     }
     if (event.type.startsWith("tool_") && agentToolRetry(payload)) {

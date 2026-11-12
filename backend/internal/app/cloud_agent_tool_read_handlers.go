@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"strings"
 	"unicode/utf8"
@@ -153,6 +155,9 @@ func cloudAgentHandleCanvasReadText(repo *repository.Repository, userID string, 
 	if err != nil {
 		return nil, err
 	}
+	if !utf8.ValidString(canvas.PayloadJSON) {
+		return nil, BadAuthRequest("画布存储文本含无效 UTF-8，无法可靠读取")
+	}
 	doc, err := creationDocument(canvas.PayloadJSON)
 	if err != nil {
 		return nil, err
@@ -173,7 +178,7 @@ func cloudAgentHandleCanvasReadText(repo *repository.Repository, userID string, 
 	if stringValue(meta["workflowKind"]) == "character" {
 		return nil, BadAuthRequest("角色卡正文不是普通文本，请读取 character 字段")
 	}
-	content := stringValue(meta["content"])
+	content, _ := meta["content"].(string)
 	resourceID := assets.ResourceID(stringValue(meta["storageKey"]))
 	if resourceID == "" {
 		resourceID = assets.ResourceID(content)
@@ -210,8 +215,19 @@ func cloudAgentHandleCanvasReadText(repo *repository.Repository, userID string, 
 		}
 		content = string(body)
 	}
-	if strings.TrimSpace(content) == "" {
-		return map[string]any{"nodeId": args.NodeID, "title": stringValue(node["title"]), "content": "", "offset": args.Offset, "nextOffset": 0, "hasMore": false}, nil
+	if !utf8.ValidString(content) {
+		return nil, BadAuthRequest("文本原文含无效 UTF-8，无法可靠读取")
+	}
+	hash := sha256.Sum256([]byte(content))
+	integrity := map[string]any{
+		"contentSha256":    fmt.Sprintf("%x", hash[:]),
+		"totalChars":       utf8.RuneCountInString(content),
+		"totalBytes":       len(content),
+		"replacementChars": strings.Count(content, "\ufffd"),
+	}
+	if content == "" {
+		return map[string]any{"nodeId": args.NodeID, "title": stringValue(node["title"]), "content": "", "offset": args.Offset, "nextOffset": 0, "hasMore": false,
+			"contentSha256": integrity["contentSha256"], "totalChars": integrity["totalChars"], "totalBytes": integrity["totalBytes"], "replacementChars": integrity["replacementChars"]}, nil
 	}
 	runes := []rune(content)
 	if args.Offset > len(runes) {
@@ -223,6 +239,7 @@ func cloudAgentHandleCanvasReadText(repo *repository.Repository, userID string, 
 		"nodeId": args.NodeID, "title": stringValue(node["title"]),
 		"content": chunk, "offset": args.Offset, "nextOffset": end,
 		"hasMore": end < len(runes), "totalChars": utf8.RuneCountInString(content),
+		"totalBytes": integrity["totalBytes"], "contentSha256": integrity["contentSha256"], "replacementChars": integrity["replacementChars"],
 	}, nil
 }
 

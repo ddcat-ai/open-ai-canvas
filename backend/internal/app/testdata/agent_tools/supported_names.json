@@ -30,6 +30,7 @@
   "canvas_create_character",
   "canvas_edit_batch_table",
   "canvas_apply_ops",
+  "canvas_merge_text",
   "canvas_arrange_nodes",
   "generate_media",
   "generate_media_batch",

@@ -12,6 +12,7 @@ export const AGENT_TOOL_NAMES = [
     "agent_profile_read",
     "ask_user",
     "canvas_apply_ops",
+    "canvas_merge_text",
     "canvas_arrange_nodes",
     "canvas_build_board",
     "canvas_create_character",
@@ -63,6 +64,7 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
     mcp_call_tool: { summary: ({ pending }) => (pending ? "准备调用外部 MCP 工具" : "外部 MCP 工具已返回结果"), failureMessage: "外部 MCP 工具调用未完成" },
     memory_search: { summary: ({ pending }) => (pending ? "准备检索个人记忆与历史会话" : "已检索个人记忆与历史会话"), failureMessage: "个人记忆检索失败" },
     canvas_apply_ops: { summary: ({ pending }) => (pending ? "准备更新画布内容" : "画布内容已保存至服务端"), failureMessage: "更新画布内容失败" },
+    canvas_merge_text: { summary: ({ pending }) => (pending ? "准备合并文本节点" : "完整文本已合并并校验"), failureMessage: "合并文本节点失败" },
     model_list: { summary: "已获取可用模型", failureMessage: "获取可用模型失败" },
     canvas_create_character: { summary: ({ pending }) => (pending ? "准备创建角色卡" : "角色卡已创建并放到画布"), failureMessage: "创建角色卡失败" },
     // 短剧工具只在关联短剧的精修画布上出现：读取作品上下文，或把画布媒体采用为短剧的新版本（总要审批）。
@@ -150,7 +152,7 @@ const AGENT_CANVAS_READ_TOOLS = new Set(["canvas_get_state", "canvas_list_node_t
 /** 非画布信息的只读工具（模型、任务、技能、偏好）。`skills_load` 是历史事件名，保留兼容。 */
 const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_market_search", "skill_read_file", "skills_load", "agent_profile_read", "drama_get_context", "canvas_preflight", "memory_search", "mcp_list_tools"]);
 const AGENT_VISION_TOOLS = new Set(["canvas_inspect_image"]);
-const AGENT_CREATE_TOOLS = new Set(["generate_media", "generate_media_batch", "canvas_build_board", "canvas_create_storyboard", "canvas_create_character", "image_annotation_render"]);
+const AGENT_CREATE_TOOLS = new Set(["generate_media", "generate_media_batch", "canvas_merge_text", "canvas_build_board", "canvas_create_storyboard", "canvas_create_character", "image_annotation_render"]);
 const AGENT_OPERATE_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_edit_storyboard", "canvas_edit_batch_table", "image_layer_split", "image_text_detect", "media_batch_control"]);
 
 export type AgentToolCategory = "read" | "vision" | "create" | "operate" | "other";

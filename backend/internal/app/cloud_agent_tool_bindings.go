@@ -42,6 +42,7 @@ func cloudAgentToolHandlers() map[string]cloudAgentToolHandler {
 		agenttool.CanvasCreateCharacter:  {Write: applyCloudAgentCharacterCreate, Preview: cloudAgentPreviewCharacterCreate},
 		agenttool.CanvasEditBatchTable:   {Write: applyCloudAgentBatchTableMutation, Preview: cloudAgentPreviewBatchTable},
 		agenttool.CanvasApplyOps:         {Write: applyCloudAgentCanvas, Preview: cloudAgentPreviewCanvas},
+		agenttool.CanvasMergeText:        {Write: applyCloudAgentMergeText, Preview: cloudAgentPreviewMergeText},
 		agenttool.CanvasArrangeNodes:     {Write: applyCloudAgentArrangeNodes, Preview: cloudAgentPreviewArrange},
 		agenttool.GenerateMedia:          {Pipeline: cloudAgentToolMedia},
 		agenttool.GenerateMediaBatch:     {Pipeline: cloudAgentToolMedia},

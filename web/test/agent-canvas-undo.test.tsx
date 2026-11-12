@@ -62,6 +62,39 @@ test("canvas mutation completion maps callId and full canvas hash into a single 
     expect(agentCanvasUndoTarget(messages[0].detail)).toEqual({ runId: "run-1", canvasId: "canvas-1", stepId: "call-1", expectedSnapshotHash: canvasHash });
 });
 
+test("merged text appears as one verified, undoable canvas node", () => {
+    let messages: CloudAgentChatMessage[] = [];
+    messages = reduceEvent(
+        messages,
+        event(
+            "canvas_updated",
+            {
+                callId: "merge-1",
+                canvasId: "canvas-1",
+                operation: "canvas_merge_text",
+                actions: [{ action: "created", nodeId: "full-script", title: "完整剧本", nodeType: "text" }],
+            },
+            1,
+        ),
+    );
+    messages = reduceEvent(
+        messages,
+        event(
+            "tool_completed",
+            {
+                callId: "merge-1",
+                toolName: "canvas_merge_text",
+                canvasId: "canvas-1",
+                result: { nodeId: "full-script", snapshotHash: canvasHash, committed: true, verified: true },
+            },
+            2,
+        ),
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].title).toBe("canvas_merge_text");
+    expect(agentCanvasUndoTarget(messages[0].detail)).toEqual({ runId: "run-1", canvasId: "canvas-1", stepId: "merge-1", expectedSnapshotHash: canvasHash });
+});
+
 test("undo target requires successful supported canvas writes and the full-canvas hash", () => {
     expect(agentCanvasUndoTarget({ runId: "run-1", canvasId: "canvas-1", eventType: "tool_failed", toolName: "canvas_apply_ops", callId: "call-1", result: { snapshotHash: canvasHash } })).toBeNull();
     expect(agentCanvasUndoTarget({ runId: "run-1", canvasId: "canvas-1", eventType: "tool_completed", toolName: "generate_media", callId: "call-2", result: { snapshotHash: canvasHash } })).toBeNull();

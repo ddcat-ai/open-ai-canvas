@@ -72,9 +72,10 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// recall_lessons）并新增 skill_market_search、skill_recommend 后为 30 个工具、37,277 字节，
 	// 预算不变。新增 generate_media_batch、media_batch_control、canvas_build_board、
 	// canvas_preflight（描述已压缩，批量参数复用同一份结构）并把 ask_user 放宽到 16 个字段后为
-	// 34 个工具、44,091 字节，预算显式上调到 45,000，保留约2%的余量。新增工具或字段时请重新测量并有意识地
+	// 34 个工具、44,091 字节，预算显式上调到 45,000。新增 canvas_merge_text 后为
+	// 38 个工具、46,205 字节，预算上调到 47,000。新增工具或字段时请重新测量并有意识地
 	// 调整这个数字，而不是让 schema 悄悄膨胀（它每一步都要发、还在前缀最前面）。
-	if len(raw) > 45000 {
-		t.Fatalf("平台工具 schema 体积 %d 字节超出预算 45000：请压缩描述或显式调整预算", len(raw))
+	if len(raw) > 47000 {
+		t.Fatalf("平台工具 schema 体积 %d 字节超出预算 47000：请压缩描述或显式调整预算", len(raw))
 	}
 }

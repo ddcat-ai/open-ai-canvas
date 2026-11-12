@@ -31,7 +31,7 @@ func cloudAgentCanonicalFor(system string, history []providerTextMessage, prompt
 
 const (
 	cloudAgentPromptCacheSchemaVersion = "cloud-agent-prompt-cache/v2"
-	cloudAgentToolSchemaVersion        = "cloud-agent-tools/v11"
+	cloudAgentToolSchemaVersion        = "cloud-agent-tools/v12"
 	cloudAgentMediaSizeDescription     = "默认省略；用户指定时填目录值；imageSize/image.size.parameter 是上游映射；仅 allowCustom=true 可自定"
 )
 
@@ -271,6 +271,15 @@ func cloudAgentAllToolSchemas() []map[string]any {
 		},
 	}
 	add("canvas_apply_ops", "创建空白节点、编辑或连线；先读画布传 snapshotHash，生成用 generate_media。每次最多20项，禁止删除、任意 metadata 和媒体 URL。必填字段见 schema；add_node 可用 x/y，省略自动排位；update_node 按能力填 patch，可用 x/y 或视频首尾帧。镜头绑定示例：资产→分镜 {\"toHandleId\":\"row:<rowId>\"}；输出示例：分镜→图片/视频 {\"fromHandleId\":\"row:<rowId>\"}；rowId 取读取结果，不是镜头编号；整表用 storyboard:context。连线不改变已提交任务输入；来源须 canSource，目标须 canTarget 且接受来源 inputKind。批量排位用 canvas_arrange_nodes。", map[string]any{"snapshotHash": str("canvas_get_state返回的snapshotHash"), "ops": map[string]any{"type": "array", "maxItems": 20, "items": opItem}}, "snapshotHash", "ops")
+	add("canvas_merge_text", "按 sources 顺序在服务端合并现有文本节点为一个新 text 节点。先用 canvas_get_state 取得 snapshotHash；removePrefix 必须与来源正文开头逐字一致，适合去掉各份重复总标题；heading 只写一次。含替换字符的来源会被拒绝，先用 canvas_read_text 核实。返回各来源及结果的 SHA-256、字符数，写入后校验。", map[string]any{
+		"snapshotHash": str("canvas_get_state 返回的 snapshotHash，来源变化时拒绝写入"),
+		"nodeId":       str("新文本节点的唯一 ID"),
+		"title":        str("新节点标题"),
+		"heading":      str("可选，写在合并正文开头的唯一总标题"),
+		"sources": map[string]any{"type": "array", "minItems": 2, "maxItems": 12, "items": map[string]any{"type": "object", "properties": map[string]any{
+			"nodeId": str("现有 text 或 markdown 节点 ID"), "removePrefix": str("可选；必须与正文开头逐字一致，包含要删除的换行"),
+		}, "required": []string{"nodeId"}, "additionalProperties": false}},
+	}, "snapshotHash", "nodeId", "title", "sources")
 	add("canvas_arrange_nodes", "整理节点位置：只改坐标，不改内容、不改/建连线、不增删；先读并传 snapshotHash。mode 默认 auto（有连线按依赖，否则按媒体类型分区）；groups 为横向分带（label 展示名，可覆盖组 mode）。省略 nodeIds 整理全部可整理节点（跳过锁定、容器、批次子节点、已归属背板）；align 对齐/等距，dryRun 仅预演；最多50节点；单节点用 update_node x/y。", map[string]any{
 		"snapshotHash": str("最近一次画布读取的 snapshotHash"),
 		"nodeIds":      map[string]any{"type": "array", "maxItems": cloudAgentArrangeMaxNodes, "items": str("节点ID；省略=全部可整理")},

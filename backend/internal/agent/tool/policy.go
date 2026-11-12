@@ -134,6 +134,7 @@ const (
 	CanvasCreateCharacter  = "canvas_create_character"
 	CanvasEditBatchTable   = "canvas_edit_batch_table"
 	CanvasApplyOps         = "canvas_apply_ops"
+	CanvasMergeText        = "canvas_merge_text"
 	CanvasArrangeNodes     = "canvas_arrange_nodes"
 	GenerateMedia          = "generate_media"
 	GenerateMediaBatch     = "generate_media_batch"
@@ -194,6 +195,7 @@ func policies() []Policy {
 		{Name: CanvasCreateCharacter, Kind: KindWrite, RequiresCanvas: true},
 		{Name: CanvasEditBatchTable, Kind: KindWrite, RequiresCanvas: true},
 		{Name: CanvasApplyOps, Kind: KindWrite, RequiresCanvas: true},
+		{Name: CanvasMergeText, Kind: KindWrite, RequiresCanvas: true},
 		{Name: CanvasArrangeNodes, Kind: KindWrite, RequiresCanvas: true},
 		{Name: GenerateMedia, Kind: KindMedia, RequiresCanvas: true},
 		// 批量生成一次审批覆盖多条收费任务；批准后的放行、重试与取消由 media_batch_control

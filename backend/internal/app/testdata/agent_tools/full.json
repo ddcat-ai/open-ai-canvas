@@ -1954,6 +1954,63 @@
   },
   {
     "function": {
+      "description": "按 sources 顺序在服务端合并现有文本节点为一个新 text 节点。先用 canvas_get_state 取得 snapshotHash；removePrefix 必须与来源正文开头逐字一致，适合去掉各份重复总标题；heading 只写一次。含替换字符的来源会被拒绝，先用 canvas_read_text 核实。返回各来源及结果的 SHA-256、字符数，写入后校验。",
+      "name": "canvas_merge_text",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "heading": {
+            "description": "可选，写在合并正文开头的唯一总标题",
+            "type": "string"
+          },
+          "nodeId": {
+            "description": "新文本节点的唯一 ID",
+            "type": "string"
+          },
+          "snapshotHash": {
+            "description": "canvas_get_state 返回的 snapshotHash，来源变化时拒绝写入",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "nodeId": {
+                  "description": "现有 text 或 markdown 节点 ID",
+                  "type": "string"
+                },
+                "removePrefix": {
+                  "description": "可选；必须与正文开头逐字一致，包含要删除的换行",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "nodeId"
+              ],
+              "type": "object"
+            },
+            "maxItems": 12,
+            "minItems": 2,
+            "type": "array"
+          },
+          "title": {
+            "description": "新节点标题",
+            "type": "string"
+          }
+        },
+        "required": [
+          "snapshotHash",
+          "nodeId",
+          "title",
+          "sources"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
       "description": "整理节点位置：只改坐标，不改内容、不改/建连线、不增删；先读并传 snapshotHash。mode 默认 auto（有连线按依赖，否则按媒体类型分区）；groups 为横向分带（label 展示名，可覆盖组 mode）。省略 nodeIds 整理全部可整理节点（跳过锁定、容器、批次子节点、已归属背板）；align 对齐/等距，dryRun 仅预演；最多50节点；单节点用 update_node x/y。",
       "name": "canvas_arrange_nodes",
       "parameters": {

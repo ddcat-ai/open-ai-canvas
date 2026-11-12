@@ -18,6 +18,7 @@
 ### 写入
 
 - `canvas_apply_ops`：新增合法节点、更新允许字段、建立合法引用边；一次最多 20 项，必须带最新 `snapshotHash`。
+- `canvas_merge_text`：长文已有多个 text/markdown 节点时，按来源 ID 顺序由服务端合并到新 text 节点；重复总标题用逐字匹配的 `removePrefix` 移除，`heading` 写一次。先用 `canvas_read_text` 核对来源；若 `replacementChars` 非零，不要把该来源当作可靠原文。
 - `canvas_create_character`：用已验收、已就绪的三视图图片（可加参考音频）创建角色卡，写入角色库并放置角色卡节点；不用文本节点冒充角色卡。
 - `canvas_create_storyboard`：创建有真实镜头行的 `script` 节点，不用 Markdown 冒充分镜。
 - `canvas_edit_storyboard`：追加、修改或删除单行；`update/remove` 必须使用最近读取的真实 `rowId` 和 `snapshotHash`。
