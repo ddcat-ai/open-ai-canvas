@@ -123,15 +123,9 @@ func ValidateProxyURL(rawURL string) (*url.URL, error) {
 
 func OutboundHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		Transport: outboundTransport,
-		Timeout:   timeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= maxOutboundRedirects {
-				return errors.New("外部服务重定向次数过多")
-			}
-			_, err := ValidateOutboundURL(req.URL.String())
-			return err
-		},
+		Transport:     outboundTransport,
+		Timeout:       timeout,
+		CheckRedirect: checkOutboundRedirect,
 	}
 }
 
@@ -147,16 +141,63 @@ func OutboundHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.C
 		return &http.Client{Transport: rejectingTransport{err: errors.New("渠道代理地址无效")}, Timeout: timeout}
 	}
 	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= maxOutboundRedirects {
-				return errors.New("外部服务重定向次数过多")
-			}
-			_, err := ValidateOutboundURL(req.URL.String())
-			return err
-		},
+		Transport:     transport,
+		Timeout:       timeout,
+		CheckRedirect: checkOutboundRedirect,
 	}
+}
+
+func checkOutboundRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxOutboundRedirects {
+		return errors.New("外部服务重定向次数过多")
+	}
+	_, err := ValidateOutboundURL(req.URL.String())
+	return err
+}
+
+// ModelMediaHTTPClient protects provider requests and media downloads while
+// storage SDKs and login integrations retain OutboundHTTPClient's contract.
+func ModelMediaHTTPClient(timeout time.Duration) *http.Client {
+	return ModelMediaHTTPClientWithProxy(timeout, "")
+}
+
+func ModelMediaHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.Client {
+	client := OutboundHTTPClientWithProxy(timeout, proxyURL)
+	client.CheckRedirect = checkModelMediaRedirect
+	return client
+}
+
+func checkModelMediaRedirect(req *http.Request, via []*http.Request) error {
+	// Check the original method: net/http may already have converted POST to GET.
+	if len(via) == 0 || (via[0].Method != http.MethodGet && via[0].Method != http.MethodHead) {
+		return errors.New("外部服务不允许重定向写入请求")
+	}
+	if err := checkOutboundRedirect(req, via); err != nil {
+		return err
+	}
+	// Go restores initial headers on every hop. After leaving the origin, never
+	// restore arbitrary credentials, even when redirecting back to that origin.
+	for _, previous := range via {
+		if !sameRedirectOrigin(previous.URL, req.URL) {
+			req.Header = make(http.Header)
+			req.Host = ""
+			break
+		}
+	}
+	return nil
+}
+
+func sameRedirectOrigin(a, b *url.URL) bool {
+	port := func(u *url.URL) string {
+		if p := u.Port(); p != "" {
+			return p
+		}
+		if strings.EqualFold(u.Scheme, "https") {
+			return "443"
+		}
+		return "80"
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Hostname(), b.Hostname()) && port(a) == port(b)
 }
 
 type rejectingTransport struct{ err error }
