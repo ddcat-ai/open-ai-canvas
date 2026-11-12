@@ -389,7 +389,7 @@ func TestCloudAgentGenerationAdapterRejectsUnimplementedMode(t *testing.T) {
 			t.Fatal("unimplemented billing mode appeared in the tool schema")
 		}
 	}
-	if err := validateCloudAgentMediaReferences("table-render", nil); err == nil {
+	if err := validateCloudAgentMediaReferences("table-render", nil, "", nil); err == nil {
 		t.Fatal("unimplemented mode accepted media references")
 	}
 	for _, mode := range cloudAgentGenerationModeNames() {

@@ -5,6 +5,10 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 官方素材扩展
+
+用户浏览和详情使用 `/api/official-assets`，画布通过 `/api/official-assets/:id/reference` 获取引用；管理员管理使用 `/api/admin/official-assets`，发布、下架为对应资源的 PATCH 操作。推荐提交、详情和审核由官方素材推荐路由提供，保留登录及管理员鉴权。角色引用不自动创建个人素材副本。
+
 ## 创作对话同步
 
 - `GET /creation-conversations?after=<id>`：当前账号摘要（含永久删除标记），按 ID 升序每页 100 条；`next=""` 表示结束。列表缺项不是删除命令。

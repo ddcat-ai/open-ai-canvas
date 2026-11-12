@@ -128,6 +128,9 @@ func cloudAgentResourceSignature(resource *model.Resource) string {
 
 func cloudAgentPreparedReferences(repo *repository.Repository, userID string, prepared *cloudAgentPreparedMedia) (map[string]any, error) {
 	refs := map[string]any{}
+	if characters := creationMaps(prepared.Input["referenceCharacters"]); len(characters) > 0 {
+		refs["referenceCharacters"] = characters
+	}
 	for _, field := range []string{"referenceImages", "referenceVideos", "referenceAudios"} {
 		items := []any{}
 		for _, ref := range creationMaps(prepared.Input[field]) {
@@ -159,12 +162,12 @@ func cloudAgentResolvedMediaHash(task *model.Task) (string, error) {
 	if values, exists := config["imageParameters"]; exists {
 		public["imageParameters"] = values
 	}
-	for _, key := range []string{"channelId", "channelModelKey", "providerModelKey", "priceTierId", "model", "apiFormat", "interfaceType", "capabilityConfig", "size", "imageResolution", "quality", "transparentBackground", "count", "videoSeconds", "vquality", "videoGenerateAudio", "videoWatermark", "audioVoice", "audioFormat", "audioSpeed", "audioInstructions"} {
+	for _, key := range []string{"channelId", "channelModelKey", "providerModelKey", "priceTierId", "model", "apiFormat", "interfaceType", "capabilityConfig", "size", "imageResolution", "quality", "transparentBackground", "count", "videoSeconds", "vquality", "videoGenerateAudio", "videoWatermark", "audioMode", "audioVoice", "audioFormat", "audioSpeed", "audioInstructions"} {
 		if value, exists := config[key]; exists {
 			public[key] = value
 		}
 	}
-	return creationHash(map[string]any{"mode": input["mode"], "prompt": input["prompt"], "config": public, "referenceImages": input["referenceImages"], "referenceVideos": input["referenceVideos"], "referenceAudios": input["referenceAudios"], "operation": task.Operation, "logicalModelId": task.LogicalModelID, "logicalModelRevisionId": task.LogicalModelRevisionID, "channelModelId": task.ChannelModelID}), nil
+	return creationHash(map[string]any{"mode": input["mode"], "prompt": input["prompt"], "config": public, "referenceImages": input["referenceImages"], "referenceVideos": input["referenceVideos"], "referenceAudios": input["referenceAudios"], "audioVoiceBindings": input["audioVoiceBindings"], "operation": task.Operation, "logicalModelId": task.LogicalModelID, "logicalModelRevisionId": task.LogicalModelRevisionID, "channelModelId": task.ChannelModelID}), nil
 }
 
 func cloudAgentQuoteHash(order *model.BillingOrder) string {

@@ -23,6 +23,8 @@ import { useUserStore } from "@/stores/use-user-store";
 import { CanvasCameraControlPopover } from "./canvas-camera-control-popover";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasAudioSettingsPopover } from "./canvas-audio-settings-popover";
+import { canvasReferenceDisplayName } from "@/lib/canvas/canvas-resource-references";
+import { canvasAudioVoiceBindings } from "@/lib/canvas/canvas-audio-voice-bindings";
 import { CanvasResourceMentionTextarea, type CanvasResourceMentionTextareaActions } from "./canvas-resource-mention-textarea";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasVideoPromptTools } from "./canvas-video-prompt-tools";
@@ -608,7 +610,14 @@ export function CanvasNodePromptPanel({
                     ) : mode === "video" ? (
                         <CanvasVideoSettingsPopover config={config} buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                     ) : mode === "audio" ? (
-                        <CanvasAudioSettingsPopover config={config} buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
+                        <CanvasAudioSettingsPopover
+                            config={{ ...config, audioVoiceBindings: canvasAudioVoiceBindings(node.metadata) }}
+                            references={activeReferences}
+                            referenceAudioLabels={activeReferences.filter((reference) => reference.kind === "audio").map(canvasReferenceDisplayName)}
+                            onBindingsChange={(bindings) => onConfigChange(node.id, { audioVoiceBindings: bindings })}
+                            buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3"
+                            onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))}
+                        />
                     ) : null}
                     {renderSubmitButton(expanded)}
                 </div>

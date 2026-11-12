@@ -20,11 +20,17 @@ import type { ModelReferenceLimits } from "@/lib/model-selection";
 import type { Asset } from "@/stores/use-asset-store";
 import { arkAssetMatchesImage } from "@/lib/ark-assets";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
+import { loadOfficialCharacterForGeneration } from "@/lib/canvas/official-character-generation";
+import { applyCharacterOutfitDefinition, resolveActiveCharacterOutfit } from "@/components/canvas/character-outfits";
+import { canvasAudioVoiceBindings, compileCanvasAudioVoiceBindings } from "@/lib/canvas/canvas-audio-voice-bindings";
+import { buildOrderedCanvasResourceReferences } from "@/lib/canvas/canvas-resource-references";
 
 export type CharacterGenerationReference = {
     nodeId: string;
     assetId: string;
+    officialAssetId?: string;
     requestedVersionId?: string;
+    selectedOutfitId?: string;
 };
 
 export type ResolvedCharacterVoice = {
@@ -71,6 +77,20 @@ export type NodeGenerationInput = {
 };
 
 export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string, assets: Asset[], promptOnly = false): NodeGenerationContext {
+    let context = buildRawNodeGenerationContext(nodeId, nodes, connections, prompt, assets, promptOnly);
+    const source = nodes.find((node) => node.id === nodeId);
+    if (source && getNodeGenerationMode(source) === "audio" && source.metadata?.audioMode !== "tts") {
+        const references = buildOrderedCanvasResourceReferences(
+            buildNodeGenerationInputs(nodeId, nodes, connections)
+                .map((input) => nodes.find((node) => node.id === input.nodeId))
+                .filter((node): node is CanvasNodeData => Boolean(node)),
+        );
+        context = { ...context, prompt: compileCanvasAudioVoiceBindings(context.prompt, canvasAudioVoiceBindings(source.metadata), references) };
+    }
+    return context;
+}
+
+function buildRawNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string, assets: Asset[], promptOnly = false): NodeGenerationContext {
     const pendingConversion = findPendingMediaConversionInput(nodeId, nodes, connections);
     if (pendingConversion) {
         const status = pendingConversion.metadata?.mediaConversion?.status;
@@ -79,12 +99,13 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     }
     const connectedInputs = withArkAssetReferenceInputs(buildNodeGenerationInputs(nodeId, nodes, connections), nodes, assets);
     const sourceNode = nodes.find((node) => node.id === nodeId);
-    const portraitTextureInput = sourceNode?.type === CanvasNodeType.Image && sourceNode.metadata?.content && sourceNode.metadata?.portraitTexture
-        ? (() => {
-              const image = readReferenceImage(sourceNode, nodes, connections);
-              return image ? [{ nodeId: sourceNode.id, type: "image" as const, title: sourceNode.title, image }] : [];
-          })()
-        : [];
+    const portraitTextureInput =
+        sourceNode?.type === CanvasNodeType.Image && sourceNode.metadata?.content && sourceNode.metadata?.portraitTexture
+            ? (() => {
+                  const image = readReferenceImage(sourceNode, nodes, connections);
+                  return image ? [{ nodeId: sourceNode.id, type: "image" as const, title: sourceNode.title, image }] : [];
+              })()
+            : [];
     // 显式 @ 引用必须与提示词面板展示的资源集合一致；默认自动输入仍只取入边，
     // 避免已有图片在没有 @图片N 时被悄悄当作自身参考图。
     const mentionInputs = withArkAssetReferenceInputs(mergeGenerationInputs(buildNodeMentionGenerationInputs(nodeId, nodes, connections), portraitTextureInput, buildAssetGenerationInputs(assets)), nodes, assets);
@@ -157,12 +178,8 @@ export function findPendingMediaConversionInput(nodeId: string, nodes: CanvasNod
                 .map((connection) => nodesById.get(connection.fromNodeId))
                 .filter((input): input is CanvasNodeData => Boolean(input && (input.type === CanvasNodeType.Image || input.type === CanvasNodeType.Video)));
             const sourceInput = sourceInputs[0];
-            const ready = state?.status === "completed"
-                && Boolean(state.resultStorageKey)
-                && sourceInputs.length === 1
-                && Boolean(sourceInput)
-                && state.sourceNodeId === sourceInput?.id
-                && state.sourceFingerprint === mediaConversionSourceFingerprint(sourceInput!);
+            const ready =
+                state?.status === "completed" && Boolean(state.resultStorageKey) && sourceInputs.length === 1 && Boolean(sourceInput) && state.sourceNodeId === sourceInput?.id && state.sourceFingerprint === mediaConversionSourceFingerprint(sourceInput!);
             if (!ready) return source;
         }
         connections.filter((connection) => connection.toNodeId === sourceId).forEach((connection) => queue.push(connection.fromNodeId));
@@ -188,13 +205,7 @@ function removeTrailingInputBlocks(prompt: string, inputs: NodeGenerationInput[]
     return next;
 }
 
-function buildComposerGenerationContext(
-    inputs: NodeGenerationInput[],
-    prompt: string,
-    videoFrameNodeIds: string[] = [],
-    autoIncludeWorkflowMedia = false,
-    workflowMediaInputs: NodeGenerationInput[] = [],
-): NodeGenerationContext {
+function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: string, videoFrameNodeIds: string[] = [], autoIncludeWorkflowMedia = false, workflowMediaInputs: NodeGenerationInput[] = []): NodeGenerationContext {
     const normalizedPrompt = normalizeGenerationNodeMentionTokens(prompt, inputs);
     const slotInputByToken = new Map(generationSlotEntries(inputs).map(({ token, input }) => [token, input]));
     const assetInputById = new Map(inputs.filter((input) => input.nodeId.startsWith("asset:")).map((input) => [input.nodeId.slice("asset:".length), input]));
@@ -203,10 +214,11 @@ function buildComposerGenerationContext(
         match,
         input: resolveGenerationMention(normalizedPrompt, match, slotInputByToken, nodeInputById, assetInputById),
     }));
-    const selectedIds = new Set(mentions.flatMap(({ input }) => input ? [input.nodeId] : []));
-    if (autoIncludeWorkflowMedia) workflowMediaInputs.forEach((input) => {
-        if (input.type !== "text") selectedIds.add(input.nodeId);
-    });
+    const selectedIds = new Set(mentions.flatMap(({ input }) => (input ? [input.nodeId] : [])));
+    if (autoIncludeWorkflowMedia)
+        workflowMediaInputs.forEach((input) => {
+            if (input.type !== "text") selectedIds.add(input.nodeId);
+        });
     videoFrameNodeIds.forEach((id) => {
         if (nodeInputById.get(id)?.image) selectedIds.add(id);
     });
@@ -222,7 +234,7 @@ function buildComposerGenerationContext(
         const index = match.index!;
         nextPrompt += normalizedPrompt.slice(lastIndex, index);
         const label = input ? providerLabels.get(input.nodeId) : undefined;
-        nextPrompt += label ? input?.type === "text" ? `【${label}】` : `@${label}` : match[0];
+        nextPrompt += label ? (input?.type === "text" ? `【${label}】` : `@${label}`) : match[0];
         lastIndex = index + match[0].length;
     }
     nextPrompt += normalizedPrompt.slice(lastIndex);
@@ -264,7 +276,11 @@ export function normalizeGenerationNodeMentionTokens(prompt: string, inputs: Nod
         return label ? `@${label}` : token;
     });
     // 仅保留无普通图片时的既有别名；混合引用不能猜测旧的独立编号。
-    return normalizeCharacterImageMentions(normalized, slots.filter(({ input }) => input.type === "image").length, slots.filter(({ input }) => input.type === "character").map(({ label }) => label));
+    return normalizeCharacterImageMentions(
+        normalized,
+        slots.filter(({ input }) => input.type === "image").length,
+        slots.filter(({ input }) => input.type === "character").map(({ label }) => label),
+    );
 }
 
 function hasResolvableGenerationMention(prompt: string, inputs: NodeGenerationInput[]) {
@@ -307,18 +323,10 @@ function generationSlotEntries(inputs: NodeGenerationInput[]) {
 }
 
 function generationImageSlots(inputs: NodeGenerationInput[]): NodeGenerationContext["referenceImageSlots"] {
-    return inputs.flatMap((input): NodeGenerationContext["referenceImageSlots"] => input.character
-        ? [{ nodeId: input.nodeId, kind: "character" }]
-        : input.image ? [{ nodeId: input.nodeId, kind: "image", imageId: input.image.id }] : []);
+    return inputs.flatMap((input): NodeGenerationContext["referenceImageSlots"] => (input.character ? [{ nodeId: input.nodeId, kind: "character" }] : input.image ? [{ nodeId: input.nodeId, kind: "image", imageId: input.image.id }] : []));
 }
 
-function resolveGenerationMention(
-    prompt: string,
-    match: RegExpMatchArray,
-    slotInputByToken: Map<string, NodeGenerationInput>,
-    nodeInputById: Map<string, NodeGenerationInput>,
-    assetInputById: Map<string, NodeGenerationInput>,
-) {
+function resolveGenerationMention(prompt: string, match: RegExpMatchArray, slotInputByToken: Map<string, NodeGenerationInput>, nodeInputById: Map<string, NodeGenerationInput>, assetInputById: Map<string, NodeGenerationInput>) {
     if (match[3]) {
         const end = (match.index || 0) + match[0].length;
         return hasMentionBoundary(prompt, end) ? slotInputByToken.get(match[0]) : undefined;
@@ -375,9 +383,47 @@ function buildAssetGenerationInputs(assets: Asset[]): NodeGenerationInput[] {
     return assets.flatMap((asset): NodeGenerationInput[] => {
         const nodeId = `asset:${asset.id}`;
         if (asset.kind === "text") return [{ nodeId, type: "text", title: asset.title, text: asset.data.content }];
-        if (asset.kind === "image") return [{ nodeId, type: "image", title: asset.title, image: { id: asset.id, name: asset.title, type: asset.data.mimeType, dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height, ...(asset.arkAssetId ? { arkAssetId: asset.arkAssetId } : {}) } }];
-        if (asset.kind === "video") return [{ nodeId, type: "video", title: asset.title, previewUrl: canvasVideoAssetPreviewUrl(asset.data.url, asset.coverUrl), video: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, width: asset.data.width, height: asset.data.height, durationMs: asset.data.durationMs } }];
-        if (asset.kind === "audio") return [{ nodeId, type: "audio", title: asset.title, audio: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, durationMs: asset.data.durationMs } }];
+        if (asset.kind === "image")
+            return [
+                {
+                    nodeId,
+                    type: "image",
+                    title: asset.title,
+                    image: {
+                        id: asset.id,
+                        name: asset.title,
+                        type: asset.data.mimeType,
+                        dataUrl: asset.data.dataUrl,
+                        storageKey: asset.data.storageKey,
+                        bytes: asset.data.bytes,
+                        width: asset.data.width,
+                        height: asset.data.height,
+                        ...(asset.arkAssetId ? { arkAssetId: asset.arkAssetId } : {}),
+                    },
+                },
+            ];
+        if (asset.kind === "video")
+            return [
+                {
+                    nodeId,
+                    type: "video",
+                    title: asset.title,
+                    previewUrl: canvasVideoAssetPreviewUrl(asset.data.url, asset.coverUrl),
+                    video: {
+                        id: asset.id,
+                        name: asset.title,
+                        type: asset.data.mimeType,
+                        url: asset.data.url,
+                        storageKey: asset.data.storageKey,
+                        bytes: asset.data.bytes,
+                        width: asset.data.width,
+                        height: asset.data.height,
+                        durationMs: asset.data.durationMs,
+                    },
+                },
+            ];
+        if (asset.kind === "audio")
+            return [{ nodeId, type: "audio", title: asset.title, audio: { id: asset.id, name: asset.title, type: asset.data.mimeType, url: asset.data.url, storageKey: asset.data.storageKey, bytes: asset.data.bytes, durationMs: asset.data.durationMs } }];
         if (isCharacterEntityAsset(asset)) return [{ nodeId, type: "character", title: asset.title, character: { nodeId, assetId: asset.id, requestedVersionId: asset.primaryVersionId } }];
         return [];
     });
@@ -415,7 +461,10 @@ function getConnectedStoryboardRows(nodeId: string, nodes: CanvasNodeData[], con
         const inputId = `${scriptNode.id}:${connection.fromHandleId}`;
         if (seen.has(inputId)) return [];
         seen.add(inputId);
-        const characters = (row.characters || []).map((character) => [character.characterName, character.characterDescription].filter(Boolean).join("：")).filter(Boolean).join("、");
+        const characters = (row.characters || [])
+            .map((character) => [character.characterName, character.characterDescription].filter(Boolean).join("："))
+            .filter(Boolean)
+            .join("、");
         const text = [
             `【分镜 ${row.shotNumber}】`,
             `时长：${row.durationSeconds} 秒`,
@@ -432,7 +481,9 @@ function getConnectedStoryboardRows(nodeId: string, nodes: CanvasNodeData[], con
             row.imageGenerationPrompt && `图片提示词：${row.imageGenerationPrompt}`,
             row.videoMotionPrompt && `视频提示词：${row.videoMotionPrompt}`,
             row.negativePrompt && `负面要求：${row.negativePrompt}`,
-        ].filter(Boolean).join("\n");
+        ]
+            .filter(Boolean)
+            .join("\n");
         return [{ nodeId: inputId, type: "text", title: `${scriptNode.title} · 镜头 ${row.shotNumber}`, text, alwaysIncludeText: true }];
     });
 }
@@ -472,20 +523,21 @@ export async function hydrateNodeGenerationContext(
     if (!context.characterReferences.length) return { ...context, referenceImages };
     const { getCharacter } = await import("@/services/api/projects");
     const { getResource, resourceFileUrl, resourceIdFromStorageKey: getResourceIdFromStorageKey, resourceStorageKey } = await import("@/services/api/resources");
-    const details = await Promise.all(context.characterReferences.map((reference) => getCharacter(reference.assetId)));
+    const details = await Promise.all(context.characterReferences.map((reference) => (reference.officialAssetId ? loadOfficialCharacterForGeneration(reference.officialAssetId) : getCharacter(reference.assetId))));
     const remainingBudget = Math.max(0, (referenceLimits?.maxImages ?? 9) - referenceImages.length);
     const selectedEntries = details.flatMap((detail, index) => {
         const reference = context.characterReferences[index];
         if (reference.requestedVersionId && reference.requestedVersionId !== detail.character.versionId) throw new Error(`角色「${detail.asset.title}」的固定版本已变化，请重新选择角色后生成`);
-        const representation = preferredCharacterRepresentation(detail.character.representations);
+        const outfit = resolveActiveCharacterOutfit(detail.character.definition, detail.character.representations, reference.selectedOutfitId);
+        const representation = outfit ? { id: `outfit-${outfit.id}`, resourceId: outfit.resourceId, role: "primary" } : preferredCharacterRepresentation(detail.character.representations);
         if (!representation && mode !== "audio" && mode !== "text") throw new Error(`角色「${detail.asset.title}」缺少可用的主参考图，请补充形象后再生成`);
-        return representation ? [{ nodeId: reference.nodeId, representation }] : [];
+        return representation && mode !== "audio" ? [{ nodeId: reference.nodeId, representation }] : [];
     });
     if (selectedEntries.length > remainingBudget) throw new Error(`当前模型参考图容量不足：角色至少需要 ${selectedEntries.length} 张主参考图`);
     const usedResourceIds = new Set(selectedEntries.map((item) => item.representation.resourceId));
     const supplementEntries = details.flatMap((detail, index) => {
         const reference = context.characterReferences[index];
-        if (!reference) return [];
+        if (mode === "audio" || !reference || Array.isArray(detail.character.definition.outfits)) return [];
         return detail.character.representations.flatMap((representation) => {
             if (!["front", "side", "back", "turnaround_sheet"].includes(representation.role) || !representation.resourceId || usedResourceIds.has(representation.resourceId)) return [];
             usedResourceIds.add(representation.resourceId);
@@ -493,16 +545,17 @@ export async function hydrateNodeGenerationContext(
         });
     });
     const imageEntries = [...selectedEntries, ...supplementEntries].slice(0, Math.max(0, remainingBudget));
-    const characterImages = imageEntries.map((entry, index) => ({
-        id: `character-reference-${index + 1}`,
-        name: `character-reference-${index + 1}.png`,
-        type: "image/png",
-        dataUrl: "",
-        storageKey: resourceStorageKey(entry.representation.resourceId),
-    } satisfies ReferenceImage));
-    const hydratedCharacterImages = materializeStoredMedia
-        ? await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) })))
-        : characterImages;
+    const characterImages = imageEntries.map(
+        (entry, index) =>
+            ({
+                id: `character-reference-${index + 1}`,
+                name: `character-reference-${index + 1}.png`,
+                type: "image/png",
+                dataUrl: "",
+                storageKey: resourceStorageKey(entry.representation.resourceId),
+            }) satisfies ReferenceImage,
+    );
+    const hydratedCharacterImages = materializeStoredMedia ? await Promise.all(characterImages.map(async (image) => ({ ...image, dataUrl: await imageToDataUrl(image) }))) : characterImages;
     const primaryByNodeId = new Map<string, ReferenceImage>();
     selectedEntries.forEach((entry, index) => {
         const image = hydratedCharacterImages[index];
@@ -525,7 +578,7 @@ export async function hydrateNodeGenerationContext(
         orderedIndexByNodeId.set(slot.nodeId, orderedImages.length);
         providerMentionBySlot.set(`@图片${index + 1}`, `@图片${orderedImages.length}`);
     });
-    const compiledPrompt = context.prompt.replace(/@图片[1-9]\d*/g, (token, offset: number) => hasMentionBoundary(context.prompt, offset + token.length) ? providerMentionBySlot.get(token) || token : token);
+    const compiledPrompt = context.prompt.replace(/@图片[1-9]\d*/g, (token, offset: number) => (hasMentionBoundary(context.prompt, offset + token.length) ? providerMentionBySlot.get(token) || token : token));
     const supplementLabelsByNodeId = new Map<string, string[]>();
     supplementEntries.slice(0, Math.max(0, remainingBudget - selectedEntries.length)).forEach((entry, index) => {
         const label = imageReferenceLabel(orderedImages.length + index);
@@ -534,14 +587,16 @@ export async function hydrateNodeGenerationContext(
     const supplementImages = hydratedCharacterImages.slice(selectedEntries.length);
     referenceImages = [...orderedImages, ...supplementImages];
     const characterBlocks = details.map((detail, index) => {
-        const nodeId = context.characterReferences[index]?.nodeId;
+        const reference = context.characterReferences[index];
+        const nodeId = reference?.nodeId;
         const primaryLabel = nodeId ? orderedIndexByNodeId.get(nodeId) : undefined;
         const supplementLabels = nodeId ? supplementLabelsByNodeId.get(nodeId) || [] : [];
         const referenceLine = primaryLabel ? `参考图片：@${imageReferenceLabel(primaryLabel - 1)}${supplementLabels.length ? `；补充视角：${supplementLabels.join("、")}` : ""}` : "";
-        const heading = includeCharacterPrompt ? compileCharacterReferencePrompt(detail.asset.title, detail.character.definition) : `【角色卡：${detail.asset.title}】`;
+        const effectiveDefinition = applyCharacterOutfitDefinition(detail.character.definition, reference?.selectedOutfitId, detail.character.representations);
+        const heading = includeCharacterPrompt ? compileCharacterReferencePrompt(detail.asset.title, effectiveDefinition) : `【角色卡：${detail.asset.title}】`;
         return [heading, referenceLine].filter(Boolean).join("\n");
     });
-    const resolvedCharacterVersions = details.map((detail) => ({ assetId: detail.asset.id, versionId: detail.character.versionId }));
+    const resolvedCharacterVersions = details.flatMap((detail, index) => (context.characterReferences[index]?.officialAssetId ? [] : [{ assetId: detail.asset.id, versionId: detail.character.versionId }]));
     const resolvedCharacterVoices = details.flatMap((detail): ResolvedCharacterVoice[] => {
         const voice = detail.character.voice;
         if (!voice) return [];
@@ -550,18 +605,20 @@ export async function hydrateNodeGenerationContext(
         const timbre = stringField(detail.character.definition.voiceTimbre) || stringField(voice.profile.timbre);
         const deliveryInstructions = stringField(voice.instructions);
         const sampleResourceId = stringField(voice.profile.sampleResourceId);
-        return [{
-            assetId: detail.asset.id,
-            versionId: detail.character.versionId,
-            characterName: detail.asset.title,
-            voiceKey: stringField(voice.profile.voiceKey),
-            sampleResourceId: sampleResourceId || undefined,
-            language: language || undefined,
-            voiceAge: voiceAge || undefined,
-            timbre: timbre || undefined,
-            deliveryInstructions: deliveryInstructions || undefined,
-            instructions: [language && `语言与口音：${language}`, voiceAge && `声音年龄感：${voiceAge}`, timbre && `音色气质：${timbre}`, deliveryInstructions].filter(Boolean).join("；"),
-        }];
+        return [
+            {
+                assetId: detail.asset.id,
+                versionId: detail.character.versionId,
+                characterName: detail.asset.title,
+                voiceKey: stringField(voice.profile.voiceKey),
+                sampleResourceId: sampleResourceId || undefined,
+                language: language || undefined,
+                voiceAge: voiceAge || undefined,
+                timbre: timbre || undefined,
+                deliveryInstructions: deliveryInstructions || undefined,
+                instructions: [language && `语言与口音：${language}`, voiceAge && `声音年龄感：${voiceAge}`, timbre && `音色气质：${timbre}`, deliveryInstructions].filter(Boolean).join("；"),
+            },
+        ];
     });
     const usedAudioResourceIds = new Set(context.referenceAudios.map((audio) => getResourceIdFromStorageKey(audio.storageKey)).filter(Boolean));
     const voiceSamples: ResolvedCharacterVoice[] = [];
@@ -575,26 +632,28 @@ export async function hydrateNodeGenerationContext(
     }
     const maxAudios = referenceLimits?.maxAudios ?? 3;
     if (context.referenceAudios.length + voiceSamples.length > maxAudios) throw new Error(`当前模型参考音频容量不足：已连接 ${context.referenceAudios.length} 个音频，角色声音样本还需要 ${voiceSamples.length} 个名额`);
-    const characterVoiceAudios = await Promise.all(voiceSamples.map(async (voice) => {
-        const resource = await getResource(voice.sampleResourceId!);
-        const extension = audioFileExtension(resource.mimeType, resource.objectKey);
-        return {
-            id: `character-voice-${voice.assetId}`,
-            name: `${voice.characterName}-声音样本.${extension}`,
-            type: resource.mimeType || "audio/mpeg",
-            url: resourceFileUrl(voice.sampleResourceId!),
-            storageKey: resourceStorageKey(voice.sampleResourceId!),
-        } satisfies ReferenceAudio;
-    }));
+    const characterVoiceAudios = await Promise.all(
+        voiceSamples.map(async (voice) => {
+            const resource = await getResource(voice.sampleResourceId!);
+            const extension = audioFileExtension(resource.mimeType, resource.objectKey);
+            return {
+                id: `character-voice-${voice.assetId}`,
+                name: `${voice.characterName}-声音样本.${extension}`,
+                type: resource.mimeType || "audio/mpeg",
+                url: resourceFileUrl(voice.sampleResourceId!),
+                storageKey: resourceStorageKey(voice.sampleResourceId!),
+            } satisfies ReferenceAudio;
+        }),
+    );
     const referenceAudios = [...context.referenceAudios, ...characterVoiceAudios];
-    const voiceBlocks = mode === "video" ? resolvedCharacterVoices.flatMap((voice) => {
-        const sampleIndex = voice.sampleResourceId ? referenceAudios.findIndex((audio) => getResourceIdFromStorageKey(audio.storageKey) === voice.sampleResourceId) : -1;
-        if (sampleIndex < 0 && !includeCharacterPrompt) return [];
-        return [[
-            includeCharacterPrompt ? compileResolvedVoicePrompt(voice) : `【角色声音：${voice.characterName}】`,
-            sampleIndex >= 0 ? `声音参考：@音频${sampleIndex + 1}` : "",
-        ].filter(Boolean).join("\n")];
-    }) : [];
+    const voiceBlocks =
+        mode === "video"
+            ? resolvedCharacterVoices.flatMap((voice) => {
+                  const sampleIndex = voice.sampleResourceId ? referenceAudios.findIndex((audio) => getResourceIdFromStorageKey(audio.storageKey) === voice.sampleResourceId) : -1;
+                  if (sampleIndex < 0 && !includeCharacterPrompt) return [];
+                  return [[includeCharacterPrompt ? compileResolvedVoicePrompt(voice) : `【角色声音：${voice.characterName}】`, sampleIndex >= 0 ? `声音参考：@音频${sampleIndex + 1}` : ""].filter(Boolean).join("\n")];
+              })
+            : [];
     return {
         ...context,
         prompt: [compiledPrompt.trim(), ...characterBlocks, ...voiceBlocks].filter(Boolean).join("\n\n"),
@@ -610,12 +669,17 @@ export async function hydrateNodeGenerationContext(
 function readNodeTextInput(node: CanvasNodeData) {
     if (node.type === CanvasNodeType.Text) return node.metadata?.content || node.metadata?.prompt || "";
     if (node.type === CanvasNodeType.Skill) return readSkillInput(node);
+    if (getNodeResourceKind(node) === "text") return node.metadata?.content || node.metadata?.prompt || "";
     return nodeGenerationPrompt(node);
 }
 
 function readCharacterReference(node: CanvasNodeData): CharacterGenerationReference | null {
-    const assetId = node.metadata?.workflowKind === "character" ? node.metadata.characterAssetId?.trim() : "";
-    return assetId ? { nodeId: node.id, assetId, requestedVersionId: node.metadata?.characterVersionPolicy === "pinned" ? node.metadata.characterVersionId : undefined } : null;
+    if (node.metadata?.workflowKind !== "character") return null;
+    const officialAssetId = node.metadata.officialAssetId?.trim();
+    const assetId = node.metadata.characterAssetId?.trim() || officialAssetId;
+    return assetId
+        ? { nodeId: node.id, assetId, ...(officialAssetId ? { officialAssetId } : {}), requestedVersionId: node.metadata.characterVersionPolicy === "pinned" ? node.metadata.characterVersionId : undefined, selectedOutfitId: node.metadata.selectedOutfitId }
+        : null;
 }
 
 function preferredCharacterRepresentation(representations: Array<{ id: string; resourceId: string; role: string }>) {
@@ -629,7 +693,9 @@ function compileResolvedVoicePrompt(voice: ResolvedCharacterVoice) {
         voice.voiceAge && `声音年龄感：${voice.voiceAge}`,
         voice.timbre && `音色气质：${voice.timbre}`,
         voice.deliveryInstructions && `表演与朗读要求：${voice.deliveryInstructions}`,
-    ].filter(Boolean).join("\n");
+    ]
+        .filter(Boolean)
+        .join("\n");
 }
 
 function stringField(value: unknown) {
@@ -639,13 +705,7 @@ function stringField(value: unknown) {
 function readSkillInput(node: CanvasNodeData) {
     const skill = node.metadata?.skillSnapshot;
     if (!skill) return node.metadata?.content || "";
-    return [
-        `【技能：${skill.name}】`,
-        skill.description ? `用途：${skill.description}` : "",
-        `执行模板：\n${skill.template}`,
-        skill.outputContract ? `输出约束：\n${skill.outputContract}` : "",
-        "请严格执行该技能，只输出结果，不要输出解释性套话。",
-    ]
+    return [`【技能：${skill.name}】`, skill.description ? `用途：${skill.description}` : "", `执行模板：\n${skill.template}`, skill.outputContract ? `输出约束：\n${skill.outputContract}` : "", "请严格执行该技能，只输出结果，不要输出解释性套话。"]
         .filter(Boolean)
         .join("\n\n");
 }

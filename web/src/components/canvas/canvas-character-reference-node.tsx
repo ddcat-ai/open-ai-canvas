@@ -6,13 +6,15 @@ import { translate } from "@/i18n";
 
 import { getResourceAccess, resolveResourceAccessURL, resourceStorageKey } from "@/services/api/resources";
 import type { CanvasNodeData } from "@/types/canvas";
+import { CanvasNodeOutfitSelector } from "@/components/canvas/character-outfit-bar";
+import { characterOutfitCoverUrl, parseCharacterOutfits, resolveActiveCharacterOutfit, type CharacterOutfit } from "@/components/canvas/character-outfits";
 
 const RESOURCE_FILE_PATTERN = /\/resources\/([^/?#]+)\/file/;
 
 /** 角色卡封面存的是 `/resources/:id/file`，展示前换成授权访问地址；换取失败再回落原地址。 */
 export function useCharacterCoverSrc(url?: string) {
     const [resolved, setResolved] = useState<{ url: string; src: string } | null>(null);
-    const resourceId = url ? RESOURCE_FILE_PATTERN.exec(url)?.[1] : undefined;
+    const resourceId = url && !url.startsWith("/api/public/canvas-shares/") ? RESOURCE_FILE_PATTERN.exec(url)?.[1] : undefined;
     useEffect(() => {
         if (!url || !resourceId) return;
         let cancelled = false;
@@ -42,17 +44,20 @@ export function characterInitial(name: string) {
 }
 
 /** 画布上的角色卡：海报式主视觉，底部压名字与形象/声音状态。 */
-export function CanvasCharacterReferenceNodeContent({ node }: { node: CanvasNodeData }) {
+export function CanvasCharacterReferenceNodeContent({ node, onSelectOutfit }: { node: CanvasNodeData; onSelectOutfit?: (outfit: CharacterOutfit) => void }) {
     const { t } = useTranslation();
     const metadata = node.metadata;
     const name = metadata?.characterName || node.title || t("canvasA.characterNode.unnamed");
     const role = typeof metadata?.characterDefinition?.role === "string" ? metadata.characterDefinition.role.trim() : "";
     const visualReady = metadata?.characterVisualStatus === "ready";
     const voiceReady = metadata?.characterVoiceStatus === "ready";
-    const cover = useCharacterCoverSrc(metadata?.characterCoverUrl);
+    const outfits = parseCharacterOutfits(metadata?.characterDefinition, undefined, characterCoverResourceId(metadata?.characterCoverUrl));
+    const activeOutfit = resolveActiveCharacterOutfit(metadata?.characterDefinition, undefined, metadata?.selectedOutfitId, characterCoverResourceId(metadata?.characterCoverUrl));
+    const cover = useCharacterCoverSrc(characterOutfitCoverUrl(metadata?.characterDefinition, undefined, metadata?.selectedOutfitId, metadata?.characterCoverUrl));
 
     return (
         <div className="relative isolate h-full w-full overflow-hidden bg-[#111114] text-white">
+            {onSelectOutfit ? <CanvasNodeOutfitSelector outfits={outfits} activeOutfitId={activeOutfit?.id} onSelect={onSelectOutfit} /> : null}
             {cover ? (
                 <>
                     <img src={cover} alt="" aria-hidden className="absolute inset-0 -z-10 h-full w-full scale-125 object-cover opacity-50 blur-2xl saturate-125" draggable={false} />

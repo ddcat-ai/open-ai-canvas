@@ -5,6 +5,12 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 官方素材扩展
+
+官方素材使用独立的 `yingce_schema_migrations` 四步扩展链，保留主线迁移版本与校验值。表包括 `official_assets`、`official_asset_imports` 和 `official_asset_recommendations`。角色快照及推荐授权版本、时间保存在扩展字段中。项目现有 `migrate-schema` 命令执行迁移，启动检查同时要求主线与扩展链完整。
+
+官方媒体由画布引用共享资源，不自动复制到个人库。推荐和官方快照参与资源保留检查。下架后的已有引用按用户、画布及服务端保存记录判断权限。升级前备份数据库与媒体；回滚使用匹配版本及备份，不直接删除迁移记录或共享资源。
+
 ## 创作对话同步（Schema 101）
 
 版本 101 `creation_conversation_history` 新增三张表，既有迁移账本保持不变。浏览器旧历史仅在原账号 scope 下补传，保留旧缓存；游客历史不自动合并到登录账号。

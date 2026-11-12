@@ -117,6 +117,15 @@ export function audioVoiceLabelForConfig(config: AiConfig, value: string) {
     return options.find((item) => item.value === normalized)?.label || normalized;
 }
 
+export function canvasAudioSource(config: AiConfig, referenceLabels: string[]) {
+    const mode = config.audioMode === "tts" || config.audioMode === "unified_edit" ? config.audioMode : referenceLabels.length ? "unified_edit" : "tts";
+    if (mode === "unified_edit" && referenceLabels.length) {
+        return { mode, label: referenceLabels.length === 1 ? `参考音色：${referenceLabels[0]}` : `参考音色：${referenceLabels.length} 段` };
+    }
+    const voice = audioVoiceLabelForConfig(config, config.audioVoice);
+    return { mode, label: voice ? `音色：${voice}` : mode === "tts" ? "文本朗读" : "配音待选音色" };
+}
+
 export function audioFormatLabelForConfig(config: AiConfig, value: string) {
     const normalized = normalizeAudioFormatForConfig(config, value);
     const options = audioFormatOptionsForConfig(config);

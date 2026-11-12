@@ -551,8 +551,8 @@ export function updateCharacter(assetId: string, input: { name: string; definiti
     return http.patch<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}`, input);
 }
 
-export function replaceCharacterRepresentations(assetId: string, representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>) {
-    return http.put<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}/representations`, { representations });
+export function replaceCharacterRepresentations(assetId: string, representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>, definition?: Record<string, unknown>) {
+    return http.put<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}/representations`, { representations, ...(definition ? { definition } : {}) });
 }
 
 export function bindCharacterVoice(assetId: string, input: { sampleResourceId?: string; voiceName?: string; instructions?: string }) {

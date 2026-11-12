@@ -145,6 +145,7 @@ export type AiConfig = {
     videoModel: string;
     textModel: string;
     audioModel: string;
+    audioMode?: string;
     audioVoice: string;
     audioFormat: string;
     audioSpeed: string;

@@ -504,6 +504,15 @@ func (r *Repository) DeleteAssetsAndResources(userID string, assetIDs []string, 
 		if len(assetIDs) == 0 || len(ownedAssets) != len(assetIDs) {
 			return gorm.ErrRecordNotFound
 		}
+		retained, err := New(tx).OfficialRecommendationResourceIDs()
+		if err != nil {
+			return err
+		}
+		for _, resourceID := range resourceIDs {
+			if _, exists := retained[resourceID]; exists {
+				return ErrOfficialResourceReferenced
+			}
+		}
 		if deleteReferencedResources {
 			// 彻底删除：移除被删资源的画布历史索引，让删除 worker 可以释放物理对象；
 			// 历史快照正文保留，恢复该版本时由画布断链修复处理失效媒体。

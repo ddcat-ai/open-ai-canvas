@@ -77,6 +77,7 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
         vquality: defaults.vquality ?? normalizeVideoResolution(globalConfig.vquality || defaultConfig.vquality),
         videoGenerateAudio: defaults.videoGenerateAudio ?? globalConfig.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: defaults.videoWatermark ?? globalConfig.videoWatermark ?? defaultConfig.videoWatermark,
+        audioMode: node.metadata?.audioMode || "auto",
         videoArkPrivateAssetUpload: node.metadata?.arkPrivateAssetUpload ?? globalConfig.videoArkPrivateAssetUpload ?? defaultConfig.videoArkPrivateAssetUpload,
         audioVoice: node.metadata?.audioVoice ?? globalConfig.audioVoice ?? defaultConfig.audioVoice,
         audioFormat: node.metadata?.audioFormat || globalConfig.audioFormat || defaultConfig.audioFormat,
@@ -115,6 +116,7 @@ export function videoConfigPatch(key: keyof AiConfig, value: string) {
 }
 
 export function audioConfigPatch(key: CanvasAudioSettingKey, value: string) {
+    if (key === "audioMode") return { audioMode: value };
     if (key === "audioVoice") return { audioVoice: value };
     if (key === "audioFormat") return { audioFormat: value };
     if (key === "audioSpeed") return { audioSpeed: value };

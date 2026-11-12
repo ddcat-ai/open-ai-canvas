@@ -10,6 +10,9 @@ import { characterCoverResourceId, characterInitial, useCharacterCoverSrc } from
 import { getResourceAccess, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { bindCharacterVoice, getCharacter, replaceCharacterRepresentations, unbindCharacterVoice, updateCharacter, type ProjectCharacterDetail } from "@/services/api/projects";
 import type { CanvasNodeData } from "@/types/canvas";
+import { fetchOfficialAssetReference } from "@/services/api/official-assets";
+import { CharacterStudioOutfitManager } from "@/components/canvas/character-outfit-bar";
+import { buildCharacterOutfitPersistence, parseCharacterOutfits, resolveActiveCharacterOutfit, type CharacterOutfit } from "@/components/canvas/character-outfits";
 
 type Tab = "profile" | "visual" | "voice";
 type FieldKey = "role" | "aliases" | "appearance" | "physique" | "clothing" | "personality" | "props" | "consistencyPrompt" | "multiViewPrompt" | "voiceLanguage" | "voiceAge" | "voiceTimbre";
@@ -47,11 +50,13 @@ function draftsFrom(name: string, definition: Record<string, unknown>): Drafts {
 }
 
 function coverOf(detail?: ProjectCharacterDetail) {
+    const outfit = resolveActiveCharacterOutfit(detail?.character.definition, detail?.character.representations);
+    if (outfit?.resourceId) return outfit.resourceId;
     const items = detail?.character.representations || [];
     return (items.find((item) => item.role === "turnaround_sheet") || items.find((item) => item.role === "primary") || items.find((item) => item.role === "front"))?.resourceId || "";
 }
 
-export function CanvasCharacterReferenceModal({ node, canvasNodes, open, onClose, onUpdated }: { node: CanvasNodeData | null; canvasNodes?: CanvasNodeData[]; open: boolean; onClose: () => void; onUpdated?: (detail: ProjectCharacterDetail) => void }) {
+export function CanvasCharacterReferenceModal({ node, canvasNodes, open, onClose, onUpdated }: { node: CanvasNodeData | null; canvasNodes?: CanvasNodeData[]; open: boolean; onClose: () => void; onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void }) {
     // 资源 ID → 画布节点名：用户在画布上重命名过的图片/音频，选择时按新名字显示并作为声音名保存。
     const canvasTitles = useMemo<CanvasMediaTitles>(() => {
         const titles = new Map<string, string>();
@@ -64,12 +69,34 @@ export function CanvasCharacterReferenceModal({ node, canvasNodes, open, onClose
     }, [canvasNodes]);
     return (
         <AppModal open={open && Boolean(node)} title={null} footer={null} destroyOnHidden width="min(1120px, calc(100vw - 32px))" onCancel={onClose} flush>
-            {node?.metadata?.characterAssetId ? <CharacterStudio key={node.id} node={node} assetId={node.metadata.characterAssetId} canvasTitles={canvasTitles} onUpdated={onUpdated} /> : null}
+            {node?.metadata?.sharedCharacter ? <SharedCharacterStudio node={node} /> : node?.metadata?.characterAssetId ? <CharacterStudio key={node.id} node={node} assetId={node.metadata.characterAssetId} canvasTitles={canvasTitles} onUpdated={onUpdated} /> : node?.metadata?.officialAssetId ? <OfficialCharacterStudio key={node.id} node={node} /> : null}
         </AppModal>
     );
 }
 
-function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: CanvasNodeData; assetId: string; canvasTitles: CanvasMediaTitles; onUpdated?: (detail: ProjectCharacterDetail) => void }) {
+function SharedCharacterStudio({ node }: { node: CanvasNodeData }) {
+    const drafts = draftsFrom(node.metadata?.characterName || node.title, node.metadata?.characterDefinition || {});
+    const cover = useCharacterCoverSrc(node.metadata?.characterCoverUrl);
+    return <div className="grid h-[min(760px,calc(100dvh-48px))] min-h-0 grid-rows-[minmax(260px,40vh)_minmax(0,1fr)] overflow-hidden bg-background text-foreground md:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)] md:grid-rows-1">
+        <CharacterStage name={drafts.name} role={drafts.role} cover={cover} hasCover={Boolean(cover)} voiceName={node.metadata?.characterVoiceName || ""} voiceSampleId="" voiceSampleUrl={node.metadata?.characterVoiceSampleUrl} />
+        <section className="flex min-h-0 flex-col"><div className="border-b border-border px-7 py-5 font-semibold">角色资料</div><div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 py-6"><p className="mb-5 text-sm text-foreground/55">分享画布中的角色资料仅供查看。</p><fieldset disabled><ProfileForm drafts={drafts} onChange={() => {}} /></fieldset></div></section>
+    </div>;
+}
+
+function OfficialCharacterStudio({ node }: { node: CanvasNodeData }) {
+    const definition = node.metadata?.characterDefinition || {};
+    const drafts = draftsFrom(node.metadata?.characterName || node.title, definition);
+    const coverId = characterCoverResourceId(node.metadata?.characterCoverUrl);
+    const cover = useCharacterCoverSrc(node.metadata?.characterCoverUrl);
+    const reference = useQuery({ queryKey: ["official-character-reference", node.metadata?.officialAssetId], queryFn: () => fetchOfficialAssetReference(node.metadata!.officialAssetId!), enabled: Boolean(node.metadata?.officialAssetId && !node.metadata?.characterVoiceSampleResourceId) });
+    const sampleId = node.metadata?.characterVoiceSampleResourceId || reference.data?.character?.voice?.profile?.sampleResourceId || "";
+    return <div className="grid h-[min(760px,calc(100dvh-48px))] min-h-0 grid-rows-[minmax(260px,40vh)_minmax(0,1fr)] overflow-hidden bg-background text-foreground md:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)] md:grid-rows-1">
+        <CharacterStage name={drafts.name || node.title} role={drafts.role} cover={cover} hasCover={Boolean(coverId)} voiceName={node.metadata?.characterVoiceName || reference.data?.character?.voice?.profile?.name || ""} voiceSampleId={sampleId} />
+        <section className="flex min-h-0 flex-col"><div className="border-b border-border px-7 py-5 font-semibold">角色资料</div><div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 py-6"><p className="mb-5 text-sm text-foreground/55">官方角色资料仅供查看。</p><fieldset disabled><ProfileForm drafts={drafts} onChange={() => {}} /></fieldset></div></section>
+    </div>;
+}
+
+function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: CanvasNodeData; assetId: string; canvasTitles: CanvasMediaTitles; onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void }) {
     const { t } = useTranslation();
     const { message } = App.useApp();
     const queryClient = useQueryClient();
@@ -78,30 +105,47 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
     const metadata = node.metadata;
     const name = detail?.asset.title || metadata?.characterName || node.title || t("canvasA.characterNode.unnamed");
     const definition = detail?.character.definition || metadata?.characterDefinition || {};
+    const [selectedOutfitId, setSelectedOutfitId] = useState<string | undefined>(metadata?.selectedOutfitId);
+    useEffect(() => setSelectedOutfitId(metadata?.selectedOutfitId), [node.id, metadata?.selectedOutfitId]);
+    const outfits = useMemo(
+        () => parseCharacterOutfits(definition, detail?.character.representations, characterCoverResourceId(metadata?.characterCoverUrl)),
+        [definition, detail?.character.representations, metadata?.characterCoverUrl],
+    );
+    const activeOutfit = useMemo(
+        () => resolveActiveCharacterOutfit(definition, detail?.character.representations, selectedOutfitId, characterCoverResourceId(metadata?.characterCoverUrl)),
+        [definition, detail?.character.representations, selectedOutfitId, metadata?.characterCoverUrl],
+    );
+    const effectiveDefinition = useMemo(
+        () => (activeOutfit?.clothing !== undefined ? { ...definition, clothing: activeOutfit.clothing } : definition),
+        [definition, activeOutfit?.clothing],
+    );
     // 以序列化结果作依赖，避免每次渲染的新对象反复重置草稿。
-    const definitionKey = JSON.stringify(definition);
+    const definitionKey = JSON.stringify(effectiveDefinition);
     const baseline = useMemo(() => draftsFrom(name, JSON.parse(definitionKey) as Record<string, unknown>), [name, definitionKey]);
     const [drafts, setDrafts] = useState<Drafts>(baseline);
     const [tab, setTab] = useState<Tab>("profile");
     const [busyKey, setBusyKey] = useState("");
+    const [addingNewOutfit, setAddingNewOutfit] = useState(false);
     // 服务端数据到达或保存成功后，用新基线覆盖草稿。
     useEffect(() => setDrafts(baseline), [baseline]);
     const dirty = (Object.keys(baseline) as Array<keyof Drafts>).some((key) => baseline[key].trim() !== drafts[key].trim());
 
-    const coverResourceId = detail ? coverOf(detail) : characterCoverResourceId(metadata?.characterCoverUrl);
+    const coverResourceId = activeOutfit?.resourceId || (detail ? coverOf(detail) : characterCoverResourceId(metadata?.characterCoverUrl));
     const cover = useCharacterCoverSrc(coverResourceId ? resourceFileUrl(coverResourceId) : undefined);
     const voice = detail?.character.voice;
     const voiceSampleId = voice?.profile.sampleResourceId || "";
     // 已绑定的样本如果在画布上被重命名，展示时跟随画布名；重新绑定时会把新名字写回声音档案。
     const voiceName = (voiceSampleId && canvasTitles.get(voiceSampleId)) || voice?.profile.name || metadata?.characterVoiceName || "";
 
-    const commit = async (key: string, work: () => Promise<ProjectCharacterDetail>, success: string) => {
+    const commit = async (key: string, work: () => Promise<ProjectCharacterDetail>, success: string, nextSelectedOutfitId?: string) => {
         setBusyKey(key);
         try {
             const next = await work();
+            const targetOutfitId = nextSelectedOutfitId || selectedOutfitId || activeOutfit?.id;
+            if (targetOutfitId) setSelectedOutfitId(targetOutfitId);
             queryClient.setQueryData(["character-studio", assetId], next);
             void queryClient.invalidateQueries({ queryKey: ["characters"] });
-            onUpdated?.(next);
+            onUpdated?.(next, targetOutfitId);
             message.success(success);
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("canvasA.characterStudio.saveFailed"));
@@ -109,14 +153,40 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
             setBusyKey("");
         }
     };
-    const bindImage = (resourceId: string) => commit(resourceId, () => replaceCharacterRepresentations(assetId, [{ role: "turnaround_sheet", resourceId }, { role: "primary", resourceId }]), t("canvasA.characterStudio.visualUpdated"));
+    const saveOutfits = (nextOutfits: CharacterOutfit[], nextActiveId: string, busyId = "outfit") => {
+        const payload = buildCharacterOutfitPersistence(definition, nextOutfits, nextActiveId);
+        setAddingNewOutfit(false);
+        return commit(busyId, () => replaceCharacterRepresentations(assetId, payload.representations, payload.definition), t("canvasA.characterStudio.visualUpdated"), nextActiveId);
+    };
+    const bindImage = (resourceId: string) => {
+        const imageTitle = canvasTitles.get(resourceId)?.trim();
+        if (addingNewOutfit || !outfits.length) {
+            const id = `outfit-${Date.now().toString(36)}`;
+            const name = imageTitle || (outfits.length === 0 ? "默认造型" : `造型 ${outfits.length + 1}`);
+            return saveOutfits([...outfits, { id, name, resourceId }], id, resourceId);
+        }
+        const currentId = activeOutfit?.id || outfits[0].id;
+        const nextOutfits = outfits.map((item) => (item.id === currentId ? { ...item, resourceId } : item));
+        return saveOutfits(nextOutfits, currentId, resourceId);
+    };
     const bindVoice = (resourceId: string, title: string) => commit(resourceId, () => bindCharacterVoice(assetId, { sampleResourceId: resourceId, voiceName: title }), t("canvasA.characterLibrary.voiceBound"));
-    const upload = (file: File, kind: "image" | "audio") => commit("upload", async () => {
-        const resource = await uploadResourceFile(file, kind, { fileName: file.name });
-        return kind === "image"
-            ? replaceCharacterRepresentations(assetId, [{ role: "turnaround_sheet", resourceId: resource.id }, { role: "primary", resourceId: resource.id }])
-            : bindCharacterVoice(assetId, { sampleResourceId: resource.id, voiceName: file.name.replace(/\.[^.]+$/, "") });
-    }, kind === "image" ? t("canvasA.characterStudio.visualUpdated") : t("canvasA.characterLibrary.voiceBound"));
+    const upload = (file: File, kind: "image" | "audio") => {
+        const newOutfitId = `outfit-${Date.now().toString(36)}`;
+        const targetOutfitId = kind === "image" ? (addingNewOutfit || !outfits.length ? newOutfitId : activeOutfit?.id || outfits[0].id) : undefined;
+        return commit("upload", async () => {
+            const resource = await uploadResourceFile(file, kind, { fileName: file.name });
+            if (kind === "image") {
+                const cleanName = file.name.replace(/\.[^.]+$/, "").trim();
+                const nextOutfits = addingNewOutfit || !outfits.length
+                    ? [...outfits, { id: newOutfitId, name: cleanName || (outfits.length === 0 ? "默认造型" : `造型 ${outfits.length + 1}`), resourceId: resource.id }]
+                    : outfits.map((item) => (item.id === (activeOutfit?.id || outfits[0].id) ? { ...item, resourceId: resource.id } : item));
+                const payload = buildCharacterOutfitPersistence(definition, nextOutfits, targetOutfitId);
+                setAddingNewOutfit(false);
+                return replaceCharacterRepresentations(assetId, payload.representations, payload.definition);
+            }
+            return bindCharacterVoice(assetId, { sampleResourceId: resource.id, voiceName: file.name.replace(/\.[^.]+$/, "") });
+        }, kind === "image" ? t("canvasA.characterStudio.visualUpdated") : t("canvasA.characterLibrary.voiceBound"), targetOutfitId);
+    };
     const saveProfile = () => {
         if (!drafts.name.trim()) {
             message.error(t("canvasA.characterStudio.nameRequired"));
@@ -126,6 +196,11 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
         FIELD_KEYS.forEach((key) => {
             nextDefinition[key] = key === "aliases" ? drafts.aliases.split(/[，,、]/).map((item) => item.trim()).filter(Boolean) : drafts[key].trim();
         });
+        if (Array.isArray(nextDefinition.outfits) && activeOutfit) {
+            nextDefinition.outfits = (nextDefinition.outfits as Array<Record<string, unknown>>).map((item) =>
+                item?.id === activeOutfit.id ? { ...item, clothing: drafts.clothing.trim() } : item,
+            );
+        }
         void commit("profile", () => updateCharacter(assetId, { name: drafts.name.trim(), definition: nextDefinition }), t("canvasA.characterStudio.profileSaved"));
     };
 
@@ -136,7 +211,34 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
                 <CharacterTabs value={tab} onChange={setTab} />
                 <div id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-8 pt-6">
                     {tab === "profile" ? <ProfileForm drafts={drafts} onChange={(key, value) => setDrafts((current) => ({ ...current, [key]: value }))} /> : null}
-                    {tab === "visual" ? <CharacterImageLibrary currentResourceId={coverResourceId} busyKey={busyKey} canvasTitles={canvasTitles} onPick={(id) => void bindImage(id)} onUpload={(file) => void upload(file, "image")} /> : null}
+                    {tab === "visual" ? (
+                        <div>
+                            <CharacterStudioOutfitManager
+                                outfits={outfits}
+                                activeOutfitId={activeOutfit?.id || ""}
+                                addingNew={addingNewOutfit}
+                                busy={Boolean(busyKey)}
+                                onSelectOutfit={(id) => {
+                                    setAddingNewOutfit(false);
+                                    setSelectedOutfitId(id);
+                                    if (detail) onUpdated?.(detail, id);
+                                }}
+                                onStartAddNew={() => setAddingNewOutfit(true)}
+                                onCancelAddNew={() => setAddingNewOutfit(false)}
+                                onUpdateOutfitMeta={(id, patch) => {
+                                    const next = outfits.map((item) => (item.id === id ? { ...item, ...patch } : item));
+                                    void saveOutfits(next, id);
+                                }}
+                                onDeleteOutfit={(id) => {
+                                    const next = outfits.filter((item) => item.id !== id);
+                                    if (!next.length) return;
+                                    const nextActive = id === activeOutfit?.id ? next[0].id : activeOutfit?.id || next[0].id;
+                                    void saveOutfits(next, nextActive);
+                                }}
+                            />
+                            <CharacterImageLibrary currentResourceId={addingNewOutfit ? "" : coverResourceId} busyKey={busyKey} canvasTitles={canvasTitles} onPick={(id) => void bindImage(id)} onUpload={(file) => void upload(file, "image")} />
+                        </div>
+                    ) : null}
                     {tab === "voice" ? (
                         <div className="space-y-5">
                             {voiceName ? (
@@ -218,7 +320,7 @@ function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) =
 }
 
 /** 左侧主视觉：模糊底 + 全幅立绘，名字压在底部；声音可直接试听。 */
-function CharacterStage({ name, role, cover, hasCover, voiceName, voiceSampleId, version }: { name: string; role: string; cover: string; hasCover: boolean; voiceName: string; voiceSampleId: string; version?: number }) {
+function CharacterStage({ name, role, cover, hasCover, voiceName, voiceSampleId, voiceSampleUrl, version }: { name: string; role: string; cover: string; hasCover: boolean; voiceName: string; voiceSampleId: string; voiceSampleUrl?: string; version?: number }) {
     const { t } = useTranslation();
     return (
         <section className="relative isolate min-h-0 overflow-hidden bg-[#0f0f12] text-white" aria-label={t("canvasA.characterStudio.stageLabel", { name })}>
@@ -242,13 +344,13 @@ function CharacterStage({ name, role, cover, hasCover, voiceName, voiceSampleId,
             <div className="absolute inset-x-0 bottom-0 px-7 pb-7">
                 <h2 className="truncate text-[var(--fs-display)] font-semibold leading-tight tracking-tight">{name}</h2>
                 <p className="mt-1 line-clamp-2 max-w-[46ch] text-sm leading-6 text-white/60">{role || t("canvasA.characterStudio.noRole")}</p>
-                <VoiceChip name={voiceName} sampleId={voiceSampleId} />
+                <VoiceChip name={voiceName} sampleId={voiceSampleId} sampleUrl={voiceSampleUrl} />
             </div>
         </section>
     );
 }
 
-function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
+function VoiceChip({ name, sampleId, sampleUrl }: { name: string; sampleId: string; sampleUrl?: string }) {
     const { t } = useTranslation();
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const [playing, setPlaying] = useState(false);
@@ -256,10 +358,10 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
     useEffect(() => {
         audioRef.current?.pause();
         setPlaying(false);
-    }, [sampleId]);
+    }, [sampleId, sampleUrl]);
     if (!name) return <p className="mt-4 inline-flex items-center gap-2 text-xs text-white/35"><Mic className="size-3.5" />{t("canvasA.characterStudio.noVoice")}</p>;
     const toggle = async () => {
-        if (!sampleId) return;
+        if (!sampleId && !sampleUrl) return;
         const audio = audioRef.current || (audioRef.current = new Audio());
         if (playing) {
             audio.pause();
@@ -268,7 +370,7 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
         }
         setPlaying(true);
         try {
-            audio.src = resolveResourceAccessURL((await getResourceAccess(resourceStorageKey(sampleId), "display", "playback")).url);
+            audio.src = sampleUrl || resolveResourceAccessURL((await getResourceAccess(resourceStorageKey(sampleId), "display", "playback")).url);
             audio.onended = () => setPlaying(false);
             await audio.play();
         } catch {
@@ -276,8 +378,8 @@ function VoiceChip({ name, sampleId }: { name: string; sampleId: string }) {
         }
     };
     return (
-        <button type="button" disabled={!sampleId} onClick={() => void toggle()} aria-label={sampleId ? t(playing ? "canvasA.characterStudio.pauseVoice" : "canvasA.characterStudio.previewVoice", { name }) : t("canvasA.characterStudio.voiceNamed", { name })} className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1 pl-1 pr-4 text-xs text-white/85 outline-none backdrop-blur transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default">
-            <span className="grid size-6 place-items-center rounded-full bg-white text-black">{playing ? <Pause className="size-3" /> : sampleId ? <Play className="size-3 translate-x-px" /> : <Mic className="size-3" />}</span>
+        <button type="button" disabled={!sampleId && !sampleUrl} onClick={() => void toggle()} aria-label={sampleId || sampleUrl ? t(playing ? "canvasA.characterStudio.pauseVoice" : "canvasA.characterStudio.previewVoice", { name }) : t("canvasA.characterStudio.voiceNamed", { name })} className="mt-4 inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1 pl-1 pr-4 text-xs text-white/85 outline-none backdrop-blur transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default">
+            <span className="grid size-6 place-items-center rounded-full bg-white text-black">{playing ? <Pause className="size-3" /> : sampleId || sampleUrl ? <Play className="size-3 translate-x-px" /> : <Mic className="size-3" />}</span>
             <span className="truncate">{name}</span>
         </button>
     );

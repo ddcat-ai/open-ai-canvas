@@ -308,6 +308,7 @@ export type CanvasNodeMetadata = {
               sourceType?: string;
           };
     content?: string;
+    officialAssetId?: string;
     previewContent?: string;
     /** Original file and immutable pixel-corrected variants; references share the current content/storageKey. */
     imageRotation?: {
@@ -371,6 +372,8 @@ export type CanvasNodeMetadata = {
     generateAudio?: string;
     watermark?: string;
     audioVoice?: string;
+    audioMode?: string;
+    audioVoiceBindings?: Array<{ characterNodeId: string; audioNodeId: string }>;
     audioFormat?: string;
     audioSpeed?: string;
     audioLanguage?: string;
@@ -486,6 +489,11 @@ export type CanvasNodeMetadata = {
     characterVisualStatus?: string;
     characterVoiceStatus?: string;
     characterVoiceName?: string;
+    characterVoiceSampleResourceId?: string;
+    characterVoiceSampleUrl?: string;
+    sharedCharacter?: boolean;
+    selectedOutfitId?: string;
+    officialCharacterSnapshot?: import("@/services/api/official-assets").OfficialAssetReference["character"];
     characterVoiceProfile?: {
         name: string;
         provider: string;

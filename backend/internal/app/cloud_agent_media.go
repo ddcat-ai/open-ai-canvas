@@ -70,8 +70,10 @@ func (s *Service) cloudAgentModelList(userID string, intent *ModelRequestIntent)
 // supplied by the model must not replace resource ownership/readiness checks.
 func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*ModelRequestIntent, error) {
 	var a struct {
-		Mode             string   `json:"mode"`
-		ReferenceNodeIDs []string `json:"referenceNodeIds"`
+		Mode               string                        `json:"mode"`
+		AudioMode          string                        `json:"audioMode"`
+		AudioVoiceBindings []cloudAgentAudioVoiceBinding `json:"audioVoiceBindings"`
+		ReferenceNodeIDs   []string                      `json:"referenceNodeIds"`
 	}
 	if err := decodeCloudAgentJSONObject(arguments, &a); err != nil {
 		return nil, BadAuthRequest("模型查询参数无效")
@@ -101,23 +103,36 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 			return nil, BadAuthRequest("参考节点不存在或重复")
 		}
 		seen[id] = true
-		ref, field, err := cloudAgentMediaReference(s.repo, userID, canvas.ProjectID, nodes[id])
+		ref, field, err := cloudAgentMediaReference(s.repo, userID, canvas.ProjectID, nodes[id], a.Mode)
 		if err != nil {
 			return nil, err
 		}
 		list, _ := refs[field].([]any)
 		refs[field] = append(list, ref)
 	}
-	if err := validateCloudAgentMediaReferences(a.Mode, refs); err != nil {
+	if err := validateCloudAgentMediaReferences(a.Mode, refs, a.AudioMode, a.AudioVoiceBindings); err != nil {
 		return nil, err
 	}
 	refs["mode"] = a.Mode
 	operation := cloudAgentMediaOperation(a.Mode, refs)
+	if a.Mode == "audio" && lenAnySlice(refs["referenceAudios"]) > 0 && a.AudioMode != "tts" {
+		operation = "unified_edit"
+	}
 	if a.Mode == "video" {
 		// 查询目录时尚未选择模型；先按真实输入筛选，再按各模型的操作合同匹配。
 		operation = ""
 	}
 	intent := ModelRequestIntentFromTaskInput(refs, "canvas_"+a.Mode, operation)
+	if a.Mode == "audio" {
+		mode := a.AudioMode
+		if mode == "" && lenAnySlice(refs["referenceAudios"]) > 0 {
+			mode = "unified_edit"
+		}
+		if mode == "" {
+			mode = "tts"
+		}
+		intent.Options["audioMode"] = mode
+	}
 	return &intent, nil
 }
 
@@ -128,6 +143,8 @@ type cloudAgentMediaArgs struct {
 	CharacterVersions          map[string]string                   `json:"-"`
 	CharacterLabels            []string                            `json:"-"`
 	Mode                       string                              `json:"mode"`
+	AudioMode                  string                              `json:"audioMode"`
+	AudioVoiceBindings         []cloudAgentAudioVoiceBinding       `json:"audioVoiceBindings"`
 	Prompt                     string                              `json:"prompt"`
 	LogicalModelID             string                              `json:"logicalModelId"`
 	ChannelID                  string                              `json:"channelId"`
@@ -148,6 +165,11 @@ type cloudAgentMediaArgs struct {
 	SourceNodeID               string                              `json:"sourceNodeId"`
 	ReferenceNodeIDs           []string                            `json:"referenceNodeIds"`
 	ReferenceTransientIDs      []string                            `json:"referenceTransientIds"`
+}
+
+type cloudAgentAudioVoiceBinding struct {
+	CharacterNodeID string `json:"characterNodeId"`
+	AudioNodeID     string `json:"audioNodeId"`
 }
 
 type cloudAgentMediaPlan struct {
@@ -485,7 +507,7 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 				return nil, nil, nil, cloudAgentFieldError(fmt.Sprintf("referenceNodeIds[%d]", i), "invalid_value", "referenceNodeIds 仅接受受支持的媒体参考节点；文本来源请改用 sourceNodeId")
 			}
 		}
-		ref, payloadField, e := cloudAgentMediaReference(repo, userID, canvas.ProjectID, nodes[id])
+		ref, payloadField, e := cloudAgentMediaReference(repo, userID, canvas.ProjectID, nodes[id], args.Mode)
 		if e != nil {
 			return nil, nil, nil, e
 		}
@@ -615,7 +637,7 @@ func validateCloudAgentMediaBudget(a cloudAgentMediaArgs, state *cloudAgentRunti
 	return nil
 }
 
-func validateCloudAgentMediaReferences(mode string, refs map[string]any) error {
+func validateCloudAgentMediaReferences(mode string, refs map[string]any, audioMode string, bindings []cloudAgentAudioVoiceBinding) error {
 	imageCount := lenAnySlice(refs["referenceImages"])
 	videoCount := lenAnySlice(refs["referenceVideos"])
 	audioCount := lenAnySlice(refs["referenceAudios"])
@@ -625,6 +647,18 @@ func validateCloudAgentMediaReferences(mode string, refs map[string]any) error {
 			return cloudAgentFieldError("referenceNodeIds", "invalid_combination", "图片生成仅支持图片参考资产；请移除视频或音频引用")
 		}
 	case "audio":
+		if audioMode != "" && audioMode != "tts" && audioMode != "unified_edit" {
+			return cloudAgentFieldError("audioMode", "invalid_value", "音频模式仅支持 tts 或 unified_edit")
+		}
+		if audioMode == "tts" && audioCount > 0 {
+			return cloudAgentFieldError("audioMode", "invalid_combination", "文本朗读不使用参考音频；请移除音频引用或改用全能配音，避免参考关系不明确")
+		}
+		if audioMode == "unified_edit" && audioCount == 0 {
+			return cloudAgentFieldError("referenceNodeIds", "required", "全能配音必须连接参考音频；请先选择音频节点")
+		}
+		if audioMode != "unified_edit" && len(bindings) > 0 {
+			return cloudAgentFieldError("audioVoiceBindings", "invalid_combination", "角色音色对应仅在明确的全能配音模式下使用")
+		}
 		if videoCount > 0 {
 			return cloudAgentFieldError("referenceNodeIds", "invalid_combination", "音频生成不能使用参考视频；请移除视频引用")
 		}
@@ -773,6 +807,16 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	}
 	if a.Prepared != nil {
 		a.Prompt = stringValue(a.Prepared.Input["prompt"])
+		if preparedConfig, ok := a.Prepared.Input["config"].(map[string]any); ok && a.AudioMode == "" {
+			a.AudioMode = stringValue(preparedConfig["audioMode"])
+		}
+		if len(a.AudioVoiceBindings) == 0 {
+			if encoded, marshalErr := json.Marshal(a.Prepared.Input["audioVoiceBindings"]); marshalErr == nil {
+				if unmarshalErr := json.Unmarshal(encoded, &a.AudioVoiceBindings); unmarshalErr != nil {
+					return CreateTaskRequest{}, nil, cloudAgentFieldError("audioVoiceBindings", "invalid_value", "已批准的角色音色对应无法恢复，请重新审批")
+				}
+			}
+		}
 	} else {
 		for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
 			if character := characters[id]; character != nil {
@@ -788,6 +832,12 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		if err != nil {
 			return CreateTaskRequest{}, nil, err
 		}
+		if a.Mode == "audio" {
+			a.Prompt, err = compileCloudAgentAudioVoiceBindings(a.Prompt, a.AudioVoiceBindings, refs)
+			if err != nil {
+				return CreateTaskRequest{}, nil, err
+			}
+		}
 	}
 	spec, err := cloudAgentGenerationSpec(a, refs, nil)
 	if err != nil {
@@ -801,6 +851,9 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		config["videoArkPrivateAssetUpload"] = strconv.FormatBool(*a.VideoArkPrivateAssetUpload)
 	}
 	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
+	if a.Mode == "audio" && len(a.AudioVoiceBindings) > 0 {
+		metadata["audioVoiceBindings"] = a.AudioVoiceBindings
+	}
 	// 首尾帧是结构化输入，不能只写进提示词；复用画布提交任务时的字段。
 	if a.VideoStartFrameNodeID != "" {
 		metadata["videoStartFrameNodeId"] = a.VideoStartFrameNodeID
@@ -826,7 +879,7 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 			if voiceKey == "" {
 				continue
 			}
-			if strings.TrimSpace(stringValue(config["audioVoice"])) == "" {
+			if a.AudioMode != "unified_edit" && strings.TrimSpace(stringValue(config["audioVoice"])) == "" {
 				config["audioVoice"] = voiceKey
 			}
 			if strings.TrimSpace(stringValue(config["audioInstructions"])) == "" && strings.TrimSpace(voice.Instructions) != "" {
@@ -838,7 +891,10 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	}
 	input := refs
 	input["mode"], input["prompt"], input["config"] = a.Mode, a.Prompt, config
-	if err := validateCloudAgentMediaReferences(a.Mode, refs); err != nil {
+	if a.Mode == "audio" && len(a.AudioVoiceBindings) > 0 {
+		input["audioVoiceBindings"] = a.AudioVoiceBindings
+	}
+	if err := validateCloudAgentMediaReferences(a.Mode, refs, a.AudioMode, a.AudioVoiceBindings); err != nil {
 		return CreateTaskRequest{}, nil, err
 	}
 	operation, err := s.resolveCloudAgentMediaOperation(a, refs)
@@ -1077,6 +1133,9 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 	}
 	meta["prompt"] = cloudAgentMediaComposerPrompt(a.Prompt, refs)
 	meta["composerContent"] = meta["prompt"]
+	if a.Mode == "audio" && len(a.AudioVoiceBindings) > 0 {
+		meta["audioVoiceBindings"] = a.AudioVoiceBindings
+	}
 	if task != nil {
 		meta["status"], meta["taskId"], meta["taskStatus"] = "loading", task.ID, "queued"
 		delete(meta, "agentDraftRunId")

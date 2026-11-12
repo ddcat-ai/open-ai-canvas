@@ -9,6 +9,8 @@ import { ConnectionPath } from "@/components/canvas/canvas-connections";
 import { CanvasNodeToolbar, CanvasNodeInfoModal } from "@/components/canvas/canvas-node-toolbar";
 import { CanvasFrameNode } from "@/components/canvas/canvas-frame-node";
 import { CanvasNode } from "@/components/canvas/canvas-node";
+import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
+import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { CanvasBatchTableNodeContent } from "@/components/canvas/canvas-batch-table-node";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { CanvasViewport } from "@/components/canvas/canvas-viewport";
@@ -259,6 +261,18 @@ export default function SharedCanvasPage() {
         );
     const renderSharedNode = useCallback(
         (node: CanvasNodeData): ReactNode => {
+            if (node.metadata?.sharedCharacter)
+                return (
+                    <div
+                        className="h-full w-full"
+                        onDoubleClickCapture={(event) => {
+                            event.stopPropagation();
+                            setInfoNodeId(node.id);
+                        }}
+                    >
+                        <CanvasCharacterReferenceNodeContent node={node} />
+                    </div>
+                );
             if (node.type === CanvasNodeType.Script) return <SharedScriptNode node={node} onUnauthorized={unauthorized} />;
             if (node.type === CanvasNodeType.BatchTable)
                 return (
@@ -308,7 +322,7 @@ export default function SharedCanvasPage() {
         );
 
     return (
-        <main className="relative h-screen overflow-hidden" style={{ background: resolveCanvasAppearance(appearance, colorTheme).background, color: theme.node.text }}>
+        <main data-canvas-viewport className="relative h-screen overflow-hidden" style={{ background: resolveCanvasAppearance(appearance, colorTheme).background, color: theme.node.text }}>
             <header className="pointer-events-none absolute inset-x-0 top-0 z-[var(--z-panel-floating)] flex h-16 items-center justify-between px-5">
                 <div className="pointer-events-auto flex min-w-0 items-center gap-3">
                     <Share2 className="size-4" style={{ color: theme.node.muted }} />
@@ -491,7 +505,11 @@ export default function SharedCanvasPage() {
                     }}
                 />
             ) : null}
-            <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} readOnly onUnauthorized={unauthorized} />
+            {infoNode?.metadata?.sharedCharacter ? (
+                <CanvasCharacterReferenceModal node={infoNode} open onClose={() => setInfoNodeId(null)} />
+            ) : (
+                <CanvasNodeInfoModal node={infoNode} open={Boolean(infoNode)} onClose={() => setInfoNodeId(null)} readOnly onUnauthorized={unauthorized} />
+            )}
         </main>
     );
 }

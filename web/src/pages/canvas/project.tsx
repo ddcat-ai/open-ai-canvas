@@ -1184,7 +1184,7 @@ function CanvasViewportPage() {
                 setDrawingNodeId(node.id);
             } else if (node.type === CanvasNodeType.Script) {
                 setDialogNodeId(null);
-            } else if (node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "character" && node.metadata.characterAssetId) {
+            } else if (node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId)) {
                 setDialogNodeId(null);
                 setCharacterReferenceNodeId(node.id);
             } else if (node.type === CanvasNodeType.Text) {
@@ -1226,7 +1226,7 @@ function CanvasViewportPage() {
                 node.type === CanvasNodeType.Drawing ||
                 node.type === CanvasNodeType.Panorama ||
                 node.type === ART_CRITIQUE_NODE_TYPE ||
-                (node.metadata?.workflowKind === "character" && node.metadata.characterAssetId)
+                (node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId))
             ) {
                 setDialogNodeId(null);
                 return;
@@ -1574,7 +1574,7 @@ function CanvasViewportPage() {
         setContextMenu(null);
         setDialogNodeId(null);
         setToolbarNodeId(null);
-        if (node.metadata?.workflowKind === "character" && node.metadata.characterAssetId) {
+        if (node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId)) {
             setCharacterReferenceNodeId(node.id);
             return;
         }
@@ -2330,7 +2330,7 @@ function CanvasViewportPage() {
 
     const renderCanvasNodeContent = useCallback(
         (contentNode: CanvasNodeData) => {
-            if (contentNode.metadata?.workflowKind === "character" && contentNode.metadata.characterAssetId) {
+            if (contentNode.metadata?.workflowKind === "character" && (contentNode.metadata.characterAssetId || contentNode.metadata.officialAssetId)) {
                 return <CanvasCharacterReferenceNodeContent node={contentNode} />;
             }
             if (contentNode.metadata?.workflowKind === "styleboard" && !contentNode.metadata.content) {
@@ -3221,7 +3221,7 @@ function CanvasViewportPage() {
                             dialogNode.type !== CanvasNodeType.BatchTable &&
                             dialogNode.type !== CanvasNodeType.Drawing &&
                             dialogNode.type !== CanvasNodeType.Panorama &&
-                            !(dialogNode.metadata?.workflowKind === "character" && dialogNode.metadata.characterAssetId) &&
+                            !(dialogNode.metadata?.workflowKind === "character" && (dialogNode.metadata.characterAssetId || dialogNode.metadata.officialAssetId)) &&
                             !dialogNode.metadata?.previsSceneId &&
                             !selectionBox &&
                             !isCanvasNodeMoving ? (
@@ -3305,7 +3305,7 @@ function CanvasViewportPage() {
                                 containerRef={containerRef}
                                 onKeep={keepNodeToolbar}
                                 onLeave={hideNodeToolbar}
-                                onInfo={(node) => (node.metadata?.workflowKind === "character" && node.metadata.characterAssetId ? openTextNodeEditor(node) : setInfoNodeId(node.id))}
+                                onInfo={(node) => (node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId) ? openTextNodeEditor(node) : setInfoNodeId(node.id))}
                                 onEditText={openTextNodeEditor}
                                 onDecreaseFont={(node) => handleFontSizeChange(node.id, Math.max(10, (node.metadata?.fontSize || 14) - 2))}
                                 onIncreaseFont={(node) => handleFontSizeChange(node.id, Math.min(32, (node.metadata?.fontSize || 14) + 2))}
