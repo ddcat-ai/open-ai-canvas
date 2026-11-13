@@ -201,6 +201,10 @@ func (s *Service) UploadLive2D(actor *model.User, header *multipart.FileHeader) 
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	return s.uploadLive2D(actor, header)
+}
+
+func (s *Service) uploadLive2D(actor *model.User, header *multipart.FileHeader) (*Live2DImport, error) {
 	if header == nil {
 		return nil, BadAuthRequest("请选择 Live2D ZIP")
 	}
@@ -212,6 +216,9 @@ func (s *Service) UploadLive2D(actor *model.User, header *multipart.FileHeader) 
 	entry, err := validateLive2DArchive(f, header.Size)
 	if err != nil {
 		return nil, err
+	}
+	if header.Header == nil {
+		header.Header = make(map[string][]string)
 	}
 	header.Header.Set("Content-Type", "application/zip")
 	resource, err := s.uploadLocalResource(actor.ID, header, "live2d", 0, 0, 0)
@@ -254,11 +261,11 @@ func (s *Service) Live2DAsset(actor *model.User, id, name string) ([]byte, strin
 		return nil, "", BadAuthRequest("模型资源不可用")
 	}
 	if appearance.Canvas.AvatarType != "live2d" || appearance.Canvas.Live2DResourceID != id {
-		if err := s.RequireAdmin(actor); err != nil {
+		if err := requirePersonalAppearanceActor(actor); err != nil {
 			return nil, "", err
 		}
 		if resource.UserID != actor.ID && appearance.Canvas.Live2DResourceID != id {
-			return nil, "", Forbidden("不能预览其他管理员的未启用模型")
+			return nil, "", Forbidden("不能读取其他账号的未启用模型")
 		}
 	}
 	_, body, err := s.OpenResource(resource.UserID, id)

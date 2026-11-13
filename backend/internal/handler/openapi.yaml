@@ -1378,6 +1378,61 @@ paths:
           { description: JSON 或 MP4 原始内容，支持 Range；停用后拒绝公开读取 }
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
+  /appearance/avatar-bundles:
+    post:
+      tags: [resources]
+      summary: 上传个人助手状态动画包
+      description: 活跃登录账号可上传，复用管理员动画 ZIP 格式、128 MiB 上限、账号频率及配额校验，不更新全站外观。
+      requestBody:
+        $ref: "#/paths/~1admin~1settings~1appearance~1avatar-bundles/post/requestBody"
+      responses:
+        "200":
+          $ref: "#/paths/~1admin~1settings~1appearance~1avatar-bundles/post/responses/200"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /appearance/live2d:
+    post:
+      tags: [resources]
+      summary: 上传个人助手 Live2D 模型
+      description: 活跃登录账号可上传，复用管理员 Cubism ZIP 格式、128 MiB 上限、账号频率及配额校验，不更新全站外观。
+      requestBody:
+        $ref: "#/paths/~1admin~1settings~1appearance~1live2d/post/requestBody"
+      responses:
+        "200":
+          $ref: "#/paths/~1admin~1settings~1appearance~1live2d/post/responses/200"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /appearance/avatar/{id}/{file}:
+    get:
+      tags: [resources]
+      summary: 读取本人上传的助手动画文件
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: file, required: true, description: avatar.json 或根目录 MP4 文件名, schema: { type: string } }
+      responses:
+        "200": { description: JSON 或 MP4 原始内容，仅本人可读，Cache-Control 为 private no-store }
+        "206": { description: MP4 字节范围，包含 Content-Range }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /appearance/live2d/{id}/{file}:
+    get:
+      tags: [resources]
+      summary: 读取本人上传的 Live2D 文件
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: file, required: true, description: ZIP 内规范相对路径，可包含多级目录, schema: { type: string } }
+      responses:
+        "200": { description: JSON、PNG 或 MOC3 原始内容，仅本人可读，禁止共享缓存 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /tools:
     get:
       tags: [canvas]

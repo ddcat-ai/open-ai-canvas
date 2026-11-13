@@ -469,6 +469,8 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 ### 画布配置、更新公告、状态动画包与 Live2D（外观合同版本 11）
 
+个人外观入口供活跃的登录账号使用：`POST /appearance/avatar-bundles` 与 `POST /appearance/live2d` 接收 multipart `file`，分别返回 `data.bundle: { resourceId, manifest }` 和 `data.model: { resourceId, entry }`。复用管理员导入的 ZIP 大小和格式校验，受账号上传频率、上传/存储额度和只读规则限制，不更新全站外观。个人文件通过 `GET /appearance/avatar/:id/*file`、`GET /appearance/live2d/:id/*file` 读取：未登录为 401、非本人为 404，响应为私有且禁止缓存，视频支持 Range。普通账号访问管理员导入仍为 403。主题与助手选择按账号保存在当前浏览器，不新增服务端偏好写接口；详见 [画布 Agent 外观](/docs/backend/canvas-agent-appearance)。
+
 外观设置新增 `updates: { enabled, currentVersion, releases }`，由管理员通过 `PATCH /admin/settings/appearance` 保存；关闭开关保留草稿，但 `GET /public/appearance` 返回关闭状态与空公告列表，前端恢复内置更新日志。开启时公开版本与内容块，当前版本须对应公告版本。媒体上传、管理员预览、公开引用读取及限制详见 [自定义更新公告](/docs/backend/update-announcements)。JSON 请求上限为 512KB；无数据表迁移。
 
 `GET /public/appearance` 和管理员 `GET /admin/settings/appearance` 返回 `canvas`；管理员通过 `PATCH /admin/settings/appearance` 随外观配置统一保存。字段为 `agentName`（1–24 字）、`launcherLabel`（0–24 字）、`panelTitle`（1–40 字）、`welcomeTitle`（1–100 字）、`welcomeDescription`（0–200 字）、`inputPlaceholder`（1–160 字）、`avatarType`（`orb|bundle|live2d`）、`avatarHeight`（120–360 整数）、`live2dResourceId`、`live2dEntry`、`avatarBundleResourceId` 和状态到 clip 名的 `avatarClipStates`。状态键为 `idle|queued|running|waiting_approval|completed|failed|cancelled|rejected`；状态动画包为空资源 ID 时使用内置 `/doll/avatar.json`。启用上传包时服务端核验资源归属、ZIP 与每个状态引用的 clip。名称以数据形式投影到每轮 Agent 执行上下文，不提供自由系统提示词配置，也不改变工具权限。
