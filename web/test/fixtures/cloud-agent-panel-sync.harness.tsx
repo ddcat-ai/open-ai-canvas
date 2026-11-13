@@ -50,6 +50,10 @@ const sendInputs: Array<Record<string, any>> = [];
 let sendFailure: Error | undefined;
 let capabilitiesOverride: (() => Promise<unknown>) | undefined;
 let sendOverride: (() => Promise<{ run: AgentRun }>) | undefined;
+// 新建画布首次保存前服务端没有这块画布：偏好要等 prepareCanvasForCloudAction 落库后才读得到。
+let draftCanvasUntilPrepared = false;
+let canvasPrepared = false;
+const cloudCalls: string[] = [];
 const refreshRequests: Array<{ observedConversationIds?: string[]; canvasId?: string }> = [];
 let generated = 0;
 let composer: Record<string, any>;
@@ -77,7 +81,11 @@ mock.module("antd", () => ({
 }));
 mock.module("@/services/api/agent", () => ({
     ...agent,
-    getAgentProfile: async () => ({ revision: "profile", hash: "hash", layers: [] }),
+    getAgentProfile: async () => {
+        cloudCalls.push("profile");
+        if (draftCanvasUntilPrepared && !canvasPrepared) throw new Error("画布不存在或尚未保存到服务端，请先完成画布同步");
+        return { revision: "profile", hash: "hash", layers: [] };
+    },
     getAgentCapabilities: async () => (capabilitiesOverride ? capabilitiesOverride() : { permissionModes: ["request_approval"], skills: true }),
     subscribeAgentEvents: (id: string, event: (event: AgentEvent) => void, options: any) => {
         const subscription = { id, after: options.after, event, connection: options.onConnectionChange, closed: false };
@@ -140,7 +148,14 @@ mock.module("@/services/api/skills", () => ({
         throw new Error("不应安装技能");
     },
 }));
-mock.module("@/services/user-data-sync", () => ({ prepareCanvasForCloudAction: async () => {}, applyAgentCanvasPatches: async () => {}, refreshCanvasAfterAgent: async () => {} }));
+mock.module("@/services/user-data-sync", () => ({
+    prepareCanvasForCloudAction: async () => {
+        cloudCalls.push("prepare");
+        canvasPrepared = true;
+    },
+    applyAgentCanvasPatches: async () => {},
+    refreshCanvasAfterAgent: async () => {},
+}));
 mock.module("@/components/skills/skill-curation-browser", () => ({ useSkillCuration: () => ({ curation: null }), curationQuery: () => ({}) }));
 mock.module("@/components/canvas/canvas-cloud-agent-chat-ui", () => ({
     AGENT_SCENE_DEFS: [],
@@ -236,7 +251,11 @@ async function mount(
     initialPending: CloudAgentPendingSubmission | null = null,
     target: AgentRequestTarget = { canvasId: "shared-canvas" },
     initialPrefill?: Omit<AgentPrefillRequest, "id">,
+    options: { draftCanvas?: boolean } = {},
 ) {
+    draftCanvasUntilPrepared = Boolean(options.draftCanvas);
+    canvasPrepared = false;
+    cloudCalls.length = 0;
     local = [initial];
     activeId = initial.id;
     remote = cloud;
@@ -350,6 +369,26 @@ test("旧轮次结束后仍发现手机新轮次，电脑下一条消息使用�
         expect(sent).toEqual(["second"]);
         expect(generated).toBe(0);
         expect(pending).toBeNull();
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("新建草稿画布打开面板时读不到偏好，发送时先落库再读偏好，不会一直卡在排队", async () => {
+    const mounted = await mount(chat("draft-canvas", makeRun("first")), [], null, undefined, undefined, { draftCanvas: true });
+    try {
+        expect(cloudCalls).toEqual(["profile"]);
+        await act(async () => {
+            composer.onPromptChange("生成2个小海獭的图片");
+        });
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(cloudCalls).toEqual(["profile", "prepare", "profile"]);
+        expect(sent).toEqual(["first"]);
+        expect(sendInputs[0]?.profileRevision).toBe("profile");
+        expect(generated).toBe(0);
     } finally {
         await mounted.close();
     }

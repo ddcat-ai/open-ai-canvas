@@ -647,7 +647,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         if (!open || view !== "chat") setSkillsOpen(false);
     }, [open, view]);
 
-    const reloadProfile = useCallback(async () => {
+    const fetchProfile = useCallback(async () => {
         const requestId = ++profileRequestRef.current;
         setProfileLoading(true);
         setProfileError(undefined);
@@ -655,12 +655,18 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         try {
             const result = await getAgentProfile({ projectId: domainProjectId, canvasId });
             if (profileRequestRef.current === requestId) setProfileView(result);
+            return result;
         } catch (cause) {
             if (profileRequestRef.current === requestId) setProfileError(cause instanceof Error ? cause.message : String(cause));
+            throw cause;
         } finally {
             if (profileRequestRef.current === requestId) setProfileLoading(false);
         }
     }, [canvasId, domainProjectId]);
+
+    const reloadProfile = useCallback(async () => {
+        await fetchProfile().catch(() => undefined);
+    }, [fetchProfile]);
 
     useEffect(() => {
         void reloadProfile();
@@ -1468,14 +1474,16 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
             // Editing model settings or prompt must not silently create a new charge.
             if (pending?.request && pending.request.prompt !== value) throw new Error("上一条请求结果待确认，请先原样重试上一条消息，再发送新要求");
             if (!pending?.request) {
-                if (profileLoading) throw new Error("正在确认长期偏好快照，请稍后再发送");
-                if (!profileView || profileError) throw new Error("长期偏好快照尚未确认，请重新读取后再发送");
                 const capabilities = await getAgentCapabilities();
                 if (!accountIsCurrent() || currentScope.current !== scope) return "skipped";
                 if (!capabilities.permissionModes.includes(settings.permissionMode)) throw new Error("当前后端不支持所选 Agent 权限，请更新后端");
                 if (settings.skillIds.length && !capabilities.skills) throw new Error("当前后端尚未接入技能库");
                 // 请求使用点击发送时的目标；等待同步期间切页不能改变已确认的对象。
                 if (target.canvasId) await prepareCanvasForCloudAction(target.canvasId);
+                if (!accountIsCurrent() || currentScope.current !== scope) return "skipped";
+                // 新建画布在首次保存前只是浏览器草稿，服务端读不到它的偏好；所以偏好在画布落库之后读取，
+                // 打开面板时的预读失败（草稿画布）不能挡住发送。
+                const profile = profileView && !profileError && !profileLoading ? profileView : await fetchProfile();
                 if (!accountIsCurrent() || currentScope.current !== scope) return "skipped";
                 const agentConfig = { ...config, model: effectiveModel };
                 const requestConfig = resolveModelRequestConfig(agentConfig, effectiveModel);
@@ -1485,7 +1493,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                     ...target,
                     prompt: value,
                     reasoningMode: settings.reasoningMode,
-                    profileRevision: profileView.revision,
+                    profileRevision: profile.revision,
                     model: modelOptionName(effectiveModel) || undefined,
                     ...(logicalModelId ? { logicalModelId } : requestConfig.channelId ? { channelId: requestConfig.channelId, channelModelKey: modelOptionName(effectiveModel) || undefined } : {}),
                     pinnedSkillIds: [...new Set([...usableSkillIds, ...resolveSkillMentions(value, installedSkills).map((skill) => skill.skillId)])].slice(0, 16),
@@ -1677,7 +1685,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
             outboxDispatchRef.current = false;
         }
     };
-    const outboxDispatchReady = historyHydrated && pendingHydrated && outboxReady && !cloudOpeningId && Boolean(profileView) && !profileLoading && !profileError;
+    const outboxDispatchReady = historyHydrated && pendingHydrated && outboxReady && !cloudOpeningId && !profileLoading;
     const outboxDispatchBlocker = agentOutboxDispatchBlocker(outbox, {
         ready: outboxDispatchReady,
         requestInFlight: busy || Boolean(pendingSubmission.current?.request),
