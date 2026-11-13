@@ -3,13 +3,13 @@ package tool
 // The same types drive strict argument decoding in the host and schema creation.
 // omitempty controls required fields in the schema, not runtime zero handling.
 type CanvasGetStateArgs struct {
-	Offset           int      `json:"offset,omitempty" description:"节点分页起点，默认0；后续用 nextOffset（非页码）。读取分页不是画布节点总量限制" minimum:"0"`
+	Offset           int      `json:"offset,omitempty" description:"节点分页起点，默认0；后续用 nextOffset（非页码）" minimum:"0"`
 	ConnectionOffset int      `json:"connectionOffset,omitempty" description:"连线分页起点；hasMoreConnections 时保持节点 offset，用 nextConnectionOffset" minimum:"0"`
 	StoryboardOffset int      `json:"storyboardOffset,omitempty" description:"分镜行分页起点，省略为0" minimum:"0"`
 	NodeIDs          []string `json:"nodeIds,omitempty" description:"节点ID数组（勿传单字符串）；与 focusNodeIds 互斥" itemDescription:"待精读的真实节点ID" maxItems:"8"`
 	FocusNodeIDs     []string `json:"focusNodeIds,omitempty" description:"与 depth 读关联子图；未传勿传 depth" itemDescription:"当前节点或当前节点集合的真实ID" maxItems:"8"`
 	Depth            *int     `json:"depth,omitempty" description:"从 focusNodeIds 沿无向连线展开；默认1；未传 focusNodeIds 勿传" minimum:"0" maximum:"3"`
-	IncludeRelated   *bool    `json:"includeRelated,omitempty" description:"仅随 focusNodeIds 使用；true 读连通分量上下游，单次读取最多256节点，不限制画布总节点数；与 depth 互斥"`
+	IncludeRelated   *bool    `json:"includeRelated,omitempty" description:"仅随 focusNodeIds 使用；true 读连通分量，最多256节点；与 depth 互斥"`
 }
 
 type CanvasReadTextArgs struct {
