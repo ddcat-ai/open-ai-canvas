@@ -21,9 +21,11 @@ description: 从产品功能快速定位主要代码入口
 
 - 用户工作回忆：`app/cloud_agent_memory_recall.go`、`repository/agent_memory_recall.go`；长期偏好沿用 `cloud_agent_memory_document*.go`。冻结注入在 `cloud_agent_skill_catalog.go`，按需检索工具为 `memory_search`。
 - Pi `1.5.2` 与真实运行回归：`backend/agent-runtime/pi/agent-runtime.mjs`、`agent-runtime.compaction.test.mjs`；受管模型桥、真实 Token 计量和缓存前缀在 `app/cloud_agent_pi_model.go`。
-- MCP HTTP 接口：`handler/mcp.go` → `service/aliases_mcp.go` → `app/mcp.go`；领域实现 `internal/integrations/mcp/`，持久化 `repository/mcp.go`、`model/models_mcp.go`，追加迁移 100 在 `database/migration_mcp.go`。
+- MCP HTTP 接口：`handler/mcp.go` → `service/aliases_mcp.go` → `app/mcp.go`；领域实现 `internal/integrations/mcp/`，`access.go` 负责平台用户与参数范围，`admission.go` 负责共享协调器限流，`outbound/mcp.go` 负责独立出站策略；持久化在 `repository/mcp.go` / `mcp_quota.go`、`model/models_mcp.go`，迁移 100 / 103 在 `database/migration_mcp.go` / `migration_mcp_security.go`。
 - MCP 工具发现、审批预览与执行：`app/cloud_agent_tools_mcp.go`；分类与 Schema 仍使用统一工具注册表。外部 IO 在检查点事务外执行，独立回执防止重复调用。
 - 前端：`web/src/components/mcp/` 与 `services/api/agent-mcp.ts`；个人入口在 Agent 设置，平台市场和连接在 `pages/admin/mcp/`。
+- Agent 并发准入与存储账本：`repository/agent_limits.go`、`repository/cloud_agent.go`、`model/agent_storage_usage.go`，迁移 104 在 `database/migration_agent_limits.go`。控制状态可在历史配额耗尽时完成取消和失败收尾。
+- 运行时生命周期：`yingce-agent/session-admission.mjs`、`run-directories.mjs` 与嵌入版 `internal/agent/runtime/directories.go`；生产资源边界由 `docker-compose.deploy.yml` 声明。跨标签页会话失效、固定账号请求和晚响应拦截在 `web/src/lib/user-scope.ts`、`user-session.ts`、`services/api/request.ts` 与 Agent / 文本 SSE 入口。
 
 ## 网站访问统计
 

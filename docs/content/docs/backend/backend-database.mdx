@@ -13,6 +13,25 @@ description: 影策后端核心持久化表与状态边界
 
 `system_settings.wechat_oauth` 保存独立的微信配置 JSON，AppSecret 使用系统设置密钥加密；对外管理响应仅含密钥存在标志。接入步骤见[微信网站应用登录](/docs/backend/wechat-login)。
 
+## Agent / MCP 多用户边界（Schema 103–104）
+
+版本 103 `mcp_tenant_boundaries` 增加平台连接的用户授权及工具参数策略，版本 104 `agent_storage_limits` 增加 Agent 持久数据账本。
+
+| 表或字段 | 合同 |
+| --- | --- |
+| `mcp_connection_grants` | `connection_id + user_id` 唯一授权；平台发现、审批和执行均查验；创建者和管理员执行工具也没有隐式豁免 |
+| `mcp_connections.allowed_user_ids_json` / `tool_policies_json` | 平台管理配置快照；每工具独立对象 JSON Schema 与远端输入 schema 同时校验；策略变更递增连接 revision |
+| `mcp_connections.tools_summary_json` | 有界工具摘要，列表查询不载入完整 `tools_json`；完整发现结果 schema 合计不超过 256 KiB |
+| `mcp_storage_usages` | 每用户 64 MiB 的 MCP 配置、凭据密文、工具快照和回执预算；包含有界元数据预留，调用领取回执前预留最多 48 KiB 结果空间 |
+| `agent_storage_usages` | 每用户 256 MiB 的状态、原生 JSONL、事件、消息及画布撤销正文账本；首次写入测量旧数据，此后在同一事务内按增量更新 |
+| `mcp_tool_executions.status = expired` | 维护裁剪回执正文后保留身份和指纹，不再次执行外部操作；正在执行的回执不裁剪 |
+
+升级 103 会**停用全部旧 MCP 连接，包括个人连接**，清空检测结果、工具授权、平台用户名单和工具策略并递增 revision；保留加密凭据和执行回执，并为既有 MCP 数据初始化预算。用户须重新检测和授权；平台连接还须明确授权用户及参数范围。104 不删除既有 Agent 历史，超过额度的账号只能缩减或停止，不能继续增长历史。
+
+Agent 根任务准入按用户在同一数据库事务计数；PostgreSQL 使用用户 advisory lock，SQLite 先取写锁。统计包含未创建执行检查点的预留、`waiting_approval` / `waiting_user` 和 `cleanup_pending`，不依赖任务载体是否为 `text_replay`。存储账本先于执行行加锁；原生会话仍采用 revision CAS，超额写入整笔回滚。取消、失败标记和无正文增长的清理不需要新增历史空间。
+
+账本用于业务容量控制，不等于数据库物理文件大小。索引、WAL、备份、系统模板与数据库页空闲空间仍需部署监控。当前不自动删除用户历史；人工归档必须通过保持账本与幂等标记一致的维护事务，不能直接清空 MCP 执行表。升级前备份数据库和 `.settings-key`，回滚时恢复同一份备份，旧二进制不能直接使用 104 结构。
+
 ## 创作对话同步（Schema 101）
 
 版本 101 `creation_conversation_history` 新增三张表，既有迁移账本保持不变。浏览器旧历史仅在原账号 scope 下补传，保留旧缓存；游客历史不自动合并到登录账号。
@@ -35,7 +54,7 @@ SQLite 写事务与 PostgreSQL 行锁串行化同一对话的修订检查；读�
 | --- | --- |
 | `mcp_server_templates` | 平台管理的市场名称、说明、传输方式、地址、请求头参数模板和发布状态；不得存放实际凭据 |
 | `mcp_connections` | `user_id` / `scope` 隔离个人与平台连接；全部参数加密保存在 `parameters_ciphertext`，已发现工具与授权清单分开保存；`revision` CAS 防止检测结果覆盖并发配置，参数变化清除检测与授权 |
-| `mcp_tool_executions` | 按用户、Agent 运行和工具调用身份记录参数指纹及 `running/completed/uncertain` 回执；不存调用参数原文；确定成功可重放回执，结果不确定不自动重发外部操作 |
+| `mcp_tool_executions` | 按用户、Agent 运行和工具调用身份记录参数指纹及 `running/completed/uncertain/expired` 回执；不存调用参数原文；确定成功可重放回执，结果不确定或已过期不自动重发外部操作 |
 
 市场模板修改会停用关联连接并撤销工具授权，重新检测后才能启用。参数加密复用数据目录的 `.settings-key`，备份数据库时须一起备份该密钥；响应只包含非密钥参数和已配置密钥的名称。平台管理变更与不含凭据的管理员审计同事务保存。
 
@@ -445,7 +464,7 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 `auth_sessions.reauthenticated_at` 记录当前会话的 Linux.do 重新核验时间，有效 5 分钟；`o_auth_states.reauth_user_id/reauth_session_id` 绑定发起重新核验的账号及会话。重新核验只允许原绑定的第三方身份，不创建账号或新登录会话。`auth_verifications.session_id/credential_hash` 将 `profile_email` 用途的验证码绑定到当前用户、当前会话和密码状态。密码、邮箱修改及旧会话撤销在同一事务提交；登录会话签发同时检查账号凭据，阻止并发旧密码登录在撤销之后再创建会话。升级执行 `migrate-schema up` / `verify`，禁止手工修改既有迁移记录。
 
-当前结构版本为 100。版本 100 新增 MCP 市场模板、个人与平台连接及外部工具执行回执三张表；版本 99 新增匿名网站访问事件表。两项迁移见本页对应节。
+当前结构版本为 104。版本 102 增加微信 OAuth 状态字段，103 增加 MCP 用户授权、工具参数策略和存储账本，104 增加 Agent 存储账本；101 为创作对话同步，100 为 MCP 基础连接，99 为匿名访问事件。升级影响与回退约束见本页对应节。
 
 版本 98 的视频请求生成快照、版本 97 的渠道网站与独立 Key、版本 96 的画布统一文本节点、版本 95 的方舟可信素材绑定唯一索引与版本 94 的短剧独立风格与跨作品素材见本页对应节；版本 87 的灵感上新、版本 86 的方舟素材组与版本 85 的站点姿势库见本页首节；版本 77 的记忆文件列补齐、版本 76 的 Agent 记忆文件与技能自动发现、版本 75 的用户分组与多币种计价、版本 74 的剧情段参考图指定、版本 73 的短剧单集素材类型与版本 72 的推广中心表见本页首节；版本 61–67 的短剧自动制作表与版本 70 的作品补传表见本页首节；版本 59 `channel_model_protocol_length` 将 `channel_models.protocol` 从 `varchar(32)` 扩为 `varchar(64)`，保留既有记录并允许存储 33 字符的 MediaKit 协议 ID。版本 58 的记忆提案与恢复结构见本页首节。版本 56 `sql_perf_indexes` 为 `api_call_logs` 与 `tasks` 增加 `created_at_epoch`（Unix 秒），回填既有 `created_at` 并分别创建 `idx_api_logs_created_epoch`、`idx_tasks_created_epoch`，SQLite 时间范围查询使用裸列以命中索引；新记录通过 `BeforeCreate` 从 `created_at` 派生该值。另增加 `api_call_logs(request_kind, status, created_at)` 与 `credit_ledger_entries(user_id, type)` 复合索引。版本 55 `provider_catalog_source` 为 `model_channels` 增加 `catalog_provider_id`（最长 64 字、非空、默认空字符串、带索引），为 `channel_models` 增加 `catalog_model_key`（最长 120 字、非空、默认空字符串），记录一键接入的目录服务商与推荐模型，仅用于来源展示和“已接入”计数，不参与路由、启停或计费。版本 53 新增独立登录日志表 `login_logs`，详见本页“用户登录日志”。版本 50 新增 `canvas_mutation_receipts`，按 `(user_id, canvas_id, mutation_id)` 唯一记录画布 operations 请求摘要、确定性结果和提交 revision，供响应丢失后的幂等重放使用；receipt 与画布内容、revision 在同一事务提交。版本 49 `banner_sort_order` 为 `banner_announcements` 增加可配置的 `sort_order` 展示顺序；版本 48 `channel_proxy_url` 为 `model_channels` 增加渠道级出站代理地址 `proxy_url`，支持 `socks5://`、`http://`、`https://`；留空时沿用全局代理。代理地址只返回管理员视图，普通用户目录不暴露渠道代理或其中的认证信息。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。 `cloud_agent_gemini_cache` 创建 `cloud_agent_gemini_caches`，保存用户范围内的官方 Gemini 缓存元数据；版本 37 `cloud_agent_gemini_cache_identity` 将缓存标识约束修正为 `(user_id, cache_key)`，移除旧的全局 cache_key 唯一索引。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。
 

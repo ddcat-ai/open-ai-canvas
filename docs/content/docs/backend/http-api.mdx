@@ -28,29 +28,31 @@ description: 信封、错误码与 OpenAPI
 
 ## Agent MCP
 
-所有接口使用登录 Cookie、统一业务信封和严格 JSON 入参。个人连接归属、平台管理员权限、连接启用状态和工具授权均在 service 层校验。
+所有接口使用登录 Cookie、统一业务信封和严格 JSON 入参。个人连接归属、平台管理员权限、平台用户授权名单、连接启用状态和工具参数约束均在 service 层校验。浏览器请求携带发起时账号的 `X-Canvas-Expected-User`；身份不一致返回 403，旧标签页取消请求并重新恢复认证。
 
 | 接口 | 合同 |
 | --- | --- |
 | `GET /api/agent/mcp/catalog` | 返回 `data.items[]`，只包含已发布市场模板 |
-| `GET /api/agent/mcp/connections` | 返回个人连接及已启用的平台连接；平台连接对普通用户只读，不返回其参数或凭据 |
+| `GET /api/agent/mcp/connections` | 返回个人连接及已启用且授权给当前用户的平台连接；平台连接对普通用户只读，不返回其参数或凭据；工具仅返回摘要 |
 | `POST /api/agent/mcp/connections`、`PUT /api/agent/mcp/connections/:id` | 完整写入 `{name,templateId?,transport,serverUrl,parameters,enabled,allowedTools}`，返回连接视图；`transport` 为 `streamable_http` 或 `sse` |
 | `POST /api/agent/mcp/connections/:id/test` | 服务端真实握手并发现工具，返回最新连接视图；成功后需要重新选择允许工具，默认禁用；失败返回真实错误 |
 | `DELETE /api/agent/mcp/connections/:id` | 删除自己的连接，返回 `data.deleted=true` |
 | `GET /api/admin/mcp/catalog` | 管理员读取全部市场模板 |
 | `POST /api/admin/mcp/catalog`、`PUT /api/admin/mcp/catalog/:id` | `{name,description,homepage,transport,serverUrl,headers,parameters,published}`；`parameters[]` 定义 `{name,label,description,type,required,defaultValue?}`，`type` 为 `string` 或 `secret` |
 | `DELETE /api/admin/mcp/catalog/:id` | 仅删除未被连接引用的市场条目；被引用返回 409，可先下架 |
-| `/api/admin/mcp/connections`、`/:id`、`/:id/test` | 与个人连接相同的方法和数据合同，只管理平台连接；普通用户返回 403 |
+| `/api/admin/mcp/connections`、`/:id`、`/:id/test` | 管理平台连接；写入额外接受 `allowedUserIds: string[]` 和 `toolPolicies: Record<string, JSONSchema>`；空用户名单默认拒绝，每个允许工具必须显式设置对象参数策略；普通用户返回 403 |
 
-连接视图包含 `id/scope/templateId/name/transport/serverUrl/enabled/parameters/configuredSecrets/tools/allowedTools/revision/lastTestAt/createdAt/updatedAt`。密钥值不回显，`configuredSecrets` 只有已配置的参数名。原连接省略密钥或传空串保留原值；更换服务地址或市场模板不自动转移旧凭据。无模板的自定义连接支持可选 `parameters.token` 作为 Bearer 凭据。
+连接视图包含 `id/scope/templateId/name/transport/serverUrl/enabled/parameters/configuredSecrets/tools/allowedTools/revision/lastTestAt/createdAt/updatedAt`；管理员视图还包含 `allowedUserIds/toolPolicies`。`tools[].inputSchema` 在列表中省略，完整 schema 通过 Agent 按单个工具发现。密钥值不回显，`configuredSecrets` 只有已配置的参数名。原连接省略密钥或传空串保留原值；更换服务地址或市场模板不自动转移旧凭据。无模板的自定义连接支持可选 `parameters.token` 作为 Bearer 凭据。
 
-修改传输、地址或参数会撤销检测和工具授权。启用必须有成功检测结果，且 `allowedTools` 必须是检测工具的非空子集。目录模板的请求头可引用 `{{parameterName}}`，认证请求头引用必须为 `secret` 类型；URL 不接受查询参数、片段和密钥占位符。默认拒绝私网、明文 HTTP 和重定向；可信开发主机只接受部署者精确配置的允许项。
+修改传输、地址或参数会撤销检测和工具授权。启用必须有成功检测结果，且 `allowedTools` 必须是检测工具的非空子集。平台的授权名单、工具策略变化同样增加 revision，使旧审批失效。目录模板的请求头可引用 `{{parameterName}}`；除白名单中的非敏感标准头外，引用必须为 `secret` 类型，不能放认证字面量。URL 不接受查询参数、片段和密钥占位符。MCP 独立使用 `CANVAS_MCP_ALLOWED_PRIVATE_HOSTS` 精确放行项，不继承模型渠道私网权限或环境代理。
 
 编辑市场模板会清空所有安装连接的参数和密钥，停用并撤销检测与工具授权，防止旧密钥被新的参数类型回显。执行前在短事务中校验持久化运行审批及连接版本并领取回执；事务提交前的取消或撤权会阻止调用，已准入的外部操作无法撤回。已完成回执可在连接删除后回放。未确认结果分类为 `external_result_uncertain`、`retryable: false`，禁止自动重复发送。
 
 Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工具名、指定工具的完整 Schema，避免每轮注入所有第三方工具。`mcp_call_tool` 接收 `{connectionId,revision,toolName,arguments}`，始终要求本次审批；执行时复验归属、版本、工具清单和 Schema，不相信对端只读声明。外部返回内容是数据，不能改变权限；超时或结果不明的调用不会自动重发。同一运行换用新调用 ID 也不能重试相同的未确认操作。
 
 安装方式和限制见 [MCP 连接与市场](./agent-mcp)。
+
+检测与调用的限频、并发和存储拒绝使用真实 429 / 403 错误，协调器不可用时拒绝新外部操作。管理员资源策略新增 `task.agentMaxRunsPerUser`（默认 5，范围 1–64）；新安装 `task.agentMaxSessions` 默认 8。管理员用户详情 `storageUsage` 新增 `agentBytes/agentLimitBytes/mcpBytes/mcpLimitBytes`，独立列示 Agent 256 MiB 与 MCP 64 MiB 的账号额度。
 
 ## 飞书需求与问题日报
 
