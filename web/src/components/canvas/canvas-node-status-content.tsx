@@ -13,7 +13,7 @@ import {
     type GenerationPhase,
 } from "@/lib/generation-task-display";
 import { AlertCircle, AlertTriangle, AudioLines, CloudOff, FileText, Film, Image as ImageIcon, RefreshCw, RotateCcw, ShieldAlert, Type, type LucideIcon } from "lucide-react";
-import { type CSSProperties, type MouseEvent } from "react";
+import { type CSSProperties, type MouseEvent, useEffect, useState } from "react";
 import { useTaskElapsed } from "@/hooks/use-task-elapsed";
 import { canvasNodeCanResyncTask } from "@/lib/canvas/canvas-task-state";
 import { CONTENT_MODERATION_ERROR_CODE, generationErrorMessage, isContentModerationError } from "@/lib/generation-error";
@@ -72,9 +72,23 @@ function TaskDetailButton({ node, onOpenTaskDetails }: Pick<CanvasNodeContentPro
 export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNodeContentProps, "node" | "theme" | "onOpenTaskDetails">) {
     const metadata = node.metadata;
     const taskId = metadata?.taskId;
+    // 节点的 taskStatus 只在任务终态由 completedTaskMetadata 写回，运行期间会一直停在提交时的
+    // queued，导致整个生成过程都显示「排队中 / 轮到后自动开始」。超过 30 秒仍是 queued，说明
+    // 上游早已接单，这里按「生成中」展示，避免把等待队列的文案挂在真正跑着的任务上。
+    const STALE_QUEUED_MS = 30_000;
+    const taskCreatedMs = metadata?.taskCreatedAt ? Date.parse(metadata.taskCreatedAt) : Number.NaN;
+    const taskActive = Boolean(taskId) && !taskTerminalStatus(metadata?.taskStatus);
+    const [nowMs, setNowMs] = useState(() => Date.now());
+    useEffect(() => {
+        if (!taskActive) return;
+        const timer = window.setInterval(() => setNowMs(Date.now()), 5000);
+        return () => window.clearInterval(timer);
+    }, [taskActive]);
+    const staleQueued =
+        metadata?.taskStatus === "queued" && Number.isFinite(taskCreatedMs) && nowMs - taskCreatedMs > STALE_QUEUED_MS;
     const displayTask = {
-        status: (metadata?.taskStatus || "running") as GenerationTask["status"],
-        stage: metadata?.taskStage,
+        status: (staleQueued ? "running" : metadata?.taskStatus || "running") as GenerationTask["status"],
+        stage: staleQueued ? undefined : metadata?.taskStage,
         mediaStage: metadata?.taskMediaStage,
         progress: metadata?.taskProgress,
     };
