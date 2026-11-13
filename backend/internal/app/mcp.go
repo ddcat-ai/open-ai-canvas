@@ -14,7 +14,7 @@ type MCPConnectionInput = mcpintegration.ConnectionInput
 type MCPConnectionView = mcpintegration.ConnectionView
 
 func (s *Service) mcpDomain() *mcpintegration.Service {
-	return mcpintegration.New(s.repo, s.encryptSettingSecret, s.decryptSettingSecret)
+	return mcpintegration.New(s.repo, s.encryptSettingSecret, s.decryptSettingSecret, s.coordinator)
 }
 
 func (s *Service) requireMCPActor(actor *model.User, admin bool) error {
@@ -41,7 +41,7 @@ func (s *Service) SaveMCPTemplate(actor *model.User, id string, input MCPTemplat
 	var view MCPTemplateView
 	err := s.repo.Transaction(func(repo *repository.Repository) error {
 		var err error
-		view, err = mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret).SaveTemplate(id, input)
+		view, err = mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret, s.coordinator).SaveTemplate(id, input)
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,7 @@ func (s *Service) DeleteMCPTemplate(actor *model.User, id string) error {
 		return err
 	}
 	return s.repo.Transaction(func(repo *repository.Repository) error {
-		if err := mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret).DeleteTemplate(id); err != nil {
+		if err := mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret, s.coordinator).DeleteTemplate(id); err != nil {
 			return err
 		}
 		event, err := newAdminAuditEvent(actor, "mcp.catalog.delete", "mcp_template", id, "删除 MCP 市场配置", nil)
@@ -87,7 +87,7 @@ func (s *Service) SaveMCPConnection(actor *model.User, id string, admin bool, in
 	var view MCPConnectionView
 	err := s.repo.Transaction(func(repo *repository.Repository) error {
 		var err error
-		view, err = mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret).SaveConnection(actor.ID, id, true, input)
+		view, err = mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret, s.coordinator).SaveConnection(actor.ID, id, true, input)
 		if err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func (s *Service) DeleteMCPConnection(actor *model.User, id string, admin bool) 
 		return s.mcpDomain().DeleteConnection(actor.ID, id, false)
 	}
 	return s.repo.Transaction(func(repo *repository.Repository) error {
-		if err := mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret).DeleteConnection(actor.ID, id, true); err != nil {
+		if err := mcpintegration.New(repo, s.encryptSettingSecret, s.decryptSettingSecret, s.coordinator).DeleteConnection(actor.ID, id, true); err != nil {
 			return err
 		}
 		event, err := newAdminAuditEvent(actor, "mcp.connection.delete", "mcp_connection", id, "删除平台 MCP 连接", nil)

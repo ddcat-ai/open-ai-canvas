@@ -159,6 +159,54 @@ async function input(label: string, value: string) {
     });
 }
 
+async function textarea(label: string, value: string) {
+    const target = field(label);
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(dom.HTMLTextAreaElement.prototype, "value")!.set!.call(target, value);
+        target.dispatchEvent(new dom.Event("input", { bubbles: true }));
+    });
+}
+
+test("平台连接必须明确授权用户并填写每个工具的参数限制", async () => {
+    const platform = { ...verified, scope: "platform" as const, allowedUserIds: [], toolPolicies: {} };
+    await render(<MCPConnectionEditor scope="platform" connection={platform} template={template} onClose={() => {}} onSaved={() => {}} />);
+    await click("全选全部 1 项");
+    expect(field("list_issues 参数限制").value).toBe("");
+    await click("保存并启用");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("明确填写参数限制");
+    expect(put.mock.calls).toHaveLength(0);
+
+    const policy = { type: "object", properties: { owner: { const: "approved-org" }, repo: { enum: ["approved-repo"] } }, required: ["owner", "repo"] };
+    await textarea("list_issues 参数限制", JSON.stringify(policy));
+    await click("保存并启用");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("用户 ID");
+    await textarea("授权用户 ID", "user-a\nuser-b\nuser-a");
+    await click("保存并启用");
+    expect(put.mock.calls[0][0]).toBe("/admin/mcp/connections/connection-1");
+    expect(put.mock.calls[0][1]).toMatchObject({ enabled: true, allowedUserIds: ["user-a", "user-b"], toolPolicies: { list_issues: policy } });
+});
+
+test("平台连接重新检测保留授权用户但清空工具和参数授权", async () => {
+    const platform = { ...verified, scope: "platform" as const, enabled: true, allowedTools: ["list_issues"], allowedUserIds: ["user-a"], toolPolicies: { list_issues: { type: "object" } } };
+    post.mockResolvedValue({ ...platform, enabled: false, allowedTools: [], toolPolicies: {} });
+    await render(<MCPConnectionEditor scope="platform" connection={platform} template={template} onClose={() => {}} onSaved={() => {}} />);
+    await input("访问令牌", "rotated-platform-token");
+    expect(document.querySelector('[aria-label="list_issues 参数限制"]')).toBeNull();
+    await click("保存并检测");
+    expect(put.mock.calls[0][1]).toMatchObject({ enabled: false, allowedTools: [], allowedUserIds: ["user-a"], toolPolicies: {} });
+    expect(field("授权用户 ID").value).toBe("user-a");
+    await click("全选全部 1 项");
+    expect(field("list_issues 参数限制").value).toBe("");
+});
+
+test("旧平台连接可以立即关闭而不需要先添加授权策略", async () => {
+    const platform = { ...verified, scope: "platform" as const, enabled: true, allowedTools: ["list_issues"] };
+    await render(<MCPConnectionEditor scope="platform" connection={platform} template={template} onClose={() => {}} onSaved={() => {}} />);
+    await act(async () => field("向授权用户开放").click());
+    await click("保存");
+    expect(put.mock.calls[0][1]).toMatchObject({ enabled: false, allowedTools: ["list_issues"], allowedUserIds: [], toolPolicies: {} });
+});
+
 test("连接器保留标题、真实图标列表和常驻市场跳转", async () => {
     get.mockResolvedValue({ items: [verified] });
     const destinations: string[] = [];

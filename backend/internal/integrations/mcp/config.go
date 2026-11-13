@@ -1,6 +1,7 @@
 package mcpintegration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -46,31 +47,35 @@ type TemplateView struct {
 }
 
 type ConnectionInput struct {
-	Name         string            `json:"name"`
-	TemplateID   string            `json:"templateId,omitempty"`
-	Transport    string            `json:"transport"`
-	ServerURL    string            `json:"serverUrl"`
-	Parameters   map[string]string `json:"parameters"`
-	Enabled      bool              `json:"enabled"`
-	AllowedTools []string          `json:"allowedTools"`
+	Name           string                    `json:"name"`
+	TemplateID     string                    `json:"templateId,omitempty"`
+	Transport      string                    `json:"transport"`
+	ServerURL      string                    `json:"serverUrl"`
+	Parameters     map[string]string         `json:"parameters"`
+	Enabled        bool                      `json:"enabled"`
+	AllowedTools   []string                  `json:"allowedTools"`
+	AllowedUserIDs []string                  `json:"allowedUserIds"`
+	ToolPolicies   map[string]map[string]any `json:"toolPolicies"`
 }
 
 type ConnectionView struct {
-	ID                string            `json:"id"`
-	Scope             string            `json:"scope"`
-	TemplateID        string            `json:"templateId,omitempty"`
-	Name              string            `json:"name"`
-	Transport         string            `json:"transport"`
-	ServerURL         string            `json:"serverUrl"`
-	Enabled           bool              `json:"enabled"`
-	Parameters        map[string]string `json:"parameters"`
-	ConfiguredSecrets []string          `json:"configuredSecrets"`
-	Tools             []Tool            `json:"tools"`
-	AllowedTools      []string          `json:"allowedTools"`
-	Revision          int64             `json:"revision"`
-	LastTestAt        *time.Time        `json:"lastTestAt,omitempty"`
-	CreatedAt         time.Time         `json:"createdAt"`
-	UpdatedAt         time.Time         `json:"updatedAt"`
+	ID                string                    `json:"id"`
+	Scope             string                    `json:"scope"`
+	TemplateID        string                    `json:"templateId,omitempty"`
+	Name              string                    `json:"name"`
+	Transport         string                    `json:"transport"`
+	ServerURL         string                    `json:"serverUrl"`
+	Enabled           bool                      `json:"enabled"`
+	Parameters        map[string]string         `json:"parameters"`
+	ConfiguredSecrets []string                  `json:"configuredSecrets"`
+	Tools             []Tool                    `json:"tools"`
+	AllowedTools      []string                  `json:"allowedTools"`
+	AllowedUserIDs    []string                  `json:"allowedUserIds,omitempty"`
+	ToolPolicies      map[string]map[string]any `json:"toolPolicies,omitempty"`
+	Revision          int64                     `json:"revision"`
+	LastTestAt        *time.Time                `json:"lastTestAt,omitempty"`
+	CreatedAt         time.Time                 `json:"createdAt"`
+	UpdatedAt         time.Time                 `json:"updatedAt"`
 }
 
 var parameterName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{0,63}$`)
@@ -84,7 +89,9 @@ func validateTransport(transport string) error {
 }
 
 func validateURL(raw string) error {
-	parsed, err := outbound.ValidateCustomRelayURL(raw)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	parsed, err := outbound.ValidateMCPURL(ctx, raw)
 	if err != nil {
 		return err
 	}
@@ -113,6 +120,21 @@ func validateTemplate(input *TemplateInput) error {
 			return kernel.BadAuthRequest("MCP 官网地址无效")
 		}
 	}
+	if err := validateTemplateCredentials(*input); err != nil {
+		return err
+	}
+	if input.Parameters == nil {
+		input.Parameters = []Parameter{}
+	}
+	if input.Headers == nil {
+		input.Headers = map[string]string{}
+	}
+	return nil
+}
+
+// This validation has no DNS or other IO, so it also protects reads and use of
+// legacy catalog entries that predate stricter credential handling.
+func validateTemplateCredentials(input TemplateInput) error {
 	if len(input.Parameters) > 24 || len(input.Headers) > 16 {
 		return kernel.BadAuthRequest("MCP 参数或请求头数量超过上限")
 	}
@@ -137,11 +159,17 @@ func validateTemplate(input *TemplateInput) error {
 		}
 		canonicalHeaders[canonical] = true
 		matches := placeholders.FindAllStringSubmatch(value, -1)
+		// Headers other than these public protocol options may carry credentials.
+		// Require a secret parameter even for nonstandard names such as X-Auth.
+		publicHeader := publicTemplateHeader(canonical)
+		if !publicHeader && len(matches) == 0 {
+			return kernel.BadAuthRequest("认证或自定义请求头必须引用 secret 参数，不能在市场模板中填写凭证")
+		}
 		for _, match := range matches {
 			if definitions[match[1]].Name == "" {
 				return kernel.BadAuthRequest("MCP 请求头引用了未定义的参数")
 			}
-			if (strings.EqualFold(name, "Authorization") || strings.Contains(strings.ToLower(name), "key") || strings.Contains(strings.ToLower(name), "token")) && definitions[match[1]].Type != "secret" {
+			if !publicHeader && definitions[match[1]].Type != "secret" {
 				return kernel.BadAuthRequest("认证请求头必须使用 secret 类型参数，避免凭据回显")
 			}
 		}
@@ -152,13 +180,11 @@ func validateTemplate(input *TemplateInput) error {
 			return kernel.BadAuthRequest("认证请求头必须引用密钥参数，不能在市场模板中存放密钥")
 		}
 	}
-	if input.Parameters == nil {
-		input.Parameters = []Parameter{}
-	}
-	if input.Headers == nil {
-		input.Headers = map[string]string{}
-	}
 	return nil
+}
+
+func publicTemplateHeader(name string) bool {
+	return name == "Accept-Language" || name == "User-Agent" || name == "X-Github-Api-Version" || name == "X-Mcp-Toolsets" || name == "X-Mcp-Readonly"
 }
 
 func validHeader(name, value string) bool {
@@ -246,6 +272,9 @@ func (s *Service) remoteConfig(row *model.MCPConnection) (remoteConfig, []string
 	if err != nil {
 		return remoteConfig{}, nil, err
 	}
+	if err := validateTemplateCredentials(template); err != nil {
+		return remoteConfig{}, nil, kernel.Forbidden("MCP 模板不符合凭据安全规则，请联系管理员修正")
+	}
 	values, err := s.parameterValues(row)
 	if err != nil {
 		return remoteConfig{}, nil, err
@@ -282,7 +311,11 @@ func (s *Service) remoteConfig(row *model.MCPConnection) (remoteConfig, []string
 
 func decodeTools(row *model.MCPConnection) ([]Tool, []string, error) {
 	tools, allowed := []Tool{}, []string{}
-	if err := json.Unmarshal([]byte(row.ToolsJSON), &tools); err != nil {
+	raw := row.ToolsJSON
+	if raw == "" {
+		raw = row.ToolsSummaryJSON
+	}
+	if err := json.Unmarshal([]byte(raw), &tools); err != nil {
 		return nil, nil, err
 	}
 	if err := json.Unmarshal([]byte(row.AllowedToolsJSON), &allowed); err != nil {
@@ -302,6 +335,14 @@ func (s *Service) connectionView(row *model.MCPConnection, shared bool) (Connect
 	if shared {
 		view.Tools = slices.DeleteFunc(view.Tools, func(tool Tool) bool { return !slices.Contains(view.AllowedTools, tool.Name) })
 		return view, nil
+	}
+	if row.Scope == "platform" {
+		if err := json.Unmarshal([]byte(row.AllowedUserIDsJSON), &view.AllowedUserIDs); err != nil {
+			return view, err
+		}
+		if err := json.Unmarshal([]byte(row.ToolPoliciesJSON), &view.ToolPolicies); err != nil {
+			return view, err
+		}
 	}
 	// An unpublished template remains editable by its owner, but cannot run.
 	template, err := s.templateFor(row.TemplateID, "platform")

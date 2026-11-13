@@ -296,7 +296,7 @@ function MCPManagerContent({ scope, userId, initialTab, onTabChange }: { scope: 
             </div>
             <div className="mcp-manager-note shrink-0">
                 <ShieldCheck className="size-4" aria-hidden="true" />
-                <span>{admin ? "平台连接启用后向用户开放；市场条目供用户独立安装和配置。" : "安装连接并授权工具后，Agent 可在后续会话中使用。平台连接由管理员提供。"}</span>
+                <span>{admin ? "平台连接仅向指定账号开放，并按工具限制访问范围；市场条目供用户独立安装和配置。" : "安装连接并授权工具后，Agent 可在后续会话中使用。平台连接由管理员指定使用账号和访问范围。"}</span>
                 <span className="mcp-manager-note-separator" aria-hidden="true" />
                 <span>每次执行 MCP 工具前都会请求确认。</span>
             </div>

@@ -22,11 +22,26 @@ type MCPConnection struct {
 	ParametersCiphertext string `gorm:"type:text;not null" json:"-"`
 	Enabled              bool   `gorm:"index;not null;default:false"`
 	ToolsJSON            string `gorm:"type:text;not null;default:'[]'"`
+	ToolsSummaryJSON     string `gorm:"type:text;not null;default:'[]'"`
 	AllowedToolsJSON     string `gorm:"type:text;not null;default:'[]'"`
+	AllowedUserIDsJSON   string `gorm:"type:text;not null;default:'[]'"`
+	ToolPoliciesJSON     string `gorm:"type:text;not null;default:'{}'"`
 	Revision             int64  `gorm:"not null;default:1"`
 	LastTestAt           *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+}
+
+// Platform credentials are usable only by explicitly granted users. Management
+// permissions do not imply permission to execute with a platform credential.
+type MCPConnectionGrant struct {
+	ConnectionID string `gorm:"primaryKey;size:36"`
+	UserID       string `gorm:"primaryKey;size:36;index"`
+}
+
+type MCPStorageUsage struct {
+	UserID string `gorm:"primaryKey;size:36"`
+	Bytes  int64  `gorm:"not null;default:0"`
 }
 
 // A receipt is claimed before external IO. An interrupted call is never

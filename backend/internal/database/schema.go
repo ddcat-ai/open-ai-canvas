@@ -36,6 +36,8 @@ func Models() []any {
 		&model.AgentMemoryDocumentRevision{},
 		&model.MCPServerTemplate{},
 		&model.MCPConnection{},
+		&model.MCPConnectionGrant{},
+		&model.MCPStorageUsage{},
 		&model.MCPToolExecution{},
 		&model.User{},
 		&model.UserGroup{},

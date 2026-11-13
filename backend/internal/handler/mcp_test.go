@@ -18,7 +18,7 @@ import (
 
 func TestMCPHTTPAuthenticationOwnershipAndSecretEnvelope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	t.Setenv("CANVAS_MCP_ALLOWED_PRIVATE_HOSTS", "127.0.0.1")
 	db, err := database.Open(database.Config{Driver: "sqlite", DSN: ":memory:"})
 	if err != nil {
 		t.Fatal(err)

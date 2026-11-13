@@ -17,7 +17,7 @@ func TestWechatMigrationSkipsMissingOAuthStateTable(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	for _, item := range schemaMigrations {
-		if item.version != 102 {
+		if item.version != 102 || item.name != "wechat_oauth" {
 			continue
 		}
 		for i := 0; i < 2; i++ {
@@ -46,8 +46,18 @@ func TestWechatMigrationPreservesExistingOAuthState(t *testing.T) {
 	if err := db.Exec(`INSERT INTO o_auth_states VALUES ('legacy','linuxdo','hash','verifier','/create',1)`).Error; err != nil {
 		t.Fatal(err)
 	}
+	var target migration
+	for _, item := range schemaMigrations {
+		if item.version == 102 && item.name == "wechat_oauth" {
+			target = item
+			break
+		}
+	}
+	if target.apply == nil {
+		t.Fatal("wechat migration absent")
+	}
 	for i := 0; i < 2; i++ {
-		if err := schemaMigrations[len(schemaMigrations)-1].apply(db); err != nil {
+		if err := target.apply(db); err != nil {
 			t.Fatal(err)
 		}
 	}

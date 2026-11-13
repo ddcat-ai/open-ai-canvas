@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 	"yingce/backend/internal/repository"
 
 	"github.com/google/uuid"
@@ -18,13 +21,16 @@ import (
 )
 
 type Service struct {
-	repo    *repository.Repository
-	encrypt func(string) (string, error)
-	decrypt func(string) (string, error)
+	repo        *repository.Repository
+	encrypt     func(string) (string, error)
+	decrypt     func(string) (string, error)
+	coordinator *platform.Coordinator
 }
 
-func New(repo *repository.Repository, encrypt, decrypt func(string) (string, error)) *Service {
-	return &Service{repo: repo, encrypt: encrypt, decrypt: decrypt}
+var unsafeCatalogWarnings sync.Map
+
+func New(repo *repository.Repository, encrypt, decrypt func(string) (string, error), coordinator *platform.Coordinator) *Service {
+	return &Service{repo: repo, encrypt: encrypt, decrypt: decrypt, coordinator: coordinator}
 }
 
 func notFound(err error) error {
@@ -35,6 +41,9 @@ func notFound(err error) error {
 }
 
 func conflict(err error) error {
+	if errors.Is(err, repository.ErrMCPStorageQuota) {
+		return kernel.QuotaExceeded(err.Error())
+	}
 	if errors.Is(err, repository.ErrCreationConflict) {
 		return kernel.NewAppError(409, "MCP 配置已变化或仍被连接引用，请刷新后重试")
 	}
@@ -51,6 +60,12 @@ func (s *Service) Catalog(admin bool) ([]TemplateView, error) {
 		view, err := parseTemplate(&rows[i])
 		if err != nil {
 			return nil, err
+		}
+		if !admin && validateTemplateCredentials(view.TemplateInput) != nil {
+			if _, warned := unsafeCatalogWarnings.LoadOrStore(view.ID, struct{}{}); !warned {
+				log.Printf("MCP catalog entry %s excluded: unsafe legacy credential configuration", view.ID)
+			}
+			continue
 		}
 		views = append(views, view)
 	}
@@ -97,7 +112,7 @@ func (s *Service) Connections(userID string, admin bool) ([]ConnectionView, erro
 	var views []ConnectionView
 	err := s.repo.MCPReadSnapshot(func(repo *repository.Repository) error {
 		var err error
-		views, err = New(repo, s.encrypt, s.decrypt).connectionViews(userID, admin)
+		views, err = New(repo, s.encrypt, s.decrypt, s.coordinator).connectionViews(userID, admin)
 		return err
 	})
 	return views, err
@@ -145,8 +160,24 @@ func (s *Service) SaveConnection(userID, id string, admin bool, input Connection
 	if err := validateURL(input.ServerURL); err != nil {
 		return ConnectionView{}, err
 	}
+	quotaOwner := userID
+	if id != "" {
+		row, err := s.ownedConnection(userID, id, admin)
+		if err != nil {
+			return ConnectionView{}, err
+		}
+		quotaOwner = row.UserID
+	}
 	var view ConnectionView
 	err := s.repo.Transaction(func(repo *repository.Repository) error {
+		if err := repo.LockMCPQuota(quotaOwner); err != nil {
+			return err
+		}
+		if admin && id == "" {
+			if err := repo.LockMCPPlatformQuota(); err != nil {
+				return err
+			}
+		}
 		// Serialize with template edits/deletion before interpreting parameters.
 		if input.TemplateID != "" {
 			if err := repo.LockMCPTemplate(input.TemplateID); err != nil {
@@ -154,10 +185,10 @@ func (s *Service) SaveConnection(userID, id string, admin bool, input Connection
 			}
 		}
 		var err error
-		view, err = New(repo, s.encrypt, s.decrypt).saveConnection(userID, id, admin, input)
+		view, err = New(repo, s.encrypt, s.decrypt, s.coordinator).saveConnection(userID, id, admin, input)
 		return err
 	})
-	return view, err
+	return view, conflict(err)
 }
 
 func (s *Service) saveConnection(userID, id string, admin bool, input ConnectionInput) (ConnectionView, error) {
@@ -169,7 +200,7 @@ func (s *Service) saveConnection(userID, id string, admin bool, input Connection
 	if err != nil {
 		return ConnectionView{}, err
 	}
-	row := &model.MCPConnection{ID: uuid.NewString(), UserID: userID, Scope: scope, ToolsJSON: "[]", AllowedToolsJSON: "[]", Revision: 1}
+	row := &model.MCPConnection{ID: uuid.NewString(), UserID: userID, Scope: scope, ToolsJSON: "[]", ToolsSummaryJSON: "[]", AllowedToolsJSON: "[]", AllowedUserIDsJSON: "[]", ToolPoliciesJSON: "{}", Revision: 1}
 	prior := map[string]string{}
 	if id != "" {
 		row, err = s.ownedConnection(userID, id, admin)
@@ -181,15 +212,9 @@ func (s *Service) saveConnection(userID, id string, admin bool, input Connection
 			return ConnectionView{}, err
 		}
 	} else {
-		rows, err := s.repo.MCPConnections(userID, admin)
+		count, err := s.repo.MCPConnectionCount(userID, scope)
 		if err != nil {
 			return ConnectionView{}, err
-		}
-		count := 0
-		for _, item := range rows {
-			if item.Scope == scope {
-				count++
-			}
 		}
 		if count >= 30 {
 			return ConnectionView{}, kernel.BadAuthRequest("最多配置 30 个 MCP 连接")
@@ -210,13 +235,16 @@ func (s *Service) saveConnection(userID, id string, admin bool, input Connection
 	}
 	changed := id == "" || row.ServerURL != input.ServerURL || row.Transport != input.Transport || row.TemplateID != input.TemplateID || string(oldJSON) != string(newJSON)
 	if changed {
-		row.ToolsJSON, row.AllowedToolsJSON, row.LastTestAt = "[]", "[]", nil
+		row.ToolsJSON, row.ToolsSummaryJSON, row.AllowedToolsJSON, row.LastTestAt = "[]", "[]", "[]", nil
 		if input.Enabled || len(input.AllowedTools) > 0 {
 			return ConnectionView{}, kernel.BadAuthRequest("连接参数已变化，请先保存并重新检测，再选择允许的工具和启用")
 		}
 	}
 	tools, _, err := decodeTools(row)
 	if err != nil {
+		return ConnectionView{}, err
+	}
+	if err := s.validateAccessPolicy(admin, &input, tools); err != nil {
 		return ConnectionView{}, err
 	}
 	names := map[string]bool{}
@@ -238,12 +266,15 @@ func (s *Service) saveConnection(userID, id string, admin bool, input Connection
 	}
 	slices.Sort(input.AllowedTools)
 	allowedJSON, _ := json.Marshal(input.AllowedTools)
+	usersJSON, _ := json.Marshal(input.AllowedUserIDs)
+	policiesJSON, _ := json.Marshal(input.ToolPolicies)
 	ciphertext, err := s.encrypt(string(newJSON))
 	if err != nil {
 		return ConnectionView{}, kernel.WrapAppError(500, "MCP 参数加密失败", err)
 	}
 	row.Name, row.TemplateID, row.ServerURL, row.Transport = input.Name, input.TemplateID, input.ServerURL, input.Transport
 	row.ParametersCiphertext, row.Enabled, row.AllowedToolsJSON = ciphertext, input.Enabled, string(allowedJSON)
+	row.AllowedUserIDsJSON, row.ToolPoliciesJSON = string(usersJSON), string(policiesJSON)
 	if id == "" {
 		err = s.repo.CreateMCPConnection(row)
 	} else {
@@ -251,6 +282,9 @@ func (s *Service) saveConnection(userID, id string, admin bool, input Connection
 	}
 	if err != nil {
 		return ConnectionView{}, conflict(err)
+	}
+	if err := s.repo.ReplaceMCPConnectionGrants(row.ID, input.AllowedUserIDs); err != nil {
+		return ConnectionView{}, err
 	}
 	return s.connectionView(row, false)
 }
@@ -260,7 +294,12 @@ func (s *Service) DeleteConnection(userID, id string, admin bool) error {
 	if err != nil {
 		return err
 	}
-	return notFound(s.repo.DeleteMCPConnection(row.ID, userID, row.Scope))
+	return s.repo.Transaction(func(repo *repository.Repository) error {
+		if err := repo.LockMCPQuota(row.UserID); err != nil {
+			return err
+		}
+		return notFound(repo.DeleteMCPConnection(row.ID, userID, row.Scope))
+	})
 }
 
 func (s *Service) TestConnection(ctx context.Context, userID, id string, admin bool) (ConnectionView, error) {
@@ -268,7 +307,7 @@ func (s *Service) TestConnection(ctx context.Context, userID, id string, admin b
 	var cfg remoteConfig
 	var secrets []string
 	err := s.repo.MCPReadSnapshot(func(repo *repository.Repository) error {
-		scoped := New(repo, s.encrypt, s.decrypt)
+		scoped := New(repo, s.encrypt, s.decrypt, s.coordinator)
 		var err error
 		row, err = scoped.ownedConnection(userID, id, admin)
 		if err != nil {
@@ -282,6 +321,11 @@ func (s *Service) TestConnection(ctx context.Context, userID, id string, admin b
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	release, err := s.acquireOperation(ctx, "test", userID, id)
+	if err != nil {
+		return ConnectionView{}, err
+	}
+	defer release()
 	tools, err := discover(ctx, cfg)
 	if err != nil {
 		return ConnectionView{}, err
@@ -294,13 +338,23 @@ func (s *Service) TestConnection(ctx context.Context, userID, id string, admin b
 	if err != nil {
 		return ConnectionView{}, err
 	}
+	if len(raw) > maxToolDefinitionBytes {
+		return ConnectionView{}, kernel.BadAuthRequest("MCP 工具定义安全处理后超过 256 KiB，请减少工具或参数说明")
+	}
 	// Re-discovery always requires a fresh tool selection, including when a
 	// server added a tool or changed a schema under an existing name.
-	row.ToolsJSON, row.AllowedToolsJSON, row.Enabled = string(raw), "[]", false
+	summary, err := toolSummary(tools)
+	if err != nil {
+		return ConnectionView{}, err
+	}
+	row.ToolsJSON, row.ToolsSummaryJSON, row.AllowedToolsJSON, row.ToolPoliciesJSON, row.Enabled = string(raw), summary, "[]", "{}", false
 	now := time.Now()
 	row.LastTestAt = &now
 	var view ConnectionView
 	err = s.repo.Transaction(func(repo *repository.Repository) error {
+		if err := repo.LockMCPQuota(row.UserID); err != nil {
+			return err
+		}
 		if row.TemplateID != "" {
 			if err := repo.LockMCPTemplate(row.TemplateID); err != nil {
 				return notFound(err)
@@ -310,8 +364,8 @@ func (s *Service) TestConnection(ctx context.Context, userID, id string, admin b
 			return conflict(err)
 		}
 		var err error
-		view, err = New(repo, s.encrypt, s.decrypt).connectionView(row, false)
+		view, err = New(repo, s.encrypt, s.decrypt, s.coordinator).connectionView(row, false)
 		return err
 	})
-	return view, err
+	return view, conflict(err)
 }

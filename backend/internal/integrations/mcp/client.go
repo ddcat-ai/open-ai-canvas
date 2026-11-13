@@ -13,19 +13,22 @@ import (
 
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/outbound"
+	"yingce/backend/internal/repository"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const maxTools = 128
-const maxResultBytes = 48 << 10
+const maxResultBytes = repository.MCPResultLimitBytes
+const maxToolDefinitionBytes = 256 << 10
 
 type Tool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
-	ReadOnly    bool           `json:"readOnly"`
+	Name           string         `json:"name"`
+	Description    string         `json:"description"`
+	InputSchema    map[string]any `json:"inputSchema,omitempty"`
+	ArgumentPolicy map[string]any `json:"argumentPolicy,omitempty"`
+	ReadOnly       bool           `json:"readOnly"`
 }
 
 type remoteConfig struct {
@@ -46,7 +49,7 @@ func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.URL.Scheme != t.origin.Scheme || !strings.EqualFold(req.URL.Host, t.origin.Host) {
 		return nil, errors.New("MCP 跨域请求已拒绝")
 	}
-	if _, err := outbound.ValidateCustomRelayURL(req.URL.String()); err != nil {
+	if _, err := outbound.ValidateMCPURL(req.Context(), req.URL.String()); err != nil {
 		return nil, err
 	}
 	copy := req.Clone(req.Context())
@@ -67,11 +70,11 @@ type boundedBody struct {
 }
 
 func connect(ctx context.Context, cfg remoteConfig) (*mcp.ClientSession, error) {
-	origin, err := outbound.ValidateCustomRelayURL(cfg.URL)
+	origin, err := outbound.ValidateMCPURL(ctx, cfg.URL)
 	if err != nil {
 		return nil, err
 	}
-	httpClient := outbound.CustomRelayHTTPClient(45 * time.Second)
+	httpClient := outbound.MCPHTTPClient(45 * time.Second)
 	httpClient.Transport = guardedTransport{base: httpClient.Transport, origin: origin, headers: cfg.Headers}
 	var transport mcp.Transport
 	switch cfg.Transport {
@@ -98,6 +101,7 @@ func discover(ctx context.Context, cfg remoteConfig) ([]Tool, error) {
 	}
 	defer session.Close()
 	tools := []Tool{}
+	definitionBytes := 0
 	seen, cursors := map[string]bool{}, map[string]bool{}
 	cursor := ""
 	for page := 0; page < 10; page++ {
@@ -121,7 +125,16 @@ func discover(ctx context.Context, cfg remoteConfig) ([]Tool, error) {
 			if _, err := resolveSchema(raw); err != nil {
 				return nil, kernel.BadAuthRequest("MCP 工具参数 Schema 无效或包含外部引用")
 			}
-			tools = append(tools, Tool{Name: item.Name, Description: truncate(item.Description, 1200), InputSchema: schema, ReadOnly: item.Annotations != nil && item.Annotations.ReadOnlyHint})
+			tool := Tool{Name: item.Name, Description: truncate(item.Description, 1200), InputSchema: schema, ReadOnly: item.Annotations != nil && item.Annotations.ReadOnlyHint}
+			encoded, err := json.Marshal(tool)
+			if err != nil {
+				return nil, kernel.BadAuthRequest("MCP 工具定义无效")
+			}
+			definitionBytes += len(encoded) + 1
+			if definitionBytes+2 > maxToolDefinitionBytes {
+				return nil, kernel.BadAuthRequest("MCP 工具定义总大小超过 256 KiB，请减少工具或参数说明")
+			}
+			tools = append(tools, tool)
 			if len(tools) > maxTools {
 				return nil, kernel.BadAuthRequest("MCP 工具超过 128 个，请在服务端限制开放的工具")
 			}
@@ -137,6 +150,15 @@ func discover(ctx context.Context, cfg remoteConfig) ([]Tool, error) {
 		cursors[cursor] = true
 	}
 	return nil, kernel.BadAuthRequest("MCP 工具分页异常或超过上限")
+}
+
+func toolSummary(tools []Tool) (string, error) {
+	summary := make([]Tool, len(tools))
+	for i, tool := range tools {
+		summary[i] = Tool{Name: tool.Name, Description: truncate(tool.Description, 160), ReadOnly: tool.ReadOnly}
+	}
+	raw, err := json.Marshal(summary)
+	return string(raw), err
 }
 
 func resolveSchema(raw []byte) (*jsonschema.Resolved, error) {

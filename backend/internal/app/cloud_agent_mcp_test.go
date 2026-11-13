@@ -17,6 +17,7 @@ import (
 	mcpintegration "yingce/backend/internal/integrations/mcp"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 	"yingce/backend/internal/repository"
 )
 
@@ -34,7 +35,7 @@ type mcpTestServer struct {
 
 func newAgentMCPTestServer(t *testing.T) *mcpTestServer {
 	t.Helper()
-	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	t.Setenv("CANVAS_MCP_ALLOWED_PRIVATE_HOSTS", "127.0.0.1")
 	remote := &mcpTestServer{credential: "mcp-test-" + strings.Repeat("a", 24), callStarted: make(chan struct{}, 1), releaseCall: make(chan struct{})}
 	server := mcp.NewServer(&mcp.Implementation{Name: "yingce-test", Version: "1"}, nil)
 	server.AddTool(&mcp.Tool{
@@ -87,6 +88,9 @@ func newAgentMCPTestServer(t *testing.T) *mcpTestServer {
 
 func enabledAgentMCPConnection(t *testing.T, s *Service, remote *mcpTestServer, actor *model.User, platform bool, templateID string) MCPConnectionView {
 	t.Helper()
+	if s.coordinator == nil {
+		s.coordinator = newMCPTestCoordinator()
+	}
 	input := MCPConnectionInput{Name: "测试连接", TemplateID: templateID, Transport: "streamable_http", ServerURL: remote.url, Parameters: map[string]string{"token": remote.credential}}
 	view, err := s.SaveMCPConnection(actor, "", platform, input)
 	if err != nil {
@@ -100,11 +104,19 @@ func enabledAgentMCPConnection(t *testing.T, s *Service, remote *mcpTestServer, 
 		t.Fatalf("discovery must require an explicit grant: %+v", view)
 	}
 	input.Enabled, input.AllowedTools, input.Parameters = true, []string{"record_note"}, map[string]string{}
+	if platform {
+		input.AllowedUserIDs = []string{"user"}
+		input.ToolPolicies = map[string]map[string]any{"record_note": {"type": "object"}}
+	}
 	view, err = s.SaveMCPConnection(actor, view.ID, platform, input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return view
+}
+
+func newMCPTestCoordinator() *platform.Coordinator {
+	return platform.NewCoordinatorWithRedis(nil, "mcp-test")
 }
 
 func agentMCPToolCall(t *testing.T, view MCPConnectionView, callID, text string) cloudAgentCall {
@@ -233,9 +245,11 @@ func TestMCPConnectionOwnerPlatformAuthorityAndSecretStorage(t *testing.T) {
 	assertMCPErrorStatus(t, err, http.StatusForbidden)
 	platform := enabledAgentMCPConnection(t, s, remote, admin, true, "")
 	views, err := s.MCPConnections(other, false)
-	if err != nil || len(views) != 1 || views[0].ID != platform.ID {
-		t.Fatalf("users should see enabled platform connections, never another user's connection: %+v err=%v", views, err)
+	if err != nil || len(views) != 0 {
+		t.Fatalf("ungranted users must not see platform or other users' connections: %+v err=%v", views, err)
 	}
+	_, err = mcpintegration.AuthorizeCall(s.repo, "other", mcpintegration.ToolCall{ConnectionID: platform.ID, Revision: platform.Revision, ToolName: "record_note", Arguments: map[string]any{"text": "hello"}})
+	assertMCPErrorStatus(t, err, http.StatusNotFound)
 	assertMCPErrorStatus(t, s.DeleteMCPConnection(user, platform.ID, false), http.StatusNotFound)
 }
 

@@ -29,7 +29,7 @@ export interface MCPServerTemplate {
 export interface MCPTool {
     name: string;
     description: string;
-    inputSchema: Record<string, unknown>;
+    inputSchema?: Record<string, unknown>;
     readOnly: boolean;
 }
 
@@ -46,6 +46,8 @@ export interface MCPConnection {
     configuredSecrets: string[];
     tools: MCPTool[];
     allowedTools: string[];
+    allowedUserIds?: string[];
+    toolPolicies?: Record<string, Record<string, unknown>>;
     lastTestAt?: string;
     createdAt: string;
     updatedAt: string;
@@ -59,6 +61,8 @@ export interface MCPConnectionInput {
     parameters: Record<string, string>;
     enabled: boolean;
     allowedTools: string[];
+    allowedUserIds: string[];
+    toolPolicies: Record<string, Record<string, unknown>>;
 }
 
 export type MCPServerTemplateInput = Omit<MCPServerTemplate, "id" | "createdAt" | "updatedAt">;

@@ -5,7 +5,7 @@ import { ChevronDown, Search } from "lucide-react";
 import { Switch } from "@/components/ui/base/switch";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { saveMCPConnection, testMCPConnection, type MCPConnection, type MCPConnectionInput, type MCPManagementScope, type MCPServerTemplate, type MCPTransport } from "@/services/api/agent-mcp";
-import { createMCPConnectionDraft, mcpConnectionChanged, mcpConnectionWrite, mcpParameters, validateMCPConnection } from "./mcp-form";
+import { createMCPConnectionDraft, mcpConnectionChanged, mcpConnectionWrite, mcpParameters, parseMCPToolPolicies, validateMCPConnection } from "./mcp-form";
 import "./mcp-connection-editor.css";
 
 export function MCPConnectionEditor({
@@ -25,6 +25,8 @@ export function MCPConnectionEditor({
     const fieldId = useId();
     const [connection, setConnection] = useState(initialConnection);
     const [draft, setDraft] = useState(() => createMCPConnectionDraft(template, connection));
+    const [allowedUsersText, setAllowedUsersText] = useState(() => (connection?.allowedUserIds ?? []).join("\n"));
+    const [policyTexts, setPolicyTexts] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(connection?.toolPolicies ?? {}).map(([name, policy]) => [name, JSON.stringify(policy, null, 2)])));
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
     const [needsActivation, setNeedsActivation] = useState(!initialConnection?.enabled);
@@ -48,19 +50,22 @@ export function MCPConnectionEditor({
     const acceptConnection = (next: MCPConnection) => {
         setConnection(next);
         setDraft(createMCPConnectionDraft(template, next));
+        setAllowedUsersText((next.allowedUserIds ?? []).join("\n"));
+        setPolicyTexts(Object.fromEntries(Object.entries(next.toolPolicies ?? {}).map(([name, policy]) => [name, JSON.stringify(policy, null, 2)])));
         setToolSearch("");
         onSaved(next);
     };
 
     const updateConfiguration = (patch: Partial<MCPConnectionInput>) => {
-        setDraft((current) => ({ ...current, ...patch, enabled: false, allowedTools: [] }));
+        setDraft((current) => ({ ...current, ...patch, enabled: false, allowedTools: [], toolPolicies: {} }));
+        setPolicyTexts({});
         setNeedsActivation(true);
         setError("");
     };
 
     const saveAndTest = async () => {
-        const input = { ...draft, enabled: false, allowedTools: [] };
-        const validation = validateMCPConnection(input, parameters, connection);
+        const input = { ...draft, enabled: false, allowedTools: [], toolPolicies: {} };
+        const validation = validateMCPConnection(input, parameters, connection, scope);
         if (validation) {
             setError(validation);
             return;
@@ -91,8 +96,16 @@ export function MCPConnectionEditor({
     };
 
     const save = async () => {
-        const input = { ...draft, enabled: needsActivation ? true : draft.enabled };
-        const validation = validateMCPConnection(input, parameters, connection);
+        const enabled = needsActivation ? true : draft.enabled;
+        let toolPolicies: MCPConnectionInput["toolPolicies"];
+        try {
+            toolPolicies = scope === "platform" ? parseMCPToolPolicies(policyTexts, draft.allowedTools, enabled) : {};
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "请检查工具参数限制");
+            return;
+        }
+        const input = { ...draft, enabled, toolPolicies };
+        const validation = validateMCPConnection(input, parameters, connection, scope);
         if (validation) {
             setError(validation);
             return;
@@ -198,6 +211,28 @@ export function MCPConnectionEditor({
                                 </div>
                             );
                         })}
+                        {scope === "platform" ? (
+                            <div className="space-y-1.5">
+                                <label htmlFor={`${fieldId}-users`} className="text-caption font-medium">
+                                    授权用户 ID
+                                </label>
+                                <Input.TextArea
+                                    id={`${fieldId}-users`}
+                                    value={allowedUsersText}
+                                    rows={3}
+                                    placeholder="每行一个用户 ID，也可用逗号分隔"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    disabled={busy}
+                                    onChange={(event) => {
+                                        setAllowedUsersText(event.target.value);
+                                        setDraft((current) => ({ ...current, allowedUserIds: [...new Set(event.target.value.split(/[\s,，]+/).filter(Boolean))] }));
+                                        setError("");
+                                    }}
+                                />
+                                <p className="text-[var(--fs-label)] text-muted-foreground">从用户管理复制有效用户 ID。只有名单内的账号可以调用，管理员也需要加入名单。</p>
+                            </div>
+                        ) : null}
                     </section>
                     <section className="mcp-connection-tools" aria-label="工具权限">
                         <div className="mcp-tools-heading">
@@ -213,6 +248,16 @@ export function MCPConnectionEditor({
                                 </Button>
                             ) : null}
                         </div>
+                        {scope === "platform" ? (
+                            <div className="space-y-1 text-[var(--fs-label)] text-muted-foreground">
+                                <p>平台连接使用同一份凭证。请为每个已选工具填写参数限制，明确允许访问的仓库、路径或其他资源。</p>
+                                <details>
+                                    <summary>查看仓库工具参数限制示例</summary>
+                                    <pre className="whitespace-pre-wrap break-all font-mono">{'{"type":"object","properties":{"owner":{"const":"your-org"},"repo":{"enum":["approved-repo"]}},"required":["owner","repo"]}'}</pre>
+                                    <p>{'仅填写 {"type":"object"} 表示明确允许该工具接受任意对象参数。不会自动添加此授权。'}</p>
+                                </details>
+                            </div>
+                        ) : null}
                         {!verified ? (
                             <p className="text-caption text-muted-foreground" role="status">
                                 {testing ? "正在连接服务并获取工具列表…" : "填写配置后点击「保存并检测」，在这里选择工具并启用连接。"}
@@ -269,6 +314,27 @@ export function MCPConnectionEditor({
                                                     <p>{tool.description}</p>
                                                 </details>
                                             ) : null}
+                                            {scope === "platform" && draft.allowedTools.includes(tool.name) ? (
+                                                <div className="mt-2 space-y-1.5">
+                                                    <label htmlFor={`${fieldId}-policy-${tool.name}`} className="text-caption font-medium">
+                                                        {tool.name} 参数限制
+                                                    </label>
+                                                    <Input.TextArea
+                                                        id={`${fieldId}-policy-${tool.name}`}
+                                                        aria-label={`${tool.name} 参数限制`}
+                                                        value={policyTexts[tool.name] ?? ""}
+                                                        rows={5}
+                                                        placeholder="填写 JSON Schema，顶层 type 必须为 object"
+                                                        spellCheck={false}
+                                                        disabled={busy || !verified}
+                                                        onChange={(event) => {
+                                                            setPolicyTexts((current) => ({ ...current, [tool.name]: event.target.value }));
+                                                            setError("");
+                                                        }}
+                                                    />
+                                                    <p className="text-[var(--fs-label)] text-muted-foreground">单个工具最多 8 KiB，全部策略最多 64 KiB；不支持外部 Schema 引用。</p>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     ))}
                                 </div>
@@ -279,7 +345,7 @@ export function MCPConnectionEditor({
                             {verified && !needsActivation ? (
                                 <div className="flex items-center justify-between gap-3 pt-2">
                                     <label htmlFor={`${fieldId}-enabled`} className="text-caption font-medium">
-                                        {scope === "platform" ? "向平台用户开放" : "启用此连接"}
+                                        {scope === "platform" ? "向授权用户开放" : "启用此连接"}
                                     </label>
                                     <Switch id={`${fieldId}-enabled`} checked={draft.enabled} disabled={busy || !verified || !draft.allowedTools.length} onChange={(enabled) => setDraft((current) => ({ ...current, enabled }))} />
                                 </div>

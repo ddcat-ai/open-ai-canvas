@@ -4746,9 +4746,19 @@ components:
           maxItems: 128
           items: { type: string }
           description: 必须来自本连接最近检测结果；空数组不允许调用任何工具。新建或参数变更时必须为空。
+        allowedUserIds:
+          type: array
+          uniqueItems: true
+          maxItems: 100
+          items: { type: string }
+          description: 仅平台连接可配置。必须为启用的用户 ID；默认无授权，管理员本人执行也必须显式加入。
+        toolPolicies:
+          type: object
+          additionalProperties: { type: object, additionalProperties: true }
+          description: 仅平台连接可配置，按工具名保存对象 JSON Schema；每个 allowedTools 项必须显式配置。单策略 8 KiB、合计 64 KiB，拒绝外部引用，与远端 schema 同时校验。
     MCPTool:
       type: object
-      required: [name, description, inputSchema, readOnly]
+      required: [name, description, readOnly]
       properties:
         name: { type: string, description: 工具名称，最多 128 字节 }
         description:
@@ -4756,7 +4766,11 @@ components:
         inputSchema:
           type: object
           additionalProperties: true
-          description: 工具输入的对象 JSON Schema，最多 32 KiB；发现时验证并拒绝外部引用。
+          description: 列表摘要不返回此字段；按工具发现时返回完整对象 JSON Schema，单个最多 32 KiB，连接总 schema 最多 256 KiB；拒绝外部引用。
+        argumentPolicy:
+          type: object
+          additionalProperties: true
+          description: 平台工具按单工具发现时返回的独立参数约束 schema，与 inputSchema 同时校验，局部引用分别相对于各自根解析。
         readOnly:
           { type: boolean, description: 远端的只读提示，不授予权限也不豁免审批 }
     MCPConnection:
@@ -4802,6 +4816,14 @@ components:
           type: array
           uniqueItems: true
           items: { type: string }
+        allowedUserIds:
+          type: array
+          items: { type: string }
+          description: 平台管理视图的用户授权；非管理视图不暴露其他用户名单。
+        toolPolicies:
+          type: object
+          additionalProperties: { type: object, additionalProperties: true }
+          description: 平台管理视图的逐工具参数约束。
         revision:
           {
             type: integer,

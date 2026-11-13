@@ -33,8 +33,8 @@ func AuthorizeCall(repo *repository.Repository, userID string, call ToolCall) (*
 	if err != nil {
 		return nil, notFound(err)
 	}
-	if row.Scope != "platform" && (row.Scope != "user" || row.UserID != userID) {
-		return nil, kernel.NotFound("MCP 配置不存在或无权访问")
+	if err := authorizeConnection(repo, row, userID); err != nil {
+		return nil, err
 	}
 	if !row.Enabled || row.LastTestAt == nil {
 		return nil, kernel.Forbidden("MCP 连接尚未检测或已停用")
@@ -67,7 +67,10 @@ func AuthorizeCall(repo *repository.Repository, userID string, call ToolCall) (*
 	}
 	for _, tool := range tools {
 		if tool.Name == call.ToolName {
-			return row, validateArguments(tool, call.Arguments)
+			if err := validateArguments(tool, call.Arguments); err != nil {
+				return nil, err
+			}
+			return row, validatePlatformArguments(row, call)
 		}
 	}
 	return nil, kernel.Forbidden("MCP 工具不在已发现清单中，请重新检测连接")
@@ -87,6 +90,16 @@ func (s *Service) AvailableTools(userID, connectionID, toolName string) ([]Avail
 	if err != nil {
 		return nil, err
 	}
+	if connectionID != "" && toolName != "" {
+		row, err := s.repo.MCPConnection(connectionID)
+		if err != nil {
+			return nil, notFound(err)
+		}
+		if err := authorizeConnection(s.repo, row, userID); err != nil {
+			return nil, err
+		}
+		rows = []model.MCPConnection{*row}
+	}
 	result := []AvailableTools{}
 	for i := range rows {
 		row := &rows[i]
@@ -105,6 +118,18 @@ func (s *Service) AvailableTools(userID, connectionID, toolName string) ([]Avail
 		tools, allowed, err := decodeTools(row)
 		if err != nil {
 			return nil, err
+		}
+		if row.Scope == "platform" {
+			var policies map[string]map[string]any
+			if err := json.Unmarshal([]byte(row.ToolPoliciesJSON), &policies); err != nil {
+				return nil, err
+			}
+			// Keep independent schema roots so local $refs retain their meaning.
+			for j := range tools {
+				if tools[j].InputSchema != nil && policies[tools[j].Name] != nil {
+					tools[j].ArgumentPolicy = policies[tools[j].Name]
+				}
+			}
 		}
 		tools = slices.DeleteFunc(tools, func(t Tool) bool { return !slices.Contains(allowed, t.Name) })
 		count := len(tools)
@@ -208,6 +233,16 @@ func (s *Service) Call(ctx context.Context, userID, runID, callID string, call T
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
+	if _, err := AuthorizeCall(s.repo, userID, call); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	release, err := s.acquireOperation(ctx, "call", userID, call.ConnectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	var cfg remoteConfig
 	var secrets []string
 	var existingReceipt *model.MCPToolExecution
@@ -230,6 +265,9 @@ func (s *Service) Call(ctx context.Context, userID, runID, callID string, call T
 		if err := approve(run); err != nil {
 			return err
 		}
+		if err := repo.LockMCPQuota(userID); err != nil {
+			return err
+		}
 		if err := repo.LockMCPConnection(call.ConnectionID); err != nil {
 			return conflict(err)
 		}
@@ -237,7 +275,7 @@ func (s *Service) Call(ctx context.Context, userID, runID, callID string, call T
 		if err != nil {
 			return err
 		}
-		cfg, secrets, err = New(repo, s.encrypt, s.decrypt).remoteConfig(row)
+		cfg, secrets, err = New(repo, s.encrypt, s.decrypt, s.coordinator).remoteConfig(row)
 		if err != nil {
 			return err
 		}
@@ -258,13 +296,11 @@ func (s *Service) Call(ctx context.Context, userID, runID, callID string, call T
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, conflict(err)
 	}
 	if existingReceipt != nil {
 		return s.awaitReceipt(ctx, existingReceipt, receipt)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
 	result, callErr := invoke(ctx, cfg, call.ToolName, call.Arguments)
 	status := "completed"
 	if callErr != nil {
@@ -278,6 +314,10 @@ func (s *Service) Call(ctx context.Context, userID, runID, callID string, call T
 	raw, err = json.Marshal(redacted)
 	if err != nil {
 		return nil, uncertainExecution(500, "MCP 回执无法编码，请先核对外部状态", err)
+	}
+	if len(raw) > maxResultBytes {
+		redacted = map[string]any{"truncated": true, "message": "MCP 已返回结果，安全处理后超过展示上限，请在外部服务核对完整结果"}
+		raw, _ = json.Marshal(redacted)
 	}
 	if err := s.repo.FinishMCPExecution(receipt.ID, userID, status, string(raw)); err != nil {
 		return nil, uncertainExecution(500, "MCP 回执保存失败，请先核对外部结果，避免重复执行", err)

@@ -2,6 +2,7 @@ package mcpintegration
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,6 +36,39 @@ func TestMCPTransportDoesNotForwardCredentialsAcrossOrigins(t *testing.T) {
 	}
 }
 
+func TestMCPDiscoveryBoundsAggregateDefinitions(t *testing.T) {
+	t.Setenv("CANVAS_MCP_ALLOWED_PRIVATE_HOSTS", "127.0.0.1")
+	server := mcp.NewServer(&mcp.Implementation{Name: "large-tools", Version: "1"}, nil)
+	for i := 0; i < 10; i++ {
+		server.AddTool(&mcp.Tool{Name: fmt.Sprintf("tool_%d", i), InputSchema: map[string]any{"type": "object", "properties": map[string]any{"value": map[string]any{"type": "string", "description": strings.Repeat("x", 28000)}}}}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{}, nil
+		})
+	}
+	remote := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+	defer remote.Close()
+	if _, err := discover(t.Context(), remoteConfig{URL: remote.URL, Transport: "streamable_http"}); err == nil || !strings.Contains(err.Error(), "256 KiB") {
+		t.Fatalf("aggregate tool schemas were not bounded: %v", err)
+	}
+}
+
+func TestMCPMarketCustomAuthHeadersRequireSecretParameters(t *testing.T) {
+	for _, name := range []string{"X-Auth", "Authentication", "X-Signature", "Authorization"} {
+		input := TemplateInput{Name: "authentication", Transport: "streamable_http", Headers: map[string]string{name: "literal-credential"}}
+		if err := validateTemplate(&input); err == nil {
+			t.Fatalf("market exposed literal header %s", name)
+		}
+		input.Headers[name] = "{{credential}}"
+		input.Parameters = []Parameter{{Name: "credential", Type: "string"}}
+		if err := validateTemplate(&input); err == nil {
+			t.Fatalf("market exposed string credential %s", name)
+		}
+		input.Parameters[0].Type = "secret"
+		if err := validateTemplate(&input); err != nil {
+			t.Fatalf("valid secret header %s: %v", name, err)
+		}
+	}
+}
+
 func TestMCPInputSchemaCannotLoadExternalReferences(t *testing.T) {
 	if _, err := resolveSchema([]byte(`{"type":"object","properties":{"token":{"$ref":"http://127.0.0.1/private"}}}`)); err == nil {
 		t.Fatal("external schema reference was accepted")
@@ -46,7 +80,7 @@ func TestMCPInputSchemaCannotLoadExternalReferences(t *testing.T) {
 }
 
 func TestMCPLegacySSEDiscoveryAndInvocation(t *testing.T) {
-	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	t.Setenv("CANVAS_MCP_ALLOWED_PRIVATE_HOSTS", "127.0.0.1")
 	server := mcp.NewServer(&mcp.Implementation{Name: "sse-test", Version: "1"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "echo", Description: "Echo"}, func(_ context.Context, _ *mcp.CallToolRequest, args struct {
 		Text string `json:"text"`
