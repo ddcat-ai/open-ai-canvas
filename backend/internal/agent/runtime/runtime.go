@@ -85,7 +85,7 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		return fmt.Errorf("encode Agent runtime request: %w", err)
 	}
 	if len(payload) > requestLimit {
-		return errors.New("Agent runtime request exceeds 32 MiB")
+		return errors.New("agent runtime request exceeds 32 MiB")
 	}
 	directory, err := createRunDirectory()
 	if err != nil {
@@ -346,7 +346,7 @@ func acquireAgentProcess(ctx context.Context) (func(), error) {
 		if !waiting {
 			if processGate.waiting >= boundedRuntimeEnvInt("YINGCE_AGENT_MAX_QUEUE", 64, 1024) {
 				processGate.mu.Unlock()
-				return nil, errors.New("Agent process queue is full")
+				return nil, errors.New("agent process queue is full")
 			}
 			processGate.waiting++
 			waiting = true

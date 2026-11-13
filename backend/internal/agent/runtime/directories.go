@@ -47,7 +47,7 @@ func createRunDirectory() (*runDirectory, error) {
 		return nil, err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 || !directoryOwnedByCurrentUser(info) {
-		return nil, errors.New("Agent temporary root must be a private directory owned by the service")
+		return nil, errors.New("agent temporary root must be a private directory owned by the service")
 	}
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
