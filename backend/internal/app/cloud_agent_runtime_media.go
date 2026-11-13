@@ -815,6 +815,10 @@ func (s *Service) CancelCloudAgent(ctx context.Context, userID, id string) error
 			}
 			return nil
 		})
+		if agentStorageCapacityError(err) {
+			// Stopping a run must not require more transcript quota.
+			err = s.repo.MarkCloudAgentCancelled(userID, id, run.Revision)
+		}
 		if errors.Is(err, repository.ErrCreationConflict) {
 			continue
 		}

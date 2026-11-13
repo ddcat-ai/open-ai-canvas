@@ -89,17 +89,7 @@ func TestEnsureFailedProviderAttemptLoggedFillsPreflightGapOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(
-		&model.SystemSetting{},
-		&model.Asset{},
-		&model.CanvasProject{},
-		&model.Task{},
-		&model.TaskLog{},
-		&model.Result{},
-		&model.ApiCallLog{},
-		&model.TaskTextDelta{},
-		&model.ModelPricing{},
-	); err != nil {
+	if err := db.AutoMigrate(append(storageQuotaTestModels(), &model.ModelPricing{})...); err != nil {
 		t.Fatal(err)
 	}
 	task := model.Task{
@@ -172,7 +162,7 @@ func TestRecordProviderRequestKeepsUserVisibleSpeechAndNetworkErrors(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.ModelPricing{}); err != nil {
+	if err := db.AutoMigrate(append(storageQuotaTestModels(), &model.ModelPricing{})...); err != nil {
 		t.Fatal(err)
 	}
 	service := &Service{repo: repository.New(db)}
@@ -207,7 +197,7 @@ func TestEnsureFailedProviderAttemptLoggedRecordsFailureHiddenBySuccessLog(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.ModelPricing{}); err != nil {
+	if err := db.AutoMigrate(append(storageQuotaTestModels(), &model.ModelPricing{})...); err != nil {
 		t.Fatal(err)
 	}
 	success := model.ApiCallLog{ID: "api-log-success", TaskID: "task-1", Status: model.ApiCallStatusSucceeded, RequestKind: "create"}

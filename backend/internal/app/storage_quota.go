@@ -2,13 +2,20 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
+
+func agentStorageCapacityError(err error) bool {
+	var appErr *kernel.AppError
+	return errors.As(err, &appErr) && appErr.Reason == kernel.ReasonStorageCapacityExceeded
+}
 
 func structuredBytes(usage repository.UserStorageUsage) int64 {
 	return usage.AssetBytes + usage.CanvasBytes
@@ -94,9 +101,9 @@ func createTaskWithStorageQuotaRepository(repo *repository.Repository, task *mod
 		return err
 	}
 	if billingOrder != nil {
-		return repo.CreateTaskWithCreditReservation(task, billingOrder, policy.Task.ActiveTaskLimit)
+		return repo.CreateTaskWithCreditReservation(task, billingOrder, policy.Task.ActiveTaskLimit, policy.Task.AgentMaxRunsPerUser)
 	}
-	return repo.CreateTaskWithActiveLimit(task, policy.Task.ActiveTaskLimit)
+	return repo.CreateTaskWithActiveLimit(task, policy.Task.ActiveTaskLimit, policy.Task.AgentMaxRunsPerUser)
 }
 
 // 任务完成会同时扩张任务历史和画布操作数据，必须在同一临界区核算并原子写入。

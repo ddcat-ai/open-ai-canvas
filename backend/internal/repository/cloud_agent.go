@@ -27,21 +27,38 @@ func (r *Repository) SaveCloudAgentPiSession(session *model.CloudAgentPiSession,
 	if session == nil || session.RunID == "" || session.UserID == "" {
 		return fmt.Errorf("invalid Agent session identity")
 	}
-	if expectedRevision == 0 {
-		session.Revision = 1
-		return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(session).Error
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		repo := New(tx)
+		if err := repo.beginAgentStorageWrite(session.UserID); err != nil {
+			return err
+		}
+		var previousBytes int64
+		var result *gorm.DB
+		if expectedRevision == 0 {
+			session.Revision = 1
+			result = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(session)
+		} else {
+			var previous model.CloudAgentPiSession
+			if err := tx.First(&previous, "run_id = ? AND user_id = ? AND revision = ?", session.RunID, session.UserID, expectedRevision).Error; err != nil {
+				return err
+			}
+			previousBytes = int64(len(previous.SessionJSONL))
+			result = tx.Model(&model.CloudAgentPiSession{}).
+				Where("run_id = ? AND user_id = ? AND revision = ?", session.RunID, session.UserID, expectedRevision).
+				Updates(map[string]any{"session_jsonl": session.SessionJSONL, "revision": expectedRevision + 1, "updated_at": time.Now()})
+		}
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return repo.changeAgentStoredBytes(session.UserID, int64(len(session.SessionJSONL))-previousBytes)
+	})
+	if err == nil {
+		session.Revision = expectedRevision + 1
 	}
-	result := r.db.Model(&model.CloudAgentPiSession{}).
-		Where("run_id = ? AND user_id = ? AND revision = ?", session.RunID, session.UserID, expectedRevision).
-		Updates(map[string]any{"session_jsonl": session.SessionJSONL, "revision": expectedRevision + 1, "updated_at": time.Now()})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
-	}
-	session.Revision = expectedRevision + 1
-	return nil
+	return err
 }
 
 func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
@@ -61,6 +78,10 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 		}
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		repo := New(tx)
+		if err := repo.beginAgentStorageWrite(run.UserID); err != nil {
+			return err
+		}
 		// GORM saves associations even when the parent INSERT loses its conflict.
 		// A late initializer must not reinsert transcript rows removed by a newer
 		// checkpoint, or append journal rows outside the revision/CAS transition.
@@ -69,6 +90,22 @@ func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
 			return created.Error
 		}
 		if created.RowsAffected == 1 {
+			bytes := int64(len(run.StateJSON))
+			for _, event := range run.Journal {
+				if event.UserID != run.UserID || event.RunID != run.ID {
+					return gorm.ErrInvalidData
+				}
+				bytes += int64(len(event.EventJSON))
+			}
+			for _, message := range run.Transcript {
+				if message.UserID != run.UserID || message.RunID != run.ID {
+					return gorm.ErrInvalidData
+				}
+				bytes += int64(len(message.MessageJSON))
+			}
+			if err := repo.changeAgentStoredBytes(run.UserID, bytes); err != nil {
+				return err
+			}
 			if len(run.Journal) > 0 {
 				if err := tx.Create(&run.Journal).Error; err != nil {
 					return err
@@ -255,6 +292,12 @@ func (r *Repository) RecentCloudAgentEventsForUser(userID string, runLimit int) 
 // Lock before reading: checkpoints, canvas writes and task reservations commit together.
 func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func(*model.CloudAgentExecution, *Repository) error) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		repo := New(tx)
+		// Keep storage -> execution as the common lock order, including nested
+		// session/undo writes, so different runs of one user cannot deadlock.
+		if err := repo.beginAgentStorageWrite(userID); err != nil {
+			return err
+		}
 		q := tx.Model(&model.CloudAgentExecution{}).Where("id = ? AND user_id = ? AND revision = ?", id, userID, revision).UpdateColumn("revision", gorm.Expr("revision + 1"))
 		if q.Error != nil {
 			return q.Error
@@ -267,6 +310,7 @@ func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func
 			return err
 		}
 		previousEvents := run.EventCount
+		previousBytes := int64(len(run.StateJSON))
 		previousEventBodies := make(map[int]string, len(run.Journal))
 		for _, event := range run.Journal {
 			previousEventBodies[event.Sequence] = event.EventJSON
@@ -274,8 +318,30 @@ func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func
 		previousMessages := make(map[string]string, len(run.Transcript))
 		for _, message := range run.Transcript {
 			previousMessages[fmt.Sprintf("%s:%d", message.Kind, message.Sequence)] = message.MessageJSON
+			previousBytes += int64(len(message.MessageJSON))
 		}
 		if err = fn(run, New(tx)); err != nil {
+			return err
+		}
+		if run.UserID != userID || run.ID != id {
+			return gorm.ErrInvalidData
+		}
+		currentBytes := int64(len(run.StateJSON))
+		for _, event := range run.Journal {
+			if event.UserID != userID || event.RunID != id {
+				return gorm.ErrInvalidData
+			}
+			if event.Sequence > previousEvents {
+				currentBytes += int64(len(event.EventJSON))
+			}
+		}
+		for _, message := range run.Transcript {
+			if message.UserID != userID || message.RunID != id {
+				return gorm.ErrInvalidData
+			}
+			currentBytes += int64(len(message.MessageJSON))
+		}
+		if err := repo.changeAgentStoredBytes(userID, currentBytes-previousBytes); err != nil {
 			return err
 		}
 		if run.EventCount < previousEvents {
@@ -403,7 +469,16 @@ func (r *Repository) CreateCloudAgentCanvasMutation(mutation *model.CloudAgentCa
 	if err := canonicalizeCanvasUndoSnapshot(mutation); err != nil {
 		return err
 	}
-	return r.db.Create(mutation).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		repo := New(tx)
+		if err := repo.beginAgentStorageWrite(mutation.UserID); err != nil {
+			return err
+		}
+		if err := repo.changeAgentStoredBytes(mutation.UserID, int64(len(mutation.BeforeJSON))); err != nil {
+			return err
+		}
+		return tx.Create(mutation).Error
+	})
 }
 
 func (r *Repository) LatestCloudAgentCanvasMutation(userID, runID string) (*model.CloudAgentCanvasMutation, error) {
@@ -436,7 +511,7 @@ func (r *Repository) MarkCloudAgentFailed(userID, id string, revision int64, mes
 		detail = message[0]
 	}
 	result := r.db.Model(&model.CloudAgentExecution{}).
-		Where("id = ? AND user_id = ? AND revision = ? AND status IN ?", id, userID, revision, []string{"queued", "running"}).
+		Where("id = ? AND user_id = ? AND revision = ? AND status IN ?", id, userID, revision, []string{"queued", "running", "waiting_approval", "waiting_user"}).
 		Updates(map[string]any{"status": "failed", "cleanup_pending": true, "failure_message": detail, "revision": gorm.Expr("revision + 1")})
 	if result.Error != nil {
 		return result.Error
@@ -452,7 +527,7 @@ func (r *Repository) MarkCloudAgentFailed(userID, id string, revision int64, mes
 // scheduler when the orchestration blob can no longer be decoded.
 func (r *Repository) MarkCloudAgentCancelled(userID, id string, revision int64) error {
 	result := r.db.Model(&model.CloudAgentExecution{}).
-		Where("id = ? AND user_id = ? AND revision = ? AND status IN ?", id, userID, revision, []string{"queued", "running", "waiting_approval"}).
+		Where("id = ? AND user_id = ? AND revision = ? AND status IN ?", id, userID, revision, []string{"queued", "running", "waiting_approval", "waiting_user"}).
 		Updates(map[string]any{"status": "cancelled", "cleanup_pending": true, "revision": gorm.Expr("revision + 1")})
 	if result.Error != nil {
 		return result.Error

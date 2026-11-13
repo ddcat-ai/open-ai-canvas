@@ -95,6 +95,8 @@ type RuntimeTaskPolicy struct {
 	AgentStepTimeoutSeconds int `json:"agentStepTimeoutSeconds"`
 	// AgentMaxSessions 是同时进行中的画布 Agent 轮次上限。审批等待不占用名额。
 	AgentMaxSessions int `json:"agentMaxSessions"`
+	// AgentMaxRunsPerUser also bounds queued and approval-waiting root runs.
+	AgentMaxRunsPerUser int `json:"agentMaxRunsPerUser"`
 }
 
 type RuntimeRequestPolicy struct {
@@ -180,6 +182,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			AgentStepMaxOutputTokens: agentStepMaxOutputTokensDefault(),
 			AgentStepTimeoutSeconds:  agentStepTimeoutSecondsDefault(),
 			AgentMaxSessions:         DefaultRuntimeAgentSessions,
+			AgentMaxRunsPerUser:      5,
 		},
 		Request: RuntimeRequestPolicy{
 			TaskCreatePerMinute:        30,
@@ -220,7 +223,8 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		AudioTimeoutMinutes: maxRuntimeTimeoutMinutes, VideoTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		StoryboardTimeoutMinutes: maxRuntimeTimeoutMinutes, DefaultTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		AgentStepMaxOutputTokens: MaxRuntimeAgentStepOutputTokens, AgentStepTimeoutSeconds: MaxRuntimeAgentStepTimeoutSeconds,
-		AgentMaxSessions: MaxRuntimeAgentSessions,
+		AgentMaxSessions:    MaxRuntimeAgentSessions,
+		AgentMaxRunsPerUser: MaxRuntimeAgentSessions,
 	}
 	value.Request = RuntimeRequestPolicy{
 		TaskCreatePerMinute:     maxRuntimeRate,
@@ -448,6 +452,9 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	}
 	if task.AgentMaxSessions < MinRuntimeAgentSessions || task.AgentMaxSessions > MaxRuntimeAgentSessions {
 		return kernel.BadAuthRequest(fmt.Sprintf("Agent 同时对话上限必须是 %d-%d 的整数", MinRuntimeAgentSessions, MaxRuntimeAgentSessions))
+	}
+	if task.AgentMaxRunsPerUser < 1 || task.AgentMaxRunsPerUser > MaxRuntimeAgentSessions {
+		return kernel.BadAuthRequest("每用户进行中的 Agent 对话数量必须在 1 到 64 之间")
 	}
 	request := value.Request
 	for label, item := range map[string]int{

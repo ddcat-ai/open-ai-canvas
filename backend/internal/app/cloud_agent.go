@@ -365,6 +365,11 @@ func (s *Service) CloudAgentRun(userID, id string, options ...CloudAgentRunViewO
 	// legacy root task whose execution row has not been created yet.
 	if _, lookupErr := s.repo.CloudAgent(userID, id); errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		if err := s.ensureCloudAgentExecution(task, state); err != nil {
+			if agentStorageCapacityError(err) {
+				if cleanupErr := s.repo.FailCloudAgentReservation(userID, id, err.Error()); cleanupErr != nil {
+					return nil, errors.Join(err, cleanupErr)
+				}
+			}
 			return nil, err
 		}
 	} else if lookupErr != nil {

@@ -63,7 +63,7 @@ func agentLifecycleRepositories(t *testing.T, driver string) (*Repository, *Repo
 		return New(db)
 	}
 	a, b := open(), open()
-	if err := a.db.AutoMigrate(&model.CanvasProject{}, &model.Task{}, &model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.CanvasEditLease{}, &model.CanvasSnapshot{}, &model.CanvasShare{}, &model.CanvasUnitLink{}); err != nil {
+	if err := a.db.AutoMigrate(&model.CanvasProject{}, &model.Task{}, &model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.CloudAgentPiSession{}, &model.CloudAgentCanvasMutation{}, &model.AgentStorageUsage{}, &model.CanvasEditLease{}, &model.CanvasSnapshot{}, &model.CanvasShare{}, &model.CanvasUnitLink{}); err != nil {
 		t.Fatal(err)
 	}
 	return a, b

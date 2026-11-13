@@ -202,7 +202,13 @@ func (s *Service) failPiRunner(runID, userID string, cause error) {
 			}
 			return nil
 		})
+		if agentStorageCapacityError(err) {
+			err = s.repo.MarkCloudAgentFailed(userID, runID, run.Revision, cause.Error())
+		}
 		if !errors.Is(err, repository.ErrCreationConflict) {
+			if err != nil {
+				log.Printf("[Agent] failure checkpoint unavailable run=%s: %v", runID, err)
+			}
 			return
 		}
 	}

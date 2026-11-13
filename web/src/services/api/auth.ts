@@ -180,6 +180,10 @@ export type AdminUserDetail = {
         taskCount: number;
         taskBytes: number;
         apiCallCount: number;
+        agentBytes: number;
+        agentLimitBytes: number;
+        mcpBytes: number;
+        mcpLimitBytes: number;
     };
     storedFileBytes: number;
     dailyUploadBytes: number;
@@ -407,6 +411,8 @@ export type RuntimeTaskPolicy = {
     workerConcurrency: number;
     channelConcurrency: number;
     activeTaskLimit: number;
+    /** 单账号进行中的 Agent 轮次上限，包含排队与等待确认。 */
+    agentMaxRunsPerUser: number;
     imageTimeoutMinutes: number;
     textTimeoutMinutes: number;
     audioTimeoutMinutes: number;

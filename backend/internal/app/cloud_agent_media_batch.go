@@ -761,17 +761,29 @@ func (s *Service) stepCloudAgentMediaBatch(ctx context.Context, userID, runID st
 		}
 		task, err := s.repo.TaskForUser(userID, item.taskID())
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, s.settleCloudAgentMediaBatchItem(run, &state, index, nil)
+			err = s.settleCloudAgentMediaBatchItem(run, &state, index, nil)
+			if agentStorageCapacityError(err) && cloudAgentRunTerminal(run.Status) {
+				return s.finishCloudAgentMediaBatchAtCapacity(ctx, run)
+			}
+			return false, err
 		}
 		if err != nil {
 			return false, err
 		}
 		if cloudAgentTaskTerminal(task.Status) {
-			return false, s.settleCloudAgentMediaBatchItem(run, &state, index, task)
+			err = s.settleCloudAgentMediaBatchItem(run, &state, index, task)
+			if agentStorageCapacityError(err) && cloudAgentRunTerminal(run.Status) {
+				return s.finishCloudAgentMediaBatchAtCapacity(ctx, run)
+			}
+			return false, err
 		}
 	}
 	if cloudAgentRunTerminal(run.Status) {
-		return s.closeCloudAgentMediaBatchAfterStop(ctx, run, &state)
+		done, err := s.closeCloudAgentMediaBatchAfterStop(ctx, run, &state)
+		if agentStorageCapacityError(err) {
+			return s.finishCloudAgentMediaBatchAtCapacity(ctx, run)
+		}
+		return done, err
 	}
 	if !batch.active() {
 		return batch.inFlight() == 0, nil

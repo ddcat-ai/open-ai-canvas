@@ -78,6 +78,7 @@ func TestMigrationDependencyOrder(t *testing.T) {
 		{"users", "mcp_connection_grants"},
 		{"mcp_connections", "mcp_connection_grants"},
 		{"users", "mcp_storage_usages"},
+		{"users", "agent_storage_usages"},
 	} {
 		parent, parentFound := positions[dependency[0]]
 		child, childFound := positions[dependency[1]]

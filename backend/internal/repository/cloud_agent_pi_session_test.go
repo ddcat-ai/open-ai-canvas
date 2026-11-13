@@ -16,7 +16,7 @@ func TestCloudAgentPiSessionSnapshotRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.CloudAgentPiSession{}); err != nil {
+	if err := db.AutoMigrate(&model.CloudAgentPiSession{}, &model.AgentStorageUsage{}, &model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.CloudAgentCanvasMutation{}); err != nil {
 		t.Fatal(err)
 	}
 	repo := New(db)

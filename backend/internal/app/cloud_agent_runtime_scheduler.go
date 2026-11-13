@@ -585,13 +585,17 @@ func (s *Service) terminateCloudAgent(run *model.CloudAgentExecution, message st
 }
 
 func (s *Service) failCloudAgent(run *model.CloudAgentExecution, state *cloudAgentRuntime, message string) error {
-	return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+	err := s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
 		current.Status = "failed"
 		current.FailureMessage = truncateRunes(message, 1000)
 		cloudAgentDropInterjections(run.ID, "本轮已结束："+truncateRunes(message, 120), state)
 		state.event(run.ID, "run_failed", map[string]any{"text": message})
 		return cloudAgentSave(current, state)
 	})
+	if agentStorageCapacityError(err) {
+		return s.terminateCloudAgent(run, message)
+	}
+	return err
 }
 
 // failCloudAgentAdmission records deterministic tool admission failures in the

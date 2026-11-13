@@ -659,12 +659,6 @@ func (s *Service) handlePiSessionSnapshot(userID, runID string, data map[string]
 		}
 		err = s.repo.SaveCloudAgentPiSession(&model.CloudAgentPiSession{RunID: runID, UserID: userID, SessionJSONL: sessionJSONL, UpdatedAt: time.Now()}, expected)
 		if err == nil {
-			if expected == 0 {
-				// OnConflict DoNothing：并发首写时再按 revision 覆盖一次。
-				if saved, readErr := s.repo.CloudAgentPiSession(userID, runID); readErr == nil && saved.SessionJSONL != sessionJSONL {
-					continue
-				}
-			}
 			return map[string]any{"ok": true}, nil
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {

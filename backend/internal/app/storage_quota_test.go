@@ -50,7 +50,7 @@ func TestUserStorageUsageCountsPersistedPayloads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}); err != nil {
+	if err := db.AutoMigrate(storageQuotaTestModels()...); err != nil {
 		t.Fatal(err)
 	}
 	items := []any{
@@ -80,7 +80,7 @@ func TestSaveTaskCompletionPersistsRelatedRowsTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}); err != nil {
+	if err := db.AutoMigrate(storageQuotaTestModels()...); err != nil {
 		t.Fatal(err)
 	}
 	task := model.Task{ID: "task-1", UserID: "user-1", Status: model.TaskStatusRunning, InputJSON: `{"mode":"text"}`}
@@ -98,4 +98,10 @@ func TestSaveTaskCompletionPersistsRelatedRowsTogether(t *testing.T) {
 	if task.Status != model.TaskStatusSucceeded || resultCount != 1 {
 		t.Fatalf("completion = status:%s results:%d", task.Status, resultCount)
 	}
+}
+
+func storageQuotaTestModels() []any {
+	return []any{&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{},
+		&model.AgentStorageUsage{}, &model.CloudAgentExecution{}, &model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.CloudAgentPiSession{}, &model.CloudAgentCanvasMutation{},
+		&model.MCPStorageUsage{}, &model.MCPConnection{}, &model.MCPToolExecution{}}
 }

@@ -96,12 +96,14 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
             onClose={onClose}
             size="min(920px, 100vw)"
             rootClassName="admin-drawer"
-            extra={onNavigate ? (
-                <div className="flex items-center gap-1">
-                    <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
-                    <IconButton size="sm" variant="ghost" aria-label="下一条用户" disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
-                </div>
-            ) : null}
+            extra={
+                onNavigate ? (
+                    <div className="flex items-center gap-1">
+                        <IconButton size="sm" variant="ghost" aria-label="上一条用户" disabled={!previousUserId} icon={ChevronLeft} onClick={() => previousUserId && onNavigate(previousUserId)} />
+                        <IconButton size="sm" variant="ghost" aria-label="下一条用户" disabled={!nextUserId} icon={ChevronRight} onClick={() => nextUserId && onNavigate(nextUserId)} />
+                    </div>
+                ) : null
+            }
         >
             {loading && !detail ? (
                 <Skeleton active paragraph={{ rows: 10 }} />
@@ -147,7 +149,7 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                                         <span className="text-foreground/60">{item.label}</span>
                                                         <span className="shrink-0 tabular-nums text-foreground/75">{item.display}</span>
                                                     </div>
-                                                    <Progress percent={Math.min(100, item.limit > 0 ? Math.round(item.value / item.limit * 100) : 0)} size="small" showInfo={false} status={item.value >= item.limit ? "exception" : "normal"} />
+                                                    <Progress percent={Math.min(100, item.limit > 0 ? Math.round((item.value / item.limit) * 100) : 0)} size="small" showInfo={false} status={item.value >= item.limit ? "exception" : "normal"} />
                                                 </div>
                                             ))}
                                         </div>
@@ -171,10 +173,10 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         dataSource: ledger,
                                         pagination: false,
                                         columns: [
-                                        { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
-                                        { title: "类型", dataIndex: "type", width: 130 },
-                                        { title: "变化", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => formatCredits(value) },
-                                        { title: "说明", dataIndex: "note", ellipsis: true },
+                                            { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "类型", dataIndex: "type", width: 130 },
+                                            { title: "变化", dataIndex: "amountMicrocredits", width: 120, align: "right", render: (value) => formatCredits(value) },
+                                            { title: "说明", dataIndex: "note", ellipsis: true },
                                         ],
                                         scroll: { x: 720 },
                                     }}
@@ -194,11 +196,11 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         dataSource: tasks,
                                         pagination: false,
                                         columns: [
-                                        { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
-                                        { title: "类型", dataIndex: "type", width: 180 },
-                                        { title: "模型", dataIndex: "model", width: 180, ellipsis: true },
-                                        { title: "状态", dataIndex: "status", width: 100, render: (value) => <AdminStatusBadge label={value || "未知"} tone={taskStatusTone(value)} /> },
-                                        { title: "阶段", dataIndex: "stage", ellipsis: true },
+                                            { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "类型", dataIndex: "type", width: 180 },
+                                            { title: "模型", dataIndex: "model", width: 180, ellipsis: true },
+                                            { title: "状态", dataIndex: "status", width: 100, render: (value) => <AdminStatusBadge label={value || "未知"} tone={taskStatusTone(value)} /> },
+                                            { title: "阶段", dataIndex: "stage", ellipsis: true },
                                         ],
                                         scroll: { x: 820 },
                                     }}
@@ -218,10 +220,10 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                         dataSource: events,
                                         pagination: false,
                                         columns: [
-                                        { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
-                                        { title: "管理员", dataIndex: "actorUserId", width: 160, ellipsis: true },
-                                        { title: "动作", dataIndex: "action", width: 160 },
-                                        { title: "摘要", dataIndex: "summary", ellipsis: true },
+                                            { title: "时间", dataIndex: "createdAt", width: 170, render: formatTime },
+                                            { title: "管理员", dataIndex: "actorUserId", width: 160, ellipsis: true },
+                                            { title: "动作", dataIndex: "action", width: 160 },
+                                            { title: "摘要", dataIndex: "summary", ellipsis: true },
                                         ],
                                         scroll: { x: 720 },
                                     }}
@@ -253,7 +255,7 @@ function taskStatusTone(value?: string): AdminStatusTone {
 
 function quotaUsageItems(detail: AdminUserDetail) {
     const structuredBytes = detail.storageUsage.assetBytes + detail.storageUsage.canvasBytes;
-    const bytes = (value: number) => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GB` : `${(value / 1024 ** 2).toFixed(1)} MB`;
+    const bytes = (value: number) => (value >= 1024 ** 3 ? `${(value / 1024 ** 3).toFixed(2)} GB` : `${(value / 1024 ** 2).toFixed(1)} MB`);
     const number = (value: number) => new Intl.NumberFormat("zh-CN").format(value);
     return [
         // 有效容量包含已购扩容；旧响应缺少 storageCapacity 时退回全局基础容量。
@@ -264,8 +266,10 @@ function quotaUsageItems(detail: AdminUserDetail) {
             display: `${bytes(detail.storedFileBytes)} / ${bytes(detail.storageCapacity?.totalBytes ?? detail.quota.storedFileGB * 1024 ** 3)}`,
         },
         { label: "今日上传（UTC）", value: detail.dailyUploadBytes, limit: detail.quota.dailyUploadMB * 1024 ** 2, display: `${bytes(detail.dailyUploadBytes)} / ${detail.quota.dailyUploadMB} MB` },
-        { label: "画布、素材与会话数据", value: structuredBytes, limit: detail.quota.structuredDataMB * 1024 ** 2, display: `${bytes(structuredBytes)} / ${detail.quota.structuredDataMB} MB` },
+        { label: "画布与素材数据", value: structuredBytes, limit: detail.quota.structuredDataMB * 1024 ** 2, display: `${bytes(structuredBytes)} / ${detail.quota.structuredDataMB} MB` },
         { label: "任务与请求日志数据", value: detail.storageUsage.taskBytes, limit: detail.quota.taskDataGB * 1024 ** 3, display: `${bytes(detail.storageUsage.taskBytes)} / ${detail.quota.taskDataGB} GB` },
+        { label: "Agent 会话与撤销历史", value: detail.storageUsage.agentBytes, limit: detail.storageUsage.agentLimitBytes, display: `${bytes(detail.storageUsage.agentBytes)} / ${bytes(detail.storageUsage.agentLimitBytes)}` },
+        { label: "MCP 配额占用", value: detail.storageUsage.mcpBytes, limit: detail.storageUsage.mcpLimitBytes, display: `${bytes(detail.storageUsage.mcpBytes)} / ${bytes(detail.storageUsage.mcpLimitBytes)}` },
         { label: "素材数量", value: detail.storageUsage.assetCount, limit: detail.quota.assetCount, display: `${number(detail.storageUsage.assetCount)} / ${number(detail.quota.assetCount)}` },
         { label: "画布数量", value: detail.storageUsage.canvasCount, limit: detail.quota.canvasCount, display: `${number(detail.storageUsage.canvasCount)} / ${number(detail.quota.canvasCount)}` },
         { label: "任务历史数量", value: detail.storageUsage.taskCount, limit: detail.quota.taskCount, display: `${number(detail.storageUsage.taskCount)} / ${number(detail.quota.taskCount)}` },
