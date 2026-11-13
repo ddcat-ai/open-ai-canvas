@@ -6,6 +6,7 @@ export type CanvasAppearance = {
     welcomeDescription: string;
     inputPlaceholder: string;
     avatarType: "orb" | "live2d" | "bundle";
+    avatarAssetScope?: "personal";
     live2dResourceId: string;
     live2dEntry: string;
     avatarBundleResourceId: string;

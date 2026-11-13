@@ -170,6 +170,10 @@ func (s *Service) UploadAgentAvatarBundle(actor *model.User, header *multipart.F
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	return s.uploadAgentAvatarBundle(actor, header)
+}
+
+func (s *Service) uploadAgentAvatarBundle(actor *model.User, header *multipart.FileHeader) (*AgentAvatarBundleImport, error) {
 	if header == nil || header.Size <= 0 || header.Size > AgentAvatarBundleMaxBytes {
 		return nil, BadAuthRequest("请选择不超过 128 MiB 的 Agent 动画 ZIP")
 	}
@@ -243,11 +247,11 @@ func (s *Service) AgentAvatarBundleAsset(actor *model.User, id, name string) ([]
 		if actor == nil {
 			return nil, "", NotFound("Agent 动画包未启用")
 		}
-		if err := s.RequireAdmin(actor); err != nil {
+		if err := requirePersonalAppearanceActor(actor); err != nil {
 			return nil, "", err
 		}
 		if resource.UserID != actor.ID {
-			return nil, "", Forbidden("不能预览其他管理员未启用的 Agent 动画包")
+			return nil, "", Forbidden("不能读取其他账号未启用的 Agent 动画包")
 		}
 	}
 	_, body, err := s.OpenResource(resource.UserID, id)
