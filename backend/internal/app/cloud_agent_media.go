@@ -934,9 +934,6 @@ func saveCloudAgentDocument(repo *repository.Repository, project *model.CanvasPr
 	if err != nil {
 		return err
 	}
-	if len(raw) > 8<<20 {
-		return BadAuthRequest("画布大小超限")
-	}
 	usage, err := repo.UserStorageUsage(project.UserID)
 	if err != nil {
 		return err
