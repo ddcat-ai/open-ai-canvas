@@ -1,7 +1,7 @@
 import { Button } from "antd";
 import { Check, ChevronDown, X } from "lucide-react";
 import { GlobeIcon } from "@/components/ui/ecommerce-icons";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { commercePlatformGroups, labelOf, languageVisuals, languages, platforms } from "./catalog";
 import { commerceKnowledgeFor, commercePlatformKnowledge } from "./platform-knowledge";
@@ -40,7 +40,45 @@ export function CommerceMarketPicker({
     onClose: () => void;
 }) {
     const [languageOpen, setLanguageOpen] = useState(false);
+    const languageFieldRef = useRef<HTMLDivElement>(null);
+    const languageListRef = useRef<HTMLDivElement>(null);
+    const languageTriggerRef = useRef<HTMLButtonElement>(null);
     const knowledge = commerceKnowledgeFor(platform);
+
+    // 列表在滚动容器底部展开时，先滚到完整可见，避免只剩第一条露在遮罩边缘。
+    useEffect(() => {
+        if (!languageOpen) return;
+        languageListRef.current?.scrollIntoView?.({ block: "nearest" });
+    }, [languageOpen]);
+
+    // 语言区在弹窗滚动容器内展开，点击别处或按 Esc 收起；收起后把焦点还给触发器。
+    useEffect(() => {
+        if (!languageOpen) return;
+        const closeOnOutsidePointer = (event: PointerEvent) => {
+            const target = event.target;
+            if (target instanceof Node && (languageFieldRef.current?.contains(target) || languageListRef.current?.contains(target))) return;
+            setLanguageOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            setLanguageOpen(false);
+            languageTriggerRef.current?.focus();
+        };
+        document.addEventListener("pointerdown", closeOnOutsidePointer);
+        document.addEventListener("keydown", closeOnEscape, true);
+        return () => {
+            document.removeEventListener("pointerdown", closeOnOutsidePointer);
+            document.removeEventListener("keydown", closeOnEscape, true);
+        };
+    }, [languageOpen]);
+
+    const chooseLanguage = (id: string) => {
+        onLanguage(id);
+        setLanguageOpen(false);
+        languageTriggerRef.current?.focus();
+    };
     return (
         <AppModal open flush closable={false} footer={null} width="min(680px, calc(100vw - 32px))" onCancel={onClose} centered className="commerce-market-modal">
             <section className="commerce-market" role="dialog" aria-label="电商平台与语言" data-canvas-no-zoom>
@@ -69,10 +107,10 @@ export function CommerceMarketPicker({
                             </div>
                         </section>
                     ))}
-                    <div className="commerce-market-fields">
+                    <div className="commerce-market-fields" ref={languageFieldRef}>
                         <div className="commerce-market-field">
                             <h3>输出语言</h3>
-                            <button className="commerce-language-trigger" type="button" aria-expanded={languageOpen} aria-controls="commerce-language-options" onClick={() => setLanguageOpen((open) => !open)}>
+                            <button ref={languageTriggerRef} className="commerce-language-trigger" type="button" aria-haspopup="listbox" aria-expanded={languageOpen} aria-controls="commerce-language-options" onClick={() => setLanguageOpen((open) => !open)}>
                                 <LanguageFlag language={language} />
                                 <strong>{languageVisuals[language]?.label || labelOf(languages, language)}</strong>
                                 <ChevronDown size={14} className={languageOpen ? "is-open" : ""} />
@@ -84,17 +122,14 @@ export function CommerceMarketPicker({
                         </label>
                     </div>
                     {languageOpen ? (
-                        <div id="commerce-language-options" className="commerce-language-options" role="listbox" aria-label="输出语言">
+                        <div ref={languageListRef} id="commerce-language-options" className="commerce-language-options" role="listbox" aria-label="输出语言">
                             {languages.map(([id, label]) => (
                                 <button
                                     type="button"
                                     key={id}
                                     role="option"
                                     aria-selected={language === id}
-                                    onClick={() => {
-                                        onLanguage(id);
-                                        setLanguageOpen(false);
-                                    }}
+                                    onClick={() => chooseLanguage(id)}
                                 >
                                     <LanguageFlag language={id} />
                                     <strong>{languageVisuals[id]?.label || label}</strong>
