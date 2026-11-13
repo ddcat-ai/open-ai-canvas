@@ -159,15 +159,11 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	for _, shot := range in.Shots {
 		total += shot.DurationMs
 	}
-	refLabel := map[string]string{}
-	for _, ref := range in.References {
-		refLabel[ref.Name] = ref.Label
-	}
-	withRef := func(name string) string {
-		if label := refLabel[name]; label != "" {
-			return name + "（" + label + "）"
+	withRef := func(ref SegmentReference) string {
+		if ref.Label != "" {
+			return ref.Name + "（" + ref.Label + "）"
 		}
-		return name
+		return ref.Name
 	}
 
 	if in.Index > 0 && in.Independent {
@@ -208,7 +204,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	scenes := []string{}
 	for _, ref := range in.References {
 		if ref.Kind == "scene" {
-			line := withRef(ref.Name)
+			line := withRef(ref)
 			if detail := strings.TrimSpace(ref.Detail); detail != "" {
 				line += "：" + detail
 			}
@@ -241,7 +237,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	if len(characters) > 0 {
 		b.WriteString("\n【角色与参考图】\n")
 		for _, ref := range characters {
-			line := withRef(ref.Name)
+			line := withRef(ref)
 			if detail := strings.TrimSpace(ref.Detail); detail != "" {
 				line += "：" + detail
 			}
@@ -252,7 +248,7 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	if len(props) > 0 {
 		b.WriteString("\n【道具与参考图】\n")
 		for _, ref := range props {
-			line := withRef(ref.Name)
+			line := withRef(ref)
 			if detail := strings.TrimSpace(ref.Detail); detail != "" {
 				line += "：" + detail
 			}

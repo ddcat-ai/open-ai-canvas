@@ -58,10 +58,19 @@ describe("Agent window layout", () => {
 });
 
 describe("Agent submission sync preflight contract", () => {
-    it("scopes submit and approval saves to the active canvas before Agent POST", () => {
+    it("scopes submit saves to the captured target and approval saves to the run canvas before Agent POST", () => {
         const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8");
-        // 提交同步当前页面绑定的画布；审批同步该轮运行自己的画布（离开画布后仍能审批写回）。无画布时都跳过。
-        expect(source).toContain("if (canvasId) await prepareCanvasForCloudAction(canvasId);");
+        // 提交前冻结目标，等待能力检查或同步时切页不能换绑；审批仍同步该轮运行自己的画布。无画布时跳过。
+        const submit = source.slice(source.indexOf("const submit = async"), source.indexOf("const outboxDispatchReady ="));
+        const capturedTarget = submit.indexOf("const target: AgentRequestTarget =");
+        const capabilities = submit.indexOf("await getAgentCapabilities()");
+        const sync = submit.indexOf("if (target.canvasId) await prepareCanvasForCloudAction(target.canvasId);");
+        const request = submit.indexOf("const input = {\n                    ...target,");
+        expect(capturedTarget).toBeGreaterThanOrEqual(0);
+        expect(capabilities).toBeGreaterThan(capturedTarget);
+        expect(sync).toBeGreaterThan(capabilities);
+        expect(request).toBeGreaterThan(sync);
+        expect(submit.indexOf("requestSent = true;")).toBeGreaterThan(request);
         expect(source).toContain('if (decision === "approve" && run.canvasId) {');
         expect(source).toContain("await prepareCanvasForCloudAction(run.canvasId);");
         expect(source).not.toContain("cloudNodeIds");

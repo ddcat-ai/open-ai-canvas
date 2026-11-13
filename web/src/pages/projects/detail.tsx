@@ -48,8 +48,11 @@ import { SegmentDialog } from "./studio/segment-dialog";
 import { QueueBar } from "./studio/queue-bar";
 import { ScriptView } from "./studio/script-view";
 import { Storyboard, type EpisodeEmpty } from "./studio/storyboard";
+import { ProjectAssetAudit } from "./studio/project-asset-audit";
 import { isTypingTarget, useDramaCast, useDramaEpisode, useDramaInvalidate, useDramaSummary, useOpenDramaCanvas } from "./studio/use-studio";
 import { progressFillStyle } from "@/lib/progress-fill";
+import { agentPageContextKey, type AgentPageContext } from "@/lib/agent-page-context";
+import { useGlobalAgentStore } from "@/stores/use-global-agent-store";
 import "./drama.css";
 
 type Tab = "board" | "script" | "final";
@@ -70,6 +73,7 @@ export default function DramaStudioPage() {
     const shotParam = searchParams.get("shot") || "";
     const view = (["cast", "inbox", "settings"].includes(searchParams.get("view") || "") ? searchParams.get("view") : "production") as StudioView;
     const castFocus = searchParams.get("cast") || "";
+    const assetView = searchParams.get("assets") === "episodes" ? "episodes" : "library";
     const [renaming, setRenaming] = useState(false);
     const [adding, setAdding] = useState(false);
     // 有值时“添加一集”弹窗插到这一集前后，否则追加到末尾。
@@ -91,9 +95,33 @@ export default function DramaStudioPage() {
     const running = summary?.production.status === "running";
     const episodeQuery = useDramaEpisode(projectId, episodeId, Boolean(running || (summary?.jobCounts.running || 0) > 0));
     const detail = episodeQuery.data?.episode.id === episodeId ? episodeQuery.data : undefined;
-    const { cast, byId: castById } = useDramaCast(projectId, Boolean(running));
+    const castQuery = useDramaCast(projectId, Boolean(running));
+    const { cast, byId: castById } = castQuery;
     const shots = useMemo(() => detail?.shots || [], [detail]);
     const currentShot = shots.find((shot) => shot.id === shotParam);
+
+    // 短剧制作台向全局小影助手发布当前页面的资源身份。正文始终由服务端读取，
+    // 页面只冻结项目、集和镜头 ID，避免助手拿到切页前的旧脚本继续写入。
+    const pageContext = useMemo<AgentPageContext | null>(() => {
+        if (!projectId || !episodeId) return null;
+        return { kind: "drama", projectId, episodeId, ...(currentShot ? { shotId: currentShot.id } : {}) };
+    }, [currentShot, episodeId, projectId]);
+    useEffect(() => {
+        const store = useGlobalAgentStore.getState();
+        if (!pageContext) {
+            if (store.page?.context.projectId === projectId) store.setPage(null);
+            return;
+        }
+        store.setPage({
+            context: pageContext,
+            label: `短剧 · 第 ${episodeRow?.number || "—"} 集${currentShot ? ` · 镜头 ${currentShot.position + 1}` : ""}`,
+        });
+        const publishedKey = agentPageContextKey(pageContext);
+        return () => {
+            const current = useGlobalAgentStore.getState().page?.context;
+            if (agentPageContextKey(current) === publishedKey) useGlobalAgentStore.getState().setPage(null);
+        };
+    }, [currentShot, episodeRow?.number, episodeId, pageContext, projectId]);
 
     const setParams = useCallback(
         (patch: Record<string, string | null>) => {
@@ -105,6 +133,18 @@ export default function DramaStudioPage() {
             setSearchParams(next, { replace: true });
         },
         [searchParams, setSearchParams],
+    );
+    const discussShot = useCallback(
+        (shot: DramaShot) => {
+            const context: AgentPageContext = { kind: "drama", projectId, episodeId, shotId: shot.id };
+            useGlobalAgentStore.getState().setPage({ context, label: `短剧 · 第 ${episodeRow?.number || "—"} 集 · 镜头 ${shot.position + 1}` });
+            setParams({ tab: "script", shot: shot.id, segment: null });
+            useGlobalAgentStore.getState().requestPrefill({
+                text: `请优化当前短剧制作台的这个分镜。先读取最新镜头内容，再根据我的要求提出或执行修改。项目 ID：${projectId}；集 ID：${episodeId}；镜头 ID：${shot.id}。`,
+                displayText: `讨论镜头 ${shot.position + 1}`,
+            });
+        },
+        [episodeId, episodeRow?.number, projectId, setParams],
     );
     const selectEpisode = useCallback(
         (id: string) => {
@@ -298,7 +338,7 @@ export default function DramaStudioPage() {
 
     const openInbox = (item: DramaInboxItem) => {
         if (item.castId) {
-            openView("cast", { cast: item.castId });
+            openView("cast", { cast: item.castId, assets: null });
             return;
         }
         if (item.kind === "paused") {
@@ -407,7 +447,7 @@ export default function DramaStudioPage() {
                         </button>
                         <button type="button" className="drama-nav-item" aria-current={view === "cast" ? "page" : undefined} onClick={() => openView("cast")}>
                             <UsersRound className="size-4" />
-                            设定{summary.castCount ? <span className="drama-nav-count">{summary.castCount}</span> : null}
+                            项目资产
                         </button>
                         <button type="button" className="drama-nav-item" aria-current={view === "inbox" ? "page" : undefined} onClick={() => openView("inbox")}>
                             <Inbox className="size-4" />
@@ -458,21 +498,50 @@ export default function DramaStudioPage() {
                 </header>
 
                 {view === "cast" ? (
-                    <CastPanel
-                        projectId={projectId}
-                        cast={cast}
-                        ratios={{ character: production.settings.assets.characterRatio }}
-                        focusId={castFocus}
-                        retrying={retry.isPending}
-                        assetsPending={production.settings.mediaMode === "manual" && !production.assetsReleased}
-                        releasing={release.isPending && release.variables?.target === "assets"}
-                        onReleaseAssets={() => release.mutate({ target: "assets" })}
-                        onFocus={(id) => setParams({ cast: id })}
-                        onRetry={() => retry.mutate()}
-                        onChanged={() => invalidate(episodeId)}
-                        onOpenCanvas={(castId) => void canvas.open({ kind: "cast", castId })}
-                        canvasOpening={canvas.opening?.startsWith("cast:") ? canvas.opening.slice("cast:".length) : undefined}
-                    />
+                    <section className="drama-assets-workspace" aria-label="项目资产">
+                        <div className="drama-assets-workspace-head">
+                            <SegmentedControl<"library" | "episodes">
+                                ariaLabel="项目资产视图"
+                                value={assetView}
+                                onChange={(value) => setParams({ assets: value === "episodes" ? "episodes" : null, cast: null })}
+                                options={[
+                                    { label: "资产库", value: "library" },
+                                    { label: "按集核查", value: "episodes" },
+                                ]}
+                            />
+                            <span>人物、环境与道具统一管理，按分镜核对参考配置</span>
+                        </div>
+                        {castQuery.isLoading ? (
+                            <WorkspaceLoadingState label="正在读取项目资产" />
+                        ) : castQuery.isError ? (
+                            <WorkspaceErrorState title="项目资产读取失败" description="当前无法核对资产配置，请重试。" onRetry={() => void castQuery.refetch()} />
+                        ) : assetView === "episodes" ? (
+                            <ProjectAssetAudit
+                                projectId={projectId}
+                                episodes={episodes}
+                                cast={cast}
+                                activeEpisodeId={episodeId}
+                                onOpenCast={(id) => setParams({ assets: null, cast: id })}
+                                onOpenSegment={(id, index) => navigate({ pathname: `/projects/${projectId}/e/${id}`, search: `?segment=${index}` })}
+                            />
+                        ) : (
+                            <CastPanel
+                                projectId={projectId}
+                                cast={cast}
+                                ratios={{ character: production.settings.assets.characterRatio }}
+                                focusId={castFocus}
+                                retrying={retry.isPending}
+                                assetsPending={production.settings.mediaMode === "manual" && !production.assetsReleased}
+                                releasing={release.isPending && release.variables?.target === "assets"}
+                                onReleaseAssets={() => release.mutate({ target: "assets" })}
+                                onFocus={(id) => setParams({ cast: id })}
+                                onRetry={() => retry.mutate()}
+                                onChanged={() => invalidate(episodeId, { assetsChanged: true })}
+                                onOpenCanvas={(castId) => void canvas.open({ kind: "cast", castId })}
+                                canvasOpening={canvas.opening?.startsWith("cast:") ? canvas.opening.slice("cast:".length) : undefined}
+                            />
+                        )}
+                    </section>
                 ) : view === "inbox" ? (
                     <InboxPanel
                         items={summary.inbox}
@@ -488,7 +557,7 @@ export default function DramaStudioPage() {
                         onReleaseAll={confirmReleaseAll}
                     />
                 ) : view === "settings" ? (
-                    <SettingsPanel projectId={projectId} summary={summary} cast={cast} onChanged={() => invalidate(episodeId)} />
+                    <SettingsPanel projectId={projectId} summary={summary} cast={cast} onChanged={() => invalidate(episodeId, { assetsChanged: true })} />
                 ) : !episodes.length ? (
                     <StudioGenesis summary={summary} />
                 ) : (
@@ -692,6 +761,7 @@ export default function DramaStudioPage() {
                                         onPatchShot={(shot, patch) => patchShot.mutate({ shot, patch })}
                                         onInsertShot={(shot, position) => insertShot.mutate({ shot, position })}
                                         onDeleteShot={(shot) => removeShot.mutate(shot)}
+                                        onDiscussShot={discussShot}
                                         onSourceSaved={(again) => {
                                             invalidate(episodeId);
                                             if (again) rescript.mutate();
@@ -724,6 +794,7 @@ export default function DramaStudioPage() {
                             onPatchShot={(shot, patch) => patchShot.mutate({ shot, patch })}
                             onInsertShot={(shot, position) => insertShot.mutate({ shot, position })}
                             onDeleteShot={(shot) => removeShot.mutate(shot)}
+                            onDiscussShot={discussShot}
                             onSavePrompt={(segment, override) => saveSegment.mutate({ segment, override })}
                             onSaveReferences={(segment, patch) => saveReferences.mutateAsync({ segment, patch })}
                             onWritePrompt={(segment) => writeSegment.mutate([segment.index])}
@@ -732,8 +803,9 @@ export default function DramaStudioPage() {
                             onReprocess={(segment) => reprocessSegment.mutate(segment.index)}
                             defaultVideoModel={production.settings.models.video}
                             videoResolution={production.settings.videoResolution}
-                            onOpenCast={(id) => openView("cast", { cast: id, segment: null, shot: null })}
-                            onOpenCanvas={(segment) => void canvas.open({ kind: "segment", episodeId, segmentIndex: segment.index })}
+                            onOpenCast={(id) => openView("cast", { cast: id, assets: null, segment: null, shot: null })}
+                            onOpenAssets={() => openView("cast", { assets: "episodes", segment: null, shot: null })}
+                            onOpenCanvas={(segment, target) => void canvas.open({ kind: "segment", episodeId, segmentIndex: segment.index }, target)}
                             canvasOpening={Boolean(canvas.opening?.startsWith("segment:"))}
                         />
                     </div>

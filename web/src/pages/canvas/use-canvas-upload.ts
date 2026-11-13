@@ -8,6 +8,7 @@ import type { InsertAssetPayload } from "@/components/canvas/asset-picker-modal"
 import { CANVAS_PROJECT_CHAPTER_DND_TYPE, type CanvasProjectChapterPayload } from "@/lib/canvas/canvas-project-chapter-dnd";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { audioUploadTitleFromFileName } from "@/lib/audio-upload-title";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { audioMetadata, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
@@ -231,10 +232,13 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                     progress.done(translate("canvasPage.upload.placeholderRemoved"));
                     return null;
                 }
+                const originalFileName = original?.metadata?.originalFileName;
+                const hasOriginalFileTitle = typeof originalFileName === "string" && originalFileName.length > 0 && (currentNode.title === originalFileName || currentNode.title === audioUploadTitleFromFileName(originalFileName));
+                const useUploadedTitle = replaceId && currentNode.title === original?.title && (placeholder.type !== CanvasNodeType.Audio || hasOriginalFileTitle);
                 const uploadedNode: CanvasNodeData = {
                     ...currentNode,
                     type: placeholder.type,
-                    title: replaceId && currentNode.title === original?.title ? file.name : currentNode.title,
+                    title: useUploadedTitle ? placeholder.title : currentNode.title,
                     metadata: {
                         ...currentNode.metadata,
                         ...metadata,

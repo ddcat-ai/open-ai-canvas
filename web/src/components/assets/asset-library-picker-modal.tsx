@@ -17,6 +17,7 @@ import { translate } from "@/i18n";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import { flushAssetStorePersistence, useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { deleteAssetsWithRemoteSync, loadAssetLibraryPage, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
+import { listProjectAssetsPage, type ProjectAsset } from "@/services/api/projects";
 
 import "./asset-library-picker-modal.css";
 
@@ -49,6 +50,8 @@ export type AssetLibraryPickerItem = {
     /** 媒体类型筛选依据；缺省时按本地素材或插件素材的 kind 推断。 */
     mediaKind?: AssetPickerMediaKind;
     asset?: Asset;
+    /** 已确认存在于服务端的素材 ID；本机未同步条目不能用本机 ID 建立项目关联。 */
+    remoteAssetId?: string;
     imageUrl?: string;
     imageStorageKey?: string;
     imageFit?: "cover" | "contain";
@@ -67,6 +70,8 @@ export type AssetLibraryPickerFolder = {
 
 type Props = {
     remoteLibrary?: boolean;
+    /** 按项目分页读取图片，复用服务端搜索与分类，不加载全项目媒体。 */
+    projectId?: string;
     remoteKind?: string;
     /** 远端素材库里的角色卡是否展示并可选（插入画布时会作为角色卡节点）。 */
     allowCharacters?: boolean;
@@ -112,6 +117,7 @@ type Props = {
 
 export function AssetLibraryPickerModal({
     remoteLibrary = false,
+    projectId,
     remoteKind,
     allowCharacters = false,
     acceptRemoteItems = false,
@@ -158,7 +164,7 @@ export function AssetLibraryPickerModal({
     const [remotePage, setRemotePage] = useState(1);
     const [remotePageSize, setRemotePageSize] = useState(40);
     const [remoteKeyword, setRemoteKeyword] = useState("");
-    const remoteEnabled = remoteLibrary && Boolean(userId) && source === "local";
+    const remoteEnabled = (remoteLibrary || Boolean(projectId)) && Boolean(userId) && source === "local";
     useEffect(() => {
         const timer = window.setTimeout(() => setRemoteKeyword(keyword.trim()), 250);
         return () => window.clearTimeout(timer);
@@ -167,9 +173,23 @@ export function AssetLibraryPickerModal({
     // remoteKind 是调用方写死的能力约束；媒体类型筛选只在没有该约束时参与服务端查询。
     const remoteQueryKind = remoteKind || (mediaKind === "all" ? undefined : mediaKind);
     const remoteQuery = useQuery({
-        queryKey: ["asset-picker", userId, remotePage, remotePageSize, category, remoteKeyword, remoteQueryKind],
-        queryFn: ({ signal }) =>
-            loadAssetLibraryPage({
+        queryKey: projectId ? ["project-asset-picker", projectId, userId, remotePage, remotePageSize, category, remoteKeyword] : ["asset-picker", userId, remotePage, remotePageSize, category, remoteKeyword, remoteQueryKind],
+        queryFn: async ({ signal }) => {
+            if (projectId) {
+                const page = await listProjectAssetsPage(
+                    projectId,
+                    {
+                        page: remotePage,
+                        pageSize: remotePageSize,
+                        mediaType: "image",
+                        category: category === "all" ? undefined : category,
+                        query: remoteKeyword,
+                    },
+                    signal,
+                );
+                return { source: "project" as const, ...page };
+            }
+            const page = await loadAssetLibraryPage({
                 page: remotePage,
                 pageSize: remotePageSize,
                 kind: remoteQueryKind,
@@ -177,27 +197,31 @@ export function AssetLibraryPickerModal({
                 status: category === "archived" ? "archived" : "active",
                 query: remoteKeyword,
                 signal,
-            }),
+            });
+            return { source: "library" as const, ...page };
+        },
         enabled: remoteEnabled && open && sessionHydrated,
         // 切分类/翻页时保留上一页，避免加载间隙退回本地数据源、左侧分类被重置（点"角色"闪一下又跳回全部）。
-        placeholderData: keepPreviousData,
+        placeholderData: (previous, previousQuery) => {
+            if (projectId && (previousQuery?.queryKey[0] !== "project-asset-picker" || previousQuery.queryKey[1] !== projectId || previousQuery.queryKey[2] !== userId)) return undefined;
+            return keepPreviousData(previous);
+        },
     });
     // 调用方的 items 只是本地缓存，不代表可插入集合（分页结果大多不在缓存里）。能接收 pickedItems 的
     // 调用方（acceptRemoteItems）允许直接选远端条目；其余调用方保持"不在 items 里就不可选"的旧约束。
-    const remoteItems = useMemo<AssetLibraryPickerItem[]>(
-        () =>
-            (remoteQuery.data?.assets || [])
-                .filter((asset) => asset.kind !== "model" && (asset.kind !== "entity" || (allowCharacters && asset.category === "character")))
-                .map((asset) =>
-                    remoteAssetToPickerItem(
-                        asset,
-                        items.find((item) => item.id === asset.id),
-                        acceptRemoteItems,
-                        remoteItemDisabledReason?.(asset),
-                    ),
+    const remoteItems = useMemo<AssetLibraryPickerItem[]>(() => {
+        if (remoteQuery.data?.source === "project") return remoteQuery.data.assets.map(projectImageToPickerItem);
+        return (remoteQuery.data?.assets || [])
+            .filter((asset) => asset.kind !== "model" && (asset.kind !== "entity" || (allowCharacters && asset.category === "character")))
+            .map((asset) =>
+                remoteAssetToPickerItem(
+                    asset,
+                    items.find((item) => item.id === asset.id),
+                    acceptRemoteItems,
+                    remoteItemDisabledReason?.(asset),
                 ),
-        [acceptRemoteItems, allowCharacters, remoteItemDisabledReason, remoteQuery.data, items],
-    );
+            );
+    }, [acceptRemoteItems, allowCharacters, remoteItemDisabledReason, remoteQuery.data, items]);
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const gridWrapRef = useRef<HTMLDivElement>(null);
     const pickedRemoteRef = useRef(new Map<string, AssetLibraryPickerItem>());
@@ -318,7 +342,7 @@ export function AssetLibraryPickerModal({
     const toggle = (item: AssetLibraryPickerItem) => {
         if (item.disabledReason || working) return;
         // 远端分页条目翻页后就不在列表里了；选中时记下来，确认时仍能转成插入内容。
-        if (item.asset && !allItems.some((known) => known.id === item.id)) pickedRemoteRef.current.set(item.id, item);
+        if (item.remoteAssetId || !allItems.some((known) => known.id === item.id)) pickedRemoteRef.current.set(item.id, item);
         setError("");
         setSelected((current) => {
             if (!multiple) return current.has(item.id) ? new Set() : new Set([item.id]);
@@ -334,8 +358,9 @@ export function AssetLibraryPickerModal({
         setWorking(true);
         setError("");
         try {
-            const known = new Set(allItems.map((item) => item.id));
-            await onConfirm(selectedIds, [...allItems, ...[...pickedRemoteRef.current.values()].filter((item) => !known.has(item.id))]);
+            const known = new Map(allItems.map((item) => [item.id, item]));
+            for (const item of pickedRemoteRef.current.values()) known.set(item.id, item);
+            await onConfirm(selectedIds, [...known.values()]);
         } catch (reason) {
             setError(reason instanceof Error ? reason.message : t("library.picker.actionFailed"));
         } finally {
@@ -431,7 +456,7 @@ export function AssetLibraryPickerModal({
     };
 
     // 远端模式下列表是分页的，按当前页数会把"角色 4"之类的数字算错；未叠加类型筛选时用服务端分类计数。
-    const remoteCategoryCounts = useRemoteItems && mediaKind === "all" && !remoteKind ? remoteQuery.data?.categoryCounts : undefined;
+    const remoteCategoryCounts = useRemoteItems && !projectId && mediaKind === "all" && !remoteKind ? remoteQuery.data?.categoryCounts : undefined;
     const countFor = (value: string) => {
         if (remoteCategoryCounts) return value === "all" ? Object.values(remoteCategoryCounts).reduce((sum, count) => sum + count, 0) : remoteCategoryCounts[value] || 0;
         return value === "all" ? activeSourceItems.length : activeSourceItems.filter((item) => item.category === value).length;
@@ -503,24 +528,28 @@ export function AssetLibraryPickerModal({
                     <div className="asset-picker-heading">
                         <div className="asset-picker-heading-copy">
                             <span>{eyebrow}</span>
-                            <Dropdown
-                                trigger={["click"]}
-                                placement="bottomLeft"
-                                rootClassName="asset-picker-source-dropdown"
-                                onOpenChange={setSourceMenuOpen}
-                                menu={{
-                                    selectedKeys: [source],
-                                    items: sourceMenuItems,
-                                    onClick: ({ key }) => {
-                                        if (key === "local" || key === "plugin") selectSource(key);
-                                    },
-                                }}
-                            >
-                                <button type="button" className="asset-picker-title-trigger" aria-haspopup="menu" aria-expanded={sourceMenuOpen} aria-label={t("library.picker.sourceLabel", { source: sourceLabel })}>
-                                    <strong>{isRecycleBin ? t("library.picker.recycleBin") : title}</strong>
-                                    <ChevronDown aria-hidden="true" />
-                                </button>
-                            </Dropdown>
+                            {projectId ? (
+                                <strong className="max-w-full truncate text-[var(--fs-heading)] font-semibold leading-[var(--lh-heading)] text-[var(--text-primary)]">{title}</strong>
+                            ) : (
+                                <Dropdown
+                                    trigger={["click"]}
+                                    placement="bottomLeft"
+                                    rootClassName="asset-picker-source-dropdown"
+                                    onOpenChange={setSourceMenuOpen}
+                                    menu={{
+                                        selectedKeys: [source],
+                                        items: sourceMenuItems,
+                                        onClick: ({ key }) => {
+                                            if (key === "local" || key === "plugin") selectSource(key);
+                                        },
+                                    }}
+                                >
+                                    <button type="button" className="asset-picker-title-trigger" aria-haspopup="menu" aria-expanded={sourceMenuOpen} aria-label={t("library.picker.sourceLabel", { source: sourceLabel })}>
+                                        <strong>{isRecycleBin ? t("library.picker.recycleBin") : title}</strong>
+                                        <ChevronDown aria-hidden="true" />
+                                    </button>
+                                </Dropdown>
+                            )}
                         </div>
                     </div>
                     <label className="asset-picker-search">
@@ -556,10 +585,10 @@ export function AssetLibraryPickerModal({
                                 {normalCategories.map((value) => (
                                     <button key={value} type="button" className={cn("assets-filter-item", category === value && "is-active")} aria-pressed={category === value} onClick={() => setCategory(value)}>
                                         <span className="assets-filter-item-label">{categoryLabels[value] || (value === "all" ? t("library.picker.allAssets") : t("library.picker.other"))}</span>
-                                        <span className="assets-filter-count">{countFor(value)}</span>
+                                        {!projectId ? <span className="assets-filter-count">{countFor(value)}</span> : null}
                                     </button>
                                 ))}
-                                {archivedCount > 0 || remoteEnabled ? (
+                                {!projectId && (archivedCount > 0 || remoteEnabled) ? (
                                     <div className="asset-picker-recycle">
                                         <button type="button" className={cn("assets-filter-item", category === "archived" && "is-active")} aria-pressed={category === "archived"} onClick={() => setCategory("archived")}>
                                             <span className="assets-filter-item-label flex items-center gap-2">
@@ -582,7 +611,7 @@ export function AssetLibraryPickerModal({
                                     <span>{t("library.picker.loadFailedDescription")}</span>
                                     <Button onClick={() => void remoteQuery.refetch()}>{t("common.retry")}</Button>
                                 </div>
-                            ) : loading || (refreshing && !visibleItems.length) ? (
+                            ) : loading || (projectId && remoteEnabled && remoteQuery.isPending) || (refreshing && !visibleItems.length) ? (
                                 // 首次读取或切换后还没有可显示的条目：骨架卡片占位，不再整块换成转圈。
                                 <div className="asset-picker-grid" aria-busy="true" aria-label={t("library.picker.loadingTitle")}>
                                     {Array.from({ length: PICKER_SKELETON_CARDS }, (_, index) => (
@@ -736,6 +765,20 @@ export function remoteAssetToPickerItem(asset: Asset, known: AssetLibraryPickerI
         ...known,
         disabledReason: known?.disabledReason || (!known && !acceptRemoteItems ? translate("library.picker.notApplicable") : disabledReason),
         asset,
+        remoteAssetId: asset.id,
+    };
+}
+
+function projectImageToPickerItem(asset: ProjectAsset): AssetLibraryPickerItem {
+    return {
+        id: asset.id,
+        remoteAssetId: asset.id,
+        title: asset.title,
+        category: asset.category,
+        kindLabel: translate("library.picker.kind.image"),
+        mediaKind: "image",
+        imageStorageKey: asset.storageKey,
+        disabledReason: asset.status === "archived" ? "此素材已归档，请先在素材库恢复" : asset.mediaType !== "image" || !asset.storageKey ? "此素材没有可引用的图片" : undefined,
     };
 }
 

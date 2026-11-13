@@ -200,6 +200,7 @@ export function mergeCloudAgentConversation(local: CloudAgentConversation, remot
         messages,
         ...(newerLocalRun ? { run: local.run, messages: local.messages, lastEventSeq: Math.max(local.lastEventSeq || 0, remote.lastEventSeq || 0) } : {}),
         draft: local.draft,
+        draftPrefill: local.draftPrefill,
         localNewCanvasId: local.localNewCanvasId,
         localSelectedCanvasId: local.localSelectedCanvasId,
         permissionMode: local.permissionMode,

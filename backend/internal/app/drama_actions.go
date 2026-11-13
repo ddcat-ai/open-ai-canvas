@@ -318,13 +318,34 @@ func (s *Service) ComposeDramaEpisode(userID, projectID, episodeID string) (Dram
 
 // UpdateDramaShot 修改镜头内容，并只把受影响的下游槽位标为过期。
 func (s *Service) UpdateDramaShot(userID, projectID, shotID string, req UpdateDramaShotRequest) (model.DramaShot, error) {
-	project, p, err := s.dramaForUser(userID, projectID)
+	plan, err := s.prepareDramaShotUpdate(userID, projectID, shotID, req)
 	if err != nil {
 		return model.DramaShot{}, err
 	}
+	if len(plan.Fields) == 0 {
+		return plan.Shot, nil
+	}
+	if err := s.repo.UpdateDramaShotScript(plan.Shot, plan.Fields); err != nil {
+		return model.DramaShot{}, err
+	}
+	return plan.Shot, s.reopenDrama(plan.Production)
+}
+
+type dramaShotUpdatePlan struct {
+	Shot       model.DramaShot
+	Production *model.DramaProduction
+	Fields     map[string]any
+}
+
+// 人工保存和助手审批预览共用业务校验；此阶段不写库，也不唤醒制作调度。
+func (s *Service) prepareDramaShotUpdate(userID, projectID, shotID string, req UpdateDramaShotRequest) (*dramaShotUpdatePlan, error) {
+	project, p, err := s.dramaForUser(userID, projectID)
+	if err != nil {
+		return nil, err
+	}
 	shot, err := s.repo.DramaShot(project.ID, shotID)
 	if err != nil {
-		return model.DramaShot{}, err
+		return nil, err
 	}
 	fields := map[string]any{}
 	for _, f := range []struct {
@@ -341,7 +362,7 @@ func (s *Service) UpdateDramaShot(userID, projectID, shotID string, req UpdateDr
 		}
 		value := strings.TrimSpace(*f.value)
 		if utf8.RuneCountInString(value) > f.limit {
-			return model.DramaShot{}, BadAuthRequest("镜头内容过长")
+			return nil, BadAuthRequest("镜头内容过长")
 		}
 		if value != *f.target {
 			*f.target = value
@@ -358,25 +379,19 @@ func (s *Service) UpdateDramaShot(userID, projectID, shotID string, req UpdateDr
 	if req.DurationSeconds != nil {
 		value := *req.DurationSeconds
 		if value < 1 || value > production.MaxStoryboardShotSeconds {
-			return model.DramaShot{}, BadAuthRequest("镜头时长超出范围")
+			return nil, BadAuthRequest("镜头时长超出范围")
 		}
 		duration := int64(value * 1000)
 		if duration != shot.DurationMs {
 			// 一个剧情段一次生成，段总时长不能超过该段视频模型的单次上限。
 			if err := s.checkDramaSegmentDuration(project.ID, p, *shot, duration); err != nil {
-				return model.DramaShot{}, err
+				return nil, err
 			}
 			shot.DurationMs = duration
 			fields["duration_ms"] = duration
 		}
 	}
-	if len(fields) == 0 {
-		return *shot, nil
-	}
-	if err := s.repo.UpdateDramaShotScript(*shot, fields); err != nil {
-		return model.DramaShot{}, err
-	}
-	return *shot, s.reopenDrama(p)
+	return &dramaShotUpdatePlan{Shot: *shot, Production: p, Fields: fields}, nil
 }
 
 func (s *Service) UpdateDramaCast(userID string, projectID string, castID string, req UpdateDramaCastRequest) (model.DramaCast, error) {

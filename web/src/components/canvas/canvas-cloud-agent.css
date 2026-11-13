@@ -3033,6 +3033,33 @@ summary.agent-tool-step:hover {
     white-space: nowrap;
 }
 
+.canvas-agent-approval-shot-details {
+    color: var(--foreground);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.canvas-agent-approval-shot-details > summary {
+    cursor: pointer;
+    width: fit-content;
+}
+
+.canvas-agent-approval-shot-details > summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+.canvas-agent-approval-shot-details > div {
+    max-height: min(44dvh, 360px);
+    overflow: auto;
+    overflow-wrap: anywhere;
+}
+
+.canvas-agent-approval-shot-details p {
+    margin-block: 8px;
+    white-space: pre-wrap;
+}
+
 .canvas-agent-approval-empty {
     margin-top: 12px;
     border-radius: 8px;

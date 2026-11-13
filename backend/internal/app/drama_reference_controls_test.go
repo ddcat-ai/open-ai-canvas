@@ -2,12 +2,81 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/production"
+	"yingce/backend/internal/repository"
 )
+
+func TestDramaReferenceReorderPreservesManualPromptAssetIdentity(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	summary := createTestDrama(t, svc, DramaReviewSample)
+	project := summary.Project.ID
+	runDramaTicks(t, svc, project, 24)
+	summary, err := svc.DramaSummary("usr-drama", project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	episode := summary.Episodes[0].ID
+	first, second := fake.resource("usr-drama", "image", "image/png"), fake.resource("usr-drama", "image", "image/png")
+	images := []model.DramaReferenceImage{{ResourceID: first, Name: "同名.png"}, {ResourceID: second, Name: "同名.png"}}
+	empty := []string{}
+	prompt := "参考图1拿起纸条，参考图2保持原位。"
+	if err := svc.UpdateDramaSegment("usr-drama", project, episode, 0, UpdateDramaSegmentRequest{ReferenceCastIDs: &empty, ReferenceImages: &images, VideoPromptOverride: &prompt}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := rows[0]
+	reordered := []model.DramaReferenceImage{images[1], images[0]}
+	if err := svc.UpdateDramaSegment("usr-drama", project, episode, 0, UpdateDramaSegmentRequest{ReferenceImages: &reordered}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := rows[0]
+	if after.VideoPromptOverride != "参考图2拿起纸条，参考图1保持原位。" || after.Revision != before.Revision+1 {
+		t.Fatalf("one atomic edit must retain image identities: before=%+v after=%+v", before, after)
+	}
+	if err := svc.repo.SaveDramaSegmentEdits(before, map[string]any{"video_prompt_override": "过期写入"}); !errors.Is(err, repository.ErrDramaSegmentEditConflict) {
+		t.Fatalf("stale remap must not overwrite a newer selection: %v", err)
+	}
+	removed := []model.DramaReferenceImage{images[0]}
+	if err := svc.UpdateDramaSegment("usr-drama", project, episode, 0, UpdateDramaSegmentRequest{ReferenceImages: &removed}); err == nil || !strings.Contains(err.Error(), "请先修改正文") {
+		t.Fatalf("removing an asset used by a manual prompt must be rejected: %v", err)
+	}
+	rows, err = svc.repo.DramaSegments(episode)
+	if err != nil || rows[0].Revision != after.Revision || rows[0].ReferenceImagesJSON != after.ReferenceImagesJSON || rows[0].VideoPromptOverride != after.VideoPromptOverride {
+		t.Fatalf("failed removal must leave references and prompt unchanged: %+v %v", rows, err)
+	}
+	corrected := "参考图1拿起纸条。"
+	if err := svc.UpdateDramaSegment("usr-drama", project, episode, 0, UpdateDramaSegmentRequest{ReferenceImages: &removed, VideoPromptOverride: &corrected}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = svc.repo.DramaSegments(episode)
+	if err != nil || rows[0].VideoPromptOverride != corrected {
+		t.Fatalf("explicit replacement prompt uses the new reference selection: %+v %v", rows, err)
+	}
+}
+
+func TestDramaReferenceRemapUsesCastIDsAndRejectsUnknownTokens(t *testing.T) {
+	before := []DramaSegmentReference{{CastID: "hero", Label: "参考图1", Name: "同名"}, {CastID: "room", Label: "参考图2", Name: "同名"}}
+	after := []DramaSegmentReference{{CastID: "room", Label: "参考图1", Name: "同名"}, {CastID: "hero", Label: "参考图2", Name: "同名"}}
+	got, err := remapDramaSegmentPromptReferences("@参考图1进入参考图 2。", before, after)
+	if err != nil || got != "参考图2进入参考图1。" {
+		t.Fatalf("same names must be resolved by cast ID: %q %v", got, err)
+	}
+	if _, err := remapDramaSegmentPromptReferences("参考图3进入。", before, after); err == nil {
+		t.Fatal("unknown references cannot become silently bound to newly added assets")
+	}
+}
 
 func TestDramaSegmentReferenceControls(t *testing.T) {
 	svc, fake := newDramaTestService(t)

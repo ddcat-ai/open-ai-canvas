@@ -114,7 +114,7 @@ func segmentVideoChoice(segment model.DramaSegment, fallback DramaModelChoice) D
 }
 
 // prepareDramaSegment is shared by the request preview and provider submission.
-// Reference numbering remains stable even when a model cannot accept every image.
+// Logical reference numbering stays stable for editing; the provider compiles it against the actual payload.
 // 返回值依次是请求预演、随请求发送的参考图与参考音频（任务输入的媒体项）。
 func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegmentDraft, segment model.DramaSegment, previous *model.DramaSegment, casts map[string]model.DramaCast) (DramaSegmentRequest, []any, []any, error) {
 	if settings.parallelVideo() {
@@ -149,7 +149,7 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 			}
 			refs = append(refs, ref)
 		}
-		header = append(header, "首帧图为上一段视频的最后一帧，不占参考图编号。")
+		header = append(header, "首帧图为上一段视频的最后一帧。")
 	} else if profile.supports("reference_to_video") {
 		request.Operation = "reference_to_video"
 	} else {
@@ -194,11 +194,12 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 				if err != nil {
 					return request, nil, nil, err
 				}
+				ref["id"] = dramaReferenceMediaID(reference)
 				refs = append(refs, ref)
 				capacity--
 				header = append(header, reference.Label+"："+reference.Name)
 			} else {
-				header = append(header, reference.Label+"（"+reference.Name+"）未附图")
+				header = append(header, "资产“"+reference.Name+"”未附图")
 				if settingLimited {
 					request.ReferenceLimited = true
 				} else {
@@ -219,6 +220,7 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 			if err != nil {
 				return request, nil, nil, err
 			}
+			ref["id"] = dramaReferenceMediaID(reference)
 			refs = append(refs, ref)
 			capacity--
 			line := reference.Label + "：" + reference.Name
@@ -228,7 +230,7 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 			}
 			header = append(header, line)
 		} else {
-			header = append(header, reference.Label+"（"+reference.Name+"）未附图，请依据文字设定："+firstNonEmpty(cast.Appearance, cast.Description))
+			header = append(header, "资产“"+reference.Name+"”未附图，请依据文字设定："+firstNonEmpty(cast.Appearance, cast.Description))
 			ready := cast.ImageStatus == model.DramaMediaReady && cast.ImageResourceID != ""
 			switch {
 			case !ready:
@@ -268,6 +270,20 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	if unknown := production.UnknownReferenceTokens(firstNonEmpty(segment.VideoPromptOverride, segment.VideoPrompt), len(request.References)); len(unknown) > 0 {
 		request.UnknownReferences = unknown
 		request.Warning = fmt.Sprintf("提示词里的 %s 不是本段的参考图（本段共 %d 张），生成前请改成正确的编号", strings.Join(unknown, "、"), len(request.References))
+	}
+	used := make(map[string]bool)
+	for _, label := range dramaPromptReferenceLabels(firstNonEmpty(segment.VideoPromptOverride, segment.VideoPrompt)) {
+		used[label] = true
+	}
+	unsent := []string{}
+	for _, reference := range request.References {
+		if !reference.Sent && used[reference.Label] {
+			unsent = append(unsent, reference.Label+"（"+reference.Name+"）")
+		}
+	}
+	if len(unsent) > 0 {
+		request.Warning = "提示词引用的 " + strings.Join(unsent, "、") + " 未附图，无法对应模型图片；请补齐图片、调整参考图上限或修改正文中的引用后再生成"
+		return request, refs, audios, errors.New(request.Warning)
 	}
 	// 给不出作品画幅时不提交：上游会按自己的默认画幅（多为横屏）出片，花了钱也用不上。
 	if screen.Issue != "" {
@@ -462,6 +478,7 @@ func (r *dramaRun) submitSegmentVideo(job *model.DramaJob) (*model.Task, bool, e
 		}
 		metadata := r.metadata(job)
 		metadata["videoEditOperation"] = request.Operation
+		metadata[dramaReferenceBindingsKey] = dramaReferenceBindings(request.References)
 		if previous != nil {
 			metadata["videoStartFrameNodeId"] = "first-frame"
 		}

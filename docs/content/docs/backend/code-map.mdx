@@ -71,6 +71,8 @@ description: 从产品功能快速定位主要代码入口
 
 ## 短剧自动制作
 
+- 项目资产与审核：`web/src/pages/projects/studio/segment-references.tsx`、`segment-project-images.tsx`、`project-asset-audit.tsx` 与 `lib/drama/asset-usage.ts`；提示词彩色名称引用和保存编号在 `lib/drama/asset-references.ts`，发往模型的实际引用顺序校验在 `app/provider_drama_references.go`。
+- 当前页助手：`app/cloud_agent_drama_page.go` 提供 `drama_shot_read` / `drama_shot_update`，复用 `drama_actions.go` 的镜头修改计划与保存；`repository/drama_page_edit.go` 将集版本校验与写入放入同一事务。前端页面身份发布在 `pages/projects/detail.tsx`，类型在 `lib/agent-page-context.ts`，预填和队列目标由 `use-global-agent-store.ts` 与 `canvas-cloud-agent-panel.tsx` 管理。
 - 设定与跨季素材：`app/drama_cast_materials.go`（手工草稿、独立风格、预览与生图共用的提示词编排），`app/drama_cast_import.go`（来源权限、同名匹配、角色造型映射与原子导入）；迁移 `database/drama_cast_styles_import.go`。前端 `studio/cast-create-dialog.tsx`、`cast-project-import.tsx`、`cast-image-fields.tsx`；`panels.tsx` 管理角色缩略图切换与独立造型列表，`cast-looks.tsx` 管理新增造型和图片预览。
 - 风格组合：`web/src/lib/drama/style-composition.ts` 分离表现形式与题材词库，生成稳定组合 ID；`drama-styles.ts` 是风格解析入口，`pages/projects/style-picker.tsx` 同时提供创建页选择器与素材编辑紧凑选择器。`drama.css` 的 reduced-motion 规则保留 rc-motion 完成事件，避免分镜弹窗停在进出场状态。
 - 段编辑的依赖失效：`repository/repository_drama.go` 的 `markLaterSegmentsStale` / `invalidateDramaSegment` 按作品衔接模式维护版本与排队任务；独立出片只影响本段，尾帧续接保留后续段级联失效。结果关联回归见 `app/drama_parallel_result_test.go`。

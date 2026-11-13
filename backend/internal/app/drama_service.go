@@ -1118,7 +1118,7 @@ func (s *Service) RequestDramaSegmentPrompts(userID string, projectID string, ep
 
 // UpdateDramaSegment 保存或清除一个剧情段的整段视频提示词改写。
 func (s *Service) UpdateDramaSegment(userID string, projectID string, episodeID string, index int, req UpdateDramaSegmentRequest) error {
-	project, _, err := s.dramaForUser(userID, projectID)
+	project, productionRow, err := s.dramaForUser(userID, projectID)
 	if err != nil {
 		return err
 	}
@@ -1143,9 +1143,23 @@ func (s *Service) UpdateDramaSegment(userID string, projectID string, episodeID 
 	if !found {
 		return BadAuthRequest("剧情段不存在")
 	}
+	rows, err := s.repo.DramaSegments(episode.ID)
+	if err != nil {
+		return err
+	}
+	var current model.DramaSegment
+	for _, row := range rows {
+		if row.SegmentIndex == index {
+			current = row
+			break
+		}
+	}
+	if current.ID == "" {
+		return BadAuthRequest("剧情段不存在")
+	}
 	fields := map[string]any{}
 	if req.AutoReferences || req.ReferenceCastIDs != nil {
-		// 参考图编号写在提示词里，换参考图后模型撰写的提示词标记过期；手写的提示词保留，由用户自行核对编号。
+		// 模型正文标记过期；手写正文按资产身份同步换号，与参考选择一起保存。
 		encoded := ""
 		if !req.AutoReferences {
 			ids, err := s.dramaSegmentReferenceIDs(project.ID, *req.ReferenceCastIDs)
@@ -1176,23 +1190,48 @@ func (s *Service) UpdateDramaSegment(userID string, projectID string, episodeID 
 		}
 		fields["audio_cast_ids_json"] = encodeStringList(ids)
 	}
-	// 先完成全部校验，再写参考选择，避免一个无效字段使本次修改只保存一半。
-	if req.VideoPromptOverride != nil && utf8.RuneCountInString(strings.TrimSpace(*req.VideoPromptOverride)) > 12000 {
-		return BadAuthRequest("段提示词过长（最多 12000 字）")
-	}
-	if len(fields) > 0 {
-		if err := s.repo.SaveDramaSegmentReferenceFields(episode.ID, index, fields); err != nil {
-			return err
-		}
-	}
 	if req.VideoPromptOverride != nil {
 		prompt := production.NormalizeReferenceTokens(strings.TrimSpace(*req.VideoPromptOverride))
 		if utf8.RuneCountInString(prompt) > 12000 {
 			return BadAuthRequest("段提示词过长（最多 12000 字）")
 		}
-		if err := s.repo.SaveDramaSegmentOverride(model.DramaSegment{ProjectID: project.ID, EpisodeID: episode.ID, SegmentIndex: index, VideoPromptOverride: prompt}); err != nil {
+		fields["video_prompt_override"] = prompt
+	} else if current.VideoPromptOverride != "" && (req.AutoReferences || req.ReferenceCastIDs != nil || req.ReferenceImages != nil) {
+		casts, err := s.repo.DramaCasts(project.ID)
+		if err != nil {
 			return err
 		}
+		castByID := map[string]model.DramaCast{}
+		for _, cast := range casts {
+			castByID[cast.ID] = cast
+		}
+		next := current
+		if value, exists := fields["reference_cast_ids_json"]; exists {
+			next.ReferenceCastIDsJSON = value.(string)
+		}
+		if value, exists := fields["reference_images_json"]; exists {
+			next.ReferenceImagesJSON = value.(string)
+		}
+		references := func(row model.DramaSegment) []DramaSegmentReference {
+			for _, draft := range buildDramaSegmentDrafts(parseDramaSettings(productionRow.SettingsJSON), parseDramaBibleMeta(productionRow.BibleJSON), shots, castByID, []model.DramaSegment{row}) {
+				if draft.view.Index == index {
+					return draft.view.Request.References
+				}
+			}
+			return nil
+		}
+		prompt, err := remapDramaSegmentPromptReferences(current.VideoPromptOverride, references(current), references(next))
+		if err != nil {
+			return err
+		}
+		fields["video_prompt_override"] = prompt
+	}
+	// 参考选择和正文必须一起落库，否则并发请求或写入失败会留下错号的半成品。
+	if err := s.repo.SaveDramaSegmentEdits(current, fields); err != nil {
+		if errors.Is(err, repository.ErrDramaSegmentEditConflict) {
+			return BadAuthRequest("本段已被更新，请刷新后再保存")
+		}
+		return err
 	}
 	s.wakeDramaScheduler()
 	return nil

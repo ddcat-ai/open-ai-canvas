@@ -1,4 +1,4 @@
-import { Button, Input, InputNumber, Modal, Segmented, Table } from "antd";
+import { Button, Input, InputNumber, Modal, Popover, Segmented, Table } from "antd";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { CheckboxGroup } from "@/components/ui/base/checkbox";
 import type { MenuProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Check, ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Clapperboard, Columns3, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, MessageSquare, Minimize2, MoreHorizontal, Pencil, Pin, Plus, RefreshCw, Send, Square, Trash2, Video, X } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { StoryboardAssetsCell } from "@/components/canvas/storyboard-assets-cell";
@@ -24,7 +24,10 @@ import { STORYBOARD_COMPOSER_MIN_HEIGHT, STORYBOARD_HEADER_HEIGHT, STORYBOARD_RO
 import type { CanvasGenerationBatch, CanvasNodeData, CanvasWorkspaceMode, StoryboardColumn, StoryboardRow, StoryboardShotCount, StoryboardShotDuration, StoryboardVideoInputMode } from "@/types/canvas";
 import type { TaskStatus } from "@/services/api/task-center";
 import { Select } from "@/components/ui/base/select";
+import { AppModal } from "@/components/ui/product/app-modal";
+import { useGlobalAgentStore } from "@/stores/use-global-agent-store";
 import { GenerationBatchDetails, StoryboardMiniPipeline, batchItemTone, generationBatchItemLabel, generationBatchSummary } from "./canvas-script-node-parts";
+import "./canvas-script-editor.css";
 
 const STORYBOARD_PROMPT_MIN_HEIGHT = 40;
 const STORYBOARD_PROMPT_MAX_HEIGHT = 116;
@@ -302,7 +305,7 @@ export function CanvasScriptNodeContent({
             >
                 {rows.length ? (
                     rows.map((row) => (
-                        <div key={row.id} className="relative grid border-b" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
+                        <div key={row.id} className="canvas-script-compact-row relative grid border-b" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
                             <div className="flex flex-col items-center justify-center gap-0.5 border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}>
                                 <div className="flex items-center gap-0.5">
                                     <span className="text-sm">{row.shotNumber}</span>
@@ -492,9 +495,15 @@ export function CanvasScriptEditor({
 }) {
     const [query, setQuery] = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [fullscreen, setFullscreen] = useState(true);
+    const [editingRowId, setEditingRowId] = useState<string>();
+    const [columnsOpen, setColumnsOpen] = useState(false);
+    const [tableHeight, setTableHeight] = useState(400);
+    const [tableArea, setTableArea] = useState<HTMLDivElement | null>(null);
     const rows = node?.metadata?.storyboard?.rows || EMPTY_STORYBOARD_ROWS;
     const visibleColumns = resolveStoryboardVisibleColumns(node?.metadata?.storyboard?.visibleColumns);
     const videoInputMode = node?.metadata?.storyboardVideoInputMode || "direct";
+    const editingRow = rows.find((row) => row.id === editingRowId);
     const nodeById = useMemo(() => new Map(nodes.map((item) => [item.id, item])), [nodes]);
     const filteredRows = useMemo(() => {
         const keyword = query.trim().toLowerCase();
@@ -524,7 +533,42 @@ export function CanvasScriptEditor({
             return next.length === current.length && next.every((id, index) => id === current[index]) ? current : next;
         });
     }, [rows]);
-    const updateRow = (rowId: string, patch: Partial<StoryboardRow>) => onUpdateRows(rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+    useEffect(() => {
+        if (!open) return;
+        setFullscreen(true);
+        setEditingRowId(undefined);
+        setColumnsOpen(false);
+    }, [open, node?.id]);
+    useEffect(() => {
+        if (!open) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Escape" || !(event.target instanceof Element)) return;
+            // 只处理本编辑器的焦点。关联资产等上层弹窗、下拉框先自行消费 Esc。
+            if (!event.target.closest(".canvas-script-editor-root, .canvas-script-editor-columns-popover")) return;
+            if (event.target.closest('[role="combobox"][aria-expanded="true"]')) return;
+            if (!columnsOpen && !fullscreen) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (columnsOpen) setColumnsOpen(false);
+            else setFullscreen(false);
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, [columnsOpen, fullscreen, open]);
+    useLayoutEffect(() => {
+        if (!open || !tableArea) return;
+        const measure = () => {
+            if (tableArea.clientHeight) setTableHeight(Math.max(120, tableArea.clientHeight - 48));
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(tableArea);
+        return () => observer.disconnect();
+    }, [open, fullscreen, tableArea]);
+    const updateRow = (rowId: string, patch: Partial<StoryboardRow>) => {
+        setEditingRowId(rowId);
+        onUpdateRows(rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+    };
     const moveRow = (rowId: string, direction: -1 | 1) => {
         const index = rows.findIndex((row) => row.id === rowId);
         const nextIndex = index + direction;
@@ -540,44 +584,91 @@ export function CanvasScriptEditor({
         onUpdateRows(next.map((item, rowIndex) => ({ ...item, shotNumber: rowIndex + 1 })));
     };
     const removeRow = (rowId: string) => onUpdateRows(rows.filter((row) => row.id !== rowId).map((row, index) => ({ ...row, shotNumber: index + 1 })));
+    const discussRow = (row: StoryboardRow) => {
+        if (!node) return;
+        onClose();
+        useGlobalAgentStore.getState().requestPrefill({
+            text: `请优化当前分镜脚本中的这个镜头。节点ID：${node.id}；镜头行ID：${row.id}。先读取最新分镜，再根据我的要求提出或执行修改。`,
+            displayText: `讨论镜头 ${row.shotNumber}`,
+        });
+    };
 
     const columns: ColumnsType<StoryboardRow> = columnOptions
-        .filter((option) => visibleColumns.includes(option.value))
+        .filter((option) => option.value === "shotNumber" || visibleColumns.includes(option.value))
         .map((option) => ({
-            title: option.label,
+            title:
+                option.value === "shotNumber" ? (
+                    <span className="canvas-script-editor-pinned">
+                        <Pin className="size-3" />
+                        镜头
+                    </span>
+                ) : (
+                    option.label
+                ),
             dataIndex: option.value,
             key: option.value,
             width:
                 option.value === "shotNumber"
-                    ? 72
+                    ? 88
                     : option.value === "durationSeconds"
                       ? 100
                       : option.value === "assets"
                         ? 220
                         : option.value === "plotDescription" || option.value === "dialogue" || option.value === "timeBeats" || option.value.endsWith("Prompt")
-                          ? 260
+                          ? option.value.endsWith("Prompt")
+                              ? 360
+                              : 280
                           : 170,
             fixed: option.value === "shotNumber" ? ("left" as const) : undefined,
             render: (_: unknown, row: StoryboardRow) =>
                 option.value === "shotNumber" ? (
-                    <span className="font-semibold">{row.shotNumber}</span>
+                    <span className="canvas-script-editor-shot-number">
+                        <strong>{row.shotNumber}</strong>
+                        {editingRowId === row.id ? (
+                            <span>
+                                <Pencil className="size-3" />
+                                编辑中
+                            </span>
+                        ) : null}
+                    </span>
                 ) : option.value === "durationSeconds" ? (
-                    <InputNumber min={1} max={60} value={row.durationSeconds} addonAfter="s" onChange={(value) => updateRow(row.id, { durationSeconds: Number(value) || 1 })} />
+                    <InputNumber
+                        aria-label={`镜头 ${row.shotNumber} 时长`}
+                        className="canvas-script-editor-duration"
+                        min={1}
+                        max={60}
+                        value={row.durationSeconds}
+                        suffix="s"
+                        onFocus={() => setEditingRowId(row.id)}
+                        onChange={(value) => updateRow(row.id, { durationSeconds: Number(value) || 1 })}
+                    />
                 ) : option.value === "assets" ? (
-                    <StoryboardAssetsCell bindings={row.assetBindings || []} nodes={nodes} onEdit={() => onEditAssets(row.id)} disabled={node?.metadata?.locked} />
+                    <StoryboardAssetsCell
+                        bindings={row.assetBindings || []}
+                        nodes={nodes}
+                        onEdit={() => {
+                            setEditingRowId(row.id);
+                            onEditAssets(row.id);
+                        }}
+                        disabled={node?.metadata?.locked}
+                    />
                 ) : option.value === "shotSize" ? (
                     <Select
                         className="w-full"
+                        ariaLabel={`镜头 ${row.shotNumber} 景别`}
                         value={row.shotSize || undefined}
                         placeholder="选择景别"
                         options={["特写", "近景", "中景", "全景", "远景"].map((value) => ({ value, label: value }))}
+                        onFocus={() => setEditingRowId(row.id)}
                         onChange={(shotSize) => updateRow(row.id, { shotSize })}
                     />
                 ) : (
                     <Input.TextArea
-                        autoSize={{ minRows: 1, maxRows: 4 }}
+                        aria-label={`镜头 ${row.shotNumber} ${option.label}`}
+                        autoSize={{ minRows: 2, maxRows: editingRowId === row.id ? 10 : 4 }}
                         value={String(row[option.value] || "")}
                         placeholder={`填写${option.label}`}
+                        onFocus={() => setEditingRowId(row.id)}
                         onChange={(event) => updateRow(row.id, { [option.value]: event.target.value } as Partial<StoryboardRow>)}
                     />
                 ),
@@ -587,61 +678,137 @@ export function CanvasScriptEditor({
         key: "actions",
         dataIndex: "shotNumber",
         width: 150,
-        fixed: "right" as const,
         render: (_: unknown, row: StoryboardRow) => (
-            <div className="flex gap-1">
-                <SmallButton title="上移" onClick={() => moveRow(row.id, -1)}>
-                    <ChevronUp className="size-3.5" />
-                </SmallButton>
-                <SmallButton title="下移" onClick={() => moveRow(row.id, 1)}>
-                    <ChevronDown className="size-3.5" />
-                </SmallButton>
-                <SmallButton title="复制" onClick={() => duplicateRow(row)}>
-                    <Copy className="size-3.5" />
-                </SmallButton>
-                <SmallButton title="删除" onClick={() => removeRow(row.id)}>
-                    <Trash2 className="size-3.5" />
-                </SmallButton>
+            <div className="canvas-script-editor-row-actions">
+                <div className="canvas-script-editor-move-actions">
+                    <SmallButton title="上移" onClick={() => moveRow(row.id, -1)}>
+                        <ChevronUp className="size-3.5" />
+                    </SmallButton>
+                    <SmallButton title="下移" onClick={() => moveRow(row.id, 1)}>
+                        <ChevronDown className="size-3.5" />
+                    </SmallButton>
+                    <SmallButton title="复制" onClick={() => duplicateRow(row)}>
+                        <Copy className="size-3.5" />
+                    </SmallButton>
+                    <SmallButton title="删除" onClick={() => removeRow(row.id)}>
+                        <Trash2 className="size-3.5" />
+                    </SmallButton>
+                </div>
+                <Button type="text" size="small" icon={<MessageSquare className="size-3.5" />} onClick={() => discussRow(row)} aria-label={`与小影讨论镜头 ${row.shotNumber}`}>
+                    与小影讨论
+                </Button>
             </div>
         ),
     });
 
     return (
-        <Modal title={node?.title || "分镜脚本"} open={open} onCancel={onClose} footer={null} width="min(1480px, calc(100vw - 40px))" centered destroyOnHidden>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Input.Search className="w-72" allowClear placeholder="筛选画面、台词或提示词" value={query} onChange={(event) => setQuery(event.target.value)} />
-                <CheckboxGroup className="script-column-picker" options={columnOptions} value={visibleColumns} onChange={(values) => onVisibleColumnsChange(values)} />
-                <span className="min-w-0 flex-1" />
-                <Button icon={<Plus className="size-4" />} onClick={() => onUpdateRows([...rows, editorRow(rows.length + 1)])}>
-                    新增镜头
-                </Button>
-                <Button icon={<ImageIcon className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateImages(selectedIds)}>
-                    生成{videoInputMode === "keyframe" ? "首帧" : "分镜图"}
-                </Button>
-                <Segmented<StoryboardVideoInputMode>
-                    value={videoInputMode}
-                    options={[
-                        { value: "direct", label: "直接生成" },
-                        { value: "keyframe", label: "先做首帧" },
-                    ]}
-                    onChange={onVideoInputModeChange}
-                />
-                <Button type="primary" icon={<Film className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateVideos(selectedIds)}>
-                    {videoInputMode === "keyframe" ? "确认首帧并生成" : "生成视频"}
-                </Button>
+        <AppModal
+            flush
+            open={open}
+            onCancel={onClose}
+            footer={null}
+            closable={false}
+            keyboard={!fullscreen}
+            width={fullscreen ? "100vw" : "min(1480px, calc(100vw - 32px))"}
+            centered={!fullscreen}
+            className={`canvas-script-editor-modal ${fullscreen ? "is-fullscreen" : ""}`}
+            rootClassName="canvas-script-editor-root"
+            styles={{ wrapper: { overflow: "hidden" } }}
+        >
+            <div className="canvas-script-editor" data-fullscreen={fullscreen} data-canvas-no-zoom data-canvas-wheel-scroll>
+                <header className="canvas-script-editor-header">
+                    <div>
+                        <h2>{node?.title || "分镜脚本"}</h2>
+                        <p>
+                            {rows.length} 个镜头 · {rows.reduce((total, row) => total + (row.durationSeconds || 0), 0)} 秒{editingRow ? ` · 正在编辑镜头 ${editingRow.shotNumber}` : " · 点击单元格直接编辑"}
+                        </p>
+                    </div>
+                    <div className="canvas-script-editor-window-actions">
+                        <Button icon={fullscreen ? <Minimize2 className="size-4" /> : <Expand className="size-4" />} onClick={() => setFullscreen(!fullscreen)}>
+                            {fullscreen ? "退出全屏" : "全屏查看"}
+                        </Button>
+                        <Button type="text" icon={<X className="size-4" />} aria-label="关闭分镜表格" onClick={onClose} />
+                    </div>
+                </header>
+                <div className="canvas-script-editor-toolbar">
+                    <Input.Search className="canvas-script-editor-search" allowClear placeholder="筛选画面、台词或提示词" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="筛选分镜" />
+                    <Popover
+                        trigger="click"
+                        placement="bottomLeft"
+                        classNames={{ root: "canvas-script-editor-columns-popover" }}
+                        open={columnsOpen}
+                        onOpenChange={setColumnsOpen}
+                        content={
+                            <div className="canvas-script-editor-columns">
+                                <div className="canvas-script-editor-columns-heading">
+                                    <strong>显示列</strong>
+                                    <span>镜头序号固定在左侧</span>
+                                </div>
+                                <CheckboxGroup
+                                    className="script-column-picker"
+                                    options={columnOptions.filter((option) => option.value !== "shotNumber")}
+                                    value={visibleColumns.filter((value) => value !== "shotNumber")}
+                                    onChange={(values) => onVisibleColumnsChange(["shotNumber", ...values])}
+                                />
+                                <div className="canvas-script-editor-column-presets">
+                                    <Button size="small" onClick={() => onVisibleColumnsChange(DEFAULT_STORYBOARD_COLUMNS)}>
+                                        恢复常用列
+                                    </Button>
+                                    <Button size="small" onClick={() => onVisibleColumnsChange(columnOptions.map((option) => option.value))}>
+                                        显示全部
+                                    </Button>
+                                </div>
+                            </div>
+                        }
+                    >
+                        <Button icon={<Columns3 className="size-4" />} aria-expanded={columnsOpen}>
+                            显示列
+                        </Button>
+                    </Popover>
+                    <Button icon={<Plus className="size-4" />} onClick={() => onUpdateRows([...rows, editorRow(rows.length + 1)])}>
+                        新增镜头
+                    </Button>
+                    <span className="canvas-script-editor-toolbar-spacer" />
+                    <Button icon={<ImageIcon className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateImages(selectedIds)}>
+                        生成{videoInputMode === "keyframe" ? "首帧" : "分镜图"}
+                    </Button>
+                    <Segmented<StoryboardVideoInputMode>
+                        value={videoInputMode}
+                        options={[
+                            { value: "direct", label: "直接生成" },
+                            { value: "keyframe", label: "先做首帧" },
+                        ]}
+                        onChange={onVideoInputModeChange}
+                    />
+                    <Button type="primary" icon={<Film className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateVideos(selectedIds)}>
+                        {videoInputMode === "keyframe" ? "确认首帧并生成" : "生成视频"}
+                    </Button>
+                </div>
+                <div className="canvas-script-editor-table-area" ref={setTableArea}>
+                    <Table<StoryboardRow>
+                        className="canvas-script-editor-table"
+                        rowKey="id"
+                        size="small"
+                        bordered
+                        sticky
+                        pagination={false}
+                        tableLayout="fixed"
+                        scroll={{ x: columns.reduce((total, column) => total + Number(column.width || 170), 40), y: tableHeight }}
+                        dataSource={filteredRows}
+                        columns={columns}
+                        rowClassName={(row) => (editingRowId === row.id ? "canvas-script-editor-row is-editing" : "canvas-script-editor-row")}
+                        onRow={(row) => ({ onFocus: () => setEditingRowId(row.id), "data-storyboard-row-id": row.id })}
+                        rowSelection={{ fixed: true, columnWidth: 40, selectedRowKeys: selectedIds, onChange: (keys) => setSelectedIds(keys.map(String)) }}
+                    />
+                </div>
+                <footer className="canvas-script-editor-footer">
+                    <span>
+                        显示 {filteredRows.length}/{rows.length} 个镜头{selectedIds.length ? ` · 已选 ${selectedIds.length} 个` : ""}
+                    </span>
+                    <span>横向滚动查看更多列 · Esc {fullscreen ? "退出全屏" : "关闭表格"}</span>
+                </footer>
             </div>
-            <Table<StoryboardRow>
-                rowKey="id"
-                size="small"
-                bordered
-                sticky
-                pagination={false}
-                scroll={{ x: Math.max(900, columns.length * 180), y: "calc(78vh - 170px)" }}
-                dataSource={filteredRows}
-                columns={columns}
-                rowSelection={{ selectedRowKeys: selectedIds, onChange: (keys) => setSelectedIds(keys.map(String)) }}
-            />
-        </Modal>
+        </AppModal>
     );
 }
 

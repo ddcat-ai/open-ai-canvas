@@ -5,7 +5,7 @@ type RecordValue = Record<string, unknown>;
 export type AgentApprovalPresentation = AgentApprovalPreview & { source: "server" | "fallback" };
 
 function record(value: unknown): RecordValue | null {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : null;
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as RecordValue) : null;
 }
 
 function text(value: unknown, max = 240): string {
@@ -41,7 +41,21 @@ function fieldLabel(key: string, nodeType: string): string {
 }
 
 function operation(value: unknown): AgentApprovalPreviewOperation | null {
-    return value === "add_node" || value === "update_node" || value === "connect_nodes" || value === "arrange_nodes" || value === "generate_media" || value === "generate_media_item" || value === "build_board" || value === "create_storyboard" || value === "edit_storyboard" || value === "create_character" || value === "plan_step" || value === "adopt_drama_media" ? value : null;
+    if (value === "update_drama_shot") return value;
+    return value === "add_node" ||
+        value === "update_node" ||
+        value === "connect_nodes" ||
+        value === "arrange_nodes" ||
+        value === "generate_media" ||
+        value === "generate_media_item" ||
+        value === "build_board" ||
+        value === "create_storyboard" ||
+        value === "edit_storyboard" ||
+        value === "create_character" ||
+        value === "plan_step" ||
+        value === "adopt_drama_media"
+        ? value
+        : null;
 }
 
 function normalizeServerPreview(value: unknown): AgentApprovalPresentation | null {
@@ -64,8 +78,19 @@ function normalizeServerPreview(value: unknown): AgentApprovalPresentation | nul
             targetNodeId: text(item.targetNodeId, 120) || undefined,
             targetNodeTitle: text(item.targetNodeTitle, 120) || undefined,
             targetNodeType: text(item.targetNodeType, 32) || undefined,
-            fields: Array.isArray(item.fields) ? item.fields.map((field) => text(field, 64)).filter(Boolean).slice(0, 12) : undefined,
-            details: Array.isArray(item.details) ? item.details.map((detail) => text(detail, 180)).filter(Boolean).slice(0, 12) : undefined,
+            fields: Array.isArray(item.fields)
+                ? item.fields
+                      .map((field) => text(field, 64))
+                      .filter(Boolean)
+                      .slice(0, 12)
+                : undefined,
+            // 分镜预览包含最长 2000 字的修改前后值，审批必须能看完实际将保存的内容。
+            details: Array.isArray(item.details)
+                ? item.details
+                      .map((detail) => text(detail, op === "update_drama_shot" ? 8400 : 180))
+                      .filter(Boolean)
+                      .slice(0, 12)
+                : undefined,
             summary,
         });
     }
@@ -86,25 +111,53 @@ function canvasFallback(args: RecordValue | null): AgentApprovalPresentation {
         const label = nodeTypeLabel(type);
         if (kind === "add_node") {
             const title = text(op.title, 120) || `未命名${label || "节点"}`;
-            items.push({ operation: kind, nodeTitle: title, nodeType: type || undefined, nodeTypeLabel: label || undefined, fields: ["节点名称", label === "文本" || label === "Markdown" ? "正文" : "初始内容"], summary: `新增${label || "节点"}《${title}》` });
+            items.push({
+                operation: kind,
+                nodeTitle: title,
+                nodeType: type || undefined,
+                nodeTypeLabel: label || undefined,
+                fields: ["节点名称", label === "文本" || label === "Markdown" ? "正文" : "初始内容"],
+                summary: `新增${label || "节点"}《${title}》`,
+            });
             continue;
         }
         if (kind === "update_node") {
             const patch = record(op.patch);
             const id = shortReference(op.id);
-            const fields = patch ? Object.keys(patch).map((key) => fieldLabel(key, type)).filter(Boolean) : [];
+            const fields = patch
+                ? Object.keys(patch)
+                      .map((key) => fieldLabel(key, type))
+                      .filter(Boolean)
+                : [];
             const resultTitle = text(patch?.title, 120);
             const target = `目标节点（引用 ${id}）`;
-            items.push({ operation: kind, nodeTitle: target, nodeType: type || undefined, nodeTypeLabel: label || undefined, resultTitle: resultTitle || undefined, fields: fields.length ? [...new Set(fields)] : ["已配置字段"], summary: `修改${label || "节点"}《${target}》的${fields.length ? [...new Set(fields)].join("、") : "已配置字段"}${resultTitle ? `，名称改为《${resultTitle}》` : ""}` });
+            items.push({
+                operation: kind,
+                nodeTitle: target,
+                nodeType: type || undefined,
+                nodeTypeLabel: label || undefined,
+                resultTitle: resultTitle || undefined,
+                fields: fields.length ? [...new Set(fields)] : ["已配置字段"],
+                summary: `修改${label || "节点"}《${target}》的${fields.length ? [...new Set(fields)].join("、") : "已配置字段"}${resultTitle ? `，名称改为《${resultTitle}》` : ""}`,
+            });
             continue;
         }
         const from = shortReference(op.fromNodeId);
         const to = shortReference(op.toNodeId);
         items.push({ operation: kind, nodeTitle: `来源（引用 ${from}）`, targetNodeTitle: `目标（引用 ${to}）`, summary: `建立来源（引用 ${from}）→目标（引用 ${to}）的引用连线` });
     }
-    const counts = items.reduce<Record<string, number>>((out, item) => { out[item.operation] = (out[item.operation] || 0) + 1; return out; }, {});
+    const counts = items.reduce<Record<string, number>>((out, item) => {
+        out[item.operation] = (out[item.operation] || 0) + 1;
+        return out;
+    }, {});
     const parts = [counts.add_node ? `新增 ${counts.add_node} 个节点` : "", counts.update_node ? `修改 ${counts.update_node} 个节点` : "", counts.connect_nodes ? `建立 ${counts.connect_nodes} 条引用连线` : ""].filter(Boolean);
-    return { source: "fallback", kind: "canvas_mutation", title: "确认画布修改", description: parts.length ? `Agent 准备${parts.join("，")}。历史审批缺少画布快照，以下目标使用安全引用标识；无法确认具体目标时不会代替当前画布。` : "审批参数不完整，无法确认具体修改目标，请重新读取画布后再申请审批。", items, };
+    return {
+        source: "fallback",
+        kind: "canvas_mutation",
+        title: "确认画布修改",
+        description: parts.length ? `Agent 准备${parts.join("，")}。历史审批缺少画布快照，以下目标使用安全引用标识；无法确认具体目标时不会代替当前画布。` : "审批参数不完整，无法确认具体修改目标，请重新读取画布后再申请审批。",
+        items,
+    };
 }
 
 function mediaFallback(args: RecordValue | null, payload: RecordValue | null): AgentApprovalPresentation {
@@ -112,8 +165,21 @@ function mediaFallback(args: RecordValue | null, payload: RecordValue | null): A
     const type = mode === "video" ? "视频" : mode === "image" ? "图片" : mode === "audio" ? "音频" : "媒体";
     const references = Array.isArray(args?.referenceNodeIds) ? args.referenceNodeIds.filter((id) => typeof id === "string") : [];
     const title = text(args?.title, 120) || `未命名${type}`;
-    const details = [text(payload?.modelName) ? `模型：${text(payload?.modelName)}` : text(args?.channelModelKey) || text(args?.logicalModelId) ? `模型：${text(args?.channelModelKey) || text(args?.logicalModelId)}` : "", references.length ? `引用 ${references.length} 个画布资产，并建立连线` : "不引用画布媒体资产", typeof args?.durationSeconds === "number" && args.durationSeconds > 0 ? `时长：${args.durationSeconds} 秒` : "", text(args?.size) ? `画幅：${text(args?.size, 40)}` : "", text(args?.quality) ? `质量：${text(args?.quality, 40)}` : "", typeof args?.videoGenerateAudio === "boolean" ? `音频：${args.videoGenerateAudio ? "开启" : "关闭"}` : ""].filter(Boolean);
-    return { source: "fallback", kind: "media_generation", title: `确认生成${type}`, description: `${type}草稿节点和引用连线已创建，尚未提交生成。确认规格后批准才会提交收费任务；拒绝则保留草稿，结果自动回写画布。`, items: [{ operation: "generate_media", nodeTitle: title, nodeType: mode || undefined, nodeTypeLabel: type, details, summary: `生成${type}《${title}》` }] };
+    const details = [
+        text(payload?.modelName) ? `模型：${text(payload?.modelName)}` : text(args?.channelModelKey) || text(args?.logicalModelId) ? `模型：${text(args?.channelModelKey) || text(args?.logicalModelId)}` : "",
+        references.length ? `引用 ${references.length} 个画布资产，并建立连线` : "不引用画布媒体资产",
+        typeof args?.durationSeconds === "number" && args.durationSeconds > 0 ? `时长：${args.durationSeconds} 秒` : "",
+        text(args?.size) ? `画幅：${text(args?.size, 40)}` : "",
+        text(args?.quality) ? `质量：${text(args?.quality, 40)}` : "",
+        typeof args?.videoGenerateAudio === "boolean" ? `音频：${args.videoGenerateAudio ? "开启" : "关闭"}` : "",
+    ].filter(Boolean);
+    return {
+        source: "fallback",
+        kind: "media_generation",
+        title: `确认生成${type}`,
+        description: `${type}草稿节点和引用连线已创建，尚未提交生成。确认规格后批准才会提交收费任务；拒绝则保留草稿，结果自动回写画布。`,
+        items: [{ operation: "generate_media", nodeTitle: title, nodeType: mode || undefined, nodeTypeLabel: type, details, summary: `生成${type}《${title}》` }],
+    };
 }
 
 export function agentApprovalPresentation(detail: unknown): AgentApprovalPresentation {

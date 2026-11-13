@@ -68,6 +68,24 @@ function inlineIconSvg(Icon: React.ComponentType<{ className?: string }>): strin
     return renderToStaticMarkup(<Icon className="size-3" />);
 }
 
+function syncInlineMentionPresentation(chip: HTMLElement, reference: CanvasResourceReference) {
+    if (reference.assetKind) chip.dataset.assetKind = reference.assetKind;
+    else delete chip.dataset.assetKind;
+    chip.setAttribute("aria-label", reference.title || reference.displayLabel || reference.label);
+    const label = chip.querySelector(".canvas-resource-inline-label");
+    const displayLabel = reference.displayLabel || reference.label;
+    if (label && label.textContent !== displayLabel) label.textContent = displayLabel;
+    let kind = chip.querySelector<HTMLElement>(".canvas-resource-inline-kind");
+    if (reference.assetKindLabel) {
+        if (!kind) {
+            kind = document.createElement("span");
+            kind.className = "canvas-resource-inline-kind";
+            chip.appendChild(kind);
+        }
+        kind.textContent = reference.assetKindLabel;
+    } else kind?.remove();
+}
+
 export function createInlineMentionChip(reference: CanvasResourceReference, token: string) {
     const chip = document.createElement("span");
     chip.contentEditable = "false";
@@ -96,8 +114,8 @@ export function createInlineMentionChip(reference: CanvasResourceReference, toke
 
     const label = document.createElement("span");
     label.className = "canvas-resource-inline-label";
-    label.textContent = reference.label;
     chip.appendChild(label);
+    syncInlineMentionPresentation(chip, reference);
 
     return chip;
 }
@@ -207,8 +225,7 @@ export function syncInlineMentionPreviews(editor: HTMLElement, references: Canva
         if (preview && (preview.tagName !== tag || preview.className !== className || preview.getAttribute("src") !== src)) {
             preview.replaceWith(createInlinePreview(reference));
         }
-        const label = chip.querySelector(".canvas-resource-inline-label");
-        if (label && label.textContent !== reference.label) label.textContent = reference.label;
+        syncInlineMentionPresentation(chip, reference);
     });
 }
 

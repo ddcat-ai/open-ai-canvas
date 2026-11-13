@@ -1,0 +1,237 @@
+.canvas-script-editor-modal {
+    max-width: 100vw;
+    padding-bottom: 0;
+}
+
+.canvas-script-editor-modal.is-fullscreen {
+    top: 0;
+    max-width: 100vw;
+    margin: 0;
+}
+
+.canvas-script-editor-modal.is-fullscreen .ant-modal-container {
+    border-radius: 0;
+}
+
+.canvas-script-editor {
+    display: flex;
+    height: min(900px, 86dvh);
+    min-height: 0;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--workspace-page);
+    color: var(--text-primary);
+}
+
+.canvas-script-editor[data-fullscreen="true"] {
+    height: 100dvh;
+}
+
+.canvas-script-editor-header,
+.canvas-script-editor-toolbar,
+.canvas-script-editor-footer {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+}
+
+.canvas-script-editor-header {
+    justify-content: space-between;
+}
+
+.canvas-script-editor-header > div:first-child {
+    min-width: 0;
+}
+
+.canvas-script-editor-header h2 {
+    overflow: hidden;
+    margin: 0;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.canvas-script-editor-header p {
+    margin: var(--space-1) 0 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+
+.canvas-script-editor-window-actions,
+.canvas-script-editor-move-actions,
+.canvas-script-editor-column-presets {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.canvas-script-editor-toolbar {
+    flex-wrap: wrap;
+    padding-top: 0;
+}
+
+.canvas-script-editor-search {
+    width: 260px;
+    max-width: 100%;
+}
+
+.canvas-script-editor-toolbar-spacer {
+    flex: 1;
+}
+
+.canvas-script-editor-columns {
+    display: flex;
+    width: min(480px, calc(100vw - 48px));
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.canvas-script-editor-columns-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-ui);
+}
+
+.canvas-script-editor-columns-heading strong {
+    font-weight: 600;
+}
+
+.canvas-script-editor-columns-heading span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+
+.canvas-script-editor-columns .script-column-picker {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+
+.canvas-script-editor-table-area {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 var(--space-5);
+}
+
+.canvas-script-editor-table {
+    max-width: 100%;
+}
+
+.canvas-script-editor-table .ant-table-cell {
+    vertical-align: top;
+}
+
+.canvas-script-editor-table .ant-table-body {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+
+.canvas-script-editor-table textarea {
+    line-height: var(--lh-body);
+    overflow-wrap: anywhere;
+}
+
+.canvas-script-editor-table .canvas-script-editor-row.is-editing > .ant-table-cell,
+.canvas-script-editor-table .canvas-script-editor-row.is-editing:hover > .ant-table-cell {
+    background: var(--control-selected-bg);
+}
+
+.canvas-script-editor-table .canvas-script-editor-row.is-editing > .ant-table-cell-fix-start,
+.canvas-script-editor-table .canvas-script-editor-row.is-editing:hover > .ant-table-cell-fix-start {
+    background: linear-gradient(var(--control-selected-bg), var(--control-selected-bg)), var(--workspace-page);
+}
+
+.canvas-script-editor-pinned,
+.canvas-script-editor-shot-number > span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.canvas-script-editor-shot-number {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-1) 0;
+}
+
+.canvas-script-editor-shot-number strong {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.canvas-script-editor-shot-number > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    white-space: nowrap;
+}
+
+.canvas-script-editor-duration {
+    width: 100%;
+}
+
+.canvas-script-editor-row-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.canvas-script-editor-row-actions > .ant-btn {
+    align-self: flex-start;
+}
+
+.canvas-script-editor-footer {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding-block: var(--space-2);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+
+.canvas-script-compact-row:focus-within {
+    background: var(--control-selected-bg);
+}
+
+@media (max-width: 639px) {
+    .canvas-script-editor-header,
+    .canvas-script-editor-toolbar,
+    .canvas-script-editor-footer {
+        padding-inline: var(--space-3);
+    }
+
+    .canvas-script-editor-table-area {
+        padding-inline: var(--space-3);
+    }
+
+    .canvas-script-editor-header {
+        align-items: flex-start;
+    }
+
+    .canvas-script-editor-window-actions {
+        gap: 0;
+    }
+
+    .canvas-script-editor-toolbar {
+        gap: var(--space-2);
+        max-height: 30dvh;
+        overflow-y: auto;
+    }
+
+    .canvas-script-editor-toolbar-spacer {
+        display: none;
+    }
+
+    .canvas-script-editor-columns .script-column-picker {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

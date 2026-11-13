@@ -6,6 +6,6 @@ test("短剧角色、参考与画布采用在独立 DOM 中通过全部交互用
     const result = Bun.spawnSync([process.execPath, "test", "./test/fixtures/drama-cast-controls.harness.tsx"], { cwd: resolve(import.meta.dir, ".."), timeout: 60000 });
     const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
     expect(result.exitCode, output).toBe(0);
-    expect(output).toContain("22 pass");
+    expect(output).toContain("25 pass");
     expect(output).toContain("0 fail");
 }, 60000);

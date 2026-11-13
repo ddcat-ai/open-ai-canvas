@@ -26,6 +26,8 @@ export const AGENT_TOOL_NAMES = [
     "canvas_read_storyboard",
     "drama_adopt_canvas_media",
     "drama_get_context",
+    "drama_shot_read",
+    "drama_shot_update",
     "finish_run",
     "generate_media",
     "generate_media_batch",
@@ -68,6 +70,8 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
     // 短剧工具只在关联短剧的精修画布上出现：读取作品上下文，或把画布媒体采用为短剧的新版本（总要审批）。
     drama_get_context: { summary: "已读取短剧设定与分集", failureMessage: "读取短剧信息失败" },
     drama_adopt_canvas_media: { summary: ({ pending }) => (pending ? "准备采用到短剧" : "已采用到短剧，成为新的当前版本"), failureMessage: "采用到短剧失败" },
+    drama_shot_read: { summary: ({ pending }) => (pending ? "准备读取当前短剧分镜" : "已读取最新短剧分镜"), failureMessage: "读取短剧分镜失败" },
+    drama_shot_update: { summary: ({ pending }) => (pending ? "准备修改短剧分镜" : "短剧分镜已保存，本段提示词与视频需重新确认"), failureMessage: "短剧分镜未保存" },
     generate_media: { summary: ({ pending, detail }) => (pending ? "准备创建媒体节点并生成" : field(detail, "eventType") === "tool_completed" ? "生成结果已回写画布节点" : "媒体节点已创建，生成任务已提交"), failureMessage: "媒体生成未完成" },
     // 批量生成：一次审批，后台并发提交；回执里是本批的完成情况。
     generate_media_batch: {
@@ -178,6 +182,8 @@ function toolArguments(detail?: unknown) {
  * 未登记的工具落 `other`（"其他操作"）：兜底不能让任何工具看起来像在写画布。
  */
 export function agentToolCategory(toolName: string, detail?: unknown): AgentToolCategory {
+    if (toolName === "drama_shot_read") return "read";
+    if (toolName === "drama_shot_update") return "operate";
     if (AGENT_VISION_TOOLS.has(toolName)) return "vision";
     if (AGENT_CANVAS_READ_TOOLS.has(toolName) || AGENT_INFO_READ_TOOLS.has(toolName)) return "read";
     if (AGENT_CREATE_TOOLS.has(toolName)) return "create";
@@ -198,6 +204,7 @@ export function isAgentCanvasReadTool(toolName: string): boolean {
 }
 
 export function agentToolCategoryLabel(toolName: string, category: AgentToolCategory): string {
+    if (toolName === "drama_shot_update") return "修改分镜";
     if (category === "vision") return "查看画面";
     if (category === "read") return AGENT_CANVAS_READ_TOOLS.has(toolName) ? "读取清单" : "读取信息";
     if (category === "create") return "创建节点";

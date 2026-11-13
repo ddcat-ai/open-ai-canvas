@@ -335,6 +335,7 @@ function MentionReferenceRow({ reference, active, activeRef, onPointerMove, onSe
             ref={active ? activeRef : null}
             type="button"
             className={`canvas-resource-mention-item ${reference.kind === "skill" ? "is-skill" : ""} ${active ? "is-active" : ""}`}
+            data-asset-kind={reference.assetKind}
             aria-selected={active}
             onPointerDown={select}
             onClick={select}
@@ -343,7 +344,12 @@ function MentionReferenceRow({ reference, active, activeRef, onPointerMove, onSe
             <ReferencePreview reference={reference} />
             <span className="canvas-resource-mention-copy">
                 <span className="canvas-resource-mention-title-row">
-                    <strong title={reference.label}>{reference.label}</strong>
+                    <strong title={reference.title}>{reference.displayLabel || reference.label}</strong>
+                    {reference.assetKindLabel ? (
+                        <span className="canvas-resource-mention-kind" data-asset-kind={reference.assetKind}>
+                            {reference.assetKindLabel}
+                        </span>
+                    ) : null}
                     {reference.kind === "skill" ? <em>{t("canvasB.mention.skill")}</em> : null}
                 </span>
                 {reference.kind === "skill" ? (
@@ -367,11 +373,28 @@ function MentionReferenceRow({ reference, active, activeRef, onPointerMove, onSe
 function MentionReferenceCard({ reference, active, activeRef, onPointerMove, onSelect }: MentionEntryProps & { reference: CanvasResourceReference; onSelect: (reference: CanvasResourceReference) => void }) {
     const select = selectOnPress(reference, onSelect);
     return (
-        <button ref={active ? activeRef : null} type="button" className={`canvas-resource-mention-card ${active ? "is-active" : ""}`} aria-selected={active} onPointerDown={select} onClick={select} onPointerMove={onPointerMove}>
+        <button
+            ref={active ? activeRef : null}
+            type="button"
+            className={`canvas-resource-mention-card ${active ? "is-active" : ""}`}
+            data-asset-kind={reference.assetKind}
+            aria-selected={active}
+            onPointerDown={select}
+            onClick={select}
+            onPointerMove={onPointerMove}
+        >
             <span className="canvas-resource-mention-card-media">
                 <ReferencePreview reference={reference} />
             </span>
-            <span className="canvas-resource-mention-card-label">{reference.label}</span>
+            <span className="canvas-resource-mention-card-label">{reference.displayLabel || reference.label}</span>
+            {reference.assetKindLabel ? (
+                <span className="canvas-resource-mention-card-kind">
+                    <span className="canvas-resource-mention-kind" data-asset-kind={reference.assetKind}>
+                        {reference.assetKindLabel}
+                    </span>
+                    <span>{reference.label}</span>
+                </span>
+            ) : null}
         </button>
     );
 }
@@ -462,7 +485,7 @@ function MentionReferenceDetail({ reference, connectedLabel }: { reference: Canv
                 </div>
             )}
             <div className="canvas-resource-mention-detail-caption">
-                <strong>{reference.label}</strong>
+                <strong>{reference.displayLabel || reference.label}</strong>
                 {description ? <span>{description}</span> : null}
                 <small>
                     {source}

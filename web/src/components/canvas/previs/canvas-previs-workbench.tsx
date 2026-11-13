@@ -90,7 +90,7 @@ import "./canvas-previs-workbench.css";
 import { useAssetStore, type ModelAsset } from "@/stores/use-asset-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { usePrevisWorkbenchStore } from "@/stores/canvas/use-previs-workbench-store";
-import { PREVIS_MODES, previsModeCapabilities } from "@/lib/canvas/previs/previs-modes";
+import { PREVIS_MODES, previsModeCapabilities, type PrevisMode } from "@/lib/canvas/previs/previs-modes";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { PrevisCameraMove, PrevisCanvasExport, PrevisRenderMode, PrevisScene, PrevisSceneOutput, PrevisTransform, PrevisVec3 } from "@/types/previs";
@@ -102,6 +102,7 @@ export function CanvasPrevisWorkbench({
     scene,
     imageNodes,
     onboardingScope,
+    initialMode,
     onClose,
     onChange,
     onApply,
@@ -114,6 +115,7 @@ export function CanvasPrevisWorkbench({
     scene: PrevisScene | null;
     imageNodes: CanvasNodeData[];
     onboardingScope: string;
+    initialMode?: PrevisMode;
     onClose: () => void;
     onChange: (scene: PrevisScene) => void;
     onApply: (output: PrevisSceneOutput) => Promise<void>;
@@ -309,7 +311,8 @@ export function CanvasPrevisWorkbench({
         setHistory([]);
         setFuture([]);
         resetWorkbench();
-    }, [open, resetWorkbench, scene, writeDraft]);
+        if (initialMode) setMode(initialMode);
+    }, [initialMode, open, resetWorkbench, scene, setMode, writeDraft]);
 
     // 打开会话时检查合法本地恢复候选
     // 父级项目收到 Agent 的预演台语义补丁后，scene.id 不变但 updatedAt 会变化；

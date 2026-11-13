@@ -135,23 +135,23 @@ afterAll(() => {
 });
 const options = { quiet: { nodeId: "upload" } };
 
-test("image/video/audio/text uploads retain the entire filename in node and asset metadata", async () => {
-    for (const [name, type] of [
-        ["镜头参考_非常长的原始文件名_包含空格 与多个.版本.v12.PNG", "image/png"],
-        ["镜头原片.v2.mp4", "video/mp4"],
-        ["配音.final.wav", "audio/wav"],
-        ["剧情梗概.v2.md", "text/markdown"],
+test("audio upload display names omit the extension while all media retain the entire filename in metadata", async () => {
+    for (const [name, type, title] of [
+        ["镜头参考_非常长的原始文件名_包含空格 与多个.版本.v12.PNG", "image/png", "镜头参考_非常长的原始文件名_包含空格 与多个.版本.v12.PNG"],
+        ["镜头原片.v2.mp4", "video/mp4", "镜头原片.v2.mp4"],
+        ["配音.final.wav", "audio/wav", "配音.final"],
+        ["剧情梗概.v2.md", "text/markdown", "剧情梗概.v2.md"],
     ]) {
         let id: string | null = null;
         await act(async () => {
             id = await api.createFileNode(new File(["actual script text"], name, { type }), { x: 0, y: 0 }, undefined, { quiet: { nodeId: name } });
         });
         const result = nodesRef.current.find((node) => node.id === id)!;
-        expect(result.title).toBe(name);
+        expect(result.title).toBe(title);
         expect(result.metadata?.originalFileName).toBe(name);
         expect(result.metadata?.fileUpload).toBeUndefined();
         const asset = canvasNodeToAsset(result, { canvasId: "canvas", source: "canvas-upload" })!;
-        expect(asset.title).toBe(name);
+        expect(asset.title).toBe(title);
         expect(asset.metadata?.originalFileName).toBe(name);
     }
 });
@@ -211,16 +211,23 @@ test("leaving the canvas while uploading cannot add assets after unmount", async
 
 test("an explicit rename during upload wins while original filename metadata remains intact", async () => {
     deferUploads = true;
-    let task!: Promise<string | null>;
-    await act(async () => {
-        task = api.createFileNode(new File(["text"], "original.md", { type: "text/markdown" }), { x: 0, y: 0 }, undefined, options);
-    });
-    nodesRef.current = nodesRef.current.map((node) => ({ ...node, title: "User title" }));
-    await act(async () => {
-        pending.get("original.md")!.resolve(uploaded("original.md"));
-        await task;
-    });
-    expect(nodesRef.current[0]).toMatchObject({ title: "User title", metadata: { originalFileName: "original.md" } });
+    for (const [name, type, title] of [
+        ["original.md", "text/markdown", "original.md"],
+        ["配音.final.wav", "audio/wav", "配音.final"],
+    ]) {
+        nodesRef.current = [];
+        let task!: Promise<string | null>;
+        await act(async () => {
+            task = api.createFileNode(new File(["file"], name, { type }), { x: 0, y: 0 }, undefined, options);
+        });
+        expect(nodesRef.current[0]).toMatchObject({ title, metadata: { originalFileName: name, fileUpload: "uploading" } });
+        nodesRef.current = nodesRef.current.map((node) => ({ ...node, title: "User title" }));
+        await act(async () => {
+            pending.get(name)!.resolve(uploaded(name));
+            await task;
+        });
+        expect(nodesRef.current[0]).toMatchObject({ title: "User title", metadata: { originalFileName: name } });
+    }
 });
 
 test("account switching prevents a pending upload from publishing into another scope", async () => {
@@ -247,6 +254,38 @@ test("failed replacement restores old media; successful replacement takes the ne
         await api.createFileNode(new File(["new"], "new.txt", { type: "text/plain" }), { x: 0, y: 0 }, "original", options);
     });
     expect(nodesRef.current[0]).toMatchObject({ title: "new.txt", metadata: { content: "new", originalFileName: "new.txt" } });
+});
+
+test("replacing audio updates filename-derived titles and preserves custom or untraceable titles", async () => {
+    for (const [title, originalFileName, expected] of [
+        ["旧配音.final.wav", "旧配音.final.wav", "新配音.take2"],
+        ["旧配音.final", "旧配音.final.wav", "新配音.take2"],
+        ["第一幕旁白", "旧配音.final.wav", "第一幕旁白"],
+        ["用户特意命名.wav", "旧配音.final.wav", "用户特意命名.wav"],
+        ["来源不详的旧标题", undefined, "来源不详的旧标题"],
+    ] as const) {
+        nodesRef.current = [{ id: "original", title, type: CanvasNodeType.Audio, position: { x: 0, y: 0 }, width: 200, height: 100, metadata: { originalFileName, content: "old-audio" } }];
+        await act(async () => {
+            await api.createFileNode(new File(["audio"], "新配音.take2.MP3", { type: "audio/mpeg" }), { x: 0, y: 0 }, "original", options);
+        });
+        expect(nodesRef.current[0]).toMatchObject({ title: expected, metadata: { originalFileName: "新配音.take2.MP3" } });
+        expect(canvasNodeToAsset(nodesRef.current[0], { canvasId: "canvas", source: "canvas-upload" })?.title).toBe(expected);
+    }
+});
+
+test("renaming an audio node during replacement wins over the uploaded filename", async () => {
+    deferUploads = true;
+    nodesRef.current = [{ id: "original", title: "旧配音", type: CanvasNodeType.Audio, position: { x: 0, y: 0 }, width: 200, height: 100, metadata: { originalFileName: "旧配音.wav", content: "old-audio" } }];
+    let task!: Promise<string | null>;
+    await act(async () => {
+        task = api.createFileNode(new File(["audio"], "新配音.final.wav", { type: "audio/wav" }), { x: 0, y: 0 }, "original", options);
+    });
+    nodesRef.current = nodesRef.current.map((node) => ({ ...node, title: "用户修订的旁白" }));
+    await act(async () => {
+        pending.get("新配音.final.wav")!.resolve(uploaded("新配音.final.wav"));
+        await task;
+    });
+    expect(nodesRef.current[0]).toMatchObject({ title: "用户修订的旁白", metadata: { originalFileName: "新配音.final.wav" } });
 });
 
 test("library import retains long titles for every media type and uploaded text filenames", async () => {

@@ -3,6 +3,8 @@ import { Window } from "happy-dom";
 import type { AgentEvent, AgentRun } from "@/services/api/agent";
 import type { CloudAgentConversation, CloudAgentPendingSubmission } from "@/services/cloud-agent-conversations";
 import type { TextThinkingConfig } from "@/lib/text-thinking";
+import type { AgentRequestTarget } from "@/lib/agent-page-context";
+import type { AgentPrefillRequest } from "@/stores/use-global-agent-store";
 
 const dom = new Window({ url: "http://localhost/" });
 for (const [key, value] of Object.entries({
@@ -90,7 +92,7 @@ mock.module("@/services/api/agent", () => ({
         sendInputs.push(input);
         if (sendFailure) throw sendFailure;
         if (sendOverride) return sendOverride();
-        return { run: { ...makeRun("submitted-child"), parentId: id, userPrompt: input.prompt, idempotencyKey: input.idempotencyKey } };
+        return { run: { ...makeRun("submitted-child"), canvasId: input.canvasId, pageContext: input.pageContext, parentId: id, userPrompt: input.prompt, idempotencyKey: input.idempotencyKey } };
     },
     createAgentRun: async () => {
         generated++;
@@ -228,7 +230,13 @@ const persist = async () => {
         window.dispatchEvent(new Event("pagehide"));
     });
 };
-async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversation[], initialPending: CloudAgentPendingSubmission | null = null) {
+async function mount(
+    initial: CloudAgentConversation,
+    cloud: CloudAgentConversation[],
+    initialPending: CloudAgentPendingSubmission | null = null,
+    target: AgentRequestTarget = { canvasId: "shared-canvas" },
+    initialPrefill?: Omit<AgentPrefillRequest, "id">,
+) {
     local = [initial];
     activeId = initial.id;
     remote = cloud;
@@ -245,7 +253,13 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     setActiveUserScope("sync-user");
     useUserStore.setState({ hydrated: true, user: { id: "sync-user", username: "test", displayName: "test", role: "user", status: "active" } });
     configureModels(false);
-    useGlobalAgentStore.setState({ open: true, canvas: { canvasId: "shared-canvas", nodeCount: 2, selectedNodeIds: [], references: [] } });
+    useGlobalAgentStore.setState({
+        open: true,
+        canvas: target.canvasId ? { canvasId: target.canvasId, nodeCount: 2, selectedNodeIds: [], references: [] } : null,
+        page: target.pageContext ? { context: target.pageContext, label: "第 1 集 · 镜头 1" } : null,
+        prefillRequest: null,
+    });
+    if (initialPrefill) useGlobalAgentStore.getState().requestPrefill(initialPrefill);
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
@@ -700,6 +714,220 @@ test("思考期间快速切换模型只改变下一轮设置，当前订阅和�
 });
 
 const alwaysThinking: TextThinkingConfig = { mode: "always", levels: ["low", "medium", "high"], default: "medium", switch: { kind: "none" }, intensity: { kind: "effort" } };
+
+const dramaTarget: AgentRequestTarget = { canvasId: "", pageContext: { kind: "drama", projectId: "drama", episodeId: "episode", shotId: "shot-1" } };
+
+test("首次打开助手时先恢复历史，再保留镜头讨论预填且不自动发送", async () => {
+    const initial = chat("drama-first-open", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget, { text: "先读取镜头 shot-1 的最新内容", displayText: "讨论镜头 1" });
+    try {
+        expect(composer.prompt).toBe("讨论镜头 1");
+        expect(sendInputs).toHaveLength(0);
+        expect(useGlobalAgentStore.getState().prefillRequest).toBeNull();
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "先读取镜头 shot-1 的最新内容" });
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("短剧页讨论镜头只预填，补充要求后发送冻结身份和完整要求", async () => {
+    const initial = chat("drama-chat", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    try {
+        await act(async () => {
+            useGlobalAgentStore.getState().requestPrefill({ text: "先读取镜头 shot-1 的最新内容", displayText: "讨论镜头 1" });
+            await settle();
+        });
+        expect(sent).toHaveLength(0);
+        expect(composer.prompt).toBe("讨论镜头 1");
+        expect(useGlobalAgentStore.getState().prefillRequest).toBeNull();
+        await act(async () => composer.onPromptChange("讨论镜头 1，把对白缩短"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "先读取镜头 shot-1 的最新内容，把对白缩短", contextScope: [], focusNodeIds: [] });
+        expect(conversationUI.messages.some((item: any) => item.role === "user" && item.text === "讨论镜头 1，把对白缩短")).toBe(true);
+        expect(generated).toBe(0);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("讨论草稿跨页刷新后保留原镜头，回到原页才发送完整要求", async () => {
+    const initial = chat("drama-draft-reload", { ...makeRun("first"), ...dramaTarget });
+    const first = await mount(initial, [], null, dramaTarget);
+    let saved: CloudAgentConversation;
+    try {
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "先读取镜头 shot-1", displayText: "讨论镜头 1" }));
+        await act(async () => composer.onPromptChange("讨论镜头 1，把台词缩短"));
+        await persist();
+        saved = local.find((item) => item.id === activeId)!;
+        expect(saved.draftPrefill).toMatchObject({ text: "先读取镜头 shot-1，把台词缩短", target: dramaTarget });
+    } finally {
+        await first.close();
+    }
+    const secondTarget = { canvasId: "", pageContext: { ...dramaTarget.pageContext!, shotId: "shot-2" } };
+    const reloaded = await mount(saved!, [], null, secondTarget);
+    try {
+        expect(composer.prompt).toBe("讨论镜头 1，把台词缩短");
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(0);
+        await act(async () => useGlobalAgentStore.getState().setPage({ context: dramaTarget.pageContext!, label: "镜头 1" }));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "先读取镜头 shot-1，把台词缩短" });
+    } finally {
+        await reloaded.close();
+    }
+});
+
+test("切换同名镜头讨论草稿恢复各自目标，新建对话清除旧预填", async () => {
+    const initial = chat("drama-draft-a", { ...makeRun("first"), ...dramaTarget });
+    const otherTarget = { canvasId: "", pageContext: { ...dramaTarget.pageContext!, projectId: "project-b", episodeId: "episode-b", shotId: "shot-b" } };
+    const other = { ...chat("drama-draft-b", { ...makeRun("other"), conversationId: "other-session", ...otherTarget }), draft: "讨论镜头 1", draftPrefill: { text: "先读取另一个项目的 shot-b", displayText: "讨论镜头 1", target: otherTarget } };
+    const mounted = await mount(initial, [initial, other], null, dramaTarget);
+    try {
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "读取旧的 shot-1", displayText: "讨论镜头 1" }));
+        await act(async () => {
+            header.onHistory();
+            await settle();
+        });
+        await act(async () => {
+            useGlobalAgentStore.getState().setPage({ context: otherTarget.pageContext, label: "另一个项目的镜头 1" });
+            historyUI.onOpen(other);
+            await settle();
+        });
+        expect(composer.prompt).toBe("讨论镜头 1");
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...otherTarget, prompt: "先读取另一个项目的 shot-b" });
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "读取 shot-b", displayText: "讨论镜头 1" }));
+        await act(async () => {
+            header.onNew();
+            await settle();
+        });
+        await act(async () => composer.onPromptChange("讨论镜头 1"));
+        await persist();
+        expect(local.find((item) => item.id === activeId)?.draftPrefill).toBeUndefined();
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("等待提交时切换分镜，已点击发送的请求仍绑定原镜头", async () => {
+    const initial = chat("drama-frozen", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    let release: ((value: unknown) => void) | undefined;
+    try {
+        capabilitiesOverride = () =>
+            new Promise((resolve) => {
+                release = resolve;
+            });
+        await act(async () => composer.onPromptChange("优化当前镜头"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(release).toBeDefined();
+        await act(async () => {
+            useGlobalAgentStore.getState().setPage({ context: { ...dramaTarget.pageContext!, shotId: "shot-2" }, label: "镜头 2" });
+            release!({ permissionModes: ["request_approval"], skills: true });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].pageContext).toEqual(dramaTarget.pageContext);
+    } finally {
+        release?.({ permissionModes: ["request_approval"], skills: true });
+        await mounted.close();
+    }
+});
+
+test("运行中在镜头1排队后切到镜头2，本轮结束不会自动发送到新目标", async () => {
+    const initial = chat("drama-queued", { ...makeRun("working", "running"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    try {
+        await act(async () => composer.onPromptChange("这镜的动作再自然一点"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(composer.tray.props.outbox.items[0].pageContext).toEqual(dramaTarget.pageContext);
+        await act(async () => {
+            useGlobalAgentStore.getState().setPage({ context: { ...dramaTarget.pageContext!, shotId: "shot-2" }, label: "镜头 2" });
+            subscriptions.at(-1)!.event({ eventId: "finished", runId: "working", seq: 5, type: "run_status", payload: { status: "completed" }, createdAt: initial.updatedAt });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(0);
+        expect(composer.tray.props.subtitle).toContain("另一个页面");
+        expect(composer.tray.props.outbox.items).toHaveLength(1);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("旧镜头的讨论草稿不会在切镜头后直接提交，回原镜头可继续发送", async () => {
+    const initial = chat("drama-prefill-target", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    try {
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "读取镜头 shot-1", displayText: "讨论镜头 1" }));
+        await act(async () => useGlobalAgentStore.getState().setPage({ context: { ...dramaTarget.pageContext!, shotId: "shot-2" }, label: "镜头 2" }));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(0);
+        expect(composer.prompt).toBe("讨论镜头 1");
+        await act(async () => useGlobalAgentStore.getState().setPage({ context: dramaTarget.pageContext!, label: "镜头 1" }));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "读取镜头 shot-1" });
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("全局预填消费后不重放旧画布预填，自动发送也不留下重复草稿", async () => {
+    const initial = chat("prefill-once", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    try {
+        await act(async () => {
+            const current = useGlobalAgentStore.getState().canvas!;
+            useGlobalAgentStore.getState().setCanvas({ ...current, prefillRequest: { id: 1, text: "旧画布预填" } });
+        });
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "当前镜头", displayText: "讨论镜头" }));
+        expect(composer.prompt).toBe("旧画布预填 讨论镜头");
+        await act(async () => composer.onPromptChange(""));
+        await act(async () => {
+            useGlobalAgentStore.getState().requestPrefill({ text: "自动发送一次", autoSubmit: true });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].prompt).toBe("自动发送一次");
+        expect(composer.prompt).toBe("");
+        expect(useGlobalAgentStore.getState().prefillRequest).toBeNull();
+    } finally {
+        await mounted.close();
+    }
+});
 
 test("Agent 推理档位按账号和模型保存，面板重建后恢复并用于下一轮", async () => {
     const initial = chat("reasoning-preference", makeRun("first"));

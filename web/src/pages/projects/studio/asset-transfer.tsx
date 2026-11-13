@@ -161,7 +161,7 @@ export function AssetImportModal({ open, projectId, onClose }: { open: boolean; 
         setProgress({ done: 0, total: currentPlan.value.operations.length });
         const outcome = await applyDramaAssetImport(projectId, pkg, currentPlan.value, (done, total) => setProgress({ done, total }));
         setResult(outcome);
-        void queryClient.invalidateQueries({ queryKey: dramaKeys.summary(projectId) });
+        await Promise.all([queryClient.invalidateQueries({ queryKey: dramaKeys.summary(projectId) }), queryClient.invalidateQueries({ queryKey: dramaKeys.cast(projectId) }), queryClient.invalidateQueries({ queryKey: dramaKeys.episodes(projectId) })]);
         if (outcome.failed.length) message.warning(`已导入 ${outcome.succeeded} 项，${outcome.failed.length} 项失败`);
         else message.success(`已导入 ${outcome.succeeded} 项`);
     };

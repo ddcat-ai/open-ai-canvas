@@ -182,9 +182,10 @@ describe("模式接线", () => {
 
     test("切模式不重建会话：初始化 effect 的依赖里没有 mode", () => {
         const initEffect = slice(workbench, "// 会话初始化只认 scene id", "// 打开会话时检查合法本地恢复候选");
-        // 依赖里出现 mode 就意味着换视图会 resetWorkbench + 清空 history。
-        expect(initEffect).toContain("}, [open, resetWorkbench, scene, writeDraft]);");
-        expect(initEffect).not.toContain("mode");
+        // 入口 initialMode 可初始化新会话；用户切换的 mode 不得重新初始化会话。
+        expect(initEffect).toContain("if (!shouldReinitializePrevisSession");
+        expect(initEffect).not.toMatch(/\},\s*\[[^\]]*\bmode\b[^\]]*\]/);
+        expect(initEffect.indexOf("if (!shouldReinitializePrevisSession")).toBeLessThan(initEffect.indexOf("resetWorkbench()"));
     });
 
     test("draft/history/save 的生命周期 effect 一律不依赖 mode", () => {

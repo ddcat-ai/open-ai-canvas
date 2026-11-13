@@ -2,10 +2,17 @@ import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { getActiveUserScope } from "@/lib/user-scope";
 import type { AgentPermissionMode, AgentRun } from "@/services/api/agent";
+import { isAgentPageContext, type AgentRequestTarget } from "@/lib/agent-page-context";
 
 export type CloudAgentMessagePresentation = {
     displayText?: string;
     canvasReferenceNodeId?: string;
+};
+
+export type CloudAgentDraftPrefill = CloudAgentMessagePresentation & {
+    text: string;
+    target: AgentRequestTarget;
+    requiresVision?: boolean;
 };
 
 export type CloudAgentConversationMessage = {
@@ -37,6 +44,8 @@ export type CloudAgentConversation = {
     lastEventSeq?: number;
     /** 未发送草稿和主动选中的会话只属于本机，不由云端覆盖。 */
     draft?: string;
+    /** 页面讨论的完整要求与原目标，随本机草稿保存，刷新不能改投当前页。 */
+    draftPrefill?: CloudAgentDraftPrefill;
     localNewCanvasId?: string;
     localSelectedCanvasId?: string;
     title: string;
@@ -188,7 +197,21 @@ function isConversationDocument(value: unknown): value is CloudAgentConversation
             Array.isArray(candidate.messages) &&
             typeof candidate.createdAt === "string" &&
             typeof candidate.updatedAt === "string" &&
+            (candidate.draftPrefill === undefined || isDraftPrefill(candidate.draftPrefill)) &&
             ["read_only", "auto", "request_approval"].includes(candidate.permissionMode || "")
         );
     });
+}
+
+function isDraftPrefill(value: unknown): value is CloudAgentDraftPrefill {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value as Partial<CloudAgentDraftPrefill>;
+    const target = candidate.target;
+    return (
+        typeof candidate.text === "string" &&
+        typeof candidate.displayText === "string" &&
+        Boolean(target && typeof target.canvasId === "string" && (target.pageContext === undefined || (!target.canvasId && isAgentPageContext(target.pageContext)))) &&
+        (candidate.requiresVision === undefined || typeof candidate.requiresVision === "boolean") &&
+        (candidate.canvasReferenceNodeId === undefined || typeof candidate.canvasReferenceNodeId === "string")
+    );
 }

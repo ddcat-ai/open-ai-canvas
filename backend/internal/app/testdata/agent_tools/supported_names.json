@@ -37,5 +37,7 @@
   "canvas_build_board",
   "canvas_preflight",
   "drama_get_context",
+  "drama_shot_read",
+  "drama_shot_update",
   "drama_adopt_canvas_media"
 ]

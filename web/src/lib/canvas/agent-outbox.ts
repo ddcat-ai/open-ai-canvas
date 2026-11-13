@@ -7,6 +7,7 @@
 
 import type { AgentPermissionMode, AgentReasoningMode, AgentRun } from "@/services/api/agent";
 import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { agentPageContextKey, isAgentPageContext, type AgentPageContext } from "@/lib/agent-page-context";
 
 export const AGENT_OUTBOX_MAX_ITEMS = 5;
 /** 与后端 validateCloudAgentRequest 的提示词上限一致。 */
@@ -42,6 +43,7 @@ export type AgentOutboxItem = {
     requiresVision?: boolean;
     /** 入队时所在画布，空串表示平台级对话。 */
     canvasId: string;
+    pageContext?: AgentPageContext;
     /** 入队时的选区快照，最多 8 个。 */
     focusNodeIds: string[];
     focusNodeOmittedCount: number;
@@ -166,10 +168,10 @@ export function clearAgentOutboxPause(outbox: AgentOutbox, reason: AgentOutboxPa
 }
 
 /** 「在此页面发送」：把条目改绑到当前页面，旧画布的选区不再带上。 */
-export function rebindAgentOutboxItem(outbox: AgentOutbox, id: string, canvasId: string): AgentOutbox {
+export function rebindAgentOutboxItem(outbox: AgentOutbox, id: string, canvasId: string, pageContext?: AgentPageContext): AgentOutbox {
     const item = outbox.items.find((entry) => entry.id === id);
-    if (!item || item.canvasId === canvasId) return outbox;
-    return updateAgentOutboxItem(outbox, id, { canvasId, focusNodeIds: [], focusNodeOmittedCount: 0 });
+    if (!item || (item.canvasId === canvasId && agentPageContextKey(item.pageContext) === agentPageContextKey(pageContext))) return outbox;
+    return updateAgentOutboxItem(outbox, id, { canvasId, pageContext, focusNodeIds: [], focusNodeOmittedCount: 0 });
 }
 
 /**
@@ -210,6 +212,7 @@ export type AgentOutboxDispatchContext = {
     canvasId: string;
     /** 在画布上时，云端对话已同步。 */
     canvasReady: boolean;
+    pageContext?: AgentPageContext;
     /** 「立即发送」：只对这一条忽略暂停。 */
     forceItemId?: string | null;
 };
@@ -229,12 +232,12 @@ export function agentOutboxDispatchBlocker(outbox: AgentOutbox, ctx: AgentOutbox
     if (!ctx.connected) return "offline";
     if (ctx.canvasBusy) return "canvas_busy";
     // 离开了入队时的画布：回到原画布自动继续，或由用户对单条选择「在此页面发送」。
-    if (head.canvasId !== ctx.canvasId) return "scope_changed";
+    if (head.canvasId !== ctx.canvasId || agentPageContextKey(head.pageContext) !== agentPageContextKey(ctx.pageContext)) return "scope_changed";
     return null;
 }
 
 export type AgentOutboxInterjectContext = {
-    run: (RunState & { canvasId?: string }) | null;
+    run: (RunState & { canvasId?: string; pageContext?: AgentPageContext }) | null;
     connected: boolean;
     stopping: boolean;
     canvasBusy: boolean;
@@ -242,11 +245,12 @@ export type AgentOutboxInterjectContext = {
 };
 
 /** 这一条现在能不能插进当前轮；返回不能的原因，用于按钮提示。 */
-export function agentOutboxInterjectBlocker(item: Pick<AgentOutboxItem, "text" | "status" | "requiresVision"> & { canvasId?: string }, ctx: AgentOutboxInterjectContext): string | null {
+export function agentOutboxInterjectBlocker(item: Pick<AgentOutboxItem, "text" | "status" | "requiresVision"> & { canvasId?: string; pageContext?: AgentPageContext }, ctx: AgentOutboxInterjectContext): string | null {
     if (ctx.stopping) return "正在停止本轮";
     if (!agentRunAcceptsInterjection(ctx.run)) return "本轮已结束，可作为下一轮发送";
     // 在画布 B 写的消息不能插进画布 A 正在运行的这一轮，否则会改动另一个画布（#881）。
     if (item.canvasId && ctx.run?.canvasId && item.canvasId !== ctx.run.canvasId) return "这条写在另一个画布上，不能插进原画布正在运行的这一轮；回到原画布插话，或等本轮结束后在此页面发送";
+    if (agentPageContextKey(item.pageContext) !== agentPageContextKey(ctx.run?.pageContext)) return "这条消息针对的项目或分镜已变化，请等本轮结束后在当前页面发送";
     if (ctx.canvasBusy) return "画布上有别的 Agent 在运行";
     if (!ctx.connected) return "连接断开，恢复后才能插话";
     if (ctx.requestPending) return "上一条提交结果待确认";
@@ -332,6 +336,7 @@ function isOutboxItem(value: unknown): value is AgentOutboxItem {
         item.id.length <= 120 &&
         typeof item.text === "string" &&
         typeof item.canvasId === "string" &&
+        (item.pageContext === undefined || isAgentPageContext(item.pageContext)) &&
         stringArray(item.focusNodeIds) &&
         typeof item.focusNodeOmittedCount === "number" &&
         isRunSettings(item.settings) &&

@@ -260,7 +260,7 @@ const segment = {
     },
 } as DramaSegment;
 
-async function renderReferences(onSave: (patch: DramaSegmentReferencePatch) => Promise<unknown>, currentSegment = segment) {
+async function renderReferences(onSave: (patch: DramaSegmentReferencePatch) => Promise<unknown>, currentSegment = segment, onOpenAssets = () => {}) {
     const castById = new Map<string, DramaCast>([
         ["hero", { ...character, imageResourceId: undefined, voiceSampleResourceId: "voice-1" }],
         ["second", { ...character, id: "second", name: "配角", aliasesJson: '["小乙"]', imageResourceId: undefined, voiceSampleResourceId: "voice-2" }],
@@ -272,18 +272,83 @@ async function renderReferences(onSave: (patch: DramaSegmentReferencePatch) => P
         root.render(
             <QueryClientProvider client={client}>
                 <App>
-                    <ReferenceBoard segment={currentSegment} shots={[]} castById={castById} busy={false} onSave={onSave} onOpenCast={() => {}} />
+                    <ReferenceBoard projectId="project" segment={currentSegment} shots={[]} castById={castById} busy={false} onSave={onSave} onOpenCast={() => {}} onOpenAssets={onOpenAssets} />
                 </App>
             </QueryClientProvider>,
         ),
     );
 }
 
+async function openReferenceSettings() {
+    const details = host.querySelector<HTMLDetailsElement>(".drama-reference-settings")!;
+    expect(details.open).toBe(false);
+    await act(async () => details.querySelector("summary")!.click());
+    expect(details.open).toBe(true);
+}
+
+async function selectReferenceKind(kind: string, menu: ParentNode) {
+    const filter = menu.querySelector<HTMLElement>(`[role="radio"] [data-asset-kind="${kind}"]`)?.closest("button");
+    expect(filter).not.toBeNull();
+    await act(async () => filter!.click());
+    expect(filter?.getAttribute("aria-checked")).toBe("true");
+}
+
+test("asset drawer keeps failed additions and removals uncommitted", async () => {
+    const save = mock(async () => {
+        throw new Error("保存失败");
+    });
+    await renderReferences(save);
+    await click("项目资产窗口");
+    const drawer = document.querySelector(".drama-asset-drawer")!;
+    const menu = drawer.querySelector('[aria-label="搜索参考资产"]')!;
+    expect(drawer.textContent).toContain("项目资产 · 选择本段参考");
+    await click("添加参考图王府大厅", menu);
+    expect(save).toHaveBeenLastCalledWith({ referenceCastIds: ["hero", "hall"] });
+    expect(menu.querySelector('[aria-label="添加参考图王府大厅"]')?.getAttribute("aria-pressed")).toBe("false");
+    expect(menu.querySelector('[aria-label="移除参考图王府大厅"]')).toBeNull();
+    expect(host.querySelector('[aria-label="本段资产预览"]')?.textContent).not.toContain("王府大厅");
+    await click("移除参考图主角", menu);
+    expect(save).toHaveBeenLastCalledWith({ referenceCastIds: [] });
+    expect(menu.querySelector('[aria-label="移除参考图主角"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(host.querySelector('[aria-label="本段资产预览"]')?.textContent).toContain("主角");
+});
+
+test("failed voice save retains the editable selection until retry succeeds", async () => {
+    const save = mock(async () => {
+        throw new Error("音色保存失败");
+    });
+    await renderReferences(save);
+    await openReferenceSettings();
+    await click("关闭配角的音色");
+    await click("保存音色选择");
+    expect(save).toHaveBeenLastCalledWith({ audioCastIds: ["hero"] });
+    expect(host.querySelector("summary")?.textContent).toContain("音色调整未保存");
+    expect(host.querySelector('[aria-label="开启配角的音色"]')?.getAttribute("aria-pressed")).toBe("false");
+    const retry = mock(async () => {});
+    await renderReferences(retry);
+    await click("保存音色选择");
+    expect(retry).toHaveBeenLastCalledWith({ audioCastIds: ["hero"] });
+    expect(host.querySelector("summary")?.textContent).not.toContain("音色调整未保存");
+});
+
+test("asset drawer links to the project episode audit without changing references", async () => {
+    const save = mock(async () => {});
+    const openAssets = mock(() => {});
+    await renderReferences(save, segment, openAssets);
+    await click("项目资产窗口");
+    const drawer = document.querySelector(".drama-asset-drawer")!;
+    await click("按集核查", drawer);
+    expect(openAssets).toHaveBeenCalledTimes(1);
+    expect(save).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-expanded="false"]')?.textContent).toContain("项目资产窗口");
+});
+
 test("reference removal updates only the selected source and keeps library/upload entry points", async () => {
     const save = mock(async () => {});
     await renderReferences(save);
     expect(host.textContent).toContain("素材库");
-    expect(host.textContent).toContain("上传参考图");
+    expect(host.textContent).toContain("上传图片");
+    await openReferenceSettings();
     await click("移除参考图夜景");
     expect(save).toHaveBeenLastCalledWith({ referenceImages: [] });
     await click("移除参考图主角");
@@ -293,6 +358,7 @@ test("reference removal updates only the selected source and keeps library/uploa
 test("over-limit automatic voices can be adjusted before saving and restored to automatic mode", async () => {
     const save = mock(async () => {});
     await renderReferences(save);
+    await openReferenceSettings();
     expect(host.textContent).toContain("当前模型音色不可多于 1 个");
     await click("关闭配角的音色");
     expect(save).not.toHaveBeenCalled();
@@ -314,12 +380,21 @@ test("reference groups and assets can both reorder without changing the custom i
         { ...segment.request.references[1], label: "参考图5" },
     ] as DramaSegment["request"]["references"];
     await renderReferences(save, { ...segment, request: { ...segment.request, references } });
-    expect([...host.querySelectorAll(".drama-sdx-asset-group")].map((group) => group.getAttribute("aria-label"))).toEqual(["人物参考", "场景参考", "道具参考", "附加图片参考"]);
-    await click("提前场景分组");
+    await openReferenceSettings();
+    expect([...host.querySelectorAll(".drama-sdx-asset-group")].map((group) => group.getAttribute("aria-label"))).toEqual(["角色参考", "环境参考", "道具参考", "附加图片参考"]);
+    expect([...host.querySelectorAll<HTMLElement>(".drama-reference-tile")].map((tile) => tile.dataset.assetKind)).toEqual(["character", "character", "scene", "prop", "image"]);
+    await click("提前环境分组");
     expect(save).toHaveBeenLastCalledWith({ referenceCastIds: ["hall", "hero", "second", "sword"] });
     const reordered = [references[2], references[0], references[1], references[3], references[4]].map((ref, index) => ({ ...ref, label: `参考图${index + 1}` }));
     await renderReferences(save, { ...segment, request: { ...segment.request, references: reordered } });
-    expect(host.querySelector(".drama-sdx-asset-group")?.getAttribute("aria-label")).toBe("场景参考");
+    expect(host.querySelector(".drama-sdx-asset-group")?.getAttribute("aria-label")).toBe("环境参考");
+    expect([...host.querySelectorAll(".drama-reference-tile")].map((tile) => tile.getAttribute("aria-label"))).toEqual([
+        "王府大厅 · 参考图1 · 未附图",
+        "主角 · 参考图2 · 未附图",
+        "配角 · 参考图3 · 未附图",
+        "宝剑 · 参考图4 · 未附图",
+        "夜景 · 参考图5 · 未附图",
+    ]);
     await click("提前配角");
     expect(save).toHaveBeenLastCalledWith({ referenceCastIds: ["hall", "second", "hero", "sword"] });
 });
@@ -328,6 +403,7 @@ test("voice controls stay under the character asset and a look inherits the base
     const save = mock(async () => {});
     const references = [{ castId: "look", name: "主角 · 晚宴", kind: "character", label: "参考图1", sent: false }] as DramaSegment["request"]["references"];
     await renderReferences(save, { ...segment, request: { ...segment.request, references, audioReferences: segment.request.audioReferences?.slice(0, 1) } });
+    await openReferenceSettings();
     const card = host.querySelector('[aria-label="主角 · 晚宴资产"]');
     expect(card?.querySelector('[aria-label="关闭主角的音色"]')).not.toBeNull();
     expect(card?.querySelector('[aria-label="试听主角的音频"]')).not.toBeNull();
@@ -341,7 +417,7 @@ test("voice controls stay under the character asset and a look inherits the base
 test("secondary asset menu searches by alias, filters categories, and toggles selected references", async () => {
     const save = mock(async () => {});
     await renderReferences(save);
-    await click("管理参考资产");
+    await click("项目资产窗口");
     const menu = document.querySelector('[aria-label="搜索参考资产"]')!;
     expect(menu).not.toBeNull();
     const input = menu.querySelector<HTMLInputElement>('[aria-label="搜索资产"]')!;
@@ -355,7 +431,7 @@ test("secondary asset menu searches by alias, filters categories, and toggles se
     expect(menu.querySelector('[aria-label="配角资产"]')).not.toBeNull();
     expect(menu.querySelector('[aria-label="主角资产"]')).toBeNull();
     await type("");
-    await click("场景", menu);
+    await selectReferenceKind("scene", menu);
     expect(menu.querySelector('[aria-label="配角资产"]')).toBeNull();
     await click("添加参考图王府大厅", menu);
     expect(save).toHaveBeenLastCalledWith({ referenceCastIds: ["hero", "hall"] });
@@ -367,7 +443,7 @@ test("secondary asset menu searches by alias, filters categories, and toggles se
 test("voice edits made in the secondary menu can be saved there", async () => {
     const save = mock(async () => {});
     await renderReferences(save);
-    await click("管理参考资产");
+    await click("项目资产窗口");
     const menu = document.querySelector('[aria-label="搜索参考资产"]')!;
     await click("关闭配角的音色", menu);
     await click("保存音色选择", menu);
@@ -377,7 +453,7 @@ test("voice edits made in the secondary menu can be saved there", async () => {
 test("reference image opens the real large preview and can return to the reference panel", async () => {
     spyOn(imageStorage, "resolveImageUrl").mockResolvedValue("data:image/png;base64,iVBORw0KGgo=");
     await renderReferences(mock(async () => {}));
-    await click("放大预览夜景");
+    await click("夜景 · 参考图2 · 未附图");
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("夜景");
     await act(async () => document.querySelector<HTMLButtonElement>(".canvas-image-preview-modal .ant-modal-close")!.click());
     expect(document.querySelector(".canvas-image-preview-modal")).toBeNull();

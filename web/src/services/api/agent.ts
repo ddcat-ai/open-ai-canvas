@@ -35,7 +35,7 @@ export type AgentProfileView = {
 };
 
 export type AgentApprovalPreviewOperation =
-    "add_node" | "update_node" | "connect_nodes" | "arrange_nodes" | "generate_media" | "generate_media_item" | "build_board" | "create_storyboard" | "edit_storyboard" | "create_character" | "plan_step" | "adopt_drama_media";
+    "add_node" | "update_node" | "connect_nodes" | "arrange_nodes" | "generate_media" | "generate_media_item" | "build_board" | "create_storyboard" | "edit_storyboard" | "create_character" | "plan_step" | "adopt_drama_media" | "update_drama_shot";
 
 export type AgentApprovalPreviewItem = {
     operation: AgentApprovalPreviewOperation;
@@ -70,6 +70,7 @@ export type AgentApproval = {
 };
 
 export type AgentRun = {
+    pageContext?: import("@/lib/agent-page-context").AgentPageContext;
     id: string;
     conversationId?: string;
     parentId?: string;
@@ -130,6 +131,7 @@ export class AgentStreamError extends Error {
 }
 
 export type CreateAgentRunInput = {
+    pageContext?: import("@/lib/agent-page-context").AgentPageContext;
     reasoningMode?: AgentReasoningMode;
     profileRevision?: string;
     /** 空字符串 = 平台级对话（未进入画布），后端不开放画布工具。 */

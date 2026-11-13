@@ -1,4 +1,5 @@
 import { fitImageNodeSize, fitNodeSize } from "@/lib/canvas/canvas-node-size";
+import { audioUploadTitleFromFileName } from "@/lib/audio-upload-title";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { CanvasNodeType, type CanvasNodeData, type Position } from "@/types/canvas";
 
@@ -43,7 +44,7 @@ export async function createFileUploadPlaceholder(id: string, file: File, positi
         ...size,
         id,
         type,
-        title: file.name,
+        title: type === CanvasNodeType.Audio ? audioUploadTitleFromFileName(file.name) : file.name,
         position: { x: position.x - size.width / 2, y: position.y - size.height / 2 },
         metadata: { fileUpload: "uploading", originalFileName: file.name, bytes: file.size, mimeType: file.type },
     } satisfies CanvasNodeData;

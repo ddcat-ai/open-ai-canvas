@@ -201,6 +201,7 @@ describe("Agent cloud conversation history", () => {
             ...remote,
             id: "browser-local-id",
             draft: "未发送草稿",
+            draftPrefill: { text: "读取原镜头", displayText: "未发送草稿", target: { canvasId: "", pageContext: { kind: "drama", projectId: "project", episodeId: "episode", shotId: "shot-1" } } },
             localSelectedCanvasId: "canvas-1",
             messages: [
                 { id: "user-submitted-key", role: "user", text: "界面里的简短问题" },
@@ -212,6 +213,7 @@ describe("Agent cloud conversation history", () => {
         expect(merged.id).toBe("browser-local-id");
         expect(merged.serverConversationId).toBe(conversationId);
         expect(merged.draft).toBe("未发送草稿");
+        expect(merged.draftPrefill).toEqual(local.draftPrefill);
         expect(merged.localSelectedCanvasId).toBe("canvas-1");
         expect(merged.messages.map((item) => item.text)).toEqual(["界面里的简短问题", "服务器新回复", "提交结果未知"]);
         expect(merged.messages[0].id).toBe("user-first");

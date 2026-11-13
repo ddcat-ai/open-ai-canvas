@@ -530,11 +530,15 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					return err
 				}
 			} else {
-				if binding.Handler.Preview == nil {
+				if binding.Handler.Preview == nil && binding.Handler.PagePreview == nil {
 					return BadAuthRequest("工具缺少审批预演入口")
 				}
 				var mutationErr error
-				preview, mutationErr = binding.Handler.Preview(repo, run.UserID, state.Request.CanvasID, call)
+				if binding.Handler.PagePreview != nil {
+					preview, mutationErr = binding.Handler.PagePreview(repo, run.UserID, state.Request.PageContext, call, s)
+				} else {
+					preview, mutationErr = binding.Handler.Preview(repo, run.UserID, state.Request.CanvasID, call)
+				}
 				if mutationErr != nil {
 					var argumentErr *cloudAgentArgumentError
 					if errors.As(mutationErr, &argumentErr) {
@@ -651,6 +655,8 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 					}
 				}
 			}
+		case binding.Handler.PageWrite != nil:
+			result, toolErr = binding.Handler.PageWrite(repo, run.UserID, state.Request.PageContext, call, s)
 		case binding.Handler.Write != nil:
 			result, toolErr = binding.Handler.Write(repo, run.UserID, state.Request.CanvasID, call, policy, cloudAgentCanvasEventRecorder(run.ID, state))
 		default:

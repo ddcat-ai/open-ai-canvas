@@ -25,15 +25,17 @@ const cloudAgentOperation = "cloud_agent"
 // turns reference the previous run, not a mutable in-memory conversation. This
 // reuses transactional billing, worker leases, cancellation and text replay.
 type CloudAgentRequest struct {
-	ReasoningMode   string `json:"reasoningMode,omitempty"`
-	ProfileRevision string `json:"profileRevision,omitempty"`
-	CanvasID        string `json:"canvasId"`
-	Prompt          string `json:"prompt"`
-	Model           string `json:"model,omitempty"`
-	LogicalModelID  string `json:"logicalModelId,omitempty"`
-	ChannelID       string `json:"channelId,omitempty"`
-	ChannelModelKey string `json:"channelModelKey,omitempty"`
-	PermissionMode  string `json:"permissionMode"`
+	// PageContext 是当前页面冻结的业务对象身份；镜头工具只允许在这份上下文内读写。
+	PageContext     *CloudAgentPageContext `json:"pageContext,omitempty"`
+	ReasoningMode   string                 `json:"reasoningMode,omitempty"`
+	ProfileRevision string                 `json:"profileRevision,omitempty"`
+	CanvasID        string                 `json:"canvasId"`
+	Prompt          string                 `json:"prompt"`
+	Model           string                 `json:"model,omitempty"`
+	LogicalModelID  string                 `json:"logicalModelId,omitempty"`
+	ChannelID       string                 `json:"channelId,omitempty"`
+	ChannelModelKey string                 `json:"channelModelKey,omitempty"`
+	PermissionMode  string                 `json:"permissionMode"`
 	// PinnedSkillIDs 是用户为对话固定或在本条消息里点名的技能；其他已安装技能由 Agent 按目录自动发现。
 	PinnedSkillIDs        []string `json:"pinnedSkillIds,omitempty"`
 	ContextScope          []string `json:"contextScope"`
@@ -59,6 +61,15 @@ type CloudAgentRequest struct {
 	// 后者是冻结的长期记忆模式（auto/review/off），决定是否暴露技能读取与记忆写入工具。
 	SkillsEnabled bool   `json:"skillsEnabled,omitempty"`
 	MemoryMode    string `json:"memoryMode,omitempty"`
+}
+
+// CloudAgentPageContext 是页面提供给 Agent 的最小资源身份，不携带镜头正文。
+// 正文和版本必须由短剧服务从服务端最新快照读取，避免客户端把过期内容当作事实。
+type CloudAgentPageContext struct {
+	Kind      string `json:"kind"`
+	ProjectID string `json:"projectId"`
+	EpisodeID string `json:"episodeId,omitempty"`
+	ShotID    string `json:"shotId,omitempty"`
 }
 
 const cloudAgentMaxStepsLimit = 9999
@@ -93,26 +104,27 @@ type cloudAgentState struct {
 }
 
 type CloudAgentRun struct {
-	ID             string              `json:"id"`
-	ConversationID string              `json:"conversationId"`
-	UserPrompt     string              `json:"userPrompt"`
-	IdempotencyKey string              `json:"idempotencyKey"`
-	CanvasID       string              `json:"canvasId"`
-	ParentID       string              `json:"parentId,omitempty"`
-	Status         string              `json:"status"`
-	Revision       int64               `json:"revision"`
-	CleanupPending bool                `json:"cleanupPending,omitempty"`
-	FailureMessage string              `json:"failureMessage,omitempty"`
-	PermissionMode string              `json:"permissionMode"`
-	Model          string              `json:"model"`
-	CreatedAt      time.Time           `json:"createdAt"`
-	UpdatedAt      time.Time           `json:"updatedAt"`
-	Events         []CloudAgentEvent   `json:"events,omitempty"`
-	Skills         []cloudAgentSkill   `json:"skills,omitempty"`
-	Approval       *cloudAgentApproval `json:"approval,omitempty"`
-	SpentCredits   float64             `json:"spentCredits"`
-	Step           int                 `json:"step"`
-	ActiveMessage  map[string]string   `json:"activeMessage,omitempty"`
+	PageContext    *CloudAgentPageContext `json:"pageContext,omitempty"`
+	ID             string                 `json:"id"`
+	ConversationID string                 `json:"conversationId"`
+	UserPrompt     string                 `json:"userPrompt"`
+	IdempotencyKey string                 `json:"idempotencyKey"`
+	CanvasID       string                 `json:"canvasId"`
+	ParentID       string                 `json:"parentId,omitempty"`
+	Status         string                 `json:"status"`
+	Revision       int64                  `json:"revision"`
+	CleanupPending bool                   `json:"cleanupPending,omitempty"`
+	FailureMessage string                 `json:"failureMessage,omitempty"`
+	PermissionMode string                 `json:"permissionMode"`
+	Model          string                 `json:"model"`
+	CreatedAt      time.Time              `json:"createdAt"`
+	UpdatedAt      time.Time              `json:"updatedAt"`
+	Events         []CloudAgentEvent      `json:"events,omitempty"`
+	Skills         []cloudAgentSkill      `json:"skills,omitempty"`
+	Approval       *cloudAgentApproval    `json:"approval,omitempty"`
+	SpentCredits   float64                `json:"spentCredits"`
+	Step           int                    `json:"step"`
+	ActiveMessage  map[string]string      `json:"activeMessage,omitempty"`
 	// 事件已全量落库，运行详情只返回一页，因此必须把"这一页在整条日志里的位置"说清楚：
 	// EventSeqBase 是本次返回的首条事件之前已入库的条数（不变量 events[i].seq ==
 	// eventSeqBase + i + 1），EventCount 是该运行累计事件条数，LatestSeq 可直接当作下次
@@ -190,6 +202,14 @@ func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	}
 	if req.FocusNodeOmittedCount < 0 || req.FocusNodeOmittedCount > 10000 {
 		return BadAuthRequest("画布焦点省略计数无效")
+	}
+	if req.PageContext != nil {
+		if req.CanvasID != "" {
+			return BadAuthRequest("当前页面上下文不能同时绑定画布")
+		}
+		if err := validateCloudAgentPageContextShape(*req.PageContext); err != nil {
+			return err
+		}
 	}
 	if len(req.FocusNodeIDs) > 8 {
 		return BadAuthRequest("画布焦点节点最多 8 个")
@@ -278,7 +298,7 @@ func agentRunOutput(task *model.Task, state cloudAgentState) *CloudAgentRun {
 	if task.Status == model.TaskStatusSucceeded {
 		status = "completed"
 	}
-	return &CloudAgentRun{ID: task.ID, UserPrompt: state.Request.Prompt, IdempotencyKey: state.Request.IdempotencyKey, CanvasID: task.ProjectID, ParentID: state.ParentID, Status: status, PermissionMode: state.Request.PermissionMode, Model: task.Model, CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt, Skills: state.Skills}
+	return &CloudAgentRun{PageContext: state.Request.PageContext, ID: task.ID, UserPrompt: state.Request.Prompt, IdempotencyKey: state.Request.IdempotencyKey, CanvasID: task.ProjectID, ParentID: state.ParentID, Status: status, PermissionMode: state.Request.PermissionMode, Model: task.Model, CreatedAt: task.CreatedAt, UpdatedAt: task.UpdatedAt, Skills: state.Skills}
 }
 
 func (s *Service) cloudAgentTask(userID, id string) (*model.Task, cloudAgentState, error) {
@@ -380,6 +400,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	if userID == "" {
 		return nil, kernel.Unauthorized("请先登录")
 	}
+	// 调用方仍可复用其请求对象；复制页面身份后，本轮后续检查只使用冻结值。
+	if req.PageContext != nil {
+		page := *req.PageContext
+		req.PageContext = &page
+	}
 	// Explicit snapshots make an accepted request independently replayable after
 	// profile edits or canvas deletion. Compare the entire frozen request before
 	// bypassing mutable admission checks; a changed model/body still conflicts.
@@ -399,6 +424,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, kernel.NotFound("画布不存在或尚未保存到服务端，请先完成画布同步")
 			}
+			return nil, err
+		}
+	}
+	if req.PageContext != nil {
+		if _, err := cloudAgentDramaPageTarget(s.repo, userID, req.PageContext, "", ""); err != nil {
 			return nil, err
 		}
 	}
@@ -427,13 +457,14 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	var inheritedConfirmationFingerprints []string
 	parentStatus := ""
 	if parentID != "" {
-		parent, _, parentErr := s.cloudAgentTask(userID, parentID)
+		parent, parentRequest, parentErr := s.cloudAgentTask(userID, parentID)
 		if parentErr != nil {
 			return nil, parentErr
 		}
 		// 同一段对话可以跟随页面切换画布绑定（首页 → 画布 → 离开画布）。
 		// 归属已由 cloudAgentTask 按 userID 校验；换绑后旧画布的节点事实不再可用。
-		scopeChanged := parent.ProjectID != req.CanvasID
+		pageChanged := !sameCloudAgentPageContext(parentRequest.Request.PageContext, req.PageContext)
+		scopeChanged := parent.ProjectID != req.CanvasID || pageChanged
 		superseded := s.cloudAgentParentCanBeSuperseded(userID, parentID)
 		// 续轮收束要读上一轮**全部**事件（运行详情默认只返回尾部一窗）：长会话一旦被截断，
 		// 新轮就看不到上一轮改过哪些节点、提交过哪些任务，表现为"忘了自己做过什么"。
@@ -485,7 +516,12 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			history = append(history, providerTextMessage{Role: "user", Content: context, AgentContextSource: "continuation"})
 		}
 		if scopeChanged {
-			history = append(history, providerTextMessage{Role: "user", Content: cloudAgentScopeChangeNotice(parent.ProjectID, req.CanvasID), AgentContextSource: "continuation"})
+			if parent.ProjectID != req.CanvasID {
+				history = append(history, providerTextMessage{Role: "user", Content: cloudAgentScopeChangeNotice(parent.ProjectID, req.CanvasID), AgentContextSource: "continuation"})
+			}
+			if pageChanged {
+				history = append(history, providerTextMessage{Role: "user", Content: cloudAgentPageScopeNotice(parentRequest.Request.PageContext, req.PageContext), AgentContextSource: "continuation"})
+			}
 		}
 	}
 	history = trimCloudAgentTextHistory(history, cloudAgentHistoryKeepRounds, cloudAgentHistoryMaxBytes)
@@ -543,6 +579,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	}
 	state := cloudAgentState{Version: 1, Request: req, ParentID: parentID, Fingerprint: fingerprint, CreativeAnchor: creativeAnchor, Plan: inheritedPlan, ConfirmationRounds: inheritedConfirmationRounds, ConfirmationFingerprints: inheritedConfirmationFingerprints, Skills: skillPool.Pinned, SkillVersions: skillPool.Versions, SkillHints: skillPool.Hints, Memory: memory, Profile: profile, Policy: policy}
 	canonical := cloudAgentCanonicalFor(system, history, req.Prompt, req, len(profile.Layers) > 0)
+	if req.PageContext != nil {
+		catalog := map[string]any{"role": "user", "content": cloudAgentPageScopeNotice(nil, req.PageContext), cloudAgentContextSourceKey: "page_context"}
+		last := canonical.Messages[len(canonical.Messages)-1]
+		canonical.Messages = append(append([]map[string]any{}, canonical.Messages[:len(canonical.Messages)-1]...), catalog, last)
+	}
 	// Keep the catalog out of TextHistory (which defines conversation turns),
 	// while exposing it as a fresh data message for this run immediately before
 	// the current user request.

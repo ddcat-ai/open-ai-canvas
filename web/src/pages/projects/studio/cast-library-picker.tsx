@@ -2,7 +2,7 @@ import { useMemo } from "react";
 
 import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
-import { ASSET_CATEGORY_LABELS, normalizeAssetCategory } from "@/lib/asset-category";
+import { ASSET_CATEGORY_LABELS, normalizeAssetCategory, type AssetCategory } from "@/lib/asset-category";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import type { DramaCast } from "@/services/api/drama";
 import { getImageBlob, uploadImage } from "@/services/image-storage";
@@ -51,7 +51,19 @@ function uploadedResourceId(uploaded: Awaited<ReturnType<typeof uploadImage>>) {
 }
 
 /** 从素材库挑一张图作为设定参考图；选中后与上传形象图一样直接替换并锁定。 */
-export function CastLibraryPicker({ open, cast, onClose, onPick, segment = false }: { open: boolean; cast: Pick<DramaCast, "kind" | "name">; onClose: () => void; onPick: (resourceId: string, name: string) => Promise<unknown>; segment?: boolean }) {
+export function CastLibraryPicker({
+    open,
+    cast,
+    onClose,
+    onPick,
+    segment = false,
+}: {
+    open: boolean;
+    cast: Pick<DramaCast, "kind" | "name">;
+    onClose: () => void;
+    onPick: (resourceId: string, name: string, asset?: { assetId: string; category: AssetCategory }) => Promise<unknown>;
+    segment?: boolean;
+}) {
     const assets = useAssetStore((state) => state.assets);
     const externalAssetSources = useExternalAssetSources(open);
     const character = cast.kind === "character";
@@ -97,7 +109,8 @@ export function CastLibraryPicker({ open, cast, onClose, onPick, segment = false
                 const pool = new Map([...items, ...(pickedItems || [])].map((item) => [item.id, item]));
                 const item = ids[0] ? pool.get(ids[0]) : undefined;
                 if (!item) throw new Error("请选择一张图片");
-                await onPick(await pickedImageResourceId(item), item.title);
+                const linkedAsset = item.remoteAssetId && item.asset?.kind === "image" ? { assetId: item.remoteAssetId, category: normalizeAssetCategory(item.category) } : undefined;
+                await onPick(await pickedImageResourceId(item), item.title, linkedAsset);
                 onClose();
             }}
         />

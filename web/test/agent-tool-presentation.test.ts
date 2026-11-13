@@ -2,6 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { AGENT_TOOL_NAMES, agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, agentToolStatus, agentVisionFailureSummary, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
 
 describe("Agent tool presentation", () => {
+    it("distinguishes reading a drama shot from saving its revision", () => {
+        expect(agentToolCategory("drama_shot_read")).toBe("read");
+        expect(agentToolCategory("drama_shot_update")).toBe("operate");
+        expect(agentToolCategoryLabel("drama_shot_update", "operate")).toBe("修改分镜");
+        expect(friendlyAgentToolSummary("drama_shot_update", "", { eventType: "tool_completed" })).toContain("短剧分镜已保存");
+        expect(friendlyAgentToolSummary("drama_shot_update", "", { eventType: "tool_failed" })).toBe("短剧分镜未保存");
+    });
+
     it("separates read, create, and canvas operation activity", () => {
         expect(agentToolCategory("canvas_get_state", { eventType: "tool_completed" })).toBe("read");
         expect(agentToolCategoryLabel("canvas_get_state", "read")).toBe("读取清单");

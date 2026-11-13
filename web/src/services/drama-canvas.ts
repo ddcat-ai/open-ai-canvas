@@ -6,6 +6,13 @@ import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 
 export const DRAMA_CANVAS_PARAM = "drama";
 export const DRAMA_CANVAS_FOCUS_PARAM = "dramaFocus";
+export const DRAMA_CANVAS_EDITOR_PARAM = "dramaEditor";
+export type DramaCanvasEditor = "canvas" | "previs" | "timeline";
+
+export function parseDramaCanvasEditor(value: string | null | undefined): DramaCanvasEditor | null {
+    if (!value || value === "canvas") return "canvas";
+    return value === "previs" || value === "timeline" ? value : null;
+}
 
 /** 从制作台跳到画布时要投送或定位的对象。 */
 export type DramaCanvasFocus = { kind: "cast"; castId: string } | { kind: "segment"; episodeId: string; segmentIndex: number } | { kind: "episode"; episodeId: string } | { kind: "final"; episodeId: string };
@@ -47,14 +54,17 @@ export async function resolveDramaCanvas(drama: { id: string; name: string }) {
     return created.id;
 }
 
-export function dramaCanvasPath(canvasId: string, dramaId: string, focus?: DramaCanvasFocus) {
+export function dramaCanvasPath(canvasId: string, dramaId: string, focus?: DramaCanvasFocus, editor: DramaCanvasEditor = "canvas") {
+    if (editor !== "canvas" && focus?.kind !== "segment") throw new Error("请选择需要精修的剧情段");
     const params = new URLSearchParams({ [DRAMA_CANVAS_PARAM]: dramaId });
     if (focus) params.set(DRAMA_CANVAS_FOCUS_PARAM, encodeDramaCanvasFocus(focus));
+    if (editor !== "canvas") params.set(DRAMA_CANVAS_EDITOR_PARAM, editor);
     return `/canvas/${encodeURIComponent(canvasId)}?${params.toString()}`;
 }
 
-export async function openDramaCanvasPath(drama: { id: string; name: string }, focus?: DramaCanvasFocus) {
-    return dramaCanvasPath(await resolveDramaCanvas(drama), drama.id, focus);
+export async function openDramaCanvasPath(drama: { id: string; name: string }, focus?: DramaCanvasFocus, editor: DramaCanvasEditor = "canvas") {
+    if (editor !== "canvas" && focus?.kind !== "segment") throw new Error("请选择需要精修的剧情段");
+    return dramaCanvasPath(await resolveDramaCanvas(drama), drama.id, focus, editor);
 }
 
 export type DramaCanvasAssetItem = { resourceId: string; title?: string; category?: string };

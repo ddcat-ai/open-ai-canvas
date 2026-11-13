@@ -1883,6 +1883,23 @@
 .drama-cast-layout {
     grid-template-columns: minmax(0, 1fr) 380px;
 }
+.drama-assets-workspace {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+}
+.drama-assets-workspace-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+}
+.drama-assets-workspace-head > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+}
 @media (max-width: 1024px) {
     .drama-cast-layout {
         grid-template-columns: minmax(0, 1fr) 320px;
@@ -4894,6 +4911,7 @@
 }
 .drama-sd-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
@@ -6564,9 +6582,9 @@
     display: grid;
     gap: 8px;
     padding: 12px 12px;
-    border: 1px solid var(--drama-line);
+    border: 0;
     border-radius: var(--radius-lg);
-    background: var(--surface);
+    background: var(--library-surface);
 }
 .drama-sdx-toolbar-row {
     display: flex;
@@ -6666,22 +6684,24 @@
     flex-direction: column;
     gap: 8px;
     min-width: 0;
-    padding: 10px;
-    border: 1px solid var(--drama-line);
-    border-radius: var(--radius-md);
-    background: var(--surface);
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--user-radius-card);
+    background: var(--library-surface);
     color: var(--drama-muted);
-    transition:
-        border-color var(--motion-instant) var(--ease-product-enter),
-        background-color var(--motion-instant) var(--ease-product-enter);
+    transition: background-color var(--motion-instant) var(--ease-product-enter);
 }
-.drama-sdx-asset:hover {
-    border-color: var(--drama-line-strong);
+.drama-sdx-asset:hover,
+.drama-sdx-asset:focus-within {
+    background: var(--library-surface-hover);
 }
 .drama-sdx-asset.is-checked {
-    border-color: var(--control-selected-border);
-    background: var(--control-selected-bg);
+    outline: 1px solid var(--library-selected-stroke);
+    outline-offset: -1px;
     color: var(--foreground);
+}
+.drama-sdx-asset > .drama-asset-kind {
+    align-self: flex-start;
 }
 .drama-sdx-asset-thumb {
     position: relative;
@@ -6690,8 +6710,8 @@
     width: 100%;
     aspect-ratio: 4 / 3;
     overflow: hidden;
-    border-radius: var(--radius-sm);
-    background: var(--drama-sunken);
+    border-radius: var(--user-radius-media);
+    background: var(--library-cover-surface);
     color: var(--drama-faint);
     font-size: var(--fs-micro);
     cursor: zoom-in;
@@ -6807,32 +6827,89 @@
     object-fit: contain;
 }
 .drama-sdx-asset-menu {
-    display: grid;
-    gap: 12px;
-    width: min(640px, calc(100vw - 56px));
-}
-.drama-sdx-asset-menu-kinds {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-.drama-sdx-asset-menu-kinds button {
-    padding: 4px 10px;
-    border: 1px solid var(--drama-line);
-    border-radius: var(--radius-sm);
-    color: var(--drama-muted);
-    font-size: var(--fs-tiny);
-}
-.drama-sdx-asset-menu-kinds button[aria-pressed="true"] {
-    background: var(--control-selected-bg);
-    border-color: var(--control-selected-border);
-    color: var(--foreground);
+    flex-direction: column;
+    gap: var(--space-3);
+    width: 100%;
+    height: 100%;
+    min-height: 0;
 }
 .drama-sdx-asset-menu-results {
-    max-height: min(480px, 55vh);
+    flex: 1;
+    min-height: 0;
+    align-content: start;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 3px;
+    padding: var(--space-1);
+}
+.drama-reference-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: var(--space-2);
+}
+.drama-reference-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    min-width: 0;
+    padding: var(--space-1);
+    border: 0;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    text-align: left;
+    cursor: zoom-in;
+    transition: background-color var(--motion-state) ease-out;
+}
+.drama-reference-tile:hover {
+    background: var(--library-surface-hover);
+}
+.drama-reference-tile:disabled {
+    cursor: default;
+}
+.drama-reference-tile-image {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border-radius: var(--user-radius-media);
+    background: var(--library-cover-surface);
+    color: var(--text-tertiary);
+}
+.drama-reference-tile-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.drama-reference-tile strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-label);
+    font-weight: 500;
+}
+.drama-reference-tile > span:not(.drama-reference-tile-image) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+}
+.drama-reference-tile small {
+    color: var(--status-warning);
+    font-size: var(--fs-label);
+}
+.drama-reference-settings summary {
+    padding: var(--space-2) 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    cursor: pointer;
+}
+.drama-reference-settings summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
 }
 
 .drama-sdx-receipt {
@@ -6951,14 +7028,13 @@
 }
 /* 完整视频提示词：放在生成控制下方，正文里的“参考图N”渲染为带缩略图的引用。 */
 .drama-sdx-prompt {
-    border-color: color-mix(in oklab, var(--workspace-accent) 22%, var(--drama-line));
-    box-shadow: 0 1px 0 color-mix(in oklab, var(--foreground) 4%, transparent);
+    box-shadow: none;
 }
 .drama-sdx-prefix {
     display: grid;
-    gap: 6px;
-    padding: 8px 10px;
-    border: 1px dashed var(--drama-line-strong);
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border: 0;
     border-radius: var(--radius-md);
     background: var(--drama-sunken);
 }
@@ -6998,12 +7074,12 @@
     padding: 0 8px 0 3px;
     border: 1px solid var(--drama-line);
     border-radius: 999px;
-    background: var(--surface);
-    color: var(--drama-muted);
+    background: var(--drama-asset-tint, var(--surface));
+    color: var(--drama-asset-color, var(--drama-muted));
     font-size: var(--fs-micro);
 }
 .drama-sdx-prefix-ref b {
-    color: var(--workspace-accent);
+    color: inherit;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }

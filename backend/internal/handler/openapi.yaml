@@ -5653,7 +5653,26 @@ components:
         canvasId:
           type: string
           maxLength: 80
-          description: 可选。为空时是平台级对话：不占画布锁、只开放无画布工具，contextScope 和 focusNodeIds 必须为空。续轮可换绑画布，服务端会注入换绑说明。
+          description: 可选，与 pageContext 互斥。为空时不占画布锁，contextScope 和 focusNodeIds 必须为空；可用 pageContext 绑定短剧页面，否则为平台级对话。续轮可切换目标，服务端会注入切换说明。
+        pageContext:
+          type: object
+          additionalProperties: false
+          required: [kind, projectId]
+          description: 本轮冻结的短剧页面身份。服务端校验项目、集和镜头归属；指定 shotId 时必须同时指定 episodeId。内容通过工具读取，不接收客户端镜头正文。
+          properties:
+            kind:
+              type: string
+              enum: [drama]
+            projectId:
+              type: string
+              minLength: 1
+              maxLength: 80
+            episodeId:
+              type: string
+              maxLength: 80
+            shotId:
+              type: string
+              maxLength: 80
         prompt:
           type: string
           description: 非空，最多 16000 字节

@@ -11,6 +11,7 @@ import { SegmentedControl } from "@/components/ui/base/segmented-control/segment
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
+import { audioUploadTitleFromFileName } from "@/lib/audio-upload-title";
 import { createClientUUID } from "@/lib/client-id";
 import { togglePromptPhrase } from "@/lib/prompt-phrases";
 import { imageQualityLabel } from "@/lib/image-quality";
@@ -813,7 +814,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         });
         if (typed.length < list.length) message.warning(kind === "image" ? "只能上传图片" : "只能上传图片、视频或音频");
         const accepted = appendReferences(
-            typed.map(({ file, mediaKind }) => ({ kind: mediaKind, name: file.name, previewUrl: URL.createObjectURL(file), file })),
+            typed.map(({ file, mediaKind }) => ({ kind: mediaKind, name: mediaKind === "audio" ? audioUploadTitleFromFileName(file.name) : file.name, previewUrl: URL.createObjectURL(file), file })),
             preferredSlotKey,
         );
         await Promise.all(

@@ -990,35 +990,34 @@ func (r *Repository) DramaSegments(episodeID string) ([]model.DramaSegment, erro
 	return segments, err
 }
 
-// SaveDramaSegmentOverride 写入或清除段级提示词改写；行不存在时创建（旧剧本没有段记录）。
-func (r *Repository) SaveDramaSegmentOverride(segment model.DramaSegment) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		var current model.DramaSegment
-		if err := tx.Where("episode_id = ? AND segment_index = ?", segment.EpisodeID, segment.SegmentIndex).First(&current).Error; err != nil {
-			return err
-		}
-		return invalidateDramaSegment(tx, current, map[string]any{"video_prompt_override": segment.VideoPromptOverride}, true)
-	})
-}
+var ErrDramaSegmentEditConflict = errors.New("drama segment changed while editing")
 
-// SaveDramaSegmentReferenceFields 一次保存图片与音色选择，并使在途作业按修订号失效。
-func (r *Repository) SaveDramaSegmentReferenceFields(episodeID string, index int, fields map[string]any) error {
+// SaveDramaSegmentEdits 原子保存参考选择与按其身份换号的正文，拒绝覆盖计算换号后发生的并发编辑。
+func (r *Repository) SaveDramaSegmentEdits(segment model.DramaSegment, fields map[string]any) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var current model.DramaSegment
-		if err := tx.Where("episode_id = ? AND segment_index = ?", episodeID, index).First(&current).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND project_id = ?", segment.ID, segment.ProjectID).First(&current).Error; err != nil {
 			return err
 		}
-		values := map[string]string{"reference_cast_ids_json": current.ReferenceCastIDsJSON, "reference_images_json": current.ReferenceImagesJSON, "audio_cast_ids_json": current.AudioCastIDsJSON}
-		changed := false
+		if current.Revision != segment.Revision {
+			return ErrDramaSegmentEditConflict
+		}
+		values := map[string]string{"reference_cast_ids_json": current.ReferenceCastIDsJSON, "reference_images_json": current.ReferenceImagesJSON, "audio_cast_ids_json": current.AudioCastIDsJSON, "video_prompt_override": current.VideoPromptOverride}
+		changed, referencesChanged := false, false
 		for key, value := range fields {
 			if values[key] != value {
 				changed = true
+				if key != "video_prompt_override" {
+					referencesChanged = true
+				}
 			}
 		}
 		if !changed {
 			return nil
 		}
-		fields["prompt_status"] = promptStatusAfterInputChange(current.PromptStatus)
+		if referencesChanged {
+			fields["prompt_status"] = promptStatusAfterInputChange(current.PromptStatus)
+		}
 		return invalidateDramaSegment(tx, current, fields, true)
 	})
 }

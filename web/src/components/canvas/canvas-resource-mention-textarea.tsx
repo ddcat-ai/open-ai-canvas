@@ -146,7 +146,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     // 只在有查询词时使用；空查询时菜单按连线节点、技能和素材库分类分组展示。
     const mentionQuery = mention?.query.trim().toLowerCase() || "";
     const filteredReferences = useMemo(
-        () => (mentionQuery ? availableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(mentionQuery)) : []),
+        () => (mentionQuery ? availableReferences.filter((item) => `${item.label} ${item.displayLabel || ""} ${item.title} ${item.kind} ${item.assetKindLabel || ""} ${item.category || ""} ${item.text || ""}`.toLowerCase().includes(mentionQuery)) : []),
         [availableReferences, mentionQuery],
     );
     const activeReferences = useMemo(() => {

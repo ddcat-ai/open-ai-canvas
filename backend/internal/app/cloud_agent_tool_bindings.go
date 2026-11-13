@@ -50,6 +50,8 @@ func cloudAgentToolHandlers() map[string]cloudAgentToolHandler {
 		agenttool.CanvasPreflight:        {Read: cloudAgentHandleCanvasPreflight},
 		agenttool.DramaGetContext:        {Read: cloudAgentHandleDramaGetContext},
 		agenttool.DramaAdoptCanvasMedia:  {Write: applyCloudAgentDramaAdopt, Preview: cloudAgentPreviewDramaAdopt},
+		agenttool.DramaShotRead:          {Read: cloudAgentHandleDramaShotRead},
+		agenttool.DramaShotUpdate:        {PageWrite: applyCloudAgentDramaShotUpdate, PagePreview: cloudAgentPreviewDramaShotUpdate},
 	}
 }
 
