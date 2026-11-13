@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -8,6 +11,7 @@ const runtime = fileURLToPath(new URL("./agent-runtime.mjs", import.meta.url));
 const initialUsage = { input: 1000, output: 100, cacheRead: 5000, cacheWrite: 1000, totalTokens: 7100 };
 
 async function runRuntime(request, onModel) {
+  const directory = await mkdtemp(join(tmpdir(), "agent-compaction-test-"));
   const modelRequests = [];
   const bridgeEvents = [];
   const server = createServer(async (req, res) => {
@@ -33,7 +37,7 @@ async function runRuntime(request, onModel) {
     }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const child = spawn(process.execPath, [runtime], { stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, PI_OFFLINE: "1" } });
+  const child = spawn(process.execPath, [runtime], { stdio: ["pipe", "pipe", "pipe"], env: { PATH: process.env.PATH, NODE_ENV: "production", PI_OFFLINE: "1", YINGCE_AGENT_RUN_DIR: directory, HOME: directory, TMPDIR: directory } });
   let stdout = "";
   let stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -70,6 +74,7 @@ async function runRuntime(request, onModel) {
       await exited;
     }
     await new Promise((resolve) => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
   }
 }
 

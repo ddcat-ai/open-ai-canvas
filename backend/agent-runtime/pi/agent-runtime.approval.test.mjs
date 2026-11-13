@@ -72,6 +72,7 @@ async function runScenario(scenario) {
     };
     const child = spawn(process.execPath, [fileURLToPath(new URL("./agent-runtime.mjs", import.meta.url))], {
       cwd: directory, stdio: ["pipe", "pipe", "pipe"],
+      env: { PATH: process.env.PATH, NODE_ENV: "production", PI_OFFLINE: "1", YINGCE_AGENT_RUN_DIR: directory, HOME: directory, TMPDIR: directory },
     });
     let stdout = "";
     let stderr = "";
@@ -108,7 +109,7 @@ async function runScenario(scenario) {
     assert.ok(events.some((event) => event.event === "settled"), stdout);
     assert.ok(!events.some((event) => event.event === "runtime_error"), stdout);
     assert.equal(events.some((event) => event.event === "approval_wait"), !signatureScenario && scenario !== "normal");
-    // The isolated working copy is removed on exit; the callback snapshot is durable.
+    // The parent removes the working copy; the callback snapshot is durable.
     assert.ok(sessionJSONL, "runtime must deliver its session snapshot");
     if (scenario === "model-pause") {
       const entries = sessionJSONL.split("\n").filter(Boolean).map(JSON.parse);

@@ -38,7 +38,7 @@ const (
 	DefaultRuntimeAgentStepTimeout      = 0
 	MinRuntimeAgentSessions             = 1
 	MaxRuntimeAgentSessions             = 64
-	DefaultRuntimeAgentSessions         = 30
+	DefaultRuntimeAgentSessions         = 8
 )
 
 // agentStepMaxOutputTokensDefault 读取部署级覆盖并按同一套范围夹取；环境变量无法表达"不限制"（0），

@@ -43,8 +43,28 @@ services:
     image: ${CANVAS_YINGCE_AGENT_IMAGE:-ghcr.io/ddcat-ai/open-ai-canvas-yingce-agent:${CANVAS_IMAGE_TAG:?请先配置 CANVAS_IMAGE_TAG}}
     environment:
       YINGCE_AGENT_TOKEN: ${YINGCE_AGENT_TOKEN:-${CANVAS_UPDATER_TOKEN:?请先配置 YINGCE_AGENT_TOKEN}}
-      MAX_CONCURRENT_SESSIONS: ${YINGCE_AGENT_MAX_SESSIONS:-30}
+      MAX_CONCURRENT_SESSIONS: ${YINGCE_AGENT_MAX_SESSIONS:-8}
+      YINGCE_AGENT_SESSION_CAP: ${YINGCE_AGENT_SESSION_CAP:-8}
       NODE_MAX_OLD_SPACE_SIZE: ${YINGCE_AGENT_NODE_MEMORY_MB:-512}
+      YINGCE_AGENT_MAX_QUEUE: ${YINGCE_AGENT_MAX_QUEUE:-64}
+      YINGCE_AGENT_QUEUE_TIMEOUT_SECONDS: ${YINGCE_AGENT_QUEUE_TIMEOUT_SECONDS:-60}
+      YINGCE_AGENT_BODY_TIMEOUT_SECONDS: ${YINGCE_AGENT_BODY_TIMEOUT_SECONDS:-30}
+      YINGCE_AGENT_KILL_GRACE_SECONDS: ${YINGCE_AGENT_KILL_GRACE_SECONDS:-5}
+      YINGCE_AGENT_ORPHAN_TTL_SECONDS: ${YINGCE_AGENT_ORPHAN_TTL_SECONDS:-86400}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=${YINGCE_AGENT_TMPFS_SIZE:-512m},mode=1777
+    mem_limit: ${YINGCE_AGENT_MEMORY_LIMIT:-4g}
+    cpus: ${YINGCE_AGENT_CPUS:-2}
+    pids_limit: ${YINGCE_AGENT_PIDS_LIMIT:-256}
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: ${CANVAS_LOG_MAX_SIZE:-10m}
+        max-file: "3"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8081/healthz"]
       interval: 10s
@@ -86,6 +106,14 @@ services:
     volumes:
       - ${CANVAS_DATA_PATH:-backend-data}:/data
       - ${CANVAS_UPDATER_SOCKET_DIR:-/run/open-ai-canvas-updater}:/run/open-ai-canvas-updater
+    mem_limit: ${CANVAS_BACKEND_MEMORY_LIMIT:-4g}
+    cpus: ${CANVAS_BACKEND_CPUS:-2}
+    pids_limit: ${CANVAS_BACKEND_PIDS_LIMIT:-256}
+    logging:
+      driver: json-file
+      options:
+        max-size: ${CANVAS_LOG_MAX_SIZE:-10m}
+        max-file: "3"
     depends_on:
       postgres:
         condition: service_healthy

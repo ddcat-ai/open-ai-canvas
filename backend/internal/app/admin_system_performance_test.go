@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +21,20 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestAdminAgentStatusExplainsDeploymentHardCap(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true,"active":1,"limit":2,"queued":0,"sessionCap":2}`))
+	}))
+	defer server.Close()
+	t.Setenv("YINGCE_AGENT_URL", server.URL)
+	svc, _ := newSystemPerformanceTestService(t)
+	agents := svc.collectAgentServices(context.Background())
+	if len(agents) != 1 || agents[0].Limit != 2 || !strings.Contains(agents[0].StatusMessage, "部署硬上限 2") || strings.Contains(agents[0].StatusMessage, "重新保存") {
+		t.Fatalf("hard cap not explained: %+v", agents)
+	}
+}
 
 func TestAdminSystemPerformanceRequiresAdmin(t *testing.T) {
 	svc := &Service{}
