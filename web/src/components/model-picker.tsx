@@ -86,9 +86,6 @@ export function ModelPicker({
     const creationVariant = variant === "creation";
     const currentChannel = current ? resolveModelChannel(config, current) : undefined;
     const isCurrentCustomChannel = Boolean(current && currentChannel && currentChannel.scope !== "system");
-    const currentChannelLabel = current ? modelChannelLabel(config, current) : "";
-    const currentModelName = current ? modelOptionName(current) : "";
-    const showChannelBadge = Boolean(currentChannelLabel && currentChannelLabel !== currentModelName && currentChannelLabel !== modelDisplayName(config, current) && !isCurrentCustomChannel);
 
     useLayoutEffect(() => {
         if (!open) return;
@@ -372,11 +369,6 @@ export function ModelPicker({
                             <ModelIcon config={config} model={current} />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
-                        {showChannelBadge ? (
-                            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none bg-foreground/10 text-foreground/70" title={currentChannelLabel}>
-                                {currentChannelLabel.length > 8 ? currentChannelLabel.slice(0, 8) : currentChannelLabel}
-                            </span>
-                        ) : null}
                         {isCurrentCustomChannel ? <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">个人</span> : null}
                         {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} quote={routeQuote} compact /> : null}
                     </span>
