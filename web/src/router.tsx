@@ -1,7 +1,8 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
+import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from "react-router";
 import { lazyAdminPage } from "@/pages/admin/admin-page-loader";
 
+import { AuthDialogHost } from "@/components/auth/auth-dialog-host";
 import { RequireAuth } from "@/components/auth/require-auth";
 // 功能开关守卫包在页面 Suspense 之外，懒加载会让整个工作区退回全屏加载页；体积很小，直接静态引入。
 import { RequireFeature } from "@/components/auth/require-feature";
@@ -101,6 +102,15 @@ function AuthenticatedWorkspaceLayout() {
     );
 }
 
+function RootLayout() {
+    return (
+        <>
+            <Outlet />
+            <AuthDialogHost />
+        </>
+    );
+}
+
 /**
  * DEV 专用实验室路由。
  *
@@ -120,7 +130,7 @@ function devRoutes() {
     ];
 }
 
-export const router = createBrowserRouter([
+const routes: RouteObject[] = [
     {
         element: <AuthScene />,
         errorElement: <RouteErrorPage />,
@@ -295,4 +305,6 @@ export const router = createBrowserRouter([
         ],
     },
     { path: "*", element: fullScreenDeferred(<NotFound />) },
-]);
+];
+
+export const router = createBrowserRouter([{ element: <RootLayout />, children: routes }]);
