@@ -31,6 +31,8 @@ const { createRoot } = await import("react-dom/client");
 const agent = await import("@/services/api/agent");
 const history = await import("@/services/cloud-agent-conversations");
 const awaitImportHistory = await import("@/services/cloud-agent-history");
+// mock.module 会改写已导入模块的导出，先留住真实的目录读取。
+const realRefreshCloudAgentConversations = awaitImportHistory.refreshCloudAgentConversations;
 const skillsApi = await import("@/services/api/skills");
 const { setActiveUserScope } = await import("@/lib/user-scope");
 const { defaultModelCapabilityConfig } = await import("@/lib/model-capabilities");
@@ -134,6 +136,13 @@ mock.module("@/services/cloud-agent-history", () => ({
     refreshCloudAgentConversations: async (options: any) => {
         refreshRequests.push(options);
         if (options.scope !== "sync-user") return [];
+        // 草稿画布落库前，服务端的画布对话目录返回 404；走真实目录读取，验证它不会把面板卡在“正在准备”。
+        if (draftCanvasUntilPrepared && !canvasPrepared) {
+            const missing = async () => {
+                throw new ApiError("画布不存在", { status: 404, code: 404, reason: "not_found" });
+            };
+            return realRefreshCloudAgentConversations({ ...options, observedConversationIds: [], client: { listConversations: missing, getConversation: missing, listRuns: missing, getRun: missing } });
+        }
         return refreshOverride ? refreshOverride() : remote;
     },
     loadCloudAgentConversation: async (id: string) => remote.find((item) => item.serverConversationId === id)!,
@@ -389,6 +398,30 @@ test("新建草稿画布打开面板时读不到偏好，发送时先落库再�
         expect(sent).toEqual(["first"]);
         expect(sendInputs[0]?.profileRevision).toBe("profile");
         expect(generated).toBe(0);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("新建草稿画布上排队的消息，在本轮结束后自动发出，不会一直显示正在准备", async () => {
+    const initial = chat("draft-queued", makeRun("working", "running"));
+    const mounted = await mount(initial, [initial], null, undefined, undefined, { draftCanvas: true });
+    try {
+        await act(async () => composer.onPromptChange("生成2个小海獭的图片"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(composer.tray.props.outbox.items).toHaveLength(1);
+        expect(sendInputs).toHaveLength(0);
+        await act(async () => {
+            subscriptions.at(-1)!.event({ eventId: "finished", runId: "working", seq: 5, type: "run_status", payload: { status: "completed" }, createdAt: initial.updatedAt });
+            await settle();
+        });
+        expect(cloudCalls).toEqual(["profile", "prepare", "profile"]);
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]?.profileRevision).toBe("profile");
+        expect(composer.tray?.props.outbox.items ?? []).toHaveLength(0);
     } finally {
         await mounted.close();
     }
