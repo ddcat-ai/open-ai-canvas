@@ -164,10 +164,27 @@ describe("Agent SSE recovery", () => {
         let requests = 0;
         globalThis.fetch = (async (_url, init) => {
             requests++;
-            return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new Error("timeout")), { once: true }));
+            return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted", "AbortError")), { once: true }));
         }) as typeof fetch;
-        expect(await observe({ timeoutMs: 10 }).done).toBeInstanceOf(Error);
+        const result = observe({ timeoutMs: 10 });
+        expect(await result.done).toMatchObject({ name: "AbortError" });
         expect(requests).toBe(5);
+        expect(result.statuses.at(-1)).toBe("disconnected");
+    });
+
+    it("reconnects after a watchdog AbortError and receives the terminal run state", async () => {
+        let requests = 0;
+        globalThis.fetch = (async (_url, init) => {
+            requests++;
+            if (requests === 1) return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted", "AbortError")), { once: true }));
+            return stream(snapshot("completed"));
+        }) as typeof fetch;
+        const result = observe({ timeoutMs: 10 });
+        await expect(result.done).resolves.toBeUndefined();
+        expect(requests).toBe(2);
+        expect(result.statuses).toContain("reconnecting");
+        expect(result.statuses.at(-1)).toBe("connected");
+        expect(result.events.filter((item) => item.type === "run_status").map((item) => item.payload.status)).toEqual(["completed"]);
     });
 
     it("unsubscribe aborts the live reader without reporting a run failure", async () => {

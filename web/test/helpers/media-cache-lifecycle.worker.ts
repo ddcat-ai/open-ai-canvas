@@ -22,7 +22,7 @@ self.onmessage = async (event: MessageEvent<string>) => {
 async function run(scenario: string) {
     const storage = new Map<string, string>();
     const stores = new Map<string, Map<string, unknown>>();
-    const listeners = new Map<string, (event: { persisted: boolean }) => void>();
+    const windowEvents = new EventTarget();
     const revoked: string[] = [];
     const created: string[] = [];
     const stored = (name: string) => {
@@ -55,7 +55,9 @@ async function run(scenario: string) {
         configurable: true,
         value: {
             localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) },
-            addEventListener: (name: string, callback: (event: { persisted: boolean }) => void) => listeners.set(name, callback),
+            addEventListener: windowEvents.addEventListener.bind(windowEvents),
+            removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
+            dispatchEvent: windowEvents.dispatchEvent.bind(windowEvents),
         },
     });
     Object.defineProperty(globalThis, "navigator", { configurable: true, value: { storage: { estimate: async () => ({ quota: 320 * 1024 * 1024 }) } } });

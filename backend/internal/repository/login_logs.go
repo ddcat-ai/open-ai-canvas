@@ -19,6 +19,8 @@ type LoginLogFilter struct {
 	To      *time.Time
 }
 
+var ErrAuthSessionUserMismatch = errors.New("auth session user changed")
+
 func (r *Repository) AppendLoginLog(event *model.LoginLog) error { return r.db.Create(event).Error }
 
 func (r *Repository) LoginLogs(filter LoginLogFilter, limit, offset int) ([]model.LoginLog, int64, error) {
@@ -63,7 +65,7 @@ func (r *Repository) LoginLog(id string) (*model.LoginLog, error) {
 }
 
 // 凭据校验、撤销和日志提交在同一事务中；只有真正撤销的有效会话写成功事件。
-func (r *Repository) RevokeAuthSessionWithLog(sessionID, tokenHash string, event *model.LoginLog) error {
+func (r *Repository) RevokeAuthSessionWithLog(sessionID, tokenHash string, event *model.LoginLog, expectedUserID ...string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		// SQLite 先取得写锁，避免并发退出在读快照后升级写锁时互相冲突。
 		if tx.Dialector.Name() == "sqlite" {
@@ -82,6 +84,9 @@ func (r *Repository) RevokeAuthSessionWithLog(sessionID, tokenHash string, event
 		// 既有 SQLite 会话可能保存不同时区的时间字符串，不能按 SQL 字符串比较有效期。
 		if !session.ExpiresAt.After(time.Now()) {
 			return nil
+		}
+		if len(expectedUserID) > 0 && expectedUserID[0] != "" && session.UserID != expectedUserID[0] {
+			return ErrAuthSessionUserMismatch
 		}
 		var user model.User
 		if err := tx.First(&user, "id = ?", session.UserID).Error; err != nil {

@@ -154,6 +154,10 @@ func (s *Service) Logout(cookieValue string, contexts ...LoginContext) error {
 	return s.authDomain().Logout(cookieValue, contexts...)
 }
 
+func (s *Service) LogoutForExpectedUser(cookieValue, expectedUserID string, contexts ...LoginContext) error {
+	return s.authDomain().LogoutForExpectedUser(cookieValue, expectedUserID, contexts...)
+}
+
 func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 	return s.authDomain().CurrentUser(cookieValue)
 }

@@ -3,7 +3,7 @@ import { projectImageParameters, imageParametersForSpec } from "./image-paramete
 import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
-import { scopedLocalStorage, setActiveUserScope, withUserScopedPersistenceSuppressed } from "@/lib/user-scope";
+import { assertCurrentUserSession, captureUserSession, isUserSessionInvalidated, scopedLocalStorage, setActiveUserScope, withUserScopedPersistenceSuppressed, type UserSessionSnapshot } from "@/lib/user-scope";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceSuppressed } from "@/stores/canvas/use-canvas-store";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, withAssetStorePersistenceSuppressed } from "@/stores/use-asset-store";
@@ -21,28 +21,40 @@ import { clearResourceBlobCache } from "@/services/resource-blob-cache";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 
-export async function switchUserStorageScope(userId?: string | null) {
-    await withGenerationConsumersPaused(async () => {
-        await withRemoteUserDataSyncExclusive(async () => {
+export async function switchUserStorageScope(userId?: string | null, expectedSession = captureUserSession(true), isCurrent = () => true) {
+    return withGenerationConsumersPaused(async () => {
+        return withRemoteUserDataSyncExclusive(async () => {
             await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+            assertCurrentUserSession(expectedSession, true);
+            if (!isCurrent()) return false;
             resetRemoteUserDataSync();
             clearResourceAccessCache();
             clearResourceBlobCache();
-            setActiveUserScope(userId);
+            setActiveUserScope(userId, expectedSession);
+            return true;
         });
     });
 }
 
 let sessionGeneration = 0;
 
-export async function applyUserSession(payload: AuthSessionPayload) {
+export function suspendUserSession() {
+    sessionGeneration += 1;
+    useUserStore.getState().setHydrated(false);
+    appQueryClient.clear();
+    resetRemoteUserDataSync();
+    clearResourceAccessCache();
+    clearResourceBlobCache();
+}
+
+export async function applyUserSession(payload: AuthSessionPayload, expectedSession: UserSessionSnapshot = captureUserSession(true)) {
     const generation = ++sessionGeneration;
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
     useUserStore.getState().setHydrated(false);
     // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
     if (previousUserId !== nextUserId) appQueryClient.clear();
-    await switchUserStorageScope(payload.user?.id);
+    if (!(await switchUserStorageScope(payload.user?.id, expectedSession, () => isCurrentGeneration(generation)))) return;
     // 切换存储 scope 时 user store 仍保留旧身份；此处只能先检查 generation。
     if (!isCurrentGeneration(generation)) return;
     withCanvasStorePersistenceSuppressed(() =>
@@ -148,7 +160,7 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
 }
 
 function isCurrentSession(generation: number, userId: string) {
-    return generation === sessionGeneration && (useUserStore.getState().user?.id || "") === userId;
+    return !isUserSessionInvalidated() && generation === sessionGeneration && (useUserStore.getState().user?.id || "") === userId;
 }
 
 function isCurrentGeneration(generation: number) {

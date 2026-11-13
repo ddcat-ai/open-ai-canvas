@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { AxiosRequestConfig } from "axios";
 import { apiClient, ApiError, type BackendEnvelope } from "../src/services/api/request";
 import { collectSiteTraffic, getSiteTrafficOverview, getSiteTrafficToday, type SiteTrafficEvent, type SiteTrafficInsights, type SiteTrafficOperations, type SiteTrafficOverview, type SiteTrafficToday } from "../src/services/api/site-traffic";
 import { trafficOperationsFixture } from "./fixtures/site-traffic-operations.fixture";
@@ -103,7 +104,7 @@ describe("site traffic API contract", () => {
             observed = true;
             expect(config.method).toBe("post");
             expect(config.url).toBe("/traffic/events");
-            expect(config.signal).toBe(controller.signal);
+            expect(config.signal?.aborted).toBe(false);
             expect(config.timeout).toBe(8000);
             expect(config.adapter).toBe("fetch");
             expect(config.fetchOptions).toEqual({ referrerPolicy: "no-referrer" });
@@ -129,7 +130,7 @@ describe("site traffic API contract", () => {
             expect(config.method).toBe("get");
             expect(config.url).toBe("/admin/traffic/overview");
             expect(config.params).toEqual(query);
-            expect(config.signal).toBe(controller.signal);
+            expect(config.signal?.aborted).toBe(false);
             expect(config.withCredentials).not.toBe(false);
             return envelope(valid);
         }) as typeof apiClient.request;
@@ -147,7 +148,7 @@ describe("site traffic API contract", () => {
             expect(config.method).toBe("get");
             expect(config.url).toBe("/admin/traffic/today");
             expect(config.params).toBeUndefined();
-            expect(config.signal).toBe(controller.signal);
+            expect(config.signal?.aborted).toBe(false);
             expect(config.withCredentials).not.toBe(false);
             return envelope(today);
         }) as typeof apiClient.request;
@@ -174,6 +175,37 @@ describe("site traffic API contract", () => {
             await expect(getSiteTrafficOverview(query)).rejects.toMatchObject({ status: 404, retryable: false });
             await expect(getSiteTrafficToday()).rejects.toMatchObject({ status: 404, retryable: false });
         } finally {
+            apiClient.request = original;
+        }
+    });
+
+    test.each(["collect", "overview", "today"] as const)("%s forwards caller cancellation to the active transport", async (kind) => {
+        const controller = new AbortController();
+        const original = apiClient.request;
+        let transportSignal: AxiosRequestConfig["signal"];
+        let abortEvents = 0;
+        apiClient.request = (async (config) => {
+            transportSignal = config.signal;
+            return new Promise<never>((_resolve, reject) => {
+                config.signal?.addEventListener?.(
+                    "abort",
+                    () => {
+                        abortEvents += 1;
+                        reject(new DOMException("The operation was aborted", "AbortError"));
+                    },
+                    { once: true },
+                );
+            });
+        }) as typeof apiClient.request;
+        try {
+            const pending = kind === "collect" ? collectSiteTraffic([event], { signal: controller.signal }) : kind === "overview" ? getSiteTrafficOverview(query, { signal: controller.signal }) : getSiteTrafficToday({ signal: controller.signal });
+            expect(transportSignal?.aborted).toBe(false);
+            controller.abort();
+            expect(transportSignal?.aborted).toBe(true);
+            expect(abortEvents).toBe(1);
+            await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+        } finally {
+            controller.abort();
             apiClient.request = original;
         }
     });

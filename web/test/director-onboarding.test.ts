@@ -117,12 +117,14 @@ describe("用户隔离", () => {
         }
     });
 
-    test("进度只走 localforage，完全不碰 localStorage", async () => {
+    test("进度只走 localforage，localStorage 仅允许读取身份提示", async () => {
         const harness = localforageHarness();
         try {
-            await savePrevisOnboardingProgress("user-a", progressAt("move"));
-            await loadPrevisOnboardingProgress("user-a");
-            expect(harness.localStorageCalls).toEqual([]);
+            const progress = progressAt("move");
+            await savePrevisOnboardingProgress("user-a", progress);
+            expect(await loadPrevisOnboardingProgress("user-a")).toEqual(progress);
+            expect([...harness.durable.keys()]).toEqual([`${PREVIS_ONBOARDING_KEY}:user:user-a`]);
+            expect(harness.localStorageCalls.filter((call) => call !== "get:yingce:active-user-scope")).toEqual([]);
         } finally {
             harness.restore();
         }

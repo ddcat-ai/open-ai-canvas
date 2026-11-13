@@ -1,6 +1,6 @@
 import { http, apiBaseURL } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser } from "@/services/api/task-text-stream";
-import { getActiveUserScope } from "@/lib/user-scope";
+import { assertCurrentUserSession, captureUserSession, isUserSessionInvalidated } from "@/lib/user-scope";
 
 export type AgentPermissionMode = "read_only" | "auto" | "request_approval";
 export type AgentReasoningMode = import("@/lib/text-thinking").ThinkingRequest;
@@ -155,11 +155,13 @@ export type CreateAgentRunInput = {
 // Never apply this policy to arbitrary provider generation POSTs.
 async function submitAgentRequest(path: string, input: CreateAgentRunInput) {
     const body = JSON.parse(JSON.stringify(input)) as CreateAgentRunInput;
-    const scope = getActiveUserScope();
+    const session = captureUserSession();
     for (let attempt = 0; ; attempt++) {
-        if (getActiveUserScope() !== scope) throw new DOMException("账号已切换，已停止原账号的请求重试", "AbortError");
+        assertCurrentUserSession(session);
         try {
-            return await http.post<{ run: AgentRun }>(path, body, { timeout: 15_000 });
+            const result = await http.post<{ run: AgentRun }>(path, body, { timeout: 15_000 });
+            assertCurrentUserSession(session);
+            return result;
         } catch (cause) {
             const error = cause as { retryable?: boolean; retryAfterMs?: number };
             if (!error.retryable || attempt >= 2) throw cause;
@@ -245,6 +247,9 @@ export function subscribeAgentEvents(
     options: { after?: number; onError?: (error: unknown) => void; onConnectionChange?: (status: "connecting" | "connected" | "reconnecting" | "disconnected") => void; timeoutMs?: number } = {},
 ) {
     const controller = new AbortController();
+    const session = captureUserSession(true);
+    const abortSession = () => controller.abort();
+    session.signal.addEventListener("abort", abortSession, { once: true });
     let localSeq = 0;
     let cursor = Number.isSafeInteger(options.after) && (options.after as number) > 0 ? (options.after as number) : 0;
     let lastActiveMessageKey = "";
@@ -269,11 +274,13 @@ export function subscribeAgentEvents(
             touch();
             options.onConnectionChange?.(failures ? "reconnecting" : "connecting");
             try {
+                assertCurrentUserSession(session);
                 const response = await fetch(`${String(apiBaseURL).replace(/\/+$/, "")}/agent/runs/${encodeURIComponent(runId)}/events?after=${cursor}`, {
                     credentials: "include",
                     signal: attempt.signal,
-                    headers: { Accept: "text/event-stream", "Last-Event-ID": String(cursor) },
+                    headers: { Accept: "text/event-stream", "Last-Event-ID": String(cursor), "X-Canvas-Expected-User": session.scope },
                 });
+                assertCurrentUserSession(session);
                 if (!response.ok) {
                     const error = new AgentStreamError(response.status);
                     const header = response.headers.get("retry-after");
@@ -310,6 +317,8 @@ export function subscribeAgentEvents(
                             parser,
                             decoder.decode(value, { stream: !done }),
                             (item) => {
+                                assertCurrentUserSession(session);
+                                if (controller.signal.aborted) return;
                                 if (item.event === "agent_event") {
                                     const event = item.data as AgentEvent;
                                     if (event.runId !== runId || !Number.isSafeInteger(event.seq) || event.seq <= cursor) return;
@@ -361,7 +370,8 @@ export function subscribeAgentEvents(
                 if (terminal) return;
                 throw new Error("Agent 连接已中断，运行仍保留，可重新连接");
             } catch (error) {
-                if (controller.signal.aborted) return;
+                // 看门狗只取消当前连接；账号失效或主动退订才终止整个订阅。
+                if (isUserSessionInvalidated() || controller.signal.aborted || session.signal.aborted) return;
                 if (++failures >= 5) {
                     options.onConnectionChange?.("disconnected");
                     options.onError?.(error);
@@ -385,6 +395,6 @@ export function subscribeAgentEvents(
                 if (controller.signal.aborted) finish();
             });
         }
-    })();
+    })().finally(() => session.signal.removeEventListener("abort", abortSession));
     return () => controller.abort();
 }

@@ -439,7 +439,11 @@ func (s *Service) usernameFromEmail(email string) (string, error) {
 	return "", kernel.NewAppError(409, "无法生成可用的用户名，请改用用户名注册")
 }
 
-func (s *Service) Logout(cookieValue string, contexts ...LoginContext) (err error) {
+func (s *Service) Logout(cookieValue string, contexts ...LoginContext) error {
+	return s.LogoutForExpectedUser(cookieValue, "", contexts...)
+}
+
+func (s *Service) LogoutForExpectedUser(cookieValue, expectedUserID string, contexts ...LoginContext) (err error) {
 	sessionID, token := parseSessionCookie(cookieValue)
 	if sessionID == "" || token == "" {
 		return nil
@@ -456,7 +460,11 @@ func (s *Service) Logout(cookieValue string, contexts ...LoginContext) (err erro
 			err = s.recordLoginFailure(event, err)
 		}
 	}()
-	return s.repo.RevokeAuthSessionWithLog(sessionID, HashToken(token), event)
+	err = s.repo.RevokeAuthSessionWithLog(sessionID, HashToken(token), event, expectedUserID)
+	if errors.Is(err, repository.ErrAuthSessionUserMismatch) {
+		return kernel.Forbidden("账号已切换，请重新加载后重试")
+	}
+	return err
 }
 
 func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
@@ -471,7 +479,10 @@ func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 		}
 		return nil, err
 	}
-	if time.Now().After(session.ExpiresAt) || session.TokenHash != HashToken(token) {
+	if session.TokenHash != HashToken(token) {
+		return nil, kernel.Unauthorized("登录状态已失效")
+	}
+	if time.Now().After(session.ExpiresAt) {
 		if cleanupErr := s.repo.DeleteAuthSession(sessionID); cleanupErr != nil {
 			log.Printf("expired auth session cleanup failed: session_id=%s error=%v", sessionID, cleanupErr)
 		}

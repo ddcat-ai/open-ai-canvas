@@ -1,6 +1,7 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
+import axios, { AxiosHeaders, type AxiosRequestConfig, type AxiosResponse, type RawAxiosRequestHeaders } from "axios";
 
 import { translate } from "@/i18n";
+import { assertCurrentUserSession, captureUserSession } from "@/lib/user-scope";
 import { localizedApiErrorMessage } from "@/services/api/error-codes";
 
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
@@ -129,11 +130,47 @@ function retryAfterMilliseconds(headers: unknown) {
 
 export type HttpRequestConfig = Omit<AxiosRequestConfig, "method" | "url" | "data" | "baseURL"> & {
     allowNotModified?: boolean;
+    /** 仅登录、注册和会话恢复等公开认证接口使用；账户业务接口始终绑定当前身份。 */
+    session?: "public";
 };
 
 async function send<T>(method: string, url: string, data?: unknown, config?: HttpRequestConfig) {
-    const { allowNotModified, ...axiosConfig } = config || {};
-    return request<T>(apiClient.request<BackendEnvelope<T>>({ method, url, data, ...axiosConfig }), { allowNotModified });
+    const { allowNotModified, session, ...axiosConfig } = config || {};
+    return request<T>(sendWithSession<BackendEnvelope<T>>({ method, url, data, ...axiosConfig }, session), { allowNotModified });
+}
+
+async function sendWithSession<T>(config: AxiosRequestConfig, mode?: "public"): Promise<AxiosResponse<T>> {
+    const snapshot = captureUserSession(mode === "public");
+    const headers = new AxiosHeaders();
+    const methodHeaderNames = new Set(["common", "delete", "get", "head", "post", "put", "patch", "options"]);
+    const headerSources: Array<RawAxiosRequestHeaders | undefined> = [config.headers?.common, config.headers?.[config.method?.toLowerCase() || "get"], config.headers];
+    for (const source of headerSources) {
+        for (const [name, value] of Object.entries(source || {})) {
+            if (value !== undefined && !methodHeaderNames.has(name.toLowerCase())) headers.set(name, value);
+        }
+    }
+    if (mode !== "public") {
+        const expectedUser = headers.get("X-Canvas-Expected-User");
+        if (expectedUser && expectedUser !== snapshot.scope) throw new DOMException("请求所属账号已变化", "AbortError");
+        headers.set("X-Canvas-Expected-User", snapshot.scope, true);
+    }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    snapshot.signal.addEventListener("abort", abort, { once: true });
+    config.signal?.addEventListener?.("abort", abort, { once: true });
+    if (snapshot.signal.aborted || config.signal?.aborted) abort();
+    try {
+        const response = await apiClient.request<T>({ ...config, headers, signal: controller.signal });
+        assertCurrentUserSession(snapshot, mode === "public");
+        return response;
+    } catch (error) {
+        // 即使传输层忽略取消，旧会话的响应和错误也不能进入新账号的缓存或重试路径。
+        assertCurrentUserSession(snapshot, mode === "public");
+        throw error;
+    } finally {
+        snapshot.signal.removeEventListener("abort", abort);
+        config.signal?.removeEventListener?.("abort", abort);
+    }
 }
 
 /**
@@ -149,7 +186,7 @@ export const http = {
     deleteWithBody: <T>(url: string, data?: unknown, config?: HttpRequestConfig) => send<T>("delete", url, data, config),
     async raw<T>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
         try {
-            return await apiClient.request<T>(config);
+            return await sendWithSession<T>(config);
         } catch (error) {
             throw unwrapTransportError(error);
         }
