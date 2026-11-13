@@ -21,7 +21,7 @@ import { ReferenceModePanel, ReferenceScreenSummary } from "./reference-mode-pan
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { ModelPicker } from "@/components/model-picker";
 import { systemModelQuoteRequest } from "@/lib/model-pricing";
-import { cancelGenerationTask, createGenerationTask, listGenerationTasks, queryGenerationTask, recoverGenerationTaskMedia, retryGenerationTask, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
+import { cancelGenerationTask, createGenerationTask, listGenerationTasks, queryGenerationTask, recoverGenerationTaskMedia, retryGenerationTask, subscribeGenerationTasks, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { parseBackendGenerationResult, prepareBackendGenerationTask } from "@/services/api/generation-task";
 import { quoteModel } from "@/services/api/logical-models";
 import { resourceStorageKey, resolveResourceVariantUrl, resourceIdFromStorageKey } from "@/services/api/resources";
@@ -75,6 +75,7 @@ import { displayImageSizeChoices, imageTypes, labelOf, languages, options, platf
 import { CommerceMarketPicker, PlatformMark } from "./market-picker";
 import { CommerceDirectionCards, directionDescription } from "./direction-cards";
 import { CommerceStylePicker } from "./style-picker";
+import { PlanningActivity } from "./planning-activity";
 import { MarketingMaterialPicker } from "./marketing-material-picker";
 import { commerceScenes, currentCommerceScene, type CommerceScene } from "./scenes";
 import { automaticMarketingSelections, marketingPlanSlots, parseMarketingSelections, type MarketingSelection } from "./marketing-materials";
@@ -392,10 +393,21 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const [stageMessage, setStage] = useState("");
     const [planningTask, setPlanningTask] = useState<GenerationTask>();
     const [planningSaveError, setPlanningSaveError] = useState(false);
+    // The task receipt is stored locally before its ID is saved to the project.
+    // A failed marker save must not hide a running task or invite a second one.
+    const [planningMarkerSaveError, setPlanningMarkerSaveError] = useState(false);
     const planningPending = Boolean(draft.planningTaskId && !plan?.images.length);
     const [quote, setQuote] = useState<{ agent: number | null; vision: number | null; image: number | null; imageTotal: number | null } | null>(null);
     const planningRecovered = useRef("");
     const planningSettling = useRef("");
+    // The backend exposes running text only through the task text stream; polling
+    // keeps status/recovery authoritative, this ref only supplies the visible
+    // received-character count between deltas.
+    const planningLiveText = useRef<{ id: string; text: string }>({ id: "", text: "" });
+    // Settlement is attempted once per task; after a save failure only the
+    // explicit retry action may run it again, so duplicate terminal events
+    // cannot silently repeat the save or advance into paid image work.
+    const planningAttempted = useRef(new Set<string>());
     const autoStartRef = useRef(false);
     // Only a planning task submitted by this mounted page may continue into paid
     // image tasks; a reload or another tab only restores and waits for the user.
@@ -608,8 +620,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             // finishes after a reload waits for the explicit "continue" action.
             autoStartRef.current = Boolean(nextDraft.planningTaskId && nextDraft.planningTaskId === autoStartTaskRef.current);
             planningRecovered.current = "";
+            planningAttempted.current = new Set();
+            planningLiveText.current = { id: "", text: "" };
             setPlanningTask(undefined);
             setPlanningSaveError(false);
+            setPlanningMarkerSaveError(false);
             if (saved) setEcommerceActiveProject(scope, saved.id);
             hydrated.current = true;
             setRestoring(false);
@@ -758,6 +773,9 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             setSelectedExportIds(new Set());
             setPlanningTask(undefined);
             setPlanningSaveError(false);
+            setPlanningMarkerSaveError(false);
+            planningAttempted.current = new Set();
+            planningLiveText.current = { id: "", text: "" };
             autoStartRef.current = false;
             setEcommerceActiveProject(scope, saved.id);
             await writeEcommerceWorkspace(scope, { sessionId: owner.id, project: saved, draft: nextDraft, plan: previousPlan, creationMode, autoGenerate }).catch(() => setCacheError("服务端已保存，本机草稿缓存失败"));
@@ -777,8 +795,10 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     };
 
     const settlePlanningTask = useCallback(
-        async (task: GenerationTask, sourceDraft: EcommerceDraft) => {
+        async (task: GenerationTask, sourceDraft: EcommerceDraft, retry = false) => {
             if (!isCurrent(session) || planningRecovered.current === task.id || planningSettling.current === task.id) return;
+            if (!retry && planningAttempted.current.has(task.id)) return;
+            planningAttempted.current.add(task.id);
             planningSettling.current = task.id;
             setPlanningSaveError(false);
             try {
@@ -836,8 +856,12 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         let cancelled = false;
         const receive = (task: GenerationTask) => {
             if (cancelled || !isCurrent(session)) return;
-            setPlanningTask(task);
-            if (terminal(task.status)) void settlePlanningTask(task, draft);
+            const live = planningLiveText.current;
+            setPlanningTask(live.id === task.id && !task.textDraft ? { ...task, textDraft: live.text } : task);
+            // A stream progress event can report succeeded before the final task
+            // payload (and its resultJson) has been read back. Settling then would
+            // reject a valid plan as "no result"; wait for the authoritative task.
+            if (terminal(task.status) && (task.status !== "succeeded" || task.resultJson)) void settlePlanningTask(task, draft);
         };
         void queryGenerationTask(id)
             .then(receive)
@@ -845,8 +869,25 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 if (!cancelled && isCurrent(session)) setStage(errorText(cause));
             });
         const unsubscribe = subscribeGenerationTasks([id], receive);
+        // Status and recovery stay on polling; the text stream only feeds the
+        // received-character line while the task runs. Its reader deduplicates
+        // by sequence, so reconnects and replayed deltas cannot double count.
+        const controller = new AbortController();
+        void waitForGenerationTask(id, {
+            useTextEvents: true,
+            signal: controller.signal,
+            onTextDelta: (text) => {
+                if (cancelled || !isCurrent(session)) return;
+                planningLiveText.current = { id, text };
+                setPlanningTask((current) => (current && current.id === id ? { ...current, textDraft: text } : current));
+            },
+            onTaskUpdate: receive,
+        }).catch(() => {
+            // A missing or blocked text stream must not disturb polling recovery.
+        });
         return () => {
             cancelled = true;
+            controller.abort();
             unsubscribe();
         };
     }, [draft.planningTaskId, plan, settlePlanningTask, session]);
@@ -1377,6 +1418,17 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             const nextDraft = { ...resolvedDraft, planningTaskId: task.id };
             setEcommercePlanningReceipt(scope, destination.id, task.id);
             sessionStorage.setItem(`ecommerce-composer-submitted:${scope}:${destination.id}`, composerFingerprint(resolvedDraft));
+            if (isCurrent(owner)) {
+                // The paid task already exists. Show its progress before the marker
+                // save so a failed save cannot hide it or make a retry look needed.
+                setDraft(nextDraft);
+                setPlan(previousPlan);
+                planningLiveText.current = { id: "", text: "" };
+                setPlanningTask(task);
+                setPlanningMarkerSaveError(false);
+                clearSubmittedComposer(resolvedDraft);
+                setStage("策划任务已提交，正在保存任务进度");
+            }
             if (peekEcommerceWorkspace(scope)?.sessionId === owner.id || isCurrent(owner)) {
                 void writeEcommerceWorkspace(scope, { sessionId: owner.id, project: destination, draft: nextDraft, plan: previousPlan, creationMode: "ai", autoGenerate: Boolean(selectedDirection) || autoGenerate, submittedDraft: resolvedDraft }).catch(
                     () => {
@@ -1384,13 +1436,17 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     },
                 );
             }
-            await save(nextDraft, previousPlan, owner);
-            if (isCurrent(owner)) {
-                setDraft(nextDraft);
-                setPlan(previousPlan);
-                setPlanningTask(task);
-                clearSubmittedComposer(resolvedDraft);
-                setStage("创作资料已提交，切换页面后可继续查看分析进度");
+            try {
+                await save(nextDraft, previousPlan, owner);
+                if (isCurrent(owner)) setStage("创作资料已提交，切换页面后可继续查看分析进度");
+            } catch (cause) {
+                // Never turn this into a new submission: the task exists and its
+                // receipt is stored. The explicit retry only repeats the save.
+                if (isCurrent(owner)) {
+                    setPlanningMarkerSaveError(true);
+                    setStage(`策划任务已提交并在后台运行，但任务进度保存失败：${errorText(cause)}。可重试保存，或刷新页面按任务回执恢复。`);
+                    message.error(errorText(cause));
+                }
             }
         } catch (cause) {
             if (isCurrent(owner)) {
@@ -1403,6 +1459,28 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 submissionLock.current = false;
                 setBusy(false);
             }
+        }
+    };
+
+    const retryPlanningMarkerSave = async () => {
+        const owner = session;
+        if (!planningTask || submissionLock.current || !draft.planningTaskId) return;
+        submissionLock.current = true;
+        setBusy(true);
+        try {
+            await save({ ...draft, planningTaskId: planningTask.id }, plan, owner);
+            if (isCurrent(owner)) {
+                setPlanningMarkerSaveError(false);
+                setStage("任务进度已保存，可切换页面后继续查看分析进度");
+            }
+        } catch (cause) {
+            if (isCurrent(owner)) {
+                setStage(`任务进度仍未保存：${errorText(cause)}。任务仍在后台运行，可刷新页面按任务回执恢复。`);
+                message.error(errorText(cause));
+            }
+        } finally {
+            submissionLock.current = false;
+            if (isCurrent(owner)) setBusy(false);
         }
     };
 
@@ -1797,8 +1875,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         setRecommendationId("");
         autoStartRef.current = false;
         planningRecovered.current = "";
+        planningAttempted.current = new Set();
+        planningLiveText.current = { id: "", text: "" };
         setPlanningTask(undefined);
         setPlanningSaveError(false);
+        setPlanningMarkerSaveError(false);
         setStage("");
         setRestoreVersion((value) => value + 1);
         navigate(`/ecommerce?project=${encodeURIComponent(item.id)}${focusId ? `&focus=${encodeURIComponent(focusId)}` : ""}`);
@@ -1829,8 +1910,11 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         setRecommendationId("");
         autoStartRef.current = false;
         planningRecovered.current = "";
+        planningAttempted.current = new Set();
+        planningLiveText.current = { id: "", text: "" };
         setPlanningTask(undefined);
         setPlanningSaveError(false);
+        setPlanningMarkerSaveError(false);
         setEcommerceActiveProject(scope, null);
         navigate(`/ecommerce?new=${owner.id}`);
     };
@@ -2155,7 +2239,15 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                     图片导出未完成：{downloadError}。可以重新点击导出。
                 </p>
             ) : null}
-            {planningSaveError && planningTask ? <Button onClick={() => void settlePlanningTask(planningTask, draft)}>重试保存分析结果</Button> : null}
+            {planningSaveError && planningTask ? <Button onClick={() => void settlePlanningTask(planningTask, draft, true)}>重试保存分析结果</Button> : null}
+            {planningMarkerSaveError && planningTask && !planningSaveError ? (
+                <>
+                    <p className="ecs-notice is-error" role="alert">
+                        策划任务已提交并在后台运行，但任务编号尚未保存到项目。任务不会重复提交；可重试保存，刷新页面也会按任务回执恢复。
+                    </p>
+                    <Button onClick={() => void retryPlanningMarkerSave()}>重试保存任务进度</Button>
+                </>
+            ) : null}
             {plan && plan.inputSignature !== commerceInputSignature(draft) ? (
                 <p className="ecs-notice" role="status">
                     配置已更新。当前方案保留供参考，重新策划后再生成。
@@ -2211,10 +2303,18 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                 </section>
             ) : null}
             {/* 正在运行的步骤在这里写明做什么；顶部流程条此时只亮起当前步，不再重复同一句话。 */}
-            {restoring || planningPending || directionsStatus === "loading" ? (
+            {restoring ? (
                 <div className="ecs-progress commerce-assistant-progress" role="status">
                     <LoaderCircle className="commerce-planning-spin" size={15} />
-                    <span>{restoring ? "正在恢复商品创作…" : commerceFlowNextStep(flowSteps)}</span>
+                    <span>正在恢复商品创作…</span>
+                </div>
+            ) : planningPending && !planningSaveError ? (
+                // 只呈现服务端可观察的任务状态、累计字数与已用时；结果保存失败时交给既有重试入口。
+                <PlanningActivity task={planningTask} references={activeCommerceReferences(draft).length} count={displayCount} automaticScreens={draft.referenceMode === "detail"} />
+            ) : directionsStatus === "loading" ? (
+                <div className="ecs-progress commerce-assistant-progress" role="status">
+                    <LoaderCircle className="commerce-planning-spin" size={15} />
+                    <span>{commerceFlowNextStep(flowSteps)}</span>
                 </div>
             ) : null}
             {stageMessage && !(plan && completed === total && creativeDirections.length) ? (

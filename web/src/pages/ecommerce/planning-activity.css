@@ -29,6 +29,7 @@
     align-items: center;
     gap: 8px;
     font-size: 13px;
+    overflow-wrap: anywhere;
 }
 .commerce-planning-title > span {
     color: var(--user-ink-muted, var(--muted-foreground));
@@ -61,6 +62,7 @@
 .commerce-planning-activity li strong {
     display: block;
     font-weight: 570;
+    overflow-wrap: anywhere;
 }
 .commerce-planning-activity li small {
     display: block;
@@ -68,6 +70,7 @@
     font-size: 11px;
     line-height: 1.65;
     color: var(--user-ink-muted, var(--muted-foreground));
+    overflow-wrap: anywhere;
 }
 .commerce-planning-activity .is-pending {
     opacity: 0.55;
