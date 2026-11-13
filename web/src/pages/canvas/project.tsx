@@ -3645,8 +3645,16 @@ function CanvasViewportPage() {
                             <CanvasScriptEditor
                                 node={activeScriptNode}
                                 nodes={nodes}
+                                connections={connections}
+                                batch={activeScriptNode ? visibleGenerationBatch(activeScriptNode) : undefined}
                                 open={Boolean(activeScriptNode)}
                                 onClose={() => setScriptEditorNodeId(null)}
+                                onFocusOutput={(nodeId) => {
+                                    setScriptEditorNodeId(null);
+                                    focusCanvasNode(nodeId);
+                                }}
+                                onRetryBatchItem={(batchId, itemId) => activeScriptNode && retryFailedBatchItems(activeScriptNode.id, batchId, itemId)}
+                                onStopBatch={(batchId) => activeScriptNode && stopRemainingBatchItems(activeScriptNode.id, batchId)}
                                 onUpdateRows={(rows) => activeScriptNode && replaceScriptRows(activeScriptNode.id, rows)}
                                 onEditAssets={(rowId) => activeScriptNode && setStoryboardAssetTarget({ nodeId: activeScriptNode.id, rowId })}
                                 onVisibleColumnsChange={(visibleColumns: StoryboardColumn[]) => {
