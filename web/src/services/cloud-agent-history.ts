@@ -1,6 +1,7 @@
 import { applyAgentEvent } from "@/lib/canvas/cloud-agent-events";
 import type { CloudAgentChatMessage } from "@/components/canvas/canvas-cloud-agent-chat-ui";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { ApiError } from "@/services/api/request";
 import { getAgentConversation, getAgentRun, listAgentConversations, listAgentConversationRuns, type AgentEvent, type AgentRun, type AgentConversationSummary } from "@/services/api/agent";
 import { cloudAgentConversationServerId, cloudAgentConversationTitle, type CloudAgentConversation } from "@/services/cloud-agent-conversations";
 
@@ -235,7 +236,11 @@ export async function refreshCloudAgentConversations(options: HistoryOptions & {
     if (options.canvasId)
         do {
             checkRequest(options, scope);
-            const page = await client.listConversations({ canvasId: options.canvasId, before, limit: 100, signal: options.signal });
+            const page = await client.listConversations({ canvasId: options.canvasId, before, limit: 100, signal: options.signal }).catch((cause) => {
+                // 画布还没存到服务端（新建草稿、首次同步未完成）时目录返回 404：服务端不会有这块画布的对话，按空目录处理；发送前会先保存画布。
+                if (!before && cause instanceof ApiError && cause.status === 404) return { items: [], nextCursor: undefined };
+                throw cause;
+            });
             checkRequest(options, scope);
             summaries.push(...page.items);
             before = page.nextCursor;
