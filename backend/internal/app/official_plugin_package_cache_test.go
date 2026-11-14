@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -180,7 +181,7 @@ func TestOfficialPluginPackageCacheCopiesAndVerifiesWhenLinkUnavailable(t *testi
 		t.Fatalf("streamed package differs from inspected source: %v", err)
 	}
 	copied, err := os.Stat(target)
-	if err != nil || os.SameFile(pkg.source, copied) || copied.Mode().Perm() != 0o600 {
+	if err != nil || os.SameFile(pkg.source, copied) || (runtime.GOOS != "windows" && copied.Mode().Perm() != 0o600) {
 		t.Fatalf("copy did not publish an independent private file: %v", err)
 	}
 }

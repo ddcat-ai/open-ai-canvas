@@ -1,1 +1,3 @@
 plugin-packages/*.sh text eol=lf
+/backend/builtin/** text eol=lf
+/backend/internal/app/testdata/agent_tools/** text eol=lf

@@ -987,6 +987,9 @@ func cachePluginPackage(path string, official officialPluginPackage) error {
 	if err := temporary.Close(); err != nil {
 		return err
 	}
+	if err := restrictPrivateFile(temporaryPath); err != nil {
+		return fmt.Errorf("restrict cached plugin package: %w", err)
+	}
 	return os.Rename(temporaryPath, path)
 }
 
@@ -1011,6 +1014,9 @@ func writePluginFile(path string, data []byte) error {
 	}
 	if err := temporary.Close(); err != nil {
 		return err
+	}
+	if err := restrictPrivateFile(temporaryPath); err != nil {
+		return fmt.Errorf("restrict plugin state file: %w", err)
 	}
 	return os.Rename(temporaryPath, path)
 }

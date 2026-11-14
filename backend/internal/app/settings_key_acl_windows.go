@@ -9,6 +9,10 @@ import (
 )
 
 func restrictSettingsKey(path string) error {
+	return restrictPrivateFile(path)
+}
+
+func restrictPrivateFile(path string) error {
 	user, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
 		return err
