@@ -170,6 +170,7 @@ func registerWechatRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		req.LoginContext = loginRequestContext(c)
+		req.Context = c.Request.Context()
 		result, err := svc.CompleteWechatRegistration(ticket, req)
 		if err != nil {
 			failService(c, err)

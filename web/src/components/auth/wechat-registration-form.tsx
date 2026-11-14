@@ -9,6 +9,7 @@ import { getAuthSession, type AuthSettings } from "@/services/api/auth";
 import { cancelWechatRegistration, completeWechatRegistration, getWechatRegistration, type WechatRegistrationInfo } from "@/services/api/wechat";
 import { emptyVerification, registrationVerificationRequired, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 import { VerificationFields } from "./verification-fields";
+import { TurnstileWidget } from "./turnstile-widget";
 import { AuthAgreementDialog, AuthNotice, AuthTabs, useAuthAgreement } from "./auth-form-parts";
 
 export function WechatRegistrationForm({ settings, settingsFailed, onReloadSettings, next }: { settings: AuthSettings | null; settingsFailed: boolean; onReloadSettings: () => void; next: string }) {
@@ -25,8 +26,11 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
     const [email, setEmail] = useState("");
     const [accepted, setAccepted] = useState(false);
     const [agreementOpen, setAgreementOpen] = useState(false);
+    const [turnstileToken, setTurnstileToken] = useState("");
+    const [turnstileResetKey, setTurnstileResetKey] = useState(0);
     const required = settings ? registrationVerificationRequired(settings) : true;
     const methods = settings && required ? verificationMethods(settings, "register") : [];
+    const turnstileRequired = Boolean(settings?.turnstileEnabled && settings.turnstileSiteKey);
     const method = chosenMethod && methods.includes(chosenMethod) ? chosenMethod : methods[0];
     const blocked = !settings || settingsFailed || !settings.registrationEnabled || (required && !method);
     useEffect(() => {
@@ -62,17 +66,21 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
     };
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (submittingRef.current || blocked || !info || !accepted) return;
+        if (submittingRef.current || blocked || !info || !accepted || (turnstileRequired && !turnstileToken)) return;
         submittingRef.current = true;
         setSubmitting(true);
         setError("");
         try {
             const contactEmail = method === "email" || method === "sms_email" ? verification.email : email.trim();
-            const result = await completeWechatRegistration({ ...(required ? verification : {}), email: contactEmail, acceptedTerms: accepted, referralCode: readReferralCode() || undefined });
+            const result = await completeWechatRegistration({ ...(required ? verification : {}), email: contactEmail, acceptedTerms: accepted, referralCode: readReferralCode() || undefined, turnstileToken: turnstileToken || undefined });
             await applyUserSession(await getAuthSession());
             clearReferralCode();
             navigate(safeAuthNext(result.next), { replace: true });
         } catch (cause) {
+            if (turnstileRequired) {
+                setTurnstileToken("");
+                setTurnstileResetKey((value) => value + 1);
+            }
             setError(cause instanceof Error ? cause.message : "微信注册失败");
         } finally {
             submittingRef.current = false;
@@ -120,6 +128,7 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
                     disabled={submitting}
                 />
             ) : null}
+            {turnstileRequired ? <TurnstileWidget siteKey={settings?.turnstileSiteKey ?? ""} resetKey={turnstileResetKey} onToken={setTurnstileToken} /> : null}
             {settings && !settingsFailed ? (
                 <div className="auth-agreement-row" data-accepted={accepted ? "true" : "false"}>
                     <Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)}>
@@ -130,7 +139,7 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
                     </button>
                 </div>
             ) : null}
-            <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={blocked || !info || !accepted || (required && !verification.ticket)}>
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={blocked || !info || !accepted || (required && !verification.ticket) || (turnstileRequired && !turnstileToken)}>
                 {t("auth.wechat.submit", { defaultValue: "完成注册并登录" })}
             </Button>
             <Button size="large" block disabled={submitting} onClick={() => void cancel()}>

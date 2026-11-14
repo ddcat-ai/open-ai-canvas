@@ -71,6 +71,39 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"account": account, "granted": true})
 	})
 
+	r.GET("/admin/settings/turnstile", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.AdminTurnstileSetting(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PATCH("/admin/settings/turnstile", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.TurnstileSettingRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		setting, err := svc.UpdateTurnstileSetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+
 	r.GET("/admin/settings/linuxdo", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

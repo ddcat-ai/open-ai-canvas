@@ -59,6 +59,13 @@
     gap: var(--space-5);
 }
 
+.auth-turnstile {
+    display: flex;
+    min-height: 65px;
+    justify-content: center;
+    overflow: hidden;
+}
+
 .auth-form-pair {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
