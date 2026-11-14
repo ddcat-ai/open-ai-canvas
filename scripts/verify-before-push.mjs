@@ -133,9 +133,9 @@ if (wantBackend) {
     tasks.push({ name: "backend:pi-runtime", cwd: PI_RUNTIME, cmd: "node", args: ["--test", ...readdirSync(PI_RUNTIME).filter((file) => file.endsWith(".test.mjs")).sort()], weight: 50 });
     tasks.push({
         name: "backend:gofmt",
-        cwd: BACKEND,
-        cmd: "gofmt",
-        args: ["-l", "."],
+        cwd: ROOT,
+        cmd: "node",
+        args: ["scripts/check-gofmt.mjs"],
         weight: 5,
         check: (output) => (output.trim() ? `以下文件需要 gofmt -w：\n${output.trim()}` : ""),
     });
