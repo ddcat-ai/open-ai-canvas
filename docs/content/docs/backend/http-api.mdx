@@ -16,6 +16,13 @@ description: 信封、错误码与 OpenAPI
 
 公开 `/auth/settings` 增加 `wechatEnabled`；`/auth/profile` 增加 `linuxdoBound`、`wechatEnabled`、`wechatBound`。登录日志方式新增 `wechat`。微信 API 的业务错误必须同时解析 `errcode`，不能只依据 HTTP 200；外部网络错误不得原样返回。
 
+## 机器人保护（Cloudflare Turnstile）
+
+- `GET /admin/settings/turnstile`：仅管理员。读取 `data.setting` 中的 `enabled`、`siteKey`、`hasSecretKey`、`updatedBy`、`createdAt` 和 `updatedAt`；永远不返回 Turnstile 密钥原文。
+- `PATCH /admin/settings/turnstile`：仅管理员，提交 `{enabled, siteKey, secretKey}`。`secretKey` 以加密形式保存；提交空字符串表示保留已保存的密钥。启用时必须同时配置站点密钥和密钥，服务端会拒绝不完整配置。
+
+启用后，公开 `GET /auth/settings` 返回 `turnstileEnabled: true` 和用于浏览器渲染组件的 `turnstileSiteKey`。登录页和注册页先通过 Cloudflare Turnstile 获取一次性令牌，并把令牌作为 `turnstileToken` 提交给密码登录、验证码登录、普通注册或微信注册补全接口。服务端固定调用 Cloudflare 的 Siteverify 地址校验令牌，并把客户端 IP 一并提交；未提交、过期、无效、网络失败或响应格式异常都拒绝登录/注册。首次创建管理员账号也受此校验保护。关闭机器人保护时保持原有登录和注册流程，令牌字段可省略。
+
 ## 创作对话同步
 
 - `GET /creation-conversations?after=<id>`：当前账号摘要（含永久删除标记），按 ID 升序每页 100 条；`next=""` 表示结束。列表缺项不是删除命令。

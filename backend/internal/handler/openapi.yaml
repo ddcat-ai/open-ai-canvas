@@ -3930,6 +3930,29 @@ paths:
           $ref: "#/components/responses/Envelope"
         "401":
           $ref: "#/components/responses/Error"
+  /auth/settings:
+    get:
+      tags: [auth]
+      security: []
+      summary: 读取公开登录注册设置
+      description: 公开读取登录注册策略。启用 Turnstile 时返回用于浏览器渲染的站点密钥，不返回验证密钥原文。
+      responses:
+        "200":
+          description: 公开登录注册设置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          turnstileEnabled: { type: boolean }
+                          turnstileSiteKey: { type: string }
+        "500":
+          $ref: "#/components/responses/Error"
   /auth/login:
     post:
       tags: [auth]
@@ -3948,6 +3971,9 @@ paths:
                 autoRegister:
                   type: boolean
                   description: 一体表单提交；账号不存在且允许注册时返回 404 account_not_registered
+                turnstileToken:
+                  type: string
+                  description: 启用机器人保护时由 Cloudflare Turnstile 返回的一次性令牌
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
@@ -3955,6 +3981,74 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+  /auth/register:
+    post:
+      tags: [auth]
+      security: []
+      summary: 注册并设置会话 Cookie
+      description: 首次创建管理员与公开注册都使用此接口；acceptedTerms 必须为 true。启用机器人保护时必须提供有效的 Cloudflare Turnstile 一次性令牌。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acceptedTerms, password]
+              properties:
+                username: { type: string }
+                email: { type: string, format: email }
+                emailCode: { type: string }
+                phone: { type: string }
+                smsCode: { type: string }
+                ticket: { type: string }
+                displayName: { type: string }
+                password: { type: string }
+                acceptedTerms: { type: boolean }
+                referralCode: { type: string }
+                turnstileToken:
+                  type: string
+                  description: 启用机器人保护时由 Cloudflare Turnstile 返回的一次性令牌
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /admin/settings/turnstile:
+    get:
+      tags: [admin]
+      summary: 读取 Cloudflare Turnstile 机器人保护配置
+      description: 仅管理员。data.setting 返回 enabled、siteKey、hasSecretKey、updatedBy、createdAt 和 updatedAt；永不返回 secretKey。
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [admin]
+      summary: 更新 Cloudflare Turnstile 机器人保护配置
+      description: 仅管理员。secretKey 加密保存；提交空字符串保留已保存密钥。启用时必须同时提供 siteKey 与 secretKey。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, siteKey, secretKey]
+              properties:
+                enabled: { type: boolean }
+                siteKey: { type: string }
+                secretKey:
+                  type: string
+                  writeOnly: true
+                  description: Cloudflare Turnstile 密钥；留空保留已保存值
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /admin/settings/wechat:
     get:
       tags: [admin]
@@ -4039,6 +4133,9 @@ paths:
                 emailCode: { type: string }
                 smsCode: { type: string }
                 referralCode: { type: string }
+                turnstileToken:
+                  type: string
+                  description: 启用机器人保护时由 Cloudflare Turnstile 返回的一次性令牌
       responses:
         "200": { $ref: "#/components/responses/Envelope" }
         "400": { $ref: "#/components/responses/Error" }
