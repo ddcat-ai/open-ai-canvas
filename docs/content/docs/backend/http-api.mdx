@@ -5,6 +5,12 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 图片用量计费
+
+渠道模型价格档可提交 `billingMode=image_usage` 与 `imagePricing={inputPriceMicrocredits,freeInputImages,outputTiers:[{maxPixels,unitPriceMicrocredits}]}`。仅图片模型可启用；输出上限递增且含边界，最后一档可用 0 表示不限。成本规则为管理员专用 `costPricing.imagePricing`。目录只发布换算后的售价规则。
+
+`POST /model-catalog/quote` 与逻辑模型报价沿用 `intent` 合同，图片拆分选项包含 `layerDecomposition`、`maxImages`。图片用量报价增加 `imageUsage={inputImages,maxOutputImages}`，`amountMicrocredits` 为预留上限，`estimated=true`。订单返回实际 `imageUsage={inputImages,outputs:[{index,width,height}],source}`；内部成本快照不进入用户响应。详见[图片用量计费](/docs/backend/image-usage-billing)。
+
 ## 微信登录
 
 - `GET/PATCH /admin/settings/wechat`：仅管理员；读取 `data.setting`，保存 `{enabled, appId, appSecret, redirectUrl}`。读取仅返回 `hasAppSecret`；密钥留空保留。回调须为 HTTPS 且路径固定为 `/api/auth/wechat/callback`。

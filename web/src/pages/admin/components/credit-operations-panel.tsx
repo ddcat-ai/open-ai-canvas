@@ -394,7 +394,21 @@ export default function CreditOperationsPanel({ users, activeOperation, onOperat
             width: 205,
             align: "center",
             render: (_, order) =>
-                order.billingMode === "token" ? (
+                order.billingMode === "image_usage" ? (
+                    <div className="text-xs leading-5">
+                        <div className="font-medium tabular-nums">{order.status === "settled" ? `${formatCredits(order.actualAmountMicrocredits)} 积分` : "等待图片用量结算"}</div>
+                        <div className="text-foreground/50">{order.imageUsage ? `输入 ${order.imageUsage.inputImages} 张 · 输出 ${order.imageUsage.outputs.length} 张` : `预留最多 ${order.imageMaxOutputImages ?? order.quantity} 张`}</div>
+                        {order.imageUsage ? (
+                            <div className="text-foreground/50">
+                                {order.imageUsage.outputs
+                                    .slice(0, 3)
+                                    .map((image) => `${image.width}×${image.height}`)
+                                    .join("、")}
+                                {order.imageUsage.outputs.length > 3 ? "…" : ""}
+                            </div>
+                        ) : null}
+                    </div>
+                ) : order.billingMode === "token" ? (
                     <div className="text-xs leading-5">
                         <div className="font-medium tabular-nums">{order.status === "settled" ? `${formatCredits(order.actualAmountMicrocredits)} 积分` : "等待用量结算"}</div>
                         <div className="text-foreground/50">

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 	protocolcontract "yingce/backend/internal/protocol"
 )
@@ -154,6 +155,7 @@ func normalizeChannelModelPriceTiersWithIDs(req ChannelModelRequest, capability 
 		}
 		enabled := input.Enabled == nil || *input.Enabled
 		result = append(result, model.ChannelModelPriceTier{
+			ImagePricing:                        input.ImagePricing,
 			CostPricing:                         input.CostPricing,
 			ID:                                  id,
 			SelectorKey:                         key,
@@ -391,8 +393,18 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if err := validateCreditCostPricing(capability, billingMode, input.CostPricing); err != nil {
 		return err
 	}
-	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
-		return BadAuthRequest("模型计费方式仅支持按次、按秒或 Token")
+	if billingMode == imagebilling.Mode {
+		if capability != "image" {
+			return BadAuthRequest("图片用量计费仅适用于图片模型")
+		}
+		if err := imagebilling.Validate(input.ImagePricing); err != nil {
+			return BadAuthRequest(err.Error())
+		}
+	} else if input.ImagePricing != nil {
+		return BadAuthRequest("图片用量价格仅用于图片用量计费模式")
+	}
+	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" && billingMode != imagebilling.Mode {
+		return BadAuthRequest("模型计费方式仅支持按次、按秒、Token 或图片用量")
 	}
 	if billingMode == "per_second" && capability != "video" && capability != "audio" {
 		return BadAuthRequest("只有视频或音频模型可以按秒计费")

@@ -5069,12 +5069,14 @@ components:
                         type: array
                         minItems: 1
                         maxItems: 48
-                        description: 完整替换价格档；与模型编辑的 ChannelModelPriceTierRequest 相同。每档必填 billingMode、priceConfigured、enabled，以及对应计费模式的全部金额字段；缺失金额不能视为免费，所有字段拒绝 null。支持 selector、resolution、videoSeconds、providerModelKey、costPricing、Token 规则和参考视频价。
+                        description: 完整替换价格档；与模型编辑的 ChannelModelPriceTierRequest 相同。每档必填 billingMode、priceConfigured、enabled，以及对应计费模式的全部金额字段；缺失金额不能视为免费，所有字段拒绝 null。支持 selector、resolution、videoSeconds、providerModelKey、costPricing、Token 规则、参考视频价和 image_usage 的 imagePricing。
                         items:
                           type: object
                           required: [billingMode, priceConfigured, enabled]
                           properties:
                             billingMode: {type: string}
+                            imagePricing:
+                              $ref: "#/components/schemas/ImagePricing"
                             priceConfigured: {type: boolean}
                             enabled: {type: boolean}
     ThinkingRequest:
@@ -5318,6 +5320,26 @@ components:
             format: int64
             minimum: 1
             maximum: 3600000
+    ImagePricing:
+      type: object
+      required: [inputPriceMicrocredits, freeInputImages, outputTiers]
+      properties:
+        inputPriceMicrocredits: {type: integer, format: int64, minimum: 0}
+        freeInputImages: {type: integer, minimum: 0, maximum: 128}
+        outputTiers:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            type: object
+            required: [maxPixels, unitPriceMicrocredits]
+            properties:
+              maxPixels:
+                type: integer
+                format: int64
+                minimum: 0
+                description: 含边界的递增像素上限；仅最后一档可用 0 表示不限
+              unitPriceMicrocredits: {type: integer, format: int64, minimum: 0}
     LogicalModelQuote:
       type: object
       required:
@@ -5328,12 +5350,12 @@ components:
           description: 前台逻辑模型 ID；直接查询系统渠道模型时为空字符串
         billingMode:
           type: string
-          enum: [fixed_request, per_second, token]
+          enum: [fixed_request, per_second, token, image_usage]
         quantity:
           type: integer
           format: int64
           minimum: 1
-          description: 按次为 1，按秒为生成秒数，按 Token 为预留用量（视频含平台预留余量）
+          description: 按次为 1，按秒为生成秒数，按 Token 为预留用量（视频含平台预留余量），图片用量模式为最多输出张数
         amountMicrocredits:
           type: integer
           format: int64
@@ -5341,7 +5363,13 @@ components:
           description: 预估预留微积分，1000000 微积分等于 1 积分；明确配置的免费价格返回 0
         estimated:
           type: boolean
-          description: Token 计费为 true；优先有效上游 usage，视频无有效用量时按提交的公式快照结算，预留不构成费用上限
+          description: Token 和图片用量计费为 true。图片用量报价金额为预留上限，按实际输入与逐张输出像素结算并退回差额；Token 模式沿用实际用量结算策略
+        imageUsage:
+          type: object
+          required: [inputImages, maxOutputImages]
+          properties:
+            inputImages: {type: integer, format: int64, minimum: 0}
+            maxOutputImages: {type: integer, format: int64, minimum: 1, maximum: 128}
         videoTokenEstimate:
           $ref: "#/components/schemas/VideoTokenEstimate"
         referenceVideo:

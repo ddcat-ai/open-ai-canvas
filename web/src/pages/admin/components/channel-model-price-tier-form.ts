@@ -2,6 +2,7 @@ import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import type { ModelCapabilityConfig } from "@/lib/model-capabilities";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
 import type { ChannelModel, ChannelModelPriceTier, TokenPriceRule } from "@/services/api/wallet";
+import { imagePricingToForm, imagePricingPayload, validImagePricingForm, type ImagePricingForm } from "@/lib/image-usage-pricing";
 
 export type PriceTierMatchMode = "default" | "advanced";
 
@@ -99,6 +100,8 @@ export function normalizeUpstreamModelKey(value: unknown): string {
 }
 
 export type PriceTierFormValues = {
+    imagePricing?: ImagePricingForm;
+    costImagePricing?: ImagePricingForm;
     imageSelector?: Record<string, string>;
     matchMode: PriceTierMatchMode;
     operation: string;
@@ -189,6 +192,8 @@ export function priceTierToForm(tier: ChannelModelPriceTier, image?: ImageCapabi
     const candidates = image?.parameters ? Object.values(selector) : [selector.operation, selector.imageResolution, selector.quality, selector.resolution, selector.size, selector.fpsBand];
     const hasSpecificMatch = candidates.some((value) => value && value !== "*") || (tier.resolution && tier.resolution !== "*");
     return {
+        imagePricing: imagePricingToForm(tier.imagePricing),
+        costImagePricing: imagePricingToForm(tier.costPricing?.imagePricing),
         matchMode: hasSpecificMatch ? "advanced" : "default",
         operation: selector.operation || "*",
         imageSelector: Object.fromEntries(Object.entries(selector).filter(([name]) => name !== "operation")),
@@ -287,6 +292,7 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
     // 规则只属于文本 Token 档；切换能力或计费方式后不提交残留规则，后端也会拒绝。
     const tokenRules = capability === "text" && tier.billingMode === "token" ? (tier.tokenRules || []).map(tokenPriceRulePayload) : [];
     return {
+        imagePricing: tier.billingMode === "image_usage" ? imagePricingPayload(tier.imagePricing) : undefined,
         tokenPriceRulesEnabled: tokenRules.length > 0 && tier.tokenRulesEnabled === true,
         tokenPriceRules: tokenRules,
         selector: skuSelectorFromForm(capability, tier, capabilityConfig),
@@ -303,6 +309,7 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
         referenceVideoUnitPriceMicrocredits: capability === "video" && tier.billingMode === "per_second" ? Math.round((tier.referenceVideoUnitPrice || 0) * 1_000_000) : 0,
         referenceVideoOutputTokenPriceMicrocredits: videoTokens ? Math.round((tier.referenceVideoOutputTokenPrice || 0) * 1_000_000) : 0,
         costPricing: {
+            imagePricing: tier.costConfigured && tier.billingMode === "image_usage" ? imagePricingPayload(tier.costImagePricing) : undefined,
             configured: tier.costConfigured,
             unitPriceMicrocredits: Math.round(tier.costUnitPrice * 1_000_000),
             inputTokenPriceMicrocredits: videoTokens ? 0 : Math.round(tier.costInputTokenPrice * 1_000_000),
@@ -318,6 +325,7 @@ export function priceTierPayloadFromForm(capability: ModelCapabilityChoice, tier
 }
 
 export function priceTierAmountsComplete(capability: ModelCapabilityChoice | undefined, tier: PriceTierFormValues, referenceVideoBilling = false) {
+    if (tier.billingMode === "image_usage") return capability === "image" && validImagePricingForm(tier.imagePricing);
     const prices = tier.billingMode !== "token" ? [tier.unitPrice] : capability === "video" ? [tier.outputTokenPrice] : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice, tier.cacheWriteTokenPrice];
     if (capability === "video" && referenceVideoBilling && tier.billingMode !== "fixed_request") prices.push(tier.billingMode === "token" ? tier.referenceVideoOutputTokenPrice : tier.referenceVideoUnitPrice);
     return prices.every((price) => typeof price === "number" && Number.isFinite(price) && price >= 0 && price <= 1_000_000);

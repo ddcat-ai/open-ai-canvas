@@ -108,7 +108,7 @@ export type ModelChannel = {
         /** 仅系统渠道：模型目录按插件 create 路径识别的文本请求格式。 */
         textWire?: TextWire;
         pricePolicy?: "channel" | "unified";
-        billingMode: "fixed_request" | "per_second" | "token";
+        billingMode: "fixed_request" | "per_second" | "token" | "image_usage";
         unitPriceMicrocredits: number;
         inputTokenPriceMicrocredits?: number;
         outputTokenPriceMicrocredits?: number;

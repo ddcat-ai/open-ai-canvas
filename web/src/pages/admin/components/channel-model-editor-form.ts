@@ -5,9 +5,10 @@ import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets"
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
-import { initializeImageRatioDefaults, resolveImageParameters, standardImageSizeEncoding } from "@/lib/image-parameters";
+import { imageParameterAppliesTo, initializeImageRatioDefaults, resolveImageParameters, standardImageSizeEncoding } from "@/lib/image-parameters";
 import { findProtocolWorkflow, resolveWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
 import { defaultPriceTier, legacyPriceTierToForm, normalizeUpstreamModelKey, priceTierToForm, skuSelectorFromForm, tokenRuleClockMinutes, type PriceTierFormValues, type TokenPriceRuleFormValues } from "./channel-model-price-tier-form";
+import { validImagePricingForm } from "@/lib/image-usage-pricing";
 import type { PriceCurrency } from "@/services/api/user-groups";
 import { priceSelectorIssues } from "./channel-model-templates";
 
@@ -92,10 +93,12 @@ export function duplicateChannelModelValues(item: ChannelModel, protocols: Model
 export function changeChannelModelCapability(values: ChannelModelFormValues, protocols: ModelProtocolDefinition[]): ChannelModelFormValues {
     const capability = values.capability;
     const protocol = protocols.find((p) => p.value === values.protocol && p.capability === capability && p.enabled !== false)?.value || protocols.find((p) => p.capability === capability && p.enabled !== false)?.value;
-    const capabilityConfig = capability === "audio" ? undefined : defaultModelCapabilityConfig(protocol, values.providerModelKey?.trim() || values.modelKey.trim());
-    if (capabilityConfig?.image && protocols.find((p) => p.value === protocol)?.imageParameters) {
+    const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
+    const capabilityConfig = capability === "audio" ? undefined : defaultModelCapabilityConfig(protocol, upstreamModel);
+    const definitions = protocols.find((p) => p.value === protocol)?.imageParameters;
+    if (capabilityConfig?.image && definitions && (!definitions.length || definitions.some((field) => imageParameterAppliesTo(field, upstreamModel)))) {
         capabilityConfig.image.parameters = [];
-        if (!capabilityConfig.image.resolution.supported || !protocols.find((p) => p.value === protocol)?.imageParameters?.some((p) => p.name === "size" && p.encoding === "pixels" && !p.values?.length)) capabilityConfig.image.size.presets = undefined;
+        if (!capabilityConfig.image.resolution.supported || !definitions.some((p) => imageParameterAppliesTo(p, upstreamModel) && p.name === "size" && p.encoding === "pixels" && !p.values?.length)) capabilityConfig.image.size.presets = undefined;
     }
     return updateChannelModelUpstreamCapabilities(
         {
@@ -200,7 +203,9 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
         const fail = (text: string) => {
             throw new Error(`价格档 ${index + 1}：${text}`);
         };
-        if (!["fixed_request", "per_second", "token"].includes(tier.billingMode)) fail("请选择计费方式");
+        if (!["fixed_request", "per_second", "token", "image_usage"].includes(tier.billingMode)) fail("请选择计费方式");
+        if (tier.billingMode === "image_usage" && (capability !== "image" || !validImagePricingForm(tier.imagePricing))) fail("请配置完整有效的图片用量价格");
+        if (tier.billingMode === "image_usage" && tier.costConfigured && !validImagePricingForm(tier.costImagePricing)) fail("请配置完整有效的图片用量成本价");
         if (tier.billingMode === "per_second" && capability !== "video" && capability !== "audio") fail("按秒计费仅支持视频或音频，请重新选择计费方式并核对价格");
         if (tier.billingMode === "token" && !modelProtocolSupportsTokenBilling(capability, protocol)) fail("当前模型能力不支持 Token 计费，请重新选择计费方式并核对价格");
         if (tier.matchMode === "advanced") {
@@ -217,7 +222,13 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
                 fail("规格价格至少需要一个匹配条件；统一价格请选择默认价格");
         }
         const prices =
-            tier.billingMode !== "token" ? [tier.unitPrice] : capability === "video" ? [tier.outputTokenPrice] : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice, tier.cacheWriteTokenPrice === undefined ? 0 : tier.cacheWriteTokenPrice];
+            tier.billingMode === "image_usage"
+                ? []
+                : tier.billingMode !== "token"
+                  ? [tier.unitPrice]
+                  : capability === "video"
+                    ? [tier.outputTokenPrice]
+                    : [tier.inputTokenPrice, tier.outputTokenPrice, tier.cachedTokenPrice, tier.cacheWriteTokenPrice === undefined ? 0 : tier.cacheWriteTokenPrice];
         const unconfigured = tier.priceConfigured === false && tier.enabled === false;
         if (prices.some((price) => !(unconfigured && (price === null || price === undefined)) && (typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 1_000_000)))
             fail("积分价格必须是 0 到 1000000 之间的有效数值；空金额未配置，不能启用");
@@ -228,7 +239,14 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
             if (typeof base === "number" && base > 0 && reference === 0) fail("已开启参考视频计费，请填写带参考视频的价格");
         }
         if (tier.costConfigured) {
-            const costs = tier.billingMode !== "token" ? [tier.costUnitPrice] : capability === "video" ? [tier.costOutputTokenPrice] : [tier.costInputTokenPrice, tier.costOutputTokenPrice, tier.costCachedTokenPrice, tier.costCacheWriteTokenPrice ?? 0];
+            const costs =
+                tier.billingMode === "image_usage"
+                    ? []
+                    : tier.billingMode !== "token"
+                      ? [tier.costUnitPrice]
+                      : capability === "video"
+                        ? [tier.costOutputTokenPrice]
+                        : [tier.costInputTokenPrice, tier.costOutputTokenPrice, tier.costCachedTokenPrice, tier.costCacheWriteTokenPrice ?? 0];
             if (costs.some((price) => typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 1_000_000)) fail("积分成本价必须是 0 到 1000000 之间的有效数值");
             if (referenceVideoBilling && tier.priceConfigured !== false && tier.enabled !== false && (tier.billingMode === "per_second" || tier.billingMode === "token")) {
                 const [baseCost, referenceCost] = tier.billingMode === "per_second" ? [tier.costUnitPrice, tier.costReferenceVideoUnitPrice] : [tier.costOutputTokenPrice, tier.costReferenceVideoOutputTokenPrice];

@@ -6,6 +6,7 @@ import type { ModelCapabilityChoice as EditableCapability } from "@/components/m
 import type { ChannelModelFormValues as FormValues } from "./channel-model-editor-form";
 import { normalizeUpstreamModelKey, priceTierAmountsComplete } from "./channel-model-price-tier-form";
 import { CreditCostFields } from "./credit-cost-fields";
+import { ImageUsagePriceFields } from "./image-usage-price-fields";
 import { priceCurrencyUnit } from "@/services/api/user-groups";
 import { Select } from "@/components/ui/base/select";
 import { ImageParameterInput } from "@/components/image-parameter-fields";
@@ -184,12 +185,15 @@ export function PriceTierFields({
                                     className="w-full"
                                     options={[
                                         { label: "按次", value: "fixed_request" },
+                                        ...(isImage ? [{ label: "图片用量", value: "image_usage" }] : []),
                                         { label: "按秒", value: "per_second", disabled: !isDurationPriced },
                                         { label: isVideo ? "视频 Token" : "Token", value: "token", disabled: !tokenEnabled },
                                     ]}
                                 />
                             </Form.Item>
-                            {billingMode === "token" ? (
+                            {billingMode === "image_usage" ? (
+                                <ImageUsagePriceFields index={index} form={form} unit={priceUnit} />
+                            ) : billingMode === "token" ? (
                                 isVideo ? (
                                     <Form.Item className="admin-price-tier-unit-price mb-0" name={[index, "outputTokenPrice"]} label={`${priceUnit} / 百万视频 Token`} rules={[{ required: requirePrice, message: "请输入视频 Token 价格" }]}>
                                         <InputNumber className="w-full" min={0} max={1_000_000} precision={6} step={0.1} />
