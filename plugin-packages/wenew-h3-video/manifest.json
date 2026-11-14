@@ -1,0 +1,1032 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "wenew-h3-video",
+  "name": "WeNew API H3 Video",
+  "version": "1.0.0",
+  "author": "WeNew API / 影策",
+  "description": "适配 WeNew API MiniMax H3 视频任务接口的声明式协议插件。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "wenew-h3-video",
+        "label": "WeNew API H3 Video",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://ai.seekthex.com",
+        "requiresPublicMediaUrls": true,
+        "detachedPolling": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "影策中的模型显示名；请求产品固定为 h3_video。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "params.prompt",
+            "description": "H3 视频提示词。"
+          },
+          {
+            "name": "images",
+            "type": "media[]",
+            "required": false,
+            "mapping": "inputs.images / inputs.first_frame / inputs.last_frame",
+            "description": "最多9张公网参考图；first_frame/last_frame角色映射独立对象，不能与参考图或音频混用。"
+          },
+          {
+            "name": "audios",
+            "type": "media[]",
+            "required": false,
+            "mapping": "inputs.audios",
+            "description": "最多3段公网音频，需至少1张参考图；每段2–15秒、合计不超过15秒。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": false,
+            "mapping": "params.seconds",
+            "description": "4-15 秒，缺省 5 秒。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": false,
+            "mapping": "params.ratio",
+            "description": "21:9、16:9、4:3、1:1、3:4或9:16；缺省16:9。"
+          },
+          {
+            "name": "resolution",
+            "type": "string",
+            "required": false,
+            "mapping": "params.quality",
+            "description": "768p或1080p，忽略大小写并输出小写，缺省768p。"
+          },
+          {
+            "name": "callback_url",
+            "type": "string",
+            "required": false,
+            "mapping": "providerOptions.wenew-h3-video.callback_url",
+            "description": "顶层callback_url：公网HTTPS回调地址，最多2048字符。"
+          },
+          {
+            "name": "params",
+            "type": "object",
+            "required": false,
+            "mapping": "providerOptions.wenew-h3-video.params",
+            "description": "仅允许seed（0–9007199254740991整数）、martial_arts（布尔）和motion_speed（-8至8、步长0.5，需martial_arts=true）。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$sortByOrder": {
+                      "$ref": "request.images"
+                    }
+                  }
+                },
+                9
+              ]
+            },
+            "message": "H3 最多支持9张图片"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$sortByOrder": {
+                      "$ref": "request.audios"
+                    }
+                  }
+                },
+                3
+              ]
+            },
+            "message": "H3 最多支持3段参考音频"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$ref": "request.videos"
+                  }
+                },
+                0
+              ]
+            },
+            "message": "H3 当前不接受参考视频"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.duration"
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$in": [
+                    {
+                      "$ref": "request.duration"
+                    },
+                    [
+                      4,
+                      5,
+                      6,
+                      7,
+                      8,
+                      9,
+                      10,
+                      11,
+                      12,
+                      13,
+                      14,
+                      15
+                    ]
+                  ]
+                }
+              ]
+            },
+            "message": "H3 视频时长应为4-15秒整数"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$lower": {
+                    "$trim": {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.resolution"
+                        },
+                        "768p"
+                      ]
+                    }
+                  }
+                },
+                [
+                  "768p",
+                  "1080p"
+                ]
+              ]
+            },
+            "message": "H3 画质只支持768p或1080p"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$coalesce": [
+                    {
+                      "$trim": {
+                        "$ref": "request.aspectRatio"
+                      }
+                    },
+                    "16:9"
+                  ]
+                },
+                [
+                  "21:9",
+                  "16:9",
+                  "4:3",
+                  "1:1",
+                  "3:4",
+                  "9:16"
+                ]
+              ]
+            },
+            "message": "H3 不支持该画幅比例"
+          },
+          {
+            "assert": {
+              "$and": [
+                {
+                  "$lte": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "where": {
+                            "$eq": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "first_frame"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    1
+                  ]
+                },
+                {
+                  "$lte": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "where": {
+                            "$eq": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "last_frame"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    1
+                  ]
+                }
+              ]
+            },
+            "message": "H3 首帧和尾帧各最多1张"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$add": [
+                        {
+                          "$len": {
+                            "$filter": {
+                              "from": {
+                                "$sortByOrder": {
+                                  "$ref": "request.images"
+                                }
+                              },
+                              "as": "media",
+                              "where": {
+                                "$eq": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  "first_frame"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$len": {
+                            "$filter": {
+                              "from": {
+                                "$sortByOrder": {
+                                  "$ref": "request.images"
+                                }
+                              },
+                              "as": "media",
+                              "where": {
+                                "$eq": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  "last_frame"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$add": [
+                        {
+                          "$len": {
+                            "$filter": {
+                              "from": {
+                                "$sortByOrder": {
+                                  "$ref": "request.images"
+                                }
+                              },
+                              "as": "media",
+                              "where": {
+                                "$and": [
+                                  {
+                                    "$ne": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      "first_frame"
+                                    ]
+                                  },
+                                  {
+                                    "$ne": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      "last_frame"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "$len": {
+                            "$sortByOrder": {
+                              "$ref": "request.audios"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    0
+                  ]
+                }
+              ]
+            },
+            "message": "H3 首尾帧不能与参考图片或音频混用"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$sortByOrder": {
+                          "$ref": "request.audios"
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$gte": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "where": {
+                            "$and": [
+                              {
+                                "$ne": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  "first_frame"
+                                ]
+                              },
+                              {
+                                "$ne": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  "last_frame"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    1
+                  ]
+                }
+              ]
+            },
+            "message": "H3 参考音频至少需要1张参考图片"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$sortByOrder": {
+                          "$ref": "request.audios"
+                        }
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$ne": [
+                              {
+                                "$ref": "media.metadata.durationMs"
+                              },
+                              null
+                            ]
+                          },
+                          {
+                            "$or": [
+                              {
+                                "$lt": [
+                                  {
+                                    "$ref": "media.metadata.durationMs"
+                                  },
+                                  2000
+                                ]
+                              },
+                              {
+                                "$gt": [
+                                  {
+                                    "$ref": "media.metadata.durationMs"
+                                  },
+                                  15000
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "H3 每段参考音频应为2-15秒"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$add": [
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$sortByOrder": {
+                                "$ref": "request.audios"
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$sortByOrder": {
+                                "$ref": "request.audios"
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        1
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$sortByOrder": {
+                                "$ref": "request.audios"
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        2
+                      ]
+                    }
+                  ]
+                },
+                15000
+              ]
+            },
+            "message": "H3 参考音频合计不能超过15秒"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$ref": "request.providerOptions.wenew-h3-video"
+                  }
+                },
+                {
+                  "$add": [
+                    {
+                      "$if": {
+                        "condition": {
+                          "$ne": [
+                            {
+                              "$ref": "request.providerOptions.wenew-h3-video.params"
+                            },
+                            null
+                          ]
+                        },
+                        "then": 1,
+                        "else": 0
+                      }
+                    },
+                    {
+                      "$if": {
+                        "condition": {
+                          "$ne": [
+                            {
+                              "$ref": "request.providerOptions.wenew-h3-video.callback_url"
+                            },
+                            null
+                          ]
+                        },
+                        "then": 1,
+                        "else": 0
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "H3 不支持product、body、extra_body、inputs或未知覆盖字段"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$ref": "request.providerOptions.wenew-h3-video.params"
+                  }
+                },
+                {
+                  "$add": [
+                    {
+                      "$if": {
+                        "condition": {
+                          "$ne": [
+                            {
+                              "$ref": "request.providerOptions.wenew-h3-video.params.seed"
+                            },
+                            null
+                          ]
+                        },
+                        "then": 1,
+                        "else": 0
+                      }
+                    },
+                    {
+                      "$if": {
+                        "condition": {
+                          "$ne": [
+                            {
+                              "$ref": "request.providerOptions.wenew-h3-video.params.martial_arts"
+                            },
+                            null
+                          ]
+                        },
+                        "then": 1,
+                        "else": 0
+                      }
+                    },
+                    {
+                      "$if": {
+                        "condition": {
+                          "$ne": [
+                            {
+                              "$ref": "request.providerOptions.wenew-h3-video.params.motion_speed"
+                            },
+                            null
+                          ]
+                        },
+                        "then": 1,
+                        "else": 0
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "H3 params仅支持seed、martial_arts和motion_speed，不能覆盖计费参数"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.providerOptions.wenew-h3-video.params.seed"
+                    },
+                    null
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$eq": [
+                        {
+                          "$ref": "request.providerOptions.wenew-h3-video.params.seed"
+                        },
+                        {
+                          "$toInt": {
+                            "$ref": "request.providerOptions.wenew-h3-video.params.seed"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "$gte": [
+                        {
+                          "$ref": "request.providerOptions.wenew-h3-video.params.seed"
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$ref": "request.providerOptions.wenew-h3-video.params.seed"
+                        },
+                        9007199254740991
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "H3 seed应为0–9007199254740991整数"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.providerOptions.wenew-h3-video.params.martial_arts"
+                    },
+                    null
+                  ]
+                },
+                {
+                  "$in": [
+                    {
+                      "$ref": "request.providerOptions.wenew-h3-video.params.martial_arts"
+                    },
+                    [
+                      true,
+                      false
+                    ]
+                  ]
+                }
+              ]
+            },
+            "message": "H3 martial_arts应为布尔值"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.providerOptions.wenew-h3-video.params.motion_speed"
+                    },
+                    null
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$eq": [
+                        {
+                          "$ref": "request.providerOptions.wenew-h3-video.params.martial_arts"
+                        },
+                        true
+                      ]
+                    },
+                    {
+                      "$gte": [
+                        {
+                          "$ref": "request.providerOptions.wenew-h3-video.params.motion_speed"
+                        },
+                        -8
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$ref": "request.providerOptions.wenew-h3-video.params.motion_speed"
+                        },
+                        8
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$ref": "request.providerOptions.wenew-h3-video.params.motion_speed"
+                        },
+                        {
+                          "$ceilStep": [
+                            {
+                              "$ref": "request.providerOptions.wenew-h3-video.params.motion_speed"
+                            },
+                            0.5
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "H3 motion_speed应为-8至8、步长0.5，且martial_arts=true"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/api/v1/tasks",
+          "originPath": true,
+          "contentType": "application/json",
+          "body": {
+            "product": "h3_video",
+            "params": {
+              "prompt": {
+                "$ref": "request.prompt"
+              },
+              "quality": {
+                "$lower": {
+                  "$trim": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.resolution"
+                      },
+                      "768p"
+                    ]
+                  }
+                }
+              },
+              "ratio": {
+                "$coalesce": [
+                  {
+                    "$trim": {
+                      "$ref": "request.aspectRatio"
+                    }
+                  },
+                  "16:9"
+                ]
+              },
+              "seconds": {
+                "$if": {
+                  "condition": {
+                    "$gt": [
+                      {
+                        "$ref": "request.duration"
+                      },
+                      0
+                    ]
+                  },
+                  "then": {
+                    "$ref": "request.duration"
+                  },
+                  "else": 5
+                }
+              },
+              "seed": {
+                "$ref": "request.providerOptions.wenew-h3-video.params.seed"
+              },
+              "martial_arts": {
+                "$ref": "request.providerOptions.wenew-h3-video.params.martial_arts"
+              },
+              "motion_speed": {
+                "$ref": "request.providerOptions.wenew-h3-video.params.motion_speed"
+              }
+            },
+            "callback_url": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.wenew-h3-video.callback_url"
+              }
+            },
+            "inputs": {
+              "$omitEmpty": {
+                "images": {
+                  "$omitEmpty": {
+                    "$map": {
+                      "from": {
+                        "$filter": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "where": {
+                            "$and": [
+                              {
+                                "$ne": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  "first_frame"
+                                ]
+                              },
+                              {
+                                "$ne": [
+                                  {
+                                    "$ref": "media.role"
+                                  },
+                                  "last_frame"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "as": "media",
+                      "in": {
+                        "url": {
+                          "$ref": "media.value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "audios": {
+                  "$omitEmpty": {
+                    "$map": {
+                      "from": {
+                        "$sortByOrder": {
+                          "$ref": "request.audios"
+                        }
+                      },
+                      "as": "media",
+                      "in": {
+                        "url": {
+                          "$ref": "media.value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "first_frame": {
+                  "$first": {
+                    "$map": {
+                      "from": {
+                        "$filter": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "where": {
+                            "$eq": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "first_frame"
+                            ]
+                          }
+                        }
+                      },
+                      "as": "media",
+                      "in": {
+                        "url": {
+                          "$ref": "media.value"
+                        }
+                      }
+                    }
+                  }
+                },
+                "last_frame": {
+                  "$first": {
+                    "$map": {
+                      "from": {
+                        "$filter": {
+                          "from": {
+                            "$sortByOrder": {
+                              "$ref": "request.images"
+                            }
+                          },
+                          "as": "media",
+                          "where": {
+                            "$eq": [
+                              {
+                                "$ref": "media.role"
+                              },
+                              "last_frame"
+                            ]
+                          }
+                        }
+                      },
+                      "as": "media",
+                      "in": {
+                        "url": {
+                          "$ref": "media.value"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/api/v1/tasks/{{taskId}}",
+          "originPath": true
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "response.status"
+          },
+          "message": {
+            "$ref": "response.error.message"
+          },
+          "videos": {
+            "$ref": "response.result.download_url"
+          },
+          "usage": {
+            "$ref": "response.billing"
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  },
+  "documentation": "# WeNew API H3 Video\n\n影策官方声明式协议插件，适配 [WeNew API](https://ai.seekthex.com/) 的 MiniMax H3 视频生成产品。\n\n- Provider：`wenew-h3-video`\n- 产品代码：`h3_video`\n- 创建：`POST /api/v1/tasks`\n- 查询：`GET /api/v1/tasks/{task_id}`\n- 鉴权：`Authorization: Bearer <API Key>`\n\n该协议使用 WeNew API 的统一异步任务入口，支持文生视频、图片参考生成（可搭配音频）和独立首尾帧模式。首尾帧不能与参考图、参考音频混用；输出固定带声音。插件使用公网素材地址，不提供任意请求体或计费产品覆盖。自定义渠道的 Base URL 填 `https://ai.seekthex.com`，API Key 填 WeNew 控制台创建的密钥。\n\n完整字段映射见 [`docs/interface.md`](docs/interface.md)。\n\n---\n\n# WeNew API H3 Video 接口字段\n\n## 协议身份与依据\n\n- 插件和 Provider ID：`wenew-h3-video`；能力：`video`。\n- Base URL：`https://ai.seekthex.com`。\n- 鉴权：`Authorization: Bearer <API Key>`；配置字段 `apiKey` 为必填 secret。\n- 创建：`POST /api/v1/tasks`；查询：`GET /api/v1/tasks/{task_id}`，均使用域名根路径。\n- 产品固定为 `h3_video`，不能通过扩展参数切换其他计费产品。\n\n合同依据：[官方文档](https://ai.seekthex.com/docs/)、该页面引用的[完整客户端文档数据](https://ai.seekthex.com/_next/static/chunks/2-u4xwfozc01d.js)。以下使用专业任务接口，不混用 OpenAI 或 Sora 格式。\n\n## 统一字段映射\n\n| 统一字段 | 上游字段 | 约束与默认值 |\n| --- | --- | --- |\n| `model` | 不发给上游 | 影策模型显示名；上游 `product` 固定 `h3_video`。 |\n| `prompt` | `params.prompt` | 必填原始提示词。参考素材按顺序使用 `<Picture N>`、`<Audio N>`。 |\n| `images` | `inputs.images` 或 `inputs.first_frame` / `inputs.last_frame` | 按 order 排序；普通图片作为参考图。首尾帧角色映射成独立对象，各最多1张。 |\n| `audios` | `inputs.audios` | 最多3段，至少搭配1张参考图；每段2–15秒、合计≤15秒。 |\n| `duration` | `params.seconds` | 4–15秒整数，未指定时5秒。 |\n| `aspectRatio` | `params.ratio` | `21:9`、`16:9`、`4:3`、`1:1`、`3:4`、`9:16`，默认 `16:9`。 |\n| `resolution` | `params.quality` | `768p` / `1080p`，去除外围空格并转小写，默认 `768p`。 |\n| `providerOptions.wenew-h3-video.callback_url` | 顶层 `callback_url` | 可选公网 HTTPS 回调地址，≤2048字符；由上游校验地址并投递签名通知。 |\n| `providerOptions.wenew-h3-video.params.seed` | `params.seed` | 可选整数0–9007199254740991；省略时平台生成，0保留。 |\n| `providerOptions.wenew-h3-video.params.martial_arts` | `params.martial_arts` | 可选布尔值，动态优化，不影响价格。 |\n| `providerOptions.wenew-h3-video.params.motion_speed` | `params.motion_speed` | 可选数值-8至8、步长0.5；仅 `martial_arts=true` 时允许，0保留。 |\n\nH3 固定输出带声音的 MP4（H.264 + AAC，24帧/秒），没有 `params.audio` 或生成声音开关。统一请求中的 `generateAudio` 不写入上游请求。\n\n## 素材模式与校验\n\n文生视频不发送 `inputs`。参考生成发送 `inputs.images` / `inputs.audios`，最多9张图、3段音频，音频不能单独生成。首尾帧模式发送独立的 `inputs.first_frame` / `inputs.last_frame`，可只传其中之一；不能与参考图片、参考音频混用。\n\n插件把统一素材的公网地址映射为 `{ \"url\": \"https://…\" }`，不会向上游发送 `role` 或 `metadata`。宿主负责统一素材地址解析与公网可访问性检查。已知的 `metadata.durationMs` 会在本地校验单段2–15秒和合计≤15秒；未提供时长的素材仍由上游读取真实媒体并最终校验。图片格式 JPG/PNG/WebP、每张<100 MB；音频格式 MP3/WAV/M4A/AAC/FLAC、每段≤50 MB，由上游校验实际文件。\n\n官方 API 的每个素材对象支持 `url`、`upload_id`、`file_id` 三选一。此插件当前仅提供公网 URL 映射，不提供手工上传流程或 ID 透传。`providerOptions` 只接受 `callback_url` 和白名单 `params`；拒绝 `inputs`、`product`、`body`、`extra_body` 及未知字段，防止覆盖模型或绕过时长、画质校验。`params` 不得覆盖 `prompt`、`quality`、`ratio`、`seconds` 等统一字段。\n\n参考生成请求示例：\n\n```json\n{\n  \"product\": \"h3_video\",\n  \"params\": {\"prompt\": \"<Picture 1>中的人物说话，<Audio 1>作为旁白\", \"quality\": \"1080p\", \"ratio\": \"16:9\", \"seconds\": 6, \"seed\": 0},\n  \"inputs\": {\n    \"images\": [{\"url\": \"https://cdn.example/hero.png\"}],\n    \"audios\": [{\"url\": \"https://cdn.example/voice.mp3\"}]\n  },\n  \"callback_url\": \"https://callback.example/wenew\"\n}\n```\n\n首尾帧请求示例：\n\n```json\n{\n  \"product\": \"h3_video\",\n  \"params\": {\"prompt\": \"从清晨过渡到日落\", \"quality\": \"768p\", \"ratio\": \"16:9\", \"seconds\": 5},\n  \"inputs\": {\n    \"first_frame\": {\"url\": \"https://cdn.example/first.png\"},\n    \"last_frame\": {\"url\": \"https://cdn.example/last.png\"}\n  }\n}\n```\n\n## 响应、轮询与结果保存\n\n| 统一结果 | 官方字段 |\n| --- | --- |\n| `taskId` | `id`；查询时可沿用已有任务ID。 |\n| `status` | `status`：`queued`、`processing`、`succeeded`、`failed`、`canceled`。 |\n| `message` | `error.message`。 |\n| `videos` | `result.download_url`。 |\n| `usage` | `billing`。 |\n\n创建返回202仅表示已受理；每5–10秒查询一次，成功状态为 `succeeded`。下载链接来自 `result.download_url`，每次查询重新签发，`result.expires_at` 为该链接到期时间；结果在任务完成后保留24小时，实际删除时间以 `result.retained_until` 为准。插件标记结果为临时资源，宿主需及时下载并持久化。没有 `video_url` 字段假设。\n\n失败任务读取 `error.code` 和 `error.message`；HTTP非2xx保留错误语义。回调只是通知，最终状态以查询为准。官方不提供用户/API取消接口，也不提供创建幂等保护；已返回任务ID应继续查询，创建超时须先在官方任务列表核实，避免重复计费。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"wenew-h3-video\",\n  \"name\": \"WeNew API H3 Video\",\n  \"version\": \"1.0.0\",\n  \"author\": \"WeNew API / 影策\",\n  \"description\": \"适配 WeNew API MiniMax H3 视频任务接口的声明式协议插件。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"wenew-h3-video\",\n        \"label\": \"WeNew API H3 Video\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://ai.seekthex.com\",\n        \"requiresPublicMediaUrls\": true,\n        \"detachedPolling\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"影策中的模型显示名；请求产品固定为 h3_video。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"params.prompt\",\n            \"description\": \"H3 视频提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"inputs.images / inputs.first_frame / inputs.last_frame\",\n            \"description\": \"最多9张公网参考图；first_frame/last_frame角色映射独立对象，不能与参考图或音频混用。\"\n          },\n          {\n            \"name\": \"audios\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"inputs.audios\",\n            \"description\": \"最多3段公网音频，需至少1张参考图；每段2–15秒、合计不超过15秒。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"params.seconds\",\n            \"description\": \"4-15 秒，缺省 5 秒。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"params.ratio\",\n            \"description\": \"21:9、16:9、4:3、1:1、3:4或9:16；缺省16:9。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"params.quality\",\n            \"description\": \"768p或1080p，忽略大小写并输出小写，缺省768p。\"\n          },\n          {\n            \"name\": \"callback_url\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.wenew-h3-video.callback_url\",\n            \"description\": \"顶层callback_url：公网HTTPS回调地址，最多2048字符。\"\n          },\n          {\n            \"name\": \"params\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"providerOptions.wenew-h3-video.params\",\n            \"description\": \"仅允许seed（0–9007199254740991整数）、martial_arts（布尔）和motion_speed（-8至8、步长0.5，需martial_arts=true）。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$sortByOrder\": {\n                      \"$ref\": \"request.images\"\n                    }\n                  }\n                },\n                9\n              ]\n            },\n            \"message\": \"H3 最多支持9张图片\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$len\": {\n                    \"$sortByOrder\": {\n                      \"$ref\": \"request.audios\"\n                    }\n                  }\n                },\n                3\n              ]\n            },\n            \"message\": \"H3 最多支持3段参考音频\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.videos\"\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"H3 当前不接受参考视频\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.duration\"\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$in\": [\n                    {\n                      \"$ref\": \"request.duration\"\n                    },\n                    [\n                      4,\n                      5,\n                      6,\n                      7,\n                      8,\n                      9,\n                      10,\n                      11,\n                      12,\n                      13,\n                      14,\n                      15\n                    ]\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 视频时长应为4-15秒整数\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$lower\": {\n                    \"$trim\": {\n                      \"$coalesce\": [\n                        {\n                          \"$ref\": \"request.resolution\"\n                        },\n                        \"768p\"\n                      ]\n                    }\n                  }\n                },\n                [\n                  \"768p\",\n                  \"1080p\"\n                ]\n              ]\n            },\n            \"message\": \"H3 画质只支持768p或1080p\"\n          },\n          {\n            \"assert\": {\n              \"$in\": [\n                {\n                  \"$coalesce\": [\n                    {\n                      \"$trim\": {\n                        \"$ref\": \"request.aspectRatio\"\n                      }\n                    },\n                    \"16:9\"\n                  ]\n                },\n                [\n                  \"21:9\",\n                  \"16:9\",\n                  \"4:3\",\n                  \"1:1\",\n                  \"3:4\",\n                  \"9:16\"\n                ]\n              ]\n            },\n            \"message\": \"H3 不支持该画幅比例\"\n          },\n          {\n            \"assert\": {\n              \"$and\": [\n                {\n                  \"$lte\": [\n                    {\n                      \"$len\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$sortByOrder\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"first_frame\"\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    1\n                  ]\n                },\n                {\n                  \"$lte\": [\n                    {\n                      \"$len\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$sortByOrder\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"last_frame\"\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    1\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 首帧和尾帧各最多1张\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$add\": [\n                        {\n                          \"$len\": {\n                            \"$filter\": {\n                              \"from\": {\n                                \"$sortByOrder\": {\n                                  \"$ref\": \"request.images\"\n                                }\n                              },\n                              \"as\": \"media\",\n                              \"where\": {\n                                \"$eq\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  \"first_frame\"\n                                ]\n                              }\n                            }\n                          }\n                        },\n                        {\n                          \"$len\": {\n                            \"$filter\": {\n                              \"from\": {\n                                \"$sortByOrder\": {\n                                  \"$ref\": \"request.images\"\n                                }\n                              },\n                              \"as\": \"media\",\n                              \"where\": {\n                                \"$eq\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  \"last_frame\"\n                                ]\n                              }\n                            }\n                          }\n                        }\n                      ]\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$eq\": [\n                    {\n                      \"$add\": [\n                        {\n                          \"$len\": {\n                            \"$filter\": {\n                              \"from\": {\n                                \"$sortByOrder\": {\n                                  \"$ref\": \"request.images\"\n                                }\n                              },\n                              \"as\": \"media\",\n                              \"where\": {\n                                \"$and\": [\n                                  {\n                                    \"$ne\": [\n                                      {\n                                        \"$ref\": \"media.role\"\n                                      },\n                                      \"first_frame\"\n                                    ]\n                                  },\n                                  {\n                                    \"$ne\": [\n                                      {\n                                        \"$ref\": \"media.role\"\n                                      },\n                                      \"last_frame\"\n                                    ]\n                                  }\n                                ]\n                              }\n                            }\n                          }\n                        },\n                        {\n                          \"$len\": {\n                            \"$sortByOrder\": {\n                              \"$ref\": \"request.audios\"\n                            }\n                          }\n                        }\n                      ]\n                    },\n                    0\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 首尾帧不能与参考图片或音频混用\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$len\": {\n                        \"$sortByOrder\": {\n                          \"$ref\": \"request.audios\"\n                        }\n                      }\n                    },\n                    0\n                  ]\n                },\n                {\n                  \"$gte\": [\n                    {\n                      \"$len\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$sortByOrder\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$and\": [\n                              {\n                                \"$ne\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  \"first_frame\"\n                                ]\n                              },\n                              {\n                                \"$ne\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  \"last_frame\"\n                                ]\n                              }\n                            ]\n                          }\n                        }\n                      }\n                    },\n                    1\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 参考音频至少需要1张参考图片\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$filter\": {\n                      \"from\": {\n                        \"$sortByOrder\": {\n                          \"$ref\": \"request.audios\"\n                        }\n                      },\n                      \"as\": \"media\",\n                      \"where\": {\n                        \"$and\": [\n                          {\n                            \"$ne\": [\n                              {\n                                \"$ref\": \"media.metadata.durationMs\"\n                              },\n                              null\n                            ]\n                          },\n                          {\n                            \"$or\": [\n                              {\n                                \"$lt\": [\n                                  {\n                                    \"$ref\": \"media.metadata.durationMs\"\n                                  },\n                                  2000\n                                ]\n                              },\n                              {\n                                \"$gt\": [\n                                  {\n                                    \"$ref\": \"media.metadata.durationMs\"\n                                  },\n                                  15000\n                                ]\n                              }\n                            ]\n                          }\n                        ]\n                      }\n                    }\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"H3 每段参考音频应为2-15秒\"\n          },\n          {\n            \"assert\": {\n              \"$lte\": [\n                {\n                  \"$add\": [\n                    {\n                      \"$at\": [\n                        {\n                          \"$map\": {\n                            \"from\": {\n                              \"$sortByOrder\": {\n                                \"$ref\": \"request.audios\"\n                              }\n                            },\n                            \"as\": \"media\",\n                            \"in\": {\n                              \"$ref\": \"media.metadata.durationMs\"\n                            }\n                          }\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$at\": [\n                        {\n                          \"$map\": {\n                            \"from\": {\n                              \"$sortByOrder\": {\n                                \"$ref\": \"request.audios\"\n                              }\n                            },\n                            \"as\": \"media\",\n                            \"in\": {\n                              \"$ref\": \"media.metadata.durationMs\"\n                            }\n                          }\n                        },\n                        1\n                      ]\n                    },\n                    {\n                      \"$at\": [\n                        {\n                          \"$map\": {\n                            \"from\": {\n                              \"$sortByOrder\": {\n                                \"$ref\": \"request.audios\"\n                              }\n                            },\n                            \"as\": \"media\",\n                            \"in\": {\n                              \"$ref\": \"media.metadata.durationMs\"\n                            }\n                          }\n                        },\n                        2\n                      ]\n                    }\n                  ]\n                },\n                15000\n              ]\n            },\n            \"message\": \"H3 参考音频合计不能超过15秒\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.providerOptions.wenew-h3-video\"\n                  }\n                },\n                {\n                  \"$add\": [\n                    {\n                      \"$if\": {\n                        \"condition\": {\n                          \"$ne\": [\n                            {\n                              \"$ref\": \"request.providerOptions.wenew-h3-video.params\"\n                            },\n                            null\n                          ]\n                        },\n                        \"then\": 1,\n                        \"else\": 0\n                      }\n                    },\n                    {\n                      \"$if\": {\n                        \"condition\": {\n                          \"$ne\": [\n                            {\n                              \"$ref\": \"request.providerOptions.wenew-h3-video.callback_url\"\n                            },\n                            null\n                          ]\n                        },\n                        \"then\": 1,\n                        \"else\": 0\n                      }\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 不支持product、body、extra_body、inputs或未知覆盖字段\"\n          },\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.providerOptions.wenew-h3-video.params\"\n                  }\n                },\n                {\n                  \"$add\": [\n                    {\n                      \"$if\": {\n                        \"condition\": {\n                          \"$ne\": [\n                            {\n                              \"$ref\": \"request.providerOptions.wenew-h3-video.params.seed\"\n                            },\n                            null\n                          ]\n                        },\n                        \"then\": 1,\n                        \"else\": 0\n                      }\n                    },\n                    {\n                      \"$if\": {\n                        \"condition\": {\n                          \"$ne\": [\n                            {\n                              \"$ref\": \"request.providerOptions.wenew-h3-video.params.martial_arts\"\n                            },\n                            null\n                          ]\n                        },\n                        \"then\": 1,\n                        \"else\": 0\n                      }\n                    },\n                    {\n                      \"$if\": {\n                        \"condition\": {\n                          \"$ne\": [\n                            {\n                              \"$ref\": \"request.providerOptions.wenew-h3-video.params.motion_speed\"\n                            },\n                            null\n                          ]\n                        },\n                        \"then\": 1,\n                        \"else\": 0\n                      }\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 params仅支持seed、martial_arts和motion_speed，不能覆盖计费参数\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.providerOptions.wenew-h3-video.params.seed\"\n                    },\n                    null\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$eq\": [\n                        {\n                          \"$ref\": \"request.providerOptions.wenew-h3-video.params.seed\"\n                        },\n                        {\n                          \"$toInt\": {\n                            \"$ref\": \"request.providerOptions.wenew-h3-video.params.seed\"\n                          }\n                        }\n                      ]\n                    },\n                    {\n                      \"$gte\": [\n                        {\n                          \"$ref\": \"request.providerOptions.wenew-h3-video.params.seed\"\n                        },\n                        0\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$ref\": \"request.providerOptions.wenew-h3-video.params.seed\"\n                        },\n                        9007199254740991\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 seed应为0–9007199254740991整数\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.providerOptions.wenew-h3-video.params.martial_arts\"\n                    },\n                    null\n                  ]\n                },\n                {\n                  \"$in\": [\n                    {\n                      \"$ref\": \"request.providerOptions.wenew-h3-video.params.martial_arts\"\n                    },\n                    [\n                      true,\n                      false\n                    ]\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 martial_arts应为布尔值\"\n          },\n          {\n            \"assert\": {\n              \"$or\": [\n                {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.providerOptions.wenew-h3-video.params.motion_speed\"\n                    },\n                    null\n                  ]\n                },\n                {\n                  \"$and\": [\n                    {\n                      \"$eq\": [\n                        {\n                          \"$ref\": \"request.providerOptions.wenew-h3-video.params.martial_arts\"\n                        },\n                        true\n                      ]\n                    },\n                    {\n                      \"$gte\": [\n                        {\n                          \"$ref\": \"request.providerOptions.wenew-h3-video.params.motion_speed\"\n                        },\n                        -8\n                      ]\n                    },\n                    {\n                      \"$lte\": [\n                        {\n                          \"$ref\": \"request.providerOptions.wenew-h3-video.params.motion_speed\"\n                        },\n                        8\n                      ]\n                    },\n                    {\n                      \"$eq\": [\n                        {\n                          \"$ref\": \"request.providerOptions.wenew-h3-video.params.motion_speed\"\n                        },\n                        {\n                          \"$ceilStep\": [\n                            {\n                              \"$ref\": \"request.providerOptions.wenew-h3-video.params.motion_speed\"\n                            },\n                            0.5\n                          ]\n                        }\n                      ]\n                    }\n                  ]\n                }\n              ]\n            },\n            \"message\": \"H3 motion_speed应为-8至8、步长0.5，且martial_arts=true\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/api/v1/tasks\",\n          \"originPath\": true,\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"product\": \"h3_video\",\n            \"params\": {\n              \"prompt\": {\n                \"$ref\": \"request.prompt\"\n              },\n              \"quality\": {\n                \"$lower\": {\n                  \"$trim\": {\n                    \"$coalesce\": [\n                      {\n                        \"$ref\": \"request.resolution\"\n                      },\n                      \"768p\"\n                    ]\n                  }\n                }\n              },\n              \"ratio\": {\n                \"$coalesce\": [\n                  {\n                    \"$trim\": {\n                      \"$ref\": \"request.aspectRatio\"\n                    }\n                  },\n                  \"16:9\"\n                ]\n              },\n              \"seconds\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$gt\": [\n                      {\n                        \"$ref\": \"request.duration\"\n                      },\n                      0\n                    ]\n                  },\n                  \"then\": {\n                    \"$ref\": \"request.duration\"\n                  },\n                  \"else\": 5\n                }\n              },\n              \"seed\": {\n                \"$ref\": \"request.providerOptions.wenew-h3-video.params.seed\"\n              },\n              \"martial_arts\": {\n                \"$ref\": \"request.providerOptions.wenew-h3-video.params.martial_arts\"\n              },\n              \"motion_speed\": {\n                \"$ref\": \"request.providerOptions.wenew-h3-video.params.motion_speed\"\n              }\n            },\n            \"callback_url\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.wenew-h3-video.callback_url\"\n              }\n            },\n            \"inputs\": {\n              \"$omitEmpty\": {\n                \"images\": {\n                  \"$omitEmpty\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$sortByOrder\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$and\": [\n                              {\n                                \"$ne\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  \"first_frame\"\n                                ]\n                              },\n                              {\n                                \"$ne\": [\n                                  {\n                                    \"$ref\": \"media.role\"\n                                  },\n                                  \"last_frame\"\n                                ]\n                              }\n                            ]\n                          }\n                        }\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      }\n                    }\n                  }\n                },\n                \"audios\": {\n                  \"$omitEmpty\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$sortByOrder\": {\n                          \"$ref\": \"request.audios\"\n                        }\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      }\n                    }\n                  }\n                },\n                \"first_frame\": {\n                  \"$first\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$sortByOrder\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"first_frame\"\n                            ]\n                          }\n                        }\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      }\n                    }\n                  }\n                },\n                \"last_frame\": {\n                  \"$first\": {\n                    \"$map\": {\n                      \"from\": {\n                        \"$filter\": {\n                          \"from\": {\n                            \"$sortByOrder\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          \"as\": \"media\",\n                          \"where\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"media.role\"\n                              },\n                              \"last_frame\"\n                            ]\n                          }\n                        }\n                      },\n                      \"as\": \"media\",\n                      \"in\": {\n                        \"url\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      }\n                    }\n                  }\n                }\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/api/v1/tasks/{{taskId}}\",\n          \"originPath\": true\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$ref\": \"response.status\"\n          },\n          \"message\": {\n            \"$ref\": \"response.error.message\"\n          },\n          \"videos\": {\n            \"$ref\": \"response.result.download_url\"\n          },\n          \"usage\": {\n            \"$ref\": \"response.billing\"\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

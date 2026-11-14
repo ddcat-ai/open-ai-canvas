@@ -175,6 +175,20 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 	case model.ChannelInterfaceGeminiVeo:
 		video.Duration = VideoDurationConfig{Selection: "enum", Values: []int{4, 6, 8}, Default: 6}
 		video.Resolutions = []string{"720p", "1080p"}
+	case model.ChannelInterfaceType("wenew-h3-video"):
+		video.Operations = append(video.Operations, "reference_to_video")
+		video.References.MaxImages = 9
+		video.References.MaxAudios = 3
+		video.References.MaxAudioBytes = 15 * 1024 * 1024
+		video.References.MaxAudioDuration = 15
+		video.Duration = VideoDurationConfig{Selection: "range", Min: 4, Max: 15, Step: 1, Default: 5}
+		video.Ratios = []string{"21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}
+		video.DefaultRatio = "16:9"
+		video.Resolutions = []string{"768p", "1080p"}
+		video.DefaultResolution = "768p"
+		// H3 固定输出有声视频，专业任务接口不接受 audio 开关。
+		video.GenerateAudio = VideoBooleanConfig{}
+		video.Watermark = VideoBooleanConfig{}
 	case model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineArkAgentPlanVideo:
 		video.Operations = append(video.Operations, "reference_to_video", "audio_to_video")
 		video.References.MaxVideos, video.References.MaxAudios = 3, 3

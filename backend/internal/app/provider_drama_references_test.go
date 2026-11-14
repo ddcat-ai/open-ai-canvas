@@ -58,6 +58,7 @@ func TestProviderDramaReferenceOfficialPayloads(t *testing.T) {
 		{protocol: "minimax-video", model: "MiniMax-H3"},
 		{protocol: "metaso-h3", model: "MiniMax-H3"},
 		{protocol: "volcengine-jimeng-video"},
+		{protocol: "wenew-h3-video", model: "h3_video", resolution: "768p"},
 		{protocol: "dashscope-wan3-video", model: "wan3.0-video-prime"},
 		{protocol: "dashscope-wan-video"},
 		{protocol: "rolldek-wan-video"},
@@ -105,6 +106,9 @@ func TestProviderDramaReferenceOfficialPayloads(t *testing.T) {
 				first, second = 2, 3
 			}
 			want := fmt.Sprintf("%s%d：人物\n%s%d：场景\n\n%s%d走入%s%d。", prefix, first, prefix, second, prefix, first, prefix, second)
+			if test.protocol == "wenew-h3-video" {
+				want = "<Picture 1>：人物\n<Picture 2>：场景\n\n<Picture 1>走入<Picture 2>。"
+			}
 			if got := layout.promptBody[layout.promptKey]; got != want {
 				t.Fatalf("actual payload prompt = %q, want %q", got, want)
 			}

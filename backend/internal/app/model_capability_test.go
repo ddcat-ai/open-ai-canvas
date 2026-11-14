@@ -254,6 +254,21 @@ func TestDefaultVolcengineArkSeedance25CapabilityUsesOfficialLimits(t *testing.T
 		t.Fatalf("audio/watermark support = %#v %#v", profile.Video.GenerateAudio, profile.Video.Watermark)
 	}
 }
+func TestDefaultWeNewH3VideoCapabilityUsesDocumentedLimits(t *testing.T) {
+	profile := DefaultModelCapabilityConfigForModel("wenew-h3-video", "MiniMax-H3")
+	if profile == nil || profile.Video == nil {
+		t.Fatal("WeNew H3 profile = nil")
+	}
+	if profile.Video.References.MaxImages != 9 || profile.Video.References.MaxAudios != 3 || profile.Video.References.MaxVideos != 0 {
+		t.Fatalf("reference limits = %#v", profile.Video.References)
+	}
+	if profile.Video.Duration.Min != 4 || profile.Video.Duration.Max != 15 || profile.Video.DefaultResolution != "768p" {
+		t.Fatalf("output defaults = %#v", profile.Video)
+	}
+	if profile.Video.GenerateAudio.Supported || profile.Video.Watermark.Supported || containsCapabilityString(profile.Video.Operations, "audio_to_video") {
+		t.Fatalf("unsupported WeNew capabilities = %#v", profile.Video)
+	}
+}
 func TestValidateVolcengineArkFullModalReferenceRejectsTextAndAudioOnly(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-0-260128").Video
 	input := canvasGenerationInput{
