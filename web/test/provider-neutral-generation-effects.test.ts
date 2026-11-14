@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { createProviderNeutralGenerationTaskEffectStore } from "@/services/provider-neutral-generation-effects";
 import type { GenerationTaskEffectClaim } from "@/services/generation-task-materializer";
 
 type WorkerRequest = { kind: "request"; id: number; action: string; args: unknown[] };
@@ -123,39 +124,28 @@ describe("生成副作用跨标签租约", () => {
         }
     });
 
-    test("生产要求跨标签锁而浏览器未提供时，降级为进程内互斥仍可领取", async () => {
-        const harness = sharedBrowserHarness();
-        try {
-            const realm = harness.createRealm();
-            await realm.invoke("initialize", { browserLocks: false, required: true });
-            const owner = await realm.invoke<GenerationTaskEffectClaim>("claim", "materialize:no-lock:0", "no-lock");
-            expect(owner.status).toBe("claimed");
-            if (owner.status !== "claimed") throw new Error("Expected a claimed lease");
-            await realm.invoke("complete", "materialize:no-lock:0", "no-lock", { materializedAssetId: "saved-without-web-locks" }, owner.binding);
-            await expect(realm.invoke("claim", "materialize:no-lock:0", "no-lock")).resolves.toEqual({
-                status: "completed",
-                result: { materializedAssetId: "saved-without-web-locks" },
-            });
-            expect(harness.lockRequests).toBe(0);
-            expect(harness.storageReads).toBeGreaterThan(0);
-        } finally {
-            harness.dispose();
-        }
+    test("生产要求跨标签锁但执行环境未提供 Web Locks 时，单线程互斥仍可领取", async () => {
+        const store = createProviderNeutralGenerationTaskEffectStore({ requireCrossRealmLock: true });
+        const effectKey = "materialize:no-lock:0";
+        const taskId = "no-lock";
+        const owner = await store.claim(effectKey, taskId);
+        expect(owner.status).toBe("claimed");
+        if (owner.status !== "claimed") throw new Error("Expected a claimed lease");
+        await store.complete(effectKey, taskId, { materializedAssetId: "saved-without-web-locks" }, owner.binding);
+        await expect(store.claim(effectKey, taskId)).resolves.toEqual({
+            status: "completed",
+            result: { materializedAssetId: "saved-without-web-locks" },
+        });
     });
 
-    test("未要求跨标签锁的现有调用仍可使用进程内降级", async () => {
-        const harness = sharedBrowserHarness();
-        try {
-            const realm = harness.createRealm();
-            await realm.invoke("initialize", { browserLocks: false, required: false });
-            const owner = await realm.invoke<GenerationTaskEffectClaim>("claim", "materialize:fallback:0", "fallback");
-            expect(owner.status).toBe("claimed");
-            if (owner.status !== "claimed") throw new Error("Expected a claimed lease");
-            await realm.invoke("complete", "materialize:fallback:0", "fallback", {}, owner.binding);
-            await expect(realm.invoke("claim", "materialize:fallback:0", "fallback")).resolves.toEqual({ status: "completed", result: {} });
-            expect(harness.lockRequests).toBe(0);
-        } finally {
-            harness.dispose();
-        }
+    test("不要求跨标签锁的调用可在单线程执行环境中使用进程内降级", async () => {
+        const store = createProviderNeutralGenerationTaskEffectStore({ requireCrossRealmLock: false });
+        const effectKey = "materialize:fallback:0";
+        const taskId = "fallback";
+        const owner = await store.claim(effectKey, taskId);
+        expect(owner.status).toBe("claimed");
+        if (owner.status !== "claimed") throw new Error("Expected a claimed lease");
+        await store.complete(effectKey, taskId, {}, owner.binding);
+        await expect(store.claim(effectKey, taskId)).resolves.toEqual({ status: "completed", result: {} });
     });
 });

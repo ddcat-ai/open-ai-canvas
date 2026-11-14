@@ -130,7 +130,11 @@ if (wantBackend) {
         console.error("✗ 有后端改动，但本机没有可用的 go；请安装 backend/go.mod 要求的 Go 版本。");
         process.exit(1);
     }
-    tasks.push({ name: "backend:pi-runtime", cwd: PI_RUNTIME, cmd: "node", args: ["--test", ...readdirSync(PI_RUNTIME).filter((file) => file.endsWith(".test.mjs")).sort()], weight: 50 });
+    if (process.platform === "win32") {
+        notCovered.push("Agent runtime POSIX 私有目录权限和符号链接用例（Windows ACL 语义不同；CI Linux 覆盖）");
+    } else {
+        tasks.push({ name: "backend:pi-runtime", cwd: PI_RUNTIME, cmd: "node", args: ["--test", ...readdirSync(PI_RUNTIME).filter((file) => file.endsWith(".test.mjs")).sort()], weight: 50 });
+    }
     tasks.push({
         name: "backend:gofmt",
         cwd: ROOT,
