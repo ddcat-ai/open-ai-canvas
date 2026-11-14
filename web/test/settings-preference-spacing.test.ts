@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+const readSource = (relativePath: string) => readFileSync(resolve(import.meta.dir, relativePath), "utf8").replace(/\r\n/g, "\n");
+
 test("settings page drops the page header copy and audio preference blocks", () => {
-    const shell = readFileSync(resolve(import.meta.dir, "../src/pages/settings/index.tsx"), "utf8");
-    const preferences = readFileSync(resolve(import.meta.dir, "../src/pages/settings/preferences-pane.tsx"), "utf8");
+    const shell = readSource("../src/pages/settings/index.tsx");
+    const preferences = readSource("../src/pages/settings/preferences-pane.tsx");
     for (const source of [shell, preferences]) {
         expect(source).not.toContain("创作偏好");
         expect(source).not.toContain("配置默认模型、生成参数和素材存储。");
@@ -18,7 +20,7 @@ test("settings page drops the page header copy and audio preference blocks", () 
 });
 
 test("wallet tabs and preference blocks keep a visible gap from neighboring surfaces", () => {
-    const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+    const css = readSource("../src/styles/globals.css");
     // 标签栏自身不留上下外边距：上方间距来自页头底部 12px 内边距，下方来自内容区 12px 外边距。
     const rule = (selector: string) => css.split(`${selector} {`)[1]?.split("}")[0] ?? "";
     expect(rule(".workspace-wallet-header")).toContain("padding: 20px 56px 12px 24px;");

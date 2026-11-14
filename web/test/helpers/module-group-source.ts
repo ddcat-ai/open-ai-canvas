@@ -35,5 +35,5 @@ const srcRoot = resolve(import.meta.dir, "../../src");
 export function moduleGroupSource(relativePath: string): string {
     const normalized = relativePath.replace(/^(\.\.\/)*src\//, "").replace(/^\.\//, "");
     const files = [normalized, ...(SPLIT_MODULE_GROUPS[normalized] ?? [])];
-    return files.map((file) => readFileSync(resolve(srcRoot, file), "utf8")).join("\n");
+    return files.map((file) => readFileSync(resolve(srcRoot, file), "utf8").replace(/\r\n/g, "\n")).join("\n");
 }

@@ -9,13 +9,14 @@ import { moduleGroupSource } from "./helpers/module-group-source";
  * 这里锁住「新建必须选模板」「已有场景不弹模板」「时间轴只在动画模式」三条链路。
  */
 const workbench = moduleGroupSource("components/canvas/previs/canvas-previs-workbench.tsx");
-const dock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/previs-viewport-dock.tsx"), "utf8");
+const readSource = (relativePath: string) => readFileSync(resolve(import.meta.dir, relativePath), "utf8").replace(/\r\n/g, "\n");
+const dock = readSource("../src/components/canvas/previs/previs-viewport-dock.tsx");
 const viewport = moduleGroupSource("components/canvas/previs/previs-viewport.tsx");
-const hook = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-previs.ts"), "utf8");
+const hook = readSource("../src/pages/canvas/use-canvas-previs.ts");
 const project = moduleGroupSource("pages/canvas/project.tsx");
-const modal = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-template-modal.tsx"), "utf8");
-const store = readFileSync(resolve(import.meta.dir, "../src/stores/canvas/use-previs-workbench-store.ts"), "utf8");
-const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+const modal = readSource("../src/components/canvas/previs/canvas-previs-template-modal.tsx");
+const store = readSource("../src/stores/canvas/use-previs-workbench-store.ts");
+const styles = readSource("../src/styles/globals.css");
 
 function slice(source: string, from: string, to: string) {
     const start = source.indexOf(from);
@@ -140,7 +141,7 @@ describe("模式接线", () => {
         // 写死的按钮会绕过门控。
         expect(dock).not.toContain('onClick={() => onRenderModeChange("pose")}');
         // 工作台当前挂的是 PrevisCanvasDock：它不提供渲染视图入口，唯一入口是已按模式过滤的顶栏下拉。
-        const canvasDock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/previs-canvas-dock.tsx"), "utf8");
+        const canvasDock = readSource("../src/components/canvas/previs/previs-canvas-dock.tsx");
         expect(workbench).toContain("<PrevisCanvasDock");
         expect(canvasDock).not.toContain("onRenderModeChange");
         expect(workbench).not.toContain("<PrevisViewportDock");
@@ -163,7 +164,7 @@ describe("模式接线", () => {
     });
 
     test("小屏通过 dock 开合属性检查器，姿态与骨骼入口仍可达", () => {
-        const workbenchCss = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-workbench.css"), "utf8");
+        const workbenchCss = readSource("../src/components/canvas/previs/canvas-previs-workbench.css");
         expect(workbench).toContain('className={`pv-panel pv-panel--right thin-scrollbar ${inspectorOpen ? "is-open" : ""}`}');
         expect(workbench).toMatch(/onToggleInspector=\{\(\) =>\s*\(?\s*compactLayout\s*\?\s*setInspectorOpen\(\(value\) => !value\)\s*:\s*setInspectorDocked\(\(value\) => !value\)\s*\)?\s*\}/);
         expect(workbenchCss).toMatch(/\.pv-panel--right\.is-open\s*\{\s*transform:\s*translateX\(0\);\s*\}/);
@@ -175,7 +176,7 @@ describe("模式接线", () => {
     });
 
     test("mode 不写进 PrevisScene：类型文件里没有 mode 字段", () => {
-        const types = readFileSync(resolve(import.meta.dir, "../src/types/previs.ts"), "utf8");
+        const types = readSource("../src/types/previs.ts");
         const sceneType = slice(types, "export type PrevisScene = {", "};");
         expect(sceneType).not.toContain("mode");
     });

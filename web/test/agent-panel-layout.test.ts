@@ -59,7 +59,7 @@ describe("Agent window layout", () => {
 
 describe("Agent submission sync preflight contract", () => {
     it("scopes submit saves to the captured target and approval saves to the run canvas before Agent POST", () => {
-        const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8");
+        const source = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-cloud-agent-panel.tsx"), "utf8").replace(/\r\n/g, "\n");
         // 提交前冻结目标，等待能力检查或同步时切页不能换绑；审批仍同步该轮运行自己的画布。无画布时跳过。
         const submit = source.slice(source.indexOf("const submit = async"), source.indexOf("const outboxDispatchReady ="));
         const capturedTarget = submit.indexOf("const target: AgentRequestTarget =");

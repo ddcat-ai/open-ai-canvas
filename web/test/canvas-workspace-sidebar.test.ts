@@ -5,10 +5,11 @@ import { readFileSync } from "node:fs";
 import { canvasDockStyle } from "../src/lib/canvas/canvas-aceternity-style";
 import { canvasThemes } from "../src/lib/canvas-theme";
 
-const component = (name: string) => readFileSync(new URL(`../src/components/canvas/${name}`, import.meta.url), "utf8");
+const readSource = (url: URL) => readFileSync(url, "utf8").replace(/\r\n/g, "\n");
+const component = (name: string) => readSource(new URL(`../src/components/canvas/${name}`, import.meta.url));
 
 test("canvas removes the standalone asset tray while retaining sidebar assets and zoom controls", () => {
-    const page = readFileSync(new URL("../src/pages/canvas/project.tsx", import.meta.url), "utf8");
+    const page = readSource(new URL("../src/pages/canvas/project.tsx", import.meta.url));
     expect(page).not.toContain("CanvasAssetTray");
     expect(page).toContain("<CanvasZoomControls");
     expect(page).toContain("<CanvasWorkspacePanel");
@@ -58,14 +59,14 @@ test("history explicitly describes its bounded dataset", () => {
 });
 
 test("cleared tool references do not fall back to the original generation prompt", () => {
-    const source = readFileSync(new URL("../src/pages/canvas/use-canvas-render-model.ts", import.meta.url), "utf8");
+    const source = readSource(new URL("../src/pages/canvas/use-canvas-render-model.ts", import.meta.url));
     const toolReferences = source.split("const toolMentionReferencesByNodeId = useMemo")[1].split("const tokens =")[0];
     expect(toolReferences).toContain("const text = nodeGenerationPrompt(node);");
     expect(toolReferences).not.toContain("||");
 });
 
 test("workspace starts collapsed and keeps separated navigation and bottom toggle", () => {
-    const page = readFileSync(new URL("../src/pages/canvas/project.tsx", import.meta.url), "utf8");
+    const page = readSource(new URL("../src/pages/canvas/project.tsx", import.meta.url));
     expect(page).toContain("const [workspaceOpen, setWorkspaceOpen] = useState(false)");
     const panel = component("canvas-workspace-panel.tsx");
     expect(panel).toContain('className="canvas-workspace-rail-items"');
@@ -94,7 +95,7 @@ test("rail inherits canvas dock colors from the workspace shell", () => {
 });
 
 test("editor rail and expanded panel share one restrained glass surface without hard dividers", () => {
-    const page = readFileSync(new URL("../src/pages/canvas/project.tsx", import.meta.url), "utf8");
+    const page = readSource(new URL("../src/pages/canvas/project.tsx", import.meta.url));
     const panel = component("canvas-workspace-panel.tsx");
     const styles = component("canvas-workspace-panel.css");
     expect(page).toContain("<CanvasViewport");

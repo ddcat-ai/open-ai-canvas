@@ -7,6 +7,8 @@ import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
 import { assetGridCardMinWidth, assetGridDensityOptions, parseAssetGridDensity } from "@/pages/assets/asset-grid-density";
 
+const readSource = (url: URL) => readFileSync(url, "utf8").replace(/\r\n/g, "\n");
+
 test("density restores all saved choices and defaults invalid preferences to standard", () => {
     for (const value of [6, 8, 10] as const) {
         expect(parseAssetGridDensity(String(value))).toBe(value);
@@ -49,8 +51,8 @@ test("real collection toolbar supplies filled selects without changing their lab
 });
 
 test("collection select focus uses a thin keyboard ring, not a persistent pointer outline", () => {
-    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8");
-    const toolbar = readFileSync(new URL("../src/components/layout/collection-toolbar.tsx", import.meta.url), "utf8");
+    const css = readSource(new URL("../src/styles/workspace-product.css", import.meta.url));
+    const toolbar = readSource(new URL("../src/components/layout/collection-toolbar.tsx", import.meta.url));
     expect(css).toContain(".collection-toolbar .ant-select {\n        outline: none !important;");
     expect(css).toContain('[data-input-modality="keyboard"] .ant-select:not(.ant-select-disabled):focus-within');
     expect(css).toContain("outline: 1px solid var(--control-focus-ring) !important;");
@@ -70,9 +72,9 @@ test("workspace menu tokens are shadow-free and use theme-aware surfaces", () =>
 });
 
 test("real grid consumes density rather than the old fixed column calculation", () => {
-    const page = readFileSync(new URL("../src/pages/assets/index.tsx", import.meta.url), "utf8");
-    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8");
-    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
+    const page = readSource(new URL("../src/pages/assets/index.tsx", import.meta.url));
+    const css = readSource(new URL("../src/styles/workspace-product.css", import.meta.url));
+    const globals = readSource(new URL("../src/styles/globals.css", import.meta.url));
     expect(page).toContain('"--collection-grid-min-width": `${assetGridCardMinWidth[gridDensity]}px`');
     expect(css).toContain("minmax(min(100%, var(--collection-grid-min-width, 224px)), 1fr)");
     expect(globals).not.toContain("--assets-grid-columns");
@@ -80,8 +82,8 @@ test("real grid consumes density rather than the old fixed column calculation", 
 });
 
 test("menu surfaces are explicitly scoped and old account inner overrides are removed", () => {
-    const css = readFileSync(new URL("../src/styles/workspace-menus.css", import.meta.url), "utf8");
-    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
+    const css = readSource(new URL("../src/styles/workspace-menus.css", import.meta.url));
+    const globals = readSource(new URL("../src/styles/globals.css", import.meta.url));
     expect(css).toContain("@layer utilities");
     expect(css).toContain(".workspace-account-popover .ant-popover-container");
     expect(css).toContain("border: 0 !important");
@@ -94,7 +96,7 @@ test("menu surfaces are explicitly scoped and old account inner overrides are re
 });
 
 test("shared single-select popup uses a borderless surface instead of a bright focus frame", () => {
-    const select = readFileSync(new URL("../src/components/ui/base/select/select.tsx", import.meta.url), "utf8");
+    const select = readSource(new URL("../src/components/ui/base/select/select.tsx", import.meta.url));
     expect(select).toContain("<AntSelect");
     expect(select).toContain('variant={variant ?? "filled"}');
     expect(select).toContain("data-input-modality={inputModality}");

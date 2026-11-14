@@ -11,23 +11,24 @@ import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 import { detectVideoAudioTrack, detectVideoAudioTrackFromBlob, detectVideoAudioTrackFromUrl } from "../src/lib/video-poster";
 import { moduleGroupSource } from "./helpers/module-group-source";
 
+const readSource = (relativePath: string) => readFileSync(resolve(import.meta.dir, relativePath), "utf8").replace(/\r\n/g, "\n");
 const canvasNodeContentSource = moduleGroupSource("components/canvas/canvas-node-content.tsx");
-const canvasAudioPlayerSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-audio-player.tsx"), "utf8");
+const canvasAudioPlayerSource = readSource("../src/components/canvas/canvas-audio-player.tsx");
 const canvasMentionSource = moduleGroupSource("components/canvas/canvas-resource-mention-textarea.tsx");
-const canvasNodeSource = readFileSync(resolve(import.meta.dir, "../src/components/canvas/canvas-node.tsx"), "utf8");
-const canvasVideoPreviewSource = readFileSync(resolve(import.meta.dir, "../src/services/canvas-video-preview.ts"), "utf8");
-const fileStorageSource = readFileSync(resolve(import.meta.dir, "../src/services/file-storage.ts"), "utf8");
-const canvasGenerationTaskSource = readFileSync(resolve(import.meta.dir, "../src/lib/canvas/canvas-generation-task-sync.ts"), "utf8");
-const canvasProjectGenerationSource = readFileSync(resolve(import.meta.dir, "../src/lib/canvas/canvas-project-generation.ts"), "utf8");
-const browserDownloadSource = readFileSync(resolve(import.meta.dir, "../src/services/browser-download.ts"), "utf8");
-const canvasNodeEditorSource = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-node-editor.ts"), "utf8");
+const canvasNodeSource = readSource("../src/components/canvas/canvas-node.tsx");
+const canvasVideoPreviewSource = readSource("../src/services/canvas-video-preview.ts");
+const fileStorageSource = readSource("../src/services/file-storage.ts");
+const canvasGenerationTaskSource = readSource("../src/lib/canvas/canvas-generation-task-sync.ts");
+const canvasProjectGenerationSource = readSource("../src/lib/canvas/canvas-project-generation.ts");
+const browserDownloadSource = readSource("../src/services/browser-download.ts");
+const canvasNodeEditorSource = readSource("../src/pages/canvas/use-canvas-node-editor.ts");
 const assetLibrarySource = moduleGroupSource("pages/assets/index.tsx");
-const dramaSharedSource = readFileSync(resolve(import.meta.dir, "../src/pages/projects/drama-shared.tsx"), "utf8");
-const videoPlayerSource = readFileSync(resolve(import.meta.dir, "../src/components/video-player.tsx"), "utf8");
+const dramaSharedSource = readSource("../src/pages/projects/drama-shared.tsx");
+const videoPlayerSource = readSource("../src/components/video-player.tsx");
 const canvasProjectSource = moduleGroupSource("pages/canvas/project.tsx");
-const globalStylesSource = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
-const resourceBlobCacheSource = readFileSync(resolve(import.meta.dir, "../src/services/resource-blob-cache.ts"), "utf8");
-const resourceApiSource = readFileSync(resolve(import.meta.dir, "../src/services/api/resources.ts"), "utf8");
+const globalStylesSource = readSource("../src/styles/globals.css");
+const resourceBlobCacheSource = readSource("../src/services/resource-blob-cache.ts");
+const resourceApiSource = readSource("../src/services/api/resources.ts");
 
 function node(id: string, type: CanvasNodeType): CanvasNodeData {
     return { id, type, title: id, position: { x: 0, y: 0 }, width: 320, height: 180, metadata: {} };

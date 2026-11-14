@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -251,6 +252,9 @@ func isTransientTransportError(err error) bool {
 		if errors.Is(err, target) {
 			return true
 		}
+	}
+	if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(10054)) {
+		return true
 	}
 	return false
 }

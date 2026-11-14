@@ -5,6 +5,8 @@ import { resolve } from "node:path";
 
 import { sidebarCheckinTitle, shouldShowSidebarCheckin } from "../src/lib/sidebar-checkin";
 
+const readSource = (relativePath: string) => readFileSync(resolve(import.meta.dir, relativePath), "utf8").replace(/\r\n/g, "\n");
+
 describe("sidebar checkin offer", () => {
     test("shows only when credits and a checkin bonus are enabled and today is unclaimed", () => {
         expect(shouldShowSidebarCheckin({ creditsEnabled: true, checkinBonusMicrocredits: 100_000_000, checkedInToday: false })).toBe(true);
@@ -22,8 +24,8 @@ describe("sidebar checkin offer", () => {
 
 describe("workspace sidebar checkin card", () => {
     test("collapsed offer uses a centered gift icon instead of a clipped text label", () => {
-        const card = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-checkin.tsx"), "utf8");
-        const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+        const card = readSource("../src/components/layout/workspace-sidebar-checkin.tsx");
+        const css = readSource("../src/styles/globals.css");
         const collapsed = card.slice(card.indexOf("if (collapsed)"), card.indexOf("<aside"));
         expect(collapsed).toContain("<Gift");
         expect(collapsed).toContain("<LoaderCircle");
@@ -35,9 +37,9 @@ describe("workspace sidebar checkin card", () => {
         expect(rule).toContain("box-shadow: none;");
     });
     test("sits above account storage and uses the claim card colors without a light-blue stage", () => {
-        const sidebar = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8");
-        const card = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-checkin.tsx"), "utf8");
-        const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
+        const sidebar = readSource("../src/components/layout/workspace-sidebar-nav.tsx");
+        const card = readSource("../src/components/layout/workspace-sidebar-checkin.tsx");
+        const css = readSource("../src/styles/globals.css");
         const checkinIndex = sidebar.indexOf("<WorkspaceSidebarCheckin collapsed={collapsed} />");
         const storageIndex = sidebar.indexOf("<WorkspaceSidebarStorageMeter collapsed={collapsed} />");
         const start = css.indexOf(".app-user-workspace .app-workspace-sidebar-checkin {");
