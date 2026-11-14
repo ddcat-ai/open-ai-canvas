@@ -480,6 +480,9 @@ export type AuthSettings = VerificationPolicy & {
     agreementTitle?: string;
     agreementContent?: string;
     loginMode: AuthLoginMode;
+    /** Cloudflare Turnstile only exposes the public site key to the browser. */
+    turnstileEnabled: boolean;
+    turnstileSiteKey: string;
 };
 
 export function getAuthSettings() {
@@ -553,7 +556,7 @@ export function updateAdminFeatureAvailability(
 }
 
 /** autoRegister：一体表单在账号不存在且允许注册时收到 reason=account_not_registered，而不是“密码不正确”。 */
-export async function login(input: { username: string; password: string; autoRegister?: boolean }) {
+export async function login(input: { username: string; password: string; autoRegister?: boolean; turnstileToken?: string }) {
     const result = await http.post<{ user: LocalUser }>("/auth/login", input, { session: "public" });
     // 登录会改变服务端会话身份，不能让登录前缓存的游客 session 污染后续恢复。
     invalidateAuthSessionCache();
@@ -572,7 +575,19 @@ export function resetPassword(input: { email: string; emailCode: string; passwor
     return http.post<{ reset: boolean }>("/auth/password-reset", input, { session: "public" });
 }
 
-export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean; referralCode?: string }) {
+export async function register(input: {
+    username: string;
+    email?: string;
+    emailCode?: string;
+    phone?: string;
+    smsCode?: string;
+    ticket?: string;
+    displayName?: string;
+    password: string;
+    acceptedTerms: boolean;
+    referralCode?: string;
+    turnstileToken?: string;
+}) {
     const result = await http.post<{ user: LocalUser }>("/auth/register", input, { session: "public" });
     invalidateAuthSessionCache();
     return result;

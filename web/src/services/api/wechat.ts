@@ -13,7 +13,7 @@ export const profileWechatURL = (purpose: "bind" | "reauth") => `${apiBaseURL.re
 export type WechatRegistrationInfo = { displayName: string; next: string; acceptedTerms: boolean };
 export const getWechatRegistration = (signal?: AbortSignal) => http.get<WechatRegistrationInfo>("/auth/wechat/registration", { signal });
 export const cancelWechatRegistration = () => http.delete<{ cleared: true }>("/auth/wechat/registration");
-export async function completeWechatRegistration(input: Partial<VerificationDraft> & { email: string; acceptedTerms: boolean; referralCode?: string }) {
+export async function completeWechatRegistration(input: Partial<VerificationDraft> & { email: string; acceptedTerms: boolean; referralCode?: string; turnstileToken?: string }) {
     const result = await http.post<{ user: LocalUser; next: string }>("/auth/wechat/registration", input);
     invalidateAuthSessionCache();
     return result;
