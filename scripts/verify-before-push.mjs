@@ -227,7 +227,7 @@ function runTask(task) {
         let output = "";
         const startedAt = Date.now();
         // 独立进程组：超时或中断时能结束 vite、chrome、go 子进程。
-        const child = spawn(task.cmd, args, { cwd: task.cwd, env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", ...task.env }, detached: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+        const child = spawn(task.cmd, args, { cwd: task.cwd, env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", ...task.env }, detached: process.platform !== "win32", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
         running.set(task.name, child);
         const collect = (chunk) => {
             output += chunk;
