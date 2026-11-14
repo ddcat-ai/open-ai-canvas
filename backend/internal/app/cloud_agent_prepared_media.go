@@ -176,6 +176,11 @@ func cloudAgentQuoteHash(order *model.BillingOrder) string {
 	if order.TokenPriceRulesJSON != "" {
 		quote["tokenPriceRules"] = order.TokenPriceRulesJSON
 	}
+	if order.ImagePricing != nil {
+		quote["imagePricing"] = order.ImagePricing
+		quote["imageInputImages"] = order.ImageInputImages
+		quote["imageMaxOutputImages"] = order.ImageMaxOutputImages
+	}
 	return creationHash(quote)
 }
 

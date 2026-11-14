@@ -125,6 +125,12 @@ func (c *taskBillingCoordinator) BillingFailureRequiresReview(orderID string, ta
 	if orderErr != nil || order == nil || order.Status == model.BillingStatusUncertain {
 		return true
 	}
+	if order.BillingMode == "image_usage" {
+		var upstream providerHTTPError
+		if errors.As(err, &upstream) {
+			return true
+		}
+	}
 	hasSuccessfulCall, logErr := c.repo.TaskHasSuccessfulBillableCall(taskID)
 	return logErr != nil || hasSuccessfulCall
 }

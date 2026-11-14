@@ -11,7 +11,7 @@ export type ModelPriceTier = NonNullable<NonNullable<AiConfig["channels"][number
 type ModelCreditCost = {
     model: string;
     pricePolicy?: "channel" | "unified";
-    billingMode: "fixed_request" | "per_second" | "token";
+    billingMode: "fixed_request" | "per_second" | "token" | "image_usage";
     unitPriceMicrocredits: number;
     logicalPriceTiers?: ModelPriceTier[];
 };
@@ -25,13 +25,13 @@ export function requestCreditCost(options: { channelMode: string; modelCosts?: M
         const tiers = priceTiersForCurrentSelection(cost.logicalPriceTiers || [], options.capability, options.config, options.requirements);
         if (!tiers.length) return null;
         const first = tiers[0];
-        if (!first || first.billingMode === "token") return null;
+        if (!first || first.billingMode === "token" || first.billingMode === "image_usage") return null;
         // 同一精确规格可能来自多个逻辑路由；只有价格一致时才可在客户端安全展示。
         if (tiers.some((tier) => tier.billingMode !== first.billingMode || tier.unitPriceMicrocredits !== first.unitPriceMicrocredits)) return null;
         return creditAmount(first.billingMode, first.unitPriceMicrocredits, options.count, options.seconds);
     }
     // Token 订单由服务端按请求体预授权并在 usage 返回后结算，前端不展示无依据的固定价格。
-    if (cost.billingMode === "token") return null;
+    if (cost.billingMode === "token" || cost.billingMode === "image_usage") return null;
     return creditAmount(cost.billingMode, cost.unitPriceMicrocredits, options.count, options.seconds);
 }
 
@@ -55,6 +55,7 @@ export function priceTiersForCurrentSelection(tiers: ModelPriceTier[], capabilit
 }
 
 export function priceTierSummaryLabel(tiers: ModelPriceTier[], capability?: ModelCapability, compactTokenUnit = false) {
+    if (tiers.some((tier) => tier.billingMode === "image_usage")) return "按图片输入张数及实际输出像素计费";
     const unitPrices = (billingMode: ModelPriceTier["billingMode"]) =>
         tiers
             .filter((tier) => tier.billingMode === billingMode)
@@ -101,6 +102,7 @@ export function formatPriceRange(values: number[], suffix: string) {
 
 export function modelQuoteDescription(quote: LogicalModelQuote) {
     const amount = (quote.amountMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 6 });
+    if (quote.billingMode === "image_usage") return `最多冻结 ${amount} 积分；输入 ${quote.imageUsage?.inputImages ?? 0} 张，最多输出 ${quote.imageUsage?.maxOutputImages ?? quote.quantity} 张（含底图）；完成后按实际输入张数及每张输出像素结算，退回差额`;
     const descriptions = [`${quote.estimated ? "预计" : "本次"}消耗 ${amount} 积分`];
     const breakdown = referenceVideoQuoteBreakdown(quote.referenceVideo);
     if (breakdown) descriptions.push(breakdown);
@@ -123,7 +125,7 @@ export function modelQuoteRequest(config: AiConfig, value: string, capability?: 
     if (!capability || !value) return undefined;
     const channel = resolveModelChannel(config, value);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
-    if (channel.scope === "system" && cost && !cost.logicalModelId && capability !== "video") return undefined;
+    if (channel.scope === "system" && cost && !cost.logicalModelId && capability !== "video" && cost.billingMode !== "image_usage" && !cost.logicalPriceTiers?.some((tier) => tier.billingMode === "image_usage")) return undefined;
     return systemModelQuoteRequest(config, value, capability, requirements);
 }
 

@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 图片用量计费
+
+- 规则与计算：`model/image_billing.go`、`imagebilling/pricing.go`；价格校验、换算和报价在 `app/channel_models_pricing.go`、`app/image_billing.go`、`app/finance.go`、`app/logical_model_quote.go`。
+- 实际用量与结算：声明式协议映射 `protocol/manifest_adapter.go` → `app/provider_protocol_result.go` → `repository/finance_image.go`；恢复素材保留图层元数据，迁移为 `database/migration_image_billing.go`（105）。
+- 官方接口：`plugin-packages/volcengine-ark-seedream/` 及对应插件包，5.5 参数与默认能力在 `app/seedream55.go`；前端模型价格编辑、服务端报价和账单展示分别位于 `pages/admin/components/image-usage-price-fields.tsx`、`lib/model-pricing.ts`、`credit-operations-panel.tsx`。
+
 ## 微信登录
 
 - HTTP：`handler/auth_wechat.go` → `service/aliases_wechat.go` → `app/auth_wechat.go` → `auth/wechat.go`。账号会话复用 `auth/linuxdo.go` 的公共 OAuth 收尾，首次注册复用 `auth/auth.go` 的验证与事务流程。

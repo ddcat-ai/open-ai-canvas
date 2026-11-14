@@ -13,6 +13,7 @@ export function formatModelMarkup(cost: number | undefined, sale: number | undef
 }
 
 export function modelPriceFields(tier: ChannelModelPriceTier, capability: ChannelModel["capability"], referenceVideoBilling = false) {
+    if (tier.billingMode === "image_usage") return [];
     if (capability === "video" && referenceVideoBilling) {
         if (tier.billingMode === "per_second")
             return [
@@ -50,6 +51,7 @@ export function previewModelRepricing(items: ChannelModel[], markupPercent: numb
             ...item,
             priceTiers: item.priceTiers.map((tier) => {
                 if (!tier.enabled) return tier;
+                if (tier.billingMode === "image_usage") throw new Error("图片用量价格请在模型编辑中的输入图和输出像素档位中调整");
                 const name = `${item.displayName || item.modelKey}（${tier.selectorKey}）`;
                 if (!tier.id || !tier.priceConfigured || !tier.costPricing?.configured) throw new Error(`${name}：请先保存完整的规格成本价和销售价配置`);
                 const next = { ...tier };

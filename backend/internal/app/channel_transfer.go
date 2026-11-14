@@ -124,7 +124,8 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 			selector = model.DecodeSKUSelector(tier.SelectorJSON)
 		}
 		tiers = append(tiers, ChannelModelPriceTierRequest{
-			CostPricing: tier.CostPricing, Selector: selector, Resolution: tier.Resolution, VideoSeconds: tier.VideoSeconds,
+			ImagePricing: tier.ImagePricing,
+			CostPricing:  tier.CostPricing, Selector: selector, Resolution: tier.Resolution, VideoSeconds: tier.VideoSeconds,
 			ProviderModelKey: tier.ProviderModelKey, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits,
 			InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits,
 			CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits,

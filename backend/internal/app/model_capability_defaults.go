@@ -64,6 +64,17 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		image.TransparentBackground.Supported = false
 		image.ResponseFormat.Supported = false
 		image.OutputFormat.Supported = false
+		if modelName == seedream55Model {
+			image.References.MaxImages = 10
+			presets := seedream55ImagePresets()
+			var values []string
+			for _, preset := range presets {
+				values = append(values, preset.Size)
+			}
+			image.Size = ImageSizeConfig{Parameter: "size", Values: values, Default: "2048x2048", AllowCustom: true, Presets: presets}
+			image.Resolution = ImageResolutionConfig{Supported: true, Values: []string{"1k", "1.5k", "2k"}, Default: "2k"}
+			image.MaxOutputs = 1
+		}
 	case model.ChannelInterfaceVolcengineJiMengImage:
 		image.References.MaxImages = 14
 		image.References.MaskSupported = false
