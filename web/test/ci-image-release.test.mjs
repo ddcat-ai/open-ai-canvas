@@ -9,6 +9,8 @@ const scripts = fileURLToPath(new URL("../../.github/scripts/", import.meta.url)
 const temporaryDirectories = [];
 const sha = "a".repeat(40);
 const digest = "b".repeat(64);
+// The release helpers require POSIX shell semantics; the Windows bash.exe here is a WSL shim.
+const shellDescribe = process.platform === "win32" ? describe.skip : describe;
 afterEach(() => {
     for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
@@ -52,7 +54,7 @@ function fixture(overrides = {}) {
     };
 }
 
-describe("commit image reuse", () => {
+shellDescribe("commit image reuse", () => {
     test("reuses the exact existing digest", () => {
         const repo = fixture();
         expect(repo.run("resolve-image.sh", "ghcr.io/fixture/image:sha-test").status).toBe(0);
@@ -76,7 +78,7 @@ describe("commit image reuse", () => {
     });
 });
 
-describe("digest promotion", () => {
+shellDescribe("digest promotion", () => {
     test("current main promotes latest and SHA tags using digests", () => {
         const repo = fixture();
         expect(repo.run("promote-image.sh").status).toBe(0);
