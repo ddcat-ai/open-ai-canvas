@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -422,6 +423,9 @@ func (s *Service) decryptSettingSecret(value string) (string, error) {
 func (s *Service) settingsEncryptionKey() ([]byte, error) {
 	path := filepath.Join(s.dataDir, ".settings-key")
 	if data, err := os.ReadFile(path); err == nil && len(data) == 32 {
+		if err := restrictSettingsKey(path); err != nil {
+			return nil, err
+		}
 		return data, nil
 	}
 	if err := os.MkdirAll(s.dataDir, 0o750); err != nil {
@@ -447,6 +451,9 @@ func readExistingSettingsKey(path string) ([]byte, error) {
 			return nil, fmt.Errorf("读取存储加密密钥失败：%w", readErr)
 		}
 		if len(data) == 32 {
+			if err := restrictSettingsKey(path); err != nil {
+				return nil, err
+			}
 			return data, nil
 		}
 		if attempt < 10 {
@@ -464,6 +471,9 @@ func publishSettingsKey(path string, key []byte, link func(string, string) error
 	defer os.Remove(file.Name())
 	defer file.Close()
 	if _, err := file.Write(key); err != nil {
+		return err
+	}
+	if err := restrictSettingsKey(file.Name()); err != nil {
 		return err
 	}
 	if err := file.Sync(); err != nil {
@@ -484,6 +494,9 @@ func publishSettingsKey(path string, key []byte, link func(string, string) error
 			return err
 		}
 		defer fallback.Close()
+		if err := restrictSettingsKey(path); err != nil {
+			return err
+		}
 		if _, err := fallback.Write(key); err != nil {
 			return err
 		}
@@ -495,6 +508,11 @@ func publishSettingsKey(path string, key []byte, link func(string, string) error
 		}
 	}
 	// Persist the published name, not only the inode's contents.
+	// Windows does not allow FlushFileBuffers through a directory handle.
+	// The key file itself has already been synced before its atomic link is published.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	dir, err := os.Open(filepath.Dir(path))
 	if err != nil {
 		return err

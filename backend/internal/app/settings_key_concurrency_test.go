@@ -5,12 +5,27 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 )
+
+func assertSettingsKeyPermissions(t *testing.T, path string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		if err := restrictSettingsKey(path); err != nil {
+			t.Fatalf("restrict key ACL: %v", err)
+		}
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("permissions: %v", err)
+	}
+}
 
 func TestSettingsEncryptionKeyPublication(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".settings-key")
@@ -20,10 +35,7 @@ func TestSettingsEncryptionKeyPublication(t *testing.T) {
 		if err != nil || !bytes.Equal(data, key) {
 			t.Fatalf("incomplete temporary key: %v", err)
 		}
-		info, err := os.Stat(temp)
-		if err != nil || info.Mode().Perm() != 0600 {
-			t.Fatalf("temporary permissions: %v", err)
-		}
+		assertSettingsKeyPermissions(t, temp)
 		if _, err := os.Stat(target); !os.IsNotExist(err) {
 			t.Fatalf("key visible before publication: %v", err)
 		}
@@ -64,10 +76,7 @@ func TestSettingsEncryptionKeyLinkFallback(t *testing.T) {
 			if err != nil || !bytes.Equal(got, key) {
 				t.Fatalf("key changed: %v", err)
 			}
-			info, err := os.Stat(path)
-			if err != nil || info.Mode().Perm() != 0600 {
-				t.Fatalf("permissions: %v", err)
-			}
+			assertSettingsKeyPermissions(t, path)
 		})
 	}
 }
@@ -101,13 +110,7 @@ func TestSettingsEncryptionKeyConcurrentFirstUse(t *testing.T) {
 	if len(entries) != 1 || entries[0].Name() != ".settings-key" {
 		t.Fatalf("temporary keys leaked: %v", entries)
 	}
-	info, err := entries[0].Info()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Fatalf("key permissions = %o", info.Mode().Perm())
-	}
+	assertSettingsKeyPermissions(t, filepath.Join(dir, entries[0].Name()))
 }
 
 func TestSettingsEncryptionKeyWaitsForLegacyWriter(t *testing.T) {
