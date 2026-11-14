@@ -12,6 +12,7 @@ import { resourceFileUrl, resourceIdFromStorageKey } from "@/services/api/resour
 import { cleanupUnusedImages, collectImageStorageKeys, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { cleanupUnusedMedia, collectMediaStorageKeys, resolveMediaUrl } from "@/services/file-storage";
 import { flushGenerationAssetStorageLocks, insertOrReturnGenerationAsset, withGenerationArtifactCommitLock, withGenerationAssetStorageLock } from "@/services/generation-asset-repository";
+import { yingceReceiptStore } from "@/services/api/yingce-lite-receipts";
 import { CANVAS_STORE_KEY, commitPendingCanvasStorePersistenceLocked, pendingCanvasStorePersistence, withCanvasStorePersistenceLock } from "@/stores/canvas/use-canvas-store";
 
 export type AssetKind = "text" | "image" | "video" | "audio" | "model" | "entity";
@@ -467,7 +468,8 @@ export const useAssetStore = create<AssetStore>()(
                             await withGenerationAssetStorageLock(scope, async () => {
                                 await commitPendingAssetStorePersistenceLocked(scope);
                                 const durableAssets = (await readPersistedAssetDocumentForScope(scope)).state.assets;
-                                const references = { projects: canvasProjects, assets: durableAssets };
+                                const receipts = await yingceReceiptStore.list(scope);
+                                const references = { projects: canvasProjects, assets: durableAssets, receipts: receipts.map((task) => (task.resultJson ? JSON.parse(task.resultJson) : null)) };
                                 const imageKeys = new Set([...frozenExtraImageKeys, ...collectImageStorageKeys(references)]);
                                 const mediaKeys = new Set([...frozenExtraMediaKeys, ...collectMediaStorageKeys(references)]);
                                 await cleanupUnusedImages(

@@ -67,6 +67,11 @@ export function generationFailureMetadata(error: unknown, prompt: string): Gener
 }
 
 export function generationErrorMessage(error: unknown) {
+    if (error && typeof error === "object") {
+        const details = error as { status?: unknown; reason?: unknown; outcomeUnknown?: unknown };
+        if (details.outcomeUnknown === true || details.reason === "outcome_unknown") return "生成状态未知，请核对结果后再手动发起新请求。";
+        if (details.status === 409) return "请求已提交过，请核对结果后再手动发起新请求。";
+    }
     const original = rawGenerationError(error);
     const upstreamIndex = original.indexOf("；上游：");
     if (upstreamIndex >= 0) {

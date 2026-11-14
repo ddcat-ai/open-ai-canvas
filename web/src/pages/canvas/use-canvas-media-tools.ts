@@ -1775,6 +1775,7 @@ export function useCanvasMediaTools({
                     config: generationConfig,
                     referenceImages: [source],
                     signal: controller.signal,
+                    persistIntent: true,
                     metadata: { sourceNodeId: node.id, edit: "angle", ...styleMetadata },
                     onTaskCreated: (task) => bindGenerationTask(childId, task),
                 });
@@ -1950,6 +1951,7 @@ export function useCanvasMediaTools({
                     referenceImages: [editReference, characterReference],
                     mask,
                     signal: controller.signal,
+                    persistIntent: true,
                     metadata: { sourceNodeId: node.id, edit: "emotion", emotionEditMode: editPlan.mode, emotion: emotionEdit, ...styleMetadata },
                     onTaskCreated: (task) => bindGenerationTask(childId, task),
                 });

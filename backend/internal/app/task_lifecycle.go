@@ -84,6 +84,9 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	if err != nil {
 		return nil, err
 	}
+	if s.taskUsesLiteRemoteChannel(task, billingInput) {
+		billingOrder = nil
+	}
 	policy, err := s.RuntimePolicy()
 	if err != nil {
 		return nil, err

@@ -56,11 +56,12 @@ type PublicModelAvailabilityDay struct {
 
 // PublicChannelCatalog 公开的渠道目录信息（脱敏）
 type PublicChannelCatalog struct {
-	ID          string               `json:"id"`
-	Name        string               `json:"name"`
-	DisplayName string               `json:"displayName"`
-	SortOrder   int                  `json:"sortOrder"`
-	Models      []PublicChannelModel `json:"models"`
+	ID              string               `json:"id"`
+	RemoteChannelID string               `json:"remoteChannelId,omitempty"`
+	Name            string               `json:"name"`
+	DisplayName     string               `json:"displayName"`
+	SortOrder       int                  `json:"sortOrder"`
+	Models          []PublicChannelModel `json:"models"`
 }
 
 // PublicChannelModel 公开的渠道模型信息（脱敏）
@@ -192,12 +193,17 @@ func (s *Service) publicSystemChannelCatalog(access *userGroupAccess, intent *Mo
 		if len(publicModels) > 0 {
 			// 系统渠道的真实名称属于内部部署信息（供应商、中转站、内部命名等），
 			// 不得通过普通用户可访问的创作目录泄漏。前端只依赖 ID 做分组，名称留空后由客户端统一展示为“系统模型”。
+			remoteChannelID := ""
+			if remoteID, ok := liteRemoteChannelID(channel.CatalogProviderID); ok {
+				remoteChannelID = remoteID
+			}
 			result = append(result, PublicChannelCatalog{
-				ID:          channel.ID,
-				Name:        "",
-				DisplayName: "",
-				SortOrder:   channel.SortOrder,
-				Models:      publicModels,
+				ID:              channel.ID,
+				RemoteChannelID: remoteChannelID,
+				Name:            "",
+				DisplayName:     "",
+				SortOrder:       channel.SortOrder,
+				Models:          publicModels,
 			})
 		}
 	}

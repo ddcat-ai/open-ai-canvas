@@ -4667,6 +4667,120 @@ paths:
           description: 预期账号与登录账号不符
         "500":
           description: 持久化失败，客户端保留本机数据并可重试
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: 注销当前会话
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "401": { $ref: "#/components/responses/Error" }
+  /auth/desktop/authorize:
+    post:
+      tags: [auth]
+      summary: 签发桌面客户端单次授权码
+      description: 当前网站会话经用户明确确认后调用。仅允许 PeekReel Lite clientId 和 127.0.0.1 随机端口回调；授权码有效 120 秒、单次使用，并绑定 S256 PKCE challenge。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, redirectUri, codeChallenge]
+              properties:
+                clientId: { type: string, enum: [peekreel-lite] }
+                redirectUri: { type: string, format: uri }
+                codeChallenge: { type: string, minLength: 43, maxLength: 43 }
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /auth/desktop/token:
+    post:
+      tags: [auth]
+      security: []
+      summary: 用 PKCE 授权码兑换桌面会话
+      description: 仅 HTTPS。授权码、clientId、redirectUri 和 S256 verifier 必须匹配；成功后仅在响应正文返回不透明 session，不设置 Cookie。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, redirectUri, code, codeVerifier]
+              properties:
+                clientId: { type: string, enum: [peekreel-lite] }
+                redirectUri: { type: string, format: uri }
+                code: { type: string }
+                codeVerifier: { type: string, minLength: 43, maxLength: 128 }
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /ai/system/{channelId}/{providerPath}:
+    parameters:
+      - in: path
+        name: channelId
+        required: true
+        schema: { type: string }
+      - in: path
+        name: providerPath
+        required: true
+        description: 上游协议路径；服务端接收该位置之后的多级路径并原样转发。
+        schema: { type: string }
+    get:
+      tags: [models]
+      summary: 经计费系统渠道查询上游任务状态或结果
+      description: 除模型目录查询外，异步轮询和结果下载必须属于当前用户与渠道的账单，并精确匹配协议根据已绑定上游任务 ID 构造的 BuildPoll 或 BuildResult 路径和查询参数；不保存请求正文或结果。
+      responses:
+        "200": { description: 按上游协议返回状态、JSON、事件流或媒体正文 }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "502": { description: 上游查询失败；返回统一错误信封 }
+    post:
+      tags: [models]
+      summary: 经计费系统渠道转发生成请求
+      description: |
+        桌面主进程使用 Authorization Bearer session。请求正文仅在内存中转发，不写入服务端任务、调用日志或结果缓存。每个生成意图须携带稳定幂等键；同一意图重试复用该键，重复键返回 409 且不会再次调用上游。异步任务记录、提示词、参考素材和结果由 Lite 本地保存；未知状态不得自动创建新意图。
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          required: true
+          description: 每次用户生成意图唯一，长度 1–128 字节；同一意图重试复用。
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      requestBody:
+        required: true
+        description: 按所选渠道上游协议编码；服务端不持久化正文。
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: 上游同步响应；按协议返回 JSON、SSE 或媒体正文 }
+        "202": { description: 上游已接受异步任务，按 provider 协议返回任务标识 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { description: 上游请求失败；返回统一错误信封 }
+  /ecommerce/knowledge/orchestration:
+    get:
+      tags: [ecommerce-agent]
+      summary: 读取电商 Agent 当前模型配置
+      description: Lite 登录后只读同步管理员发布的模型选择，不上传本地工作区内容。
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "401": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [ecommerce-agent]
+      summary: 更新电商 Agent 模型配置
+      description: 仅管理员可修改；Lite 客户端不会向远端写入配置。
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 components:
   parameters:
     MCPResourceID:

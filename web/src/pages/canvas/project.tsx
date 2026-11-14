@@ -16,6 +16,7 @@ import { canvasAssetHandoffIds } from "@/lib/canvas/canvas-asset-handoff";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { createCanvasGenerationLiveProjectAdapter, registerCanvasGenerationLiveProject } from "@/services/canvas-generation-consumer";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { registerCanvasLiteIntentAdapter } from "@/lib/canvas/canvas-lite-intent";
 import { getResource, getResourceAccess, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, syncResourceToArkPrivateAsset } from "@/services/api/resources";
 import { uploadImage } from "@/services/image-storage";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
@@ -109,6 +110,7 @@ import {
 import { buildImageToPrevisAgentPrompt, buildImageToPrevisDisplayText } from "@/lib/canvas/image-to-previs-agent";
 import type { CloudAgentMessagePresentation } from "@/services/cloud-agent-conversations";
 import { CanvasConnectionCreateMenu, CanvasNodePanelOverlay } from "@/components/canvas/canvas-workspace-overlays";
+import { DoubaoCanvasPanel, useDoubaoCanvasTasks } from "@/components/doubao/doubao-canvas-tasks";
 import { CanvasOverlayLayerContainer, CanvasOverlayLayerProvider } from "@/components/canvas/canvas-overlay-layer";
 import { CanvasLeaferGraphicsLayer } from "@/components/canvas/canvas-leafer-graphics-layer";
 import {
@@ -264,6 +266,7 @@ function CanvasViewportPage() {
     const previsOnboardingScope = useUserStore((state) => state.user?.id?.trim() || "");
     const nodesRef = useRef<CanvasNodeData[]>([]);
     const [nodes, setNodesState] = useState<CanvasNodeData[]>([]);
+    const doubao = useDoubaoCanvasTasks();
     const setNodes = useMemo(() => createCanvasStateWriter(nodesRef, setNodesState, stampCanvasNodeChanges), []);
     const [nodeStackOrder, setNodeStackOrder] = useState<CanvasNodeStackOrder>([]);
     const bringNodeToFront = useCallback((nodeId: string) => {
@@ -459,6 +462,25 @@ function CanvasViewportPage() {
         cleanupCanvasFiles,
     });
 
+    const persistLocalEditsRef = useRef(persistLocalEdits);
+    persistLocalEditsRef.current = persistLocalEdits;
+    const liteIntentContextRef = useRef({ canvasStorageScope, projectId, projectLoaded });
+    liteIntentContextRef.current = { canvasStorageScope, projectId, projectLoaded };
+    useEffect(() => {
+        if (!projectLoaded || !projectId) return;
+        const isCurrent = () => liteIntentContextRef.current.projectLoaded && liteIntentContextRef.current.projectId === projectId && liteIntentContextRef.current.canvasStorageScope === canvasStorageScope;
+        return registerCanvasLiteIntentAdapter(canvasStorageScope, projectId, {
+            bind: (nodeId, intentId) => {
+                if (isCurrent()) setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, taskId: intentId, taskStatus: "running", status: "loading" } } : node)));
+            },
+            owns: (nodeId, intentId) => isCurrent() && nodesRef.current.some((node) => node.id === nodeId && node.metadata?.taskId === intentId),
+            persist: () => {
+                if (!isCurrent()) throw new Error("画布或账号已切换，生成请求未发送");
+                return persistLocalEditsRef.current();
+            },
+        });
+    }, [canvasStorageScope, projectId, projectLoaded, setNodes]);
+
     const openAgent = useCallback(() => {
         openAssistant();
     }, [openAssistant]);
@@ -576,15 +598,28 @@ function CanvasViewportPage() {
     // 每帧新对象会让所有节点跟着重渲染，错题本里多条崩溃都出在画布高频更新。
     const nodeGraphContext = useMemo<CanvasNodeGraphContextValue>(() => ({ getUpstreamNodes: (nodeId: string) => getContextResourceNodes(nodeId, nodes, connections) }), [connections, nodes]);
 
-    const { applyGenerationTaskResult, bindGenerationTask, finishGenerationRequest, openNodeTaskDetails, resyncGenerationTaskNode, runningNodeId, setRunningNodeId, setTaskDetail, startGenerationRequest, taskDetail, taskDetailLoading, taskDetailLogs } =
-        useCanvasGeneration({
-            projectId,
-            domainProjectId: linkedProjectId,
-            projectLoaded,
-            nodes,
-            nodesRef,
-            setNodes,
-        });
+    const {
+        applyGenerationTaskResult,
+        bindGenerationTask,
+        finishGenerationRequest,
+        ownsGenerationRequest,
+        openNodeTaskDetails,
+        resyncGenerationTaskNode,
+        runningNodeId,
+        setRunningNodeId,
+        setTaskDetail,
+        startGenerationRequest,
+        taskDetail,
+        taskDetailLoading,
+        taskDetailLogs,
+    } = useCanvasGeneration({
+        projectId,
+        domainProjectId: linkedProjectId,
+        projectLoaded,
+        nodes,
+        nodesRef,
+        setNodes,
+    });
 
     const cancelCanvasTask = useCallback(
         (task: import("@/services/api/task-center").GenerationTask) => {
@@ -2016,6 +2051,7 @@ function CanvasViewportPage() {
         setRunningNodeId,
         startGenerationRequest,
         finishGenerationRequest,
+        ownsGenerationRequest,
         bindGenerationTask,
         applyGenerationTaskResult,
     });
@@ -3178,6 +3214,17 @@ function CanvasViewportPage() {
                                     ) : null}
                                 </div>
                             </div>
+
+                            {doubao.bridge
+                                ? nodes.map((node) => {
+                                      const task = doubao.tasksByNode.get(node.id);
+                                      return task ? (
+                                          <CanvasNodePanelOverlay key={node.id} node={node} viewport={viewport} containerRef={containerRef} panelWidth={320} panelHeight={160} anchorBelow>
+                                              <DoubaoCanvasPanel key={task.id} bridge={doubao.bridge!} task={task} connectionError={doubao.error} />
+                                          </CanvasNodePanelOverlay>
+                                      ) : null;
+                                  })
+                                : null}
 
                             {angleNode?.metadata?.content ? (
                                 <CanvasNodePanelOverlay

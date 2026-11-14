@@ -307,6 +307,9 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 	}
 	ApplyDefaultOutboundHeaders(req)
 	client := OutboundHTTPClientWithProxy(requestTimeout, channelProxyURL)
+	if runtimeService != nil {
+		client = runtimeService.OutboundHTTPClientForChannel(requestTimeout, req.URL, channelProxyURL)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		err = providerConnectionError(err)

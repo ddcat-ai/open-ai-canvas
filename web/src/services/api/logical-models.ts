@@ -176,6 +176,7 @@ export type ModelCatalogSource = "system";
 
 export type PublicChannelCatalog = {
     id: string;
+    remoteChannelId?: string;
     name: string;
     displayName: string;
     sortOrder?: number;

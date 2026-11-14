@@ -1,0 +1,17 @@
+{
+  "name": "peekreel-desktop",
+  "productName": "PeekReel",
+  "version": "0.7.0",
+  "description": "PeekReel — 先睹你的故事。AI 影视与短剧创作工作台桌面版",
+  "author": "PeekReel",
+  "license": "MIT",
+  "main": "src/main.js",
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
+  "peekreel": {
+    "appUserModelId": "com.peekreel.lite",
+    "edition": "lite",
+    "updateFeed": "https://peekreel.peekcart.com/updates/lite/"
+  }
+}

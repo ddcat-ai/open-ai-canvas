@@ -1,0 +1,77 @@
+:root {
+    color-scheme: dark;
+    font: 15px "Microsoft YaHei", sans-serif;
+    color: #f1f3f4;
+    background: #111416;
+}
+
+body {
+    display: grid;
+    min-height: 100vh;
+    margin: 0;
+    place-items: center;
+}
+
+main {
+    box-sizing: border-box;
+    width: min(400px, calc(100vw - 40px));
+    padding: 30px;
+    border: 1px solid #3a4145;
+    border-radius: 8px;
+    background: #1b2023;
+}
+
+h1 {
+    margin: 0 0 10px;
+    font-size: 24px;
+}
+
+p {
+    min-height: 3em;
+    margin: 0 0 18px;
+    color: #c0c7ca;
+    line-height: 1.55;
+}
+
+button {
+    width: 100%;
+    min-height: 42px;
+    margin-top: 10px;
+    padding: 9px 14px;
+    border: 1px solid #566168;
+    border-radius: 6px;
+    color: #f8fafb;
+    background: #293237;
+    font: inherit;
+    cursor: pointer;
+}
+
+button#login {
+    border-color: #1f8a72;
+    background: #11745f;
+}
+
+button:hover:not(:disabled) {
+    filter: brightness(1.12);
+}
+
+button:focus-visible {
+    outline: 2px solid #7de0ca;
+    outline-offset: 2px;
+}
+
+button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+    }
+}

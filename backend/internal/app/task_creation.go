@@ -236,6 +236,11 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 			return nil, BadAuthRequest("Agent 暂不支持当前模型计费方式")
 		}
 	}
+	if s.taskUsesLiteRemoteChannel(&task, normalizedInput) {
+		// The authenticated remote system proxy owns the charge. Keep the local
+		// quote above for Agent admission limits, but never reserve it locally.
+		billingOrder = nil
+	}
 	if req.creationPrepare != nil {
 		encoded, encodeErr := json.Marshal(normalizedInput)
 		if encodeErr != nil {

@@ -1,0 +1,74 @@
+# 警告：本配置产出「完整版」（PeekReel，含内嵌管理后台），自 2026-11-11 起停止对外分发。
+#   对外唯一分发的客户端是精简版：desktop/electron-builder.lite.yml（npm run dist）。
+#   保留本文件仅供内部诊断（排查客户本地 sqlite / 渠道 / 模型问题时需要内嵌 admin）。
+#   日常构建请用 npm run dist（= lite），不要用 npm run dist:internal。
+appId: com.peekreel.desktop
+productName: PeekReel
+copyright: Copyright © 2026 PeekReel. 基于 MIT 协议的影策（open-ai-canvas）
+
+directories:
+  output: release
+
+beforePack: scripts/before-pack.cjs
+extraMetadata:
+  peekreel:
+    edition: full
+    appUserModelId: com.peekreel.desktop
+    updateFeed: https://peekreel.peekcart.com/updates/
+
+# 只打包实际用得到的 Chromium 语言包。
+# 默认会把 Electron 自带的全部语言（约 50 种）塞进 locales/，实测 40.3 MB；
+# 产品只有中文界面（i18n 层另有 6 种语言，与这份 Chromium 资源无关），
+# 保留 zh-CN 与 en-US 即可，省约 37 MB。
+electronLanguages:
+  - zh-CN
+  - en-US
+
+files:
+  - src/**
+  - offline/**
+  - package.json
+  - "!**/*.map"
+
+# 完整本地运行资源：前端构建产物 + CGO 编译的后端（含 SQLite）+ 激活引导页 + 闪屏/托盘图标。
+# desktop/resources/ 由 scripts/prepare-resources.ps1 填充（已 gitignore）。
+extraResources:
+  - from: resources/build-manifest.json
+    to: build-manifest.json
+  - from: resources/web-dist
+    to: web-dist
+  - from: resources/canvas-backend.exe
+    to: canvas-backend.exe
+  # 官方插件包（*.yingce-plugin）：后端启动必需，缺失会导致进程直接退出。
+  - from: resources/plugin-packages
+    to: plugin-packages
+  # 豆包网页驱动桥（自包含 Node 包，含 node_modules；extraResources 天然在 asar 外）。
+  - from: resources/doubao-bridge
+    to: doubao-bridge
+  - from: activation
+    to: activation
+  - from: build/splash.png
+    to: splash.png
+  - from: build/tray.png
+    to: tray.png
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+  # 代码签名：设置环境变量 CSC_LINK 与 CSC_KEY_PASSWORD 后自动签名。
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  # 默认装 D 盘（无 D 盘自动回退 C）；安装向导里用户可自由修改路径。
+  include: build/installer-default-dir.nsh
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: PeekReel
+  artifactName: PeekReel-Setup-${version}-${arch}.${ext}
+
+# 更新 feed 由具体发行版配置，避免 Lite 继承完整版地址。

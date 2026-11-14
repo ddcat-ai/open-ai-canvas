@@ -38,8 +38,8 @@ type EcommerceOrchestrationSetting struct {
 }
 
 func (s *Service) EcommerceOrchestrationSetting(actor *model.User) (EcommerceOrchestrationSetting, error) {
-	if err := s.RequireAdmin(actor); err != nil {
-		return EcommerceOrchestrationSetting{}, err
+	if actor == nil || actor.ID == "" || actor.Status != model.UserStatusActive {
+		return EcommerceOrchestrationSetting{}, Unauthorized("请先登录")
 	}
 	setting, _, err := s.storedEcommerceOrchestrationSetting()
 	return setting, err

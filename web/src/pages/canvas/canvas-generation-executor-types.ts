@@ -16,6 +16,7 @@ export type CanvasGenerationExecutorDependencies = {
     setDialogNodeId: Dispatch<SetStateAction<string | null>>;
     startGenerationRequest: (targetNodeId: string, originNodeId: string, runningId?: string, controller?: AbortController) => AbortController;
     finishGenerationRequest: (targetNodeId: string, controller: AbortController) => void;
+    ownsGenerationRequest: (targetNodeId: string, controller: AbortController) => boolean;
     bindGenerationTask: (targetNodeId: string, task: GenerationTask) => void;
     applyGenerationTaskResult: (targetNodeId: string, task: GenerationTask) => Promise<void>;
     showError: (content: string) => void;

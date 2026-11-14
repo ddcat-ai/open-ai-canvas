@@ -57,3 +57,27 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 		t.Fatalf("skills presets status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestOpenAPIIncludesLiteDesktopContracts(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	RegisterOpenAPIRoutes(router.Group("/api"))
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/openapi.yaml", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("openapi.yaml status=%d", recorder.Code)
+	}
+	for _, required := range []string{
+		"bearerSession:",
+		"/auth/register:",
+		"/auth/logout:",
+		"/ai/system/{channelId}/{providerPath}:",
+		"X-Idempotency-Key",
+		"/api/{channelId}/*",
+	} {
+		if !strings.Contains(recorder.Body.String(), required) {
+			t.Errorf("OpenAPI is missing Lite contract marker %q", required)
+		}
+	}
+}

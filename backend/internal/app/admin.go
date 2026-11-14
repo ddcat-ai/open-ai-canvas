@@ -105,6 +105,7 @@ type ChannelRequest struct {
 	ConcurrencyLimit     *int                     `json:"concurrencyLimit"`
 	UseGlobalConcurrency *bool                    `json:"useGlobalConcurrency"`
 	Models               []string                 `json:"models"`
+	CatalogProviderID    string                   `json:"catalogProviderId"`
 	Headers              []OutboundHeader         `json:"headers"`
 	Enabled              *bool                    `json:"enabled"`
 	// ProxyURL 指针语义：nil = 请求未提交该字段（更新时保持渠道现有值），

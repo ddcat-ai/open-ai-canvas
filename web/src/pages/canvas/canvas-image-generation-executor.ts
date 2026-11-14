@@ -43,6 +43,7 @@ export async function executeImageGeneration(
         setDialogNodeId,
         startGenerationRequest,
         finishGenerationRequest,
+        ownsGenerationRequest,
         bindGenerationTask,
         applyGenerationTaskResult,
         styleMetadata,
@@ -284,7 +285,7 @@ export async function executeImageGeneration(
                 if (isConfigNode) setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined } } : node)));
                 return true;
             } catch (error) {
-                if (isGenerationCanceled(error)) return false;
+                if (controller.signal.aborted || isGenerationCanceled(error)) return false;
                 const failure = generationFailureMetadata(error, prompt);
                 if (!representativeFailure || failure.generationErrorCode === CONTENT_MODERATION_ERROR_CODE) representativeFailure = failure;
                 hasFailure = true;
@@ -295,23 +296,45 @@ export async function executeImageGeneration(
                     return next;
                 });
                 return false;
-            } finally {
-                finishGenerationRequest(targetId, controller);
             }
         }),
     );
-    if (count > 1) finishGenerationRequest(rootId, controller);
     if (controller.signal.aborted) {
         setNodes((current) => {
-            const cancelled = cancelIncompleteImageBatch(rootId, childIds, current, []);
+            const ownedChildren = childIds.filter((id) => ownsGenerationRequest(id, controller));
+            const ownsRoot = ownsGenerationRequest(rootId, controller);
+            const takenOverChild = ownedChildren.length !== childIds.length;
+            const cancelled =
+                ownsRoot && !takenOverChild
+                    ? cancelIncompleteImageBatch(rootId, ownedChildren, current, [])
+                    : {
+                          nodes: current.filter((node) => !ownedChildren.includes(node.id) || node.metadata?.batchRootId !== rootId || hasImageBatchResult(node)),
+                          removedIds: current.filter((node) => ownedChildren.includes(node.id) && node.metadata?.batchRootId === rootId && !hasImageBatchResult(node)).map((node) => node.id),
+                      };
+            const nextNodes = cancelled.nodes.map((node) => {
+                if (ownsRoot && takenOverChild && node.id === rootId && node.metadata?.batchChildIds) {
+                    return { ...node, metadata: { ...node.metadata, batchChildIds: node.metadata.batchChildIds.filter((id) => !cancelled.removedIds.includes(id)) } };
+                }
+                return node.id === nodeId && isConfigNode && ownsGenerationRequest(nodeId, controller) && node.metadata?.status === NODE_STATUS_LOADING
+                    ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, errorDetails: undefined } }
+                    : node;
+            });
             if (cancelled.removedIds.length) {
                 const removed = new Set(cancelled.removedIds);
-                setConnections((connections) => connections.filter((connection) => !removed.has(connection.fromNodeId) && !removed.has(connection.toNodeId)));
-            }
-            return cancelled.nodes.map((node) => (node.id === nodeId && isConfigNode && node.metadata?.status === NODE_STATUS_LOADING ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_IDLE, errorDetails: undefined } } : node));
+                setConnections((connections) => {
+                    const next = connections.filter((connection) => !removed.has(connection.fromNodeId) && !removed.has(connection.toNodeId));
+                    if (projectId) useCanvasStore.getState().updateProject(projectId, { nodes: nextNodes, connections: next });
+                    return next;
+                });
+            } else if (projectId) useCanvasStore.getState().updateProject(projectId, { nodes: nextNodes });
+            return nextNodes;
         });
+        targetIds.forEach((id) => finishGenerationRequest(id, controller));
+        if (count > 1) finishGenerationRequest(rootId, controller);
         return;
     }
+    targetIds.forEach((id) => finishGenerationRequest(id, controller));
+    if (count > 1) finishGenerationRequest(rootId, controller);
     if (hasFailure) showError(hasSuccess ? translate("canvasPage.generation.someImagesFailed") : translate("canvasPage.generation.allImagesFailed"));
     setNodes((current) => {
         const next = current.map((node) => {

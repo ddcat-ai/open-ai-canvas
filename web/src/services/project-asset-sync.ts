@@ -578,6 +578,7 @@ async function generationOutputAsset(input: Parameters<MaterializeGenerationTask
               input.signal,
           );
     if (!stored.url) throw new Error("音频结果资源不可用");
+    if (!stored.url) throw new Error("音频结果资源不可用");
     return {
         kind: "audio",
         title: "生成音频",

@@ -99,4 +99,4 @@ export type GeminiPayload = {
 };
 export type GeminiStreamState = { buffer: string; text: string; reasoning: string; toolCalls: ResponseToolCall[]; error?: string };
 
-export type RequestOptions = { signal?: AbortSignal; promptCacheKey?: string; onReasoning?: (text: string) => void };
+export type RequestOptions = { signal?: AbortSignal; promptCacheKey?: string; onReasoning?: (text: string) => void; imageRequest?: (path: string, body: Record<string, unknown> | FormData) => Promise<unknown> };

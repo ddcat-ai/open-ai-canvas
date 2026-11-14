@@ -599,16 +599,27 @@ func (s *Service) ReserveProxyBillingWithBody(userID string, channelID string, m
 		return nil, err
 	}
 	if !enabled {
+		if strings.TrimSpace(idempotencyKey) != "" {
+			return nil, kernel.NewAppError(503, "积分计费未启用，无法安全提交请求")
+		}
 		return nil, nil
 	}
-	if strings.TrimSpace(idempotencyKey) == "" {
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if len(idempotencyKey) > 128 {
+		return nil, BadAuthRequest("请求幂等键过长")
+	}
+	if idempotencyKey == "" {
 		idempotencyKey = newID()
 	}
-	order, err := s.newBillingOrder(userID, "", "proxy:"+idempotencyKey, channelID, modelKey, capability, firstNonEmpty(strings.TrimSpace(scene), "system_proxy"), quantity, estimateProxyTokens(requestBody))
+	digest := sha256.Sum256([]byte(idempotencyKey))
+	order, err := s.newBillingOrder(userID, "", "proxy:"+hex.EncodeToString(digest[:]), channelID, modelKey, capability, "system_proxy", quantity, estimateProxyTokens(requestBody))
 	if err != nil {
 		return nil, err
 	}
-	if err := s.repo.ReserveBillingOrder(order); err != nil {
+	if err := s.repo.ReserveProxyBillingOrder(order); err != nil {
+		if errors.Is(err, repository.ErrBillingDuplicate) {
+			return nil, &kernel.AppError{Status: 409, Code: kernel.CodeIdempotencyConflict, Reason: kernel.ReasonConflict, Message: "该请求已提交，请核对账单；生成结果不会在服务端保存"}
+		}
 		if errors.Is(err, repository.ErrInsufficientCredits) {
 			return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 		}

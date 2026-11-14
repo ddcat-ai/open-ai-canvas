@@ -44,6 +44,7 @@ type UseCanvasGenerationExecutorOptions = {
     setRunningNodeId: Dispatch<SetStateAction<string | null>>;
     startGenerationRequest: (targetNodeId: string, originNodeId: string, runningId?: string, controller?: AbortController) => AbortController;
     finishGenerationRequest: (targetNodeId: string, controller: AbortController) => void;
+    ownsGenerationRequest: (targetNodeId: string, controller: AbortController) => boolean;
     bindGenerationTask: (targetNodeId: string, task: GenerationTask) => void;
     applyGenerationTaskResult: (targetNodeId: string, task: GenerationTask) => Promise<void>;
 };
@@ -77,6 +78,7 @@ export function useCanvasGenerationExecutor({
     setRunningNodeId,
     startGenerationRequest,
     finishGenerationRequest,
+    ownsGenerationRequest,
     bindGenerationTask,
     applyGenerationTaskResult,
 }: UseCanvasGenerationExecutorOptions) {
@@ -148,6 +150,12 @@ export function useCanvasGenerationExecutor({
                     const isPreparingEmptyImage = mode === "image" && sourceNode?.type === CanvasNodeType.Image && !sourceNode.metadata?.content;
                     const preparationController = startGenerationRequest(nodeId, nodeId, nodeId, options?.controller);
                     setRunningNodeId(nodeId);
+                    const stopCancelledPreparation = () => {
+                        if (!preparationController.signal.aborted) return false;
+                        finishGenerationRequest(nodeId, preparationController);
+                        if (preparationController.signal.reason !== "superseded") setRunningNodeId((current) => (current === nodeId ? null : current));
+                        return true;
+                    };
                     if (markSourceStatus)
                         setNodes((current) =>
                             current.map((node) =>
@@ -181,25 +189,21 @@ export function useCanvasGenerationExecutor({
                         const contextPrompt = editingTextNode ? buildTextRewritePrompt(sourceTextContent, prompt) : generationPrompt;
                         // 批量快照已在入队时解析过引用；其余路径先补齐提示词引用的素材，再用最新列表解析。
                         const contextAssets = options?.inputSnapshot ? assets : await loadPromptMentionedAssets(contextPrompt);
-                        const baseContext = resolveCanvasBatchInputContext(options?.inputSnapshot, () => buildNodeGenerationContext(
-                            nodeId,
-                            nodesRef.current,
-                            connectionsRef.current,
-                            contextPrompt,
-                            contextAssets,
-                            promptOnly,
-                        ));
+                        if (stopCancelledPreparation()) return;
+                        const baseContext = resolveCanvasBatchInputContext(options?.inputSnapshot, () => buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, contextPrompt, contextAssets, promptOnly));
                         const requirements = generationModelRequirements(mode, baseContext, sourceNode, generationConfig, true);
                         generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, requirements, false, referenceImageSize);
                         const compatibilityError = usesWorkflowProvider ? "" : modelCompatibilityError(generationConfig, generationConfig.model, requirements);
                         if (compatibilityError) throw new Error(translate("canvasPage.generation.modelIncompatible", { error: compatibilityError }));
                         const referenceLimits = usesWorkflowProvider ? undefined : modelGroupReferenceLimits(effectiveConfig, generationConfig.model, mode, requirements);
                         rawGenerationContext = await hydrateNodeGenerationContext(baseContext, projectId, domainProjectId, mode, mode === "video" && Boolean(referenceLimits?.maxAudios), !promptOnly, referenceLimits, false);
+                        if (stopCancelledPreparation()) return;
                         const hydratedRequirements = generationModelRequirements(mode, rawGenerationContext, sourceNode, generationConfig);
                         generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode, hydratedRequirements, false, referenceImageSize);
                         const hydratedCompatibilityError = usesWorkflowProvider ? "" : modelCompatibilityError(generationConfig, generationConfig.model, hydratedRequirements);
                         if (hydratedCompatibilityError) throw new Error(translate("canvasPage.generation.modelIncompatible", { error: hydratedCompatibilityError }));
                     } catch (error) {
+                        if (stopCancelledPreparation()) return;
                         const errorDetails = generationErrorMessage(error);
                         message.error(errorDetails);
                         finishGenerationRequest(nodeId, preparationController);
@@ -210,7 +214,9 @@ export function useCanvasGenerationExecutor({
                     let skillExecution: Awaited<ReturnType<typeof skillRuntime.prepare<"canvas">>>;
                     try {
                         skillExecution = await skillRuntime.prepare({ profile: "canvas", prompt: rawGenerationContext.prompt, skills: addedSkills });
+                        if (stopCancelledPreparation()) return;
                     } catch (error) {
+                        if (stopCancelledPreparation()) return;
                         message.error(error instanceof Error ? error.message : translate("canvasPage.generation.skillContextFailed"));
                         finishGenerationRequest(nodeId, preparationController);
                         setRunningNodeId(null);
@@ -307,18 +313,16 @@ export function useCanvasGenerationExecutor({
                         context: generationContext,
                     });
                     const duplicateConfirmationRequired = !options?.skipDuplicateConfirmation && !options?.retryContext && sourceNode?.metadata?.lastGenerationRequestFingerprint === requestFingerprint;
-                    if (duplicateConfirmationRequired && !(await confirmDuplicateSubmission())) {
+                    const confirmed = !duplicateConfirmationRequired || (await confirmDuplicateSubmission());
+                    if (stopCancelledPreparation()) return;
+                    if (!confirmed) {
                         finishGenerationRequest(nodeId, preparationController);
                         setRunningNodeId(null);
                         return;
                     }
 
                     const controller = preparationController;
-                    if (controller.signal.aborted) {
-                        finishGenerationRequest(nodeId, controller);
-                        setRunningNodeId(null);
-                        return;
-                    }
+                    if (stopCancelledPreparation()) return;
                     if (isPreparingEmptyImage) {
                         setNodes((current) =>
                             current.map((node) =>
@@ -352,7 +356,15 @@ export function useCanvasGenerationExecutor({
                                 node.id === nodeId
                                     ? {
                                           ...node,
-                                          metadata: { ...node.metadata, ...canvasGenerationPromptMetadata(prompt, statusPrompt), status: NODE_STATUS_LOADING, errorDetails: undefined, generationErrorCode: undefined, resourceReloadAvailable: undefined, failedPromptFingerprint: undefined },
+                                          metadata: {
+                                              ...node.metadata,
+                                              ...canvasGenerationPromptMetadata(prompt, statusPrompt),
+                                              status: NODE_STATUS_LOADING,
+                                              errorDetails: undefined,
+                                              generationErrorCode: undefined,
+                                              resourceReloadAvailable: undefined,
+                                              failedPromptFingerprint: undefined,
+                                          },
                                       }
                                     : node,
                             ),
@@ -382,6 +394,7 @@ export function useCanvasGenerationExecutor({
                         setDialogNodeId,
                         startGenerationRequest,
                         finishGenerationRequest,
+                        ownsGenerationRequest,
                         bindGenerationTask: (targetNodeId: string, task: GenerationTask) => {
                             bindGenerationTask(targetNodeId, task);
                             setNodes((current) => {
@@ -404,7 +417,7 @@ export function useCanvasGenerationExecutor({
                         else if (mode === "audio") await executeAudioGeneration(execution);
                         else await executeTextGeneration(execution);
                     } catch (error) {
-                        if (isGenerationCanceled(error)) return;
+                        if (controller.signal.aborted || isGenerationCanceled(error)) return;
                         const failure = generationFailureMetadata(error, prompt);
                         if (options?.waitForTaskCapacity && isGenerationTaskCapacityError(error)) {
                             setNodes((current) =>
@@ -431,7 +444,7 @@ export function useCanvasGenerationExecutor({
                         );
                     } finally {
                         finishGenerationRequest(nodeId, controller);
-                        setRunningNodeId(null);
+                        if (controller.signal.reason !== "superseded") setRunningNodeId((current) => (current === nodeId ? null : current));
                     }
                 },
                 () => message.info({ key: `canvas-generation-submission-${nodeId}`, content: translate("canvasPage.generation.submissionInProgress") }),
@@ -456,10 +469,10 @@ export function useCanvasGenerationExecutor({
             setSelectedConnectionId,
             setSelectedNodeIds,
             startGenerationRequest,
+            ownsGenerationRequest,
         ],
     );
 }
-
 
 function generationModelRequirements(
     mode: CanvasNodeGenerationMode,

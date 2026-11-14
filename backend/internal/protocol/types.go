@@ -96,6 +96,7 @@ type GenerationRequest struct {
 	Output          OutputOptions             `json:"output,omitempty"`
 	ProviderOptions map[string]map[string]any `json:"providerOptions,omitempty"`
 	ImageParameters map[string]any            `json:"imageParameters,omitempty"`
+	Metadata        map[string]any            `json:"metadata,omitempty"`
 	// InterfaceType 是宿主解析后的协议接口（如 claude-api、chat-completion），
 	// 不是供应商字段。宿主用它对参考素材做协议适配（如 Anthropic 线用 image 块），
 	// 插件模板不应读取它。

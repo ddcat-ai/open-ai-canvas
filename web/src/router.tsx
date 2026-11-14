@@ -56,6 +56,7 @@ const AssetsPage = workspaceRoutePages.assets;
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const RegisterPage = lazy(() => import("@/pages/auth/register"));
 const ForgotPasswordPage = lazy(() => import("@/pages/auth/forgot-password"));
+const DesktopAuthorizePage = lazy(() => import("@/pages/auth/desktop-authorize"));
 const CanvasPage = workspaceRoutePages.canvas;
 const CanvasProjectPage = workspaceRoutePages.canvasProject;
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
@@ -125,6 +126,7 @@ export const router = createBrowserRouter([
         element: <AuthScene />,
         errorElement: <RouteErrorPage />,
         children: [
+            { path: "/auth/desktop/authorize", element: fullScreenDeferred(<DesktopAuthorizePage />) },
             { path: "/login", element: fullScreenDeferred(<LoginPage />) },
             { path: "/register", element: fullScreenDeferred(<RegisterPage />) },
             { path: "/forgot-password", element: fullScreenDeferred(<ForgotPasswordPage />) },

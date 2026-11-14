@@ -129,7 +129,7 @@ function rawMedia(value: unknown): RawMedia | null {
     const url = mediaUrlValue(record.url) || mediaUrlValue(record.dataUrl) || mediaUrlValue(record.resultUrl);
     const storageKey = text(record.storageKey);
     const resourceId = text(record.resourceId) || resourceIdFromStorageKey(storageKey) || resourceIdFromMediaUrl(url);
-    if (!url && !resourceId) return null;
+    if (!url && !resourceId && !storageKey) return null;
     const poster = ["posterUrl", "poster", "thumbnailUrl", "coverUrl", "cover"].map((key) => mediaUrlValue(record[key])).find(Boolean);
     const mimeType = text(record.mimeType) || text(record.type);
     return {

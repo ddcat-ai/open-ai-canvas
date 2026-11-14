@@ -18,7 +18,7 @@ export type GalleryTile =
     | { type: "output"; key: string; output: WorkbenchOutput; task: GenerationTask }
     | { type: "active"; key: string; task: GenerationTask; slot: number }
     | { type: "loading"; key: string; task: GenerationTask }
-    | { type: "failed"; key: string; task: GenerationTask }
+    | { type: "failed"; key: string; task: GenerationTask; retryable?: boolean }
     | { type: "pending"; key: string; state: "submitting" | "unsubmitted"; error?: string };
 
 export type GalleryBatch = {
@@ -185,8 +185,8 @@ function OutputTile({ batch, tile, kind, actions }: { batch: GalleryBatch; tile:
             <span className="wb-tile-scrim" aria-hidden />
             <span className="wb-tile-actions">
                 <TileAction label="下载" icon={<Download />} onClick={() => actions.download(output, batch)} />
-                {kind === "image" && actions.useAsReference && output.resourceId ? <TileAction label="用作参考图" icon={<ImagePlus />} onClick={() => actions.useAsReference?.(output)} /> : null}
-                {kind === "image" && actions.makeVideo && output.resourceId ? <TileAction label="做成视频" icon={<Clapperboard />} onClick={() => actions.makeVideo?.(output)} /> : null}
+                {kind === "image" && actions.useAsReference && (output.resourceId || output.storageKey?.startsWith("generation-image:")) ? <TileAction label="用作参考图" icon={<ImagePlus />} onClick={() => actions.useAsReference?.(output)} /> : null}
+                {kind === "image" && actions.makeVideo && (output.resourceId || output.storageKey?.startsWith("generation-image:")) ? <TileAction label="做成视频" icon={<Clapperboard />} onClick={() => actions.makeVideo?.(output)} /> : null}
                 <TileAction label="查看大图" icon={<Maximize2 />} onClick={() => actions.openOutput(batch, output)} primary />
             </span>
         </div>
@@ -218,7 +218,7 @@ function ProgressTile({ tile, actions, busy }: { tile: Extract<GalleryTile, { ty
     );
 }
 
-function FailedTile({ task, actions, busy }: { task: GenerationTask; actions: GalleryActions; busy: boolean }) {
+function FailedTile({ task, actions, busy, retryable = true }: { task: GenerationTask; actions: GalleryActions; busy: boolean; retryable?: boolean }) {
     const cancelled = task.status === "cancelled";
     return (
         <div className={cn("wb-tile is-failed", cancelled && "is-cancelled")}>
@@ -230,9 +230,11 @@ function FailedTile({ task, actions, busy }: { task: GenerationTask; actions: Ga
                         {task.error}
                     </small>
                 ) : null}
-                <Button size="small" icon={busy ? <LoaderCircle className="wb-spin" /> : <RotateCcw />} disabled={busy} onClick={() => actions.retryTask(task)}>
-                    重新生成
-                </Button>
+                {retryable ? (
+                    <Button size="small" icon={busy ? <LoaderCircle className="wb-spin" /> : <RotateCcw />} disabled={busy} onClick={() => actions.retryTask(task)}>
+                        重新生成
+                    </Button>
+                ) : null}
             </span>
         </div>
     );
@@ -335,7 +337,7 @@ const BatchCard = memo(function BatchCard({ batch, kind, actions, busyTaskIds }:
                     ) : tile.type === "active" ? (
                         <ProgressTile key={tile.key} tile={tile} actions={actions} busy={busyTaskIds.has(tile.task.id)} />
                     ) : tile.type === "failed" ? (
-                        <FailedTile key={tile.key} task={tile.task} actions={actions} busy={busyTaskIds.has(tile.task.id)} />
+                        <FailedTile key={tile.key} task={tile.task} actions={actions} busy={busyTaskIds.has(tile.task.id)} retryable={tile.retryable} />
                     ) : tile.type === "loading" ? (
                         <div key={tile.key} className="wb-tile is-active" aria-busy="true">
                             <span className="wb-tile-shimmer" aria-hidden />

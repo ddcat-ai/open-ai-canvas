@@ -62,6 +62,20 @@ type OAuthState struct {
 	CreatedAt       time.Time  `json:"createdAt"`
 }
 
+// DesktopAuthorizationCode is a short-lived, single-use code exchanged by a
+// native client using PKCE. Only the code hash is stored.
+type DesktopAuthorizationCode struct {
+	ID            string     `json:"id" gorm:"primaryKey;size:36"`
+	CodeHash      string     `json:"-" gorm:"uniqueIndex;size:64"`
+	UserID        string     `json:"-" gorm:"index;size:36"`
+	ClientID      string     `json:"-" gorm:"size:80;not null"`
+	RedirectURI   string     `json:"-" gorm:"size:512;not null"`
+	CodeChallenge string     `json:"-" gorm:"size:64;not null"`
+	ExpiresAt     time.Time  `json:"-" gorm:"index"`
+	UsedAt        *time.Time `json:"-" gorm:"index"`
+	CreatedAt     time.Time  `json:"-"`
+}
+
 type EmailVerificationCode struct {
 	Attempts  int        `json:"-"`
 	ID        string     `json:"id" gorm:"primaryKey;size:36"`

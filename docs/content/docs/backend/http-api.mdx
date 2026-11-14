@@ -521,7 +521,7 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 ### 用户模型目录
 
-`GET /model-catalog` 固定返回 `source=system`，直接查询所有启用系统渠道下的渠道模型，目录数据在 `channels[].models[]`，`models` 固定为空数组。不受逻辑模型开关影响，不反查逻辑模型或供应线路。每项的 `modelKey` 是调用标识，`displayName` 是一级分组展示名（未设置时归入 `未分类`），`icon` 是模型图标键，`channelLabel` 是二级渠道展示名。后台渠道模型创建与更新请求使用相同的 `channelLabel` 字段；服务端去除首尾空白后限制为 80 字，空值或与上游模型 ID 相同的值表示不固化该名称，读取时回退到上游模型 ID（默认与上游 ID 保持一致，上游改名时自动跟随）。
+`GET /model-catalog` 固定返回 `source=system`，直接查询所有启用系统渠道下的渠道模型，目录数据在 `channels[].models[]`，`models` 固定为空数组。不受逻辑模型开关影响，不反查逻辑模型或供应线路。桌面 Lite 的本地目录镜像可额外返回 `remoteChannelId`，用于把本地渠道 ID 映射到该登录账号可见的影策渠道；它不包含任何认证凭据。每项的 `modelKey` 是调用标识，`displayName` 是一级分组展示名（未设置时归入 `未分类`），`icon` 是模型图标键，`channelLabel` 是二级渠道展示名。后台渠道模型创建与更新请求使用相同的 `channelLabel` 字段；服务端去除首尾空白后限制为 80 字，空值或与上游模型 ID 相同的值表示不固化该名称，读取时回退到上游模型 ID（默认与上游 ID 保持一致，上游改名时自动跟随）。
 
 文本模型额外返回 `textWire`（`chat-completion` / `responses` / `claude-api`），由协议插件的 `create.path` 识别，不看协议 ID；识别不出时省略。浏览器直连系统代理的提示词优化、编辑器助手和美术点评按它选择 `/chat/completions`、`/responses` 或 `/messages`。`GET /plugins/catalog` 的 provider 同样返回 `textWire`，并在插件 `auth.secretField` 指向 Secret Key 时返回 `requiresSecretKey: true`。系统渠道代理只放行内置合同或插件声明的 POST 路径，出站鉴权按插件 `auth` 声明写，详见 [统一插件运行时](/docs/backend/protocol-plugins)。
 
@@ -549,6 +549,29 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`intent.referenceVideoDurationsMs` 可按顺序给出参考视频时长（毫秒，长度必须等于 `inputs.video`，单个 1 到 3,600,000）；省略时带参考视频统一按 15 秒估算并返回 `referenceDurationEstimated: true`。该字段只用于报价，真实任务按秒计费时由后端实测参考视频时长。
 
 按秒或视频 Token 计费、挂参考视频的视频报价另有 `referenceVideo`（按次计费不返回）：`count`、`billed`（模型开启参考视频计费时为 `true`）、`generatedSeconds`、`referenceSeconds`、`billedSeconds`（按秒计入数量的参考视频秒数，Token 为 0）、`estimated`（时长未知、按 15 秒预估）。系统渠道目录的模型新增 `referenceVideoBilling`，价格档新增 `referenceVideoUnitPriceMicrocredits` / `referenceVideoOutputTokenPriceMicrocredits`（开关关闭时为 0）。规则见[视频 Token 计费](/docs/backend/video-token-billing#参考视频计费开关)。所有视频协议均支持 Token 定价；10% 预留是平台策略，不是费用上限。成功后优先有效上游用量，无有效用量时按提交的公式快照结算，余量不计入公式费用。账单新增 `videoFormulaTokens` 及 `usageSource`（`provider` / `video_formula`），公式结算的 `usageAvailable` 为 `false`，`outputTokens` 表示公式数量。算法、配置与异常用量处理见[视频 Token 计费](/docs/backend/video-token-billing)。
+
+## Lite 客户端系统渠道中转
+
+Lite 通过规范路径 `/api/ai/system/:channelId/*path` 调用系统渠道；不要使用旧短路径 `/api/:channelId/*path`。模型目录使用 `GET /api/model-catalog`。桌面登录由影策控制台完成，桌面客户端不在应用内采集密码或验证码。
+
+### 桌面授权码
+
+客户端在主进程生成 `state`、PKCE verifier/challenge，并监听随机 `127.0.0.1` 端口后打开控制台 `/auth/desktop/authorize`。网站未登录时先按现有 `auth/settings` 策略完成登录或注册；已有登录态也必须显示当前账号，并由用户明确授权，或选择切换账号/取消。
+
+| 方法 | 路径 | 入参与结果 |
+| --- | --- | --- |
+| `POST /api/auth/desktop/authorize` | 当前网站 Cookie 会话。`{ clientId: "peekreel-lite", redirectUri, codeChallenge }`；回调仅接受 `http://127.0.0.1:<随机端口>/oauth/callback`，challenge 必须是 S256。返回 `{ code, expiresIn }`，授权码在 120 秒内单次有效，不返回 session |
+| `POST /api/auth/desktop/token` | `{ clientId, redirectUri, code, codeVerifier }`；TLS 下用授权码和 PKCE verifier 兑换，返回标准信封 `{ user, session, expiresIn }`，不设置 Cookie。错误 verifier、redirect 不匹配、过期或重放均返回 401 |
+
+授权码可短暂出现在本机 loopback 回调 URL；长期 session 只由 Electron 主进程接收并保存到操作系统安全存储，不进入 URL、渲染层、本地业务数据库或日志。桌面每次业务请求使用 Bearer session。`POST /auth/logout` 撤销远端 session 并清除本地凭据；退出后项目、素材和生成结果仍保留在原账号隔离区。
+
+### 系统渠道中转
+
+注册和普通登录成功后服务端同时设置 HttpOnly Cookie，并在响应 `data.session` 返回不透明会话令牌；`GET /api/auth/session` 用于读取当前会话用户状态，不返回新的令牌。Lite 主进程用 Bearer session 读取模型目录、钱包与只读配置，并转发系统渠道请求。
+
+所有会调用上游的 `POST` 请求必须携带稳定的 `X-Idempotency-Key`，长度 1–128 字节。客户端为一次用户生成意图创建一个随机键，网络重试必须复用同一个键；服务端按用户和键唯一预留账单，重复提交返回 HTTP 409、`reason=conflict`，不会再次调用上游。服务端不缓存生成结果，因此重复键只用于防止重复生成和重复扣费；遇到 409 或连接中断时，客户端不要自动换键重试，应先提示用户核对积分/账单，再由用户明确发起新的生成意图。
+
+系统渠道中转不把提示词、参考媒体、请求正文、上游响应正文或上游错误原文写入持久化调用日志；云端只在内存中转发 provider 请求并负责鉴权、计费。同步文本/图片/语音由 Lite 的嵌入后端执行，任务、项目、审批、提示词和结果保存在本地账号分区，provider 请求经本机主进程注入远端会话后再转发。异步视频/音频只有在服务端明确实现创建、轮询和访问授权的协议才能使用；创建成功后账单绑定上游任务 ID，轮询与结果下载必须与该协议对该 ID 构造出的路径和查询参数完全一致。明确成功结算、明确失败退款、未知状态转待核对；已退款订单不能再下载结果。当前合同不代表任意异步协议均可用。嵌入后端的镜像渠道不创建本地账单，避免与云端重复扣款；远端目录或会话不可用时隐藏上游模型，不自动重发已派发的意图。`GET /ecommerce/knowledge/orchestration` 对登录用户只读，Lite 登录时把云端配置映射到本地模型目录，Lite 不开放知识源或模型配置写操作。以上是代码边界；真实生产渠道、异步任务账单、账号切换及重启恢复仍需影策环境验收。
 
 ## 用户分组与多币种计价
 

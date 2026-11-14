@@ -2,6 +2,8 @@ package handler
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"image"
 	"image/png"
@@ -83,6 +85,60 @@ func TestProfileRoutesRejectAnonymousBeforeMutation(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s returned %d", route.method, route.path, rec.Code)
 		}
+	}
+}
+
+func TestDesktopAuthorizationIssuesAndExchangesBearerSession(t *testing.T) {
+	router, db, cookie := profileHandlerFixture(t)
+	verifier := strings.Repeat("v", 43)
+	challengeHash := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(challengeHash[:])
+	redirectURI := "http://127.0.0.1:49154/oauth/callback"
+	payload, err := json.Marshal(map[string]string{"clientId": "peekreel-lite", "redirectUri": redirectURI, "codeChallenge": challenge})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorized := profileRequest(router, http.MethodPost, "/api/auth/desktop/authorize", string(payload), cookie)
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authorize status=%d body=%s", authorized.Code, authorized.Body.String())
+	}
+	var authorizationEnvelope struct {
+		Code int `json:"code"`
+		Data struct {
+			Code string `json:"code"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(authorized.Body.Bytes(), &authorizationEnvelope); err != nil || authorizationEnvelope.Code != 0 || authorizationEnvelope.Data.Code == "" {
+		t.Fatalf("invalid authorize envelope: %#v err=%v", authorizationEnvelope, err)
+	}
+	tokenPayload, err := json.Marshal(map[string]string{"clientId": "peekreel-lite", "redirectUri": redirectURI, "code": authorizationEnvelope.Data.Code, "codeVerifier": verifier})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := profileRequest(router, http.MethodPost, "/api/auth/desktop/token", string(tokenPayload), "")
+	if token.Code != http.StatusOK {
+		t.Fatalf("token status=%d body=%s", token.Code, token.Body.String())
+	}
+	var sessionEnvelope struct {
+		Data struct {
+			Session   string `json:"session"`
+			ExpiresIn int    `json:"expiresIn"`
+			User      struct{ ID string `json:"id"` } `json:"user"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(token.Body.Bytes(), &sessionEnvelope); err != nil || sessionEnvelope.Data.Session == "" || sessionEnvelope.Data.ExpiresIn <= 0 || sessionEnvelope.Data.User.ID != "profile-user" {
+		t.Fatalf("invalid token envelope: %#v err=%v", sessionEnvelope, err)
+	}
+	if strings.Contains(token.Header().Get("Set-Cookie"), sessionEnvelope.Data.Session) {
+		t.Fatal("desktop token response must not place the session in a cookie")
+	}
+	replayed := profileRequest(router, http.MethodPost, "/api/auth/desktop/token", string(tokenPayload), "")
+	if replayed.Code != http.StatusUnauthorized {
+		t.Fatalf("replayed code status=%d body=%s", replayed.Code, replayed.Body.String())
+	}
+	var sessionCount int64
+	if err := db.Model(&model.AuthSession{}).Where("user_id = ?", "profile-user").Count(&sessionCount).Error; err != nil || sessionCount != 3 {
+		t.Fatalf("session count=%d err=%v, want one new desktop session", sessionCount, err)
 	}
 }
 

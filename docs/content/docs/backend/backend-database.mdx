@@ -5,6 +5,12 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## Lite 桌面授权码（Schema 105）
+
+版本 105 `desktop_authorization_codes` 保存短时桌面授权码的服务端状态。授权码原文只在签发响应和本机 loopback 回调中短暂传递，数据库只存 SHA-256 哈希；记录绑定影策用户、固定 client ID、随机 127.0.0.1 回调 URI 与 S256 PKCE challenge，120 秒过期并原子单次消费。清理过期码不会影响已建立的会话。
+
+表不保存桌面 session、浏览器 Cookie、密码或授权码原文。回滚必须恢复与旧版匹配的数据库备份；不能只降级 Backend 并保留更高 Schema 数据库。
+
 ## 微信登录（Schema 102）
 
 版本 102 `wechat_oauth` 为 `o_auth_states` 增加 `purpose`（登录、绑定、重新核验用途）、`client_id`（发起时的网站应用 AppID）和 `profile_json`（首次微信注册的临时昵称、头像及身份标识）。旧状态的这些字段为空，不改变 Linux.do 与 OIDC 的处理。

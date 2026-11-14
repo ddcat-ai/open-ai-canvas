@@ -89,6 +89,8 @@ export type ModelChannel = {
     // 仅平台目录使用：将已保存的旧 SKU 选择重定向到当前模型家族。
     modelAliases?: Record<string, string>;
     scope?: "system" | "user";
+    /** Lite 远端影策目录的渠道；本地系统渠道没有此标记。 */
+    yingceChannelId?: string;
     enabled?: boolean;
     hasApiKey?: boolean;
     hasSecretKey?: boolean;
@@ -529,6 +531,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
         interfaceType,
         models: uniqueRawModels(channel?.models || []),
         scope: channel?.scope === "system" ? "system" : "user",
+        yingceChannelId: typeof channel?.yingceChannelId === "string" && channel.yingceChannelId ? channel.yingceChannelId : undefined,
         enabled: channel?.enabled !== false,
         hasApiKey: channel?.hasApiKey,
         hasSecretKey: channel?.hasSecretKey,

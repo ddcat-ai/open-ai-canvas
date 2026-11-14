@@ -90,6 +90,24 @@ func TestAccessLevelSlowRequest(t *testing.T) {
 	}
 }
 
+func TestAccessLogSystemProxyUsesRouteTemplate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	buffer := setupBuffer(t, slog.LevelInfo)
+	router := gin.New()
+	router.Use(AccessLog(nil))
+	router.POST("/api/ai/system/:channelId/*path", func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/ai/system/channel/private-prompt?reference=secret", nil))
+	router.NoRoute(func(c *gin.Context) {
+		_ = c.Error(errors.New("private-error"))
+		c.Status(http.StatusNotFound)
+	})
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/channel/private-short-path", nil))
+	output := buffer.String()
+	if strings.Contains(output, "private-prompt") || strings.Contains(output, "private-short-path") || strings.Contains(output, "private-error") || strings.Contains(output, "secret") || !strings.Contains(output, "/api/ai/system/*") {
+		t.Fatalf("unexpected proxy access log: %s", output)
+	}
+}
+
 func TestStdlogBridgesToWarn(t *testing.T) {
 	buffer := setupBuffer(t, slog.LevelWarn)
 	log.Printf("legacy failure: %v", errors.New("boom"))

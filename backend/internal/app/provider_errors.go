@@ -91,6 +91,7 @@ type providerAnalyticsContext struct {
 	Model                 string
 	VideoSeconds          int
 	RequestKind           string
+	RouteRun              int
 	ProviderRequestID     string
 	ConcurrencyLimit      int
 	GenerationContentJSON string

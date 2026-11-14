@@ -53,6 +53,8 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		// （如 Anthropic Messages 用 type=image + source，不用 OpenAI image_url）。
 		InterfaceType: strings.TrimSpace(input.Config.InterfaceType),
 		BaseURL:       strings.TrimSpace(input.Config.BaseURL),
+		// 声明式插件用 request.imageCount 取张数（例如豆包插件的 n）。
+		ImageCount: requestedImageCount(input.Config.Count),
 		Extra: map[string]any{
 			"videoSeconds":      input.Config.VideoSeconds,
 			"audioVoice":        input.Config.AudioVoice,

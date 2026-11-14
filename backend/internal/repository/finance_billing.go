@@ -23,7 +23,29 @@ func (r *Repository) ReserveBillingOrder(order *model.BillingOrder) error {
 	})
 }
 
+// ReserveProxyBillingOrder claims the user-scoped key before touching credits.
+// A failed reservation rolls back both the claim and the balance changes.
+func (r *Repository) ReserveProxyBillingOrder(order *model.BillingOrder) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if order.ReservedAmountMicrocredits <= 0 {
+			order.ReservedAmountMicrocredits = order.AmountMicrocredits
+		}
+		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "user_id"}, {Name: "idempotency_key"}}, DoNothing: true}).Create(order)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrBillingDuplicate
+		}
+		return reserveBillingOrderWithClaim(tx, order, true)
+	})
+}
+
 func reserveBillingOrder(tx *gorm.DB, order *model.BillingOrder) error {
+	return reserveBillingOrderWithClaim(tx, order, false)
+}
+
+func reserveBillingOrderWithClaim(tx *gorm.DB, order *model.BillingOrder, claimed bool) error {
 	if err := validateBillingChargeLimit(*order, order.AmountMicrocredits); err != nil {
 		return err
 	}
@@ -51,8 +73,10 @@ func reserveBillingOrder(tx *gorm.DB, order *model.BillingOrder) error {
 	if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
 		return err
 	}
-	if err := tx.Create(order).Error; err != nil {
-		return err
+	if !claimed {
+		if err := tx.Create(order).Error; err != nil {
+			return err
+		}
 	}
 	return tx.Create(&model.CreditLedgerEntry{
 		ID:                         newRepositoryID(),
@@ -289,6 +313,34 @@ func (r *Repository) UpdateBillingProviderRequestID(id string, providerRequestID
 	return r.db.Model(&model.BillingOrder{}).Where("id = ?", id).Updates(map[string]any{
 		"provider_request_id": providerRequestID, "updated_at": time.Now(),
 	}).Error
+}
+
+func (r *Repository) BillingOrderForProviderRequest(userID string, channelID string, providerRequestID string) (*model.BillingOrder, error) {
+	var orders []model.BillingOrder
+	if err := r.db.Where("user_id = ? AND channel_id = ? AND provider_request_id = ?", userID, channelID, providerRequestID).
+		Order("created_at desc").Limit(2).Find(&orders).Error; err != nil {
+		return nil, err
+	}
+	if len(orders) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if len(orders) != 1 {
+		return nil, ErrBillingStateConflict
+	}
+	return &orders[0], nil
+}
+
+func (r *Repository) LinkBillingProviderRequestID(id string, userID string, channelID string, providerRequestID string) error {
+	result := r.db.Model(&model.BillingOrder{}).
+		Where("id = ? AND user_id = ? AND channel_id = ? AND status = ? AND COALESCE(provider_request_id, '') = ''", id, userID, channelID, model.BillingStatusRunning).
+		Updates(map[string]any{"provider_request_id": providerRequestID, "updated_at": time.Now()})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrBillingStateConflict
+	}
+	return nil
 }
 
 func (r *Repository) MarkBillingRunning(id string) error {

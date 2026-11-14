@@ -501,23 +501,26 @@ export function oidcLoginURL(next: string, acceptedTerms: boolean) {
     return `${base}/auth/oidc/start?${query}`;
 }
 
-export function getAuthSession() {
+export function getAuthSession(options: { refresh?: boolean } = {}) {
+    const refresh = options.refresh === true;
+    if (refresh) invalidateAuthSessionCache();
     const now = Date.now();
-    if (authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
-    if (authSessionRequest) return authSessionRequest;
+    if (!refresh && authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
+    if (!refresh && authSessionRequest) return authSessionRequest;
     const generation = authSessionGeneration;
-    const pending = http
+    const request = http
         .get<AuthSessionPayload>("/auth/session", { session: "public" })
         .then((payload) => {
             if (generation !== authSessionGeneration) throw new DOMException("认证会话已变化", "AbortError");
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
             return payload;
-        })
-        .finally(() => {
-            if (authSessionRequest === pending) authSessionRequest = null;
         });
-    authSessionRequest = pending;
-    return authSessionRequest;
+    let sharedRequest: Promise<AuthSessionPayload>;
+    sharedRequest = request.finally(() => {
+        if (authSessionRequest === sharedRequest) authSessionRequest = null;
+    });
+    authSessionRequest = sharedRequest;
+    return sharedRequest;
 }
 
 export function getSystemChannels() {

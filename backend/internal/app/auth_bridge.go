@@ -17,6 +17,9 @@ type (
 	LoginContext                = auth.LoginContext
 	PublicAuthSettings          = auth.PublicAuthSettings
 	AuthSessionResult           = auth.AuthSessionResult
+	DesktopAuthorizationRequest = auth.DesktopAuthorizationRequest
+	DesktopAuthorizationResult  = auth.DesktopAuthorizationResult
+	DesktopTokenRequest         = auth.DesktopTokenRequest
 	AuthUser                    = auth.AuthUser
 	RegistrationSettingRequest  = auth.RegistrationSettingRequest
 	PublicRegistrationSetting   = auth.PublicRegistrationSetting

@@ -1,4 +1,11 @@
 # CHANGELOG
+## v1.9.0
+- PeekReel Lite：新增影策控制台 Authorization Code + PKCE 桌面授权，session 只由 Electron 主进程保存在系统安全存储；本地工作区按 API 来源与影策用户隔离，旧版未绑定账号的档案仅在用户确认后导入。
+- 本地优先生成：豆包继续在客户端运行；影策系统模型经云端鉴权、计费和转发，项目、提示词、参考媒体、对话、审批及结果保存在 Lite 本地。
+- 上游任务安全：异步轮询和结果下载严格匹配协议声明的 BuildPoll / BuildResult 路径并绑定账单任务 ID；明确成功才结算、明确失败才退款，未知状态留待核对，不自动重发。
+- Schema 105：新增短时、单次使用的桌面授权码记录，仅保存授权码哈希并绑定用户、client、loopback redirect 与 PKCE challenge。
+- Lite 更新：修正 electron-builder 配置继承，确保安装包只声明 `/updates/lite/`；更新服务发布必须提供有效 Authenticode 签名，未签名包不得进入线上 feed。
+
 ## v1.8.5
 - 云端 Agent：新增按账号隔离的跨会话工作回忆与 `memory_search`，支持检索近期已完成会话和长期记忆；Pi 运行时升级至 1.5.2，接入原生上下文压缩、超限恢复和真实 Token / 缓存用量，按账号及模型恢复本机推理档位偏好。
 - MCP 连接：新增个人连接、平台连接和插件市场管理，支持远端 Streamable HTTP / SSE、连接检测、工具发现及授权；凭据在服务端加密保存，工具逐次审批并校验连接版本，结果不确定的外部调用不会自动重放。

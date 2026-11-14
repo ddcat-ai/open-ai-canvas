@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { applyGeneratedMediaResultMetadata, applyGenerationTaskResultToNodes, generationTaskOutputsApplied, shouldRecoverCanvasImageOutputs, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
+import { applyGeneratedMediaResultMetadata, applyGenerationTaskResultToNodes, discoverCanvasGenerationTask, generationTaskOutputsApplied, shouldRecoverCanvasImageOutputs, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { commitCanvasGenerationResult } from "@/lib/canvas/canvas-generation-result";
 import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
@@ -26,6 +26,15 @@ function videoNode(assetId: string, storageKey: string): CanvasNodeData {
 }
 
 describe("applyGeneratedMediaResultMetadata", () => {
+    test("按节点发现任务时不把历史本地回执当作当前生成", () => {
+        const base = { type: "canvas_image", status: "succeeded" as const, prompt: "", attempts: 1, createdAt: "", updatedAt: "" };
+        const receipt = { ...base, id: "yingce-local:old", inputJson: JSON.stringify({ metadata: { nodeId: "node-1" } }) };
+        const other = { ...base, id: "other", inputJson: JSON.stringify({ metadata: { nodeId: "node-2" } }) };
+        const remote = { ...base, id: "remote", inputJson: JSON.stringify({ metadata: { nodeId: "node-1" } }) };
+        expect(discoverCanvasGenerationTask([receipt, other], "node-1")).toBeUndefined();
+        expect(discoverCanvasGenerationTask([receipt, other, remote], "node-1")).toEqual(remote);
+        expect(discoverCanvasGenerationTask([receipt, other], "node-2")).toEqual(other);
+    });
     test("旧 Midjourney 单图节点需要补齐结果，新堆叠与普通模型不重复恢复", () => {
         const old = { ...videoNode("asset", "resource:old"), type: CanvasNodeType.Image, metadata: { content: "/old.png", status: "success" as const, taskId: "task", producedModel: "CHANNEL::Midjourney v8.2 高速" } };
         const task = { id: "task", type: "canvas_image", status: "succeeded" as const, prompt: "", attempts: 1, createdAt: "", updatedAt: "", resultJson: JSON.stringify({ images: Array.from({ length: 4 }, () => ({ dataUrl: "/image.png" })) }) };
@@ -51,7 +60,20 @@ describe("applyGeneratedMediaResultMetadata", () => {
         expect(generationTaskOutputsApplied({ ...node, metadata: { ...node.metadata, assetId: "missing" } }, task)).toBe(false);
     });
     test("图层组恢复检查每个现存子图绑定，已删除图层不需要复活", () => {
-        const root: CanvasNodeData = { ...videoNode("composite", "resource:composite"), type: CanvasNodeType.Image, metadata: { assetId: "composite", storageKey: "resource:composite", content: "/composite.png", status: "success", taskId: "task", generationOutputCount: 2, batchChildIds: ["child", "deleted"], imageLayerGroup: { width: 640, height: 480, layers: [{ nodeId: "child", x: 0, y: 0, visible: true }] } } };
+        const root: CanvasNodeData = {
+            ...videoNode("composite", "resource:composite"),
+            type: CanvasNodeType.Image,
+            metadata: {
+                assetId: "composite",
+                storageKey: "resource:composite",
+                content: "/composite.png",
+                status: "success",
+                taskId: "task",
+                generationOutputCount: 2,
+                batchChildIds: ["child", "deleted"],
+                imageLayerGroup: { width: 640, height: 480, layers: [{ nodeId: "child", x: 0, y: 0, visible: true }] },
+            },
+        };
         const child: CanvasNodeData = { ...root, id: "child", metadata: { batchRootId: root.id, content: "/child.png", storageKey: "resource:child" } };
         const task = { id: "task", type: "canvas_image", status: "succeeded" as const, prompt: "", attempts: 1, createdAt: "", updatedAt: "", resultJson: JSON.stringify({ images: [{ dataUrl: "/first.png" }, { dataUrl: "/second.png" }] }) };
         withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: [imageAsset("composite", "resource:composite"), imageAsset("child-asset", "resource:child")] }));
@@ -82,15 +104,19 @@ describe("applyGeneratedMediaResultMetadata", () => {
     });
     test("clears the previous asset binding when a regenerated media result lands", () => {
         const node = videoNode("asset-old", "video:old");
-        const next = applyGeneratedMediaResultMetadata(node, videoMetadata({
-            url: "https://example.test/new.mp4",
-            storageKey: "video:new",
-            width: 1280,
-            height: 720,
-            bytes: 12,
-            mimeType: "video/mp4",
-            durationMs: 4000,
-        }), { prompt: "新提示词" });
+        const next = applyGeneratedMediaResultMetadata(
+            node,
+            videoMetadata({
+                url: "https://example.test/new.mp4",
+                storageKey: "video:new",
+                width: 1280,
+                height: 720,
+                bytes: 12,
+                mimeType: "video/mp4",
+                durationMs: 4000,
+            }),
+            { prompt: "新提示词" },
+        );
 
         expect(next.assetId).toBeUndefined();
         expect(next.storageKey).toBe("video:new");

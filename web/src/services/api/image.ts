@@ -76,9 +76,11 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const normalizedImage = normalizeImageValue(imageProfile, config, requestConfig.interfaceType);
     const n = Number(normalizedImage.count);
     if (requestConfig.interfaceType === "gemini-image") {
+        if (options?.imageRequest && n !== 1) throw new Error("影策 Gemini 图片每次只能生成一张，请调整张数");
         try {
             return await requestGeminiImages(requestConfig, prompt, [], n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality, extractThinkingLevel(config), normalizedImage.imageResolution), options);
         } catch (error) {
+            if (options?.imageRequest) throw error;
             throw new Error(readAxiosError(error, "请求失败"));
         }
     }
@@ -103,6 +105,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
             );
             return parseImagePayload(responseData);
         } catch (error) {
+            if (options?.imageRequest) throw error;
             throw new Error(readAxiosError(error, "Grok 图片生成失败"));
         }
     }
@@ -135,6 +138,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
         const images = parseImagePayload(responseData);
         return images;
     } catch (error) {
+        if (options?.imageRequest) throw error;
         throw new Error(readAxiosError(error, "请求失败"));
     }
 }
@@ -157,9 +161,11 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     const requestPrompt = buildImageReferencePromptText(prompt, references);
     if (requestConfig.interfaceType === "gemini-image") {
         if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
+        if (options?.imageRequest && n !== 1) throw new Error("影策 Gemini 图片每次只能生成一张，请调整张数");
         try {
             return await requestGeminiImages(requestConfig, requestPrompt, references, n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality, extractThinkingLevel(config), normalizedImage.imageResolution), options);
         } catch (error) {
+            if (options?.imageRequest) throw error;
             throw new Error(readAxiosError(error, "请求失败"));
         }
     }
@@ -188,6 +194,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             );
             return parseImagePayload(response);
         } catch (error) {
+            if (options?.imageRequest) throw error;
             throw new Error(readAxiosError(error, "Grok 图片编辑失败"));
         }
     }
@@ -213,6 +220,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
             );
             return parseImagePayload(response);
         } catch (error) {
+            if (options?.imageRequest) throw error;
             throw new Error(readAxiosError(error, "火山方舟图片生成失败"));
         }
     }
@@ -239,9 +247,11 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (mask) formData.set("mask", dataUrlToFile(mask));
 
     try {
-        const images = parseImagePayload(await imageChannelTransport(requestConfig).postForm<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { signal: options?.signal, headers: aiHeaders(requestConfig) }));
+        const response = options?.imageRequest ? ((await options.imageRequest("/images/edits", formData)) as ImageApiResponse) : await imageChannelTransport(requestConfig).postForm<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { signal: options?.signal, headers: aiHeaders(requestConfig) });
+        const images = parseImagePayload(response);
         return images;
     } catch (error) {
+        if (options?.imageRequest) throw error;
         throw new Error(readAxiosError(error, "请求失败"));
     }
 }

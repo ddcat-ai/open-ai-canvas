@@ -13,6 +13,8 @@ import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { normalizeCanvasNodeMentionTokens, type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { audioUploadTitleFromFileName } from "@/lib/audio-upload-title";
 import { createClientUUID } from "@/lib/client-id";
+import { IS_LITE } from "@/lib/edition";
+import { getActiveUserScope } from "@/lib/user-scope";
 import { togglePromptPhrase } from "@/lib/prompt-phrases";
 import { imageQualityLabel } from "@/lib/image-quality";
 import { imageResolutionUsesQuality } from "@/lib/image-size-presets";
@@ -22,7 +24,9 @@ import { MediaSettingsNotice } from "@/components/media-settings-notice";
 import { modelQuoteRequest, requestCreditCost } from "@/lib/model-pricing";
 import { creationVideoConfig } from "@/pages/create/creation-generation-config";
 import { resolveBrowserMediaDownloadHref, startBrowserDownload } from "@/services/browser-download";
-import { prepareBackendGenerationTask } from "@/services/api/generation-task";
+import { prepareBackendGenerationTask, submitBackendGenerationTask, usesLiteSystemModel } from "@/services/api/generation-task";
+import { yingceReceiptStore } from "@/services/api/yingce-lite-receipts";
+import { resolveImageUrl } from "@/services/image-storage";
 import { quoteModel } from "@/services/api/logical-models";
 import { resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { cancelGenerationTask, createGenerationTask, queryGenerationTask, retryGenerationTask, type GenerationTask } from "@/services/api/task-center";
@@ -50,6 +54,7 @@ import { missingWorkbenchInput, workbenchPromptRequired, workbenchVideoOperation
 import { isModelIdLike, WORKBENCH_INSPIRATIONS, WORKBENCH_SPEC_TIPS, workbenchQuickTools, workbenchRatioUsage } from "./workbench-presets";
 import { SceneLibraryModal } from "./workbench-scene-library";
 import { WorkbenchViewer } from "./workbench-viewer";
+import { importLocalOutputResource } from "./local-output-resource";
 import "./workbench.css";
 
 export { filterWorkbenchTools } from "./workbench-presets";
@@ -66,7 +71,7 @@ type MediaKind = WorkbenchReference["kind"];
 /** 提交那一刻冻结的请求；“继续提交剩余”使用同一份参数，不受之后编辑影响。 */
 type BatchRequest = {
     kind: WorkbenchKind;
-    route: "workbench" | "tasks";
+    route: "workbench" | "tasks" | "yingce";
     prompt: string;
     model: string;
     logicalModelId?: string;
@@ -156,6 +161,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const features = useUserStore((state) => state.features);
+    const userId = useUserStore((state) => state.user?.id);
     const creditsEnabled = features.creditsEnabled;
     const activeTaskLimit = useUserStore((state) => state.runtimeLimits.activeTaskLimit);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -382,6 +388,10 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
             setEstimate({ credits: null, estimated: false, tone: "unavailable" });
             return;
         }
+        if (usesLiteSystemModel(composerConfig)) {
+            setEstimate({ credits: null, estimated: false, tone: "unavailable" });
+            return;
+        }
         const priceChannel = resolveModelChannel(config, selectedModel);
         const distinct = [...new Set(plan)];
         const localFor = (outputs: number) =>
@@ -421,19 +431,34 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     // ---------- 任务列表轮询 ----------
     const loadFailedRef = useRef(false);
     const loadTasks = useCallback(async () => {
+        const scope = getActiveUserScope();
         try {
-            const result = await listWorkbenchTasks(kind, 100);
+            const [remote, receipts] = await Promise.all([listWorkbenchTasks(kind, 100), IS_LITE ? yingceReceiptStore.list(scope) : Promise.resolve([])]);
+            if (scope !== getActiveUserScope()) return null;
+            const local = receipts.filter((task) => {
+                const snapshot = workbenchTaskSnapshot(task);
+                return snapshot?.kind === kind;
+            });
+            const result = [...remote, ...local].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 100);
             loadFailedRef.current = false;
             setTasks(result);
             return result;
         } catch (error) {
+            if (scope !== getActiveUserScope()) return null;
             if (!loadFailedRef.current) message.error(errorMessage(error, "作品列表加载失败"));
             loadFailedRef.current = true;
             return null;
         } finally {
             setTasksLoading(false);
         }
-    }, [kind, message]);
+    }, [kind, message, userId]);
+    useEffect(() => {
+        setTasks([]);
+        setDetails({});
+        setLocalBatches(() => []);
+        setVisibleBatchKeys(new Set());
+        setBusy(false);
+    }, [userId, setLocalBatches]);
     const taskIds = useMemo(() => new Set(tasks.map((task) => task.id)), [tasks]);
     const hasActiveWork = tasks.some(isActiveWorkbenchTask) || localBatches.some((batch) => batch.submitting || Object.values(batch.receipts).some((receipt) => !taskIds.has(receipt.id) && isActiveWorkbenchTask(receipt)));
     const hasActiveWorkRef = useRef(hasActiveWork);
@@ -472,10 +497,12 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     const pumpDetails = useCallback(() => {
         while (detailActiveRef.current < DETAIL_CONCURRENCY && detailQueueRef.current.length) {
             const { id, version } = detailQueueRef.current.shift()!;
+            const scope = getActiveUserScope();
             detailActiveRef.current += 1;
             detailInflightRef.current.add(id);
             queryGenerationTask(id)
                 .then((task) => {
+                    if (scope !== getActiveUserScope()) return;
                     detailFailedRef.current.delete(id);
                     setDetails((current) => ({ ...current, [id]: task }));
                     setDetailErrors((current) => {
@@ -487,6 +514,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                 })
                 // 失败时记下当时的任务版本：同一版本不再重复请求，任务更新后再取；画廊不再为它保留加载占位。
                 .catch(() => {
+                    if (scope !== getActiveUserScope()) return;
                     detailFailedRef.current.set(id, version);
                     setDetailErrors((current) => (current.has(id) ? current : new Set(current).add(id)));
                 })
@@ -518,6 +546,19 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
 
     const receiptTasks = useMemo(() => localBatches.flatMap((batch) => Object.values(batch.receipts)).filter((receipt) => !taskIds.has(receipt.id)), [localBatches, taskIds]);
     const groups = useMemo(() => groupWorkbenchTasks([...tasks, ...receiptTasks]), [receiptTasks, tasks]);
+    const [localImageUrls, setLocalImageUrls] = useState<Record<string, string>>({});
+    useEffect(() => {
+        let stopped = false;
+        const scope = getActiveUserScope();
+        setLocalImageUrls({});
+        const keys = new Set(groups.flatMap((group) => group.tasks.flatMap((task) => workbenchTaskOutputs(task, kind, details[task.id]).flatMap((output) => (output.storageKey && !output.resourceId ? [output.storageKey] : [])))));
+        void Promise.all([...keys].map(async (key) => [key, await resolveImageUrl(key).catch(() => "")] as const)).then((entries) => {
+            if (!stopped && scope === getActiveUserScope()) setLocalImageUrls(Object.fromEntries(entries));
+        });
+        return () => {
+            stopped = true;
+        };
+    }, [groups, details, kind, userId]);
 
     useEffect(() => {
         const wanted: Array<{ id: string; version: string }> = [];
@@ -571,8 +612,16 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                 counts.total += expected;
                 if (task.status === "succeeded") {
                     const detail = details[task.id];
-                    const taskOutputs = workbenchTaskOutputs(task, kind, detail);
+                    const taskOutputs = workbenchTaskOutputs(task, kind, detail).map((output) => {
+                        const url = output.storageKey && !output.resourceId ? localImageUrls[output.storageKey] : undefined;
+                        return url ? { ...output, url, thumbUrl: url } : output;
+                    });
                     for (const output of taskOutputs) {
+                        if (output.storageKey && !output.url && !output.resourceId) {
+                            if (Object.hasOwn(localImageUrls, output.storageKey)) tiles.push({ type: "failed", key: `${output.key}:missing`, retryable: false, task: { ...task, status: "failed", error: "本地图片无法读取，请检查本机存储" } });
+                            else tiles.push({ type: "loading", key: `${output.key}:local`, task });
+                            continue;
+                        }
                         tiles.push({ type: "output", key: output.key, output, task });
                         outputs.push(output);
                     }
@@ -601,8 +650,19 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                         return;
                     }
                     const state = local.states[index];
+                    if (local.request.route === "yingce" && state === "failed") {
+                        counts.total += outputsForTask;
+                        counts.failed += outputsForTask;
+                        tiles.push({
+                            type: "failed",
+                            key: `${local.id}:${index}:uncertain`,
+                            retryable: false,
+                            task: { id: `${local.id}:${index}`, type: "canvas_image", status: "failed", prompt: local.prompt, error: local.error || "请求结果未知，请核对后重新生成", attempts: 1, createdAt: local.createdAt, updatedAt: local.createdAt },
+                        });
+                        return;
+                    }
                     const submitting = state === "submitting" || (state === "pending" && local.submitting);
-                    if (!submitting) resumable += 1;
+                    if (!submitting && !(local.request.route === "yingce" && state === "failed")) resumable += 1;
                     counts.total += outputsForTask;
                     if (submitting) counts.active += outputsForTask;
                     else counts.pending += outputsForTask;
@@ -638,7 +698,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         }
         for (const local of localBatches) if (!used.has(local.id)) result.push(build(null, local));
         return result.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-    }, [detailErrors, details, groups, kind, localBatches, measuredRatios, taskModelLabel, tools]);
+    }, [detailErrors, details, groups, kind, localBatches, localImageUrls, measuredRatios, taskModelLabel, tools]);
 
     // ---------- 场景与提示词 ----------
     // 提示词为空，或仍是当前预设原文（用户没改过），切换时可以直接替换；改过的内容先确认再动。
@@ -980,7 +1040,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         const readyReferences = references.filter((reference) => reference.resourceId);
         return {
             kind,
-            route: logicalModelId || channel?.scope === "system" ? "workbench" : "tasks",
+            route: usesLiteSystemModel(generationConfig) ? "yingce" : logicalModelId || channel?.scope === "system" ? "workbench" : "tasks",
             prompt: submittedPrompt,
             model: modelOptionName(selectedModel),
             ...(logicalModelId ? { logicalModelId } : channel?.id ? { channelId: channel.id } : {}),
@@ -1020,7 +1080,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
             role: reference.role,
             ...(reference.slotKey ? { slotKey: reference.slotKey } : {}),
         });
-        const taskInput = await prepareBackendGenerationTask({
+        const options = {
             mode: request.kind,
             prompt: request.prompt,
             config: request.kind === "image" ? { ...request.generationConfig, count: String(outputs) } : request.generationConfig,
@@ -1038,12 +1098,15 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                 ...(request.presetId ? { workbenchPresetId: request.presetId } : {}),
                 workbench: { kind: request.kind, ...(request.toolId ? { toolId: request.toolId } : {}), ...(request.presetId ? { presetId: request.presetId } : {}), parameters, references: referenceSnapshot, batch },
             },
-        });
+        };
+        if (request.route === "yingce") return receiptTask(await submitBackendGenerationTask(options), request, batch);
+        const taskInput = await prepareBackendGenerationTask(options);
         const created = await createGenerationTask({ ...taskInput, ...(request.videoOperation ? { operation: request.videoOperation } : {}) });
         return receiptTask(created, request, batch);
     };
 
     const runBatchSubmission = async (batchId: string, indices: number[]) => {
+        const scope = getActiveUserScope();
         setBusy(true);
         updateLocalBatch(batchId, (batch) => ({ ...batch, submitting: true, error: undefined, states: batch.states.map((state, index) => (indices.includes(index) ? "pending" : state)) }));
         let created = 0;
@@ -1056,25 +1119,29 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                 updateLocalBatch(batchId, (batch) => ({ ...batch, states: batch.states.map((state, itemIndex) => (itemIndex === index ? "submitting" : state)) }));
                 try {
                     const task = await createBatchTask(local.request, local.plan, index, batchId);
+                    if (scope !== getActiveUserScope()) return;
                     created += 1;
                     updateLocalBatch(batchId, (batch) => ({ ...batch, states: batch.states.map((state, itemIndex) => (itemIndex === index ? "created" : state)), receipts: { ...batch.receipts, [index]: task } }));
                 } catch (error) {
+                    if (scope !== getActiveUserScope()) return;
                     // 一个任务失败（并发上限、积分不足、参数被拒）时后面的大概率同样失败：停下来，交给用户决定是否继续提交。
                     failure = errorMessage(error, "任务提交失败");
-                    const remaining = new Set(indices.slice(position));
+                    if (local.request.route === "yingce") failure += "。该请求可能已计费或结果未知，请核对后在创作面板明确发起新的生成";
+                    const remaining = new Set(local.request.route === "yingce" ? [index] : indices.slice(position));
                     updateLocalBatch(batchId, (batch) => ({ ...batch, error: failure, states: batch.states.map((state, itemIndex) => (remaining.has(itemIndex) ? "failed" : state)) }));
                     break;
                 }
             }
         } finally {
+            if (scope !== getActiveUserScope()) return;
             updateLocalBatch(batchId, (batch) => ({ ...batch, submitting: false }));
             setBusy(false);
             pollKickRef.current();
         }
         const unit = kind === "image" ? "批" : "条";
         if (created && !failure) message.success(created > 1 ? `已提交 ${created} 个任务，正在生成` : "已提交，正在生成");
-        else if (created) message.warning(`已提交 ${created} 个任务，其余未提交：${failure}`);
-        else if (failure) message.error(indices.length > 1 ? `这${unit}没有提交成功：${failure}` : failure);
+        else if (created) message.warning(`已完成 ${created} 个请求，后续请求已停止：${failure}`);
+        else if (failure) message.error(indices.length > 1 ? `这${unit}未全部完成：${failure}` : failure);
     };
 
     const submit = async () => {
@@ -1259,18 +1326,27 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
     };
 
     const useAsReference = async (output: WorkbenchOutput) => {
-        if (!output.resourceId) return;
-        const accepted = await addResourceReferences([{ resourceId: output.resourceId, kind: "image", name: "生成结果" }]);
-        if (accepted.length) {
-            message.success("已加入商品素材，可继续调整描述再生成");
-            setViewer(null);
-            setMobileTab("compose");
+        try {
+            const resourceId = output.resourceId || (output.storageKey ? await importLocalOutputResource(output.storageKey) : "");
+            if (!resourceId) return;
+            const accepted = await addResourceReferences([{ resourceId, kind: "image", name: "生成结果" }]);
+            if (accepted.length) {
+                message.success("已加入商品素材，可继续调整描述再生成");
+                setViewer(null);
+                setMobileTab("compose");
+            }
+        } catch (error) {
+            message.error(errorMessage(error, "无法添加参考图"));
         }
     };
 
-    const makeVideo = (output: WorkbenchOutput) => {
-        if (!output.resourceId) return;
-        navigate(`/toolbox/video?ref=${encodeURIComponent(output.resourceId)}`);
+    const makeVideo = async (output: WorkbenchOutput) => {
+        try {
+            const resourceId = output.resourceId || (output.storageKey ? await importLocalOutputResource(output.storageKey) : "");
+            if (resourceId) navigate(`/toolbox/video?ref=${encodeURIComponent(resourceId)}`);
+        } catch (error) {
+            message.error(errorMessage(error, "无法使用生成图片"));
+        }
     };
 
     const copyText = async (text: string) => {
@@ -1327,7 +1403,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         resume: (batch) => {
             const local = localBatchesRef.current.find((item) => `batch:${item.id}` === batch.key);
             if (!local || local.submitting || busy) return;
-            const indices = local.states.flatMap((state, index) => (state === "failed" || state === "pending" ? [index] : []));
+            const indices = local.states.flatMap((state, index) => (state === "pending" || (state === "failed" && local.request.route !== "yingce") ? [index] : []));
             if (indices.length) void runBatchSubmission(local.id, indices);
         },
         dismiss: (batch) => setLocalBatches((current) => current.filter((item) => `batch:${item.id}` !== batch.key || item.submitting)),

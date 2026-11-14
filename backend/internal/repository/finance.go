@@ -18,6 +18,7 @@ var (
 	ErrTaskNotRetryable        = errors.New("该任务当前状态不支持重试")
 	ErrTaskBillingReview       = errors.New("上一次调用费用仍需核对")
 	ErrBillingStateConflict    = errors.New("计费状态已变化，请刷新后重试")
+	ErrBillingDuplicate        = errors.New("请求已提交，不能重复执行")
 	ErrBillingUsageUnavailable = errors.New("暂时无法获取用量，计费未完成")
 	ErrBillingChargeLimit      = errors.New("本次费用超过授权上限，已拒绝扣费")
 	ErrChannelModelInUse       = errors.New("该渠道模型正在被使用，无法删除或停用")

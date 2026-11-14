@@ -116,6 +116,9 @@ type (
 	AssetsSyncRequest                      = app.AssetsSyncRequest
 	AuthError                              = app.AuthError
 	AuthSessionResult                      = app.AuthSessionResult
+	DesktopAuthorizationRequest            = app.DesktopAuthorizationRequest
+	DesktopAuthorizationResult             = app.DesktopAuthorizationResult
+	DesktopTokenRequest                    = app.DesktopTokenRequest
 	AuthUser                               = app.AuthUser
 	BillingOrderPage                       = app.BillingOrderPage
 	BindCharacterVoiceRequest              = app.BindCharacterVoiceRequest
@@ -151,6 +154,7 @@ type (
 	ChannelRequest                         = app.ChannelRequest
 	SystemChannelExport                    = app.SystemChannelExport
 	SystemChannelImportResult              = app.SystemChannelImportResult
+	SystemProxyAsyncResult                 = app.SystemProxyAsyncResult
 	ProviderCatalogVerifyRequest           = app.ProviderCatalogVerifyRequest
 	ProviderCatalogInstallRequest          = app.ProviderCatalogInstallRequest
 	CharacterAssetSummary                  = app.CharacterAssetSummary

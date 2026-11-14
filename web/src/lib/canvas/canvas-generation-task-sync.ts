@@ -37,6 +37,12 @@ export function generationTaskNodeId(task: GenerationTask) {
     return task.clientContext?.nodeId || generationTaskInput(task)?.metadata?.nodeId || "";
 }
 
+// A node may have several paid local receipts. Without a persisted task ID,
+// node identity alone cannot establish which generation the current UI represents.
+export function discoverCanvasGenerationTask(tasks: GenerationTask[], nodeId: string) {
+    return tasks.find((task) => !task.id.startsWith("yingce-local:") && generationTaskNodeId(task) === nodeId);
+}
+
 export function generationTaskMode(task: GenerationTask, fallback?: CanvasGenerationMode): CanvasGenerationMode {
     const inputMode = generationTaskInput(task)?.mode;
     if (inputMode === "text" || inputMode === "image" || inputMode === "video" || inputMode === "audio") return inputMode;
@@ -255,10 +261,11 @@ export async function buildGenerationTaskNodeResult(node: CanvasNodeData, task: 
     }
 
     if (mode === "audio") {
-        if (!result.audio?.dataUrl) throw new Error("后端任务没有返回音频");
+        if (!result.audio || (!result.audio.dataUrl && !result.audio.storageKey)) throw new Error("后端任务没有返回音频");
         const audio = result.audio.storageKey
             ? { url: await resolveMediaUrl(result.audio.storageKey, result.audio.dataUrl), storageKey: result.audio.storageKey, durationMs: result.audio.durationMs, bytes: result.audio.bytes || 0, mimeType: result.audio.mimeType || "audio/mpeg" }
             : await storeGeneratedAudio(await (await fetch(result.audio.dataUrl)).blob(), result.audio.format || "mp3");
+        if (!audio.url) throw new Error("音频结果资源不可用");
         return { ...node, type: CanvasNodeType.Audio, metadata: applyGeneratedMediaResultMetadata(node, audioMetadata(audio), { prompt, ...completedTaskMetadata(task) }, task.model) };
     }
 

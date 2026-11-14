@@ -16,6 +16,7 @@ export function aiHeaders(config: Pick<AiConfig, "apiKey" | "baseUrl">, contentT
 }
 
 export async function postVolcengineArkImage(config: Parameters<typeof createChannelTransport>[0], payload: Record<string, unknown>, options?: RequestOptions) {
+    if (options?.imageRequest) return (await options.imageRequest("/images/generations", payload)) as ImageApiResponse;
     return createChannelTransport(config, "image").postJson<ImageApiResponse>(aiApiUrl(config, "/images/generations"), payload, options);
 }
 
@@ -43,10 +44,12 @@ export function geminiHeaders(config: Pick<AiConfig, "apiKey">) {
 }
 
 export async function postChannelJSON<T>(config: Parameters<typeof createChannelTransport>[0], upstreamUrl: string, body: unknown, options?: RequestOptions) {
+    if (options?.imageRequest) return (await options.imageRequest(upstreamUrl.endsWith("/images/edits") ? "/images/edits" : "/images/generations", body as Record<string, unknown>)) as T;
     return createChannelTransport(config, "image").postJson<T>(upstreamUrl, body, options);
 }
 
 export async function postGeminiJSON(config: Parameters<typeof createChannelTransport>[0] & Pick<AiConfig, "model">, body: unknown, options?: RequestOptions) {
+    if (options?.imageRequest) return (await options.imageRequest(`/models/${encodeURIComponent(geminiModelName(config.model))}:generateContent`, body as Record<string, unknown>)) as GeminiPayload;
     return createChannelTransport(config, "image").postJson<GeminiPayload>(geminiApiUrl(config, "generateContent"), body, {
         ...options,
         headers: geminiHeaders(config),

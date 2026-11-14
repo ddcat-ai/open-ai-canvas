@@ -41,6 +41,12 @@ func AccessLog(redactPath func(string) string) gin.HandlerFunc {
 			return
 		}
 		path := c.Request.URL.Path
+		// The system relay path may contain caller-controlled upstream IDs.
+		// Log the route template so prompts or signed URLs cannot enter access logs.
+		isSystemProxy := strings.HasPrefix(path, "/api/ai/system/") || (route == "" && strings.HasPrefix(path, "/api/"))
+		if isSystemProxy {
+			path = "/api/ai/system/*"
+		}
 		if redactPath != nil {
 			path = redactPath(path)
 		}
@@ -54,7 +60,7 @@ func AccessLog(redactPath func(string) string) gin.HandlerFunc {
 		if requestID := c.Writer.Header().Get("X-Request-ID"); requestID != "" {
 			attrs = append(attrs, slog.String("request_id", requestID))
 		}
-		if message := c.Errors.ByType(gin.ErrorTypePrivate).String(); message != "" {
+		if message := c.Errors.ByType(gin.ErrorTypePrivate).String(); message != "" && !isSystemProxy {
 			attrs = append(attrs, slog.String("error", strings.TrimSpace(message)))
 		}
 		slog.LogAttrs(ctx, level, "http request", attrs...)

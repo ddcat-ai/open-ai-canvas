@@ -93,6 +93,7 @@ async function executeCandidate(candidate: ReturnType<typeof prepare>, outcome: 
                 return controller;
             },
             finishGenerationRequest: noop,
+            ownsGenerationRequest: () => true,
             registerPendingNodeIds: noop,
             showError: noop,
             bindGenerationTask: (id, completed) => setNodes((current) => current.map((node) => (node.id === id ? { ...node, metadata: { ...node.metadata, ...generationTaskMetadata(completed), status: canvasTaskBindingStatus(node, completed) } } : node))),
@@ -119,6 +120,80 @@ async function executeCandidate(candidate: ReturnType<typeof prepare>, outcome: 
 }
 
 describe("batch regeneration result ownership", () => {
+    test("superseded batches remove only their own placeholders and ignore late task results", async () => {
+        for (const takeover of ["root", "child"] as const) {
+            const candidate = prepare(fixture());
+            const target = candidate.targets[0];
+            const source = { ...candidate.nodes.find((node) => node.id === target.nodeId)!, metadata: {} };
+            const nodesRef = { current: [source] };
+            const connectionsRef = { current: candidate.connections };
+            const owners = new Map<string, AbortController>();
+            const controller = new AbortController();
+            const successor = new AbortController();
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            let bound = 0;
+            const pending = executeImageGeneration(
+                {
+                    nodeId: source.id,
+                    sourceNode: source,
+                    canvasNodes: nodesRef.current,
+                    canvasConnections: [],
+                    prompt: "prompt",
+                    effectivePrompt: "prompt",
+                    generationContext: target.inputSnapshot.context,
+                    generationConfig: { ...defaultConfig, model: defaultConfig.imageModel, count: "2" },
+                    controller,
+                    projectId: "",
+                    editingTextNode: false,
+                    styleMetadata: {},
+                    skillMetadata: {},
+                    setNodes: createCanvasStateWriter(nodesRef, noop),
+                    setConnections: createCanvasStateWriter(connectionsRef, noop),
+                    setSelectedNodeIds: noop,
+                    setSelectedConnectionId: noop,
+                    setDialogNodeId: noop,
+                    startGenerationRequest: (id, _origin, _running, request = controller) => {
+                        owners.set(id, request);
+                        return request;
+                    },
+                    finishGenerationRequest: (id, request) => {
+                        if (owners.get(id) === request) owners.delete(id);
+                    },
+                    ownsGenerationRequest: (id, request) => owners.get(id) === request,
+                    registerPendingNodeIds: noop,
+                    showError: noop,
+                    bindGenerationTask: () => {
+                        bound += 1;
+                    },
+                    applyGenerationTaskResult: async () => {
+                        bound += 1;
+                    },
+                },
+                async (options) => {
+                    await gate;
+                    options.onTaskCreated?.(task);
+                    return { mode: "image", images: [{ dataUrl: "/late.png" }] };
+                },
+            );
+            const childIds = nodesRef.current.find((node) => node.id === source.id)!.metadata!.batchChildIds!;
+            expect(childIds).toHaveLength(2);
+            const takenId = takeover === "root" ? source.id : childIds[0];
+            controller.abort("superseded");
+            owners.set(takenId, successor);
+            release();
+            await pending;
+            expect(bound).toBe(0);
+            expect(owners.get(takenId)).toBe(successor);
+            expect(nodesRef.current.some((node) => node.id === childIds[1])).toBe(false);
+            expect(nodesRef.current.some((node) => node.id === childIds[0])).toBe(takeover === "child");
+            expect(connectionsRef.current.some((connection) => connection.toNodeId === childIds[1])).toBe(false);
+            if (takeover === "child") expect(nodesRef.current.find((node) => node.id === source.id)!.metadata!.batchChildIds).toEqual([childIds[0]]);
+        }
+    });
+
     test("waiting and failed regeneration keep the old image, dirty marker and same target ID", async () => {
         const state = fixture();
         const candidate = prepare(state);

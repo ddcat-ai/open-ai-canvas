@@ -21,6 +21,7 @@ import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { generationSpecMetadata, readNodeGenerationSpec, resolveGenerationSelection } from "@/lib/canvas/generation-contract";
 import { withReferenceImageSize, type ImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
+import { persistCanvasLiteIntent } from "@/lib/canvas/canvas-lite-intent";
 
 export async function runBackendCanvasGenerationTask(
     {
@@ -36,6 +37,8 @@ export async function runBackendCanvasGenerationTask(
         signal,
         metadata,
         onTaskCreated,
+        onIntentPrepared,
+        persistIntent,
         clientOperationId,
         retryOf,
         attemptGroupId,
@@ -52,6 +55,8 @@ export async function runBackendCanvasGenerationTask(
         signal?: AbortSignal;
         metadata?: Record<string, unknown>;
         onTaskCreated?: (task: GenerationTask) => void;
+        onIntentPrepared?: (id: string) => Promise<void>;
+        persistIntent?: boolean;
         clientOperationId?: string;
         retryOf?: string;
         attemptGroupId?: string;
@@ -70,8 +75,23 @@ export async function runBackendCanvasGenerationTask(
             referenceAudios,
             mask,
             signal,
-            metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
+            metadata: { ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata, nodeId },
             onTaskUpdate: onTaskCreated,
+            onIntentPrepared: persistIntent
+                ? async (id) => {
+                      await onIntentPrepared?.(id);
+                      await persistCanvasLiteIntent({
+                          projectId,
+                          nodeId,
+                          intentId: id,
+                          signal,
+                          onBound: () => {
+                              const now = new Date().toISOString();
+                              onTaskCreated?.({ id, type: `canvas_${mode}`, status: "running", prompt, attempts: 1, createdAt: now, updatedAt: now });
+                          },
+                      });
+                  }
+                : onIntentPrepared,
             clientOperationId,
             retryOf,
             attemptGroupId,
@@ -122,12 +142,15 @@ export async function runCanvasGenerationTaskToConsumer(
         let completedTask: GenerationTask | undefined;
         const result = await (dependencies.runTask ?? runBackendCanvasGenerationTask)({
             ...input,
+            persistIntent: true,
             onTaskCreated: (task) => {
+                input.signal?.throwIfAborted();
                 input.onTaskCreated?.(task);
                 dependencies.bindTask(task);
                 if (task.status === "succeeded") completedTask = task;
             },
         });
+        input.signal?.throwIfAborted();
         if (!completedTask) throw new Error("生成任务缺少成功终态");
         await dependencies.consumeTask(completedTask);
         return result;

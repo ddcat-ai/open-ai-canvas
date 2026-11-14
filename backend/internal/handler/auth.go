@@ -21,6 +21,7 @@ import (
 
 func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerChannelOrderRoutes(r, svc)
+	RegisterDesktopAuthRoutes(r, svc)
 	registerNotificationRoutes(r, svc)
 	registerAuthProfileRoutes(r, svc)
 	registerWechatRoutes(r, svc)
@@ -51,7 +52,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		setSessionCookie(c, result.Session, result.MaxAgeSecs)
-		ok(c, gin.H{"user": result.User})
+		ok(c, gin.H{"user": result.User, "session": result.Session, "expiresIn": result.MaxAgeSecs})
 	})
 	r.POST("/auth/email-code", func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
@@ -145,7 +146,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		setSessionCookie(c, result.Session, result.MaxAgeSecs)
-		ok(c, gin.H{"user": result.User})
+		ok(c, gin.H{"user": result.User, "session": result.Session, "expiresIn": result.MaxAgeSecs})
 	})
 	r.GET("/auth/linuxdo/start", func(c *gin.Context) {
 		if !enforceRateLimit(c, "linuxdo-start:"+c.ClientIP(), 20, 10*time.Minute) {
@@ -351,6 +352,10 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	if !available || !enforceRateLimit(c, "system-proxy:"+user.ID, policy.Request.SystemRelayPerMinute, time.Minute) {
 		return
 	}
+	if c.Request.Method == http.MethodPost && !validSystemProxyIdempotencyKey(c.GetHeader("X-Idempotency-Key")) {
+		fail(c, http.StatusBadRequest, errors.New("生成请求必须携带有效的 X-Idempotency-Key（最多 128 字节）"))
+		return
+	}
 	path := providerPath
 	if path == "" {
 		path = "/"
@@ -362,43 +367,55 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		return
 	}
 	modelName := proxyRequestModelForPath(path, c.GetHeader("Content-Type"), body)
-	if modelName == "" && c.Request.Method == http.MethodGet && path == "/agnesapi" {
-		modelName = strings.TrimSpace(c.Query("model_name"))
-	}
 	protocol := model.ChannelInterfaceType("")
 	capability := "text"
 	var channelModel *model.ChannelModel
-	if !(c.Request.Method == http.MethodGet && path == "/models") {
-		if c.Request.Method == http.MethodGet && systemMiniMaxTaskPath.MatchString(path) && modelName == "" {
-			supported, supportErr := svc.SystemChannelHasProtocol(channel.ID, model.ChannelInterfaceMiniMaxVideo)
-			if supportErr != nil {
-				failService(c, supportErr)
-				return
-			}
-			if !supported {
-				fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权 MiniMax 视频协议"))
-				return
-			}
-			protocol = model.ChannelInterfaceMiniMaxVideo
-			capability = "video"
-		} else {
-			var modelErr error
-			channelModel, modelErr = svc.SystemChannelModel(channel.ID, modelName)
-			if modelErr != nil || channelModel.Protocol == "" {
-				fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权该模型或模型协议尚未配置"))
-				return
-			}
-			protocol = channelModel.Protocol
-			capability = channelModel.Capability
+	billingOrderID := ""
+	var asyncBillingOrder *model.BillingOrder
+	asyncOperation := ""
+	asyncTaskID := ""
+	isAsyncContinuation := c.Request.Method == http.MethodGet && path != "/models" || c.Request.Method == http.MethodPost && strings.TrimSpace(c.GetHeader("X-Yingce-Lite-Task-ID")) != ""
+	if isAsyncContinuation {
+		candidates := systemProxyTaskIDCandidates(path, c.Request.URL.Query(), body, c.GetHeader("X-Yingce-Lite-Task-ID"))
+		order, orderErr := svc.SystemProxyBillingOrderForTask(user.ID, channel.ID, candidates)
+		if orderErr != nil {
+			fail(c, http.StatusForbidden, errors.New("异步任务不属于当前账号或渠道"))
+			return
 		}
+		channelModel, err = svc.SystemChannelModel(channel.ID, order.Model)
+		if err != nil || channelModel == nil || channelModel.Protocol == "" {
+			fail(c, http.StatusForbidden, errors.New("异步任务模型已不可用"))
+			return
+		}
+		protocol = channelModel.Protocol
+		capability = channelModel.Capability
+		var matched bool
+		asyncTaskID, asyncOperation, matched = svc.MatchSystemProxyAsyncRequest(string(protocol), capability, order.Model, order.ProviderRequestID, c.Request.Method, path, c.Request.URL.Query())
+		if !matched {
+			fail(c, http.StatusForbidden, errors.New("异步任务轮询路径与计费订单不匹配"))
+			return
+		}
+		asyncBillingOrder = order
+		billingOrderID = order.ID
+		modelName = order.Model
+	} else if !(c.Request.Method == http.MethodGet && path == "/models") {
+		channelModel, err = svc.SystemChannelModel(channel.ID, modelName)
+		if err != nil || channelModel.Protocol == "" {
+			fail(c, http.StatusForbidden, errors.New("当前系统渠道未授权该模型或模型协议尚未配置"))
+			return
+		}
+		protocol = channelModel.Protocol
+		capability = channelModel.Capability
 	}
 	var declaredPaths []string
 	if protocol != "" {
 		declaredPaths = svc.SystemProxyDeclaredPostPaths(protocol)
 	}
-	if err := authorizeSystemProxy(channel, protocol, declaredPaths, c.Request.Method, path, c.GetHeader("Content-Type"), body); err != nil {
-		fail(c, http.StatusForbidden, err)
-		return
+	if !isAsyncContinuation {
+		if err := authorizeSystemProxy(channel, protocol, declaredPaths, c.Request.Method, path, c.GetHeader("Content-Type"), body); err != nil {
+			fail(c, http.StatusForbidden, err)
+			return
+		}
 	}
 	// 按 Token 计费的 Chat Completions 流式请求需要上游最后返回 usage 块；是否属于 Chat Completions
 	// 看实际转发的路径，不看协议 ID，插件协议（deepseek-chat 等）同样能拿到用量结算。
@@ -411,7 +428,6 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		}
 	}
 	streamUsageInjected := !bytes.Equal(clientBody, body)
-	billingOrderID := ""
 	query := c.Request.URL.Query()
 	for _, key := range []string{"key", "api_key", "access_token", "token"} {
 		query.Del(key)
@@ -435,7 +451,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 	if err != nil {
 		log := apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), model.ApiCallStatusFailed, 0, time.Since(startedAt), err.Error(), concurrencyLimit)
 		log.ErrorCode, log.Error = service.ChannelSlotFailureDetails(err)
-		logSystemProxyCall(svc, log, nil)
+		_, _ = logSystemProxyCall(svc, log, nil)
 		failInternal(c, http.StatusServiceUnavailable, err)
 		return
 	}
@@ -501,7 +517,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		status = model.ApiCallStatusFailed
 		errorText = err.Error()
 		markSystemProxyBillingUncertain(svc, billingOrderID, "系统渠道连接中断，费用状态待核对")
-		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), nil)
+		_, _ = logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), nil)
 		fail(c, http.StatusBadGateway, errors.New("系统渠道连接失败"))
 		return
 	}
@@ -526,7 +542,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 			billingNote = "上游已响应但流式响应体超过限制，费用状态待核对"
 		}
 		markSystemProxyBillingUncertain(svc, billingOrderID, billingNote)
-		logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
+		_, _ = logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
 		// SSE 响应头已经发送，流中断后只能关闭连接；非流式响应仍返回结构化错误。
 		if !streamed {
 			fail(c, http.StatusBadGateway, errors.New("系统渠道响应读取失败"))
@@ -538,12 +554,16 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		fail(c, http.StatusBadGateway, fmt.Errorf("系统渠道响应超过 %dMB 限制", policy.Request.SystemRelayResponseMB))
 		return
 	}
-	logErr := logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
-	if status == model.ApiCallStatusSucceeded {
+	callResult, logErr := logSystemProxyCall(svc, apiCallLog(user, channel, billingOrderID, capability, protocol, c.Request.Method, path, target, body, c.GetHeader("Content-Type"), status, statusCode, time.Since(startedAt), errorText, concurrencyLimit), responseBody)
+	if isAsyncContinuation {
+		handleSystemProxyAsyncContinuation(svc, asyncBillingOrder, channelModel, asyncTaskID, asyncOperation, callResult, statusCode, logErr, responseBody)
+	} else if c.Request.Method == http.MethodPost && channelModel != nil && svc.SystemProxySupportsPolling(string(protocol)) {
+		handleSystemProxyAsyncCreate(svc, billingOrderID, user.ID, channel.ID, channelModel, callResult, statusCode, logErr, responseBody)
+	} else if status == model.ApiCallStatusSucceeded {
 		if logErr != nil {
 			markSystemProxyBillingUncertain(svc, billingOrderID, "上游成功但调用日志写入失败，费用状态待核对")
 		} else if err := svc.SettleBilling(billingOrderID, ""); err != nil {
-			markSystemProxyBillingUncertain(svc, billingOrderID, "上游成功但积分结算失败："+err.Error())
+			markSystemProxyBillingUncertain(svc, billingOrderID, "上游成功但积分结算失败，费用状态待核对")
 		}
 	} else if statusCode == 524 {
 		markSystemProxyBillingUncertain(svc, billingOrderID, "上游返回 524，费用状态待核对")
@@ -560,6 +580,196 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 // resendIfStreamUsageRejected 处理严格 schema 上游（如 Mistral）拒收宿主补上的 stream_options：
 // 400/422 且错误里点名该字段时，按浏览器原始请求体重发一次。被拒的请求没有进入生成，不会重复计费；
 // 其他响应原样交回，错误体已读出的部分会放回 Body，后续读取和日志不受影响。
+func validSystemProxyIdempotencyKey(value string) bool {
+	value = strings.TrimSpace(value)
+	return value != "" && len(value) <= 128
+}
+
+func systemProxyTaskIDCandidates(requestPath string, query url.Values, body []byte, relayTaskID string) []string {
+	seen := make(map[string]struct{})
+	result := make([]string, 0, 8)
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || len(value) > 160 || strings.ContainsAny(value, "\r\n\x00") {
+			return
+		}
+		if _, exists := seen[value]; exists {
+			return
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	add(relayTaskID)
+	for _, key := range []string{"task_id", "taskId", "request_id", "requestId", "video_id", "videoId", "id", "name"} {
+		for _, value := range query[key] {
+			add(value)
+		}
+	}
+	if strings.Contains(requestPath, "/operations/") {
+		if index := strings.Index(requestPath, "/operations/"); index >= 0 {
+			add(strings.TrimPrefix(requestPath[index+1:], "/"))
+		}
+	}
+	segments := strings.Split(strings.Trim(requestPath, "/"), "/")
+	if len(segments) > 0 {
+		if len(segments) > 1 && strings.EqualFold(segments[len(segments)-1], "content") {
+			parent, err := url.PathUnescape(segments[len(segments)-2])
+			if err == nil {
+				add(parent)
+			}
+		}
+		last, err := url.PathUnescape(segments[len(segments)-1])
+		if err == nil {
+			add(last)
+		}
+	}
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) == nil {
+		for _, key := range []string{"task_id", "taskId", "request_id", "requestId", "video_id", "videoId", "id", "name"} {
+			if value, ok := payload[key].(string); ok {
+				add(value)
+			}
+		}
+		for _, key := range []string{"task", "data"} {
+			if nested, ok := payload[key].(map[string]any); ok {
+				for _, field := range []string{"task_id", "taskId", "request_id", "requestId", "video_id", "videoId", "id", "name"} {
+					if value, ok := nested[field].(string); ok {
+						add(value)
+					}
+				}
+			}
+		}
+	}
+	return result
+}
+
+func systemProxyTaskIDMatches(routeTaskID string, billingTaskID string) bool {
+	if routeTaskID == billingTaskID {
+		return true
+	}
+	return strings.HasSuffix(billingTaskID, "/"+routeTaskID)
+}
+
+func handleSystemProxyAsyncCreate(svc *service.Service, billingOrderID string, userID string, channelID string, channelModel *model.ChannelModel, call systemProxyCallResult, statusCode int, logErr error, responseBody []byte) {
+	if billingOrderID == "" {
+		return
+	}
+	if call.Status != model.ApiCallStatusSucceeded {
+		if statusCode == 524 || call.StatusCode == 0 {
+			markSystemProxyBillingUncertain(svc, billingOrderID, "异步上游创建状态不明确，费用待核对")
+		} else {
+			refundSystemProxyBilling(svc, billingOrderID, "异步上游明确拒绝创建")
+		}
+		return
+	}
+	if logErr != nil {
+		markSystemProxyBillingUncertain(svc, billingOrderID, "异步任务已创建但调用记录写入失败，费用待核对")
+		return
+	}
+	result, parseErr := svc.ParseSystemProxyAsyncResponse(string(channelModel.Protocol), channelModel.Capability, channelModel.ModelKey, "", "create", responseBody)
+	if parseErr != nil {
+		if call.ProviderRequestID != "" {
+			result = &service.SystemProxyAsyncResult{TaskID: call.ProviderRequestID}
+		} else {
+			markSystemProxyBillingUncertain(svc, billingOrderID, "异步上游响应无法解析且没有可核对的任务 ID，费用待核对")
+			return
+		}
+	}
+	if result.TaskID == "" {
+		result.TaskID = call.ProviderRequestID
+	}
+	if call.ProviderRequestID != "" && result.TaskID != "" && !systemProxyTaskIDMatches(call.ProviderRequestID, result.TaskID) && !systemProxyTaskIDMatches(result.TaskID, call.ProviderRequestID) {
+		markSystemProxyBillingUncertain(svc, billingOrderID, "异步上游返回了不一致的任务标识，费用待核对")
+		return
+	}
+	status := strings.ToLower(strings.TrimSpace(string(result.Status)))
+	if status == "" {
+		status = strings.ToLower(strings.TrimSpace(call.ProviderStatus))
+	}
+	if status == "failed" || status == "failure" || status == "error" || status == "cancelled" || status == "canceled" {
+		refundSystemProxyBilling(svc, billingOrderID, "异步上游确认生成失败")
+		return
+	}
+	linkTask := func() bool {
+		if result.TaskID == "" {
+			markSystemProxyBillingUncertain(svc, billingOrderID, "异步任务缺少可核对的上游任务 ID，费用待核对")
+			return false
+		}
+		if linkErr := svc.LinkSystemProxyBillingTask(billingOrderID, userID, channelID, result.TaskID); linkErr != nil {
+			markSystemProxyBillingUncertain(svc, billingOrderID, "异步任务已创建但账单无法关联，费用待核对")
+			return false
+		}
+		return true
+	}
+	switch status {
+	case "queued", "pending", "processing", "running", "in_progress", "in-progress":
+		linkTask()
+		return
+	case "succeeded", "success", "completed", "complete", "done":
+		if result.RequiresResultRequest && !result.HasResult {
+			linkTask()
+			return
+		}
+		if err := svc.SettleBilling(billingOrderID, result.TaskID); err != nil {
+			markSystemProxyBillingUncertain(svc, billingOrderID, "生成请求成功但积分结算失败，费用状态待核对")
+		}
+	default:
+		if result.TaskID != "" && !linkTask() {
+			return
+		}
+		markSystemProxyBillingUncertain(svc, billingOrderID, "异步上游返回未知创建状态，费用待核对")
+	}
+}
+
+func handleSystemProxyAsyncContinuation(svc *service.Service, order *model.BillingOrder, channelModel *model.ChannelModel, taskID string, operation string, call systemProxyCallResult, statusCode int, logErr error, responseBody []byte) {
+	if order == nil {
+		return
+	}
+	if statusCode < 200 || statusCode >= 300 {
+		markSystemProxyBillingUncertain(svc, order.ID, "异步上游查询或取结果失败，费用待核对")
+		return
+	}
+	if logErr != nil {
+		markSystemProxyBillingUncertain(svc, order.ID, "异步任务状态已返回但调用记录写入失败，费用待核对")
+		return
+	}
+	if operation == "result" {
+		if err := svc.SettleBilling(order.ID, order.ProviderRequestID); err != nil {
+			markSystemProxyBillingUncertain(svc, order.ID, "异步结果已返回但积分结算失败，费用待核对")
+		}
+		return
+	}
+	if channelModel == nil {
+		markSystemProxyBillingUncertain(svc, order.ID, "异步任务模型无法确认，费用待核对")
+		return
+	}
+	parsed, parseErr := svc.ParseSystemProxyAsyncResponse(string(channelModel.Protocol), channelModel.Capability, order.Model, taskID, "poll", responseBody)
+	status := ""
+	if parseErr == nil && parsed != nil {
+		status = string(parsed.Status)
+	}
+	if status == "" {
+		status = strings.ToLower(strings.TrimSpace(call.ProviderStatus))
+	}
+	switch status {
+	case "queued", "pending", "processing", "running", "in_progress", "in-progress":
+		return
+	case "failed", "failure", "error", "cancelled", "canceled":
+		refundSystemProxyBilling(svc, order.ID, "异步上游确认生成失败")
+		return
+	case "succeeded", "success", "completed", "complete", "done":
+		if parseErr == nil && parsed != nil && parsed.RequiresResultRequest && !parsed.HasResult {
+			return
+		}
+		if err := svc.SettleBilling(order.ID, order.ProviderRequestID); err != nil {
+			markSystemProxyBillingUncertain(svc, order.ID, "异步任务成功但积分结算失败，费用状态待核对")
+		}
+		return
+	default:
+		markSystemProxyBillingUncertain(svc, order.ID, "异步上游返回未知状态，费用待核对")
+	}
+}
+
 func resendIfStreamUsageRejected(resp *http.Response, limit int64, resend func() (*http.Response, error)) (*http.Response, error) {
 	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusUnprocessableEntity {
 		return resp, nil
@@ -578,9 +788,9 @@ func refundSystemProxyBilling(svc *service.Service, billingOrderID string, reaso
 		return
 	}
 	if err := svc.RefundBilling(billingOrderID, reason); err != nil {
-		log.Printf("system proxy billing refund failed: billing_order_id=%s error=%v", billingOrderID, err)
+		log.Printf("system proxy billing refund failed: billing_order_id=%s", billingOrderID)
 		// 退款写失败不能当没发生：转待核对，避免订单停在 running 被当成已扣费。
-		markSystemProxyBillingUncertain(svc, billingOrderID, "退款失败，费用状态待核对："+err.Error())
+		markSystemProxyBillingUncertain(svc, billingOrderID, "退款失败，费用状态待核对")
 	}
 }
 
@@ -589,7 +799,7 @@ func markSystemProxyBillingUncertain(svc *service.Service, billingOrderID string
 		return
 	}
 	if err := svc.MarkBillingUncertain(billingOrderID, reason); err != nil {
-		log.Printf("system proxy billing uncertainty update failed: billing_order_id=%s error=%v", billingOrderID, err)
+		log.Printf("system proxy billing uncertainty update failed: billing_order_id=%s", billingOrderID)
 	}
 }
 
@@ -624,14 +834,39 @@ func apiCallLog(user *model.User, channel *model.ModelChannel, billingOrderID st
 		ConcurrencyLimit:   concurrencyLimit,
 		UpstreamURL:        target,
 		RequestContentType: contentType,
-		RequestBody:        service.SanitizeAPICallPayload(body, contentType),
+		// Request and response content can contain prompts, references, or
+		// generated material. Keep operational metadata only.
+		RequestBody: "",
 	}
 }
 
-func logSystemProxyCall(svc *service.Service, log model.ApiCallLog, responseBody []byte) error {
-	log.ResponseBody = service.SanitizeAPICallPayload(responseBody, "")
+type systemProxyCallResult struct {
+	Status            model.ApiCallStatus
+	StatusCode        int
+	ProviderRequestID string
+	ProviderStatus    string
+}
+
+func logSystemProxyCall(svc *service.Service, log model.ApiCallLog, responseBody []byte) (systemProxyCallResult, error) {
 	svc.EnrichAPICallLog(&log, responseBody)
-	return svc.LogAPICall(log)
+	result := systemProxyCallResult{Status: log.Status, StatusCode: log.StatusCode, ProviderRequestID: log.ProviderRequestID, ProviderStatus: log.ProviderStatus}
+	minimizeSystemProxyLog(&log)
+	return result, svc.LogAPICall(log)
+}
+
+// Upstream error messages and URLs can echo request content or signed media URLs.
+// Extract usage first, then retain only the operational fields needed for billing.
+func minimizeSystemProxyLog(log *model.ApiCallLog) {
+	log.RequestBody = ""
+	log.ResponseBody = ""
+	log.Error = ""
+	log.ErrorCode = ""
+	log.UpstreamURL = ""
+	log.Path = ""
+	log.Model = ""
+	log.ProviderRequestID = ""
+	log.ProviderStatus = ""
+	log.RequestContentType = ""
 }
 
 func readPayloadModel(body []byte) string {
@@ -657,8 +892,18 @@ func currentUser(c *gin.Context, svc *service.Service) (*model.User, error) {
 }
 
 func sessionCookie(c *gin.Context) string {
-	value, _ := c.Cookie(service.SessionCookieName)
-	return value
+	if value, err := c.Cookie(service.SessionCookieName); err == nil && strings.TrimSpace(value) != "" {
+		return value
+	}
+	// Desktop clients cannot share the browser's HttpOnly cookie jar with the
+	// embedded backend. Accept the same opaque server session as a Bearer token;
+	// this does not grant API-key or administrator privileges.
+	const prefix = "Bearer "
+	header := strings.TrimSpace(c.GetHeader("Authorization"))
+	if len(header) > len(prefix) && strings.EqualFold(header[:len(prefix)], prefix) {
+		return strings.TrimSpace(header[len(prefix):])
+	}
+	return ""
 }
 
 func passwordResetRateLimitSubject(value string) string {

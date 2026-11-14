@@ -4,6 +4,8 @@ import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamE
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
 import { observeGenerationTaskStatus, observeGenerationTaskStatuses } from "@/services/generation-completion-tracker";
 import { assertCurrentUserSession, captureUserSession, getActiveUserScope } from "@/lib/user-scope";
+import { IS_LITE } from "@/lib/edition";
+import { YINGCE_RECEIPT_PREFIX, yingceReceiptStore } from "@/services/api/yingce-lite-receipts";
 
 export type { BackendEnvelope } from "@/services/api/request";
 
@@ -175,6 +177,7 @@ const defaultGenerationTaskListDependencies: GenerationTaskListDependencies = {
 
 export async function listGenerationTasks(limit = 30, options?: { projectId?: string; activeOnly?: boolean }, dependencies: GenerationTaskListDependencies = defaultGenerationTaskListDependencies, signal?: AbortSignal) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const scope = getActiveUserScope();
     const boundedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(10_000, Math.trunc(limit))) : 30;
     const baseRequest = {
         limit: Math.min(100, boundedLimit),
@@ -196,8 +199,10 @@ export async function listGenerationTasks(limit = 30, options?: { projectId?: st
         }));
     const backendTasks = await collectGenerationTaskPages(backendPageReader, baseRequest, boundedLimit, signal);
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const receipts = IS_LITE && dependencies === defaultGenerationTaskListDependencies && !options?.activeOnly ? await yingceReceiptStore.list(scope) : [];
+    if (IS_LITE && scope !== getActiveUserScope()) throw new Error("账号已切换，无法读取之前账号的任务");
     observeGenerationTaskStatuses(backendTasks);
-    return backendTasks
+    return [...backendTasks, ...receipts]
         .filter((task) => !options?.projectId || task.projectId === options.projectId)
         .filter((task) => !options?.activeOnly || task.status === "queued" || task.status === "running")
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id))
@@ -221,6 +226,15 @@ async function collectGenerationTaskPages<T>(readPage: (request: GenerationTaskP
 }
 
 export function queryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
+    if (IS_LITE && id.startsWith(YINGCE_RECEIPT_PREFIX)) {
+        const scope = getActiveUserScope();
+        return yingceReceiptStore.get(id, scope).then((task) => {
+            if (options?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+            if (scope !== getActiveUserScope()) throw new Error("账号已切换，无法读取之前账号的任务");
+            if (!task) throw new Error("本地生成回执不存在");
+            return observedTask(task);
+        });
+    }
     return http.get<GenerationTask>(`/tasks/${encodeURIComponent(id)}`, { signal: options?.signal }).then(observedTask);
 }
 

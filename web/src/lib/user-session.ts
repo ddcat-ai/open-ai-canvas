@@ -20,6 +20,9 @@ import { clearResourceAccessCache } from "@/services/api/resources";
 import { clearResourceBlobCache } from "@/services/resource-blob-cache";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
+import { IS_LITE } from "@/lib/edition";
+import { requestYingceCatalog, requestYingceLegacyWorkspaceImport } from "@/services/api/yingce-lite-ipc";
+import { importLegacyWorkspaceState } from "@/services/legacy-workspace-import";
 
 export async function switchUserStorageScope(userId?: string | null, expectedSession = captureUserSession(true), isCurrent = () => true) {
     return withGenerationConsumersPaused(async () => {
@@ -56,6 +59,12 @@ export async function applyUserSession(payload: AuthSessionPayload, expectedSess
     if (previousUserId !== nextUserId) appQueryClient.clear();
     if (!(await switchUserStorageScope(payload.user?.id, expectedSession, () => isCurrentGeneration(generation)))) return;
     // 切换存储 scope 时 user store 仍保留旧身份；此处只能先检查 generation。
+    if (!isCurrentGeneration(generation)) return;
+    if (IS_LITE && nextUserId) {
+        const legacyImport = await requestYingceLegacyWorkspaceImport();
+        if (!isCurrentGeneration(generation)) return;
+        if (legacyImport.enabled) await importLegacyWorkspaceState(nextUserId, legacyImport.sourceScope);
+    }
     if (!isCurrentGeneration(generation)) return;
     withCanvasStorePersistenceSuppressed(() =>
         withAssetStorePersistenceSuppressed(() =>
@@ -128,13 +137,13 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
 
     void (async () => {
         try {
-            const catalog = await getModelCatalog();
+            const channels = await loadSystemChannels(useConfigStore.getState().config.channels);
             if (!isCurrentSession(generation, userId)) return;
             if (!persistedConfig) {
                 // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
                 const initialSystemConfig = {
                     ...defaultConfig,
-                    channels: modelCatalogChannels(catalog),
+                    channels,
                     imageModels: undefined,
                     videoModels: undefined,
                     textModels: undefined,
@@ -142,7 +151,7 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
                 };
                 useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
             } else {
-                useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+                useConfigStore.getState().mergeSystemChannels(channels);
             }
         } catch (error) {
             if (isCurrentSession(generation, userId)) console.warn("模型目录后台刷新失败，保留本地配置", error);
@@ -181,8 +190,36 @@ function safeScopedStorageGet(key: string) {
 }
 
 export async function refreshSystemChannels() {
-    const catalog = await getModelCatalog();
-    useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+    const generation = sessionGeneration;
+    const userId = useUserStore.getState().user?.id || "";
+    const channels = await loadSystemChannels(useConfigStore.getState().config.channels);
+    if (isCurrentSession(generation, userId)) useConfigStore.getState().mergeSystemChannels(channels);
+}
+
+/** Local direct channels and remote Yingce channels have independent identities. */
+export async function loadSystemChannels(previous: ModelChannel[], options: { lite?: boolean; local?: typeof getModelCatalog; remote?: typeof requestYingceCatalog } = {}): Promise<ModelChannel[]> {
+    if (!(options.lite ?? IS_LITE)) return modelCatalogChannels(await (options.local || getModelCatalog)());
+    const [local, remote] = await Promise.allSettled([(options.local || getModelCatalog)(), (options.remote || requestYingceCatalog)()]);
+    if (local.status === "rejected" && remote.status === "rejected") throw remote.reason;
+    const localCatalog = local.status === "fulfilled" ? modelCatalogChannels(local.value) : previous.filter((channel) => channel.scope === "system" && !channel.yingceChannelId);
+    const localChannels = localCatalog.filter((channel) => !channel.yingceChannelId);
+    const localRemoteByID = new Map(localCatalog.filter((channel) => channel.yingceChannelId).map((channel) => [channel.yingceChannelId!, channel]));
+    const remoteChannels = remote.status === "fulfilled"
+        ? modelCatalogChannels(remote.value).flatMap((channel) => {
+              const localMirror = localRemoteByID.get(channel.id);
+              if (!localMirror) return [];
+              return [{
+                  ...channel,
+                  id: localMirror.id,
+                  baseUrl: `/api/ai/system/${encodeURIComponent(channel.id)}`,
+                  yingceChannelId: channel.id,
+                  modelCosts: (channel.modelCosts || []).map((model) => ({ ...model, channelId: localMirror.id })),
+              }];
+          })
+        : [];
+    const localIds = new Set(localChannels.map((channel) => channel.id));
+    if (remoteChannels.some((channel) => localIds.has(channel.id))) throw new Error("影策与本地渠道标识冲突，请联系支持人员");
+    return [...localChannels, ...remoteChannels];
 }
 
 // 目录仅接受系统渠道模型，避免畸形响应被当成空目录写入配置。
@@ -197,6 +234,7 @@ function modelCatalogChannels(catalog: ModelCatalogResponse): ModelChannel[] {
 // 系统渠道模型转换为前端配置格式
 export function systemChannelModelChannels(channels: PublicChannelCatalog[]): ModelChannel[] {
     return channels.map((channel) => {
+        const remoteChannelId = channel.remoteChannelId || "";
         const availableModels = channel.models.filter((m) => m.available);
         return {
             id: channel.id,
@@ -204,10 +242,11 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
             sortOrder: channel.sortOrder,
             // 系统渠道必须走带渠道 ID 的站内代理；/api 只是业务 API 根路径，
             // 不能作为模型请求的运行时 Base URL 传给 channelRequest。
-            baseUrl: `/api/${channel.id}`,
+            baseUrl: remoteChannelId ? `/api/ai/system/${encodeURIComponent(remoteChannelId)}` : `/api/${channel.id}`,
             apiKey: "system",
             apiFormat: "openai",
             scope: "system" as const,
+            ...(remoteChannelId ? { yingceChannelId: remoteChannelId } : {}),
             enabled: true,
             models: availableModels.map((m) => m.modelKey),
             modelAliases: {},

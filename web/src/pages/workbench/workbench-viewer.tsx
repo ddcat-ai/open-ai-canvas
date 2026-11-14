@@ -207,12 +207,12 @@ export function WorkbenchViewer({
                                 下载{output.kind === "video" ? "视频" : "原图"}
                             </Button>
                             <div className="wb-viewer-secondary">
-                                {onUseAsReference && output.kind === "image" && output.resourceId ? (
+                                {onUseAsReference && output.kind === "image" && (output.resourceId || output.storageKey?.startsWith("generation-image:")) ? (
                                     <Button icon={<ImagePlus />} onClick={() => onUseAsReference(output)}>
                                         用作参考图
                                     </Button>
                                 ) : null}
-                                {onMakeVideo && output.kind === "image" && output.resourceId ? (
+                                {onMakeVideo && output.kind === "image" && (output.resourceId || output.storageKey?.startsWith("generation-image:")) ? (
                                     <Button icon={<Clapperboard />} onClick={() => onMakeVideo(output)}>
                                         做成视频
                                     </Button>

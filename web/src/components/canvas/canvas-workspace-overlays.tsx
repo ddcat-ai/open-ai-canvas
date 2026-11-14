@@ -108,6 +108,7 @@ export function CanvasNodePanelOverlay({
     dragOffset,
     isDragging = false,
     allowOverflow = false,
+    anchorBelow = false,
     children,
 }: {
     node: CanvasNodeData;
@@ -118,13 +119,18 @@ export function CanvasNodePanelOverlay({
     dragOffset?: Position | null;
     isDragging?: boolean;
     allowOverflow?: boolean;
+    anchorBelow?: boolean;
     children: ReactNode;
 }) {
     const panelRef = useRef<HTMLDivElement>(null);
     const resizeMotion = useCanvasNodeResizeMotion();
-    const { bringToFront, zIndex } = useCanvasOverlayLayer(`node-panel:${node.id}`, "var(--z-modal-overlay)");
+    const { bringToFront, zIndex } = useCanvasOverlayLayer(`${anchorBelow ? "doubao-panel" : "node-panel"}:${node.id}`, "var(--z-modal-overlay)");
     const initialWidth = resolveNodePanelWidth(node, viewport, panelWidth);
-    const initialPosition = getNodePanelPosition(node, viewport, { width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }, initialWidth, panelHeight, dragOffset);
+    const positionFor = (visualNode: CanvasNodeData, currentViewport: ViewportTransform, offset: Position | null | undefined, width: number, height: number, bounds: ReturnType<typeof canvasOverlayBounds>) =>
+        anchorBelow
+            ? { left: currentViewport.x + (visualNode.position.x + (offset?.x || 0) + visualNode.width / 2) * currentViewport.k - width / 2, top: currentViewport.y + (visualNode.position.y + (offset?.y || 0) + visualNode.height) * currentViewport.k + 10 }
+            : placeCanvasNodePanel(visualNode, currentViewport, bounds, { width, height }, offset);
+    const initialPosition = positionFor(node, viewport, dragOffset, initialWidth, panelHeight, canvasOverlayBounds({ width: containerRef.current?.clientWidth || 0, height: containerRef.current?.clientHeight || 0 }));
 
     useLayoutEffect(() => {
         bringToFront();
@@ -148,7 +154,7 @@ export function CanvasNodePanelOverlay({
             panel.style.overflowY = measuredHeight > availableHeight || !allowOverflow ? "auto" : "visible";
             // 视口预览期间世界层刚写入 transform，读取节点布局会强制浏览器同步
             // layout。节点位置和拖拽偏移已经在这里可用，直接用世界坐标计算浮层位置。
-            const position = placeCanvasNodePanel(visualNode, nextViewport, availableBounds, { width: nextWidth, height: measuredHeight }, liveDragOffset);
+            const position = positionFor(visualNode, nextViewport, liveDragOffset, nextWidth, measuredHeight, availableBounds);
             panel.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
             updateCanvasNodePanelBounds(container, panel, { left: position.left, top: position.top, right: position.left + nextWidth, bottom: position.top + Math.min(measuredHeight, availableHeight) });
         };
@@ -177,7 +183,7 @@ export function CanvasNodePanelOverlay({
             unsubscribeDrag();
             updateCanvasNodePanelBounds(container, panel, null);
         };
-    }, [allowOverflow, containerRef, dragOffset?.x, dragOffset?.y, isDragging, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, resizeMotion, viewport]);
+    }, [allowOverflow, anchorBelow, containerRef, dragOffset?.x, dragOffset?.y, isDragging, node.height, node.id, node.position.x, node.position.y, node.width, panelHeight, panelWidth, resizeMotion, viewport]);
 
     return (
         <div

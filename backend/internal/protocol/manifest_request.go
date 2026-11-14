@@ -345,6 +345,7 @@ func manifestRequestValues(request GenerationRequest) map[string]any {
 		"operation":       request.Operation,
 		"output":          outputValue,
 		"providerOptions": providerOptionsValue,
+		"metadata":        request.Metadata,
 		"extra":           request.Extra,
 	}
 }

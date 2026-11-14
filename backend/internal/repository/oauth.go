@@ -5,8 +5,53 @@ import (
 
 	"yingce/backend/internal/model"
 
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm"
 )
+
+func (r *Repository) CreateDesktopAuthorizationCodeForUser(expected *model.User, code *model.DesktopAuthorizationCode) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+	if expected == nil || code.UserID != expected.ID {
+			return ErrProfileAuthorization
+		}
+		if err := lockProfileUser(tx, expected.ID); err != nil {
+			return err
+		}
+		var current model.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, "id = ?", expected.ID).Error; err != nil {
+			return err
+		}
+		if current.Status != model.UserStatusActive || current.PasswordHash != expected.PasswordHash || current.Email != expected.Email {
+			return ErrProfileAuthorization
+		}
+		stale := time.Now().Add(-24 * time.Hour)
+		if err := tx.Where("expires_at <= ? OR used_at <= ?", stale, stale).Delete(&model.DesktopAuthorizationCode{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(code).Error
+	})
+}
+
+func (r *Repository) DesktopAuthorizationCode(codeHash string, now time.Time) (*model.DesktopAuthorizationCode, error) {
+	var code model.DesktopAuthorizationCode
+	if err := r.db.First(&code, "code_hash = ? AND used_at IS NULL AND expires_at > ?", codeHash, now).Error; err != nil {
+		return nil, err
+	}
+	return &code, nil
+}
+
+func (r *Repository) ConsumeDesktopAuthorizationCode(id string, now time.Time) error {
+	result := r.db.Model(&model.DesktopAuthorizationCode{}).
+		Where("id = ? AND used_at IS NULL AND expires_at > ?", id, now).
+		Update("used_at", now)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
 
 func (r *Repository) UserIdentity(provider string, subject string) (*model.UserIdentity, error) {
 	var identity model.UserIdentity

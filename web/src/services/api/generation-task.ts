@@ -12,11 +12,14 @@ import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveGenerationWorkflowExecution, type GenerationWorkflowExecution } from "@/lib/generation-workflow-execution";
 import { isArkPlanBaseUrl } from "@/lib/seedance-video";
 import { resolveVideoOperation } from "@/lib/model-selection";
-import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { decodeChannelModel, logicalModelIDForConfig, modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInputMessage, type ToolChoice, type ToolResponseResult } from "@/services/api/image";
 import { assertAgentExchangeBudget } from "@/lib/canvas/agent-context-budget";
+import { YingceLiteError } from "@/services/api/yingce-lite-ipc";
+import { IS_LITE } from "@/lib/edition";
+import { runYingceAudioGeneration, runYingceImageGeneration, runYingceTextGeneration, yingceTextMessagesWithImages } from "@/services/api/yingce-lite-generation";
 
 export { logicalModelIDForConfig };
 
@@ -47,6 +50,7 @@ type BackendGenerationTaskOptions = {
     signal?: AbortSignal;
     metadata?: Record<string, unknown>;
     onTaskUpdate?: (task: GenerationTask) => void;
+    onIntentPrepared?: (id: string) => Promise<void>;
     onTextDelta?: (text: string) => void;
     streamText?: boolean;
     /** 思考档位或意图（auto/deep）；不传时由模型默认值决定。 */
@@ -91,6 +95,7 @@ export async function runBackendGenerationTask(
         signal,
         metadata,
         onTaskUpdate,
+        onIntentPrepared,
         onTextDelta,
         streamText,
         thinkingLevel,
@@ -101,6 +106,29 @@ export async function runBackendGenerationTask(
     dependencies: GenerationTaskDependencies = defaultDependencies,
 ) {
     throwIfAborted(signal);
+    if (usesLiteSystemModel(config)) {
+        if (mode === "image") {
+            if (referenceVideos.length || referenceAudios.length) throw new Error("影策图片生成暂不支持视频或音频参考");
+            const { task } = await runYingceImageGeneration({ config, prompt, projectId, metadata, signal, referenceImages, mask, onIntentPrepared });
+            onTaskUpdate?.(task);
+            return parseBackendGenerationResult(task);
+        }
+        if (mode === "audio" && usesLiteSynchronousAudioModel(config)) {
+            if (referenceImages.length || referenceVideos.length || referenceAudios.length || mask) throw new Error("影策语音合成暂不支持参考媒体");
+            const { task } = await runYingceAudioGeneration({ config, prompt, projectId, metadata, signal, onIntentPrepared });
+            onTaskUpdate?.(task);
+            return parseBackendGenerationResult(task);
+        }
+        if (mode === "text") {
+            if (referenceVideos.length || referenceAudios.length || mask) throw new Error("影策文本暂不支持视频、音频或蒙版参考");
+            const prepared = await yingceTextMessagesWithImages(prompt, textHistory, referenceImages);
+            const { task, result } = await runYingceTextGeneration({ config, prompt, messages: prepared.messages, expectedScope: prepared.scope, projectId, metadata, signal, onIntentPrepared });
+            onTaskUpdate?.(task);
+            if (result.content) onTextDelta?.(result.content);
+            return parseBackendGenerationResult(task);
+        }
+        if (mode !== "video" && mode !== "audio") throw new Error("该影策系统模型的生成流程尚未接入，请选择其他渠道");
+    }
     assertClientPromptLimit(mode, prompt, config, metadata);
     assertBackendRuntimeConfigured(config, mode);
     const prepared = await prepareGenerationReferences({ config, mode, referenceImages, referenceVideos, referenceAudios, mask });
@@ -116,6 +144,37 @@ export async function runBackendGenerationTask(
 // 后端自动回填负责，不能让页面 mutation 一直等待供应商完成。
 export async function submitBackendGenerationTask(options: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies = defaultDependencies): Promise<GenerationTask> {
     throwIfAborted(options.signal);
+    if (usesLiteSystemModel(options.config)) {
+        if (options.mode === "image") {
+            if (options.referenceVideos?.length || options.referenceAudios?.length) throw new Error("影策图片生成暂不支持视频或音频参考");
+            const { task } = await runYingceImageGeneration(options);
+            options.onTaskUpdate?.(task);
+            return task;
+        }
+        if (options.mode === "audio" && usesLiteSynchronousAudioModel(options.config)) {
+            if (options.referenceImages?.length || options.referenceVideos?.length || options.referenceAudios?.length || options.mask) throw new Error("影策语音合成暂不支持参考媒体");
+            const { task } = await runYingceAudioGeneration(options);
+            options.onTaskUpdate?.(task);
+            return task;
+        }
+        if (options.mode === "text") {
+            if (options.referenceVideos?.length || options.referenceAudios?.length || options.mask) throw new Error("影策文本暂不支持视频、音频或蒙版参考");
+            const prepared = await yingceTextMessagesWithImages(options.prompt, options.textHistory || [], options.referenceImages || []);
+            const { task } = await runYingceTextGeneration({
+                config: options.config,
+                prompt: options.prompt,
+                messages: prepared.messages,
+                expectedScope: prepared.scope,
+                projectId: options.projectId,
+                metadata: options.metadata,
+                signal: options.signal,
+                onIntentPrepared: options.onIntentPrepared,
+            });
+            options.onTaskUpdate?.(task);
+            return task;
+        }
+        if (options.mode !== "video" && options.mode !== "audio") throw new Error("该影策系统模型的生成流程尚未接入，请选择其他渠道");
+    }
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     assertBackendRuntimeConfigured(options.config, options.mode);
     const prepared = await prepareGenerationReferences(options);
@@ -138,6 +197,7 @@ type BackendToolGenerationOptions = {
 // 报价和执行复用完全相同的任务协议，准备阶段不提交模型任务。
 export function prepareBackendToolGenerationTask(options: BackendToolGenerationOptions): CreateTaskInput {
     throwIfAborted(options.signal);
+    if (usesLiteSystemModel(options.config)) throw new Error("此流程暂不支持影策系统模型，请选择其他渠道");
     const logicalModelId = logicalModelIDForConfig(options.config);
     const requestConfig = resolveModelRequestConfig(options.config, options.config.model);
     const capability = modelCapabilityConfigFor(options.config, requestConfig.model).text;
@@ -176,6 +236,15 @@ export function prepareBackendToolGenerationTask(options: BackendToolGenerationO
 }
 
 export async function runBackendToolGenerationTask(options: BackendToolGenerationOptions): Promise<ToolResponseResult> {
+    if (usesLiteSystemModel(options.config)) {
+        const hasMedia = options.messages.some((message) => !("type" in message) && message.role !== "tool" && Array.isArray(message.content) && message.content.some((part) => part.type !== "text"));
+        if (hasMedia) throw new Error("影策助手参考媒体暂不可用，请移除后重试");
+        assertAgentExchangeBudget(options.messages, options.tools, options.config.systemPrompt || "", modelCapabilityConfigFor(options.config, options.config.model).text);
+        const { task, result } = await runYingceTextGeneration({ config: options.config, prompt: options.prompt, messages: options.messages, tools: options.tools, toolChoice: options.toolChoice, metadata: options.metadata, signal: options.signal });
+        options.onTaskCreated?.(task);
+        if (result.content) options.onDelta?.(result.content);
+        return result;
+    }
     const task = await createGenerationTask(prepareBackendToolGenerationTask(options));
     options.onTaskCreated?.(task);
     const completed = await waitForGenerationTask(task.id, { signal: options.signal, initialTask: task, onTextDelta: options.onDelta });
@@ -192,6 +261,7 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
     throwIfAborted(options.signal);
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
+    if (usesLiteSystemModel(options.config)) return Promise.allSettled(Array.from({ length: count }, (_, batchIndex) => runBackendGenerationTask({ ...options, metadata: { ...options.metadata, batchIndex, batchCount: count } }, dependencies)));
     const prepared = await prepareGenerationReferences(options);
     throwIfAborted(options.signal);
     return Promise.allSettled(
@@ -206,6 +276,20 @@ export async function runBackendGenerationTaskBatch(options: BackendGenerationTa
             ),
         ),
     );
+}
+
+export function usesLiteSystemModel(config: AiConfig) {
+    if (!IS_LITE) return false;
+    const selection = decodeChannelModel(config.model);
+    const matches = selection ? config.channels.filter((channel) => channel.id === selection.channelId) : config.channels.filter((channel) => channel.models.includes(modelOptionName(config.model)));
+    if (selection?.channelId.startsWith("yingce-") && !matches.length) throw new Error("影策模型已不可用，请重新选择模型");
+    if (matches.length > 1 && matches.some((channel) => channel.yingceChannelId)) throw new Error("模型渠道无法确定，请重新选择模型");
+    return Boolean(matches[0]?.yingceChannelId);
+}
+
+function usesLiteSynchronousAudioModel(config: AiConfig) {
+    if (!usesLiteSystemModel(config)) return false;
+    return resolveModelRequestConfig(config, config.model).interfaceType === "openai-audio";
 }
 
 function generationOperation(options: BackendGenerationTaskOptions) {
@@ -223,6 +307,8 @@ function generationOperation(options: BackendGenerationTaskOptions) {
 }
 
 export function isGenerationTaskCancelled(error: unknown, signal?: AbortSignal) {
+    // Once dispatched, stopping the wait does not establish the remote outcome.
+    if (error instanceof YingceLiteError && (error.reason === "outcome_unknown" || error.outcomeUnknown === true)) return false;
     return signal?.aborted === true || (error instanceof Error && error.name === "AbortError");
 }
 
@@ -285,6 +371,7 @@ async function createBackendGenerationTask(options: BackendGenerationTaskOptions
 
 export async function prepareBackendGenerationTask(options: BackendGenerationTaskOptions): Promise<CreateTaskInput> {
     throwIfAborted(options.signal);
+    if (usesLiteSystemModel(options.config)) throw new Error("此流程暂不支持影策系统模型，请选择其他渠道");
     assertClientPromptLimit(options.mode, options.prompt, options.config, options.metadata);
     assertBackendRuntimeConfigured(options.config, options.mode);
     const prepared = await prepareGenerationReferences(options);

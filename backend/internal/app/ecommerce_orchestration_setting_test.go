@@ -24,7 +24,7 @@ func TestOrchestrationCatalogRejectsMissingVisionAndPrivateModel(t *testing.T) {
 	}
 }
 
-func TestOrchestrationSettingSaveIsAdminOnlyAndRequiresImageModels(t *testing.T) {
+func TestOrchestrationSettingReadOnlyForUsersAndSaveIsAdminOnly(t *testing.T) {
 	svc, db, _, _ := creationTestService(t)
 	admin := &model.User{ID: "admin", Username: "admin", Role: model.UserRoleAdmin, Status: model.UserStatusActive}
 	if err := db.Create(admin).Error; err != nil {
@@ -46,8 +46,8 @@ func TestOrchestrationSettingSaveIsAdminOnlyAndRequiresImageModels(t *testing.T)
 	if _, err := svc.UpdateEcommerceOrchestrationSetting(ordinary, setting); err == nil {
 		t.Fatal("ordinary user changed configuration")
 	}
-	if _, err := svc.EcommerceOrchestrationSetting(ordinary); err == nil {
-		t.Fatal("ordinary user read configuration")
+	if _, err := svc.EcommerceOrchestrationSetting(ordinary); err != nil {
+		t.Fatalf("ordinary user could not read the published configuration: %v", err)
 	}
 	if _, err := svc.UpdateEcommerceOrchestrationSetting(admin, setting); err != nil {
 		t.Fatal(err)
