@@ -30,7 +30,7 @@ func TestOrchestrationSettingReadOnlyForUsersAndSaveIsAdminOnly(t *testing.T) {
 	if err := db.Create(admin).Error; err != nil {
 		t.Fatal(err)
 	}
-	ordinary := &model.User{ID: "user", Role: model.UserRoleUser}
+	ordinary := &model.User{ID: "user", Role: model.UserRoleUser, Status: model.UserStatusActive}
 	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceChatCompletion), "text-test")
 	profile.Text.References.MaxImages = 1
 	if err := db.Model(&model.ChannelModel{}).Where("id = ?", "cm").Update("capability_config_json", mustEncodeModelCapabilityConfig(t, profile)).Error; err != nil {
