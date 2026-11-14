@@ -24,11 +24,7 @@ function sourceLocalStorageName(key: string, sourceScope: string) {
     return sourceKeyName(key, sourceScope);
 }
 
-export async function importLegacyWorkspaceState(
-    targetScope: string,
-    sourceScope: string,
-    dependencies: { storage?: LegacyStorage; localStorage?: LegacyLocalStorage } = {},
-): Promise<LegacyWorkspaceImportResult> {
+export async function importLegacyWorkspaceState(targetScope: string, sourceScope: string, dependencies: { storage?: LegacyStorage; localStorage?: LegacyLocalStorage } = {}): Promise<LegacyWorkspaceImportResult> {
     if (!targetScope || targetScope === "guest" || targetScope.length > 200) throw new Error("目标影策账号分区无效");
     if (!sourceScope || sourceScope.length > 200) throw new Error("旧版本地分区无效");
     const storage = dependencies.storage || localforage;

@@ -1,0 +1,211 @@
+{
+  "port": 8787,
+  "host": "127.0.0.1",
+  "doubao": {
+    "entryUrl": "https://www.doubao.com/chat/",
+    "hostnames": [
+      "www.doubao.com",
+      "doubao.com"
+    ],
+    "selectors": {
+      "composerHost": "[data-testid=\"chat_input_input\"]",
+      "promptEditor": "[data-testid=\"chat_input_input\"] .ProseMirror, [data-testid=\"chat_input_input\"] [contenteditable=\"true\"]",
+      "generateSubmit": "[data-testid=\"chat_input_send_button\"]",
+      "uploadButton": "[data-testid=\"upload_file_button\"]",
+      "fileInput": "input[type=\"file\"]",
+      "loginButtonMarker": "[data-testid=\"to_login_button\"]",
+      "chatStream": "[data-testid=\"message-list\"], [data-message-id]",
+      "productVideo": "[class*=\"block-video\"] video, [class*=\"block-video\"] video source, video",
+      "actionbarControl": "[data-input-engine-actionbar-control-key]"
+    },
+    "endpoints": {
+      "completion": [
+        "/samantha/chat/completion",
+        "/alice/chat/completion",
+        "/chat/completion"
+      ],
+      "chainSingle": "/im/chain/single",
+      "playInfo": "/samantha/video/get_play_info"
+    },
+    "capture": {
+      "chainSuppressMs": 10000,
+      "domHoldMs": 5000,
+      "baselineDelayMs": 3000,
+      "taskTimeoutMs": 600000,
+      "pollIntervalMs": 5000,
+      "confirmTimeoutMs": 20000,
+      "confirmPollMs": 1000,
+      "videoMinCaptureMs": 15000
+    },
+    "idleEvictMs": 600000
+  },
+  "patch30": {
+    "enabled": false,
+    "targetDuration": 30,
+    "targetModel": "seedance_v2.5",
+    "cameraMovement": "fixed",
+    "skillPackFake": true
+  },
+  "models": [
+    {
+      "id": "seedance_2.0_mini",
+      "label": "Seedance 2.0 Mini (免费·豆包网页驱动)",
+      "capabilities": [
+        "video"
+      ],
+      "durations": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "default_duration": 10,
+      "ratios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "supports_reference_images": true,
+      "max_reference_images": 10,
+      "note": "免费档。桥会按任务自动点选模型与比例（actionbar 控件）",
+      "duration_range": {
+        "min": 4,
+        "max": 15,
+        "step": 1
+      }
+    },
+    {
+      "id": "seedance_2.0_fast",
+      "label": "Seedance 2.0 Fast (免费·豆包网页驱动)",
+      "capabilities": [
+        "video"
+      ],
+      "durations": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "default_duration": 10,
+      "ratios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "21:9"
+      ],
+      "supports_reference_images": true,
+      "max_reference_images": 10,
+      "note": "免费档。桥会按任务自动点选模型与比例；未选中时沿用页面当前值",
+      "duration_range": {
+        "min": 4,
+        "max": 15,
+        "step": 1
+      }
+    },
+    {
+      "id": "doubao_image_1.0",
+      "label": "Seedream 5.0 Flash (免费·豆包网页驱动)",
+      "capabilities": [
+        "image"
+      ],
+      "ratios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "2:3",
+        "3:2"
+      ],
+      "supports_reference_images": true,
+      "max_reference_images": 10,
+      "note": "免费档·专业快速（默认）。走豆包「图像生成」技能；模型与比例由桥按任务点选"
+    },
+    {
+      "id": "doubao_image_5.5",
+      "label": "Seedream 5.5 (免费·豆包网页驱动)",
+      "capabilities": [
+        "image"
+      ],
+      "ratios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "2:3",
+        "3:2"
+      ],
+      "supports_reference_images": true,
+      "max_reference_images": 10,
+      "note": "免费档·旗舰生图。细节与光影最强"
+    },
+    {
+      "id": "doubao_image_4.5",
+      "label": "Seedream 4.5 (免费·豆包网页驱动)",
+      "capabilities": [
+        "image"
+      ],
+      "ratios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "2:3",
+        "3:2"
+      ],
+      "supports_reference_images": true,
+      "max_reference_images": 10,
+      "note": "免费档·日常生成。速度与质量均衡"
+    },
+    {
+      "id": "doubao_image_4.0",
+      "label": "Seedream 4.0 (免费·豆包网页驱动)",
+      "capabilities": [
+        "image"
+      ],
+      "ratios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4",
+        "2:3",
+        "3:2"
+      ],
+      "supports_reference_images": true,
+      "max_reference_images": 10,
+      "note": "免费档·基础生图。最快出图"
+    },
+    {
+      "id": "doubao_text_1.0",
+      "label": "豆包文本 (免费·豆包网页驱动)",
+      "capabilities": [
+        "text"
+      ],
+      "note": "免费档。豆包网页纯文本对话；每次新建会话（历史不回放），不支持工具调用"
+    }
+  ]
+}

@@ -6,9 +6,16 @@ function memoryStore(seed: Record<string, unknown> = {}) {
     const values = new Map(Object.entries(seed));
     return {
         values,
-        async keys() { return [...values.keys()]; },
-        async getItem<T>(key: string) { return (values.get(key) as T | undefined) ?? null; },
-        async setItem<T>(key: string, value: T) { values.set(key, value); return value; },
+        async keys() {
+            return [...values.keys()];
+        },
+        async getItem<T>(key: string) {
+            return (values.get(key) as T | undefined) ?? null;
+        },
+        async setItem<T>(key: string, value: T) {
+            values.set(key, value);
+            return value;
+        },
     };
 }
 
@@ -16,10 +23,18 @@ function memoryLocalStorage(seed: Record<string, string> = {}) {
     const values = new Map(Object.entries(seed));
     return {
         values,
-        get length() { return values.size; },
-        key(index: number) { return [...values.keys()][index] ?? null; },
-        getItem(key: string) { return values.get(key) ?? null; },
-        setItem(key: string, value: string) { values.set(key, value); },
+        get length() {
+            return values.size;
+        },
+        key(index: number) {
+            return [...values.keys()][index] ?? null;
+        },
+        getItem(key: string) {
+            return values.get(key) ?? null;
+        },
+        setItem(key: string, value: string) {
+            values.set(key, value);
+        },
     };
 }
 

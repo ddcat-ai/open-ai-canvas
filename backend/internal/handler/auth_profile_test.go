@@ -123,7 +123,9 @@ func TestDesktopAuthorizationIssuesAndExchangesBearerSession(t *testing.T) {
 		Data struct {
 			Session   string `json:"session"`
 			ExpiresIn int    `json:"expiresIn"`
-			User      struct{ ID string `json:"id"` } `json:"user"`
+			User      struct {
+				ID string `json:"id"`
+			} `json:"user"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(token.Body.Bytes(), &sessionEnvelope); err != nil || sessionEnvelope.Data.Session == "" || sessionEnvelope.Data.ExpiresIn <= 0 || sessionEnvelope.Data.User.ID != "profile-user" {

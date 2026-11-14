@@ -1,0 +1,25 @@
+{
+  "name": "doubao-bridge",
+  "version": "1.0.0",
+  "description": "豆包网页驱动桥服务（dola-pool 协议形态，供 open-ai-canvas doubao-web 插件对接）",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node test/patch30.test.js && node test/results.test.js && node test/watermark.test.js && node test/fplay.test.js && node test/chain-meta.test.js && node test/quota-ledger.test.js && node test/capture-guard.test.js && node test/browser-host.test.js && node test/task-row.test.js && node test/image-count.test.js && node test/conversation-cleanup.test.js && node test/conversation-chain.test.js && node test/store-recovery.test.js && node test/task-retention.test.js && node test/cors.test.js",
+    "test:patch30": "node test/patch30.test.js",
+    "test:results": "node test/results.test.js",
+    "test:watermark": "node test/watermark.test.js",
+    "test:fplay": "node test/fplay.test.js",
+    "test:chainmeta": "node test/chain-meta.test.js",
+    "test:browser-host": "node test/browser-host.test.js",
+    "test:task-row": "node test/task-row.test.js",
+    "test:image-count": "node test/image-count.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

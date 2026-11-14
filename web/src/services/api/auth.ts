@@ -508,13 +508,11 @@ export function getAuthSession(options: { refresh?: boolean } = {}) {
     if (!refresh && authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
     if (!refresh && authSessionRequest) return authSessionRequest;
     const generation = authSessionGeneration;
-    const request = http
-        .get<AuthSessionPayload>("/auth/session", { session: "public" })
-        .then((payload) => {
-            if (generation !== authSessionGeneration) throw new DOMException("认证会话已变化", "AbortError");
-            authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
-            return payload;
-        });
+    const request = http.get<AuthSessionPayload>("/auth/session", { session: "public" }).then((payload) => {
+        if (generation !== authSessionGeneration) throw new DOMException("认证会话已变化", "AbortError");
+        authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
+        return payload;
+    });
     let sharedRequest: Promise<AuthSessionPayload>;
     sharedRequest = request.finally(() => {
         if (authSessionRequest === sharedRequest) authSessionRequest = null;

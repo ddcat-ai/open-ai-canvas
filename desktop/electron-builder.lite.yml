@@ -1,0 +1,28 @@
+# 精简版（lite）打包配置：extends 主配置，仅覆盖分发标识与品牌资产。
+# 白标交付：改本文件 appId/productName/shortcutName/artifactName/publish +
+# build/icon-lite.png + web/.env.lite 品牌串，一条命令出包，见 docs/LITE-EDITION.md。
+extends: ./electron-builder.yml
+appId: com.peekreel.lite
+productName: PeekReel Lite
+copyright: Copyright © 2026 PeekReel Lite. 基于 MIT 协议的影策（open-ai-canvas）
+
+win:
+  icon: build/icon-lite.png
+
+# 运行时 AUMID 必须与上面 appId 逐字符相同，否则任务栏图标退化成系统默认白纸。
+# main.js 优先读 package.json 的 peekreel.appUserModelId，这里通过 extraMetadata 覆盖。
+# ⚠ 改 appId 时必须同步改这一段。
+extraMetadata:
+  peekreel:
+    edition: lite
+    appUserModelId: com.peekreel.lite
+    updateFeed: https://peekreel.peekcart.com/updates/lite/
+
+nsis:
+  shortcutName: PeekReel Lite
+  artifactName: PeekReel-Lite-Setup-${version}-${arch}.${ext}
+  include: build/installer-default-dir-lite.nsh
+
+publish:
+  - provider: generic
+    url: https://peekreel.peekcart.com/updates/lite/

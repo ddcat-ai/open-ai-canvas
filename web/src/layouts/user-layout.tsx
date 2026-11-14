@@ -8,7 +8,6 @@ import { useAgentPanelDock } from "@/components/canvas/use-agent-panel-dock";
 import { cn } from "@/lib/utils";
 import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
-import { preloadWorkspaceNavigationPages } from "@/lib/workspace-route-modules";
 import { useGlobalAgentStore } from "@/stores/use-global-agent-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { IS_LITE } from "@/lib/edition";
@@ -45,23 +44,25 @@ export default function UserLayout({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!IS_LITE || !userId || !hydrated) return;
         let active = true;
-        void import("@/services/api/yingce-lite-recovery").then(({ recoverYingceGenerations }) => recoverYingceGenerations()).then((result) => {
-            if (!active) return;
-            if (result.restored) void queryClient.invalidateQueries();
-            if (result.unknown || result.failures.length) notification.warning({
-                message: "部分生成结果需要核对",
-                description: `有 ${result.unknown} 条请求状态未知，${result.failures.length} 条结果未能恢复到本地。请先核对结果和本地存储，再决定是否手动发起新请求。`,
-                duration: 0,
+        void import("@/services/api/yingce-lite-recovery")
+            .then(({ recoverYingceGenerations }) => recoverYingceGenerations())
+            .then((result) => {
+                if (!active) return;
+                if (result.restored) void queryClient.invalidateQueries();
+                if (result.unknown || result.failures.length)
+                    notification.warning({
+                        message: "部分生成结果需要核对",
+                        description: `有 ${result.unknown} 条请求状态未知，${result.failures.length} 条结果未能恢复到本地。请先核对结果和本地存储，再决定是否手动发起新请求。`,
+                        duration: 0,
+                    });
+            })
+            .catch(() => {
+                if (active) notification.error({ message: "无法读取本地生成恢复记录", description: "请检查本地存储，保留数据并联系支持人员。", duration: 0 });
             });
-        }).catch(() => {
-            if (active) notification.error({ message: "无法读取本地生成恢复记录", description: "请检查本地存储，保留数据并联系支持人员。", duration: 0 });
-        });
-        return () => { active = false; };
+        return () => {
+            active = false;
+        };
     }, [userId, hydrated, notification, queryClient]);
-
-    useEffect(() => {
-        if (userId) preloadWorkspaceNavigationPages();
-    }, [userId]);
 
     useLayoutEffect(() => {
         // Ant Design 浮层挂载在 body，必须用路由级标记隔离用户工作台与画布编辑器、运营后台。

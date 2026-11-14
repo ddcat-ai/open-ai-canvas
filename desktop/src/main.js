@@ -307,7 +307,8 @@ async function startApp() {
     }
 
     const userData = app.getPath("userData");
-    const localWebPort = resolveLocalPort(userData, config.localWebPort);
+    const smokePort = smokeTest && process.env.YINGCE_SMOKE_PORT ? Number(process.env.YINGCE_SMOKE_PORT) : undefined;
+    const localWebPort = resolveLocalPort(userData, smokePort ?? config.localWebPort);
     if (isLite && !smokeTest) return startLiteApp(resources, localWebPort);
     const currentBackend = new BackendProcess(resources.backendExe, path.join(userData, "data"), path.join(userData, "logs"), {
         // 后端崩溃自愈（审计补强）：此前后端一死就静默失效到重启应用，而桥仍正常应答

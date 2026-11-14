@@ -14,7 +14,8 @@ export function prepareYingceTextRequest(config: AiConfig, textWire: string | un
         return { providerPath: "/messages", body: { ...toClaudeBody(config, messages, tools), ...(tools.length ? { tool_choice: choice } : {}) }, textWire };
     }
     const input = withSystemMessage(config, messages);
-    if (textWire === "chat-completion") return { providerPath: "/chat/completions", body: { model: config.model, messages: toChatCompletionMessages(input), stream: false, ...(tools.length ? { tools, tool_choice: toChatCompletionToolChoice(toolChoice) } : {}) }, textWire };
+    if (textWire === "chat-completion")
+        return { providerPath: "/chat/completions", body: { model: config.model, messages: toChatCompletionMessages(input), stream: false, ...(tools.length ? { tools, tool_choice: toChatCompletionToolChoice(toolChoice) } : {}) }, textWire };
     return { providerPath: "/responses", body: { model: config.model, input: toResponseInput(input), stream: false, ...(tools.length ? { tools: tools.map(toResponseTool), tool_choice: toolChoice } : {}) }, textWire };
 }
 

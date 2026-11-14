@@ -25,14 +25,26 @@ export function parseDesktopAuthorizationRequest(search: string): DesktopAuthori
     const method = one("code_challenge_method");
     const state = one("state");
     let redirect: URL;
-    try { redirect = new URL(redirectUri); }
-    catch { throw new Error("桌面登录回调地址无效"); }
+    try {
+        redirect = new URL(redirectUri);
+    } catch {
+        throw new Error("桌面登录回调地址无效");
+    }
     const port = Number(redirect.port);
     if (
-        clientId !== DESKTOP_CLIENT_ID || redirect.protocol !== "http:" || redirect.hostname !== "127.0.0.1" ||
-        redirect.username || redirect.password || redirect.pathname !== "/oauth/callback" ||
-        redirect.search || redirect.hash || !Number.isInteger(port) || port < 1 || port > 65535
-    ) throw new Error("桌面登录请求无效");
+        clientId !== DESKTOP_CLIENT_ID ||
+        redirect.protocol !== "http:" ||
+        redirect.hostname !== "127.0.0.1" ||
+        redirect.username ||
+        redirect.password ||
+        redirect.pathname !== "/oauth/callback" ||
+        redirect.search ||
+        redirect.hash ||
+        !Number.isInteger(port) ||
+        port < 1 ||
+        port > 65535
+    )
+        throw new Error("桌面登录请求无效");
     if (method !== "S256" || !/^[A-Za-z0-9_-]{43}$/.test(codeChallenge)) throw new Error("桌面登录校验参数无效");
     if (!/^[A-Za-z0-9_-]{43,128}$/.test(state)) throw new Error("桌面登录 state 无效");
     return { clientId: DESKTOP_CLIENT_ID, redirectUri, codeChallenge, codeChallengeMethod: "S256", state };

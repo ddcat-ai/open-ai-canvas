@@ -5,13 +5,13 @@ import (
 
 	"yingce/backend/internal/model"
 
-	"gorm.io/gorm/clause"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (r *Repository) CreateDesktopAuthorizationCodeForUser(expected *model.User, code *model.DesktopAuthorizationCode) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-	if expected == nil || code.UserID != expected.ID {
+		if expected == nil || code.UserID != expected.ID {
 			return ErrProfileAuthorization
 		}
 		if err := lockProfileUser(tx, expected.ID); err != nil {

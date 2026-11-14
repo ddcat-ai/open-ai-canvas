@@ -151,6 +151,14 @@ func (s *Service) Login(req LoginRequest) (*AuthSessionResult, error) {
 	return s.authDomain().Login(req)
 }
 
+func (s *Service) AuthorizeDesktop(user *model.User, req DesktopAuthorizationRequest) (*DesktopAuthorizationResult, error) {
+	return s.authDomain().AuthorizeDesktop(user, req)
+}
+
+func (s *Service) ExchangeDesktopAuthorizationCode(req DesktopTokenRequest, contexts ...LoginContext) (*AuthSessionResult, error) {
+	return s.authDomain().ExchangeDesktopAuthorizationCode(req, contexts...)
+}
+
 func (s *Service) LoginRateLimitSubject(account string) (string, error) {
 	return s.authDomain().LoginRateLimitSubject(account)
 }

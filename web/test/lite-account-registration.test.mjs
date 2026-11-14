@@ -3,71 +3,66 @@ import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 
 const read = (name) => readFileSync(new URL(`../../desktop/activation/${name}`, import.meta.url), "utf8");
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test("registration explains disabled and unavailable settings after switching tabs", async () => {
+function createActivationWindow(desktop) {
     const dom = new Window({ url: "http://localhost/peekreel-activation" });
-    let resolveSettings;
-    let calls = 0;
-    dom.desktop = { yingceRequest: async () => {
-        calls++;
-        if (calls === 1) return new Promise((resolve) => { resolveSettings = resolve; });
-        return { ok: true, data: { firstUser: false, registrationEnabled: false } };
-    } };
+    dom.desktop = desktop;
+    const html = read("lite.html").replace(/<script src="\/peekreel-activation\/lite\.js"><\/script>/, "");
+    dom.document.write(html);
+    new Function("window", "document", "globalThis", read("lite.js"))(dom, dom.document, dom);
+    return dom;
+}
+
+test("activation starts PKCE login and shows the returned error", async () => {
+    let finishLogin;
+    const calls = [];
+    const dom = createActivationWindow({
+        yingceRequest: async (method) => {
+            calls.push(method);
+            if (method === "beginLogin") return new Promise((resolve) => (finishLogin = resolve));
+            return { ok: true, data: null };
+        },
+    });
+    const byId = (id) => dom.document.getElementById(id);
+
     try {
-        dom.document.write(read("lite.html"));
-        dom.eval(read("lite-policy.js"));
-        dom.eval(read("lite.js"));
-        const byId = (id) => dom.document.getElementById(id);
-        byId("register-tab").click();
-        expect(byId("status").textContent).toContain("正在获取注册设置");
-        expect(byId("reload").disabled).toBe(true);
-        resolveSettings({ ok: false, error: { message: "网络不可用" } });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(byId("status").textContent).toBe("网络不可用");
-        expect(byId("reload").hidden).toBe(false);
-        expect(byId("reload").disabled).toBe(false);
-        byId("login-tab").click();
-        byId("register-tab").click();
-        expect(byId("status").textContent).toBe("网络不可用");
-        byId("reload").click();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(byId("status").textContent).toContain("未开放注册");
-        expect(byId("submit").disabled).toBe(true);
-        byId("login-tab").click();
-        byId("register-tab").click();
-        expect(byId("status").textContent).toContain("未开放注册");
-        expect(calls).toBe(2);
+        byId("login").click();
+        expect(byId("login").disabled).toBe(true);
+        expect(byId("cancel").hidden).toBe(false);
+        expect(byId("status").textContent).toBe("正在打开影策控制台…");
+
+        finishLogin({ ok: false, error: { message: "登录未完成" } });
+        await tick();
+        expect(byId("status").textContent).toBe("登录未完成");
+        expect(byId("login").disabled).toBe(false);
+        expect(byId("cancel").hidden).toBe(true);
+        expect(calls).toContain("beginLogin");
     } finally {
         dom.happyDOM.abort();
     }
 });
 
-test("registration settings can be refreshed after the server opens registration", async () => {
-    const dom = new Window({ url: "http://localhost/peekreel-activation" });
-    let calls = 0;
-    dom.desktop = { yingceRequest: async () => {
-        calls++;
-        return { ok: true, data: calls === 1
-            ? { firstUser: false, registrationEnabled: false, emailRegistration: true }
-            : { firstUser: false, registrationEnabled: true, emailRegistration: true } };
-    } };
-    try {
-        dom.document.write(read("lite.html"));
-        dom.eval(read("lite-policy.js"));
-        dom.eval(read("lite.js"));
-        const byId = (id) => dom.document.getElementById(id);
-        byId("register-tab").click();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(byId("submit").disabled).toBe(true);
-        expect(byId("reload").hidden).toBe(false);
+test("activation offers offline resume only after finding a cached account", async () => {
+    const calls = [];
+    const dom = createActivationWindow({
+        yingceRequest: async (method) => {
+            calls.push(method);
+            if (method === "cachedAccount") return { ok: true, data: { id: "user-1", displayName: "本地账号" } };
+            return { ok: true, data: null };
+        },
+    });
+    const byId = (id) => dom.document.getElementById(id);
 
-        byId("reload").click();
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        expect(calls).toBe(2);
-        expect(byId("submit").disabled).toBe(false);
-        const methodOptions = dom.document.querySelector('[name="method"]').options;
-        expect(methodOptions.length).toBe(1);
-        expect(methodOptions[0].value).toBe("email");
+    try {
+        await tick();
+        expect(byId("offline").hidden).toBe(false);
+        expect(byId("status").textContent).toContain("本地账号");
+
+        byId("offline").click();
+        await tick();
+        expect(calls).toEqual(["cachedAccount", "continueOffline"]);
+        expect(byId("status").textContent).toBe("正在打开本地工作区…");
     } finally {
         dom.happyDOM.abort();
     }

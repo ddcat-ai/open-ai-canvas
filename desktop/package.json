@@ -6,8 +6,16 @@
   "author": "PeekReel",
   "license": "MIT",
   "main": "src/main.js",
+  "scripts": {
+    "pack:lite": "electron-builder --config electron-builder.lite.yml --dir",
+    "dist:lite": "electron-builder --config electron-builder.lite.yml"
+  },
   "dependencies": {
     "electron-updater": "^6.3.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
   },
   "peekreel": {
     "appUserModelId": "com.peekreel.lite",

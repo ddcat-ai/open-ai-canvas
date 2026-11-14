@@ -204,19 +204,22 @@ export async function loadSystemChannels(previous: ModelChannel[], options: { li
     const localCatalog = local.status === "fulfilled" ? modelCatalogChannels(local.value) : previous.filter((channel) => channel.scope === "system" && !channel.yingceChannelId);
     const localChannels = localCatalog.filter((channel) => !channel.yingceChannelId);
     const localRemoteByID = new Map(localCatalog.filter((channel) => channel.yingceChannelId).map((channel) => [channel.yingceChannelId!, channel]));
-    const remoteChannels = remote.status === "fulfilled"
-        ? modelCatalogChannels(remote.value).flatMap((channel) => {
-              const localMirror = localRemoteByID.get(channel.id);
-              if (!localMirror) return [];
-              return [{
-                  ...channel,
-                  id: localMirror.id,
-                  baseUrl: `/api/ai/system/${encodeURIComponent(channel.id)}`,
-                  yingceChannelId: channel.id,
-                  modelCosts: (channel.modelCosts || []).map((model) => ({ ...model, channelId: localMirror.id })),
-              }];
-          })
-        : [];
+    const remoteChannels =
+        remote.status === "fulfilled"
+            ? modelCatalogChannels(remote.value).flatMap((channel) => {
+                  const localMirror = localRemoteByID.get(channel.id);
+                  if (!localMirror) return [];
+                  return [
+                      {
+                          ...channel,
+                          id: localMirror.id,
+                          baseUrl: `/api/ai/system/${encodeURIComponent(channel.id)}`,
+                          yingceChannelId: channel.id,
+                          modelCosts: (channel.modelCosts || []).map((model) => ({ ...model, channelId: localMirror.id })),
+                      },
+                  ];
+              })
+            : [];
     const localIds = new Set(localChannels.map((channel) => channel.id));
     if (remoteChannels.some((channel) => localIds.has(channel.id))) throw new Error("影策与本地渠道标识冲突，请联系支持人员");
     return [...localChannels, ...remoteChannels];

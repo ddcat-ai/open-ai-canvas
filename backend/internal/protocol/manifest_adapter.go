@@ -479,6 +479,10 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 			if reference.DataURL == "" {
 				reference.DataURL = firstString(typed, "data_url", "b64_json")
 			}
+			if reference.DataURL == "" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(reference.URL)), "data:") {
+				reference.DataURL = strings.TrimSpace(reference.URL)
+				reference.URL = ""
+			}
 			// OpenAI / Ark 等渠道常直接返回裸 b64_json；声明式结果下载要求 data URL。
 			reference.DataURL = normalizeManifestInlineDataURL(reference.DataURL, reference.Kind, firstString(typed, "output_format", "mime_type", "mimeType"))
 			if reference.URL != "" || reference.DataURL != "" {

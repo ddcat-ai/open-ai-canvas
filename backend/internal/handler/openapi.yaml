@@ -4719,6 +4719,8 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
   /ai/system/{channelId}/{providerPath}:
+    x-short-route-pattern: "/api/{channelId}/*"
+    x-auth-schemes: [sessionCookie, bearerSession]
     parameters:
       - in: path
         name: channelId
@@ -4806,6 +4808,10 @@ components:
       type: apiKey
       in: cookie
       name: open_ai_canvas_session
+    bearerSession:
+      type: http
+      scheme: bearer
+      description: Opaque session returned to a desktop client after PKCE authorization.
   schemas:
     CreationHistoryMessage:
       type: object

@@ -115,7 +115,7 @@ export async function requestYingceLegacyWorkspaceImport() {
     if (!value || typeof value.enabled !== "boolean" || (value.enabled && (typeof value.sourceScope !== "string" || !value.sourceScope))) {
         throw new Error("旧版本地资料导入状态无效");
     }
-    return { enabled: value.enabled, sourceScope: value.enabled ? value.sourceScope as string : "" };
+    return { enabled: value.enabled, sourceScope: value.enabled ? (value.sourceScope as string) : "" };
 }
 
 function isCatalogChannel(value: PublicChannelCatalog) {

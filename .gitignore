@@ -1,6 +1,8 @@
 .next/
 out/
 node_modules/
+/desktop/release/
+/desktop/resources/
 open-storyboard-canvas/
 docs/*
 !docs/design/

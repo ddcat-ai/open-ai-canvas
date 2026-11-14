@@ -89,8 +89,12 @@ func TestDesktopAuthorizationExpires(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&model.DesktopAuthorizationCode{}).Where("code_hash = ?", HashToken(issued.Code)).Update("expires_at", time.Now().Add(-time.Second)).Error; err != nil {
-		t.Fatal(err)
+	updated := db.Model(&model.DesktopAuthorizationCode{}).Where("code_hash = ?", HashToken(issued.Code)).Update("expires_at", time.Now().UTC().Add(-time.Second))
+	if updated.Error != nil {
+		t.Fatal(updated.Error)
+	}
+	if updated.RowsAffected != 1 {
+		t.Fatalf("expected to expire one authorization code, got %d", updated.RowsAffected)
 	}
 	_, err = svc.ExchangeDesktopAuthorizationCode(DesktopTokenRequest{ClientID: DesktopClientID, RedirectURI: "http://127.0.0.1:49153/oauth/callback", Code: issued.Code, Verifier: verifier})
 	if err == nil || errors.Is(err, gorm.ErrRecordNotFound) {

@@ -20,6 +20,14 @@ import (
 	"yingce/backend/internal/protocol"
 )
 
+func requestedImageCount(raw string) int {
+	count, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || count < 1 {
+		return 1
+	}
+	return count
+}
+
 func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRequest {
 	resolution := strings.TrimSpace(input.Config.VQuality)
 	if input.Mode == "image" {
@@ -49,6 +57,7 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		GenerateAudio:   parseBool(input.Config.VideoGenerateAudio, false),
 		Watermark:       parseBool(input.Config.VideoWatermark, false),
 		Operation:       firstNonEmpty(metadataString(input.Metadata, "videoEditOperation"), metadataString(input.Metadata, "videoOperation")),
+		Metadata:        input.Metadata,
 		// InterfaceType 让声明式插件宿主按协议线格式适配参考素材内容块
 		// （如 Anthropic Messages 用 type=image + source，不用 OpenAI image_url）。
 		InterfaceType: strings.TrimSpace(input.Config.InterfaceType),

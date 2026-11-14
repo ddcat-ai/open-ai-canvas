@@ -247,7 +247,9 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (mask) formData.set("mask", dataUrlToFile(mask));
 
     try {
-        const response = options?.imageRequest ? ((await options.imageRequest("/images/edits", formData)) as ImageApiResponse) : await imageChannelTransport(requestConfig).postForm<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { signal: options?.signal, headers: aiHeaders(requestConfig) });
+        const response = options?.imageRequest
+            ? ((await options.imageRequest("/images/edits", formData)) as ImageApiResponse)
+            : await imageChannelTransport(requestConfig).postForm<ImageApiResponse>(aiApiUrl(requestConfig, "/images/edits"), formData, { signal: options?.signal, headers: aiHeaders(requestConfig) });
         const images = parseImagePayload(response);
         return images;
     } catch (error) {
