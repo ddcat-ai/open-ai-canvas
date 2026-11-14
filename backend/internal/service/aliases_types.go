@@ -295,12 +295,14 @@ type (
 	PublicModelChannel                     = app.PublicModelChannel
 	PublicOSSSetting                       = app.PublicOSSSetting
 	PublicRegistrationSetting              = app.PublicRegistrationSetting
+	PublicTurnstileSetting                 = app.PublicTurnstileSetting
 	PublicRuntimeLimits                    = app.PublicRuntimeLimits
 	PublicRuntimePolicySetting             = app.PublicRuntimePolicySetting
 	RedeemBatchPage                        = app.RedeemBatchPage
 	RegisterRequest                        = app.RegisterRequest
 	RegisterTaskOutputRequest              = app.RegisterTaskOutputRequest
 	RegistrationSettingRequest             = app.RegistrationSettingRequest
+	TurnstileSettingRequest                = app.TurnstileSettingRequest
 	ReorderProjectUnitsRequest             = app.ReorderProjectUnitsRequest
 	ReplaceCharacterRepresentationsRequest = app.ReplaceCharacterRepresentationsRequest
 	ReplaceProjectUnitShotInput            = app.ReplaceProjectUnitShotInput

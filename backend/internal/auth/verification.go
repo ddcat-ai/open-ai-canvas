@@ -30,10 +30,12 @@ type VerificationTicket struct {
 	RetryAfter int    `json:"retryAfter"`
 }
 type VerificationConfirm struct {
-	LoginContext LoginContext `json:"-"`
-	Ticket       string       `json:"ticket"`
-	EmailCode    string       `json:"emailCode"`
-	SMSCode      string       `json:"smsCode"`
+	Context        context.Context `json:"-"`
+	LoginContext   LoginContext    `json:"-"`
+	Ticket         string          `json:"ticket"`
+	EmailCode      string          `json:"emailCode"`
+	SMSCode        string          `json:"smsCode"`
+	TurnstileToken string          `json:"turnstileToken"`
 }
 
 func (s *Service) verificationHash(value string) (string, error) {
@@ -295,6 +297,9 @@ func (s *Service) LoginVerification(req VerificationConfirm) (result *AuthSessio
 			err = s.recordLoginFailure(event, err)
 		}
 	}()
+	if err := s.VerifyTurnstile(req.Context, req.TurnstileToken, req.LoginContext.IP); err != nil {
+		return nil, err
+	}
 	if id, secret, ok := strings.Cut(req.Ticket, "."); ok && len(id) <= 36 && len(secret) == 64 {
 		candidate, lookupErr := s.repo.AuthVerification(id)
 		if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {

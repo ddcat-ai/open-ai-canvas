@@ -44,6 +44,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		req.LoginContext = loginRequestContext(c)
+		req.Context = c.Request.Context()
 		result, err := svc.Register(req)
 		if err != nil {
 			failService(c, err)
@@ -136,6 +137,7 @@ func RegisterAuthRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		req.LoginContext = loginRequestContext(c)
+		req.Context = c.Request.Context()
 		c.Set("login_audit_handled", true)
 		result, err := svc.Login(req)
 		if err != nil {
