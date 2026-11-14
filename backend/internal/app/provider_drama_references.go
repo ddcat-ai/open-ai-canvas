@@ -18,6 +18,7 @@ const dramaReferenceBindingsKey = "dramaReferenceBindings"
 var dramaReferenceProtocolLayouts = map[string]string{
 	string(model.ChannelInterfaceVolcengineArkVideo):          "content",
 	string(model.ChannelInterfaceVolcengineArkAgentPlanVideo): "content",
+	"volcengine-ark-seedance-25":                              "content",
 	string(model.ChannelInterfaceMiniMaxVideo):                "content",
 	"metaso-h3":        "content",
 	"legacy-ark-video": "content",

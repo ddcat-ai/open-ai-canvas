@@ -49,6 +49,7 @@ func TestProviderDramaReferenceOfficialPayloads(t *testing.T) {
 		{protocol: "newapi-channel-2", first: true, shift: true},
 		{protocol: "volcengine-ark-video", first: true},
 		{protocol: "volcengine-ark-agent-plan-video", first: true},
+		{protocol: "volcengine-ark-seedance-25", model: "doubao-seedance-2-5-260628"},
 		{protocol: "newapi-channel-1", first: true},
 		{protocol: "xai-video", model: "grok-imagine-video"},
 		{protocol: "agnes-video", model: "agnes-video-2.5"},

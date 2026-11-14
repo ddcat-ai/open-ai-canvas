@@ -183,6 +183,19 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
 		video.Resolutions = []string{"480p", "720p", "1080p"}
+	case model.ChannelInterfaceType("volcengine-ark-seedance-25"):
+		video.Operations = append(video.Operations, "reference_to_video", "audio_to_video")
+		video.References.MaxImages = 30
+		video.References.MaxVideos, video.References.MaxAudios = 10, 10
+		video.References.MaxImageBytes = 30 * 1024 * 1024
+		video.References.MaxVideoBytes, video.References.MaxAudioBytes = 200*1024*1024, 15*1024*1024
+		video.References.MaxVideoDuration, video.References.MaxAudioDuration = 30, 30
+		video.Duration = VideoDurationConfig{Selection: "range", Min: 4, Max: 30, Step: 1, Default: 5}
+		video.Ratios = []string{"adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}
+		video.DefaultRatio = "adaptive"
+		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
+		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
+		video.Resolutions = []string{"480p", "720p", "1080p"}
 	case model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2:
 		video.References.MaxVideos, video.References.MaxAudios = 3, 3
 		video.References.MaxVideoBytes, video.References.MaxAudioBytes = 200*1024*1024, 15*1024*1024
