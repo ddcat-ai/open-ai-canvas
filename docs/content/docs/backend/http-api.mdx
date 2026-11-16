@@ -622,6 +622,8 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`inten
 
 ## 用户任务计费与作品花费口径
 
+任务摘要的 `clientContext.assetTitle` 为生成时捕获的素材名称，来自 `input.metadata.assetTitle`（最多 200 字符）。画布提交图片、视频、音频时携带结果节点名称；素材入库优先使用该名称，否则使用提示词摘要。服务端恢复与浏览器入库遵循同一命名规则，已存在的素材名称不会被恢复重放覆盖。
+
 短剧的「按要求修改视频提示词」复用 `POST /api/tasks` 文本任务与文本事件流，任务 `projectId` 指向作品，费用计入作品花费。直接以作品 ID 创建的任务与关联画布任务均检查作品预算；预算不足返回 `reason=drama_budget_exhausted`。AI 输出仅为候选，用户确认后才通过原剧情段更新接口写入。
 
 任务列表与详情的 `billing` 同时返回预授权、实收与退回，前端不能再把 `amountMicrocredits` 当作扣费额：

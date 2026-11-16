@@ -127,6 +127,7 @@ export async function executeVideoGeneration({
                 referenceAudios: generationContext.referenceAudios,
                 signal: controller.signal,
                 metadata: {
+                    assetTitle: videoNode.title,
                     sourceNodeId: nodeId,
                     ...taskContext,
                     resolvedCharacterVersions: generationContext.resolvedCharacterVersions,
@@ -212,6 +213,7 @@ export async function executeAudioGeneration({
                 referenceAudios: generationContext.referenceAudios,
                 signal: controller.signal,
                 metadata: {
+                    assetTitle: audioNode.title,
                     sourceNodeId: nodeId,
                     ...taskContext,
                     ...(sourceNode?.metadata?.audioVoiceBindings?.length ? { audioVoiceBindings: sourceNode.metadata.audioVoiceBindings } : {}),

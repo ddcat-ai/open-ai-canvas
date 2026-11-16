@@ -70,6 +70,7 @@ export type GenerationTask = {
         status: TaskBillingStatus;
     };
     clientContext?: {
+        assetTitle?: string;
         conversationId?: string;
         messageId?: string;
         nodeId?: string;

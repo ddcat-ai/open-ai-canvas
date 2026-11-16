@@ -28,10 +28,30 @@ function card(selected: boolean, selectionMode: boolean) {
     const onOpen = mock(() => {});
     const element = AssetCard({ asset, selected, selectionMode, onSelect, onOpen, onEdit: () => {}, onCopy: () => {}, onDownload: () => {}, onDelete: () => {}, folderOptions: [], onMoveToFolder: () => {} });
     const [cover, body] = element.props.children;
-    return { onSelect, onOpen, cover: AssetCover(cover.props).props.children[0], body };
+    return { onSelect, onOpen, cover: AssetCover(cover.props).props.children[0], body: body.props.children[0] };
 }
 
 describe("素材库分页多选", () => {
+    test.each(["image", "video", "audio", "model", "text", "entity"] as const)("%s 素材有独立名称编辑入口", (kind) => {
+        const onRename = mock(() => {});
+        const element = AssetCard({
+            asset: { ...asset, kind, data: kind === "entity" ? { definition: {}, visualStatus: "draft" } : asset.data } as Asset,
+            selected: false,
+            onSelect: () => {},
+            onOpen: () => {},
+            onEdit: () => {},
+            onRename,
+            onCopy: () => {},
+            onDownload: () => {},
+            onDelete: () => {},
+            folderOptions: [],
+            onMoveToFolder: () => {},
+        });
+        const nameButton = element.props.children[1].props.children[1];
+        expect(nameButton.props["aria-label"]).toBe("修改素材名称：第二页素材");
+        nameButton.props.onClick();
+        expect(onRename).toHaveBeenCalledTimes(1);
+    });
     test("跨页选择合并去重，取消只影响指定素材", () => {
         let ids = selectAssetIds([], ["page-1"], "page-1", true);
         ids = selectAssetIds(ids, ["page-2-a", "page-2-b"], "page-2-a", true);

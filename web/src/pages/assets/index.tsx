@@ -14,6 +14,7 @@ import { WorkspaceNoResultsState, WorkspaceState } from "@/components/layout/wor
 import { AssetCard } from "./asset-library-cards";
 import { resourceStorageTitle, resourceStorageLabel } from "@/lib/canvas/resource-storage-status";
 import { AssetBatchUploadModal } from "./asset-batch-upload-modal";
+import { AssetRenameModal } from "./asset-rename-modal";
 import { assetGridCardMinWidth, type AssetGridDensity, assetGridDensityOptions, parseAssetGridDensity } from "./asset-grid-density";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -154,6 +155,7 @@ export default function AssetsPage() {
     const [pageSize, setPageSize] = useState(40);
     const [gridDensity, setGridDensity] = useState<AssetGridDensity>(readAssetGridDensity);
     const [editingAsset, setEditingAsset] = useState<LibraryAsset | null>(null);
+    const [renamingAsset, setRenamingAsset] = useState<LibraryAsset | null>(null);
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<LibraryAsset | null>(null);
     const [deletingAsset, setDeletingAsset] = useState<LibraryAsset | null>(null);
@@ -994,6 +996,7 @@ export default function AssetsPage() {
                                                     onSelect={(selected, range) => selectAsset(asset.id, selected, range)}
                                                     onOpen={() => setPreviewAsset(asset)}
                                                     onEdit={() => void openEdit(asset)}
+                                                    onRename={() => setRenamingAsset(asset)}
                                                     onCopy={copyAssetText}
                                                     onDownload={downloadImage}
                                                     onRestore={() => void changeAssetStatus([asset.id], "confirmed")}
@@ -1029,6 +1032,17 @@ export default function AssetsPage() {
             </WorkspacePage>
 
             <ArkCertifyModal asset={certifyingAsset} onClose={() => setCertifyingAsset(null)} />
+            {renamingAsset ? (
+                <AssetRenameModal
+                    key={renamingAsset.id}
+                    asset={renamingAsset}
+                    onClose={() => setRenamingAsset(null)}
+                    onSaved={async (id, title) => {
+                        setPreviewAsset((current) => (current?.id === id ? { ...current, title } : current));
+                        await invalidateAssetLibrary();
+                    }}
+                />
+            ) : null}
             <Modal
                 className="workspace-modal workspace-modal-wide library-modal"
                 title={editingAsset ? t("library.assets.form.editTitle") : t("library.assets.page.create")}

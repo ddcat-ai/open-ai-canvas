@@ -225,6 +225,7 @@ export async function executeImageGeneration(
                         referenceImages,
                         signal: controller.signal,
                         metadata: {
+                            assetTitle: childNodes.find((node) => node.id === targetId)?.title || rootNode.title,
                             sourceNodeId: nodeId,
                             ...taskContext,
                             resolvedCharacterVersions: generationContext.resolvedCharacterVersions,
