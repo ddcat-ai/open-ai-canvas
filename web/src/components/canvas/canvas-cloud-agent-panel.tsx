@@ -5,7 +5,7 @@ import { App, Button } from "antd";
 import { appQueryClient } from "@/lib/query-client";
 import { sameAgentRequestTarget, type AgentRequestTarget } from "@/lib/agent-page-context";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { EyeOff, FileText, ImagePlus, MoveDiagonal2, SquareDashedMousePointer, X } from "lucide-react";
+import { EyeOff, FileText, ImagePlus, MoveDiagonal2, X } from "lucide-react";
 import { canvasNodeMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { CANVAS_IMAGE_ASSET_DND_TYPE } from "@/lib/canvas/canvas-asset-dnd";
 import {
@@ -2225,7 +2225,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     const visionMissing = composerAttachments.some((item) => item.kind === "image") && Boolean(selectedModel) && !modelSupportsImageInspection(config, selectedModel);
     const visionCandidate = visionMissing ? selectImageInspectionModel(config, selectedModel) : "";
     const contextBar =
-        pageContext || (canvasId && selectionCount > 0) || visionMissing || longTextVisible || (running && run && !sameAgentRequestTarget({ canvasId, pageContext }, run)) ? (
+        pageContext || visionMissing || longTextVisible || (running && run && !sameAgentRequestTarget({ canvasId, pageContext }, run)) ? (
             <>
                 {pageContext ? (
                     <AgentContextChip icon={<FileText className="size-3.5 shrink-0" aria-hidden="true" />} title="小影会读取当前页面的最新分镜，修改前展示审批预览">
@@ -2235,26 +2235,6 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 {running && run && !sameAgentRequestTarget({ canvasId, pageContext }, run) ? (
                     <AgentContextChip tone="warning" icon={<FileText className="size-3.5 shrink-0" aria-hidden="true" />}>
                         本轮仍在处理发起时的页面，下一条消息使用当前页面
-                    </AgentContextChip>
-                ) : null}
-                {canvasId && selectionCount > 0 ? (
-                    <AgentContextChip
-                        tone={selectionExcluded ? "off" : "default"}
-                        title="发送时会把选中的节点作为重点交给 Agent"
-                        icon={<SquareDashedMousePointer className="size-3.5 shrink-0" aria-hidden="true" />}
-                        actions={
-                            <button
-                                type="button"
-                                className="agent-context-chip-action"
-                                aria-pressed={selectionExcluded}
-                                aria-label={selectionExcluded ? "这条消息带上选中的节点" : "这条消息不带选中的节点"}
-                                onClick={() => setSelectionExcluded((value) => !value)}
-                            >
-                                {selectionExcluded ? "带上" : <X className="size-3" aria-hidden="true" />}
-                            </button>
-                        }
-                    >
-                        {selectionExcluded ? `这条不带选中的 ${selectionCount} 个节点` : selectionCount > AGENT_FOCUS_NODE_LIMIT ? `已选 ${selectionCount} 个节点，前 ${AGENT_FOCUS_NODE_LIMIT} 个作为重点` : `已选 ${selectionCount} 个节点`}
                     </AgentContextChip>
                 ) : null}
                 {visionMissing ? (
@@ -2802,6 +2782,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                             onReferenceSelection: referenceSelection,
                                         }}
                                         contextBar={contextBar}
+                                        canvasSelection={canvasId ? { count: selectionCount, excluded: selectionExcluded, onToggle: () => setSelectionExcluded((value) => !value) } : undefined}
                                         charLimit={AGENT_PROMPT_MAX_CHARS}
                                         blockReason={attachmentBlockReason}
                                         onLongTextPaste={insertAgentText ? (text) => setLongTextOffer({ text }) : undefined}

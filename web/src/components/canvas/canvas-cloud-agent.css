@@ -3814,6 +3814,13 @@ summary.agent-tool-step:hover {
     opacity: 0.5;
 }
 
+.agent-composer-canvas-selection {
+    display: flex;
+    min-width: 0;
+    height: var(--space-6);
+    margin-bottom: var(--space-2);
+}
+
 .agent-composer-context {
     display: flex;
     flex-wrap: wrap;

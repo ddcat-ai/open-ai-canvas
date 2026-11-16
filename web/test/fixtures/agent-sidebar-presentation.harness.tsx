@@ -318,6 +318,45 @@ test("普通用户欢迎页保留创作入口且不显示技能入口", async ()
     expect(sent).toEqual(["普通用户的短片草稿"]);
 });
 
+test("画布选择状态固定占一行，切换选区保留输入与其他上下文", async () => {
+    let toggles = 0;
+    const composer = (count: number, excluded = false) => (
+        <AgentChatComposer
+            prompt="保留我的草稿"
+            theme={theme}
+            placeholder="描述创作想法"
+            onPromptChange={noop}
+            onSubmit={noop}
+            includeAssetLibrary={false}
+            canvasSelection={{ count, excluded, onToggle: () => toggles++ }}
+            contextBar={<span>当前模型不能看图</span>}
+        />
+    );
+    await render(composer(0));
+    const row = host.querySelector(".agent-composer-canvas-selection");
+    const input = host.querySelector('[aria-label="Agent 输入"]');
+    const surface = host.querySelector(".agent-composer-surface");
+    const childCount = surface?.childElementCount;
+    expect(row?.textContent).toBe("未选中节点");
+    for (const count of [1, 24, 0]) {
+        await render(composer(count));
+        expect(host.querySelector(".agent-composer-canvas-selection")).toBe(row);
+        expect(host.querySelector('[aria-label="Agent 输入"]')).toBe(input);
+        expect(surface?.childElementCount).toBe(childCount);
+        expect(host.querySelector(".agent-composer-context")?.textContent).toBe("当前模型不能看图");
+        expect(input?.textContent).toBe("保留我的草稿");
+        if (count) {
+            expect(row?.textContent).toContain(`已选 ${count} 个节点`);
+            await click("这条消息不带选中的节点");
+        } else expect(row?.querySelector("button")).toBeNull();
+    }
+    expect(toggles).toBe(2);
+    await render(composer(2, true));
+    expect(row?.textContent).toContain("这条不带选中的 2 个节点");
+    await click("这条消息带上选中的节点");
+    expect(toggles).toBe(3);
+});
+
 test("原欢迎页创作入口只填草稿、保留已有输入，发送后收起", async () => {
     await render(<SidebarFixture />);
     await type("我的短片是都市题材");
