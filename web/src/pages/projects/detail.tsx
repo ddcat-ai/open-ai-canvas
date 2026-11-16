@@ -184,7 +184,7 @@ export default function DramaStudioPage() {
         mutationFn: ({ shot, patch }: { shot: DramaShot; patch: DramaShotPatch }) => updateDramaShot(projectId, shot.id, patch),
         onSuccess: () => {
             invalidate(episodeId);
-            message.success("已保存，本段提示词与视频已标记过期，请重新确认");
+            message.success("分镜已保存；可安全同步的对白已更新到提示词");
         },
         onError: (error) => errorMessage(error, "保存失败"),
     });
@@ -193,7 +193,7 @@ export default function DramaStudioPage() {
         onSuccess: ({ shot }) => {
             invalidate(episodeId);
             setParams({ shot: shot.id });
-            message.success("已插入空镜头，填写动作或台词后本段提示词需重新撰写");
+            message.success("已插入空镜头，原提示词已保留，请核对镜头内容");
         },
         onError: (error) => errorMessage(error, "插入失败"),
     });
@@ -202,7 +202,7 @@ export default function DramaStudioPage() {
         onSuccess: () => {
             invalidate(episodeId);
             setParams({ shot: null });
-            message.success("已删除镜头，本段提示词与视频已标记过期");
+            message.success("已删除镜头，原提示词已保留，请核对镜头内容");
         },
         onError: (error) => errorMessage(error, "删除失败"),
     });

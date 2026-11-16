@@ -325,13 +325,47 @@ func (s *Service) UpdateDramaShot(userID, projectID, shotID string, req UpdateDr
 	if len(plan.Fields) == 0 {
 		return plan.Shot, nil
 	}
-	if err := s.repo.UpdateDramaShotScript(plan.Shot, plan.Fields); err != nil {
+	rows, err := s.repo.DramaSegments(plan.Shot.EpisodeID)
+	if err != nil {
+		return model.DramaShot{}, err
+	}
+	var segment *model.DramaSegment
+	for i := range rows {
+		if rows[i].SegmentIndex == plan.Shot.SegmentIndex {
+			segment = &rows[i]
+			break
+		}
+	}
+	if segment == nil {
+		return model.DramaShot{}, dramaSegmentChangedError()
+	}
+	detail, err := s.DramaEpisodeDetail(userID, projectID, plan.Shot.EpisodeID)
+	if err != nil {
+		return model.DramaShot{}, err
+	}
+	duplicates, maxChars, headerChars := 0, 0, 0
+	for _, row := range detail.Shots {
+		if row.SegmentIndex == plan.Shot.SegmentIndex && row.Dialogue == plan.Before.Dialogue {
+			duplicates++
+		}
+	}
+	for _, row := range detail.Segments {
+		if row.ID == segment.ID {
+			maxChars, headerChars = row.Request.PromptMaxChars, utf8.RuneCountInString(row.Request.Header)+2
+		}
+	}
+	promptFields := dramaShotPromptEdit(*segment, plan.Before, plan.Fields, duplicates, maxChars, headerChars)
+	if err := s.repo.UpdateDramaShotScript(plan.Before, plan.Fields, *segment, promptFields); err != nil {
+		if errors.Is(err, repository.ErrDramaSegmentChanged) {
+			return model.DramaShot{}, dramaSegmentChangedError()
+		}
 		return model.DramaShot{}, err
 	}
 	return plan.Shot, s.reopenDrama(plan.Production)
 }
 
 type dramaShotUpdatePlan struct {
+	Before     model.DramaShot
 	Shot       model.DramaShot
 	Production *model.DramaProduction
 	Fields     map[string]any
@@ -347,6 +381,7 @@ func (s *Service) prepareDramaShotUpdate(userID, projectID, shotID string, req U
 	if err != nil {
 		return nil, err
 	}
+	before := *shot
 	fields := map[string]any{}
 	for _, f := range []struct {
 		column string
@@ -391,7 +426,7 @@ func (s *Service) prepareDramaShotUpdate(userID, projectID, shotID string, req U
 			fields["duration_ms"] = duration
 		}
 	}
-	return &dramaShotUpdatePlan{Shot: *shot, Production: p, Fields: fields}, nil
+	return &dramaShotUpdatePlan{Shot: *shot, Before: before, Production: p, Fields: fields}, nil
 }
 
 func (s *Service) UpdateDramaCast(userID string, projectID string, castID string, req UpdateDramaCastRequest) (model.DramaCast, error) {
@@ -905,7 +940,7 @@ func (s *Service) GenerateDramaSegments(userID, projectID, episodeID string, req
 			return nil, BadAuthRequest("剧情段不存在")
 		}
 		if !dramaPromptReady(seg) {
-			return nil, BadAuthRequest("请先重新撰写过期或缺失的视频提示词")
+			return nil, BadAuthRequest("请先核对并保存完整视频提示词，也可选择 AI 撰写")
 		}
 		if mediaBusyStatus(seg.VideoStatus) {
 			return nil, BadAuthRequest("剧情段视频正在生成或排队")

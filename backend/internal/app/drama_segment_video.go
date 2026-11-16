@@ -35,7 +35,10 @@ func encodeDramaRevision(revision int64) string {
 }
 
 func dramaPromptReady(segment model.DramaSegment) bool {
-	return strings.TrimSpace(segment.VideoPromptOverride) != "" || (segment.PromptStatus == model.DramaMediaReady && strings.TrimSpace(segment.VideoPrompt) != "")
+	if segment.PromptStatus == model.DramaPromptConflict || segment.PromptStatus == model.DramaPromptReview {
+		return false
+	}
+	return (strings.TrimSpace(segment.VideoPromptOverride) != "" && (segment.PromptStatus == model.DramaMediaReady || segment.PromptStatus == model.DramaMediaStale)) || (segment.PromptStatus == model.DramaMediaReady && strings.TrimSpace(segment.VideoPrompt) != "")
 }
 
 func dramaSegmentVideoDone(segment model.DramaSegment) bool {

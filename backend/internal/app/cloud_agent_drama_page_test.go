@@ -251,7 +251,7 @@ func TestCloudAgentDramaPageUpdateUsesBusinessRulesAndRejectsStaleApproval(t *te
 	shot, _ := s.repo.DramaShot(page.ProjectID, page.ShotID)
 	segment, _ := s.repo.DramaSegments(page.EpisodeID)
 	episode, _ := s.repo.DramaEpisode(page.ProjectID, page.EpisodeID)
-	if shot.Dialogue != "好久不见" || shot.Camera != "缓慢推近" || segment[0].PromptStatus != "stale" || segment[0].VideoStatus != "stale" || episode.Approved || result["revision"] != episode.Revision {
+	if shot.Dialogue != "好久不见" || shot.Camera != "缓慢推近" || segment[0].PromptStatus != model.DramaPromptConflict || segment[0].VideoStatus != "stale" || episode.Approved || result["revision"] != episode.Revision {
 		t.Fatalf("business mutation/invalidations missing: %+v %+v %+v %+v", shot, segment, episode, result)
 	}
 	if _, err := applyCloudAgentDramaShotUpdate(s.repo, "user", page, call, s); err == nil {

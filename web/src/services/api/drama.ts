@@ -326,7 +326,7 @@ export type DramaEpisodeDetail = {
 export type DramaDialogueCheck = { sourceLines: number; missingCount: number; missing: string[] };
 
 /** 剧情段视频提示词的撰写状态：none 无记录、stale 镜头或设定改过后过期。 */
-export type DramaSegmentPromptStatus = "none" | "queued" | "running" | "ready" | "stale" | "failed";
+export type DramaSegmentPromptStatus = "none" | "queued" | "running" | "ready" | "stale" | "failed" | "conflict" | "review";
 
 /** 一个剧情段；videoPrompt 为生效内容（手动改写优先），generated 为模型撰写的版本。 */
 export type DramaSegment = {
