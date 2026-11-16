@@ -18,7 +18,7 @@ func TestCommonImageFieldsReachStandardCreateWithoutDeclarations(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := manifestTestBody(t, spec)
-	if body["size"] != "2048x1024" || body["quality"] != "custom-quality" || body["n"] != float64(7) || body["background"] != "transparent" || body["imageResolution"] != nil {
+	if body["size"] != "2048x1024" || body["quality"] != "custom-quality" || body["n"] != float64(7) || body["background"] != "transparent" || body["imageResolution"] != nil || body["resolution"] != nil {
 		t.Fatalf("standard mapping: %#v", body)
 	}
 	a.manifest.Create.Body = map[string]any{"quality": "explicit-conversion", "size": map[string]any{"$omitEmpty": nil}}

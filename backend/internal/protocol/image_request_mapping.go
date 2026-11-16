@@ -73,6 +73,10 @@ func completeCommonImageRequest(spec RequestSpec, operation ManifestOperation, r
 	for name := range names {
 		if openAI {
 			switch name {
+			case "imageResolution":
+				// OpenAI expresses preset resolution through size; auto delegates it
+				// to the model rather than adding a separate resolution field.
+				mapped[name] = request.AspectRatio == "" || request.AspectRatio == "auto" || strings.Contains(request.AspectRatio, "x")
 			case "size":
 				if request.AspectRatio != "" {
 					mapped[name] = set("size", request.AspectRatio)
