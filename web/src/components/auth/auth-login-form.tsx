@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { App, Button, Checkbox, Divider, Input } from "antd";
 import { Info, TriangleAlert, MessageCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { VerificationFields } from "@/components/auth/verification-fields";
 import { TurnstileWidget } from "@/components/auth/turnstile-widget";
 import { clearReferralCode, readReferralCode, type AuthView } from "@/lib/auth-entry";
-import { getAuthSession, linuxDOLoginURL, login, oidcLoginURL, register, type AuthSettings } from "@/services/api/auth";
+import { getAuthSession, invalidateAuthSessionCache, linuxDOLoginURL, login, oidcLoginURL, register, type AuthSettings } from "@/services/api/auth";
 import { ApiError } from "@/services/api/request";
 import { wechatLoginURL } from "@/services/api/wechat";
 import { emptyVerification, loginVerification, registrationVerificationRequired, verificationMethods, type VerificationMethod } from "@/services/api/verification";
@@ -43,6 +43,9 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
     const [registerVerification, setRegisterVerification] = useState({ ...emptyVerification });
     const [chosenRegisterMethod, setChosenRegisterMethod] = useState<VerificationMethod | null>(null);
     const [pending, setPending] = useState<PendingRegistration | null>(null);
+    const [createdAccount, setCreatedAccount] = useState<{ userId: string; successText: string } | null>(null);
+    const submissionRef = useRef(false);
+    const recoveryNoticeRef = useRef<HTMLSpanElement>(null);
     const [agreementAccepted, setAgreementAccepted] = useState(false);
     const [agreementOpen, setAgreementOpen] = useState(false);
     const [retryCountdown, setRetryCountdown] = useState(0);
@@ -76,11 +79,23 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
         return () => window.clearInterval(timer);
     }, [retryCountdown]);
 
-    const finish = async (successText: string) => {
+    useEffect(() => {
+        if (createdAccount) recoveryNoticeRef.current?.focus();
+    }, [createdAccount]);
+
+    const finish = async (successText: string, expectedUserId?: string) => {
+        const session = await getAuthSession();
+        if (!session.user?.id || session.user.status !== "active" || (expectedUserId !== undefined && session.user.id !== expectedUserId)) throw new Error(t("auth.login.sessionUnavailable"));
         const { applyUserSession } = await import("@/lib/user-session");
-        await applyUserSession(await getAuthSession());
+        await applyUserSession(session);
         message.success(successText);
         onAuthenticated();
+    };
+
+    const restoreCreatedAccount = async (account: { userId: string; successText: string }) => {
+        // A successful registration must never be repeated because session recovery failed.
+        invalidateAuthSessionCache();
+        await finish(account.successText, account.userId);
     };
 
     const startRegistration = (accountKind: PendingRegistration["accountKind"]) => {
@@ -94,6 +109,7 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
 
     const cancelRegistration = () => {
         setPending(null);
+        setCreatedAccount(null);
         setConfirmPassword("");
         setRegisterVerification({ ...emptyVerification });
     };
@@ -135,8 +151,9 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
         const contactEmail = current.accountKind === "email" ? account : email.trim();
         if (emailRequired && !settings?.firstUser && !contactEmail && !registerVerification.email) throw new Error(t("auth.login.emailRequired"));
         const contact = verificationRequired ? { ...registerVerification, email: registerVerification.email || contactEmail } : { email: contactEmail };
+        let created: { userId: string; successText: string };
         try {
-            await register({
+            const result = await register({
                 username: current.accountKind === "username" ? account : "",
                 ...contact,
                 password,
@@ -144,21 +161,26 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
                 ...(referralCode ? { referralCode } : {}),
                 ...(turnstileToken ? { turnstileToken } : {}),
             });
+            created = { userId: result.user?.id || "", successText: settings?.firstUser ? t("auth.register.adminCreated") : t("auth.register.success") };
+            setCreatedAccount(created);
         } catch (error) {
             if (error instanceof ApiError && error.status === 429) setRetryCountdown(Math.max(1, Math.ceil((error.retryAfterMs ?? 60000) / 1000)));
             throw error;
         }
         clearReferralCode();
         if (!settings?.firstUser) window.sessionStorage.setItem("yingce:model-setup-guide", "1");
-        await finish(settings?.firstUser ? t("auth.register.adminCreated") : t("auth.register.success"));
+        await restoreCreatedAccount(created);
     };
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (submissionRef.current) return;
         if (submitting || retryCountdown > 0) return;
+        submissionRef.current = true;
         setSubmitting(true);
         try {
-            if (pending) await submitRegistration(pending);
+            if (createdAccount) await restoreCreatedAccount(createdAccount);
+            else if (pending) await submitRegistration(pending);
             else await submitLogin();
         } catch (error) {
             if (turnstileRequired) {
@@ -167,11 +189,38 @@ export function AuthLoginForm({ settings, settingsFailed, onReloadSettings, next
             }
             message.error(error instanceof Error ? error.message : pending ? t("auth.register.failed") : t("auth.login.failed"));
         } finally {
+            submissionRef.current = false;
             setSubmitting(false);
         }
     };
 
     const registrationBlocked = verificationUnavailable;
+
+    if (createdAccount) {
+        return (
+            <form onSubmit={submit} className="auth-form">
+                <AuthNotice icon={<Info className="size-3.5" />} tone="blue">
+                    <span ref={recoveryNoticeRef} role="status" tabIndex={-1}>
+                        {t("auth.login.registrationSessionPending")}
+                    </span>
+                </AuthNotice>
+                <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={submitting}>
+                    {t("auth.login.retrySession")}
+                </Button>
+                <Button
+                    size="large"
+                    block
+                    disabled={submitting}
+                    onClick={() => {
+                        cancelRegistration();
+                        setChosenMethod("password");
+                    }}
+                >
+                    {t("auth.register.toLogin")}
+                </Button>
+            </form>
+        );
+    }
 
     return (
         <form onSubmit={submit} className="auth-form">

@@ -9,7 +9,7 @@ describe("注册服务协议", () => {
         const source = read("components/auth/auth-login-form.tsx");
         const passwordIndex = source.indexOf('aria-label={t("auth.register.confirmPassword")}');
         const agreementIndex = source.indexOf("Checkbox checked={agreementAccepted}");
-        const submitIndex = source.indexOf('htmlType="submit"');
+        const submitIndex = source.indexOf('htmlType="submit"', agreementIndex);
 
         expect(passwordIndex).toBeGreaterThanOrEqual(0);
         expect(agreementIndex).toBeGreaterThan(passwordIndex);
