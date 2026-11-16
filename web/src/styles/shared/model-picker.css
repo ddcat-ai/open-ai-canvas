@@ -413,6 +413,32 @@
         text-align: center;
     }
 
+    .canvas-model-picker-status {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 12px;
+        font-size: var(--fs-tiny);
+        color: var(--user-ink-muted);
+    }
+
+    .canvas-model-picker-recovery,
+    .canvas-model-picker-status button {
+        border: 0;
+        border-radius: var(--r-sm);
+        padding: 8px 12px;
+        background: var(--user-surface-hover);
+        color: var(--user-ink);
+        cursor: pointer;
+    }
+
+    .canvas-model-picker-recovery {
+        display: block;
+        margin: 12px auto 0;
+    }
+
     html:not(.dark) .canvas-composer-model-picker {
         background: rgba(15, 23, 42, 0.045) !important;
         color: #1f2937 !important;
