@@ -118,10 +118,10 @@ func (s *Service) UpdateCloudAgentProfile(userID string, req AgentProfileRequest
 	if req.Scope == model.AgentProfileScopeCanvas {
 		canvas, err := s.repo.CanvasProjectForUser(userID, canvasID)
 		if err != nil {
-			return AgentProfileView{}, err
+			return AgentProfileView{}, canvasProfileLookupError(err)
 		}
 		if projectID != "" && canvas.ProjectID != projectID {
-			return AgentProfileView{}, errors.New("画布不属于指定项目")
+			return AgentProfileView{}, kernel.BadAuthRequest("画布不属于指定项目")
 		}
 		projectID = canvas.ProjectID
 	}
@@ -153,6 +153,16 @@ func (s *Service) CloudAgentProfileForScope(userID, projectID, canvasID string) 
 	return s.cloudAgentProfileView(userID, projectID, canvasID)
 }
 
+// canvasProfileLookupError 区分“画布还没同步到云端”和服务故障：新建画布的首次落库与
+// 助手读取存在竞态，未分类错误会被 failService 归为 500“系统处理失败”，客户端既无法
+// 判断能否重试，也拿不到可读原因，只能一直卡在偏好快照确认失败。
+func canvasProfileLookupError(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return kernel.NotFound("画布尚未同步到云端，请稍后重试")
+	}
+	return err
+}
+
 func (s *Service) cloudAgentProfileView(userID, projectID, canvasID string) (AgentProfileView, error) {
 	if userID == "" {
 		return AgentProfileView{}, kernel.Unauthorized("请先登录")
@@ -165,10 +175,10 @@ func (s *Service) cloudAgentProfileView(userID, projectID, canvasID string) (Age
 	if canvasID != "" {
 		canvas, err := s.repo.CanvasProjectForUser(userID, canvasID)
 		if err != nil {
-			return AgentProfileView{}, err
+			return AgentProfileView{}, canvasProfileLookupError(err)
 		}
 		if projectID != "" && canvas.ProjectID != projectID {
-			return AgentProfileView{}, errors.New("画布不属于指定项目")
+			return AgentProfileView{}, kernel.BadAuthRequest("画布不属于指定项目")
 		}
 		projectID = canvas.ProjectID
 	}
