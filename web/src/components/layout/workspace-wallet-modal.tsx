@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { WalletTopupPanel, type TopupCategory } from "@/components/layout/workspace-wallet-topup";
 import { usePaymentOrderFlow } from "@/components/payment/use-payment-order-flow";
+import { PaymentOrdersPanel, paymentOrdersQueryKey } from "@/components/payment/payment-orders-panel";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { currentLocale } from "@/i18n";
@@ -22,7 +23,7 @@ import { openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletO
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-type WalletModalTab = "topup" | "redeem" | "history";
+type WalletModalTab = "topup" | "redeem" | "history" | "orders";
 
 const storageGrantsQueryKey = ["account-storage-grants"] as const;
 
@@ -119,7 +120,7 @@ export function WorkspaceWalletModal({
 
     const selectedProduct = useMemo(() => products.find((item) => item.id === selectedProductId), [products, selectedProductId]);
     const selectedOption = useMemo(() => paymentOptions.find((item) => item.key === selectedOptionKey), [paymentOptions, selectedOptionKey]);
-    const activeTab: WalletModalTab = creditsEnabled ? tab : "topup";
+    const activeTab: WalletModalTab = creditsEnabled || tab === "orders" ? tab : "topup";
 
     const reloadWallet = async (targetPage = page) => {
         if (!creditsEnabled) return;
@@ -182,6 +183,10 @@ export function WorkspaceWalletModal({
     };
 
     const payment = usePaymentOrderFlow({ onGranted: announceGranted });
+
+    useEffect(() => {
+        if (payment.order) void queryClient.invalidateQueries({ queryKey: paymentOrdersQueryKey });
+    }, [payment.order, queryClient]);
 
     useEffect(() => {
         payment.resetIdempotency();
@@ -287,24 +292,32 @@ export function WorkspaceWalletModal({
                         </div>
                     </header>
 
-                    {creditsEnabled ? (
-                        <div className="workspace-wallet-tabs" role="tablist" aria-label={t("nav.tools.wallet")}>
-                            <button type="button" role="tab" aria-selected={activeTab === "topup"} onClick={() => setTab("topup")}>
-                                <WalletCards />
-                                {t("account.wallet.tabTopup")}
-                            </button>
-                            <button type="button" role="tab" aria-selected={activeTab === "redeem"} onClick={() => setTab("redeem")}>
-                                <TicketCheck />
-                                {t("account.wallet.tabRedeem")}
-                            </button>
-                            <button type="button" role="tab" aria-selected={activeTab === "history"} onClick={() => setTab("history")}>
-                                <History />
-                                {t("account.wallet.tabHistory")}
-                            </button>
-                        </div>
-                    ) : null}
+                    <div className="workspace-wallet-tabs" role="tablist" aria-label={t("nav.tools.wallet")}>
+                        <button type="button" role="tab" aria-selected={activeTab === "topup"} onClick={() => setTab("topup")}>
+                            <WalletCards />
+                            {t("account.wallet.tabTopup")}
+                        </button>
+                        <button type="button" role="tab" aria-selected={activeTab === "orders"} onClick={() => setTab("orders")}>
+                            <CreditCard />
+                            {t("account.payment.ordersTitle")}
+                        </button>
+                        {creditsEnabled ? (
+                            <>
+                                <button type="button" role="tab" aria-selected={activeTab === "redeem"} onClick={() => setTab("redeem")}>
+                                    <TicketCheck />
+                                    {t("account.wallet.tabRedeem")}
+                                </button>
+                                <button type="button" role="tab" aria-selected={activeTab === "history"} onClick={() => setTab("history")}>
+                                    <History />
+                                    {t("account.wallet.tabHistory")}
+                                </button>
+                            </>
+                        ) : null}
+                    </div>
 
-                    {activeTab === "topup" ? (
+                    {activeTab === "orders" ? (
+                        <PaymentOrdersPanel onOpen={(id) => void payment.showOrder(id)} />
+                    ) : activeTab === "topup" ? (
                         <WalletTopupPanel
                             loading={paymentsLoading}
                             products={products}

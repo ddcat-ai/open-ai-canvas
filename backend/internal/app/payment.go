@@ -133,6 +133,13 @@ type AdminPaymentOrderPage struct {
 	Limit  int                     `json:"pageSize"`
 }
 
+type PaymentOrderPage struct {
+	Orders []PaymentOrderView `json:"orders"`
+	Total  int64              `json:"total"`
+	Page   int                `json:"page"`
+	Limit  int                `json:"pageSize"`
+}
+
 type AdminPaymentOrderUser struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`
@@ -299,11 +306,30 @@ func (s *Service) PaymentOrder(actor *model.User, id string) (*PaymentOrderView,
 		return nil, Unauthorized("请先登录")
 	}
 	order, err := s.repo.PaymentOrderForUser(actor.ID, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, NotFound("订单不存在")
+	}
 	if err != nil {
 		return nil, err
 	}
 	view := paymentOrderView(*order)
 	return &view, nil
+}
+
+func (s *Service) PaymentOrders(actor *model.User, page, limit int) (*PaymentOrderPage, error) {
+	if actor == nil {
+		return nil, Unauthorized("请先登录")
+	}
+	page, limit = normalizeAdminPage(page, limit)
+	orders, total, err := s.repo.PaymentOrdersForUser(actor.ID, limit, (page-1)*limit)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]PaymentOrderView, 0, len(orders))
+	for _, order := range orders {
+		views = append(views, paymentOrderView(order))
+	}
+	return &PaymentOrderPage{Orders: views, Total: total, Page: page, Limit: limit}, nil
 }
 
 func (s *Service) PaymentCheckout(actor *model.User, id string) (string, error) {

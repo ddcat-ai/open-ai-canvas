@@ -132,6 +132,10 @@ export function getPaymentOrder(id: string) {
     return http.get<{ order: PaymentOrder }>(`/payments/orders/${encodeURIComponent(id)}`);
 }
 
+export function listPaymentOrders(page = 1, signal?: AbortSignal) {
+    return http.get<{ orders: PaymentOrder[]; total: number; page: number; pageSize: number }>("/payments/orders", { params: { page, pageSize: 20 }, signal });
+}
+
 export function queryPaymentOrder(id: string) {
     return http.post<{ order: PaymentOrder }>(`/payments/orders/${encodeURIComponent(id)}/query`);
 }

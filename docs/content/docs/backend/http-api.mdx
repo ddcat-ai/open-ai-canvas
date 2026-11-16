@@ -844,6 +844,8 @@ Skills 的 `tool_completed` / `tool_failed` 事件附带 `skillId`、`skillName`
 
 ## 管理员支付订单
 
+普通用户可通过 `GET /api/payments/orders?page=1&pageSize=20` 分页读取自己的充值与扩容订单，返回 `orders`、`total`、`page`、`pageSize`，按创建时间倒序排列。归属由登录会话确定，不接受用户 ID 参数。充值弹窗的「我的订单」在刷新后仍可恢复未支付订单，使用既有单笔查询、继续支付和关单接口；创建失败订单也可关闭。积分功能关闭时仍保留存储订单入口。
+
 `GET /api/admin/payments/orders` 需要管理员权限，支持 `status`、`keyword`、`providerId`、`timeField`、`from`、`to`、`page`、`pageSize`。关键词匹配订单号、渠道交易号、用户名称、用户名或邮箱，也支持完整用户 ID 精确匹配。用户名和邮箱搜索忽略大小写；所有筛选同时生效，返回匹配总数和当前页订单。`timeField` 为 `created`（默认创建时间）、`paid`（渠道支付时间）、`credited`（入账时间）。`from`、`to` 为 `YYYY-MM-DD`，包含起止日期，按北京时间转换为左闭右开的时间区间；未填写的边界不限制，倒置日期或无效状态/时间口径返回 400。
 
 每条管理员列表订单在原有字段之外包含 `user: { id, username, displayName, email }`，由当前页用户 ID 批量读取；用户不存在时返回 `user: null`，保留原 `userId` 与历史订单。此身份摘要仅用于管理员订单列表，不添加到普通用户支付接口或支付状态同步响应。

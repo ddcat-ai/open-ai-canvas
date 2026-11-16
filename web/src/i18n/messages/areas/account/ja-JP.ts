@@ -297,6 +297,12 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         },
     },
     payment: {
+        ordersTitle: "注文履歴",
+        ordersHint: "クレジットとストレージの注文を確認し、支払いの再開や未払い注文の取消ができます。",
+        ordersEmpty: "注文はありません",
+        continuePayment: "支払いを続ける",
+        viewOrder: "注文を確認",
+        status: { created: "作成中", pending: "未払い", closing: "取消中", closed: "取消済み", credited: "反映済み", create_failed: "作成失敗" },
         qrAlt: "支払い用 QR コード",
         grantedStorage: "支払いを確認しました。ストレージが拡張されました",
         grantedCredits: "支払いを確認しました。クレジットが付与されました",

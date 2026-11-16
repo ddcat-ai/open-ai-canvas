@@ -297,6 +297,12 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         },
     },
     payment: {
+        ordersTitle: "Meine Bestellungen",
+        ordersHint: "Guthaben- und Speicherbestellungen ansehen, bezahlen oder unbezahlte Bestellungen schließen.",
+        ordersEmpty: "Noch keine Bestellungen",
+        continuePayment: "Weiter bezahlen",
+        viewOrder: "Bestellung ansehen",
+        status: { created: "Wird erstellt", pending: "Unbezahlt", closing: "Wird geschlossen", closed: "Geschlossen", credited: "Gutgeschrieben", create_failed: "Erstellung fehlgeschlagen" },
         qrAlt: "Zahlungs-QR-Code",
         grantedStorage: "Zahlung bestätigt. Speicher wurde erweitert.",
         grantedCredits: "Zahlung bestätigt. Credits gutgeschrieben.",

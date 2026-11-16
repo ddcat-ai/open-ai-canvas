@@ -295,6 +295,12 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         },
     },
     payment: {
+        ordersTitle: "내 주문",
+        ordersHint: "크레딧 및 저장 공간 주문을 확인하고 결제를 계속하거나 미결제 주문을 취소하세요.",
+        ordersEmpty: "주문이 없습니다",
+        continuePayment: "결제 계속",
+        viewOrder: "주문 보기",
+        status: { created: "생성 중", pending: "미결제", closing: "취소 중", closed: "취소됨", credited: "지급 완료", create_failed: "생성 실패" },
         qrAlt: "결제 QR 코드",
         grantedStorage: "결제가 확인되어 저장 공간이 늘어났습니다",
         grantedCredits: "결제가 확인되어 크레딧이 지급되었습니다",

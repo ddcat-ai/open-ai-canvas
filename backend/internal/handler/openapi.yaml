@@ -93,6 +93,20 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "502": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
+  /payments/orders:
+    get:
+      summary: 当前用户的充值与扩容订单
+      description: 按创建时间倒序分页；仅返回当前登录用户的订单，不接受指定用户。订单含当前状态及仍有效的支付入口，可通过既有单笔接口继续支付、查询或关闭。
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: pageSize, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        "200":
+          description: data 包含 orders、total、page、pageSize；orders 使用单笔订单视图，无管理员用户身份字段
+        "401":
+          description: 未登录
+        "400":
+          description: 分页参数无效
   /admin/api-logs/{id}:
     get:
       tags: [admin]

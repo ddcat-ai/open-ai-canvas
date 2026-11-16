@@ -296,6 +296,12 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         },
     },
     payment: {
+        ordersTitle: "My orders",
+        ordersHint: "View credit and storage orders, continue payment or close unpaid orders.",
+        ordersEmpty: "No payment orders yet",
+        continuePayment: "Continue payment",
+        viewOrder: "View order",
+        status: { created: "Creating", pending: "Unpaid", closing: "Closing", closed: "Closed", credited: "Granted", create_failed: "Creation failed" },
         qrAlt: "Payment QR code",
         grantedStorage: "Payment confirmed. Storage expanded.",
         grantedCredits: "Payment confirmed. Credits added.",

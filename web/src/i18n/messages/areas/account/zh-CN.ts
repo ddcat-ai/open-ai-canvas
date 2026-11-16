@@ -290,6 +290,12 @@ export const zhCN = {
         },
     },
     payment: {
+        ordersTitle: "我的订单",
+        ordersHint: "查看充值与扩容订单，继续支付或关闭未支付订单。",
+        ordersEmpty: "暂无充值订单",
+        continuePayment: "继续支付",
+        viewOrder: "查看订单",
+        status: { created: "创建中", pending: "待支付", closing: "关单中", closed: "已关闭", credited: "已到账", create_failed: "下单失败" },
         qrAlt: "支付二维码",
         grantedStorage: "支付已确认，存储空间已扩容",
         grantedCredits: "支付已确认，积分已经到账",

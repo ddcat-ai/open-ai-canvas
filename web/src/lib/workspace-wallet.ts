@@ -4,7 +4,7 @@ export type WorkspaceWalletOpenDetail = {
     paymentOrderId?: string;
     paymentInvalid?: boolean;
     /** 打开后所在的标签，默认“充值”。 */
-    tab?: "topup" | "redeem" | "history";
+    tab?: "topup" | "redeem" | "history" | "orders";
     /** 充值页的商品分类，默认“全部”。 */
     category?: "all" | "credits" | "storage";
 };
