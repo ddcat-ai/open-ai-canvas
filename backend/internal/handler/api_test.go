@@ -53,7 +53,7 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 
 	recorder = httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/skills/presets", nil))
-	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"presets"`) {
+	if recorder.Code != http.StatusUnauthorized || strings.Contains(recorder.Body.String(), `"presets"`) {
 		t.Fatalf("skills presets status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

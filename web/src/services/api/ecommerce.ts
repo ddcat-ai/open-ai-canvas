@@ -1,3 +1,4 @@
+import { hasSkillLibraryAccess } from "@/lib/skill-access";
 import { http } from "@/services/api/request";
 
 export type EcommerceReferenceRole = "primary" | "detail" | "sku" | "style" | "logo" | "package" | "competitor" | "model";
@@ -219,7 +220,7 @@ export function normalizeEcommerceReferenceGroups(draft: EcommerceDraft): Ecomme
     const references = Array.isArray(draft.references) ? draft.references : [];
     const isLayout = (reference: EcommerceReference) => reference.role === "style" || reference.role === "competitor";
     const layoutReferences = Array.isArray(draft.layoutReferences) ? draft.layoutReferences : references.filter(isLayout);
-    return { ...draft, references: references.filter((reference) => !isLayout(reference)), layoutReferences: layoutReferences.filter(isLayout) };
+    return { ...draft, skillIds: hasSkillLibraryAccess() ? draft.skillIds : [], references: references.filter((reference) => !isLayout(reference)), layoutReferences: layoutReferences.filter(isLayout) };
 }
 
 export function projectDraft(project: EcommerceProject): EcommerceDraft {
@@ -258,7 +259,7 @@ export function saveEcommerceProject(project: EcommerceProject, draft: Ecommerce
     return http.put<EcommerceProject>(`/ecommerce/projects/${encodeURIComponent(project.id)}`, {
         revision: project.revision,
         name: draft.productName || project.name,
-        draft,
+        draft: { ...draft, skillIds: hasSkillLibraryAccess() ? draft.skillIds : [] },
         // Round-mode saves never upload archived rounds. The active plan is the
         // only plan the server stores on the project row.
         ...(plan ? { plan: options?.historyMode === "rounds" ? { ...plan, previousImages: undefined } : plan } : {}),
@@ -281,6 +282,7 @@ export function patchEcommerceRoundImage(projectId: string, roundId: string, ima
 }
 
 export function getEcommerceSkillPrompt(skillIds: string[]) {
+    if (!hasSkillLibraryAccess() || !skillIds.length) return Promise.resolve("");
     return http.post<{ prompt: string }>("/ecommerce/skills/prompt", { skillIds }).then(({ prompt }) => prompt);
 }
 

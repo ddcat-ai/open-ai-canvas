@@ -223,6 +223,7 @@ func TestCloudAgentSkillUsageSkillsLoadWithoutIDsFallsBackToRunCount(t *testing.
 
 func TestCloudAgentSkillUsageReadsOnlyOwnJournalAndRejectsCorruptReceipts(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "user")
 	for _, item := range []struct {
 		id, userID, skillID string
 	}{

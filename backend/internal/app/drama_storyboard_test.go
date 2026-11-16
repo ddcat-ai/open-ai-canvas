@@ -311,9 +311,8 @@ func TestDramaSettingsRejectUnreadablePromptSkill(t *testing.T) {
 	summary := createTestDrama(t, svc, DramaReviewAuto)
 	settings := summary.Production.Settings
 	settings.PromptSkill = &DramaSkillRef{SkillID: "missing-skill", SkillName: "不存在的技能"}
-	if _, err := svc.UpdateDramaSettings("usr-drama", summary.Project.ID, UpdateDramaSettingsRequest{Settings: &settings}); err == nil || !strings.Contains(err.Error(), "不存在的技能") {
-		t.Fatalf("an unreadable skill must be rejected with its name, got %v", err)
-	}
+	_, err := svc.UpdateDramaSettings("usr-drama", summary.Project.ID, UpdateDramaSettingsRequest{Settings: &settings})
+	assertSkillRuntimeStatus(t, err, 403)
 	settings.PromptSkill = &DramaSkillRef{}
 	if _, err := svc.UpdateDramaSettings("usr-drama", summary.Project.ID, UpdateDramaSettingsRequest{Settings: &settings}); err != nil {
 		t.Fatalf("an empty skill ref clears the selection: %v", err)

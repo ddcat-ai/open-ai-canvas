@@ -1,3 +1,5 @@
+import { useUserStore } from "@/stores/use-user-store";
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Input } from "antd";
@@ -36,7 +38,17 @@ const STEP_COPY: Record<DramaSkillStep, { title: string; detail: string; empty: 
  * 文字步骤的写作技能：选一个已添加技能里的文本文件，执行该步骤时把全文交给文本模型作为写作方法。
  * 保存的是技能与文件引用，在技能库里修改自己的技能后，下一次执行就会读到新内容。
  */
-export function PromptSkillField({ value, onChange, step = "prompt", compact }: { value?: DramaSkillRef; onChange: (value?: DramaSkillRef) => void; step?: DramaSkillStep; compact?: boolean }) {
+export function PromptSkillField(props: Parameters<typeof AdminPromptSkillField>[0]) {
+    const allowed = useSkillLibraryAccess();
+    const hydrated = useUserStore((state) => state.hydrated);
+    const userId = useUserStore((state) => state.user?.id);
+    useEffect(() => {
+        if (hydrated && !allowed && props.value) props.onChange(undefined);
+    }, [allowed, hydrated, props.value, props.onChange]);
+    return allowed ? <AdminPromptSkillField key={userId} {...props} /> : null;
+}
+
+function AdminPromptSkillField({ value, onChange, step = "prompt", compact }: { value?: DramaSkillRef; onChange: (value?: DramaSkillRef) => void; step?: DramaSkillStep; compact?: boolean }) {
     const [open, setOpen] = useState(false);
     const copy = STEP_COPY[step];
     return (

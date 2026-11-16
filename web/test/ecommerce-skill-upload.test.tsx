@@ -31,6 +31,7 @@ const skills = await import("../src/services/api/skills");
 const curation = await import("../src/components/skills/skill-curation-browser");
 const { setActiveUserScope } = await import("../src/lib/user-scope");
 const { EcommerceSkillPicker } = await import("../src/pages/ecommerce/skill-picker");
+const { useUserStore } = await import("../src/stores/use-user-store");
 
 let root: ReturnType<typeof createRoot> | undefined;
 let host: HTMLDivElement;
@@ -74,6 +75,7 @@ async function choose(file: File) {
 }
 
 beforeEach(() => {
+    useUserStore.setState({ hydrated: true, user: { id: "upload-owner", username: "admin", displayName: "Admin", role: "admin", status: "active" } });
     uploads.length = 0;
     errors.length = 0;
     successes.length = 0;
@@ -109,6 +111,7 @@ afterEach(async () => {
     root = undefined;
     host?.remove();
     mock.restore();
+    useUserStore.setState({ hydrated: false, user: null });
 });
 afterAll(() => {
     dom.happyDOM.abort();
@@ -239,4 +242,24 @@ describe("电商 Skills 文件上传", () => {
         expect(successes).toEqual(["Skill 已保存到个人库，本轮已选满，请取消一个后再选择"]);
         expect(host.textContent).toContain("已选择 8 个 Skills");
     });
+});
+
+test("普通用户没有电商技能入口，清除旧选择且不发技能请求", async () => {
+    useUserStore.setState({ user: { id: "upload-owner", username: "member", displayName: "Member", role: "user", status: "active" }, hydrated: true });
+    await render();
+    expect(host.textContent).toBe("");
+    expect(selected).toEqual([]);
+    expect(skills.listAddedSkills).not.toHaveBeenCalled();
+    expect(skills.listSkills).not.toHaveBeenCalled();
+    expect(uploads).toHaveLength(0);
+});
+
+test("管理员降权后技能界面立即卸载且已有选择清空", async () => {
+    await render();
+    expect(host.textContent).toContain("已选择 1 个 Skills");
+    await act(async () => useUserStore.setState({ user: { ...useUserStore.getState().user!, role: "user" } }));
+    expect(host.textContent).toBe("");
+    expect(selected).toEqual([]);
+    expect(skills.listAddedSkills).not.toHaveBeenCalled();
+    expect(uploads).toHaveLength(0);
 });

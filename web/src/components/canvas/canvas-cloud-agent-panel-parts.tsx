@@ -1,3 +1,4 @@
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 // 画布 Agent 面板的展示组件：悬浮入口、标题栏、上下文用量环、历史会话、对话区、
 // 输入区控件与审批卡片。
 //
@@ -885,6 +886,7 @@ export function ComposerControls({
     reasoningMode: AgentReasoningMode;
     onReasoningModeChange: (value: AgentReasoningMode) => void;
 }) {
+    const canUseSkills = useSkillLibraryAccess();
     const [thinkingOpen, setThinkingOpen] = useState(false);
     const thinkingAnchor = usePopoverAnchorAlign(thinkingOpen);
     const thinking = modelCapabilityConfigFor(config, selectedModel).text?.thinking || LEGACY_TEXT_THINKING_CONFIG;
@@ -940,21 +942,23 @@ export function ComposerControls({
                     <span className="agent-permission-label">{agentPermissionShortLabel(permissionMode)}</span>
                 </button>
             </Dropdown>
-            <button
-                type="button"
-                className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-[var(--fs-label)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25"
-                style={{ color: selectedSkillCount ? theme.accent.primary : theme.node.muted, background: skillsOpen ? theme.node.fill : "transparent" }}
-                aria-label={`打开 Skills 技能库${selectedSkillCount ? `，本对话已固定 ${selectedSkillCount} 个` : ""}`}
-                aria-expanded={skillsOpen}
-                aria-haspopup="dialog"
-                title={selectedSkillCount ? `本对话已固定 ${selectedSkillCount} 个技能；其他已安装技能 Agent 会按任务自动查找` : "已安装的技能 Agent 会按任务自动查找"}
-                onClick={() => onSkillsOpenChange(true)}
-            >
-                <Blocks className="size-3.5" aria-hidden="true" />
-                {/* 面板窄时只留图标和数量，把位置让给模型名。 */}
-                <span className="agent-skills-label">技能</span>
-                {selectedSkillCount ? <span className="tabular-nums">{selectedSkillCount}</span> : null}
-            </button>
+            {canUseSkills && (
+                <button
+                    type="button"
+                    className="flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-[var(--fs-label)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/25"
+                    style={{ color: selectedSkillCount ? theme.accent.primary : theme.node.muted, background: skillsOpen ? theme.node.fill : "transparent" }}
+                    aria-label={`打开 Skills 技能库${selectedSkillCount ? `，本对话已固定 ${selectedSkillCount} 个` : ""}`}
+                    aria-expanded={skillsOpen}
+                    aria-haspopup="dialog"
+                    title={selectedSkillCount ? `本对话已固定 ${selectedSkillCount} 个技能；其他已安装技能 Agent 会按任务自动查找` : "已安装的技能 Agent 会按任务自动查找"}
+                    onClick={() => onSkillsOpenChange(true)}
+                >
+                    <Blocks className="size-3.5" aria-hidden="true" />
+                    {/* 面板窄时只留图标和数量，把位置让给模型名。 */}
+                    <span className="agent-skills-label">技能</span>
+                    {selectedSkillCount ? <span className="tabular-nums">{selectedSkillCount}</span> : null}
+                </button>
+            )}
         </div>
     );
 }

@@ -1,3 +1,5 @@
+import { useUserStore } from "@/stores/use-user-store";
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 import { App, Button } from "antd";
 import { Check, Film, Landmark, LoaderCircle, Megaphone, Palette, Plus, Shapes, ShoppingBag, Users, Wrench, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -33,7 +35,13 @@ function markInstalled(list: SkillRecommendationList, installed: string[]): Skil
  * 按行业推荐内置技能。只在用户点击时安装；装好的技能默认允许 Agent 按任务自动选用，
  * 用户可在技能设置里改成只在点名或固定时使用。
  */
-export function SkillRecommendationsModal({ open, onClose, onInstalled }: SkillRecommendationsModalProps) {
+export function SkillRecommendationsModal(props: SkillRecommendationsModalProps) {
+    const allowed = useSkillLibraryAccess();
+    const userId = useUserStore((state) => state.user?.id);
+    return allowed ? <AdminSkillRecommendationsModal key={userId} {...props} /> : null;
+}
+
+function AdminSkillRecommendationsModal({ open, onClose, onInstalled }: SkillRecommendationsModalProps) {
     const { message } = App.useApp();
     const [data, setData] = useState<SkillRecommendationList | null>(null);
     const [loading, setLoading] = useState(false);

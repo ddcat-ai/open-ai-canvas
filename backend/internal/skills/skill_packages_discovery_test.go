@@ -107,13 +107,13 @@ func TestDiscoverGitHubSkillsRejectsUnsafeCandidates(t *testing.T) {
 }
 
 func TestDiscoverGitHubSkillsRequiresUserAndSafeURL(t *testing.T) {
-	svc := &Service{}
+	svc, _ := newSkillEditTestService(t)
 	_, err := svc.DiscoverGitHubSkills(context.Background(), " ", SkillGitHubDiscoverRequest{URL: "https://github.com/owner/repo"})
 	if appErr, ok := err.(*kernel.AppError); !ok || appErr.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated error = %#v", err)
 	}
 	for _, address := range []string{"http://github.com/owner/repo", "https://localhost/owner/repo", "https://user@github.com/owner/repo"} {
-		if _, err := svc.DiscoverGitHubSkills(context.Background(), "user", SkillGitHubDiscoverRequest{URL: address}); err == nil {
+		if _, err := svc.DiscoverGitHubSkills(context.Background(), "owner", SkillGitHubDiscoverRequest{URL: address}); err == nil {
 			t.Fatalf("accepted invalid URL %q", address)
 		}
 	}

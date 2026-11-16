@@ -42,7 +42,8 @@ func TestEcommerceCreativeParametersPersistAndValidate(t *testing.T) {
 }
 
 func TestEcommerceUploadedSkillReadsReferencedMethods(t *testing.T) {
-	svc, _, _, _ := ecommerceCreationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
+	skillAdministratorFixture(t, db, "user")
 	var data bytes.Buffer
 	archive := zip.NewWriter(&data)
 	for name, body := range map[string]string{

@@ -1,3 +1,4 @@
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Button, Checkbox, Input } from "antd";
 import { ArrowLeft, BookMarked, Check, ChevronRight, Cpu, Gauge, LockKeyhole, Search, ShieldCheck, Sparkles, Wrench, Blocks, CirclePlay, X } from "lucide-react";
@@ -80,7 +81,9 @@ const permissionOptions: Array<{ value: AgentPermissionMode; label: string; shor
 const contextOptions: Array<{ value: AgentContextKey; label: string; description: string }> = [{ value: "canvas", label: "画布节点目录", description: "每次请求只带节点 id、类型和标题；正文按页读取，不含媒体或未同步修改" }];
 
 export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
-    const [section, setSection] = useState<SettingsSection>(props.initialSection || "home");
+    const canUseSkills = useSkillLibraryAccess();
+    const [selectedSection, setSection] = useState<SettingsSection>(props.initialSection || "home");
+    const section = !canUseSkills && selectedSection === "skills" ? "home" : selectedSection;
     const [skillTab, setSkillTab] = useState<"installed" | "market">("installed");
     const [mcpTab, setMcpTab] = useState<AgentMCPSettingsTab>(props.initialMcpTab || "connections");
     const { theme } = props;
@@ -120,6 +123,7 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
 }
 
 function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; theme: CanvasTheme; onOpen: (section: SettingsSection) => void }) {
+    const canUseSkills = useSkillLibraryAccess();
     const thinking = modelCapabilityConfigFor(props.config, props.selectedModel).text?.thinking || LEGACY_TEXT_THINKING_CONFIG;
     return (
         <div className="canvas-agent-settings-scroll thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
@@ -181,7 +185,7 @@ function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; the
                     <SettingRow theme={theme} icon={<Cpu className="size-4" />} title="上下文" summary={props.nodeCount === null ? "未绑定画布" : `${props.nodeCount} 个节点 · ${props.contextScope.length} 个范围`} onClick={() => onOpen("context")} />
                     <SettingRow theme={theme} icon={<BookMarked className="size-4" />} title="长期偏好" summary={profileSummary(props.profileView)} onClick={() => onOpen("profile")} />
                     <SettingRow theme={theme} icon={<BookMarked className="size-4" />} title="个人记忆" summary="Agent 在对话中自己记住和改写，可随时撤销；只属于你" onClick={() => onOpen("memories")} />
-                    <SettingRow theme={theme} icon={<Blocks className="size-4" />} title="Skills · 用户技能库" summary={skillsSummary(props.installedSkills, props.selectedSkillIds)} onClick={() => onOpen("skills")} />
+                    {canUseSkills && <SettingRow theme={theme} icon={<Blocks className="size-4" />} title="Skills · 用户技能库" summary={skillsSummary(props.installedSkills, props.selectedSkillIds)} onClick={() => onOpen("skills")} />}
                     <SettingRow theme={theme} icon={<Wrench className="size-4" />} title="工具与连接" summary="个人与平台 MCP、工具授权和连接市场" onClick={() => onOpen("mcp")} />
                     <SettingRow theme={theme} icon={<Gauge className="size-4" />} title="预算" summary={`每轮最多 ${props.maxCredits || "未设置"} 积分 · 固定计价模型`} onClick={() => onOpen("budget")} />
                 </div>

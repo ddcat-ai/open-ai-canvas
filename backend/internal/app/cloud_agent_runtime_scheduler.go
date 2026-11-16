@@ -214,7 +214,14 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 		}
 		return s.terminateCloudAgent(run, "Agent 运行状态损坏，本轮已停止")
 	}
-	// 单步边界每次推进都重新解析：管理员改配置后，正在跑的这一轮下一步就用新值。
+	if err := s.cloudAgentCheckSkillExecution(run.UserID, &state, nil, ""); err != nil {
+		var appErr *AppError
+		if errors.As(err, &appErr) && (appErr.Status == 401 || appErr.Status == 403) {
+			return s.terminateCloudAgent(run, appErr.Message)
+		}
+		return err
+	}
+	// 单步边界每次推进都重新解析：管理员改配置后，正在跑的这一轮下一步就用新值.
 	state.StepLimits, err = s.cloudAgentStepLimits()
 	if err != nil {
 		return err

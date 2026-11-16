@@ -3,7 +3,9 @@ package skills
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"unicode/utf8"
 
@@ -148,8 +150,8 @@ func ValidateSkillRecommendations() error {
 
 // SkillRecommendations 返回按行业分组的推荐技能及当前用户的安装状态；已删除或停用的技能不出现。
 func (s *Service) SkillRecommendations(userID string) (*SkillRecommendationList, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, kernel.Unauthorized("请先登录")
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
 	}
 	file, err := loadSkillRecommendations()
 	if err != nil {
@@ -208,8 +210,8 @@ func (s *Service) SkillRecommendations(userID string) (*SkillRecommendationList,
 // InstallSkillRecommendations 安装某个行业的推荐技能；skillIds 为空时安装该行业全部推荐。
 // 已安装、已删除或不在该行业推荐里的技能计入 skipped，不报错。
 func (s *Service) InstallSkillRecommendations(userID, industryID string, req SkillRecommendationInstallRequest) (*SkillRecommendationInstallResult, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, kernel.Unauthorized("请先登录")
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
 	}
 	file, err := loadSkillRecommendations()
 	if err != nil {
@@ -256,7 +258,15 @@ func (s *Service) InstallSkillRecommendations(userID, industryID string, req Ski
 			continue
 		}
 		item, err := s.SkillDetail(userID, id)
-		if err != nil || item.Status != skillStatusEnabled {
+		if err != nil {
+			var appErr *kernel.AppError
+			if errors.As(err, &appErr) && (appErr.Status == http.StatusBadRequest || appErr.Status == http.StatusNotFound) {
+				result.Skipped = append(result.Skipped, id)
+				continue
+			}
+			return nil, err
+		}
+		if item.Status != skillStatusEnabled {
 			result.Skipped = append(result.Skipped, id)
 			continue
 		}

@@ -824,6 +824,9 @@ func (s *Service) markCloudAgentMediaBatchItemFailed(run *model.CloudAgentExecut
 }
 
 func (s *Service) submitCloudAgentMediaBatchItem(run *model.CloudAgentExecution, state *cloudAgentRuntime, index int, policy RuntimePolicySetting) error {
+	if err := s.cloudAgentCheckSkillExecution(run.UserID, state, nil, ""); err != nil {
+		return err
+	}
 	batch := state.MediaBatch
 	item := batch.Items[index]
 	budget := state.Request.Budget

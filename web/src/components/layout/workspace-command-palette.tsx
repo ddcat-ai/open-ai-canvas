@@ -8,6 +8,7 @@ import { Kbd } from "@/components/ui/base/kbd";
 import { cn } from "@/lib/utils";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { useUserStore } from "@/stores/use-user-store";
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 import { useTranslation } from "react-i18next";
 
 type PaletteEntry = {
@@ -22,6 +23,7 @@ type PaletteEntry = {
 export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
     const navigate = useNavigate();
     const features = useUserStore((state) => state.features);
+    const canUseSkills = useSkillLibraryAccess();
     const [query, setQuery] = useState("");
     const [highlight, setHighlight] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -37,13 +39,13 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
             toolEntry("canvas", "/canvas"),
             ...(features.taskCenterEnabled ? [toolEntry("tasks", "/tasks")] : []),
             toolEntry("assets", "/assets"),
-            toolEntry("skills", "/skills"),
+            ...(canUseSkills ? [toolEntry("skills", "/skills")] : []),
             ...(features.creditsEnabled ? [{ ...toolEntry("wallet"), run: () => openWorkspaceWallet() }] : []),
             toolEntry("settings", "/settings"),
             // 与 ⌘/Ctrl+J 相同：打开平台 Agent 面板。
             { id: "agent", title: t("shell.palette.agent"), icon: Bot, run: () => useGlobalAgentStore.getState().openAgent() },
         ];
-    }, [features, t, i18n.language]);
+    }, [features, t, i18n.language, canUseSkills]);
 
     const filtered = useMemo(() => {
         const keyword = query.trim().toLowerCase();

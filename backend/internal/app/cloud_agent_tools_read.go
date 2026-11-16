@@ -106,6 +106,9 @@ func cloudAgentReadCacheKeyForState(repo *repository.Repository, userID string, 
 }
 
 func cloudAgentReadToolCached(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
+	if err := cloudAgentRequireSkillToolAdministrator(repo, userID, call.Function.Name, services...); err != nil {
+		return nil, err
+	}
 	if !cloudAgentReadToolReadOnly(call.Function.Name) {
 		return cloudAgentReadTool(repo, userID, state, call, services...)
 	}
@@ -196,6 +199,9 @@ func cloudAgentReadToolCached(repo *repository.Repository, userID string, state 
 }
 
 func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
+	if err := cloudAgentRequireSkillToolAdministrator(repo, userID, call.Function.Name, services...); err != nil {
+		return nil, err
+	}
 	binding, known := cloudAgentRegistry().Lookup(call.Function.Name)
 	if !known || binding.Handler.Read == nil {
 		return nil, BadAuthRequest("未知或不可读取的工具")

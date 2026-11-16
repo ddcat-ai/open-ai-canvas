@@ -20,6 +20,7 @@ func skillFeedbackCall(id, path string) cloudAgentCall {
 func skillFeedbackFixture(t *testing.T, packs map[string]map[string]string) (*Service, map[string]string, cloudAgentRuntime) {
 	t.Helper()
 	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "user")
 	if sqlDB, err := db.DB(); err == nil {
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}

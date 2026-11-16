@@ -134,6 +134,7 @@ func TestCloudAgentSkillSearchToleratesStraySkillIDArgument(t *testing.T) {
 	// 被 decodeCloudAgentJSONObject（DisallowUnknownFields）拒绝 → tool_failed，
 	// 检索一次都没成功。这里走完整的工具分发路径，确保解码层真的容忍该字段。
 	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "u1")
 	if sqlDB, err := db.DB(); err == nil {
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}

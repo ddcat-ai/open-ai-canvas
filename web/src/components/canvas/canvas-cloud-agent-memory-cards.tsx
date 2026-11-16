@@ -1,3 +1,4 @@
+import { hasSkillLibraryAccess, useSkillLibraryAccess } from "@/lib/skill-access";
 import { App, Button } from "antd";
 import { BookMarked, Check, Plus, Sparkles, Undo2 } from "lucide-react";
 import { useState } from "react";
@@ -75,7 +76,9 @@ export function AgentSkillSuggestionCard({ suggestion, theme }: { suggestion: Cl
     const { message } = App.useApp();
     const [installing, setInstalling] = useState<string | null>(null);
     const [installed, setInstalled] = useState<Record<string, boolean>>({});
+    const canUseSkills = useSkillLibraryAccess();
     const install = async (skillId: string, name: string) => {
+        if (!hasSkillLibraryAccess()) return;
         setInstalling(skillId);
         try {
             await addSkill(skillId);
@@ -87,6 +90,7 @@ export function AgentSkillSuggestionCard({ suggestion, theme }: { suggestion: Cl
             setInstalling(null);
         }
     };
+    if (!canUseSkills) return null;
     return (
         <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: theme.node.fill, color: theme.node.text }}>
             <div className="flex items-center gap-1.5 font-medium">

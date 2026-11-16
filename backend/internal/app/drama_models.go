@@ -1054,11 +1054,18 @@ func dramaMaxVideoSeconds(options production.DurationOptions) int {
 
 // dramaWritingSkill 读取作品为某个文字步骤选定的写作技能；技能不可读时报错，不悄悄退回内置写法。label 用于错误提示。
 func (s *Service) dramaWritingSkill(userID string, ref *DramaSkillRef, label string) (*production.WritingSkill, error) {
-	if ref == nil {
+	if ref == nil || strings.TrimSpace(ref.SkillID) == "" {
 		return nil, nil
+	}
+	if err := s.RequireSkillAdministrator(userID); err != nil {
+		return nil, err
 	}
 	file, err := s.SkillPackageFile(userID, ref.SkillID, ref.Path)
 	if err != nil {
+		var appErr *AppError
+		if errors.As(err, &appErr) && (appErr.Status == 401 || appErr.Status == 403) {
+			return nil, err
+		}
 		return nil, BadAuthRequest(label + "技能「" + firstNonEmpty(ref.SkillName, ref.SkillID) + "」不可用：" + err.Error())
 	}
 	if file.Binary || strings.TrimSpace(file.Content) == "" {

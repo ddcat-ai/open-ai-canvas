@@ -1,3 +1,5 @@
+import { useUserStore } from "@/stores/use-user-store";
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 import { App, Button, Checkbox, Input, Modal, Segmented } from "antd";
 import { BookOpen, RefreshCw, Search, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,7 +10,17 @@ import { getActiveUserScope } from "@/lib/user-scope";
 
 type Props = { selected: string[]; onChange: (ids: string[]) => void; disabled?: boolean };
 
-export function EcommerceSkillPicker({ selected, onChange, disabled }: Props) {
+export function EcommerceSkillPicker(props: Props) {
+    const allowed = useSkillLibraryAccess();
+    const hydrated = useUserStore((state) => state.hydrated);
+    const userId = useUserStore((state) => state.user?.id);
+    useEffect(() => {
+        if (hydrated && !allowed && props.selected.length) props.onChange([]);
+    }, [allowed, hydrated, props.selected, props.onChange]);
+    return allowed ? <AdminEcommerceSkillPicker key={userId} {...props} /> : null;
+}
+
+function AdminEcommerceSkillPicker({ selected, onChange, disabled }: Props) {
     const { message } = App.useApp();
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<"mine" | "public">("mine");

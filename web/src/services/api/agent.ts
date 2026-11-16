@@ -1,3 +1,4 @@
+import { hasSkillLibraryAccess } from "@/lib/skill-access";
 import { http, apiBaseURL } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser } from "@/services/api/task-text-stream";
 import { assertCurrentUserSession, captureUserSession, isUserSessionInvalidated } from "@/lib/user-scope";
@@ -175,11 +176,15 @@ async function submitAgentRequest(path: string, input: CreateAgentRunInput) {
 }
 
 export async function createAgentRun(input: CreateAgentRunInput) {
-    return submitAgentRequest("/agent/runs", input);
+    return submitAgentRequest("/agent/runs", { ...input, pinnedSkillIds: hasSkillLibraryAccess() ? input.pinnedSkillIds : [], contextScope: hasSkillLibraryAccess() ? input.contextScope : input.contextScope?.filter((scope) => scope !== "skills") });
 }
 
 export async function sendAgentMessage(runId: string, input: CreateAgentRunInput) {
-    return submitAgentRequest(`/agent/runs/${encodeURIComponent(runId)}/messages`, input);
+    return submitAgentRequest(`/agent/runs/${encodeURIComponent(runId)}/messages`, {
+        ...input,
+        pinnedSkillIds: hasSkillLibraryAccess() ? input.pinnedSkillIds : [],
+        contextScope: hasSkillLibraryAccess() ? input.contextScope : input.contextScope?.filter((scope) => scope !== "skills"),
+    });
 }
 
 export function sendAgentInterjection(runId: string, input: { text: string; messageId: string }) {

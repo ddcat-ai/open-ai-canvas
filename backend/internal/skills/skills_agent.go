@@ -49,8 +49,12 @@ func agentSkillCatalogEntry(userID string, row repository.AgentSkillCatalogRow) 
 
 // AgentSkillCatalog 返回用户技能库中所有已安装或自建、且启用的技能。
 func (s *Service) AgentSkillCatalog(userID string) ([]AgentSkillCatalogEntry, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, kernel.Unauthorized("请先登录")
+	admin, err := s.IsAdministrator(userID)
+	if err != nil {
+		return nil, err
+	}
+	if !admin {
+		return []AgentSkillCatalogEntry{}, nil
 	}
 	rows, err := s.repo.AgentSkillCatalogRows(userID)
 	if err != nil {
@@ -68,8 +72,11 @@ func (s *Service) AgentSkillCatalog(userID string) ([]AgentSkillCatalogEntry, er
 
 // AgentSkillCatalogByIDs 只返回仍然可见且启用的指定技能。
 func (s *Service) AgentSkillCatalogByIDs(userID string, ids []string) ([]AgentSkillCatalogEntry, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, kernel.Unauthorized("请先登录")
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return []AgentSkillCatalogEntry{}, nil
 	}
 	rows, err := s.repo.AgentSkillCatalogRowsByIDs(userID, ids)
 	if err != nil {
@@ -84,8 +91,12 @@ func (s *Service) AgentSkillCatalogByIDs(userID string, ids []string) ([]AgentSk
 
 // MarketSkillCatalog 返回用户还没装的公开技能，只用于推荐安装，不授予读取正文的权限。
 func (s *Service) MarketSkillCatalog(userID string) ([]AgentSkillCatalogEntry, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, kernel.Unauthorized("请先登录")
+	admin, err := s.IsAdministrator(userID)
+	if err != nil {
+		return nil, err
+	}
+	if !admin {
+		return []AgentSkillCatalogEntry{}, nil
 	}
 	rows, err := s.repo.MarketSkillCatalogRows(userID, 0)
 	if err != nil {
@@ -110,6 +121,9 @@ func (s *Service) MarketSkillCatalog(userID string) ([]AgentSkillCatalogEntry, e
 
 // SetSkillAgentMode 设置已安装技能是否允许 Agent 自动发现。
 func (s *Service) SetSkillAgentMode(userID, id, mode string) (*SkillItem, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	mode = strings.TrimSpace(mode)
 	if mode != model.UserSkillAgentModeAuto && mode != model.UserSkillAgentModeManual {
 		return nil, kernel.BadAuthRequest("Agent 使用方式只能是 auto 或 manual")
@@ -139,6 +153,9 @@ func (s *Service) SetSkillAgentMode(userID, id, mode string) (*SkillItem, error)
 
 // RecordSkillAgentUse 记录 Agent 本轮实际读取过的技能，用于目录排序；统计失败不影响读取结果。
 func (s *Service) RecordSkillAgentUse(userID string, skillIDs []string) error {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return err
+	}
 	return s.repo.RecordUserSkillAgentUse(userID, skillIDs, time.Now())
 }
 

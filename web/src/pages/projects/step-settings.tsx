@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useSkillLibraryAccess } from "@/lib/skill-access";
+import { useUserStore } from "@/stores/use-user-store";
 import { Button, Select } from "antd";
 import { TriangleAlert } from "lucide-react";
 
@@ -69,6 +71,13 @@ export function DramaTextSteps({
     textThinking: DramaTextThinking;
     onThinkingChange: (step: DramaTextStep, value: ThinkingRequest) => void;
 }) {
+    const canUseSkills = useSkillLibraryAccess();
+    const hydrated = useUserStore((state) => state.hydrated);
+    useEffect(() => {
+        if (!hydrated || canUseSkills) return;
+        const selected = TEXT_STEPS.find((item) => skills[SKILL_FIELD[item.step]]);
+        if (selected) onSkillChange(selected.step, undefined);
+    }, [canUseSkills, hydrated, skills, onSkillChange]);
     return (
         <div className="drama-steps" role="list" aria-label="文字步骤">
             <div className="drama-step-row" role="listitem">
@@ -80,10 +89,12 @@ export function DramaTextSteps({
                     <span className="drama-step-caption">文本模型</span>
                     <small className="drama-step-note">跟随制作模型{models?.text?.label ? ` · ${models.text.label}` : ""}</small>
                 </div>
-                <div className="drama-step-field">
-                    <span className="drama-step-caption">技能</span>
-                    <small className="drama-step-note">系统内置分集规则</small>
-                </div>
+                {canUseSkills && (
+                    <div className="drama-step-field">
+                        <span className="drama-step-caption">技能</span>
+                        <small className="drama-step-note">系统内置分集规则</small>
+                    </div>
+                )}
                 <div className="drama-step-field">
                     <span className="drama-step-caption">思考等级</span>
                     <Select aria-label="分集规划思考等级" value={textThinking.plan || "auto"} options={THINKING_REQUEST_OPTIONS} onChange={(value) => onThinkingChange("plan", value)} />
@@ -99,10 +110,12 @@ export function DramaTextSteps({
                         <span className="drama-step-caption">文本模型</span>
                         <OverridePicker capability="text" value={overrideOf(models, item.override)} fallback={models?.text} onChange={(choice) => onModelsChange({ [item.override]: choice || {} })} />
                     </div>
-                    <div className="drama-step-field">
-                        <span className="drama-step-caption">技能</span>
-                        <PromptSkillField compact step={item.step} value={skills[SKILL_FIELD[item.step]]} onChange={(value) => onSkillChange(item.step, value)} />
-                    </div>
+                    {canUseSkills && (
+                        <div className="drama-step-field">
+                            <span className="drama-step-caption">技能</span>
+                            <PromptSkillField compact step={item.step} value={skills[SKILL_FIELD[item.step]]} onChange={(value) => onSkillChange(item.step, value)} />
+                        </div>
+                    )}
                     <div className="drama-step-field">
                         <span className="drama-step-caption">思考等级</span>
                         <Select aria-label={`${item.label}思考等级`} value={textThinking[item.step] || "auto"} options={THINKING_REQUEST_OPTIONS} onChange={(value) => onThinkingChange(item.step, value)} />

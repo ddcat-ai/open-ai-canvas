@@ -1,3 +1,4 @@
+import { hasSkillLibraryAccess } from "@/lib/skill-access";
 import { compactApiParams, http } from "@/services/api/request";
 import type { Project } from "@/services/api/projects";
 import type { ThinkingRequest } from "@/lib/text-thinking";
@@ -531,6 +532,12 @@ export type DramaDraft = {
     form: DramaDraftForm;
 };
 
+function withoutRestrictedSkillRefs<T extends { settings?: Partial<DramaSettings> }>(input: T): T {
+    if (hasSkillLibraryAccess() || !input.settings) return input;
+    const { bibleSkill, scriptSkill, promptSkill, ...settings } = input.settings;
+    return { ...input, settings };
+}
+
 const base = (projectId: string) => `/dramas/${encodeURIComponent(projectId)}`;
 
 export function listDramas(params: { page: number; pageSize: number; q?: string; status?: DramaStatus }, signal?: AbortSignal) {
@@ -546,11 +553,11 @@ export function getDramaModels() {
 }
 
 export function estimateDrama(input: { chapterCount: number; wordCount: number; settings: Partial<DramaSettings>; episodeMode?: DramaEpisodeMode }, signal?: AbortSignal) {
-    return http.post<DramaEstimate>("/dramas/estimate", input, { signal });
+    return http.post<DramaEstimate>("/dramas/estimate", withoutRestrictedSkillRefs(input), { signal });
 }
 
 export function createDrama(input: CreateDramaInput) {
-    return http.post<DramaSummary>("/dramas", input, { timeout: 120_000 });
+    return http.post<DramaSummary>("/dramas", withoutRestrictedSkillRefs(input), { timeout: 120_000 });
 }
 
 export function getDramaDraft(projectId: string, signal?: AbortSignal) {
@@ -559,7 +566,7 @@ export function getDramaDraft(projectId: string, signal?: AbortSignal) {
 
 /** 整体替换从未开工的草稿；start=true 时替换后直接开工。 */
 export function saveDramaDraft(projectId: string, input: CreateDramaInput) {
-    return http.put<DramaSummary>(`${base(projectId)}/draft`, input, { timeout: 120_000 });
+    return http.put<DramaSummary>(`${base(projectId)}/draft`, withoutRestrictedSkillRefs(input), { timeout: 120_000 });
 }
 
 export function deleteDrama(projectId: string) {
@@ -571,7 +578,7 @@ export function getDrama(projectId: string, signal?: AbortSignal) {
 }
 
 export function updateDramaSettings(projectId: string, input: { settings?: DramaSettings; budgetMicrocredits?: number }) {
-    return http.patch<DramaSummary>(`${base(projectId)}/settings`, input);
+    return http.patch<DramaSummary>(`${base(projectId)}/settings`, withoutRestrictedSkillRefs(input));
 }
 
 export function startDrama(projectId: string) {

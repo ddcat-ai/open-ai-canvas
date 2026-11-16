@@ -87,6 +87,7 @@ func TestSkillHintsSeparateMentionedPinnedAndRecalled(t *testing.T) {
 
 func TestSkillPoolUsesInstalledSkillsAndHonorsManualMode(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "user")
 	if sqlDB, err := db.DB(); err == nil {
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
@@ -125,6 +126,7 @@ func TestSkillPoolUsesInstalledSkillsAndHonorsManualMode(t *testing.T) {
 
 func TestSkillMarketSearchFeedsOneRecommendationCard(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "user", "author")
 	if sqlDB, err := db.DB(); err == nil {
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}

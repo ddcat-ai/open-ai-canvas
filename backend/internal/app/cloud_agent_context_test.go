@@ -163,7 +163,8 @@ func TestCloudAgentUnlimitedBudgetKeepsGenerationTools(t *testing.T) {
 }
 
 func TestCloudAgentSkillsLoadOnDemandAndPage(t *testing.T) {
-	s, _, _, _ := creationTestService(t)
+	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "user")
 	var ids []string
 	for i := 0; i < 10; i++ {
 		skill, err := s.CreateSkill("user", SkillMutationRequest{SkillName: strings.Repeat("s", i+1), Description: "test", Instruction: "# Test\n\nDescription\n\n" + strings.Repeat("中文", 10000), Tag: "others", IsPrivate: true})

@@ -1,3 +1,4 @@
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button, Input } from "antd";
@@ -79,6 +80,7 @@ export function AssetSchemePicker({
     imageModel?: DramaModelOption;
 }) {
     const { modal } = App.useApp();
+    const canUseSkills = useSkillLibraryAccess();
     const catalogQuery = useAssetSchemes();
     const catalog = catalogQuery.data;
     const [tab, setTab] = useState<"character" | "scene">("character");
@@ -204,9 +206,11 @@ export function AssetSchemePicker({
                     </div>
                     {modified ? <span className="drama-assets-badge">已修改</span> : <span className="drama-assets-badge is-muted">默认</span>}
                     <div className="ml-auto flex gap-2">
-                        <Button size="small" type="text" icon={<BookMarked className="size-3.5" />} onClick={() => setImportOpen(true)}>
-                            从技能导入
-                        </Button>
+                        {canUseSkills && (
+                            <Button size="small" type="text" icon={<BookMarked className="size-3.5" />} onClick={() => setImportOpen(true)}>
+                                从技能导入
+                            </Button>
+                        )}
                         <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} disabled={!modified} onClick={() => setPrompt(defaultPrompt)}>
                             恢复默认
                         </Button>
@@ -236,7 +240,7 @@ export function AssetSchemePicker({
                         不支持的变量：{unknown.join("、")}。保存时会被拒绝，可用变量见上方。
                     </p>
                 ) : null}
-                {tab === "character" && value.sourceSkillName ? (
+                {canUseSkills && tab === "character" && value.sourceSkillName ? (
                     <p className="drama-assets-source">
                         <Blocks className="size-3.5" />
                         约束来自技能「{value.sourceSkillName}」{value.sourcePath ? ` · ${value.sourcePath}` : ""}
@@ -251,16 +255,18 @@ export function AssetSchemePicker({
                     {tab === "character" && scheme ? <small>参考图版式说明：{scheme.frameHint}</small> : null}
                 </div>
             </div>
-            <SkillPromptImportModal
-                open={importOpen}
-                onClose={() => setImportOpen(false)}
-                onImport={({ text, skillId, skillName, path }) => {
-                    const next = /\{\{角色名称\}\}|\{\{角色设定\}\}/.test(text) ? text : `${text.trim()}\n\n【本角色】{{角色名称}}：{{角色设定}}。画风：{{项目画风}}。{{画面规则}}`;
-                    onChange({ ...value, mode: value.mode === "custom" ? "custom" : value.mode, characterPrompt: next.slice(0, PROMPT_LIMIT), sourceSkillId: skillId, sourceSkillName: skillName, sourcePath: path });
-                    setTab("character");
-                    setImportOpen(false);
-                }}
-            />
+            {canUseSkills && (
+                <SkillPromptImportModal
+                    open={importOpen}
+                    onClose={() => setImportOpen(false)}
+                    onImport={({ text, skillId, skillName, path }) => {
+                        const next = /\{\{角色名称\}\}|\{\{角色设定\}\}/.test(text) ? text : `${text.trim()}\n\n【本角色】{{角色名称}}：{{角色设定}}。画风：{{项目画风}}。{{画面规则}}`;
+                        onChange({ ...value, mode: value.mode === "custom" ? "custom" : value.mode, characterPrompt: next.slice(0, PROMPT_LIMIT), sourceSkillId: skillId, sourceSkillName: skillName, sourcePath: path });
+                        setTab("character");
+                        setImportOpen(false);
+                    }}
+                />
+            )}
         </section>
     );
 }
