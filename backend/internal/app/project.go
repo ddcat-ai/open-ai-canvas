@@ -678,5 +678,8 @@ func (s *Service) ensureTaskProjectActive(userID string, canvasOrProjectID strin
 	if project.Status == model.ProjectStatusArchived {
 		return BadAuthRequest("项目已归档，无法创建生成任务")
 	}
+	if project.Type == "short-drama" {
+		return s.ensureDramaCanvasBudget(project.ID)
+	}
 	return nil
 }

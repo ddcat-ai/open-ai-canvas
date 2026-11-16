@@ -802,6 +802,7 @@ export default function DramaStudioPage() {
                             reprocessing={reprocessSegment.isPending}
                             onReprocess={(segment) => reprocessSegment.mutate(segment.index)}
                             defaultVideoModel={production.settings.models.video}
+                            promptModel={production.settings.models.promptText || production.settings.models.text}
                             videoResolution={production.settings.videoResolution}
                             onOpenCast={(id) => openView("cast", { cast: id, assets: null, segment: null, shot: null })}
                             onOpenAssets={() => openView("cast", { assets: "episodes", segment: null, shot: null })}
