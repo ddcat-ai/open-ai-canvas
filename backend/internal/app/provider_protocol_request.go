@@ -55,6 +55,7 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		BaseURL:       strings.TrimSpace(input.Config.BaseURL),
 		Extra: map[string]any{
 			"videoSeconds":      input.Config.VideoSeconds,
+			"audioMode":         input.Config.AudioMode,
 			"audioVoice":        input.Config.AudioVoice,
 			"audioFormat":       input.Config.AudioFormat,
 			"audioSpeed":        input.Config.AudioSpeed,

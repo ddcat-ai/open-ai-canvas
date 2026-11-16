@@ -4,6 +4,7 @@ import { projectImageParameters, normalizeImageParameters, imageParameterRequest
 import type { ImageResolutionOption, ImageResolutionTier } from "@/lib/image-resolution-tiers";
 import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio } from "@/lib/image-size-presets";
 import { kemeiSeedreamPresets } from "./kemei-image-presets";
+import { seedream55ImagePresets } from "./seedream-image-presets";
 import { type WorkflowVideoFieldLike, workflowImageCapabilityConfig, workflowVideoCapabilityConfig } from "./model-capabilities-workflow";
 import { resolveWorkflowVideoScreenSpec } from "./video-screen-specs";
 
@@ -375,6 +376,13 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
         image.transparentBackground.supported = false;
         image.responseFormat.supported = false;
         image.outputFormat.supported = false;
+        if (model === "doubao-seedream-5-5-261028") {
+            const presets = seedream55ImagePresets();
+            image.references.maxImages = 10;
+            image.size = { parameter: "size", values: presets.map((preset) => preset.size), default: "2048x2048", allowCustom: true, presets };
+            image.resolution = { supported: true, values: ["1k", "1.5k", "2k"], default: "2k" };
+            image.maxOutputs = 1;
+        }
     }
     if (protocol === "openai-image") {
         // OpenAI Images 只收 WIDTHxHEIGHT：默认配置声明了 1K/2K/4K，就必须自带档位换算表，

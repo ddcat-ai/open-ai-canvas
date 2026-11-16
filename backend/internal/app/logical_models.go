@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/protocol"
 	"yingce/backend/internal/repository"
@@ -17,20 +18,21 @@ import (
 var logicalModelCodePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{1,79}$`)
 
 type LogicalModelRequest struct {
-	Code                        string `json:"code"`
-	Name                        string `json:"name"`
-	Icon                        string `json:"icon"`
-	Description                 string `json:"description"`
-	Capability                  string `json:"capability"`
-	Enabled                     bool   `json:"enabled"`
-	SortOrder                   int    `json:"sortOrder"`
-	PricePolicy                 string `json:"pricePolicy"`
-	BillingMode                 string `json:"billingMode"`
-	UnitPriceMicrocredits       int64  `json:"unitPriceMicrocredits"`
-	InputPriceMicrocredits      int64  `json:"inputPriceMicrocredits"`
-	OutputPriceMicrocredits     int64  `json:"outputPriceMicrocredits"`
-	CachedPriceMicrocredits     int64  `json:"cachedPriceMicrocredits"`
-	CacheWritePriceMicrocredits int64  `json:"cacheWritePriceMicrocredits"`
+	ImagePricing                *model.ImagePricing `json:"imagePricing,omitempty"`
+	Code                        string              `json:"code"`
+	Name                        string              `json:"name"`
+	Icon                        string              `json:"icon"`
+	Description                 string              `json:"description"`
+	Capability                  string              `json:"capability"`
+	Enabled                     bool                `json:"enabled"`
+	SortOrder                   int                 `json:"sortOrder"`
+	PricePolicy                 string              `json:"pricePolicy"`
+	BillingMode                 string              `json:"billingMode"`
+	UnitPriceMicrocredits       int64               `json:"unitPriceMicrocredits"`
+	InputPriceMicrocredits      int64               `json:"inputPriceMicrocredits"`
+	OutputPriceMicrocredits     int64               `json:"outputPriceMicrocredits"`
+	CachedPriceMicrocredits     int64               `json:"cachedPriceMicrocredits"`
+	CacheWritePriceMicrocredits int64               `json:"cacheWritePriceMicrocredits"`
 	// LegacyModelIDs 只用于将用户本地保存的旧目录选择迁移到当前模型家族，
 	// 不能用它重写任务、账单或路由尝试中的不可变快照。
 	LegacyModelIDs []string              `json:"legacyModelIds"`
@@ -49,6 +51,7 @@ type LogicalRouteRequest struct {
 }
 
 type PublicLogicalModel struct {
+	ImagePricing                *model.ImagePricing           `json:"imagePricing,omitempty"`
 	ID                          string                        `json:"id"`
 	Code                        string                        `json:"code"`
 	Name                        string                        `json:"name"`
@@ -78,15 +81,16 @@ type PublicLogicalModel struct {
 // PublicLogicalModelPriceTier 是创作端用于约束规格选择和展示当前报价的安全投影，
 // 不暴露供应渠道、上游模型 ID 或内部路由信息。
 type PublicLogicalModelPriceTier struct {
-	Selector                         map[string]string `json:"selector"`
-	Resolution                       string            `json:"resolution"`
-	VideoSeconds                     int               `json:"videoSeconds"`
-	BillingMode                      string            `json:"billingMode"`
-	UnitPriceMicrocredits            int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits      int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
-	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
+	ImagePricing                     *model.ImagePricing `json:"imagePricing,omitempty"`
+	Selector                         map[string]string   `json:"selector"`
+	Resolution                       string              `json:"resolution"`
+	VideoSeconds                     int                 `json:"videoSeconds"`
+	BillingMode                      string              `json:"billingMode"`
+	UnitPriceMicrocredits            int64               `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits      int64               `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits     int64               `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits     int64               `json:"cachedTokenPriceMicrocredits"`
+	CacheWriteTokenPriceMicrocredits int64               `json:"cacheWriteTokenPriceMicrocredits"`
 }
 
 type AdminLogicalRoute struct {
@@ -443,8 +447,8 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	if pricePolicy == "channel" {
 		billingMode = "fixed_request"
 		req.UnitPriceMicrocredits, req.InputPriceMicrocredits, req.OutputPriceMicrocredits, req.CachedPriceMicrocredits, req.CacheWritePriceMicrocredits = 0, 0, 0, 0, 0
-	} else if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
-		return nil, nil, nil, false, BadAuthRequest("前台模型计费方式仅支持按次、按秒或 Token")
+	} else if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" && billingMode != imagebilling.Mode {
+		return nil, nil, nil, false, BadAuthRequest("前台模型计费方式仅支持按次、按秒、Token 或图片用量")
 	}
 	if pricePolicy == "unified" && billingMode == "per_second" && capability != "video" && capability != "audio" {
 		return nil, nil, nil, false, BadAuthRequest("只有视频或音频前台模型可以按秒计费")
@@ -452,6 +456,14 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	if pricePolicy == "unified" && billingMode == "token" {
 		if err := validateTokenPrices(capability, req.InputPriceMicrocredits, req.OutputPriceMicrocredits, req.CachedPriceMicrocredits, req.CacheWritePriceMicrocredits); err != nil {
 			return nil, nil, nil, false, err
+		}
+	}
+	if pricePolicy == "unified" && billingMode == imagebilling.Mode {
+		if capability != "image" {
+			return nil, nil, nil, false, BadAuthRequest("图片用量计费仅适用于图片前台模型")
+		}
+		if err := imagebilling.Validate(req.ImagePricing); err != nil {
+			return nil, nil, nil, false, BadAuthRequest(err.Error())
 		}
 	}
 	creating := strings.TrimSpace(id) == ""
@@ -478,6 +490,7 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 	item.Enabled, item.SortOrder, item.PricePolicy, item.BillingMode = req.Enabled, req.SortOrder, pricePolicy, billingMode
 	item.UnitPriceMicrocredits, item.InputPriceMicrocredits, item.OutputPriceMicrocredits, item.CachedPriceMicrocredits = req.UnitPriceMicrocredits, req.InputPriceMicrocredits, req.OutputPriceMicrocredits, req.CachedPriceMicrocredits
 	item.CacheWritePriceMicrocredits = req.CacheWritePriceMicrocredits
+	item.ImagePricing = req.ImagePricing
 	if req.LegacyModelIDs != nil {
 		legacyJSON, marshalErr := json.Marshal(normalizeLegacyModelIDs(req.LegacyModelIDs))
 		if marshalErr != nil {
@@ -798,7 +811,15 @@ func logicalModelNotFound(err error) bool { return errors.Is(err, gorm.ErrRecord
 // computeModelPriceDisplay 计算模型的价格展示信息
 // 返回：pricingMode, displayPrice, priceLabel
 func computeModelPriceDisplay(model model.LogicalModel, priceTiers []PublicLogicalModelPriceTier) (string, *int64, string) {
+	if model.PricePolicy == "unified" && model.BillingMode == imagebilling.Mode {
+		return "unified", nil, "按图片用量计费"
+	}
 	if model.PricePolicy == "channel" {
+		for _, tier := range priceTiers {
+			if tier.BillingMode == imagebilling.Mode {
+				return "provider", nil, "按图片用量计费"
+			}
+		}
 		// 跟随渠道价格
 		if len(priceTiers) == 0 {
 			return "provider", nil, "未配置"

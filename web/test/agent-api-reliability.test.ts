@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentEvent, CreateAgentRunInput } from "../src/services/api/agent";
+import { useUserStore } from "../src/stores/use-user-store";
 
 // Exercise the production protocol, isolating only transport/storage dependencies.
 // Temporary modules avoid mock.module leaking into unrelated Bun test suites.
@@ -15,6 +16,7 @@ writeFileSync(
     join(dir, "agent.ts"),
     readFileSync(new URL("services/api/agent.ts", root), "utf8")
         .replace('"@/services/api/request"', JSON.stringify(requestPath))
+        .replace('"@/lib/skill-access"', JSON.stringify(fileURLToPath(new URL("lib/skill-access.ts", root))))
         .replace('"@/lib/user-scope"', JSON.stringify(fileURLToPath(new URL("lib/user-scope.ts", root))))
         .replace('"@/services/api/task-text-stream"', JSON.stringify(fileURLToPath(new URL("services/api/task-text-stream.ts", root)))),
 );
@@ -37,7 +39,10 @@ const nativeFetch = globalThis.fetch;
 const nativeTimer = globalThis.setTimeout;
 let delays: number[] = [];
 let stops: Array<() => void> = [];
+let originalUser: ReturnType<typeof useUserStore.getState>;
 beforeEach(() => {
+    originalUser = useUserStore.getState();
+    useUserStore.setState({ hydrated: true, user: { id: "agent-reliability-user", username: "agent-reliability-user", displayName: "Agent 测试用户", role: "user", status: "active" } });
     delays = [];
     storage.data.clear();
     // Retain watchdog semantics; accelerate only retry waits, recording real delays.
@@ -47,6 +52,7 @@ beforeEach(() => {
     }) as typeof setTimeout;
 });
 afterEach(() => {
+    useUserStore.setState(originalUser);
     stops.forEach((stop) => stop());
     stops = [];
     globalThis.fetch = nativeFetch;
@@ -222,7 +228,8 @@ describe("Agent admission replay and durable pending records", () => {
             return { run: { id: "accepted" } };
         };
         expect(await api.createAgentRun(mutable)).toMatchObject({ run: { id: "accepted" } });
-        expect(bodies).toEqual([input, input, input]);
+        const expectedBody = { ...input, pinnedSkillIds: [] };
+        expect(bodies).toEqual([expectedBody, expectedBody, expectedBody]);
     });
 
     it("limits transport failures to three attempts, but never retries admission rejection", async () => {

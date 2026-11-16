@@ -1,5 +1,6 @@
 import { Form, InputNumber, Switch, type FormInstance } from "antd";
 import type { ChannelModelFormValues } from "./channel-model-editor-form";
+import { ImageUsagePriceFields } from "./image-usage-price-fields";
 
 export function CreditCostFields({
     index,
@@ -42,7 +43,9 @@ export function CreditCostFields({
                     <Switch aria-label="配置积分成本价" />
                 </Form.Item>
             </header>
-            {configured ? (
+            {configured && billingMode === "image_usage" ? (
+                <ImageUsagePriceFields index={index} form={form} unit="积分" cost />
+            ) : configured ? (
                 <div className={billingMode === "token" && !isVideo ? "admin-price-tier-cost-grid admin-price-tier-cost-token-grid" : "admin-price-tier-cost-grid"}>
                     {fields.map(([field, label]) => (
                         <Form.Item key={field} className="mb-0" name={[index, field]} label={label} rules={[{ required: true, message: "请输入积分成本价" }]}>

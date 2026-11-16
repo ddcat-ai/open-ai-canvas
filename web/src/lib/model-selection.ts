@@ -215,6 +215,7 @@ export function modelRequestOptions(config: AiConfig, capability: ModelCapabilit
         }
         case "audio":
             return {
+                audioMode: config.audioMode,
                 audioVoice: config.audioVoice,
                 audioFormat: config.audioFormat,
                 audioSpeed: Number(config.audioSpeed),

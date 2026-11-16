@@ -13,6 +13,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 )
@@ -346,6 +347,14 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 		if order.Status == model.BillingStatusRefunded {
 			return errors.New("billing order already refunded")
 		}
+		if order.CostBillingMode == imagebilling.Mode && order.CostPricing.Configured {
+			if _, err := imagebilling.Amount(order.CostPricing.ImagePricing, order.ImageUsage, 10_000); err != nil {
+				return err
+			}
+		}
+		if order.BillingMode == imagebilling.Mode {
+			return settleImageBillingOrder(tx, order, providerRequestID)
+		}
 		if order.BillingMode != "token" {
 			if err := validateBillingChargeLimit(order, order.AmountMicrocredits); err != nil {
 				return err
@@ -623,6 +632,16 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 
 		actual := order.AmountMicrocredits
 		var usage *BillingUsage
+		if order.BillingMode == imagebilling.Mode {
+			var err error
+			actual, err = imagebilling.Amount(order.ImagePricing, order.ImageUsage, order.MultiplierBasisPoints)
+			if err != nil {
+				return err
+			}
+			if actual > order.AmountMicrocredits || billingChargeLimitApplies(order) && actual > order.ChargeLimitMicrocredits {
+				return errors.New("图片实际费用超过原授权上限，需人工核对")
+			}
+		}
 		var usageSource string
 		priceRule := 0
 		if order.BillingMode == "token" {

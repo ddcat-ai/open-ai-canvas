@@ -57,6 +57,13 @@ func (e *mediaRecoveryError) Unwrap() error { return e.cause }
 var mediaRecoverySlots = make(chan struct{}, 2)
 var mediaRecoveryDelays = []time.Duration{15 * time.Second, time.Minute, 3 * time.Minute, 10 * time.Minute}
 
+func mediaCheckpointItemLimit(mode string) int {
+	if mode == "image" {
+		return 128
+	}
+	return 32
+}
+
 func mediaStageLabel(stage string) string {
 	switch stage {
 	case "download":
@@ -85,7 +92,7 @@ func (s *Service) decodeMediaCheckpoint(task *model.Task) (*mediaCheckpoint, err
 	if err := json.Unmarshal([]byte(plain), &checkpoint); err != nil {
 		return nil, err
 	}
-	if len(checkpoint.Items) == 0 || len(checkpoint.Items) > 32 || (checkpoint.Mode != "image" && checkpoint.Mode != "video" && checkpoint.Mode != "audio") {
+	if len(checkpoint.Items) == 0 || len(checkpoint.Items) > mediaCheckpointItemLimit(checkpoint.Mode) || (checkpoint.Mode != "image" && checkpoint.Mode != "video" && checkpoint.Mode != "audio") {
 		return nil, errors.New("作品恢复信息无效")
 	}
 	return &checkpoint, nil
@@ -119,7 +126,7 @@ func recoverProtocolMedia(ctx context.Context, config providerConfig, mode strin
 	if task.Status != model.TaskStatusRunning {
 		return nil, false, nil
 	}
-	if len(references) == 0 || len(references) > 32 {
+	if len(references) == 0 || len(references) > mediaCheckpointItemLimit(mode) {
 		return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: errors.New("生成结果数量超过恢复限制")}
 	}
 	if task.MediaRecoveryJSON != "" {
@@ -131,7 +138,7 @@ func recoverProtocolMedia(ctx context.Context, config providerConfig, mode strin
 		if len(reference.URL) > 16_384 {
 			return nil, true, &mediaRecoveryError{stage: "checkpoint", cause: errors.New("上游媒体地址过长")}
 		}
-		item := mediaCheckpointItem{Reference: protocol.MediaReference{URL: reference.URL, MIMEType: reference.MIMEType}}
+		item := mediaCheckpointItem{Reference: protocol.MediaReference{URL: reference.URL, MIMEType: reference.MIMEType, Name: reference.Name, Order: reference.Order, Metadata: reference.Metadata}}
 		// Inline bytes are staged, never stored as a large base64 DB checkpoint.
 		if reference.DataURL != "" {
 			mimeType, data, decodeErr := decodeProviderDataURL(reference.DataURL)
@@ -266,7 +273,14 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 			}
 		}
 		url := resourceFileURL(resource.ID)
-		items = append(items, map[string]interface{}{"dataUrl": url, "url": url, "resourceId": resource.ID, "storageKey": "resource:" + resource.ID, "mimeType": resource.MimeType, "bytes": resource.Size, "width": resource.Width, "height": resource.Height, "durationMs": resource.DurationMs})
+		output := map[string]interface{}{"dataUrl": url, "url": url, "resourceId": resource.ID, "storageKey": "resource:" + resource.ID, "mimeType": resource.MimeType, "bytes": resource.Size, "width": resource.Width, "height": resource.Height, "durationMs": resource.DurationMs}
+		if len(item.Reference.Metadata) > 0 {
+			output["metadata"] = item.Reference.Metadata
+		}
+		if item.Reference.Name != "" {
+			output["name"] = item.Reference.Name
+		}
+		items = append(items, output)
 	}
 	result = map[string]interface{}{"mode": checkpoint.Mode}
 	if checkpoint.Mode == "image" {

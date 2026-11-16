@@ -188,7 +188,7 @@ func TestImageParametersPublicIntentDoesNotOverwriteEncodedPixelSize(t *testing.
 		encoded, _ := json.Marshal(spec.Body)
 		_ = json.Unmarshal(encoded, &body)
 	}
-	if body["size"] != "2496x1664" || body["quality"] != "max" || body["resolution"] != "2k" {
+	if body["size"] != "2496x1664" || body["quality"] != "max" || body["resolution"] != nil {
 		t.Fatalf("encoded request = %#v", body)
 	}
 }

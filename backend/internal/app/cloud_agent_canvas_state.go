@@ -311,6 +311,9 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 		}
 		if capability.GenerationMode != "" {
 			generation := map[string]any{"taskStatus": "not_submitted"}
+			if capability.GenerationMode == "audio" {
+				generation["audio"] = cloudAgentAudioReferenceState(meta, doc)
+			}
 			if reason, issue := cloudAgentMediaTargetIssue(node, capability.Type); reason != "" {
 				generation["submitBlockedReason"], generation["submitBlockedIssue"] = reason, issue
 			}

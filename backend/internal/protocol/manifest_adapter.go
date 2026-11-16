@@ -473,6 +473,18 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 				Kind: defaultValue(manifestString(typed["kind"]), kind), Role: manifestString(typed["role"]), MIMEType: manifestString(typed["mimeType"]),
 				Name: manifestString(typed["name"]), Order: manifestInt(typed["order"]), Weight: manifestFloat(typed["weight"]), Ephemeral: ephemeral || manifestTruthy(typed["ephemeral"]),
 			}
+			reference.Metadata = make(map[string]any)
+			metadata, _ := typed["metadata"].(map[string]any)
+			for _, key := range []string{"size", "z_index", "bounding_box", "description", "text_recognition", "background", "output_format"} {
+				if value, exists := typed[key]; exists {
+					reference.Metadata[key] = value
+				} else if value, exists := metadata[key]; exists {
+					reference.Metadata[key] = value
+				}
+			}
+			if len(reference.Metadata) == 0 {
+				reference.Metadata = nil
+			}
 			if reference.URL == "" {
 				reference.URL = firstString(typed, "file_url", "fileUrl", "image_url", "imageUrl", "video_url", "videoUrl", "audio_url", "audioUrl", "uri")
 			}

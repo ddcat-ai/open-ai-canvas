@@ -12,6 +12,20 @@ import (
 )
 
 func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions []protocol.ImageParameter, model, create string) error {
+	// Model-scoped common defaults must not create disabled controls on older
+	// models. Explicitly saved common controls still own their capability bounds.
+	applicable := make([]protocol.ImageParameter, 0, len(definitions))
+	for _, definition := range definitions {
+		_, common := protocol.CommonImageParameter(definition.Name)
+		configured := false
+		for _, field := range image.Parameters {
+			configured = configured || field.Name == definition.Name
+		}
+		if !common || definition.AppliesTo(model) || configured {
+			applicable = append(applicable, definition)
+		}
+	}
+	definitions = applicable
 	// Preserve the established legacy quality-as-resolution conversion before
 	// supplementing generic fields; explicit parameter schemas are untouched.
 	if image.Parameters == nil && !image.Resolution.Supported && image.Quality.Supported && len(image.Quality.Values) > 0 {

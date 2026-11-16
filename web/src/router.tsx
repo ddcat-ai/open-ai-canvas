@@ -1,7 +1,8 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
+import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from "react-router";
 import { lazyAdminPage } from "@/pages/admin/admin-page-loader";
 
+import { AuthDialogHost } from "@/components/auth/auth-dialog-host";
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireSkillAdmin } from "@/components/auth/require-skill-admin";
 // 功能开关守卫包在页面 Suspense 之外，懒加载会让整个工作区退回全屏加载页；体积很小，直接静态引入。
@@ -29,6 +30,8 @@ const AgentLessonsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-p
 const ChannelsPage = lazyAdminPage(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazyAdminPage(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazyAdminPage(() => import("@/pages/admin/plugins/plugins-page"));
+const AdminOfficialAssetsPage = lazyAdminPage(() => import("@/pages/admin/official-assets-page"));
+const AdminOfficialAssetRecommendationsPage = lazyAdminPage(() => import("@/pages/admin/official-asset-recommendations-page"));
 const AdminMCPPage = lazyAdminPage(() => import("@/pages/admin/mcp/mcp-page"));
 const SkillCurationPage = lazyAdminPage(() => import("@/pages/admin/skill-curation-page"));
 const AdminSkillsPage = lazyAdminPage(() => import("@/pages/admin/skills/skills-page"));
@@ -102,6 +105,15 @@ function AuthenticatedWorkspaceLayout() {
     );
 }
 
+function RootLayout() {
+    return (
+        <>
+            <Outlet />
+            <AuthDialogHost />
+        </>
+    );
+}
+
 /**
  * DEV 专用实验室路由。
  *
@@ -121,7 +133,7 @@ function devRoutes() {
     ];
 }
 
-export const router = createBrowserRouter([
+const routes: RouteObject[] = [
     {
         element: <AuthScene />,
         errorElement: <RouteErrorPage />,
@@ -259,6 +271,8 @@ export const router = createBrowserRouter([
                     { path: "ecommerce-skills", element: <Navigate to="/admin/ecommerce/library/skills" replace /> },
                     { path: "ecommerce-categories", element: <Navigate to="/admin/ecommerce/library/categories" replace /> },
                     { path: "plugins", element: <AdminPluginsPage /> },
+                    { path: "official-assets", element: <AdminOfficialAssetsPage /> },
+                    { path: "official-asset-recommendations", element: <AdminOfficialAssetRecommendationsPage /> },
                     { path: "mcp", element: <AdminMCPPage /> },
                     { path: "workbench-tools", element: <WorkbenchToolsPage /> },
                     { path: "pose-library", element: <PoseLibraryAdminPage /> },
@@ -296,4 +310,6 @@ export const router = createBrowserRouter([
         ],
     },
     { path: "*", element: fullScreenDeferred(<NotFound />) },
-]);
+];
+
+export const router = createBrowserRouter([{ element: <RootLayout />, children: routes }]);

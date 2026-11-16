@@ -190,9 +190,13 @@ export function useCanvasKeyboard({
                 else if (selectedConnectionId) deleteConnection(selectedConnectionId);
             }
             if (event.key === "Escape") {
-                // 沉浸专注：无选中且无弹窗/下拉/右键菜单时，Esc 退出专注；否则保留原有取消选择行为。
-                const hasFocusOverlay = Boolean(document.querySelector(".ant-modal-wrap, .ant-dropdown, .ant-select-dropdown, .ant-popover, [data-canvas-context-menu]"));
-                if (focusMode && !selectedNodeIdsRef.current.size && !hasFocusOverlay) {
+                // 先让可见浮层处理 Esc，避免关闭弹窗时连底层选择和播放一起取消。
+                // AntD 可能保留已关闭的浮层 DOM，不能只判断元素存在。
+                const hasFocusOverlay = Array.from(document.querySelectorAll<HTMLElement>(".ant-modal-wrap, .ant-dropdown, .ant-select-dropdown, .ant-popover, [data-canvas-context-menu]")).some(
+                    (overlay) => overlay.getClientRects().length > 0 && window.getComputedStyle(overlay).visibility !== "hidden" && !overlay.closest('[hidden], [aria-hidden="true"], [inert]'),
+                );
+                if (hasFocusOverlay) return;
+                if (focusMode && !selectedNodeIdsRef.current.size) {
                     event.stopPropagation();
                     exitFocusMode();
                     return;

@@ -24,6 +24,9 @@ func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput
 	if !ok {
 		return nil, fmt.Errorf("接口类型 %s 未安装声明式适配器", input.Config.InterfaceType)
 	}
+	if input.Mode == "audio" && (input.Config.AudioMode == "unified_edit" || input.Config.AudioMode != "tts" && len(input.ReferenceAudios) > 0) && len(input.ReferenceAudios) == 0 {
+		return nil, errors.New("全能配音需要连接参考音频；请检查音频是否已连接，或切换为文本朗读")
+	}
 	return runProtocolAdapterTask(ctx, input, adapter)
 }
 

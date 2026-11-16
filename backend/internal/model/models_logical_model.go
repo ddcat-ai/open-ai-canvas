@@ -11,14 +11,15 @@ type IDSequence struct {
 }
 
 type LogicalModel struct {
-	ID          string `json:"id" gorm:"primaryKey;size:36"`
-	Code        string `json:"code" gorm:"size:80;uniqueIndex:idx_logical_models_code,where:archived_at IS NULL"`
-	Name        string `json:"name" gorm:"size:120"`
-	Icon        string `json:"icon" gorm:"size:80"`
-	Description string `json:"description" gorm:"size:500"`
-	Capability  string `json:"capability" gorm:"size:32;index"`
-	Enabled     bool   `json:"enabled" gorm:"index"`
-	SortOrder   int    `json:"sortOrder" gorm:"index"`
+	ImagePricing *ImagePricing `json:"imagePricing,omitempty" gorm:"serializer:json;type:text"`
+	ID           string        `json:"id" gorm:"primaryKey;size:36"`
+	Code         string        `json:"code" gorm:"size:80;uniqueIndex:idx_logical_models_code,where:archived_at IS NULL"`
+	Name         string        `json:"name" gorm:"size:120"`
+	Icon         string        `json:"icon" gorm:"size:80"`
+	Description  string        `json:"description" gorm:"size:500"`
+	Capability   string        `json:"capability" gorm:"size:32;index"`
+	Enabled      bool          `json:"enabled" gorm:"index"`
+	SortOrder    int           `json:"sortOrder" gorm:"index"`
 	// RevisionSequence 记录已经分配的 revision 版本号，由数据库原子递增。
 	RevisionSequence int    `json:"-" gorm:"not null;default:0"`
 	ActiveRevisionID string `json:"activeRevisionId" gorm:"size:36;index"`

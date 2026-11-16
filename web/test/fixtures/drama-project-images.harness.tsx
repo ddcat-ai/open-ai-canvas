@@ -18,6 +18,7 @@ for (const [key, value] of Object.entries({
     ShadowRoot: dom.ShadowRoot,
     Event: dom.Event,
     MouseEvent: dom.MouseEvent,
+    MutationObserver: dom.MutationObserver,
     ResizeObserver: dom.ResizeObserver,
     getComputedStyle: dom.getComputedStyle.bind(dom),
     IS_REACT_ACT_ENVIRONMENT: true,

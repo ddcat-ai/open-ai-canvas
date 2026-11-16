@@ -23,6 +23,10 @@ export type ImageParameter = {
     enabled?: boolean;
 };
 
+export function imageParameterAppliesTo(field: ImageParameter, model: string) {
+    return !field.models?.length || field.models.includes(model.trim().replace(/^models\//, ""));
+}
+
 export function imageParameterAccepts(field: ImageParameter, value: unknown): value is ImageParameterValue {
     if (field.type === "string" && (typeof value !== "string" || (field.maxLength !== undefined && value.length > field.maxLength))) return false;
     if (field.type === "boolean" && typeof value !== "boolean") return false;
@@ -229,6 +233,7 @@ export function standardImageSizeEncoding(create = ""): "pixels" | "ratio" | und
 }
 
 export function resolveImageParameters(profile: ImageCapabilityConfig, definitions: ImageParameter[], model: string, protocol?: string, create?: string) {
+    definitions = definitions.filter((field) => !imageHostControls.has(field.name) || imageParameterAppliesTo(field, model) || profile.parameters?.some((configured) => configured.name === field.name));
     const resolutionDefinition = definitions.find((p) => p.name === "imageResolution");
     if (
         !profile.parameters &&
@@ -259,7 +264,7 @@ export function resolveImageParameters(profile: ImageCapabilityConfig, definitio
     }
     const defaults = protocolImageSizePresets(protocol);
     const resolutionDefaults = defaults.length > 0 || protocol === "gemini-image";
-    const applicable = definitions.filter((p) => imageHostControls.has(p.name) || !p.models?.length || p.models.includes(model.trim().replace(/^models\//, "")));
+    const applicable = definitions.filter((p) => imageHostControls.has(p.name) || imageParameterAppliesTo(p, model));
     const importAutomaticResolution = protocol === "openai-image" && !configured.has("imageResolution") && !profile.resolution.values.length && profile.size.default === "auto";
     if (resolutionDefaults && profile.size.presets?.length && !configured.has("imageResolution") && !profile.resolution.values.length) {
         const definition = applicable.find((p) => p.name === "imageResolution");

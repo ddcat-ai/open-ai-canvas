@@ -68,6 +68,29 @@ func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapsh
 	}
 	err := r.Transaction(func(repo *Repository) error {
 		tx := repo.db
+		retained := make(map[string]bool)
+		candidates := append(slices.Clone(currentResourceIDs), resourceIDs...)
+		owned, err := repo.ResourcesForUserIDs(project.UserID, candidates)
+		if err != nil {
+			return err
+		}
+		ownedIDs := make(map[string]bool, len(owned))
+		for _, resource := range owned {
+			ownedIDs[resource.ID] = true
+		}
+		for _, id := range candidates {
+			if ownedIDs[id] {
+				continue
+			}
+			if retained[id] {
+				continue
+			}
+			allowed, err := repo.RetainedCanvasOfficialResource(project.UserID, project.ID, id)
+			if err != nil {
+				return err
+			}
+			retained[id] = allowed
+		}
 		if err := repo.UpsertCanvasProject(&next); err != nil {
 			return err
 		}
@@ -98,6 +121,22 @@ func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapsh
 			found := make(map[string]struct{}, len(resources))
 			for _, resource := range resources {
 				found[resource.ID] = struct{}{}
+			}
+			for _, id := range requiredIDs {
+				if _, exists := found[id]; exists {
+					continue
+				}
+				if retained[id] {
+					found[id] = struct{}{}
+					continue
+				}
+				published, err := repo.PublishedOfficialResource(id)
+				if err != nil {
+					return err
+				}
+				if published {
+					found[id] = struct{}{}
+				}
 			}
 			missingIDs := make([]string, 0)
 			allowDamagedPreimage := snapshot != nil && (snapshot.Reason == "before_resource_repair" || snapshot.Reason == "before_restore")

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -299,6 +300,11 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 		now := time.Now()
 		updates := map[string]any{"channel_id": channelID, "channel_model_id": channelModelID, "updated_at": now}
 		updates["cost_configured"] = cost.CostPricing.Configured
+		costImagePricing, err := json.Marshal(cost.CostPricing.ImagePricing)
+		if err != nil {
+			return err
+		}
+		updates["cost_image_pricing"] = string(costImagePricing)
 		updates["cost_unit_price_microcredits"] = cost.CostPricing.UnitPriceMicrocredits
 		updates["cost_input_token_price_microcredits"] = cost.CostPricing.InputTokenPriceMicrocredits
 		updates["cost_output_token_price_microcredits"] = cost.CostPricing.OutputTokenPriceMicrocredits
@@ -365,6 +371,13 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 				}
 			}
 			updates["billing_mode"] = replacement.BillingMode
+			imagePricing, err := json.Marshal(replacement.ImagePricing)
+			if err != nil {
+				return err
+			}
+			updates["image_pricing"] = string(imagePricing)
+			updates["image_input_images"] = replacement.ImageInputImages
+			updates["image_max_output_images"] = replacement.ImageMaxOutputImages
 			updates["price_version"] = replacement.PriceVersion
 			updates["price_tier_id"] = replacement.PriceTierID
 			updates["price_tier_version"] = replacement.PriceTierVersion
@@ -399,6 +412,10 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 }
 
 func (r *Repository) SaveLogicalModelBundle(item *model.LogicalModel, revision *model.LogicalModelRevision, routes []model.LogicalModelRoute, creating bool) error {
+	imagePricing, err := json.Marshal(item.ImagePricing)
+	if err != nil {
+		return err
+	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if creating {
 			if err := tx.Create(item).Error; err != nil {
@@ -421,6 +438,7 @@ func (r *Repository) SaveLogicalModelBundle(item *model.LogicalModel, revision *
 				"output_price_microcredits":      item.OutputPriceMicrocredits,
 				"cached_price_microcredits":      item.CachedPriceMicrocredits,
 				"cache_write_price_microcredits": item.CacheWritePriceMicrocredits,
+				"image_pricing":                  string(imagePricing),
 				"legacy_model_ids_json":          item.LegacyModelIDsJSON,
 				"updated_at":                     item.UpdatedAt,
 			})

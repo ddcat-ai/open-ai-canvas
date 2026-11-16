@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"strings"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 )
 
 func batchRequiredAmounts(capability, billingMode string, referenceVideoBilling bool) []string {
+	if billingMode == imagebilling.Mode {
+		return []string{"imagePricing"}
+	}
 	fields := []string{"unitPriceMicrocredits"}
 	if billingMode == "token" {
 		fields = []string{"inputTokenPriceMicrocredits", "outputTokenPriceMicrocredits", "cachedTokenPriceMicrocredits", "cacheWriteTokenPriceMicrocredits"}
@@ -28,6 +32,9 @@ func batchRequiredAmounts(capability, billingMode string, referenceVideoBilling 
 }
 
 func batchTierAmountsComplete(item model.ChannelModel, tier model.ChannelModelPriceTier) bool {
+	if tier.BillingMode == imagebilling.Mode {
+		return item.Capability == "image" && imagebilling.Validate(tier.ImagePricing) == nil
+	}
 	amounts := map[string]int64{
 		"unitPriceMicrocredits": tier.UnitPriceMicrocredits, "inputTokenPriceMicrocredits": tier.InputTokenPriceMicrocredits,
 		"outputTokenPriceMicrocredits": tier.OutputTokenPriceMicrocredits, "cachedTokenPriceMicrocredits": tier.CachedTokenPriceMicrocredits,
@@ -106,7 +113,8 @@ func validateBatchPricingTemplate(template *BatchModelPricingTemplate, item mode
 func batchTierRequest(tier model.ChannelModelPriceTier) ChannelModelPriceTierRequest {
 	enabled := tier.Enabled
 	return ChannelModelPriceTierRequest{
-		CostPricing: tier.CostPricing, Selector: tier.Selector, Resolution: tier.Resolution, VideoSeconds: tier.VideoSeconds,
+		ImagePricing: tier.ImagePricing,
+		CostPricing:  tier.CostPricing, Selector: tier.Selector, Resolution: tier.Resolution, VideoSeconds: tier.VideoSeconds,
 		ProviderModelKey: tier.ProviderModelKey, BillingMode: tier.BillingMode,
 		UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits,
 		OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits,

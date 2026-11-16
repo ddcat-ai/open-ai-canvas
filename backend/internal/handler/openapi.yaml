@@ -43,6 +43,56 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /admin/system-update:
+    get:
+      tags: [admin]
+      summary: 管理员读取系统更新与来源检测状态
+      responses:
+        "200":
+          description: 更新状态，sourceProbe 为异步来源检测快照
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemUpdateEnvelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/system-update/sources:
+    put:
+      tags: [admin]
+      summary: 管理员保存系统更新来源
+      description: 宿主机持久化成功后返回；改变来源清除版本与检测缓存。与检查、检测、更新和回退互斥。不接收任意代理或仓库地址。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemUpdateSources" }
+      responses:
+        "200":
+          description: 已保存来源后的更新状态
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemUpdateEnvelope" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /admin/system-update/sources/test:
+    post:
+      tags: [admin]
+      summary: 管理员启动已保存更新来源的异步检测
+      description: 立即返回 sourceProbe.status=running，之后轮询 GET /admin/system-update。检测版本、Compose、更新器校验清单与镜像架构清单，不下载完整镜像层或安装更新器。
+      responses:
+        "200":
+          description: 来源检测已启动
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemUpdateEnvelope" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
   /admin/api-logs/{id}:
     get:
       tags: [admin]
@@ -1378,6 +1428,61 @@ paths:
         "200":
           { description: JSON 或 MP4 原始内容，支持 Range；停用后拒绝公开读取 }
         "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /appearance/avatar-bundles:
+    post:
+      tags: [resources]
+      summary: 上传个人助手状态动画包
+      description: 活跃登录账号可上传，复用管理员动画 ZIP 格式、128 MiB 上限、账号频率及配额校验，不更新全站外观。
+      requestBody:
+        $ref: "#/paths/~1admin~1settings~1appearance~1avatar-bundles/post/requestBody"
+      responses:
+        "200":
+          $ref: "#/paths/~1admin~1settings~1appearance~1avatar-bundles/post/responses/200"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /appearance/live2d:
+    post:
+      tags: [resources]
+      summary: 上传个人助手 Live2D 模型
+      description: 活跃登录账号可上传，复用管理员 Cubism ZIP 格式、128 MiB 上限、账号频率及配额校验，不更新全站外观。
+      requestBody:
+        $ref: "#/paths/~1admin~1settings~1appearance~1live2d/post/requestBody"
+      responses:
+        "200":
+          $ref: "#/paths/~1admin~1settings~1appearance~1live2d/post/responses/200"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /appearance/avatar/{id}/{file}:
+    get:
+      tags: [resources]
+      summary: 读取本人上传的助手动画文件
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: file, required: true, description: avatar.json 或根目录 MP4 文件名, schema: { type: string } }
+      responses:
+        "200": { description: JSON 或 MP4 原始内容，仅本人可读，Cache-Control 为 private no-store }
+        "206": { description: MP4 字节范围，包含 Content-Range }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /appearance/live2d/{id}/{file}:
+    get:
+      tags: [resources]
+      summary: 读取本人上传的 Live2D 文件
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: file, required: true, description: ZIP 内规范相对路径，可包含多级目录, schema: { type: string } }
+      responses:
+        "200": { description: JSON、PNG 或 MOC3 原始内容，仅本人可读，禁止共享缓存 }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
   /tools:
     get:
@@ -4702,6 +4807,57 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    SystemUpdateSources:
+      type: object
+      required: [githubSource, imageSource]
+      additionalProperties: false
+      properties:
+        githubSource: { type: string, enum: [direct, gh_proxy] }
+        imageSource: { type: string, enum: [ghcr, nju] }
+    SystemUpdateSourceProbe:
+      type: object
+      required: [id, status, sources, checks, startedAt]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [running, succeeded, failed] }
+        sources: { $ref: "#/components/schemas/SystemUpdateSources" }
+        targetVersion: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [key, label, status, blocking]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              status: { type: string, enum: [pending, passed, failed] }
+              detail: { type: string }
+              blocking: { type: boolean }
+    SystemUpdateEnvelope:
+      allOf:
+        - { $ref: "#/components/schemas/Envelope" }
+        - type: object
+          properties:
+            data:
+              type: object
+              description: 既有更新状态附带来源与检测快照；不支持来源配置的更新器可省略 sources。
+              properties:
+                supported: { type: boolean }
+                connected: { type: boolean }
+                repository: { type: string }
+                deployment: { type: string }
+                currentVersion: { type: string }
+                updateAvailable: { type: boolean }
+                sources: { $ref: "#/components/schemas/SystemUpdateSources" }
+                sourceProbe: { $ref: "#/components/schemas/SystemUpdateSourceProbe" }
+                operation:
+                  type: object
+                  properties:
+                    sources: { $ref: "#/components/schemas/SystemUpdateSources" }
+                    phase: { type: string }
+                    targetVersion: { type: string }
     CreationHistoryMessage:
       type: object
       required: [id, revision]
@@ -5175,12 +5331,14 @@ components:
                         type: array
                         minItems: 1
                         maxItems: 48
-                        description: 完整替换价格档；与模型编辑的 ChannelModelPriceTierRequest 相同。每档必填 billingMode、priceConfigured、enabled，以及对应计费模式的全部金额字段；缺失金额不能视为免费，所有字段拒绝 null。支持 selector、resolution、videoSeconds、providerModelKey、costPricing、Token 规则和参考视频价。
+                        description: 完整替换价格档；与模型编辑的 ChannelModelPriceTierRequest 相同。每档必填 billingMode、priceConfigured、enabled，以及对应计费模式的全部金额字段；缺失金额不能视为免费，所有字段拒绝 null。支持 selector、resolution、videoSeconds、providerModelKey、costPricing、Token 规则、参考视频价和 image_usage 的 imagePricing。
                         items:
                           type: object
                           required: [billingMode, priceConfigured, enabled]
                           properties:
                             billingMode: {type: string}
+                            imagePricing:
+                              $ref: "#/components/schemas/ImagePricing"
                             priceConfigured: {type: boolean}
                             enabled: {type: boolean}
     ThinkingRequest:
@@ -5424,6 +5582,26 @@ components:
             format: int64
             minimum: 1
             maximum: 3600000
+    ImagePricing:
+      type: object
+      required: [inputPriceMicrocredits, freeInputImages, outputTiers]
+      properties:
+        inputPriceMicrocredits: {type: integer, format: int64, minimum: 0}
+        freeInputImages: {type: integer, minimum: 0, maximum: 128}
+        outputTiers:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items:
+            type: object
+            required: [maxPixels, unitPriceMicrocredits]
+            properties:
+              maxPixels:
+                type: integer
+                format: int64
+                minimum: 0
+                description: 含边界的递增像素上限；仅最后一档可用 0 表示不限
+              unitPriceMicrocredits: {type: integer, format: int64, minimum: 0}
     LogicalModelQuote:
       type: object
       required:
@@ -5434,12 +5612,12 @@ components:
           description: 前台逻辑模型 ID；直接查询系统渠道模型时为空字符串
         billingMode:
           type: string
-          enum: [fixed_request, per_second, token]
+          enum: [fixed_request, per_second, token, image_usage]
         quantity:
           type: integer
           format: int64
           minimum: 1
-          description: 按次为 1，按秒为生成秒数，按 Token 为预留用量（视频含平台预留余量）
+          description: 按次为 1，按秒为生成秒数，按 Token 为预留用量（视频含平台预留余量），图片用量模式为最多输出张数
         amountMicrocredits:
           type: integer
           format: int64
@@ -5447,7 +5625,13 @@ components:
           description: 预估预留微积分，1000000 微积分等于 1 积分；明确配置的免费价格返回 0
         estimated:
           type: boolean
-          description: Token 计费为 true；优先有效上游 usage，视频无有效用量时按提交的公式快照结算，预留不构成费用上限
+          description: Token 和图片用量计费为 true。图片用量报价金额为预留上限，按实际输入与逐张输出像素结算并退回差额；Token 模式沿用实际用量结算策略
+        imageUsage:
+          type: object
+          required: [inputImages, maxOutputImages]
+          properties:
+            inputImages: {type: integer, format: int64, minimum: 0}
+            maxOutputImages: {type: integer, format: int64, minimum: 1, maximum: 128}
         videoTokenEstimate:
           $ref: "#/components/schemas/VideoTokenEstimate"
         referenceVideo:

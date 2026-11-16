@@ -38,6 +38,9 @@ func TestCloudAgentReliabilitySchedulerHeadOfLine500(t *testing.T) {
 	}
 	for i := 0; i < 500; i++ {
 		user := fmt.Sprintf("audit-user-%03d", i)
+		if err := db.Create(&model.User{ID: user, Username: user, Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+			t.Fatal(err)
+		}
 		req := agentTestRequest()
 		req.IdempotencyKey = fmt.Sprintf("audit-key-%03d", i)
 		id := cloudAgentID(user, req.IdempotencyKey)

@@ -170,6 +170,24 @@ func (s *Service) sharedCanvasResource(token string, resourceID string) (string,
 		return "", nil, nil, gorm.ErrRecordNotFound
 	}
 	resource, err := s.repo.ResourceForUser(share.UserID, resourceID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// A share grants access only to resources present in its sanitized canvas.
+		// Shared official resources belong to their publisher, not the canvas owner.
+		allowed, checkErr := s.repo.PublishedOfficialResource(resourceID)
+		if checkErr != nil {
+			return "", nil, nil, checkErr
+		}
+		if !allowed {
+			allowed, checkErr = s.repo.RetainedCanvasOfficialResource(share.UserID, project.ID, resourceID)
+			if checkErr != nil {
+				return "", nil, nil, checkErr
+			}
+		}
+		if !allowed {
+			return "", nil, nil, gorm.ErrRecordNotFound
+		}
+		resource, err = s.repo.Resource(resourceID)
+	}
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -279,6 +297,31 @@ func publicCanvasNode(value any, token string, allowedResources map[string]bool)
 			continue
 		}
 		publicMetadata[key] = scrubPublicCanvasValue(value)
+	}
+	if kernel.StringValue(metadata["workflowKind"]) == "character" && (kernel.StringValue(metadata["characterAssetId"]) != "" || kernel.StringValue(metadata["officialAssetId"]) != "") {
+		publicMetadata["sharedCharacter"] = true
+		for _, key := range []string{"characterVisualStatus", "characterVoiceStatus", "characterVoiceName", "characterVoiceInstructions"} {
+			if value, ok := metadata[key].(string); ok {
+				publicMetadata[key] = value
+			}
+		}
+		if definition, ok := metadata["characterDefinition"].(map[string]any); ok {
+			fields := map[string]any{}
+			for _, key := range []string{"role", "aliases", "personality", "appearance", "physique", "clothing", "props", "consistencyPrompt", "multiViewPrompt", "voiceLanguage", "voiceAge", "voiceTimbre"} {
+				if value, ok := definition[key]; ok {
+					fields[key] = scrubPublicCanvasValue(value)
+				}
+			}
+			publicMetadata["characterDefinition"] = fields
+		}
+		if id := assets.ResourceID(kernel.StringValue(metadata["characterCoverUrl"])); id != "" {
+			allowedResources[id] = true
+			publicMetadata["characterCoverUrl"] = sharedCanvasResourceURL(token, id)
+		}
+		if id := assets.ValidID(kernel.StringValue(metadata["characterVoiceSampleResourceId"])); id != "" {
+			allowedResources[id] = true
+			publicMetadata["characterVoiceSampleUrl"] = sharedCanvasResourceURL(token, id)
+		}
 	}
 	if resourceID := assets.ResourceID(kernel.StringValue(metadata["storageKey"])); resourceID != "" {
 		allowedResources[resourceID] = true

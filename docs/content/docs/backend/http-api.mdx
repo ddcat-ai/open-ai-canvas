@@ -5,6 +5,12 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 图片用量计费
+
+渠道模型价格档可提交 `billingMode=image_usage` 与 `imagePricing={inputPriceMicrocredits,freeInputImages,outputTiers:[{maxPixels,unitPriceMicrocredits}]}`。仅图片模型可启用；输出上限递增且含边界，最后一档可用 0 表示不限。成本规则为管理员专用 `costPricing.imagePricing`。目录只发布换算后的售价规则。
+
+`POST /model-catalog/quote` 与逻辑模型报价沿用 `intent` 合同，图片拆分选项包含 `layerDecomposition`、`maxImages`。图片用量报价增加 `imageUsage={inputImages,maxOutputImages}`，`amountMicrocredits` 为预留上限，`estimated=true`。订单返回实际 `imageUsage={inputImages,outputs:[{index,width,height}],source}`；内部成本快照不进入用户响应。详见[图片用量计费](/docs/backend/image-usage-billing)。
+
 ## 微信登录
 
 - `GET/PATCH /admin/settings/wechat`：仅管理员；读取 `data.setting`，保存 `{enabled, appId, appSecret, redirectUrl}`。读取仅返回 `hasAppSecret`；密钥留空保留。回调须为 HTTPS 且路径固定为 `/api/auth/wechat/callback`。
@@ -22,6 +28,22 @@ description: 信封、错误码与 OpenAPI
 - `PATCH /admin/settings/turnstile`：仅管理员，提交 `{enabled, siteKey, secretKey}`。`secretKey` 以加密形式保存；提交空字符串表示保留已保存的密钥。启用时必须同时配置站点密钥和密钥，服务端会拒绝不完整配置。
 
 启用后，公开 `GET /auth/settings` 返回 `turnstileEnabled: true` 和用于浏览器渲染组件的 `turnstileSiteKey`。登录页和注册页先通过 Cloudflare Turnstile 获取一次性令牌，并把令牌作为 `turnstileToken` 提交给密码登录、验证码登录、普通注册或微信注册补全接口。服务端固定调用 Cloudflare 的 Siteverify 地址校验令牌，并把客户端 IP 一并提交；未提交、过期、无效、网络失败或响应格式异常都拒绝登录/注册。首次创建管理员账号也受此校验保护。关闭机器人保护时保持原有登录和注册流程，令牌字段可省略。
+
+## 官方素材扩展
+
+用户浏览和详情使用 `/api/official-assets`，画布通过 `/api/official-assets/:id/reference` 获取引用；管理员管理使用 `/api/admin/official-assets`，发布、下架为对应资源的 PATCH 操作。推荐提交、详情和审核由官方素材推荐路由提供，保留登录及管理员鉴权。角色引用不自动创建个人素材副本。
+
+## 系统更新来源
+
+以下接口仅管理员可用，使用登录 Cookie 和统一业务信封，由 Backend 通过已认证 Unix Socket 调用宿主机 Host Updater。
+
+| 接口 | 合同 |
+| --- | --- |
+| `GET /api/admin/system-update` | 返回更新状态，含 `sources`、可选 `sourceProbe` 和 `operation.sources` |
+| `PUT /api/admin/system-update/sources` | 完整写入 `{githubSource:"direct"\|"gh_proxy",imageSource:"ghcr"\|"nju"}`，返回更新状态；非法值 400，任务忙碌 409；持久化成功后才返回成功 |
+| `POST /api/admin/system-update/sources/test` | 为当前已保存来源创建异步检测任务，立即返回更新状态；通过 GET 轮询结果，任务忙碌 409 |
+
+`sourceProbe` 含 `id/status/sources/targetVersion?/checks/startedAt/finishedAt?`；`status` 为 `running/succeeded/failed`，`checks[]` 含 `key/label/status/detail/blocking`，检查状态为 `pending/passed/failed`。版本检查、来源检测、更新和回退互斥。检测结果不替代显式版本检查；切换来源后必须重新检查版本才能开始更新。宿主机协议对应 `PUT /v1/sources`、`POST /v1/sources/test`，只允许既定来源枚举，不接受任意下载地址。
 
 ## 创作对话同步
 
@@ -475,6 +497,8 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 ## 站点皮肤主按钮
 
 ### 画布配置、更新公告、状态动画包与 Live2D（外观合同版本 11）
+
+个人外观入口供活跃的登录账号使用：`POST /appearance/avatar-bundles` 与 `POST /appearance/live2d` 接收 multipart `file`，分别返回 `data.bundle: { resourceId, manifest }` 和 `data.model: { resourceId, entry }`。复用管理员导入的 ZIP 大小和格式校验，受账号上传频率、上传/存储额度和只读规则限制，不更新全站外观。个人文件通过 `GET /appearance/avatar/:id/*file`、`GET /appearance/live2d/:id/*file` 读取：未登录为 401、非本人为 404，响应为私有且禁止缓存，视频支持 Range。普通账号访问管理员导入仍为 403。主题与助手选择按账号保存在当前浏览器，不新增服务端偏好写接口；详见 [画布 Agent 外观](/docs/backend/canvas-agent-appearance)。
 
 外观设置新增 `updates: { enabled, currentVersion, releases }`，由管理员通过 `PATCH /admin/settings/appearance` 保存；关闭开关保留草稿，但 `GET /public/appearance` 返回关闭状态与空公告列表，前端恢复内置更新日志。开启时公开版本与内容块，当前版本须对应公告版本。媒体上传、管理员预览、公开引用读取及限制详见 [自定义更新公告](/docs/backend/update-announcements)。JSON 请求上限为 512KB；无数据表迁移。
 

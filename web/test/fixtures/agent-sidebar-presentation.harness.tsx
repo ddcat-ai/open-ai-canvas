@@ -50,6 +50,7 @@ const { AgentChatComposer, AgentQuestionBar, AgentSceneCapsules } = await import
 const { CanvasAgentSkillLibraryModal } = await import("@/components/canvas/canvas-agent-skill-library-modal");
 const { useAgentPanelDock } = await import("@/components/canvas/use-agent-panel-dock");
 const { useGlobalAgentStore } = await import("@/stores/use-global-agent-store");
+const { useUserStore } = await import("@/stores/use-user-store");
 const { restoreAgentPanelDock } = await import("@/lib/canvas/agent-panel-dock");
 const { defaultConfig } = await import("@/stores/use-config-store");
 const { canvasThemes } = await import("@/lib/canvas-theme");
@@ -95,6 +96,7 @@ let chosenPresets: string[];
 
 beforeEach(() => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    useUserStore.setState({ hydrated: true, user: { id: "sidebar-admin", username: "sidebar-admin", displayName: "侧栏管理员", role: "admin", status: "active" } });
     useGlobalAgentStore.setState({ open: true, canvas, dock: { ...initialDock } });
     host = document.createElement("div");
     document.body.append(host);
@@ -289,7 +291,7 @@ function SidebarFixture() {
     );
 }
 
-test("空会话恢复原光球、居中欢迎文案和三个入口，输入仍可操作", async () => {
+test("管理员空会话恢复原光球、居中欢迎文案和三个入口，输入仍可操作", async () => {
     await render(<SidebarFixture />);
     expect(host.querySelector(".agent-welcome-orb")).not.toBeNull();
     expect(host.querySelector(".agent-welcome-intro h2")?.textContent).toContain("让灵感，慢慢成形");
@@ -303,6 +305,17 @@ test("空会话恢复原光球、居中欢迎文案和三个入口，输入仍�
     expect(button("发送").disabled).toBe(false);
     await click("发送");
     expect(sent).toEqual(["保留我的短片草稿"]);
+});
+
+test("普通用户欢迎页保留创作入口且不显示技能入口", async () => {
+    useUserStore.setState({ user: { id: "sidebar-user", username: "sidebar-user", displayName: "侧栏用户", role: "user", status: "active" } });
+    await render(<SidebarFixture />);
+    expect(host.querySelectorAll(".agent-welcome-actions button")).toHaveLength(2);
+    expect(host.querySelector('[aria-label="打开 Skills 技能库"]')).toBeNull();
+    expect(host.textContent).not.toContain("选择技能，开始创作");
+    await type("普通用户的短片草稿");
+    await click("发送");
+    expect(sent).toEqual(["普通用户的短片草稿"]);
 });
 
 test("原欢迎页创作入口只填草稿、保留已有输入，发送后收起", async () => {

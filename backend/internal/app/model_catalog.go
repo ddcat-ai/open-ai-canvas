@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/logging"
 	"yingce/backend/internal/model"
 )
@@ -90,16 +91,17 @@ type PublicChannelModel struct {
 
 // PublicChannelModelPriceTier 公开的渠道模型价格档（脱敏）
 type PublicChannelModelPriceTier struct {
-	ID                               string            `json:"id"`
-	Selector                         map[string]string `json:"selector,omitempty"`
-	Resolution                       string            `json:"resolution"`
-	VideoSeconds                     int               `json:"videoSeconds"`
-	BillingMode                      string            `json:"billingMode"`
-	UnitPriceMicrocredits            int64             `json:"unitPriceMicrocredits"`
-	InputTokenPriceMicrocredits      int64             `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits     int64             `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits     int64             `json:"cachedTokenPriceMicrocredits"`
-	CacheWriteTokenPriceMicrocredits int64             `json:"cacheWriteTokenPriceMicrocredits"`
+	ImagePricing                     *model.ImagePricing `json:"imagePricing,omitempty"`
+	ID                               string              `json:"id"`
+	Selector                         map[string]string   `json:"selector,omitempty"`
+	Resolution                       string              `json:"resolution"`
+	VideoSeconds                     int                 `json:"videoSeconds"`
+	BillingMode                      string              `json:"billingMode"`
+	UnitPriceMicrocredits            int64               `json:"unitPriceMicrocredits"`
+	InputTokenPriceMicrocredits      int64               `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits     int64               `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits     int64               `json:"cachedTokenPriceMicrocredits"`
+	CacheWriteTokenPriceMicrocredits int64               `json:"cacheWriteTokenPriceMicrocredits"`
 	// TokenPriceRules 是启用中的分时与上下文规则（东八区），单价与基础价同样已换算为当前分组实扣微积分。
 	TokenPriceRules []model.TokenPriceRule `json:"tokenPriceRules,omitempty"`
 	// 带参考视频的价格只在模型开启参考视频计费时发布，否则为 0。
@@ -230,6 +232,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 			}
 		}
 		publicTiers = append(publicTiers, PublicChannelModelPriceTier{
+			ImagePricing:                     tier.ImagePricing,
 			ID:                               tier.ID,
 			Selector:                         model.DecodeSKUSelector(tier.SelectorJSON),
 			Resolution:                       tier.Resolution,
@@ -307,6 +310,19 @@ func (s *Service) applyGroupCatalogPricing(policy CreditPolicy, access *userGrou
 		if err != nil {
 			return err
 		}
+		if tier.ImagePricing != nil {
+			converted, convertErr := imagebilling.MapPrices(tier.ImagePricing, func(price int64) (int64, error) {
+				value, err := pricing.convertPrice(price)
+				if err != nil {
+					return 0, err
+				}
+				return effectiveCatalogPrice(value, pricing.MultiplierBPS), nil
+			})
+			if convertErr != nil {
+				return convertErr
+			}
+			tier.ImagePricing = converted
+		}
 		// 带参考视频价格复用同一换算：按秒价换算 Unit，Token 价换算 Output。
 		_, referencePrices, err := groupTierPricesWithPolicy(policy, access, cm, &model.ChannelModelPriceTier{
 			UnitPriceMicrocredits: tier.ReferenceVideoUnitPriceMicrocredits, OutputTokenPriceMicrocredits: tier.ReferenceVideoOutputTokenPriceMicrocredits,
@@ -375,6 +391,11 @@ func effectiveCatalogPrice(price int64, multiplierBPS int64) int64 {
 func computeChannelModelPriceDisplay(cm *model.ChannelModel, priceTiers []PublicChannelModelPriceTier) (string, *int64, string) {
 	if len(priceTiers) == 0 {
 		return "provider", nil, "未配置"
+	}
+	for _, tier := range priceTiers {
+		if tier.BillingMode == imagebilling.Mode {
+			return "provider", nil, "按图片用量计费"
+		}
 	}
 
 	if len(priceTiers) == 1 {

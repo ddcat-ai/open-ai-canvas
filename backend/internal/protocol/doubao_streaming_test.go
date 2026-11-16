@@ -101,7 +101,7 @@ func TestDoubaoSeedAudioCreateUsesTextPromptWithoutResourceHeader(t *testing.T) 
 		t.Fatalf("seed-audio create must not send a TTS resource header: %#v", spec.Headers)
 	}
 	body := spec.Body.(map[string]any)
-	if body["model"] != "seed-audio-1.0" || body["text_prompt"] != "你好" || body["references"] != nil {
+	if body["model"] != "seed-audio-1.0" || body["text_prompt"] != "你好" || body["audio_mode"] != "tts" || body["references"] != nil {
 		t.Fatalf("text-only body = %#v", body)
 	}
 }
@@ -153,5 +153,33 @@ func TestDoubaoSeedAudioCreateSendsReferenceAudioAndImage(t *testing.T) {
 	imageReference, _ := imageReferences[0].(map[string]any)
 	if imageReference["image_data"] != "aGVsbG8=" || imageReference["image_url"] != nil {
 		t.Fatalf("image reference = %#v", imageReference)
+	}
+}
+
+func TestDoubaoSeedAudioMapsModeAndReferenceCount(t *testing.T) {
+	manifest, err := os.ReadFile("../../../plugin-packages/doubao-streaming-tts/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := LoadManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Capability: CapabilityAudio,
+		Model:      "seed-audio-1.0",
+		Prompt:     "参考音频1的音色",
+		Audios:     []MediaReference{{DataURL: "data:audio/mpeg;base64,YXVkaW8=", MIMEType: "audio/mpeg"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := spec.Body.(map[string]any)
+	if body["audio_mode"] != "unified_edit" {
+		t.Fatalf("audio_mode = %#v", body["audio_mode"])
+	}
+	references, ok := body["references"].([]any)
+	if !ok || len(references) != 1 || references[0].(map[string]any)["audio_data"] != "YXVkaW8=" {
+		t.Fatalf("references = %#v", body["references"])
 	}
 }

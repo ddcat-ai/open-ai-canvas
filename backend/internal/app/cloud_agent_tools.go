@@ -218,7 +218,7 @@ func cloudAgentAllToolSchemas() []map[string]any {
 		"size": str(cloudAgentMediaSizeDescription), "imageResolution": str("model_list 档位；未启用时省略"), "quality": str("模型支持的质量档位"), "snapshotHash": str("最近画布读取返回的 mediaSnapshotHash，可省略"), "nodeId": str("新的结果节点ID"), "title": str("结果节点名称"), "referenceNodeIds": map[string]any{"type": "array", "maxItems": 16, "items": str("源图片节点ID")},
 	}, "prompt", "nodeId", "title", "referenceNodeIds")
 	cloudAgentDeclareMediaModelSelection(tools[len(tools)-1], false)
-	add("model_list", "按 mode 和真实 referenceNodeIds 筛选当前模型、能力和价格；空列表不可生成。同条件复用，变化再查。复制 selection，不猜ID；规格默认交执行器解析。", map[string]any{"mode": map[string]any{"type": "string", "enum": cloudAgentGenerationModeNames()}, "referenceNodeIds": map[string]any{"type": "array", "maxItems": 16, "items": str("真实媒体参考节点ID；文生媒体传[]")}})
+	add("model_list", "按 mode 和真实 referenceNodeIds 筛选当前模型、能力和价格；空列表不可生成。同条件复用，变化再查。复制 selection，不猜ID；规格默认交执行器解析。", map[string]any{"mode": map[string]any{"type": "string", "enum": cloudAgentGenerationModeNames()}, "audioMode": map[string]any{"type": "string", "enum": []any{"tts", "unified_edit"}}, "referenceNodeIds": map[string]any{"type": "array", "maxItems": 16, "items": str("真实媒体参考节点ID；文生媒体传[]")}})
 	add("canvas_create_storyboard", "创建带真实镜头行的结构化分镜脚本节点，写入前按权限模式进入现有画布审批。仅在多镜头、连续性、逐镜审查/生成或后续维护确有价值时使用；单画面快速试验优先轻量节点。必须提交结构化 rows，不能用普通 content 或 Markdown 伪装分镜。", map[string]any{
 		"snapshotHash": str("最近一次画布读取返回的 snapshotHash"),
 		"nodeId":       str("当前画布内新的稳定分镜节点ID"),
@@ -286,9 +286,11 @@ func cloudAgentAllToolSchemas() []map[string]any {
 		"gap":    map[string]any{"type": "number", "minimum": 0, "maximum": cloudAgentArrangeMaxGap, "description": "分带间距（像素）"},
 		"dryRun": map[string]any{"type": "boolean", "description": "true 只预演不写入"},
 	}, "snapshotHash")
-	add("generate_media", "创作媒体：给出提示词和真实参考，执行器创建草稿、连线、解析默认并报价审批，批准后提交。无需先建节点。规格默认继承；用户要求改变时用 configurationChange，勿为构图或风格擅改规格。已有任务/成品不可覆盖。sourceNodeId=文本，referenceNodeIds=媒体；角色卡同时取设定和三视图，仅取设定用 sourceNodeId，勿重复。临时参考只用工具ID。提交前按回执有界纠正；已提交失败不得自动重提或换模型。", map[string]any{
+	add("generate_media", "媒体生成：执行器建草稿/连线、解析默认、报价审批后提交，无需预建节点。仅用户要求改规格时用configurationChange。不可覆盖成品/任务。sourceNodeId取文本设定；referenceNodeIds取媒体，角色卡含设定/三视图，勿重复。临时参考用工具ID。提交前按回执有界纠正；提交失败禁自动重提/换模型。", map[string]any{
 		"mode": map[string]any{"type": "string", "enum": cloudAgentGenerationModeNames()}, "prompt": str("完整提示词；媒体按 referenceNodeIds 各类型分别编号 @图片1/@视频1/@音频1，文本来源不计数。漏标签由服务端补齐，不推断用途"),
-		"logicalModelId": str("selection.logicalModelId；与channelId/channelModelKey互斥"), "channelId": str("selection.channelId"), "channelModelKey": str("selection.channelModelKey"),
+		"audioMode":          map[string]any{"type": "string", "enum": []any{"tts", "unified_edit"}, "description": "tts禁音频引用；unified_edit必需音频；省略自动判定。"},
+		"audioVoiceBindings": map[string]any{"type": "array", "maxItems": 3, "description": "本次角色/音频绑定，均须在referenceNodeIds。", "items": map[string]any{"type": "object", "properties": map[string]any{"characterNodeId": str("角色节点真实ID"), "audioNodeId": str("参考音频节点真实ID")}, "required": []string{"characterNodeId", "audioNodeId"}, "additionalProperties": false}},
+		"logicalModelId":     str("selection.logicalModelId；与channelId/channelModelKey互斥"), "channelId": str("selection.channelId"), "channelModelKey": str("selection.channelModelKey"),
 		"durationSeconds": map[string]any{"type": "integer", "minimum": 0}, "size": str(cloudAgentMediaSizeDescription), "imageResolution": str("model_list 档位；未启用时省略"), "quality": str("按本回合 model_list 返回的 image.quality 或 video.resolutions 取值；视频输出分辨率保持目录返回的大小写"), "videoGenerateAudio": map[string]any{"type": "boolean", "description": "是否生成音频，仅视频可用"},
 		"videoStartFrameNodeId": str("视频首帧图片ID，须在 referenceNodeIds 中"),
 		"videoEndFrameNodeId":   str("视频尾帧图片ID，须在 referenceNodeIds 中"),

@@ -44,6 +44,8 @@ func TestCloudAgentReadArgumentsRejectBeforeReadingCanvas(t *testing.T) {
 }
 
 func TestCloudAgentReadArgumentFeedbackUsesAdvertisedSchema(t *testing.T) {
+	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "user")
 	req := agentTestRequest()
 	for _, name := range []string{"agent_profile_read", "canvas_list_node_types", "canvas_get_state", "canvas_read_storyboard", "canvas_read_batch_table", "skill_read_file", "task_get"} {
 		t.Run(name, func(t *testing.T) {
@@ -51,7 +53,7 @@ func TestCloudAgentReadArgumentFeedbackUsesAdvertisedSchema(t *testing.T) {
 			call := cloudAgentCall{ID: "read-1"}
 			call.Function.Name = name
 			call.Function.Arguments = `{"private-value-do-not-echo":"private-value-do-not-echo"}`
-			_, err := cloudAgentReadTool(nil, "user", state, call)
+			_, err := cloudAgentReadTool(s.repo, "user", state, call)
 			if err == nil {
 				t.Fatal("unknown argument was accepted")
 			}

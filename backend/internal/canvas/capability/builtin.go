@@ -40,7 +40,7 @@ func BuiltinRegistry() *Registry {
 			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "video", "audio", "character"},
 		}),
 		generatedMediaDescriptor("audio", "2", "音频", 340, 120, "audio", ConnectionPolicy{
-			CanSource: true, CanTarget: true, CanReference: true, MaxInputCount: 1, AcceptedInputKinds: []string{"text", "character"},
+			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "character", "image", "audio"},
 		}),
 		characterDescriptor(),
 		{
@@ -187,7 +187,7 @@ func generatedMediaSemantics(nodeType string) generatedMediaCapabilitySemantics 
 			Purpose:     "生成或承载一个音频素材，用于配音、音乐、音效或视频参考输入。",
 			GoodFor:     []string{"文本转语音", "配音", "音乐或音效素材", "为视频提供音频参考"},
 			NotIdealFor: []string{"承载分镜结构", "表达画面构图或镜头运动", "代替视频节点"},
-			Tradeoffs:   []string{"一个节点对应一个音频目标且最多接收一个文本输入", "音频类型、时长和价格仍以模型目录及任务准入为准"},
+			Tradeoffs:   []string{"一个节点对应一个音频目标，可连接文字、角色及模型支持的参考图片或音频", "参考类型、组合、数量和价格须由模型目录及任务准入校验；配音必须提供参考音频"},
 			Actions:     []string{"generate_media", "update_prompt", "use_as_reference"},
 		}
 	default:

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { loadCloudAgentConversation, mergeCloudAgentConversation, mergeCloudAgentConversations, projectCloudAgentConversation, refreshCloudAgentConversations, type CloudAgentHistoryClient } from "@/services/cloud-agent-history";
 import type { AgentEvent, AgentRun, AgentConversationSummary } from "@/services/api/agent";
 import type { CloudAgentConversation } from "@/services/cloud-agent-conversations";
+import { ApiError } from "@/services/api/request";
+import { getActiveUserScope } from "@/lib/user-scope";
 
 const at = "2026-10-23T00:00:00Z";
 const conversationId = "conversation-1";
@@ -193,6 +195,25 @@ describe("Agent cloud conversation history", () => {
         const controller = new AbortController();
         controller.abort();
         await expect(loadCloudAgentConversation(conversationId, { signal: controller.signal, client: client() })).rejects.toMatchObject({ name: "AbortError" });
+    });
+
+    test("画布还没存到服务端时目录 404 按空目录处理，其他失败照常抛出", async () => {
+        const scope = getActiveUserScope();
+        const notFound = async () => {
+            throw new ApiError("画布不存在", { status: 404, code: 404, reason: "not_found" });
+        };
+        expect(await refreshCloudAgentConversations({ canvasId: "draft-canvas", scope, client: client({ listConversations: notFound }) })).toEqual([]);
+        const failed = async () => {
+            throw new ApiError("服务暂不可用", { status: 503, code: 503 });
+        };
+        await expect(refreshCloudAgentConversations({ canvasId: "draft-canvas", scope, client: client({ listConversations: failed }) })).rejects.toThrow("服务暂不可用");
+        // 翻页途中 404 说明目录状态不一致，不能当成读完了。
+        let pages = 0;
+        const midway = async () => {
+            if (pages++) return notFound();
+            return { items: [summary()], nextCursor: "next" };
+        };
+        await expect(refreshCloudAgentConversations({ canvasId: "canvas-1", scope, client: client({ listConversations: midway }) })).rejects.toThrow("画布不存在");
     });
 
     test("keeps local IDs, drafts, rendered user text and ambiguous POST rows", () => {

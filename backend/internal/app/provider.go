@@ -88,6 +88,7 @@ type providerConfig struct {
 	VideoWatermark        string                  `json:"videoWatermark"`
 	ArkPrivateAssetUpload string                  `json:"videoArkPrivateAssetUpload"`
 	AudioVoice            string                  `json:"audioVoice"`
+	AudioMode             string                  `json:"audioMode"`
 	AudioFormat           string                  `json:"audioFormat"`
 	AudioSpeed            string                  `json:"audioSpeed"`
 	AudioInstructions     string                  `json:"audioInstructions"`

@@ -53,7 +53,15 @@ describe("登录入口打开方式", () => {
         }
         // 首页创作输入框的未发送内容只在内存里，两种模式都必须用弹窗。
         expect(source("pages/create/index.tsx")).toContain("openAuth({ preferDialog: true })");
-        expect(source("application.tsx")).toContain("<AuthDialogHost navigate={navigateFromAuthDialog} />");
+        expect(source("application.tsx")).not.toContain("AuthDialogHost");
+        expect(source("components/auth/auth-dialog-host.tsx")).toContain("useNavigate()");
+    });
+
+    test("全局登录弹窗挂在根路由内，表单可以读取路由上下文", () => {
+        const router = source("router.tsx");
+        expect(router).toContain("<Outlet />");
+        expect(router).toContain("<AuthDialogHost />");
+        expect(router).toContain("createBrowserRouter([{ element: <RootLayout />, children: routes }])");
     });
 
     test("后台登录与注册页提供打开方式选择并保留原有分区", () => {

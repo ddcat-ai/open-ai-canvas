@@ -576,7 +576,7 @@ func newCanvasOperationTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.CanvasEditLease{}, &model.CanvasProject{}, &model.CanvasSnapshot{}, &model.CanvasSnapshotResource{}, &model.CanvasMutationReceipt{}, &model.CanvasShare{}, &model.CanvasUnitLink{}, &model.Task{}, &model.CloudAgentExecution{}, &model.Resource{}, &model.Asset{}); err != nil {
+	if err := db.AutoMigrate(&model.CanvasEditLease{}, &model.CanvasProject{}, &model.CanvasSnapshot{}, &model.CanvasSnapshotResource{}, &model.CanvasMutationReceipt{}, &model.CanvasShare{}, &model.CanvasUnitLink{}, &model.Task{}, &model.CloudAgentExecution{}, &model.Resource{}, &model.Asset{}, &model.OfficialAsset{}); err != nil {
 		t.Fatal(err)
 	}
 	sqlDB, _ := db.DB()

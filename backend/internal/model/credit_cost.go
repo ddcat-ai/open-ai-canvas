@@ -3,12 +3,13 @@ package model
 // CreditCostPricing 仅供管理员配置和内部核算。持有者必须使用 json:"-"，
 // 管理端通过专用响应投影公开，禁止随用户目录、报价或账单序列化。
 type CreditCostPricing struct {
-	Configured                       bool  `json:"configured" gorm:"not null;default:false"`
-	UnitPriceMicrocredits            int64 `json:"unitPriceMicrocredits" gorm:"not null;default:0"`
-	InputTokenPriceMicrocredits      int64 `json:"inputTokenPriceMicrocredits" gorm:"not null;default:0"`
-	OutputTokenPriceMicrocredits     int64 `json:"outputTokenPriceMicrocredits" gorm:"not null;default:0"`
-	CachedTokenPriceMicrocredits     int64 `json:"cachedTokenPriceMicrocredits" gorm:"not null;default:0"`
-	CacheWriteTokenPriceMicrocredits int64 `json:"cacheWriteTokenPriceMicrocredits" gorm:"not null;default:0"`
+	ImagePricing                     *ImagePricing `json:"imagePricing,omitempty" gorm:"serializer:json;type:text"`
+	Configured                       bool          `json:"configured" gorm:"not null;default:false"`
+	UnitPriceMicrocredits            int64         `json:"unitPriceMicrocredits" gorm:"not null;default:0"`
+	InputTokenPriceMicrocredits      int64         `json:"inputTokenPriceMicrocredits" gorm:"not null;default:0"`
+	OutputTokenPriceMicrocredits     int64         `json:"outputTokenPriceMicrocredits" gorm:"not null;default:0"`
+	CachedTokenPriceMicrocredits     int64         `json:"cachedTokenPriceMicrocredits" gorm:"not null;default:0"`
+	CacheWriteTokenPriceMicrocredits int64         `json:"cacheWriteTokenPriceMicrocredits" gorm:"not null;default:0"`
 	// 带参考视频的成本价，仅视频模型开启参考视频计费且请求挂参考视频时使用：按秒档替代 Unit，Token 档替代 Output。
 	ReferenceVideoUnitPriceMicrocredits        int64 `json:"referenceVideoUnitPriceMicrocredits" gorm:"not null;default:0"`
 	ReferenceVideoOutputTokenPriceMicrocredits int64 `json:"referenceVideoOutputTokenPriceMicrocredits" gorm:"not null;default:0"`

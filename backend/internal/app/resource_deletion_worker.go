@@ -77,6 +77,13 @@ func (s *Service) cleanupDetachedUserResources(userID string, candidates []model
 		return err
 	}
 	referenced := map[string]struct{}{}
+	retained, err := s.repo.OfficialRecommendationResourceIDs()
+	if err != nil {
+		return err
+	}
+	for resourceID := range retained {
+		referenced[resourceID] = struct{}{}
+	}
 	// Site assets are global references and are not part of a user's canvas snapshot.
 	for resourceID := range s.appearanceResourceReferences(resourceIDs) {
 		referenced[resourceID] = struct{}{}

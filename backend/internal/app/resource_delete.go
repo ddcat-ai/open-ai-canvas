@@ -106,6 +106,15 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		}
 	}
 	if len(ownedIDs) > 0 {
+		retained, retainedErr := s.repo.OfficialRecommendationResourceIDs()
+		if retainedErr != nil {
+			return retainedErr
+		}
+		for _, resourceID := range ownedIDs {
+			if _, exists := retained[resourceID]; exists {
+				return BadAuthRequest("素材正在被官方素材库或待审核推荐引用，暂不能删除")
+			}
+		}
 		var snapshot repository.ResourceReferenceSnapshot
 		var snapshotErr error
 		if deleteReferencedResources {
@@ -203,6 +212,9 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	// 业务记录和 Outbox 必须在同一事务提交。事务失败时物理文件完全不动；
 	// 提交成功后由幂等 worker 清理，进程退出或对象存储暂时失败都可继续重试。
 	if err := s.repo.DeleteAssetsAndResources(userID, assetIDs, ownedIDs, deletionJobs, deleteReferencedResources); err != nil {
+		if errors.Is(err, repository.ErrOfficialResourceReferenced) {
+			return BadAuthRequest("素材正在被官方素材库或待审核推荐引用，暂不能删除")
+		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return NotFound("素材不存在或无权删除")
 		}
@@ -234,6 +246,15 @@ func resourceDeletionJobs(userID string, physicalObjects map[string]*model.Resou
 			StorageSettingID: resource.StorageSettingID, ObjectKey: resource.ObjectKey,
 			Status: model.ResourceDeletionStatusPending, NextAttemptAt: now,
 		})
+		// 云端播放副本是独立对象；资源记录删除后只能由 outbox 保留其对象键。
+		if resource.Provider != "local" && resource.PlaybackStatus == model.PlaybackStatusReady && resource.PlaybackObjectKey != "" && resource.PlaybackObjectKey != resource.ObjectKey {
+			jobs = append(jobs, model.ResourceDeletionJob{
+				ID: newID(), UserID: userID, ResourceID: resource.ID,
+				Provider: resource.Provider, Endpoint: resource.Endpoint, Bucket: resource.Bucket,
+				StorageSettingID: resource.StorageSettingID, ObjectKey: resource.PlaybackObjectKey,
+				Status: model.ResourceDeletionStatusPending, NextAttemptAt: now,
+			})
+		}
 	}
 	return jobs
 }

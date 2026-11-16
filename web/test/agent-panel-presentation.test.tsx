@@ -11,11 +11,12 @@ const noop = () => {};
 
 const conversationProps = { theme: canvasThemes.light, references: [], approval: null, approvalSubmitting: false, onApprovalReasonChange: noop, onApprove: noop, onReject: noop };
 
-test("empty Agent conversation restores the original welcome and three actions", () => {
+test("empty Agent conversation hides skill actions before the administrator session loads", () => {
     const html = renderToStaticMarkup(<AgentConversation {...conversationProps} messages={[]} busy={false} nodeCount={0} onChooseSkill={noop} onDraftPrompt={noop} />);
     expect(html).toContain("agent-welcome-orb");
     expect(html).toContain("让灵感，慢慢成形");
-    expect(html.match(/type="button"/g)).toHaveLength(3);
+    expect(html.match(/type="button"/g)).toHaveLength(2);
+    expect(html).not.toContain("选择技能，开始创作");
     expect(html.match(/disabled=""/g)).toHaveLength(1);
     expect(html).not.toContain("agent-conversation-starter");
     expect(html).not.toContain("agent-scene-capsules");

@@ -539,7 +539,8 @@ func cloudAgentPiCanonicalForModelRequest(messages []map[string]any, existing ca
 	}
 	// A projected Pi transcript containing a compaction summary is authoritative,
 	// even though it is shorter than the server's pre-compaction canonical history.
-	if !cloudAgentPiHasCompactionSummary(messages) && len(existing.Messages) > runtimeMessageCount {
+	// 过滤掉的 system 消息不能撑大历史条数，否则会覆盖服务端额外附上的图片消息。
+	if !cloudAgentPiHasCompactionSummary(messages) && len(existing.Messages) > min(runtimeMessageCount, len(canonical.Messages)) {
 		existing.Messages = repairCanonicalUnansweredCalls(existing.Messages)
 		return existing, nil
 	}

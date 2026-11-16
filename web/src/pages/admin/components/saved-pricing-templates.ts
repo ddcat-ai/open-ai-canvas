@@ -2,6 +2,7 @@ import { getActiveUserScope, scopedStorageKey } from "@/lib/user-scope";
 import { useUserStore } from "@/stores/use-user-store";
 import { validateChannelModelPrices, type ChannelModelFormValues } from "./channel-model-editor-form";
 import { defaultPriceTier, defaultTokenPriceRule } from "./channel-model-price-tier-form";
+import { validImagePricingForm } from "@/lib/image-usage-pricing";
 
 export type PricingSnapshot = Pick<ChannelModelFormValues, "priceTiers" | "priceCurrency" | "referenceVideoBilling">;
 export type SavedPricingTemplate = { id: string; revision: string; name: string; capability: ChannelModelFormValues["capability"]; pricing: PricingSnapshot };
@@ -36,7 +37,15 @@ export function pricingSnapshot(value: PricingSnapshot): PricingSnapshot {
         const item = object(raw);
         const tier = copyFields(item, defaultPriceTier());
         tier.providerModelKey = "";
-        if (!["default", "advanced"].includes(tier.matchMode) || !["fixed_request", "per_second", "token"].includes(tier.billingMode)) throw new Error("模板价格类型无效");
+        if (!["default", "advanced"].includes(tier.matchMode) || !["fixed_request", "per_second", "token", "image_usage"].includes(tier.billingMode)) throw new Error("模板价格类型无效");
+        if (tier.billingMode === "image_usage") {
+            if (!validImagePricingForm(item.imagePricing as typeof tier.imagePricing)) throw new Error("模板图片价格无效");
+            tier.imagePricing = structuredClone(item.imagePricing) as typeof tier.imagePricing;
+            if (tier.costConfigured) {
+                if (!validImagePricingForm(item.costImagePricing as typeof tier.costImagePricing)) throw new Error("模板图片成本价无效");
+                tier.costImagePricing = structuredClone(item.costImagePricing) as typeof tier.costImagePricing;
+            }
+        }
         if (item.imageSelector !== undefined) {
             const entries = Object.entries(object(item.imageSelector));
             if (entries.length > 64 || entries.some(([key, value]) => key.length > 128 || typeof value !== "string" || value.length > 256)) throw new Error("模板规格条件无效");

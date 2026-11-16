@@ -8,8 +8,15 @@ import * as imageStorage from "../src/services/image-storage";
 import { createModelChannel, defaultConfig, encodeChannelModel } from "../src/stores/use-config-store";
 import type { Asset } from "../src/stores/use-asset-store";
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
+import { buildNodeMentionReferences } from "../src/lib/canvas/canvas-resource-references";
 
 const restores: Array<() => void> = [];
+test("tts ignores stale per-generation voice bindings", () => {
+    const target = node("target", CanvasNodeType.Audio, { audioMode: "tts", audioVoiceBindings: [{ characterNodeId: "missing-character", audioNodeId: "missing-audio" }] });
+    const context = buildNodeGenerationContext(target.id, [target], [], "只读这句话", []);
+    expect(context.prompt).toBe("只读这句话");
+    expect(context.referenceAudios).toHaveLength(0);
+});
 afterEach(() =>
     restores
         .splice(0)
@@ -78,6 +85,45 @@ function videoConfig() {
 }
 
 describe("canvas character reference delivery", () => {
+    test("official character is mentionable and delivers the shared snapshot without importing a personal character", async () => {
+        const get = spyOn(http, "get").mockImplementation(async (url) => {
+            if (url === "/official-assets/shared/reference")
+                return {
+                    officialAssetId: "shared",
+                    mediaType: "entity",
+                    title: "林初",
+                    storageKey: "resource:cover",
+                    character: { versionId: "v1", version: 1, definition: { appearance: "青年" }, representations: [{ id: "r", role: "primary", resourceId: "shared-image", mediaType: "image/png" }] },
+                } as never;
+            throw new Error(`Unexpected request: ${url}`);
+        });
+        restores.push(() => get.mockRestore());
+        const source = node("official", CanvasNodeType.Text, { workflowKind: "character", officialAssetId: "shared", characterVersionPolicy: "pinned", characterVersionId: "v1" });
+        const target = node("target", CanvasNodeType.Image);
+        const edges = [{ id: "e", fromNodeId: source.id, toNodeId: target.id }];
+        expect(buildNodeMentionReferences(target, [source, target], edges)).toEqual([expect.objectContaining({ kind: "character", label: "角色1" })]);
+        const context = buildNodeGenerationContext(target.id, [source, target], edges, "@角色1", [], true);
+        const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, "image", false, true, undefined, false);
+        expect(hydrated.referenceImages.map((image) => image.storageKey)).toEqual(["resource:shared-image"]);
+        expect(hydrated.prompt).toContain("林初");
+        expect(hydrated.resolvedCharacterVersions).toEqual([]);
+        expect(get).toHaveBeenCalledTimes(1);
+    });
+    test("audio keeps character text and connected audio without adding character images", async () => {
+        const { images } = mockResources([
+            detail("hero", [
+                ["primary", "hero-main"],
+                ["side", "hero-side"],
+            ]),
+        ]);
+        const context = contextFor([characterNode("hero"), node("sample", CanvasNodeType.Audio, { storageKey: "resource:sample" })], "@角色1 @音频1", [], CanvasNodeType.Audio);
+        const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, "audio", false, true, { maxImages: 1, maxVideos: 0, maxAudios: 3 }, false);
+        expect(hydrated.referenceImages).toEqual([]);
+        expect(hydrated.imageCount).toBe(0);
+        expect(hydrated.referenceAudios).toHaveLength(1);
+        expect(hydrated.prompt).toContain("角色外观设定");
+        expect(images).not.toHaveBeenCalled();
+    });
     test("saved resource references stay as storage keys without browser materialization", async () => {
         const { images } = mockResources([]);
         const context = contextFor([node("scene", CanvasNodeType.Image, { storageKey: "resource:scene" })], "@图片1");
@@ -197,6 +243,12 @@ describe("canvas character reference delivery", () => {
         const context = contextFor([characterNode("a"), node("scene", CanvasNodeType.Image, { storageKey: "resource:scene" }), characterNode("b")], "@角色1对@角色3说话，位于@图片2");
         for (const mode of ["text", "audio"] as const) {
             const hydrated = await hydrateNodeGenerationContext(context, "canvas", undefined, mode);
+            if (mode === "audio") {
+                expect(hydrated.prompt).toStartWith("a对b说话，位于@图片1");
+                expect(hydrated.referenceImages.map((image) => image.storageKey)).toEqual(["resource:scene"]);
+                expect(hydrated.prompt).toContain("【角色卡：b】\n角色外观设定");
+                continue;
+            }
             expect(hydrated.prompt).toStartWith("a对@图片2说话，位于@图片1");
             expect(hydrated.referenceImages.map((image) => image.storageKey)).toEqual(["resource:scene", "resource:b-main"]);
             expect(hydrated.prompt).toContain("【角色卡：b】\n角色外观设定\n参考图片：@图片2");

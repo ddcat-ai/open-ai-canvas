@@ -25,7 +25,7 @@
 | `images` | media[] | 否 | `provider image/reference fields` | 参考图或编辑源图，role 由业务层确定。 |
 | `imageCount` | integer | 否 | `n/sample_count` | 输出数量。 |
 | `aspectRatio` | string | 否 | `size/aspect_ratio` | 比例或尺寸，语义按协议说明。 |
-| `resolution` | string | 否 | `resolution/imageSize` | 分辨率档位。 |
+| `resolution` | string | 否 | `size` | 仅用于宿主选择像素尺寸与计价，不发送独立 resolution 字段。 |
 | `quality` | string | 否 | `quality` | 质量档位。 |
 | `providerOptions` | object | 否 | `provider-specific fields` | 插件命名空间内的厂商扩展字段。 |
 
@@ -37,14 +37,22 @@
 | --- | --- |
 | `create.method` | `"POST"` |
 | `create.path` | `"/v1/images/generations"` |
+| `create.pathTemplate` | `{"$if":{"condition":{"$gt":[{"$len":{"$ref":"request.images"}},0]},"then":"/v1/images/edits","else":"/v1/images/generations"}}` |
 | `create.contentType` | `"application/json"` |
 | `create.contentTypeTemplate` | `{"$if":{"condition":{"$gt":[{"$len":{"$ref":"request.images"}},0]},"then":"multipart/form-data","else":"application/json"}}` |
-| `create.files` | `[{"name":"image","source":{"$if":{"condition":{"$eq":[{"$len":{"$filter":{"from":{"$ref":"request.images"},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}}},1]},"then":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}},"else":null}},"filename":"image.png"},{"name":"image[]","source":{"$if":{"condition":{"$gt":[{"$len":{"$filter":{"from":{"$ref":"request.images"},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}}},1]},"then":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}},"else":null}}},{"name":"mask","source":{"$first":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$eq":[{"$ref":"media.role"},"mask"]}}}},"filename":"mask.png"}]` |
+| `create.files[0].name` | `"image"` |
+| `create.files[0].source` | `{"$if":{"condition":{"$eq":[{"$len":{"$filter":{"from":{"$ref":"request.images"},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}}},1]},"then":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}},"else":null}}` |
+| `create.files[0].filename` | `"image.png"` |
+| `create.files[1].name` | `"image[]"` |
+| `create.files[1].source` | `{"$if":{"condition":{"$gt":[{"$len":{"$filter":{"from":{"$ref":"request.images"},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}}},1]},"then":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$ne":[{"$ref":"media.role"},"mask"]}}},"else":null}}` |
+| `create.files[2].name` | `"mask"` |
+| `create.files[2].source` | `{"$first":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$eq":[{"$ref":"media.role"},"mask"]}}}}` |
+| `create.files[2].filename` | `"mask.png"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
 | `create.body.prompt` | `{"$ref":"request.prompt"}` |
 | `create.body.n` | `{"$omitEmpty":{"$if":{"condition":{"$gt":[{"$ref":"request.imageCount"},0]},"then":{"$ref":"request.imageCount"},"else":1}}}` |
 | `create.body.size` | `{"$omitEmpty":{"$if":{"condition":{"$in":[{"$lower":{"$trim":{"$ref":"request.aspectRatio"}}},["","auto"]]},"then":null,"else":{"$ref":"request.aspectRatio"}}}}` |
-| `create.body.quality` | `{"$omitEmpty":{"$switch":{"cases":[{"when":{"$in":[{"$lower":{"$trim":{"$ref":"request.quality"}}},["1k"]]},"then":"low"},{"when":{"$in":[{"$lower":{"$trim":{"$ref":"request.quality"}}},["2k"]]},"then":"medium"},{"when":{"$in":[{"$lower":{"$trim":{"$ref":"request.quality"}}},["4k"]]},"then":"high"},{"when":{"$in":[{"$lower":{"$trim":{"$ref":"request.quality"}}},["","auto"]]},"then":null}],"default":{"$ref":"request.quality"}}}}` |
+| `create.body.quality` | `{"$omitEmpty":{"$if":{"condition":{"$in":[{"$lower":{"$trim":{"$ref":"request.quality"}}},["","auto"]]},"then":null,"else":{"$ref":"request.quality"}}}}` |
 | `create.body.background` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.openai-image.background"},{"$if":{"condition":{"$eq":[{"$ref":"request.extra.transparentBackground"},"true"]},"then":"transparent","else":null}}]}}` |
 | `create.body.output_format` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.openai-image.output_format"},"png"]}}` |
 | `create.body.output_compression` | `{"$omitEmpty":{"$ref":"request.providerOptions.openai-image.output_compression"}}` |
@@ -81,11 +89,7 @@
 
 ## 兼容边界
 
-无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。quality 的 1k/2k/4k 映射为 OpenAI low/medium/high。
-
-## 动态图片参数
-
-`contributes.providers[].imageParameters` 是渠道模型、前台模型与生成界面共用的参数合同。`name` 为稳定身份，`type`、`values`、`min/max/step`、`default` 描述输入；`models` 限定适用上游模型，`enabled` 为初始启用状态。只有 `pricing: true` 的启用字段允许作为价格条件；其他参数仍参与生成。渠道可收窄范围，绑定与计价资格由插件拥有。`binding` 映射到统一请求或插件自己的 `providerOptions` 命名空间。
+无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。1K/2K/4K 档位只用于选择 size 像素预设及计价，不向上游发送 resolution；自动尺寸由模型决定。quality 独立发送，auto 时省略，不把分辨率档位转换为质量。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -97,7 +101,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "openai-images",
   "name": "OpenAI Images",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "author": "OpenAI / 影策",
   "description": "OpenAI Images 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -242,8 +246,8 @@
             "name": "resolution",
             "type": "string",
             "required": false,
-            "mapping": "resolution/imageSize",
-            "description": "分辨率档位。"
+            "mapping": "size",
+            "description": "仅用于宿主选择像素尺寸与计价，不发送独立 resolution 字段。"
           },
           {
             "name": "quality",
@@ -469,11 +473,6 @@
                     "$ref": "request.aspectRatio"
                   }
                 }
-              }
-            },
-            "resolution": {
-              "$omitEmpty": {
-                "$ref": "request.resolution"
               }
             },
             "quality": {

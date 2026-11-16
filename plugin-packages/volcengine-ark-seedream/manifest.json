@@ -2,10 +2,10 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-seedream",
   "name": "Volcengine Ark Seedream Images",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "author": "Volcengine / 影策",
   "description": "Volcengine Ark Seedream Images 独立请求协议插件。",
-  "documentation": "# Volcengine Ark Seedream Images\n\n该目录是独立官方协议插件源码。后端从生成的 `volcengine-ark-seedream.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# Volcengine Ark Seedream Images 接口字段\n\n## 协议身份\n\n- 插件 ID：`volcengine-ark-seedream`。\n- Provider ID：`volcengine-ark-image`。\n- 能力：`image`。\n- 默认 Base URL：`https://ark.cn-beijing.volces.com`。\n- 鉴权驱动：`bearer`。\n- 创建：`POST /api/v3/images/generations`。\n- 生命周期：同步响应。\n\n## 配置字段\n\n| 字段 | 类型 | 必填 | 含义 |\n| --- | --- | --- | --- |\n| `apiKey` | secret | 是 | API Key |\n\n## 统一字段映射\n\n| 统一字段 | 类型 | 必填 | 上游映射 | 说明 |\n| --- | --- | --- | --- | --- |\n| `model` | string | 是 | `model` | 图片模型 ID。 |\n| `prompt` | string | 是 | `prompt` | 图片提示词。 |\n| `images` | media[] | 否 | `provider image/reference fields` | 参考图或编辑源图，role 由业务层确定。 |\n| `imageCount` | integer | 否 | `n/sample_count` | 输出数量。 |\n| `aspectRatio` | string | 否 | `size/aspect_ratio` | 比例或尺寸，语义按协议说明。 |\n| `resolution` | string | 否 | `resolution/imageSize` | 分辨率档位。 |\n| `quality` | string | 否 | `quality` | 质量档位。 |\n| `providerOptions` | object | 否 | `provider-specific fields` | 插件命名空间内的厂商扩展字段。 |\n\n## 上游请求模板逐字段清单\n\n下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。\n\n| 上游位置 | 值或转换表达式 |\n| --- | --- |\n| `create.method` | `\"POST\"` |\n| `create.path` | `\"/api/v3/images/generations\"` |\n| `create.contentType` | `\"application/json\"` |\n| `create.body.model` | `{\"$ref\":\"request.model\"}` |\n| `create.body.prompt` | `{\"$ref\":\"request.prompt\"}` |\n| `create.body.size` | `{\"$omitEmpty\":{\"$switch\":{\"cases\":[{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"auto\"]},\"then\":\"2k\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"1:1\"]},\"then\":\"2048x2048\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"4:3\"]},\"then\":\"2304x1728\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"3:4\"]},\"then\":\"1728x2304\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"16:9\"]},\"then\":\"2560x1440\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"9:16\"]},\"then\":\"1440x2560\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"3:2\"]},\"then\":\"2496x1664\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"2:3\"]},\"then\":\"1664x2496\"},{\"when\":{\"$eq\":[{\"$ref\":\"request.aspectRatio\"},\"21:9\"]},\"then\":\"3024x1296\"}],\"default\":{\"$ref\":\"request.aspectRatio\"}}}}` |\n| `create.body.image` | `{\"$omitEmpty\":{\"$if\":{\"condition\":{\"$eq\":[{\"$len\":{\"$ref\":\"request.images\"}},1]},\"then\":{\"$first\":{\"$map\":{\"from\":{\"$ref\":\"request.images\"},\"as\":\"media\",\"in\":{\"$ref\":\"media.value\"}}}},\"else\":{\"$if\":{\"condition\":{\"$gt\":[{\"$len\":{\"$ref\":\"request.images\"}},1]},\"then\":{\"$map\":{\"from\":{\"$ref\":\"request.images\"},\"as\":\"media\",\"in\":{\"$ref\":\"media.value\"}}},\"else\":null}}}}}` |\n| `create.body.sequential_image_generation` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-image.sequential_image_generation\"}}` |\n| `create.body.sequential_image_generation_options` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-image.sequential_image_generation_options\"}}` |\n| `create.body.watermark` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.volcengine-ark-image.watermark\"},{\"$ref\":\"request.watermark\"},false]}` |\n| `create.body.seed` | `{\"$omitEmpty\":{\"$ref\":\"request.providerOptions.volcengine-ark-image.seed\"}}` |\n| `create.body.response_format` | `{\"$coalesce\":[{\"$ref\":\"request.providerOptions.volcengine-ark-image.response_format\"},\"b64_json\"]}` |\n\n## Provider 扩展键\n\n- `providerOptions.volcengine-ark-image.response_format`\n- `providerOptions.volcengine-ark-image.seed`\n- `providerOptions.volcengine-ark-image.sequential_image_generation`\n- `providerOptions.volcengine-ark-image.sequential_image_generation_options`\n- `providerOptions.volcengine-ark-image.watermark`\n\n动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。\n\n## 响应映射逐字段清单\n\n| 映射位置 | 上游路径或转换表达式 |\n| --- | --- |\n| `response.status` | `\"succeeded\"` |\n| `response.images` | `{\"$ref\":\"response.data\"}` |\n| `response.usage` | `{\"$ref\":\"response.usage\"}` |\n| `response.errorPaths[0]` | `\"error.code\"` |\n| `response.messagePaths[0]` | `\"error.message\"` |\n\n## 响应与错误\n\n插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。\n\n## 兼容边界\n\n官方 Ark 推理接入：Base URL 使用 /api/v3，API Key 来自方舟推理接入控制台，不可与 Agent Plan 专属 Key 混用。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"volcengine-ark-seedream\",\n  \"name\": \"Volcengine Ark Seedream Images\",\n  \"version\": \"2.0.0\",\n  \"author\": \"Volcengine / 影策\",\n  \"description\": \"Volcengine Ark Seedream Images 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"volcengine-ark-image\",\n        \"label\": \"Volcengine Ark Seedream Images\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://ark.cn-beijing.volces.com\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"图片模型 ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"图片提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"provider image/reference fields\",\n            \"description\": \"参考图或编辑源图，role 由业务层确定。\"\n          },\n          {\n            \"name\": \"imageCount\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"n/sample_count\",\n            \"description\": \"输出数量。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"size/aspect_ratio\",\n            \"description\": \"比例或尺寸，语义按协议说明。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution/imageSize\",\n            \"description\": \"分辨率档位。\"\n          },\n          {\n            \"name\": \"quality\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"quality\",\n            \"description\": \"质量档位。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/api/v3/images/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"size\": {\n              \"$omitEmpty\": {\n                \"$switch\": {\n                  \"cases\": [\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"auto\"\n                        ]\n                      },\n                      \"then\": \"2k\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"1:1\"\n                        ]\n                      },\n                      \"then\": \"2048x2048\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"4:3\"\n                        ]\n                      },\n                      \"then\": \"2304x1728\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"3:4\"\n                        ]\n                      },\n                      \"then\": \"1728x2304\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"16:9\"\n                        ]\n                      },\n                      \"then\": \"2560x1440\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"9:16\"\n                        ]\n                      },\n                      \"then\": \"1440x2560\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"3:2\"\n                        ]\n                      },\n                      \"then\": \"2496x1664\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"2:3\"\n                        ]\n                      },\n                      \"then\": \"1664x2496\"\n                    },\n                    {\n                      \"when\": {\n                        \"$eq\": [\n                          {\n                            \"$ref\": \"request.aspectRatio\"\n                          },\n                          \"21:9\"\n                        ]\n                      },\n                      \"then\": \"3024x1296\"\n                    }\n                  ],\n                  \"default\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                }\n              }\n            },\n            \"image\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$eq\": [\n                      {\n                        \"$len\": {\n                          \"$ref\": \"request.images\"\n                        }\n                      },\n                      1\n                    ]\n                  },\n                  \"then\": {\n                    \"$first\": {\n                      \"$map\": {\n                        \"from\": {\n                          \"$ref\": \"request.images\"\n                        },\n                        \"as\": \"media\",\n                        \"in\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      }\n                    }\n                  },\n                  \"else\": {\n                    \"$if\": {\n                      \"condition\": {\n                        \"$gt\": [\n                          {\n                            \"$len\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          1\n                        ]\n                      },\n                      \"then\": {\n                        \"$map\": {\n                          \"from\": {\n                            \"$ref\": \"request.images\"\n                          },\n                          \"as\": \"media\",\n                          \"in\": {\n                            \"$ref\": \"media.value\"\n                          }\n                        }\n                      },\n                      \"else\": null\n                    }\n                  }\n                }\n              }\n            },\n            \"sequential_image_generation\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.sequential_image_generation\"\n              }\n            },\n            \"sequential_image_generation_options\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.sequential_image_generation_options\"\n              }\n            },\n            \"watermark\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.providerOptions.volcengine-ark-image.watermark\"\n                },\n                {\n                  \"$ref\": \"request.watermark\"\n                },\n                false\n              ]\n            },\n            \"seed\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.seed\"\n              }\n            },\n            \"response_format\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.providerOptions.volcengine-ark-image.response_format\"\n                },\n                \"b64_json\"\n              ]\n            }\n          }\n        },\n        \"response\": {\n          \"status\": \"succeeded\",\n          \"images\": {\n            \"$ref\": \"response.data\"\n          },\n          \"usage\": {\n            \"$ref\": \"response.usage\"\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"messagePaths\": [\n            \"error.message\"\n          ]\n        }\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
+  "documentation": "# Volcengine Ark Seedream Images\r\n\r\n该目录是独立官方协议插件源码。后端从生成的 `volcengine-ark-seedream.yingce-plugin` 包加载，不依赖系统内置 `host:` 适配器。\r\n\r\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# 火山方舟原生图片接口\n\n## 接口与鉴权\n\nPOST https://ark.cn-beijing.volces.com/api/v3/images/generations，使用 Bearer API Key。\n\n## Seedream 5.5\n\n模型 ID：doubao-seedream-5-5-261028。普通生成每次输出一张，最多 10 张参考图；不支持组图和流式输出。尺寸支持 1K、1.5K、2K 或合法像素尺寸。项目的比例与分辨率选择先由宿主按保存的预设转换成像素尺寸。\n\n开启 layerDecomposition 后，仅输入一张图；maxImages 为最多输出数量（2–100，包含底图），layerSize 为拆层尺寸（1K、1.5K、2K、auto）。textRecognition 控制文字识别。拆层时不发送 background；普通生成的 background 支持 auto、opaque、transparent，透明背景应选择 PNG。outputFormat 支持 png、jpeg。\n\n## 响应与计费\n\n保留 usage.input_images、usage.generated_images 和每个 data[].size；图层的 z_index、bounding_box、name、description、text_recognition 保存在结果元数据中。计费由宿主的图片用量规则完成，按每张输出的实际像素匹配档位。\n\n官方公开按量价：输入 0.05 元/张；输出不超过 2.61M 像素为 0.13 元/张，超过 2.61M 且不超过 4.63M 为 0.23 元/张。图片生成 API 的输出像素范围为 921600–4624220。失败输入费等未明确规则需通过官方账单核对。\n\n## 官方资料\n\n- [官方模型价格](https://console.volcengine.com/ark/region:cn-beijing/docs/model-pricing)\n- [图片生成 API](https://docs.volcengine.com/docs/ark/image-generation-api?lang=zh)\n\n## Manifest 完整接口定义\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"volcengine-ark-seedream\",\n  \"name\": \"Volcengine Ark Seedream Images\",\n  \"version\": \"2.1.0\",\n  \"author\": \"Volcengine / 影策\",\n  \"description\": \"Volcengine Ark Seedream Images 独立请求协议插件。\",\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"volcengine-ark-image\",\n        \"label\": \"Volcengine Ark Seedream Images\",\n        \"capabilities\": [\n          \"image\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://ark.cn-beijing.volces.com\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"图片模型 ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"图片提示词。\"\n          },\n          {\n            \"name\": \"images\",\n            \"type\": \"media[]\",\n            \"required\": false,\n            \"mapping\": \"provider image/reference fields\",\n            \"description\": \"参考图或编辑源图，role 由业务层确定。\"\n          },\n          {\n            \"name\": \"imageCount\",\n            \"type\": \"integer\",\n            \"required\": false,\n            \"mapping\": \"n/sample_count\",\n            \"description\": \"输出数量。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"size/aspect_ratio\",\n            \"description\": \"比例或尺寸，语义按协议说明。\"\n          },\n          {\n            \"name\": \"resolution\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"resolution/imageSize\",\n            \"description\": \"分辨率档位。\"\n          },\n          {\n            \"name\": \"quality\",\n            \"type\": \"string\",\n            \"required\": false,\n            \"mapping\": \"quality\",\n            \"description\": \"质量档位。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"required\": false,\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"插件命名空间内的厂商扩展字段。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/api/v3/images/generations\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"size\": {\n              \"$if\": {\n                \"condition\": {\n                  \"$eq\": [\n                    {\n                      \"$ref\": \"request.providerOptions.volcengine-ark-image.layer_decomposition\"\n                    },\n                    true\n                  ]\n                },\n                \"then\": {\n                  \"$coalesce\": [\n                    {\n                      \"$ref\": \"request.providerOptions.volcengine-ark-image.layer_size\"\n                    },\n                    \"auto\"\n                  ]\n                },\n                \"else\": {\n                  \"$omitEmpty\": {\n                    \"$switch\": {\n                      \"cases\": [\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"auto\"\n                            ]\n                          },\n                          \"then\": \"2k\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"1:1\"\n                            ]\n                          },\n                          \"then\": \"2048x2048\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"4:3\"\n                            ]\n                          },\n                          \"then\": \"2304x1728\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"3:4\"\n                            ]\n                          },\n                          \"then\": \"1728x2304\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"16:9\"\n                            ]\n                          },\n                          \"then\": \"2560x1440\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"9:16\"\n                            ]\n                          },\n                          \"then\": \"1440x2560\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"3:2\"\n                            ]\n                          },\n                          \"then\": \"2496x1664\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"2:3\"\n                            ]\n                          },\n                          \"then\": \"1664x2496\"\n                        },\n                        {\n                          \"when\": {\n                            \"$eq\": [\n                              {\n                                \"$ref\": \"request.aspectRatio\"\n                              },\n                              \"21:9\"\n                            ]\n                          },\n                          \"then\": \"3024x1296\"\n                        }\n                      ],\n                      \"default\": {\n                        \"$ref\": \"request.aspectRatio\"\n                      }\n                    }\n                  }\n                }\n              }\n            },\n            \"image\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$eq\": [\n                      {\n                        \"$len\": {\n                          \"$ref\": \"request.images\"\n                        }\n                      },\n                      1\n                    ]\n                  },\n                  \"then\": {\n                    \"$first\": {\n                      \"$map\": {\n                        \"from\": {\n                          \"$ref\": \"request.images\"\n                        },\n                        \"as\": \"media\",\n                        \"in\": {\n                          \"$ref\": \"media.value\"\n                        }\n                      }\n                    }\n                  },\n                  \"else\": {\n                    \"$if\": {\n                      \"condition\": {\n                        \"$gt\": [\n                          {\n                            \"$len\": {\n                              \"$ref\": \"request.images\"\n                            }\n                          },\n                          1\n                        ]\n                      },\n                      \"then\": {\n                        \"$map\": {\n                          \"from\": {\n                            \"$ref\": \"request.images\"\n                          },\n                          \"as\": \"media\",\n                          \"in\": {\n                            \"$ref\": \"media.value\"\n                          }\n                        }\n                      },\n                      \"else\": null\n                    }\n                  }\n                }\n              }\n            },\n            \"sequential_image_generation\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.sequential_image_generation\"\n              }\n            },\n            \"sequential_image_generation_options\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.sequential_image_generation_options\"\n              }\n            },\n            \"watermark\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.providerOptions.volcengine-ark-image.watermark\"\n                },\n                {\n                  \"$ref\": \"request.watermark\"\n                },\n                false\n              ]\n            },\n            \"seed\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.seed\"\n              }\n            },\n            \"response_format\": {\n              \"$coalesce\": [\n                {\n                  \"$ref\": \"request.providerOptions.volcengine-ark-image.response_format\"\n                },\n                \"b64_json\"\n              ]\n            },\n            \"layer_decomposition\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.layer_decomposition\"\n              }\n            },\n            \"layer_decomposition_options\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$eq\": [\n                      {\n                        \"$ref\": \"request.providerOptions.volcengine-ark-image.layer_decomposition\"\n                      },\n                      true\n                    ]\n                  },\n                  \"then\": {\n                    \"max_images\": {\n                      \"$coalesce\": [\n                        {\n                          \"$ref\": \"request.providerOptions.volcengine-ark-image.max_images\"\n                        },\n                        30\n                      ]\n                    },\n                    \"text_recognition\": {\n                      \"$coalesce\": [\n                        {\n                          \"$ref\": \"request.providerOptions.volcengine-ark-image.text_recognition\"\n                        },\n                        false\n                      ]\n                    }\n                  },\n                  \"else\": null\n                }\n              }\n            },\n            \"background\": {\n              \"$omitEmpty\": {\n                \"$if\": {\n                  \"condition\": {\n                    \"$eq\": [\n                      {\n                        \"$ref\": \"request.providerOptions.volcengine-ark-image.layer_decomposition\"\n                      },\n                      true\n                    ]\n                  },\n                  \"then\": null,\n                  \"else\": {\n                    \"$ref\": \"request.providerOptions.volcengine-ark-image.background\"\n                  }\n                }\n              }\n            },\n            \"output_format\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.providerOptions.volcengine-ark-image.output_format\"\n              }\n            }\n          }\n        },\n        \"response\": {\n          \"status\": \"succeeded\",\n          \"images\": {\n            \"$ref\": \"response.data\"\n          },\n          \"usage\": {\n            \"$ref\": \"response.usage\"\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"messagePaths\": [\n            \"error.message\"\n          ]\n        },\n        \"imageParameters\": [\n          {\n            \"name\": \"size\",\n            \"label\": \"画幅 / 尺寸\",\n            \"type\": \"string\",\n            \"pricing\": true,\n            \"binding\": \"aspectRatio\",\n            \"encoding\": \"pixels\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          },\n          {\n            \"name\": \"imageResolution\",\n            \"label\": \"分辨率\",\n            \"type\": \"string\",\n            \"values\": [\n              \"1k\",\n              \"1.5k\",\n              \"2k\"\n            ],\n            \"default\": \"2k\",\n            \"pricing\": true,\n            \"binding\": \"resolution\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          },\n          {\n            \"name\": \"layerDecomposition\",\n            \"label\": \"图层拆分\",\n            \"type\": \"boolean\",\n            \"default\": false,\n            \"pricing\": true,\n            \"binding\": \"providerOptions.volcengine-ark-image.layer_decomposition\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          },\n          {\n            \"name\": \"maxImages\",\n            \"label\": \"最多输出张数（含底图）\",\n            \"type\": \"integer\",\n            \"min\": 2,\n            \"max\": 100,\n            \"step\": 1,\n            \"default\": 30,\n            \"binding\": \"providerOptions.volcengine-ark-image.max_images\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          },\n          {\n            \"name\": \"layerSize\",\n            \"label\": \"拆层输出尺寸\",\n            \"type\": \"string\",\n            \"values\": [\n              \"1K\",\n              \"1.5K\",\n              \"2K\",\n              \"auto\"\n            ],\n            \"default\": \"auto\",\n            \"binding\": \"providerOptions.volcengine-ark-image.layer_size\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          },\n          {\n            \"name\": \"background\",\n            \"label\": \"图片背景\",\n            \"type\": \"string\",\n            \"values\": [\n              \"auto\",\n              \"opaque\",\n              \"transparent\"\n            ],\n            \"default\": \"auto\",\n            \"binding\": \"providerOptions.volcengine-ark-image.background\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          },\n          {\n            \"name\": \"outputFormat\",\n            \"label\": \"输出格式\",\n            \"type\": \"string\",\n            \"values\": [\n              \"png\",\n              \"jpeg\"\n            ],\n            \"default\": \"png\",\n            \"binding\": \"providerOptions.volcengine-ark-image.output_format\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          },\n          {\n            \"name\": \"textRecognition\",\n            \"label\": \"拆层时识别文字\",\n            \"type\": \"boolean\",\n            \"default\": false,\n            \"binding\": \"providerOptions.volcengine-ark-image.text_recognition\",\n            \"models\": [\n              \"doubao-seedream-5-5-261028\"\n            ]\n          }\n        ]\n      }\n    ]\n  }\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n",
   "permissions": [
     "generation.run",
     "media.read"
@@ -111,111 +111,131 @@
               "$ref": "request.prompt"
             },
             "size": {
-              "$omitEmpty": {
-                "$switch": {
-                  "cases": [
+              "$if": {
+                "condition": {
+                  "$eq": [
                     {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
-                          },
-                          "auto"
-                        ]
-                      },
-                      "then": "2k"
+                      "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
                     },
+                    true
+                  ]
+                },
+                "then": {
+                  "$coalesce": [
                     {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
-                          },
-                          "1:1"
-                        ]
-                      },
-                      "then": "2048x2048"
+                      "$ref": "request.providerOptions.volcengine-ark-image.layer_size"
                     },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                    "auto"
+                  ]
+                },
+                "else": {
+                  "$omitEmpty": {
+                    "$switch": {
+                      "cases": [
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "auto"
+                            ]
                           },
-                          "4:3"
-                        ]
-                      },
-                      "then": "2304x1728"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2k"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "1:1"
+                            ]
                           },
-                          "3:4"
-                        ]
-                      },
-                      "then": "1728x2304"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2048x2048"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "4:3"
+                            ]
                           },
-                          "16:9"
-                        ]
-                      },
-                      "then": "2560x1440"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2304x1728"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "3:4"
+                            ]
                           },
-                          "9:16"
-                        ]
-                      },
-                      "then": "1440x2560"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "1728x2304"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "16:9"
+                            ]
                           },
-                          "3:2"
-                        ]
-                      },
-                      "then": "2496x1664"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2560x1440"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "9:16"
+                            ]
                           },
-                          "2:3"
-                        ]
-                      },
-                      "then": "1664x2496"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "1440x2560"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "3:2"
+                            ]
                           },
-                          "21:9"
-                        ]
-                      },
-                      "then": "3024x1296"
+                          "then": "2496x1664"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "2:3"
+                            ]
+                          },
+                          "then": "1664x2496"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "21:9"
+                            ]
+                          },
+                          "then": "3024x1296"
+                        }
+                      ],
+                      "default": {
+                        "$ref": "request.aspectRatio"
+                      }
                     }
-                  ],
-                  "default": {
-                    "$ref": "request.aspectRatio"
                   }
                 }
               }
@@ -308,6 +328,67 @@
                 },
                 "b64_json"
               ]
+            },
+            "layer_decomposition": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
+              }
+            },
+            "layer_decomposition_options": {
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$eq": [
+                      {
+                        "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
+                      },
+                      true
+                    ]
+                  },
+                  "then": {
+                    "max_images": {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.providerOptions.volcengine-ark-image.max_images"
+                        },
+                        30
+                      ]
+                    },
+                    "text_recognition": {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.providerOptions.volcengine-ark-image.text_recognition"
+                        },
+                        false
+                      ]
+                    }
+                  },
+                  "else": null
+                }
+              }
+            },
+            "background": {
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$eq": [
+                      {
+                        "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
+                      },
+                      true
+                    ]
+                  },
+                  "then": null,
+                  "else": {
+                    "$ref": "request.providerOptions.volcengine-ark-image.background"
+                  }
+                }
+              }
+            },
+            "output_format": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.volcengine-ark-image.output_format"
+              }
             }
           }
         },
@@ -325,7 +406,115 @@
           "messagePaths": [
             "error.message"
           ]
-        }
+        },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "pricing": true,
+            "binding": "aspectRatio",
+            "encoding": "pixels",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "values": [
+              "1k",
+              "1.5k",
+              "2k"
+            ],
+            "default": "2k",
+            "pricing": true,
+            "binding": "resolution",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "layerDecomposition",
+            "label": "图层拆分",
+            "type": "boolean",
+            "default": false,
+            "pricing": true,
+            "binding": "providerOptions.volcengine-ark-image.layer_decomposition",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "maxImages",
+            "label": "最多输出张数（含底图）",
+            "type": "integer",
+            "min": 2,
+            "max": 100,
+            "step": 1,
+            "default": 30,
+            "binding": "providerOptions.volcengine-ark-image.max_images",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "layerSize",
+            "label": "拆层输出尺寸",
+            "type": "string",
+            "values": [
+              "1K",
+              "1.5K",
+              "2K",
+              "auto"
+            ],
+            "default": "auto",
+            "binding": "providerOptions.volcengine-ark-image.layer_size",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "background",
+            "label": "图片背景",
+            "type": "string",
+            "values": [
+              "auto",
+              "opaque",
+              "transparent"
+            ],
+            "default": "auto",
+            "binding": "providerOptions.volcengine-ark-image.background",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "outputFormat",
+            "label": "输出格式",
+            "type": "string",
+            "values": [
+              "png",
+              "jpeg"
+            ],
+            "default": "png",
+            "binding": "providerOptions.volcengine-ark-image.output_format",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "textRecognition",
+            "label": "拆层时识别文字",
+            "type": "boolean",
+            "default": false,
+            "binding": "providerOptions.volcengine-ark-image.text_recognition",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          }
+        ]
       }
     ]
   }

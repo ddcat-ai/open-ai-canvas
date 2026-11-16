@@ -24,6 +24,12 @@ type MediaAssetReference struct {
 // owned by the same user. The client writes Assets before canvases, so rejecting
 // an incomplete pair prevents a durable Resource-only (ghost capacity) state.
 func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) error {
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &identity); err != nil {
+		return kernel.BadAuthRequest("画布媒体数据格式错误")
+	}
 	references, err := MediaAssetReferences(raw)
 	if err != nil {
 		return kernel.BadAuthRequest("画布媒体数据格式错误")
@@ -39,10 +45,9 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 	assetIDSet := make(map[string]struct{}, len(references))
 	resourceIDSet := make(map[string]struct{}, len(references)+len(allResourceReferences))
 	for _, reference := range references {
-		if reference.AssetID == "" {
-			return canvasMediaAssetsPendingError()
+		if reference.AssetID != "" {
+			assetIDSet[reference.AssetID] = struct{}{}
 		}
-		assetIDSet[reference.AssetID] = struct{}{}
 		resourceIDSet[reference.ResourceID] = struct{}{}
 	}
 	for _, reference := range allResourceReferences {
@@ -77,6 +82,26 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 			readyResources[resource.ID] = struct{}{}
 		}
 	}
+	officialResources := make(map[string]bool)
+	for resourceID := range resourceIDSet {
+		if _, owned := readyResources[resourceID]; owned {
+			continue
+		}
+		published, err := s.repo.PublishedOfficialResource(resourceID)
+		if err != nil {
+			return err
+		}
+		if !published {
+			published, err = s.repo.RetainedCanvasOfficialResource(userID, identity.ID, resourceID)
+			if err != nil {
+				return err
+			}
+		}
+		if published {
+			officialResources[resourceID] = true
+			readyResources[resourceID] = struct{}{}
+		}
+	}
 	missing := make([]assets.DocumentResourceReference, 0)
 	for _, reference := range allResourceReferences {
 		if _, exists := readyResources[reference.ResourceID]; !exists {
@@ -89,6 +114,24 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 	}
 
 	for _, reference := range references {
+		if reference.AssetID == "" {
+			allowed := officialResources[reference.ResourceID]
+			if !allowed {
+				allowed, err = s.repo.PublishedOfficialResource(reference.ResourceID)
+				if err != nil {
+					return err
+				}
+			}
+			if !allowed {
+				allowed, err = s.repo.RetainedCanvasOfficialResource(userID, identity.ID, reference.ResourceID)
+				if err != nil {
+					return err
+				}
+			}
+			if allowed {
+				continue
+			}
+		}
 		resourceIDs, assetExists := assetResources[reference.AssetID]
 		if !assetExists {
 			return canvasMediaAssetsPendingError()
