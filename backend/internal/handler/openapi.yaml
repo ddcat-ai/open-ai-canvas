@@ -2115,6 +2115,7 @@ paths:
       summary: 按对象或字段变更写入画布
       description: |
         请求只提交对象级或字段级 operations，不提交整批画布快照。
+        create_canvas 的初始字段通过 patch 提交；空白画布可只提交标题，未关联项目的 projectId 可省略或为 null、空字符串。
         mutationId 是一次请求的幂等身份；响应丢失、断网、刷新或后台重试时必须复用同一个 mutationId 与原始 operations。
         更新、删除和连接操作要求目标存在并通过对象基线校验；同一字段冲突不会覆盖远端修改。
       requestBody:
@@ -2159,7 +2160,7 @@ paths:
         "200":
           description: 信封 data.project 返回当前画布摘要，data.mutationId 返回原 mutationId
         "400":
-          description: 请求、字段、对象基线或素材引用格式不合法
+          description: 请求、字段、对象基线或素材引用格式不合法；后端 canvas operations rejected 日志记录失败阶段及安全诊断
         "401":
           description: 未登录
         "404":
