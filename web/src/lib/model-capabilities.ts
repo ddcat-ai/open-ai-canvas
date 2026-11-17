@@ -151,7 +151,7 @@ export const DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS = 180;
 export const VOLCENGINE_MEDIAKIT_ENHANCE_VIDEO_PROTOCOL = "volcengine-mediakit-enhance-video";
 export const VOLCENGINE_MEDIAKIT_VIDEO_DEPTH_PROTOCOL = "volcengine-mediakit-video-depth";
 export const MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS = 600;
-/** 火山 MediaKit 画质增强（大模型版）支持的目标分辨率，按从低到高排列。 */
+/** 火山 MediaKit 视频画质增强工具支持的目标分辨率，按从低到高排列。 */
 export const VIDEO_ENHANCE_RESOLUTIONS = ["720p", "1080p", "2k", "4k"] as const;
 /** 目标档对应的短边像素，用于判断是否低于源视频。 */
 export const VIDEO_ENHANCE_SHORT_EDGE: Record<string, number> = { "720p": 720, "1080p": 1080, "2k": 1440, "4k": 2160 };

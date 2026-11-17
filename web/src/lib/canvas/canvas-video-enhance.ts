@@ -38,7 +38,7 @@ export function videoEnhanceResolutionShortEdge(resolution: string) {
     return Number.isFinite(numeric) ? numeric : 0;
 }
 
-/** 火山画质增强（大模型版）输入规格：短边 [360,1080]、长边 [360,1920]、时长不超过后台上限。 */
+/** MediaKit 视频画质增强工具输入规格：短边 [360,1080]、长边 [360,1920]、时长不超过后台上限。 */
 export function videoEnhanceSourceError(node: CanvasNodeData, maxSourceSeconds: number) {
     const metadata = node.metadata;
     if (!metadata?.storageKey && !metadata?.content) return "视频节点为空，无法画质增强";

@@ -1,4 +1,4 @@
-# 相对深度视频接口
+# 火山 MediaKit 视频相对深度估计工具接口
 
 ## 协议身份与配置
 
@@ -45,10 +45,10 @@ Stub 回归不代表真实服务验收。真实效果、处理耗时、HEVC 跨�
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-mediakit-depth",
-  "name": "火山 MediaKit 相对深度视频",
+  "name": "火山 MediaKit 视频相对深度估计工具",
   "version": "1.0.0",
   "author": "Volcengine / 影策",
-  "description": "逐帧估计视频相对深度，输出 HEVC 视频；默认关闭，由管理员配置系统渠道后使用。",
+  "description": "火山 MediaKit 视频处理工具，用于逐帧估计相对深度；默认关闭，不是视频生成模型。",
   "enabled": false,
   "permissions": [
     "generation.run",
@@ -68,7 +68,7 @@ Stub 回归不代表真实服务验收。真实效果、处理耗时、HEVC 跨�
     "providers": [
       {
         "id": "volcengine-mediakit-video-depth",
-        "label": "火山 MediaKit 相对深度视频",
+        "label": "火山 MediaKit 视频相对深度估计工具",
         "kind": "processing",
         "capabilities": [
           "video"
