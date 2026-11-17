@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
+import { imageParameterRequest } from "../src/lib/image-parameters";
 import type { ModelProtocolDefinition } from "../src/lib/model-protocols";
 import { initialChannelModelValues, validateChannelModelPrices } from "../src/pages/admin/components/channel-model-editor-form";
 import { defaultPriceTier, priceTierAmountsComplete, priceTierPayloadFromForm, priceTierToForm } from "../src/pages/admin/components/channel-model-price-tier-form";
@@ -20,6 +21,18 @@ const draft = () => ({
     modelKey: "gpt-image-2",
     providerModelKey: "gpt-image-2",
     capabilityConfig: defaultModelCapabilityConfig("openai-image", "gpt-image-2"),
+});
+
+test("GPT Image 2.6 模板启用 GIF 输出并映射真实协议参数，普通模板保持原格式范围", () => {
+    const image = applyCapabilityTemplate("gpt-image-2.6-openai-v1", { ...draft(), modelKey: "gpt-image-2.6", providerModelKey: "gpt-image-2.6" }).capabilityConfig!.image!;
+    const output = image.parameters!.find((parameter) => parameter.name === "outputFormat")!;
+    expect(output.enabled).toBe(true);
+    expect(output.values).toEqual(["png", "jpeg", "webp", "gif"]);
+    const request = imageParameterRequest(image, { imageParameters: JSON.stringify({ outputFormat: "gif" }) });
+    expect(request?.outputFormat).toBe("gif");
+    expect(output.binding).toBe("providerOptions.openai-image.output_format");
+    const standard = applyCapabilityTemplate("gpt-image-openai-v1", draft()).capabilityConfig!.image!;
+    expect(standard.parameters!.find((parameter) => parameter.name === "outputFormat")?.values).not.toContain("gif");
 });
 
 test("能力模板显式应用且仅改声明字段，保留媒体传输、扩展与所有价格", () => {

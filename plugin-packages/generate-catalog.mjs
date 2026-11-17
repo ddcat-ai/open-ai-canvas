@@ -94,7 +94,7 @@ function add(spec) {
 
 add({
   id: "openai-images", providerId: "openai-image", name: "OpenAI Images", vendor: "OpenAI", capability: "image",
-  version: "2.2.1",
+  version: "2.2.2",
   baseUrl: "https://api.openai.com", auth: bearer,
   params: imageParams.map((parameter) => parameter[0] === "resolution"
     ? ["resolution", "string", false, "size", "仅用于宿主选择像素尺寸与计价，不发送独立 resolution 字段。"]
@@ -105,10 +105,10 @@ add({
     { name: "quality", label: "图片质量", type: "string", binding: "quality", pricing: true },
     { name: "count", label: "生成数量", type: "integer", binding: "imageCount", min: 1, max: 100, step: 1, default: 1 },
     { name: "transparentBackground", label: "透明背景", type: "boolean", binding: "transparentBackground", default: false, enabled: false },
-    { name: "outputFormat", label: "输出格式", type: "string", binding: "providerOptions.openai-image.output_format", values: ["png", "jpeg", "webp"], default: "png", enabled: false },
+    { name: "outputFormat", label: "输出格式", type: "string", binding: "providerOptions.openai-image.output_format", values: ["png", "jpeg", "webp", "gif"], default: "png", enabled: false },
     { name: "outputCompression", label: "压缩质量", type: "integer", binding: "providerOptions.openai-image.output_compression", min: 0, max: 100, step: 1, enabled: false }
   ],
-  notes: "无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。1K/2K/4K 档位只用于选择 size 像素预设及计价，不向上游发送 resolution；自动尺寸由模型决定。quality 独立发送，auto 时省略，不把分辨率档位转换为质量。",
+  notes: "无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。1K/2K/4K 档位只用于选择 size 像素预设及计价，不向上游发送 resolution；自动尺寸由模型决定。quality 独立发送，auto 时省略，不把分辨率档位转换为质量。输出格式通过 providerOptions.openai-image.output_format 发送；管理员须按渠道实际能力启用并限定枚举，支持 GIF 的 GPT Image 2.6 渠道可使用对应能力模板。Base64 响应读取单张或顶层 output_format，并按实际文件头识别格式；GIF 下载保留原文件动画。",
   create: {
     method: "POST",
     path: "/v1/images/generations",
@@ -142,7 +142,8 @@ add({
     status: "succeeded",
     images: map(ref("response.data"), "item", {
       url: omit(ref("item.url")),
-      dataUrl: conditional(ref("item.b64_json"), { $concat: ["data:image/png;base64,", ref("item.b64_json")] })
+      b64_json: omit(ref("item.b64_json")),
+      output_format: omit(coalesce(ref("item.output_format"), ref("response.output_format")))
     }),
     usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"]
   }
