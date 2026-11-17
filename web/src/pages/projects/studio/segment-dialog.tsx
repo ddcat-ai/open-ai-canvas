@@ -621,7 +621,9 @@ function SegmentPrompt({
     const [showHeader, setShowHeader] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState("");
-    useEffect(() => setDraft(segment.videoPrompt), [segment.videoPrompt]);
+    const [saveVersion, setSaveVersion] = useState(0);
+    // 服务端会规范化参考图写法；等值保存也要重新采用服务端正文。
+    useEffect(() => setDraft(segment.videoPrompt), [segment.videoPrompt, saveVersion]);
     const busy = segment.promptStatus === "queued" || segment.promptStatus === "running";
     const editingDisabled = disabled || busy || writing || saving;
     const notice = segment.custom && segment.promptStatus === "stale" ? "" : PROMPT_NOTICE[segment.promptStatus];
@@ -638,7 +640,7 @@ function SegmentPrompt({
         setSaveError("");
         try {
             await onSave(next === segment.generated.trim() ? "" : next);
-            setDraft(next);
+            setSaveVersion((version) => version + 1);
         } finally {
             setSaving(false);
         }

@@ -43,6 +43,8 @@ const { createModelChannel, useConfigStore } = await import("../../src/stores/us
 
 const { http } = await import("../../src/services/api/request");
 
+const { serializeEditableValue } = await import("../../src/components/canvas/canvas-mention-editable");
+
 function request(seconds: number, resolution: string) {
     return {
         operation: "reference_to_video" as const,
@@ -108,11 +110,21 @@ const detail: DramaEpisodeDetail = {
     jobs: [],
 };
 
-function Host({ onSavePrompt = async () => {}, promptModel, busy = false }: { onSavePrompt?: (segment: DramaSegment, override: string) => Promise<unknown>; promptModel?: DramaModelChoice; busy?: boolean }) {
+function Host({
+    onSavePrompt = async () => {},
+    promptModel,
+    busy = false,
+    episodeDetail = detail,
+}: {
+    onSavePrompt?: (segment: DramaSegment, override: string) => Promise<unknown>;
+    promptModel?: DramaModelChoice;
+    busy?: boolean;
+    episodeDetail?: DramaEpisodeDetail;
+}) {
     const [index, setIndex] = useState(0);
     return (
         <SegmentDialog
-            detail={detail}
+            detail={episodeDetail}
             segmentIndex={index}
             castById={new Map()}
             aspectRatio="9:16"
@@ -233,7 +245,12 @@ test("剧情段采用 AI 候选等待保存，失败不替换正文并可重试"
     const channel = createModelChannel({ id: "text-channel", scope: "system", models: ["text-model"], modelCosts: [{ model: "text-model", capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: 0 }] });
     useConfigStore.setState({ config: { ...previousConfig, channels: [channel] } });
     const model = { channelId: channel.id, modelKey: "text-model" };
-    const candidate = "主角在远景中对峙，用反应镜头表现冲突。";
+    const candidate = "@参考图 1在远景中对峙，用反应镜头表现冲突。";
+    const savedPrompt = "参考图1在远景中对峙，用反应镜头表现冲突。";
+    let episodeDetail: DramaEpisodeDetail = {
+        ...detail,
+        segments: detail.segments.map((current) => ({ ...current, request: { ...current.request, references: [{ castId: "cast-1", label: "参考图1", name: "主角", kind: "character", sent: true }] } })),
+    };
     const generate = spyOn(generation, "runBackendGenerationTask").mockResolvedValue({ text: candidate });
     let rejectSave!: (reason: Error) => void;
     const patch = spyOn(http, "patch").mockImplementation(
@@ -248,13 +265,14 @@ test("剧情段采用 AI 候选等待保存，失败不替换正文并可重试"
             <QueryClientProvider client={client}>
                 <ConfigProvider>
                     <App>
-                        <Host busy={busy} promptModel={model} onSavePrompt={(current, override) => api.updateDramaSegment("p1", "ep1", current.index, override)} />
+                        <Host episodeDetail={episodeDetail} busy={busy} promptModel={model} onSavePrompt={(current, override) => api.updateDramaSegment("p1", "ep1", current.index, override)} />
                     </App>
                 </ConfigProvider>
             </QueryClientProvider>,
         );
     const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.includes(text))!;
-    const editor = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="完整视频提示词"]')!;
+    const editor = () => document.querySelector<HTMLElement>('[role="textbox"][aria-label="完整视频提示词"]')!;
+    const editorValue = () => serializeEditableValue(editor());
     const candidateField = () => document.querySelector<HTMLTextAreaElement>('[aria-label="AI 修改候选"]');
     try {
         await act(async () => render());
@@ -265,31 +283,46 @@ test("剧情段采用 AI 候选等待保存，失败不替换正文并可重试"
         });
         await act(async () => button("生成修改候选").click());
         expect(candidateField()?.value).toBe(candidate);
-        expect(editor().value).toBe(detail.segments[0].videoPrompt);
+        expect(editorValue()).toBe(detail.segments[0].videoPrompt);
         expect(patch).not.toHaveBeenCalled();
         busy = true;
         await act(async () => render());
         expect(button("采用这版提示词").disabled).toBe(true);
-        expect(editor().readOnly).toBe(true);
+        expect(editor().getAttribute("aria-readonly")).toBe("true");
         busy = false;
         await act(async () => render());
         await act(async () => button("采用这版提示词").click());
         expect(patch).toHaveBeenCalledWith("/dramas/p1/episodes/ep1/segments/0", { videoPromptOverride: candidate });
         expect(candidateField()?.value).toBe(candidate);
-        expect(editor().value).toBe(detail.segments[0].videoPrompt);
-        expect(editor().readOnly).toBe(true);
+        expect(editorValue()).toBe(detail.segments[0].videoPrompt);
+        expect(editor().getAttribute("aria-readonly")).toBe("true");
         expect(document.body.textContent).toContain("正在保存提示词");
         await act(async () => rejectSave(new Error("保存失败：服务暂不可用")));
         expect(candidateField()?.value).toBe(candidate);
-        expect(editor().value).toBe(detail.segments[0].videoPrompt);
-        expect(editor().readOnly).toBe(false);
+        expect(editorValue()).toBe(detail.segments[0].videoPrompt);
+        expect(editor().getAttribute("aria-readonly")).toBe("false");
         expect(document.body.textContent).toContain("保存失败：服务暂不可用");
-        patch.mockResolvedValue({ saved: true });
+        patch.mockImplementation(async () => {
+            episodeDetail = {
+                ...episodeDetail,
+                segments: episodeDetail.segments.map((current) => (current.index === 0 ? { ...current, videoPrompt: savedPrompt, custom: true, revision: 2 } : current)),
+            };
+            render();
+            return { saved: true };
+        });
         await act(async () => button("采用这版提示词").click());
         expect(patch).toHaveBeenCalledTimes(2);
         expect(generate).toHaveBeenCalledTimes(1);
         expect(candidateField()).toBeNull();
-        expect(editor().value).toBe(candidate);
+        expect(editorValue()).toBe(savedPrompt);
+        expect(document.querySelector(".drama-sd-pane-foot")!.textContent).not.toContain("未保存");
+        await act(async () => button("生成修改候选").click());
+        expect(candidateField()?.value).toBe(candidate);
+        await act(async () => button("采用这版提示词").click());
+        expect(patch).toHaveBeenCalledTimes(3);
+        expect(episodeDetail.segments[0].revision).toBe(2);
+        expect(editorValue()).toBe(savedPrompt);
+        expect(document.querySelector(".drama-sd-pane-foot")!.textContent).not.toContain("未保存");
     } finally {
         await act(async () => useConfigStore.setState({ config: previousConfig }));
     }
