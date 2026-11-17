@@ -17,7 +17,6 @@ import {
     reprocessDramaSegmentVideo,
     regenerateDramaCast,
     releaseDramaMedia,
-    renameDramaEpisode,
     rescriptDramaEpisode,
     retryFailedDrama,
     startDrama,
@@ -39,6 +38,7 @@ import { formatCount, formatDuration, sourceFormatOf, StagePips, STAGE_LABEL, ST
 import { CastPanel, InboxPanel, SettingsPanel } from "./studio/panels";
 import { EpisodeDeleteModal } from "./studio/episode-delete-modal";
 import { EpisodeRail } from "./studio/episode-rail";
+import { EpisodeRenameModal } from "./studio/episode-rename-modal";
 import { AddEpisodeModal, type EpisodePlacement } from "./studio/episode-source";
 import { AssetImportModal, AssetPackageModal } from "./studio/asset-transfer";
 import { ChapterPickerModal } from "./studio/chapter-picker";
@@ -74,7 +74,7 @@ export default function DramaStudioPage() {
     const view = (["cast", "inbox", "settings"].includes(searchParams.get("view") || "") ? searchParams.get("view") : "production") as StudioView;
     const castFocus = searchParams.get("cast") || "";
     const assetView = searchParams.get("assets") === "episodes" ? "episodes" : "library";
-    const [renaming, setRenaming] = useState(false);
+    const [renaming, setRenaming] = useState<DramaEpisodeRow | null>(null);
     const [adding, setAdding] = useState(false);
     // 有值时“添加一集”弹窗插到这一集前后，否则追加到末尾。
     const [placement, setPlacement] = useState<EpisodePlacement>();
@@ -328,14 +328,6 @@ export default function DramaStudioPage() {
             centered: true,
             onOk: () => release.mutateAsync({ target: "all" }),
         });
-    const rename = useMutation({
-        mutationFn: (title: string) => renameDramaEpisode(projectId, episodeId, title),
-        onSuccess: () => {
-            invalidate(episodeId);
-            setRenaming(false);
-        },
-        onError: (error) => errorMessage(error, "重命名失败"),
-    });
     const busy = approve.isPending || rescript.isPending || generateSegments.isPending || release.isPending || patchShot.isPending || insertShot.isPending || removeShot.isPending || saveReferences.isPending || saveSegment.isPending;
 
     const openInbox = (item: DramaInboxItem) => {
@@ -594,6 +586,7 @@ export default function DramaStudioPage() {
                                 setPlacement({ anchorId: episode.id, anchorNumber: episode.number, position });
                                 setAdding(true);
                             }}
+                            onRename={setRenaming}
                             onDelete={setDeleting}
                             onPickChapters={() => setPickingChapters(true)}
                         />
@@ -604,36 +597,12 @@ export default function DramaStudioPage() {
                                         <div className="drama-eyebrow">
                                             第 {episodeRow.number} 集 · {STAGE_LABEL[episodeRow.stage]}
                                         </div>
-                                        {renaming ? (
-                                            <div className="drama-title-editor">
-                                                <input
-                                                    className="drama-title-input"
-                                                    autoFocus
-                                                    defaultValue={episodeRow.title}
-                                                    maxLength={60}
-                                                    aria-label="集标题"
-                                                    disabled={rename.isPending}
-                                                    onFocus={(event) => event.currentTarget.select()}
-                                                    onBlur={(event) => {
-                                                        const title = event.target.value.trim();
-                                                        if (title && title !== episodeRow.title) rename.mutate(title);
-                                                        else setRenaming(false);
-                                                    }}
-                                                    onKeyDown={(event) => {
-                                                        if (event.key === "Enter") event.currentTarget.blur();
-                                                        if (event.key === "Escape") setRenaming(false);
-                                                    }}
-                                                />
-                                                <span className="drama-title-hint">回车保存 · Esc 取消</span>
-                                            </div>
-                                        ) : (
-                                            <h2 title={episodeRow.title}>
-                                                {episodeRow.title}
-                                                <button type="button" className="drama-title-edit" aria-label="重命名本集" onClick={() => setRenaming(true)}>
-                                                    <Pencil className="size-3.5" />
-                                                </button>
-                                            </h2>
-                                        )}
+                                        <h2 title={episodeRow.title}>
+                                            {episodeRow.title}
+                                            <button type="button" className="drama-title-edit" aria-label="重命名本集" onClick={() => setRenaming(episodeRow)}>
+                                                <Pencil className="size-3.5" />
+                                            </button>
+                                        </h2>
                                         <p>
                                             <span>{episodeRow.shotCount} 镜</span>
                                             {episodeRow.durationMs ? <span>{formatDuration(episodeRow.durationMs)}</span> : null}
@@ -829,6 +798,7 @@ export default function DramaStudioPage() {
                         selectEpisode(id);
                     }}
                 />
+                {renaming ? <EpisodeRenameModal key={renaming.id} projectId={projectId} episode={renaming} onClose={() => setRenaming(null)} /> : null}
                 <EpisodeDeleteModal
                     projectId={projectId}
                     episode={deleting}

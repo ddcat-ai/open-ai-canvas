@@ -1312,14 +1312,21 @@
 .drama-ep.is-review .drama-ep-meta span {
     color: var(--drama-warn);
 }
-/* 分集行的更多操作（插入、删除）：悬停、键盘聚焦、当前集或菜单打开时显示；触屏没有悬停，常显。 */
+/* 分集行的改名与更多操作：悬停、键盘聚焦、当前集或菜单打开时显示；触屏没有悬停，常显。 */
 .drama-ep-row .drama-ep-title {
     padding-right: 26px;
 }
-.drama-ep-more {
+.drama-ep-row.has-rename .drama-ep-title {
+    padding-right: calc(var(--space-6) * 2 + var(--space-2));
+}
+.drama-ep-actions {
     position: absolute;
     top: 6px;
     right: 6px;
+    display: flex;
+    gap: var(--space-1);
+}
+.drama-ep-more {
     display: grid;
     place-items: center;
     width: 24px;
