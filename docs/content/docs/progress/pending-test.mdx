@@ -8,8 +8,9 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ## Agent Responses 工具调用回传
 
 - 已修复：显式 `function_call` 和助手 `tool_calls` 转为 Responses 输入时，保留 `id`、`call_id`、名称与参数，不再添加上游不接受的 `item_reference` 字段；工具结果仍按 `call_id` 关联。
-- 既有协议断言已同步为不发送该额外字段；未新增测试用例，未在本地运行测试套件，未调用真实收费模型验证修复。
-- [ ] 使用 Responses 模型完成一次技能搜索或画布读取，确认工具结果回传后模型继续输出，不再出现 `Unknown parameter: 'input[N].item_reference'`；检查调用记录与结果的 `call_id` 保持对应。
+- 来源：接续上游 [PR #883](https://github.com/ddcat-ai/open-ai-canvas/pull/883)，保留原提交 `de2f07cb` 的作者署名，在当前主分支解决待测试文档冲突。
+- 自动回归：4 个本地 HTTP 传输场景覆盖两种工具历史表示，以及普通和官方声明式 Responses 路径；核对出站字段、`id` / `call_id`、工具结果配对、流式续轮和单次请求。修复前均复现同类 400，修复后通过；相邻协议、思考配置和工具历史专项通过，自动回归使用本地模拟上游。
+- [x] 用户确认真实 Responses 模型的工具调用及续轮正常，不再出现 `Unknown parameter: 'input[N].item_reference'`；`id` / `call_id` 配对由上述 HTTP 回归覆盖。
 
 ## 分集改名与插件检索
 
