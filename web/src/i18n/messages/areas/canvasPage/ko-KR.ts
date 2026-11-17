@@ -116,6 +116,9 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         expressionNodeDeleted: "표정 편집 노드가 삭제되었습니다",
         emptyVideoEnhance: "동영상 노드가 비어 있어 화질을 개선할 수 없습니다",
         noEnhanceModel: "관리자가 아직 화질 개선 모델을 설정하지 않았습니다",
+        emptyVideoDepth: "동영상 노드가 비어 있어 상대 깊이 동영상을 만들 수 없습니다",
+        noDepthModel: "관리자가 아직 상대 깊이 모델을 설정하지 않았습니다",
+        titleDepth: "{{title}} · 상대 깊이",
         titleEnhance: "{{title}} · 화질 개선 {{resolution}}",
     },
     layerMaterials: {
@@ -301,6 +304,8 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         restoreSaveFailed: "결과물 저장 재개 실패",
         enhanceSourceMissing: "원본 동영상 노드가 삭제되었거나 비어 있어 다시 개선할 수 없습니다. 작업을 제출하지 않았습니다",
         enhanceFailed: "화질 개선 실패",
+        depthSourceMissing: "원본 동영상 노드가 삭제되었거나 비어 있습니다. 처리 작업을 제출하지 않았습니다",
+        depthFailed: "상대 깊이 처리 실패",
         notRetryable: "이 노드는 일반 생성 재시도를 사용할 수 없습니다",
         layerProtocolMissing: "원래 레이어 분리 모델에 전용 프로토콜이 설정되지 않아 다시 시도할 수 없습니다",
         promptRejected: "이 프롬프트가 콘텐츠 검토를 통과하지 못했습니다. 수정한 뒤 다시 생성하세요",

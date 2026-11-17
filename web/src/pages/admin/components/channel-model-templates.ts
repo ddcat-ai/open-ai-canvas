@@ -117,12 +117,12 @@ export function pricingDimensions(values: PricingContext): PricingDimension[] {
         add(
             "operation",
             "生成方式",
-            video.operations.filter((operation) => ["text_to_video", "image_to_video", "video_to_video", "enhance"].includes(operation)),
+            video.operations.filter((operation) => ["text_to_video", "image_to_video", "video_to_video", "enhance", "depth"].includes(operation)),
         );
         add("resolution", "分辨率", [...video.resolutions, ...(video.fixedScreenSpec?.resolutions || [])].map(normalizeTierResolution));
         // processing 的计价合同固定声明三档（后端 videoProcessingFPSBands）；
         // fpsOptions 只限制用户可选的输出帧率，keep_source 不需要提供该列表。
-        if (video.processing) add("fpsBand", "输出帧率档", ["le30", "le60", "le120"]);
+        if (video.processing && video.defaultOperation !== "depth") add("fpsBand", "输出帧率档", ["le30", "le60", "le120"]);
     }
     return dimensions;
 }

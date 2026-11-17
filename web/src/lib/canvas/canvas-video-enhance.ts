@@ -1,6 +1,6 @@
 import { DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, modelCapabilityConfigFor, type VideoProcessingConfig } from "@/lib/model-capabilities";
 import type { ModelQuoteRequest } from "@/services/api/logical-models";
-import { decodeChannelModel, modelOptionName, modelOptionsFromChannels, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import type { CanvasNodeData } from "@/types/canvas";
 import type { ReferenceVideo } from "@/types/media";
 
@@ -17,17 +17,6 @@ export type VideoEnhanceParams = {
     bitrateLevel?: VideoEnhanceBitrateLevel;
     bitrate?: number;
 };
-
-/** 画质增强只使用系统渠道上声明了 processing 配置的视频模型；这些模型已从普通生成下拉中排除。 */
-export function listVideoEnhanceModels(config: AiConfig): string[] {
-    return modelOptionsFromChannels(config.channels).filter((model) => {
-        const decoded = decodeChannelModel(model);
-        const channel = decoded ? config.channels.find((item) => item.id === decoded.channelId) : undefined;
-        if (!channel || channel.scope !== "system") return false;
-        const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
-        return cost?.capability === "video" && Boolean(cost.capabilityConfig?.video?.processing);
-    });
-}
 
 export function videoEnhanceProfile(config: AiConfig, model: string) {
     const video = modelCapabilityConfigFor(config, model).video;
@@ -68,22 +57,6 @@ export function videoEnhanceSourceError(node: CanvasNodeData, maxSourceSeconds: 
 export function videoEnhanceFpsBand(fps?: number) {
     if (!fps || fps <= 30) return "le30";
     return fps <= 60 ? "le60" : "le120";
-}
-
-export function videoEnhanceSourceReference(node: CanvasNodeData): ReferenceVideo {
-    const metadata = node.metadata || {};
-    return {
-        id: node.id,
-        name: `${node.title || "video"}.mp4`,
-        type: metadata.mimeType || "video/mp4",
-        url: metadata.content || "",
-        storageKey: metadata.storageKey,
-        role: "reference",
-        ...(metadata.bytes ? { bytes: metadata.bytes } : {}),
-        ...(metadata.naturalWidth ? { width: metadata.naturalWidth } : {}),
-        ...(metadata.naturalHeight ? { height: metadata.naturalHeight } : {}),
-        ...(metadata.durationMs ? { durationMs: metadata.durationMs } : {}),
-    };
 }
 
 /** 生成任务配置：只覆盖模型与分辨率；时长和帧率档由后端按源资源重算。 */
