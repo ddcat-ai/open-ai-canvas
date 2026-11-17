@@ -1848,8 +1848,14 @@ paths:
   /model-catalog:
     get:
       tags: [models]
+      security:
+        - {}
+        - sessionCookie: []
       summary: 获取创作端模型目录
       description: |
+        游客可读取默认用户分组允许的脱敏模型目录与参考价格；登录后按当前账号分组展示。
+        无 Cookie 时，X-Canvas-Expected-User 为空或为 guest 才按游客读取；其他预期身份与携带的无效会话仍执行身份校验。
+        目录浏览不授予生成权限，报价、能力筛选和任务接口继续要求登录。
         固定 source=system，channels 直接来自系统渠道下的模型列表，models 为空数组；不反查逻辑模型。
         一级跨渠道按 displayName 分组，二级显示 channelLabel；模型请求仍使用 channelId + modelKey 定位。
         channelLabel 是后台渠道模型创建和更新时配置的渠道展示名，去除首尾空白后最多 80 字，空字符串表示使用所属渠道名称。

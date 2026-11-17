@@ -645,6 +645,15 @@ func userGroupAuditMetadata(group *model.UserGroup, channelIDs []string) map[str
 	}
 }
 
+// ModelCatalogForGuest 只开放默认分组的脱敏目录，不能用作任务或报价的身份上下文。
+func (s *Service) ModelCatalogForGuest() (*ModelCatalogResponse, error) {
+	group, err := s.resolvedUserGroup(model.DefaultUserGroupCode)
+	if err != nil {
+		return nil, err
+	}
+	return s.ModelCatalog(&userGroupAccess{group: group}, nil)
+}
+
 // ModelCatalogForUser 是 HTTP 目录入口：按登录用户的分组过滤渠道并换算价格。
 func (s *Service) ModelCatalogForUser(user *model.User, intent *ModelRequestIntent) (*ModelCatalogResponse, error) {
 	access, err := s.userGroupAccessForUser(user)
