@@ -112,10 +112,14 @@ func TestAgentFailureTypedSourcesAndBillingSemantics(t *testing.T) {
 
 func TestAgentFailureParserReasonsSurvivePersistenceAndWait(t *testing.T) {
 	s, db, _, _ := creationTestService(t)
-	_, empty := newStreamingAgentParser("chat-completion", nil).result()
+	// 流已正常结束（收到结束标记）但没有内容，才是空输出；未结束的流属于中断。
+	emptyParser := newStreamingAgentParser("chat-completion", nil)
+	emptyParser.terminal = true
+	_, empty := emptyParser.result()
 	_, claudeEmpty := parseAgentToolPayload(map[string]interface{}{"content": []interface{}{}}, "claude-api")
 	parser := newStreamingAgentParser("chat-completion", nil)
 	parser.setToolCall(0, "call", "", "test", "{invalid")
+	parser.terminal = true
 	_, arguments := parser.result()
 	for i, tc := range []struct {
 		cause  error
