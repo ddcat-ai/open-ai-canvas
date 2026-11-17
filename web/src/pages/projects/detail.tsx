@@ -208,11 +208,13 @@ export default function DramaStudioPage() {
     });
     const saveSegment = useMutation({
         mutationFn: ({ segment, override }: { segment: DramaSegment; override: string }) => updateDramaSegment(projectId, episodeId, segment.index, override),
-        onSuccess: (_, { override }) => {
-            invalidate(episodeId);
+        onSuccess: async (_, { override }) => {
+            await invalidate(episodeId);
             message.success(override ? "已保存完整视频提示词" : "已恢复模型撰写的版本");
         },
-        onError: (error) => errorMessage(error, "保存失败"),
+        onError: (error) => {
+            errorMessage(error, "保存失败");
+        },
     });
     const saveReferences = useMutation({
         mutationFn: ({ segment, patch }: { segment: DramaSegment; patch: Parameters<typeof updateDramaSegmentReferences>[3] }) => updateDramaSegmentReferences(projectId, episodeId, segment.index, patch),
@@ -334,7 +336,7 @@ export default function DramaStudioPage() {
         },
         onError: (error) => errorMessage(error, "重命名失败"),
     });
-    const busy = approve.isPending || rescript.isPending || generateSegments.isPending || release.isPending || insertShot.isPending || removeShot.isPending || saveReferences.isPending;
+    const busy = approve.isPending || rescript.isPending || generateSegments.isPending || release.isPending || patchShot.isPending || insertShot.isPending || removeShot.isPending || saveReferences.isPending || saveSegment.isPending;
 
     const openInbox = (item: DramaInboxItem) => {
         if (item.castId) {
@@ -795,7 +797,7 @@ export default function DramaStudioPage() {
                             onInsertShot={(shot, position) => insertShot.mutate({ shot, position })}
                             onDeleteShot={(shot) => removeShot.mutate(shot)}
                             onDiscussShot={discussShot}
-                            onSavePrompt={(segment, override) => saveSegment.mutate({ segment, override })}
+                            onSavePrompt={(segment, override) => saveSegment.mutateAsync({ segment, override })}
                             onSaveReferences={(segment, patch) => saveReferences.mutateAsync({ segment, patch })}
                             onWritePrompt={(segment) => writeSegment.mutate([segment.index])}
                             onGenerate={(segment, videoModel) => generateSegments.mutate({ segments: [segment.index], videoModel })}

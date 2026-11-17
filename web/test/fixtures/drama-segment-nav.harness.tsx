@@ -38,6 +38,11 @@ const api = await import("../../src/services/api/drama");
 const resources = await import("../../src/services/api/resources");
 const { SegmentDialog } = await import("../../src/pages/projects/studio/segment-dialog");
 
+const generation = await import("../../src/services/api/generation-task");
+const { createModelChannel, useConfigStore } = await import("../../src/stores/use-config-store");
+
+const { http } = await import("../../src/services/api/request");
+
 function request(seconds: number, resolution: string) {
     return {
         operation: "reference_to_video" as const,
@@ -103,7 +108,7 @@ const detail: DramaEpisodeDetail = {
     jobs: [],
 };
 
-function Host() {
+function Host({ onSavePrompt = async () => {}, promptModel, busy = false }: { onSavePrompt?: (segment: DramaSegment, override: string) => Promise<unknown>; promptModel?: DramaModelChoice; busy?: boolean }) {
     const [index, setIndex] = useState(0);
     return (
         <SegmentDialog
@@ -111,20 +116,22 @@ function Host() {
             segmentIndex={index}
             castById={new Map()}
             aspectRatio="9:16"
-            busy={false}
+            busy={busy}
             writing={false}
             reprocessing={false}
             defaultVideoModel={{ modelKey: "wb-seedance-2-fast", label: "wb-seedance-2-fast" }}
+            promptModel={promptModel}
             videoResolution="720P"
             onClose={() => {}}
             onNavigate={(next) => setIndex(next)}
             onPatchShot={() => {}}
-            onSavePrompt={() => {}}
+            onSavePrompt={onSavePrompt}
             onSaveReferences={async () => {}}
             onWritePrompt={() => {}}
             onGenerate={() => {}}
             onReprocess={() => {}}
             onOpenCast={() => {}}
+            onOpenAssets={() => {}}
             onOpenCanvas={() => {}}
             canvasOpening={false}
         />
@@ -219,4 +226,71 @@ test("切换上一段下一段时生成设置卡片不会叠加", async () => {
     expect(document.querySelectorAll('section[aria-label="完整视频提示词"]').length).toBe(1);
     expect(document.body.textContent).toContain("场景3");
     expect(document.body.textContent).not.toContain("场景4");
+});
+
+test("剧情段采用 AI 候选等待保存，失败不替换正文并可重试", async () => {
+    const previousConfig = useConfigStore.getState().config;
+    const channel = createModelChannel({ id: "text-channel", scope: "system", models: ["text-model"], modelCosts: [{ model: "text-model", capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: 0 }] });
+    useConfigStore.setState({ config: { ...previousConfig, channels: [channel] } });
+    const model = { channelId: channel.id, modelKey: "text-model" };
+    const candidate = "主角在远景中对峙，用反应镜头表现冲突。";
+    const generate = spyOn(generation, "runBackendGenerationTask").mockResolvedValue({ text: candidate });
+    let rejectSave!: (reason: Error) => void;
+    const patch = spyOn(http, "patch").mockImplementation(
+        () =>
+            new Promise((_, reject) => {
+                rejectSave = reject;
+            }),
+    );
+    let busy = false;
+    const render = () =>
+        root.render(
+            <QueryClientProvider client={client}>
+                <ConfigProvider>
+                    <App>
+                        <Host busy={busy} promptModel={model} onSavePrompt={(current, override) => api.updateDramaSegment("p1", "ep1", current.index, override)} />
+                    </App>
+                </ConfigProvider>
+            </QueryClientProvider>,
+        );
+    const button = (text: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.includes(text))!;
+    const editor = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="完整视频提示词"]')!;
+    const candidateField = () => document.querySelector<HTMLTextAreaElement>('[aria-label="AI 修改候选"]');
+    try {
+        await act(async () => render());
+        await act(async () => {
+            const field = document.querySelector<HTMLTextAreaElement>('[aria-label="提示词修改要求"]')!;
+            Object.getOwnPropertyDescriptor(dom.HTMLTextAreaElement.prototype, "value")!.set!.call(field, "改成对峙，弱化暴力描写");
+            field.dispatchEvent(new dom.Event("input", { bubbles: true }));
+        });
+        await act(async () => button("生成修改候选").click());
+        expect(candidateField()?.value).toBe(candidate);
+        expect(editor().value).toBe(detail.segments[0].videoPrompt);
+        expect(patch).not.toHaveBeenCalled();
+        busy = true;
+        await act(async () => render());
+        expect(button("采用这版提示词").disabled).toBe(true);
+        expect(editor().readOnly).toBe(true);
+        busy = false;
+        await act(async () => render());
+        await act(async () => button("采用这版提示词").click());
+        expect(patch).toHaveBeenCalledWith("/dramas/p1/episodes/ep1/segments/0", { videoPromptOverride: candidate });
+        expect(candidateField()?.value).toBe(candidate);
+        expect(editor().value).toBe(detail.segments[0].videoPrompt);
+        expect(editor().readOnly).toBe(true);
+        expect(document.body.textContent).toContain("正在保存提示词");
+        await act(async () => rejectSave(new Error("保存失败：服务暂不可用")));
+        expect(candidateField()?.value).toBe(candidate);
+        expect(editor().value).toBe(detail.segments[0].videoPrompt);
+        expect(editor().readOnly).toBe(false);
+        expect(document.body.textContent).toContain("保存失败：服务暂不可用");
+        patch.mockResolvedValue({ saved: true });
+        await act(async () => button("采用这版提示词").click());
+        expect(patch).toHaveBeenCalledTimes(2);
+        expect(generate).toHaveBeenCalledTimes(1);
+        expect(candidateField()).toBeNull();
+        expect(editor().value).toBe(candidate);
+    } finally {
+        await act(async () => useConfigStore.setState({ config: previousConfig }));
+    }
 });
