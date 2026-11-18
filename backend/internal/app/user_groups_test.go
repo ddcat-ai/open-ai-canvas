@@ -1,10 +1,55 @@
 package app
 
 import (
+	"reflect"
 	"testing"
 
 	"yingce/backend/internal/model"
 )
+
+func TestGuestModelCatalogUsesDefaultGroupVisibilityAndPricing(t *testing.T) {
+	s, _, _, _ := creationTestService(t)
+	user, err := s.repo.User("user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, err := s.ModelCatalogForGuest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	member, err := s.ModelCatalogForUser(user, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(guest.Channels) == 0 {
+		t.Fatal("guest should see configured default-group models")
+	}
+	// 可用率统计带计算时间，只比较目录权限和计价字段。
+	for i := range guest.Channels {
+		for j := range guest.Channels[i].Models {
+			guest.Channels[i].Models[j].Availability = nil
+			member.Channels[i].Models[j].Availability = nil
+		}
+	}
+	if !reflect.DeepEqual(guest, member) {
+		t.Fatal("guest must share default-group catalog pricing")
+	}
+	group, err := s.repo.UserGroupByCode(model.DefaultUserGroupCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := &model.User{ID: "catalog-admin", Role: model.UserRoleAdmin}
+	if _, err := s.UpdateUserGroup(admin, group.ID, UserGroupRequest{Name: "默认分组", RatioBasisPoints: 10_000, PointsPerUSD: 7 * CreditScale, PointsPerCNY: CreditScale}); err != nil {
+		t.Fatal(err)
+	}
+	restricted, err := s.ModelCatalogForGuest()
+	if err != nil || len(restricted.Channels) != 0 {
+		t.Fatalf("guest must not bypass channel visibility: %#v, %v", restricted, err)
+	}
+	if _, err := s.ModelCatalogForUser(nil, nil); err == nil {
+		t.Fatal("guest access must not weaken authenticated entry points")
+	}
+}
 
 // 分组 -> 渠道 -> 模型：可见性、分组折扣、模型倍率和货币换算在目录、报价与账单中必须一致。
 func TestUserGroupChannelVisibilityDiscountAndCurrencyPricing(t *testing.T) {

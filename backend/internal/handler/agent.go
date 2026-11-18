@@ -32,8 +32,8 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		capabilities := service.CloudAgentCapabilitySetInfo()
 		ok(c, gin.H{"version": 2, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": skillsEnabled, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": tools, "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
 	})
-	// Skill usage exposes skill names and file paths, so it uses the same admin boundary.
-	r.GET("/agent/skills/usage", requireSkillAdministration(svc), func(c *gin.Context) {
+	// Usage is scoped to the authenticated user's own Agent runs.
+	r.GET("/agent/skills/usage", requireSkillAccess(svc), func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)

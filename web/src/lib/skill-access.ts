@@ -1,12 +1,20 @@
 import { useUserStore } from "@/stores/use-user-store";
 
-/** Skill library data is only available after the administrator session is loaded. */
+/** Skill usage requires a loaded, active account; content management is administrator-only. */
 export function hasSkillLibraryAccess(state = useUserStore.getState()) {
-    return state.hydrated && state.user?.role === "admin";
+    return state.hydrated && Boolean(state.user?.id) && state.user?.status === "active";
 }
 
 export function useSkillLibraryAccess() {
     return useUserStore(hasSkillLibraryAccess);
+}
+
+export function hasSkillAdministrationAccess(state = useUserStore.getState()) {
+    return hasSkillLibraryAccess(state) && state.user?.role === "admin";
+}
+
+export function useSkillAdministrationAccess() {
+    return useUserStore(hasSkillAdministrationAccess);
 }
 
 export function skillLibraryUserId() {
@@ -16,7 +24,7 @@ export function skillLibraryUserId() {
 
 let permissionRevision = 0;
 useUserStore.subscribe((state, previous) => {
-    if (state.hydrated !== previous.hydrated || state.user?.id !== previous.user?.id || state.user?.role !== previous.user?.role) permissionRevision += 1;
+    if (state.hydrated !== previous.hydrated || state.user?.id !== previous.user?.id || state.user?.role !== previous.user?.role || state.user?.status !== previous.user?.status) permissionRevision += 1;
 });
 
 export function captureSkillLibraryAccess() {

@@ -7,16 +7,19 @@ import type { ChannelModelFormValues } from "./channel-model-editor-form";
 import { defaultPriceTier, skuSelectorFromForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
 
 // 固定版本的能力预设。来源仅用于构造默认参数，不要求安装来源协议，也不限定目标型号。
+const gptImageParameters: ImageParameter[] = [
+    { name: "size", label: "画幅 / 尺寸", type: "string", binding: "aspectRatio", encoding: "pixels", pricing: true },
+    { name: "imageResolution", label: "分辨率", type: "string", binding: "resolution", values: ["auto", "1k", "2k", "4k"], default: "1k", pricing: true },
+    { name: "quality", label: "图片质量", type: "string", binding: "quality", pricing: true },
+    { name: "count", label: "生成数量", type: "integer", binding: "imageCount", min: 1, max: 100, step: 1, default: 1 },
+    { name: "transparentBackground", label: "透明背景", type: "boolean", binding: "transparentBackground", default: false, enabled: false },
+    { name: "outputFormat", label: "输出格式", type: "string", binding: "providerOptions.openai-image.output_format", values: ["png", "jpeg", "webp"], default: "png", enabled: false },
+    { name: "outputCompression", label: "压缩质量", type: "integer", binding: "providerOptions.openai-image.output_compression", min: 0, max: 100, step: 1, enabled: false },
+];
+
 const presetParameters: Record<string, ImageParameter[]> = {
-    "gpt-image-openai-v1": [
-        { name: "size", label: "画幅 / 尺寸", type: "string", binding: "aspectRatio", encoding: "pixels", pricing: true },
-        { name: "imageResolution", label: "分辨率", type: "string", binding: "resolution", values: ["auto", "1k", "2k", "4k"], default: "1k", pricing: true },
-        { name: "quality", label: "图片质量", type: "string", binding: "quality", pricing: true },
-        { name: "count", label: "生成数量", type: "integer", binding: "imageCount", min: 1, max: 100, step: 1, default: 1 },
-        { name: "transparentBackground", label: "透明背景", type: "boolean", binding: "transparentBackground", default: false, enabled: false },
-        { name: "outputFormat", label: "输出格式", type: "string", binding: "providerOptions.openai-image.output_format", values: ["png", "jpeg", "webp"], default: "png", enabled: false },
-        { name: "outputCompression", label: "压缩质量", type: "integer", binding: "providerOptions.openai-image.output_compression", min: 0, max: 100, step: 1, enabled: false },
-    ],
+    "gpt-image-openai-v1": gptImageParameters,
+    "gpt-image-2.6-openai-v1": gptImageParameters.map((parameter) => (parameter.name === "outputFormat" ? { ...parameter, values: ["png", "jpeg", "webp", "gif"], enabled: true } : parameter)),
     "nano-banana-gemini-v1": [
         { name: "size", label: "画幅比例", type: "string", binding: "aspectRatio", encoding: "ratio", values: ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], default: "1:1" },
         { name: "imageResolution", label: "分辨率", type: "string", binding: "resolution", values: ["auto", "1k", "2k", "4k"], default: "1k", pricing: true },
@@ -28,6 +31,7 @@ const presetParameters: Record<string, ImageParameter[]> = {
 
 export const capabilityTemplates = [
     { id: "gpt-image-openai-v1", version: 1, name: "GPT Image · OpenAI Images", sourceProtocol: "openai-image", sourceModel: "gpt-image-2" },
+    { id: "gpt-image-2.6-openai-v1", version: 1, name: "GPT Image 2.6 · GIF 输出", sourceProtocol: "openai-image", sourceModel: "gpt-image-2.6" },
     {
         id: "nano-banana-gemini-v1",
         version: 1,
@@ -117,12 +121,12 @@ export function pricingDimensions(values: PricingContext): PricingDimension[] {
         add(
             "operation",
             "生成方式",
-            video.operations.filter((operation) => ["text_to_video", "image_to_video", "video_to_video", "enhance"].includes(operation)),
+            video.operations.filter((operation) => ["text_to_video", "image_to_video", "video_to_video", "enhance", "depth"].includes(operation)),
         );
         add("resolution", "分辨率", [...video.resolutions, ...(video.fixedScreenSpec?.resolutions || [])].map(normalizeTierResolution));
         // processing 的计价合同固定声明三档（后端 videoProcessingFPSBands）；
         // fpsOptions 只限制用户可选的输出帧率，keep_source 不需要提供该列表。
-        if (video.processing) add("fpsBand", "输出帧率档", ["le30", "le60", "le120"]);
+        if (video.processing && video.defaultOperation !== "depth") add("fpsBand", "输出帧率档", ["le30", "le60", "le120"]);
     }
     return dimensions;
 }

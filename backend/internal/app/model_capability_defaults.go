@@ -267,6 +267,15 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Watermark = VideoBooleanConfig{}
 		video.Operations, video.DefaultOperation = []string{VideoProcessingOperationEnhance}, VideoProcessingOperationEnhance
 		video.Processing = &VideoProcessingConfig{FPSPolicy: VideoProcessingFPSKeepSource, MaxSourceSeconds: DefaultVideoProcessingMaxSourceSeconds}
+	case model.ChannelInterfaceType(VolcengineMediaKitVideoDepthProtocol):
+		video.References = VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MaxVideos: 1, MaxVideoDuration: MediaKitDepthMaxSourceSeconds}
+		video.Duration = VideoDurationConfig{Selection: "range", Min: 1, Max: MediaKitDepthMaxSourceSeconds, Step: 1, Default: 5}
+		video.Ratios, video.DefaultRatio = []string{}, ""
+		video.Resolutions, video.DefaultResolution = []string{}, ""
+		video.GenerateAudio = VideoBooleanConfig{}
+		video.Watermark = VideoBooleanConfig{}
+		video.Operations, video.DefaultOperation = []string{VideoProcessingOperationDepth}, VideoProcessingOperationDepth
+		video.Processing = &VideoProcessingConfig{FPSPolicy: VideoProcessingFPSKeepSource, MaxSourceSeconds: MediaKitDepthMaxSourceSeconds}
 	}
 	return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: video}
 }

@@ -3,6 +3,7 @@ package canvas
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -337,7 +338,7 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 				}
 				for field, value := range create.Patch {
 					if !allowedCanvasOperationField(field) {
-						return kernel.BadAuthRequest("不支持的新画布字段")
+						return kernel.BadAuthRequest(fmt.Sprintf("不支持的新画布字段: 字段 %q", field))
 					}
 					payload[field] = append(json.RawMessage(nil), value...)
 				}
@@ -613,7 +614,7 @@ func canvasProjectFromJSONWithValidation(userID string, raw json.RawMessage, val
 		UpdatedAt string `json:"updatedAt"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return model.CanvasProject{}, kernel.BadAuthRequest("画布数据格式错误")
+		return model.CanvasProject{}, kernel.WrapAppError(http.StatusBadRequest, "画布数据格式错误", err)
 	}
 	now := time.Now()
 	createdAt := parseClientTime(payload.CreatedAt, now)

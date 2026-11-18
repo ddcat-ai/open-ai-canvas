@@ -21,6 +21,7 @@ import {
 
 import {
     DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS,
+    MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS,
     defaultImageCapabilityConfig,
     defaultModelCapabilityConfig,
     normalizeModelCapabilityConfig,
@@ -49,6 +50,7 @@ const operationOptions = [
     { label: "风格迁移", value: "style_transfer" },
     { label: "音频生视频", value: "audio_to_video" },
     { label: "画质增强", value: "enhance" },
+    { label: "相对深度", value: "depth" },
 ];
 
 function ImageSizeHelp() {
@@ -87,34 +89,40 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
     // 视频处理模型（画质增强等）：帧率策略与源视频时长上限；生成模型不显示。
     const processing = profile.processing;
+    const depthProcessing = profile.defaultOperation === "depth";
+    const maxProcessingSeconds = depthProcessing ? MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS : DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS;
     const processingFields = processing ? (
         <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="帧率策略">
-                <Select
-                    className="w-full"
-                    disabled={disabled}
-                    value={processing.fpsPolicy}
-                    options={[
-                        { label: "保持原帧率（按 ≤30fps 档预扣）", value: "keep_source" },
-                        { label: "用户选择帧率", value: "user_select" },
-                    ]}
-                    onChange={(fpsPolicy) =>
-                        update({ processing: fpsPolicy === "user_select" ? { ...processing, fpsPolicy, fpsOptions: processing.fpsOptions?.length ? processing.fpsOptions : [30, 60] } : { fpsPolicy, maxSourceSeconds: processing.maxSourceSeconds } })
-                    }
-                />
-            </Field>
+            {depthProcessing ? (
+                <p className="text-sm text-muted-foreground">固定 standard 档，不提供输出分辨率、帧率或码率选项。</p>
+            ) : (
+                <Field label="帧率策略">
+                    <Select
+                        className="w-full"
+                        disabled={disabled}
+                        value={processing.fpsPolicy}
+                        options={[
+                            { label: "保持原帧率（按 ≤30fps 档预扣）", value: "keep_source" },
+                            { label: "用户选择帧率", value: "user_select" },
+                        ]}
+                        onChange={(fpsPolicy) =>
+                            update({ processing: fpsPolicy === "user_select" ? { ...processing, fpsPolicy, fpsOptions: processing.fpsOptions?.length ? processing.fpsOptions : [30, 60] } : { fpsPolicy, maxSourceSeconds: processing.maxSourceSeconds } })
+                        }
+                    />
+                </Field>
+            )}
             {processing.fpsPolicy === "user_select" ? (
                 <Field label="可选帧率（15–120，逗号分隔）">
                     <Input disabled={disabled} value={(processing.fpsOptions || []).join(",")} placeholder="例如：30,60" onChange={(event) => update({ processing: { ...processing, fpsOptions: parseIntegerList(event.target.value) } })} />
                 </Field>
             ) : null}
             <NumberField
-                label={`源视频最长秒数（≤${DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}）`}
-                value={processing.maxSourceSeconds || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}
+                label={`源视频最长秒数（≤${maxProcessingSeconds}）`}
+                value={processing.maxSourceSeconds || maxProcessingSeconds}
                 min={1}
-                max={DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS}
+                max={maxProcessingSeconds}
                 disabled={disabled}
-                onChange={(value) => update({ processing: { ...processing, maxSourceSeconds: value || DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS } })}
+                onChange={(value) => update({ processing: { ...processing, maxSourceSeconds: value || maxProcessingSeconds } })}
             />
         </div>
     ) : null;

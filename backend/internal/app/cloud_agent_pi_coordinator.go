@@ -291,7 +291,7 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		return fmt.Errorf("decode state: %w", err)
 	}
 
-	if err := s.cloudAgentCheckSkillExecution(userID, &runtimeState, nil, ""); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return err
 	}
 
@@ -331,7 +331,7 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		return fmt.Errorf("load session: %w", sessionErr)
 	}
 
-	if err := s.cloudAgentCheckSkillExecution(userID, &runtimeState, &canonical, sessionJSONL); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return err
 	}
 

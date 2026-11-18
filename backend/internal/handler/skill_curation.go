@@ -8,7 +8,7 @@ import (
 	"yingce/backend/internal/service"
 )
 
-func registerSkillCurationRoutes(r *gin.RouterGroup, svc *service.Service) {
+func registerSkillCurationRoutes(r, admin *gin.RouterGroup, svc *service.Service) {
 	read := func(admin bool) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			actor, err := currentUser(c, svc)
@@ -25,8 +25,8 @@ func registerSkillCurationRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 	}
 	r.GET("/skills/curation", read(false))
-	r.GET("/admin/skill-curation", read(true))
-	r.PUT("/admin/skill-curation", func(c *gin.Context) {
+	admin.GET("/admin/skill-curation", read(true))
+	admin.PUT("/admin/skill-curation", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)

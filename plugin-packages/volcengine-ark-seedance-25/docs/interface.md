@@ -1,4 +1,4 @@
-# Volcengine Ark Seedance 2.5 接口字段
+# 火山方舟 Seedance 2.5 官方视频生成接口字段
 
 ## 协议身份
 
@@ -107,10 +107,10 @@
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-seedance-25",
-  "name": "Volcengine Ark Seedance 2.5",
+  "name": "火山方舟 Seedance 2.5 官方视频生成",
   "version": "1.0.0",
   "author": "Volcengine / 影策",
-  "description": "火山方舟 Seedance 2.5 官方视频请求协议插件。",
+  "description": "火山方舟官方 /api/v3 视频生成接口，支持 Seedance 2.5 的文本、图片、视频和音频全模态输入。",
   "permissions": [
     "generation.run",
     "media.read"
@@ -129,7 +129,7 @@
     "providers": [
       {
         "id": "volcengine-ark-seedance-25",
-        "label": "Volcengine Ark Seedance 2.5",
+        "label": "火山方舟 Seedance 2.5 官方视频生成",
         "capabilities": [
           "video"
         ],

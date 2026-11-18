@@ -27,9 +27,31 @@ export type CreditLedgerEntry = {
     createdAt: string;
 };
 
+export type WalletBillingEntry = {
+    id: string;
+    type: "billing";
+    billingOrderId: string;
+    billingStatus: "reserved" | "running" | "settled" | "refunded" | "uncertain";
+    reservedMicrocredits: number;
+    chargedMicrocredits: number;
+    refundedMicrocredits: number;
+    model?: string;
+    scene?: string;
+    note?: string;
+    createdAt: string;
+};
+
+export type WalletCreditEntry = Pick<CreditLedgerEntry, "id" | "type" | "amountMicrocredits" | "model" | "scene" | "note" | "createdAt"> & {
+    paymentProviderId?: string;
+    paymentProviderName?: string;
+};
+
+export type WalletHistoryEntry = WalletBillingEntry | WalletCreditEntry;
+export type WalletHistoryType = "all" | "income" | "expenses" | "consume" | "refund";
+
 export type WalletSummary = {
     account: CreditAccount;
-    entries: CreditLedgerEntry[];
+    entries: WalletHistoryEntry[];
     total: number;
     page: number;
     pageSize: number;
@@ -311,7 +333,7 @@ export type BillingOrder = {
     updatedAt: string;
 };
 
-export function getWallet(page = 1, pageSize = 30, type = "all") {
+export function getWallet(page = 1, pageSize = 30, type: WalletHistoryType = "all") {
     return http.get<WalletSummary>("/wallet", { params: { type, page, pageSize } });
 }
 

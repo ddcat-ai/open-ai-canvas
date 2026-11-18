@@ -28,14 +28,33 @@ func (s *Service) IsAdministrator(userID string) (bool, error) {
 	return user.Role == model.UserRoleAdmin, nil
 }
 
-// RequireAdministrator is the shared boundary for skill content and management.
+// RequireSkillAccess is the shared boundary for an authenticated user's skill usage.
+// Management operations use RequireAdministrator separately.
+func (s *Service) RequireSkillAccess(userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return kernel.Unauthorized("请先登录")
+	}
+	user, err := s.repo.User(userID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return kernel.Unauthorized("用户不存在，请重新登录")
+	}
+	if err != nil {
+		return err
+	}
+	if user.Status != model.UserStatusActive {
+		return kernel.Forbidden("账号已停用")
+	}
+	return nil
+}
+
+// RequireAdministrator is the shared boundary for skill management.
 func (s *Service) RequireAdministrator(userID string) error {
 	admin, err := s.IsAdministrator(userID)
 	if err != nil {
 		return err
 	}
 	if !admin {
-		return kernel.Forbidden("只有管理员可以查看和管理技能")
+		return kernel.Forbidden("只有管理员可以上传和管理技能")
 	}
 	return nil
 }

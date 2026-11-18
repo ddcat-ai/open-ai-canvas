@@ -244,22 +244,30 @@ describe("电商 Skills 文件上传", () => {
     });
 });
 
-test("普通用户没有电商技能入口，清除旧选择且不发技能请求", async () => {
+test("普通用户能选择已有技能，保留选择但不显示上传入口", async () => {
     useUserStore.setState({ user: { id: "upload-owner", username: "member", displayName: "Member", role: "user", status: "active" }, hydrated: true });
     await render();
-    expect(host.textContent).toBe("");
-    expect(selected).toEqual([]);
-    expect(skills.listAddedSkills).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("已选择 1 个 Skills");
+    expect(host.textContent).not.toContain("上传 Skills");
+    expect(host.querySelector('[aria-label="上传策划 Skill 文件"]')).toBeNull();
+    expect(selected).toEqual(["existing-skill"]);
+    const pickerButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("已选择 1"))!;
+    await act(async () => pickerButton.click());
+    expect(skills.listAddedSkills).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".ecommerce-skill-list")?.textContent).toContain("已有策划方法");
+    expect(document.querySelectorAll('.ecommerce-skill-list input[type="checkbox"]:checked')).toHaveLength(1);
     expect(skills.listSkills).not.toHaveBeenCalled();
     expect(uploads).toHaveLength(0);
 });
 
-test("管理员降权后技能界面立即卸载且已有选择清空", async () => {
+test("管理员降权后保留技能选择，上传入口立即移除", async () => {
     await render();
     expect(host.textContent).toContain("已选择 1 个 Skills");
     await act(async () => useUserStore.setState({ user: { ...useUserStore.getState().user!, role: "user" } }));
-    expect(host.textContent).toBe("");
-    expect(selected).toEqual([]);
+    expect(host.textContent).toContain("已选择 1 个 Skills");
+    expect(host.textContent).not.toContain("上传 Skills");
+    expect(host.querySelector('[aria-label="上传策划 Skill 文件"]')).toBeNull();
+    expect(selected).toEqual(["existing-skill"]);
     expect(skills.listAddedSkills).not.toHaveBeenCalled();
     expect(uploads).toHaveLength(0);
 });

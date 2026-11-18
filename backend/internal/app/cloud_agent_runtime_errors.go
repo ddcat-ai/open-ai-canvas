@@ -19,18 +19,17 @@ func cloudAgentModelFailure(task *model.Task) (string, string) {
 	if diagnostic := taskExecutionDiagnostic(task); diagnostic != nil && diagnostic.Code == string(ReasonUpstreamDNSFailed) {
 		return "模型服务域名解析失败，请检查渠道域名和后端 DNS 配置；本轮已停止。请在任务中心检查模型任务 " + task.ID, string(ReasonUpstreamDNSFailed)
 	}
-	raw := strings.ToLower(task.Error)
-	switch {
-	case strings.Contains(task.Error, "没有返回内容"):
+	switch agentModelTaskReason(task) {
+	case agentModelFailureEmpty:
 		// 思考模型的典型失败：整个输出预算被推理吃掉，正文与工具调用皆空。
 		detail, reason = "上游连续返回空内容（通常是思考占满输出预算）；已自动关思考并放大预算重试仍失败，建议换用非思考模型或调小上下文", "model_empty_output"
-	case strings.Contains(task.Error, cloudAgentStepTimeoutError):
+	case agentModelFailureStepTimeout:
 		detail, reason = "单步模型调用超过执行时限仍未返回（长思考或上下文过大时常见）；已自动关思考重试仍超时，可在管理端调大 Agent 单步超时", "model_step_timeout"
-	case strings.Contains(raw, "connection reset by peer"):
+	case agentModelFailureReset:
 		detail, reason = "模型连接被对端或中间网络设备重置", "model_connection_reset"
-	case strings.Contains(raw, "timeout"), strings.Contains(raw, "deadline exceeded"):
+	case agentModelFailureTimeout:
 		detail, reason = "模型请求超时", "model_request_timeout"
-	case strings.Contains(raw, "connection refused"):
+	case agentModelFailureRefused:
 		detail, reason = "无法连接模型服务（连接被拒绝）", "model_connection_refused"
 	}
 	return detail + "；本轮已停止。请在任务中心检查模型任务 " + task.ID, reason
