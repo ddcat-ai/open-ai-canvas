@@ -422,6 +422,7 @@ type (
 	VideoReferenceConfig                   = app.VideoReferenceConfig
 	VoiceProfileSummary                    = app.VoiceProfileSummary
 	WalletSummary                          = app.WalletSummary
+	WalletHistorySummary                   = app.WalletHistorySummary
 	WorkflowField                          = app.WorkflowField
 )
 

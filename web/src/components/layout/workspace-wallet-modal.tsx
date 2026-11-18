@@ -6,24 +6,22 @@ import { useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 
 import { WalletTopupPanel, type TopupCategory } from "@/components/layout/workspace-wallet-topup";
+import { WalletHistoryRow } from "@/components/layout/workspace-wallet-history-row";
 import { usePaymentOrderFlow } from "@/components/payment/use-payment-order-flow";
 import { PaymentOrdersPanel, paymentOrdersQueryKey } from "@/components/payment/payment-orders-panel";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
-import { currentLocale } from "@/i18n";
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { accountFileStorageUsageQueryKey, accountStorageMeter } from "@/lib/account-storage-usage";
-import { generationErrorMessage } from "@/lib/generation-error";
 import { estimatePaymentCharge, paymentOptionsFromProviders, type PaymentOption } from "@/lib/payment-options";
 import { getPaymentSettings, listPaymentProviders, listTopupProducts, type PaymentOrder, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import { listMyStorageGrants } from "@/services/api/storage-grants";
-import { getWallet, redeemCredits, type CreditLedgerEntry, type WalletSummary } from "@/services/api/wallet";
-import { cn } from "@/lib/utils";
+import { getWallet, redeemCredits, type WalletHistoryType, type WalletSummary } from "@/services/api/wallet";
 import { openWorkspaceWallet, WORKSPACE_WALLET_OPEN_EVENT, type WorkspaceWalletOpenDetail } from "@/lib/workspace-wallet";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-type WalletModalTab = "topup" | "redeem" | "history" | "orders";
+type WalletModalTab = "topup" | "redeem" | "income" | "history" | "orders";
 
 const storageGrantsQueryKey = ["account-storage-grants"] as const;
 
@@ -101,7 +99,7 @@ export function WorkspaceWalletModal({
     const [tab, setTab] = useState<WalletModalTab>("topup");
     const [focusKind, setFocusKind] = useState<TopupProductKind | undefined>();
     const [focusToken, setFocusToken] = useState(0);
-    const [wallet, setWallet] = useState<WalletSummary | null>(null);
+    const [walletResult, setWalletResult] = useState<{ type: WalletHistoryType; data: WalletSummary } | null>(null);
     const [walletLoading, setWalletLoading] = useState(false);
     const [walletError, setWalletError] = useState("");
     const [page, setPage] = useState(1);
@@ -121,15 +119,18 @@ export function WorkspaceWalletModal({
     const selectedProduct = useMemo(() => products.find((item) => item.id === selectedProductId), [products, selectedProductId]);
     const selectedOption = useMemo(() => paymentOptions.find((item) => item.key === selectedOptionKey), [paymentOptions, selectedOptionKey]);
     const activeTab: WalletModalTab = creditsEnabled || tab === "orders" ? tab : "topup";
+    const historyType = activeTab === "income" ? "income" : "expenses";
+    const wallet = walletResult?.data;
+    const historyWallet = walletResult?.type === historyType ? wallet : undefined;
 
-    const reloadWallet = async (targetPage = page) => {
+    const reloadWallet = async (targetPage = page, targetType: WalletHistoryType = historyType) => {
         if (!creditsEnabled) return;
         const sequence = ++requestSequence.current;
         setWalletLoading(true);
         setWalletError("");
         try {
-            const result = await getWallet(targetPage, 20, "all");
-            if (sequence === requestSequence.current) setWallet(result);
+            const result = await getWallet(targetPage, 20, targetType);
+            if (sequence === requestSequence.current) setWalletResult({ type: targetType, data: result });
         } catch (error) {
             if (sequence === requestSequence.current) setWalletError(error instanceof Error ? error.message : t("account.wallet.loadFailed"));
         } finally {
@@ -137,12 +138,18 @@ export function WorkspaceWalletModal({
         }
     };
 
+    const openHistory = (nextTab: "income" | "history") => {
+        setTab(nextTab);
+        setPage(1);
+        void reloadWallet(1, nextTab === "income" ? "income" : "expenses");
+    };
+
     useEffect(() => {
         if (!open) return;
         setTab(initialTab || "topup");
         setFocusKind(initialCategory && initialCategory !== "all" ? initialCategory : undefined);
         setPage(1);
-        void reloadWallet(1);
+        void reloadWallet(1, initialTab === "income" ? "income" : "expenses");
         setPaymentsLoading(true);
         Promise.all([listTopupProducts(), listPaymentProviders(), getPaymentSettings()])
             .then(([productResult, providerResult, settingsResult]) => {
@@ -248,7 +255,7 @@ export function WorkspaceWalletModal({
     };
 
     const available = wallet?.account.availableMicrocredits ?? 0;
-    const totalPages = Math.max(1, Math.ceil((wallet?.total || 0) / 20));
+    const totalPages = Math.max(1, Math.ceil((historyWallet?.total || 0) / 20));
 
     return (
         <>
@@ -307,7 +314,11 @@ export function WorkspaceWalletModal({
                                     <TicketCheck />
                                     {t("account.wallet.tabRedeem")}
                                 </button>
-                                <button type="button" role="tab" aria-selected={activeTab === "history"} onClick={() => setTab("history")}>
+                                <button type="button" role="tab" aria-selected={activeTab === "income"} onClick={() => openHistory("income")}>
+                                    <Coins />
+                                    {t("account.wallet.tabIncome")}
+                                </button>
+                                <button type="button" role="tab" aria-selected={activeTab === "history"} onClick={() => openHistory("history")}>
                                     <History />
                                     {t("account.wallet.tabHistory")}
                                 </button>
@@ -367,8 +378,8 @@ export function WorkspaceWalletModal({
                         <div className="workspace-wallet-content is-history">
                             <div className="workspace-wallet-history-toolbar">
                                 <div>
-                                    <h3>{t("account.wallet.tabHistory")}</h3>
-                                    <p>{t("account.wallet.historyDescription")}</p>
+                                    <h3>{t(activeTab === "income" ? "account.wallet.tabIncome" : "account.wallet.tabHistory")}</h3>
+                                    <p>{t(activeTab === "income" ? "account.wallet.incomeDescription" : "account.wallet.historyDescription")}</p>
                                 </div>
                                 <Button type="text" icon={<RefreshCw />} loading={walletLoading} onClick={() => void reloadWallet(page)}>
                                     {t("common.refresh")}
@@ -384,19 +395,19 @@ export function WorkspaceWalletModal({
                                         </div>
                                         <Button onClick={() => void reloadWallet(page)}>{t("common.retry")}</Button>
                                     </div>
-                                ) : walletLoading && !wallet ? (
+                                ) : walletLoading && !historyWallet ? (
                                     <Skeleton active paragraph={{ rows: 6 }} />
-                                ) : wallet?.entries.length ? (
+                                ) : historyWallet?.entries.length ? (
                                     <div className="workspace-wallet-ledger">
-                                        {wallet.entries.map((entry) => (
-                                            <WalletLedgerRow key={entry.id} entry={entry} />
+                                        {historyWallet.entries.map((entry) => (
+                                            <WalletHistoryRow key={`${entry.type}:${entry.id}`} entry={entry} />
                                         ))}
                                     </div>
                                 ) : (
                                     <div className="workspace-wallet-empty">
                                         <History />
-                                        <strong>{t("account.wallet.historyEmpty")}</strong>
-                                        <span>{t("account.wallet.historyEmptyHint")}</span>
+                                        <strong>{t(activeTab === "income" ? "account.wallet.incomeEmpty" : "account.wallet.historyEmpty")}</strong>
+                                        <span>{t(activeTab === "income" ? "account.wallet.incomeEmptyHint" : "account.wallet.historyEmptyHint")}</span>
                                     </div>
                                 )}
                             </div>
@@ -434,40 +445,5 @@ export function WorkspaceWalletModal({
 
             {payment.dialog}
         </>
-    );
-}
-
-function WalletLedgerRow({ entry }: { entry: CreditLedgerEntry }) {
-    const { t } = useTranslation();
-    const positive = entry.amountMicrocredits > 0;
-    // 方舟素材组费用不是模型调用：标题按场景显示，说明只展示组名或退回原因。
-    const arkGroup = entry.scene === "ark_asset_group";
-    const note = entry.note ? (arkGroup ? entry.note : generationErrorMessage(entry.note)) : "";
-    const title = arkGroup
-        ? t("account.wallet.ledger.arkAssetGroup")
-        : entry.type === "consume"
-          ? t("account.wallet.ledger.consume")
-          : entry.type === "refund"
-            ? t("account.wallet.ledger.refund")
-            : entry.type === "payment_topup"
-              ? t("account.wallet.ledger.paymentTopup")
-              : entry.type === "redeem"
-                ? t("account.wallet.ledger.redeem")
-                : entry.type === "referral_commission"
-                  ? t("account.wallet.ledger.referral")
-                  : note || t("account.wallet.ledger.adjust");
-    return (
-        <article className="workspace-wallet-ledger-row">
-            <span className={cn("workspace-wallet-ledger-icon", positive ? "is-income" : "is-consume")}>{positive ? <Coins /> : <CreditCard />}</span>
-            <div>
-                <strong>{title}</strong>
-                <span>{(arkGroup ? [note] : [entry.scene, entry.model, note]).filter(Boolean).join(" · ") || t("account.wallet.ledger.change")}</span>
-            </div>
-            <time>{new Date(entry.createdAt).toLocaleString(currentLocale(), { hour12: false })}</time>
-            <b className={positive ? "is-income" : "is-consume"}>
-                {positive ? "+" : ""}
-                {formatCredits(entry.amountMicrocredits, 6)}
-            </b>
-        </article>
     );
 }

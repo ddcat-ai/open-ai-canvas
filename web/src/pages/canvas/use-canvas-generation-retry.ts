@@ -40,7 +40,9 @@ import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/generation-error";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
-import { videoEnhanceSourceReference, videoEnhanceTaskInput, type VideoEnhanceParams } from "@/lib/canvas/canvas-video-enhance";
+import { videoEnhanceTaskInput } from "@/lib/canvas/canvas-video-enhance";
+import { videoDepthTaskInput } from "@/lib/canvas/canvas-video-depth";
+import { videoProcessingSourceReference } from "@/lib/canvas/canvas-video-processing";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
 import { skillRuntime, type SkillRuntimeMetadata } from "@/services/skill-runtime";
@@ -289,23 +291,26 @@ export function useCanvasGenerationRetry({
                 }
                 return;
             }
-            // 画质增强节点按自身保存的增强参数重建请求，不能沿用源节点的生成配置。
+            // 处理节点按保存的参数重建请求，不能落入普通视频生成。
             const videoEnhance = node.metadata?.videoEnhance;
-            if (videoEnhance) {
-                const sourceVideoNode = nodesRef.current.find((item) => item.id === videoEnhance.sourceNodeId);
+            const videoDepth = node.metadata?.videoDepth;
+            const videoProcessing = videoDepth || videoEnhance;
+            if (videoProcessing) {
+                const sourceVideoNode = nodesRef.current.find((item) => item.id === videoProcessing.sourceNodeId);
                 if (!sourceVideoNode || (!sourceVideoNode.metadata?.storageKey && !sourceVideoNode.metadata?.content)) {
-                    message.error(translate("canvasPage.retry.enhanceSourceMissing"));
+                    message.error(translate(videoDepth ? "canvasPage.retry.depthSourceMissing" : "canvasPage.retry.enhanceSourceMissing"));
                     return;
                 }
-                const params: VideoEnhanceParams = { model: videoEnhance.model, resolution: videoEnhance.resolution, fps: videoEnhance.fps, bitrateLevel: videoEnhance.bitrateLevel, bitrate: videoEnhance.bitrate };
                 const retryContext = node.metadata?.taskId ? await createGenerationRetryContext(node.metadata.taskId, node.metadata.attemptGroupId) : {};
                 const controller = startGenerationRequest(node.id, sourceVideoNode.id, node.id);
                 setRunningNodeId(node.id);
                 setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...resetGenerationTaskMetadata(item.metadata, "loading"), errorDetails: undefined } } : item)));
                 let retryTaskId: string | undefined;
                 try {
+                    const inputOptions = { config: effectiveConfig, source: videoProcessingSourceReference(sourceVideoNode), sourceNodeId: sourceVideoNode.id, projectId, nodeId: node.id, signal: controller.signal };
+                    const input = videoDepth ? videoDepthTaskInput({ ...inputOptions, params: videoDepth }) : videoEnhanceTaskInput({ ...inputOptions, params: videoEnhance! });
                     await runCanvasGenerationTaskToConsumer(
-                        { ...videoEnhanceTaskInput({ config: effectiveConfig, params, source: videoEnhanceSourceReference(sourceVideoNode), sourceNodeId: sourceVideoNode.id, projectId, nodeId: node.id, signal: controller.signal }), ...retryContext },
+                        { ...input, ...retryContext },
                         {
                             bindTask: (task) => {
                                 retryTaskId = task.id;
@@ -316,7 +321,7 @@ export function useCanvasGenerationRetry({
                     );
                 } catch (error) {
                     if (controller.signal.aborted || isGenerationCanceled(error)) return;
-                    const details = error instanceof Error ? error.message : translate("canvasPage.retry.enhanceFailed");
+                    const details = error instanceof Error ? error.message : translate(videoDepth ? "canvasPage.retry.depthFailed" : "canvasPage.retry.enhanceFailed");
                     message.error(details);
                     if (!isCanvasGenerationDurableAckError(error))
                         setNodes((current) => current.map((item) => (item.id === node.id && (!retryTaskId || item.metadata?.taskId === retryTaskId) ? { ...item, metadata: { ...item.metadata, status: "error", errorDetails: details } } : item)));

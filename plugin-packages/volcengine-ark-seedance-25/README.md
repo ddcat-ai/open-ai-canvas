@@ -1,6 +1,6 @@
-# Volcengine Ark Seedance 2.5
+# 火山方舟 Seedance 2.5 官方视频生成
 
-影策官方声明式协议插件，面向火山方舟 Seedance 2.5 视频生成 API。
+火山方舟官方 Seedance 2.5 声明式协议插件，面向 Seedance 2.5 视频生成 API。
 
 - Provider：`volcengine-ark-seedance-25`
 - Endpoint：`POST /api/v3/contents/generations/tasks`

@@ -1,15 +1,98 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/gif"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestOpenAIImageProtocolPreservesAnimatedGIF(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	adapter := imageParameterTestAdapter(t, "openai-images", "openai-image")
+	palette := color.Palette{color.Black, color.White}
+	first := image.NewPaletted(image.Rect(0, 0, 2, 2), palette)
+	second := image.NewPaletted(image.Rect(0, 0, 2, 2), palette)
+	second.SetColorIndex(0, 0, 1)
+	var animation bytes.Buffer
+	if err := gif.EncodeAll(&animation, &gif.GIF{Image: []*image.Paletted{first, second}, Delay: []int{10, 20}, LoopCount: 0}); err != nil {
+		t.Fatal(err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(animation.Bytes())
+	for _, responseKind := range []string{"base64", "base64-no-format", "base64-wrong-format", "url"} {
+		for _, edit := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/edit-%t", responseKind, edit), func(t *testing.T) {
+				var server *httptest.Server
+				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/animation.gif" {
+						w.Header().Set("Content-Type", "image/gif")
+						_, _ = w.Write(animation.Bytes())
+						return
+					}
+					var outputFormat string
+					if edit {
+						if r.URL.Path != "/v1/images/edits" {
+							t.Errorf("edit path = %s", r.URL.Path)
+						}
+						if err := r.ParseMultipartForm(1 << 20); err != nil {
+							t.Error(err)
+							return
+						}
+						defer r.MultipartForm.RemoveAll()
+						outputFormat = r.FormValue("output_format")
+					} else {
+						var body map[string]any
+						if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+							t.Error(err)
+							return
+						}
+						outputFormat, _ = body["output_format"].(string)
+					}
+					if outputFormat != "gif" {
+						t.Errorf("output_format = %q, want gif", outputFormat)
+					}
+					response := map[string]any{"data": []any{map[string]string{"b64_json": encoded}}}
+					switch responseKind {
+					case "base64":
+						response["output_format"] = "gif"
+					case "base64-wrong-format":
+						response["output_format"] = "png"
+					case "url":
+						response["data"] = []any{map[string]string{"url": server.URL + "/animation.gif"}}
+					}
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(response)
+				}))
+				defer server.Close()
+				input := canvasGenerationInput{Mode: "image", Prompt: "animated cat", Config: providerConfig{
+					Model: "gpt-image-2.6", InterfaceType: "openai-image", BaseURL: server.URL,
+					ImageParameters: map[string]any{"outputFormat": "gif"},
+				}}
+				if edit {
+					input.ReferenceImages = []providerMedia{{Name: "reference.png", Type: "image/png", DataURL: testReferenceImageDataURL}}
+				}
+				result, err := runProtocolAdapterTask(context.Background(), input, adapter)
+				if err != nil {
+					t.Fatal(err)
+				}
+				items := result["images"].([]interface{})
+				item := items[0].(map[string]interface{})
+				if item["mimeType"] != "image/gif" || item["dataUrl"] != "data:image/gif;base64,"+encoded {
+					t.Fatalf("animation bytes or MIME changed: %#v", item)
+				}
+			})
+		}
+	}
+}
 
 func TestOpenAIImageProtocolKeepsResolutionInSize(t *testing.T) {
 	allowLoopbackProviderTest(t)

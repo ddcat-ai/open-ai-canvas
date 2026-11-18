@@ -116,6 +116,9 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
         expressionNodeDeleted: "Le nœud d’édition d’expression a été supprimé",
         emptyVideoEnhance: "Le nœud vidéo est vide, impossible d’améliorer la qualité",
         noEnhanceModel: "Aucun modèle d’amélioration de la qualité n’a encore été configuré par un administrateur",
+        emptyVideoDepth: "Le nœud vidéo est vide, impossible de créer une vidéo de profondeur relative",
+        noDepthModel: "Aucun modèle de profondeur relative n’a encore été configuré",
+        titleDepth: "{{title}} · Profondeur relative",
         titleEnhance: "{{title}} · Amélioration {{resolution}}",
     },
     layerMaterials: {
@@ -301,6 +304,8 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
         restoreSaveFailed: "Échec de la reprise de l’enregistrement du résultat",
         enhanceSourceMissing: "Le nœud vidéo source a été supprimé ou est vide, impossible d’améliorer à nouveau ; aucune tâche envoyée",
         enhanceFailed: "Échec de l’amélioration de la qualité",
+        depthSourceMissing: "Le nœud vidéo source a été supprimé ou est vide. Aucune tâche de traitement envoyée",
+        depthFailed: "Échec du traitement de profondeur relative",
         notRetryable: "Ce nœud ne peut pas utiliser la relance de génération standard",
         layerProtocolMissing: "Le modèle de calques d’origine n’a pas de protocole dédié configuré, impossible de relancer",
         promptRejected: "Ce prompt n’a pas passé la modération, modifiez-le avant de régénérer",

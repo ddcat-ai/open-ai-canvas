@@ -10,6 +10,7 @@ func TestPaginationJSONUsesPageSizeCamelCase(t *testing.T) {
 		SkillList{TotalCount: 3, HasMore: true, NextOffset: 20, Page: 1, PageSize: 20},
 		AdminUserPage{Total: 1, Page: 1, Limit: 20},
 		WalletSummary{Total: 1, Page: 1, Limit: 30},
+		WalletHistorySummary{Total: 1, Page: 1, Limit: 30},
 		APICallLogPage{Total: 1, Page: 1, Limit: 50},
 	}
 	for _, payload := range payloads {

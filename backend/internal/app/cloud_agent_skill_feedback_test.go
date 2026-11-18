@@ -139,7 +139,7 @@ func TestCloudAgentModelFailureRedactsProviderDetails(t *testing.T) {
 		{"connection refused", "model_connection_refused"},
 		{"unknown provider error", "model_task_failed"},
 	} {
-		text, reason := cloudAgentModelFailure(&model.Task{ID: "task-id", Error: `Post "https://private.example?key=secret": ` + test.raw})
+		text, reason := cloudAgentModelFailure(&model.Task{ID: "task-id", Error: `Post "https://private.example?key=secret": ` + test.raw, ExecutionDiagnosticJSON: `{"code":"` + test.reason + `"}`})
 		if reason != test.reason || !strings.Contains(text, "task-id") || strings.Contains(text, "private") || strings.Contains(text, "secret") {
 			t.Fatalf("unsafe or incorrect error: %q, %q", text, reason)
 		}
@@ -155,7 +155,7 @@ func TestCloudAgentFailedModelEmitsSafeReason(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&model.Task{}).Where("id = ?", run.ID).Updates(map[string]any{"status": model.TaskStatusFailed, "error": "private-url connection reset by peer"}).Error; err != nil {
+	if err := db.Model(&model.Task{}).Where("id = ?", run.ID).Updates(map[string]any{"status": model.TaskStatusFailed, "error": "private-url connection reset by peer", "execution_diagnostic_json": `{"code":"model_connection_reset"}`}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {

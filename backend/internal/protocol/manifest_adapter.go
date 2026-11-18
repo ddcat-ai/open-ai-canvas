@@ -506,6 +506,15 @@ func normalizeManifestInlineDataURL(value, kind, formatHint string) string {
 	if value == "" || strings.HasPrefix(value, "data:") {
 		return value
 	}
+	// 某些 Images 网关不返回 output_format；按文件头识别，避免把 GIF 动画标为 PNG。
+	if kind == "image" {
+		prefix := value[:min(len(value), 48)]
+		if data, err := base64.StdEncoding.DecodeString(prefix); err == nil {
+			if detected := http.DetectContentType(data); strings.HasPrefix(detected, "image/") {
+				formatHint = detected
+			}
+		}
+	}
 	return "data:" + manifestInlineMediaMIME(kind, formatHint) + ";base64," + value
 }
 

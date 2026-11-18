@@ -78,7 +78,7 @@
 | 映射位置 | 上游路径或转换表达式 |
 | --- | --- |
 | `response.status` | `"succeeded"` |
-| `response.images` | `{"$map":{"from":{"$ref":"response.data"},"as":"item","in":{"url":{"$omitEmpty":{"$ref":"item.url"}},"dataUrl":{"$if":{"condition":{"$ref":"item.b64_json"},"then":{"$concat":["data:image/png;base64,",{"$ref":"item.b64_json"}]},"else":null}}}}}` |
+| `response.images` | `{"$map":{"from":{"$ref":"response.data"},"as":"item","in":{"url":{"$omitEmpty":{"$ref":"item.url"}},"b64_json":{"$omitEmpty":{"$ref":"item.b64_json"}},"output_format":{"$omitEmpty":{"$coalesce":[{"$ref":"item.output_format"},{"$ref":"response.output_format"}]}}}}}` |
 | `response.usage` | `{"$ref":"response.usage"}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.messagePaths[0]` | `"error.message"` |
@@ -89,7 +89,7 @@
 
 ## 兼容边界
 
-无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。1K/2K/4K 档位只用于选择 size 像素预设及计价，不向上游发送 resolution；自动尺寸由模型决定。quality 独立发送，auto 时省略，不把分辨率档位转换为质量。
+无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。1K/2K/4K 档位只用于选择 size 像素预设及计价，不向上游发送 resolution；自动尺寸由模型决定。quality 独立发送，auto 时省略，不把分辨率档位转换为质量。输出格式通过 providerOptions.openai-image.output_format 发送；管理员须按渠道实际能力启用并限定枚举，支持 GIF 的 GPT Image 2.6 渠道可使用对应能力模板。Base64 响应读取单张或顶层 output_format，并按实际文件头识别格式；GIF 下载保留原文件动画。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -101,7 +101,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "openai-images",
   "name": "OpenAI Images",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "author": "OpenAI / 影策",
   "description": "OpenAI Images 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -190,7 +190,8 @@
             "values": [
               "png",
               "jpeg",
-              "webp"
+              "webp",
+              "gif"
             ],
             "default": "png",
             "enabled": false
@@ -574,20 +575,21 @@
                     "$ref": "item.url"
                   }
                 },
-                "dataUrl": {
-                  "$if": {
-                    "condition": {
-                      "$ref": "item.b64_json"
-                    },
-                    "then": {
-                      "$concat": [
-                        "data:image/png;base64,",
-                        {
-                          "$ref": "item.b64_json"
-                        }
-                      ]
-                    },
-                    "else": null
+                "b64_json": {
+                  "$omitEmpty": {
+                    "$ref": "item.b64_json"
+                  }
+                },
+                "output_format": {
+                  "$omitEmpty": {
+                    "$coalesce": [
+                      {
+                        "$ref": "item.output_format"
+                      },
+                      {
+                        "$ref": "response.output_format"
+                      }
+                    ]
                   }
                 }
               }

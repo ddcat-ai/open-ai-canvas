@@ -149,7 +149,9 @@ export type VideoProcessingConfig = {
 /** 与后端一致：轮询上限 1 小时，按 RTF≈20 估算源视频默认不超过 180 秒。 */
 export const DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS = 180;
 export const VOLCENGINE_MEDIAKIT_ENHANCE_VIDEO_PROTOCOL = "volcengine-mediakit-enhance-video";
-/** 火山 MediaKit 画质增强（大模型版）支持的目标分辨率，按从低到高排列。 */
+export const VOLCENGINE_MEDIAKIT_VIDEO_DEPTH_PROTOCOL = "volcengine-mediakit-video-depth";
+export const MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS = 600;
+/** 火山 MediaKit 视频画质增强工具支持的目标分辨率，按从低到高排列。 */
 export const VIDEO_ENHANCE_RESOLUTIONS = ["720p", "1080p", "2k", "4k"] as const;
 /** 目标档对应的短边像素，用于判断是否低于源视频。 */
 export const VIDEO_ENHANCE_SHORT_EDGE: Record<string, number> = { "720p": 720, "1080p": 1080, "2k": 1440, "4k": 2160 };
@@ -557,6 +559,19 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.operations = ["enhance"];
         video.defaultOperation = "enhance";
         video.processing = { fpsPolicy: "keep_source", maxSourceSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS };
+    }
+    if (protocol === VOLCENGINE_MEDIAKIT_VIDEO_DEPTH_PROTOCOL) {
+        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxVideoDurationSeconds: MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS, maxAudios: 0 };
+        video.duration = { selection: "range", min: 1, max: MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS, step: 1, default: 5 };
+        video.ratios = [];
+        video.defaultRatio = "";
+        video.resolutions = [];
+        video.defaultResolution = "";
+        video.generateAudio = { supported: false, default: false };
+        video.watermark = { supported: false, default: false };
+        video.operations = ["depth"];
+        video.defaultOperation = "depth";
+        video.processing = { fpsPolicy: "keep_source", maxSourceSeconds: MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS };
     }
     return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }

@@ -132,7 +132,7 @@ export function PriceTierFields({
                                         <Select options={[{ label: "任意分辨率", value: "*" }, ...resolutionOptions.map((value) => ({ label: value.toUpperCase(), value: normalizeTierResolution(value) }))]} />
                                     </Form.Item>
                                 ) : null}
-                                {isVideo && video?.processing ? (
+                                {isVideo && video?.processing && video.defaultOperation !== "depth" ? (
                                     <Form.Item className="mb-0" name={[index, "fpsBand"]} label="输出帧率档" tooltip="视频处理按输出帧率分档计价；保持原帧率时按 ≤30fps 档预扣">
                                         <Select options={fpsBandOptions} />
                                     </Form.Item>
@@ -315,7 +315,8 @@ const fpsBandOptions = [
 function operationOptions(capability: EditableCapability | undefined) {
     const options = [{ label: "任意生成方式", value: "*" }];
     if (capability === "image") return [...options, { label: "文生图", value: "text_to_image" }, { label: "图生图", value: "image_to_image" }];
-    if (capability === "video") return [...options, { label: "文生视频", value: "text_to_video" }, { label: "图生视频", value: "image_to_video" }, { label: "视频生视频", value: "video_to_video" }, { label: "画质增强", value: "enhance" }];
+    if (capability === "video")
+        return [...options, { label: "文生视频", value: "text_to_video" }, { label: "图生视频", value: "image_to_video" }, { label: "视频生视频", value: "video_to_video" }, { label: "画质增强", value: "enhance" }, { label: "相对深度", value: "depth" }];
     if (capability === "text") return [...options, { label: "文本生成", value: "text_generation" }];
     return options;
 }

@@ -61,9 +61,15 @@
 
 .auth-turnstile {
     display: flex;
+    min-width: 0;
     min-height: 65px;
     justify-content: center;
-    overflow: hidden;
+}
+
+.auth-turnstile-status {
+    min-width: 0;
+    color: var(--auth-muted);
+    font-size: var(--fs-caption);
 }
 
 .auth-form-pair {

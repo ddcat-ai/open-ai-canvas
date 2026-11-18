@@ -13,7 +13,7 @@ func TestValidateVideoProcessingConfig(t *testing.T) {
 		{FPSPolicy: VideoProcessingFPSUserSelect, FPSOptions: []int{30, 60, 120}, MaxSourceSeconds: 120},
 	}
 	for _, value := range valid {
-		if err := validateVideoProcessingConfig(value); err != nil {
+		if err := validateVideoProcessingConfig(value, VideoProcessingOperationEnhance); err != nil {
 			t.Fatalf("validateVideoProcessingConfig(%#v) = %v", value, err)
 		}
 	}
@@ -26,7 +26,7 @@ func TestValidateVideoProcessingConfig(t *testing.T) {
 		{FPSPolicy: VideoProcessingFPSKeepSource, MaxSourceSeconds: DefaultVideoProcessingMaxSourceSeconds + 1},
 	}
 	for _, value := range invalid {
-		if err := validateVideoProcessingConfig(value); err == nil {
+		if err := validateVideoProcessingConfig(value, VideoProcessingOperationEnhance); err == nil {
 			t.Fatalf("validateVideoProcessingConfig(%#v) accepted invalid config", value)
 		}
 	}

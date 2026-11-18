@@ -301,17 +301,10 @@ func buildCloudAgentSkillHints(prompt string, pinned []skills.AgentSkillCatalogE
 // cloudAgentBuildSkillPool 冻结本轮可用的技能范围，并生成目录与动态提示。
 // 范围 = 允许自动使用的已安装技能 ∪ 本轮固定的技能；固定的技能必须已安装且启用。
 func (s *Service) cloudAgentBuildSkillPool(userID, prompt string, pinnedIDs []string, budget cloudAgentContextBudget) (cloudAgentSkillPool, error) {
-	admin, err := s.skillDomain().IsAdministrator(userID)
-	if err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return cloudAgentSkillPool{}, err
 	}
 	mentions := cloudAgentPromptSkillMentions(prompt)
-	if !admin {
-		if len(pinnedIDs) > 0 || len(mentions) > 0 {
-			return cloudAgentSkillPool{}, cloudAgentSkillHistoryError()
-		}
-		return cloudAgentSkillPool{Versions: map[string]string{}}, nil
-	}
 	pinnedIDs = append([]string(nil), pinnedIDs...)
 	for _, id := range mentions {
 		found := false

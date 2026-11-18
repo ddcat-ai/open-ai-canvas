@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { formatSkillCount, formatSkillDate, skillCategoryLabel } from "@/pages/skills/skill-catalog";
+import { useSkillAdministrationAccess } from "@/lib/skill-access";
 import { splitSkillFrontmatter, type SkillFrontmatter } from "@/pages/skills/skill-frontmatter";
 import { getSkillFile, listSkillFiles, skillFileRawURL, type Skill, type SkillCategory, type SkillPackageFile, type SkillPackageFileContent } from "@/services/api/skills";
 
@@ -38,6 +39,7 @@ export function SkillDetailModal({
     onOpenWorkbench: (skill: Skill) => void;
     onSync: (skill: Skill) => void;
 }) {
+    const canManage = useSkillAdministrationAccess() && skill?.isOwner;
     const [files, setFiles] = useState<SkillPackageFile[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
     const [filesError, setFilesError] = useState("");
@@ -135,21 +137,21 @@ export function SkillDetailModal({
                             <p className="mt-1 line-clamp-2 max-w-4xl text-sm leading-5 text-foreground/58">{skill.description}</p>
                         </div>
                         <div className="skill-package-actions">
-                            {skill.sourceType === "github" && skill.isOwner ? (
+                            {skill.sourceType === "github" && canManage ? (
                                 <Tooltip title={skill.syncError || "从 GitHub 检查并同步最新提交"}>
                                     <Button loading={mutating} icon={<RefreshCw className="size-4" />} onClick={() => onSync(skill)}>
                                         同步
                                     </Button>
                                 </Tooltip>
                             ) : null}
-                            {skill.isOwner ? (
+                            {canManage ? (
                                 <Tooltip title="编辑名称、简介、分类和展示信息">
                                     <Button icon={<Info className="size-4" />} onClick={() => onEdit(skill)}>
                                         技能信息
                                     </Button>
                                 </Tooltip>
                             ) : null}
-                            {skill.isOwner ? (
+                            {canManage ? (
                                 <Button icon={<Pencil className="size-4" />} onClick={() => onOpenWorkbench(skill)}>
                                     {skill.sourceType === "github" ? "作者工作台" : "编辑"}
                                 </Button>

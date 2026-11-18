@@ -358,7 +358,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 			// 画布 Agent 的单步超时是可恢复事件（运行期会关思考重试同一步），
 			// 因此必须与"任务执行超时"区分开，否则只能整轮判死。
 			if cloudAgentModelOperation(task) {
-				err = errors.New(cloudAgentStepTimeoutError + "，已中止这一步")
+				err = agentModelFailure(agentModelFailureStepTimeout, errors.New(cloudAgentStepTimeoutError+"，已中止这一步"))
 			} else {
 				err = errors.New(taskTimeoutMessage(task.Type))
 			}
@@ -422,7 +422,7 @@ func taskLeaseRenewContext(parent context.Context) (context.Context, context.Can
 // taskExecutionTimeout 解析一次任务的执行墙钟：画布 Agent 的单步调用可以配秒级超时
 // （AgentStepTimeoutSeconds），没配时沿用文本任务超时。秒级粒度是必要的——一轮里每一步
 // 都是分钟级的调用，分钟粒度改不动"某一步卡住"的体验。
-// 超时的表现是任务错误里带 cloudAgentStepTimeoutError 标记，运行期据此关思考重试同一步，
+// 超时会记录单步超时原因，运行期据此关思考重试同一步，
 // 而不是把整轮判死（见 cloud_agent_step_timeout.go）。
 func taskExecutionTimeout(task *model.Task, policy RuntimeTaskPolicy) time.Duration {
 	if task != nil && cloudAgentModelOperation(task) && policy.AgentStepTimeoutSeconds > 0 {
