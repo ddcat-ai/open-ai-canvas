@@ -1,4 +1,5 @@
 import { getResourceBlob, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
+import { getActiveUserScope } from "@/lib/user-scope";
 
 import type { TryOnFaceRead } from "./tryon-plan";
 
@@ -7,11 +8,11 @@ import type { TryOnFaceRead } from "./tryon-plan";
  * 图片模型拿到整张大头照时会把参考人的头发、头顶一起画上去（光头参考尤其明显），裁掉后只剩五官可借。
  * 上边不外扩，避免把发际线带回来；任何一张失败都退回原图，不阻断出图。
  */
-export async function cropFaceReferences(faceIds: string[], boxes: TryOnFaceRead["boxes"]): Promise<string[]> {
-    return Promise.all(faceIds.map((id, index) => cropOne(id, boxes[index]).catch(() => "")));
+export async function cropFaceReferences(faceIds: string[], boxes: TryOnFaceRead["boxes"], scope: string): Promise<string[]> {
+    return Promise.all(faceIds.map((id, index) => cropOne(id, boxes[index], scope).catch(() => "")));
 }
 
-async function cropOne(resourceId: string, box: TryOnFaceRead["boxes"][number]) {
+async function cropOne(resourceId: string, box: TryOnFaceRead["boxes"][number], scope: string) {
     if (!box) return "";
     const blob = await getResourceBlob(resourceStorageKey(resourceId), "browser-process");
     if (!blob) return "";
@@ -37,7 +38,9 @@ async function cropOne(resourceId: string, box: TryOnFaceRead["boxes"][number]) 
         context.drawImage(bitmap, left, top, width, height, 0, 0, canvas.width, canvas.height);
         const output = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
         if (!output) return "";
+        if (getActiveUserScope() !== scope) throw new DOMException("账号已切换", "AbortError");
         const resource = await uploadResourceFile(output, "image", {
+            expectedUserId: scope,
             fileName: "face-crop.jpg",
             width: canvas.width,
             height: canvas.height,

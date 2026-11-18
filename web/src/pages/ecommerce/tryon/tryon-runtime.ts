@@ -1,6 +1,6 @@
 import { createClientUUID } from "@/lib/client-id";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
-import { getActiveUserScope } from "@/lib/user-scope";
+import { captureUserSession, getActiveUserScope } from "@/lib/user-scope";
 import { appQueryClient } from "@/lib/query-client";
 import { ApiError } from "@/services/api/request";
 import { useAssetStore, flushAssetStorePersistence } from "@/stores/use-asset-store";
@@ -218,13 +218,25 @@ export function watchTryOnTasks(scope: string, ids: string[]) {
 
 function waitTerminal(scope: string, id: string) {
     return new Promise<GenerationTask>((resolve, reject) => {
+        const session = captureUserSession();
+        if (session.scope !== scope) {
+            reject(new DOMException("账号已切换", "AbortError"));
+            return;
+        }
         let done = false;
         let stop: (() => void) | undefined;
         // 订阅时如果已有缓存状态会同步回调一次，此时 stop 还没赋值：结束标记先记下，订阅返回后再退订。
         const finish = () => {
             done = true;
+            session.signal.removeEventListener("abort", abort);
             queueMicrotask(() => stop?.());
         };
+        const abort = () => {
+            if (done) return;
+            finish();
+            reject(new DOMException("账号已切换", "AbortError"));
+        };
+        session.signal.addEventListener("abort", abort, { once: true });
         stop = subscribeGenerationTasks([id], (task) => {
             if (done) return;
             if (getActiveUserScope() !== scope) {
@@ -240,6 +252,20 @@ function waitTerminal(scope: string, id: string) {
         });
         if (done) queueMicrotask(() => stop?.());
     });
+}
+
+const watchedLeads = new Set<string>();
+
+/** Follow-up images must continue even after the studio route unmounts. */
+function watchLeadUntilSettled(ctx: TryOnRunContext, taskId: string, batchId: string) {
+    if (watchedLeads.has(taskId)) return;
+    watchedLeads.add(taskId);
+    void waitTerminal(ctx.scope, taskId)
+        .then(() => {
+            if (getActiveUserScope() === ctx.scope) void pumpTryOnBatch(ctx, batchId);
+        })
+        .catch(() => undefined)
+        .finally(() => watchedLeads.delete(taskId));
 }
 
 // ---------- 素材 ----------
@@ -312,7 +338,7 @@ export async function addTryOnFiles(scope: string, slot: TryOnSlotKey, files: Fi
             break;
         }
         insertImages(scope, slot, [{ id, slot, resourceId: "", name: file.name, previewUrl, progress: 0, ...size }]);
-        void uploadResourceFile(file, "image", { fileName: file.name, width: size.width || undefined, height: size.height || undefined }, (done, total) => patchImage(scope, id, { progress: total ? done / total : 0 }))
+        void uploadResourceFile(file, "image", { expectedUserId: scope, fileName: file.name, width: size.width || undefined, height: size.height || undefined }, (done, total) => patchImage(scope, id, { progress: total ? done / total : 0 }))
             .then((resource) => patchImage(scope, id, { resourceId: resource.id, progress: undefined }))
             .catch((error) => patchImage(scope, id, { error: error instanceof Error ? error.message : "上传失败", progress: undefined }));
     }
@@ -392,7 +418,7 @@ export async function addTryOnCatalog(scope: string, slot: TryOnSlotKey, profile
         if (!response.ok) throw new Error(`读取模特库图片失败（${response.status}）`);
         const blob = await response.blob();
         current(scope);
-        const resource = await uploadResourceFile(blob, "image", { fileName: `${profile.id}.png`, width: 1672, height: 941 });
+        const resource = await uploadResourceFile(blob, "image", { expectedUserId: scope, fileName: `${profile.id}.png`, width: 1672, height: 941 });
         current(scope);
         if (!resource.id) throw new Error("模特图片未保存成功，请重试");
         resourceId = resource.id;
@@ -577,7 +603,7 @@ export async function pumpTryOnBatch(ctx: TryOnRunContext, batchId: string) {
                     listActive: (limit) => listGenerationTasks(limit, { activeOnly: true }),
                     assertCurrent: () => {
                         if (getActiveUserScope() !== scope) throw new DOMException("账号已切换", "AbortError");
-                        acquireLease(batchId);
+                        if (!acquireLease(batchId)) throw new DOMException("另一个页面正在提交这批任务", "AbortError");
                     },
                     onWaiting: (_active, limit) => setNotice(scope, batchId, { text: `同时进行的任务已达上限 ${limit} 个，前面的图片完成后自动继续提交` }),
                     submit: () =>
@@ -594,6 +620,7 @@ export async function pumpTryOnBatch(ctx: TryOnRunContext, batchId: string) {
                 setNotice(scope, batchId, null);
                 updateJob(scope, batchId, next.key, { state: "submitted", taskId: task.id });
                 setTryOnTask(scope, task);
+                if (next.anchor === "lead") watchLeadUntilSettled(ctx, task.id, batchId);
             } catch (cause) {
                 if (cause instanceof DOMException && cause.name === "AbortError") {
                     updateJob(scope, batchId, next.key, { state: "waiting" });
@@ -655,7 +682,7 @@ export async function planTryOnBatch(ctx: TryOnRunContext, batchId: string) {
         if (isFaceSwapFunction(batch.fn)) {
             const read = parseTryOnFaceRead(text, batch.source);
             const faceIds = batch.fn === "face-swap" ? readyImages(batch.source, "face").map((image) => image.resourceId) : [];
-            analysis = { shots: [], faceRead: { ...read, crops: faceIds.length ? await cropFaceReferences(faceIds, read.boxes) : [] } };
+            analysis = { shots: [], faceRead: { ...read, crops: faceIds.length ? await cropFaceReferences(faceIds, read.boxes, scope) : [] } };
         } else analysis = parseTryOnAnalysis(text);
         if (batch.fn === "pose" && (analysis.shots.length !== batch.source.count || analysis.shots.some((shot) => !shot.pose || !shot.camera))) throw new Error("Agent 未完整识别每张姿势与机位，请调整参考图后重新提交");
         updateTryOnBatch(scope, batchId, (item) => ({
@@ -730,6 +757,7 @@ export async function retryTryOnJob(ctx: TryOnRunContext, batchId: string, key: 
         const task = await retryGenerationTask(job.taskId);
         setTryOnTask(ctx.scope, task);
         updateJob(ctx.scope, batchId, key, { taskId: task.id, state: "submitted", error: undefined });
+        if (job.anchor === "lead") watchLeadUntilSettled(ctx, task.id, batchId);
         if (job.anchor === "lead")
             updateTryOnBatch(ctx.scope, batchId, (item) => ({ ...item, jobs: item.jobs.map((entry) => (entry.anchor === "follow" && entry.state === "failed" && !entry.taskId ? { ...entry, state: "waiting", error: undefined } : entry)) }));
         return;
