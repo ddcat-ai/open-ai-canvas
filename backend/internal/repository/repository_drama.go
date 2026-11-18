@@ -1025,7 +1025,7 @@ func (r *Repository) SaveDramaSegmentOverrideIfRevision(segment model.DramaSegme
 		if expectedRevision != nil && current.Revision != *expectedRevision {
 			return ErrCreationConflict
 		}
-		if current.VideoPromptOverride == segment.VideoPromptOverride {
+		if current.VideoPromptOverride == segment.VideoPromptOverride && current.PromptStatus != model.DramaPromptConflict && current.PromptStatus != model.DramaPromptReview {
 			revision = current.Revision
 			return nil
 		}

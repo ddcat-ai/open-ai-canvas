@@ -60,10 +60,17 @@ func TestDramaMCPSegmentPromptEditAndGenerationRevision(t *testing.T) {
 	if len(read.VideoVersions) == 0 || read.Segment.Request.Operation == "" {
 		t.Fatalf("missing versions or request preview: %+v", read)
 	}
+	if err := svc.repo.UpdateDramaSegmentFields(segment.ID, map[string]any{"prompt_status": model.DramaPromptConflict, "prompt_error": "对白待核对"}); err != nil {
+		t.Fatal(err)
+	}
+	confirmed, err := svc.EditDramaSegmentPrompt("usr-drama", projectID, episodeID, segment.Index, EditDramaSegmentPromptRequest{Prompt: prompt, ExpectedRevision: &edit.Revision})
+	if err != nil || confirmed.Revision != edit.Revision+1 || confirmed.PromptStatus == model.DramaPromptConflict {
+		t.Fatalf("same prompt did not resolve conflict: %+v, %v", confirmed, err)
+	}
 	if _, err := svc.GenerateDramaSegments("usr-drama", projectID, episodeID, GenerateDramaSegmentsRequest{Segments: []int{segment.Index}, ExpectedPromptRevision: &segment.Revision}); err == nil {
 		t.Fatal("stale generation accepted")
 	}
-	queued, err := svc.GenerateDramaSegments("usr-drama", projectID, episodeID, GenerateDramaSegmentsRequest{Segments: []int{segment.Index}, ExpectedPromptRevision: &edit.Revision})
+	queued, err := svc.GenerateDramaSegments("usr-drama", projectID, episodeID, GenerateDramaSegmentsRequest{Segments: []int{segment.Index}, ExpectedPromptRevision: &confirmed.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
