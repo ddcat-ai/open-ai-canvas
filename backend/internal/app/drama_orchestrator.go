@@ -1554,7 +1554,16 @@ func (r *dramaRun) applySegmentPrompt(job *model.DramaJob, task *model.Task) err
 		}
 		return &dramaResultIssue{message: fmt.Sprintf("视频提示词 %d 个字符，自动精简 %d 次后仍超过本段上限 %d 个字符（视频模型上限减去开头的参考图说明）；请手动精简后保存，或重新撰写", chars, payload.Condensed, payload.MaxChars)}
 	}
-	_, err = r.s.repo.UpdateDramaSegmentRevision(job.ShotID, payload.Revision, map[string]any{"video_prompt": truncateRunes(prompt, 12000), "prompt_status": model.DramaMediaReady, "prompt_error": "", "prompt_seconds": payload.Seconds})
+	fields := map[string]any{"video_prompt": truncateRunes(prompt, 12000), "prompt_status": model.DramaMediaReady, "prompt_error": "", "prompt_seconds": payload.Seconds}
+	current, err := r.s.repo.DramaSegment(r.project.ID, job.ShotID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(current.VideoPromptOverride) != "" {
+		fields["prompt_status"] = model.DramaPromptReview
+		fields["prompt_error"] = "AI 新稿已生成，原手写内容仍保留。可采用 AI 版本，或核对后确认使用当前提示词。"
+	}
+	_, err = r.s.repo.UpdateDramaSegmentRevision(job.ShotID, payload.Revision, fields)
 	return err
 }
 

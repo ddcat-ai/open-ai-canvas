@@ -1226,6 +1226,23 @@ func (s *Service) UpdateDramaSegment(userID string, projectID string, episodeID 
 		}
 		fields["video_prompt_override"] = prompt
 	}
+	if req.VideoPromptOverride != nil {
+		referencesChanged := false
+		for key, before := range map[string]string{"reference_cast_ids_json": current.ReferenceCastIDsJSON, "reference_images_json": current.ReferenceImagesJSON, "audio_cast_ids_json": current.AudioCastIDsJSON} {
+			if after, exists := fields[key]; exists && after != before {
+				referencesChanged = true
+			}
+		}
+		if strings.TrimSpace(*req.VideoPromptOverride) != "" {
+			fields["prompt_status"] = current.PromptStatus
+			if current.PromptStatus != model.DramaMediaReady || referencesChanged {
+				fields["prompt_status"] = model.DramaMediaStale
+			}
+			fields["prompt_error"] = ""
+		} else if current.PromptStatus == model.DramaPromptReview && !referencesChanged {
+			fields["prompt_status"], fields["prompt_error"] = model.DramaMediaReady, ""
+		}
+	}
 	// 参考选择和正文必须一起落库，否则并发请求或写入失败会留下错号的半成品。
 	if err := s.repo.SaveDramaSegmentEdits(current, fields); err != nil {
 		if errors.Is(err, repository.ErrDramaSegmentEditConflict) {

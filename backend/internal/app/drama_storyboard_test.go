@@ -209,7 +209,7 @@ func TestDramaShotScriptEditAndPromptRewrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if detail.Segments[0].PromptStatus != "stale" || detail.Shots[0].Camera != camera {
+	if detail.Segments[0].PromptStatus != model.DramaPromptConflict || detail.Shots[0].Camera != camera {
 		t.Fatalf("shot edit must invalidate prompt: %+v", detail)
 	}
 	if _, err := svc.ApproveDramaEpisode("usr-drama", project, episode); err == nil {
@@ -301,7 +301,7 @@ func TestDramaLatePromptDoesNotOverwriteEditedShot(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, _ = svc.repo.DramaSegments(episode)
-	if rows[0].VideoPrompt == text || rows[0].PromptStatus != "stale" {
+	if rows[0].VideoPrompt == text || rows[0].PromptStatus != model.DramaMediaReady || !strings.Contains(rows[0].VideoPrompt, dialogue) {
 		t.Fatalf("late prompt overwrote edited script: %+v", rows[0])
 	}
 }

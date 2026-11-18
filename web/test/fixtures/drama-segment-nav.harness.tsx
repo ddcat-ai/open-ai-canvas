@@ -182,6 +182,33 @@ function toolbars() {
     return [...document.querySelectorAll('[aria-label="生成设置"]')];
 }
 
+test("冲突保留正文并可人工确认，AI 新稿不会自动替换手写稿", async () => {
+    const saved: string[] = [];
+    const current = { ...segment(0, "minimax-h3-1080p", 9.8, ""), custom: true, videoPrompt: "手写镜头：甲说你好。", promptStatus: "conflict" as const, promptError: "原对白缺失" };
+    const render = (value: DramaSegment) =>
+        root.render(
+            <QueryClientProvider client={client}>
+                <App>
+                    <Host episodeDetail={{ ...detail, segments: [value] }} onSavePrompt={async (_, prompt) => saved.push(prompt)} />
+                </App>
+            </QueryClientProvider>,
+        );
+    await act(async () => render(current));
+    expect(document.body.textContent).toContain("原对白缺失");
+    expect(document.querySelector('[aria-label="完整视频提示词"]')?.textContent).toContain(current.videoPrompt);
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "确认使用当前提示词");
+    expect(confirm?.disabled).toBe(false);
+    await act(async () => confirm!.click());
+    expect(saved).toEqual([current.videoPrompt]);
+    await act(async () => render({ ...current, promptStatus: "review", generated: "新的 AI 稿" }));
+    expect(document.body.textContent).toContain("查看 AI 新稿");
+    expect(saved).toHaveLength(1);
+    const adopt = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("采用 AI 版本"));
+    expect(adopt).toBeDefined();
+    await act(async () => adopt!.click());
+    expect(saved).toEqual([current.videoPrompt, ""]);
+});
+
 function clickNext() {
     const button = document.querySelector('button[aria-label="下一段"]') as HTMLButtonElement | null;
     expect(button).not.toBeNull();

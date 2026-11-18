@@ -266,7 +266,7 @@ func cloudAgentDramaShotPreview(target *cloudAgentDramaPageSelection, plan *dram
 	}
 	title := fmt.Sprintf("%s · 第 %d 集 · 镜头 %d", target.Project.Name, target.Episode.Number, before.Position+1)
 	summary := "修改" + title + "的" + strings.Join(fields, "、")
-	description := summary + "。保存后，本段提示词和视频按制作规则标记过期。"
+	description := summary + "。可安全定位的对白会同步到完整提示词；其他修改保留原稿并提示核对，已有视频标记过期。"
 	if len(fields) == 0 {
 		summary = title + "的内容未变化"
 		description = summary

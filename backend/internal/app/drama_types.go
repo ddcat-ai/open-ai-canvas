@@ -608,7 +608,7 @@ type DramaSegmentView struct {
 	VideoPrompt string `json:"videoPrompt"`
 	Generated   string `json:"generated"`
 	Custom      bool   `json:"custom"`
-	// PromptStatus：none 无记录、queued 待撰写、running 撰写中、ready 完成、stale 镜头已改动、failed 失败。
+	// PromptStatus：none 无记录、queued 待撰写、running 撰写中、ready 完成、stale 过期、failed 失败、conflict 待核对、review AI 新稿待采用。
 	PromptStatus string `json:"promptStatus"`
 	PromptError  string `json:"promptError,omitempty"`
 	// VideoStatus：空串待生成、running、ready、stale（提示词或上一段已变）、failed。

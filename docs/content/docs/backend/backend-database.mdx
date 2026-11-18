@@ -5,6 +5,10 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 对白同步与提示词核对
+
+沿用现有字段，无新增表或 Schema 迁移。`drama_segments.prompt_status` 新增 `conflict`（镜头已保存但无法安全同步，保留两份正文）及 `review`（AI 新稿生成后保留原手写稿，等待采用）。原因保存在 `prompt_error`。两种状态均不计为提示词就绪，不允许提交视频；显式确认正文后恢复。只修改对白时按唯一引语局部更新 `video_prompt_override`，没有手写稿时更新 `video_prompt`，同时递增修订号使迟到作业失效。
+
 ## 图片用量计费（Schema 105）
 
 版本 105 `image_usage_billing` 增加可空 JSON 文本列：`channel_model_price_tiers.image_pricing`、`cost_image_pricing`，`logical_models.image_pricing`，以及 `billing_orders.image_pricing`、`cost_image_pricing`、`image_usage`。订单另有 `image_input_images` 和 `image_max_output_images`，均为非空整数、默认 0。售价与内部成本分别保存，成本字段不向用户端序列化。
@@ -380,7 +384,7 @@ SQLite 写事务与 PostgreSQL 行锁串行化同一对话的修订检查；读�
 | `drama_casts` | 全剧设定：角色（`kind=character`，含别名、外貌与声线 `voice_instructions`）、关键道具（`kind=prop`）和场景（`kind=scene`），当前参考图 `image_resource_id` 与状态 | 作品圣经建档；剧本里首次出现的人物、道具或地点即时建档，按标准名与别名归并；锁定后不再重新生成 |
 | `drama_episodes` | 集标题、大纲、钩子、悬念、素材类型 `source_format`（Schema 73）、阶段（queued → script → prompts → review → video → render → done）、`approved`（逐集确认模式下已确认本集提示词）、`media_released`、错误、成片资源、`final_stale`、`revision` | `(project_id, number)` 唯一；用户修改递增 `revision`，调度写入以 `revision` 为条件 |
 | `drama_shots` | 镜头脚本：剧情段 `segment_index` / `segment_title`、场景与场景设定 `scene_cast_id`、出场角色 `cast_ids_json`、关键道具 `prop_ids_json`、说话人、台词、动作、景别、运镜、转场 `transition`、时长、起幅画面 `image_prompt`、运动描述 `video_prompt`、原文出处 | 镜头只是撰写段提示词的素材，不产出媒体；修改后所在段的提示词与视频标记过期 |
-| `drama_segments` | 剧情段：模型撰写的完整视频提示词 `video_prompt`、撰写状态 `prompt_status`（空串待撰写、`running`、`ready`、`stale`、`failed`）与 `prompt_error`、撰写时的秒数 `prompt_seconds`、用户改写 `video_prompt_override`、按段视频模型 `video_model_json`、用户指定的参考图 `reference_cast_ids_json`（Schema 74）、视频状态 `video_status`、`video_resource_id`、`video_seconds`、`video_error`、本段视频最后一帧 `tail_frame_resource_id`、`revision` | `(episode_id, segment_index)` 唯一；剧本写入时建行，重新改编时重建；结果按 `revision` 条件写入，过期结果作废；某段视频变化会让后续已生成的段过期（它们承接的是旧最后一帧） |
+| `drama_segments` | 剧情段：模型撰写的完整视频提示词 `video_prompt`、撰写状态 `prompt_status`（空串待撰写、`running`、`ready`、`stale`、`conflict`、`review`、`failed`）与 `prompt_error`、撰写时的秒数 `prompt_seconds`、用户改写 `video_prompt_override`、按段视频模型 `video_model_json`、用户指定的参考图 `reference_cast_ids_json`（Schema 74）、视频状态 `video_status`、`video_resource_id`、`video_seconds`、`video_error`、本段视频最后一帧 `tail_frame_resource_id`、`revision` | `(episode_id, segment_index)` 唯一；剧本写入时建行，重新改编时重建；结果按 `revision` 条件写入，过期结果作废；某段视频变化会让后续已生成的段过期（它们承接的是旧最后一帧） |
 | `drama_takes` | 历史版本：设定参考图（`cast`）、剧情段视频（`video`，`owner_id` 为段 ID）与单集成片（`final`） | `(owner_id, kind)` 内递增 `version`；版本始终入库 |
 | `drama_jobs` | 调度队列：类型（bible/plan/cast_image/script/segment_prompt/segment_video/render）、目标、优先级、关联任务、重试次数、历次提交 `attempts_json`、错误、实际花费 | 任务在派发时才创建；`segment_prompt` / `segment_video` 的 `shot_id` 存放 `drama_segments.id` |
 

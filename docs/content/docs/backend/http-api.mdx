@@ -5,6 +5,12 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 镜头对白与完整提示词同步
+
+现有镜头修改接口在仅修改 `dialogue` 且旧对白能唯一定位为独立引语时，直接替换本段生效提示词中的对白，不调用文本模型，不改变周围手写内容。原对白重复、缺失、无法定位、超出模型提示词上限或同时修改其他镜头字段时，保存镜头并保留原稿，返回 `promptStatus=conflict` 与核对原因。修改镜头和提示词在同一事务中保存，修订号与镜头更新时间不一致时拒绝覆盖。
+
+冲突期间不允许提交视频。显式保存核对后的非空正文可解除冲突，AI 重写为可选。重新撰写完成时如有手写稿，返回 `promptStatus=review`，新稿位于 `generated`，手写稿继续作为 `videoPrompt` 展示；保存非空正文表示确认手写稿，清空覆盖值表示采用 AI 新稿。参考资产换号不解除未确认的对白冲突。
+
 ## 图片用量计费
 
 渠道模型价格档可提交 `billingMode=image_usage` 与 `imagePricing={inputPriceMicrocredits,freeInputImages,outputTiers:[{maxPixels,unitPriceMicrocredits}]}`。仅图片模型可启用；输出上限递增且含边界，最后一档可用 0 表示不限。成本规则为管理员专用 `costPricing.imagePricing`。目录只发布换算后的售价规则。

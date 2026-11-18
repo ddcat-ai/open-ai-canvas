@@ -21,6 +21,8 @@ export function videoWaitLabel(wait: string) {
 
 /** 剧情段当前处于哪一步，以及用户下一步该做什么。detail 是需要悬停查看的完整原因。 */
 export function segmentState(segment: DramaSegment): { tone: SegmentTone; label: string; detail?: string } {
+    if (segment.promptStatus === "review") return { tone: "blocked", label: "AI 新稿待采用", detail: segment.promptError };
+    if (segment.promptStatus === "conflict") return { tone: "blocked", label: "提示词待核对", detail: segment.promptError };
     const writing = segment.promptStatus === "queued" || segment.promptStatus === "running";
     if (segment.promptStatus === "failed") return { tone: "failed", label: "提示词撰写失败" };
     // 视频已入库但尾帧等后处理失败：视频本身可看，重试只重新处理已有视频。
@@ -45,7 +47,7 @@ export function segmentState(segment: DramaSegment): { tone: SegmentTone; label:
 }
 
 export function promptReady(segment: DramaSegment) {
-    return segment.custom || segment.promptStatus === "ready";
+    return segment.promptStatus === "ready" || (segment.promptStatus === "stale" && segment.custom);
 }
 
 export function SegmentStatus({ segment }: { segment: DramaSegment }) {

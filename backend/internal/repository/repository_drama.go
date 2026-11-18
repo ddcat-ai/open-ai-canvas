@@ -402,7 +402,13 @@ func refreshDramaSegmentAfterShotChange(tx *gorm.DB, shot model.DramaShot) error
 	if err := tx.Where("episode_id = ? AND segment_index = ?", shot.EpisodeID, shot.SegmentIndex).First(&segment).Error; err != nil {
 		return err
 	}
-	if err := invalidateDramaSegment(tx, segment, map[string]any{"prompt_status": promptStatusAfterInputChange(segment.PromptStatus), "video_prompt_override": ""}, true); err != nil {
+	fields := map[string]any{"prompt_status": promptStatusAfterInputChange(segment.PromptStatus)}
+	if strings.TrimSpace(segment.VideoPromptOverride) != "" || strings.TrimSpace(segment.VideoPrompt) != "" {
+		fields["prompt_status"] = model.DramaPromptConflict
+		fields["prompt_error"] = "镜头数量已变化，原提示词已保留。请核对并保存完整提示词，也可选择 AI 重新撰写。"
+	}
+	if err := invalidateDramaSegment(tx, segment, fields, true); err != nil {
+
 		return err
 	}
 	if err := tx.Model(&model.DramaEpisode{}).Where("id = ?", shot.EpisodeID).Update("duration_ms", tx.Model(&model.DramaShot{}).Select("COALESCE(SUM(duration_ms),0)").Where("episode_id = ?", shot.EpisodeID)).Error; err != nil {
@@ -965,6 +971,10 @@ func (r *Repository) UpdateDramaCastFields(id string, fields map[string]any) err
 // 待撰写或撰写中的退回待撰写，由调度按新素材自动写；失败保持失败，等用户重试。
 func promptStatusAfterInputChange(current string) string {
 	switch current {
+	case model.DramaPromptConflict:
+		return model.DramaPromptConflict
+	case model.DramaPromptReview:
+		return model.DramaPromptConflict
 	case model.DramaMediaReady, model.DramaMediaStale:
 		return model.DramaMediaStale
 	case model.DramaMediaFailed:
@@ -1002,12 +1012,12 @@ func (r *Repository) SaveDramaSegmentEdits(segment model.DramaSegment, fields ma
 		if current.Revision != segment.Revision {
 			return ErrDramaSegmentEditConflict
 		}
-		values := map[string]string{"reference_cast_ids_json": current.ReferenceCastIDsJSON, "reference_images_json": current.ReferenceImagesJSON, "audio_cast_ids_json": current.AudioCastIDsJSON, "video_prompt_override": current.VideoPromptOverride}
+		values := map[string]string{"reference_cast_ids_json": current.ReferenceCastIDsJSON, "reference_images_json": current.ReferenceImagesJSON, "audio_cast_ids_json": current.AudioCastIDsJSON, "video_prompt_override": current.VideoPromptOverride, "prompt_status": current.PromptStatus, "prompt_error": current.PromptError}
 		changed, referencesChanged := false, false
 		for key, value := range fields {
 			if values[key] != value {
 				changed = true
-				if key != "video_prompt_override" {
+				if key == "reference_cast_ids_json" || key == "reference_images_json" || key == "audio_cast_ids_json" {
 					referencesChanged = true
 				}
 			}
@@ -1015,7 +1025,7 @@ func (r *Repository) SaveDramaSegmentEdits(segment model.DramaSegment, fields ma
 		if !changed {
 			return nil
 		}
-		if referencesChanged {
+		if _, explicitStatus := fields["prompt_status"]; referencesChanged && !explicitStatus {
 			fields["prompt_status"] = promptStatusAfterInputChange(current.PromptStatus)
 		}
 		return invalidateDramaSegment(tx, current, fields, true)
@@ -1166,7 +1176,7 @@ func (r *Repository) DramaSegmentStats(projectID string) (map[string]DramaSegmen
 	var rows []DramaSegmentStat
 	err := r.db.Model(&model.DramaSegment{}).Select(`episode_id,
 		COUNT(*) AS total,
-		SUM(CASE WHEN (prompt_status = 'ready' OR video_prompt_override <> '') THEN 1 ELSE 0 END) AS prompt_ready,
+		SUM(CASE WHEN prompt_status = 'ready' OR (prompt_status = 'stale' AND video_prompt_override <> '') THEN 1 ELSE 0 END) AS prompt_ready,
 		SUM(CASE WHEN video_status = 'ready' THEN 1 ELSE 0 END) AS video_ready,
 		SUM(CASE WHEN video_resource_id <> '' THEN 1 ELSE 0 END) AS video_generated,
 		SUM(CASE WHEN prompt_status = 'failed' OR video_status = 'failed' THEN 1 ELSE 0 END) AS failed`).
@@ -1283,17 +1293,29 @@ func invalidateDramaSegment(tx *gorm.DB, segment model.DramaSegment, fields map[
 	return jobs.Updates(map[string]any{"status": "canceled", "updated_at": time.Now()}).Error
 }
 
-func (r *Repository) UpdateDramaShotScript(shot model.DramaShot, fields map[string]any) error {
+var ErrDramaSegmentChanged = errors.New("drama segment changed")
+
+func (r *Repository) UpdateDramaShotScript(shot model.DramaShot, fields map[string]any, expected model.DramaSegment, promptFields map[string]any) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var segment model.DramaSegment
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND project_id = ?", expected.ID, shot.ProjectID).First(&segment).Error; err != nil {
+			return err
+		}
+		if segment.Revision != expected.Revision {
+			return ErrDramaSegmentChanged
+		}
+		var current model.DramaShot
+		if err := tx.Where("id = ? AND project_id = ?", shot.ID, shot.ProjectID).First(&current).Error; err != nil {
+			return err
+		}
+		if !current.UpdatedAt.Equal(shot.UpdatedAt) {
+			return ErrDramaSegmentChanged
+		}
 		fields["updated_at"] = time.Now()
 		if err := tx.Model(&model.DramaShot{}).Where("id = ? AND project_id = ?", shot.ID, shot.ProjectID).Updates(fields).Error; err != nil {
 			return err
 		}
-		var segment model.DramaSegment
-		if err := tx.Where("episode_id = ? AND segment_index = ?", shot.EpisodeID, shot.SegmentIndex).First(&segment).Error; err != nil {
-			return err
-		}
-		if err := invalidateDramaSegment(tx, segment, map[string]any{"prompt_status": promptStatusAfterInputChange(segment.PromptStatus), "video_prompt_override": ""}, true); err != nil {
+		if err := invalidateDramaSegment(tx, segment, promptFields, true); err != nil {
 			return err
 		}
 		return tx.Model(&model.DramaEpisode{}).Where("id = ?", shot.EpisodeID).Update("duration_ms", tx.Model(&model.DramaShot{}).Select("COALESCE(SUM(duration_ms),0)").Where("episode_id = ?", shot.EpisodeID)).Error

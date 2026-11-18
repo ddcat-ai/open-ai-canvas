@@ -32,7 +32,9 @@ const PROMPT_NOTICE: Record<DramaSegment["promptStatus"], string> = {
     queued: "排队撰写中…",
     running: "正在撰写本段视频提示词…",
     ready: "",
-    stale: "本段镜头或设定改过，提示词已过期，请重新撰写",
+    stale: "本段内容已变化，请核对并保存提示词，也可选择 AI 重新撰写",
+    conflict: "分镜与提示词需要核对",
+    review: "AI 新稿待采用",
     failed: "撰写失败",
 };
 
@@ -198,7 +200,7 @@ export function SegmentDialog({
                             <section className="drama-sdx-section" aria-label="本段镜头">
                                 <div className="drama-sdx-section-head">
                                     <strong>本段镜头</strong>
-                                    <small>改动镜头后本段提示词与视频需要重新生成</small>
+                                    <small>对白小改自动同步；有冲突时保留提示词并提示核对</small>
                                 </div>
                                 <ol className="drama-sdx-shots">
                                     {shots.map((item, index) => (
@@ -352,7 +354,7 @@ function SegmentToolbar({
             </div>
             <div className="drama-sdx-toolbar-row">
                 <Button size="small" icon={<PenLine className="size-3.5" />} loading={writing} disabled={busy || writingNow} onClick={onWritePrompt}>
-                    {segment.promptStatus === "none" ? "撰写提示词" : "重新撰写提示词"}
+                    {segment.promptStatus === "none" ? "AI 撰写提示词" : "AI 重新撰写（可选）"}
                 </Button>
                 <Button
                     size="small"
@@ -399,7 +401,12 @@ function SegmentReceipt({ segment }: { segment: DramaSegment }) {
     const references = request.references.length;
     const sent = request.references.filter((ref) => ref.sent).length;
     const first = segment.index === 0 && !request.firstFrameResourceId && !request.firstFramePending;
-    const promptText = segment.custom ? "已手动改写" : { none: "未撰写", queued: "排队撰写", running: "撰写中", ready: "已就绪", stale: "已过期，需要重新撰写", failed: "撰写失败" }[segment.promptStatus];
+    const promptText =
+        segment.promptStatus === "conflict" || segment.promptStatus === "review"
+            ? "需要核对"
+            : segment.custom
+              ? "已手动改写"
+              : { none: "未撰写", queued: "排队撰写", running: "撰写中", ready: "已就绪", stale: "需要核对", failed: "撰写失败" }[segment.promptStatus];
     // 读到视频模型能力时才有画面与声音参数（aspectRatio 与它们一起填写）。
     const outputRows: ReceiptRow[] = request.aspectRatio
         ? [
@@ -635,16 +642,17 @@ function SegmentPrompt({
     const sentChars = Array.from([request.header, draft.trim()].filter(Boolean).join("\n\n")).length;
     const overLimit = Boolean(request.promptMaxChars && sentChars > request.promptMaxChars);
     const unmentioned = request.references.filter((_, index) => !usage.used.has(index + 1));
-    const savePrompt = async (next: string) => {
+    const saveOverride = async (override: string) => {
         setSaving(true);
         setSaveError("");
         try {
-            await onSave(next === segment.generated.trim() ? "" : next);
+            await onSave(override);
             setSaveVersion((version) => version + 1);
         } finally {
             setSaving(false);
         }
     };
+    const savePrompt = (next: string) => saveOverride(next === segment.generated.trim() ? "" : next);
     const reportSaveError = (reason: unknown) => setSaveError(reason instanceof Error ? reason.message : "保存失败，请重试");
     const commit = () => {
         const next = draft.trim();
@@ -662,8 +670,8 @@ function SegmentPrompt({
                 {segment.custom ? <span className="drama-sdx-chip is-accent">已手动改写</span> : null}
                 <small>输入 @ 按名称引用资产，双击引用查看原图；资产名称对应当前参考图编号</small>
                 {segment.custom ? (
-                    <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} disabled={editingDisabled} onClick={() => void savePrompt(segment.generated.trim()).catch(reportSaveError)}>
-                        恢复模型版本
+                    <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} disabled={editingDisabled} onClick={() => void saveOverride("").catch(reportSaveError)}>
+                        {segment.promptStatus === "review" ? "采用 AI 版本" : "恢复模型版本"}
                     </Button>
                 ) : null}
             </div>
@@ -677,6 +685,17 @@ function SegmentPrompt({
             </div>
             {promptModel ? <SegmentPromptRewrite projectId={projectId} episodeId={episodeId} segment={segment} prompt={draft} model={promptModel} disabled={editingDisabled} onApply={savePrompt} /> : null}
             {notice && segment.videoPrompt ? <PromptNotice segment={segment} text={notice} /> : null}
+            {segment.promptStatus === "review" ? (
+                <details className="drama-sdx-prefix">
+                    <summary>查看 AI 新稿</summary>
+                    <pre>{segment.generated}</pre>
+                </details>
+            ) : null}
+            {segment.promptStatus === "conflict" || segment.promptStatus === "review" || (segment.promptStatus === "stale" && !segment.custom) ? (
+                <Button size="small" disabled={!draft.trim() || overLimit || usage.unknown.length > 0 || editingDisabled} onClick={() => void saveOverride(draft.trim()).catch(reportSaveError)}>
+                    确认使用当前提示词
+                </Button>
+            ) : null}
             {request.header ? (
                 <div className="drama-sdx-prefix" aria-label="提交时加在开头的参考图说明">
                     <div className="drama-sdx-prefix-head">
@@ -803,11 +822,11 @@ function SegmentPrompt({
 function PromptNotice({ segment, text }: { segment: DramaSegment; text: ReactNode }) {
     const busy = segment.promptStatus === "queued" || segment.promptStatus === "running";
     return (
-        <div className={`drama-sd-notice is-${segment.promptStatus}`}>
+        <div className={`drama-sd-notice is-${segment.promptStatus === "conflict" || segment.promptStatus === "review" ? "stale" : segment.promptStatus}`}>
             {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
             <span>
                 {text}
-                {segment.promptStatus === "failed" && segment.promptError ? `：${segment.promptError}` : ""}
+                {(segment.promptStatus === "failed" || segment.promptStatus === "conflict" || segment.promptStatus === "review") && segment.promptError ? `：${segment.promptError}` : ""}
             </span>
         </div>
     );
