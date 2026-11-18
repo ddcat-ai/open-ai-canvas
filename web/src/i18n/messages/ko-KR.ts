@@ -288,6 +288,7 @@ export const koKR: Messages = {
         },
         sections: {
             profile: { label: "개인 정보", description: "아바타, 비밀번호, 이메일" },
+            "api-keys": { label: "API 키", description: "외부 Agent와 MCP 권한 관리" },
             channels: { label: "개인 채널", description: "모델 서비스와 개인 워크플로" },
             runninghub: { label: "RunningHub 워크플로", description: "개인 채널의 클라우드 워크플로" },
             models: { label: "모델 선택", description: "분야별 기본 모델" },

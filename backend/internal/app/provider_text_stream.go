@@ -13,6 +13,9 @@ import (
 )
 
 func requestTextProvider(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, stream bool, onDelta func(string)) (providerTextResult, error) {
+	if config.APIFormat == chatGPTPlanFormat {
+		stream = true
+	}
 	if stream {
 		return postStreamingTextResult(ctx, config, path, body, protocol, onDelta)
 	}

@@ -287,6 +287,7 @@ export const enUS: Messages = {
         },
         sections: {
             profile: { label: "Profile", description: "Avatar, password and email" },
+            "api-keys": { label: "API Keys", description: "Manage external Agent and MCP access" },
             channels: { label: "My channels", description: "Model services and personal workflows" },
             runninghub: { label: "RunningHub workflows", description: "Cloud workflows for your channels" },
             models: { label: "Models", description: "Default models by category" },

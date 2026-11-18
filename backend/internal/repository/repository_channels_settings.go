@@ -21,6 +21,18 @@ func (r *Repository) SystemChannels(includeDisabled bool) ([]model.ModelChannel,
 	return channels, err
 }
 
+func (r *Repository) SystemChannelOwnersByAPIFormat(format string) (map[string]string, error) {
+	var channels []model.ModelChannel
+	if err := r.db.Model(&model.ModelChannel{}).Select("id", "user_id").Where("scope = ? AND api_format = ?", model.ChannelScopeSystem, format).Find(&channels).Error; err != nil {
+		return nil, err
+	}
+	owners := make(map[string]string, len(channels))
+	for _, channel := range channels {
+		owners[channel.ID] = channel.UserID
+	}
+	return owners, nil
+}
+
 func (r *Repository) HistoricalSystemChannelReferences() ([]model.ModelChannel, error) {
 	var channels []model.ModelChannel
 	err := r.db.Unscoped().Select("id", "name").Where("scope = ?", model.ChannelScopeSystem).Order("created_at asc").Find(&channels).Error

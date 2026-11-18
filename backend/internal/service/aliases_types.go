@@ -5,6 +5,8 @@ import "yingce/backend/internal/app"
 type AgentAvatarBundleManifest = app.AgentAvatarBundleManifest
 type AgentAvatarBundleImport = app.AgentAvatarBundleImport
 type Live2DImport = app.Live2DImport
+type ChatGPTPlanStatus = app.ChatGPTPlanStatus
+type ChatGPTPlanModel = app.ChatGPTPlanModel
 
 const (
 	WorkbenchKindImage = app.WorkbenchKindImage

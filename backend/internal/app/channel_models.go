@@ -48,7 +48,7 @@ const maxAdminChannelModelBatchDeleteCount = 100
 type ChannelModelPriceTierRequest struct {
 	ImagePricing *model.ImagePricing     `json:"imagePricing,omitempty"`
 	CostPricing  model.CreditCostPricing `json:"costPricing"`
-	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds、imageCount、videoGenerateAudio；
+	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、referenceImageCount、vquality、videoSeconds、imageCount、videoGenerateAudio；
 	// operation 可区分文生/图生/视频生，避免同一分辨率下错误复用价格。
 	Selector                         map[string]string `json:"selector"`
 	Resolution                       string            `json:"resolution"`
@@ -170,6 +170,9 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	channel, err := s.repo.AdminSystemChannel(channelID)
 	if err != nil {
 		return nil, err
+	}
+	if channel.APIFormat == chatGPTPlanFormat && channel.UserID != actor.ID {
+		return nil, Forbidden("只有授权者本人可以编辑 ChatGPT 方案模型")
 	}
 	modelKey, providerModelKey, capability, protocol, err := s.normalizeChannelModelContract(channel, req)
 	if err != nil {
@@ -350,6 +353,9 @@ func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, chan
 		return "", "", "", "", BadAuthRequest("请选择有效的模型请求协议")
 	}
 	protocol := model.ChannelInterfaceType(adapter.Metadata().ID)
+	if channel.APIFormat == chatGPTPlanFormat && (protocol != model.ChannelInterfaceOpenAIResponse || capability != "text") {
+		return "", "", "", "", BadAuthRequest("ChatGPT 方案只支持 Responses 文本模型")
+	}
 	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != capability {
 		return "", "", "", "", BadAuthRequest("模型能力与请求协议不匹配")
 	}

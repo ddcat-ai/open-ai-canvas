@@ -73,6 +73,10 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	if err != nil {
 		return err
 	}
+	nodePath, err := agentNodePath()
+	if err != nil {
+		return err
+	}
 	server, err := StartBridge("127.0.0.1:0", "127.0.0.1", bridge)
 	if err != nil {
 		return err
@@ -92,7 +96,7 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		return fmt.Errorf("create Agent runtime directory: %w", err)
 	}
 	defer directory.cleanup()
-	cmd := exec.CommandContext(ctx, "node", "--max-old-space-size="+nodeMemoryMB(), filepath.Join(runtimeDir, "agent-runtime.mjs"))
+	cmd := exec.CommandContext(ctx, nodePath, "--max-old-space-size="+nodeMemoryMB(), filepath.Join(runtimeDir, "agent-runtime.mjs"))
 	cmd.Dir = runtimeDir
 	cmd.WaitDelay = 5 * time.Second
 	// 环境变量白名单。父进程创建并回收本轮目录，不使用服务端数据目录。
@@ -102,6 +106,7 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		"PI_OFFLINE=1",
 		"YINGCE_AGENT_RUN_DIR=" + directory.path,
 		"HOME=" + directory.path,
+		"PI_CODING_AGENT_DIR=" + directory.path,
 		"TMPDIR=" + directory.path,
 	}
 	stdin, err := cmd.StdinPipe()
@@ -147,6 +152,22 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		return fmt.Errorf("write Agent runtime input: %w", inputErr)
 	}
 	return nil
+}
+
+func agentNodePath() (string, error) {
+	// Version-manager shims may need the host HOME to locate Node. Resolve the
+	// real binary before launching the Agent with its isolated HOME.
+	probe := exec.Command("node", "-p", "process.execPath")
+	probe.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME")}
+	output, err := probe.Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve Agent Node runtime: %w", err)
+	}
+	path := strings.TrimSpace(string(output))
+	if !filepath.IsAbs(path) {
+		return "", errors.New("Agent Node runtime did not resolve to an absolute path")
+	}
+	return path, nil
 }
 
 func StartBridge(listenAddr, advertiseHost string, bridge Bridge) (*BridgeServer, error) {

@@ -30,6 +30,15 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 			return nil, err
 		}
 	}
+	if channel.APIFormat == chatGPTPlanFormat {
+		if actor.ID != channel.UserID || protocol != model.ChannelInterfaceOpenAIResponse || capability != "text" {
+			return nil, Forbidden("ChatGPT 方案仅授权本人测试 Responses 文本模型")
+		}
+		channel.APIKey, err = s.chatGPTPlanAccessToken(actor.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "" {
 		return nil, BadAuthRequest("请先在渠道中配置 Base URL 和 API Key")
 	}
@@ -96,6 +105,9 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 			AudioSpeed:         "1",
 		},
 		Metadata: map[string]interface{}{},
+	}
+	if channel.APIFormat == chatGPTPlanFormat {
+		input.StreamText = true
 	}
 	if capability == "image" {
 		input.ImageCapability = imageProfile

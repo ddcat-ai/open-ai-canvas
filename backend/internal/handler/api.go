@@ -14,6 +14,8 @@ func RegisterCanvasAPI(api *gin.RouterGroup, svc *service.Service) {
 	api.Use(StorageReadOnlyGuard(svc))
 	RegisterOpenAPIRoutes(api)
 	RegisterAuthRoutes(api, svc)
+	RegisterExternalAccessRoutes(api, svc)
+	RegisterExternalMCPRoutes(api, svc)
 	RegisterAppearanceRoutes(api, svc)
 	RegisterFeatureAvailabilityRoutes(api, svc)
 	RegisterAgentRoutes(api, svc)

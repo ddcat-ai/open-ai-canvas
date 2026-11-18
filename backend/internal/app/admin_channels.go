@@ -144,6 +144,9 @@ func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicM
 	if err != nil {
 		return nil, err
 	}
+	if source.APIFormat == chatGPTPlanFormat {
+		return nil, BadAuthRequest("ChatGPT 方案渠道不能复制，请连接自己的账号")
+	}
 	sourceModels, err := s.repo.ChannelModels(source.ID, true)
 	if err != nil {
 		return nil, err
@@ -247,6 +250,9 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err != nil {
 		return nil, err
 	}
+	if channel.APIFormat == chatGPTPlanFormat && !req.enabledOnly() && !req.presentationOnly() {
+		return nil, BadAuthRequest("ChatGPT 方案渠道的连接信息由授权管理，不能在普通渠道表单修改")
+	}
 	if !req.enabledOnly() && (req.ExpectedUpdatedAt.IsZero() || !req.ExpectedUpdatedAt.Equal(channel.UpdatedAt)) {
 		return nil, BadAuthRequest("Key 分组已被修改或缺少编辑版本，请刷新后重新编辑；本次未保存任何修改")
 	}
@@ -338,6 +344,9 @@ func (s *Service) DeleteSystemChannel(actor *model.User, id string) error {
 			return BadAuthRequest("系统渠道不存在或已删除")
 		}
 		return err
+	}
+	if channel.APIFormat == chatGPTPlanFormat {
+		return BadAuthRequest("请从 ChatGPT 方案连接入口断开账号")
 	}
 	// 保留主体供历史账单和调用日志关联，但从所有业务查询中隐藏并清除密钥。
 	err = s.repo.DeleteSystemChannel(channel.ID)

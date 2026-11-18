@@ -431,17 +431,21 @@ export function ChannelModelManager({
                     <span className="admin-channel-model-count">{loading ? "加载中" : `${filters && (keyword || capability !== "all" || status !== "all") ? `${filteredItems.length} / ` : ""}${items.length} 个模型`}</span>
                 </div>
                 <Space size={6} wrap>
-                    <Button
-                        loading={fetching}
-                        title={catalogStatus?.readAt ? `上次读取：${new Date(catalogStatus.readAt).toLocaleString()} · ${catalogStatus.models.length} 个模型` : undefined}
-                        icon={<RefreshCw className="size-3.5" />}
-                        onClick={() => void fetchModels()}
-                    >
-                        读取模型
-                    </Button>
-                    <Button icon={<Plus className="size-3.5" />} onClick={startCreate}>
-                        新增模型
-                    </Button>
+                    {channel.apiFormat !== "chatgpt-plan" && (
+                        <Button
+                            loading={fetching}
+                            title={catalogStatus?.readAt ? `上次读取：${new Date(catalogStatus.readAt).toLocaleString()} · ${catalogStatus.models.length} 个模型` : undefined}
+                            icon={<RefreshCw className="size-3.5" />}
+                            onClick={() => void fetchModels()}
+                        >
+                            读取模型
+                        </Button>
+                    )}
+                    {channel.apiFormat !== "chatgpt-plan" && (
+                        <Button icon={<Plus className="size-3.5" />} onClick={startCreate}>
+                            新增模型
+                        </Button>
+                    )}
                     <ChannelOrderDialog
                         channelId={channel.id}
                         renderTrigger={groupActions}

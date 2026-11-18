@@ -288,6 +288,7 @@ export const deDE: Messages = {
         },
         sections: {
             profile: { label: "Profil", description: "Avatar, Passwort und E-Mail" },
+            "api-keys": { label: "API-Schlüssel", description: "Agent- und MCP-Zugriff verwalten" },
             channels: { label: "Meine Kanäle", description: "Modelldienste und persönliche Workflows" },
             runninghub: { label: "RunningHub-Workflows", description: "Cloud-Workflows deiner Kanäle" },
             models: { label: "Modelle", description: "Standardmodelle nach Kategorie" },

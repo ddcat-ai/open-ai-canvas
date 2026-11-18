@@ -288,6 +288,7 @@ export const jaJP: Messages = {
         },
         sections: {
             profile: { label: "プロフィール", description: "アバター、パスワード、メール" },
+            "api-keys": { label: "APIキー", description: "外部AgentとMCPの認可を管理" },
             channels: { label: "個人チャネル", description: "モデルサービスと個人ワークフロー" },
             runninghub: { label: "RunningHub ワークフロー", description: "個人チャネルのクラウドワークフロー" },
             models: { label: "モデル選択", description: "分野ごとの既定モデル" },

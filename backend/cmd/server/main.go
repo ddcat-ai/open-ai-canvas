@@ -137,6 +137,7 @@ func run(ctx context.Context) error {
 	}
 	r.Use(corsMiddleware)
 	handler.ConfigureRuntime(svc)
+	handler.RegisterMCPDiscoveryRoutes(r)
 	api := r.Group("/api")
 	status := newSystemStatus(db, svc)
 	registerSystemStatusRoutes(api, status)

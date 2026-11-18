@@ -22,7 +22,9 @@ type Task struct {
 	CreationSubmissionID         *string                  `json:"creationSubmissionId,omitempty" gorm:"size:36;uniqueIndex"`
 	WorkbenchKind                string                   `json:"workbenchKind,omitempty" gorm:"size:16;index"`
 	ID                           string                   `json:"id" gorm:"primaryKey;size:36"`
-	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1"`
+	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1;uniqueIndex:idx_task_external_key,priority:1"`
+	ExternalIdempotencyKey       *string                  `json:"-" gorm:"size:128;uniqueIndex:idx_task_external_key,priority:2"`
+	ExternalRequestHash          string                   `json:"-" gorm:"size:64"`
 	TraceID                      string                   `json:"-" gorm:"index;size:96"`
 	RequestID                    string                   `json:"-" gorm:"index;size:96"`
 	ProjectID                    string                   `json:"projectId" gorm:"index;size:80;index:idx_tasks_user_project_created,priority:2"`

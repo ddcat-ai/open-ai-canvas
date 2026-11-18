@@ -1,8 +1,14 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"strings"
+	"unicode/utf8"
 
+	"gorm.io/gorm"
 	"yingce/backend/internal/assets"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/workbench"
@@ -106,6 +112,27 @@ func (s *Service) SetWorkbenchPresetEnabled(actor *model.User, id string, enable
 }
 
 func (s *Service) CreateWorkbenchTask(userID string, req WorkbenchTaskInput, traceID, requestID string) (*model.Task, error) {
+	key := strings.TrimSpace(req.IdempotencyKey)
+	if key != "" && (len(key) < 8 || len(key) > 128 || !utf8.ValidString(key)) {
+		return nil, BadAuthRequest("幂等键必须为 8–128 个有效字符")
+	}
+	var fingerprint string
+	if key != "" {
+		encoded, err := json.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+		sum := sha256.Sum256(encoded)
+		fingerprint = hex.EncodeToString(sum[:])
+		if existing, err := s.repo.TaskByExternalKey(userID, key); err == nil {
+			if existing.ExternalRequestHash != fingerprint {
+				return nil, BadAuthRequest("幂等键已用于不同请求")
+			}
+			return taskForOutput(*existing), nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
 	projectID := strings.TrimSpace(req.EcommerceProjectID)
 	if err := s.requireTaskGenerationFeatures(userID, "", "canvas_"+req.Kind, "", req.Kind, map[string]any{"metadata": map[string]any{"ecommerceProjectId": projectID}}); err != nil {
 		return nil, err
@@ -130,7 +157,16 @@ func (s *Service) CreateWorkbenchTask(userID string, req WorkbenchTaskInput, tra
 		return nil, BadAuthRequest("所选系统模型不可用")
 	}
 	resolved.Model = modelName
-	return s.CreateTask(userID, CreateTaskRequest{ProjectID: projectID, Type: resolved.TaskType, Operation: resolved.Operation, Prompt: resolved.Prompt, Model: resolved.Model, LogicalModelID: resolved.LogicalModelID, Input: resolved.Input, TraceID: traceID, RequestID: requestID, workbenchKind: req.Kind})
+	task, err := s.CreateTask(userID, CreateTaskRequest{ProjectID: projectID, Type: resolved.TaskType, Operation: resolved.Operation, Prompt: resolved.Prompt, Model: resolved.Model, LogicalModelID: resolved.LogicalModelID, Input: resolved.Input, TraceID: traceID, RequestID: requestID, workbenchKind: req.Kind, externalIdempotencyKey: key, externalRequestHash: fingerprint})
+	if err != nil && key != "" {
+		if existing, lookupErr := s.repo.TaskByExternalKey(userID, key); lookupErr == nil {
+			if existing.ExternalRequestHash != fingerprint {
+				return nil, BadAuthRequest("幂等键已用于不同请求")
+			}
+			return taskForOutput(*existing), nil
+		}
+	}
+	return task, err
 }
 
 func (s *Service) WorkbenchTasks(userID, kind string, activeOnly bool, limit int) ([]TaskSummary, error) {

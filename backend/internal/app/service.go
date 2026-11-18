@@ -33,6 +33,7 @@ type Service struct {
 	dataDir                  string
 	cancelMu                 sync.Mutex
 	registrationMu           sync.Mutex
+	chatGPTPlanMu            sync.Mutex
 	emailCodeMu              sync.Mutex
 	redeemBatchMu            sync.Mutex
 	billingAutoRefund        billingAutoRefundScan
@@ -130,9 +131,11 @@ const taskWorkerConcurrency = 3
 const taskLogPayloadLimit = 4000
 
 type CreateTaskRequest struct {
-	creationPrepare *creationTaskPreparation
-	admission       *taskAdmission
-	workbenchKind   string
+	externalIdempotencyKey string
+	externalRequestHash    string
+	creationPrepare        *creationTaskPreparation
+	admission              *taskAdmission
+	workbenchKind          string
 	// callerHoldsStorageMu 只给已经持有 Service.storageMu 的内部调用设置。
 	// 文件容量检查不能再锁一次，否则审批改参数会自锁。
 	callerHoldsStorageMu bool

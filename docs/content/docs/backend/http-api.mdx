@@ -50,6 +50,22 @@ description: 信封、错误码与 OpenAPI
 | `POST /api/admin/system-update/sources/test` | 为当前已保存来源创建异步检测任务，立即返回更新状态；通过 GET 轮询结果，任务忙碌 409 |
 
 `sourceProbe` 含 `id/status/sources/targetVersion?/checks/startedAt/finishedAt?`；`status` 为 `running/succeeded/failed`，`checks[]` 含 `key/label/status/detail/blocking`，检查状态为 `pending/passed/failed`。版本检查、来源检测、更新和回退互斥。检测结果不替代显式版本检查；切换来源后必须重新检查版本才能开始更新。宿主机协议对应 `PUT /v1/sources`、`POST /v1/sources/test`，只允许既定来源枚举，不接受任意下载地址。
+## 外部 Agent 与影策 MCP
+
+远程 MCP 地址为 `<站点源地址>/api/mcp`。开放测试阶段可将 `CANVAS_MCP_PUBLIC_ORIGIN` 显式设为 `http://<域名或 IP>:<端口>`；正式环境使用 HTTPS。留空时只自动识别本机环回地址。公网 HTTP 会明文传输登录 Cookie、授权码和 Bearer 凭证；一些 Agent SDK 会直接拒绝非环回 HTTP 的 OAuth 自动登录，此时只能在允许该地址的客户端中手动配置设置页生成的 API Key，或使用 HTTPS 反向代理/隧道。Nginx 同时代理 `/.well-known/oauth-protected-resource/api/mcp` 与 `/.well-known/oauth-authorization-server`，供 MCP 客户端在收到 401 `WWW-Authenticate` 后发现登录授权。此处是影策向外提供 MCP 工具，与 `/api/agent/mcp/*` 的外部 MCP 连接管理方向相反。
+
+首次连接由客户端登记公开回调地址，使用授权码 + PKCE S256。用户打开授权链接、登录影策并明确点击“允许访问”后，客户端用一次性授权码换取 Bearer 凭证；拒绝时客户端收到 `access_denied`。授权码五分钟过期且只能使用一次。令牌仅在响应中返回，服务端保存哈希；客户端须把它放在 `Authorization: Bearer` 头中。MCP 服务只接受授权用户自己的模型、素材、任务和短剧数据，不接受登录 Cookie 代替 Bearer。用户设置的 API Key 列表会显示一条 `kind=mcp` 授权记录；记录不能删除，但用户可随时撤销，撤销后凭证立即失效。手动 API Key 也可在同一设置页创建、仅显示一次并撤销。
+
+| 接口 | 合同 |
+| --- | --- |
+| `GET /api/auth/api-keys` | 列出当前登录用户的手动 Key 与 MCP 授权记录，永不返回令牌或哈希 |
+| `POST /api/auth/api-keys` | `{name}` 创建手动 Key，响应中的 `token` 仅显示一次 |
+| `POST /api/auth/api-keys/:id/revoke` | 撤销当前用户的 Key；保留审计记录，无删除接口 |
+| `POST /api/mcp/oauth/register` | OAuth 动态客户端登记；只接受 HTTPS 或环回 HTTP 回调、公开客户端和授权码模式 |
+| `POST /api/mcp/oauth/consent` | 已登录用户从同源授权页确认；校验客户端回调、PKCE、目标 MCP 资源 |
+| `POST /api/mcp/oauth/token` | 用授权码、相同回调与 `code_verifier` 换取 Bearer 凭证 |
+
+MCP 工具覆盖 `list_models`、`quote_model`、`list_resources`、`import_resource`、`get_resource_access`、`create_video`、`get_task`、`cancel_task`，以及 `drama_models`、`estimate_drama`、`create_drama`、`list_dramas`、`get_drama`、`start_drama`、`pause_drama`、`get_drama_jobs`、`get_episode`、`approve_episode`、`generate_segments`、`compose_episode`。视频任务和短剧建档必须带 `idempotencyKey`；相同键及相同请求返回原对象，不同请求拒绝。视频任务复用工作台的模型能力、资源归属、额度、计费和队列准入；成品先由任务或剧集返回资源 ID，再用资源访问工具取得临时地址。外部 Agent 必须在获得用户指令后再执行批准剧集、启动制作、重生成与合成等写操作。
 
 ## 创作对话同步
 
@@ -992,6 +1008,18 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 推荐目录随后端发布（`backend/internal/skills/seed/recommendations.json`），启动时校验只引用内置技能。安装只写用户技能库，不会替用户把技能固定到对话。
 
 ## 管理员系统渠道
+
+本机个人 ChatGPT 方案渠道：
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/admin/chatgpt-plan` | 查询本人连接状态，不返回令牌 |
+| `POST /api/admin/chatgpt-plan/start` | 启动本机 loopback OAuth，返回 `authorizationUrl`；需由本人在浏览器授权 |
+| `GET /api/admin/chatgpt-plan/models` | 使用 OAuth 令牌读取当前账号可见模型，返回 `models` |
+| `POST /api/admin/chatgpt-plan/models` | `{ slug }`，只加入所选模型，Responses 文本协议、本人零积分 |
+| `POST /api/admin/chatgpt-plan/disconnect` | 清除本机连接并尝试远端撤销，返回 `revocationConfirmed` |
+
+授权回调监听在影策后端动态分配的 `127.0.0.1` 端口，只用于同机浏览器；不会把 OAuth 令牌放进浏览器存储或任务正文。
 
 `POST /api/admin/channels/:id/duplicate` 需要管理员权限，会复制指定系统渠道的连接配置、加密凭证、请求头、模型和价格档，生成新的渠道与模型 ID；复制渠道名称自动追加“ - 副本”。原渠道及其前台供应线路不受影响。
 

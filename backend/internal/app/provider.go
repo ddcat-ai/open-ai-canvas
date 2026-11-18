@@ -432,6 +432,16 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	config.APIFormat = channelAPIFormatForProtocol(channel.APIFormat, channelModel.Protocol)
 	config.BaseURL = channel.BaseURL
 	config.APIKey = channel.APIKey
+	if channel.APIFormat == chatGPTPlanFormat {
+		if channelModel.Protocol != model.ChannelInterfaceOpenAIResponse || channelModel.Capability != "text" {
+			return providerConfig{}, InvalidModelSelection("ChatGPT 方案只支持 Responses 文本模型")
+		}
+		config.APIFormat = chatGPTPlanFormat
+		config.APIKey, err = s.chatGPTPlanAccessToken(channel.UserID)
+		if err != nil {
+			return providerConfig{}, err
+		}
+	}
 	config.SecretKey = channel.SecretKey
 	config.Headers, err = ParseOutboundHeadersJSON(channel.HeadersJSON)
 	if err != nil {

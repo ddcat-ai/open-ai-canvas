@@ -24,6 +24,7 @@ import { Select } from "@/components/ui/base/select";
 import { listAdminChannelWebsites, deleteAdminChannelWebsite, type ChannelWebsite } from "@/services/api/channel-websites";
 import { ChannelWebsiteDialog } from "./channel-website-dialog";
 import { useChannelKeySort } from "./use-channel-key-sort";
+import { ChatGPTPlanConnection } from "./chatgpt-plan-connection";
 
 type ChannelFormValues = {
     apiFormat?: ModelChannel["apiFormat"];
@@ -389,18 +390,26 @@ export default function ChannelsPage() {
                     },
                     onClick: () => toggleChannel(channel),
                 },
-                { key: "edit", label: "编辑 Key", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) },
+                ...(channel.apiFormat === "chatgpt-plan" ? [] : [{ key: "edit", label: "编辑 Key", icon: <Pencil className="size-3.5" />, onClick: () => openDrawer(channel) }]),
                 { key: "sort", label: "模型排序", icon: <ListOrdered className="size-3.5" />, onClick: openSort },
-                { key: "duplicate", label: "复制", icon: <Copy className="size-3.5" />, disabled: Boolean(duplicatingChannelId), onClick: () => duplicateChannel(channel) },
-                { key: "export", label: "导出", icon: <Download className="size-3.5" />, disabled: transferring, onClick: () => exportChannels(channel) },
-                {
-                    key: "delete",
-                    label: "删除",
-                    icon: <Trash2 className="size-3.5" />,
-                    danger: true,
-                    confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" },
-                    onClick: () => removeChannel(channel),
-                },
+                ...(channel.apiFormat === "chatgpt-plan"
+                    ? []
+                    : [
+                          { key: "duplicate", label: "复制", icon: <Copy className="size-3.5" />, disabled: Boolean(duplicatingChannelId), onClick: () => duplicateChannel(channel) },
+                          { key: "export", label: "导出", icon: <Download className="size-3.5" />, disabled: transferring, onClick: () => exportChannels(channel) },
+                      ]),
+                ...(channel.apiFormat === "chatgpt-plan"
+                    ? []
+                    : [
+                          {
+                              key: "delete",
+                              label: "删除",
+                              icon: <Trash2 className="size-3.5" />,
+                              danger: true,
+                              confirm: { title: "删除这个系统渠道？", description: "删除后渠道及所属模型将不再显示，API Key 会被清除，历史账单和调用记录继续保留。该操作不能在页面恢复。", okText: "确认删除" },
+                              onClick: () => removeChannel(channel),
+                          },
+                      ]),
             ]}
         />
     );
@@ -416,6 +425,12 @@ export default function ChannelsPage() {
                     { label: "按网站", value: "channels" },
                     { label: "全部模型", value: "models" },
                 ]}
+            />
+            <ChatGPTPlanConnection
+                onChanged={async () => {
+                    await syncChannels();
+                    await reload();
+                }}
             />
             {view === "models" ? (
                 <AllChannelModelsPanel channels={channels} health={health} healthLoading={healthLoading} onChanged={syncChannels} onOpenChannel={(channelId) => updateUrl(openChannelWorkspace(channelId))} />
@@ -535,7 +550,7 @@ export default function ChannelsPage() {
                                         <h2 className="font-semibold">{selectedWebsite.name}</h2>
                                         <p className="truncate text-xs text-foreground/50">{selectedWebsite.baseUrl}</p>
                                     </div>
-                                    <Button onClick={() => setWebsiteDialog(selectedWebsite)}>编辑网站</Button>
+                                    {selectedWebsite.apiFormat !== "chatgpt-plan" && <Button onClick={() => setWebsiteDialog(selectedWebsite)}>编辑网站</Button>}
                                     {selectedWebsite.keyCount === 0 && (
                                         <Button
                                             danger
@@ -560,9 +575,11 @@ export default function ChannelsPage() {
                                             删除网站
                                         </Button>
                                     )}
-                                    <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer(undefined, selectedWebsite)}>
-                                        新增 Key
-                                    </Button>
+                                    {selectedWebsite.apiFormat !== "chatgpt-plan" && (
+                                        <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openDrawer(undefined, selectedWebsite)}>
+                                            新增 Key
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -637,7 +654,7 @@ export default function ChannelsPage() {
                                                         {channel.name}
                                                     </h3>
                                                     <AdminStatusBadge label={channel.enabled !== false ? "启用" : "停用"} tone={channel.enabled !== false ? "success" : "neutral"} />
-                                                    {!channel.hasApiKey && <AdminStatusBadge label="未配置凭证" tone="warning" />}
+                                                    {!channel.hasApiKey && channel.apiFormat !== "chatgpt-plan" && <AdminStatusBadge label="未配置凭证" tone="warning" />}
                                                 </>
                                             }
                                             groupActions={(openSort) => channelActions(channel, openSort)}

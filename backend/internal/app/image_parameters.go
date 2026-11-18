@@ -442,6 +442,13 @@ func validateImageParameterPriceSelector(parameters []protocol.ImageParameter, s
 		}
 	}
 	for name, value := range selector {
+		if name == "referenceImageCount" {
+			count, err := strconv.Atoi(value)
+			if err != nil || count < 0 || count > 100 || strconv.Itoa(count) != value {
+				return BadAuthRequest("参考图片数量价格条件无效")
+			}
+			continue
+		}
 		if name == "operation" {
 			if value != "text_to_image" && value != "image_to_image" && value != "" && value != "*" {
 				return BadAuthRequest("图片价格生成方式无效")
@@ -552,7 +559,7 @@ func applyImageParameterValues(config *providerConfig, profile *ImageCapabilityC
 }
 
 func imagePriceSelectorForParameters(parameters []protocol.ImageParameter, intent ModelRequestIntent) map[string]string {
-	selector := map[string]string{"operation": "text_to_image"}
+	selector := map[string]string{"operation": "text_to_image", "referenceImageCount": strconv.Itoa(max(0, intent.Inputs["image"]))}
 	if intent.Inputs["image"] > 0 {
 		selector["operation"] = "image_to_image"
 	}

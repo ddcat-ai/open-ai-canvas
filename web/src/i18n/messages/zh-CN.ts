@@ -288,6 +288,7 @@ export const zhCN = {
         },
         sections: {
             profile: { label: "个人信息", description: "头像、密码与邮箱" },
+            "api-keys": { label: "API Key", description: "管理外部 Agent 与 MCP 授权" },
             channels: { label: "个人渠道", description: "模型服务与个人工作流" },
             runninghub: { label: "RunningHub 工作流", description: "个人渠道的云端工作流配置" },
             models: { label: "模型选择", description: "按领域选择默认模型" },

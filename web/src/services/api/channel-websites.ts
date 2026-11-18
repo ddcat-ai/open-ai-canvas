@@ -5,7 +5,7 @@ export type ChannelWebsite = {
     id: string;
     name: string;
     baseUrl: string;
-    apiFormat: "openai" | "gemini";
+    apiFormat: "openai" | "gemini" | "chatgpt-plan";
     proxyUrl: string;
     headers: ChannelHeader[];
     keyCount: number;
@@ -13,7 +13,7 @@ export type ChannelWebsite = {
     updatedAt: string;
 };
 
-export type ChannelWebsiteInput = Pick<ChannelWebsite, "name" | "baseUrl" | "apiFormat" | "proxyUrl" | "headers"> & { expectedUpdatedAt?: string };
+export type ChannelWebsiteInput = Pick<ChannelWebsite, "name" | "baseUrl" | "proxyUrl" | "headers"> & { apiFormat: "openai" | "gemini"; expectedUpdatedAt?: string };
 
 export function listAdminChannelWebsites() {
     return http.get<{ websites: ChannelWebsite[] }>("/admin/channel-websites");

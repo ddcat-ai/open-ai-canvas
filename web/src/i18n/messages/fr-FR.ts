@@ -288,6 +288,7 @@ export const frFR: Messages = {
         },
         sections: {
             profile: { label: "Profil", description: "Avatar, mot de passe et e-mail" },
+            "api-keys": { label: "Clés API", description: "Gérer les accès Agent et MCP" },
             channels: { label: "Mes canaux", description: "Services de modèles et flux personnels" },
             runninghub: { label: "Flux RunningHub", description: "Flux cloud de vos canaux" },
             models: { label: "Modèles", description: "Modèles par défaut par catégorie" },

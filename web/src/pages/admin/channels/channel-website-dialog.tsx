@@ -10,7 +10,7 @@ export function ChannelWebsiteDialog({ website, onClose, onSaved }: { website?: 
     const [form] = Form.useForm<ChannelWebsiteInput>();
     const [saving, setSaving] = useState(false);
     useEffect(() => {
-        form.setFieldsValue(website ?? { name: "", baseUrl: "", apiFormat: "openai", proxyUrl: "", headers: [] });
+        form.setFieldsValue(website ? { ...website, apiFormat: website.apiFormat === "gemini" ? "gemini" : "openai" } : { name: "", baseUrl: "", apiFormat: "openai", proxyUrl: "", headers: [] });
     }, [website, form]);
     const save = async () => {
         const values = await form.validateFields();

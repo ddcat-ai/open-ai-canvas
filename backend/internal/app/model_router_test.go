@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 func TestImagePriceTiersMatchResolutionAndActualReferences(t *testing.T) {
@@ -35,6 +36,27 @@ func TestImagePriceTiersMatchResolutionAndActualReferences(t *testing.T) {
 	}
 	if tier := channelModelPriceTierForIntent(channelModel, ModelRequestIntent{Capability: "image", Options: map[string]any{"quality": "8k"}}); tier != nil {
 		t.Fatalf("unconfigured resolution matched tier: %#v", tier)
+	}
+}
+
+func TestImageParameterPriceTiersMatchReferenceImageCount(t *testing.T) {
+	parameters := []protocol.ImageParameter{{Name: "imageResolution", Type: "string", Values: []any{"1K", "2K"}, Pricing: true}}
+	modelWithTiers := model.ChannelModel{PriceTiers: []model.ChannelModelPriceTier{
+		{ID: "none", SelectorJSON: `{"imageResolution":"2K","referenceImageCount":"0"}`, Enabled: true, PriceConfigured: true},
+		{ID: "three", SelectorJSON: `{"imageResolution":"2K","referenceImageCount":"3"}`, Enabled: true, PriceConfigured: true},
+	}}
+	for count, want := range map[int]string{0: "none", 3: "three"} {
+		intent := ModelRequestIntent{Capability: "image", Inputs: map[string]int{"image": count}, Options: map[string]any{"imageResolution": "2K"}}
+		matched := channelModelPriceTierForIntent(modelWithTiers, intent, CapabilitySpec{Capability: "image", ImageParameters: parameters})
+		if matched == nil || matched.ID != want {
+			t.Fatalf("reference image count %d: matched %#v, want %s", count, matched, want)
+		}
+	}
+	if err := validateImageParameterPriceSelector(parameters, map[string]string{"referenceImageCount": "-1"}); err == nil {
+		t.Fatal("negative reference image count accepted")
+	}
+	if matched := channelModelPriceTierForIntent(modelWithTiers, ModelRequestIntent{Capability: "image", Inputs: map[string]int{"image": 2}, Options: map[string]any{"imageResolution": "2K"}}, CapabilitySpec{Capability: "image", ImageParameters: parameters}); matched != nil {
+		t.Fatalf("unpriced reference image count matched %#v", matched)
 	}
 }
 

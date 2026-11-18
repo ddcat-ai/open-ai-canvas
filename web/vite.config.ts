@@ -36,6 +36,11 @@ export default defineConfig({
                 changeOrigin: true,
                 xfwd: true,
             },
+            "/.well-known/oauth-": {
+                target: apiProxyTarget,
+                changeOrigin: true,
+                xfwd: true,
+            },
         },
     },
     resolve: {

@@ -68,7 +68,15 @@ func StreamUsageOptionRejectedResponse(statusCode int, body []byte) bool {
 // stream_options 时去掉该字段重试一次；body 必须就是 spec.Body 指向的同一个对象。
 func executeTextWireStream(ctx context.Context, config providerConfig, spec protocol.RequestSpec, body map[string]any, wire string, newParser func() *streamingAgentParser) ([]byte, string, *streamingAgentParser, error) {
 	parser := newParser()
-	data, mimeType, err := executeProtocolBinaryRequestWithConsumer(ctx, config, spec, parser.consume)
+	consume := parser.consume
+	if config.APIFormat == chatGPTPlanFormat {
+		// The plan route requires SSE even when an intermediary omits its MIME type.
+		consume = func(_ string, chunk []byte) { parser.consume("text/event-stream", chunk) }
+	}
+	data, mimeType, err := executeProtocolBinaryRequestWithConsumer(ctx, config, spec, consume)
+	if config.APIFormat == chatGPTPlanFormat && err == nil {
+		mimeType = "text/event-stream"
+	}
 	if err == nil || wire != protocol.TextWireChatCompletion || !streamUsageOptionRejected(err) {
 		return data, mimeType, parser, err
 	}

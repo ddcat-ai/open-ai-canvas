@@ -43,6 +43,77 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /auth/api-keys:
+    get:
+      tags: [auth]
+      summary: 列出当前用户的 API Key 与 MCP 授权记录
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+    post:
+      tags: [auth]
+      summary: 创建手动 API Key，令牌仅返回一次
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /auth/api-keys/{id}/revoke:
+    post:
+      tags: [auth]
+      summary: 撤销当前用户的 API Key，保留授权记录
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /mcp:
+    post:
+      tags: [mcp]
+      summary: 远程 Streamable HTTP MCP 服务
+      description: Bearer 凭证鉴权；无凭证时返回 401 与 OAuth 资源元数据地址。请求及响应为 MCP JSON-RPC，而非业务信封。
+      security: []
+      responses:
+        "200": { description: MCP JSON-RPC 或 SSE 响应 }
+        "401": { description: 需要 OAuth 登录授权 }
+  /mcp/oauth/register:
+    post:
+      tags: [mcp]
+      summary: 登记公开 MCP OAuth 客户端
+      security: []
+      responses:
+        "201": { description: 返回 client_id 与登记的回调地址 }
+  /mcp/oauth/clients/{id}:
+    get:
+      tags: [mcp]
+      summary: 授权页读取 MCP 客户端名称
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Envelope" }
+  /mcp/oauth/consent:
+    post:
+      tags: [mcp]
+      summary: 已登录用户确认 MCP 授权并签发一次性授权码
+      responses:
+        "200": { description: 信封 data.redirectUrl 为经登记回调地址与 code/state 组成的跳转地址 }
+  /mcp/oauth/token:
+    post:
+      tags: [mcp]
+      summary: 使用授权码与 PKCE 验证器换取 MCP Bearer 凭证
+      security: []
+      responses:
+        "200": { description: OAuth token JSON，包含 access_token、token_type 与 scope }
   /admin/users/{id}/agent-history:
     delete:
       tags: [admin]
