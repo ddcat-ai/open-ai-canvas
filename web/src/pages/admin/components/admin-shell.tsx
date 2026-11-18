@@ -125,6 +125,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         items: [
             { path: "/admin/workbench-tools", keywords: "工作台 工具 首页", label: "工作台工具", shortLabel: "工具", icon: <Shapes className="size-4" /> },
             { path: "/admin/prompt-templates", keywords: "提示词 模板 分镜 prompt", label: "提示词模板", shortLabel: "模板", icon: <MessageSquareText className="size-4" /> },
+            { path: "/admin/garment-library", label: "服装库", shortLabel: "服装", icon: <PersonStanding className="size-4" /> },
             { path: "/admin/pose-library", keywords: "姿势 动作 pose", label: "姿势库", shortLabel: "姿势", icon: <PersonStanding className="size-4" /> },
             { path: "/admin/settings/drawing-engine", keywords: "绘图 画板 引擎", label: "绘图工具", shortLabel: "绘图", icon: <Paintbrush className="size-4" /> },
             { path: "/admin/plugins", keywords: "插件 扩展 协议 plugin", label: "插件管理", shortLabel: "插件", icon: <PlugZap className="size-4" /> },
@@ -141,6 +142,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "电商 Agent",
         items: [
             { path: "/admin/ecommerce/agent", keywords: "电商 Agent 模型 配置", label: "电商 Agent 配置", shortLabel: "配置", icon: <Bot className="size-4" /> },
+            { path: "/admin/ecommerce/features", label: "功能开放", shortLabel: "功能", icon: <Settings2 className="size-4" /> },
             { path: "/admin/ecommerce/library", keywords: "电商 知识 技能 品类", label: "知识与技能", shortLabel: "知识", icon: <Database className="size-4" /> },
         ],
     },

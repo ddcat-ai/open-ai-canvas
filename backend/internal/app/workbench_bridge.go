@@ -113,6 +113,13 @@ func (s *Service) CreateWorkbenchTask(userID string, req WorkbenchTaskInput, tra
 	if req.Kind != WorkbenchKindImage && req.Kind != WorkbenchKindVideo {
 		return nil, BadAuthRequest("工作台类型无效")
 	}
+	if req.Batch != nil {
+		if fn := tryOnFunctionFromBatchID(req.Batch.ID); fn != "" {
+			if err := s.RequireEcommerceTryOn(userID, fn); err != nil {
+				return nil, err
+			}
+		}
+	}
 	resolved, err := s.workbenchDomain().ResolveTask(userID, req)
 	if err != nil {
 		return nil, err

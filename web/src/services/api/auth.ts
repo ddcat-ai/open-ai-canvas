@@ -549,6 +549,7 @@ export function updateAdminFeatureAvailability(
             | "videoWorkbenchEnabled"
             | "ecommerceEnabled"
             | "ecommerceVideoEnabled"
+            | "ecommerceTryOnFunctions"
         >
     >,
 ) {

@@ -1,0 +1,259 @@
+/* Reference picker: one searchable collection, grouped camera views, fixed confirmation. */
+.ecr-modal {
+    --ecr-ink: var(--user-ink, var(--foreground));
+    --ecr-muted: var(--user-ink-muted, var(--muted-foreground));
+}
+.ecr-toolbar {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+}
+.ecr-toolbar > .ant-input-affix-wrapper {
+    flex: 1;
+}
+.ecr-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: var(--space-4) 0;
+}
+.ecr-filters .ecs-chip[aria-pressed="true"] {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+.ecr-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    color: var(--ecr-muted);
+    font-size: var(--fs-caption);
+}
+.ecr-meta .ant-select {
+    min-width: 100px;
+}
+.ecr-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+    max-height: min(56vh, 560px);
+    min-height: 240px;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: var(--space-1);
+}
+.ecr-grid > [data-slot="empty-state"] {
+    grid-column: 1 / -1;
+}
+.ecr-card {
+    min-width: 0;
+    background: var(--user-surface-muted, var(--secondary));
+    border-radius: var(--r-lg);
+    overflow: hidden;
+}
+.ecr-card-image {
+    position: relative;
+    width: 100%;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+.ecr-card-image > img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: contain;
+}
+.ecr-card[data-kind="garment"] .ecr-card-image > img {
+    aspect-ratio: 2 / 3;
+}
+.ecr-more {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    padding: var(--space-3);
+}
+.ecr-missing-angle {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 3 / 4;
+    opacity: 0.5;
+    font-size: var(--fs-label);
+}
+.ecr-card-image:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+.ecr-card-image:focus-visible,
+.ecr-angles button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+}
+.ecr-code {
+    position: absolute;
+    top: var(--space-2);
+    left: var(--space-2);
+    padding: var(--space-1);
+    color: var(--ecr-muted);
+    background: var(--user-surface);
+    border-radius: var(--r-xs);
+    font-size: var(--fs-label);
+}
+.ecr-check {
+    position: absolute;
+    right: var(--space-2);
+    top: var(--space-2);
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--r-full);
+    background: var(--user-surface);
+    color: var(--ecr-muted);
+    box-shadow: inset 0 0 0 1px var(--user-border);
+}
+.ecr-card[data-selected] .ecr-check {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+.ecr-card[data-selected] {
+    box-shadow: 0 0 0 2px var(--control-selected-border);
+}
+.ecr-card-info {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3);
+}
+.ecr-card-info strong {
+    color: var(--ecr-ink);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+.ecr-card-info > span {
+    color: var(--ecr-muted);
+    font-size: var(--fs-label);
+}
+.ecr-angles {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-1);
+    padding: 0 var(--space-2) var(--space-2);
+}
+.ecr-angles button {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-xs);
+    overflow: hidden;
+    background: var(--user-surface);
+    color: var(--ecr-muted);
+    cursor: pointer;
+}
+.ecr-angles button[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px var(--control-selected-border);
+    color: var(--control-selected-fg);
+}
+.ecr-angles button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+.ecr-angles img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+}
+.ecr-angles span {
+    display: block;
+    padding: var(--space-1) 0;
+    font-size: var(--fs-label);
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.ecr-selected {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    overflow-x: auto;
+    padding: var(--space-1);
+}
+.ecr-selected button {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--space-2);
+    border: 0;
+    border-radius: var(--r-md);
+    padding: var(--space-1) var(--space-2);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    font-size: var(--fs-label);
+    cursor: pointer;
+}
+.ecr-selected img {
+    width: 28px;
+    height: 36px;
+    object-fit: contain;
+    border-radius: var(--r-xs);
+}
+.ecr-source {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    color: var(--ecr-muted);
+    font-size: var(--fs-label);
+}
+.ecr-source a {
+    display: inline-flex;
+    gap: var(--space-1);
+    align-items: center;
+    color: var(--ecr-muted);
+}
+.ecr-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+.ecr-footer > span {
+    color: var(--ecr-muted);
+    font-size: var(--fs-caption);
+    text-align: left;
+}
+.ecr-footer > div {
+    display: flex;
+    gap: var(--space-2);
+}
+@media (max-width: 760px) {
+    .ecr-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+        max-height: 52vh;
+    }
+    .ecr-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .ecr-footer > div {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    .ecr-toolbar {
+        gap: var(--space-2);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ecr-modal *,
+    .ecr-modal *::before,
+    .ecr-modal *::after {
+        transition: none;
+        animation: none;
+    }
+}

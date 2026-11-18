@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 105
+const CurrentSchemaVersion int64 = 106
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -370,6 +370,28 @@ var schemaMigrations = []migration{
 	{version: 103, name: "mcp_tenant_boundaries", checksum: "sha256:mcp-tenant-boundaries-v103", apply: migrateMCPTenantBoundaries},
 	{version: 104, name: "agent_storage_limits", checksum: "sha256:agent-storage-limits-v104", apply: migrateAgentStorageLimits},
 	{version: 105, name: "image_usage_billing", checksum: "sha256:image-usage-billing-v105", apply: migrateImageUsageBilling},
+	{version: 106, name: "pose_library_kind", checksum: "sha256:pose-library-kind-v106", apply: migratePoseLibraryKind},
+}
+
+// Existing reference images remain in the pose library when garment support is added.
+func migratePoseLibraryKind(tx *gorm.DB) error {
+	for _, entity := range []any{&model.PoseLibrarySource{}, &model.PoseLibraryItem{}} {
+		if !tx.Migrator().HasTable(entity) {
+			if err := tx.AutoMigrate(entity); err != nil {
+				return err
+			}
+			continue
+		}
+		if !tx.Migrator().HasColumn(entity, "Library") {
+			if err := tx.Migrator().AddColumn(entity, "Library"); err != nil {
+				return err
+			}
+		}
+	}
+	if !tx.Migrator().HasIndex(&model.PoseLibraryItem{}, "Library") {
+		return tx.Migrator().CreateIndex(&model.PoseLibraryItem{}, "Library")
+	}
+	return nil
 }
 
 func migrateAPILogGenerationContent(tx *gorm.DB) error {

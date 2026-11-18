@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 电商姿势与服装库分类（Schema 106）
+
+版本 106 `pose_library_kind` 为 `pose_library_sources`、`pose_library_items` 增加 `library` 字段，默认 `pose`，并为条目库类别建立索引。`pose` 表示姿势库，`garment` 表示服装库；既有姿势记录保留为 `pose`。迁移只补缺失列与索引，可重复执行，不更改历史迁移。
+
+两类素材复用已有导入、同步、来源署名与用户资源复制链路。图库记录不等于用户资源，只有用户选用后才进入其资源空间。代码仓库不包含第三方图库图片。
+
+批量换装不增加独立任务表：规划使用文本任务，生成使用工作台图片任务，`input_json.metadata.workbench.batch.id` 采用 `tryon_<功能>_<随机标识>` 关联同批结果。功能开放配置在既有 `feature_availability` 设置内增加 `ecommerceTryOnFunctions`；缺省项为开放，显式关闭项仅管理员可使用。
+
 ## 图片用量计费（Schema 105）
 
 版本 105 `image_usage_billing` 增加可空 JSON 文本列：`channel_model_price_tiers.image_pricing`、`cost_image_pricing`，`logical_models.image_pricing`，以及 `billing_orders.image_pricing`、`cost_image_pricing`、`image_usage`。订单另有 `image_input_images` 和 `image_max_output_images`，均为非空整数、默认 0。售价与内部成本分别保存，成本字段不向用户端序列化。

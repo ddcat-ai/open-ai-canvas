@@ -45,6 +45,7 @@ export type FeatureAvailability = {
     videoWorkbenchEnabled: boolean;
     ecommerceEnabled: boolean;
     ecommerceVideoEnabled: boolean;
+    ecommerceTryOnFunctions: Record<string, boolean>;
     configured?: boolean;
     updatedBy?: string;
     updatedAt?: string;
@@ -64,6 +65,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     videoWorkbenchEnabled: false,
     ecommerceEnabled: false,
     ecommerceVideoEnabled: false,
+    ecommerceTryOnFunctions: {},
 };
 
 type UserStore = {

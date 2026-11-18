@@ -1,0 +1,581 @@
+/* Shared controls used by the batch try-on studio. */
+.ecv-kinds {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+.ecv-kinds button {
+    height: 32px;
+    padding: 0 4px;
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color var(--ecs-motion),
+        border-color var(--ecs-motion);
+}
+.ecv-kinds button:hover {
+    background: var(--user-surface-hover);
+}
+.ecv-kinds button[aria-pressed="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.ecv-tip-anchor {
+    display: inline-flex;
+}
+.ecv-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--user-surface);
+    color: var(--user-ink-soft);
+    font-size: 10px;
+    line-height: 16px;
+}
+.ecv-slot-note {
+    margin: 0;
+    color: var(--user-ink-soft);
+    font-size: 11px;
+}
+.ecv-library {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-ink);
+    color: var(--user-surface);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.ecv-library:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+.ecv-check {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+    cursor: pointer;
+}
+.ecv-check input {
+    width: 15px;
+    height: 15px;
+    margin-top: 2px;
+    accent-color: var(--control-selected-fg);
+}
+.ecv-badge.is-filled {
+    background: var(--ecv-good, var(--control-selected-bg));
+    color: #fff;
+    font-weight: 600;
+}
+.ecv-audio {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+.ecv-audio button {
+    display: grid;
+    gap: 2px;
+    padding: var(--space-2);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    text-align: left;
+    cursor: pointer;
+}
+.ecv-audio button strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--fs-caption);
+}
+.ecv-audio button small {
+    color: var(--user-ink-soft);
+    font-size: 11px;
+    line-height: 1.35;
+}
+.ecv-audio button[aria-checked="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+}
+.ecv-audio button[aria-checked="true"] strong {
+    color: var(--control-selected-fg);
+}
+.ecv-audio button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+.ecv-badge.is-required {
+    background: var(--user-ink);
+    color: var(--user-surface);
+}
+.ecv-count {
+    justify-self: end;
+    margin-top: -6px;
+    color: var(--user-ink-soft);
+    font-size: 11px;
+}
+.ecv-count.is-over {
+    color: var(--ecv-bad);
+}
+.ecv-tip-popover .ant-popover-inner {
+    padding: 0;
+    border-radius: var(--r-xl, 16px);
+    overflow: hidden;
+}
+.ecv-tip {
+    position: relative;
+    width: min(520px, calc(100vw - 32px));
+    padding: var(--space-4);
+}
+.ecv-tip-actions {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    display: flex;
+    gap: 2px;
+}
+.ecv-tip-actions button {
+    height: 24px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted, rgb(0 0 0 / 5%));
+    color: var(--user-ink-muted, inherit);
+    font-size: 11px;
+    cursor: pointer;
+}
+.ecv-tip-title {
+    margin: 0 0 var(--space-3);
+    font-size: 18px;
+    font-weight: 750;
+    text-align: center;
+}
+.ecv-tip-title::before,
+.ecv-tip-title::after {
+    content: "";
+    display: inline-block;
+    width: 36px;
+    height: 1px;
+    margin: 0 10px;
+    vertical-align: middle;
+    background: linear-gradient(90deg, transparent, #60a5fa);
+}
+.ecv-tip-title::after {
+    background: linear-gradient(90deg, #60a5fa, transparent);
+}
+.ecv-tip-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: var(--space-2) 0;
+    font-size: 13px;
+    font-weight: 700;
+}
+.ecv-tip-group.is-good svg {
+    color: var(--ecv-good, #16a34a);
+}
+.ecv-tip-group.is-bad svg {
+    color: var(--ecv-bad, #dc2626);
+}
+.ecv-tip-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+    gap: var(--space-2);
+}
+.ecv-tip-grid[data-count="4"] {
+    --cols: 4;
+}
+.ecv-tip-grid[data-count="2"] {
+    --cols: 2;
+}
+.ecv-tip-grid figure {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+}
+.ecv-tip-grid figcaption {
+    display: grid;
+    gap: 2px;
+}
+.ecv-tip-grid figcaption strong {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+}
+.ecv-tip-grid figcaption small {
+    color: var(--user-ink-soft, #888);
+    font-size: 10px;
+    line-height: 1.35;
+}
+.ecv-tip-grid i {
+    display: inline-grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 10px;
+    font-style: normal;
+}
+.ecv-tip-grid i.is-good {
+    background: var(--ecv-good, #16a34a);
+}
+.ecv-tip-grid i.is-bad {
+    background: var(--ecv-bad, #dc2626);
+}
+.ecv-results {
+    overflow: hidden;
+    border-radius: var(--r-2xl);
+}
+.ecv-results-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-1);
+}
+.ecv-results-head h2 {
+    margin: 0;
+    font-size: var(--fs-heading, 16px);
+    font-weight: 650;
+}
+.ecv-results-head small {
+    margin-left: 6px;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+}
+.ecv-filter {
+    display: inline-flex;
+    gap: 2px;
+    padding: var(--space-1);
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+}
+.ecv-filter button {
+    height: 26px;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+}
+.ecv-filter button[aria-pressed="true"] {
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--user-ink) 10%, transparent);
+}
+.ecv-results-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-1) var(--space-1) var(--space-4);
+    container-type: inline-size;
+}
+.ecv-result-banner {
+    position: absolute;
+    inset: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgb(0 0 0 / 62%);
+    color: #fff;
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+}
+.ecv-result-banner > span {
+    display: -webkit-box;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.ecv-result-banner > svg,
+.ecv-result-banner > .ant-btn {
+    flex: none;
+}
+.ecv-result-banner.is-failed {
+    background: rgb(60 0 0 / 70%);
+}
+.ecv-progress {
+    width: 160px;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 25%);
+}
+.ecv-progress i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: #fff;
+    transition: width 0.6s ease;
+}
+.ecv-empty {
+    display: grid;
+    place-items: center;
+    gap: var(--space-2);
+    max-width: 420px;
+    margin: 12vh auto 0;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    text-align: center;
+}
+.ecv-empty strong {
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+}
+
+@media (max-width: 520px) {
+    .ecv-kinds {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .ecv-tip-grid[data-count="4"] {
+        --cols: 2;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ecv-progress i {
+        transition: none;
+    }
+}
+
+.ecv-slot-note.is-blocked {
+    color: var(--user-ink-soft);
+}
+
+.ecv-shell {
+    --ecv-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ecv-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ecv-glyph-tile {
+    --glyph-accent: currentColor;
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: var(--space-3);
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: var(--control-selected-bg);
+    color: var(--user-ink);
+}
+.ecv-swap-in {
+    animation: ecv-swap-in var(--motion-dur-base) var(--ecv-ease, ease) both;
+}
+@keyframes ecv-swap-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+.ecv-shell .ecv-kinds {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 104px), 1fr));
+    gap: 8px;
+}
+.ecv-shell .ecv-kind {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    height: auto;
+    min-height: 40px;
+    padding: 4px 8px 4px 5px;
+    text-align: left;
+    white-space: normal;
+    border: 1px solid var(--user-border);
+    border-radius: 12px;
+    background: var(--user-surface);
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        border-color 180ms var(--ecv-ease),
+        background 180ms var(--ecv-ease);
+}
+.ecv-shell .ecv-kind:hover:not(:disabled) {
+    border-color: var(--control-selected-border);
+    background: var(--user-surface-hover);
+}
+.ecv-shell .ecv-kind:focus-visible {
+    outline: 2px solid var(--control-selected-fg);
+    outline-offset: 2px;
+}
+.ecv-shell .ecv-kind[aria-pressed="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.ecv-kind-icon {
+    --glyph-accent: currentColor;
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 5px;
+    border-radius: 9px;
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    transition:
+        background 200ms var(--ecv-ease, ease),
+        color 200ms var(--ecv-ease, ease);
+}
+.ecv-kind[aria-pressed="true"] .ecv-kind-icon {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.ecv-kind-label {
+    display: -webkit-box;
+    min-width: 0;
+    overflow: hidden;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+.ecv-shell .ecv-kind:disabled {
+    cursor: not-allowed;
+    filter: grayscale(1);
+    opacity: 0.42;
+}
+@keyframes ecv-pop {
+    0% {
+        transform: scale(0.7);
+    }
+    60% {
+        transform: scale(1.12);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+.ecv-kind-tip .ant-tooltip-container {
+    max-width: 260px;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--popover);
+    box-shadow: var(--elevation-overlay);
+}
+.ecv-kind-tip-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.ecv-kind-tip-body .ecv-glyph-tile.is-kind {
+    background: transparent;
+    color: var(--popover-foreground);
+    width: 34px;
+    height: 34px;
+    padding: 7px;
+    border-radius: 10px;
+}
+.ecv-kind-tip-body strong {
+    display: block;
+    color: var(--popover-foreground);
+    font-size: var(--fs-ui);
+}
+.ecv-kind-tip-body small {
+    display: block;
+    margin-top: 2px;
+    color: color-mix(in srgb, var(--popover-foreground) 72%, transparent);
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+}
+.ecv-hover-anchor {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.ecv-hover-preview .ant-popover-inner {
+    padding: 6px;
+    overflow: hidden;
+    border-radius: 16px;
+    box-shadow: 0 22px 50px rgba(0, 0, 0, 0.3);
+}
+.ecv-hover-card {
+    width: 240px;
+    animation: ecv-swap-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.ecv-hover-card img,
+.ecv-hover-card video {
+    display: block;
+    width: 100%;
+    max-height: 340px;
+    border-radius: 11px;
+    background: #000;
+    object-fit: contain;
+}
+.ecv-hover-card.is-video {
+    width: 220px;
+}
+.ecv-hover-card footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 4px 2px;
+    font-size: 11px;
+}
+.ecv-hover-card footer span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ecv-hover-card footer small {
+    flex: none;
+    color: #16a34a;
+    font-weight: 600;
+}
+
+@media (max-width: 520px) {
+    .ecv-shell .ecv-kinds {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ecv-swap-in,
+    .ecv-hover-card {
+        animation: none;
+    }
+    .ecv-shell .ecv-kind,
+    .ecv-kind-icon {
+        transition: none;
+    }
+}

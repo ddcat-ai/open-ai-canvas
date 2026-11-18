@@ -11,6 +11,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"gorm.io/gorm"
+
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/outbound"
@@ -18,6 +20,7 @@ import (
 
 // ImportRequest 是一次姿势包导入。Systems 必须显式列出要导入的体系，避免误导入整包。
 type ImportRequest struct {
+	Library string
 	Data    []byte
 	BaseURL string
 	Systems []string
@@ -54,6 +57,7 @@ type importEntry struct {
 }
 
 type importPack struct {
+	library string
 	format  string
 	source  model.PoseLibrarySource
 	entries []importEntry
@@ -76,6 +80,8 @@ type upstreamPose struct {
 type genericPack struct {
 	Format  string `json:"format"`
 	Version int    `json:"version"`
+	// Library 声明包属于姿势库（pose，默认）还是服装库（garment）。
+	Library string `json:"library"`
 	Source  struct {
 		Key         string `json:"key"`
 		Name        string `json:"name"`
@@ -111,7 +117,7 @@ func parseImportPack(data []byte) (*importPack, error) {
 		if len(rows) == 0 || rows[0].ID == "" || rows[0].Name == "" {
 			return nil, kernel.BadAuthRequest("文件不是 ai-pose-gallery-zh 的 pose-zh.json（缺少 id / 姿势名称 字段）")
 		}
-		pack := &importPack{format: SourceAIPoseGalleryZH, source: model.PoseLibrarySource{
+		pack := &importPack{library: model.PoseLibraryKindPose, format: SourceAIPoseGalleryZH, source: model.PoseLibrarySource{
 			Key:         SourceAIPoseGalleryZH,
 			Name:        "AI 姿势参考图库（ai-pose-gallery-zh）",
 			Attribution: "姿势素体原作者 ギア（@giaaibusi），中文整理 Anhao",
@@ -133,14 +139,18 @@ func parseImportPack(data []byte) (*importPack, error) {
 			return nil, kernel.BadAuthRequest(fmt.Sprintf("姿势包须声明 format=%q、version=1", PackFormat))
 		}
 		key := strings.TrimSpace(raw.Source.Key)
-		if !validSourceKey(key) || key == SourceCustom {
+		if !validSourceKey(key) || key == SourceCustom || key == customSourceKey(model.PoseLibraryKindGarment) {
 			return nil, kernel.BadAuthRequest("姿势包 source.key 只能使用 2–64 位小写字母、数字、- 或 _，且不能为 custom")
 		}
 		name := clip(raw.Source.Name, 120)
 		if name == "" {
 			name = key
 		}
-		pack := &importPack{format: PackFormat, source: model.PoseLibrarySource{
+		library, err := normalizeLibrary(raw.Library)
+		if err != nil {
+			return nil, err
+		}
+		pack := &importPack{library: library, format: PackFormat, source: model.PoseLibrarySource{
 			Key: key, Name: name, Attribution: clip(raw.Source.Attribution, 300), Homepage: clip(raw.Source.Homepage, 500), BaseURL: strings.TrimSpace(raw.Source.BaseURL),
 		}}
 		for _, item := range raw.Items {
@@ -284,6 +294,19 @@ func (s *Service) Import(actor *model.User, req ImportRequest) (*ImportResult, e
 	if err != nil {
 		return nil, err
 	}
+	library, err := normalizeLibrary(req.Library)
+	if err != nil {
+		return nil, err
+	}
+	if pack.library != library {
+		return nil, kernel.BadAuthRequest(fmt.Sprintf("这个文件是%s库数据，请到后台「%s库」导入", libraryLabel(pack.library), libraryLabel(pack.library)))
+	}
+	if existingSource, lookupErr := s.repo.PoseLibrarySourceByKey(pack.source.Key); lookupErr == nil && existingSource.Library != "" && existingSource.Library != library {
+		return nil, kernel.BadAuthRequest("来源 " + pack.source.Key + " 已用于" + libraryLabel(existingSource.Library) + "库，请换一个 source.key")
+	} else if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+		return nil, lookupErr
+	}
+	pack.source.Library = library
 	if len(pack.entries) > maxImportItems {
 		return nil, kernel.BadAuthRequest(fmt.Sprintf("单次最多导入 %d 条姿势", maxImportItems))
 	}
@@ -379,7 +402,7 @@ func (s *Service) Import(actor *model.User, req ImportRequest) (*ImportResult, e
 		candidates = append(candidates, candidate{entry: entry, order: index, remoteThumb: remoteThumb, remoteImage: remoteImage})
 	}
 	if len(candidates) == 0 {
-		return nil, kernel.BadAuthRequest("所选体系里没有可导入的姿势")
+		return nil, kernel.BadAuthRequest("所选体系里没有可导入的" + libraryLabel(library))
 	}
 
 	keys := make([]string, 0, len(candidates))
@@ -405,7 +428,7 @@ func (s *Service) Import(actor *model.User, req ImportRequest) (*ImportResult, e
 		entry := item.entry
 		record, found := existing[entry.key]
 		if !found {
-			record = model.PoseLibraryItem{ID: kernel.NewID(), SourceKey: pack.source.Key, ExternalKey: entry.key, Enabled: true, Status: model.PoseLibraryStatusPending, CreatedBy: actor.ID, CreatedAt: now}
+			record = model.PoseLibraryItem{ID: kernel.NewID(), Library: library, SourceKey: pack.source.Key, ExternalKey: entry.key, Enabled: true, Status: model.PoseLibraryStatusPending, CreatedBy: actor.ID, CreatedAt: now}
 		}
 		record.GroupKey = pack.source.Key + ":" + entry.group
 		record.Code = entry.code
@@ -439,7 +462,7 @@ func (s *Service) Import(actor *model.User, req ImportRequest) (*ImportResult, e
 	result.Source = source
 	result.Created = len(created)
 	result.Updated = len(updated)
-	if err := s.admin.AppendAudit(actor, "pose_library.import", "pose_library_source", source.Key, fmt.Sprintf("导入姿势库 %s：新增 %d，更新 %d", source.Name, result.Created, result.Updated), map[string]any{"created": result.Created, "updated": result.Updated, "skipped": result.Skipped, "systems": req.Systems}); err != nil {
+	if err := s.admin.AppendAudit(actor, "pose_library.import", "pose_library_source", source.Key, fmt.Sprintf("导入%s库 %s：新增 %d，更新 %d", libraryLabel(library), source.Name, result.Created, result.Updated), map[string]any{"library": library, "created": result.Created, "updated": result.Updated, "skipped": result.Skipped, "systems": req.Systems}); err != nil {
 		return nil, err
 	}
 	return result, nil

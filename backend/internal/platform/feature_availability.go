@@ -31,20 +31,27 @@ const (
 )
 
 type FeatureAvailability struct {
-	WelcomeEnabled               bool `json:"welcomeEnabled"`
-	ShortDramaEnabled            bool `json:"shortDramaEnabled"`
-	TaskCenterEnabled            bool `json:"taskCenterEnabled"`
-	CreditsEnabled               bool `json:"creditsEnabled"`
-	CustomChannelsEnabled        bool `json:"customChannelsEnabled"`
-	FrontendModelsEnabled        bool `json:"frontendModelsEnabled"`
-	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
-	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
-	InspirationSourcesVisible    bool `json:"inspirationSourcesVisible"`
-	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
-	ImageWorkbenchEnabled        bool `json:"imageWorkbenchEnabled"`
-	VideoWorkbenchEnabled        bool `json:"videoWorkbenchEnabled"`
-	EcommerceEnabled             bool `json:"ecommerceEnabled"`
-	EcommerceVideoEnabled        bool `json:"ecommerceVideoEnabled"`
+	WelcomeEnabled               bool            `json:"welcomeEnabled"`
+	ShortDramaEnabled            bool            `json:"shortDramaEnabled"`
+	TaskCenterEnabled            bool            `json:"taskCenterEnabled"`
+	CreditsEnabled               bool            `json:"creditsEnabled"`
+	CustomChannelsEnabled        bool            `json:"customChannelsEnabled"`
+	FrontendModelsEnabled        bool            `json:"frontendModelsEnabled"`
+	PluginCenterEnabled          bool            `json:"pluginCenterEnabled"`
+	SystemPluginsVisibleToUsers  bool            `json:"systemPluginsVisibleToUsers"`
+	InspirationSourcesVisible    bool            `json:"inspirationSourcesVisible"`
+	TimelineTranscriptionEnabled bool            `json:"timelineTranscriptionEnabled"`
+	ImageWorkbenchEnabled        bool            `json:"imageWorkbenchEnabled"`
+	VideoWorkbenchEnabled        bool            `json:"videoWorkbenchEnabled"`
+	EcommerceEnabled             bool            `json:"ecommerceEnabled"`
+	EcommerceVideoEnabled        bool            `json:"ecommerceVideoEnabled"`
+	EcommerceTryOnFunctions      map[string]bool `json:"ecommerceTryOnFunctions"`
+}
+
+// TryOnFunctionEnabled leaves newly registered functions open unless explicitly disabled.
+func (f FeatureAvailability) TryOnFunctionEnabled(id string) bool {
+	enabled, exists := f.EcommerceTryOnFunctions[id]
+	return !exists || enabled
 }
 
 type PublicFeatureAvailability struct {
@@ -71,6 +78,7 @@ func DefaultFeatureAvailability() FeatureAvailability {
 		VideoWorkbenchEnabled:        false,
 		EcommerceEnabled:             false,
 		EcommerceVideoEnabled:        false,
+		EcommerceTryOnFunctions:      map[string]bool{},
 	}
 }
 
@@ -96,6 +104,9 @@ func (s *Service) UpdateFeatureAvailability(actor *model.User, value FeatureAvai
 	current, before, err := s.readFeatureAvailability()
 	if err != nil {
 		return nil, err
+	}
+	if value.EcommerceTryOnFunctions == nil {
+		value.EcommerceTryOnFunctions = before.EcommerceTryOnFunctions
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -151,6 +162,14 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 	}
 }
 
+func (s *Service) TryOnFunctionEnabled(id string) (bool, error) {
+	_, value, err := s.readFeatureAvailability()
+	if err != nil {
+		return false, err
+	}
+	return value.TryOnFunctionEnabled(id), nil
+}
+
 func (s *Service) RequireFeature(feature string) error {
 	enabled, err := s.FeatureEnabled(feature)
 	if err != nil {
@@ -203,6 +222,9 @@ func (s *Service) readFeatureAvailability() (*model.SystemSetting, FeatureAvaila
 	value := DefaultFeatureAvailability()
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, FeatureAvailability{}, errors.New("功能开放配置格式无效")
+	}
+	if value.EcommerceTryOnFunctions == nil {
+		value.EcommerceTryOnFunctions = map[string]bool{}
 	}
 	return setting, value, nil
 }

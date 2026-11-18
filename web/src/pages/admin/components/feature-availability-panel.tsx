@@ -532,6 +532,7 @@ function toEditablePayload(features: FeatureAvailability) {
         videoWorkbenchEnabled: features.videoWorkbenchEnabled,
         ecommerceEnabled: features.ecommerceEnabled,
         ecommerceVideoEnabled: features.ecommerceVideoEnabled,
+        ecommerceTryOnFunctions: features.ecommerceTryOnFunctions,
         frontendModelsEnabled: features.frontendModelsEnabled,
         pluginCenterEnabled: features.pluginCenterEnabled,
         systemPluginsVisibleToUsers: features.systemPluginsVisibleToUsers,
@@ -542,7 +543,7 @@ function sameEditableFeatures(left: FeatureAvailability, right: FeatureAvailabil
     return editableFeatureKeys.every((key) => left[key] === right[key]);
 }
 
-function parseFeatureAvailability(value: unknown): FeatureAvailability {
+export function parseFeatureAvailability(value: unknown): FeatureAvailability {
     if (!value || typeof value !== "object") throw new Error("功能开放配置响应格式无效");
     const record = value as Record<string, unknown>;
     for (const key of editableFeatureKeys) {
@@ -559,6 +560,11 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         videoWorkbenchEnabled: record.videoWorkbenchEnabled as boolean,
         ecommerceEnabled: record.ecommerceEnabled as boolean,
         ecommerceVideoEnabled: record.ecommerceVideoEnabled as boolean,
+        ecommerceTryOnFunctions: Object.fromEntries(
+            Object.entries((record.ecommerceTryOnFunctions && typeof record.ecommerceTryOnFunctions === "object" ? record.ecommerceTryOnFunctions : {}) as Record<string, unknown>).filter(
+                (entry): entry is [string, boolean] => typeof entry[1] === "boolean",
+            ),
+        ),
         frontendModelsEnabled: record.frontendModelsEnabled as boolean,
         pluginCenterEnabled: record.pluginCenterEnabled as boolean,
         systemPluginsVisibleToUsers: record.systemPluginsVisibleToUsers as boolean,

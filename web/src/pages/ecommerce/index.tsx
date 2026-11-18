@@ -9,7 +9,7 @@ import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { promptHasPhrase, togglePromptPhrase } from "@/lib/prompt-phrases";
 import { CreditStar } from "@/components/ui/credit-star";
 import { RollingCreditAmount } from "@/components/rolling-credit-text";
-import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ApiError } from "@/services/api/request";
 import { archiveCommercePlan, commerceCanvasImages, continueCommercePlan, updateCommerceCanvasImage } from "./continuation";
@@ -114,6 +114,8 @@ import "./agent-theme.css";
 import "./composer.css";
 import { getEcommerceDirectionsReceipt, setEcommerceDirectionsReceipt } from "@/services/ecommerce-session";
 
+const TryOnStudio = lazy(() => import("./tryon/tryon-studio"));
+import { TRYON_FUNCTIONS, type TryOnFunction } from "./tryon/tryon-kinds";
 const referenceRoles: Array<[EcommerceReferenceRole, string]> = [
     ["primary", "商品主图"],
     ["detail", "细节参考"],
@@ -154,6 +156,16 @@ export default function EcommercePage() {
 }
 
 function EcommerceWorkspace({ scope }: { scope: string }) {
+    const isAdmin = useUserStore((state) => state.user?.role === "admin");
+    const tryOnSwitches = useUserStore((state) => state.features.ecommerceTryOnFunctions);
+    const allowedTryOn = useMemo(() => TRYON_FUNCTIONS.filter((item) => isAdmin || tryOnSwitches?.[item.id] !== false).map((item) => item.id), [isAdmin, tryOnSwitches]);
+    const [tryOn, setTryOn] = useState<TryOnFunction | null>(null);
+    const [tryOnMounted, setTryOnMounted] = useState(false);
+    const currentTryOn = tryOn && allowedTryOn.includes(tryOn) ? tryOn : null;
+    useEffect(() => {
+        if (currentTryOn) setTryOnMounted(true);
+    }, [currentTryOn]);
+
     // 用 App 上下文里的 message：跟随明暗主题，并按全站规则去重，不会叠出一串同样的报错。
     const { message } = App.useApp();
     const config = useEffectiveConfig();
@@ -2361,9 +2373,39 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         </>
     );
 
+    const imageFeatureSwitch = (active: boolean) =>
+        allowedTryOn.length ? (
+            <SegmentedControl<"create" | "tryon">
+                block
+                ariaLabel="当前图片功能"
+                value={active ? "tryon" : "create"}
+                onChange={(value) => setTryOn(value === "tryon" ? allowedTryOn[0] : null)}
+                options={[
+                    { value: "create", label: "商品创作" },
+                    { value: "tryon", label: "批量换装" },
+                ]}
+            />
+        ) : null;
     return (
         <WorkspacePage fluid scroll={false} className="ecs-page ecommerce-page">
-            <div className="ecs-shell" data-mobile-view={mobileView}>
+            {tryOnMounted ? (
+                <Suspense fallback={<div role="status">正在加载批量换装…</div>}>
+                    <TryOnStudio
+                        scope={scope}
+                        fn={currentTryOn || allowedTryOn[0] || "outfit"}
+                        allowed={allowedTryOn}
+                        kindSwitch={<span>商品图片</span>}
+                        featureSwitch={imageFeatureSwitch(true)}
+                        market={{ platform: draft.platform, platformLabel: labelOf(platforms, draft.platform), region: draft.region, language: draft.language, languageLabel: labelOf(languages, draft.language) }}
+                        defaultModel={draft.imageModel}
+                        hidden={!currentTryOn}
+                        onPickFunction={(fn) => {
+                            if (allowedTryOn.includes(fn)) setTryOn(fn);
+                        }}
+                    />
+                </Suspense>
+            ) : null}
+            <div className="ecs-shell" data-mobile-view={mobileView} style={currentTryOn ? { display: "none" } : undefined}>
                 <div className="ecs-mobile-tabs">
                     <SegmentedControl<"create" | "works">
                         block
@@ -2461,6 +2503,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
                             电商创作暂未开放。历史方案和作品仍可查看与下载。
                         </p>
                     ) : null}
+                    {imageFeatureSwitch(false)}
                     <div className="ecs-composer-scroll" data-canvas-wheel-scroll>
                         <ComposerBlock title="做什么">
                             <div className="ecs-scene-grid" role="group" aria-label="创作场景">

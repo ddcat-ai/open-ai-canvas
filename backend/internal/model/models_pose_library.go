@@ -6,12 +6,17 @@ const (
 	PoseLibraryStatusPending = "pending"
 	PoseLibraryStatusReady   = "ready"
 	PoseLibraryStatusFailed  = "failed"
+
+	// PoseLibraryKindPose / PoseLibraryKindGarment 区分画布「姿势库」和「服装库」，两者共用同一套导入、同步和开关。
+	PoseLibraryKindPose    = "pose"
+	PoseLibraryKindGarment = "garment"
 )
 
 // PoseLibrarySource 是一个姿势数据来源（一次导入包）及其署名。
 // BaseURL 只在把图片同步到本站时使用，用户浏览和选用都不再访问来源站点。
 type PoseLibrarySource struct {
 	Key         string    `json:"key" gorm:"primaryKey;size:64"`
+	Library     string    `json:"library" gorm:"size:16;not null;default:pose"`
 	Name        string    `json:"name" gorm:"size:120;not null"`
 	Attribution string    `json:"attribution" gorm:"size:300"`
 	Homepage    string    `json:"homepage" gorm:"size:500"`
@@ -25,6 +30,7 @@ type PoseLibrarySource struct {
 // 同一 GroupKey 的多张图是同一姿势的不同视角；图片文件保存在数据目录 pose-library/<ID>/ 下。
 type PoseLibraryItem struct {
 	ID          string     `json:"id" gorm:"primaryKey;size:36"`
+	Library     string     `json:"library" gorm:"size:16;not null;default:pose;index"`
 	SourceKey   string     `json:"sourceKey" gorm:"size:64;not null;uniqueIndex:idx_pose_library_items_source_external,priority:1"`
 	ExternalKey string     `json:"externalKey" gorm:"size:160;not null;uniqueIndex:idx_pose_library_items_source_external,priority:2"`
 	GroupKey    string     `json:"groupKey" gorm:"size:240;not null;index"`

@@ -282,8 +282,23 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 // Client metadata can request a stricter gate, but cannot grant an exemption.
 func (s *Service) requireTaskGenerationFeatures(userID, projectID, taskType, operation, workbenchKind string, input map[string]any) error {
 	metadata, _ := input["metadata"].(map[string]any)
+	tryOnFunction := ""
+	if stringValue(metadata["source"]) == "ecommerce-tryon" {
+		tryOnFunction = stringValue(metadata["tryonFunction"])
+		if err := s.RequireEcommerceTryOn(userID, tryOnFunction); err != nil {
+			return err
+		}
+	} else if workbench, ok := metadata["workbench"].(map[string]any); ok {
+		batch, _ := workbench["batch"].(map[string]any)
+		tryOnFunction = tryOnFunctionFromBatchID(stringValue(batch["id"]))
+		if tryOnFunction != "" {
+			if err := s.RequireEcommerceTryOn(userID, tryOnFunction); err != nil {
+				return err
+			}
+		}
+	}
 	ecommerceID := strings.TrimSpace(stringValue(metadata["ecommerceProjectId"]))
-	ecommerce := false
+	ecommerce := tryOnFunction != ""
 	if ecommerceID != "" {
 		if _, err := s.repo.EcommerceProject(userID, ecommerceID); err != nil {
 			return NotFound("电商项目不存在")
