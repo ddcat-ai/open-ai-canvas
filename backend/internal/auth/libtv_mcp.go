@@ -90,6 +90,7 @@ func (s *Service) fetchLibTVProjectDetailWithToken(projectUUID string, forceRefr
 	if !ok {
 		args = map[string]any{"projectId": projectUUID, "uuid": projectUUID}
 	}
+	args["view"] = "nodes"
 	result, err := session.callTool("read_project", args)
 	if err != nil {
 		return nil, err
