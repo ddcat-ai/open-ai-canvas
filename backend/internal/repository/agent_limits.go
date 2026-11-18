@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -11,10 +12,6 @@ import (
 )
 
 const DefaultAgentMaxRunsPerUser = 5
-
-// The quota covers Agent payloads, including native sessions, receipts and undo
-// snapshots. Ordinary task data continues to use the configurable task quota.
-const AgentStoredDataLimit int64 = 256 << 20
 
 // Release a carrier whose first checkpoint could not fit. A concurrent successful
 // initializer wins: its execution/ready marker prevents this terminal update.
@@ -41,18 +38,8 @@ func enforceAgentRunLimit(tx *gorm.DB, task *model.Task, configured []int) error
 	if task.UserID == "" || limit < 1 || limit > 64 {
 		return gorm.ErrInvalidData
 	}
-	// Acquire before observing the parent/canvas or count, including on SQLite.
-	switch tx.Dialector.Name() {
-	case "postgres":
-		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?)::bigint)", "agent-runs:"+task.UserID).Error; err != nil {
-			return err
-		}
-	case "sqlite":
-		if err := tx.Exec("UPDATE tasks SET progress = progress WHERE 1 = 0").Error; err != nil {
-			return err
-		}
-	default:
-		return gorm.ErrInvalidData
+	if err := lockAgentRunAdmissions(tx, task.UserID); err != nil {
+		return err
 	}
 	var count int64
 	err := tx.Raw(`SELECT COUNT(*) FROM tasks t
@@ -68,6 +55,17 @@ func enforceAgentRunLimit(tx *gorm.DB, task *model.Task, configured []int) error
 		return kernel.QuotaExceeded(fmt.Sprintf("每个账号最多保留 %d 个进行中的 Agent 对话（含排队和等待确认），请先完成或停止已有对话", limit))
 	}
 	return nil
+}
+
+func lockAgentRunAdmissions(tx *gorm.DB, userID string) error {
+	switch tx.Dialector.Name() {
+	case "postgres":
+		return tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?)::bigint)", "agent-runs:"+userID).Error
+	case "sqlite":
+		return tx.Exec("UPDATE tasks SET progress = progress WHERE 1 = 0").Error
+	default:
+		return gorm.ErrInvalidData
+	}
 }
 
 // beginAgentStorageWrite must run inside the write transaction, before changing
@@ -109,8 +107,14 @@ func (r *Repository) changeAgentStoredBytes(userID string, delta int64) error {
 		return nil
 	}
 	q := r.db.Model(&model.AgentStorageUsage{}).Where("user_id = ?", userID)
+	var limit int64
 	if delta > 0 {
-		q = q.Where("stored_bytes <= ?", AgentStoredDataLimit-delta)
+		var err error
+		limit, err = r.agentHistoryLimitBytes()
+		if err != nil {
+			return err
+		}
+		q = q.Where("stored_bytes <= ?", limit-delta)
 	} else {
 		q = q.Where("stored_bytes >= ?", -delta)
 	}
@@ -122,9 +126,24 @@ func (r *Repository) changeAgentStoredBytes(userID string, delta int64) error {
 		if delta < 0 {
 			return fmt.Errorf("Agent storage accounting is inconsistent")
 		}
-		return kernel.StorageCapacityExceeded("账号 Agent 会话、事件和撤销历史已达到 256MiB 上限，请联系管理员清理历史数据")
+		return &kernel.AppError{Status: kernel.CodeForbidden, Code: kernel.CodeQuotaExceeded, Reason: kernel.ReasonAgentHistoryCapacityExceeded,
+			Message: fmt.Sprintf("本次写入将超过账号 Agent 历史的 %d MiB 上限。请联系管理员调高 Agent 历史额度或清理历史；购买文件空间不会增加此额度。", limit>>20)}
 	}
 	return nil
+}
+
+func (r *Repository) agentHistoryLimitBytes() (int64, error) {
+	policy := struct{ Resource model.AgentHistoryQuota }{Resource: model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB}}
+	setting, err := r.SystemSettingOptional(model.RuntimePolicySettingKey)
+	if err != nil {
+		return 0, err
+	}
+	if setting != nil {
+		if err := json.Unmarshal([]byte(setting.ValueJSON), &policy); err != nil {
+			return 0, fmt.Errorf("读取 Agent 历史额度失败: %w", err)
+		}
+	}
+	return policy.Resource.LimitBytes()
 }
 
 // AgentStoredBytes reads the ledger once initialized, including pre-upgrade

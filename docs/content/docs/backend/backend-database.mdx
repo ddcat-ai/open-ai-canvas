@@ -33,7 +33,7 @@ description: 影策后端核心持久化表与状态边界
 | `mcp_connections.allowed_user_ids_json` / `tool_policies_json` | 平台管理配置快照；每工具独立对象 JSON Schema 与远端输入 schema 同时校验；策略变更递增连接 revision |
 | `mcp_connections.tools_summary_json` | 有界工具摘要，列表查询不载入完整 `tools_json`；完整发现结果 schema 合计不超过 256 KiB |
 | `mcp_storage_usages` | 每用户 64 MiB 的 MCP 配置、凭据密文、工具快照和回执预算；包含有界元数据预留，调用领取回执前预留最多 48 KiB 结果空间 |
-| `agent_storage_usages` | 每用户 256 MiB 的状态、原生 JSONL、事件、消息及画布撤销正文账本；首次写入测量旧数据，此后在同一事务内按增量更新 |
+| `agent_storage_usages` | 每用户的状态、原生 JSONL、事件、消息及画布撤销正文账本；首次写入测量旧数据。上限取自运行时策略 `resource.agentHistoryMB`（默认 256 MiB），写入和管理员清理均在同一事务内更新账本，无需迁移 |
 | `mcp_tool_executions.status = expired` | 维护裁剪回执正文后保留身份和指纹，不再次执行外部操作；正在执行的回执不裁剪 |
 
 升级 103 会**停用全部旧 MCP 连接，包括个人连接**，清空检测结果、工具授权、平台用户名单和工具策略并递增 revision；保留加密凭据和执行回执，并为既有 MCP 数据初始化预算。用户须重新检测和授权；平台连接还须明确授权用户及参数范围。104 不删除既有 Agent 历史，超过额度的账号只能缩减或停止，不能继续增长历史。

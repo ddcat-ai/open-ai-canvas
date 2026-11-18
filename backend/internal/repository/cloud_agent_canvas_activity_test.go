@@ -90,10 +90,10 @@ func testCanvasAgentHistoryPlan(t *testing.T, db *gorm.DB) {
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		for i := range 1000 {
 			id := fmt.Sprintf("pi-history-%d", i)
-			if err := tx.Create(&model.Task{ID: id, UserID: "history", ProjectID: "history-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, AgentExecutionReady: true}).Error; err != nil {
+			if err := tx.Create(&model.CloudAgentExecution{ID: id, ConversationID: id, UserID: "history", Status: "completed"}).Error; err != nil {
 				return err
 			}
-			if err := New(tx).EnsureCloudAgent(&model.CloudAgentExecution{ID: id, UserID: "history", Status: "completed"}); err != nil {
+			if err := tx.Create(&model.Task{ID: id, UserID: "history", ProjectID: "history-canvas", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, AgentExecutionReady: true}).Error; err != nil {
 				return err
 			}
 		}

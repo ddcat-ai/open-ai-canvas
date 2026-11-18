@@ -209,7 +209,7 @@ func (s *Service) ValidateRuntime() error {
 
 const (
 	featureAvailabilitySettingKey = "feature_availability"
-	runtimePolicySettingKey       = "runtime_policy"
+	runtimePolicySettingKey       = model.RuntimePolicySettingKey
 )
 
 func defaultFeatureAvailability() FeatureAvailability {

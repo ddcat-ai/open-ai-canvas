@@ -95,6 +95,19 @@ func registerAdminUserRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, result)
 	})
+	r.DELETE("/admin/users/:id/agent-history", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		freedBytes, err := svc.AdminClearAgentHistory(user, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"freedBytes": freedBytes})
+	})
 	r.GET("/admin/users/:id/ledger", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

@@ -12,7 +12,7 @@ import (
 	"yingce/backend/internal/model"
 )
 
-const runtimePolicySettingKey = "runtime_policy"
+const runtimePolicySettingKey = model.RuntimePolicySettingKey
 
 const (
 	maxRuntimeUploadMB        int64 = 999
@@ -57,6 +57,7 @@ func agentStepTimeoutSecondsDefault() int {
 }
 
 type RuntimeResourcePolicy struct {
+	model.AgentHistoryQuota
 	ResourceUploadMB        int64 `json:"resourceUploadMB"`
 	GeneratedFileMB         int64 `json:"generatedFileMB"`
 	DailyUploadMB           int64 `json:"dailyUploadMB"`
@@ -150,6 +151,7 @@ type PublicRuntimeLimits struct {
 func DefaultRuntimePolicy() RuntimePolicySetting {
 	return RuntimePolicySetting{
 		Resource: RuntimeResourcePolicy{
+			AgentHistoryQuota:       model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB},
 			ResourceUploadMB:        50,
 			GeneratedFileMB:         64,
 			DailyUploadMB:           2048,
@@ -211,7 +213,8 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 func selfUseRuntimePolicy() RuntimePolicySetting {
 	value := DefaultRuntimePolicy()
 	value.Resource = RuntimeResourcePolicy{
-		ResourceUploadMB: maxRuntimeUploadMB, GeneratedFileMB: maxRuntimeUploadMB,
+		AgentHistoryQuota: model.AgentHistoryQuota{AgentHistoryMB: model.MaxAgentHistoryMB},
+		ResourceUploadMB:  maxRuntimeUploadMB, GeneratedFileMB: maxRuntimeUploadMB,
 		DailyUploadMB: maxRuntimeDataMB, StoredFileGB: maxRuntimeStorageGB, StructuredDataMB: maxRuntimeDataMB,
 		TaskDataGB: maxRuntimeStorageGB, AssetCount: maxRuntimeCount, CanvasCount: maxRuntimeCount,
 		TaskCount: maxRuntimeCount, APICallLogCount: maxRuntimeCount,
@@ -379,6 +382,9 @@ func (s *Service) readRuntimePolicy() (*model.SystemSetting, RuntimePolicySettin
 
 func validateRuntimePolicy(value RuntimePolicySetting) error {
 	resource := value.Resource
+	if _, err := resource.AgentHistoryQuota.LimitBytes(); err != nil {
+		return kernel.BadAuthRequest(err.Error())
+	}
 	for label, item := range map[string]int64{
 		"普通资源单文件": resource.ResourceUploadMB,
 		"单个生成资源":  resource.GeneratedFileMB,

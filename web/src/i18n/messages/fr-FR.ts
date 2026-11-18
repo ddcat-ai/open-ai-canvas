@@ -331,6 +331,7 @@ export const frFR: Messages = {
             not_found: "L'élément demandé n'existe pas ou a été supprimé",
             rate_limited: "Trop de requêtes. Réessayez plus tard.",
             quota_exceeded: "Vous avez dépassé votre quota disponible",
+            agent_history_capacity_exceeded: "L’historique de l’agent est plein. Demandez à un administrateur d’augmenter son quota ou d’effacer votre historique.",
             storage_capacity_exceeded: "Stockage insuffisant. Libérez de l'espace ou achetez du stockage, puis réessayez.",
             storage_read_only: "Le stockage du compte est dépassé : lecture, suppression ou achat de stockage uniquement.",
             unavailable: "Le service est temporairement indisponible. Réessayez plus tard.",

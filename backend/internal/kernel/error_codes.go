@@ -28,16 +28,17 @@ const (
 type ErrorReason string
 
 const (
-	ReasonInvalidArgument        ErrorReason = "invalid_argument"
-	ReasonUnauthorized           ErrorReason = "unauthorized"
-	ReasonForbidden              ErrorReason = "forbidden"
-	ReasonNotFound               ErrorReason = "not_found"
-	ReasonConflict               ErrorReason = "conflict"
-	ReasonProjectNameConflict    ErrorReason = "project_name_conflict"
-	ReasonSkillVersionConflict   ErrorReason = "skill_version_conflict"
-	ReasonCanvasResourcesMissing ErrorReason = "canvas_history_resources_missing"
-	ReasonFailedPrecondition     ErrorReason = "failed_precondition"
-	ReasonQuotaExceeded          ErrorReason = "quota_exceeded"
+	ReasonInvalidArgument              ErrorReason = "invalid_argument"
+	ReasonUnauthorized                 ErrorReason = "unauthorized"
+	ReasonForbidden                    ErrorReason = "forbidden"
+	ReasonNotFound                     ErrorReason = "not_found"
+	ReasonConflict                     ErrorReason = "conflict"
+	ReasonProjectNameConflict          ErrorReason = "project_name_conflict"
+	ReasonSkillVersionConflict         ErrorReason = "skill_version_conflict"
+	ReasonCanvasResourcesMissing       ErrorReason = "canvas_history_resources_missing"
+	ReasonFailedPrecondition           ErrorReason = "failed_precondition"
+	ReasonQuotaExceeded                ErrorReason = "quota_exceeded"
+	ReasonAgentHistoryCapacityExceeded ErrorReason = "agent_history_capacity_exceeded"
 	// 账号文件容量不足：前端据此展示扩容入口，与每日上传量等其它额度区分。
 	ReasonStorageCapacityExceeded ErrorReason = "storage_capacity_exceeded"
 	// 账号超出文件容量且宽限期已过：只允许读取、删除和购买扩容。

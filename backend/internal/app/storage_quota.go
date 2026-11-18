@@ -14,7 +14,7 @@ import (
 
 func agentStorageCapacityError(err error) bool {
 	var appErr *kernel.AppError
-	return errors.As(err, &appErr) && appErr.Reason == kernel.ReasonStorageCapacityExceeded
+	return errors.As(err, &appErr) && appErr.Reason == kernel.ReasonAgentHistoryCapacityExceeded
 }
 
 func structuredBytes(usage repository.UserStorageUsage) int64 {

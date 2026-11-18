@@ -331,6 +331,7 @@ export const koKR: Messages = {
             not_found: "요청한 내용이 없거나 삭제되었습니다",
             rate_limited: "요청이 너무 많습니다. 잠시 후 다시 시도하세요.",
             quota_exceeded: "사용 가능한 한도를 초과했습니다",
+            agent_history_capacity_exceeded: "에이전트 기록 용량이 부족합니다. 관리자에게 기록 용량 한도를 높이거나 기록을 삭제해 달라고 요청하세요.",
             storage_capacity_exceeded: "계정 저장 공간이 부족합니다. 소재를 정리하거나 용량을 늘린 뒤 다시 시도하세요.",
             storage_read_only: "계정 저장 공간이 초과되었습니다. 읽기, 삭제, 용량 구매만 가능합니다.",
             unavailable: "서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도하세요.",

@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { App, Button, Descriptions, Progress, Skeleton, Tabs } from "antd";
 import { AdminDrawer } from "@/pages/admin/ui/overlays";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
 import { formatCredits } from "@/constant/credits";
 import { IconButton } from "@/pages/admin/ui/controls";
 import { AdminDataTable, AdminEmpty, AdminStatusBadge, AdminTableEmpty, PaginationBar, type AdminStatusTone } from "./admin-ui";
 import { AdminUserStoragePanel } from "./admin-user-storage-panel";
-import { getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
+import { clearAdminUserAgentHistory, getAdminUserDetail, listAdminUserAuditEvents, listAdminUserLedger, listAdminUserTasks, type AdminAuditEvent, type AdminUserDetail, type AdminUserTask } from "@/services/api/auth";
 import type { CreditLedgerEntry } from "@/services/api/wallet";
 
 export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUserId, onNavigate }: { userId: string | null; onClose: () => void; previousUserId?: string; nextUserId?: string; onNavigate?: (userId: string) => void }) {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
+    const [historyRevision, setHistoryRevision] = useState(0);
     const [detail, setDetail] = useState<AdminUserDetail | null>(null);
     const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
     const [tasks, setTasks] = useState<AdminUserTask[]>([]);
@@ -41,7 +42,7 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
         return () => {
             active = false;
         };
-    }, [message, userId]);
+    }, [historyRevision, message, userId]);
 
     useEffect(() => {
         if (!userId) return;
@@ -87,7 +88,27 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
         return () => {
             active = false;
         };
-    }, [auditPage, message, userId]);
+    }, [auditPage, historyRevision, message, userId]);
+
+    function confirmClearHistory(target: AdminUserDetail) {
+        modal.confirm({
+            title: `清理 @${target.user.username} 的全部 Agent 历史？`,
+            content: "所有 Agent 会话、消息、事件和撤销快照都将永久删除。已有画布、素材、任务和账务记录保留。若要保留历史，请改为调高运行时策略中的 Agent 历史容量。",
+            okText: "永久清理",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                try {
+                    const { freedBytes } = await clearAdminUserAgentHistory(target.user.id);
+                    message.success(`已清理 @${target.user.username} 的 Agent 历史，释放 ${(freedBytes / 1024 ** 2).toFixed(2)} MiB`);
+                    setHistoryRevision((revision) => revision + 1);
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : "清理 Agent 历史失败");
+                    throw error;
+                }
+            },
+        });
+    }
 
     return (
         <AdminDrawer
@@ -150,6 +171,11 @@ export function AdminUserDetailDrawer({ userId, onClose, previousUserId, nextUse
                                                         <span className="shrink-0 tabular-nums text-foreground/75">{item.display}</span>
                                                     </div>
                                                     <Progress percent={Math.min(100, item.limit > 0 ? Math.round((item.value / item.limit) * 100) : 0)} size="small" showInfo={false} status={item.value >= item.limit ? "exception" : "normal"} />
+                                                    {item.agentHistory && item.value > 0 ? (
+                                                        <Button danger size="small" icon={<Trash2 size={14} />} onClick={() => confirmClearHistory(detail)}>
+                                                            清理 Agent 历史
+                                                        </Button>
+                                                    ) : null}
                                                 </div>
                                             ))}
                                         </div>
@@ -268,7 +294,13 @@ function quotaUsageItems(detail: AdminUserDetail) {
         { label: "今日上传（UTC）", value: detail.dailyUploadBytes, limit: detail.quota.dailyUploadMB * 1024 ** 2, display: `${bytes(detail.dailyUploadBytes)} / ${detail.quota.dailyUploadMB} MB` },
         { label: "画布与素材数据", value: structuredBytes, limit: detail.quota.structuredDataMB * 1024 ** 2, display: `${bytes(structuredBytes)} / ${detail.quota.structuredDataMB} MB` },
         { label: "任务与请求日志数据", value: detail.storageUsage.taskBytes, limit: detail.quota.taskDataGB * 1024 ** 3, display: `${bytes(detail.storageUsage.taskBytes)} / ${detail.quota.taskDataGB} GB` },
-        { label: "Agent 会话与撤销历史", value: detail.storageUsage.agentBytes, limit: detail.storageUsage.agentLimitBytes, display: `${bytes(detail.storageUsage.agentBytes)} / ${bytes(detail.storageUsage.agentLimitBytes)}` },
+        {
+            agentHistory: true,
+            label: "Agent 会话与撤销历史",
+            value: detail.storageUsage.agentBytes,
+            limit: detail.storageUsage.agentLimitBytes,
+            display: `${(detail.storageUsage.agentBytes / 1024 ** 2).toFixed(2)} / ${detail.storageUsage.agentLimitBytes / 1024 ** 2} MiB`,
+        },
         { label: "MCP 配额占用", value: detail.storageUsage.mcpBytes, limit: detail.storageUsage.mcpLimitBytes, display: `${bytes(detail.storageUsage.mcpBytes)} / ${bytes(detail.storageUsage.mcpLimitBytes)}` },
         { label: "素材数量", value: detail.storageUsage.assetCount, limit: detail.quota.assetCount, display: `${number(detail.storageUsage.assetCount)} / ${number(detail.quota.assetCount)}` },
         { label: "画布数量", value: detail.storageUsage.canvasCount, limit: detail.quota.canvasCount, display: `${number(detail.storageUsage.canvasCount)} / ${number(detail.quota.canvasCount)}` },

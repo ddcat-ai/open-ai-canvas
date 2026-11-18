@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"yingce/backend/internal/model"
-	"yingce/backend/internal/repository"
 )
 
 func TestCloudAgentFullStorageFinishesTerminalMediaBatch(t *testing.T) {
@@ -43,7 +42,7 @@ func TestCloudAgentFullStorageFinishesTerminalMediaBatch(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := db.Model(&model.AgentStorageUsage{}).Where("user_id = ?", "user").Update("stored_bytes", repository.AgentStoredDataLimit).Error; err != nil {
+			if err := db.Model(&model.AgentStorageUsage{}).Where("user_id = ?", "user").Update("stored_bytes", model.DefaultAgentHistoryMB<<20).Error; err != nil {
 				t.Fatal(err)
 			}
 			if err := s.CancelCloudAgent(context.Background(), "user", run.ID); err != nil {
@@ -94,7 +93,7 @@ func TestCloudAgentFullStorageFinishesTerminalMediaBatch(t *testing.T) {
 			}
 			usedAfter, err := s.repo.AgentStoredBytes("user")
 			delta := int64(len(run.StateJSON) - len(before.StateJSON))
-			if err != nil || delta >= 0 || usedAfter != repository.AgentStoredDataLimit+delta {
+			if err != nil || delta >= 0 || usedAfter != model.DefaultAgentHistoryMB<<20+delta {
 				t.Fatalf("cleanup exceeded or bypassed quota: delta=%d used=%d err=%v", delta, usedAfter, err)
 			}
 			if state.MediaBatch.Items[1].Status != cloudAgentMediaBatchItemCancelled {

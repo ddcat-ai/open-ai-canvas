@@ -130,7 +130,7 @@ func TestAgentStorageQuotaRollsBackAndAllowsCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Seed only the accounting boundary: avoid allocating a 256 MiB fixture.
-	if err := repo.db.Model(&model.AgentStorageUsage{}).Where("user_id = ?", "user").Update("stored_bytes", AgentStoredDataLimit-1).Error; err != nil {
+	if err := repo.db.Model(&model.AgentStorageUsage{}).Where("user_id = ?", "user").Update("stored_bytes", model.DefaultAgentHistoryMB<<20-1).Error; err != nil {
 		t.Fatal(err)
 	}
 	start, results := make(chan struct{}), make(chan error, 2)
@@ -174,7 +174,7 @@ func TestAgentFailedReservationDoesNotBlockContinuation(t *testing.T) {
 	if err := repo.EnsureCloudAgent(parent); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.db.Model(&model.AgentStorageUsage{}).Where("user_id = ?", "user").Update("stored_bytes", AgentStoredDataLimit).Error; err != nil {
+	if err := repo.db.Model(&model.AgentStorageUsage{}).Where("user_id = ?", "user").Update("stored_bytes", model.DefaultAgentHistoryMB<<20).Error; err != nil {
 		t.Fatal(err)
 	}
 	child := &model.Task{ID: "child", UserID: "user", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, InputJSON: `{"cloudAgent":{"parentId":"parent"}}`}
@@ -194,5 +194,43 @@ func TestAgentFailedReservationDoesNotBlockContinuation(t *testing.T) {
 	child.ID = "retry-child"
 	if err := repo.CreateTaskWithActiveLimit(child, 5); err != nil {
 		t.Fatalf("failed reservation retained conversation ownership: %v", err)
+	}
+}
+
+func TestAgentHistoryCleanupSerializesWithContinuation(t *testing.T) {
+	for _, driver := range []string{"sqlite", "postgres"} {
+		t.Run(driver, func(t *testing.T) {
+			cleaner, writer := agentLifecycleRepositories(t, driver)
+			if err := cleaner.Create(&model.User{ID: "user", Username: "user"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := writer.CreateTaskWithActiveLimit(&model.Task{ID: "parent", UserID: "user", Operation: "cloud_agent", Status: model.TaskStatusTextReplay}, 5); err != nil {
+				t.Fatal(err)
+			}
+			if err := writer.EnsureCloudAgent(&model.CloudAgentExecution{ID: "parent", UserID: "user", Status: "completed", StateJSON: `{}`}); err != nil {
+				t.Fatal(err)
+			}
+			start, admitted := make(chan struct{}), make(chan error, 1)
+			go func() {
+				<-start
+				admitted <- writer.CreateTaskWithActiveLimit(&model.Task{ID: "child", UserID: "user", Operation: "cloud_agent", Status: model.TaskStatusTextReplay, InputJSON: `{"cloudAgent":{"parentId":"parent"}}`}, 5)
+			}()
+			close(start)
+			cleanupErr := cleaner.Transaction(func(tx *Repository) error {
+				_, err := tx.ClearIdleAgentHistory("user")
+				return err
+			})
+			admissionErr := <-admitted
+			if cleanupErr == nil {
+				if !errors.Is(admissionErr, gorm.ErrRecordNotFound) {
+					t.Fatalf("child admission after cleanup: %v", admissionErr)
+				}
+			} else {
+				var busy *kernel.AppError
+				if admissionErr != nil || !errors.As(cleanupErr, &busy) || busy.Status != 409 {
+					t.Fatalf("cleanup=%v, admission=%v", cleanupErr, admissionErr)
+				}
+			}
+		})
 	}
 }

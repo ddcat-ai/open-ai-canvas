@@ -330,6 +330,7 @@ export const enUS: Messages = {
             not_found: "The requested item doesn't exist or was deleted",
             rate_limited: "Too many requests. Try again later.",
             quota_exceeded: "You've exceeded your available quota",
+            agent_history_capacity_exceeded: "Agent history is full. Ask an administrator to raise the Agent history limit or clear your history.",
             storage_capacity_exceeded: "Not enough account storage. Clean up assets or buy more storage, then try again.",
             storage_read_only: "Account storage is over the limit. You can only read, delete or buy more storage.",
             unavailable: "The service is temporarily unavailable. Try again later.",

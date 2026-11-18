@@ -87,7 +87,9 @@ Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工�
 
 安装方式和限制见 [MCP 连接与市场](./agent-mcp)。
 
-检测与调用的限频、并发和存储拒绝使用真实 429 / 403 错误，协调器不可用时拒绝新外部操作。管理员资源策略新增 `task.agentMaxRunsPerUser`（默认 5，范围 1–64）；新安装 `task.agentMaxSessions` 默认 8。管理员用户详情 `storageUsage` 新增 `agentBytes/agentLimitBytes/mcpBytes/mcpLimitBytes`，独立列示 Agent 256 MiB 与 MCP 64 MiB 的账号额度。
+检测与调用的限频、并发和存储拒绝使用真实 429 / 403 错误，协调器不可用时拒绝新外部操作。管理员资源策略 `task.agentMaxRunsPerUser` 默认 5，范围 1–64；新安装 `task.agentMaxSessions` 默认 8。`GET/PUT /admin/settings/runtime-policy` 的 `resource.agentHistoryMB` 设置每账号 Agent 历史容量（1–999999 MiB；旧配置缺省为 256 MiB）。用户详情 `storageUsage.agentBytes/agentLimitBytes` 显示用量和策略上限，独立于文件空间及 MCP 的 64 MiB 额度。
+
+`DELETE /admin/users/:id/agent-history` 仅限管理员。成功返回 `data.freedBytes`；清理目标账号全部 Agent 历史、扣减账本并记录管理审计。只要存在未结束、待收尾或刚预留的轮次，返回 409 且不删除任何记录。清理不可恢复，不影响已有画布、素材、任务和账务。
 
 ## 飞书需求与问题日报
 
@@ -1036,6 +1038,7 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 | 504 | 504 | `timeout` | 超时 |
 | 40301 | 403 | `quota_exceeded` | 账号配额用尽（不自动重试） |
 | 40301 | 403 | `storage_capacity_exceeded` | 账号文件容量不足，上传或媒体生成被拒；前端据此展示“购买空间”入口 |
+| 40301 | 403 | `agent_history_capacity_exceeded` | Agent 历史容量不足；联系管理员调高独立额度或清理历史，不展示文件扩容入口 |
 | 40302 | 403 | `storage_read_only` | 账号超出文件容量且 7 天宽限期已结束，内容写入被拒；`details` 含 `usedBytes`、`totalBytes`、`readOnlyAt` |
 | 40401 | 404 | `account_not_registered` | 一体表单密码登录时账号不存在且允许注册；`details.accountKind` 为 `username` / `email` |
 | 40901 | 409 | `conflict` | 幂等冲突 |

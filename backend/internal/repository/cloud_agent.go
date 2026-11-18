@@ -35,6 +35,9 @@ func (r *Repository) SaveCloudAgentPiSession(session *model.CloudAgentPiSession,
 		var previousBytes int64
 		var result *gorm.DB
 		if expectedRevision == 0 {
+			if err := repo.requireAgentHistoryNotCleared(session.UserID, session.RunID); err != nil {
+				return err
+			}
 			session.Revision = 1
 			result = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(session)
 		} else {
@@ -62,25 +65,27 @@ func (r *Repository) SaveCloudAgentPiSession(session *model.CloudAgentPiSession,
 }
 
 func (r *Repository) EnsureCloudAgent(run *model.CloudAgentExecution) error {
-	if run.ConversationID == "" {
-		run.ConversationID = run.ID
-		if run.ParentID != "" {
-			var parent model.CloudAgentExecution
-			if err := r.db.Select("id", "conversation_id", "title").First(&parent, "id = ? AND user_id = ?", run.ParentID, run.UserID).Error; err != nil {
-				return err
-			}
-			if parent.ConversationID != "" {
-				run.ConversationID = parent.ConversationID
-			} else {
-				run.ConversationID = parent.ID
-			}
-			run.Title = parent.Title
-		}
-	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		repo := New(tx)
 		if err := repo.beginAgentStorageWrite(run.UserID); err != nil {
 			return err
+		}
+		if err := repo.requireAgentHistoryNotCleared(run.UserID, run.ID); err != nil {
+			return err
+		}
+		if run.ConversationID == "" {
+			run.ConversationID = run.ID
+			if run.ParentID != "" {
+				var parent model.CloudAgentExecution
+				if err := tx.Select("id", "conversation_id", "title").First(&parent, "id = ? AND user_id = ?", run.ParentID, run.UserID).Error; err != nil {
+					return err
+				}
+				run.ConversationID = parent.ID
+				if parent.ConversationID != "" {
+					run.ConversationID = parent.ConversationID
+				}
+				run.Title = parent.Title
+			}
 		}
 		// GORM saves associations even when the parent INSERT loses its conflict.
 		// A late initializer must not reinsert transcript rows removed by a newer
@@ -228,7 +233,7 @@ func (r *Repository) CloudAgentIDsWaitingApprovalForCanvas(userID, canvasID stri
 
 func (r *Repository) CloudAgentRoots() ([]model.Task, error) {
 	var tasks []model.Task
-	err := r.db.Where("operation = ? AND id NOT IN (SELECT id FROM cloud_agent_executions)", "cloud_agent").Order("created_at").Limit(50).Find(&tasks).Error
+	err := r.db.Where("operation = ? AND agent_execution_ready = false AND id NOT IN (SELECT id FROM cloud_agent_executions)", "cloud_agent").Order("created_at").Limit(50).Find(&tasks).Error
 	return tasks, err
 }
 
@@ -472,6 +477,9 @@ func (r *Repository) CreateCloudAgentCanvasMutation(mutation *model.CloudAgentCa
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		repo := New(tx)
 		if err := repo.beginAgentStorageWrite(mutation.UserID); err != nil {
+			return err
+		}
+		if err := repo.requireAgentHistoryNotCleared(mutation.UserID, mutation.RunID); err != nil {
 			return err
 		}
 		if err := repo.changeAgentStoredBytes(mutation.UserID, int64(len(mutation.BeforeJSON))); err != nil {

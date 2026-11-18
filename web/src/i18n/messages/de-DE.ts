@@ -331,6 +331,7 @@ export const deDE: Messages = {
             not_found: "Der angeforderte Inhalt existiert nicht oder wurde gelöscht",
             rate_limited: "Zu viele Anfragen. Später erneut versuchen.",
             quota_exceeded: "Dein verfügbares Kontingent ist überschritten",
+            agent_history_capacity_exceeded: "Der Agent-Verlauf ist voll. Bitte die Administration, das Limit für den Agent-Verlauf zu erhöhen oder deinen Verlauf zu löschen.",
             storage_capacity_exceeded: "Nicht genug Kontospeicher. Assets bereinigen oder Speicher kaufen und erneut versuchen.",
             storage_read_only: "Kontospeicher überschritten: nur Lesen, Löschen oder Speicherkauf möglich.",
             unavailable: "Der Dienst ist vorübergehend nicht verfügbar. Später erneut versuchen.",

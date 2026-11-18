@@ -27,7 +27,7 @@ const resourceFields: PolicyField[] = [
     { group: "resource", name: "generatedFileMB", label: "单个生成资源", extra: "上游生成响应和落库资源的单文件上限。", unit: "MB", max: 999 },
     { group: "resource", name: "dailyUploadMB", label: "每日上传总量", extra: "按 UTC 自然日累计资源与附件上传。", unit: "MB", max: 999_999 },
     { group: "resource", name: "storedFileGB", label: "账号文件总量", extra: "资源文件与 Agent 会话附件合计。", unit: "GB", max: 999 },
-    { group: "resource", name: "structuredDataMB", label: "结构化数据总量", extra: "画布和素材的结构化数据合计。Agent 历史另有每账号 256 MiB 上限，MCP 配置与调用记录另有每账号 64 MiB 上限。", unit: "MB", max: 999_999 },
+    { group: "resource", name: "structuredDataMB", label: "结构化数据总量", extra: "仅计入画布和素材。Agent 历史单独设置；MCP 配置与调用记录另有每账号 64 MiB 上限。", unit: "MB", max: 999_999 },
     { group: "resource", name: "taskDataGB", label: "任务数据总量", extra: "任务历史、结果和上游请求日志合计。", unit: "GB", max: 999 },
     { group: "resource", name: "assetCount", label: "素材数量", extra: "单账号可保存的素材记录数。", unit: "条", max: 999_999_999 },
     { group: "resource", name: "canvasCount", label: "画布数量", extra: "单账号可保存的画布数量。", unit: "个", max: 999_999_999 },
@@ -59,6 +59,7 @@ const timeoutFields: PolicyField[] = [
 ];
 
 const agentFields: PolicyField[] = [
+    { group: "resource", name: "agentHistoryMB", label: "每账号 Agent 历史容量", extra: "包括会话、消息、事件和撤销快照。调低不会删除历史；购买文件空间不改变此上限。", unit: "MiB", max: 999_999 },
     {
         group: "task",
         name: "agentStepMaxOutputTokens",
@@ -145,9 +146,9 @@ const policySections: PolicySectionDefinition[] = [
     {
         id: "policy-agent",
         icon: <Orbit className="size-4" aria-hidden="true" />,
-        title: "画布 Agent 单步",
-        shortTitle: "Agent 单步",
-        description: "画布 Agent 每一步模型调用的输出上限与等待时限；两者一起决定单步最坏耗时。",
+        title: "画布 Agent",
+        shortTitle: "Agent",
+        description: "每账号历史容量、进行中的对话数量，以及单步模型调用的输出上限和时限。",
         fields: agentFields,
         status: <AdminStatusBadge label="保存后热更新" tone="info" />,
     },

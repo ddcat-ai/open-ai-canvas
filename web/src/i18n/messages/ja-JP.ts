@@ -331,6 +331,7 @@ export const jaJP: Messages = {
             not_found: "要求された内容は存在しないか、削除されました",
             rate_limited: "操作が多すぎます。しばらくしてから再試行してください。",
             quota_exceeded: "利用可能な上限を超えました",
+            agent_history_capacity_exceeded: "エージェント履歴の容量が不足しています。管理者に履歴の容量上限の引き上げ、または履歴の削除を依頼してください。",
             storage_capacity_exceeded: "アカウントのストレージが不足しています。素材を整理するか容量を追加してから再試行してください。",
             storage_read_only: "アカウントのストレージ上限を超えています。閲覧・削除・容量の購入のみ可能です。",
             unavailable: "サービスが一時的に利用できません。しばらくしてから再試行してください。",

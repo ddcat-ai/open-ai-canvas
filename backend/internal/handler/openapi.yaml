@@ -43,6 +43,21 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /admin/users/{id}/agent-history:
+    delete:
+      tags: [admin]
+      summary: 清理指定账号的全部 Agent 历史
+      description: 不可恢复。只删除 Agent 执行、会话、事件、消息和撤销快照；不删除画布、素材、任务、账务或 MCP 回执。账本和管理审计同事务提交。
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: data.freedBytes 为本次释放的 Agent 历史字节数
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: 该账号有未结束、等待确认、刚预留或尚未收尾的轮次，未清理任何历史
   /admin/system-update:
     get:
       tags: [admin]
@@ -3079,6 +3094,8 @@ paths:
           description: 信封 data.run，包含新一轮 id、conversationId、userPrompt、idempotencyKey、canvasId、status、permissionMode、model 及时间
         "400":
           description: 参数、能力、模型或预算不符合要求，未创建任务
+        "403":
+          description: Agent 历史额度不足时 code=40301、reason=agent_history_capacity_exceeded；购买文件空间不会增加此额度
         "409":
           description: 幂等键已用于不同请求，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；未创建任务或预留积分，不自动重试。
   /agent/runs/{id}:
@@ -6131,6 +6148,7 @@ components:
                 - failed_precondition
                 - quota_exceeded
                 - storage_capacity_exceeded
+                - agent_history_capacity_exceeded
                 - storage_read_only
                 - rate_limited
                 - unavailable

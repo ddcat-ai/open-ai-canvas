@@ -331,6 +331,7 @@ export const zhCN = {
             not_found: "请求的内容不存在或已被删除",
             rate_limited: "操作过于频繁，请稍后再试",
             quota_exceeded: "已超出可用额度",
+            agent_history_capacity_exceeded: "Agent 历史容量不足，请联系管理员调高 Agent 历史额度或清理历史。",
             storage_capacity_exceeded: "账号文件容量不足，请清理素材或扩容后重试",
             storage_read_only: "账号文件容量已超出，当前只能读取、删除或购买扩容",
             unavailable: "服务暂时不可用，请稍后重试",
