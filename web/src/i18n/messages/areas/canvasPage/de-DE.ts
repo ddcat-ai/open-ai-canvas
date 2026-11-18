@@ -116,6 +116,9 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         expressionNodeDeleted: "Der Knoten zur Mimikbearbeitung wurde gelöscht",
         emptyVideoEnhance: "Der Videoknoten ist leer, die Qualität kann nicht verbessert werden",
         noEnhanceModel: "Ein Administrator hat noch kein Modell zur Qualitätsverbesserung konfiguriert",
+        emptyVideoDepth: "Der Videoknoten ist leer, ein relatives Tiefenvideo kann nicht erstellt werden",
+        noDepthModel: "Ein Administrator hat noch kein Modell für relative Tiefe konfiguriert",
+        titleDepth: "{{title}} · Relative Tiefe",
         titleEnhance: "{{title}} · Verbessert {{resolution}}",
     },
     layerMaterials: {
@@ -301,6 +304,8 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
         restoreSaveFailed: "Speichern des Ergebnisses konnte nicht fortgesetzt werden",
         enhanceSourceMissing: "Der Quellvideoknoten wurde gelöscht oder ist leer, eine erneute Verbesserung ist nicht möglich; keine Aufgabe gesendet",
         enhanceFailed: "Qualitätsverbesserung fehlgeschlagen",
+        depthSourceMissing: "Der Quellvideoknoten wurde gelöscht oder ist leer. Keine Verarbeitungsaufgabe gesendet",
+        depthFailed: "Verarbeitung der relativen Tiefe fehlgeschlagen",
         notRetryable: "Dieser Knoten unterstützt die normale Generierungswiederholung nicht",
         layerProtocolMissing: "Für das ursprüngliche Ebenenmodell ist kein spezielles Ebenenprotokoll konfiguriert, Wiederholung nicht möglich",
         promptRejected: "Dieser Prompt hat die Inhaltsprüfung nicht bestanden. Bearbeiten Sie ihn vor der erneuten Generierung",

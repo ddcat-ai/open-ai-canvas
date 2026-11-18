@@ -179,7 +179,7 @@ const routes: RouteObject[] = [
                 ),
             },
             { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
-            { path: "/skills", element: <RequireSkillAdmin>{deferred(<SkillsPage />)}</RequireSkillAdmin> },
+            { path: "/skills", element: <RequireAuth>{deferred(<SkillsPage />)}</RequireAuth> },
             { path: "/skills/:skillId/edit", element: <RequireSkillAdmin>{deferred(<SkillWorkbenchPage />)}</RequireSkillAdmin> },
             {
                 path: "/plugins",

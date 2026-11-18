@@ -21,7 +21,7 @@ func TestOfficialVolcengineArkSeedance25PackageIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pkg.Manifest.Metadata.ID != seedance25Provider || pkg.Manifest.Metadata.Name != "Volcengine Ark Seedance 2.5" {
+	if pkg.Manifest.Metadata.ID != seedance25Provider || pkg.Manifest.Metadata.Name != "火山方舟 Seedance 2.5 官方视频生成" {
 		t.Fatalf("metadata = %#v", pkg.Manifest.Metadata)
 	}
 	provider := pkg.Manifest.Contributes.Providers[0]

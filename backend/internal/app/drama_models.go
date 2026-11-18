@@ -1057,7 +1057,7 @@ func (s *Service) dramaWritingSkill(userID string, ref *DramaSkillRef, label str
 	if ref == nil || strings.TrimSpace(ref.SkillID) == "" {
 		return nil, nil
 	}
-	if err := s.RequireSkillAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	file, err := s.SkillPackageFile(userID, ref.SkillID, ref.Path)

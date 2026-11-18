@@ -59,7 +59,7 @@ type Props = {
     /** 删除镜头；剧情段唯一的镜头不能删。 */
     onDeleteShot?: (shot: DramaShot) => void;
     onDiscussShot?: (shot: DramaShot) => void;
-    onSavePrompt: (segment: DramaSegment, override: string) => void;
+    onSavePrompt: (segment: DramaSegment, override: string) => Promise<unknown>;
     /** 指定本段参考图；null 恢复按镜头自动取。 */
     onSaveReferences: (segment: DramaSegment, patch: DramaSegmentReferencePatch) => Promise<unknown>;
     onWritePrompt: (segment: DramaSegment) => void;
@@ -189,6 +189,7 @@ export function SegmentDialog({
                                 episodeId={detail.episode.id}
                                 promptModel={promptModel}
                                 castById={castById}
+                                disabled={busy}
                                 writing={writing}
                                 onSave={(override) => onSavePrompt(segment, override)}
                                 onWrite={() => onWritePrompt(segment)}
@@ -600,6 +601,7 @@ function SegmentPrompt({
     episodeId,
     promptModel,
     castById,
+    disabled,
     writing,
     onSave,
     onWrite,
@@ -609,15 +611,21 @@ function SegmentPrompt({
     episodeId: string;
     promptModel?: DramaModelChoice;
     castById: Map<string, DramaCast>;
+    disabled: boolean;
     writing: boolean;
-    onSave: (override: string) => void;
+    onSave: (override: string) => Promise<unknown>;
     onWrite: () => void;
 }) {
     const [draft, setDraft] = useState(segment.videoPrompt);
     const [editorHeight, setEditorHeight] = useState(PROMPT_EDITOR_MIN);
     const [showHeader, setShowHeader] = useState(false);
-    useEffect(() => setDraft(segment.videoPrompt), [segment.videoPrompt]);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
+    const [saveVersion, setSaveVersion] = useState(0);
+    // 服务端会规范化参考图写法；等值保存也要重新采用服务端正文。
+    useEffect(() => setDraft(segment.videoPrompt), [segment.videoPrompt, saveVersion]);
     const busy = segment.promptStatus === "queued" || segment.promptStatus === "running";
+    const editingDisabled = disabled || busy || writing || saving;
     const notice = segment.custom && segment.promptStatus === "stale" ? "" : PROMPT_NOTICE[segment.promptStatus];
     const dirty = draft.trim() !== segment.videoPrompt.trim();
     const { request } = segment;
@@ -627,14 +635,25 @@ function SegmentPrompt({
     const sentChars = Array.from([request.header, draft.trim()].filter(Boolean).join("\n\n")).length;
     const overLimit = Boolean(request.promptMaxChars && sentChars > request.promptMaxChars);
     const unmentioned = request.references.filter((_, index) => !usage.used.has(index + 1));
+    const savePrompt = async (next: string) => {
+        setSaving(true);
+        setSaveError("");
+        try {
+            await onSave(next === segment.generated.trim() ? "" : next);
+            setSaveVersion((version) => version + 1);
+        } finally {
+            setSaving(false);
+        }
+    };
+    const reportSaveError = (reason: unknown) => setSaveError(reason instanceof Error ? reason.message : "保存失败，请重试");
     const commit = () => {
         const next = draft.trim();
-        if (!dirty) return;
+        if (!dirty || editingDisabled) return;
         if (!next) {
             setDraft(segment.videoPrompt);
             return;
         }
-        onSave(next === segment.generated.trim() ? "" : next);
+        void savePrompt(next).catch(reportSaveError);
     };
     return (
         <section className="drama-sdx-section drama-sdx-prompt" aria-label="完整视频提示词">
@@ -643,7 +662,7 @@ function SegmentPrompt({
                 {segment.custom ? <span className="drama-sdx-chip is-accent">已手动改写</span> : null}
                 <small>输入 @ 按名称引用资产，双击引用查看原图；资产名称对应当前参考图编号</small>
                 {segment.custom ? (
-                    <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} onClick={() => onSave("")}>
+                    <Button size="small" type="text" icon={<RotateCcw className="size-3.5" />} disabled={editingDisabled} onClick={() => void savePrompt(segment.generated.trim()).catch(reportSaveError)}>
                         恢复模型版本
                     </Button>
                 ) : null}
@@ -656,20 +675,7 @@ function SegmentPrompt({
                 ))}
                 <small>正文可直接修改</small>
             </div>
-            {promptModel ? (
-                <SegmentPromptRewrite
-                    projectId={projectId}
-                    episodeId={episodeId}
-                    segment={segment}
-                    prompt={draft}
-                    model={promptModel}
-                    disabled={busy || writing}
-                    onApply={(next) => {
-                        setDraft(next);
-                        onSave(next === segment.generated.trim() ? "" : next);
-                    }}
-                />
-            ) : null}
+            {promptModel ? <SegmentPromptRewrite projectId={projectId} episodeId={episodeId} segment={segment} prompt={draft} model={promptModel} disabled={editingDisabled} onApply={savePrompt} /> : null}
             {notice && segment.videoPrompt ? <PromptNotice segment={segment} text={notice} /> : null}
             {request.header ? (
                 <div className="drama-sdx-prefix" aria-label="提交时加在开头的参考图说明">
@@ -737,6 +743,7 @@ function SegmentPrompt({
                     <CanvasResourceMentionTextarea
                         value={draft}
                         references={references}
+                        readOnly={editingDisabled}
                         onChange={(next) => {
                             setDraft(next);
                         }}
@@ -750,7 +757,7 @@ function SegmentPrompt({
                         placeholder="也可以直接在这里手写本段完整视频提示词；输入 @ 引用参考图，失焦保存。开头的参考图说明由系统自动追加。"
                         onBlur={commit}
                         onKeyDown={(event) => {
-                            if (event.key === "Escape" && dirty) {
+                            if (event.key === "Escape" && dirty && !editingDisabled) {
                                 event.stopPropagation();
                                 setDraft(segment.videoPrompt);
                             }
@@ -777,8 +784,13 @@ function SegmentPrompt({
                     {segment.custom ? "手动改写的版本需要精简后才能生成视频。" : "生成视频时会按上限自动重新撰写，不会截断。"}
                 </p>
             ) : null}
+            {saveError ? (
+                <p className="drama-sg-note is-error" role="alert">
+                    {saveError}
+                </p>
+            ) : null}
             <div className="drama-sd-pane-foot">
-                {dirty ? <span className="is-dirty">未保存 · 失焦或 ⌘↵ 保存，Esc 放弃</span> : <span>直接修改正文，失焦自动保存</span>}
+                {saving ? <span role="status">正在保存提示词…</span> : dirty ? <span className="is-dirty">未保存 · 失焦或 ⌘↵ 保存，Esc 放弃</span> : <span>直接修改正文，失焦自动保存</span>}
                 <span className={overLimit ? "is-over" : undefined} title="与视频模型校验口径一致：开头的参考图说明 + 正文">
                     提示词 {sentChars}
                     {request.promptMaxChars ? ` / ${request.promptMaxChars}` : ""} 字

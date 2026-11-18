@@ -28,6 +28,26 @@ function createNodeContext(node: CanvasNodeData): ToolContext {
 }
 
 describe("canvas node toolbar model", () => {
+    test("relative depth is offered only for available, non-loading videos and runs lazily", () => {
+        const node: CanvasNodeData = { id: "video", type: CanvasNodeType.Video, title: "视频", position: { x: 0, y: 0 }, width: 720, height: 405, metadata: { storageKey: "resource:video" } };
+        const ctx = createNodeContext(node);
+        expect(resolveToolbarTools("node-hover", ctx, null).some((tool) => tool.id === "depthVideo")).toBe(false);
+        const received: CanvasNodeData[] = [];
+        ctx.handlers.onNodeDepthVideo = (source) => received.push(source);
+        const tool = resolveToolbarTools("node-hover", ctx, null).find((tool) => tool.id === "depthVideo")!;
+        expect(tool).toBeDefined();
+        expect(received).toEqual([]);
+        tool.run(ctx);
+        expect(received).toEqual([node]);
+        for (const unavailable of [
+            { ...ctx, nodeMetadata: { status: "loading" as const } },
+            { ...ctx, nodeMetadata: {} },
+            { ...ctx, workspaceMode: "simple" as const },
+        ]) {
+            expect(resolveToolbarTools("node-hover", unavailable, null).some((tool) => tool.id === "depthVideo")).toBe(false);
+        }
+    });
+
     test("edit copy delegates the selected image once and refuses unavailable sources", () => {
         const node: CanvasNodeData = { id: "image", type: CanvasNodeType.Image, title: "图片", position: { x: 0, y: 0 }, width: 320, height: 180, metadata: { content: "image.png" } };
         const ctx = createNodeContext(node);

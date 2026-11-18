@@ -25206,6 +25206,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     display: inline-flex;
     flex-shrink: 0;
     align-self: flex-start;
+    max-width: calc(100% - 48px);
+    overflow-x: auto;
     gap: 2px;
     margin: 0 24px;
     border-radius: 12px;
@@ -25467,6 +25469,11 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     border-bottom: 0;
 }
 
+.workspace-wallet-ledger-row.is-billing {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    padding-block: var(--space-3);
+}
+
 .workspace-wallet-ledger-icon {
     display: grid;
     width: 34px;
@@ -25512,6 +25519,11 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     font-size: 12px;
     font-weight: 600;
     text-align: right;
+}
+
+.workspace-wallet-ledger-row .workspace-wallet-ledger-detail {
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .workspace-wallet-ledger-row b.is-income {
@@ -25685,6 +25697,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     }
     .workspace-wallet-tabs {
         margin: 0 16px;
+        max-width: calc(100% - 32px);
         overflow-x: auto;
     }
     .workspace-wallet-content {
@@ -25708,6 +25721,10 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     }
     .workspace-wallet-ledger-row time {
         display: none;
+    }
+
+    .workspace-wallet-ledger-row.is-billing {
+        grid-template-columns: 34px minmax(0, 1fr);
     }
 }
 

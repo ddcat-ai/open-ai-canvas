@@ -402,6 +402,7 @@ export function CanvasViewport({
                 panState.current.hasMoved = true;
                 if (panState.current.button === 2) event.preventDefault();
             }
+            if (!panState.current.hasMoved) return;
 
             scheduleViewportChange({
                 x: panState.current.initialX + dx,
@@ -442,7 +443,8 @@ export function CanvasViewport({
             interactingRef.current = false;
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
             delete containerRef.current?.dataset.canvasViewportInteracting;
-            syncViewport();
+            // Edge 等浏览器可能先派发 contextmenu；单击不能提交视口并关闭刚打开的菜单。
+            if (hasMoved) syncViewport();
             setIsPanning(false);
             document.body.style.cursor = "";
         };

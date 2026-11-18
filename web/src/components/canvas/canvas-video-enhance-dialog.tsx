@@ -4,15 +4,8 @@ import { ChevronDown } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
-import {
-    listVideoEnhanceModels,
-    videoEnhanceProfile,
-    videoEnhanceQuoteRequest,
-    videoEnhanceResolutionShortEdge,
-    videoEnhanceSourceError,
-    type VideoEnhanceBitrateLevel,
-    type VideoEnhanceParams,
-} from "@/lib/canvas/canvas-video-enhance";
+import { videoEnhanceProfile, videoEnhanceQuoteRequest, videoEnhanceResolutionShortEdge, videoEnhanceSourceError, type VideoEnhanceBitrateLevel, type VideoEnhanceParams } from "@/lib/canvas/canvas-video-enhance";
+import { listVideoProcessingModels } from "@/lib/canvas/canvas-video-processing";
 import { modelQuoteDescription } from "@/lib/model-pricing";
 import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
 import { modelDisplayName, type AiConfig } from "@/stores/use-config-store";
@@ -40,7 +33,7 @@ export function CanvasVideoEnhanceDialog(props: Props) {
 
 function EnhanceEditor({ node, config, onClose, onConfirm }: Props) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const models = useMemo(() => listVideoEnhanceModels(config), [config]);
+    const models = useMemo(() => listVideoProcessingModels(config, "enhance"), [config]);
     const [model, setModel] = useState(models[0] || "");
     const profile = useMemo(() => videoEnhanceProfile(config, model), [config, model]);
     const sourceShortEdge = Math.min(node.metadata?.naturalWidth || 0, node.metadata?.naturalHeight || 0);
@@ -131,7 +124,9 @@ function EnhanceEditor({ node, config, onClose, onConfirm }: Props) {
             </div>
 
             {!models.length ? (
-                <p role="alert" className="text-sm text-destructive">管理员尚未配置可用的画质增强模型。</p>
+                <p role="alert" className="text-sm text-destructive">
+                    管理员尚未配置可用的画质增强模型。
+                </p>
             ) : (
                 <div className="flex flex-col gap-4">
                     {models.length > 1 ? (
@@ -180,7 +175,9 @@ function EnhanceEditor({ node, config, onClose, onConfirm }: Props) {
             )}
 
             {sourceError ? (
-                <p role="alert" className="mt-4 text-sm text-destructive">{sourceError}</p>
+                <p role="alert" className="mt-4 text-sm text-destructive">
+                    {sourceError}
+                </p>
             ) : null}
         </AppModal>
     );

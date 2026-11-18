@@ -621,11 +621,13 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 5<<20)
 		var req service.CanvasOperationsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
+			logCanvasOperationsFailure(c, "decode_request", nil, err)
 			fail(c, http.StatusBadRequest, service.BadAuthRequest("画布操作请求格式错误"))
 			return
 		}
 		project, err := svc.ApplyUserCanvasOperations(user.ID, c.Param("id"), req)
 		if err != nil {
+			logCanvasOperationsFailure(c, "apply_operations", &req, err)
 			failService(c, err)
 			return
 		}

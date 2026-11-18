@@ -57,6 +57,6 @@ test("a pending skills response cannot replace the cache after installation", as
 });
 
 import { useUserStore } from "@/stores/use-user-store";
-const skillAdmin = { id: "skill-admin", username: "admin", displayName: "Admin", role: "admin" as const, status: "active" as const };
-beforeEach(() => useUserStore.setState({ user: skillAdmin, hydrated: true }));
+const skillUser = { id: "skill-user", username: "member", displayName: "Member", role: "user" as const, status: "active" as const };
+beforeEach(() => useUserStore.setState({ user: skillUser, hydrated: true }));
 afterEach(() => useUserStore.setState({ user: null, hydrated: false }));

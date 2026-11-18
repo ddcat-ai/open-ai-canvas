@@ -94,7 +94,7 @@ function add(spec) {
 
 add({
   id: "openai-images", providerId: "openai-image", name: "OpenAI Images", vendor: "OpenAI", capability: "image",
-  version: "2.2.1",
+  version: "2.2.2",
   baseUrl: "https://api.openai.com", auth: bearer,
   params: imageParams.map((parameter) => parameter[0] === "resolution"
     ? ["resolution", "string", false, "size", "仅用于宿主选择像素尺寸与计价，不发送独立 resolution 字段。"]
@@ -105,10 +105,10 @@ add({
     { name: "quality", label: "图片质量", type: "string", binding: "quality", pricing: true },
     { name: "count", label: "生成数量", type: "integer", binding: "imageCount", min: 1, max: 100, step: 1, default: 1 },
     { name: "transparentBackground", label: "透明背景", type: "boolean", binding: "transparentBackground", default: false, enabled: false },
-    { name: "outputFormat", label: "输出格式", type: "string", binding: "providerOptions.openai-image.output_format", values: ["png", "jpeg", "webp"], default: "png", enabled: false },
+    { name: "outputFormat", label: "输出格式", type: "string", binding: "providerOptions.openai-image.output_format", values: ["png", "jpeg", "webp", "gif"], default: "png", enabled: false },
     { name: "outputCompression", label: "压缩质量", type: "integer", binding: "providerOptions.openai-image.output_compression", min: 0, max: 100, step: 1, enabled: false }
   ],
-  notes: "无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。1K/2K/4K 档位只用于选择 size 像素预设及计价，不向上游发送 resolution；自动尺寸由模型决定。quality 独立发送，auto 时省略，不把分辨率档位转换为质量。",
+  notes: "无参考图走 JSON generations；有参考图或蒙版走 multipart edits（官方与 LiteLLM 等网关的通用格式），单张参考图用 image 字段、多张用 image[]，蒙版用 mask。1K/2K/4K 档位只用于选择 size 像素预设及计价，不向上游发送 resolution；自动尺寸由模型决定。quality 独立发送，auto 时省略，不把分辨率档位转换为质量。输出格式通过 providerOptions.openai-image.output_format 发送；管理员须按渠道实际能力启用并限定枚举，支持 GIF 的 GPT Image 2.6 渠道可使用对应能力模板。Base64 响应读取单张或顶层 output_format，并按实际文件头识别格式；GIF 下载保留原文件动画。",
   create: {
     method: "POST",
     path: "/v1/images/generations",
@@ -142,7 +142,8 @@ add({
     status: "succeeded",
     images: map(ref("response.data"), "item", {
       url: omit(ref("item.url")),
-      dataUrl: conditional(ref("item.b64_json"), { $concat: ["data:image/png;base64,", ref("item.b64_json")] })
+      b64_json: omit(ref("item.b64_json")),
+      output_format: omit(coalesce(ref("item.output_format"), ref("response.output_format")))
     }),
     usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"]
   }
@@ -228,15 +229,42 @@ const arkSeedreamImageBody = (optionNamespace) => ({
 });
 
 add({
-  id: "volcengine-ark-seedream", providerId: "volcengine-ark-image", name: "Volcengine Ark Seedream Images", vendor: "Volcengine", capability: "image",
+  id: "volcengine-ark-seedream", providerId: "volcengine-ark-image", name: "火山方舟 Seedream 官方图片生成", vendor: "Volcengine", capability: "image",
+  version: "2.1.0",
+  description: "火山方舟官方 Seedream 图片生成接口，使用普通 /api/v3 推理 API Key；支持图片生成和参考图编辑。",
+  readmeIntro: "火山方舟官方声明式图片协议插件，面向普通 `/api/v3` Seedream 图片生成接口。使用方舟推理 API Key，可生成图片或通过参考图编辑。",
+
   baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: imageParams,
+  imageParameters: [
+    { name: "size", label: "画幅 / 尺寸", type: "string", pricing: true, binding: "aspectRatio", encoding: "pixels" },
+    { name: "imageResolution", label: "分辨率", type: "string", values: ["1k", "1.5k", "2k"], default: "2k", pricing: true, binding: "resolution" },
+    { name: "layerDecomposition", label: "图层拆分", type: "boolean", default: false, pricing: true, binding: "providerOptions.volcengine-ark-image.layer_decomposition" },
+    { name: "maxImages", label: "最多输出张数（含底图）", type: "integer", min: 2, max: 100, step: 1, default: 30, binding: "providerOptions.volcengine-ark-image.max_images" },
+    { name: "layerSize", label: "拆层输出尺寸", type: "string", values: ["1K", "1.5K", "2K", "auto"], default: "auto", binding: "providerOptions.volcengine-ark-image.layer_size" },
+    { name: "background", label: "图片背景", type: "string", values: ["auto", "opaque", "transparent"], default: "auto", binding: "providerOptions.volcengine-ark-image.background" },
+    { name: "outputFormat", label: "输出格式", type: "string", values: ["png", "jpeg"], default: "png", binding: "providerOptions.volcengine-ark-image.output_format" },
+    { name: "textRecognition", label: "拆层时识别文字", type: "boolean", default: false, binding: "providerOptions.volcengine-ark-image.text_recognition" }
+  ].map((parameter) => ({ ...parameter, models: ["doubao-seedream-5-5-261028"] })),
   notes: "官方 Ark 推理接入：Base URL 使用 /api/v3，API Key 来自方舟推理接入控制台，不可与 Agent Plan 专属 Key 混用。",
-  create: jsonCreate("/api/v3/images/generations", arkSeedreamImageBody("volcengine-ark-image")),
+  create: jsonCreate("/api/v3/images/generations", {
+    ...arkSeedreamImageBody("volcengine-ark-image"),
+    size: conditional(eq(ref("request.providerOptions.volcengine-ark-image.layer_decomposition"), true), coalesce(ref("request.providerOptions.volcengine-ark-image.layer_size"), "auto"), arkSeedreamImageBody("volcengine-ark-image").size),
+    layer_decomposition: omit(ref("request.providerOptions.volcengine-ark-image.layer_decomposition")),
+    layer_decomposition_options: omit(conditional(eq(ref("request.providerOptions.volcengine-ark-image.layer_decomposition"), true), {
+      max_images: coalesce(ref("request.providerOptions.volcengine-ark-image.max_images"), 30),
+      text_recognition: coalesce(ref("request.providerOptions.volcengine-ark-image.text_recognition"), false)
+    })),
+    background: omit(conditional(eq(ref("request.providerOptions.volcengine-ark-image.layer_decomposition"), true), null, ref("request.providerOptions.volcengine-ark-image.background"))),
+    output_format: omit(ref("request.providerOptions.volcengine-ark-image.output_format"))
+  }),
   response: { status: "succeeded", images: ref("response.data"), usage: ref("response.usage"), errorPaths: ["error.code"], messagePaths: ["error.message"] }
 });
 
 add({
-  id: "volcengine-ark-agent-plan-seedream", providerId: "volcengine-ark-agent-plan-image", name: "Volcengine Ark Agent Plan Seedream Images", vendor: "Volcengine", capability: "image",
+  id: "volcengine-ark-agent-plan-seedream", providerId: "volcengine-ark-agent-plan-image", name: "火山方舟 Seedream Agent Plan 图片接口", vendor: "Volcengine", capability: "image",
+  description: "火山方舟 Agent Plan 专用 Seedream /api/plan/v3 图片生成接口，需要专用 API Key 和 AFP 额度；与普通 /api/v3 分开配置。",
+  readmeIntro: "火山方舟 Agent Plan 专用声明式图片协议插件，使用 `/api/plan/v3` 图片生成接口。需要 Agent Plan 专用 API Key 和 AFP 额度，不能与普通 `/api/v3` 方舟接口混用。",
+
   baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: imageParams,
   notes: "Agent Plan 专属接入：请求路径为 /api/plan/v3/images/generations，必须使用 Agent Plan 控制台专属 API Key；请求体与官方 Seedream 协议一致，但凭证与额度按 AFP 套餐结算，不能与 /api/v3 官方 Key 混用。",
   create: jsonCreate("/api/plan/v3/images/generations", arkSeedreamImageBody("volcengine-ark-agent-plan-image")),
@@ -307,7 +335,10 @@ const arkSeedanceResponse = {
 };
 
 add({
-  id: "volcengine-ark-seedance", providerId: "volcengine-ark-video", name: "Volcengine Ark Seedance", vendor: "Volcengine", capability: "video",
+  id: "volcengine-ark-seedance", providerId: "volcengine-ark-video", name: "火山方舟 Seedance 官方视频生成", vendor: "Volcengine", capability: "video",
+  description: "火山方舟官方 Seedance 视频生成接口，使用普通 /api/v3 Contents Generations Tasks 和方舟推理 API Key；不是 Agent Plan 专用线路。",
+  readmeIntro: "火山方舟官方声明式协议插件，面向普通 `/api/v3` Contents Generations Tasks 视频生成接口。使用普通方舟 API Key 和 Endpoint，可接入 Seedance 视频模型。",
+
   baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: arkSeedanceParams, requiresPublicMediaUrls: true,
   validations: arkSeedanceValidations,
   notes: "官方 Ark 推理接入：创建/查询/取消走 /api/v3/contents/generations/tasks；插件不根据图片下标推断首尾帧，role 由业务层确定。API Key 来自方舟推理接入控制台。",
@@ -318,7 +349,10 @@ add({
 });
 
 add({
-  id: "volcengine-ark-agent-plan-seedance", providerId: "volcengine-ark-agent-plan-video", name: "Volcengine Ark Agent Plan Seedance", vendor: "Volcengine", capability: "video",
+  id: "volcengine-ark-agent-plan-seedance", providerId: "volcengine-ark-agent-plan-video", name: "火山方舟 Seedance Agent Plan 视频接口", vendor: "Volcengine", capability: "video",
+  description: "火山方舟 Agent Plan 专用 Seedance /api/plan/v3 视频生成接口，需要专用 API Key 和 AFP 额度；与普通 /api/v3 分开配置。",
+  readmeIntro: "火山方舟 Agent Plan 专用声明式协议插件，使用 `/api/plan/v3` 视频生成接口。需要 Agent Plan 专用 API Key 和 AFP 额度，不能与普通 `/api/v3` 方舟接口混用。",
+
   baseUrl: "https://ark.cn-beijing.volces.com", auth: bearer, params: arkSeedanceParams, requiresPublicMediaUrls: true,
   validations: arkSeedanceValidations,
   notes: "Agent Plan 专属接入：创建/查询/取消走 /api/plan/v3/contents/generations/tasks；请求体与官方 Seedance 协议一致，但必须使用 Agent Plan 专属 API Key 与 AFP 额度，不能与 /api/v3 官方 Key 混用。",
@@ -397,7 +431,10 @@ const jimengResponse = (kind, results) => asyncResponse(kind, {
 });
 
 add({
-  id: "volcengine-jimeng-image", providerId: "volcengine-jimeng-image", name: "Volcengine Jimeng Image", vendor: "Volcengine", capability: "image",
+  id: "volcengine-jimeng-image", providerId: "volcengine-jimeng-image", name: "火山即梦 官方图片生成", vendor: "Volcengine", capability: "image",
+  description: "火山即梦 Visual API 图片生成接口，使用 API Key 与 Secret Key；协议和凭证不同于火山方舟 Seedream。",
+  readmeIntro: "火山即梦 Visual API 官方声明式图片协议插件，使用 API Key 与 Secret Key。它与火山方舟 Seedream 使用不同的接口协议和凭证。",
+
   baseUrl: "https://visual.volcengineapi.com", auth: { type: "volcengine-v4", field: "apiKey", secretField: "secretKey", service: "cv", region: "cn-north-1" }, params: imageParams,
   configuration: config([{ name: "secretKey", type: "secret", label: "Secret Key", required: true }]),
   notes: "本地参考图走 binary_data_base64；公网 URL 走 image_urls。WxH 尺寸拆成 width/height。",
@@ -650,7 +687,10 @@ add({
 });
 
 add({
-  id: "volcengine-jimeng-video", providerId: "volcengine-jimeng-video", name: "Volcengine Jimeng Video", vendor: "Volcengine", capability: "video",
+  id: "volcengine-jimeng-video", providerId: "volcengine-jimeng-video", name: "火山即梦 官方视频生成", vendor: "Volcengine", capability: "video",
+  description: "火山即梦 Visual API 视频生成接口，使用 API Key 与 Secret Key；协议和凭证不同于火山方舟 Seedance。",
+  readmeIntro: "火山即梦 Visual API 官方声明式视频协议插件，使用 API Key 与 Secret Key。它与火山方舟 Seedance 使用不同的接口协议和凭证。",
+
   baseUrl: "https://visual.volcengineapi.com", auth: { type: "volcengine-v4", field: "apiKey", secretField: "secretKey", service: "cv", region: "cn-north-1" }, params: videoParams,
   configuration: config([{ name: "secretKey", type: "secret", label: "Secret Key", required: true }]),
   create: jsonCreate("/", {
@@ -1281,7 +1321,7 @@ function manifestFor(spec) {
     name: spec.name,
     version: spec.version || "2.0.0",
     author: `${spec.vendor} / 影策`,
-    description: `${spec.name} 独立请求协议插件。`,
+    description: spec.description || `${spec.name} 独立请求协议插件。`,
     documentation: `# ${spec.name}\n\n完整字段、映射、响应、鉴权和兼容边界见包内 README.md 与 docs/interface.md。\n\n## 影策运行时合同\n\n用户只操作统一的文本、图片或视频能力；插件负责把统一请求转换为 ${spec.name} 上游协议。`,
     permissions: ["generation.run", "media.read"],
     configuration: spec.configuration || config(),
@@ -1417,7 +1457,8 @@ for (const spec of selectedSpecs) {
   }
   await mkdir(join(dir, "docs"), { recursive: true });
   await writeFile(join(dir, "manifest.json"), JSON.stringify(manifestFor(spec), null, 2) + "\n");
-  await writeFile(join(dir, "README.md"), `# ${spec.name}\n\n该目录是独立官方协议插件源码。后端从生成的 \`${spec.id}.yingce-plugin\` 包加载，不依赖系统内置 \`host:\` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n`);
+  const readmeIntro = spec.readmeIntro || "该目录是独立官方协议插件源码。";
+  await writeFile(join(dir, "README.md"), `# ${spec.name}\n\n${readmeIntro}\n\n后端从生成的 \`${spec.id}.yingce-plugin\` 包加载，不依赖系统内置 \`host:\` 适配器。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n`);
   await writeFile(join(dir, "docs", "interface.md"), docsFor(spec));
 }
 

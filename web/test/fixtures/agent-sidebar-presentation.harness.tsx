@@ -307,13 +307,18 @@ test("管理员空会话恢复原光球、居中欢迎文案和三个入口，�
     expect(sent).toEqual(["保留我的短片草稿"]);
 });
 
-test("普通用户欢迎页保留创作入口且不显示技能入口", async () => {
+test("普通用户欢迎页保留三个入口，可打开技能库且不丢失创作草稿", async () => {
     useUserStore.setState({ user: { id: "sidebar-user", username: "sidebar-user", displayName: "侧栏用户", role: "user", status: "active" } });
     await render(<SidebarFixture />);
-    expect(host.querySelectorAll(".agent-welcome-actions button")).toHaveLength(2);
-    expect(host.querySelector('[aria-label="打开 Skills 技能库"]')).toBeNull();
-    expect(host.textContent).not.toContain("选择技能，开始创作");
+    expect(host.querySelectorAll(".agent-welcome-actions button")).toHaveLength(3);
+    expect(button("打开 Skills 技能库").disabled).toBe(false);
+    expect(host.textContent).toContain("选择技能，开始创作");
     await type("普通用户的短片草稿");
+    await click("选择技能，开始创作");
+    await eventually(() => expect(document.querySelector('[role="dialog"] .agent-scene-capsules')).not.toBeNull());
+    await act(async () => document.querySelector<HTMLButtonElement>(".canvas-agent-skill-library-close")!.click());
+    await eventually(() => expect(document.querySelector(".agent-scene-capsules")).toBeNull());
+    expect(editorText()).toBe("普通用户的短片草稿");
     await click("发送");
     expect(sent).toEqual(["普通用户的短片草稿"]);
 });

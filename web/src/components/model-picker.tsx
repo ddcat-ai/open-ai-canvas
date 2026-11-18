@@ -61,7 +61,7 @@ export function ModelPicker({
     modelDisabledReason,
 }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const user = useUserStore((state) => state.user);
+    const userId = useUserStore((state) => state.user?.id);
     const catalogStatus = useModelCatalogStore((state) => state.status);
     const pickerId = useId();
     // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
@@ -81,7 +81,7 @@ export function ModelPicker({
     const options = useMemo(() => Array.from(new Set(selectableModelsByCapability(config, capability).filter((model) => Boolean(model) && (!modelFilter || modelFilter(model))))), [capability, config, modelFilter]);
     const usesSystemCatalog = catalogSource === "session" && (!config.channels.length || config.channels.some((channel) => channel.scope === "system"));
     const catalogRelevant = usesSystemCatalog && (!options.length || options.some((model) => resolveModelChannel(config, model).scope === "system"));
-    const catalogPending = catalogRelevant && Boolean(user) && catalogStatus !== "ready";
+    const catalogPending = catalogRelevant && Boolean(userId) && catalogStatus !== "ready";
     const catalogMessage = catalogStatus === "loading" ? "正在加载模型…" : catalogStatus === "error" ? (options.length ? "模型列表刷新失败，仍可选择已加载模型。" : "模型列表加载失败，请重试。") : "模型列表尚未加载，请重试。";
     const retryCatalog = () => {
         // 按需加载，避免静态模型展示也初始化整个用户会话模块。
@@ -117,7 +117,7 @@ export function ModelPicker({
     }, [open]);
 
     useEffect(() => {
-        if (!showSelectedPrice || !creditsEnabled || !quoteRequest) {
+        if (!userId || !showSelectedPrice || !creditsEnabled || !quoteRequest) {
             setRouteQuote(undefined);
             return;
         }
@@ -129,7 +129,7 @@ export function ModelPicker({
                 if (!controller.signal.aborted) setRouteQuote(undefined);
             });
         return () => controller.abort();
-    }, [creditsEnabled, quoteRequest, showSelectedPrice]);
+    }, [creditsEnabled, quoteRequest, showSelectedPrice, userId]);
 
     useEffect(() => {
         const closeOtherPicker = (event: Event) => {

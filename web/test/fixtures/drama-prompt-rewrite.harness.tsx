@@ -29,7 +29,7 @@ const { defaultConfig, createModelChannel, useConfigStore } = await import("@/st
 const channel = createModelChannel({ id: "text-channel", scope: "system", models: ["text-model"], modelCosts: [{ model: "text-model", capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: 0 }] });
 const config = { ...defaultConfig, channels: [channel] };
 const model = { channelId: channel.id, modelKey: "text-model" };
-const segment = { id: "segment-1", request: { seconds: 5, header: "参考图1：主角", promptMaxChars: 500, references: [{ label: "参考图1", name: "主角" }] } } as DramaSegment;
+const segment = { id: "segment-1", revision: 1, request: { seconds: 5, header: "参考图1：主角", promptMaxChars: 500, references: [{ label: "参考图1", name: "主角" }] } } as DramaSegment;
 
 test("候选保留原稿、按新要求继续修改、显式采用及过期结果阻止覆盖", async () => {
     useConfigStore.setState({ config });
@@ -43,7 +43,8 @@ test("候选保留原稿、按新要求继续修改、显式采用及过期结�
     document.body.append(host);
     const root = createRoot(host);
     let prompt = "参考图1参与打斗。";
-    const render = () => root.render(<SegmentPromptRewrite projectId="project-1" episodeId="episode-1" segment={segment} prompt={prompt} model={model} disabled={false} onApply={(value) => applied.push(value)} />);
+    let currentSegment = segment;
+    const render = () => root.render(<SegmentPromptRewrite projectId="project-1" episodeId="episode-1" segment={currentSegment} prompt={prompt} model={model} disabled={false} onApply={async (value) => applied.push(value)} />);
     const click = async (text: string) => {
         await act(async () => {
             const button = [...host.querySelectorAll("button")].find((item) => item.textContent?.includes(text));
@@ -76,9 +77,93 @@ test("候选保留原稿、按新要求继续修改、显式采用及过期结�
         await act(async () => render());
         const apply = [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.includes("采用这版提示词"))!;
         expect(apply.disabled).toBe(true);
-        expect(host.textContent).toContain("原提示词或参考素材已变化");
+        expect(host.textContent).toContain("本段内容已变化");
         await click("生成修改候选");
         expect(JSON.parse(calls.at(-1)!.prompt).currentPrompt).toBe(prompt);
+        currentSegment = { ...segment, revision: segment.revision + 1 };
+        await act(async () => render());
+        expect(apply.disabled).toBe(true);
+        await click("采用这版提示词");
+        expect(applied).toHaveLength(1);
+        await click("生成修改候选");
+        const candidate = host.querySelector<HTMLTextAreaElement>('[aria-label="AI 修改候选"]')!.value;
+        upstream.mockRejectedValueOnce(new Error("文本模型暂时不可用"));
+        await instruction("进一步减少冲突描写");
+        await click("按新要求继续修改");
+        expect(host.querySelector<HTMLTextAreaElement>('[aria-label="AI 修改候选"]')!.value).toBe(candidate);
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain("文本模型暂时不可用");
+        expect(apply.disabled).toBe(false);
+    } finally {
+        upstream.mockRestore();
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
+test("采用期间保留候选，保存失败后可直接重试，保存成功才清除", async () => {
+    useConfigStore.setState({ config });
+    const candidate = "参考图1在远景中对峙。";
+    const upstream = spyOn(generation, "runBackendGenerationTask").mockResolvedValue({ text: candidate });
+    const saves: string[] = [];
+    let resolveSave: (value: unknown) => void = () => {};
+    let rejectSave: (error: Error) => void = () => {};
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const button = (label: string) => {
+        const found = [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent?.includes(label));
+        expect(found).toBeDefined();
+        return found!;
+    };
+    const click = async (label: string) => {
+        await act(async () => button(label).click());
+    };
+    try {
+        await act(async () => {
+            root.render(
+                <SegmentPromptRewrite
+                    projectId="project-1"
+                    episodeId="episode-1"
+                    segment={segment}
+                    prompt="参考图1参与打斗。"
+                    model={model}
+                    disabled={false}
+                    onApply={(value) => {
+                        saves.push(value);
+                        return new Promise((resolve, reject) => {
+                            resolveSave = resolve;
+                            rejectSave = reject;
+                        });
+                    }}
+                />,
+            );
+        });
+        await act(async () => {
+            const field = host.querySelector<HTMLTextAreaElement>('[aria-label="提示词修改要求"]')!;
+            Object.getOwnPropertyDescriptor(dom.HTMLTextAreaElement.prototype, "value")!.set!.call(field, "将打斗改为对峙");
+            field.dispatchEvent(new dom.Event("input", { bubbles: true }));
+        });
+        await click("生成修改候选");
+        await click("采用这版提示词");
+        expect(saves).toEqual([candidate]);
+        expect(host.querySelector<HTMLTextAreaElement>('[aria-label="AI 修改候选"]')!.value).toBe(candidate);
+        expect(button("采用这版提示词").classList.contains("ant-btn-loading")).toBe(true);
+        expect(button("按新要求继续修改").disabled).toBe(true);
+        expect(button("放弃候选").disabled).toBe(true);
+        await click("采用这版提示词");
+        expect(saves).toHaveLength(1);
+        await act(async () => rejectSave(new Error("保存失败，请重试")));
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain("保存失败，请重试");
+        expect(host.querySelector<HTMLTextAreaElement>('[aria-label="AI 修改候选"]')!.value).toBe(candidate);
+        expect(button("采用这版提示词").classList.contains("ant-btn-loading")).toBe(false);
+        expect(button("采用这版提示词").disabled).toBe(false);
+        await click("采用这版提示词");
+        expect(saves).toEqual([candidate, candidate]);
+        expect(upstream).toHaveBeenCalledTimes(1);
+        await act(async () => resolveSave({ saved: true }));
+        expect(host.querySelector('[aria-label="AI 修改候选"]')).toBeNull();
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        expect(button("生成修改候选").disabled).toBe(false);
     } finally {
         upstream.mockRestore();
         await act(async () => root.unmount());

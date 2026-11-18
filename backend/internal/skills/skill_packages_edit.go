@@ -62,6 +62,9 @@ func skillVersionConflict(currentVersionID string) *kernel.AppError {
 
 // EditSkillPackageFiles 只允许作者修改；GitHub 技能以仓库为准，避免本地修改被下一次同步静默覆盖。
 func (s *Service) EditSkillPackageFiles(userID string, skillID string, req SkillPackageEditRequest) (*SkillPackageEditResult, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	skill, err := s.ownedSkill(userID, skillID)
 	if err != nil {
 		return nil, err

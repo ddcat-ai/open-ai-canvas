@@ -1,0 +1,144 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "volcengine-mediakit-depth",
+  "name": "火山 MediaKit 视频相对深度估计工具",
+  "version": "1.0.0",
+  "author": "Volcengine / 影策",
+  "description": "火山 MediaKit 视频处理工具，用于逐帧估计相对深度；默认关闭，不是视频生成模型。",
+  "enabled": false,
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "MediaKit API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "volcengine-mediakit-video-depth",
+        "label": "火山 MediaKit 视频相对深度估计工具",
+        "kind": "processing",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "canvas"
+        ],
+        "baseUrl": "https://mediakit.cn-beijing.volces.com",
+        "requiresPublicMediaUrls": true,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "videos",
+            "type": "media[]",
+            "required": true,
+            "mapping": "video_url",
+            "description": "单个源视频，最长 600 秒、分辨率不超过 2K，必须包含有效视频流。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$ref": "request.videos"
+                  }
+                },
+                1
+              ]
+            },
+            "message": "相对深度处理需要且只能提交一个源视频"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/api/v1/tools/video-depth",
+          "contentType": "application/json",
+          "body": {
+            "video_url": {
+              "$first": {
+                "$map": {
+                  "from": {
+                    "$ref": "request.videos"
+                  },
+                  "as": "media",
+                  "in": {
+                    "$ref": "media.value"
+                  }
+                }
+              }
+            },
+            "model": "standard",
+            "client_token": {
+              "$omitEmpty": {
+                "$ref": "request.extra.idempotencyKey"
+              }
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/api/v1/tasks/{{taskId}}"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.error.code"
+              }
+            ]
+          },
+          "videos": {
+            "$ref": "response.result.video_url"
+          },
+          "usage": {
+            "$omitEmpty": {
+              "outputDurationSeconds": {
+                "$ref": "response.result.duration"
+              }
+            }
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  },
+  "documentation": "# 火山 MediaKit 视频相对深度估计工具\n\n火山 MediaKit 官方声明式视频处理插件，默认关闭，不是视频生成模型。管理员启用插件，在系统渠道配置 MediaKit API Key，并为视频模型选择 `volcengine-mediakit-video-depth` 协议、配置价格和用户组后，视频节点显示「相对深度」工具。无需服务器安装推理模型。\n\n点击工具只打开确认面板，确认后创建连接原视频的结果节点和任务。产物为逐帧相对深度视频，适合动作和运镜参考；不输出骨骼、BVH 或三维动画。\n\n完整接口见 [docs/interface.md](docs/interface.md)。本目录维护 manifest 和文档源，内嵌文档及分发包从源重新生成：\n\n```bash\nbun plugin-packages/embed-documentation.mjs volcengine-mediakit-depth\npython3 - <<'PY'\nfrom pathlib import Path\nfrom zipfile import ZipFile, ZIP_DEFLATED\nroot = Path(\"plugin-packages/volcengine-mediakit-depth\")\nwith ZipFile(root.with_suffix(\".yingce-plugin\"), \"w\", ZIP_DEFLATED) as archive:\n    for relative in (\"manifest.json\", \"README.md\", \"docs/interface.md\"):\n        archive.write(root / relative, relative)\nPY\n```\n\n---\n\n# 火山 MediaKit 视频相对深度估计工具接口\n\n## 协议身份与配置\n\n- 插件 ID：`volcengine-mediakit-depth`，默认 `enabled: false`；不随画质增强插件启用。\n- Provider ID：`volcengine-mediakit-video-depth`，`kind: processing`，能力 `video`，仅系统渠道与画布使用。\n- 默认 Base URL：`https://mediakit.cn-beijing.volces.com`。\n- 必填配置 `apiKey`：MediaKit API Key，使用 `Authorization: Bearer <apiKey>`。\n- 创建：`POST /api/v1/tools/video-depth`。\n- 查询：`GET /api/v1/tasks/{{taskId}}`。\n- [官方接口说明](https://docs.volcengine.com/docs/intelligent-processing/submit-deep-motion-capture-task-api?lang=zh)。\n\n## 请求字段\n\n| 上游字段 | 统一来源 | 说明 |\n| --- | --- | --- |\n| `video_url` | `request.videos[0]`（参数 `videos`） | 单个公网视频 URL。最长 600 秒，分辨率不超过 2K，必须包含有效视频流。宿主验证源资源归属、就绪状态和时长；官方未明确 2K 的像素边界，分辨率交上游校验，不套用增强工具的 1080p 限制。 |\n| `model` | 固定 `standard` | 唯一支持的深度估计档位；不使用系统渠道的模型别名作为上游档位。 |\n| `client_token` | `request.extra.idempotencyKey` | 宿主幂等键，空时省略。 |\n\n不开放 `providerOptions`、回调、队列或 `media_output_destination`，结果沿用宿主轮询和资源入库。源视频必须是当前用户可访问的影策资源，沿用公网素材转换、出站 SSRF、配额与任务权限校验。\n\n## 响应与错误\n\n| 映射 | 来源 | 说明 |\n| --- | --- | --- |\n| `taskId` | `task_id` | 异步任务 ID；轮询时沿用原 ID。 |\n| `status` | `status` | 未返回时为 pending；running / completed / failed 映射为宿主任务状态。 |\n| `message` | `error.message` / `error.code` | `error.code` 非空时按失败处理，HTTP 失败保留失败语义。 |\n| `videos` | `result.video_url` | HEVC 相对深度视频；`resultEphemeral: true`，宿主及时下载并持久化，临时链接默认 24 小时有效。 |\n| `usage.outputDurationSeconds` | `result.duration` | 输出时长（秒），用于按秒结算；不是输入时长或估算值。 |\n\n## 计量与验收边界\n\n价格按独立 `depth` 操作配置，不使用画质增强的分辨率或帧率计价档，不预设供应商单价。按秒时先按服务端源时长预扣，成功后优先按持久化资源探测时长、其次按 `result.duration` 结算；缺少有效输出时长则待核对，不伪装为结算成功。\n\nStub 回归不代表真实服务验收。真实效果、处理耗时、HEVC 跨浏览器播放、输出时长与供应商账单对应关系均需独立验收；不为自动回归发起付费调用。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"volcengine-mediakit-depth\",\n  \"name\": \"火山 MediaKit 视频相对深度估计工具\",\n  \"version\": \"1.0.0\",\n  \"author\": \"Volcengine / 影策\",\n  \"description\": \"火山 MediaKit 视频处理工具，用于逐帧估计相对深度；默认关闭，不是视频生成模型。\",\n  \"enabled\": false,\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"MediaKit API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"volcengine-mediakit-video-depth\",\n        \"label\": \"火山 MediaKit 视频相对深度估计工具\",\n        \"kind\": \"processing\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"canvas\"\n        ],\n        \"baseUrl\": \"https://mediakit.cn-beijing.volces.com\",\n        \"requiresPublicMediaUrls\": true,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"videos\",\n            \"type\": \"media[]\",\n            \"required\": true,\n            \"mapping\": \"video_url\",\n            \"description\": \"单个源视频，最长 600 秒、分辨率不超过 2K，必须包含有效视频流。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$eq\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.videos\"\n                  }\n                },\n                1\n              ]\n            },\n            \"message\": \"相对深度处理需要且只能提交一个源视频\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/api/v1/tools/video-depth\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"video_url\": {\n              \"$first\": {\n                \"$map\": {\n                  \"from\": {\n                    \"$ref\": \"request.videos\"\n                  },\n                  \"as\": \"media\",\n                  \"in\": {\n                    \"$ref\": \"media.value\"\n                  }\n                }\n              }\n            },\n            \"model\": \"standard\",\n            \"client_token\": {\n              \"$omitEmpty\": {\n                \"$ref\": \"request.extra.idempotencyKey\"\n              }\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/api/v1/tasks/{{taskId}}\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.error.code\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$ref\": \"response.result.video_url\"\n          },\n          \"usage\": {\n            \"$omitEmpty\": {\n              \"outputDurationSeconds\": {\n                \"$ref\": \"response.result.duration\"\n              }\n            }\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

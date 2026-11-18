@@ -26,6 +26,7 @@ import {
     UserRound,
     Video,
     ImageUpscale,
+    Layers,
 } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
@@ -219,6 +220,19 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeEnhanceVideo) && ctx.nodeMetadata?.status !== "loading",
         disabled: (ctx) => !ctx.nodeMetadata?.storageKey && !ctx.nodeMetadata?.content,
         run: (ctx) => ctx.handlers.onNodeEnhanceVideo?.(ctx.node!),
+    },
+    {
+        id: "depthVideo",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "生成逐帧相对深度视频，用于动作与运镜参考",
+        displayLabel: "相对深度",
+        icon: <Layers className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 46,
+        nodeToolbar: { group: "process", order: 31, section: "深度", description: "提取相对深度，另存为新视频" },
+        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeDepthVideo) && ctx.nodeMetadata?.status !== "loading",
+        run: (ctx) => ctx.handlers.onNodeDepthVideo?.(ctx.node!),
     },
     {
         id: "saveAsset",

@@ -217,18 +217,20 @@ describe("Agent SSE recovery", () => {
 
 describe("Agent admission replay and durable pending records", () => {
     const input: CreateAgentRunInput = { canvasId: "canvas", prompt: "generate", model: "original", idempotencyKey: "stable-key-123" };
-    it("retries with a frozen original body/key and a bounded HTTP timeout", async () => {
+    it.each([false, true])("retries with a frozen original body/key and a bounded HTTP timeout (skills selected: %s)", async (withSkills) => {
         const bodies: unknown[] = [];
-        const mutable = { ...input };
+        const expectedBody: CreateAgentRunInput = withSkills ? { ...input, pinnedSkillIds: ["installed-skill"], contextScope: ["skills"] } : input;
+        const mutable = structuredClone(expectedBody);
         transport.http.post = async (_path: string, body: unknown, options: unknown) => {
             bodies.push(structuredClone(body));
             expect(options).toEqual({ timeout: 15_000 });
             mutable.model = "changed";
+            mutable.pinnedSkillIds?.push("changed-skill");
+            mutable.contextScope?.splice(0);
             if (bodies.length < 3) throw { retryable: true };
             return { run: { id: "accepted" } };
         };
         expect(await api.createAgentRun(mutable)).toMatchObject({ run: { id: "accepted" } });
-        const expectedBody = { ...input, pinnedSkillIds: [] };
         expect(bodies).toEqual([expectedBody, expectedBody, expectedBody]);
     });
 

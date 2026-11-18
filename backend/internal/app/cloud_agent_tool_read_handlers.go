@@ -317,7 +317,7 @@ func cloudAgentHandleImageAnnotationRender(repo *repository.Repository, userID s
 }
 
 func cloudAgentHandleSkillSearch(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
-	if err := cloudAgentRequireSkillToolAdministrator(repo, userID, "skill_search", services...); err != nil {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, "skill_search", services...); err != nil {
 		return nil, err
 	}
 	var args struct {
@@ -342,7 +342,7 @@ func cloudAgentHandleSkillSearch(repo *repository.Repository, userID string, sta
 }
 
 func cloudAgentHandleSkillReadFile(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
-	if err := cloudAgentRequireSkillToolAdministrator(repo, userID, "skill_read_file", services...); err != nil {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, "skill_read_file", services...); err != nil {
 		return nil, err
 	}
 	var service *Service

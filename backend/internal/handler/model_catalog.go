@@ -30,6 +30,16 @@ func RegisterModelCatalogRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"quote": quote})
 	})
 	r.GET("/model-catalog", func(c *gin.Context) {
+		expectedUser := c.GetHeader("X-Canvas-Expected-User")
+		if sessionCookie(c) == "" && (expectedUser == "" || expectedUser == "guest") {
+			catalog, err := svc.ModelCatalogForGuest()
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			ok(c, catalog)
+			return
+		}
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)

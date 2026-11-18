@@ -341,7 +341,7 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 	if call.Function.Name == "" {
 		return nil, fmt.Errorf("tool call is missing a name")
 	}
-	if err := cloudAgentRequireSkillToolAdministrator(s.repo, userID, call.Function.Name, s); err != nil {
+	if err := cloudAgentRequireSkillToolAccess(s.repo, userID, call.Function.Name, s); err != nil {
 		return nil, err
 	}
 	if err := validateCloudAgentCalls([]cloudAgentCall{call}); err != nil {
@@ -352,7 +352,7 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 		// 按历史长度二选一，看到哪份不稳定。优先回放已保存回执，两边保持一致。
 		if run, loadErr := s.repo.CloudAgent(userID, runID); loadErr == nil {
 			if state, decodeErr := cloudAgentDecode(run); decodeErr == nil {
-				if authErr := s.cloudAgentCheckSkillExecution(userID, &state, nil, ""); authErr != nil {
+				if authErr := s.RequireSkillAccess(userID); authErr != nil {
 					return nil, authErr
 				}
 				if content, ok := cloudAgentToolMessage(&state, call.ID); ok {
@@ -373,7 +373,7 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 		return nil, err
 	}
 
-	if err := s.cloudAgentCheckSkillExecution(userID, &state, nil, ""); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	allowedTools := make(map[string]bool)
@@ -405,10 +405,10 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		if err != nil {
 			return nil, err
 		}
-		if err := cloudAgentRequireSkillToolAdministrator(s.repo, userID, call.Function.Name, s); err != nil {
+		if err := cloudAgentRequireSkillToolAccess(s.repo, userID, call.Function.Name, s); err != nil {
 			return nil, err
 		}
-		if err := s.cloudAgentCheckSkillExecution(userID, &state, nil, ""); err != nil {
+		if err := s.RequireSkillAccess(userID); err != nil {
 			return nil, err
 		}
 		// A runtime may retry the same /tool request after the bridge response was
@@ -454,7 +454,7 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		if err != nil {
 			return nil, err
 		}
-		if err := s.cloudAgentCheckSkillExecution(userID, &state, nil, ""); err != nil {
+		if err := s.RequireSkillAccess(userID); err != nil {
 			return nil, err
 		}
 		if run.Status == "waiting_approval" && state.Approval != nil {
