@@ -205,15 +205,8 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if err != nil {
 			return nil, false, err
 		}
-		if err := s.cloudAgentCheckSkillExecution(userID, &state, nil, ""); err != nil {
+		if err := s.RequireSkillAccess(userID); err != nil {
 			return nil, false, err
-		}
-		for _, message := range messages {
-			if cloudAgentValueHasSkillContext(message) {
-				if err := s.RequireSkillAdministrator(userID); err != nil {
-					return nil, false, err
-				}
-			}
 		}
 		if cloudAgentRunTerminal(run.Status) {
 			return nil, false, fmt.Errorf("run already terminated")

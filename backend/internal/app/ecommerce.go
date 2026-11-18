@@ -100,7 +100,7 @@ type DeleteEcommerceProjectsRequest struct {
 // EcommerceSkillPrompt reads only installed, active skills owned by this user.
 func (s *Service) EcommerceSkillPrompt(userID string, ids []string) (string, error) {
 	if len(ids) > 0 {
-		if err := s.RequireSkillAdministrator(userID); err != nil {
+		if err := s.RequireSkillAccess(userID); err != nil {
 			return "", err
 		}
 	}

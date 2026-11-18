@@ -146,7 +146,7 @@ type SkillMutationRequest struct {
 }
 
 func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error) {
-	if err := s.RequireAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	req = normalizeSkillListRequest(req)
@@ -202,7 +202,7 @@ func (s *Service) Skills(userID string, req SkillListRequest) (*SkillList, error
 }
 
 func (s *Service) AddedSkills(userID string) ([]AddedSkillReference, error) {
-	if err := s.RequireAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	rows, _, err := s.repo.Skills(repository.SkillListFilter{UserID: userID, Scope: "mine", Sort: "updated", Limit: -1})
@@ -261,6 +261,9 @@ func (s *Service) CreateSkill(userID string, req SkillMutationRequest) (*SkillIt
 }
 
 func (s *Service) UpdateSkill(userID string, id string, req SkillMutationRequest) (*SkillItem, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	skill, err := s.ownedSkill(userID, id)
 	if err != nil {
 		return nil, err
@@ -288,6 +291,9 @@ func (s *Service) UpdateSkill(userID string, id string, req SkillMutationRequest
 }
 
 func (s *Service) DeleteSkill(userID string, id string) error {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return err
+	}
 	skill, err := s.ownedSkill(userID, id)
 	if err != nil {
 		return err
@@ -442,7 +448,7 @@ func (s *Service) skillItems(userID string, skills []model.Skill, includeInstruc
 
 // 所有详情和关系写入都先经过同一可见性边界，避免私有技能通过加入、收藏或画布接口泄露正文。
 func (s *Service) visibleSkill(userID string, id string) (*model.Skill, error) {
-	if err := s.RequireAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	id = strings.TrimSpace(id)

@@ -26,7 +26,7 @@ type EnhancedPiRequestParams struct {
 
 // buildEnhancedPiRequest 构建增强的 Pi 请求（核心方法）
 func (s *Service) buildEnhancedPiRequest(_ context.Context, params EnhancedPiRequestParams) (cloudAgentPiProcessRequest, error) {
-	if err := s.cloudAgentCheckSkillExecution(params.UserID, params.RuntimeState, params.Canonical, params.SessionJSONL); err != nil {
+	if err := s.RequireSkillAccess(params.UserID); err != nil {
 		return cloudAgentPiProcessRequest{}, err
 	}
 	slog.Debug("agent building request", "canvas", params.CanvasID)

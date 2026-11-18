@@ -57,7 +57,7 @@ type CloudAgentSkillCardUsage struct {
 
 // CloudAgentSkillUsage reports how the caller's skills were actually used.
 func (s *Service) CloudAgentSkillUsage(userID string) (*CloudAgentSkillUsage, error) {
-	if err := s.RequireSkillAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	records, err := s.repo.RecentCloudAgentEventsForUser(userID, cloudAgentSkillUsageRunWindow)

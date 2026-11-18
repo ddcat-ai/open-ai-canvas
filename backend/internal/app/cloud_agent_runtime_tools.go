@@ -439,11 +439,11 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	if state.CallIndex < 0 || state.CallIndex >= len(state.Calls) {
 		return s.failCloudAgent(run, state, "Agent 工具调用状态无效，本轮已停止")
 	}
-	if err := s.cloudAgentCheckSkillExecution(run.UserID, state, nil, ""); err != nil {
+	if err := s.RequireSkillAccess(run.UserID); err != nil {
 		return err
 	}
 	call := state.Calls[state.CallIndex]
-	if err := cloudAgentRequireSkillToolAdministrator(s.repo, run.UserID, call.Function.Name, s); err != nil {
+	if err := cloudAgentRequireSkillToolAccess(s.repo, run.UserID, call.Function.Name, s); err != nil {
 		return err
 	}
 	call = s.cloudAgentRefreshStepSnapshotHash(run, state, call)
