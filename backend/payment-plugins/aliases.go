@@ -27,9 +27,11 @@ const (
 	ProviderXunHuPay     = "xunhupay-aggregate"
 	ProviderZhiFuFM      = "zhifufm-pay"
 	ProviderEpay         = "epay"
+	ProviderHuifuH5      = "huifu-h5-cashier"
 	PluginWeChatNative   = "official-payment-wechat-native"
 	PluginAlipayPage     = "official-payment-alipay-page"
 	PluginXunHuPay       = "official-payment-xunhupay"
 	PluginZhiFuFM        = "official-payment-zhifufm"
 	PluginEpay           = "official-payment-epay"
+	PluginHuifuH5        = "official-payment-huifu-h5"
 )

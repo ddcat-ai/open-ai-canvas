@@ -227,3 +227,41 @@ func TestEpayOfficialPackageIsPaymentPlugin(t *testing.T) {
 		t.Fatalf("packaged epay executable rejected explicit configuration: %v", err)
 	}
 }
+
+func TestHuifuH5OfficialPackageIsPaymentPlugin(t *testing.T) {
+	center, err := newPluginRuntime(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plugin PluginView
+	for _, item := range center.list() {
+		if item.Manifest.ID == "official-payment-huifu-h5" {
+			plugin = item
+			plugin.Management = pluginManagementFromView(item)
+			break
+		}
+	}
+	if plugin.Manifest.ID == "" {
+		t.Fatal("official-payment-huifu-h5 is missing")
+	}
+	if plugin.Management.Kind != PluginKindPayment || plugin.Source != PluginOriginOfficial {
+		t.Fatalf("huifu-h5 plugin = %#v", plugin)
+	}
+	if len(plugin.Manifest.Contributes.PaymentProviders) != 1 || plugin.Manifest.Contributes.PaymentProviders[0].ID != "huifu-h5-cashier" {
+		t.Fatalf("huifu-h5 contributions = %#v", plugin.Manifest.Contributes.PaymentProviders)
+	}
+	registry := center.paymentRegistrySnapshot()
+	if registry == nil {
+		t.Fatal("payment registry is nil")
+	}
+	provider, ok := registry.Get("huifu-h5-cashier")
+	if !ok {
+		t.Fatal("huifu-h5-cashier provider is missing")
+	}
+	if _, ok := provider.(*payment.RPCProvider); !ok {
+		t.Fatalf("huifu-h5 provider type = %T", provider)
+	}
+	if err := provider.ValidateConfig(payment.Config{"sysId": "sys-1", "productId": "YYZY"}); err == nil {
+		t.Fatal("packaged huifu-h5 executable must reject incomplete configuration")
+	}
+}
