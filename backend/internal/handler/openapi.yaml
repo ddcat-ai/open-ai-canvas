@@ -28,7 +28,7 @@ tags:
     description: Agent 个人及平台 MCP 连接、工具发现与市场配置
   - name: admin
   - name: skills
-    description: 仅有效管理员可查看、上传、安装和管理技能；普通用户返回403，旧技能所有者身份不例外。
+    description: 有效登录用户可浏览、读取可见技能并加入自己的技能库使用；上传创建、编辑、GitHub安装或同步、删除及平台管理仅限管理员，旧技能所有者身份不授予管理权限。
   - name: workbench
   - name: dramas
     description: 短剧作品与角色、场景、道具设定
@@ -1551,12 +1551,12 @@ paths:
   /skills/presets:
     get:
       tags: [skills]
-      summary: 管理员获取场景技能预设目录
+      summary: 登录用户获取场景技能预设目录
       responses:
         "200":
           description: 标准信封 data 为 presets 数组；预设只引用公开且启用的种子技能
         "401": { $ref: "#/components/responses/Error" }
-        "403": { description: 仅管理员可访问技能预设 }
+        "403": { description: 账号已停用 }
         "500": { $ref: "#/components/responses/Error" }
   /skills/recommendations:
     get:
@@ -1568,7 +1568,7 @@ paths:
             description: "标准信封 data 为 {industries, installedTotal}；每个行业含 industryId、name、description、icon、installedCount 和 skills（skillId、skillName、description、tag、reason、isAdded）。只读目录，不会自动安装",
           }
         "401": { $ref: "#/components/responses/Error" }
-        "403": { description: 仅有效管理员可访问技能 }
+        "403": { description: 账号已停用 }
   /skills/recommendations/{industryId}/install:
     parameters:
       - {
@@ -1600,12 +1600,13 @@ paths:
           }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
-        "403": { description: 仅有效管理员可访问技能 }
+        "403": { description: 账号已停用 }
         "404": { $ref: "#/components/responses/Error" }
   /skills:
     get:
       tags: [skills]
       summary: 列出技能；在个人技能视图按技能库分类筛选
+      description: 普通有效用户可浏览公开技能和自己的技能库；私有可见性、启用状态及用户关系由服务端校验。
       parameters:
         - {
             in: query,
@@ -1654,10 +1655,11 @@ paths:
             description: 标准信封 data 为 categories、totalCount、uncategorizedCount；分类含 id、name、scope、count,
           }
         "401": { $ref: "#/components/responses/Error" }
-        "403": { description: 仅有效管理员可访问技能 }
+        "403": { description: 账号已停用 }
     post:
       tags: [skills]
       summary: 创建个人或平台技能库分类
+      description: 有效登录用户可创建自己的 personal 分类；platform 分类仅管理员可创建。
       requestBody:
         required: true
         content:
@@ -1684,6 +1686,7 @@ paths:
     delete:
       tags: [skills]
       summary: 删除技能库分类并解除相关技能归类，不删除技能
+      description: 个人分类仅分类所有者可删除；平台分类仅管理员可删除。
       responses:
         "200": { description: "标准信封 data 为 {deleted: true}" }
         "401": { $ref: "#/components/responses/Error" }
@@ -1719,7 +1722,7 @@ paths:
         "200": { description: 标准信封 data.skill 为更新后的技能 }
         "400": { description: mode 无效，或技能未安装（自建技能除外） }
         "401": { $ref: "#/components/responses/Error" }
-        "403": { description: 仅有效管理员可访问技能 }
+        "403": { description: 账号已停用或技能对当前用户不可见 }
         "404": { description: 技能不存在或对当前用户不可见 }
   /skills/{id}/library-category:
     parameters:
@@ -1763,8 +1766,8 @@ paths:
         }
     put:
       tags: [skills]
-      summary: 作者批量写入、重命名或删除技能包文本文件，并生成新的技能版本
-      description: 按顺序应用 operations 后重建 ZIP 与文件清单；SKILL.md 变化时同步 instruction。baseVersionId 必须等于当前版本，否则返回 409 skill_version_conflict，details.currentVersionId 为最新版本。GitHub 技能返回 409 failed_precondition。
+      summary: 管理员作者批量修改技能包文本文件并生成新版本
+      description: 需要当前有效管理员身份且为技能作者，普通用户即使是旧作者也不能修改。按顺序应用 operations 后重建 ZIP 与文件清单；SKILL.md 变化时同步 instruction。baseVersionId 必须等于当前版本，否则返回 409 skill_version_conflict，details.currentVersionId 为最新版本。GitHub 技能返回 409 failed_precondition。
       requestBody:
         required: true
         content:
@@ -2236,21 +2239,21 @@ paths:
     get:
       tags: [agent]
       summary: 读取云端 Agent 能力
-      description: 按当前账号角色过滤工具；普通用户 skills=false，tools 不含技能读取、检索与推荐工具。
+      description: 有效登录用户的 skills 为 true，tools 包含技能读取、检索与推荐工具；实际运行仍按当前用户的技能库、偏好与权限裁剪，技能管理不属于 Agent 工具权限。
       responses:
         "200":
           description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
   /agent/skills/usage:
     get:
       tags: [agent]
-      summary: 管理员读取自身技能使用统计（由运行日志聚合，只读）
+      summary: 登录用户读取自身技能使用统计（由运行日志聚合，只读）
       responses:
         "200":
           description: 信封 data 含 scannedRuns、searchCalls 与按启用次数降序的 skills；每个技能含 runsEnabled、searchHits、readCalls、readFailures、entryReads、cardReads 与 topCards（最多 5 条最热卡路径）。统计仅覆盖调用方本人最近的运行，且不含任何技能正文
         "401":
           description: 未登录
         "403":
-          description: 仅管理员可读取技能使用统计
+          description: 账号已停用
   /agent/profile:
     get:
       tags: [agent]
@@ -6032,7 +6035,7 @@ components:
           maxItems: 16
           items:
             type: string
-          description: 仅管理员可指定技能；普通用户指定技能返回403。其余已安装且 agentMode=auto 的技能由管理员的 Agent 按目录自动发现
+          description: 有效登录用户可指定自己已安装且启用的技能；其余已安装且 agentMode=auto 的技能由当前用户的 Agent 按目录自动发现
         contextScope:
           type: array
           maxItems: 1
