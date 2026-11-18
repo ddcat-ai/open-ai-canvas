@@ -44,10 +44,73 @@ const statusLabels: Record<AdminPoseLibraryItem["status"], { label: string; tone
 
 type SyncProgress = { running: boolean; succeeded: number; failed: number; lastError?: string };
 
+/** 体系和分类折叠并限高，避免导入后把下方素材列表挤出屏幕。 */
+export function PoseLibrarySystems({
+    systems,
+    sourceName,
+    categories = [],
+    onBulk,
+}: {
+    systems: AdminPoseLibrarySystem[];
+    sourceName: Map<string, string>;
+    categories?: AdminPoseLibraryCategory[];
+    onBulk: (action: PoseLibraryBulkAction, target: AdminPoseLibrarySystem | AdminPoseLibraryCategory) => void;
+}) {
+    return (
+        <section className="shrink-0 rounded-[var(--card-radius)] bg-[var(--library-surface)] p-4">
+            <details className="pose-library-systems">
+                <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium">
+                    <span>按体系与分类管理</span>
+                    <span className="text-xs font-normal text-[var(--text-secondary)]">
+                        {systems.length} 个体系 · 共 {systems.reduce((sum, item) => sum + item.total, 0)} 条 · 已启用 {systems.reduce((sum, item) => sum + item.enabled, 0)} 条
+                    </span>
+                </summary>
+                <div className="mt-2 max-h-60 overflow-y-auto pr-1">
+                    <div className="divide-y divide-[var(--border)]">
+                        {systems.map((item) => (
+                            <div key={`${item.sourceKey}:${item.system}`} className="py-2">
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="truncate text-sm">
+                                            {item.system}
+                                            {isAdultPoseSystem(item.system) ? (
+                                                <span className="ml-2">
+                                                    <AdminStatusBadge label="成人向" tone="warning" />
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                        <div className="text-xs text-[var(--text-secondary)]">
+                                            {sourceName.get(item.sourceKey) || item.sourceKey} · 共 {item.total} · 已同步 {item.ready} · 启用 {item.enabled}
+                                        </div>
+                                    </div>
+                                    <Button size="small" disabled={item.enabled === item.total} onClick={() => onBulk("enable", item)}>
+                                        全部启用
+                                    </Button>
+                                    <Button size="small" disabled={item.enabled === 0} onClick={() => onBulk("disable", item)}>
+                                        全部停用
+                                    </Button>
+                                    {item.sourceKey !== "custom" ? (
+                                        <Button size="small" title="数据目录丢失或来源图片更新后，放回待同步再点「同步图片」" onClick={() => onBulk("resync", item)}>
+                                            重新同步
+                                        </Button>
+                                    ) : null}
+                                    <Button size="small" danger onClick={() => onBulk("delete", item)}>
+                                        删除
+                                    </Button>
+                                </div>
+                                <CategorySwitches categories={categories.filter((entry) => entry.sourceKey === item.sourceKey && entry.system === item.system)} onToggle={(entry, enabled) => onBulk(enabled ? "enable" : "disable", entry)} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </details>
+        </section>
+    );
+}
+
 export default function PoseLibraryAdminPage({ library = "pose" }: { library?: PoseLibraryKind }) {
     const { message, modal } = App.useApp();
     const labels = POSE_LIBRARY_LABELS[library];
-    const [groupsOpen, setGroupsOpen] = useState(true);
     const [keyword, setKeyword] = useState("");
     const [source, setSource] = useState("");
     const [system, setSystem] = useState("");
@@ -269,53 +332,7 @@ export default function PoseLibraryAdminPage({ library = "pose" }: { library?: P
                 ) : null}
             </section>
 
-            {systems.length ? (
-                <section className="shrink-0 rounded-[var(--card-radius)] bg-[var(--library-surface)] p-4">
-                    <div className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1 text-sm font-medium">按体系与分类管理</div>
-                        <Button size="small" type="text" aria-expanded={groupsOpen} onClick={() => setGroupsOpen((value) => !value)}>
-                            {groupsOpen ? "收起" : `展开（${systems.length} 个体系）`}
-                        </Button>
-                    </div>
-                    {/* 体系多时限高内滚，下面的列表始终有完整的高度。 */}
-                    <div className="mt-2 max-h-[42vh] divide-y divide-[var(--border)] overflow-y-auto pr-1" hidden={!groupsOpen}>
-                        {systems.map((item) => (
-                            <div key={`${item.sourceKey}:${item.system}`} className="py-2">
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="truncate text-sm">
-                                            {item.system}
-                                            {isAdultPoseSystem(item.system) ? (
-                                                <span className="ml-2">
-                                                    <AdminStatusBadge label="成人向" tone="warning" />
-                                                </span>
-                                            ) : null}
-                                        </div>
-                                        <div className="text-xs text-[var(--text-secondary)]">
-                                            {sourceName.get(item.sourceKey) || item.sourceKey} · 共 {item.total} · 已同步 {item.ready} · 启用 {item.enabled}
-                                        </div>
-                                    </div>
-                                    <Button size="small" disabled={item.enabled === item.total} onClick={() => runBulk("enable", item)}>
-                                        全部启用
-                                    </Button>
-                                    <Button size="small" disabled={item.enabled === 0} onClick={() => runBulk("disable", item)}>
-                                        全部停用
-                                    </Button>
-                                    {item.sourceKey !== "custom" ? (
-                                        <Button size="small" title="数据目录丢失或来源图片更新后，放回待同步再点「同步图片」" onClick={() => runBulk("resync", item)}>
-                                            重新同步
-                                        </Button>
-                                    ) : null}
-                                    <Button size="small" danger onClick={() => runBulk("delete", item)}>
-                                        删除
-                                    </Button>
-                                </div>
-                                <CategorySwitches categories={categories.filter((entry) => entry.sourceKey === item.sourceKey && entry.system === item.system)} onToggle={(entry, enabled) => runBulk(enabled ? "enable" : "disable", entry)} />
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            ) : null}
+            {systems.length ? <PoseLibrarySystems systems={systems} sourceName={sourceName} categories={categories} onBulk={runBulk} /> : null}
 
             {/* 列表固定占近一屏高度并且不被上面的区块压缩，整页向下滚动即可看到。 */}
             <div className="flex h-[calc(100dvh-96px)] min-h-[520px] shrink-0 flex-col">

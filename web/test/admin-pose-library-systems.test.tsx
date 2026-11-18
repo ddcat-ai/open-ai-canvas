@@ -57,14 +57,26 @@ const sourceName = new Map(systems.map((item) => [item.sourceKey, `来源 ${item
 let root: ReturnType<typeof createRoot> | undefined;
 let host: HTMLDivElement;
 const bulkCalls: Array<[BulkAction, string]> = [];
+const categoryCalls: Array<[BulkAction, string, string, string]> = [];
 
-async function render() {
+async function render(withCategories = false) {
     bulkCalls.length = 0;
+    categoryCalls.length = 0;
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
     await act(async () => {
-        root!.render(<PoseLibrarySystems systems={systems} sourceName={sourceName} onBulk={(action, target) => bulkCalls.push([action, target.system])} />);
+        root!.render(
+            <PoseLibrarySystems
+                systems={systems}
+                sourceName={sourceName}
+                categories={withCategories ? [{ sourceKey: "source-1", system: "体系 1", category: "站姿", total: 5, enabled: 0 }] : []}
+                onBulk={(action, target) => {
+                    bulkCalls.push([action, target.system]);
+                    if ("category" in target) categoryCalls.push([action, target.sourceKey, target.system, target.category]);
+                }}
+            />,
+        );
     });
 }
 
@@ -88,6 +100,13 @@ afterAll(() => {
 });
 
 describe("姿势库按体系管理", () => {
+    test("分类开关保留来源与体系，不修改其他体系的同名分类", async () => {
+        await render(true);
+        const toggle = document.querySelector<HTMLButtonElement>('[aria-label="向用户展示分类 站姿"]')!;
+        expect(toggle).not.toBeNull();
+        await act(async () => toggle.click());
+        expect(categoryCalls).toEqual([["enable", "source-1", "体系 1", "站姿"]]);
+    });
     test("默认折叠，摘要展示体系数量与统计", async () => {
         await render();
         expect(details().open).toBe(false);
