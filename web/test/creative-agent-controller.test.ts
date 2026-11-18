@@ -5,6 +5,7 @@ import { creationRuns, type CreationRun, type CreationSubmission } from "../src/
 import { applyCanvasOperations, type CanvasSnapshot } from "../src/lib/canvas/canvas-operation-contract";
 import { useUserStore } from "../src/stores/use-user-store";
 import { apiClient } from "../src/services/api/request";
+import { invalidateAddedSkillsCache, type AddedSkillReference } from "../src/services/api/skills";
 import { createModelChannel, defaultConfig } from "../src/stores/use-config-store";
 import type { GenerationTask } from "../src/services/api/task-center";
 import { CanvasNodeType } from "../src/types/canvas";
@@ -357,17 +358,28 @@ describe("创作控制器恢复", () => {
     });
 });
 
-test("普通用户带旧技能选择也能创建规划，不请求受限技能接口", async () => {
+test("普通用户保留已选技能，读取正文后交给规划任务", async () => {
     useUserStore.setState({ hydrated: true, user: { id: "member", username: "member", displayName: "Member", role: "user", status: "active" } });
+    invalidateAddedSkillsCache();
     const channel = createModelChannel({ id: "system-text", name: "Text", scope: "system", models: ["text"], apiFormat: "openai", interfaceType: "chat-completion", apiKey: "system", baseUrl: "/api/test" });
     const config = { ...defaultConfig, channels: [channel], model: "system-text::text", textModel: "system-text::text" };
-    const h = harness({ ...initialCreativeState(), selectedSkillIds: ["private-skill"] }, "paused", [], undefined, config);
-    const request = spyOn(apiClient, "request").mockImplementation(async () => {
-        throw new Error("不得调用技能接口");
-    });
+    const skill: AddedSkillReference = { skillId: "member-installed", skillName: "图片策划方法", description: "编排主体与光线", versionId: "v1", version: "1", tag: "creative", isLike: false, isAdded: true, isOwner: false, agentMode: "manual" };
+    const file = { path: "SKILL.md", kind: "markdown", mimeType: "text/markdown", size: 50, sha256: "skill-hash" };
+    const h = harness({ ...initialCreativeState(), selectedSkillIds: [skill.skillId] }, "paused", [], undefined, config);
+    const request = spyOn(apiClient, "request").mockImplementation((async (input) => {
+        let data: unknown;
+        if (input.method !== "get") throw new Error(`技能使用不应修改技能内容：${input.method}`);
+        if (input.url === "/skills/added") data = { skills: [skill] };
+        else if (input.url === `/skills/${skill.skillId}/files`) data = { files: [file] };
+        else if (input.url === `/skills/${skill.skillId}/file` && input.params?.path === "SKILL.md") data = { file: { file, content: "# 图片策划方法\n\n先安排主体，再安排光线。", binary: false } };
+        else throw new Error(`未知技能读取：${input.url}`);
+        return { data: { code: 0, data, msg: "ok" }, status: 200, headers: {} };
+    }) as typeof apiClient.request);
     let prepared = 0;
+    let planningRequest: Parameters<typeof creationRuns.prepare>[1]["request"] | undefined;
     h.api.prepare = async (_id, input) => {
         prepared += 1;
+        planningRequest = input.request;
         return submission("planning", input.itemKey);
     };
     try {
@@ -375,11 +387,14 @@ test("普通用户带旧技能选择也能创建规划，不请求受限技能�
         await h.controller.send("帮我规划一张图片");
         expect(prepared).toBe(1);
         expect(h.view().run?.status).toBe("waiting_payment");
-        expect(h.view().state.selectedSkillIds).toEqual([]);
-        expect(request).not.toHaveBeenCalled();
+        expect(h.view().state.selectedSkillIds).toEqual([skill.skillId]);
+        expect(JSON.stringify(planningRequest)).toContain("先安排主体，再安排光线。");
+        expect(JSON.stringify(planningRequest)).toContain(skill.skillId);
+        expect(request.mock.calls.map(([input]) => input.url).sort()).toEqual(["/skills/added", `/skills/${skill.skillId}/file`, `/skills/${skill.skillId}/files`]);
     } finally {
         h.controller.dispose();
         request.mockRestore();
+        invalidateAddedSkillsCache();
         useUserStore.setState({ hydrated: false, user: null });
     }
 });
