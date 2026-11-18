@@ -12,7 +12,7 @@ func TestCloudAgentEmptyModelOutputDetection(t *testing.T) {
 		task *model.Task
 		want bool
 	}{
-		{"空回合 → 可恢复", &model.Task{Status: model.TaskStatusFailed, Error: "画布 Agent 接口没有返回内容"}, true},
+		{"空回合 → 可恢复", &model.Task{Status: model.TaskStatusFailed, Error: "画布 Agent 接口没有返回内容", ExecutionDiagnosticJSON: `{"code":"model_empty_output"}`}, true},
 		{"成功的任务不算空回合", &model.Task{Status: model.TaskStatusSucceeded, Error: ""}, false},
 		{"别的失败原因不该被吞", &model.Task{Status: model.TaskStatusFailed, Error: "上游 429 限流"}, false},
 		{"nil 安全", nil, false},
@@ -28,7 +28,7 @@ func TestCloudAgentEmptyModelOutputDetection(t *testing.T) {
 }
 
 func TestCloudAgentTruncatedToolArguments(t *testing.T) {
-	if !cloudAgentTruncatedToolArguments(&model.Task{Error: "工具参数不是完整 JSON"}) {
+	if !cloudAgentTruncatedToolArguments(&model.Task{Error: "工具参数不是完整 JSON", ExecutionDiagnosticJSON: `{"code":"model_truncated_arguments"}`}) {
 		t.Fatal("截断的工具参数应判为可恢复")
 	}
 	if cloudAgentTruncatedToolArguments(&model.Task{Error: "上游 429 限流"}) {

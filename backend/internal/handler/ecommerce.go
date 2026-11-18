@@ -371,7 +371,7 @@ func RegisterEcommerceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"status": req.Status})
 	})
-	r.POST("/ecommerce/skills/prompt", requireSkillAdministration(svc), func(c *gin.Context) {
+	r.POST("/ecommerce/skills/prompt", requireSkillAccess(svc), func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)

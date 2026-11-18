@@ -39,7 +39,7 @@ type SkillLibraryCategoryAssignmentRequest struct {
 }
 
 func (s *Service) SkillLibraryCategories(userID string, scope string) (*SkillLibraryCategoryList, error) {
-	if err := s.RequireAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	scope = normalizeSkillLibraryCategoryListScope(scope)
@@ -67,7 +67,10 @@ func (s *Service) SkillLibraryCategories(userID string, scope string) (*SkillLib
 }
 
 func (s *Service) CreateSkillLibraryCategory(actor *model.User, req SkillLibraryCategoryMutationRequest) (*SkillLibraryCategory, error) {
-	if err := s.requireSkillAdmin(actor); err != nil {
+	if actor == nil {
+		return nil, kernel.Unauthorized("请先登录")
+	}
+	if err := s.RequireSkillAccess(actor.ID); err != nil {
 		return nil, err
 	}
 	name, normalizedName := normalizeSkillLibraryCategoryName(req.Name)
@@ -80,6 +83,11 @@ func (s *Service) CreateSkillLibraryCategory(actor *model.User, req SkillLibrary
 	}
 	if scope != skillLibraryCategoryPersonal && scope != skillLibraryCategoryPlatform {
 		return nil, kernel.BadAuthRequest("分类范围必须是 personal 或 platform")
+	}
+	if scope == skillLibraryCategoryPlatform {
+		if err := s.requireSkillAdmin(actor); err != nil {
+			return nil, err
+		}
 	}
 	category := &model.SkillLibraryCategory{
 		ID: kernel.NewID(), Name: name, NormalizedName: normalizedName, Scope: scope,
@@ -98,7 +106,10 @@ func (s *Service) CreateSkillLibraryCategory(actor *model.User, req SkillLibrary
 }
 
 func (s *Service) DeleteSkillLibraryCategory(actor *model.User, id string) error {
-	if err := s.requireSkillAdmin(actor); err != nil {
+	if actor == nil {
+		return kernel.Unauthorized("请先登录")
+	}
+	if err := s.RequireSkillAccess(actor.ID); err != nil {
 		return err
 	}
 	id = strings.TrimSpace(id)
@@ -114,6 +125,11 @@ func (s *Service) DeleteSkillLibraryCategory(actor *model.User, id string) error
 	}
 	if category.Scope != skillLibraryCategoryPlatform && (category.Scope != skillLibraryCategoryPersonal || category.OwnerID != actor.ID) {
 		return kernel.Forbidden("无权删除该技能库分类")
+	}
+	if category.Scope == skillLibraryCategoryPlatform {
+		if err := s.requireSkillAdmin(actor); err != nil {
+			return err
+		}
 	}
 	return s.repo.DeleteSkillLibraryCategory(id)
 }

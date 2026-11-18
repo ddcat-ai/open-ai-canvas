@@ -28,8 +28,14 @@ func (s *Service) SkillCuration(actor *model.User, admin bool) (*SkillCuration, 
 	}
 	return s.repo.SkillCuration(admin)
 }
-func (s *Service) curationActor(actor *model.User, _ bool) error {
-	return s.requireSkillAdmin(actor)
+func (s *Service) curationActor(actor *model.User, admin bool) error {
+	if admin {
+		return s.requireSkillAdmin(actor)
+	}
+	if actor == nil {
+		return kernel.Unauthorized("请先登录")
+	}
+	return s.RequireSkillAccess(actor.ID)
 }
 
 func (s *Service) UpdateSkillCuration(actor *model.User, req SkillCurationUpdate, requestID string) (*SkillCuration, error) {

@@ -37,6 +37,9 @@ func recordTaskDiagnostic(task *model.Task, phase, code, outcome, retryClass str
 	if errors.As(cause, &appErr) && appErr.Reason != "" {
 		code = string(appErr.Reason)
 	}
+	if cause != nil && cloudAgentModelOperation(task) && (phase == "execution" || phase == "cancellation") {
+		code = string(agentModelErrorReason(cause))
+	}
 	diagnostic := &model.TaskExecutionDiagnostic{
 		Code: code, Phase: phase, TaskSubmitted: outcome == "accepted" || outcome == "submitted", SubmissionOutcome: outcome,
 		RetryClass: retryClass, SafeMessage: safeTaskDiagnosticMessage(task.Error), DiagnosticID: task.ID,

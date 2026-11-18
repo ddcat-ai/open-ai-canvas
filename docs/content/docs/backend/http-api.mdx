@@ -757,7 +757,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - `GET /agent/conversations/:id` 返回单个对话的目录项（字段同上），只读控制列、不载入事件，`latestRunId`/`status`/`revision`/`cleanupPending` 取该对话全局最新一轮；会话不存在或不属于当前用户返回 404。前端轮询时，已选中但不在当前画布目录里的对话用它判断是否变化，未变化就复用本机快照，不再每轮重读全部轮次。
 - 同一对话只允许从最新终态轮次接续。另一设备已经提交后续轮次时，旧父轮新请求返回 409，`reason: agent_conversation_stale_parent`，客户端先同步历史，不能自动重发。该检查与任务创建、积分预留同事务串行，覆盖新子轮尚未保存执行检查点的间隙；原请求的幂等回放仍先执行，画布独占和防重复生成规则保持。
 - `POST /agent/runs/:id/interjections` 向**正在运行**的轮次插入一句话，不新建轮次、不产生新的扣费身份。请求 `{ text, messageId }`，`text` 最多 4000 字符；同一 `messageId` 幂等。插话在下一次模型调用前注入；运行已结束返回 409 `agent_interjection_run_finished`，前端把这条留在本机队列首位作为下一轮发送；运行状态并发写冲突返回 409 `agent_run_state_busy`（可重试）。`DELETE /agent/runs/:id/interjections/:messageId` 撤回尚未送达的插话，已送达或本轮已结束返回 409 `agent_interjection_already_delivered`；服务端记住撤回过的 `messageId`，再次用它插话会按幂等忽略，所以前端把撤回的原文以新 ID 放回队列。步数耗尽或运行失败时发出 `user_interjection_dropped`，不会静默吞掉，也不会自动替用户开新一轮。
-- 请求字段：`canvasId`（空字符串为未绑定画布的对话）、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode`、`profileRevision`、`pinnedSkillIds`（仅管理员可用，最多 16 个：对话固定的技能加上本条消息 `@[skill:ID]` 点名的技能；必须已安装且启用，其余已安装技能由 Agent 按目录自动发现；旧字段 `skillIds` 已移除，按未知字段拒绝）、`contextScope: [] | ["canvas"]`、`focusNodeIds`（最多 8 个）、`focusNodeOmittedCount`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds, maxSteps }` 和 `idempotencyKey`。前端多选超过 8 个时保留前 8 个并报告省略数量，不清空全部焦点；计数只提供事实，不授予访问权限。未绑定画布时上下文与焦点必须为空。不接受密钥、自定义 URL、客户端历史或未知字段。
+- 请求字段：`canvasId`（空字符串为未绑定画布的对话）、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode`、`profileRevision`、`pinnedSkillIds`（有效登录用户可用，最多 16 个：对话固定的技能加上本条消息 `@[skill:ID]` 点名的技能；必须已安装且启用，其余已安装技能由 Agent 按目录自动发现；旧字段 `skillIds` 已移除，按未知字段拒绝）、`contextScope: [] | ["canvas"]`、`focusNodeIds`（最多 8 个）、`focusNodeOmittedCount`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds, maxSteps }` 和 `idempotencyKey`。前端多选超过 8 个时保留前 8 个并报告省略数量，不清空全部焦点；计数只提供事实，不授予访问权限。未绑定画布时上下文与焦点必须为空。不接受密钥、自定义 URL、客户端历史或未知字段。
 - 同用户同幂等键及相同请求返回同一运行；不同请求复用键返回 409。失败后重试同一提交应保留键。上一轮未完成时禁止追加；已完成、失败、取消或已拒绝的终态轮次作为不可变历史读取，即使其冻结的策略或节点能力版本早于当前服务，也可用于创建采用当前执行合同的新一轮，父运行不会被改写。旧版合同下仍活动或待审批的运行不得恢复执行。历史只保留最近 10 轮用户目标；运行历史与跨轮摘要仍受独立的持久化 JSON 保护，超限先丢掉更早的可重读正文并保留结构化事实，单轮仍超出当前模型能力预算时才提示缩小范围或新建对话；历史结构损坏返回明确 409，不投影为通用 500。
 - 短剧页面可传 `pageContext: { kind: "drama", projectId, episodeId?, shotId? }`，与非空 `canvasId` 互斥；指定镜头必须同时指定集。服务端在创建、读取、审批和写入时校验当前用户及项目、集、镜头的归属。本轮运行视图返回冻结的 `pageContext`，切页不改变正在执行的目标；续轮使用新目标并注入 `scope_change` 说明。页面只传身份，最新正文从数据库读取。
 - 页面工具 `drama_shot_read({ episodeId?, shotId?, offset?, limit? })`：未选集时返回本项目分集目录，已选集时返回镜头摘要；`offset` 非负，默认每页 20 条，最多 40 条。选定镜头后返回完整 `shot`、所属项目与集、集 `revision`、`source` 和 `readAt`；冻结的集或镜头只允许继续缩小范围，不能跨出该目标。
@@ -771,7 +771,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - Cloud Agent 与首页创造的规划请求使用自动工具选择。OpenAI Chat Completion 兼容协议会把显式 `auto` 归一化为省略 `tool_choice`，沿用协议默认的自动选择语义；显式开启思考模式时还会在首个上游请求前移除 `required` 或指定函数对象。非思考模式仍保留艺术点评、提示词优化等结构化任务的强制函数选择。若上游隐式开启思考而本地未声明，仍按 `required` → `auto` → 省略字段做兼容重试。
 - `GET /agent/profile?scope=user|project|canvas&projectId=...&canvasId=...` 按作用域读取生效的用户 → 项目 → 画布偏好；`PATCH /agent/profile` 用 `{ scope, projectId?, canvasId?, content, revision }` 更新单层（首次 revision 为 0，冲突返回 409）。读取返回各层独立数字 revision，以及合并文档的 `revision`/`hash`；新轮次携带合并 `profileRevision`，发生变化拒绝创建，已运行轮次仍用提交时固定的快照。system prompt 只包含层级、revision、hash 和长度清单，正文保存在运行快照中；本轮快照有层时才提供 `agent_profile_read`，只读清单中存在的层。没有偏好层时工具清单不含该工具。偏好仅是非授权数据，不能扩展工具、节点或预算，不能绕过审批；最多 12000 字符/层。
 - 行为规则唯一来源是编译进后端的 `agent-system-policy.md` v21；不再 embed 旧操作合同或独立媒体策略。媒体 ID/版本/哈希从同一系统合同派生，仅服务于冻结校验。画布能力和工具 Policy 仍由代码强制执行；新生成模式还须接入共享任务适配器。用户目标、画布内容和长期记忆以动态消息提供，不写入稳定 system 前缀。
-- 技能自动发现（仅管理员）：创建运行时，服务端把管理员已安装、`agentMode` 不是 `manual` 的技能（最多 1000 个）编成「已安装技能目录」放进 system，排在执行上下文 JSON 之后。目录最多占本轮模型输入预算的 5%（至少 1000 token）：先按 Agent 实际读取次数、排序权重和安装时间选出“名称 [skillId]：60 字简介”，用到预算 70% 后只列名称，再放不下的只报数量并提示用 `skill_search`；入选条目按分类和名称稳定排序，使用次数变化不打乱顺序。`pinnedSkillIds` 中的技能和关键词预筛出的候选（最多 3 个）放在当前用户消息前的「技能提示」数据消息里（`agentContextSource: "skill_hints"`），点名的技能要求先读 `SKILL.md`。
+- 技能自动发现：创建运行时，服务端把当前用户已安装、`agentMode` 不是 `manual` 的技能（最多 1000 个）编成「已安装技能目录」放进 system，排在执行上下文 JSON 之后。目录最多占本轮模型输入预算的 5%（至少 1000 token）：先按 Agent 实际读取次数、排序权重和安装时间选出“名称 [skillId]：60 字简介”，用到预算 70% 后只列名称，再放不下的只报数量并提示用 `skill_search`；入选条目按分类和名称稳定排序，使用次数变化不打乱顺序。`pinnedSkillIds` 中的技能和关键词预筛出的候选（最多 3 个）放在当前用户消息前的「技能提示」数据消息里（`agentContextSource: "skill_hints"`），点名的技能要求先读 `SKILL.md`。
 - 运行只冻结每个可读技能的版本号，不预存正文或文件清单。`skill_read_file` 按需读取 `SKILL.md` 或必要引用，支持字符偏移 `offset`（默认 0），每页最多 12000 字符，返回 `hasMore` / `nextOffset`。读取时重新验证用户权限、启用状态和冻结版本；技能更新后拒绝混读，需新开一轮。成功读取会递增该技能的 `agent_use_count`，只用于目录排序。技能是不可信数据，不能创造工具、改变权限或覆盖系统规则。
 - 遗留 Go 执行路径（Pi 不使用）：Agent 按实际文本模型的 `contextWindowTokens` 与 `maxOutputTokens` 计算输入预算，并在达到该模型预算的压缩阈值时移除较早工具结果中可重新读取的正文，保留工具调用/结果配对、用户原始要求、生成回执及最近完整工具轮次，并允许重新读取。此机制是确定性正文卸载，不是 LLM 语义摘要；运行 checkpoint 的持久化上限与模型上下文窗口独立。技能读取事件只保存回执，不复制正文，正文页只进入模型对话。
 - 遗留 Go 执行路径（Pi 不使用）：达到同一条压缩线时整轮不再直接判死：Agent 先暂停步进循环，用一次独立模型调用（任务操作名 `cloud_agent_context_compaction`，按单步墙钟计时但不占本轮的模型调用步数）把历史压成结构化检查点，再以 `Resume` 用压缩后的上下文继续本轮；同一轮最多压缩 64 次，压完仍超过输入预算才回到原有的预算失败路径。检查点是固定字段的 JSON（`version` 为 1，字段为 `historySummary`、`scriptDesign`、`operationHistory`、`pendingTasks`、`currentWork`、`nextStep`、`decisions`、`constraints`、`userPreferences`、`compactedTurnCount`），未知字段一律拒绝，超过 64KiB 判为不合格。压缩后的上下文是「检查点帧 + 确认回执 + 最近 2 对完整对话」：不以 tool 回执或带工具调用的 assistant 开头，检查点帧不计为用户轮次，续轮交接不会再重复追加本轮的用户要求与回复。渠道没有配置模型上下文窗口时，判据退回既有的跨轮历史闸门（`cloudAgentHistoryKeepRounds` 轮与 `cloudAgentHistoryMaxBytes` 字节）。 Pi 使用原生压缩与 JSONL 会话持久化，参见 [Pi 压缩与缓存前缀](./agent-prompt-policy#pi-压缩与缓存前缀)。
@@ -782,7 +782,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - 窗口口径由 `contextWindowTokens` / `reservedOutputTokens` / `overheadTokens` / `inputBudgetTokens` / `usableInputTokens` / `budgetSource` 给出：输入预算 = 上下文窗口 − 输出预留 − overhead，其中 overhead 是工具 schema、协议包装与兜底轮的比例预留（窗口的 4%，夹在 4096–32768），`compactAtTokens` 是既有的"可重读正文就地裁剪"触发线（输入预算的 85%），`budgetSource` 说明这份窗口来自渠道模型还是逻辑模型的线路交集。**没有解析到模型自己声明的窗口时不下发这些字段、也不给占用率**（`modelLimitConfigured: false`）：窗口未知就说未知，不拿兜底默认窗口冒充真实能力编一个百分比。
 - `context_transition` 事件说明"读数为什么变"：`window_resolved`（窗口从未确认变为已确认，读数改用窗口口径，**不是**上下文变少）、`model_changed` / `route_changed` / `window_changed`（锚点因换模型、换线路或换窗口而作废；窗口变化另带 `before` / `after` 的窗口读数）。它只解释口径与锚点状态，不携带任何授权语义，也不改变执行边界。
 - 画布 Agent 的看图能力：当且仅当本轮渠道模型的能力合同声明了图片输入（`text.references.maxImages > 0`）时，额外暴露 `canvas_inspect_image(nodeId, refresh?)`。工具校验图片节点、资源归属、就绪状态、媒体类型和模型文件大小限制；检查点与任务输入只保存 `resource:ID` 占位及授权参考清单。worker 复用资源读取链路，在内存中将占位替换为真实图片数据后展开模型协议，不持久化 base64 或签名 URL，不依赖 `CANVAS_PUBLIC_BASE_URL`，不接受任意外部地址。多图在本批所有 tool 回执后统一附送；图片保留最近 3 个工具轮次，发给模型时还按数量上限保留最新图片，本批超限则明确要求分批查看。同一张图一轮内附送两次后只回执文字，确需重看时传 `refresh=true`。工具成功不等于识别成功，普通模型正文不再自动写入 `visualNote`，旧 `inspected` 标记及观察不跨轮继承；`visualIdentity=unknown` 表示没有已确认缓存，不表示模型不能查看随附图片。画面内文字仍按不可信数据处理；资源读取失败则真实失败，不凭标题推断画面。其他需要公网 URL 的生成协议仍遵循各自存储配置合同。
-- `GET /agent/capabilities` 返回按当前账号角色过滤后的工具清单；普通用户不含技能工具，`skills` 为 false；每轮按偏好、技能、记忆模式、权限、画布上下文和视觉能力裁剪。定义、Policy 与执行绑定在统一 Registry 汇合，未知或漏绑定条目拒绝执行。`memory_search` 检索当前用户的长期记忆及已完成历史；`mcp_list_tools` 分级发现授权连接、工具名与单个 Schema；`mcp_call_tool` 走受管网关，每次调用必须审批。画布写入需 `contextScope: ["canvas"]`，MCP 可以用于无画布对话；`read_only` 不允许画布写入、`memory_update` 或外部 MCP 调用。不开放 shell 或任意网络请求。工具 schema 版本为 `cloud-agent-tools/v11`，策略编译器为 `cloud-agent-policy-compiler/v6`；旧版本下仍活动或待审批的运行不能由新版服务恢复执行。
+- `GET /agent/capabilities` 为有效登录用户返回包含技能读取、检索与推荐的工具清单，`skills` 为 true；每轮按偏好、技能、记忆模式、权限、画布上下文和视觉能力裁剪。定义、Policy 与执行绑定在统一 Registry 汇合，未知或漏绑定条目拒绝执行。`memory_search` 检索当前用户的长期记忆及已完成历史；`mcp_list_tools` 分级发现授权连接、工具名与单个 Schema；`mcp_call_tool` 走受管网关，每次调用必须审批。画布写入需 `contextScope: ["canvas"]`，MCP 可以用于无画布对话；`read_only` 不允许画布写入、`memory_update` 或外部 MCP 调用。不开放 shell 或任意网络请求。工具 schema 版本为 `cloud-agent-tools/v11`，策略编译器为 `cloud-agent-policy-compiler/v6`；旧版本下仍活动或待审批的运行不能由新版服务恢复执行。
 - `plan_update` 维护本轮结构化待办清单（整表替换，最多 20 项），跨轮继承未完成项，并在界面以 PlanBar 展示。权限为 `request_approval` 时，首次建立至少 2 项的清单会先进入审批；`auto` 直接写入清单。新一轮的第一次模型请求就会带上继承的清单。模型在没有工具调用且清单仍有未完成项时，服务端会催办并要求继续调用工具；这是软约束，不验证工作是否真的完成，也不会在没有清单时强行催建。
 - 短剧工具只在运行绑定的画布关联到当前用户的自动制作短剧时出现（服务端按画布的 `project_id` 判断，客户端不能声明）：`drama_get_context` 只读返回作品的设定、分集与剧情段摘要和画布节点上的 `dramaRef` 绑定；`drama_adopt_canvas_media` 把画布上已就绪的图片采用为设定参考图、或把视频采用为剧情段视频（默认只换本段，`cascade` 重新生成后续段），总是需要用户审批，预览类型为 `canvas_mutation`、条目操作为 `adopt_drama_media`。采用在运行检查点事务内只写数据库，不读写对象存储；剧情段尾帧与精确时长由调度循环补做，暂停中的作品在继续制作后再重新合成成片。
 - 批量生成：`generate_media_batch` 一次审批同一模式的最多 40 个空闲占位节点。条目只传 `nodeId`（可选 `prompt` 覆盖），提示词与参考取自节点及其无 handle 的入边，视频首尾帧取节点字段。服务端逐条复用 `generate_media` 的无扣费准入并报价，建好草稿后只发一张审批卡（预览 `kind: media_batch`，条目操作 `generate_media_item`），列明细、合计积分、并发、试跑与每条重试次数（0–2，默认 1）；总额上限为合计 ×（1+重试次数）。图片和视频批次审批可通过同一 decision 接口的 `mediaSettings` 统一修改模型与规格，不允许改单条目标、提示词、参考或并发/重试策略。服务端对全部条目重新做无扣费准入、预算与报价校验，原子更新审批哈希、资源引用租约与批次快照；任一条目失败则保留原审批。省略 `durationSeconds` 保留各视频条目的原时长，显式传入则统一覆盖每项时长。音频批次暂不支持此设置编辑。批准后后台执行器按并发（默认 3，不超过账号同时任务上限）提交：每次提交都重新准入，规格哈希必须与批准时一致、报价不得高于批准单价（作为 `MaxCharge`），并按本轮积分、生成次数和视频秒数预算强校验；结果逐条回写节点并发 `media_batch_progress` 事件（阶段切换带全部条目，条目变化只带增量）。`canary=true` 时先只跑第 1 条，结束后把回执交回 Agent；全部结束后记录工具回执并用恢复提示词续跑。批次执行期间 Pi 会话暂停，进程重启后按持久化的 `mediaBatch` 状态重新挂上执行器；停止本轮时未提交条目取消，已进入上游的条目按单条媒体规则继续生成并回写。
@@ -791,7 +791,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - `canvas_build_board`（写工具，需 `snapshotHash`）按分镜脚本一次搭制作看板：总控 Markdown、按类别分三列的资产占位图（`metadata.assetCategory`，放在资产背板内）、每个镜头行的关键帧与视频占位（提示词取 `imageGenerationPrompt` / `videoMotionPrompt`，缺省拼 `plotDescription` 等字段）、按幕分组的背板（`metadata.frame.color` 为语义色名），以及资产→关键帧、镜头行→关键帧/视频（写入行的 `imageNodeId` / `videoNodeId`）、关键帧→视频的连线，视频占位的首帧指向关键帧。布局由服务端确定性计算并放在现有内容右侧；节点 ID 由画布、分镜与行派生，重复调用只补缺失内容。整次搭建是一条可撤销的画布改动。
 - `ask_user` 给出一个问题与 2–6 个候选项（或最多 16 个表单字段，字段可带 `section` 分组）后结束本轮；`recordDecision=true` 时用户提交问卷后，前端在画布上新建「决策确认单」Markdown 节点，并在答案里带上 `decisionNodeId`。界面在输入框上方显示可点击的选项卡片；用户点选或输入后作为新一轮继续。运行中也可以用插话直接回答。Agent 普通回复末尾的编号选项（问句或“你可以：”之后列出 2–6 条短句）在本轮停下后也显示为卡片，点击即把该条作为用户回复发送；这是前端展示规则，不改变事件或运行合同，识别不出时保持原文。
 - 长期记忆：每个用户一份记忆文件，分「关于用户」和「工作笔记」。每轮开始时冻结快照，以 `agentContextSource: "agent_memory_doc"` 的 user 数据消息插在最后一条真实用户消息前，不进 system；用户这条消息含“记住、以后、下次、叫我”等说法时，快照末尾附一句提示。`memory_update` 一次最多 10 项 `add` / `replace` / `remove`，单条最多 400 字，全文默认 5000 字，每轮最多调用 8 次；同一调用 ID 重放不重复写。`auto` 模式立即生效并发出 `memory_updated` 事件（聊天里可撤销），`review` 模式写成待确认修订，`off` 不注入也不开放工具，`read_only` 运行不能写。旧的 `remember_lesson` / `recall_lessons` 已从工具表移除。
-- 技能市场（仅管理员）：已安装技能都不适用时，`skill_market_search` 在用户未安装的公开技能里按关键词找最多 5 个候选（只返回名称、简介和分类，不能读正文）；`skill_recommend` 只能推荐本轮检索返回过、且用户尚未安装的技能（最多 3 个，每轮一次），发出 `skill_install_suggested` 事件由界面显示安装卡片。Agent 不能自行安装。
+- 技能市场：已安装技能都不适用时，`skill_market_search` 在用户未安装的公开技能里按关键词找最多 5 个候选（只返回名称、简介和分类，不能读正文）；`skill_recommend` 只能推荐本轮检索返回过、且用户尚未安装的技能（最多 3 个，每轮一次），发出 `skill_install_suggested` 事件由界面显示安装卡片。Agent 不能自行安装。
 - `canvas_list_node_types` 从服务端节点能力 registry 返回当前可用类型；可更新节点的 `updateFields` 同时包含字段类型、最大字符数和字段语义。模型不能从前端渲染器、技能或偏好文档推断额外能力。
 - `canvas_apply_ops` 必须带 `snapshotHash`，每批最多 20 项；`add_node` 可省略坐标：服务端按画布内容落位（优先贴合本批连线的对端，否则追加到同泳道之后并避让已有节点），不再落到原点重叠；`update_node` 的 patch 额外支持 `x`/`y`（坐标绝对值上限 1e6）用于微调单个节点。支持新增文本、Markdown、图片、视频、音频、分组与分镜表节点，以及 `connect_nodes` 引用连线。媒体占位节点的 `content` 是提示词，不是媒体 URL；只建节点不提交收费生成。`update_node` 的字段映射完全由能力 registry 决定：文本 / Markdown 可改标题和正文，图片 / 视频 / 音频可改标题和下一次生成使用的提示词草稿；媒体更新参数中的 `content` 写入 `metadata.composerContent`，不会覆盖媒体结果 `metadata.content`、已提交提示词 `metadata.prompt`、任务状态或引用状态。锁定节点、删除、任意元数据写入、自连接、重复边与不存在的端点仍被服务端拒绝。
 - `canvas_arrange_nodes` 只改节点坐标：`snapshotHash` 必需，`mode` 取 `auto`（有引用连线按依赖分层、否则按媒体类型分区）/`flow`/`byType`/`row`/`column`/`grid`，`groups` 把节点按给定顺序排成横向位置带（仅位置分带，不创建容器、不改层级），`align` 做对齐或等距分布，`gap` 调整组间距，`dryRun` 只预演。`nodeIds` 省略时整理全部可整理节点，锁定节点、背板等容器节点、隐藏批次子节点与已归属背板的子节点保持不动并在回执中说明；一次最多 50 个节点。整理与 `add_node` 的自动落位共用服务端布局实现（`backend/internal/canvas/layout`），与前端“自动整理节点”使用同一套常量与算法。
@@ -812,7 +812,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - 使用画布工具时必须绑定当前用户已保存的画布；平台级对话不注入画布目录。首轮目录是独立动态消息，最多 120 个节点、约 24 KiB，仅限制当轮注入的上下文摘要，不限制画布总节点数；实际总数以 `canvas_get_state.totalNodes` 为准。全局项只含 ID、类型、截断标题及能力标记。明确选中的最多 8 个焦点先列入，附带至多 240 个 Unicode 字符的正文/提示词摘要、已记录的媒体/任务状态与一跳邻居；另选中但未附带的数量以 `omittedFocusCount` 说明。摘要不等于资源就绪证明，正文和资源事实仍需语义工具读取。Pi 不再额外注入 CanvasIntelligence 的聚类、情感、建议或任意 metadata。`canvas_get_state` 支持分页、最多 8 个节点精读及关联子图，保留真实 ID、结构化行和截断标记；名称不等于视觉识别。
 - `canvas_get_state` 接受 `offset`、`connectionOffset`、`storyboardOffset`、`nodeIds`、`focusNodeIds`、`depth`、`includeRelated`；分页偏移非负，两个 ID 数组互斥且最多 8 项。默认每次最多返回 40 个节点且不超过 64 KiB，`totalNodes` 是全画布总数；`hasMore` 和 `nextOffset` 只表示当前读取页未完，须继续分页，不能据此判断画布达到节点上限，也不影响创建节点或提交媒体任务。`depth`（0–3，默认 1）和 `includeRelated` 仅随焦点使用且互斥；`includeRelated` 的 256 节点限制仅约束单次关联子图读取。读取目录可传 `{}`，精读用返回的真实 ID；画布由运行绑定，不接受额外 `canvasId`、`limit` 或 `page`。JSON 非对象、多对象、未知字段和类型错误按现有参数纠错回执拒绝，不静默丢字段。
 - `GET /agent/runs/:id` 返回运行信息；`POST /agent/runs/:id/cancel` 取消当前运行及活动子任务；`POST /agent/runs/:id/approvals/:approvalId/decision` 接受 `{"decision":"approve"|"reject","reason":"..."}`，审批决定幂等且服务端校验归属。
-- `GET /agent/skills/usage` 需要有效管理员身份，只聚合当前管理员最近最多 200 次 Agent 运行的日志；返回技能启用次数、检索命中、成功/失败读取、总纲/卡片读取和最多 5 条最常读卡片路径，不返回技能正文。损坏的日志会返回错误而非静默给出不完整统计。
+- `GET /agent/skills/usage` 需要有效登录身份，只聚合当前用户最近最多 200 次 Agent 运行的日志；返回技能启用次数、检索命中、成功/失败读取、总纲/卡片读取和最多 5 条最常读卡片路径，不返回技能正文。损坏的日志会返回错误而非静默给出不完整统计。
 - 运行详情的事件**分页**：事件全量在 `cloud_agent_event_records`（append-only，主键 `run_id` + `sequence`），运行详情默认只返回**尾部一窗**（最新 40 条），并同时给出四个位置字段：`eventSeqBase`（本次返回的首条事件之前已入库的条数，不变量是 `events[i].seq == eventSeqBase + i + 1`）、`eventCount`（该轮次累计事件条数）、`latestSeq`（本次返回的最后一条序号，可直接作为下次 `sinceSeq`）、`eventsTruncated`（还有更早的记录没随本次返回）。不返回事件时 `eventsTruncated` 为 false，`eventSeqBase` 退回内存窗口在整条日志里的偏移。
 - 运行详情查询参数：`?sinceSeq=<seq>` 只返回该序号**之后**的事件（增量 / 断线重连，单次最多 500 条，按 seq 升序）；`?eventLimit=<n>` 覆盖默认页大小，取值 1–500，大于窗口时由服务端从事件表往前补页。两个参数都必须是整数，越界或非法返回 400；游标追平或越界时返回空 `events` 而不是报错。读取一律走 `(run_id, sequence)` 的 keyset 分页（`sequence > ? ORDER BY sequence LIMIT ?`），不用 offset，也不会为这些字段载入整条日志。升级前把事件放在 `state_json` 里的旧轮次在事件表中没有行，读取回退到内存窗口，行为与升级前一致。
 - 首次通过取消接口取消运行时记录一次 `run_cancelled` 事件，`source: user_request` 表示来自用户取消 API，并携带当时的 `activeTaskId` / `mediaTaskId`；此事件表示取消请求已接收，关联任务最终状态以任务查询及收尾状态为准。运行记录损坏或超限时优先保证取消和后台收尾，事件无法保存会记录服务端告警；旧导出日志不能据此追溯取消发起来源。
@@ -962,11 +962,16 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 
 ## 技能权限
 
-技能功能仅向当前有效的管理员账号开放。`/api/skills` 及其全部子路径（列表、预设、推荐、安装、上传、GitHub 发现/同步、详情、原始文件、打包、编辑、收藏和分类）均先鉴权，再解析请求或访问技能包；匿名请求返回 401，普通用户返回 403。旧技能的所有者身份不会绕过管理员限制。管理端 `/api/admin/skills`、技能策展及电商技能管理接口遵循同一边界。
+技能使用向所有有效登录用户开放，技能管理仅限管理员。匿名请求返回 401，停用账号返回 403；普通用户访问管理操作返回 403，使用接口继续执行资源可见性、状态及入参校验。
 
-服务端从数据库重新核对角色和账号状态，不能用客户端角色、旧会话缓存或伪造的 actor 取得权限。已有普通用户技能及文件保留供管理员处理；后台 GitHub 自动同步跳过不再属于有效管理员的技能来源。
+| 权限 | 接口与行为 |
+| --- | --- |
+| 有效登录用户 | 技能列表、预设、推荐、详情、文件清单/内容/原始字节/包与搜索；对可见技能加入或移除自己的技能库、收藏、设置 Agent 使用方式、安装行业推荐，以及维护自己的个人分类 |
+| 管理员 | 上传/创建技能、从 GitHub 发现或安装、同步来源、编辑信息或文件、删除技能；`/api/admin/skills`、平台策展维护及电商技能管理 |
 
-`GET /api/agent/skills/usage` 与 `POST /api/ecommerce/skills/prompt` 也只允许管理员。普通用户的 Agent 能力返回 `skills=false`，工具目录不列出技能工具；新对话使用空技能池，显式指定技能会被拒绝。包含旧技能上下文的运行、技能工具缓存或 Pi 会话回执不得绕过新权限继续执行。普通无技能对话及常规文本/媒体创作不依赖技能接口成功。
+使用接口继续校验技能启用状态、私有可见性和个人关系归属。旧技能的普通用户作者可以读取和使用其仍有效的技能，但作者身份不授予管理权限。服务端从数据库重新核对账号状态，管理操作额外核对当前角色，不能用客户端角色、旧会话缓存或伪造的 actor 提权。后台 GitHub 自动同步仍只处理有效管理员拥有的技能来源。
+
+`GET /api/agent/skills/usage` 读取当前用户自己的统计，`POST /api/ecommerce/skills/prompt` 只使用当前用户已安装且启用的技能。普通用户的 Agent 能力返回 `skills=true`，支持自动发现、固定和点名技能，以及市场检索与推荐；技能读取仍受本轮范围、安装关系、可见性与版本校验约束。降为普通用户不影响合法技能使用和含技能历史的会话续聊，后续管理请求仍被拒绝。
 
 ## 技能推荐与 Agent 使用方式
 
@@ -1036,12 +1041,12 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 
 ## 技能库分类 API
 
-以下接口均需要有效管理员身份。技能库分类与技能广场共享分类分离：`skills.tag` 仍表示共享市场分类；用户技能库分类记录在用户自己的技能状态中，只影响该用户技能库和画布 Agent。
+以下接口均需要有效登录身份。用户可维护自己的个人分类，平台分类维护仅限管理员。技能库分类与技能广场共享分类分离：`skills.tag` 仍表示共享市场分类；用户技能库分类记录在用户自己的技能状态中，只影响该用户技能库和画布 Agent。
 
 | 方法 | 路径 | 行为 |
 | --- | --- | --- |
 | GET | `/api/skills/library-categories?scope=mine\|created` | 返回当前用户可见的个人分类和平台分类，以及所选视图下每类数量、全部技能数和未分类数量。`mine` 包含自己创建及已加入的公开技能；`created` 只统计自己创建的技能。 |
-| POST | `/api/skills/library-categories` | 请求 `{ "name": "分镜", "scope": "personal" }`。`scope` 可省略并默认为 `personal`；管理员可指定 `platform`，该分类对其他管理员账号可见、可分配和筛选。同一用户可见范围内分类名唯一。 |
+| POST | `/api/skills/library-categories` | 请求 `{ "name": "分镜", "scope": "personal" }`。`scope` 可省略并默认为 `personal`；管理员可指定 `platform`，该分类对所有有效登录用户可见、可分配和筛选。同一用户可见范围内分类名唯一。 |
 | DELETE | `/api/skills/library-categories/:id` | 删除个人分类（仅分类所有者）或平台分类（仅管理员），只解除该分类与技能的关联，不删除技能。 |
 | PATCH | `/api/skills/:id/library-category` | 请求 `{ "categoryId": "分类 ID" }` 设置分类；空字符串清除分类。仅允许对自己创建或已加入的技能操作，并且只能使用当前用户的个人分类或平台分类。 |
 
@@ -1051,14 +1056,14 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 
 ## 技能包文件 API
 
-以下接口均需要有效管理员身份，并继续执行技能归属与私有可见性校验。管理员可通过 `/api/admin/skills/:id/...` 读写任意技能，见“管理员技能管理”。普通用户即便是旧技能的作者也不能读取或修改技能包。
+读取技能包需要有效登录身份，并校验技能启用状态与私有可见性。写入需要当前有效管理员身份且为技能作者；普通用户即便是旧技能的作者也不能修改技能包。管理员可通过 `/api/admin/skills/:id/...` 读写任意技能，见“管理员技能管理”。
 
 | 方法 | 路径 | 行为 |
 | --- | --- | --- |
 | GET | `/api/skills/:id/files` | 当前版本的文件清单：`path`、`kind`、`mimeType`、`size`、`sha256` |
 | GET | `/api/skills/:id/file?path=` | 单个文件；文本返回 `content`，二进制只返回 `binary=true`，文本超过 512KB 返回 400 |
 | GET | `/api/skills/:id/file/raw?path=` | 原始字节，`Content-Security-Policy: sandbox`、`nosniff`、`no-store` |
-| PUT | `/api/skills/:id/files` | 作者批量修改文本文件并生成新版本，见下文 |
+| PUT | `/api/skills/:id/files` | 管理员作者批量修改文本文件并生成新版本，见下文 |
 
 `PUT /api/skills/:id/files` 请求：
 
@@ -1128,7 +1133,7 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 
 ## 平台技能策展
 
-`/api/skills/curation` 与 GET／PUT `/api/admin/skill-curation` 均需要有效管理员身份；原技能列表仅在策展开启时应用新增分类筛选，响应结构不变。见 [接口与行为](./skill-curation)。
+`GET /api/skills/curation` 向有效登录用户返回公开策展目录；GET／PUT `/api/admin/skill-curation` 需要有效管理员身份。原技能列表仅在策展开启时应用新增分类筛选，响应结构不变。见 [接口与行为](./skill-curation)。
 
 一级分类扩展：管理写入增加 root 命令，assignment.rootId 与子分类完整集合一起保存；列表增加 platformRootId 筛选。关闭模式继续忽略新增筛选。
 
@@ -1159,7 +1164,7 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 | `POST /dramas/estimate` | 按章节数、字数与设置估算集数、镜头数、剧情段视频数、参考图数与费用区间（基于真实报价，含重试余量）；`episodeMode=chapter` 时集数等于章节数 |
 | `POST /dramas` | 一次性创建作品、写入原文与制作设置；`start=true` 立即进入自动制作。`sourceFormat` 为 `novel`（默认）/ `script` / `storyboard`；分集方式写在 `settings.episodeMode`（`auto` 模型分集 / `chapter` 按章分集，顶层 `episodeMode` 只在设置里没写时使用）与 `settings.chaptersPerEpisode`（按章分集时每 1–12 章一集，默认 1），剧本与分镜总是每章一集。按章分集时建档即写好各集、不经过分集规划，合并后单集原文 ≤ 4 万字。任何分集方式下单章都 ≤ 1.2 万字（剧本提示词每章读取上限，超出会丢台词，所以直接拒绝）。请求体上限 32 MiB，单章 ≤ 6 万字，全书 ≤ 600 万字。`selectedChapters`（章节下标数组，从 0 起）只让这些章节先加入制作：资产提取、分集规划与改编都只读选中的章节，按章分集时不相邻的章节不合进同一集；其余章节原文照常保存为预留章节（`project_units.status=reserved`），1.2 万字上限在加入制作时才检查；不传表示全部章节 |
 | `GET /dramas/:id` | 制作台摘要：控制面状态、每集按剧情段聚合的进度 `stats`（`segments`、`promptReady`、`videoReady`、`failed`）、队列计数、待处理收件箱。`cast_failed` 的 `castKind` 为 character/prop/scene；`segment_failed` 带 `episodeNumber`、`segmentIndex` 与失败环节 `media`（prompt/video） |
-| `PATCH /dramas/:id/settings` | 修改单集时长（30–1200 秒）、分镜规则 `storyboard`（`segmentMode` auto/fixed/range、`segmentSeconds`、`segmentMinSeconds`、`segmentMaxSeconds`、`pacing`、`dialogue`、`transition`、`transitionMs`、`performance`、`cameraMotion`）、视频提示词技能 `promptSkill`（`{ skillId, skillName, path }`，仅管理员可选；权限不足返回 403，其他不可读错误返回 400；传空 `skillId` 清除）、资产提取与分镜拆分技能 `bibleSkill` / `scriptSkill`（同格式）、视频分辨率 `videoResolution`（空为模型默认）、每段最多参考图 `referenceLimit`（0–20，0 为按视频模型上限，只约束自动取参考图的段）、审阅方式、生成节奏、参考图方案、模型、并发与预算；分集方式 `episodeMode` / `chaptersPerEpisode` 只能在分集完成（`planDone`）前修改，只影响还没分集的章节，改成按章分集后下一轮调度直接把剩余章节分组建集、在途的模型规划作废；开工后不能修改画幅；画幅只接受 9:16 / 16:9 / 1:1 / 3:4 / 4:3（创建作品同样，未知值返回 400，不再改成 9:16），视频模型给不出作品画幅时返回 400；提示词包含未知变量时返回 400 |
+| `PATCH /dramas/:id/settings` | 修改单集时长（30–1200 秒）、分镜规则 `storyboard`（`segmentMode` auto/fixed/range、`segmentSeconds`、`segmentMinSeconds`、`segmentMaxSeconds`、`pacing`、`dialogue`、`transition`、`transitionMs`、`performance`、`cameraMotion`）、视频提示词技能 `promptSkill`（`{ skillId, skillName, path }`，有效登录用户可选择可见且启用的技能；权限不足返回 403，其他不可读错误返回 400；传空 `skillId` 清除）、资产提取与分镜拆分技能 `bibleSkill` / `scriptSkill`（同格式）、视频分辨率 `videoResolution`（空为模型默认）、每段最多参考图 `referenceLimit`（0–20，0 为按视频模型上限，只约束自动取参考图的段）、审阅方式、生成节奏、参考图方案、模型、并发与预算；分集方式 `episodeMode` / `chaptersPerEpisode` 只能在分集完成（`planDone`）前修改，只影响还没分集的章节，改成按章分集后下一轮调度直接把剩余章节分组建集、在途的模型规划作废；开工后不能修改画幅；画幅只接受 9:16 / 16:9 / 1:1 / 3:4 / 4:3（创建作品同样，未知值返回 400，不再改成 9:16），视频模型给不出作品画幅时返回 400；提示词包含未知变量时返回 400 |
 | `GET /dramas/:id/draft` · `PUT /dramas/:id/draft` | 草稿回填与重存。`GET` 返回 `{ projectId, name, sourceFormat, settings, budgetMicrocredits, selectedChapters, chapterCount, form: { sourceText, styleId } }`；作品不是草稿或没有保存表单时返回 400。`PUT` 请求体同 `POST /dramas`，整体替换名称、原文章节、选章、设置与预算，`start=true` 时替换后直接开工；作品已开工返回 400，名称与其他作品重复返回 409。`POST /dramas` 在 `start=false` 时可带 `draft: { sourceText, styleId }`，作品列表项与 `production` 的 `hasDraftForm=true` 表示打开时回到创建页（`/projects/new?draft=<id>`）。保存草稿时请求体还带一份原始正文，`POST /dramas` 与 `PUT /dramas/:id/draft` 的请求体上限为 64 MiB |
 | `POST /dramas/:id/media/release` | 手动模式下放行生成：`target=assets` 只生成参考图，`episodes`（配合 `episodeIds`，最多 500）生成指定集的参考图与剧情段视频，`all` 全部开始 |
 | `POST /dramas/:id/start` · `/pause` · `/retry-failed` | 继续 / 暂停 / 把失败的参考图、段提示词与段视频重新排队，返回 `{ segments, casts }` |

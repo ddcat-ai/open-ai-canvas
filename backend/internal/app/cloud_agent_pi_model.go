@@ -205,15 +205,8 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if err != nil {
 			return nil, false, err
 		}
-		if err := s.cloudAgentCheckSkillExecution(userID, &state, nil, ""); err != nil {
+		if err := s.RequireSkillAccess(userID); err != nil {
 			return nil, false, err
-		}
-		for _, message := range messages {
-			if cloudAgentValueHasSkillContext(message) {
-				if err := s.RequireSkillAdministrator(userID); err != nil {
-					return nil, false, err
-				}
-			}
 		}
 		if cloudAgentRunTerminal(run.Status) {
 			return nil, false, fmt.Errorf("run already terminated")
@@ -384,7 +377,7 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 			}
 		}
 		if truncated {
-			err = fmt.Errorf("%w: %v", errCloudAgentTruncatedToolArguments, err)
+			err = fmt.Errorf("%w: %w", errCloudAgentTruncatedToolArguments, err)
 		}
 		return nil, retryable, err
 	}
@@ -617,18 +610,8 @@ func cloudAgentTransientModelFailure(call model.ApiCallLog) bool {
 	if call.StatusCode >= 400 && call.StatusCode < 500 {
 		return false
 	}
-	text := strings.ToLower(strings.TrimSpace(call.ErrorCode + " " + call.Error))
-	for _, marker := range []string{"invalid_request", "authentication", "permission", "forbidden", "model_not_found", "insufficient_quota", "content_policy", "sensitive_words", "safety"} {
-		if strings.Contains(text, marker) {
-			return false
-		}
-	}
-	for _, marker := range []string{"openai_error", "api_error", "server_error", "temporarily_unavailable", "service_unavailable", "overloaded", "gateway_error", "rate_limit", "too_many_requests", "upstream_timeout"} {
-		if strings.Contains(text, marker) {
-			return true
-		}
-	}
-	return false
+	reason := agentModelUpstreamReason(call.StatusCode, call.ErrorCode)
+	return reason == agentModelFailureTransient || reason == agentModelFailureTimeout
 }
 
 // cloudAgentModelTaskRetryable 按上游真实 HTTP 状态和结构化业务错误判断失败是否是临时性的：
@@ -658,9 +641,11 @@ func (s *Service) cloudAgentModelTaskRetryable(taskID string) bool {
 	case status >= 500, status == 429, status == 408:
 		return true
 	case status == 0:
-		// 没有上游响应：连接失败、重置、超时。
-		raw := strings.ToLower(task.Error)
-		return strings.Contains(raw, "timeout") || strings.Contains(raw, "deadline") || strings.Contains(raw, "connection") || strings.Contains(raw, "eof") || strings.Contains(task.Error, "超时")
+		// 没有上游响应：只使用原始 error 链持久化的网络原因。
+		switch agentModelTaskReason(task) {
+		case agentModelFailureTimeout, agentModelFailureReset, agentModelFailureRefused, agentModelFailureEOF:
+			return true
+		}
 	}
 	return false
 }
@@ -825,7 +810,7 @@ func (s *Service) waitCloudAgentTask(ctx context.Context, taskID string) (*model
 			if task.Status != model.TaskStatusSucceeded {
 				// 与画布节点同一套失败分类（网络/审核/存储/HTTP 状态/供应商原因），
 				// 原始错误保留在任务中心诊断里，不直接抛给用户。
-				return nil, BadAuthRequest(userFacingTaskFailure(task))
+				return nil, agentModelFailure(agentModelTaskReason(task), BadAuthRequest(userFacingTaskFailure(task)))
 			}
 			return task, nil
 		}
