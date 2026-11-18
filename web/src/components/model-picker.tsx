@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { modelDisplayName, modelIcon, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { useModelCatalogStore } from "@/stores/use-model-catalog-store";
 import { ModelLogo } from "@/components/model-logo";
 import { ModelTags } from "@/components/model-tags";
 import { referenceCapabilityTag } from "@/lib/model-tags";
@@ -34,6 +35,8 @@ type ModelPickerProps = {
     requirements?: ModelRequirements;
     showConfiguredModelName?: boolean;
     modelFilter?: (model: string) => boolean;
+    /** 独立编辑或预览配置不读取当前会话的系统目录状态。 */
+    catalogSource?: "session" | "provided";
     /** 调用方额外的不可选原因（例如短剧只能用平台模型）；返回非空串时选项置灰并显示原因。 */
     modelDisabledReason?: (model: string) => string;
 };
@@ -54,10 +57,12 @@ export function ModelPicker({
     requirements,
     showConfiguredModelName = false,
     modelFilter,
+    catalogSource = "session",
     modelDisabledReason,
 }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const userId = useUserStore((state) => state.user?.id);
+    const catalogStatus = useModelCatalogStore((state) => state.status);
     const pickerId = useId();
     // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
     const rawTheme = useActiveTheme();
@@ -74,6 +79,14 @@ export function ModelPicker({
         setInSpatialWorkspace(Boolean(triggerRef.current?.closest(".app-spatial-workspace")));
     }, []);
     const options = useMemo(() => Array.from(new Set(selectableModelsByCapability(config, capability).filter((model) => Boolean(model) && (!modelFilter || modelFilter(model))))), [capability, config, modelFilter]);
+    const usesSystemCatalog = catalogSource === "session" && (!config.channels.length || config.channels.some((channel) => channel.scope === "system"));
+    const catalogRelevant = usesSystemCatalog && (!options.length || options.some((model) => resolveModelChannel(config, model).scope === "system"));
+    const catalogPending = catalogRelevant && Boolean(userId) && catalogStatus !== "ready";
+    const catalogMessage = catalogStatus === "loading" ? "正在加载模型…" : catalogStatus === "error" ? (options.length ? "模型列表刷新失败，仍可选择已加载模型。" : "模型列表加载失败，请重试。") : "模型列表尚未加载，请重试。";
+    const retryCatalog = () => {
+        // 按需加载，避免静态模型展示也初始化整个用户会话模块。
+        void import("@/lib/user-session").then(({ refreshSystemChannels }) => refreshSystemChannels()).catch(() => {});
+    };
     const optionGroups = useMemo(() => groupModelsForPicker(config, options), [config, options]);
     const storedCurrent = value?.trim() || "";
     // 参数档位会在选中模型后由调用方归一到其能力配置，不能因为旧模型留下的参数而禁止切换。
@@ -140,7 +153,7 @@ export function ModelPicker({
     }, [open]);
 
     const setPickerOpen = (nextOpen: boolean) => {
-        if (nextOpen && !options.length) onMissingConfig?.();
+        if (nextOpen && !options.length && !catalogPending) onMissingConfig?.();
         if (nextOpen) window.dispatchEvent(new CustomEvent("model-picker-open", { detail: pickerId }));
         if (nextOpen) {
             setActiveGroupKey(optionGroups.find((group) => group.models.some((item) => item.models.includes(current)))?.key ?? null);
@@ -193,6 +206,16 @@ export function ModelPicker({
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
         >
+            {options.length > 0 && catalogPending ? (
+                <div className="canvas-model-picker-status" role="status">
+                    <span>{catalogMessage}</span>
+                    {catalogStatus !== "loading" ? (
+                        <button type="button" onClick={retryCatalog}>
+                            重新加载
+                        </button>
+                    ) : null}
+                </div>
+            ) : null}
             {optionGroups.length ? (
                 activeGroupKey === null ? (
                     <div className="canvas-model-picker-brands" aria-label="选择产品模型">
@@ -321,7 +344,12 @@ export function ModelPicker({
                 )
             ) : (
                 <div className="canvas-model-picker-empty" style={{ color: theme.node.muted }}>
-                    {emptyModelLabel(config, capability)}
+                    <span role={catalogPending ? "status" : undefined}>{catalogPending ? catalogMessage : emptyModelLabel(config, capability)}</span>
+                    {catalogPending && catalogStatus !== "loading" ? (
+                        <button type="button" className="canvas-model-picker-recovery" onClick={retryCatalog}>
+                            重新加载
+                        </button>
+                    ) : null}
                 </div>
             )}
         </div>

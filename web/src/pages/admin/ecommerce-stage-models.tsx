@@ -159,6 +159,7 @@ export function EcommerceStageModels({ embedded = false, onSaved }: { embedded?:
                             <div className="ecommerce-stage-models-picker">
                                 <ModelPicker
                                     config={config}
+                                    catalogSource="provided"
                                     capability="text"
                                     value={draft[stage.key].model}
                                     fullWidth
@@ -172,6 +173,7 @@ export function EcommerceStageModels({ embedded = false, onSaved }: { embedded?:
                             <div className="ecommerce-stage-models-picker">
                                 <ModelPicker
                                     config={config}
+                                    catalogSource="provided"
                                     capability="text"
                                     value={draft[stage.key].fallback}
                                     fullWidth

@@ -20,6 +20,7 @@ import { clearResourceAccessCache } from "@/services/api/resources";
 import { clearResourceBlobCache } from "@/services/resource-blob-cache";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
+import { useModelCatalogStore } from "@/stores/use-model-catalog-store";
 
 export async function switchUserStorageScope(userId?: string | null, expectedSession = captureUserSession(true), isCurrent = () => true) {
     return withGenerationConsumersPaused(async () => {
@@ -37,9 +38,18 @@ export async function switchUserStorageScope(userId?: string | null, expectedSes
 }
 
 let sessionGeneration = 0;
+let catalogRequest: { generation: number; promise: Promise<void> } | undefined;
+let catalogInitialConfig: typeof defaultConfig | undefined;
+
+function resetModelCatalog() {
+    catalogRequest = undefined;
+    catalogInitialConfig = undefined;
+    useModelCatalogStore.setState({ status: "idle" });
+}
 
 export function suspendUserSession() {
     sessionGeneration += 1;
+    resetModelCatalog();
     useUserStore.getState().setHydrated(false);
     appQueryClient.clear();
     resetRemoteUserDataSync();
@@ -49,6 +59,7 @@ export function suspendUserSession() {
 
 export async function applyUserSession(payload: AuthSessionPayload, expectedSession: UserSessionSnapshot = captureUserSession(true)) {
     const generation = ++sessionGeneration;
+    resetModelCatalog();
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
     useUserStore.getState().setHydrated(false);
@@ -126,29 +137,10 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
         resetRemoteUserDataSync();
     }
 
-    void (async () => {
-        try {
-            const catalog = await getModelCatalog();
-            if (!isCurrentSession(generation, userId)) return;
-            if (!persistedConfig) {
-                // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
-                const initialSystemConfig = {
-                    ...defaultConfig,
-                    channels: modelCatalogChannels(catalog),
-                    imageModels: undefined,
-                    videoModels: undefined,
-                    textModels: undefined,
-                    audioModels: undefined,
-                };
-                useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
-            } else {
-                useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
-            }
-        } catch (error) {
-            if (isCurrentSession(generation, userId)) console.warn("模型目录后台刷新失败，保留本地配置", error);
-        }
-    })();
     if (isCurrentSession(generation, userId)) {
+        catalogInitialConfig = persistedConfig ? undefined : useConfigStore.getState().config;
+        // 失败状态保留给页面重试，不把网络故障当成空模型目录。
+        void refreshSystemChannels().catch(() => {});
         recordDiagnosticEvent({
             category: "navigation",
             level: "info",
@@ -180,9 +172,35 @@ function safeScopedStorageGet(key: string) {
     }
 }
 
-export async function refreshSystemChannels() {
-    const catalog = await getModelCatalog();
-    useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+export function refreshSystemChannels(): Promise<void> {
+    const generation = sessionGeneration;
+    const userId = useUserStore.getState().user?.id || "";
+    if (!isCurrentSession(generation, userId)) return Promise.reject(new DOMException("账号已切换，请重新加载", "AbortError"));
+    if (catalogRequest?.generation === generation) return catalogRequest.promise;
+    useModelCatalogStore.setState({ status: "loading" });
+    const promise = (async () => {
+        try {
+            const catalog = await getModelCatalog();
+            if (!isCurrentSession(generation, userId)) throw new DOMException("账号已切换，请重新加载", "AbortError");
+            const channels = modelCatalogChannels(catalog);
+            if (catalogInitialConfig && useConfigStore.getState().config === catalogInitialConfig) {
+                // 重试仍可初始化首次配置，但不能覆盖等待期间用户做过的编辑。
+                const initialSystemConfig = { ...defaultConfig, channels, imageModels: undefined, videoModels: undefined, textModels: undefined, audioModels: undefined };
+                useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
+            } else {
+                useConfigStore.getState().mergeSystemChannels(channels);
+            }
+            catalogInitialConfig = undefined;
+            useModelCatalogStore.setState({ status: "ready" });
+        } catch (error) {
+            if (isCurrentSession(generation, userId)) useModelCatalogStore.setState({ status: "error" });
+            throw error;
+        } finally {
+            if (catalogRequest?.generation === generation) catalogRequest = undefined;
+        }
+    })();
+    catalogRequest = { generation, promise };
+    return promise;
 }
 
 // 目录仅接受系统渠道模型，避免畸形响应被当成空目录写入配置。
