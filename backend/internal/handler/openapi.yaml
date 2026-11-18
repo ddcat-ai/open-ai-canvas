@@ -22,6 +22,7 @@ tags:
   - name: resources
   - name: tasks
   - name: assets
+  - name: community-works
   - name: models
   - name: agent
   - name: mcp
@@ -43,6 +44,278 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /works:
+    get:
+      tags: [community-works]
+      summary: 分页读取当前用户的投稿
+      description: 仅返回当前登录用户的投稿，包含所有状态。管理员查看全站投稿须使用 /admin/works。响应 private,no-store。
+      parameters:
+        - { $ref: "#/components/parameters/CommunityWorkStatus" }
+        - { $ref: "#/components/parameters/CommunityWorkPage" }
+        - { $ref: "#/components/parameters/CommunityWorkPageSize" }
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [community-works]
+      summary: 提交图片或视频成品供审核
+      description: 成品、封面及可选制作画布中的所有资源必须属于当前用户且保存完成；成品与封面不接受 SVG。rightsConfirmed 必须为 true。制作画布最多 2 MiB，提交时固定公开快照和资源白名单；不会复制原媒体。同一成品只允许一份待审或已发布投稿。请求正文最多 32 KiB，每账号每分钟最多 20 次；账号存储只读时拒绝。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommunityWorkInput" }
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPrivate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /works/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+    get:
+      tags: [community-works]
+      summary: 作者或管理员读取投稿详情
+      description: 作者可读取自己的任何状态投稿，管理员可读取全站投稿；其他账号返回 404。包含私有 projectId 与审核反馈，响应 no-store。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPrivate" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [community-works]
+      summary: 作者修改投稿并重新送审
+      description: 仅作者本人可修改，管理员不能代改。使用完整投稿正文替换；任何状态修改后均回到 pending、取消精选并重新固定快照，原公开版本立即不可访问。资源、权利确认、32 KiB 正文、20 次/分钟及存储只读校验与首次投稿相同。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommunityWorkInput" }
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPrivate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /works/{id}/withdraw:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+    post:
+      tags: [community-works]
+      summary: 作者撤回投稿
+      description: 仅作者本人可执行；重复撤回幂等。状态变为 withdrawn 并取消精选，后续公开详情、制作画布、资源及复制请求均拒绝；保留原媒体与审核记录。存储只读账号仍可撤回，不需要请求正文。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPrivate" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /admin/works:
+    get:
+      tags: [community-works, admin]
+      summary: 管理员分页读取全站投稿
+      description: 仅活动管理员账号可访问；支持全部五种投稿状态，响应 private,no-store。
+      parameters:
+        - { $ref: "#/components/parameters/CommunityWorkStatus" }
+        - { $ref: "#/components/parameters/CommunityWorkPage" }
+        - { $ref: "#/components/parameters/CommunityWorkPageSize" }
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /admin/works/{id}/review:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+    patch:
+      tags: [community-works, admin]
+      summary: 管理员审核、精选或下架投稿
+      description: 仅管理员可执行，正文最多 4 KiB，每次操作追加审核日志。approve/reject 仅允许 pending；批准前重新核验作者活动状态和全部媒体。feature/unfeature/unlist 仅允许 published；批准不会自动设为首页精选。reject 必须填写非空原因；unlist 取消精选并使后续公开访问不可用。状态冲突返回 409。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommunityWorkReviewInput" }
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPrivate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /public/works:
+    get:
+      tags: [community-works]
+      summary: 读取已发布用户作品或首页精选
+      security: []
+      description: 仅返回已发布且作者账号活动的投稿，按更新时间倒序，最多 200 条；featured=true 用于首页精选。公开响应不含原画布 projectId、账号联系方式或审核原因，响应 no-store；每 IP 每分钟最多 120 次。
+      parameters:
+        - in: query
+          name: featured
+          schema: { type: boolean, default: false }
+          description: 仅 true 筛选精选；省略或 false 返回所有已发布作品
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPublicList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /public/works/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+    get:
+      tags: [community-works]
+      summary: 匿名读取已发布作品详情
+      security: []
+      description: 待审、驳回、撤回、下架、作者停用及不存在的作品均返回 404。无需入选精选即可通过此接口读取已发布作品，响应 no-store。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkPublic" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /works/{id}/project:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+    get:
+      tags: [community-works, canvas]
+      summary: 作者或管理员预览投稿的固定制作画布
+      description: 权限与私有投稿详情相同。读取投稿时保存的公开字段快照，不读取作者后来编辑的画布；未附制作画布返回 404。媒体引用改写为私有投稿白名单资源入口，响应 no-store。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkProject" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /public/works/{id}/project:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+    get:
+      tags: [community-works, canvas]
+      summary: 匿名预览已发布作品的固定制作画布
+      security: []
+      description: 只读预览，不创建用户工程或复制媒体。作品必须已发布、作者账号活动且投稿时选择公开制作画布。返回固定节点、布局、连线和公开元数据；去除聊天、渠道凭据、任务运行态及非托管媒体 URL，预演场景沿用上游公开画布的省略策略。资源引用改写为公开投稿白名单入口，响应 no-store。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkProject" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /public/works/{id}/copy:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+    post:
+      tags: [community-works, canvas]
+      summary: 将已发布作品的制作画布复制到当前用户
+      security:
+        - sessionCookie: []
+      description: 此 public 前缀下的写接口仍须登录。用户主动调用后才复制资源，重建当前用户的 Asset 和媒体节点归属，并持久保存新画布；返回的 project.id 可直接进入编辑。重复复制复用同来源的资源文件和 Asset，每次产生新画布；复制自己的作品复用已有资源。受上传、结构化存储配额和账号只读限制，复制提交前再次核验作品版本、发布状态及双方账号。每账号每分钟最多 6 次，不需要请求正文，响应 private,no-store。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkProject" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /works/{id}/resources/{resourceId}/file:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceID" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceVariant" }
+      - { $ref: "#/components/parameters/CommunityWorkResourcePurpose" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceAccess" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceDownload" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceRange" }
+    get:
+      tags: [community-works, resources]
+      summary: 作者或管理员读取投稿白名单资源
+      description: 权限与私有详情相同；资源必须在固定投稿白名单内、属于作者且处于 ready。按统一资源分发策略返回文件流或 307；access=1 返回访问描述。支持 Range。响应 private,no-store、no-referrer 和 sandbox；每 IP 每分钟最多 300 次。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkMedia" }
+        "206": { $ref: "#/components/responses/CommunityWorkMediaPartial" }
+        "307": { $ref: "#/components/responses/CommunityWorkMediaRedirect" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "416": { description: 字节范围不满足资源长度；本地文件流可返回非 JSON 错误正文 }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /public/works/{id}/resources/{resourceId}/file:
+    parameters:
+      - { $ref: "#/components/parameters/CommunityWorkID" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceID" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceVariant" }
+      - { $ref: "#/components/parameters/CommunityWorkResourcePurpose" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceAccess" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceDownload" }
+      - { $ref: "#/components/parameters/CommunityWorkResourceRange" }
+    get:
+      tags: [community-works, resources]
+      summary: 匿名读取已发布作品的白名单资源
+      security: []
+      description: 每次请求核验发布状态、作者活动状态、固定白名单及资源归属；未通过均返回 404。支持 Range，按统一策略返回文件流、307 或 access=1 的访问描述。签名地址受一分钟上限约束；公共 CDN 地址仍依既有分发配置，撤回不能召回已经交付的媒体。响应 private,no-store、no-referrer 和 sandbox；每 IP 每分钟最多 300 次。
+      responses:
+        "200": { $ref: "#/components/responses/CommunityWorkMedia" }
+        "206": { $ref: "#/components/responses/CommunityWorkMediaPartial" }
+        "307": { $ref: "#/components/responses/CommunityWorkMediaRedirect" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "416": { description: 字节范围不满足资源长度；本地文件流可返回非 JSON 错误正文 }
+        "429": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /public/works/{id}/reaction:
+    parameters:
+      - $ref: '#/components/parameters/CommunityWorkID'
+    get:
+      tags: [community-works]
+      summary: 读取已发布作品的点赞数
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/CommunityWorkReaction'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /works/{id}/reaction:
+    parameters:
+      - $ref: '#/components/parameters/CommunityWorkID'
+    get:
+      tags: [community-works]
+      summary: 读取已发布作品的点赞数及当前用户状态
+      responses:
+        '200':
+          $ref: '#/components/responses/CommunityWorkReaction'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /works/{id}/like:
+    parameters:
+      - $ref: '#/components/parameters/CommunityWorkID'
+    put:
+      tags: [community-works]
+      summary: 给已发布作品点赞
+      responses:
+        '200':
+          $ref: '#/components/responses/CommunityWorkReaction'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [community-works]
+      summary: 取消对已发布作品的点赞
+      responses:
+        '200':
+          $ref: '#/components/responses/CommunityWorkReaction'
+        '404':
+          $ref: '#/components/responses/Error'
+
   /admin/users/{id}/agent-history:
     delete:
       tags: [admin]
@@ -4824,6 +5097,68 @@ paths:
           description: 持久化失败，客户端保留本机数据并可重试
 components:
   parameters:
+    CommunityWorkID:
+      name: id
+      in: path
+      required: true
+      description: 投稿 ID，由服务端生成，前缀为 work-
+      schema: { type: string }
+
+    CommunityWorkResourceID:
+      name: resourceId
+      in: path
+      required: true
+      description: 已包含在该投稿固定白名单内的资源 ID
+      schema: { type: string }
+
+    CommunityWorkStatus:
+      name: status
+      in: query
+      description: 省略或空字符串返回全部状态
+      schema:
+        type: string
+        enum: ["", pending, published, rejected, withdrawn, unlisted]
+
+    CommunityWorkPage:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+
+    CommunityWorkPageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 24 }
+
+    CommunityWorkResourceVariant:
+      name: variant
+      in: query
+      schema: { type: string, enum: [original, playback, thumbnail], default: original }
+      description: 可播放副本或缩略图未就绪时按既有资源策略回落原件
+
+    CommunityWorkResourcePurpose:
+      name: purpose
+      in: query
+      schema: { type: string, enum: [display, copy, download, browser-process, ecommerce-export, provider-input], default: display }
+      description: 资源用途；copy/download/ecommerce-export/provider-input 固定 original，ecommerce-export 另校验图片类型和大小
+
+    CommunityWorkResourceAccess:
+      name: access
+      in: query
+      schema: { type: string, enum: ["1"] }
+      description: 为 1 时返回 JSON 信封 data.access，不返回文件正文或重定向
+
+    CommunityWorkResourceDownload:
+      name: download
+      in: query
+      schema: { type: string, enum: ["1"] }
+      description: purpose 未填写时，download=1 等价于 purpose=download
+
+    CommunityWorkResourceRange:
+      name: Range
+      in: header
+      schema: { type: string, example: "bytes=0-1023" }
+      description: 字节范围请求；本地或代理流返回 206，CDN/源站分发时由 307 后的媒体地址处理
+
     MCPResourceID:
       name: id
       in: path
@@ -4848,6 +5183,165 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    CommunityWorkStatus:
+      type: string
+      enum: [pending, published, rejected, withdrawn, unlisted]
+
+    CommunityWorkCategory:
+      type: string
+      enum: [drama, animation, commercial, music, documentary, education, creative, other]
+
+    CommunityWorkInput:
+      type: object
+      required: [title, category, mediaResourceId, coverResourceId, rightsConfirmed]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120, description: 去除首尾空白后的作品名称 }
+        description: { type: string, maxLength: 2000, description: 可选作品简介 }
+        category: { $ref: "#/components/schemas/CommunityWorkCategory" }
+        tags:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 32 }
+          description: 可省略；服务端去除首尾空白并去重
+        mediaResourceId: { type: string, minLength: 1, maxLength: 80, description: 当前用户保存完成的图片或视频成品资源 }
+        coverResourceId: { type: string, minLength: 1, maxLength: 80, description: 当前用户保存完成的图片封面资源，不接受 SVG }
+        projectId: { type: string, maxLength: 80, description: 可选制作画布 ID；空值只发布成品，非空值明确公开其中制作素材 }
+        rightsConfirmed: { type: boolean, enum: [true], description: 确认拥有作品及所公开制作素材的发布权利 }
+
+    CommunityWorkSummary:
+      type: object
+      required: [id, title, description, category, tags, author, kind, mediaResourceId, coverResourceId, mediaUrl, coverUrl, hasProject, status, featured, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: 服务端生成的 work- 前缀投稿 ID }
+        title: { type: string }
+        description: { type: string }
+        category: { $ref: "#/components/schemas/CommunityWorkCategory" }
+        tags: { type: array, items: { type: string } }
+        author: { type: string, description: 投稿时固定的公开显示名，不返回邮箱或手机号 }
+        kind: { type: string, enum: [image, video] }
+        mediaResourceId: { type: string }
+        coverResourceId: { type: string }
+        mediaUrl: { type: string, description: 按当前公开或私有场景生成的投稿资源入口；视频默认带 variant=playback }
+        coverUrl: { type: string, description: 投稿封面白名单资源入口 }
+        hasProject: { type: boolean }
+        status: { $ref: "#/components/schemas/CommunityWorkStatus" }
+        featured: { type: boolean, description: 是否入选首页精选，与 published 状态独立 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CommunityWorkPrivate:
+      allOf:
+        - { $ref: "#/components/schemas/CommunityWorkSummary" }
+        - type: object
+          properties:
+            projectId: { type: string, description: 投稿附带的原画布 ID；未附画布时省略 }
+            reviewReason: { type: string, description: 作者及管理员可见的审核说明；空值省略 }
+
+    CommunityWorkPublic:
+      description: 公开 DTO 不返回 projectId、reviewReason、用户账号或存储凭据
+      allOf:
+        - { $ref: "#/components/schemas/CommunityWorkSummary" }
+        - type: object
+          properties:
+            status: { type: string, enum: [published] }
+
+    CommunityWorkPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CommunityWorkPrivate" } }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, format: int64, minimum: 0, description: 当前权限与状态筛选下的总数 }
+
+    CommunityWorkPublicList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/CommunityWorkPublic" } }
+
+    CommunityWorkReviewInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [approve, reject, feature, unfeature, unlist] }
+        reason: { type: string, maxLength: 500, description: 审核说明；驳回必须填写去除首尾空白后非空的原因 }
+      oneOf:
+        - properties:
+            action: { type: string, enum: [reject] }
+            reason: { type: string, minLength: 1 }
+          required: [reason]
+        - properties:
+            action: { type: string, enum: [approve, feature, unfeature, unlist] }
+
+    CommunityWorkProject:
+      type: object
+      required: [project]
+      properties:
+        project:
+          type: object
+          required: [id, title, nodes, connections]
+          description: 预览为公开字段冻结快照，复制为已保存的新用户画布。预览媒体使用投稿白名单 URL；复制后媒体使用当前用户资源引用和 Asset。
+          properties:
+            id: { type: string }
+            title: { type: string }
+            revision: { type: integer, format: int64, minimum: 1, description: 仅复制结果包含已保存的新画布版本 }
+            createdAt: { type: string, format: date-time, nullable: true }
+            updatedAt: { type: string, format: date-time, nullable: true }
+            nodes:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  type: { type: string }
+                  title: { type: string, nullable: true }
+                  position: { type: object, nullable: true, properties: { x: { type: number }, y: { type: number } } }
+                  width: { type: number, nullable: true }
+                  height: { type: number, nullable: true }
+                  parentId: { type: string, nullable: true }
+                  metadata: { type: object, additionalProperties: true, description: 提示词、富文本、故事板等公开字段；不含渠道凭据及任务运行态 }
+            connections:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  fromNodeId: { type: string }
+                  toNodeId: { type: string }
+                  fromHandleId: { type: string, nullable: true }
+                  toHandleId: { type: string, nullable: true }
+            viewport: { type: object, nullable: true, properties: { x: { type: number }, y: { type: number }, k: { type: number } } }
+            chatSessions: { type: array, maxItems: 0, items: { type: object } }
+            activeChatId: { type: string, nullable: true }
+            previsScenes: { type: array, maxItems: 0, items: { type: object } }
+
+    CommunityWorkResourceAccess:
+      type: object
+      required: [resourceId, requestedVariant, actualVariant, url, delivery, issuedAt, expiresAt, refreshAt, revision]
+      properties:
+        resourceId: { type: string }
+        requestedVariant: { type: string, enum: [original, playback, thumbnail] }
+        actualVariant: { type: string, enum: [original, playback, thumbnail] }
+        url: { type: string, description: 统一分发层选择的资源地址，不返回存储密钥 }
+        delivery: { type: string, enum: [cdn, origin, platform-local, platform-proxy] }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time, nullable: true, description: 签名地址到期时间；公共分发地址可能为空 }
+        refreshAt: { type: string, format: date-time }
+        revision: { type: string }
+        fallbackReason: { type: string }
+
+    CommunityWorkReaction:
+      type: object
+      required: [count, liked]
+      properties:
+        count:
+          type: integer
+          format: int64
+          minimum: 0
+        liked:
+          type: boolean
+
     SystemUpdateSources:
       type: object
       required: [githubSource, imageSource]
@@ -6163,6 +6657,127 @@ components:
                 - model_catalog_mismatch
                 - invalid_model_selection
   responses:
+    CommunityWorkPrivate:
+      description: 投稿私有详情，位于信封 data
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/CommunityWorkPrivate" }
+
+    CommunityWorkPublic:
+      description: 已发布作品公开详情，位于信封 data
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/CommunityWorkPublic" }
+
+    CommunityWorkPage:
+      description: 作者或管理员分页结果，位于信封 data
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/CommunityWorkPage" }
+
+    CommunityWorkPublicList:
+      description: 已发布作品列表，位于信封 data；空列表仍返回 items 数组
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/CommunityWorkPublicList" }
+
+    CommunityWorkProject:
+      description: 冻结制作快照或复制后已保存的新画布，位于信封 data.project
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data: { $ref: "#/components/schemas/CommunityWorkProject" }
+
+    CommunityWorkMedia:
+      description: 资源完整文件流；仅 access=1 时返回 JSON 信封 data.access
+      headers:
+        Cache-Control: { schema: { type: string }, description: "private, no-store" }
+        Referrer-Policy: { schema: { type: string, enum: [no-referrer] } }
+        Content-Security-Policy: { schema: { type: string }, description: sandbox；非内联媒体另加 default-src 'none' }
+      content:
+        "*/*":
+          schema: { type: string, format: binary }
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/Envelope" }
+              - type: object
+                required: [data]
+                properties:
+                  code: { type: integer, enum: [0] }
+                  data:
+                    type: object
+                    required: [access]
+                    properties:
+                      access: { $ref: "#/components/schemas/CommunityWorkResourceAccess" }
+
+    CommunityWorkMediaPartial:
+      description: Range 请求的资源部分字节，不使用 JSON 业务信封
+      headers:
+        Content-Range: { schema: { type: string }, description: 例如 bytes 0-1023/4096 }
+        Accept-Ranges: { schema: { type: string, enum: [bytes] } }
+        Cache-Control: { schema: { type: string }, description: "private, no-store" }
+        Referrer-Policy: { schema: { type: string, enum: [no-referrer] } }
+        Content-Security-Policy: { schema: { type: string }, description: sandbox；非内联媒体另加 default-src 'none' }
+      content:
+        "*/*":
+          schema: { type: string, format: binary }
+
+    CommunityWorkMediaRedirect:
+      description: 交由统一分发层选定的 CDN 或源站读取，不包含重定向 HTML 正文
+      headers:
+        Location: { required: true, schema: { type: string, format: uri } }
+        Cache-Control: { schema: { type: string }, description: "private, no-store" }
+        Accept-Ranges: { schema: { type: string, enum: [bytes] } }
+        Referrer-Policy: { schema: { type: string, enum: [no-referrer] } }
+        Content-Security-Policy: { schema: { type: string, enum: [sandbox] } }
+
+    CommunityWorkReaction:
+      description: 点赞统计与当前登录用户的点赞状态
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CommunityWorkReaction'
+
     MCPCatalog:
       description: MCP 市场条目列表；空列表返回 items 数组
       content:

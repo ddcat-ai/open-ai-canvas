@@ -23,6 +23,7 @@ import { FOLDER_COLLAPSED_HEIGHT, FOLDER_COLLAPSED_WIDTH, isCanvasFolderNode, is
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import { getContextResourceNodes } from "@/lib/canvas/canvas-resource-references";
 import { getPublicCanvasShare } from "@/services/api/canvas-share";
+import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import { useCanvasThemeStore, useCanvasThemeScope } from "@/stores/canvas/use-canvas-theme-store";
 import { CanvasNodeType, type CanvasNodeData, type Position, type ViewportTransform } from "@/types/canvas";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
@@ -32,13 +33,18 @@ type ContextMenu = { x: number; y: number; world: Position; nodeId?: string };
 type DragState = { primaryId: string; nodeIds: string[]; startX: number; startY: number; origins: Map<string, Position>; moved: boolean };
 
 export default function SharedCanvasPage() {
-    useCanvasThemeScope();
     const { token = "" } = useParams();
+    return <SharedCanvasView token={token} />;
+}
+
+export function SharedCanvasView({ token = "", snapshot }: { token?: string; snapshot?: CanvasProject }) {
+    useCanvasThemeScope();
     const { message } = App.useApp();
     const colorTheme = useCanvasThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
     const containerRef = useRef<HTMLDivElement>(null);
     const viewportRef = useRef<ViewportTransform>({ x: 0, y: 0, k: 1 });
+    const fittedSnapshot = useRef<CanvasProject | undefined>(undefined);
     const dragRef = useRef<DragState | null>(null);
     const toolbarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [title, setTitle] = useState("共享画布");
@@ -98,7 +104,7 @@ export default function SharedCanvasPage() {
             if (appliedShareTheme && state.theme !== previous.theme && state.theme !== appliedShareTheme) themeChangedAfterApply = true;
         });
         setLoading(true);
-        getPublicCanvasShare(token)
+        (snapshot ? Promise.resolve({ project: snapshot }) : getPublicCanvasShare(token))
             .then(({ project }) => {
                 if (!active) return;
                 setTitle(project.title || "共享画布");
@@ -126,7 +132,7 @@ export default function SharedCanvasPage() {
                 useCanvasThemeStore.getState().setTheme(themeBeforeShare);
             }
         };
-    }, [token]);
+    }, [snapshot, token]);
 
     useEffect(() => {
         const onMove = (event: MouseEvent) => {
@@ -203,7 +209,7 @@ export default function SharedCanvasPage() {
             k: scale,
         });
     };
-    const resetViewport = () => {
+    const resetViewport = useCallback(() => {
         const container = containerRef.current;
         if (!container || !nodes.length) return onViewportChange({ x: 0, y: 0, k: 1 });
         const rect = container.getBoundingClientRect();
@@ -213,7 +219,12 @@ export default function SharedCanvasPage() {
         const bottom = Math.max(...nodes.map((node) => node.position.y + node.height));
         const scale = Math.min(1, Math.max(0.05, Math.min((rect.width - 120) / Math.max(right - left, 1), (rect.height - 140) / Math.max(bottom - top, 1))));
         onViewportChange({ x: rect.width / 2 - ((left + right) / 2) * scale, y: rect.height / 2 - ((top + bottom) / 2) * scale, k: scale });
-    };
+    }, [nodes, onViewportChange]);
+    useEffect(() => {
+        if (!snapshot || loading || fittedSnapshot.current === snapshot) return;
+        fittedSnapshot.current = snapshot;
+        resetViewport();
+    }, [loading, resetViewport, snapshot]);
     const openContextMenu = (event: ReactMouseEvent, nodeId?: string) => {
         event.preventDefault();
         event.stopPropagation();
@@ -304,7 +315,7 @@ export default function SharedCanvasPage() {
     const toolbarNodeKey = selectedNodeId;
     const toolbarNode = toolbarNodeKey ? nodeById.get(toolbarNodeKey) || null : null;
 
-    if (loading) return <FullScreenLoader label="正在打开共享画布" detail="读取节点、连线和视图状态" />;
+    if (loading) return snapshot ? null : <FullScreenLoader label="正在打开共享画布" detail="读取节点、连线和视图状态" />;
     if (loadError)
         return (
             <div className="grid h-screen place-items-center px-5" style={{ background: theme.canvas.background }}>
@@ -322,22 +333,24 @@ export default function SharedCanvasPage() {
         );
 
     return (
-        <main data-canvas-viewport className="relative h-screen overflow-hidden" style={{ background: resolveCanvasAppearance(appearance, colorTheme).background, color: theme.node.text }}>
-            <header className="pointer-events-none absolute inset-x-0 top-0 z-[var(--z-panel-floating)] flex h-16 items-center justify-between px-5">
-                <div className="pointer-events-auto flex min-w-0 items-center gap-3">
-                    <Share2 className="size-4" style={{ color: theme.node.muted }} />
-                    <span className="max-w-[45vw] truncate text-base font-semibold">{title}</span>
-                    <span className="inline-flex items-center gap-1 text-xs" style={{ color: theme.node.muted }}>
-                        <Eye className="size-3.5" />
-                        只读分享
-                    </span>
-                </div>
-                <AuthLoginLink className="pointer-events-auto">
-                    <Button type="text" icon={<LogIn className="size-4" />}>
-                        登录
-                    </Button>
-                </AuthLoginLink>
-            </header>
+        <main data-canvas-viewport className={snapshot ? "relative h-[min(68dvh,720px)] overflow-hidden" : "relative h-screen overflow-hidden"} style={{ background: resolveCanvasAppearance(appearance, colorTheme).background, color: theme.node.text }}>
+            {!snapshot ? (
+                <header className="pointer-events-none absolute inset-x-0 top-0 z-[var(--z-panel-floating)] flex h-16 items-center justify-between px-5">
+                    <div className="pointer-events-auto flex min-w-0 items-center gap-3">
+                        <Share2 className="size-4" style={{ color: theme.node.muted }} />
+                        <span className="max-w-[45vw] truncate text-base font-semibold">{title}</span>
+                        <span className="inline-flex items-center gap-1 text-xs" style={{ color: theme.node.muted }}>
+                            <Eye className="size-3.5" />
+                            只读分享
+                        </span>
+                    </div>
+                    <AuthLoginLink className="pointer-events-auto">
+                        <Button type="text" icon={<LogIn className="size-4" />}>
+                            登录
+                        </Button>
+                    </AuthLoginLink>
+                </header>
+            ) : null}
 
             <CanvasViewport
                 containerRef={containerRef}

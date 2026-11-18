@@ -1,0 +1,33 @@
+.community-preview-media {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: var(--radius);
+    background: var(--muted);
+}
+
+.community-preview-media img,
+.community-preview-media video {
+    display: block;
+    width: 100%;
+    max-height: 66dvh;
+    object-fit: contain;
+}
+
+.community-preview-author {
+    margin: 12px 0;
+    color: var(--muted-foreground);
+}
+
+.community-preview-description {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin-bottom: 12px;
+}
+
+.community-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+}

@@ -5,6 +5,19 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 用户作品投稿（Schema 106）
+
+版本 106 `community_work_publication` 添加作品、投稿资源引用、审核记录和点赞四张表。迁移保留现有画布和素材，并纳入 SQLite 到 PostgreSQL 迁移清单。
+
+| 表 | 用途 |
+| --- | --- |
+| `community_works` | 标题、作者、成品和封面引用、可选的固定画布快照、审核状态与精选标记。活跃投稿键防止同一成品重复投稿，修订号用于并发检查 |
+| `community_work_resources` | 作品允许读取的资源引用，保护审核和公开预览依赖的媒体 |
+| `community_work_reviews` | 审核、精选、撤回和下架的操作记录 |
+| `community_work_likes` | 按作品与账号记录点赞 |
+
+接口与公开边界见[用户投稿与首页精选](/docs/backend/community-works)。
+
 ## 对白同步与提示词核对
 
 沿用现有字段，无新增表或 Schema 迁移。`drama_segments.prompt_status` 新增 `conflict`（镜头已保存但无法安全同步，保留两份正文）及 `review`（AI 新稿生成后保留原手写稿，等待采用）。原因保存在 `prompt_error`。两种状态均不计为提示词就绪，不允许提交视频；显式确认正文后恢复。只修改对白时按唯一引语局部更新 `video_prompt_override`，没有手写稿时更新 `video_prompt`，同时递增修订号使迟到作业失效。

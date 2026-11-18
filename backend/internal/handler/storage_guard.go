@@ -48,6 +48,8 @@ var storageReadOnlyExemptRoutes = map[string]struct{}{
 	"/dramas/:id/asset-package":                      {},
 	"/creation-runs/:id/release":                     {},
 	"/creation-runs/:id/heartbeat":                   {},
+	"/works/:id/withdraw":                            {},
+	"/works/:id/like":                                {},
 }
 
 func storageReadOnlyExempt(method, fullPath string) bool {

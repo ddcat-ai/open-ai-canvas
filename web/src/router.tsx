@@ -54,6 +54,9 @@ const SystemUpdatePage = lazyAdminPage(() => import("@/pages/admin/settings/syst
 const SystemPerformancePage = lazyAdminPage(() => import("@/pages/admin/settings/system-performance-page"));
 const StoryboardPromptsPage = lazyAdminPage(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const AdminFeedbacksPage = lazyAdminPage(() => import("@/pages/admin/feedbacks/feedbacks-page"));
+const AdminWorksPage = lazyAdminPage(() => import("@/pages/admin/works/works-page"));
+const MyWorksPage = lazy(() => import("@/pages/works"));
+const CommunitySharedWork = lazy(() => import("@/components/community-works/community-shared-work"));
 const UsersPage = lazyAdminPage(() => import("@/pages/admin/users/users-page"));
 const UserGroupsPage = lazyAdminPage(() => import("@/pages/admin/user-groups/user-groups-page"));
 const AssetsPage = workspaceRoutePages.assets;
@@ -144,6 +147,7 @@ const routes: RouteObject[] = [
         ],
     },
     { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
+    { path: "/share/work/:id", element: fullScreenDeferred(<CommunitySharedWork />), errorElement: <RouteErrorPage /> },
     // H5 真人认证回跳页：多在未登录的手机上打开，不进入工作区登录守卫。
     { path: "/ark-portrait/result", element: fullScreenDeferred(<ArkPortraitResultPage />), errorElement: <RouteErrorPage /> },
     ...(import.meta.env.DEV ? devRoutes() : []),
@@ -153,6 +157,7 @@ const routes: RouteObject[] = [
         children: [
             { path: "/", element: deferred(<CreatePage />) },
             { path: "/create", element: deferred(<CreatePage />) },
+            { path: "/my/works", element: <RequireAuth>{deferred(<MyWorksPage />)}</RequireAuth> },
             { path: "/ecommerce", element: <RequireAuth>{deferred(<EcommercePage />)}</RequireAuth> },
             {
                 path: "/toolbox/image",
@@ -256,6 +261,7 @@ const routes: RouteObject[] = [
                     { path: "login-logs", element: <LoginLogsPage /> },
                     { path: "email-logs", element: <EmailLogsPage /> },
                     { path: "feedbacks", element: <AdminFeedbacksPage /> },
+                    { path: "works", element: <AdminWorksPage /> },
                     { path: "channels", element: <ChannelsPage /> },
                     // 关闭前台模型只影响用户端模型来源；后台仍可进入，便于开启前先配置。
                     { path: "models", element: <LogicalModelsPage /> },

@@ -99,6 +99,7 @@ import { trackSiteTrafficAction } from "@/services/site-traffic";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
 const InspirationHall = lazy(() => import("@/pages/inspirations"));
+const FeaturedCommunityWorks = lazy(() => import("@/components/community-works/featured-community-works").then(({ FeaturedCommunityWorks }) => ({ default: FeaturedCommunityWorks })));
 const loadCreationRuntime = () => import("./creation-runtime");
 type CreationRuntime = Awaited<ReturnType<typeof loadCreationRuntime>>;
 
@@ -1681,6 +1682,9 @@ export default function CreatePage() {
                                 />
                             </section>
                             <CreationRecentCanvases onRequireLogin={() => openAuth()} />
+                            <Suspense fallback={null}>
+                                <FeaturedCommunityWorks />
+                            </Suspense>
                             <Suspense
                                 fallback={
                                     <div className="creation-hall-loading" role="status">
