@@ -106,7 +106,7 @@ func (s *Service) AdminPaymentOrdersCSV(ctx context.Context, actor *model.User, 
 		if order.ProviderTradeNo != nil {
 			trade = *order.ProviderTradeNo
 		}
-		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.DisplayName, user.Email, order.ProductName, s.paymentExportProviderName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt), order.PaymentMethod, paymentDecimal(order.ChargeAmountFen, 2, false), order.ChargeCurrency, formatPaymentRate(order.ExchangeRateMicros)})
+		rows = append(rows, []string{paymentCSVIdentifier(order.ID), paymentCSVIdentifier(order.MerchantOrderNo), paymentCSVIdentifier(trade), paymentCSVIdentifier(order.UserID), user.Username, user.DisplayName, user.Email, order.ProductName, s.paymentProviderDisplayName(order.ProviderID), paymentDecimal(order.AmountFen, 2, false), order.Currency, paymentDecimal(order.CreditsMicrocredits, 6, true), paymentExportLabel(string(order.Status)), order.ProviderStatus, paymentCSVTime(&order.CreatedAt), paymentCSVTime(order.ProviderPaidAt), paymentCSVTime(order.CreditedAt), paymentCSVTime(order.ClosedAt), order.PaymentMethod, paymentDecimal(order.ChargeAmountFen, 2, false), order.ChargeCurrency, formatPaymentRate(order.ExchangeRateMicros)})
 	}
 	return paymentCSV(rows)
 }
@@ -132,7 +132,7 @@ func (s *Service) AdminPaymentReconciliationsCSV(ctx context.Context, actor *mod
 		if actor == "system" {
 			actor = "系统"
 		}
-		rows = append(rows, []string{paymentCSVIdentifier(run.ID), run.BillDate, s.paymentExportProviderName(run.ProviderID), paymentExportLabel(string(run.Status)), strconv.Itoa(run.TotalItems), strconv.Itoa(run.MatchItems), strconv.Itoa(run.RecoveredItems), strconv.Itoa(run.ErrorItems), run.Error, paymentCSVIdentifier(actor), paymentCSVTime(&run.StartedAt), paymentCSVTime(run.CompletedAt)})
+		rows = append(rows, []string{paymentCSVIdentifier(run.ID), run.BillDate, s.paymentProviderDisplayName(run.ProviderID), paymentExportLabel(string(run.Status)), strconv.Itoa(run.TotalItems), strconv.Itoa(run.MatchItems), strconv.Itoa(run.RecoveredItems), strconv.Itoa(run.ErrorItems), run.Error, paymentCSVIdentifier(actor), paymentCSVTime(&run.StartedAt), paymentCSVTime(run.CompletedAt)})
 	}
 	return paymentCSV(rows)
 }
@@ -166,7 +166,7 @@ func (s *Service) AdminPaymentReconciliationItemsCSV(ctx context.Context, actor 
 		if item.Resolved {
 			resolved = "是"
 		}
-		rows = append(rows, []string{paymentCSVIdentifier(run.ID), run.BillDate, s.paymentExportProviderName(run.ProviderID), paymentCSVIdentifier(item.PaymentOrderID), paymentCSVIdentifier(item.MerchantOrderNo), paymentCSVIdentifier(item.ProviderTradeNo), paymentDecimal(item.AmountFen, 2, false), source, item.Currency, paymentExportLabel(string(item.Result)), resolved, item.Detail, paymentCSVTime(&run.StartedAt), paymentCSVTime(run.CompletedAt)})
+		rows = append(rows, []string{paymentCSVIdentifier(run.ID), run.BillDate, s.paymentProviderDisplayName(run.ProviderID), paymentCSVIdentifier(item.PaymentOrderID), paymentCSVIdentifier(item.MerchantOrderNo), paymentCSVIdentifier(item.ProviderTradeNo), paymentDecimal(item.AmountFen, 2, false), source, item.Currency, paymentExportLabel(string(item.Result)), resolved, item.Detail, paymentCSVTime(&run.StartedAt), paymentCSVTime(run.CompletedAt)})
 	}
 	return paymentCSV(rows)
 }
@@ -238,7 +238,7 @@ func paymentCSVTime(value *time.Time) string {
 	return value.In(paymentBillLocation).Format("2006-01-02 15:04:05")
 }
 
-func (s *Service) paymentExportProviderName(id string) string {
+func (s *Service) paymentProviderDisplayName(id string) string {
 	if s.paymentRegistry != nil {
 		if provider, ok := s.paymentRegistry.Get(id); ok {
 			return provider.Descriptor().Name

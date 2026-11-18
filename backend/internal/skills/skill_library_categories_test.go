@@ -15,9 +15,8 @@ import (
 
 func TestSkillLibraryCategoriesVisibilityAssignmentAndDelete(t *testing.T) {
 	svc, db := newSkillLibraryCategoryTestService(t)
-	// Personal-library isolation still applies between separate active administrators.
-	user := createSkillTestUser(t, db, "user-1", model.UserRoleAdmin, model.UserStatusActive)
-	otherUser := createSkillTestUser(t, db, "user-2", model.UserRoleAdmin, model.UserStatusActive)
+	user := createSkillTestUser(t, db, "user-1", model.UserRoleUser, model.UserStatusActive)
+	otherUser := createSkillTestUser(t, db, "user-2", model.UserRoleUser, model.UserStatusActive)
 	admin := createSkillTestUser(t, db, "admin-1", model.UserRoleAdmin, model.UserStatusActive)
 	member := createSkillTestUser(t, db, "member", model.UserRoleUser, model.UserStatusActive)
 

@@ -115,6 +115,9 @@ export const zhCN = {
         expressionNodeDeleted: "表情编辑节点已被删除",
         emptyVideoEnhance: "视频节点为空，无法画质增强",
         noEnhanceModel: "管理员尚未配置可用的画质增强模型",
+        emptyVideoDepth: "视频节点为空，无法生成相对深度视频",
+        noDepthModel: "管理员尚未配置可用的相对深度模型",
+        titleDepth: "{{title}} · 相对深度",
         titleEnhance: "{{title}} · 画质增强 {{resolution}}",
     },
     layerMaterials: {
@@ -300,6 +303,8 @@ export const zhCN = {
         restoreSaveFailed: "恢复作品保存失败",
         enhanceSourceMissing: "源视频节点已删除或为空，无法重新增强；没有提交任务",
         enhanceFailed: "画质增强失败",
+        depthSourceMissing: "源视频节点已删除或为空，无法重新处理；没有提交任务",
+        depthFailed: "相对深度处理失败",
         notRetryable: "当前节点不能使用通用生成重试",
         layerProtocolMissing: "原拆层模型未配置专用拆层协议，无法重试",
         promptRejected: "该提示词未通过内容审核，请先修改提示词再重新生成",

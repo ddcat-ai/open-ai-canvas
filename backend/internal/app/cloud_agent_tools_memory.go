@@ -132,7 +132,7 @@ func cloudAgentHandleMemoryUpdate(repo *repository.Repository, userID string, st
 // cloudAgentHandleSkillMarketSearch 只在技能市场里找用户还没安装的公开技能；结果只是候选元数据，
 // 不授予读取正文的权限。命中的候选记入本轮状态，供 skill_recommend 校验。
 func cloudAgentHandleSkillMarketSearch(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
-	if err := cloudAgentRequireSkillToolAdministrator(repo, userID, "skill_market_search", services...); err != nil {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, "skill_market_search", services...); err != nil {
 		return nil, err
 	}
 	service := cloudAgentToolService(services)
@@ -213,7 +213,7 @@ func cloudAgentRememberMarketSuggestion(state *cloudAgentRuntime, suggestion clo
 
 // cloudAgentHandleSkillRecommend 只发出“推荐安装”卡片事件，安装与否由用户在界面决定，Agent 不能自行安装。
 func cloudAgentHandleSkillRecommend(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
-	if err := cloudAgentRequireSkillToolAdministrator(repo, userID, "skill_recommend", services...); err != nil {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, "skill_recommend", services...); err != nil {
 		return nil, err
 	}
 	if state == nil || repo == nil {

@@ -1,14 +1,12 @@
 package app
 
 import (
-	"strings"
-
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
 
-// cloudAgentStepTimeoutError 是一次画布 Agent 模型调用被单步墙钟掐断时写进任务错误的标记。
-// 秒级超时（策略 AgentStepTimeoutSeconds）与文本任务超时都会走到这里，运行期按这个标记
+// cloudAgentStepTimeoutError 是一次画布 Agent 模型调用被单步墙钟掐断时写进任务的说明。
+// 秒级超时（策略 AgentStepTimeoutSeconds）与文本任务超时都会走到这里，运行期按结构化原因
 // 把它当成"可恢复失败"处理，而不是整轮判死。
 const cloudAgentStepTimeoutError = "画布 Agent 单步模型调用超时"
 
@@ -36,7 +34,7 @@ func cloudAgentStepTimedOut(task *model.Task) bool {
 	if task == nil || task.Status == model.TaskStatusSucceeded {
 		return false
 	}
-	return strings.Contains(task.Error, cloudAgentStepTimeoutError)
+	return agentModelTaskReason(task) == agentModelFailureStepTimeout
 }
 
 // correctCloudAgentStepTimeout 是单步超时的兜底：关掉上游思考并重发同一步。

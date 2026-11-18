@@ -150,7 +150,7 @@ func ValidateSkillRecommendations() error {
 
 // SkillRecommendations 返回按行业分组的推荐技能及当前用户的安装状态；已删除或停用的技能不出现。
 func (s *Service) SkillRecommendations(userID string) (*SkillRecommendationList, error) {
-	if err := s.RequireAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	file, err := loadSkillRecommendations()
@@ -210,7 +210,7 @@ func (s *Service) SkillRecommendations(userID string) (*SkillRecommendationList,
 // InstallSkillRecommendations 安装某个行业的推荐技能；skillIds 为空时安装该行业全部推荐。
 // 已安装、已删除或不在该行业推荐里的技能计入 skipped，不报错。
 func (s *Service) InstallSkillRecommendations(userID, industryID string, req SkillRecommendationInstallRequest) (*SkillRecommendationInstallResult, error) {
-	if err := s.RequireAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	file, err := loadSkillRecommendations()

@@ -164,12 +164,12 @@ export function createSkillRuntime(
     };
 }
 
-const administratorSkillRuntime = createSkillRuntime();
+const authenticatedSkillRuntime = createSkillRuntime();
 export const skillRuntime = {
     async prepare<P extends keyof SkillRuntimeResultByProfile>(input: PrepareSkillRuntimeInput<P>): Promise<SkillRuntimeResultByProfile[P]> {
         const access = captureSkillLibraryAccess();
         if (!access) return linkedResult(input.prompt, [], EMPTY_PROVENANCE);
-        const result = await administratorSkillRuntime.prepare(input);
+        const result = await authenticatedSkillRuntime.prepare(input);
         return isSkillLibraryAccessCurrent(access) ? result : linkedResult(input.prompt, [], EMPTY_PROVENANCE);
     },
 };

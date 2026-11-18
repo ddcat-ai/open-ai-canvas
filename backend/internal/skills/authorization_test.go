@@ -60,6 +60,10 @@ func TestSkillAdministratorAuthorizationUsesPersistedAccount(t *testing.T) {
 		{admin.ID, true, 0},
 	} {
 		t.Run(test.id, func(t *testing.T) {
+			err := svc.RequireSkillAccess(test.id)
+			if appErrorStatus(err) != test.status || (test.status == 0 && err != nil) {
+				t.Fatalf("RequireSkillAccess = %v; want %d", err, test.status)
+			}
 			isAdmin, err := svc.IsAdministrator(test.id)
 			if isAdmin != test.admin || appErrorStatus(err) != test.status || (test.status == 0 && err != nil) {
 				t.Fatalf("IsAdministrator = %v, %v; want %v / %d", isAdmin, err, test.admin, test.status)
@@ -89,13 +93,16 @@ func TestSkillAdministratorAuthorizationUsesPersistedAccount(t *testing.T) {
 	if err := svc.RequireAdministrator(admin.ID); !errors.Is(err, injected) {
 		t.Fatalf("lost repository error: %v", err)
 	}
+	if err := svc.RequireSkillAccess(member.ID); !errors.Is(err, injected) {
+		t.Fatalf("lost usage authorization error: %v", err)
+	}
 	if _, err := svc.SkillDetail(admin.ID, "anything"); !errors.Is(err, injected) {
 		t.Fatalf("detail swallowed repository error: %v", err)
 	}
 }
 
 func TestSkillManagementRejectsOrdinaryOwnersBeforeReadingContent(t *testing.T) {
-	svc, db, _, member, created := newSkillAuthorizationTest(t)
+	svc, db, _, member, _ := newSkillAuthorizationTest(t)
 	// Every skill read would fail independently; authorization must run first.
 	var skillReads int
 	if err := db.Callback().Query().Before("gorm:query").Register("reject-skill-read", func(tx *gorm.DB) {
@@ -119,27 +126,9 @@ func TestSkillManagementRejectsOrdinaryOwnersBeforeReadingContent(t *testing.T) 
 		name string
 		run  func() error
 	}{
-		{"list", func() error { _, e := svc.Skills(member.ID, SkillListRequest{}); return e }},
-		{"added", func() error { _, e := svc.AddedSkills(member.ID); return e }},
-		{"detail-public", func() error { _, e := svc.SkillDetail(member.ID, created.SkillID); return e }},
-		{"detail-old-owned", func() error { _, e := svc.SkillDetail(member.ID, "legacy-skill"); return e }},
-		{"visible", func() error { _, e := svc.visibleSkill(member.ID, "legacy-skill"); return e }},
-		{"owned", func() error { _, e := svc.ownedSkill(member.ID, "legacy-skill"); return e }},
 		{"create", func() error { _, e := svc.CreateSkill(member.ID, SkillMutationRequest{}); return e }},
 		{"update", func() error { _, e := svc.UpdateSkill(member.ID, "legacy-skill", SkillMutationRequest{}); return e }},
 		{"delete", func() error { return svc.DeleteSkill(member.ID, "legacy-skill") }},
-		{"add", func() error { _, e := svc.SetSkillAdded(member.ID, created.SkillID, true); return e }},
-		{"like", func() error { _, e := svc.SetSkillLiked(member.ID, created.SkillID, true); return e }},
-		{"agent-mode", func() error { _, e := svc.SetSkillAgentMode(member.ID, "legacy-skill", "auto"); return e }},
-		{"agent-mode-invalid", func() error { _, e := svc.SetSkillAgentMode(member.ID, "legacy-skill", "invalid"); return e }},
-		{"agent-use", func() error { return svc.RecordSkillAgentUse(member.ID, []string{"legacy-skill"}) }},
-		{"catalog-by-ids", func() error { _, e := svc.AgentSkillCatalogByIDs(member.ID, []string{"legacy-skill"}); return e }},
-		{"catalog-empty-ids", func() error { _, e := svc.AgentSkillCatalogByIDs(member.ID, nil); return e }},
-		{"file-list", func() error { _, e := svc.SkillPackageFiles(member.ID, "legacy-skill"); return e }},
-		{"file", func() error { _, e := svc.SkillPackageFile(member.ID, "legacy-skill", "SKILL.md"); return e }},
-		{"raw-file", func() error { _, _, _, e := svc.SkillPackageRawFile(member.ID, "legacy-skill", "SKILL.md"); return e }},
-		{"bundle", func() error { _, e := svc.SkillPackageBundle(member.ID, "legacy-skill"); return e }},
-		{"search", func() error { _, e := svc.SearchSkillPackage(member.ID, "legacy-skill", "Secret"); return e }},
 		{"file-edit", func() error {
 			_, e := svc.EditSkillPackageFiles(member.ID, "legacy-skill", SkillPackageEditRequest{})
 			return e
@@ -166,19 +155,10 @@ func TestSkillManagementRejectsOrdinaryOwnersBeforeReadingContent(t *testing.T) 
 			return e
 		}},
 		{"github-sync", func() error { _, e := svc.SyncGitHubSkill(member.ID, "legacy-skill"); return e }},
-		{"recommendations", func() error { _, e := svc.SkillRecommendations(member.ID); return e }},
-		{"recommendation-install", func() error {
-			_, e := svc.InstallSkillRecommendations(member.ID, "drama", SkillRecommendationInstallRequest{})
+		{"platform-category-create", func() error {
+			_, e := svc.CreateSkillLibraryCategory(forged, SkillLibraryCategoryMutationRequest{Name: "Shared", Scope: "platform"})
 			return e
 		}},
-		{"category-read", func() error { _, e := svc.SkillLibraryCategories(member.ID, "mine"); return e }},
-		{"category-create", func() error {
-			_, e := svc.CreateSkillLibraryCategory(forged, SkillLibraryCategoryMutationRequest{Name: "Personal"})
-			return e
-		}},
-		{"category-delete", func() error { return svc.DeleteSkillLibraryCategory(forged, "old-category") }},
-		{"category-assign", func() error { _, e := svc.SetSkillLibraryCategory(member.ID, "legacy-skill", ""); return e }},
-		{"curation-public", func() error { _, e := svc.SkillCuration(forged, false); return e }},
 		{"curation-admin", func() error { _, e := svc.SkillCuration(forged, true); return e }},
 		{"curation-write", func() error { _, e := svc.UpdateSkillCuration(forged, SkillCurationUpdate{}, ""); return e }},
 		{"admin-list", func() error { _, e := svc.AdminSkills(forged, AdminSkillListRequest{}); return e }},
@@ -201,12 +181,6 @@ func TestSkillManagementRejectsOrdinaryOwnersBeforeReadingContent(t *testing.T) 
 	for _, operation := range operations {
 		t.Run(operation.name, func(t *testing.T) { requireAppError(t, operation.run(), http.StatusForbidden, kernel.ReasonForbidden) })
 	}
-	for _, catalog := range []func(string) ([]AgentSkillCatalogEntry, error){svc.AgentSkillCatalog, svc.MarketSkillCatalog} {
-		items, err := catalog(member.ID)
-		if err != nil || items == nil || len(items) != 0 {
-			t.Fatalf("ordinary catalog=%#v, err=%v", items, err)
-		}
-	}
 	if requests != 0 || skillReads != 0 {
 		t.Fatalf("unauthorized side effects: HTTP=%d skill reads=%d", requests, skillReads)
 	}
@@ -218,20 +192,33 @@ func TestSkillManagementRejectsRevokedAndDisabledPersistedAdmin(t *testing.T) {
 		if err := db.Model(&model.User{}).Where("id = ?", actor.ID).Updates(change).Error; err != nil {
 			t.Fatal(err)
 		}
-		_, err := svc.SkillDetail(actor.ID, created.SkillID)
-		requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
-		_, err = svc.AdminSkillDetail(actor, created.SkillID)
+		_, err := svc.AdminSkillDetail(actor, created.SkillID)
 		requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
 		_, err = svc.AdminSetSkillEnabled(actor, created.SkillID, false)
 		requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
-		_, err = svc.SkillCuration(actor, false)
+		_, err = svc.SkillCuration(actor, true)
 		requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
-		_, err = svc.CreateSkillLibraryCategory(actor, SkillLibraryCategoryMutationRequest{Name: "Revoked"})
+		_, err = svc.CreateSkillLibraryCategory(actor, SkillLibraryCategoryMutationRequest{Name: "Revoked", Scope: "platform"})
+		requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
+		_, err = svc.UpdateSkill(actor.ID, created.SkillID, SkillMutationRequest{})
 		requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
 		if change["status"] == model.UserStatusDisabled {
+			_, err := svc.SkillDetail(actor.ID, created.SkillID)
+			requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
+			_, err = svc.SkillCuration(actor, false)
+			requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
+			_, err = svc.CreateSkillLibraryCategory(actor, SkillLibraryCategoryMutationRequest{Name: "Personal"})
+			requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
 			for _, catalog := range []func(string) ([]AgentSkillCatalogEntry, error){svc.AgentSkillCatalog, svc.MarketSkillCatalog} {
 				_, err := catalog(actor.ID)
 				requireAppError(t, err, http.StatusForbidden, kernel.ReasonForbidden)
+			}
+		} else {
+			if _, err := svc.SkillDetail(actor.ID, created.SkillID); err != nil {
+				t.Fatalf("demoted administrator lost skill usage: %v", err)
+			}
+			if _, err := svc.SkillCuration(actor, false); err != nil {
+				t.Fatalf("demoted administrator lost public categories: %v", err)
 			}
 		}
 	}
@@ -242,8 +229,83 @@ func TestSkillManagementRejectsRevokedAndDisabledPersistedAdmin(t *testing.T) {
 	requireAppError(t, err, http.StatusUnauthorized, kernel.ReasonUnauthorized)
 }
 
+func TestActiveMemberCanUseSkillsWithoutManagingThem(t *testing.T) {
+	svc, db, admin, member, created := newSkillAuthorizationTest(t)
+	if result, err := svc.Skills(member.ID, SkillListRequest{}); err != nil || result.TotalCount != 1 {
+		t.Fatalf("member market=%#v, err=%v", result, err)
+	}
+	if detail, err := svc.SkillDetail(member.ID, "legacy-skill"); err != nil || !detail.IsOwner {
+		t.Fatalf("member cannot use their existing private skill: %#v, %v", detail, err)
+	}
+	if file, err := svc.SkillPackageFile(member.ID, created.SkillID, "SKILL.md"); err != nil || file.Content != created.Instruction {
+		t.Fatalf("member package content=%#v, err=%v", file, err)
+	}
+	if files, err := svc.SkillPackageFiles(member.ID, created.SkillID); err != nil || len(files) != 1 {
+		t.Fatalf("member files=%#v, err=%v", files, err)
+	}
+	if data, _, _, err := svc.SkillPackageRawFile(member.ID, created.SkillID, "SKILL.md"); err != nil || string(data) != created.Instruction {
+		t.Fatalf("member raw file=%q, err=%v", data, err)
+	}
+	if bundle, err := svc.SkillPackageBundle(member.ID, created.SkillID); err != nil || bundle.SkillID != created.SkillID || len(bundle.Files) != 1 {
+		t.Fatalf("member bundle=%#v, err=%v", bundle, err)
+	}
+	if matches, err := svc.SearchSkillPackage(member.ID, created.SkillID, "剧本"); err != nil || len(matches) == 0 {
+		t.Fatalf("member search=%#v, err=%v", matches, err)
+	}
+	if _, err := svc.SkillCuration(member, false); err != nil {
+		t.Fatalf("member public curation: %v", err)
+	}
+	for _, value := range []bool{false, true} {
+		if item, err := svc.SetSkillAdded(member.ID, created.SkillID, value); err != nil || item.IsAdded != value {
+			t.Fatalf("member added=%#v, err=%v", item, err)
+		}
+		if item, err := svc.SetSkillLiked(member.ID, created.SkillID, value); err != nil || item.IsLike != value {
+			t.Fatalf("member liked=%#v, err=%v", item, err)
+		}
+	}
+	if rows, err := svc.AddedSkills(member.ID); err != nil || len(rows) != 2 {
+		t.Fatalf("member library=%#v, err=%v", rows, err)
+	}
+	if item, err := svc.SetSkillAgentMode(member.ID, created.SkillID, "manual"); err != nil || item.AgentMode != "manual" {
+		t.Fatalf("member agent mode=%#v, err=%v", item, err)
+	}
+	if err := svc.RecordSkillAgentUse(member.ID, []string{created.SkillID}); err != nil {
+		t.Fatal(err)
+	}
+	if catalog, err := svc.AgentSkillCatalog(member.ID); err != nil || len(catalog) != 1 || catalog[0].UseCount != 1 {
+		t.Fatalf("member catalog=%#v, err=%v", catalog, err)
+	}
+	if catalog, err := svc.AgentSkillCatalogByIDs(member.ID, []string{created.SkillID}); err != nil || len(catalog) != 1 || !catalog[0].Installed {
+		t.Fatalf("member selected catalog=%#v, err=%v", catalog, err)
+	}
+	if _, err := svc.SetSkillAdded(member.ID, created.SkillID, false); err != nil {
+		t.Fatal(err)
+	}
+	if catalog, err := svc.MarketSkillCatalog(member.ID); err != nil || len(catalog) != 1 || catalog[0].SkillID != created.SkillID {
+		t.Fatalf("member market catalog=%#v, err=%v", catalog, err)
+	}
+
+	private := createEditableSkill(t, svc, admin.ID, true)
+	for _, read := range []func() error{
+		func() error { _, err := svc.SkillDetail(member.ID, private.SkillID); return err },
+		func() error { _, err := svc.SkillPackageFile(member.ID, private.SkillID, "SKILL.md"); return err },
+		func() error { _, err := svc.SetSkillAdded(member.ID, private.SkillID, true); return err },
+	} {
+		requireAppError(t, read(), http.StatusForbidden, kernel.ReasonForbidden)
+	}
+	if err := db.Model(&model.Skill{}).Where("id = ?", created.SkillID).Update("status", 0).Error; err != nil {
+		t.Fatal(err)
+	}
+	if catalog, err := svc.MarketSkillCatalog(member.ID); err != nil || len(catalog) != 0 {
+		t.Fatalf("disabled/private skills leaked into member market=%#v, err=%v", catalog, err)
+	}
+	if _, err := svc.SkillPackageFile(member.ID, created.SkillID, "SKILL.md"); appErrorStatus(err) != http.StatusBadRequest {
+		t.Fatalf("member read disabled skill: %v", err)
+	}
+}
+
 func TestActiveAdministratorSkillLifecycleAndIsolation(t *testing.T) {
-	svc, db, admin, _, created := newSkillAuthorizationTest(t)
+	svc, db, admin, member, created := newSkillAuthorizationTest(t)
 	other := createSkillTestUser(t, db, "other-admin", model.UserRoleAdmin, model.UserStatusActive)
 	private := createEditableSkill(t, svc, admin.ID, true)
 	_, err := svc.SkillDetail(other.ID, private.SkillID)
@@ -306,12 +368,14 @@ func TestActiveAdministratorSkillLifecycleAndIsolation(t *testing.T) {
 	if err := db.Create(&model.Skill{ID: seed.SkillID, OwnerID: "system", Name: "Recommendation", Description: "Builtin", Instruction: "# Builtin", Status: skillStatusEnabled, Source: 3, SourceType: "builtin", CurrentVersionID: "recommendation-version"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if result, err := svc.SkillRecommendations(admin.ID); err != nil || len(result.Industries) == 0 {
-		t.Fatalf("recommendations=%v err=%v", result, err)
-	}
-	result, err := svc.InstallSkillRecommendations(admin.ID, industry.IndustryID, SkillRecommendationInstallRequest{SkillIDs: []string{seed.SkillID}})
-	if err != nil || len(result.Installed) != 1 {
-		t.Fatalf("install recommendation=%v err=%v", result, err)
+	for _, userID := range []string{admin.ID, member.ID} {
+		if result, err := svc.SkillRecommendations(userID); err != nil || len(result.Industries) == 0 {
+			t.Fatalf("recommendations=%v err=%v", result, err)
+		}
+		result, err := svc.InstallSkillRecommendations(userID, industry.IndustryID, SkillRecommendationInstallRequest{SkillIDs: []string{seed.SkillID}})
+		if err != nil || len(result.Installed) != 1 {
+			t.Fatalf("install recommendation=%v err=%v", result, err)
+		}
 	}
 }
 

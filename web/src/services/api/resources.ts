@@ -367,9 +367,9 @@ export async function importResourceFromUrl(url: string, kind: "image" | "video"
 
 const UPLOAD_TIMEOUT_FLOOR_MS = 60_000;
 const UPLOAD_TIMEOUT_CEIL_MS = 15 * 60_000;
-// 按 256KB/s 的保守上行带宽估算传输时间，再加一分钟留给服务端保存。
+// 按 64KB/s（约 0.5Mbps）的保守上行带宽估算传输时间，再加一分钟留给服务端保存；50MB 约 14 分钟，仍在 15 分钟上限内。
 // 固定 60s 会让慢网下的大文件必然超时，退回本机后在同步时再完整重传一遍。
-const UPLOAD_MIN_BYTES_PER_SECOND = 256 * 1024;
+const UPLOAD_MIN_BYTES_PER_SECOND = 64 * 1024;
 
 export function uploadTimeoutMs(bytes = 0) {
     const transferMs = Math.ceil(Math.max(0, bytes) / UPLOAD_MIN_BYTES_PER_SECOND) * 1000;

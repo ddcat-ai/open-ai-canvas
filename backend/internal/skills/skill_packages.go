@@ -229,6 +229,9 @@ func (s *Service) InstallGitHubSkill(userID string, req SkillGitHubInstallReques
 }
 
 func (s *Service) SyncGitHubSkill(userID string, skillID string) (*SkillItem, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	skill, err := s.ownedSkill(userID, skillID)
 	if err != nil {
 		return nil, err

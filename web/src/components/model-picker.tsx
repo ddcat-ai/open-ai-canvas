@@ -57,6 +57,7 @@ export function ModelPicker({
     modelDisabledReason,
 }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
+    const userId = useUserStore((state) => state.user?.id);
     const pickerId = useId();
     // 双保险：即使 store merge 写出非法 theme，这里也兜底到 dark，避免 "reading 'node'" 崩溃
     const rawTheme = useActiveTheme();
@@ -103,7 +104,7 @@ export function ModelPicker({
     }, [open]);
 
     useEffect(() => {
-        if (!showSelectedPrice || !creditsEnabled || !quoteRequest) {
+        if (!userId || !showSelectedPrice || !creditsEnabled || !quoteRequest) {
             setRouteQuote(undefined);
             return;
         }
@@ -115,7 +116,7 @@ export function ModelPicker({
                 if (!controller.signal.aborted) setRouteQuote(undefined);
             });
         return () => controller.abort();
-    }, [creditsEnabled, quoteRequest, showSelectedPrice]);
+    }, [creditsEnabled, quoteRequest, showSelectedPrice, userId]);
 
     useEffect(() => {
         const closeOtherPicker = (event: Event) => {

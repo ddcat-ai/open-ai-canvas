@@ -34,6 +34,8 @@ export type PluginProviderContribution = {
     id: string;
     label: string;
     capabilities: ProtocolCapability[];
+    /** Processing providers operate on existing media rather than generating new media. */
+    kind?: "processing";
     scopes: ProtocolScope[];
     baseUrl?: string;
     auth?: { type: "bearer" | "api-key" | "custom"; field: string; header?: string };

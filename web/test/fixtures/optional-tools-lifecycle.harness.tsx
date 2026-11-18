@@ -283,14 +283,14 @@ test("ordinary users, loading and failed authorization never load the skill IDE"
     }
 });
 
-test("admins use admin authorization route and authors may load the IDE", async () => {
+test("admins use admin authorization route and administrator authors may load the IDE", async () => {
     user = { id: "admin", role: "admin" };
     query = { data: { skill: { isOwner: false } } };
     await mount(SkillWorkbenchRoute);
     expect(container.querySelector("[data-target]")?.getAttribute("data-target")).toBe("/admin/skills/skill/edit");
     expect(editorLoads).toBe(0);
     await unmount();
-    user = { id: "owner", role: "user" };
+    user = { id: "owner", role: "admin" };
     query = { data: { skill: { isOwner: true } } };
     await mount(SkillWorkbenchRoute);
     await act(async () => {

@@ -17,8 +17,8 @@ describe("ecommerce planning skills", () => {
     });
 });
 
-test("ordinary ecommerce signatures ignore obsolete restricted skill selections", () => {
+test("ordinary ecommerce signatures include selected skills so changes trigger planning", () => {
     useUserStore.setState({ user: { id: "member", username: "member", displayName: "Member", role: "user", status: "active" } });
     const draft = { ...emptyEcommerceDraft(), productName: "腕表", skillIds: ["private"] };
-    expect(commerceInputSignature(draft)).toBe(commerceInputSignature({ ...draft, skillIds: [] }));
+    expect(commerceInputSignature(draft)).not.toBe(commerceInputSignature({ ...draft, skillIds: [] }));
 });

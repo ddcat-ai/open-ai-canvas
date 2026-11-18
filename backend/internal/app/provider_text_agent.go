@@ -239,7 +239,7 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 	}
 	result["toolCalls"] = calls
 	if strings.TrimSpace(parsed.Text) == "" && len(calls) == 0 {
-		return nil, errors.New("声明式 Agent 接口没有返回内容")
+		return nil, agentModelFailure(agentModelFailureEmpty, errors.New("声明式 Agent 接口没有返回内容"))
 	}
 	return result, nil
 }
@@ -478,7 +478,7 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 		}
 		markAgentReasoningWire(result, protocol)
 		if result["text"] == "" && len(calls) == 0 {
-			return nil, errors.New("Claude Agent 接口没有返回内容")
+			return nil, agentModelFailure(agentModelFailureEmpty, errors.New("Claude Agent 接口没有返回内容"))
 		}
 		return result, nil
 	}

@@ -1,5 +1,5 @@
 import { useUserStore } from "@/stores/use-user-store";
-import { useSkillLibraryAccess } from "@/lib/skill-access";
+import { useSkillAdministrationAccess, useSkillLibraryAccess } from "@/lib/skill-access";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Input } from "antd";
@@ -38,17 +38,18 @@ const STEP_COPY: Record<DramaSkillStep, { title: string; detail: string; empty: 
  * 文字步骤的写作技能：选一个已添加技能里的文本文件，执行该步骤时把全文交给文本模型作为写作方法。
  * 保存的是技能与文件引用，在技能库里修改自己的技能后，下一次执行就会读到新内容。
  */
-export function PromptSkillField(props: Parameters<typeof AdminPromptSkillField>[0]) {
+export function PromptSkillField(props: Parameters<typeof AuthorizedPromptSkillField>[0]) {
     const allowed = useSkillLibraryAccess();
     const hydrated = useUserStore((state) => state.hydrated);
     const userId = useUserStore((state) => state.user?.id);
     useEffect(() => {
         if (hydrated && !allowed && props.value) props.onChange(undefined);
     }, [allowed, hydrated, props.value, props.onChange]);
-    return allowed ? <AdminPromptSkillField key={userId} {...props} /> : null;
+    return allowed ? <AuthorizedPromptSkillField key={userId} {...props} /> : null;
 }
 
-function AdminPromptSkillField({ value, onChange, step = "prompt", compact }: { value?: DramaSkillRef; onChange: (value?: DramaSkillRef) => void; step?: DramaSkillStep; compact?: boolean }) {
+function AuthorizedPromptSkillField({ value, onChange, step = "prompt", compact }: { value?: DramaSkillRef; onChange: (value?: DramaSkillRef) => void; step?: DramaSkillStep; compact?: boolean }) {
+    const canManage = useSkillAdministrationAccess();
     const [open, setOpen] = useState(false);
     const copy = STEP_COPY[step];
     return (
@@ -60,9 +61,11 @@ function AdminPromptSkillField({ value, onChange, step = "prompt", compact }: { 
                         <strong>{value.skillName || value.skillId}</strong>
                         <span title={value.path}>{value.path}</span>
                     </div>
-                    <Link to={`/skills/${encodeURIComponent(value.skillId)}/edit`} target="_blank" rel="noreferrer" className="drama-pskill-edit" aria-label="在技能库打开，自己的技能可以直接修改" title="在技能库打开，自己的技能可以直接修改">
-                        <PenLine className="size-3.5" />
-                    </Link>
+                    {canManage ? (
+                        <Link to={`/skills/${encodeURIComponent(value.skillId)}/edit`} target="_blank" rel="noreferrer" className="drama-pskill-edit" aria-label="在技能工作台编辑" title="在技能工作台编辑">
+                            <PenLine className="size-3.5" />
+                        </Link>
+                    ) : null}
                     <Button size="small" onClick={() => setOpen(true)}>
                         更换
                     </Button>

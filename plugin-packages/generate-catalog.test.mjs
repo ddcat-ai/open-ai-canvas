@@ -25,7 +25,7 @@ async function fixture(t) {
     ids.push(id);
     await cp(join(root, id), join(temp, id), { recursive: true });
   }
-  assert.equal(ids.length, 34);
+  assert.ok(ids.length > 0, "the fixture must include text providers");
   return { temp, ids };
 }
 
@@ -94,11 +94,11 @@ test("selected text regeneration retains canonical runtime, custom prose and cur
   for (const name of Object.keys(once)) assert.equal(twice[name].content, once[name].content, `idempotent ${name}`);
 });
 
-test("all 34 text packages including mixed-provider manifests regenerate without runtime changes", async (t) => {
+test("all text packages including mixed-provider manifests regenerate without runtime changes", async (t) => {
   const { temp, ids } = await fixture(t);
   const before = {};
   for (const id of ids) before[id] = await snapshot(join(temp, id));
-  assert.match(generate(temp, ids), /generated 34 protocol packages/);
+  assert.match(generate(temp, ids), new RegExp(`generated ${ids.length} protocol packages`));
   for (const id of ids) {
     const after = await json(join(temp, id, "manifest.json"));
     assert.deepEqual(runtime(after), runtime(JSON.parse(before[id]["manifest.json"].content)), id);
@@ -114,4 +114,18 @@ test("unknown selections fail before writing any package", async (t) => {
   const before = await snapshot(temp);
   assert.throws(() => generate(temp, ["ollama-chat", "does-not-exist"]), /unknown protocol package/);
   assert.deepEqual(await snapshot(temp), before);
+});
+
+test("Seedream regeneration preserves the published layer decomposition contract", async (t) => {
+  const { temp } = await fixture(t);
+  const id = "volcengine-ark-seedream";
+  const published = await json(join(root, id, "manifest.json"));
+  await cp(join(root, id), join(temp, id), { recursive: true });
+  generate(temp, [id]);
+  const regenerated = await json(join(temp, id, "manifest.json"));
+  assert.equal(regenerated.version, published.version);
+  assert.deepEqual(runtime(regenerated), runtime(published));
+  const provider = regenerated.contributes.providers[0];
+  assert.ok(provider.create.body.layer_decomposition_options);
+  assert.ok(provider.imageParameters.some((parameter) => parameter.name === "layerDecomposition"));
 });

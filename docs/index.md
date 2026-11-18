@@ -77,6 +77,7 @@ ADR-0001～0007 的站内手工剪辑方案已随产品减负退场，保留为�
 - [功能](content/docs/overview/features.mdx)
 - [本地开发](content/docs/backend/local-development.mdx)
 - [HTTP API 合同](content/docs/backend/http-api.mdx)
+- [相对深度视频](content/docs/backend/video-depth.mdx)
 - [后端数据库](content/docs/backend/backend-database.mdx)
 - [代码地图](content/docs/backend/code-map.mdx)
 - [待办](content/docs/progress/todo.mdx)

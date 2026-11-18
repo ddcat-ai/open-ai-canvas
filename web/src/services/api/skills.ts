@@ -1,6 +1,6 @@
 import { ApiError, http, apiBaseURL, compactApiParams, serializeApiParams, type ApiParams } from "@/services/api/request";
 import { getActiveUserScope } from "@/lib/user-scope";
-import { captureSkillLibraryAccess, hasSkillLibraryAccess, isSkillLibraryAccessCurrent } from "@/lib/skill-access";
+import { captureSkillLibraryAccess, hasSkillAdministrationAccess, hasSkillLibraryAccess, isSkillLibraryAccessCurrent } from "@/lib/skill-access";
 import { useUserStore } from "@/stores/use-user-store";
 
 let addedSkillsRequest: { scope: string; promise: Promise<{ skills: Skill[] }> } | null = null;
@@ -10,14 +10,22 @@ let addedSkillsAbort: AbortController | null = null;
 
 export async function withSkillLibraryAccess<T>(request: () => Promise<T>): Promise<T> {
     const access = captureSkillLibraryAccess();
-    if (!access) throw new ApiError("技能库仅供管理员访问", { status: 403, reason: "admin_required", retryable: false });
+    if (!access) {
+        const disabled = useUserStore.getState().user?.status === "disabled";
+        throw new ApiError(disabled ? "账号已停用" : "请先登录后使用技能", { status: disabled ? 403 : 401, reason: disabled ? "forbidden" : "unauthorized", retryable: false });
+    }
     const result = await request();
     if (!isSkillLibraryAccessCurrent(access)) throw new DOMException("技能访问权限已变更", "AbortError");
     return result;
 }
 
+export async function withSkillAdministrationAccess<T>(request: () => Promise<T>): Promise<T> {
+    if (!hasSkillAdministrationAccess()) throw new ApiError("只有管理员可以上传和管理技能", { status: 403, reason: "admin_required", retryable: false });
+    return withSkillLibraryAccess(request);
+}
+
 useUserStore.subscribe((state, previous) => {
-    if (state.hydrated !== previous.hydrated || state.user?.id !== previous.user?.id || state.user?.role !== previous.user?.role) invalidateAddedSkillsCache();
+    if (state.hydrated !== previous.hydrated || state.user?.id !== previous.user?.id || state.user?.role !== previous.user?.role || state.user?.status !== previous.user?.status) invalidateAddedSkillsCache();
 });
 
 export type SkillSort = "popular" | "new" | "updated";
@@ -235,7 +243,8 @@ export function listSkillLibraryCategories(scope: "mine" | "created" = "mine") {
 }
 
 export function createSkillLibraryCategory(input: SkillLibraryCategoryMutationInput) {
-    return withSkillLibraryAccess(() => http.post<{ category: SkillLibraryCategory }>("/skills/library-categories", input).finally(invalidateAddedSkillsCache));
+    const withAccess = input.scope === "platform" ? withSkillAdministrationAccess : withSkillLibraryAccess;
+    return withAccess(() => http.post<{ category: SkillLibraryCategory }>("/skills/library-categories", input).finally(invalidateAddedSkillsCache));
 }
 
 export function deleteSkillLibraryCategory(id: string) {
@@ -250,7 +259,7 @@ export function getSkill(id: string) {
     return withSkillLibraryAccess(() => http.get<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}`));
 }
 
-/** 管理员场景预设目录；普通创作不依赖技能接口。 */
+/** 登录用户可读取场景预设目录。 */
 export function listSkillPresets() {
     if (!hasSkillLibraryAccess()) return Promise.resolve({ presets: [] as SkillPreset[] });
     return withSkillLibraryAccess(() => http.get<{ presets: SkillPreset[] }>("/skills/presets"));
@@ -348,7 +357,7 @@ export function invalidateAddedSkillsCache() {
 }
 
 export function createSkill(input: SkillMutationInput) {
-    return withSkillLibraryAccess(() => http.post<{ skill: Skill }>("/skills", input).finally(invalidateAddedSkillsCache));
+    return withSkillAdministrationAccess(() => http.post<{ skill: Skill }>("/skills", input).finally(invalidateAddedSkillsCache));
 }
 
 export function installSkillUpload(input: InstallSkillUploadInput) {
@@ -359,11 +368,11 @@ export function installSkillUpload(input: InstallSkillUploadInput) {
     if (input.description) form.append("description", input.description);
     if (input.tag) form.append("tag", input.tag);
     form.append("isPrivate", String(Boolean(input.isPrivate)));
-    return withSkillLibraryAccess(() => http.post<{ skill: Skill }>("/skills/install", form).finally(invalidateAddedSkillsCache));
+    return withSkillAdministrationAccess(() => http.post<{ skill: Skill }>("/skills/install", form).finally(invalidateAddedSkillsCache));
 }
 
 export function installGitHubSkill(input: InstallGitHubSkillInput) {
-    return withSkillLibraryAccess(() => http.post<{ skill: Skill }>("/skills/install/github", input).finally(invalidateAddedSkillsCache));
+    return withSkillAdministrationAccess(() => http.post<{ skill: Skill }>("/skills/install/github", input).finally(invalidateAddedSkillsCache));
 }
 
 export function listSkillFiles(id: string) {
@@ -392,7 +401,7 @@ export const SKILL_VERSION_CONFLICT_REASON = "skill_version_conflict";
 
 /** 作者批量保存技能包文件：后端按顺序应用操作并原子生成新版本。 */
 export function saveSkillFiles(id: string, input: SaveSkillFilesInput) {
-    return withSkillLibraryAccess(() => http.put<SaveSkillFilesResult>(`/skills/${encodeURIComponent(id)}/files`, input).finally(invalidateAddedSkillsCache));
+    return withSkillAdministrationAccess(() => http.put<SaveSkillFilesResult>(`/skills/${encodeURIComponent(id)}/files`, input).finally(invalidateAddedSkillsCache));
 }
 
 export function searchSkillFiles(id: string, query: string) {
@@ -400,21 +409,21 @@ export function searchSkillFiles(id: string, query: string) {
 }
 
 export function syncSkill(id: string) {
-    return withSkillLibraryAccess(() => http.post<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}/sync`).finally(invalidateAddedSkillsCache));
+    return withSkillAdministrationAccess(() => http.post<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}/sync`).finally(invalidateAddedSkillsCache));
 }
 
 export function skillFileRawURL(id: string, path: string) {
-    if (!hasSkillLibraryAccess()) throw new ApiError("技能库仅供管理员访问", { status: 403, reason: "admin_required", retryable: false });
+    if (!hasSkillLibraryAccess()) throw new ApiError("当前账号无法读取技能文件", { status: 403, reason: "forbidden", retryable: false });
     const base = String(apiBaseURL).replace(/\/$/, "");
     return `${base}/skills/${encodeURIComponent(id)}/file/raw?path=${encodeURIComponent(path)}`;
 }
 
 export function updateSkill(id: string, input: SkillMutationInput) {
-    return withSkillLibraryAccess(() => http.put<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}`, input).finally(invalidateAddedSkillsCache));
+    return withSkillAdministrationAccess(() => http.put<{ skill: Skill }>(`/skills/${encodeURIComponent(id)}`, input).finally(invalidateAddedSkillsCache));
 }
 
 export function deleteSkill(id: string) {
-    return withSkillLibraryAccess(() => http.delete<{ deleted: boolean }>(`/skills/${encodeURIComponent(id)}`).finally(invalidateAddedSkillsCache));
+    return withSkillAdministrationAccess(() => http.delete<{ deleted: boolean }>(`/skills/${encodeURIComponent(id)}`).finally(invalidateAddedSkillsCache));
 }
 
 export function addSkill(id: string) {

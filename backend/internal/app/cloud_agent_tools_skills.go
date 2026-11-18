@@ -353,7 +353,7 @@ func cloudAgentSearchSkills(skills []cloudAgentSkill, keyword string, limit int)
 // cloudAgentSkillPoolForSearch 取本轮可读技能的检索视图：只保留仍已安装、版本与建 run 时一致的技能，
 // 文件清单按冻结版本读取（不含正文）。用户在运行中卸载或更新的技能本轮不再出现在检索结果里。
 func (s *Service) cloudAgentSkillPoolForSearch(userID string, state *cloudAgentRuntime) ([]cloudAgentSkill, error) {
-	if err := s.RequireSkillAdministrator(userID); err != nil {
+	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
 	}
 	if state == nil || len(state.SkillVersions) == 0 {
@@ -397,13 +397,9 @@ func (s *Service) cloudAgentSkillPoolForSearch(userID string, state *cloudAgentR
 	return pool, nil
 }
 
-// cloudAgentReadSkillFile 读取本轮可读技能的文件。版本以建 run 时冻结的为准：技能在运行中更新后
-// 本轮不再读取，避免把同一技能两个版本的内容混在一起。读取成功会计入技能使用次数，用于目录排序。
-func (s *Service) cloudAgentReadSkillFile(userID string, state *cloudAgentRuntime, args agenttool.SkillReadArgs) (any, error) {
-	if err := s.RequireSkillAdministrator(userID); err != nil {
-		return nil, err
-	}
-	id := strings.TrimSpace(args.SkillID)
+// Fresh reads and cache replays share the same installed-skill and frozen-version boundary.
+func (s *Service) cloudAgentSkillForRead(userID string, state *cloudAgentRuntime, id string) (*SkillItem, error) {
+	id = strings.TrimSpace(id)
 	version := ""
 	if state != nil {
 		version = state.SkillVersions[id]
@@ -421,6 +417,17 @@ func (s *Service) cloudAgentReadSkillFile(userID string, state *cloudAgentRuntim
 	if detail.VersionID != version {
 		return nil, creationConflict("技能在本轮开始后更新了；为避免混读两个版本，本轮不再读取它，下一条消息会使用新版本")
 	}
+	return detail, nil
+}
+
+// cloudAgentReadSkillFile 读取本轮可读技能的文件。版本以建 run 时冻结的为准：技能在运行中更新后
+// 本轮不再读取，避免把同一技能两个版本的内容混在一起。读取成功会计入技能使用次数，用于目录排序。
+func (s *Service) cloudAgentReadSkillFile(userID string, state *cloudAgentRuntime, args agenttool.SkillReadArgs) (any, error) {
+	detail, err := s.cloudAgentSkillForRead(userID, state, args.SkillID)
+	if err != nil {
+		return nil, err
+	}
+	id, version := detail.SkillID, detail.VersionID
 	paths, err := s.skillDomain().SkillVersionTextPaths([]string{version})
 	if err != nil {
 		return nil, err

@@ -534,6 +534,8 @@ func TestCloudAgentMediaFillsMissingSnapshotHash(t *testing.T) {
 
 func TestCloudAgentMediaFailedTaskUpdatesNode(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
+	// This test advances the legacy scheduler itself; the approval waiter would race its checkpoint.
+	s.closeApprovedCloudAgentMediaWaiters()
 	run, _ := agentMediaRun(t, s, a, "request_approval")
 	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
 		t.Fatal(err)
