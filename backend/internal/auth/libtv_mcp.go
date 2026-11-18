@@ -85,11 +85,8 @@ func (s *Service) fetchLibTVProjectDetailWithToken(projectUUID string, forceRefr
 			return nil, callErr
 		}
 	}
-	readTool, ok := tools["read_project"]
-	args := libTVMCPToolArgs(readTool, projectUUID)
-	if !ok {
-		args = map[string]any{"projectId": projectUUID, "uuid": projectUUID}
-	}
+	args := libTVMCPToolArgs(tools["read_project"], projectUUID)
+	args["view"] = "nodes"
 	result, err := session.callTool("read_project", args)
 	if err != nil {
 		return nil, err

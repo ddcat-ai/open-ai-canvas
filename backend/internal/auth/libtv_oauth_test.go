@@ -3,9 +3,11 @@ package auth
 import (
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -49,11 +51,11 @@ func newLibTVFakeServer() *libTVFakeServer {
 		tools: []mcpTool{
 			{Name: "account_user", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}}},
 			{Name: "target_project", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"projectId": map[string]any{"type": "string"}}, "required": []any{"projectId"}}},
-			{Name: "read_project", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"projectId": map[string]any{"type": "string"}}, "required": []any{"projectId"}}},
+			{Name: "read_project", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"projectId": map[string]any{"type": "string"}, "view": map[string]any{"type": "string", "default": "summary"}}, "required": []any{"projectId"}}},
 		},
 		projectPayload: map[string]any{
 			"projectMeta": map[string]any{"uuid": testLibTVProjectUUID, "name": "测试画布", "effective": map[string]any{"canRead": true, "canCopy": true}},
-			"nodeList": []any{
+			"nodes": []any{
 				map[string]any{
 					"nodeKey":   "image-1",
 					"name":      "示例图",
@@ -65,8 +67,13 @@ func newLibTVFakeServer() *libTVFakeServer {
 					"url":       []any{"https://example.com/first.png"},
 					"params":    map[string]any{"prompt": "prompt", "model": "model"},
 				},
+				map[string]any{
+					"nodeKey": "video-1", "name": "示例视频",
+					"position": map[string]any{"x": 720, "y": -48},
+					"data":     map[string]any{"type": "video", "url": []string{"https://example.com/clip.mp4"}},
+				},
 			},
-			"connectionList": []any{},
+			"edges": []any{map[string]any{"id": "edge-1", "source": "image-1", "target": "video-1"}},
 		},
 		accountPayload: map[string]any{"displayName": "画布管理员", "id": "user-1"},
 	}
@@ -155,7 +162,14 @@ func (f *libTVFakeServer) start(t *testing.T) *httptest.Server {
 					writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": rpc.ID, "result": map[string]any{"structuredContent": f.accountPayload}})
 				case "read_project":
 					f.readArgs = params.Arguments
-					writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": rpc.ID, "result": map[string]any{"structuredContent": f.projectPayload}})
+					payload := f.projectPayload
+					if params.Arguments["view"] != "nodes" {
+						payload = map[string]any{"projectMeta": f.projectPayload["projectMeta"], "nodes": []any{
+							map[string]any{"nodeId": "image-1", "type": "image", "name": "示例图"},
+							map[string]any{"nodeId": "video-1", "type": "video", "name": "示例视频"},
+						}}
+					}
+					writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": rpc.ID, "result": map[string]any{"structuredContent": payload}})
 				default:
 					writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": rpc.ID, "error": map[string]any{"code": -32601, "message": "unknown tool"}})
 				}
@@ -363,31 +377,52 @@ func TestLibTVAccessTokenRefreshesAndPersistsRotatedRefreshToken(t *testing.T) {
 	}
 }
 
-func TestImportLibTVUsesAuthorizedMCPAndExistingAdapter(t *testing.T) {
-	fake := newLibTVFakeServer()
-	server := fake.start(t)
-	svc, db, admin := newLibTVTestService(t, server)
-	if err := seedLibTVConnection(svc, admin.ID, fake.accessToken, fake.refreshToken, time.Now().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.UpdateLibTVSetting(admin, LibTVSettingRequest{Enabled: true}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Create(&model.CanvasProject{ID: "canvas-1", UserID: admin.ID, Title: "画布"}).Error; err != nil {
-		t.Fatal(err)
-	}
-	result, err := svc.ImportLibTV(admin.ID, "canvas-1", testLibTVProjectUUID)
-	if err != nil {
-		t.Fatalf("ImportLibTV() error = %v", err)
-	}
-	if result.ImportedNodeCount != 1 || result.ProjectName != "测试画布" || result.Nodes[0].Content != "https://example.com/first.png" {
-		t.Fatalf("import result = %#v", result)
-	}
-	if fake.readArgs["projectId"] != testLibTVProjectUUID {
-		t.Fatalf("read_project args = %#v", fake.readArgs)
-	}
-	if fake.targetArgs["projectId"] != testLibTVProjectUUID {
-		t.Fatalf("target_project args = %#v", fake.targetArgs)
+func TestLibTVReadsFullNodesForConnectionTestAndImport(t *testing.T) {
+	for name, listed := range map[string]bool{"listed": true, "unlisted": false} {
+		t.Run(name, func(t *testing.T) {
+			fake := newLibTVFakeServer()
+			wantReadArgs := map[string]any{"projectId": testLibTVProjectUUID, "view": "nodes"}
+			if !listed {
+				fake.tools = slices.DeleteFunc(fake.tools, func(tool mcpTool) bool { return tool.Name == "read_project" })
+				wantReadArgs["uuid"] = testLibTVProjectUUID
+			}
+			svc, db, admin := newLibTVTestService(t, fake.start(t))
+			if err := seedLibTVConnection(svc, admin.ID, fake.accessToken, fake.refreshToken, time.Now().Add(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			if err := svc.TestLibTV(admin, testLibTVProjectUUID); err != nil {
+				t.Fatalf("TestLibTV() error = %v", err)
+			}
+			if !maps.Equal(fake.readArgs, wantReadArgs) {
+				t.Errorf("connection test read_project args = %v, want %v", fake.readArgs, wantReadArgs)
+			}
+			if _, err := svc.UpdateLibTVSetting(admin, LibTVSettingRequest{Enabled: true}); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Create(&model.CanvasProject{ID: "canvas-1", UserID: admin.ID, Title: "画布"}).Error; err != nil {
+				t.Fatal(err)
+			}
+			result, err := svc.ImportLibTV(admin.ID, "canvas-1", testLibTVProjectUUID)
+			if err != nil {
+				t.Fatalf("ImportLibTV() error = %v", err)
+			}
+			if !maps.Equal(fake.readArgs, wantReadArgs) || !maps.Equal(fake.targetArgs, map[string]any{"projectId": testLibTVProjectUUID}) {
+				t.Fatalf("import MCP args: read_project = %v, target_project = %v", fake.readArgs, fake.targetArgs)
+			}
+			if result.ProjectName != "测试画布" || result.ImportedNodeCount != 2 || result.ImportedConnectionCount != 1 {
+				t.Fatalf("import result = %#v", result)
+			}
+			image, video := result.Nodes[0], result.Nodes[1]
+			if image.Type != "image" || image.Content != "https://example.com/first.png" || image.X != 12 || image.Y != 34 {
+				t.Errorf("image = %#v", image)
+			}
+			if video.Type != "video" || video.Content != "https://example.com/clip.mp4" || video.X != 720 || video.Y != -48 {
+				t.Errorf("video = %#v", video)
+			}
+			if edge := result.Connections[0]; edge.FromNodeID != image.ID || edge.ToNodeID != video.ID {
+				t.Errorf("imported edge = %#v, want %s -> %s", edge, image.ID, video.ID)
+			}
+		})
 	}
 }
 
