@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { authPageURL, clearReferralCode, readReferralCode, safeAuthNext } from "@/lib/auth-entry";
 import { applyUserSession } from "@/lib/user-session";
-import { getAuthSession, type AuthSettings } from "@/services/api/auth";
+import { getAuthSession, invalidateAuthSessionCache, type AuthSettings } from "@/services/api/auth";
 import { cancelWechatRegistration, completeWechatRegistration, getWechatRegistration, type WechatRegistrationInfo } from "@/services/api/wechat";
 import { emptyVerification, registrationVerificationRequired, verificationMethods, type VerificationMethod } from "@/services/api/verification";
 import { VerificationFields } from "./verification-fields";
@@ -21,6 +21,8 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const submittingRef = useRef(false);
+    const [createdAccount, setCreatedAccount] = useState<{ userId: string; next: string } | null>(null);
+    const recoveryNoticeRef = useRef<HTMLSpanElement>(null);
     const [verification, setVerification] = useState({ ...emptyVerification });
     const [chosenMethod, setChosenMethod] = useState<VerificationMethod | null>(null);
     const [email, setEmail] = useState("");
@@ -33,6 +35,9 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
     const turnstileRequired = Boolean(settings?.turnstileEnabled && settings.turnstileSiteKey);
     const method = chosenMethod && methods.includes(chosenMethod) ? chosenMethod : methods[0];
     const blocked = !settings || settingsFailed || !settings.registrationEnabled || (required && !method);
+    useEffect(() => {
+        if (createdAccount) recoveryNoticeRef.current?.focus();
+    }, [createdAccount]);
     useEffect(() => {
         const controller = new AbortController();
         getWechatRegistration(controller.signal)
@@ -52,6 +57,10 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
     }, []);
     const cancel = async () => {
         if (submittingRef.current) return;
+        if (createdAccount) {
+            navigate(authPageURL("login", createdAccount.next), { replace: true });
+            return;
+        }
         submittingRef.current = true;
         setSubmitting(true);
         try {
@@ -64,30 +73,64 @@ export function WechatRegistrationForm({ settings, settingsFailed, onReloadSetti
             setSubmitting(false);
         }
     };
+    const restoreCreatedAccount = async (account: { userId: string; next: string }) => {
+        invalidateAuthSessionCache();
+        const session = await getAuthSession();
+        if (!account.userId || session.user?.id !== account.userId || session.user.status !== "active") throw new Error(t("auth.login.sessionUnavailable"));
+        await applyUserSession(session);
+        navigate(account.next, { replace: true });
+    };
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (submittingRef.current || blocked || !info || !accepted || (turnstileRequired && !turnstileToken)) return;
+        if (submittingRef.current || (!createdAccount && (blocked || !info || !accepted || (turnstileRequired && !turnstileToken)))) return;
         submittingRef.current = true;
         setSubmitting(true);
         setError("");
+        let account = createdAccount;
         try {
-            const contactEmail = method === "email" || method === "sms_email" ? verification.email : email.trim();
-            const result = await completeWechatRegistration({ ...(required ? verification : {}), email: contactEmail, acceptedTerms: accepted, referralCode: readReferralCode() || undefined, turnstileToken: turnstileToken || undefined });
-            await applyUserSession(await getAuthSession());
-            clearReferralCode();
-            navigate(safeAuthNext(result.next), { replace: true });
+            if (!account) {
+                const contactEmail = method === "email" || method === "sms_email" ? verification.email : email.trim();
+                const result = await completeWechatRegistration({ ...(required ? verification : {}), email: contactEmail, acceptedTerms: accepted, referralCode: readReferralCode() || undefined, turnstileToken: turnstileToken || undefined });
+                // The registration ticket and Turnstile token are consumed; only restore this confirmed account.
+                account = { userId: result.user?.id || "", next: safeAuthNext(result.next) };
+                setCreatedAccount(account);
+                clearReferralCode();
+            }
+            await restoreCreatedAccount(account);
         } catch (cause) {
-            if (turnstileRequired) {
+            if (!account && turnstileRequired) {
                 setTurnstileToken("");
                 setTurnstileResetKey((value) => value + 1);
             }
-            setError(cause instanceof Error ? cause.message : "微信注册失败");
+            setError(cause instanceof Error ? cause.message : account ? t("auth.login.sessionUnavailable") : "微信注册失败");
         } finally {
             submittingRef.current = false;
             setSubmitting(false);
         }
     };
     if (loading) return <Skeleton active paragraph={{ rows: 3 }} />;
+    if (createdAccount) {
+        return (
+            <form className="auth-form" onSubmit={submit}>
+                <AuthNotice icon={<Info className="size-3.5" />} tone="blue">
+                    <span ref={recoveryNoticeRef} role="status" tabIndex={-1}>
+                        {t("auth.login.registrationSessionPending")}
+                    </span>
+                </AuthNotice>
+                {error ? (
+                    <AuthNotice icon={<TriangleAlert className="size-3.5" />}>
+                        <span role="alert">{error}</span>
+                    </AuthNotice>
+                ) : null}
+                <Button type="primary" htmlType="submit" size="large" block loading={submitting} disabled={submitting}>
+                    {t("auth.login.retrySession")}
+                </Button>
+                <Button size="large" block disabled={submitting} onClick={() => void cancel()}>
+                    {t("auth.register.toLogin")}
+                </Button>
+            </form>
+        );
+    }
     return (
         <form className="auth-form" onSubmit={submit}>
             <AuthNotice icon={<Info className="size-3.5" />} tone="blue">
