@@ -19,8 +19,9 @@ import (
 )
 
 type SyncRequest struct {
-	Limit       int  `json:"limit"`
-	RetryFailed bool `json:"retryFailed"`
+	Library     string `json:"library"`
+	Limit       int    `json:"limit"`
+	RetryFailed bool   `json:"retryFailed"`
 }
 
 type SyncFailure struct {
@@ -44,6 +45,10 @@ func (s *Service) SyncImages(ctx context.Context, actor *model.User, req SyncReq
 	if err := s.admin.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	library, err := normalizeLibrary(req.Library)
+	if err != nil {
+		return nil, err
+	}
 	limit := req.Limit
 	if limit <= 0 {
 		limit = defaultSyncSize
@@ -51,11 +56,11 @@ func (s *Service) SyncImages(ctx context.Context, actor *model.User, req SyncReq
 	limit = min(limit, maxSyncSize)
 	if req.RetryFailed {
 		// 重试先把失败条目整体放回待同步，后续批次只取待同步：再次失败的条目不会在同一轮里被反复领取。
-		if _, err := s.repo.RequeueFailedPoseLibraryItems(); err != nil {
+		if _, err := s.repo.RequeueFailedPoseLibraryItems(library); err != nil {
 			return nil, err
 		}
 	}
-	items, err := s.repo.PoseLibraryItemsForSync(limit)
+	items, err := s.repo.PoseLibraryItemsForSync(library, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +97,7 @@ func (s *Service) SyncImages(ctx context.Context, actor *model.User, req SyncReq
 	}
 	close(queue)
 	wg.Wait()
-	stats, err := s.stats()
+	stats, err := s.stats(library)
 	if err != nil {
 		return nil, err
 	}

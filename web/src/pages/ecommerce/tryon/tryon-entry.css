@@ -1,0 +1,78 @@
+/* 批量换装入口：按钮沿用商品视频的 .ecv-kind（video-chrome.css），这里只补悬浮说明卡里的效果演示。 */
+
+.ect-entry .ecv-kinds {
+    margin-top: 2px;
+}
+
+/* 悬浮说明卡比替换类型宽一些，放得下「图一 + 图二 → 效果」演示。 */
+.ect-kind-tip .ant-tooltip-inner {
+    max-width: 320px;
+}
+.ect-kind-tip-card {
+    display: grid;
+    gap: 10px;
+}
+.ect-demo-flow {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.ect-demo-tile {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 62px;
+    overflow: hidden;
+    border-radius: 9px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    animation: ect-demo-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.ect-demo-tile:nth-child(3) {
+    animation-delay: 70ms;
+}
+.ect-demo-tile:nth-child(4),
+.ect-demo-tile:nth-child(5) {
+    animation-delay: 140ms;
+}
+.ect-demo-tile:nth-child(6) {
+    animation-delay: 210ms;
+}
+.ect-demo-tile svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.ect-demo-tile small {
+    position: absolute;
+    top: 3px;
+    left: 4px;
+    z-index: 1;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: rgba(17, 24, 39, 0.62);
+    color: #fff !important;
+    font-size: 9px !important;
+    line-height: 14px;
+}
+.ect-demo-op {
+    flex: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 700;
+}
+@keyframes ect-demo-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.94);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ect-demo-tile {
+        animation: none;
+    }
+}

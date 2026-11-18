@@ -12,6 +12,10 @@ import (
 
 // PoseLibraryFilter 是姿势库列表的筛选条件。VisibleOnly 只返回已启用且图片已同步的条目。
 type PoseLibraryFilter struct {
+	// Library 为空时不按库区分；GroupKeys 用于按姿势（同组多视角）整组开关。
+	Library     string
+	GroupKeys   []string
+	IDs         []string
 	Keyword     string
 	SourceKey   string
 	System      string
@@ -19,6 +23,15 @@ type PoseLibraryFilter struct {
 	Angle       string
 	Status      string
 	VisibleOnly bool
+}
+
+// PoseLibraryCategorySummary 是某个体系下一个分类的条目与启用计数，后台按分类开关用。
+type PoseLibraryCategorySummary struct {
+	SourceKey string `json:"sourceKey"`
+	System    string `json:"system"`
+	Category  string `json:"category"`
+	Total     int64  `json:"total"`
+	Enabled   int64  `json:"enabled"`
 }
 
 type PoseLibraryFacet struct {
@@ -47,6 +60,15 @@ func (r *Repository) poseLibraryQuery(filter PoseLibraryFilter) *gorm.DB {
 	if filter.VisibleOnly {
 		query = query.Where("enabled = ? AND status = ?", true, model.PoseLibraryStatusReady)
 	}
+	if filter.Library != "" {
+		query = query.Where("library = ?", filter.Library)
+	}
+	if len(filter.GroupKeys) > 0 {
+		query = query.Where("group_key IN ?", filter.GroupKeys)
+	}
+	if len(filter.IDs) > 0 {
+		query = query.Where("id IN ?", filter.IDs)
+	}
 	if filter.SourceKey != "" {
 		query = query.Where("source_key = ?", filter.SourceKey)
 	}
@@ -71,14 +93,22 @@ func (r *Repository) poseLibraryQuery(filter PoseLibraryFilter) *gorm.DB {
 func (r *Repository) UpsertPoseLibrarySource(source *model.PoseLibrarySource) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "key"}},
-		DoUpdates: clause.AssignmentColumns([]string{"name", "attribution", "homepage", "base_url", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"library", "name", "attribution", "homepage", "base_url", "updated_at"}),
 	}).Create(source).Error
 }
 
-func (r *Repository) PoseLibrarySources() ([]model.PoseLibrarySource, error) {
+func (r *Repository) PoseLibrarySources(library string) ([]model.PoseLibrarySource, error) {
 	sources := []model.PoseLibrarySource{}
-	err := r.db.Order("created_at asc, key asc").Find(&sources).Error
+	err := r.db.Where("library = ?", library).Order("created_at asc, key asc").Find(&sources).Error
 	return sources, err
+}
+
+func (r *Repository) PoseLibrarySourceByKey(key string) (*model.PoseLibrarySource, error) {
+	var source model.PoseLibrarySource
+	if err := r.db.First(&source, "key = ?", key).Error; err != nil {
+		return nil, err
+	}
+	return &source, nil
 }
 
 // PoseLibraryItemsByExternalKeys 按来源内的外部 ID 读取已有条目，用于导入时判断新增还是更新。
@@ -102,7 +132,7 @@ func (r *Repository) SavePoseLibraryImport(source *model.PoseLibrarySource, crea
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "key"}},
-			DoUpdates: clause.AssignmentColumns([]string{"name", "attribution", "homepage", "base_url", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"library", "name", "attribution", "homepage", "base_url", "updated_at"}),
 		}).Create(source).Error; err != nil {
 			return err
 		}
@@ -152,9 +182,9 @@ func (r *Repository) UpdatePoseLibraryItem(id string, fields map[string]any) (in
 }
 
 // PoseLibraryItemsForSync 返回等待下载图片的条目；只有带远程地址的条目才需要同步。
-func (r *Repository) PoseLibraryItemsForSync(limit int) ([]model.PoseLibraryItem, error) {
+func (r *Repository) PoseLibraryItemsForSync(library string, limit int) ([]model.PoseLibraryItem, error) {
 	var items []model.PoseLibraryItem
-	err := r.db.Where("status = ? AND remote_image <> ''", model.PoseLibraryStatusPending).Order("sort_order asc, id asc").Limit(limit).Find(&items).Error
+	err := r.db.Where("library = ? AND status = ? AND remote_image <> ''", library, model.PoseLibraryStatusPending).Order("sort_order asc, id asc").Limit(limit).Find(&items).Error
 	return items, err
 }
 
@@ -176,8 +206,8 @@ func (r *Repository) RequeuePoseLibraryItems(ids []string) (int64, error) {
 	return affected, err
 }
 
-func (r *Repository) RequeueFailedPoseLibraryItems() (int64, error) {
-	result := r.db.Model(&model.PoseLibraryItem{}).Where("status = ? AND remote_image <> ''", model.PoseLibraryStatusFailed).
+func (r *Repository) RequeueFailedPoseLibraryItems(library string) (int64, error) {
+	result := r.db.Model(&model.PoseLibraryItem{}).Where("library = ? AND status = ? AND remote_image <> ''", library, model.PoseLibraryStatusFailed).
 		Updates(map[string]any{"status": model.PoseLibraryStatusPending, "error": "", "updated_at": time.Now()})
 	return result.RowsAffected, result.Error
 }
@@ -227,17 +257,25 @@ func (r *Repository) AdminPoseLibraryItems(filter PoseLibraryFilter, limit int, 
 	return items, total, err
 }
 
-func (r *Repository) PoseLibraryStatusCounts() ([]PoseLibraryStatusCount, error) {
+func (r *Repository) PoseLibraryStatusCounts(library string) ([]PoseLibraryStatusCount, error) {
 	var rows []PoseLibraryStatusCount
-	err := r.db.Model(&model.PoseLibraryItem{}).Select("status, enabled, COUNT(*) AS count").Group("status, enabled").Scan(&rows).Error
+	err := r.db.Model(&model.PoseLibraryItem{}).Where("library = ?", library).Select("status, enabled, COUNT(*) AS count").Group("status, enabled").Scan(&rows).Error
 	return rows, err
 }
 
-func (r *Repository) PoseLibrarySystemSummaries() ([]PoseLibrarySystemSummary, error) {
+func (r *Repository) PoseLibrarySystemSummaries(library string) ([]PoseLibrarySystemSummary, error) {
 	rows := []PoseLibrarySystemSummary{}
-	err := r.db.Model(&model.PoseLibraryItem{}).
+	err := r.db.Model(&model.PoseLibraryItem{}).Where("library = ?", library).
 		Select("source_key, system, COUNT(*) AS total, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS ready, SUM(CASE WHEN enabled THEN 1 ELSE 0 END) AS enabled", model.PoseLibraryStatusReady).
 		Group("source_key, system").Order("MIN(sort_order) asc").Scan(&rows).Error
+	return rows, err
+}
+
+func (r *Repository) PoseLibraryCategorySummaries(library string) ([]PoseLibraryCategorySummary, error) {
+	rows := []PoseLibraryCategorySummary{}
+	err := r.db.Model(&model.PoseLibraryItem{}).Where("library = ?", library).
+		Select("source_key, system, category, COUNT(*) AS total, SUM(CASE WHEN enabled THEN 1 ELSE 0 END) AS enabled").
+		Group("source_key, system, category").Order("MIN(sort_order) asc").Scan(&rows).Error
 	return rows, err
 }
 
@@ -268,12 +306,12 @@ func (r *Repository) PoseLibraryGroupPage(filter PoseLibraryFilter, limit int, o
 	return keys, total, nil
 }
 
-func (r *Repository) PoseLibraryVisibleItemsByGroups(groupKeys []string) ([]model.PoseLibraryItem, error) {
+func (r *Repository) PoseLibraryVisibleItemsByGroups(library string, groupKeys []string) ([]model.PoseLibraryItem, error) {
 	var items []model.PoseLibraryItem
 	if len(groupKeys) == 0 {
 		return items, nil
 	}
-	err := r.poseLibraryQuery(PoseLibraryFilter{VisibleOnly: true}).Where("group_key IN ?", groupKeys).Order("sort_order asc, id asc").Find(&items).Error
+	err := r.poseLibraryQuery(PoseLibraryFilter{VisibleOnly: true, Library: library}).Where("group_key IN ?", groupKeys).Order("sort_order asc, id asc").Find(&items).Error
 	return items, err
 }
 

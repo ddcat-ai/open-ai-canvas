@@ -238,3 +238,7 @@ export async function createWorkbenchTask(input: WorkbenchTaskIntent) {
 export type WorkbenchTaskReceipt = {
     task: GenerationTask;
 };
+
+export function deleteTryOnBatch(id: string) {
+    return http.delete<{ assetIds: string[] }>(`/workbench/tryon/batches/${encodeURIComponent(id)}`);
+}

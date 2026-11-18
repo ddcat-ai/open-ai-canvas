@@ -129,6 +129,10 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 	return s.platformDomain().FeatureEnabled(feature)
 }
 
+func (s *Service) TryOnFunctionEnabled(id string) (bool, error) {
+	return s.platformDomain().TryOnFunctionEnabled(id)
+}
+
 func (s *Service) RequireFeature(feature string) error {
 	return s.platformDomain().RequireFeature(feature)
 }

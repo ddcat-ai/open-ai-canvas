@@ -16,6 +16,8 @@ type (
 	EcommerceCreativeDirectionsRequest     = app.EcommerceCreativeDirectionsRequest
 	EcommerceStyleChoice                   = app.EcommerceStyleChoice
 	EcommerceAgentSetting                  = app.EcommerceAgentSetting
+	EcommerceTryOnKnowledgeRequest         = app.EcommerceTryOnKnowledgeRequest
+	EcommerceTryOnKnowledge                = app.EcommerceTryOnKnowledge
 	EcommerceOrchestrationSetting          = app.EcommerceOrchestrationSetting
 	EcommerceCreativeDirection             = app.EcommerceCreativeDirection
 	EcommerceCreativeDirectionsResponse    = app.EcommerceCreativeDirectionsResponse

@@ -153,7 +153,17 @@ Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工�
 | `PATCH /api/admin/settings/inspiration-feed` | 管理员。`{ enabled: boolean }`，缺少 `enabled` 返回 400；写入审计，返回最新 `status` |
 | `POST /api/admin/settings/inspiration-feed/sync` | 管理员。立即同步，与请求解绑，最长约 8 分钟；部分来源失败返回 200 并在 `lastError`、`sources[].error` 说明；全部失败返回 502；已关闭或已有同步在进行返回 409。写入审计 |
 
-## 姿势库
+## 电商批量换装
+
+`POST /api/ecommerce/tryon/knowledge` 要求登录、电商总功能开放以及对应换装功能可用。请求包含 `function`、`garment`、`scene`、`platform`、`region`、`language`、`markets`；正文最多 8 KiB。返回 `{category,knowledge,entries}`，知识最多 9000 字，只读取已审核且适用当前条件的知识，并补充服饰摄影与平台方法；不调用模型、不计费。响应使用 `Cache-Control: private, no-store`。
+
+规划通过已有 `POST /api/tasks` 创建文本任务，出图通过 `POST /api/workbench/tasks` 创建图片任务，沿用各自的模型权限、参考图资源校验与计费规则。换装批次 ID 使用 `tryon_<功能>_<随机标识>`，服务端检查对应功能开放状态。后台功能开放配置扩展 `ecommerceTryOnFunctions: Record<string, boolean>`，未设置的项默认开放，关闭项仅管理员可调用。
+
+`DELETE /api/workbench/tryon/batches/:id` 仅处理当前用户的换装批次。只要该批次存在尚未结束的任务就拒绝删除；已结束批次在事务中删除任务及对应作品，资源清理保留既有引用保护。此接口不会删除其他用户同名批次。
+
+## 姿势库与服装库
+
+以下目录、导入、同步、新增和批量操作支持 `library=pose|garment`（省略为 `pose`）。后台列表支持按 `category` 筛选，并返回类别及分组汇总供管理页使用。图库类型隔离应用于查询和批量操作，画布既有姿势入口默认只读姿势库。
 
 所有接口使用登录 Cookie 和标准业务信封。`/api/admin/pose-library/*` 由 service 校验管理员权限（匿名 401、普通用户 403），写入记录管理员审计。用户接口只返回 `enabled=true` 且图片已同步（`status=ready`）的条目；管理员还能预览停用条目。数据表与导入流程见 [后端数据库](/docs/backend/backend-database) 和 [姿势库](/docs/canvas/pose-library)。
 

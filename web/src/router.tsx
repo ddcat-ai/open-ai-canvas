@@ -16,6 +16,8 @@ import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
 const EcommerceManagementPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-management-page"));
+const EcommerceFeaturesPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-features-page"));
+const GarmentLibraryAdminPage = lazyAdminPage(() => import("@/pages/admin/pose-library/garment-library-page"));
 const EcommerceAgentConfigPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-agent-config-page"));
 const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
 const TrafficPage = lazyAdminPage(() => import("@/pages/admin/traffic/traffic-page"));
@@ -261,6 +263,7 @@ const routes: RouteObject[] = [
                     { path: "models", element: <LogicalModelsPage /> },
                     { path: "ecommerce", element: <Navigate to="/admin/ecommerce/agent" replace /> },
                     { path: "ecommerce/agent", element: <EcommerceAgentConfigPage /> },
+                    { path: "ecommerce/features", element: <EcommerceFeaturesPage /> },
                     { path: "ecommerce/library", element: <EcommerceManagementPage /> },
                     { path: "ecommerce/library/skills", element: <EcommerceManagementPage /> },
                     { path: "ecommerce/library/categories", element: <EcommerceManagementPage /> },
@@ -276,6 +279,7 @@ const routes: RouteObject[] = [
                     { path: "mcp", element: <AdminMCPPage /> },
                     { path: "workbench-tools", element: <WorkbenchToolsPage /> },
                     { path: "pose-library", element: <PoseLibraryAdminPage /> },
+                    { path: "garment-library", element: <GarmentLibraryAdminPage /> },
                     { path: "skills", element: <AdminSkillsPage /> },
                     { path: "skills/:skillId/edit", element: <AdminSkillWorkbenchPage /> },
                     { path: "skill-curation", element: <SkillCurationPage /> },

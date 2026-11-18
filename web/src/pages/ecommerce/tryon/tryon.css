@@ -1,0 +1,1554 @@
+/* 商品图片 · 批量换装：沿用 .ecs-*（商品图片面板）与 .ecv-*（商品视频按钮、上传位、作品）样式，这里只补换装特有的布局与动效。 */
+
+.ect-shell {
+    --ect-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ect-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ect-shell .ecv-check-strong {
+    font-weight: 600;
+}
+.ect-shell .ecv-check-strong small {
+    display: block;
+    margin-top: 2px;
+    color: var(--user-ink-soft);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.5;
+}
+.ect-sections {
+    animation: ecv-swap-in 360ms var(--ect-ease) both;
+}
+.ect-block-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+}
+.ect-block-head h3 {
+    flex: none;
+    margin: 0;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+}
+.ect-block-head > span {
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ect-block-head > .ect-block-extra {
+    margin-left: auto;
+    overflow: visible;
+}
+
+/* ---------- 指令卡：句子 + 上传位 + 补充要求 ---------- */
+.ect-card {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+    box-shadow: inset 0 0 0 1px transparent;
+    transition:
+        background-color var(--ecs-motion),
+        box-shadow var(--ecs-motion);
+}
+.ect-card:focus-within {
+    background: var(--user-surface);
+    box-shadow: inset 0 0 0 1px var(--user-border-strong);
+}
+.ect-sentence {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+}
+.ect-card:focus-within .ect-sentence {
+    background: var(--user-surface-muted);
+}
+.ect-sentence-text {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+    line-height: 2;
+    animation: ecv-swap-in 320ms var(--ect-ease) both;
+}
+.ect-hover-inline {
+    display: inline;
+}
+.ect-sentence-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 22px;
+    margin: 0 3px;
+    padding: 0 7px 0 5px;
+    border: 1px solid var(--user-border-strong);
+    border-radius: 6px;
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    vertical-align: 1px;
+    cursor: pointer;
+    transition:
+        border-color 160ms var(--ect-ease),
+        color 160ms var(--ect-ease),
+        transform 160ms var(--ect-ease);
+}
+.ect-sentence-chip:hover {
+    border-color: var(--control-selected-border);
+    color: var(--user-ink);
+    transform: translateY(-1px);
+}
+.ect-sentence-chip:active {
+    transform: scale(0.95);
+}
+.ect-sentence-chip.is-filled {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    font-weight: 600;
+}
+.ect-sentence-chip img {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    object-fit: cover;
+    animation: ecv-pop 360ms var(--ect-spring) both;
+}
+.ect-sentence-chip small {
+    color: inherit;
+    font-size: 10px;
+    opacity: 0.75;
+}
+.ect-template {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    margin-top: 3px;
+    padding: 0 var(--space-2);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+    transition:
+        border-color 160ms var(--ect-ease),
+        color 160ms var(--ect-ease);
+}
+.ect-template:hover,
+.ect-template[aria-expanded="true"] {
+    border-color: var(--control-selected-border);
+    color: var(--user-ink);
+}
+
+/* 上传位：两张卡片之间是互换按钮 */
+.ect-slots {
+    display: grid;
+    grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+    gap: var(--space-2);
+}
+.ect-slots[data-count="1"] {
+    --cols: 1;
+    justify-items: start;
+}
+.ect-slot-cell {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    min-width: 0;
+    animation: ect-pop-in 420ms var(--ect-spring) both;
+    animation-delay: calc(var(--i, 0) * 70ms);
+}
+.ect-slots[data-count="1"] .ect-slot-cell {
+    justify-items: start;
+}
+.ect-slot {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.ect-slots[data-count="1"] .ect-slot {
+    justify-items: start;
+}
+.ect-slot .ecv-tip-anchor {
+    display: block;
+}
+.ect-slot-card {
+    position: relative;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 4px;
+    width: 112px;
+    height: 136px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px dashed var(--user-border-strong, var(--user-border));
+    border-radius: var(--r-lg);
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    transform-origin: 50% 90%;
+    transition:
+        border-color 200ms var(--ect-ease),
+        background-color 200ms var(--ect-ease),
+        box-shadow 200ms var(--ect-ease),
+        transform 260ms var(--ect-spring);
+}
+.ect-slot-card:hover:not(:disabled),
+.ect-slot-card.is-dragging {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    box-shadow: 0 10px 24px color-mix(in srgb, #000 12%, transparent);
+    transform: translateY(-3px) rotate(-1.5deg);
+}
+.ect-slot-card.is-flip:hover:not(:disabled),
+.ect-slot-card.is-flip.is-dragging {
+    transform: translateY(-3px) rotate(1.5deg);
+}
+.ect-slot-card:active:not(:disabled) {
+    transform: scale(0.97);
+}
+.ect-slot-card:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+.ect-slot-card strong {
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+}
+.ect-slot-card small {
+    color: var(--user-ink-soft);
+    font-size: 10px;
+}
+.ect-slot-plus {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--user-surface-muted);
+    transition:
+        transform 320ms var(--ect-spring),
+        background-color 200ms var(--ect-ease);
+}
+.ect-slot-card:hover:not(:disabled) .ect-slot-plus {
+    background: var(--user-surface);
+    transform: rotate(90deg) scale(1.06);
+}
+.ect-slot-card.is-filled {
+    border-style: solid;
+    border-color: transparent;
+    background: var(--user-surface-muted);
+    cursor: default;
+}
+.ect-slot-card.is-filled .ecv-hover-anchor,
+.ect-slot-card.is-filled img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+.ect-slot-card.is-filled .ecv-hover-anchor {
+    position: absolute;
+    inset: 0;
+}
+.ect-slot-card.is-filled img {
+    object-fit: contain;
+    animation: ect-reveal 420ms var(--ect-ease) both;
+}
+.ect-media-preview .ecv-hover-card {
+    width: min(240px, calc(100vw - 32px));
+}
+.ect-media-preview .ecv-hover-card img {
+    height: min(340px, calc(100dvh - 120px));
+    object-fit: contain;
+}
+.ect-slot-chip {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 55%);
+    color: #fff;
+    font-size: 10px;
+    line-height: 17px;
+    pointer-events: none;
+}
+.ect-slot-remove {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 55%);
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 160ms var(--ect-ease);
+}
+.ect-slot-remove:hover {
+    background: var(--ecv-bad, #dc2626);
+}
+.ect-slot-replace {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 60%);
+    color: #fff;
+    font-size: 11px;
+    line-height: 22px;
+    opacity: 0;
+    cursor: pointer;
+    transform: translate(-50%, 4px);
+    transition:
+        opacity 180ms var(--ect-ease),
+        transform 180ms var(--ect-ease);
+}
+.ect-slot-card.is-filled:hover .ect-slot-replace,
+.ect-slot-replace:focus-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+.ect-slot-progress {
+    position: absolute;
+    inset: auto 0 0;
+    height: 4px;
+    background: rgb(0 0 0 / 25%);
+}
+.ect-slot-progress::after {
+    display: block;
+    width: var(--p, 0%);
+    height: 100%;
+    background: var(--ecv-good, #16a34a);
+    transition: width 0.3s ease;
+    content: "";
+}
+.ect-slot-error {
+    position: absolute;
+    inset: auto 0 0;
+    padding: 4px 6px;
+    background: rgb(60 0 0 / 70%);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1.4;
+}
+.ect-slot-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+}
+.ect-slots[data-count="1"] .ect-slot-tools {
+    justify-content: flex-start;
+}
+.ect-slot .ecv-library.is-soft {
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: inset 0 0 0 1px var(--user-border);
+}
+.ect-slot .ecv-slot-note {
+    text-align: center;
+}
+.ect-slots[data-count="1"] .ecv-slot-note {
+    text-align: left;
+}
+.ect-swap {
+    position: absolute;
+    top: 52px;
+    right: calc(var(--space-2) / -2);
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--user-border);
+    border-radius: 50%;
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+    box-shadow: 0 4px 12px color-mix(in srgb, #000 10%, transparent);
+    cursor: pointer;
+    transform: translateX(50%);
+    transition:
+        color 160ms var(--ect-ease),
+        border-color 160ms var(--ect-ease),
+        transform 200ms var(--ect-spring);
+}
+.ect-swap:hover {
+    border-color: var(--control-selected-border);
+    color: var(--control-selected-fg);
+    transform: translateX(50%) scale(1.08);
+}
+.ect-swap:active {
+    transform: translateX(50%) scale(0.92);
+}
+.ect-swap svg.is-turn {
+    animation: ect-turn 460ms var(--ect-spring);
+}
+
+/* 多张位的缩略条 */
+.ect-strip {
+    display: grid;
+    gap: 6px;
+}
+.ect-strip-label {
+    color: var(--user-ink-soft);
+    font-size: 11px;
+}
+.ect-strip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.ect-thumb.is-compact {
+    width: 56px;
+    height: 68px;
+    border-radius: var(--r-md);
+    animation: ect-pop-in 360ms var(--ect-spring) both;
+}
+.ect-thumb .ecv-hover-anchor {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.ect-notes {
+    display: grid;
+    gap: 2px;
+    padding-top: var(--space-2);
+    border-top: 1px solid color-mix(in srgb, var(--user-border) 70%, transparent);
+}
+.ect-notes textarea {
+    width: 100%;
+    padding: var(--space-2);
+    background: transparent;
+    color: var(--user-ink);
+    font-size: var(--fs-body);
+    line-height: 1.7;
+    box-shadow: none;
+    resize: none;
+}
+.ect-notes textarea::placeholder {
+    color: var(--user-ink-soft);
+}
+.ect-notes .ecv-count {
+    margin-top: 0;
+}
+
+/* 选项 */
+.ect-chips .ecs-chip {
+    gap: 4px;
+    animation: ect-pop-in 300ms var(--ect-ease) both;
+    animation-delay: calc(min(var(--i, 0), 16) * 18ms);
+}
+.ect-chips .ecs-chip:active:not(:disabled) {
+    transform: scale(0.95);
+}
+.ect-chips .ecs-chip:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.ect-chips .ecs-chip[aria-pressed="true"] svg {
+    animation: ecv-pop 300ms var(--ect-spring);
+}
+.ect-markets {
+    gap: var(--space-2);
+}
+.ect-market-group {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-2);
+}
+.ect-market-group em {
+    padding-top: 6px;
+    color: var(--user-ink-soft);
+    font-size: 11px;
+    font-style: normal;
+}
+.ect-market-group .ecs-chip {
+    height: 26px;
+    padding: 0 10px;
+}
+.ect-casting {
+    display: grid;
+    gap: var(--space-3);
+}
+.ect-shell .ect-choices {
+    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+}
+.ect-shell .ect-choices button {
+    transition:
+        border-color 180ms var(--ect-ease),
+        background-color 180ms var(--ect-ease),
+        transform 160ms var(--ect-ease);
+}
+.ect-shell .ect-choices button:hover:not(:disabled) {
+    border-color: var(--control-selected-border);
+}
+.ect-shell .ect-choices button:active:not(:disabled) {
+    transform: scale(0.97);
+}
+.ect-shell .ect-choices button[aria-checked="true"] strong svg {
+    animation: ecv-pop 320ms var(--ect-spring);
+}
+.ect-agent-check {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--ecv-good, #16a34a) 35%, transparent);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--ecv-good, #16a34a) 7%, transparent);
+}
+.ect-count-bump {
+    animation: ecv-pop 300ms var(--ect-spring);
+}
+.ect-shell .ect-submit:not(:disabled):hover {
+    transform: translateY(-1px);
+}
+
+/* ---------- 上传示范（悬浮卡） ---------- */
+.ect-tip {
+    width: min(460px, calc(100vw - 32px));
+}
+.ect-tip-grid figure {
+    animation: ect-pop-in 380ms var(--ect-ease) both;
+    animation-delay: calc(var(--i, 0) * 50ms);
+}
+.ect-tip-grid .ect-demo-tile,
+.ect-tip-photo {
+    display: block;
+    width: 100%;
+    max-width: none;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border-radius: var(--r-md);
+    background: var(--ecv-illus-bg);
+    animation: none;
+}
+.ect-tip-grid.is-bad .ect-demo-tile,
+.ect-tip-grid.is-bad .ect-tip-photo {
+    aspect-ratio: 1 / 1;
+}
+.ect-tip-grid .ect-demo-tile svg {
+    width: 100%;
+    height: 100%;
+}
+.ect-tip-photo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 12%;
+    transition: transform 400ms var(--ect-ease);
+}
+.ect-tip-grid figure:hover .ect-tip-photo img {
+    transform: scale(1.05);
+}
+.ect-tip-photo.is-group {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+}
+
+/* ---------- 案例提示词 ---------- */
+.ect-examples-popover .ant-popover-inner {
+    padding: 6px;
+    border-radius: var(--r-xl, 14px);
+}
+.ect-examples {
+    display: grid;
+    gap: 2px;
+    width: min(320px, calc(100vw - 48px));
+}
+.ect-examples > strong {
+    padding: 4px 8px 6px;
+    color: var(--user-ink-soft, #888);
+    font-size: 11px;
+    font-weight: 600;
+}
+.ect-examples button {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: left;
+    cursor: pointer;
+    animation: ect-pop-in 260ms var(--ect-ease, ease) both;
+    animation-delay: calc(var(--i, 0) * 35ms);
+}
+.ect-examples button:hover {
+    background: var(--user-surface-muted, rgb(0 0 0 / 5%));
+}
+.ect-examples button svg {
+    flex: none;
+    margin-top: 3px;
+    color: #f59e0b;
+}
+
+/* ---------- 真人模特库 ---------- */
+.ect-library-hint {
+    margin: 0 0 var(--space-3);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.ect-library-filters {
+    display: grid;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+.ect-library-filters > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+.ect-library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--space-3);
+    max-height: min(60vh, 560px);
+    overflow-y: auto;
+    padding: 2px;
+}
+.ect-library-card {
+    display: grid;
+    gap: 4px;
+    padding: var(--space-2);
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+    animation: ect-pop-in 360ms var(--ect-ease, ease) both;
+    transition:
+        box-shadow 200ms var(--ect-ease, ease),
+        transform 200ms var(--ect-ease, ease);
+}
+.ect-library-card:hover {
+    box-shadow: 0 10px 24px color-mix(in srgb, #000 12%, transparent);
+    transform: translateY(-2px);
+}
+.ect-library-card.is-picked {
+    box-shadow: inset 0 0 0 2px var(--control-selected-border);
+}
+.ect-library-card strong {
+    font-size: var(--fs-caption);
+}
+.ect-library-card small {
+    display: -webkit-box;
+    min-height: 2.8em;
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: 11px;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.ect-library-media {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+}
+.ect-library-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 10%;
+    transition:
+        opacity 280ms var(--ect-ease, ease),
+        transform 400ms var(--ect-ease, ease);
+}
+.ect-library-media .is-face {
+    opacity: 0;
+    transform: scale(1.06);
+}
+.ect-library-card:hover .ect-library-media .is-face {
+    opacity: 1;
+    transform: none;
+}
+.ect-library-check {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--ecv-good, #16a34a);
+    color: #fff;
+    animation: ecv-pop 320ms var(--ect-spring, ease);
+}
+
+/* ---------- 作品区 ---------- */
+.ect-batches {
+    display: grid;
+    gap: var(--space-4);
+}
+.ect-batch {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--r-xl, 14px);
+    background: var(--user-surface);
+    animation: ecv-swap-in 360ms var(--ect-ease) both;
+}
+.ect-batch-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+}
+.ect-batch-icon.ecv-kind-icon {
+    --glyph-accent: #fff;
+    width: 30px;
+    height: 30px;
+    background: linear-gradient(135deg, #10b981, #0ea5e9);
+    color: #fff;
+}
+.ect-batch-title {
+    display: grid;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.ect-batch-title strong {
+    overflow: hidden;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ect-batch-title small {
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ect-batch-head time {
+    flex: none;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.ect-batch-tools {
+    display: flex;
+    flex: none;
+    gap: 2px;
+}
+.ect-batch-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--status-warning, #f59e0b) 10%, transparent);
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    line-height: 1.5;
+}
+.ect-batch-notice.is-paused {
+    background: color-mix(in srgb, var(--status-error, #dc2626) 9%, transparent);
+}
+
+.ect-planning {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid color-mix(in srgb, #10b981 30%, transparent);
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, #10b981 6%, var(--user-surface));
+}
+.ect-planning.is-failed {
+    border-color: color-mix(in srgb, var(--status-warning, #f59e0b) 40%, transparent);
+    background: color-mix(in srgb, var(--status-warning, #f59e0b) 7%, var(--user-surface));
+}
+.ect-planning header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+.ect-planning header > span:last-child {
+    display: grid;
+    min-width: 0;
+}
+.ect-planning header strong {
+    font-size: var(--fs-caption);
+}
+.ect-planning header small {
+    color: var(--user-ink-soft);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.ect-planning-mark.ecv-glyph-tile {
+    width: 32px;
+    height: 32px;
+    padding: 8px;
+    border-radius: 10px;
+}
+.ect-planning.is-running .ect-planning-mark {
+    animation: ect-breathe 1.8s ease-in-out infinite;
+}
+.ect-planning-steps {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.ect-planning-steps li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    transition: color 200ms var(--ect-ease);
+}
+.ect-planning-steps li[data-state="active"] {
+    color: var(--user-ink);
+    font-weight: 600;
+}
+.ect-planning-steps li[data-state="done"] {
+    color: var(--user-ink-muted);
+}
+.ect-step-dot {
+    display: inline-grid;
+    place-items: center;
+    width: 13px;
+    height: 13px;
+    border: 1px solid var(--user-border-strong);
+    border-radius: 50%;
+    font-size: 9px;
+}
+.ect-step-dot.is-done {
+    border-color: transparent;
+    background: var(--ecv-good, #16a34a);
+    color: #fff;
+}
+.ect-planning-garment {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+}
+.ect-planning-garment small {
+    color: var(--user-ink-muted);
+    font-weight: 400;
+    line-height: 1.5;
+}
+.ect-knowledge-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    gap: 4px;
+    height: 24px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: 999px;
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+    font-size: 11px;
+    cursor: pointer;
+}
+.ect-knowledge-chip:hover {
+    color: var(--user-ink);
+}
+.ect-knowledge-list {
+    display: grid;
+    gap: 4px;
+    max-width: 320px;
+    max-height: 280px;
+    margin: 0;
+    padding: 0 0 0 1.1em;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.ect-job-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-6);
+}
+.ect-job-grid[data-multiple] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+    align-items: start;
+}
+.ect-job-grid[data-multiple] .ect-job {
+    width: 100%;
+}
+.ect-job {
+    display: grid;
+    flex: 0 1 auto;
+    width: min(100%, clamp(280px, calc(var(--ect-aspect, 0.75) * 440px), 960px));
+    gap: var(--space-2);
+    min-width: 0;
+    animation: ect-pop-in 420ms var(--ect-spring) both;
+    animation-delay: calc(min(var(--i, 0), 12) * 45ms);
+}
+.ect-job-media {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+}
+.ect-job:not(.is-done) .ect-job-media {
+    min-height: 240px;
+}
+.ect-job-open {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+}
+.ect-job-open img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    animation: ect-reveal 520ms var(--ect-ease) both;
+    transition: transform 420ms var(--ect-ease);
+}
+.ect-job-pending {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    text-align: center;
+    background: var(--user-surface-muted);
+}
+.ect-job.is-failed .ect-job-pending {
+    background: color-mix(in srgb, var(--status-error, #dc2626) 8%, var(--user-surface-muted));
+    color: var(--status-error, #dc2626);
+    animation: none;
+}
+.ect-job .ecv-progress {
+    width: 70%;
+    background: color-mix(in srgb, var(--user-ink) 12%, transparent);
+}
+.ect-job .ecv-progress i {
+    background: linear-gradient(90deg, #10b981, #0ea5e9);
+}
+.ect-job .ecv-result-banner {
+    inset: auto 0 0;
+    font-size: var(--fs-body);
+}
+.ect-job-actions {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition:
+        opacity 180ms var(--ect-ease),
+        transform 180ms var(--ect-ease);
+}
+.ect-job-media:hover .ect-job-actions,
+.ect-job-actions:focus-within {
+    opacity: 1;
+    transform: none;
+}
+.ect-job-actions > button,
+.ect-job-actions > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 28px;
+    min-width: 28px;
+    justify-content: center;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 62%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition:
+        background-color 160ms var(--ect-ease),
+        transform 160ms var(--ect-spring);
+}
+.ect-job-actions > button:hover,
+.ect-job-actions > a:hover {
+    background: rgb(0 0 0 / 82%);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.ect-job-actions > button:active,
+.ect-job-actions > a:active {
+    transform: scale(0.92);
+}
+.ect-job-actions > button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+.ect-job footer {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+    padding: 0 2px;
+}
+.ect-job footer strong {
+    font-size: var(--fs-body);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    line-height: var(--lh-body);
+}
+.ect-job footer small {
+    color: var(--user-ink-soft);
+    font-size: var(--fs-ui);
+    overflow-wrap: anywhere;
+    line-height: var(--lh-body);
+}
+.ect-job.is-ghost {
+    opacity: 0.7;
+}
+.ect-more {
+    justify-self: center;
+}
+
+.ect-empty {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-2);
+    padding: var(--space-6) var(--space-4);
+    border-radius: var(--r-2xl);
+    background: var(--user-surface);
+    text-align: center;
+}
+.ect-empty > strong {
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+.ect-empty > span {
+    max-width: 46ch;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.ect-empty-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+    gap: var(--space-3);
+    width: 100%;
+    margin-top: var(--space-3);
+}
+.ect-empty-card {
+    display: grid;
+    gap: 6px;
+    padding: var(--space-3);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    text-align: left;
+    cursor: pointer;
+    animation: ect-pop-in 420ms var(--ect-ease) both;
+    animation-delay: calc(var(--i, 0) * 45ms);
+    transition:
+        border-color 180ms var(--ect-ease),
+        box-shadow 180ms var(--ect-ease),
+        transform 180ms var(--ect-ease);
+}
+.ect-empty-card:hover {
+    border-color: var(--control-selected-border);
+    box-shadow: 0 10px 24px color-mix(in srgb, #000 10%, transparent);
+    transform: translateY(-2px);
+}
+.ect-empty-card:active {
+    transform: scale(0.98);
+}
+.ect-empty-card strong {
+    font-size: var(--fs-ui);
+}
+.ect-empty-card small {
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.ect-empty-card .ect-demo-op {
+    color: var(--user-ink-soft);
+}
+.ect-empty-card .ect-demo-tile {
+    box-shadow: 0 0 0 1px var(--user-border);
+}
+
+.ect-lightbox-body {
+    position: relative;
+    height: max(240px, calc(100dvh - 200px));
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+}
+.ect-image-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    cursor: default;
+}
+.ect-image-viewport[data-zoom]:not([data-zoom="1"]) {
+    cursor: grab;
+}
+.ect-image-viewport[data-dragging] {
+    cursor: grabbing;
+}
+.ect-image-viewport img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+}
+.ect-image-state {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--user-ink);
+    font-size: var(--fs-body);
+}
+.ect-image-tools {
+    position: absolute;
+    bottom: var(--space-3);
+    left: 50%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-radius: var(--r-lg);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    transform: translateX(-50%);
+}
+.ect-image-tools output {
+    min-width: 48px;
+    text-align: center;
+    font-size: var(--fs-body);
+    font-variant-numeric: tabular-nums;
+}
+.ect-lightbox-help {
+    display: block;
+    font-size: var(--fs-ui);
+}
+.ect-lightbox-nav {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--user-surface);
+    color: var(--user-ink);
+    cursor: pointer;
+    transform: translateY(-50%);
+}
+.ect-lightbox-nav:hover:not(:disabled) {
+    background: var(--user-surface-muted);
+}
+.ect-lightbox-nav:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+.ect-lightbox-nav.is-prev {
+    left: 10px;
+}
+.ect-lightbox-nav.is-next {
+    right: 10px;
+}
+.ect-lightbox-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+}
+.ect-lightbox-foot a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+@keyframes ect-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes ect-reveal {
+    from {
+        opacity: 0;
+        filter: blur(6px);
+        transform: scale(1.04);
+    }
+    to {
+        opacity: 1;
+        filter: none;
+        transform: none;
+    }
+}
+@keyframes ect-turn {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(180deg);
+    }
+}
+@keyframes ect-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@keyframes ect-breathe {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.08);
+    }
+}
+
+@media (max-width: 760px) {
+    .ect-market-group {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 4px;
+    }
+    .ect-market-group em {
+        padding-top: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ect-sections,
+    .ect-sentence-text,
+    .ect-sentence-chip img,
+    .ect-slot-cell,
+    .ect-slot-card.is-filled img,
+    .ect-thumb.is-compact,
+    .ect-chips .ecs-chip,
+    .ect-chips .ecs-chip[aria-pressed="true"] svg,
+    .ect-count-bump,
+    .ect-tip-grid figure,
+    .ect-examples button,
+    .ect-library-card,
+    .ect-library-check,
+    .ect-batch,
+    .ect-planning.is-running .ect-planning-mark,
+    .ect-job,
+    .ect-job-open img,
+    .ect-job-pending,
+    .ect-swap svg.is-turn,
+    .ect-empty-card,
+    .ect-lightbox-body img {
+        animation: none;
+    }
+    .ect-slot-card,
+    .ect-slot-plus,
+    .ect-swap,
+    .ect-job-open img,
+    .ect-job-actions,
+    .ect-library-card,
+    .ect-library-media img,
+    .ect-empty-card {
+        transition: none;
+    }
+}
+
+/* 多张上传位：已上传的图叠放在上传位里，悬停扇形展开，点击弹出管理面板。 */
+.ect-stack {
+    position: relative;
+    display: block;
+    width: 112px;
+    height: 136px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+    cursor: pointer;
+    transition:
+        border-color 200ms var(--ect-ease),
+        background-color 200ms var(--ect-ease);
+}
+.ect-stack.is-dragging {
+    border: 1px dashed var(--control-selected-border);
+    background: var(--control-selected-bg);
+}
+.ect-stack:focus-visible {
+    outline: 2px solid var(--control-selected-fg);
+    outline-offset: 2px;
+}
+.ect-stack > img {
+    --offset: calc(var(--i) - (var(--n) - 1) / 2);
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    width: 78px;
+    height: 104px;
+    margin-left: -39px;
+    border: 2px solid var(--user-surface);
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.22);
+    object-fit: cover;
+    z-index: calc(10 - var(--i));
+    transform-origin: 50% 120%;
+    transform: rotate(calc(var(--offset) * 4deg)) translateX(calc(var(--offset) * 3px));
+    transition: transform 320ms var(--ect-spring);
+    animation: ect-stack-in 320ms var(--ect-ease);
+}
+.ect-stack > img.is-error {
+    border-color: var(--status-danger, #dc2626);
+}
+.ect-stack:hover > img,
+.ect-stack.is-open > img {
+    transform: rotate(calc(var(--offset) * 13deg)) translateX(calc(var(--offset) * 16px)) translateY(-4px);
+}
+.ect-stack > .ect-slot-chip {
+    z-index: 20;
+}
+.ect-stack > .ecv-badge {
+    right: 5px;
+    left: auto;
+    z-index: 20;
+}
+.ect-stack-badge {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    z-index: 20;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--user-ink);
+    color: var(--user-surface);
+    font-size: 10px;
+    line-height: 17px;
+    white-space: nowrap;
+    transform: translateX(-50%);
+}
+.ect-stack-badge.is-error {
+    background: var(--status-danger, #dc2626);
+    color: #fff;
+}
+.ect-stack-popover .ant-popover-inner {
+    padding: 0;
+    border-radius: var(--r-xl, 16px);
+}
+.ect-stack-panel {
+    position: relative;
+    width: min(380px, calc(100vw - 32px));
+}
+.ect-stack-panel > header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--user-border);
+}
+.ect-stack-panel > header > div {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+}
+.ect-stack-panel > header strong {
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+    font-weight: 600;
+}
+.ect-stack-panel > header small {
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.ect-stack-close {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+}
+.ect-stack-close:hover {
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+}
+.ect-stack-panel ul {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+    max-height: 320px;
+    margin: 0;
+    padding: var(--space-4);
+    overflow-y: auto;
+    list-style: none;
+}
+.ect-stack-panel li {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+}
+.ect-stack-panel li.is-error {
+    outline: 2px solid var(--status-danger, #dc2626);
+}
+.ect-stack-preview {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+}
+.ect-stack-preview:disabled {
+    cursor: default;
+}
+.ect-stack-preview > span {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--r-sm);
+    background: rgb(0 0 0 / 0.6);
+    color: #fff;
+    pointer-events: none;
+}
+.ect-stack-panel li img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.ect-stack-label,
+.ect-stack-state {
+    position: absolute;
+    left: 50%;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateX(-50%);
+}
+.ect-stack-label {
+    bottom: 4px;
+}
+.ect-stack-state {
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+.ect-stack-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.6);
+    color: #fff;
+    cursor: pointer;
+}
+.ect-stack-remove:hover {
+    background: rgb(0 0 0 / 0.82);
+}
+.ect-stack-zoom {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: var(--space-3);
+    border-radius: inherit;
+    background: var(--user-surface);
+}
+.ect-stack-zoom img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--r-md);
+}
+.ect-stack-zoom .ect-stack-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgb(0 0 0 / 0.55);
+    color: #fff;
+}
+@media (prefers-reduced-motion: reduce) {
+    .ect-stack > img {
+        transition: none;
+        animation: none;
+    }
+}
+@keyframes ect-stack-in {
+    from {
+        opacity: 0;
+    }
+}

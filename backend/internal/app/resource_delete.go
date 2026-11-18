@@ -20,7 +20,11 @@ func (s *Service) deleteUserAssetWithResources(userID string, assetID string, pu
 	return s.deleteUserAssetsWithResources(userID, []string{assetID}, purge)
 }
 
-func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, purge bool) error {
+func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, purge bool, transactionRepo ...*repository.Repository) error {
+	repo := s.repo
+	if len(transactionRepo) > 0 {
+		repo = transactionRepo[0]
+	}
 	if strings.TrimSpace(userID) == "" || len(ids) == 0 || len(ids) > 1000 {
 		return BadAuthRequest("每次删除须提供 1–1000 个素材 ID 和有效用户")
 	}
@@ -36,7 +40,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 			assetIDs = append(assetIDs, id)
 		}
 	}
-	assetRecords, err := s.repo.AssetsForUserIDs(userID, assetIDs)
+	assetRecords, err := repo.AssetsForUserIDs(userID, assetIDs)
 	if err != nil {
 		return err
 	}
@@ -50,13 +54,13 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	//   - purge=false 是内部普通删除：回收站（archived）素材同样直接删除，其余素材保留引用保护。
 	//   - 无论哪种，被其他素材复用的资源与物理对象都保留，物理删除一律经 Outbox 异步执行。
 	deleteReferencedResources := purge
-	if !purge {
+	if !purge && len(transactionRepo) == 0 {
 		if len(assetRecords) != 1 {
 			return BadAuthRequest("普通删除仅支持单个素材")
 		}
 		deleteReferencedResources = assetRecords[0].Status == model.AssetVersionStatusArchived
 	}
-	versions, representations, err := s.repo.AssetsResourceRecords(assetIDs)
+	versions, representations, err := repo.AssetsResourceRecords(assetIDs)
 	if err != nil {
 		return err
 	}
@@ -82,7 +86,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	}
 
 	candidateIDs := sortedReferenceIDs(resourceIDs)
-	resources, err := s.repo.ResourcesForUserIDs(userID, candidateIDs)
+	resources, err := repo.ResourcesForUserIDs(userID, candidateIDs)
 	if err != nil {
 		return err
 	}
@@ -96,7 +100,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	usages := make([]resourceUsage, 0)
 	if !deleteReferencedResources {
 		for _, assetID := range assetIDs {
-			assetReferences, referenceErr := s.repo.AssetBusinessReferences(userID, assetID)
+			assetReferences, referenceErr := repo.AssetBusinessReferences(userID, assetID)
 			if referenceErr != nil {
 				return referenceErr
 			}
@@ -106,7 +110,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		}
 	}
 	if len(ownedIDs) > 0 {
-		retained, retainedErr := s.repo.OfficialRecommendationResourceIDs()
+		retained, retainedErr := repo.OfficialRecommendationResourceIDs()
 		if retainedErr != nil {
 			return retainedErr
 		}
@@ -119,20 +123,20 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		var snapshotErr error
 		if deleteReferencedResources {
 			// 彻底删除只需要知道哪些资源仍被「其他素材」复用（这些资源要保留），不扫描任务和画布。
-			snapshot, snapshotErr = s.repo.OtherAssetResourceReferences(userID, assetIDs)
+			snapshot, snapshotErr = repo.OtherAssetResourceReferences(userID, assetIDs)
 			if snapshotErr == nil {
 				// 短剧表直接持有的媒体同样保留：素材记录只是它在素材库里的入口。
 				var dramaReferences []repository.ResourceDirectReference
-				dramaReferences, snapshotErr = s.repo.DramaResourceReferences(userID, ownedIDs)
+				dramaReferences, snapshotErr = repo.DramaResourceReferences(userID, ownedIDs)
 				snapshot.Direct = append(snapshot.Direct, dramaReferences...)
 			}
 			if snapshotErr == nil {
 				var logReferences []repository.ResourceDirectReference
-				logReferences, snapshotErr = s.repo.APICallLogResourceReferences(userID, ownedIDs)
+				logReferences, snapshotErr = repo.APICallLogResourceReferences(userID, ownedIDs)
 				snapshot.Direct = append(snapshot.Direct, logReferences...)
 			}
 		} else {
-			snapshot, snapshotErr = s.repo.ResourceReferenceSnapshotExcludingAssets(userID, assetIDs, ownedIDs)
+			snapshot, snapshotErr = repo.ResourceReferenceSnapshotExcludingAssets(userID, assetIDs, ownedIDs)
 		}
 		if snapshotErr != nil {
 			return snapshotErr
@@ -199,7 +203,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	physicalObjects := map[string]*model.Resource{}
 	for index := range resources {
 		resource := &resources[index]
-		sharedCount, countErr := s.repo.ResourceStorageReferenceCount(resource, ownedIDs)
+		sharedCount, countErr := repo.ResourceStorageReferenceCount(resource, ownedIDs)
 		if countErr != nil {
 			return countErr
 		}
@@ -211,7 +215,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	deletionJobs := resourceDeletionJobs(userID, physicalObjects)
 	// 业务记录和 Outbox 必须在同一事务提交。事务失败时物理文件完全不动；
 	// 提交成功后由幂等 worker 清理，进程退出或对象存储暂时失败都可继续重试。
-	if err := s.repo.DeleteAssetsAndResources(userID, assetIDs, ownedIDs, deletionJobs, deleteReferencedResources); err != nil {
+	if err := repo.DeleteAssetsAndResources(userID, assetIDs, ownedIDs, deletionJobs, deleteReferencedResources); err != nil {
 		if errors.Is(err, repository.ErrOfficialResourceReferenced) {
 			return BadAuthRequest("素材正在被官方素材库或待审核推荐引用，暂不能删除")
 		}
@@ -223,7 +227,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		}
 		return fmt.Errorf("素材记录删除失败，请重试：%w", err)
 	}
-	if len(deletionJobs) > 0 {
+	if len(deletionJobs) > 0 && len(transactionRepo) == 0 {
 		// 纳入停机等待；排空期间拒绝新 worker 时，已提交的 outbox 留待下次启动处理。
 		s.runWorkerTask(func() { s.drainResourceDeletionJobs(len(deletionJobs)) })
 	}

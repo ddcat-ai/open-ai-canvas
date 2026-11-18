@@ -13,6 +13,19 @@ import (
 )
 
 func RegisterWorkbenchRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.DELETE("/workbench/tryon/batches/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ids, err := svc.DeleteTryOnBatch(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"assetIds": ids})
+	})
 	r.GET("/workbench/tools", func(c *gin.Context) {
 		if _, err := currentUser(c, svc); err != nil {
 			failService(c, err)

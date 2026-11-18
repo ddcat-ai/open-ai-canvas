@@ -27,7 +27,7 @@ func RegisterPoseLibraryRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		catalog, err := svc.PoseLibraryCatalog(user, service.PoseLibraryCatalogQuery{
-			Keyword: c.Query("keyword"), System: c.Query("system"), Category: c.Query("category"), Angle: c.Query("angle"), Page: page, PageSize: pageSize,
+			Library: c.Query("library"), Keyword: c.Query("keyword"), System: c.Query("system"), Category: c.Query("category"), Angle: c.Query("angle"), Page: page, PageSize: pageSize,
 		})
 		if err != nil {
 			failService(c, err)
@@ -75,7 +75,7 @@ func RegisterPoseLibraryRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		result, err := svc.AdminPoseLibraryItems(user, service.PoseLibraryAdminQuery{
-			Keyword: c.Query("keyword"), SourceKey: c.Query("source"), System: c.Query("system"), Status: c.Query("status"), Page: page, PageSize: pageSize,
+			Library: c.Query("library"), Category: c.Query("category"), Keyword: c.Query("keyword"), SourceKey: c.Query("source"), System: c.Query("system"), Status: c.Query("status"), Page: page, PageSize: pageSize,
 		})
 		if err != nil {
 			failService(c, err)
@@ -103,7 +103,7 @@ func RegisterPoseLibraryRoutes(r *gin.RouterGroup, svc *service.Service) {
 				return
 			}
 		}
-		result, err := svc.ImportPoseLibrary(user, service.PoseLibraryImportRequest{Data: data, BaseURL: c.PostForm("baseUrl"), Systems: systems})
+		result, err := svc.ImportPoseLibrary(user, service.PoseLibraryImportRequest{Library: c.PostForm("library"), Data: data, BaseURL: c.PostForm("baseUrl"), Systems: systems})
 		if err != nil {
 			failService(c, err)
 			return
@@ -142,7 +142,7 @@ func RegisterPoseLibraryRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		item, err := svc.CreatePoseLibraryItem(user, service.PoseLibraryCreateItemRequest{
-			Name: c.PostForm("name"), System: c.PostForm("system"), Category: c.PostForm("category"), Angle: c.PostForm("angle"), Code: c.PostForm("code"), Data: data,
+			Library: c.PostForm("library"), Name: c.PostForm("name"), System: c.PostForm("system"), Category: c.PostForm("category"), Angle: c.PostForm("angle"), Code: c.PostForm("code"), Data: data,
 		})
 		if err != nil {
 			failService(c, err)

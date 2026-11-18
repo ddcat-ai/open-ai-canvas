@@ -7,6 +7,8 @@ description: 画布姿势参考图库的使用、站长导入 ai-pose-gallery-zh
 
 姿势库是站点级的人物动作参考图库。用户在画布里浏览姿势、切换视角、多选后插入画布，再把姿势图连到生图节点，让人物按这个姿势生成。
 
+电商[批量换装](/docs/canvas/batch-tryon)也使用这套图库服务，并提供独立的服装库。后台分别管理姿势与服装，两类条目通过 `library=pose|garment` 隔离；既有数据默认属于姿势库。服装库同样支持上传自有素材和通用包导入，不随代码分发第三方图片。
+
 影策代码仓库和发布镜像**不包含任何姿势图片**。站长部署后导入元数据，再让服务器把图片下载到本站数据目录。首批数据来自开源项目 [anhao/ai-pose-gallery-zh](https://github.com/anhao/ai-pose-gallery-zh)，之后可以在后台逐张新增，或用通用姿势包导入其他来源。
 
 ## 版权与内容边界
@@ -89,6 +91,8 @@ curl -L -o pose-zh.json https://raw.githubusercontent.com/anhao/ai-pose-gallery-
 
 要批量导入其他来源，按下面的格式写一个 JSON，在「导入数据」里选择即可：
 
+服装包使用相同格式，但必须在顶层声明 `"library": "garment"`，并从后台「服装库」导入；省略 `library` 表示姿势包。包声明与入口不一致会拒绝导入，避免把服装混入画布姿势库。不同图库应使用各自的来源标识。
+
 ```json
 {
   "format": "yingce-pose-library",
@@ -130,7 +134,7 @@ curl -L -o pose-zh.json https://raw.githubusercontent.com/anhao/ai-pose-gallery-
 
 导入时仍要勾选体系。图片同样由「同步图片」下载到本站，只支持 JPEG/PNG/WebP，单张 20 MB、8192×8192 以内。
 
-ai-pose-gallery-zh 里的深度图（`thumbs/depth/<id>.webp`、`img/depth/<id>.webp`，可用于 ControlNet Depth）、服装库和人像库目前没有内置导入。需要时可以按上面的格式生成一个独立来源的姿势包。
+ai-pose-gallery-zh 里的深度图（`thumbs/depth/<id>.webp`、`img/depth/<id>.webp`，可用于 ControlNet Depth）和人像库没有内置导入。服装素材可在独立服装库入口上传或使用通用包导入，需事先确认图片和数据的使用授权。
 
 ## 实现边界
 

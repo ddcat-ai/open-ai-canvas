@@ -10,8 +10,10 @@ package poselibrary
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
+	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/outbound"
 	"yingce/backend/internal/repository"
@@ -62,6 +64,34 @@ type Service struct {
 
 func New(repo *repository.Repository, dataDir string, admin AdminGate) *Service {
 	return &Service{repo: repo, dataDir: dataDir, admin: admin, client: outbound.OutboundHTTPClient(syncDownloadTimeout)}
+}
+
+// normalizeLibrary 校验库类型：空值视为姿势库，兼容旧客户端。
+func normalizeLibrary(value string) (string, error) {
+	switch value = strings.TrimSpace(value); value {
+	case "", model.PoseLibraryKindPose:
+		return model.PoseLibraryKindPose, nil
+	case model.PoseLibraryKindGarment:
+		return model.PoseLibraryKindGarment, nil
+	default:
+		return "", kernel.BadAuthRequest("素材库类型无效")
+	}
+}
+
+// libraryLabel 是提示文案和文件名里的库名：姿势 / 服装。
+func libraryLabel(library string) string {
+	if library == model.PoseLibraryKindGarment {
+		return "服装"
+	}
+	return "姿势"
+}
+
+// customSourceKey 是后台逐张上传条目的来源键；服装库与姿势库分开，避免两个库共用一个来源。
+func customSourceKey(library string) string {
+	if library == model.PoseLibraryKindGarment {
+		return SourceCustom + "-garment"
+	}
+	return SourceCustom
 }
 
 // angleOrder 是卡片内视角切换的固定顺序；不在列表里的自定义视角排在后面。

@@ -16,6 +16,7 @@ import (
 )
 
 type CatalogQuery struct {
+	Library  string
 	Keyword  string
 	System   string
 	Category string
@@ -80,8 +81,13 @@ func (s *Service) Catalog(actor *model.User, query CatalogQuery) (*CatalogPage, 
 	if actor == nil {
 		return nil, kernel.Unauthorized("请先登录")
 	}
+	library, err := normalizeLibrary(query.Library)
+	if err != nil {
+		return nil, err
+	}
 	page, pageSize := normalizePage(query.Page, query.PageSize)
 	filter := repository.PoseLibraryFilter{
+		Library:     library,
 		VisibleOnly: true,
 		Keyword:     clip(query.Keyword, 80),
 		System:      clip(query.System, 80),
@@ -92,7 +98,7 @@ func (s *Service) Catalog(actor *model.User, query CatalogQuery) (*CatalogPage, 
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.repo.PoseLibraryVisibleItemsByGroups(groupKeys)
+	items, err := s.repo.PoseLibraryVisibleItemsByGroups(library, groupKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -128,15 +134,15 @@ func (s *Service) Catalog(actor *model.User, query CatalogQuery) (*CatalogPage, 
 
 // catalogFacets 逐级收窄：体系计数看全部，分类计数看所选体系，视角计数看所选体系和分类。
 func (s *Service) catalogFacets(filter repository.PoseLibraryFilter) (CatalogFacets, error) {
-	systems, err := s.repo.PoseLibraryGroupFacets("system", repository.PoseLibraryFilter{VisibleOnly: true})
+	systems, err := s.repo.PoseLibraryGroupFacets("system", repository.PoseLibraryFilter{Library: filter.Library, VisibleOnly: true})
 	if err != nil {
 		return CatalogFacets{}, err
 	}
-	categories, err := s.repo.PoseLibraryGroupFacets("category", repository.PoseLibraryFilter{VisibleOnly: true, System: filter.System})
+	categories, err := s.repo.PoseLibraryGroupFacets("category", repository.PoseLibraryFilter{Library: filter.Library, VisibleOnly: true, System: filter.System})
 	if err != nil {
 		return CatalogFacets{}, err
 	}
-	angles, err := s.repo.PoseLibraryGroupFacets("angle", repository.PoseLibraryFilter{VisibleOnly: true, System: filter.System, Category: filter.Category})
+	angles, err := s.repo.PoseLibraryGroupFacets("angle", repository.PoseLibraryFilter{Library: filter.Library, VisibleOnly: true, System: filter.System, Category: filter.Category})
 	if err != nil {
 		return CatalogFacets{}, err
 	}
@@ -248,7 +254,7 @@ func useFileName(item model.PoseLibraryItem) string {
 		}
 		return char
 	}, clip(item.Name+"-"+item.Angle, 60))
-	return "姿势-" + name + imageExtension(item.ImageMime)
+	return libraryLabel(item.Library) + "-" + name + imageExtension(item.ImageMime)
 }
 
 func readLimited(reader io.Reader, maxBytes int64) ([]byte, error) {

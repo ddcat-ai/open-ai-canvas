@@ -8,6 +8,14 @@ export const POSE_LIBRARY_DEFAULT_BASE_URL = "https://ai-pose-gallery.anhao.app/
 export const POSE_LIBRARY_UPSTREAM_REPO = "https://github.com/anhao/ai-pose-gallery-zh";
 export const POSE_LIBRARY_ANGLES = ["正面", "斜侧", "侧面", "背面", "俯视", "仰视"] as const;
 
+/** 画布「姿势库」和「服装库」共用同一套后端，按 library 区分。 */
+export type PoseLibraryKind = "pose" | "garment";
+
+export const POSE_LIBRARY_LABELS: Record<PoseLibraryKind, { name: string; noun: string; adminPath: string }> = {
+    pose: { name: "姿势库", noun: "姿势", adminPath: "/admin/pose-library" },
+    garment: { name: "服装库", noun: "服装", adminPath: "/admin/garment-library" },
+};
+
 export type PoseLibraryFacet = { name: string; count: number };
 
 export type PoseLibraryItem = { id: string; angle: string; width: number; height: number; version: number };
@@ -30,7 +38,7 @@ export type PoseLibraryCatalog = {
     facets: { systems: PoseLibraryFacet[]; categories: PoseLibraryFacet[]; angles: PoseLibraryFacet[] };
 };
 
-export type PoseLibraryCatalogParams = { keyword?: string; system?: string; category?: string; angle?: string; page?: number; pageSize?: number };
+export type PoseLibraryCatalogParams = { library?: PoseLibraryKind; keyword?: string; system?: string; category?: string; angle?: string; page?: number; pageSize?: number };
 
 export type PoseLibraryUseResult = { itemId: string; name: string; angle: string; category: string; resource: RemoteResource };
 
@@ -68,6 +76,8 @@ export type AdminPoseLibrarySource = { key: string; name: string; attribution: s
 
 export type AdminPoseLibrarySystem = { sourceKey: string; system: string; total: number; ready: number; enabled: number };
 
+export type AdminPoseLibraryCategory = { sourceKey: string; system: string; category: string; total: number; enabled: number };
+
 export type AdminPoseLibraryPage = {
     items: AdminPoseLibraryItem[];
     total: number;
@@ -76,9 +86,11 @@ export type AdminPoseLibraryPage = {
     stats: PoseLibraryStats;
     sources: AdminPoseLibrarySource[];
     systems: AdminPoseLibrarySystem[];
+    categories: AdminPoseLibraryCategory[];
+    library: PoseLibraryKind;
 };
 
-export type AdminPoseLibraryParams = { keyword?: string; source?: string; system?: string; status?: string; page?: number; pageSize?: number };
+export type AdminPoseLibraryParams = { library?: PoseLibraryKind; keyword?: string; source?: string; system?: string; status?: string; page?: number; pageSize?: number };
 
 export type PoseLibraryImportResult = {
     source: AdminPoseLibrarySource;
@@ -121,20 +133,22 @@ export function listAdminPoseLibrary(params: AdminPoseLibraryParams, signal?: Ab
     return http.get<AdminPoseLibraryPage>("/admin/pose-library/items", { params: compactApiParams(params), signal });
 }
 
-export function importPoseLibrary(input: { file: File; baseUrl: string; systems: string[] }) {
+export function importPoseLibrary(input: { library: PoseLibraryKind; file: File; baseUrl: string; systems: string[] }) {
     const form = new FormData();
+    form.append("library", input.library);
     form.append("file", input.file, input.file.name);
     form.append("baseUrl", input.baseUrl.trim());
     form.append("systems", JSON.stringify(input.systems));
     return http.post<PoseLibraryImportResult>("/admin/pose-library/import", form);
 }
 
-export function syncPoseLibraryImages(input: { limit?: number; retryFailed?: boolean }, signal?: AbortSignal) {
+export function syncPoseLibraryImages(input: { library: PoseLibraryKind; limit?: number; retryFailed?: boolean }, signal?: AbortSignal) {
     return http.post<PoseLibrarySyncResult>("/admin/pose-library/sync", input, { signal });
 }
 
-export function createPoseLibraryItem(input: { file: File; name: string; system: string; category: string; angle: string; code: string }) {
+export function createPoseLibraryItem(input: { library: PoseLibraryKind; file: File; name: string; system: string; category: string; angle: string; code: string }) {
     const form = new FormData();
+    form.append("library", input.library);
     form.append("file", input.file, input.file.name);
     form.append("name", input.name.trim());
     form.append("system", input.system.trim());
@@ -152,12 +166,13 @@ export function deletePoseLibraryItem(id: string) {
     return http.delete<{ ok: boolean }>(`/admin/pose-library/items/${encodeURIComponent(id)}`);
 }
 
-export function bulkPoseLibraryItems(input: { action: PoseLibraryBulkAction; ids?: string[]; sourceKey?: string; system?: string }) {
+export function bulkPoseLibraryItems(input: { library: PoseLibraryKind; action: PoseLibraryBulkAction; ids?: string[]; groupKeys?: string[]; sourceKey?: string; system?: string; category?: string }) {
     return http.post<{ affected: number }>("/admin/pose-library/bulk", input);
 }
 
 export type PoseLibraryPackPreview = {
     format: "ai-pose-gallery-zh" | "yingce-pose-library";
+    library: PoseLibraryKind;
     sourceName: string;
     baseUrl: string;
     total: number;
@@ -180,13 +195,14 @@ export function previewPoseLibraryPack(text: string): PoseLibraryPackPreview {
     if (Array.isArray(data)) {
         const rows = data as Record<string, unknown>[];
         if (!rows.length || typeof rows[0]?.id !== "string" || typeof rows[0]?.["姿势名称"] !== "string") throw new Error("不是 ai-pose-gallery-zh 的 data/pose-zh.json");
-        return { format: "ai-pose-gallery-zh", sourceName: "AI 姿势参考图库（ai-pose-gallery-zh）", baseUrl: POSE_LIBRARY_DEFAULT_BASE_URL, total: rows.length, systems: count(rows.map((row) => String(row["体系"] || "").trim())) };
+        return { format: "ai-pose-gallery-zh", library: "pose", sourceName: "AI 姿势参考图库（ai-pose-gallery-zh）", baseUrl: POSE_LIBRARY_DEFAULT_BASE_URL, total: rows.length, systems: count(rows.map((row) => String(row["体系"] || "").trim())) };
     }
-    const pack = data as { format?: unknown; source?: { name?: unknown; key?: unknown; baseUrl?: unknown }; items?: unknown };
+    const pack = data as { format?: unknown; library?: unknown; source?: { name?: unknown; key?: unknown; baseUrl?: unknown }; items?: unknown };
     if (pack && pack.format === "yingce-pose-library" && Array.isArray(pack.items)) {
         const items = pack.items as Record<string, unknown>[];
         return {
             format: "yingce-pose-library",
+            library: pack.library === "garment" ? "garment" : "pose",
             sourceName: String(pack.source?.name || pack.source?.key || "自定义姿势包"),
             baseUrl: typeof pack.source?.baseUrl === "string" ? pack.source.baseUrl : "",
             total: items.length,

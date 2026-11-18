@@ -13,6 +13,30 @@ import (
 )
 
 func RegisterEcommerceRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.POST("/ecommerce/tryon/knowledge", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 8<<10)
+		var req service.EcommerceTryOnKnowledgeRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		if err := svc.RequireEcommerceTryOn(user.ID, req.Function); err != nil {
+			failService(c, err)
+			return
+		}
+		result, err := svc.EcommerceTryOnKnowledge(req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Cache-Control", "private, no-store")
+		ok(c, result)
+	})
 	skillAdmin := r.Group("", requireSkillAdministration(svc))
 	skillAdmin.POST("/admin/ecommerce/skills/install", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
