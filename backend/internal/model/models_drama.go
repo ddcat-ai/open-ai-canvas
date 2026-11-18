@@ -229,6 +229,16 @@ type DramaSegment struct {
 	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
+// DramaSegmentPromptRevision 保留段提示词的人工作改写；模型稿仍保存在 DramaSegment.VideoPrompt。
+type DramaSegmentPromptRevision struct {
+	ID        string    `json:"id" gorm:"primaryKey;size:36"`
+	ProjectID string    `json:"projectId" gorm:"index;size:36"`
+	SegmentID string    `json:"segmentId" gorm:"uniqueIndex:idx_drama_segment_prompt_revisions,priority:1;size:36"`
+	Revision  int64     `json:"revision" gorm:"uniqueIndex:idx_drama_segment_prompt_revisions,priority:2"`
+	Prompt    string    `json:"prompt" gorm:"type:text"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type DramaReferenceImage struct {
 	ResourceID string `json:"resourceId"`
 	Name       string `json:"name"`

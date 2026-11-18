@@ -124,7 +124,7 @@ func TestExternalMCPDiscoveryAndChallenge(t *testing.T) {
 	request.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, request)
-	if response.Code != 200 || !strings.Contains(response.Body.String(), `"create_video"`) || !strings.Contains(response.Body.String(), `"create_drama"`) {
+	if response.Code != 200 || !strings.Contains(response.Body.String(), `"create_video"`) || !strings.Contains(response.Body.String(), `"create_drama"`) || !strings.Contains(response.Body.String(), `"edit_segment_prompt"`) || !strings.Contains(response.Body.String(), `"get_segment"`) || !strings.Contains(response.Body.String(), `"preview_segment_frame"`) || !strings.Contains(response.Body.String(), `"list_segment_versions"`) || !strings.Contains(response.Body.String(), `"set_segment_current_version"`) {
 		t.Fatalf("MCP tools/list: %d %s", response.Code, response.Body.String())
 	}
 }

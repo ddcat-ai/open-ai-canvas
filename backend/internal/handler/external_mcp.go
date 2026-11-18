@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -147,6 +148,52 @@ func externalMCPServer(svc *service.Service, user *model.User) *mcp.Server {
 		EpisodeID string `json:"episodeId"`
 	}) (any, error) {
 		return svc.DramaEpisodeDetail(userID, input.DramaID, input.EpisodeID)
+	})
+	externalMCPTool(server, "get_segment", "定向读取一个剧情段的生效提示词、镜头、参考图、生成请求预演、视频状态及人工提示词历史", func(_ context.Context, input struct {
+		DramaID      string `json:"dramaId"`
+		EpisodeID    string `json:"episodeId"`
+		SegmentIndex int    `json:"segmentIndex"`
+	}) (any, error) {
+		return svc.DramaSegmentDetail(userID, input.DramaID, input.EpisodeID, input.SegmentIndex)
+	})
+	externalMCPTool(server, "edit_segment_prompt", "保存一段完整视频提示词，不触发生成；可用 expectedRevision 防止覆盖新版本", func(_ context.Context, input struct {
+		DramaID          string `json:"dramaId"`
+		EpisodeID        string `json:"episodeId"`
+		SegmentIndex     int    `json:"segmentIndex"`
+		Prompt           string `json:"prompt"`
+		ExpectedRevision *int64 `json:"expectedRevision,omitempty"`
+	}) (any, error) {
+		return svc.EditDramaSegmentPrompt(userID, input.DramaID, input.EpisodeID, input.SegmentIndex, service.EditDramaSegmentPromptRequest{Prompt: input.Prompt, ExpectedRevision: input.ExpectedRevision})
+	})
+	externalMCPTool(server, "list_segment_versions", "列出本段视频版本、当前版本及各版本资源和尺寸时长", func(_ context.Context, input struct {
+		DramaID      string `json:"dramaId"`
+		EpisodeID    string `json:"episodeId"`
+		SegmentIndex int    `json:"segmentIndex"`
+	}) (any, error) {
+		return svc.DramaSegmentVideoVersions(userID, input.DramaID, input.EpisodeID, input.SegmentIndex)
+	})
+	externalMCPTool(server, "set_segment_current_version", "将本段已有视频版本设为当前版本；可用 expectedRevision 防止覆盖新版本", func(_ context.Context, input struct {
+		DramaID          string `json:"dramaId"`
+		EpisodeID        string `json:"episodeId"`
+		SegmentIndex     int    `json:"segmentIndex"`
+		TakeID           string `json:"takeId"`
+		ExpectedRevision *int64 `json:"expectedRevision,omitempty"`
+	}) (any, error) {
+		return svc.RestoreDramaSegmentTake(userID, input.DramaID, input.EpisodeID, input.SegmentIndex, service.RestoreDramaSegmentTakeRequest{TakeID: input.TakeID, ExpectedRevision: input.ExpectedRevision})
+	})
+	mcp.AddTool(server, &mcp.Tool{Name: "preview_segment_frame", Description: "提取本段当前或指定历史视频在某秒的预览帧，同时返回实测尺寸、时长和有无音轨"}, func(ctx context.Context, _ *mcp.CallToolRequest, input struct {
+		DramaID      string  `json:"dramaId"`
+		EpisodeID    string  `json:"episodeId"`
+		SegmentIndex int     `json:"segmentIndex"`
+		TakeID       string  `json:"takeId,omitempty"`
+		AtSeconds    float64 `json:"atSeconds"`
+	}) (*mcp.CallToolResult, any, error) {
+		frame, err := svc.DramaSegmentPreviewFrame(ctx, userID, input.DramaID, input.EpisodeID, input.SegmentIndex, input.TakeID, input.AtSeconds)
+		if err != nil {
+			return nil, nil, err
+		}
+		metadata, _ := json.Marshal(frame)
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(metadata)}, &mcp.ImageContent{MIMEType: "image/jpeg", Data: frame.JPEG}}}, nil, nil
 	})
 	externalMCPTool(server, "approve_episode", "批准剧集继续制作；仅在用户明确要求时调用", func(_ context.Context, input struct {
 		DramaID   string `json:"dramaId"`

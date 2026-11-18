@@ -260,6 +260,8 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 ## 外部 MCP 视频创作与授权
 
 - 已实现：用户设置可创建、查看和撤销 API Key；首次远程 MCP 连接通过登录、PKCE 授权码取得 Bearer 凭证，MCP 授权记录保留且可撤销。工具覆盖素材、模型、视频任务和短剧自动制作。
+- 已实现待验收：单段 `get_segment`、完整提示词 `edit_segment_prompt`、`list_segment_versions`、`set_segment_current_version` 和 `preview_segment_frame`；`generate_segments` 支持单段修订校验并回传段级作业/任务映射，任务实际派发前任务 ID 为空。人工提示词历史由 Schema 107 保存。
+- [ ] 在隔离短剧中编辑提示词、检查模型稿与人工历史、按时间点检查当前及历史视频的画幅、音轨和画面、切换当前版本，再以新旧 `expectedPromptRevision` 分别请求生成。只对测试作品提交收费请求。
 - [ ] 在开放测试 HTTP 部署显式设置 `CANVAS_MCP_PUBLIC_ORIGIN`，用允许该地址的外部 MCP 客户端检查自动授权或手动 API Key 连接；另在真实 HTTPS 部署完成首次连接、登录、允许访问、工具发现、视频生成、查询结果和下载，确认 API Key 列表出现 MCP 记录。
 - [ ] 验收取消授权、撤销后连接失效、重新授权、账号禁用、跨用户资源与任务拒绝，以及多实例和 PostgreSQL 环境的授权码单次消费。
 - [ ] 真实计费模型验收短剧建档、启动、剧集审批、剧情段生成和合成；检查预算、重复调用和素材归属。

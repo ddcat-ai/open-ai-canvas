@@ -65,7 +65,19 @@ description: 信封、错误码与 OpenAPI
 | `POST /api/mcp/oauth/consent` | 已登录用户从同源授权页确认；校验客户端回调、PKCE、目标 MCP 资源 |
 | `POST /api/mcp/oauth/token` | 用授权码、相同回调与 `code_verifier` 换取 Bearer 凭证 |
 
-MCP 工具覆盖 `list_models`、`quote_model`、`list_resources`、`import_resource`、`get_resource_access`、`create_video`、`get_task`、`cancel_task`，以及 `drama_models`、`estimate_drama`、`create_drama`、`list_dramas`、`get_drama`、`start_drama`、`pause_drama`、`get_drama_jobs`、`get_episode`、`approve_episode`、`generate_segments`、`compose_episode`。视频任务和短剧建档必须带 `idempotencyKey`；相同键及相同请求返回原对象，不同请求拒绝。视频任务复用工作台的模型能力、资源归属、额度、计费和队列准入；成品先由任务或剧集返回资源 ID，再用资源访问工具取得临时地址。外部 Agent 必须在获得用户指令后再执行批准剧集、启动制作、重生成与合成等写操作。
+MCP 工具覆盖 `list_models`、`quote_model`、`list_resources`、`import_resource`、`get_resource_access`、`create_video`、`get_task`、`cancel_task`，以及 `drama_models`、`estimate_drama`、`create_drama`、`list_dramas`、`get_drama`、`start_drama`、`pause_drama`、`get_drama_jobs`、`get_episode`、`get_segment`、`edit_segment_prompt`、`list_segment_versions`、`set_segment_current_version`、`preview_segment_frame`、`approve_episode`、`generate_segments`、`compose_episode`。视频任务和短剧建档必须带 `idempotencyKey`；相同键及相同请求返回原对象，不同请求拒绝。视频任务复用工作台的模型能力、资源归属、额度、计费和队列准入；成品先由任务或剧集返回资源 ID，再用资源访问工具取得临时地址。外部 Agent 必须在获得用户指令后再执行批准剧集、启动制作、重生成与合成等写操作。
+
+短剧精修工具以 `dramaId`、`episodeId`、从 0 开始的 `segmentIndex` 定位段，始终校验授权账号归属：
+
+| MCP 工具 | 输入与结果 |
+| --- | --- |
+| `get_segment` | 返回单段 `segment`（生效提示词、模型稿、`revision`、`promptStatus`、参考图和 `request` 生成预演、视频资源及状态、最近作业）、本段 `shots`、最近 50 条人工提示词 `promptHistory`、最近 50 个 `videoVersions`。`segment.request` 是按当前数据计算的下一次请求预演；`lastVideoJob` 是最近已提交作业的实际模型、提示词和安全白名单参数。 |
+| `edit_segment_prompt` | 加 `prompt`（完整提示词，1–12000 字）和可选 `expectedRevision`；返回保存后的 `revision/custom/promptStatus/videoStatus`。只改写本段的人工覆盖稿，模型稿和此前人工修订保留；已有视频标记过期，不发起生成。修订冲突返回 409 `drama_segment_changed`。 |
+| `list_segment_versions` | 返回 `currentResourceId` 和视频版本列表；每个版本带 `takeId`（字段 `id`）、资源 ID、任务 ID、来源、是否当前、资源宽高与时长。缺失媒体元数据时为 0，可用预览工具实测。 |
+| `set_segment_current_version` | 加 `takeId` 和可选 `expectedRevision`；只接受本段已有的就绪视频版本，切换当前资源，不新建版本或模型生成任务。 |
+| `preview_segment_frame` | 可选 `takeId`（省略即当前版本）、`atSeconds`（0–3600）；返回 JPEG 图像内容及 `resourceId`、实测宽高、时长和有无音轨。服务端需安装 ffmpeg/ffprobe；单个视频读取上限 512 MiB。 |
+
+`generate_segments` 的 `request` 支持单段使用 `expectedPromptRevision`（取自 `get_segment.segment.revision`）；在排队事务中复核，版本已变化返回 409，不创建收费任务。响应的 `segments[]` 按段索引返回 `segmentId/jobId/taskId/status`。生成由调度器异步派发：尚未创建作业时 `status=awaiting_dispatch`，尚未提交模型任务时 `taskId` 为空；随后用 `get_segment.segment.videoJob` 或 `lastVideoJob` 取得实际任务 ID，再用 `get_task` 查询。任务 ID 不会在尚未提交时预先伪造。
 
 ## 创作对话同步
 

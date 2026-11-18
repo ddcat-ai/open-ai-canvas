@@ -26,6 +26,34 @@ func TestCurrentSchemaVersionMatchesMigrationPlan(t *testing.T) {
 	}
 }
 
+func TestMigrateDramaSegmentPromptRevisionsBackfillsCurrentOverride(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: "file:drama-prompt-revisions?mode=memory&cache=shared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.DramaSegment{}); err != nil {
+		t.Fatal(err)
+	}
+	segment := model.DramaSegment{ID: "segment", ProjectID: "project", EpisodeID: "episode", SegmentIndex: 0, Revision: 7, VideoPrompt: "模型稿", VideoPromptOverride: "人工稿", UpdatedAt: time.Now()}
+	if err := db.Create(&segment).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateDramaSegmentPromptRevisions(db); err != nil {
+		t.Fatal(err)
+	}
+	var history []model.DramaSegmentPromptRevision
+	if err := db.Where("segment_id = ?", segment.ID).Find(&history).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 1 || history[0].Revision != 7 || history[0].Prompt != "人工稿" {
+		t.Fatalf("backfilled history: %+v", history)
+	}
+	var stored model.DramaSegment
+	if err := db.First(&stored, "id = ?", segment.ID).Error; err != nil || stored.VideoPrompt != "模型稿" {
+		t.Fatalf("generated prompt changed: %+v, %v", stored, err)
+	}
+}
+
 type channelModelProtocolV58 struct {
 	ID       string `gorm:"primaryKey;size:36"`
 	Protocol string `gorm:"size:32;index"`

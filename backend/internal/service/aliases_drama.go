@@ -17,6 +17,7 @@ type (
 	DramaCastLookRequest           = app.DramaCastLookRequest
 	DramaEstimateRequest           = app.DramaEstimateRequest
 	GenerateDramaSegmentsRequest   = app.GenerateDramaSegmentsRequest
+	EditDramaSegmentPromptRequest  = app.EditDramaSegmentPromptRequest
 	DramaListRequest               = app.DramaListRequest
 	RegenerateDramaCastsRequest    = app.RegenerateDramaCastsRequest
 	ReleaseDramaMediaRequest       = app.ReleaseDramaMediaRequest

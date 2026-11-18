@@ -892,8 +892,9 @@ func (s *Service) RetryFailedDrama(userID, projectID string) (map[string]any, er
 }
 
 type GenerateDramaSegmentsRequest struct {
-	Segments   []int             `json:"segments"`
-	VideoModel *DramaModelChoice `json:"videoModel"`
+	Segments               []int             `json:"segments"`
+	VideoModel             *DramaModelChoice `json:"videoModel"`
+	ExpectedPromptRevision *int64            `json:"expectedPromptRevision,omitempty"`
 }
 
 // GenerateDramaSegments 显式请求剧情段视频重生成，所有段先校验再统一写入。
@@ -904,6 +905,9 @@ func (s *Service) GenerateDramaSegments(userID, projectID, episodeID string, req
 	}
 	if len(req.Segments) == 0 || len(req.Segments) > 200 {
 		return nil, BadAuthRequest("请选择剧情段")
+	}
+	if req.ExpectedPromptRevision != nil && len(req.Segments) != 1 {
+		return nil, BadAuthRequest("expectedPromptRevision 只适用于单段生成")
 	}
 	episode, err := s.repo.DramaEpisode(project.ID, episodeID)
 	if err != nil {
@@ -966,13 +970,34 @@ func (s *Service) GenerateDramaSegments(userID, projectID, episodeID string, req
 			indexes = append(indexes, index)
 		}
 	}
-	if err := s.repo.RequestDramaSegmentVideos(project.ID, episode.ID, indexes, modelJSON); err != nil {
+	if err := s.repo.RequestDramaSegmentVideosIfRevision(project.ID, episode.ID, indexes, modelJSON, req.ExpectedPromptRevision); err != nil {
+		if errors.Is(err, repository.ErrCreationConflict) {
+			return nil, dramaSegmentChangedError()
+		}
 		return nil, err
 	}
 	if err := s.releaseDramaEpisodes(project.ID, []string{episode.ID}); err != nil {
 		return nil, err
 	}
-	return map[string]any{"queued": len(indexes)}, s.requestDramaWork(p)
+	if err := s.requestDramaWork(p); err != nil {
+		return nil, err
+	}
+	jobs, err := s.repo.RecentDramaSegmentJobs(project.ID, episode.ID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]map[string]any, 0, len(indexes))
+	for _, index := range indexes {
+		item := map[string]any{"segmentIndex": index, "segmentId": known[index].ID, "jobId": "", "taskId": "", "status": "awaiting_dispatch"}
+		for _, job := range jobs {
+			if job.Kind == model.DramaJobSegmentVideo && job.ShotID == known[index].ID && (job.Status == model.DramaJobQueued || job.Status == model.DramaJobRunning) {
+				item["jobId"], item["taskId"], item["status"] = job.ID, job.TaskID, job.Status
+				break
+			}
+		}
+		result = append(result, item)
+	}
+	return map[string]any{"queued": len(indexes), "segments": result}, nil
 }
 
 func mediaBusyStatus(status string) bool {
