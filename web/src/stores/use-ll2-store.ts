@@ -74,7 +74,9 @@ function syncChannel(apiKey: string, liveModels: LL2LivePricing[] = []) {
             interfaceType: "newapi-channel-2",
             scope: "user",
             enabled: true,
-            models: groups.video,
+            // auto-hd 是「生成后超分」的后处理档位，不是可选的生成模型；
+            // 已经把它做进面板勾选后，就别再让它出现在模型下拉里。
+            models: groups.video.filter((model) => model !== "auto-hd"),
         }),
         createModelChannel({
             id: LL2_TEXT_CHANNEL_ID,

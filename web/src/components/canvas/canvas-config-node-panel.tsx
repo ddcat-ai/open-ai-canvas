@@ -762,6 +762,8 @@ function buildModelNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode
 }
 
 function videoConfigPatch(key: keyof AiConfig, value: string) {
+    if (key === "ll2PromptOptimizer") return { ll2PromptOptimizer: value };
+    if (key === "ll2Upscale") return { ll2UpscaleTarget: value };
     if (key === "videoSeconds") return { seconds: value };
     if (key === "videoGenerateAudio") return { generateAudio: value };
     if (key === "videoWatermark") return { watermark: value };

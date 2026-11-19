@@ -224,6 +224,25 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("画布的两个 LL2 勾选值会写进节点 metadata 并读回", async () => {
+    const cfg = await read("../src/components/canvas/canvas-node-prompt-config.ts");
+    expect(cfg).toContain('if (key === "ll2PromptOptimizer") return { ll2PromptOptimizer: value }');
+    expect(cfg).toContain('if (key === "ll2Upscale") return { ll2UpscaleTarget: value }');
+    expect(cfg).toContain("node.metadata?.ll2PromptOptimizer");
+    expect(cfg).toContain("node.metadata?.ll2UpscaleTarget");
+    const types = await read("../src/types/canvas.ts");
+    expect(types).toContain("ll2PromptOptimizer?: string");
+    expect(types).toContain("ll2UpscaleTarget?: string");
+});
+
+test("auto-hd 不再出现在模型下拉里，只作为超分选项", async () => {
+    const store = await read("../src/stores/use-ll2-store.ts");
+    expect(store).toContain('groups.video.filter((model) => model !== "auto-hd")');
+    const models = await read("../src/lib/ll2-models.ts");
+    // auto-hd 仍然保留在价目/档位表里，只是不作为生成模型注册。
+    expect(models).toContain('"auto-hd"');
+});
+
 test("画布视频节点走 LL2 直连（和一句话想法同一条客户端链路）", async () => {
     const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
     expect(executor).toContain("isLL2CanvasVideoModel");

@@ -371,6 +371,10 @@ export type CanvasNodeMetadata = {
     vquality?: string;
     /** LL2 无限画布的自动超分（auto-hd）记录，用于节点标注与重试。 */
     ll2Upscale?: { sourceNodeId: string; target: string };
+    /** 画布 LL2 生成：H3 提示词优化（"1" 开）。 */
+    ll2PromptOptimizer?: string;
+    /** 画布 LL2 生成：生成后超分档位（"1080p" | "2k" | "4k"）。 */
+    ll2UpscaleTarget?: string;
     generateAudio?: string;
     watermark?: string;
     audioVoice?: string;

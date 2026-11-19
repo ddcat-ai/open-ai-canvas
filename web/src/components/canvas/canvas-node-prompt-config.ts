@@ -77,6 +77,8 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
         vquality: defaults.vquality ?? normalizeVideoResolution(globalConfig.vquality || defaultConfig.vquality),
         videoGenerateAudio: defaults.videoGenerateAudio ?? globalConfig.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: defaults.videoWatermark ?? globalConfig.videoWatermark ?? defaultConfig.videoWatermark,
+        ll2PromptOptimizer: node.metadata?.ll2PromptOptimizer ?? globalConfig.ll2PromptOptimizer ?? "",
+        ll2Upscale: node.metadata?.ll2UpscaleTarget ?? globalConfig.ll2Upscale ?? "",
         audioMode: node.metadata?.audioMode || "auto",
         videoArkPrivateAssetUpload: node.metadata?.arkPrivateAssetUpload ?? globalConfig.videoArkPrivateAssetUpload ?? defaultConfig.videoArkPrivateAssetUpload,
         audioVoice: node.metadata?.audioVoice ?? globalConfig.audioVoice ?? defaultConfig.audioVoice,
@@ -108,6 +110,9 @@ export function promptPlaceholder(mode: CanvasNodeGenerationMode, hasImageConten
 }
 
 export function videoConfigPatch(key: keyof AiConfig, value: string) {
+    // LL2 的两个附加开关直接落节点 metadata，下次打开面板和生成都从这里读。
+    if (key === "ll2PromptOptimizer") return { ll2PromptOptimizer: value };
+    if (key === "ll2Upscale") return { ll2UpscaleTarget: value };
     if (key === "videoSeconds") return { seconds: value };
     if (key === "videoGenerateAudio") return { generateAudio: value };
     if (key === "videoWatermark") return { watermark: value };
