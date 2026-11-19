@@ -6,12 +6,12 @@ import type { TextAreaRef } from "antd/es/input/TextArea";
 import { BookMarked, Check, Eye, FileText, PenLine, RotateCcw, Search, TriangleAlert, Blocks } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
-import { CHARACTER_VARIABLES, renderAssetPrompt, SCENE_VARIABLES, unknownAssetVariables } from "@/lib/drama/asset-prompt";
+import { CHARACTER_VARIABLES, PROP_VARIABLES, renderAssetPrompt, SCENE_VARIABLES, unknownAssetVariables } from "@/lib/drama/asset-prompt";
 import { cn } from "@/lib/utils";
 import { getDramaAssetSchemes, type DramaAssetMode, type DramaAssetSchemeCatalog, type DramaAssetSettings, type DramaModelOption } from "@/services/api/drama";
 import { getSkillFile, listAddedSkills, listSkillFiles } from "@/services/api/skills";
 
-// 角色/场景参考图方案：开工前选定，设置页可改。保存的是全文提示词，预览就是实际发送的内容。
+// 角色/场景/道具参考图方案：开工前选定，设置页可改。保存的是全文提示词，预览就是实际发送的内容。
 
 const PROMPT_LIMIT = 4000;
 const CUSTOM_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16"];
@@ -23,12 +23,24 @@ export function useAssetSchemes() {
 export function defaultAssetSettings(catalog?: DramaAssetSchemeCatalog): DramaAssetSettings | undefined {
     const scheme = catalog?.schemes.find((item) => item.mode === "fourview") || catalog?.schemes[0];
     if (!catalog || !scheme) return undefined;
-    return { mode: scheme.mode, characterPrompt: scheme.characterPrompt, scenePrompt: catalog.scenePrompt, characterRatio: scheme.ratio };
+    return { mode: scheme.mode, characterPrompt: scheme.characterPrompt, scenePrompt: catalog.scenePrompt, propPrompt: catalog.propPrompt, characterRatio: scheme.ratio };
 }
 
-export type AssetPreviewSample = { characterName: string; characterAppearance: string; sceneName: string; sceneAppearance: string; style: string; rules: string };
+export type AssetPreviewSample = { characterName: string; characterAppearance: string; sceneName: string; sceneAppearance: string; propName: string; propAppearance: string; style: string; rules: string };
 
-const FALLBACK_SAMPLE: AssetPreviewSample = { characterName: "主角", characterAppearance: "（作品圣经建立后自动填入角色外貌）", sceneName: "主场景", sceneAppearance: "（作品圣经建立后自动填入环境描述）", style: "写实电影感", rules: "" };
+const FALLBACK_SAMPLE: AssetPreviewSample = {
+    characterName: "主角",
+    characterAppearance: "（作品圣经建立后自动填入角色外貌）",
+    sceneName: "主场景",
+    sceneAppearance: "（作品圣经建立后自动填入环境描述）",
+    propName: "关键道具",
+    propAppearance: "（作品圣经建立后自动填入道具外观）",
+    style: "写实电影感",
+    rules: "",
+};
+
+type AssetTab = "character" | "scene" | "prop";
+const TAB_SUBJECT: Record<AssetTab, "角色" | "场景" | "道具"> = { character: "角色", scene: "场景", prop: "道具" };
 
 /** 方案示意：用色块画出版式，比文字更快看懂差别。 */
 function SchemeGlyph({ mode }: { mode: DramaAssetMode }) {
@@ -83,7 +95,7 @@ export function AssetSchemePicker({
     const canUseSkills = useSkillLibraryAccess();
     const catalogQuery = useAssetSchemes();
     const catalog = catalogQuery.data;
-    const [tab, setTab] = useState<"character" | "scene">("character");
+    const [tab, setTab] = useState<AssetTab>("character");
     const [importOpen, setImportOpen] = useState(false);
     const editorRef = useRef<TextAreaRef>(null);
     const preview = { ...FALLBACK_SAMPLE, ...Object.fromEntries(Object.entries(sample || {}).filter(([, item]) => item)) } as AssetPreviewSample;
@@ -94,17 +106,17 @@ export function AssetSchemePicker({
     const ratioProblems = ratios && !ratios.includes(value.characterRatio) ? [value.characterRatio] : [];
 
     const scheme = catalog.schemes.find((item) => item.mode === value.mode);
-    const prompt = tab === "character" ? value.characterPrompt : value.scenePrompt;
-    const variables = tab === "character" ? CHARACTER_VARIABLES : SCENE_VARIABLES;
-    const defaultPrompt = tab === "character" ? scheme?.characterPrompt || catalog.schemes[0].characterPrompt : catalog.scenePrompt;
+    const prompt = tab === "character" ? value.characterPrompt : tab === "scene" ? value.scenePrompt : (value.propPrompt ?? catalog.propPrompt);
+    const variables = tab === "character" ? CHARACTER_VARIABLES : tab === "scene" ? SCENE_VARIABLES : PROP_VARIABLES;
+    const defaultPrompt = tab === "character" ? scheme?.characterPrompt || catalog.schemes[0].characterPrompt : tab === "scene" ? catalog.scenePrompt : catalog.propPrompt;
     const unknown = unknownAssetVariables(prompt, variables);
     const modified = prompt.trim() !== defaultPrompt.trim();
-    const rendered =
-        tab === "character"
-            ? renderAssetPrompt(prompt, { 角色名称: preview.characterName, 角色设定: preview.characterAppearance, 项目画风: preview.style, 画面规则: preview.rules })
-            : renderAssetPrompt(prompt, { 场景名称: preview.sceneName, 场景设定: preview.sceneAppearance, 项目画风: preview.style, 画面规则: preview.rules });
+    const subject = TAB_SUBJECT[tab];
+    const sampleName = tab === "character" ? preview.characterName : tab === "scene" ? preview.sceneName : preview.propName;
+    const sampleAppearance = tab === "character" ? preview.characterAppearance : tab === "scene" ? preview.sceneAppearance : preview.propAppearance;
+    const rendered = renderAssetPrompt(prompt, { [`${subject}名称`]: sampleName, [`${subject}设定`]: sampleAppearance, 项目画风: preview.style, 画面规则: preview.rules });
 
-    const setPrompt = (next: string) => onChange(tab === "character" ? { ...value, characterPrompt: next } : { ...value, scenePrompt: next });
+    const setPrompt = (next: string) => onChange(tab === "character" ? { ...value, characterPrompt: next } : tab === "scene" ? { ...value, scenePrompt: next } : { ...value, propPrompt: next });
     const chooseMode = (mode: DramaAssetMode) => {
         if (mode === value.mode) return;
         const target = catalog.schemes.find((item) => item.mode === mode);
@@ -203,6 +215,9 @@ export function AssetSchemePicker({
                         <button type="button" role="tab" className="drama-tab" aria-selected={tab === "scene"} onClick={() => setTab("scene")}>
                             场景提示词
                         </button>
+                        <button type="button" role="tab" className="drama-tab" aria-selected={tab === "prop"} onClick={() => setTab("prop")}>
+                            道具提示词
+                        </button>
                     </div>
                     {modified ? <span className="drama-assets-badge">已修改</span> : <span className="drama-assets-badge is-muted">默认</span>}
                     <div className="ml-auto flex gap-2">
@@ -231,7 +246,7 @@ export function AssetSchemePicker({
                     showCount
                     autoSize={{ minRows: layout === "compact" ? 5 : 6, maxRows: 16 }}
                     onChange={(event) => setPrompt(event.target.value)}
-                    aria-label={tab === "character" ? "角色参考图提示词" : "场景参考图提示词"}
+                    aria-label={`${subject}参考图提示词`}
                     status={unknown.length ? "error" : undefined}
                 />
                 {unknown.length ? (
@@ -249,7 +264,7 @@ export function AssetSchemePicker({
                 <div className="drama-assets-preview">
                     <div className="drama-assets-preview-head">
                         <Eye className="size-3.5" />
-                        实际发送预览<span>以「{tab === "character" ? preview.characterName : preview.sceneName}」为例</span>
+                        实际发送预览<span>以「{sampleName}」为例</span>
                     </div>
                     <p>{rendered}</p>
                     {tab === "character" && scheme ? <small>参考图版式说明：{scheme.frameHint}</small> : null}
@@ -258,11 +273,17 @@ export function AssetSchemePicker({
             {canUseSkills && (
                 <SkillPromptImportModal
                     open={importOpen}
+                    subject={subject}
                     onClose={() => setImportOpen(false)}
                     onImport={({ text, skillId, skillName, path }) => {
-                        const next = /\{\{角色名称\}\}|\{\{角色设定\}\}/.test(text) ? text : `${text.trim()}\n\n【本角色】{{角色名称}}：{{角色设定}}。画风：{{项目画风}}。{{画面规则}}`;
-                        onChange({ ...value, mode: value.mode === "custom" ? "custom" : value.mode, characterPrompt: next.slice(0, PROMPT_LIMIT), sourceSkillId: skillId, sourceSkillName: skillName, sourcePath: path });
-                        setTab("character");
+                        // 导入到当前所在的页；来源技能只记录角色约束（角色页显示），场景、道具页只替换本页提示词。
+                        if (tab === "character") {
+                            const next = /\{\{角色名称\}\}|\{\{角色设定\}\}/.test(text) ? text : `${text.trim()}\n\n【本角色】{{角色名称}}：{{角色设定}}。画风：{{项目画风}}。{{画面规则}}`;
+                            onChange({ ...value, mode: value.mode === "custom" ? "custom" : value.mode, characterPrompt: next.slice(0, PROMPT_LIMIT), sourceSkillId: skillId, sourceSkillName: skillName, sourcePath: path });
+                        } else {
+                            const next = text.includes(`{{${subject}名称}}`) || text.includes(`{{${subject}设定}}`) ? text : `${text.trim()}\n\n【本${subject}】{{${subject}名称}}：{{${subject}设定}}。画风：{{项目画风}}。`;
+                            onChange(tab === "scene" ? { ...value, scenePrompt: next.slice(0, PROMPT_LIMIT) } : { ...value, propPrompt: next.slice(0, PROMPT_LIMIT) });
+                        }
                         setImportOpen(false);
                     }}
                 />
@@ -271,8 +292,8 @@ export function AssetSchemePicker({
     );
 }
 
-/** 从已添加技能里挑一份文本，选中段落导入为角色约束提示词。 */
-function SkillPromptImportModal({ open, onClose, onImport }: { open: boolean; onClose: () => void; onImport: (input: { text: string; skillId: string; skillName: string; path: string }) => void }) {
+/** 从已添加技能里挑一份文本，选中段落导入为当前页（角色、场景或道具）的参考图提示词。 */
+function SkillPromptImportModal({ open, subject, onClose, onImport }: { open: boolean; subject: "角色" | "场景" | "道具"; onClose: () => void; onImport: (input: { text: string; skillId: string; skillName: string; path: string }) => void }) {
     const { message } = App.useApp();
     const [keyword, setKeyword] = useState("");
     const [skillId, setSkillId] = useState("");
@@ -353,7 +374,7 @@ function SkillPromptImportModal({ open, onClose, onImport }: { open: boolean; on
                 </div>
                 <footer className="drama-skill-import-foot">
                     <span>
-                        未包含 {"{{角色名称}}"} / {"{{角色设定}}"} 时，导入后会在末尾自动补上本角色信息。
+                        导入到{subject}提示词；未包含 {`{{${subject}名称}}`} / {`{{${subject}设定}}`} 时，会在末尾自动补上本{subject}信息。
                     </span>
                     <Button onClick={onClose}>取消</Button>
                     <Button disabled={!content} onClick={() => importText(true)}>

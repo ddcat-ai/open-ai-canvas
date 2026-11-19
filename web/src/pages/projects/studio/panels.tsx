@@ -873,6 +873,7 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
     const continuity: DramaVideoContinuity = settings.videoContinuity || "tail_frame";
     const sampleCharacter = cast.find((item) => item.kind === "character" && item.appearance);
     const sampleScene = cast.find((item) => item.kind === "scene" && item.appearance);
+    const sampleProp = cast.find((item) => item.kind === "prop" && item.appearance);
     const countOf = (kind: DramaCastKind) => cast.filter((item) => item.kind === kind).length;
     const spent = summary.production.spentMicrocredits;
     const held = summary.production.heldMicrocredits || 0;
@@ -933,7 +934,15 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                 <AssetSchemePicker
                                     value={settings.assets}
                                     onChange={(assets) => setSettings({ ...settings, assets })}
-                                    sample={{ style: settings.stylePrompt, characterName: sampleCharacter?.name, characterAppearance: sampleCharacter?.appearance, sceneName: sampleScene?.name, sceneAppearance: sampleScene?.appearance }}
+                                    sample={{
+                                        style: settings.stylePrompt,
+                                        characterName: sampleCharacter?.name,
+                                        characterAppearance: sampleCharacter?.appearance,
+                                        sceneName: sampleScene?.name,
+                                        sceneAppearance: sampleScene?.appearance,
+                                        propName: sampleProp?.name,
+                                        propAppearance: sampleProp?.appearance,
+                                    }}
                                     imageModel={imageOption}
                                 />
                                 <div className="drama-settings-regen">

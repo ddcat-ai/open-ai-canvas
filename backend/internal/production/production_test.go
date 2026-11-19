@@ -421,6 +421,20 @@ func TestCastImagePromptKeepsCastDescription(t *testing.T) {
 	}
 }
 
+// 道具模板和场景一样存进作品设置：没存过用默认模板，存了按存的渲染，未知变量保存时拒绝。
+func TestCastImagePromptUsesPropTemplate(t *testing.T) {
+	if got := (AssetSettings{}).Normalized().PropPrompt; got != DefaultPropPrompt() {
+		t.Fatalf("empty prop prompt must fall back to the default template, got %q", got)
+	}
+	custom := AssetSettings{PropPrompt: "{{项目画风}}｜{{道具名称}}｜{{道具设定}}"}
+	if got := CastImagePrompt(custom, "prop", "短斧", "黑色斧刃", "国漫3D", ""); got != "国漫3D｜短斧｜黑色斧刃" {
+		t.Fatalf("prop prompt must render the saved template, got %q", got)
+	}
+	if problem := ValidateAssetPrompts(AssetSettings{PropPrompt: "{{道具名称}}{{角色名称}}"}.Normalized()); !strings.Contains(problem, "道具参考图提示词") || !strings.Contains(problem, "{{角色名称}}") {
+		t.Fatalf("unknown prop placeholder must be rejected, got %q", problem)
+	}
+}
+
 func TestSegmentWriterUsesSkill(t *testing.T) {
 	in := SegmentPromptInput{Index: 0, Count: 2, Shots: []SegmentShot{{DurationMs: 5000, Dialogue: "醒了"}}}
 	plain := SegmentWriterPrompt(in, "素材", "", nil)

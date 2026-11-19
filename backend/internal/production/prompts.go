@@ -334,12 +334,12 @@ func ScriptPrompt(ctx ScriptContext) string {
 	return b.String()
 }
 
-// CastImagePrompt 按作品的参考图方案渲染角色或场景参考图提示词，作为后续镜头的身份锚点。
+// CastImagePrompt 按作品的参考图方案渲染角色、场景或道具参考图提示词，作为后续镜头的身份锚点。
 func CastImagePrompt(assets AssetSettings, kind, name, appearance, stylePrompt, visualRules string) string {
 	assets = assets.Normalized()
 	style := firstNonEmpty(stylePrompt, "写实电影感")
 	if kind == "prop" {
-		return renderAssetTemplate(propPrompt, map[string]string{"道具名称": name, "道具设定": appearance, "项目画风": style, "画面规则": visualRules})
+		return renderAssetTemplate(assets.PropPrompt, map[string]string{"道具名称": name, "道具设定": appearance, "项目画风": style, "画面规则": visualRules})
 	}
 	if kind == "scene" {
 		return renderAssetTemplate(assets.ScenePrompt, map[string]string{"场景名称": name, "场景设定": appearance, "项目画风": style, "画面规则": visualRules})
