@@ -15,6 +15,7 @@ import {
     Grid3X3,
     LayoutTemplate,
     Link2,
+    PanelTop,
     Workflow,
 } from "lucide-react";
 
@@ -63,6 +64,17 @@ export const selectionToolbarTools: ToolDefinition[] = [
         defaultOrder: 130,
         disabled: (ctx) => ctx.selectedCount < 2,
         run: (ctx) => ctx.handlers.onCreateStoryboard(),
+    },
+    {
+        id: "selection-create-frame",
+        toolbar: "selection",
+        category: "selection",
+        label: "创建背板",
+        icon: <PanelTop />,
+        defaultVisible: true,
+        defaultOrder: 135,
+        disabled: (ctx) => ctx.selectedCount < 1,
+        run: (ctx) => ctx.handlers.onCreateFrame(),
     },
     {
         id: "selection-create-reference-group",

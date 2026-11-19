@@ -42,7 +42,7 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { resolveAddNodeMenuCommands, type AddNodeMenuContext } from "@/lib/canvas/tool-registry";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { usePluginStore } from "@/stores/use-plugin-store";
-import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasFrameColor, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
@@ -84,6 +84,7 @@ type CanvasNodeContextMenuProps = {
     onUploadToArkPrivateAsset: () => void;
     onSetAssetCategory: (category: CanvasAssetCategory) => void;
     onToggleFrame: () => void;
+    onSetFrameColor: (color?: CanvasFrameColor) => void;
     onSpreadSelection?: () => void;
     onCopySelection?: () => void;
     onDeleteSelection?: () => void;
@@ -133,6 +134,7 @@ export function CanvasNodeContextMenu({
     onUploadToArkPrivateAsset,
     onSetAssetCategory,
     onToggleFrame,
+    onSetFrameColor,
     onSpreadSelection,
     onCopySelection,
     onDeleteSelection,
@@ -145,6 +147,7 @@ export function CanvasNodeContextMenu({
     const theme = canvasThemes[useActiveTheme()];
     const [addOpen, setAddOpen] = useState(false);
     const [categoryOpen, setCategoryOpen] = useState(false);
+    const [frameColorOpen, setFrameColorOpen] = useState(false);
 
     useEffect(() => {
         const close = (event: PointerEvent) => {
@@ -154,8 +157,10 @@ export function CanvasNodeContextMenu({
         };
         const closeOnEscape = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
-            if (categoryOpen) setCategoryOpen(false);
-            else onClose();
+            if (categoryOpen || frameColorOpen) {
+                setCategoryOpen(false);
+                setFrameColorOpen(false);
+            } else onClose();
         };
         window.addEventListener("pointerdown", close);
         window.addEventListener("keydown", closeOnEscape);
@@ -163,11 +168,12 @@ export function CanvasNodeContextMenu({
             window.removeEventListener("pointerdown", close);
             window.removeEventListener("keydown", closeOnEscape);
         };
-    }, [categoryOpen, onClose]);
+    }, [categoryOpen, frameColorOpen, onClose]);
 
     useEffect(() => {
         setAddOpen(menu.type === "canvas" && Boolean(menu.createOpen));
         setCategoryOpen(false);
+        setFrameColorOpen(false);
     }, [menu]);
 
     const runAction = (action: () => void) => {
@@ -226,7 +232,28 @@ export function CanvasNodeContextMenu({
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 <div className="thin-scrollbar min-h-0 space-y-1 overflow-y-auto">
-                    {menu.type === "node" && isMedia && categoryOpen ? (
+                    {menu.type === "node" && isFrame && frameColorOpen ? (
+                        <>
+                            <MenuHeader title="设置背板颜色" description={node?.title} onBack={() => setFrameColorOpen(false)} />
+                            <MenuSection label="颜色" />
+                            <div className="grid grid-cols-4 gap-2 px-2 pb-2">
+                                {FRAME_COLOR_OPTIONS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        className="grid size-8 place-items-center rounded-full border transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                                        style={{ background: option.swatch, borderColor: theme.toolbar.border, color: "white", outlineColor: theme.frame.activeStroke }}
+                                        aria-label={option.label}
+                                        title={option.label}
+                                        onClick={() => runAction(() => onSetFrameColor(option.value))}
+                                    >
+                                        {node?.metadata?.frame?.color === option.value ? <Check className="size-4" /> : null}
+                                    </button>
+                                ))}
+                            </div>
+                            <MenuButton icon={<PanelTop />} label="恢复默认颜色" onClick={() => runAction(() => onSetFrameColor(undefined))} />
+                        </>
+                    ) : menu.type === "node" && isMedia && categoryOpen ? (
                         <>
                             <MenuHeader title="设置资产分类" description={node?.title || nodeTypeLabel(node)} onBack={() => setCategoryOpen(false)} />
                             <MenuSection label="项目用途" />
@@ -300,11 +327,14 @@ export function CanvasNodeContextMenu({
                                     <MenuHeader title={node?.title || nodeTypeLabel(node)} />
                                     <MenuSection label="节点操作" />
                                     {isFrame ? (
-                                        <MenuButton
-                                            icon={isFolder ? <FolderOpen /> : <PanelTop />}
-                                            label={node?.metadata?.frame?.collapsed ? `展开${isFolder ? "文件夹" : "背板"}` : `折叠${isFolder ? "文件夹" : "背板"}`}
-                                            onClick={() => runAction(onToggleFrame)}
-                                        />
+                                        <>
+                                            <MenuButton
+                                                icon={isFolder ? <FolderOpen /> : <PanelTop />}
+                                                label={node?.metadata?.frame?.collapsed ? `展开${isFolder ? "文件夹" : "背板"}` : `折叠${isFolder ? "文件夹" : "背板"}`}
+                                                onClick={() => runAction(onToggleFrame)}
+                                            />
+                                            {!isFolder ? <MenuButton icon={<PanelTop />} label="设置背板颜色" chevron onClick={() => setFrameColorOpen(true)} /> : null}
+                                        </>
                                     ) : (
                                         <MenuButton icon={<FolderPlus />} label="保存到我的素材" disabled={!canSaveAsset} onClick={() => runAction(onSaveAsset)} />
                                     )}
@@ -454,6 +484,16 @@ function MenuHeader({ title, description, onBack }: { title: string; description
         </div>
     );
 }
+
+const FRAME_COLOR_OPTIONS: Array<{ value: CanvasFrameColor; label: string; swatch: string }> = [
+    { value: "blue", label: "蓝色", swatch: "#5b8def" },
+    { value: "green", label: "绿色", swatch: "#56a978" },
+    { value: "violet", label: "紫色", swatch: "#9b68d0" },
+    { value: "amber", label: "琥珀色", swatch: "#d99a36" },
+    { value: "rose", label: "玫瑰色", swatch: "#d96976" },
+    { value: "teal", label: "青色", swatch: "#42a6a0" },
+    { value: "slate", label: "灰色", swatch: "#7c8492" },
+];
 
 function MenuSection({ label }: { label: string }) {
     const theme = canvasThemes[useActiveTheme()];
