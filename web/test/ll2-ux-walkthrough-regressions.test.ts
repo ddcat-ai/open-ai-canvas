@@ -224,6 +224,13 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("旧配置里的 auto-hd 也会从模型列表里清掉", async () => {
+    const store = await read("../src/stores/use-config-store.ts");
+    expect(store).toContain('channel.models.filter((model) => model !== "auto-hd")');
+    const ll2 = await read("../src/stores/use-ll2-store.ts");
+    expect(ll2).toContain('groups.video.filter((model) => model !== "auto-hd")');
+});
+
 test("画布入口输入框打 @ 会弹出本机素材库，且素材菜单可点", async () => {
     const entry = await read("../src/components/canvas/canvas-short-drama-entry.tsx");
     expect(entry).toContain("LL2AssetLibrary");

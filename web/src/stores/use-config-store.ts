@@ -456,6 +456,14 @@ export function normalizeConfigSnapshot(snapshot: ConfigStoreSnapshot | undefine
     };
     const hasPersistedChannels = Array.isArray(persistedConfig.channels);
     if (!hasPersistedChannels) config.channels = [];
+    // auto-hd 是超分后处理，不是可选的生成模型；旧快照里可能还残留，读配置时统一清掉。
+    if (Array.isArray(config.channels)) {
+        config.channels = config.channels.map((channel) =>
+            channel.id === "ll2-primary" && Array.isArray(channel.models)
+                ? { ...channel, models: channel.models.filter((model) => model !== "auto-hd") }
+                : channel,
+        );
+    }
     const channels = normalizeChannels(config, !hasPersistedChannels);
     const models = modelOptionsFromChannels(channels);
     const imageModels = filterModelsByCapability(models, "image", channels);
