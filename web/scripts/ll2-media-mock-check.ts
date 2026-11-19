@@ -142,11 +142,11 @@ console.log("\n⑥ 非 H3 模型带素材：服务层明确拦截（素材协议
 
 let blocked = "";
 try {
-    await ll2GenerateVideo({ apiKey: "mock-key", model: "viduq3-pro", prompt: "一只猫", seconds: 5, resolution: "480P", media: oneImage.items });
+    await ll2GenerateVideo({ apiKey: "mock-key", model: "Super Vega 1.0-lite", prompt: "一只猫", seconds: 5, resolution: "480P", media: oneImage.items });
 } catch (error) {
     blocked = error instanceof Error ? error.message : String(error);
 }
-check("带素材 + wan3 被拦住", blocked.includes("协议还没接通"), true);
+check("带素材 + Super Vega 被拦住", blocked.includes("还在验证"), true);
 
 console.log(`\n${failed === 0 ? "全部通过" : `${failed} 项失败`}：${passed} pass / ${failed} fail`);
 if (failed) process.exit(1);

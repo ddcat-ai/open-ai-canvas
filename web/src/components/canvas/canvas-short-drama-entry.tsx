@@ -190,8 +190,8 @@ export function CanvasShortDramaEmptyState({
                     <button type="button" onClick={onCreatePipeline}>
                         <Workflow aria-hidden="true" />
                         <span>
-                            <strong>自己创作</strong>
-                            <small>跟着五步走，一步步做出片子</small>
+                            <strong>漫剧五步</strong>
+                            <small>画风 → 故事 → 分镜 → 视频 → 成片</small>
                         </span>
                     </button>
                     <button type="button" onClick={onAddScript}>
@@ -476,6 +476,16 @@ function CanvasHowToGuide() {
                     <span>在画布里的文本助手把想法写清楚，点「交给 Agent 出片」；先看要花多少钱，片子会直接放进画布。</span>
                 </li>
             </ol>
+            <div className="ll2-canvas-howto-drama">
+                <strong>做漫剧，记住这 5 条</strong>
+                <ul>
+                    <li>人物先固定：用同一张角色图连到分镜和视频，换镜头才不会“换脸”。</li>
+                    <li>视频节点连 <b>两张图</b> 就是首尾帧：第一张是开场、第二张是结尾，中间会自动补动作。</li>
+                    <li>只连一张图 = 图生视频，从那帧开始往后演。</li>
+                    <li>每段先按 4–15 秒做，分镜拆短一点，废了重做也不心疼。</li>
+                    <li>多段视频都满意了，再合并成片；中间任何一步都能单独重生成。</li>
+                </ul>
+            </div>
             <p className="ll2-canvas-howto-note">不记得也没关系，随时点开再看。</p>
         </details>
     );

@@ -224,6 +224,12 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("wan3 连两张图会明确提示换模型，不静默丢尾帧", async () => {
+    const video = await read("../src/services/ll2/ll2-video.ts");
+    expect(video).toContain("万相 3.0 只支持 1 张首帧图");
+    expect(video).toContain('req.model.startsWith("wan3.0-") && media.filter');
+});
+
 test("画布 LL2 直连节点不显示「排队」三段进度", async () => {
     const status = await read("../src/components/canvas/canvas-node-status-content.tsx");
     expect(status).toContain("ll2Direct");

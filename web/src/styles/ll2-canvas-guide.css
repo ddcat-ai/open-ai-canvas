@@ -78,6 +78,31 @@
     font-weight: 600;
 }
 
+.ll2-canvas-howto-drama {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border: 1px solid var(--ll2-a-0_08, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    background: var(--ll2-a-0_03, rgba(255, 255, 255, 0.03));
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+.ll2-canvas-howto-drama strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12.5px;
+}
+
+.ll2-canvas-howto-drama ul {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.ll2-canvas-howto-drama li + li {
+    margin-top: 2px;
+}
+
 .ll2-canvas-howto-note {
     margin: var(--space-2, 8px) 0 0;
     padding: 0 var(--space-3, 12px) var(--space-3, 12px);
