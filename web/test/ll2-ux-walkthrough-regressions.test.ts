@@ -150,6 +150,22 @@ test("免登录不偷偷打登录态接口，价格页与悬浮按钮不挡内�
     expect(batch).toContain("if (!userId)");
 });
 
+test("文本模型下拉显示真实模型名与 Token 单价，填 Key 弹窗只留必要信息", async () => {
+    // 用户口径：不能写「写得快 · 便宜」这种档位白话，要能对上控制台和账单。
+    const text = await read("../src/services/ll2/ll2-text.ts");
+    expect(text).toContain("export function ll2TextModelName");
+    expect(text).toContain("export function ll2TextModelPriceHint");
+    expect(text).not.toContain("写得快 · 便宜");
+    const config = await read("../src/pages/ll2-workspace/config.tsx");
+    expect(config).toContain("ll2TextModelPriceHint");
+    expect(config).toContain("{item.name}</option>");
+    // 填 Key 弹窗：不要红色大按钮、不要两段解释。
+    const connect = await read("../src/components/ll2/ll2-connect.tsx");
+    expect(connect).not.toContain("ll2-key-console-button");
+    expect(connect).not.toContain("我们不会另做一套登录");
+    expect(connect).toContain("粘贴 LL2 Key，只保存在这台电脑。");
+});
+
 test("14 个视频模型全部适配，秒数按字符串发，渠道缺失要说人话", async () => {
     const models = await read("../src/lib/ll2-models.ts");
     // 清单里每个非 H3 的视频模型都要在册，不能再退回「只有两个」。

@@ -19,21 +19,20 @@ export const LL2_TEXT_MODELS = LL2_MODELS.filter((model) => model.category === "
 export const LL2_DEFAULT_TEXT_MODEL = "glm-5.3-flash";
 
 /**
- * C 端不直接展示 glm-5.3-flash / ¥0.44/1M 这类内部写法。
- * 按目录顺序给出白话名字与大致花费档位，模型 id 仍用于实际请求。
+ * 选择器直接显示模型名：用户要能对上 LL2 控制台和账单。
+ * 2026-11-19 用户口径：不要再写「快 / 便宜」这种档位白话，看不出用的是哪个模型。
  */
-const TEXT_FRIENDLY_NAMES = [
-    "写得最快 · 最省",
-    "写得快 · 便宜",
-    "写得稳 · 便宜",
-    "想得更细 · 中等",
-    "想得最细 · 稍贵",
-    "读得最长 · 最贵",
-];
+export function ll2TextModelName(id: string): string {
+    return LL2_MODELS.find((item) => item.id === id)?.name || id || "聊天改稿";
+}
 
-export function ll2TextFriendlyName(id: string): string {
-    const index = LL2_TEXT_MODELS.findIndex((item) => item.id === id);
-    return TEXT_FRIENDLY_NAMES[index] ?? "聊天改稿";
+/** 模型选择器下面的一行价格：元 / 1M Token，与官网口径一致。 */
+export function ll2TextModelPriceHint(id: string): string {
+    const model = ll2ModelById(id);
+    if (!model) return "按 Token 用量计费";
+    const input = typeof model.tokenInput === "number" ? ll2FormatCNY(model.tokenInput) : "—";
+    const output = typeof model.tokenOutput === "number" ? ll2FormatCNY(model.tokenOutput) : "—";
+    return `输入 ¥${input} · 输出 ¥${output} / 1M Token`;
 }
 
 /** 一次聊天大概花多少钱的白话说法，不给用户看小数。 */

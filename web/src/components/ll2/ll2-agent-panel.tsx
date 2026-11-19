@@ -20,7 +20,7 @@ import {
     LL2_TEXT_MODELS,
     LL2_THINK_SYSTEM,
     ll2ChatText,
-    ll2TextFriendlyName,
+    ll2TextModelName,
 } from "@/services/ll2/ll2-text";
 import type { LL2VideoProgress } from "@/services/ll2/ll2-video";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -74,7 +74,7 @@ export function LL2AgentPanel() {
     const [inserted, setInserted] = useState("");
     const listRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
-    const friendlyName = ll2TextFriendlyName(model);
+    const friendlyName = ll2TextModelName(model);
 
     // Agent 出片链路的状态（只在画布里出现）。
     const [videoStage, setVideoStage] = useState<VideoStage>("idle");
@@ -361,7 +361,7 @@ export function LL2AgentPanel() {
                                 <p>{message.text}</p>
                                 {message.role === "assistant" ? (
                                     <div className="ll2-agent-msg-foot">
-                                        <span>{ll2TextFriendlyName(message.model || model)} · 本次 {message.costLabel || "几乎不花钱"}</span>
+                                        <span>{ll2TextModelName(message.model || model)} · 本次 {message.costLabel || "几乎不花钱"}</span>
                                         <div className="ll2-agent-msg-actions">
                                             <button type="button" onClick={() => void copy(message.text, message.id)} title="复制">
                                                 {copied === message.id ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -485,7 +485,7 @@ export function LL2AgentPanel() {
                     <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="选一个写得顺手的" title="换一个写法，价格档位也不同">
                         {LL2_TEXT_MODELS.map((item) => (
                             <option key={item.id} value={item.id}>
-                                {ll2TextFriendlyName(item.id)} · 一次几分钱
+                                {item.name} · 输入 ¥{item.tokenInput ?? 0}/1M
                             </option>
                         ))}
                     </select>

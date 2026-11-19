@@ -1,5 +1,5 @@
 import { Check, ExternalLink, KeyRound } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/lib/ll2-models";
 import { ll2MaskedKey, ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
 import { ll2ReadSettings, ll2WriteSettings, type LL2WorkspaceSettings } from "@/lib/ll2-workspace";
-import { LL2_TEXT_MODELS, ll2TextFriendlyName } from "@/services/ll2/ll2-text";
+import { LL2_TEXT_MODELS, ll2TextModelPriceHint } from "@/services/ll2/ll2-text";
 
 const RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
 
@@ -27,7 +27,7 @@ export default function LL2Config() {
     const [saved, setSaved] = useState(false);
     const tiers = LL2_VIDEO_TIERS[settings.videoModel];
     const range = LL2_VIDEO_DURATION[settings.videoModel];
-    const textModelName = useMemo(() => ll2TextFriendlyName(settings.textModel), [settings.textModel]);
+    const textModelPrice = ll2TextModelPriceHint(settings.textModel);
 
     const update = (patch: Partial<LL2WorkspaceSettings>) => {
         const next = ll2WriteSettings({ ...settings, ...patch });
@@ -76,14 +76,14 @@ export default function LL2Config() {
                             }}>
                                 {LL2_CONNECTED_VIDEO_MODELS.map((id) => <option key={id} value={id}>{id}</option>)}
                             </select>
-                            <small>现在能直接出片的两个模型</small>
+                            <small>{LL2_CONNECTED_VIDEO_MODELS.length} 个视频模型都能直接出片</small>
                         </label>
                         <label>
                             <span>清晰度</span>
                             <select value={settings.resolution} onChange={(event) => update({ resolution: event.target.value })} disabled={tiers.length < 2}>
                                 {tiers.map((tier) => <option key={tier.resolution} value={tier.resolution}>{tier.label}</option>)}
                             </select>
-                            <small>H3 只有 768P；万相 3.0 可以挑清晰度</small>
+                            <small>每个模型可选的清晰度不同</small>
                         </label>
                         <label>
                             <span>时长（秒）</span>
@@ -102,9 +102,9 @@ export default function LL2Config() {
                         <label>
                             <span>聊天改稿用哪个</span>
                             <select value={settings.textModel} onChange={(event) => update({ textModel: event.target.value })}>
-                                {LL2_TEXT_MODELS.map((item) => <option key={item.id} value={item.id}>{ll2TextFriendlyName(item.id)}</option>)}
+                                {LL2_TEXT_MODELS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                             </select>
-                            <small>{textModelName} · 一次大约几分钱</small>
+                            <small>{textModelPrice}</small>
                         </label>
                     </div>
                 </section>

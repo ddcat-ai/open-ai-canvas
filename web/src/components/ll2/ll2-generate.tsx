@@ -122,7 +122,7 @@ export function LL2GeneratePanel() {
                     <h2>想自己调参数，就在这里</h2>
                     <p>选模型、清晰度、时长，提交前先告诉你要花多少钱</p>
                 </div>
-                <span className="ll2-generate-live">目前能出片的两个模型</span>
+                <span className="ll2-generate-live">{LL2_CONNECTED_VIDEO_MODELS.length} 个视频模型都能出片</span>
             </header>
 
             {!connected ? (

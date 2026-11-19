@@ -139,8 +139,18 @@ html.dark .ll2-site-logo {
 /* 视频预览底永远是纯黑，不跟随主题翻面。 */
 html.dark .ll2-result-video { background: #000; }
 
-/* 暗色下原生控件与滚动条也跟着走，避免输入框/下拉仍是白底。 */
-html.dark .app-user-workspace.app-product-workspace :is(input, textarea, select) { color-scheme: dark; }
+/* 暗色下原生控件与滚动条也跟着走，避免输入框/下拉仍是白底。
+   作用域不能限定在某个工作区：C 端首页/设置页的原生 <select> 不在那个壳里，
+   否则下拉弹层是白底、选项字还是浅色，客户根本看不见（2026-11-19 实测）。 */
+html.dark :is(input, textarea, select) {
+    color-scheme: dark;
+}
+
+/* 原生下拉弹层由系统绘制，部分环境不认 color-scheme，再显式给 option 配色兜底。 */
+html.dark option {
+    background-color: #171820;
+    color: #f2f2f5;
+}
 html.dark .app-user-workspace.app-product-workspace ::selection { background: rgba(139, 92, 246, 0.42); }
 
 /* ── 左下角主题开关：免登录也能用，三档偏好写在本机 ─────────────────── */

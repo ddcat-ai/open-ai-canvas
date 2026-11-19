@@ -45,16 +45,7 @@ function LL2KeyPanel() {
                 </button>
             </div>
 
-            <p className="ll2-key-lead">
-                去 LL2 网站登录，复制你的 Key，再回到这里粘贴。
-                <br />
-                Key 只保存在这台电脑，我们不会另做一套登录。
-            </p>
-
-            <button type="button" className="ll2-key-console-button" onClick={openConsoleInNewTab}>
-                <ExternalLink className="size-4" aria-hidden /> 去 LL2 控制台复制 Key
-            </button>
-            <small className="ll2-key-console-note">会在新标签页打开，这一页写好的内容不会丢。</small>
+            <p className="ll2-key-lead">粘贴 LL2 Key，只保存在这台电脑。</p>
 
             {apiKey ? (
                 <div className="ll2-key-connected">
@@ -63,13 +54,11 @@ function LL2KeyPanel() {
                 </div>
             ) : null}
 
-            <label className="ll2-key-label" htmlFor="ll2-api-key-input">
-                LL2 API Key
-            </label>
             <div className="ll2-key-input-row">
                 <input
                     id="ll2-api-key-input"
                     className="ll2-key-input"
+                    aria-label="LL2 API Key"
                     type={visible ? "text" : "password"}
                     value={draft}
                     autoComplete="off"
@@ -109,8 +98,13 @@ function LL2KeyPanel() {
             </div>
 
             <div className="ll2-key-panel-foot">
-                <span>不用注册账号，只要填一次 Key。</span>
-                <Link to="/models" onClick={close}>看看每个模型多少钱</Link>
+                <button type="button" className="ll2-key-console" onClick={openConsoleInNewTab}>
+                    去 LL2 控制台复制 Key <ExternalLink className="size-3" aria-hidden />
+                </button>
+                <div className="ll2-key-foot-right">
+                    <Link to="/models" onClick={close}>价格</Link>
+                    <button type="button" className="ll2-key-later" onClick={close}>稍后</button>
+                </div>
             </div>
         </div>
     );
@@ -144,7 +138,6 @@ export function LL2KeyDialog() {
         >
             <div className="ll2-key-dialog" role="dialog" aria-modal="true" aria-label="连接 LL2">
                 <LL2KeyPanel />
-                <button type="button" className="ll2-key-later" onClick={close}>稍后再说</button>
             </div>
         </div>
     );
