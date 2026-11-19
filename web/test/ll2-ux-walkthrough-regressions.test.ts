@@ -115,8 +115,10 @@ test("首页拖图先存资产库：没有「素材库 @」页签，弹保存框
     // 拖图不再直接当首帧，而是打开保存弹窗。
     expect(source).toContain("setSaveAssetDraft({ file, dataUrl: item.dataUrl");
     expect(source).toContain("<LL2SaveAssetDialog");
-    // 用户指定的说明文案。
-    expect(source).toContain("这里只能拖一张图，想用好几个素材");
+    // 2026-11-19：素材入口收进参数行的「+」chip，不再占一整行提示。
+    expect(source).not.toContain("这里只能拖一张图");
+    expect(source).toContain("ll2-chip-add");
+    expect(source).toContain("打 @ 可以引用素材库里的图片");
     expect(source).not.toContain("给小白简单出片");
     const dialog = await read("../src/components/ll2/ll2-save-asset-dialog.tsx");
     expect(dialog).toContain("保存到资产库");

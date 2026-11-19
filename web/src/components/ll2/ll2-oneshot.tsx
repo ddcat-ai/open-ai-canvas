@@ -1,4 +1,4 @@
-import { ArrowRight, AtSign, Check, Download, Film, LoaderCircle, Sparkles, Square, UploadCloud, X } from "lucide-react";
+import { ArrowRight, AtSign, Check, Download, Film, LoaderCircle, Plus, Sparkles, Square, UploadCloud, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -505,42 +505,21 @@ export function LL2OneShot() {
                             disabled={running}
                         />
 
-                        {/* 两条素材来源：拖进来只收 1 张图（小白）；@ 引用可以很多个（资产库）。 */}
-                        {tab === "video" ? (
-                            <div className={`ll2-media-drop${dragOver ? " is-drag-over" : ""}`}>
-                                <div className="ll2-media-drop-head">
-                                    <strong>{hasAnyReference ? modeLabel : "想更准一点？拖一张图，或 @ 引用素材"}</strong>
-                                    <div className="ll2-media-drop-head-actions">
-                                        {hasMedia ? <span>已拖 {ll2MediaSummary(media)}</span> : null}
-                                        <button type="button" className="ll2-media-mention" onClick={() => openLibrary()} disabled={running}>
-                                            <AtSign className="size-3.5" aria-hidden /> 素材库 @
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="ll2-media-drop-body">
-                                    {media.map((item) => (
-                                        <div key={item.id} className="ll2-media-thumb" title={item.name}>
-                                            <img src={item.dataUrl} alt={item.name} />
-                                            <span className="ll2-media-thumb-name">{item.name}</span>
-                                            <button type="button" className="ll2-media-thumb-remove" onClick={() => removeMedia(item.id)} aria-label={`移除 ${item.name}`} disabled={running}><X className="size-3" aria-hidden /></button>
-                                        </div>
-                                    ))}
-                                    <button type="button" className="ll2-media-add" onClick={openFilePicker} disabled={running || mediaBusy} title="也可以直接把图片拖进这个框">
-                                        {mediaBusy ? <LoaderCircle className="size-4 is-spinning" aria-hidden /> : <UploadCloud className="size-4" aria-hidden />}
-                                        <span>{mediaBusy ? "正在读图" : hasMedia ? "换一张" : "选一张图"}</span>
-                                    </button>
-                                </div>
-                                <p className="ll2-media-drop-note">
-                                    这里只能拖一张图，想用好几个素材（多张图、首尾帧），点「素材库 @」上传后，在句子里打 @ 引用，可以选很多张。视频参考需要公网 HTTPS 地址，本机视频暂时不能直接引用。
-                                </p>
-                            </div>
-                        ) : null}
-
                         {/* 没填 Key 之前不露任何模型 / 分辨率 / 价格；填了之后按
                             「模型 → 分辨率 → 单价 → 时长 → 本次一共」逐项排清楚。 */}
                         {connected && tab === "video" ? (
                             <div className="ll2-oneshot-pricing" aria-label="本次生成的价格明细">
                                 <div className="ll2-price-grid">
+                                    <button
+                                        type="button"
+                                        className="ll2-chip ll2-chip-add"
+                                        onClick={() => openLibrary()}
+                                        disabled={running || mediaBusy}
+                                        title="添加素材：上传后在句子里打 @ 引用"
+                                        aria-label="添加素材"
+                                    >
+                                        <Plus className="size-4" aria-hidden />
+                                    </button>
                                     <div className="ll2-price-cell">
                                         <span>模型</span>
                                         <select value={model} onChange={(event) => {
@@ -614,15 +593,6 @@ export function LL2OneShot() {
                                         <small>{totalBasis}</small>
                                     </div>
                                     <div className="ll2-price-actions">
-                                        <button
-                                            type="button"
-                                            className="ll2-chip"
-                                            onClick={() => openLibrary()}
-                                            title="打开素材库，上传后在句子里 @ 引用"
-                                            disabled={running || mediaBusy}
-                                        >
-                                            <AtSign className="size-3.5" /> @ 引用素材
-                                        </button>
                                         {running ? (
                                             <button type="button" className="ll2-oneshot-submit is-running" onClick={() => abortRef.current?.abort()}>
                                                 <Square className="size-3.5" /> 取消

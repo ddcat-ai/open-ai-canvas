@@ -225,6 +225,178 @@
     color: var(--ll2-t-6b6b6b, #6b6b76);
 }
 
+/* ── 首页一句话成片：收成一张卡片 + 一排参数 chip（对齐 RHTV 那种整洁感） ── */
+.ll2-oneshot {
+    padding: 14px 16px 12px;
+    border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
+    border-radius: 20px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    box-shadow: 0 12px 40px rgba(15, 15, 30, 0.06);
+}
+
+.ll2-oneshot-tabs {
+    display: inline-flex;
+    gap: 2px;
+    margin: 0 0 6px;
+    padding: 3px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--ll2-a-0_04, rgba(10, 10, 10, 0.04));
+}
+
+.ll2-oneshot-tabs button {
+    min-width: 0;
+    padding: 6px 14px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ll2-wb-muted, #6b6b76);
+    font-size: 12.5px;
+}
+
+.ll2-oneshot-tabs button.is-active {
+    border-bottom: 0;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-wb-accent, #6720ff);
+    box-shadow: 0 1px 4px rgba(15, 15, 30, 0.08);
+}
+
+.ll2-oneshot-input {
+    min-height: 92px;
+    padding: 6px 2px 8px;
+    font-size: 15px;
+    line-height: 1.7;
+    resize: none;
+}
+
+.ll2-oneshot .ll2-media-drop {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 2px 6px;
+    border: 0;
+    background: transparent;
+}
+
+.ll2-media-drop-head {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+
+.ll2-media-drop-head strong {
+    color: var(--ll2-wb-muted, #6b6b76);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.ll2-media-drop-body {
+    gap: 6px;
+}
+
+.ll2-media-drop-body .ll2-media-add {
+    width: auto;
+    height: 30px;
+    padding: 0 10px;
+    flex-direction: row;
+    gap: 5px;
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.ll2-media-drop-note {
+    display: none;
+}
+
+.ll2-media-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+}
+
+.ll2-oneshot-pricing {
+    padding: 4px 0 0;
+    border-top: 0;
+}
+
+.ll2-price-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ll2-price-cell {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border: 1px solid var(--ll2-a-0_10, rgba(10, 10, 10, 0.1));
+    border-radius: 999px;
+    background: var(--ll2-a-0_035, rgba(10, 10, 10, 0.035));
+}
+
+.ll2-price-cell > span,
+.ll2-price-cell > small {
+    display: none;
+}
+
+.ll2-chip-add {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 999px;
+    color: var(--ll2-wb-accent, #6720ff);
+}
+
+.ll2-price-cell select,
+.ll2-price-cell strong {
+    width: auto;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ll2-upscale-row {
+    margin-top: 8px;
+}
+
+.ll2-price-total {
+    margin-top: 10px;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.ll2-price-total-text > span,
+.ll2-price-total-text small {
+    display: none;
+}
+
+.ll2-price-total-text strong {
+    font-size: 20px;
+}
+
+.ll2-price-actions .ll2-chip {
+    border-radius: 999px;
+}
+
+.ll2-oneshot-submit {
+    border-radius: 999px;
+}
+
+.ll2-oneshot-foot {
+    padding: 8px 0 0;
+    border-top: 0;
+    font-size: 11px;
+}
+
 /* ── 生成 / 超分等待：要有明显反应，不能一行静止文字 ───────────────── */
 .ll2-oneshot-waiting {
     display: flex;

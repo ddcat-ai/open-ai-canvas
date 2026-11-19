@@ -126,6 +126,29 @@ html.dark .ll2-site-header {
 
 /* 悬浮层的投影在暗色下加深，避免浮层像贴在页面上。 */
 html.dark .ll2-key-dialog { box-shadow: 0 24px 70px rgba(0, 0, 0, 0.62); }
+
+/* 暗色下边框不能沿用浅色的 rgba(0,0,0,.08)：在深底上等于没有边框。 */
+html.dark .ll2-key-dialog { border-color: rgba(242, 242, 245, 0.14); }
+html.dark .ll2-key-dialog .ll2-key-input-row { border-color: rgba(242, 242, 245, 0.18); }
+html.dark .ll2-key-dialog .ll2-key-status { border-color: rgba(242, 242, 245, 0.1); }
+html.dark .ll2-oneshot {
+    border-color: rgba(242, 242, 245, 0.14);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+html.dark .ll2-oneshot .ll2-price-cell {
+    border-color: rgba(242, 242, 245, 0.14);
+    background: rgba(242, 242, 245, 0.05);
+}
+html.dark .ll2-oneshot .ll2-oneshot-tabs { background: rgba(242, 242, 245, 0.06); }
+html.dark .ll2-oneshot .ll2-oneshot-tabs button.is-active {
+    background: rgba(242, 242, 245, 0.12);
+    color: #b18cff;
+    box-shadow: none;
+}
+html.dark .ll2-oneshot .ll2-chip {
+    border-color: rgba(242, 242, 245, 0.14);
+    background: rgba(242, 242, 245, 0.04);
+}
 html.dark .ll2-key-panel { box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5); }
 html.dark .ll2-canvas-back { box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55); }
 
