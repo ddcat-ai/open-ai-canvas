@@ -2248,7 +2248,7 @@ summary.agent-tool-step:hover {
 
 .agent-composer-submit > .w-full {
     width: auto;
-    min-width: 0;
+    min-width: 44px;
     max-width: 18rem;
     flex: 0 1 auto;
 }
@@ -2270,6 +2270,38 @@ summary.agent-tool-step:hover {
 
 .agent-composer-model-trigger .canvas-model-picker-label {
     gap: var(--space-1);
+}
+
+/* 模型选择器触发器文案渐进收纳（仅画布 Agent 输入框）。
+   与同排「自动 / 技能 / 默认」以及上下文环同一套写法：纯容器查询，零 JS。
+   面板本身已是容器（.canvas-agent-panel { container-type: inline-size }），
+   因此这里直接按面板宽度分档，与上游 @container (max-width: 519px) 的既有做法一致。
+   两档阈值按「全量文案 + 左侧控件 + 右侧圆环/箭头」的实际占宽留出余量取整，
+   只拦真正放不下的宽度——面板再宽也不会无谓收起。 */
+@container (max-width: 700px) {
+    /* 放不下「· 渠道/模型名」→ 只留模型显示名。 */
+    .agent-composer-model-trigger .canvas-model-picker-trigger-secondary {
+        display: none;
+    }
+}
+
+@container (max-width: 520px) {
+    /* 文本已无可读宽度 → 只留图标，但保留向下箭头：它是「可点开选择」的唯一视觉提示。 */
+    .agent-composer-model-trigger .canvas-model-picker-trigger-text {
+        display: none;
+    }
+    /* 按内容自然收口（图标 + 间隙 + 箭头 + 内边距），不写死宽度：
+       图标在画布/工作台两套主题下尺寸不同。 */
+    .agent-composer-submit > .w-full {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 0;
+        max-width: fit-content;
+    }
+    .agent-composer-model-trigger {
+        justify-content: center;
+        padding-inline: var(--space-2);
+    }
 }
 
 .agent-composer-selection > button {

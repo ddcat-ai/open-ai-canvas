@@ -2815,7 +2815,10 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                                     onChange={setModel}
                                                     variant="creation"
                                                     fullWidth
-                                                    className="agent-composer-model-trigger !h-8 !min-w-0 !w-full !max-w-full !border-0 !shadow-none"
+                                                    adaptiveTrigger
+                                                    // 不要加 !w-full / !max-w-full：它们编译成 max-width:100%!important，
+                                                    // 会盖掉图标档对 pill 的收口（图标被裁），也让宽度不可控。
+                                                    className="agent-composer-model-trigger !h-8 !min-w-0 !border-0 !shadow-none"
                                                     popoverClassName="agent-model-picker-popover"
                                                     showSelectedPrice={false}
                                                     showOptionPrices

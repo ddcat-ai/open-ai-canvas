@@ -39,6 +39,8 @@ type ModelPickerProps = {
     catalogSource?: "session" | "provided";
     /** 调用方额外的不可选原因（例如短剧只能用平台模型）；返回非空串时选项置灰并显示原因。 */
     modelDisabledReason?: (model: string) => string;
+    /** 窄宽度时渐进收纳触发器文案（全量→只留分组名→只留图标），由容器查询实现；仅画布 Agent 输入框启用。 */
+    adaptiveTrigger?: boolean;
 };
 
 export function ModelPicker({
@@ -59,6 +61,7 @@ export function ModelPicker({
     modelFilter,
     catalogSource = "session",
     modelDisabledReason,
+    adaptiveTrigger = false,
 }: ModelPickerProps) {
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const userId = useUserStore((state) => state.user?.id);
@@ -100,6 +103,10 @@ export function ModelPicker({
     const creationVariant = variant === "creation";
     const currentChannel = current ? resolveModelChannel(config, current) : undefined;
     const isCurrentCustomChannel = Boolean(current && currentChannel && currentChannel.scope !== "system");
+    // 触发器文案拆两段：primary 是模型显示名，secondary 是「· 渠道标签 /（渠道名）」。
+    // 仅 adaptiveTrigger 入口使用（其余入口仍走原来的 pickerModelDisplayName/pickerModelOptionLabel 整串）。
+    // 收纳本身由 canvas-cloud-agent.css 的容器查询完成，与同排「自动/技能/默认」控件同一套写法。
+    const currentLabelParts = adaptiveTrigger && current ? triggerLabelParts(config, current, creationVariant, showConfiguredModelName) : null;
 
     useLayoutEffect(() => {
         if (!open) return;
@@ -397,7 +404,22 @@ export function ModelPicker({
                         <span className="canvas-model-picker-trigger-icon">
                             <ModelIcon config={config} model={current} />
                         </span>
-                        <span className="min-w-0 flex-1 truncate">{current ? (creationVariant ? pickerModelDisplayName(config, current, showConfiguredModelName) : pickerModelOptionLabel(config, current, showConfiguredModelName)) : placeholder}</span>
+                        <span className="canvas-model-picker-trigger-text min-w-0 flex-1 truncate">
+                            {current ? (
+                                adaptiveTrigger && currentLabelParts ? (
+                                    <>
+                                        <span className="canvas-model-picker-trigger-primary">{currentLabelParts.primary}</span>
+                                        {currentLabelParts.secondary ? <span className="canvas-model-picker-trigger-secondary">{` · ${currentLabelParts.secondary}`}</span> : null}
+                                    </>
+                                ) : creationVariant ? (
+                                    pickerModelDisplayName(config, current, showConfiguredModelName)
+                                ) : (
+                                    pickerModelOptionLabel(config, current, showConfiguredModelName)
+                                )
+                            ) : (
+                                placeholder
+                            )}
+                        </span>
                         {isCurrentCustomChannel ? <span className="shrink-0 rounded px-2 py-0.5 text-[var(--fs-label)] font-medium leading-none bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/25">个人</span> : null}
                         {showSelectedPrice && creditsEnabled ? <ModelPrice price={currentPrice} quote={routeQuote} compact /> : null}
                     </span>
@@ -590,6 +612,21 @@ function pickerModelOptionLabel(config: AiConfig, model: string, showConfiguredM
     const displayName = showConfiguredModelName ? configuredModelDisplayName(config, model) : modelDisplayName(config, model);
     const channel = resolveModelChannel(config, model);
     return channel.scope === "system" ? pickerModelDisplayName(config, model, showConfiguredModelName) : `${displayName}（${channel.name}）`;
+}
+
+// 触发器文案两段拆分，与 pickerModelDisplayName / pickerModelOptionLabel 一一对应（default 变体
+// 直连系统模型也要带「· 渠道标签」，渠道模型带「（渠道名）」），仅把次要段拆进独立 span。
+// 展示名与模型名相同（未设置展示名）时省去第二段，避免「x · x」重复。
+function triggerLabelParts(config: AiConfig, model: string, creationVariant: boolean, showConfiguredModelName: boolean): { primary: string; secondary: string } {
+    const displayName = showConfiguredModelName ? configuredModelDisplayName(config, model) : modelDisplayName(config, model);
+    let secondary = "";
+    if (isDirectSystemModel(config, model)) {
+        secondary = modelChannelLabel(config, model);
+    } else if (!creationVariant) {
+        const channel = resolveModelChannel(config, model);
+        if (channel.scope !== "system") secondary = `（${channel.name}）`;
+    }
+    return { primary: displayName, secondary: secondary && secondary !== displayName ? secondary : "" };
 }
 
 function channelTierPriceSummary(
