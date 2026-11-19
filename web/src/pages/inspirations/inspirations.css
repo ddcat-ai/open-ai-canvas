@@ -400,20 +400,68 @@
     outline-offset: var(--space-half);
 }
 
+.inspiration-detail-layout {
+    display: flex;
+    height: min(780px, 82vh);
+    min-height: 0;
+    overflow: hidden;
+}
+
 .inspiration-detail-cover {
     position: relative;
-    flex-shrink: 0;
-    height: 256px;
+    display: flex;
+    flex: 0 0 42%;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
-    border-radius: var(--r-xl);
     background: var(--library-cover-surface);
 }
 
 .inspiration-detail-cover img {
     display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.inspiration-detail-panel {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+}
+
+.inspiration-detail-heading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.inspiration-detail-actions {
+    justify-content: flex-start;
+}
+
+.inspiration-detail-content {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--space-4);
+    overflow-y: auto;
+    padding: var(--space-5);
+}
+
+.inspiration-detail-footer {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    border-top: 1px solid var(--user-border);
+    padding: var(--space-3) var(--space-5);
 }
 
 /* 提示词正文保留原始换行，长内容只在区域内部滚动。 */
@@ -468,8 +516,16 @@
     .inspiration-mode-count {
         display: none;
     }
+    .inspiration-detail-layout {
+        height: min(900px, 90vh);
+        flex-direction: column;
+    }
     .inspiration-detail-cover {
-        height: 224px;
+        flex: 0 0 30vh;
+        max-height: 30vh;
+    }
+    .inspiration-detail-cover img {
+        max-height: 30vh;
     }
 }
 
