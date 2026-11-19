@@ -367,6 +367,15 @@ func TestDramaEveryEpisodeSingleSegmentDoesNotApproveEpisode(t *testing.T) {
 	if summary.Episodes[0].Stage != "done" || fake.byKind["video"] != 2 {
 		t.Fatalf("approving the episode must generate the rest: %+v %v", summary.Episodes[0], fake.byKind)
 	}
+	// 已确认的集重做最后一段：只生成这一段并重新成片，不需要再次确认。
+	if _, err := svc.GenerateDramaSegments("usr-drama", project, episode, GenerateDramaSegmentsRequest{Segments: []int{rows[1].SegmentIndex}}); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 20)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	if !summary.Episodes[0].Approved || summary.Episodes[0].Stage != "done" || fake.byKind["video"] != 3 || fake.byKind["render"] != 2 {
+		t.Fatalf("regenerating a segment of an approved episode must keep approval and re-render: %+v %v", summary.Episodes[0], fake.byKind)
+	}
 }
 
 func TestDramaFailedSegmentSurfacesAndRetries(t *testing.T) {
