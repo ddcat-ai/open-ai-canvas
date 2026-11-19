@@ -65,7 +65,7 @@ export const LL2_MODELS: LL2Model[] = [
         category: "video",
         vendor: "MiniMax · DMC 自建机房",
         capability: "文生视频、首尾帧、参考图片 / 视频 / 音频",
-        spec: "固定 768P · 1–15 秒 · 24 FPS · MP4",
+        spec: "固定 768P · 4–15 秒 · 24 FPS · MP4",
         priceText: "¥0.05/秒",
         billingUnit: "按成片秒数",
         perSecondMin: 0.05,
@@ -644,15 +644,15 @@ export type LL2ModelSpec = {
 };
 
 export const LL2_MODEL_SPECS: Record<string, LL2ModelSpec> = {
-    "MiniMax-H3": { resolutions: "768P（固定）", duration: "1–15 秒", unit: "按成片秒数", secondsMin: 1, secondsMax: 15, tiers: [
+    "MiniMax-H3": { resolutions: "768P（固定）", duration: "4–15 秒", unit: "按成片秒数", secondsMin: 4, secondsMax: 15, tiers: [
         { label: "768P", perSecond: 0.05 },
     ] },
-    "wan3.0-video": { resolutions: "480P / 720P / 1080P", duration: "2–30 秒", unit: "按成片秒数", secondsMin: 2, secondsMax: 30, tiers: [
+    "wan3.0-video": { resolutions: "480P / 720P / 1080P", duration: "4–30 秒", unit: "按成片秒数", secondsMin: 4, secondsMax: 30, tiers: [
         { label: "480P", perSecond: 0.132 },
         { label: "720P", perSecond: 0.264 },
         { label: "1080P", perSecond: 0.528 },
     ] },
-    "wan3.0-video-prime": { resolutions: "480P / 720P / 1080P", duration: "2–30 秒", unit: "按成片秒数", secondsMin: 2, secondsMax: 30, tiers: [
+    "wan3.0-video-prime": { resolutions: "480P / 720P / 1080P", duration: "4–30 秒", unit: "按成片秒数", secondsMin: 4, secondsMax: 30, tiers: [
         { label: "480P", perSecond: 0.234 },
         { label: "720P", perSecond: 0.468 },
         { label: "1080P", perSecond: 0.936 },
@@ -778,11 +778,12 @@ export const LL2_VIDEO_TIERS = Object.fromEntries(
 export const LL2_VIDEO_DURATION = Object.fromEntries(
     LL2_CONNECTED_VIDEO_MODELS.map((id) => {
         const spec = LL2_MODEL_SPECS[id];
-        // 官网没标注固定时长的模型（viduq3 / 豆包）按 1–15 秒给可选范围，
+        // 2026-11-19 用户口径：视频模型一律 4 秒起。
+        // 官网没标注固定时长的模型（viduq3 / 豆包）按 4–15 秒给可选范围，
         // 真正能不能出由网关判定，前端不假装知道更多。
-        const min = spec?.secondsMin ?? 1;
-        const max = spec?.secondsMax ?? 15;
-        return [id, { min, max, default: Math.min(5, max) }];
+        const min = Math.max(4, spec?.secondsMin ?? 4);
+        const max = Math.max(min, spec?.secondsMax ?? 15);
+        return [id, { min, max, default: Math.max(min, Math.min(5, max)) }];
     }),
 ) as Record<LL2ConnectedVideoModel, { min: number; max: number; default: number }>;
 

@@ -82,7 +82,7 @@ const h3Adapter: LL2VideoAdapter = {
     label: "H3",
     createPath: "/v2/video_generation",
     normalize: (args) => {
-        // H3 固定 768P / 1–15 秒，不提供 2K 或质量档位；2K/4K 属 auto-hd 后处理。
+        // H3 固定 768P / 4–15 秒，不提供 2K 或质量档位；2K/4K 属 auto-hd 后处理。
         const base = normalizeBase(args);
         return { ...base, resolution: "768P" };
     },

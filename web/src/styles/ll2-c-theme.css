@@ -180,6 +180,33 @@ html.dark .ll2-select.is-chip {
     background: rgba(242, 242, 245, 0.07);
 }
 
+html.dark .ll2-ref-menu {
+    border-color: rgba(242, 242, 245, 0.14);
+    background: #1b1c22;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+html.dark .ll2-ref-folder:hover,
+html.dark .ll2-ref-item-main:hover,
+html.dark .ll2-ref-back:hover,
+html.dark .ll2-ref-close:hover {
+    background: rgba(242, 242, 245, 0.08);
+}
+
+html.dark .ll2-ref-folder-icon,
+html.dark .ll2-ref-item-icon {
+    background: rgba(242, 242, 245, 0.08);
+}
+
+html.dark .ll2-ref-upload {
+    background: rgba(139, 92, 246, 0.16);
+    color: #b18cff;
+}
+
+html.dark .ll2-ref-foot {
+    border-top-color: rgba(242, 242, 245, 0.08);
+}
+
 html.dark .ll2-select-menu {
     border-color: rgba(242, 242, 245, 0.14);
     background: #1b1c22;

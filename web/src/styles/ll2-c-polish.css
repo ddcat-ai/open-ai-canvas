@@ -225,6 +225,287 @@
     color: var(--ll2-t-6b6b6b, #6b6b76);
 }
 
+/* ── 首页 @ 素材库：贴输入框的紧凑菜单（和画布 @ 菜单同一种体验） ──── */
+.ll2-ref-menu {
+    position: fixed;
+    z-index: 90;
+    overflow: hidden;
+    border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
+    border-radius: 14px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    box-shadow: 0 24px 60px rgba(15, 15, 30, 0.18);
+}
+
+.ll2-ref-menu-body {
+    display: flex;
+    max-height: 420px;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.ll2-ref-menu-body.is-drag-over {
+    outline: 2px dashed var(--ll2-t-6720ff, #6720ff);
+    outline-offset: -4px;
+}
+
+.ll2-ref-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 2px 6px;
+}
+
+.ll2-ref-head strong {
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-size: 12.5px;
+}
+
+.ll2-ref-back {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    cursor: pointer;
+}
+
+.ll2-ref-back:hover {
+    background: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+}
+
+.ll2-ref-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.ll2-ref-upload {
+    display: inline-flex;
+    height: 24px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--ll2-ap-0_08, rgba(103, 32, 255, 0.08));
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-family: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.ll2-ref-close {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    cursor: pointer;
+}
+
+.ll2-ref-close:hover {
+    background: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+}
+
+.ll2-ref-folders {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ll2-ref-folder {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 8px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-family: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ll2-ref-folder:hover {
+    border-color: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+    background: var(--ll2-a-0_04, rgba(10, 10, 10, 0.04));
+}
+
+.ll2-ref-folder-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+}
+
+.ll2-ref-folder small {
+    margin-left: auto;
+    color: var(--ll2-t-9a9a9a, #9a9aa2);
+    font-size: 11px;
+}
+
+.ll2-ref-folder-arrow {
+    flex: none;
+    color: var(--ll2-t-9a9a9a, #9a9aa2);
+}
+
+.ll2-ref-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ll2-ref-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ll2-ref-item-main {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ll2-ref-item-main:hover {
+    background: var(--ll2-a-0_05, rgba(10, 10, 10, 0.05));
+}
+
+.ll2-ref-item-main:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.ll2-ref-item-main img {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    object-fit: cover;
+}
+
+.ll2-ref-item-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    background: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+}
+
+.ll2-ref-item-title {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-ref-item-remove {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--ll2-t-9a9a9a, #9a9aa2);
+    cursor: pointer;
+}
+
+.ll2-ref-item-remove:hover {
+    color: #d44343;
+    background: rgba(212, 67, 67, 0.1);
+}
+
+.ll2-ref-empty {
+    padding: 10px 6px;
+}
+
+.ll2-ref-empty strong {
+    font-size: 12px;
+}
+
+.ll2-ref-empty p,
+.ll2-ref-empty-line {
+    margin: 4px 0 0;
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.ll2-ref-message {
+    margin: 4px 4px 0;
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    font-size: 11px;
+}
+
+.ll2-ref-message.is-error {
+    color: #d44343;
+}
+
+.ll2-ref-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 6px 4px 0;
+    border-top: 1px solid var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+}
+
+.ll2-ref-more {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-family: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.ll2-ref-link {
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ll2-t-9a9a9a, #9a9aa2);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
 /* ── C 端统一小下拉（替代原生 select 的丑弹层） ───────────────────── */
 .ll2-select {
     position: relative;

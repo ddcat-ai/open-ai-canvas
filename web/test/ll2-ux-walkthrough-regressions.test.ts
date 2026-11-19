@@ -191,6 +191,14 @@ test("生成后超分：默认不勾、只能往上超、1080P 就是 1K", async
     expect(hd).toContain("Bearer");
 });
 
+test("视频模型一律 4 秒起", async () => {
+    const models = await read("../src/lib/ll2-models.ts");
+    expect(models).toContain("Math.max(4, spec?.secondsMin ?? 4)");
+    expect(models).toContain("duration: \"4–15 秒\"");
+    const workspace = await read("../src/lib/ll2-workspace.ts");
+    expect(workspace).toContain("Math.max(4, Number(value.seconds))");
+});
+
 test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", async () => {
     const toolsRegistry = await read("../src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx");
     expect(toolsRegistry).toContain('id: "llmUpscale"');

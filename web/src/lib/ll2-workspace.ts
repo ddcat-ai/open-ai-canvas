@@ -175,7 +175,8 @@ export function ll2ReadSettings(): LL2WorkspaceSettings {
                 ? (value.videoModel as LL2ConnectedVideoModel)
                 : LL2_DEFAULT_SETTINGS.videoModel,
             resolution: typeof value.resolution === "string" && value.resolution ? value.resolution : LL2_DEFAULT_SETTINGS.resolution,
-            seconds: Number.isFinite(value.seconds) ? Math.min(30, Math.max(1, Number(value.seconds))) : LL2_DEFAULT_SETTINGS.seconds,
+            // 视频模型一律 4 秒起（2026-11-19 用户口径），旧设置里的 1–3 秒也抬到 4。
+            seconds: Number.isFinite(value.seconds) ? Math.min(30, Math.max(4, Number(value.seconds))) : LL2_DEFAULT_SETTINGS.seconds,
             ratio: typeof value.ratio === "string" && value.ratio ? value.ratio : LL2_DEFAULT_SETTINGS.ratio,
             textModel,
             promptOptimizer: value.promptOptimizer === true,

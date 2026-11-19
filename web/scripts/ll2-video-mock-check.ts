@@ -141,11 +141,12 @@ const OPENAI_MODELS = [
 let openaiFails = 0;
 for (const item of OPENAI_MODELS) {
     scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
-    const result = await ll2GenerateVideo(common({ model: item.model, resolution: item.resolution, seconds: 2 }));
+    // 视频模型 4 秒起：请求 4 秒，恰好等于下限，payload 也应原样是 "4"。
+    const result = await ll2GenerateVideo(common({ model: item.model, resolution: item.resolution, seconds: 4 }));
     const bodyOk =
         !!openaiCreateBody &&
         openaiCreateBody.model === item.model &&
-        openaiCreateBody.seconds === "2" &&
+        openaiCreateBody.seconds === "4" &&
         openaiCreateBody.aspect_ratio === "16:9" &&
         openaiCreateBody.resolution === item.resolution;
     out.push(`⑥ ${item.model}：${bodyOk ? "PASS" : "FAIL"} 创建体 ${JSON.stringify(openaiCreateBody)}`);

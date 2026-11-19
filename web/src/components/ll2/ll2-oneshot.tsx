@@ -104,6 +104,9 @@ export function LL2OneShot() {
     const waitStartRef = useRef(0);
     const [waitSeconds, setWaitSeconds] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const promptRef = useRef<HTMLTextAreaElement | null>(null);
+    const plusRef = useRef<HTMLButtonElement | null>(null);
+    const [libraryAnchor, setLibraryAnchor] = useState<{ left: number; top: number } | null>(null);
     // 读文件是异步的。用 ref 保存最新拖图 + 同步互斥，避免连续拖两次互相覆盖。
     const mediaRef = useRef<LL2MediaInput[]>([]);
     const mediaBusyRef = useRef(false);
@@ -218,6 +221,10 @@ export function LL2OneShot() {
         setTab("video");
         setMentionAnchor(anchor);
         setError("");
+        // 菜单贴着「＋」或输入框底部弹出（和画布 @ 菜单同一种用法），不再整屏弹抽屉。
+        const trigger = anchor === null ? plusRef.current : promptRef.current;
+        const rect = trigger?.getBoundingClientRect();
+        setLibraryAnchor(rect ? { left: rect.left, top: rect.bottom + 8 } : null);
         setLibraryOpen(true);
     };
 
@@ -487,6 +494,7 @@ export function LL2OneShot() {
                 {tab === "video" || tab === "text" ? (
                     <>
                         <textarea
+                            ref={promptRef}
                             className="ll2-oneshot-input"
                             value={prompt}
                             onChange={handlePromptChange}
@@ -502,6 +510,7 @@ export function LL2OneShot() {
                             <div className="ll2-oneshot-pricing" aria-label="本次生成的价格明细">
                                 <div className="ll2-price-grid">
                                     <button
+                                        ref={plusRef}
                                         type="button"
                                         className="ll2-chip ll2-chip-add"
                                         onClick={() => openLibrary()}
@@ -713,6 +722,7 @@ export function LL2OneShot() {
 
             <LL2AssetLibrary
                 open={libraryOpen}
+                anchor={libraryAnchor}
                 onClose={() => { setLibraryOpen(false); setMentionAnchor(null); }}
                 onQuote={insertMention}
             />

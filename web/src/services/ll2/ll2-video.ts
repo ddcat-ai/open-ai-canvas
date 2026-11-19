@@ -285,7 +285,7 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
 
 /** 连接自检：只查 /v1/models，不产生费用。 */
 export async function ll2CheckConnection(apiKey: string, baseUrl?: string, signal?: AbortSignal): Promise<{ ok: boolean; message: string }> {
-    const req: LL2VideoRequest = { apiKey, baseUrl, model: "MiniMax-H3", prompt: "", seconds: 1, resolution: "768P", signal };
+    const req: LL2VideoRequest = { apiKey, baseUrl, model: "MiniMax-H3", prompt: "", seconds: 4, resolution: "768P", signal };
     try {
         await ll2Fetch(`${originOf(req)}/v1/models`, { method: "GET", headers: authHeaders(req) }, req, "校验 Key");
         return { ok: true, message: "Key 有效" };

@@ -41,7 +41,7 @@ if (!API_KEY) {
 }
 
 const MODEL = (valueOf("model", "MiniMax-H3") || "MiniMax-H3").trim() as LL2ConnectedVideoModel;
-const SECONDS = Number(valueOf("seconds", "1")) || 1;
+const SECONDS = Math.max(4, Number(valueOf("seconds", "4")) || 4);
 const TIMEOUT_MS = Number(valueOf("timeout-ms", "480000")) || 480000;
 const POLL_MS = 5000;
 const CREATE_ONLY = flag("create-only");

@@ -28,6 +28,7 @@ export type LL2LibraryItem = {
     durationSeconds: number;
     createdAt: string;
     archived: boolean;
+    category: AssetCategory;
 };
 
 type LibraryAsset = Extract<Asset, { kind: "image" | "video" }>;
@@ -43,6 +44,7 @@ function toItem(asset: LibraryAsset): LL2LibraryItem {
         durationSeconds: asset.kind === "video" && asset.data.durationMs ? asset.data.durationMs / 1000 : 0,
         createdAt: asset.createdAt,
         archived: asset.status === "archived",
+        category: asset.category || "other",
     };
 }
 
