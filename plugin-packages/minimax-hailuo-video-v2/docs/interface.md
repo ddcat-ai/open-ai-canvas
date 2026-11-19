@@ -84,6 +84,10 @@
     "providers": [
       {
         "id": "minimax-video",
+        "videoReferences": {
+          "layout": "content",
+          "token": "参考图{n}"
+        },
         "label": "MiniMax Hailuo Video V2 / H3",
         "capabilities": [
           "video"

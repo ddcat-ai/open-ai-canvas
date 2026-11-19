@@ -133,6 +133,10 @@
           "type": "bearer",
           "field": "apiKey"
         },
+        "videoReferences": {
+          "layout": "content",
+          "token": "参考图{n}"
+        },
         "parameters": [
           {
             "name": "model",

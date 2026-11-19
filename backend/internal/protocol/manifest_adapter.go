@@ -69,6 +69,11 @@ func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (Reque
 	if err := validateManifestRequest(a.manifest.Validations, request); err != nil {
 		return RequestSpec{}, err
 	}
+	if request.Capability == "" || request.Capability == CapabilityVideo {
+		if limit, limited := a.manifest.Metadata.VideoReferences.ImageLimit(request.Model, request.Operation); limited && len(request.Images) > limit {
+			return RequestSpec{}, fmt.Errorf("视频协议 %s 的当前工作流和生成方式最多发送 %d 张图片，当前有 %d 张", a.manifest.Metadata.ID, limit, len(request.Images))
+		}
+	}
 	spec, err := buildManifestOperation(a.manifest.Create, a.manifest.Auth, request, "")
 	if err != nil {
 		return RequestSpec{}, err

@@ -144,6 +144,10 @@
           "service": "cv",
           "region": "cn-north-1"
         },
+        "videoReferences": {
+          "layout": "image-urls",
+          "token": "参考图{n}"
+        },
         "parameters": [
           {
             "name": "model",

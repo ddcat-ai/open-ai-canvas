@@ -44,7 +44,6 @@
 | `create.body` | `{"$merge":[{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"},"images":{"$omitEmpty":{"$map":{"from":{"$ref":"request.images"},"as":"media","in":{"$ref":"media.value"}}}},"videos":{"$omitEmpty":{"$map":{"from":{"$ref":"request.videos"},"as":"media","in":{"$ref":"media.value"}}}},"audios":{"$omitEmpty":{"$map":{"from":{"$ref":"request.audios"},"as":"media","in":{"$ref":"media.value"}}}},"duration":{"$omitEmpty":{"$ref":"request.duration"}},"aspect_ratio":{"$omitEmpty":{"$ref":"request.aspectRatio"}},"resolution":{"$omitEmpty":{"$ref":"request.resolution"}},"parameters":{"$omitEmpty":{"$ref":"request.providerOptions.seedance-videos-compatible.parameters"}}},{"$coalesce":[{"$ref":"request.providerOptions.seedance-videos-compatible.body"},{"$ref":"request.providerOptions.seedance-videos-compatible.extra_body"},{}]}]}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/videos/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -121,6 +120,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "images",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

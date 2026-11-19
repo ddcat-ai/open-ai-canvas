@@ -133,6 +133,10 @@ Agent Plan 专属接入：创建/查询/取消走 /api/plan/v3/contents/generati
           "type": "bearer",
           "field": "apiKey"
         },
+        "videoReferences": {
+          "layout": "content",
+          "token": "参考图{n}"
+        },
         "parameters": [
           {
             "name": "model",

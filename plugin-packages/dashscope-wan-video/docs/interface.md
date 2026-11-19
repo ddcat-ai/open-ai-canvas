@@ -61,7 +61,6 @@
 | `create.headers.X-DashScope-Async` | `"enable"` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/api/v1/tasks/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -143,6 +142,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "input-reference-images",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

@@ -50,7 +50,6 @@
 | `create.body.reference_images` | `{"$omitEmpty":{"$map":{"from":{"$filter":{"from":{"$ref":"request.images"},"as":"media","where":{"$in":[{"$ref":"media.role"},["reference_image","subject_reference","style_reference"]]}}},"as":"media","in":{"url":{"$ref":"media.value"}}}}}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/videos/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -125,6 +124,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "reference-only-images",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

@@ -309,6 +309,11 @@ func ValidateManifest(manifest Manifest) error {
 		if err := ValidateImageParameters(provider.ImageParameters); err != nil {
 			return fmt.Errorf("provider %q image parameters: %w", provider.ID, err)
 		}
+		if rule := provider.VideoReferences; rule != nil {
+			if !hasCapability(provider.Capabilities, CapabilityVideo) || !rule.valid() {
+				return fmt.Errorf("provider %q has an invalid videoReferences contract", provider.ID)
+			}
+		}
 		for _, parameter := range provider.ImageParameters {
 			if parameter.Binding == "" {
 				return fmt.Errorf("provider %q image parameter %s requires a binding", provider.ID, parameter.Name)
@@ -490,6 +495,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.Scopes = provider.Scopes
 	manifest.Metadata.Parameters = provider.Parameters
 	manifest.Metadata.ImageParameters = provider.ImageParameters
+	manifest.Metadata.VideoReferences = provider.VideoReferences
 	manifest.Metadata.Create = operationSummary(provider.Create)
 	manifest.Metadata.Agent = operationSummaryPtr(provider.Agent)
 	manifest.Metadata.Poll = operationSummaryPtr(provider.Poll)

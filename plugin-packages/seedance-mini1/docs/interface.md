@@ -99,6 +99,10 @@ zip -X -q ../seedance-mini1.yingce-plugin manifest.json README.md docs/interface
     "providers": [
       {
         "id": "seedance-mini1",
+        "videoReferences": {
+          "layout": "reference-images",
+          "token": "@Image{n}"
+        },
         "label": "SeedanceMINI1",
         "capabilities": [
           "video"

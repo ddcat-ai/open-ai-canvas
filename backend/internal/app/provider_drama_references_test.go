@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -35,6 +37,18 @@ func buildDramaReferenceSpec(t *testing.T, input canvasGenerationInput, request 
 		t.Fatal(err)
 	}
 	return spec
+}
+
+func compileDramaReferenceRequest(input canvasGenerationInput, request protocol.GenerationRequest, spec *protocol.RequestSpec, providerID string) error {
+	metadata := protocol.Metadata{ID: providerID}
+	if adapter, exists := loadOfficialFallbackRegistry().Resolve(providerID); exists {
+		metadata = adapter.Metadata()
+	}
+	plan, err := prepareDramaReferencePlan(input, request, metadata)
+	if err != nil {
+		return err
+	}
+	return plan.compile(request, spec, input.VideoCapability)
 }
 
 func TestProviderDramaReferenceOfficialPayloads(t *testing.T) {
@@ -95,11 +109,6 @@ func TestProviderDramaReferenceOfficialPayloads(t *testing.T) {
 			if err := compileDramaReferenceRequest(input, request, &spec, test.protocol); err != nil {
 				t.Fatal(err)
 			}
-			body := spec.Body.(map[string]any)
-			layout, err := dramaReferenceRequestLayout(body, spec.Files, test.protocol)
-			if err != nil {
-				t.Fatal(err)
-			}
 			prefix := firstNonEmpty(test.prefix, "参考图")
 			first, second := 1, 2
 			if test.shift {
@@ -109,14 +118,12 @@ func TestProviderDramaReferenceOfficialPayloads(t *testing.T) {
 			if test.protocol == "wenew-h3-video" {
 				want = "<Picture 1>：人物\n<Picture 2>：场景\n\n<Picture 1>走入<Picture 2>。"
 			}
-			if got := layout.promptBody[layout.promptKey]; got != want {
-				t.Fatalf("actual payload prompt = %q, want %q", got, want)
-			}
-			// 编译只能改正文；媒体、角色、时长、画幅与声音等字段原样保留。
-			layout.promptBody[layout.promptKey] = input.Prompt
+			originalText, _ := json.Marshal(input.Prompt)
+			compiledText, _ := json.Marshal(want)
+			wantBody := strings.ReplaceAll(string(before), string(originalText), string(compiledText))
 			after, _ := json.Marshal(spec.Body)
-			if string(before) != string(after) {
-				t.Fatalf("non-prompt payload changed: before=%s after=%s", before, after)
+			if wantBody == string(before) || string(after) != wantBody {
+				t.Fatalf("compiled payload = %s, want %s", after, wantBody)
 			}
 		})
 	}
@@ -145,6 +152,92 @@ func TestProviderDramaReferenceActualOrderAndMultiDigitReplacement(t *testing.T)
 	urls := body["image_urls"].([]any)
 	if urls[0] != images[1].URL || urls[1] != images[9].URL || urls[9] != images[0].URL {
 		t.Fatalf("unexpected actual image order: %v", urls)
+	}
+}
+
+func TestProviderDramaReferenceReportedWireRequests(t *testing.T) {
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	for _, test := range []struct {
+		protocol, model, prefix string
+		count                   int
+	}{
+		{"autodl-comfyui", "minimax_h3_zm_u30", "@图片", 5},
+		{"newapi", "seedance-2-5-flash-request-line-n", "参考图", 9},
+	} {
+		t.Run(test.protocol, func(t *testing.T) {
+			var images []providerMedia
+			var bindings []dramaReferenceBinding
+			var labels, tokens []string
+			for index := range test.count {
+				id := fmt.Sprintf("cast:asset-%d", index+1)
+				label := fmt.Sprintf("参考图%d", index+1)
+				image := providerMedia{ID: id, Name: label, MimeType: "image/png"}
+				if test.protocol == "autodl-comfyui" {
+					image.URL = fmt.Sprintf("https://media.example/%d.png", index+1)
+				} else {
+					image.DataURL = "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte(id))
+				}
+				images = append(images, image)
+				bindings = append(bindings, dramaReferenceBinding{label, id})
+				labels = append(labels, label)
+				tokens = append(tokens, fmt.Sprintf("%s%d", test.prefix, index+1))
+			}
+			input := dramaReferenceProviderInput(test.protocol, images, bindings...)
+			input.Config.Model = test.model
+			input.Prompt = strings.Join(labels, "、") + "。@参考图 2入画。"
+			wantPrompt := strings.Join(tokens, "、") + "。" + tokens[1] + "入画。"
+			creates := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				creates++
+				switch r.Method + " " + r.URL.Path {
+				case "POST /api/v1/comfyui/comfyui_workflow/minimax_h3_zm_u30":
+					var body map[string]any
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+					}
+					if body["prompt"] != wantPrompt {
+						t.Errorf("prompt = %q, want %q", body["prompt"], wantPrompt)
+					}
+					for index, image := range images {
+						if got := body[fmt.Sprintf("ref_image_%d", index)]; got != image.URL {
+							t.Errorf("slot %d = %v, want %s", index, got, image.URL)
+						}
+					}
+				case "POST /v1/videos":
+					if err := r.ParseMultipartForm(1 << 20); err != nil {
+						t.Error(err)
+						return
+					}
+					defer r.MultipartForm.RemoveAll()
+					files := r.MultipartForm.File["input_reference[]"]
+					if r.FormValue("prompt") != wantPrompt || len(files) != len(images) || len(r.MultipartForm.File) != 1 {
+						t.Errorf("multipart prompt=%q files=%d, want %q and %d files", r.FormValue("prompt"), len(files), wantPrompt, len(images))
+						return
+					}
+					for index, part := range files {
+						file, err := part.Open()
+						if err != nil {
+							t.Error(err)
+							return
+						}
+						data, err := io.ReadAll(file)
+						file.Close()
+						if err != nil || string(data) != images[index].ID {
+							t.Errorf("file %d = %q, %v", index, data, err)
+						}
+					}
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				http.Error(w, "wire captured", http.StatusBadRequest)
+			}))
+			defer server.Close()
+			input.Config.BaseURL = server.URL
+			_, err := runVideoTaskForTest(context.Background(), input)
+			if creates != 1 || err == nil || !strings.Contains(err.Error(), "wire captured") {
+				t.Fatalf("expected one create and its upstream error, got creates=%d err=%v", creates, err)
+			}
+		})
 	}
 }
 
@@ -247,8 +340,9 @@ func TestProviderDramaReferenceMissingOrUnknownLayoutRejectsBeforeCreate(t *test
 		{ID: "scene", URL: "https://media.example/scene.png"},
 	}, dramaReferenceBinding{"参考图1", "hero"}, dramaReferenceBinding{"参考图2", "scene"})
 	input.Config.BaseURL = server.URL
-	if _, err := runVideoTaskForTest(context.Background(), input); err == nil || !strings.Contains(err.Error(), "参考图2 未包含") {
-		t.Fatalf("official adapter silently dropping second image must fail: %v", err)
+	input.Metadata["videoEditOperation"] = "image_to_video"
+	if _, err := runVideoTaskForTest(context.Background(), input); err == nil || !strings.Contains(err.Error(), "最多发送 1 张") {
+		t.Fatalf("standard single-image mode must reject extra images: %v", err)
 	}
 	input.Config.InterfaceType = "seedance-mini1"
 	input.ReferenceImages = input.ReferenceImages[:1]
@@ -260,9 +354,9 @@ func TestProviderDramaReferenceMissingOrUnknownLayoutRejectsBeforeCreate(t *test
 	}
 	input.Config.InterfaceType = "custom-unknown"
 	input.Prompt = "参考图1起身。"
-	uploader, ok := loadOfficialFallbackRegistry().Resolve("coolhs-wan3-relay")
-	if !ok {
-		t.Fatal("WAN adapter unavailable")
+	uploader, err := protocol.LoadManifest([]byte(`{"apiVersion":"yingce.plugin/v2","id":"uploader","version":"1.0.0","name":"Upload test","contributes":{"providers":[{"id":"custom-unknown","label":"Upload","capabilities":["video"],"scopes":["canvas"],"upload":{"method":"POST","path":"/upload","kinds":["image"],"id":{"$ref":"response.id"}},"create":{"method":"POST","path":"/jobs"}}]}}`))
+	if err != nil {
+		t.Fatal(err)
 	}
 	if _, err := runProtocolAdapterTaskWithPolicy(context.Background(), input, uploader, fastVideoPollPolicy()); err == nil || !strings.Contains(err.Error(), "更换协议") || requests != 0 {
 		t.Fatalf("unknown numbering contract must fail before upload: requests=%d err=%v", requests, err)
@@ -480,5 +574,43 @@ func TestDramaReferenceSubmissionCarriesBindingsAndRejectsMissingImages(t *testi
 	}
 	if fake.byKind["video"] != before || !strings.Contains(detail.Segments[0].Request.Warning, reference.Label+"（"+reference.Name+"）") {
 		t.Fatalf("missing image was silently submitted: before=%d after=%d warning=%q", before, fake.byKind["video"], detail.Segments[0].Request.Warning)
+	}
+}
+
+func TestDramaReferencePreviewUsesWorkflowAndOperationContract(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	settings := DramaSettings{Models: fakeDramaModels}
+	settings.AspectRatio = "9:16"
+	video := dramaVideoFixture()
+	video.References.MaxImages = 9
+	video.Resolutions, video.DefaultResolution = []string{"768p竖"}, "768p竖"
+	setDramaVideoCapability(t, svc, fake, video)
+	var draft dramaSegmentDraft
+	draft.view.DurationMs = 5000
+	casts := map[string]model.DramaCast{}
+	for index := range 7 {
+		id := fmt.Sprintf("asset-%d", index+1)
+		casts[id] = model.DramaCast{ID: id, Kind: "character", Name: id, ImageStatus: model.DramaMediaReady, ImageResourceID: fake.resource("usr-drama", "image", "image/png")}
+		draft.view.Request.References = append(draft.view.Request.References, DramaSegmentReference{CastID: id, Name: id, Label: fmt.Sprintf("参考图%d", index+1)})
+	}
+	for _, test := range []struct {
+		provider, modelName, prompt, issue string
+		previous                           *model.DramaSegment
+		capacity                           int
+	}{
+		{"autodl-comfyui", "minimax_h3_zm_u30", "参考图7入画", "", nil, 9},
+		{"autodl-comfyui", "minimax_h3_z0902", "参考图7入画", "参考图7（asset-7）", nil, 6},
+		{"autodl-comfyui", "minimax_h3_lightx2v_no_pic", "参考图1入画", "minimax_h3_lightx2v_no_pic", nil, 0},
+		{"autodl-comfyui", "unknown-workflow", "参考图1入画", "unknown-workflow", nil, 0},
+		{"newapi", "video", "参考图7入画", "", nil, 9},
+		{"newapi", "video", "参考图1入画", "未附图", &model.DramaSegment{}, 0},
+	} {
+		if err := fake.db.Model(&model.ChannelModel{}).Where("id = ?", "drama-video").Updates(map[string]any{"protocol": test.provider, "provider_model_key": test.modelName}).Error; err != nil {
+			t.Fatal(err)
+		}
+		preview, _, _, err := svc.prepareDramaSegment(settings, draft, model.DramaSegment{VideoPrompt: test.prompt}, test.previous, casts)
+		if preview.ReferenceCapacity != test.capacity || (err == nil) != (test.issue == "") || err != nil && !strings.Contains(err.Error(), test.issue) {
+			t.Errorf("%s/%s capacity=%d err=%v, want %d, %q", test.provider, test.modelName, preview.ReferenceCapacity, err, test.capacity, test.issue)
+		}
 	}
 }

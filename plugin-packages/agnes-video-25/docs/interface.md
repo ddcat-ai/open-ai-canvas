@@ -55,7 +55,7 @@
 | `create.body.audios` | `{"$if":{"condition":{"$or":[{"$gt":[{"$len":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$in":[{"$ref":"media.role"},["reference_image","subject_reference","style_reference"]]}}}},0]},{"$gt":[{"$len":{"$ref":"request.videos"}},0]},{"$gt":[{"$len":{"$ref":"request.audios"}},0]}]},"then":{"$omitEmpty":{"$map":{"from":{"$sortByOrder":{"$ref":"request.audios"}},"as":"media","in":{"$ref":"media.value"}}}},"else":null}}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/agnesapi"` |
-| `poll.contentType` | `"application/json"` |
+| `poll.originPath` | `true` |
 | `poll.query.video_id` | `{"$ref":"taskId"}` |
 | `poll.query.model_name` | `{"$ref":"request.model"}` |
 
@@ -132,6 +132,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "images",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

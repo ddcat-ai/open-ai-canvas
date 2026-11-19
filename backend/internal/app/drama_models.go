@@ -340,7 +340,6 @@ func missingDramaCapabilities(models DramaModels) []string {
 type dramaVideoProfile struct {
 	Durations  production.DurationOptions
 	Operations []string
-	MaxImages  int
 	// MinImages 是模型要求的最少参考图数（含首帧）；剧情段发不出这么多张时预演就报出，不提交。
 	MinImages int
 	// MaxAudios / MaxAudioSeconds 是参考音频的张数与单段时长上限（秒，0 表示未声明），用于随段发送角色声音样本。
@@ -457,7 +456,7 @@ func (s *Service) dramaVideoProfile(choice DramaModelChoice) (dramaVideoProfile,
 	video := capability.Video
 	options := dramaDurationOptions(video.Duration)
 	// 不声明同步生成声音的模型也可以用：段视频没有对白与音效，由用户在选模型时自行取舍。
-	profile := dramaVideoProfile{Durations: options, Operations: video.Operations, MaxImages: video.References.MaxImages, MinImages: max(video.References.MinImages, 0), MaxAudios: max(video.References.MaxAudios, 0), MaxAudioSeconds: max(video.References.MaxAudioDuration, 0), GenerateAudio: video.GenerateAudio.Supported, PromptMaxChars: max(video.References.PromptMaxChars, 0), video: video}
+	profile := dramaVideoProfile{Durations: options, Operations: video.Operations, MinImages: max(video.References.MinImages, 0), MaxAudios: max(video.References.MaxAudios, 0), MaxAudioSeconds: max(video.References.MaxAudioDuration, 0), GenerateAudio: video.GenerateAudio.Supported, PromptMaxChars: max(video.References.PromptMaxChars, 0), video: video}
 	if profile.maxSeconds() <= 0 {
 		return profile, errors.New("未声明可生成时长，无法按剧情段切分")
 	}

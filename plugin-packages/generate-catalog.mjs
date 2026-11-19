@@ -32,6 +32,7 @@ const conditional = (condition, thenValue, elseValue = null) => ({ $if: { condit
 const nonZeroFloat = (value) => conditional(ne(toFloat(value), 0), toFloat(value));
 const first = (value) => ({ $first: value });
 const sorted = (value) => ({ $sortByOrder: value });
+const numberedImages = (layout) => ({ layout, token: "参考图{n}" });
 const mediaWithRoles = (path, roles) => filter(sorted(ref(path)), "media", { $in: [ref("media.role"), roles] });
 const firstMediaWithRoles = (path, roles) => first(mediaWithRoles(path, roles));
 const firstMediaFieldWithRoles = (path, roles, field) => first(map(mediaWithRoles(path, roles), "media", ref(`media.${field}`)));
@@ -336,6 +337,7 @@ const arkSeedanceResponse = {
 
 add({
   id: "volcengine-ark-seedance", providerId: "volcengine-ark-video", name: "火山方舟 Seedance 官方视频生成", vendor: "Volcengine", capability: "video",
+  videoReferences: numberedImages("content"),
   description: "火山方舟官方 Seedance 视频生成接口，使用普通 /api/v3 Contents Generations Tasks 和方舟推理 API Key；不是 Agent Plan 专用线路。",
   readmeIntro: "火山方舟官方声明式协议插件，面向普通 `/api/v3` Contents Generations Tasks 视频生成接口。使用普通方舟 API Key 和 Endpoint，可接入 Seedance 视频模型。",
 
@@ -350,6 +352,7 @@ add({
 
 add({
   id: "volcengine-ark-agent-plan-seedance", providerId: "volcengine-ark-agent-plan-video", name: "火山方舟 Seedance Agent Plan 视频接口", vendor: "Volcengine", capability: "video",
+  videoReferences: numberedImages("content"),
   description: "火山方舟 Agent Plan 专用 Seedance /api/plan/v3 视频生成接口，需要专用 API Key 和 AFP 额度；与普通 /api/v3 分开配置。",
   readmeIntro: "火山方舟 Agent Plan 专用声明式协议插件，使用 `/api/plan/v3` 视频生成接口。需要 Agent Plan 专用 API Key 和 AFP 额度，不能与普通 `/api/v3` 方舟接口混用。",
 
@@ -540,8 +543,12 @@ add({
   })
 });
 
+const openAIVideoImages = filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask"));
+const openAIVideoImageCount = len(openAIVideoImages);
 add({
-  id: "openai-videos", providerId: "newapi", name: "OpenAI Videos / Sora", vendor: "OpenAI", capability: "video",
+  id: "openai-videos", providerId: "newapi", name: "OpenAI Videos / Sora", vendor: "OpenAI", capability: "video", version: "2.1.0",
+  videoReferences: { ...numberedImages("multipart-references"), maxImagesByOperation: { text_to_video: 0, image_to_video: 1, reference_to_video: null } },
+  notes: "标准图生视频以单个 input_reference 文件发送。兼容网关的模型显式启用 reference_to_video 时支持多图，单图沿用 input_reference，多图按顺序发送所有 input_reference[] 文件。参考上限应按上游配置。",
   baseUrl: "https://api.openai.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: false,
   create: {
     method: "POST", path: "/v1/videos", contentType: "multipart/form-data",
@@ -550,7 +557,10 @@ add({
       size: omit(ref("request.aspectRatio")), resolution_name: omit(ref("request.resolution")),
       variants: omit(ref("request.providerOptions.newapi.variants"))
     },
-    files: [{ name: "input_reference", source: first(filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask"))), filename: "input-reference.png" }]
+    files: [
+      { name: "input_reference", source: conditional(eq(openAIVideoImageCount, 1), openAIVideoImages), filename: "input-reference.png" },
+      { name: "input_reference[]", source: conditional(gt(openAIVideoImageCount, 1), openAIVideoImages) }
+    ]
   },
   poll: { method: "GET", path: "/v1/videos/{{taskId}}" },
   cancel: { method: "DELETE", path: "/v1/videos/{{taskId}}" },
@@ -566,6 +576,7 @@ const newAPITaskMessage = coalesce(
 
 add({
   id: "newapi-media-task-v1", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
+  videoReferences: numberedImages("input-media"),
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   create: jsonCreate("/v1/videos", {
     model: ref("request.model"),
@@ -588,6 +599,7 @@ add({
 
 add({
   id: "newapi-video-generations-v1", providerId: "newapi-channel-2", name: "NewAPI Video Generations Channel 2", vendor: "NewAPI", capability: "video",
+  videoReferences: numberedImages("image-urls"),
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   create: jsonCreate("/v1/video/generations", {
     model: ref("request.model"), prompt: ref("request.prompt"), seconds: { $toString: ref("request.duration") },
@@ -611,6 +623,7 @@ add({
 
 add({
   id: "rolldek-wan-video", providerId: "rolldek-wan-video", name: "RollDek WAN 3.0 Video", vendor: "RollDek", capability: "video",
+  videoReferences: numberedImages("role-reference-images"),
   baseUrl: "https://rolldek.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   notes: "该协议严格对应 RollDek WAN 3.0 的 JSON /v1/videos 合同。RollDek 同时暴露的其他兼容创建入口不共享任务查询路径，不能与 NewAPI Video Generations Channel 2 混用。",
   create: jsonCreate("/v1/videos", {
@@ -634,6 +647,7 @@ add({
 
 add({
   id: "xai-video", providerId: "xai-video", name: "xAI Video", vendor: "xAI", capability: "video",
+  videoReferences: numberedImages("reference-only-images"),
   baseUrl: "https://api.x.ai", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
     { assert: { $lte: [len(filter(ref("request.images"), "media", { $in: [ref("media.role"), ["first_frame", "last_frame"]] })), 1] }, message: "xAI Video 最多支持一个帧输入，当前 profile 不支持尾帧" },
@@ -645,7 +659,9 @@ add({
     image: conditional(gt(len(mediaWithRoles("request.images", ["first_frame", ""])), 0), { url: firstMediaFieldWithRoles("request.images", ["first_frame", ""], "value") }),
     reference_images: omit(map(filter(ref("request.images"), "media", { $in: [ref("media.role"), ["reference_image", "subject_reference", "style_reference"]] }), "media", { url: ref("media.value") }))
   }),
-  poll: { method: "GET", path: "/v1/videos/{{taskId}}" }, response: asyncResponse("video")
+  poll: { method: "GET", path: "/v1/videos/{{taskId}}" }, response: asyncResponse("video", {
+    videos: coalesce(ref("response.video.url"), ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.url"), ref("response.data.video_url"), ref("response.output.url"))
+  })
 });
 
 add({
@@ -688,6 +704,7 @@ add({
 
 add({
   id: "volcengine-jimeng-video", providerId: "volcengine-jimeng-video", name: "火山即梦 官方视频生成", vendor: "Volcengine", capability: "video",
+  videoReferences: numberedImages("image-urls"),
   description: "火山即梦 Visual API 视频生成接口，使用 API Key 与 Secret Key；协议和凭证不同于火山方舟 Seedance。",
   readmeIntro: "火山即梦 Visual API 官方声明式视频协议插件，使用 API Key 与 Secret Key。它与火山方舟 Seedance 使用不同的接口协议和凭证。",
 
@@ -708,6 +725,7 @@ const agnesReferenceMode = { $or: [gt(len(agnesReferenceImages), 0), gt(len(ref(
 
 add({
   id: "agnes-video-25", providerId: "agnes-video", name: "Agnes Video 2.5 / 2.5 Flash", vendor: "Agnes AI", capability: "video",
+  videoReferences: numberedImages("images"),
   baseUrl: "https://apihub.agnes-ai.com/v1", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
     { assert: { $in: [ref("request.model"), ["agnes-video-2.5", "agnes-video-2.5-flash"]] }, message: "Agnes 2.5 插件仅支持 agnes-video-2.5 与 agnes-video-2.5-flash" },
@@ -977,6 +995,7 @@ const minimaxRatio = ref("request.output.aspectRatio");
 
 add({
   id: "dashscope-minimax-video", providerId: "dashscope-minimax-video", name: "百炼 MiniMax H3 Video", vendor: "Alibaba Cloud", capability: "video",
+  videoReferences: numberedImages("input-image-media"),
   baseUrl: "", auth: bearer, requiresPublicMediaUrls: true,
   params: [
     ["model", "string", true, "model", "固定为 MiniMax/MiniMax-H3。"],
@@ -1050,6 +1069,7 @@ const wan3MediaType = coalesce(
 
 add({
   id: "dashscope-wan3-video", providerId: "dashscope-wan3-video", name: "DashScope Wan 3.0 Video", vendor: "Alibaba Cloud", capability: "video",
+  version: "2.0.1", videoReferences: numberedImages("input-media"),
   baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
     { assert: { $in: [lower(ref("request.model")), ["wan3.0-video-prime", "wan3.0-video"]] }, message: "Wan 3.0 Video 仅支持 wan3.0-video-prime 或 wan3.0-video" },
@@ -1066,7 +1086,7 @@ add({
       ))
     },
     parameters: {
-      resolution: omit(ref("request.resolution")),
+      resolution: omit({ $upper: ref("request.resolution") }),
       ratio: omit(ref("request.aspectRatio")),
       duration: omit(ref("request.duration")),
       audio: coalesce(ref("request.providerOptions.dashscope-wan3-video.audio"), ref("request.generateAudio")),
@@ -1086,6 +1106,7 @@ add({
 
 add({
   id: "dashscope-wan-video", providerId: "dashscope-wan-video", name: "DashScope Wan Video", vendor: "Alibaba Cloud", capability: "video",
+  videoReferences: numberedImages("input-reference-images"),
   baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
     { assert: { $lte: [len(mediaWithRoles("request.images", ["first_frame"])), 1] }, message: "Wan 视频最多只能有一个首帧" },
@@ -1281,6 +1302,7 @@ for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, request
   }
   add({
     id, providerId: id, name, vendor, capability, baseUrl, auth, params, configuration,
+    videoReferences: id === "seedance-videos-compatible" ? numberedImages("images") : undefined,
     notes: `该协议的模型级字段变化快或依赖云资源配置。插件固定线协议入口和统一字段，完整厂商对象通过 providerOptions.${id} 的 parameters/input/extra_body 传入；${requestShape}。云签名型入口在未配置对应鉴权驱动时会明确失败，不会伪装成 Bearer 成功。`,
     create: jsonCreate(createPath, standard, operationExtra),
     poll: pollPath ? { method: "GET", path: pollPath } : undefined,
@@ -1335,6 +1357,7 @@ function manifestFor(spec) {
         requiresPublicMediaUrls: spec.requiresPublicMediaUrls === true,
         auth: spec.auth,
         ...(spec.imageParameters ? { imageParameters: spec.imageParameters } : {}),
+        ...(spec.videoReferences ? { videoReferences: spec.videoReferences } : {}),
         parameters: parameters(spec.params),
         ...(spec.validations ? { validations: spec.validations } : {}),
         create: spec.create,

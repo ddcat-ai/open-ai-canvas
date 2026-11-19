@@ -341,7 +341,7 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 			}
 			profile = DefaultModelCapabilityConfigForModel(taskInput.Config.InterfaceType, taskInput.Config.Model)
 		}
-		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", taskInput.Config.InterfaceType, taskInput.Config.Model, profile)
+		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", taskInput.Config.InterfaceType, taskInput.Config.Model, profile, s.protocolRegistry())
 		if normalizeErr != nil || normalized == nil || normalized.Video == nil {
 			return BadAuthRequest("当前视频模型能力参数无效")
 		}
@@ -378,7 +378,7 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	if err != nil || profile == nil || profile.Video == nil {
 		return BadAuthRequest("当前视频模型尚未配置能力参数")
 	}
-	normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), profile)
+	normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), profile, s.protocolRegistry())
 	if normalizeErr != nil || normalized == nil || normalized.Video == nil {
 		return BadAuthRequest("当前视频模型能力参数无效")
 	}
@@ -472,7 +472,18 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if err := validateModelPromptLength("视频", input.Prompt, profile.References.PromptMaxChars); err != nil {
 		return err
 	}
-	if len(input.ReferenceImages) > profile.References.MaxImages || len(input.ReferenceVideos) > profile.References.MaxVideos || len(input.ReferenceAudios) > profile.References.MaxAudios {
+	operation := metadataString(input.Metadata, "videoEditOperation")
+	if operation == "" {
+		if len(input.ReferenceImages) > 0 {
+			operation = "image_to_video"
+		} else {
+			operation = profile.DefaultOperation
+		}
+	}
+	if capacity := profile.maxImagesFor(operation); len(input.ReferenceImages) > capacity {
+		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest(fmt.Sprintf("当前视频模型在 %s 模式最多发送 %d 张图片，当前有 %d 张", operation, capacity, len(input.ReferenceImages))))
+	}
+	if len(input.ReferenceVideos) > profile.References.MaxVideos || len(input.ReferenceAudios) > profile.References.MaxAudios {
 		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest("参考素材数量超过当前模型限制"))
 	}
 	if model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) && len(input.ReferenceAudios) > 0 && len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
@@ -514,14 +525,6 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	}
 	if len(profile.Resolutions) > 0 && !isAutomaticVideoResolution(input.Config.VQuality) && videoResolutionNameRequest(profile, input.Config.VQuality) == "" {
 		return newModelCapabilityArgumentError("quality", "unsupported_value", BadAuthRequest("输出分辨率不在当前模型支持范围内"))
-	}
-	operation := metadataString(input.Metadata, "videoEditOperation")
-	if operation == "" {
-		if len(input.ReferenceImages) > 0 {
-			operation = "image_to_video"
-		} else {
-			operation = profile.DefaultOperation
-		}
 	}
 	if !containsCapabilityString(profile.Operations, operation) {
 		return newModelCapabilityArgumentError("logicalModelId", "unsupported_value", BadAuthRequest("当前视频模型不支持该生成模式"))

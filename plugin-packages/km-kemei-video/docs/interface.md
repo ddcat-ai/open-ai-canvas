@@ -76,6 +76,10 @@
     "providers": [
       {
         "id": "km-kemei-video",
+        "videoReferences": {
+          "layout": "role-images",
+          "token": "参考图{n}"
+        },
         "label": "KM 可美视频",
         "capabilities": [
           "video"

@@ -98,6 +98,9 @@ type ParameterSupport struct {
 }
 
 type VideoCapabilityConfig struct {
+	providerID        string
+	providerModel     string
+	referenceContract *protocolcontract.VideoReferenceContract
 	References        VideoReferenceConfig   `json:"references"`
 	Duration          VideoDurationConfig    `json:"duration"`
 	DurationSupported *bool                  `json:"durationSupported,omitempty"`
@@ -113,6 +116,14 @@ type VideoCapabilityConfig struct {
 	// Processing 只用于 kind=processing 的视频处理 provider（如画质增强），
 	// 生成类模型保持 nil。
 	Processing *VideoProcessingConfig `json:"processing,omitempty"`
+}
+
+func (video *VideoCapabilityConfig) maxImagesFor(operation string) int {
+	capacity := video.References.MaxImages
+	if limit, limited := video.referenceContract.ImageLimit(video.providerModel, operation); limited {
+		return min(capacity, limit)
+	}
+	return capacity
 }
 
 const (
@@ -302,7 +313,14 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 			return nil, err
 		}
 	}
-	value := &ModelCapabilityConfig{Version: 1, MediaTransport: transport, Video: video}
+	resolvedVideo := *video
+	resolvedVideo.providerID, resolvedVideo.providerModel = protocol, modelName
+	if len(registries) > 0 && registries[0] != nil {
+		if adapter, ok := registries[0].Resolve(protocol); ok {
+			resolvedVideo.referenceContract = adapter.Metadata().VideoReferences
+		}
+	}
+	value := &ModelCapabilityConfig{Version: 1, MediaTransport: transport, Video: &resolvedVideo}
 	if err := validateVideoCapabilityConfig(value.Video); err != nil {
 		return nil, err
 	}

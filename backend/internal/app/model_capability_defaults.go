@@ -229,8 +229,8 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		if model.ChannelInterfaceType(protocol) == model.ChannelInterfaceNewAPIChannel1 {
 			video.Resolutions = []string{"480p", "720p", "1080p"}
 		}
-	case model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceXAIVideo:
-		video.GenerateAudio = VideoBooleanConfig{Supported: false, Default: false}
+	case model.ChannelInterfaceNewAPIVideo:
+		video.References.MaxImages = 1
 	case model.ChannelInterfaceType("dashscope-wan3-video"):
 		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
 	case model.ChannelInterfaceNovitaVideo:

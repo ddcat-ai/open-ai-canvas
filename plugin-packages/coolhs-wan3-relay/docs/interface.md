@@ -103,6 +103,9 @@
     "providers": [
       {
         "id": "coolhs-wan3-relay",
+        "videoReferences": {
+          "layout": "media-tokens"
+        },
         "label": "WAN 3.0 拼车中转",
         "capabilities": [
           "video"

@@ -52,9 +52,10 @@
 | `create.body.parameters.prompt_extend` | `{"$coalesce":[{"$ref":"request.providerOptions.dashscope-wan3-video.prompt_extend"},true]}` |
 | `create.body.parameters.watermark` | `{"$ref":"request.watermark"}` |
 | `create.headers.X-DashScope-Async` | `"enable"` |
+| `create.originPath` | `true` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/api/v1/tasks/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
+| `poll.originPath` | `true` |
 
 ## Provider 扩展键
 
@@ -136,6 +137,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "input-media",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

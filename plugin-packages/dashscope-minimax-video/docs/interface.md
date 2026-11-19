@@ -47,9 +47,10 @@
 | `create.body.parameters.duration` | `{"$ref":"request.output.duration"}` |
 | `create.body.parameters.watermark` | `{"$coalesce":[{"$ref":"request.output.watermark"},false]}` |
 | `create.headers.X-DashScope-Async` | `"enable"` |
+| `create.originPath` | `true` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/api/v1/tasks/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
+| `poll.originPath` | `true` |
 
 ## Provider 扩展键
 
@@ -132,6 +133,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "input-image-media",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

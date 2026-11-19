@@ -51,7 +51,6 @@
 | `create.body.parameters.prompt_extend` | `{"$coalesce":[{"$ref":"request.providerOptions.newapi-channel-1.prompt_extend"},false]}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/videos/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -126,6 +125,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "input-media",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

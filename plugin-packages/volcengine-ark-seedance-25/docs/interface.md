@@ -129,6 +129,10 @@
     "providers": [
       {
         "id": "volcengine-ark-seedance-25",
+        "videoReferences": {
+          "layout": "content",
+          "token": "参考图{n}"
+        },
         "label": "火山方舟 Seedance 2.5 官方视频生成",
         "capabilities": [
           "video"

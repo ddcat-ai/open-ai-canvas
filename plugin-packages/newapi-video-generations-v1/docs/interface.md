@@ -52,7 +52,6 @@
 | `create.body.audio_urls` | `{"$omitEmpty":{"$map":{"from":{"$sortByOrder":{"$ref":"request.audios"}},"as":"media","in":{"$ref":"media.value"}}}}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/video/generations/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -127,6 +126,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "image-urls",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -164,7 +165,8 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		}
 		return request, nil, nil, fmt.Errorf("所选模型不支持本段所需的 %s", request.Operation)
 	}
-	capacity := profile.MaxImages
+	request.ModelMaxImages = profile.video.maxImagesFor(request.Operation)
+	capacity := request.ModelMaxImages
 	if previous != nil {
 		capacity--
 	}
@@ -176,7 +178,7 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 	if settingLimited {
 		capacity = settings.ReferenceLimit
 	}
-	request.ReferenceCapacity, request.ModelMaxImages = max(capacity, 0), profile.MaxImages
+	request.ReferenceCapacity = max(capacity, 0)
 	if request.Operation == "text_to_video" && len(draft.view.Request.References) > 0 {
 		request.Warning = "所选视频模型不支持参考图生视频，本段按文生视频生成，人物、道具与场景只按文字设定"
 	}
@@ -246,6 +248,16 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 		}
 		request.References = append(request.References, reference)
 	}
+	if slices.ContainsFunc(request.References, func(ref DramaSegmentReference) bool { return ref.Sent }) {
+		if err := profile.video.referenceContract.CheckNumbering(profile.video.providerID, profile.video.providerModel); err != nil {
+			request.ReferenceCapacity = 0
+			for index := range request.References {
+				request.References[index].Sent = false
+			}
+			request.Warning = err.Error()
+			return request, nil, nil, err
+		}
+	}
 	audios, err := s.dramaSegmentAudioReferences(&request, profile, draft.shots, casts, len(refs) > 0, segment.AudioCastIDsJSON)
 	if err != nil {
 		return request, nil, nil, err
@@ -264,7 +276,7 @@ func (s *Service) prepareDramaSegment(settings DramaSettings, draft dramaSegment
 			notes = append(notes, fmt.Sprintf("本段引用 %d 个设定，按每段最多 %d 张参考图发送，其余按文字设定；可在生成依据里手动调整", len(draft.view.Request.References), settings.ReferenceLimit))
 		}
 		if len(overflow) > 0 {
-			notes = append(notes, fmt.Sprintf("超出视频模型参考图上限（%d 张，含首帧），按文字设定生成：%s", profile.MaxImages, strings.Join(overflow, "、")))
+			notes = append(notes, fmt.Sprintf("超出视频模型参考图上限（%d 张，含首帧），按文字设定生成：%s", request.ModelMaxImages, strings.Join(overflow, "、")))
 		}
 		request.Warning = strings.Join(notes, "；")
 	}

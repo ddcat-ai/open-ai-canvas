@@ -74,6 +74,10 @@
     "providers": [
       {
         "id": "maxforai-videos",
+        "videoReferences": {
+          "layout": "images",
+          "token": "@image{n}"
+        },
         "label": "MaxForAI Videos",
         "capabilities": [
           "video"
@@ -472,6 +476,10 @@
       },
       {
         "id": "maxforai-video-generations",
+        "videoReferences": {
+          "layout": "images",
+          "token": "@image{n}"
+        },
         "label": "MaxForAI Video Generations",
         "capabilities": [
           "video"
