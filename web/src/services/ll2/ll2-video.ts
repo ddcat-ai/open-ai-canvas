@@ -35,6 +35,8 @@ export type LL2VideoRequest = {
     seconds: number;
     resolution: string;
     ratio?: string;
+    /** 仅 H3：提示词优化（prompt_optimizer）。 */
+    promptOptimizer?: boolean;
     signal?: AbortSignal;
     /** 参考素材媒体项（图片 / 视频）。只有 MiniMax-H3 的 content[] 契约已核准。 */
     media?: LL2MediaContent[];
@@ -208,6 +210,7 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
         resolution: req.resolution || (req.model === "MiniMax-H3" ? "768P" : "480P"),
         ratio: req.ratio || "16:9",
         media,
+        promptOptimizer: req.promptOptimizer === true,
     });
     const { seconds, resolution, ratio } = args;
     const protocol = adapter.protocol;

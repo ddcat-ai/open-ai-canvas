@@ -34,6 +34,7 @@ export function LL2GeneratePanel() {
     const [resolution, setResolution] = useState("768P");
     const [seconds, setSeconds] = useState(5);
     const [ratio, setRatio] = useState("16:9");
+    const [promptOptimizer, setPromptOptimizer] = useState(false);
     const [prompt, setPrompt] = useState("");
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState<LL2VideoProgress | null>(null);
@@ -79,7 +80,7 @@ export function LL2GeneratePanel() {
         abortRef.current = controller;
         try {
             const result = await ll2GenerateVideo(
-                { apiKey, model, prompt, seconds, resolution, ratio, signal: controller.signal },
+                { apiKey, model, prompt, seconds, resolution, ratio, signal: controller.signal, promptOptimizer },
                 setProgress,
             );
             const film: LL2Film = {
@@ -183,6 +184,18 @@ export function LL2GeneratePanel() {
                             </select>
                         </label>
                     </div>
+
+                    {model === "MiniMax-H3" ? (
+                        <label className="ll2-control ll2-control-check">
+                            <input
+                                type="checkbox"
+                                checked={promptOptimizer}
+                                disabled={running}
+                                onChange={(event) => setPromptOptimizer(event.target.checked)}
+                            />
+                            <span>提示词优化（H3）</span>
+                        </label>
+                    ) : null}
 
                     <div className="ll2-generate-prompt">
                         <textarea

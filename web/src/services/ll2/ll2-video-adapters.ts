@@ -27,6 +27,8 @@ export type LL2AdapterArgs = {
     ratio: string;
     /** H3 content[] 里的参考素材项；由 ll2-media.ts 按官方契约构造，本层不改写。 */
     media?: LL2MediaContent[];
+    /** 仅 H3：让网关先把提示词按 MiniMax 官方格式整理一遍（prompt_optimizer）。 */
+    promptOptimizer?: boolean;
 };
 
 export type LL2QueriedTask = {
@@ -93,6 +95,8 @@ const h3Adapter: LL2VideoAdapter = {
         resolution: "768P",
         duration: args.seconds,
         ratio: args.ratio,
+        // 网关缺省 false；只在用户勾选时显式传 true。
+        ...(args.promptOptimizer ? { prompt_optimizer: true } : {}),
     }),
     taskIdOf: (payload) =>
         ll2TextOf(payload, "task_id", "id", "request_id") ||

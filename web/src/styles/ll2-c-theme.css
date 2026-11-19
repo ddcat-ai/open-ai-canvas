@@ -153,6 +153,47 @@ html.dark .ll2-oneshot .ll2-chip {
     border: 0;
     background: rgba(242, 242, 245, 0.07);
 }
+
+html.dark .ll2-option-card {
+    border-color: rgba(242, 242, 245, 0.14);
+    background: rgba(242, 242, 245, 0.04);
+}
+
+html.dark .ll2-option-card:hover {
+    border-color: rgba(139, 92, 246, 0.55);
+}
+
+html.dark .ll2-option-card:has(input:checked) {
+    border-color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.14);
+}
+
+html.dark .ll2-option-box {
+    border-color: rgba(242, 242, 245, 0.28);
+}
+
+html.dark .ll2-option-card:has(input:disabled):hover {
+    border-color: rgba(242, 242, 245, 0.14);
+}
+
+html.dark .ll2-select.is-chip {
+    background: rgba(242, 242, 245, 0.07);
+}
+
+html.dark .ll2-select-menu {
+    border-color: rgba(242, 242, 245, 0.14);
+    background: #1b1c22;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+html.dark .ll2-select-item:hover {
+    background: rgba(242, 242, 245, 0.08);
+}
+
+html.dark .ll2-select-item.is-selected {
+    background: rgba(139, 92, 246, 0.18);
+    color: #b18cff;
+}
 html.dark .ll2-key-panel { box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5); }
 html.dark .ll2-canvas-back { box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55); }
 

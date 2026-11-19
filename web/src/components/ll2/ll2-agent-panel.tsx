@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { nanoid } from "nanoid";
 
 import { LL2_MODELS } from "@/lib/ll2-models";
+import { LL2Select } from "@/components/ll2/ll2-select";
 import {
     ll2CurrentCanvasId,
     ll2PromptUrl,
@@ -482,13 +483,13 @@ export function LL2AgentPanel() {
                     disabled={running}
                 />
                 <div className="ll2-agent-compose-bar">
-                    <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="选一个写得顺手的" title="换一个写法，价格档位也不同">
-                        {LL2_TEXT_MODELS.map((item) => (
-                            <option key={item.id} value={item.id}>
-                                {item.name} · 输入 ¥{item.tokenInput ?? 0}/1M
-                            </option>
-                        ))}
-                    </select>
+                    <LL2Select
+                        value={model}
+                        onChange={(nextValue) => setModel(nextValue)}
+                        ariaLabel="选一个写得顺手的"
+                        title="换一个写法"
+                        options={LL2_TEXT_MODELS.map((item) => ({ value: item.id, label: item.name }))}
+                    />
                     <button type="button" className="ll2-agent-send" onClick={() => void send(draft)} disabled={running || !draft.trim()}>
                         {running ? <LoaderCircle className="size-3.5 is-spinning" /> : <ArrowUp className="size-3.5" />} 发送
                     </button>

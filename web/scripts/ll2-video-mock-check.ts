@@ -16,6 +16,7 @@ let openaiCreateBody = null;
 let hdCreateBody = null;
 let hdDownloadAuth = "";
 let hdQueryCount = 0;
+let h3CreateBody = null;
 
 const server = Bun.serve({
     port: 0,
@@ -50,6 +51,7 @@ const server = Bun.serve({
         }
         if (req.method === "POST" && url.pathname === "/v2/video_generation") {
             if (scenario === "http401") return Response.json({ message: "invalid token" }, { status: 401 });
+            h3CreateBody = await req.json();
             createCount += 1;
             idempotencyKeys.push(req.headers.get("Idempotency-Key") || "(无)");
             return Response.json({ task_id: `mock-${createCount}` });
@@ -193,6 +195,19 @@ const mediaOk = Array.isArray(openaiCreateBody?.image_urls) && openaiCreateBody.
 out.push(`⑧ 带素材的通用模型：${mediaOk ? "PASS" : "FAIL"} image_urls=${JSON.stringify(openaiCreateBody?.image_urls)}`);
 if (!mediaOk) {
     console.error("⑧ 失败：非 H3 模型没有把素材放进 image_urls");
+    process.exitCode = 1;
+}
+
+// ⑨ H3 提示词优化：只在勾选时显式传 prompt_optimizer=true
+scenario = "success"; createCount = 0; queryCount = 0; h3CreateBody = null;
+await ll2GenerateVideo(common({ promptOptimizer: true }));
+const optOn = h3CreateBody?.prompt_optimizer === true;
+h3CreateBody = null; createCount = 0; queryCount = 0;
+await ll2GenerateVideo(common());
+const optOff = !h3CreateBody || !("prompt_optimizer" in h3CreateBody);
+out.push(`⑨ H3 提示词优化：${optOn && optOff ? "PASS" : "FAIL"} 勾选=${optOn}，不勾不传=${optOff}`);
+if (!optOn || !optOff) {
+    console.error("⑨ 失败：prompt_optimizer 只在勾选时传 true");
     process.exitCode = 1;
 }
 

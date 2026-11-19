@@ -1,4 +1,4 @@
-import { ArrowRight, AtSign, Check, Download, Film, LoaderCircle, Plus, Sparkles, Square, UploadCloud, X } from "lucide-react";
+import { ArrowRight, AtSign, Check, Download, Film, LoaderCircle, Plus, Sparkles, Square, UploadCloud, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -34,6 +34,7 @@ import { ll2UpscaleEstimate, ll2UpscaleTargetLabel, ll2UpscaleTargetsFor, type L
 import { useLL2AgentStore } from "@/stores/use-ll2-agent-store";
 import { ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
 import { LL2SaveAssetDialog, type LL2SaveAssetDraft } from "@/components/ll2/ll2-save-asset-dialog";
+import { LL2Select } from "@/components/ll2/ll2-select";
 
 type Tab = "video" | "text" | "chat";
 
@@ -86,6 +87,7 @@ export function LL2OneShot() {
     const [result, setResult] = useState<{ film: LL2Film; label: string; basis: string; previewUrl?: string } | null>(null);
     /** 生成后是否顺便超分：默认不勾，客户不勾就不多花钱。 */
     const [upscale, setUpscale] = useState<LL2UpscaleTarget | "">("");
+    const [promptOptimizer, setPromptOptimizer] = useState(settings.promptOptimizer);
     const [hdProgress, setHdProgress] = useState<LL2HdProgress | null>(null);
     const [downloadMessage, setDownloadMessage] = useState("");
     /** media 只放「拖进来的那一张图」；@ 引用的素材从提示词里的 @[名称] 解析。 */
@@ -350,7 +352,7 @@ export function LL2OneShot() {
 
             phase = "generate";
             const outcome = await ll2GenerateVideo(
-                { apiKey, model, prompt: finalPrompt, seconds, resolution, ratio, signal: controller.signal, media: build.items },
+                { apiKey, model, prompt: finalPrompt, seconds, resolution, ratio, signal: controller.signal, media: build.items, promptOptimizer },
                 setProgress,
             );
             const film = ll2AddFilm({
@@ -511,25 +513,34 @@ export function LL2OneShot() {
                                     </button>
                                     <div className="ll2-price-cell">
                                         <span>模型</span>
-                                        <select value={model} onChange={(event) => {
-                                            const next = event.target.value as LL2ConnectedVideoModel;
-                                            setModel(next);
-                                            const nextTiers = ll2TiersFor(next);
-                                            setResolution(nextTiers[0]?.resolution || "768P");
-                                            syncSettings({ videoModel: next, resolution: nextTiers[0]?.resolution || "768P" });
-                                        }} aria-label="选择视频模型">
-                                            {LL2_CONNECTED_VIDEO_MODELS.map((id) => <option key={id} value={id}>{id}</option>)}
-                                        </select>
+                                        <LL2Select
+                                            variant="plain"
+                                            value={model}
+                                            ariaLabel="选择视频模型"
+                                            options={LL2_CONNECTED_VIDEO_MODELS.map((id) => ({ value: id, label: id }))}
+                                            onChange={(nextValue) => {
+                                                const next = nextValue as LL2ConnectedVideoModel;
+                                                setModel(next);
+                                                const nextTiers = ll2TiersFor(next);
+                                                setResolution(nextTiers[0]?.resolution || "768P");
+                                                syncSettings({ videoModel: next, resolution: nextTiers[0]?.resolution || "768P" });
+                                            }}
+                                        />
                                         <small>{spec?.resolutions || "—"}</small>
                                     </div>
                                     <div className="ll2-price-cell">
                                         <span>分辨率</span>
-                                        <select value={resolution} onChange={(event) => {
-                                            setResolution(event.target.value);
-                                            syncSettings({ resolution: event.target.value });
-                                        }} aria-label="清晰度" disabled={tiers.length < 2}>
-                                            {tiers.map((tier) => <option key={tier.resolution} value={tier.resolution}>{tier.label}</option>)}
-                                        </select>
+                                        <LL2Select
+                                            variant="plain"
+                                            value={resolution}
+                                            ariaLabel="清晰度"
+                                            disabled={tiers.length < 2}
+                                            options={tiers.map((tier) => ({ value: tier.resolution, label: tier.label }))}
+                                            onChange={(nextValue) => {
+                                                setResolution(nextValue);
+                                                syncSettings({ resolution: nextValue });
+                                            }}
+                                        />
                                         <small>{spec?.duration || "按成片秒数"}</small>
                                     </div>
                                     <div className="ll2-price-cell">
@@ -539,42 +550,68 @@ export function LL2OneShot() {
                                     </div>
                                     <div className="ll2-price-cell">
                                         <span>时长</span>
-                                        <select value={seconds} onChange={(event) => {
-                                            const value = Number(event.target.value);
-                                            setSeconds(value);
-                                            syncSettings({ seconds: value });
-                                        }} aria-label="时长">
-                                            {Array.from({ length: range.max - range.min + 1 }, (_, index) => range.min + index).map((value) => <option key={value} value={value}>{value} 秒</option>)}
-                                        </select>
+                                        <LL2Select
+                                            variant="plain"
+                                            value={String(seconds)}
+                                            ariaLabel="时长"
+                                            options={Array.from({ length: range.max - range.min + 1 }, (_, index) => range.min + index).map((value) => ({ value: String(value), label: `${value} 秒` }))}
+                                            onChange={(nextValue) => {
+                                                const value = Number(nextValue);
+                                                setSeconds(value);
+                                                syncSettings({ seconds: value });
+                                            }}
+                                        />
                                         <small>想要几秒就选几秒</small>
                                     </div>
                                 </div>
-                                <div className="ll2-upscale-row">
-                                    <label>
+                                <div className="ll2-options">
+                                    <label className="ll2-option-card">
                                         <input
                                             type="checkbox"
                                             checked={Boolean(upscale)}
                                             disabled={running || !upscaleTargets.length}
                                             onChange={(event) => setUpscale(event.target.checked ? (upscaleTargets[0]?.id || "") : "")}
                                         />
-                                        <span>生成后顺便超分</span>
+                                        <span className="ll2-option-icon"><Sparkles className="size-4" aria-hidden /></span>
+                                        <span className="ll2-option-text">
+                                            <strong>生成后顺便超分</strong>
+                                            <small>{upscaleTargets.length ? "不勾不多花钱" : "已是最高档"}</small>
+                                        </span>
+                                        <span className="ll2-option-box"><Check className="size-3" aria-hidden /></span>
                                     </label>
-                                    {upscale ? (
-                                        <>
-                                            <select
-                                                value={upscale}
+                                    {model === "MiniMax-H3" ? (
+                                        <label className="ll2-option-card">
+                                            <input
+                                                type="checkbox"
+                                                checked={promptOptimizer}
                                                 disabled={running}
-                                                onChange={(event) => setUpscale(event.target.value as LL2UpscaleTarget)}
-                                                aria-label="超分到"
-                                            >
-                                                {upscaleTargets.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
-                                            </select>
-                                            <small>{hdEstimate ? `+ ${hdEstimate.label} · ${hdEstimate.basis}` : ""}</small>
-                                        </>
-                                    ) : (
-                                        <small>{upscaleTargets.length ? "不勾就只生成，不多花钱" : "这个清晰度已经最高，不能再超"}</small>
-                                    )}
+                                                onChange={(event) => {
+                                                    setPromptOptimizer(event.target.checked);
+                                                    syncSettings({ promptOptimizer: event.target.checked });
+                                                }}
+                                            />
+                                            <span className="ll2-option-icon"><Wand2 className="size-4" aria-hidden /></span>
+                                            <span className="ll2-option-text">
+                                                <strong>提示词优化</strong>
+                                                <small>H3 先按官方格式整理一遍</small>
+                                            </span>
+                                            <span className="ll2-option-box"><Check className="size-3" aria-hidden /></span>
+                                        </label>
+                                    ) : null}
                                 </div>
+                                {upscale ? (
+                                    <div className="ll2-upscale-target">
+                                        <span>超分到</span>
+                                        <LL2Select
+                                            value={upscale}
+                                            disabled={running}
+                                            ariaLabel="超分到"
+                                            options={upscaleTargets.map((target) => ({ value: target.id, label: target.label }))}
+                                            onChange={(nextValue) => setUpscale(nextValue as LL2UpscaleTarget)}
+                                        />
+                                        <small>{hdEstimate ? `+ ${hdEstimate.label} · ${hdEstimate.basis}` : ""}</small>
+                                    </div>
+                                ) : null}
                                 <div className="ll2-price-total">
                                     <div className="ll2-price-total-text">
                                         <span>本次一共</span>

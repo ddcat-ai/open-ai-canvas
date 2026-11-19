@@ -6,7 +6,7 @@
  */
 
 import { LL2_DEFAULT_TEXT_MODEL, LL2_TEXT_MODELS } from "@/services/ll2/ll2-text";
-import { ll2PreciseCNY, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
+import { LL2_CONNECTED_VIDEO_MODELS, ll2PreciseCNY, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 
 // ── 灵感广场 ────────────────────────────────────────────────────────────────
@@ -147,6 +147,8 @@ export type LL2WorkspaceSettings = {
     seconds: number;
     ratio: string;
     textModel: string;
+    /** 仅 H3 支持：让网关先把提示词整理成官方格式再生成。默认关。 */
+    promptOptimizer: boolean;
 };
 
 export const LL2_SETTINGS_KEY = "ll2:workspace_settings:v1";
@@ -157,6 +159,7 @@ export const LL2_DEFAULT_SETTINGS: LL2WorkspaceSettings = {
     seconds: 5,
     ratio: "16:9",
     textModel: LL2_DEFAULT_TEXT_MODEL,
+    promptOptimizer: false,
 };
 
 export function ll2ReadSettings(): LL2WorkspaceSettings {
@@ -165,12 +168,17 @@ export function ll2ReadSettings(): LL2WorkspaceSettings {
         if (!raw) return { ...LL2_DEFAULT_SETTINGS };
         const value = JSON.parse(raw) as Partial<LL2WorkspaceSettings>;
         const textModel = typeof value.textModel === "string" && LL2_TEXT_MODELS.some((model) => model.id === value.textModel) ? value.textModel : LL2_DEFAULT_TEXT_MODEL;
+        const connectedModels = LL2_CONNECTED_VIDEO_MODELS as readonly string[];
         return {
-            videoModel: value.videoModel === "wan3.0-video" ? "wan3.0-video" : "MiniMax-H3",
+            // 14 个视频模型都能被记住，不再只认 H3 / wan3。
+            videoModel: typeof value.videoModel === "string" && connectedModels.includes(value.videoModel)
+                ? (value.videoModel as LL2ConnectedVideoModel)
+                : LL2_DEFAULT_SETTINGS.videoModel,
             resolution: typeof value.resolution === "string" && value.resolution ? value.resolution : LL2_DEFAULT_SETTINGS.resolution,
             seconds: Number.isFinite(value.seconds) ? Math.min(30, Math.max(1, Number(value.seconds))) : LL2_DEFAULT_SETTINGS.seconds,
             ratio: typeof value.ratio === "string" && value.ratio ? value.ratio : LL2_DEFAULT_SETTINGS.ratio,
             textModel,
+            promptOptimizer: value.promptOptimizer === true,
         };
     } catch {
         return { ...LL2_DEFAULT_SETTINGS };
