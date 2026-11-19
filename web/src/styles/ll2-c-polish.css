@@ -628,9 +628,12 @@
     transform: rotate(180deg);
 }
 
-.ll2-select.is-up .ll2-select-menu {
+.ll2-select-menu.is-portal {
+    position: fixed;
     top: auto;
-    bottom: calc(100% + 6px);
+    bottom: auto;
+    left: auto;
+    z-index: 1200;
 }
 
 .ll2-select-menu {
@@ -640,24 +643,33 @@
     z-index: 60;
     display: flex;
     min-width: 190px;
-    max-height: 280px;
+    /* 6 行 × 32px + 上下 6px 内边距：正好整行，不会露出半行。 */
+    max-height: 204px;
     overflow-y: auto;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
     padding: 6px;
     border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
     border-radius: 12px;
     background: var(--ll2-t-ffffff, #ffffff);
     box-shadow: 0 18px 44px rgba(15, 15, 30, 0.16);
     animation: ll2-select-in 0.14s ease-out;
+    /* 滚动时按整行吸附，停下来永远是完整选项；边缘再淡出一点，避免硬切。 */
+    scroll-snap-type: y mandatory;
+    scroll-padding-block: 6px;
+    overscroll-behavior: contain;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
 }
 
 .ll2-select-item {
     display: flex;
+    flex-shrink: 0;
+    height: 32px;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 7px 9px;
+    padding: 0 9px;
     border: 0;
     border-radius: 8px;
     background: transparent;
@@ -667,6 +679,8 @@
     text-align: left;
     cursor: pointer;
     white-space: nowrap;
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
 }
 
 .ll2-select-item:hover {

@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type LL2SelectOption = { value: string; label: string };
 
@@ -20,14 +21,17 @@ type Props = {
  */
 export function LL2Select({ value, options, onChange, ariaLabel, disabled, title, variant = "chip" }: Props) {
     const [open, setOpen] = useState(false);
-    const [placement, setPlacement] = useState<"down" | "up">("down");
+    const [menuBox, setMenuBox] = useState<{ left: number; top: number; width: number } | null>(null);
     const rootRef = useRef<HTMLDivElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => {
         if (!open) return;
         const onPointerDown = (event: MouseEvent) => {
-            if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+            const target = event.target as Node;
+            if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+            setOpen(false);
         };
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") setOpen(false);
@@ -42,22 +46,41 @@ export function LL2Select({ value, options, onChange, ariaLabel, disabled, title
 
     const current = options.find((option) => option.value === value);
 
-    /** 弹层默认向下；靠近视口底部（比如右侧聊天改稿的输入条）就向上翻，避免被裁掉。 */
+    /** 弹层挂到 body 上（portal）：卡片的 overflow:hidden 不会再把它裁掉一半。 */
+    const measure = () => {
+        const rect = triggerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const width = Math.max(190, rect.width);
+        const menuHeight = Math.min(204, options.length * 32 + 12);
+        const spaceBelow = window.innerHeight - rect.bottom - 10;
+        const flipUp = spaceBelow < menuHeight && rect.top > menuHeight;
+        const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+        const top = flipUp ? Math.max(8, rect.top - menuHeight - 6) : rect.bottom + 6;
+        setMenuBox({ left, top, width });
+    };
+
     const toggle = () => {
         if (open) {
             setOpen(false);
             return;
         }
-        const rect = triggerRef.current?.getBoundingClientRect();
-        const estimated = Math.min(280, options.length * 32 + 12);
-        const spaceBelow = rect ? window.innerHeight - rect.bottom : estimated + 24;
-        const spaceAbove = rect ? rect.top : estimated + 24;
-        setPlacement(spaceBelow < estimated + 16 && spaceAbove > spaceBelow ? "up" : "down");
+        measure();
         setOpen(true);
     };
 
+    useLayoutEffect(() => {
+        if (!open) return;
+        const onViewportChange = () => measure();
+        window.addEventListener("resize", onViewportChange);
+        window.addEventListener("scroll", onViewportChange, true);
+        return () => {
+            window.removeEventListener("resize", onViewportChange);
+            window.removeEventListener("scroll", onViewportChange, true);
+        };
+    }, [open]);
+
     return (
-        <div className={`ll2-select is-${variant}${open ? " is-open" : ""}${placement === "up" ? " is-up" : ""}`} ref={rootRef}>
+        <div className={`ll2-select is-${variant}${open ? " is-open" : ""}`} ref={rootRef}>
             <button
                 ref={triggerRef}
                 type="button"
@@ -72,29 +95,38 @@ export function LL2Select({ value, options, onChange, ariaLabel, disabled, title
                 <span className="ll2-select-value">{current?.label || "请选择"}</span>
                 <ChevronDown className="ll2-select-arrow" aria-hidden />
             </button>
-            {open ? (
-                <span className="ll2-select-menu" role="listbox" aria-label={ariaLabel}>
-                    {options.map((option) => {
-                        const selected = option.value === value;
-                        return (
-                            <button
-                                key={option.value}
-                                type="button"
-                                role="option"
-                                aria-selected={selected}
-                                className={`ll2-select-item${selected ? " is-selected" : ""}`}
-                                onClick={() => {
-                                    onChange(option.value);
-                                    setOpen(false);
-                                }}
-                            >
-                                <span>{option.label}</span>
-                                {selected ? <Check className="size-3.5" aria-hidden /> : null}
-                            </button>
-                        );
-                    })}
-                </span>
-            ) : null}
+            {open && menuBox
+                ? createPortal(
+                      <div
+                          ref={menuRef}
+                          className="ll2-select-menu is-portal"
+                          role="listbox"
+                          aria-label={ariaLabel}
+                          style={{ left: menuBox.left, top: menuBox.top, width: menuBox.width }}
+                      >
+                          {options.map((option) => {
+                              const selected = option.value === value;
+                              return (
+                                  <button
+                                      key={option.value}
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selected}
+                                      className={`ll2-select-item${selected ? " is-selected" : ""}`}
+                                      onClick={() => {
+                                          onChange(option.value);
+                                          setOpen(false);
+                                      }}
+                                  >
+                                      <span>{option.label}</span>
+                                      {selected ? <Check className="size-3.5" aria-hidden /> : null}
+                                  </button>
+                              );
+                          })}
+                      </div>,
+                      document.body,
+                  )
+                : null}
         </div>
     );
 }
