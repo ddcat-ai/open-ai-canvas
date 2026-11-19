@@ -1070,3 +1070,20 @@ html:not(.dark) .app-product-overlays .creation-control-popover-surface {
 .creation-home .creation-chat-mention-container {
     min-height: 0 !important;
 }
+
+.creation-chat-composer.is-reference-drag-over {
+    outline: 2px dashed var(--user-ink);
+    outline-offset: 3px;
+}
+
+.creation-reference-drop-hint {
+    position: absolute;
+    top: -32px;
+    left: 16px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--creation-surface, var(--background));
+    color: var(--creation-text);
+    font-size: 12px;
+    pointer-events: none;
+}
