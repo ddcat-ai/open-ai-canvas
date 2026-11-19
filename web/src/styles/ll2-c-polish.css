@@ -225,6 +225,75 @@
     color: var(--ll2-t-6b6b6b, #6b6b76);
 }
 
+/* ── 无限画布列表：删除 / 清理空白画布 ─────────────────────────────── */
+.ll2-wb-section-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ll2-wb-clear-empty {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border: 1px solid rgba(212, 67, 67, 0.28);
+    border-radius: 999px;
+    background: transparent;
+    color: #c13c3c;
+    font-family: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.ll2-wb-clear-empty:hover {
+    background: rgba(212, 67, 67, 0.08);
+}
+
+.ll2-wb-project-cell {
+    position: relative;
+    min-width: 0;
+}
+
+.ll2-wb-project-cell .ll2-wb-project {
+    width: 100%;
+}
+
+.ll2-wb-project-delete {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ll2-t-9a9a9a, #9a9aa2);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.ll2-wb-project-cell:hover .ll2-wb-project-delete,
+.ll2-wb-project-delete:focus-visible {
+    opacity: 1;
+}
+
+.ll2-wb-project-delete:hover {
+    background: rgba(212, 67, 67, 0.12);
+    color: #d44343;
+}
+
+.ll2-wb-modal-text {
+    margin: 0;
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    font-size: 13px;
+    line-height: 1.65;
+}
+
 /* ── 首页 @ 素材库：贴输入框的紧凑菜单（和画布 @ 菜单同一种体验） ──── */
 .ll2-ref-menu {
     position: fixed;
