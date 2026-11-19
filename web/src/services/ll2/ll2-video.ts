@@ -189,8 +189,12 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     const prompt = String(req.prompt || "").trim();
     if (!prompt) throw new Error("先写一句话，说清你想要的画面");
     const media = req.media || [];
-    // 2026-11-19 用户口径：什么模型都能带素材。
-    // H3 走 content[]；其余模型走统一网关的 image_urls / video_urls / audio_urls（见适配器）。
+    // 2026-11-19 真机反馈：非 H3 模型把 image_urls 发到 /v1 后，网关没有真的按首帧出片
+    // （用户引用了图，成片却是按文字生成的，还扣了钱）。其它模型的素材协议还没逐个接通前，
+    // 先明确挡住，避免再花冤枉钱。H3 的 content[] 是已实测的契约。
+    if (media.length > 0 && req.model !== "MiniMax-H3") {
+        throw new Error("这个模型带图/视频出片的协议还没接通：现在只有 MiniMax-H3 会真的按参考图出片。先换 H3，或把参考素材去掉再生成。");
+    }
     // 2026-11-19 真网关实测：图片的 data URI 能出片；视频 / 音频必须是自己能下载的公网 HTTPS 地址，
     // 本机文件转 Base64 会被 400 打回（content[n].video_url.url must be a public HTTPS URL）。
     // 这里做最后一道防御，避免界面漏检时又把注定失败的请求发出去。

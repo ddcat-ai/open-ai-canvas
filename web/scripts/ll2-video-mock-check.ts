@@ -189,13 +189,18 @@ if (!hdOk) {
     process.exitCode = 1;
 }
 
-// ⑧ 非 H3 模型带素材：统一网关用 image_urls / video_urls / audio_urls
+// ⑧ 非 H3 模型带素材：明确拦截，不能把 image_urls 发出去白扣费
 scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
-await ll2GenerateVideo(common({ model: "wan3.0-video", resolution: "720P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
-const mediaOk = Array.isArray(openaiCreateBody?.image_urls) && openaiCreateBody.image_urls[0] === "data:image/png;base64,AAAA";
-out.push(`⑧ 带素材的通用模型：${mediaOk ? "PASS" : "FAIL"} image_urls=${JSON.stringify(openaiCreateBody?.image_urls)}`);
+let mediaBlocked = "";
+try {
+    await ll2GenerateVideo(common({ model: "wan3.0-video", resolution: "720P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
+} catch (error) {
+    mediaBlocked = error instanceof Error ? error.message : String(error);
+}
+const mediaOk = mediaBlocked.includes("协议还没接通") && !openaiCreateBody;
+out.push(`⑧ 非 H3 带素材：${mediaOk ? "PASS" : "FAIL"} ${mediaBlocked.slice(0, 40)}`);
 if (!mediaOk) {
-    console.error("⑧ 失败：非 H3 模型没有把素材放进 image_urls");
+    console.error("⑧ 失败：非 H3 模型带素材没有被拦住");
     process.exitCode = 1;
 }
 

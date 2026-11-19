@@ -136,13 +136,15 @@ check("MOV 识别为视频", ll2MediaKindOf({ name: "a.mov", type: "video/quickt
 check("首页不开放音频入口", ll2HomeMediaKindOf({ name: "a.mp3", type: "audio/mpeg" }), null);
 check("未知类型不收", ll2MediaKindOf({ name: "a.exe", type: "application/octet-stream" }), null);
 
-console.log("\n⑥ 非 H3 模型也能带素材：图片进 image_urls，不再强制切 H3");
+console.log("\n⑥ 非 H3 模型带素材：服务层明确拦截（素材协议未接通）");
 
-const wan3Payload = LL2_VIDEO_ADAPTERS["wan3.0-video"].buildCreatePayload(
-    LL2_VIDEO_ADAPTERS["wan3.0-video"].normalize({ model: "wan3.0-video", prompt: "一只猫", seconds: 5, resolution: "480P", ratio: "16:9", media: oneImage.items }),
-);
-check("带素材 + wan3 走 image_urls", Array.isArray(wan3Payload.image_urls) && wan3Payload.image_urls.length, 1);
-check("prompt 保持纯文本", typeof wan3Payload.prompt, "string");
+let blocked = "";
+try {
+    await ll2GenerateVideo({ apiKey: "mock-key", model: "wan3.0-video", prompt: "一只猫", seconds: 5, resolution: "480P", media: oneImage.items });
+} catch (error) {
+    blocked = error instanceof Error ? error.message : String(error);
+}
+check("带素材 + wan3 被拦住", blocked.includes("协议还没接通"), true);
 
 console.log(`\n${failed === 0 ? "全部通过" : `${failed} 项失败`}：${passed} pass / ${failed} fail`);
 if (failed) process.exit(1);
