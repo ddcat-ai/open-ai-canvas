@@ -1,0 +1,295 @@
+/**
+ * LL2 视频直连生成客户端 —— 协议细节集中在 ll2-video-adapters.ts。
+ *
+ * 2026-11-17 21:24 分工：
+ *   渠道已接入官网全部 21 个模型；
+ *   但**只有 MiniMax-H3 与 wan3.0-video 完成协议适配**，能走这条
+ *   「创建 → 轮询 → 按 usage 精确计费 → 出片」链路。
+ *   其余 19 个模型只是接上渠道，走影策通用协议，客户端不替它们编造端点与计费。
+ *
+ * Key 只从调用方传入（浏览器 localStorage），不写业务库、不经影策后端中转。
+ * 端点取证见 ll2-video-adapters.ts 头部注释。
+ */
+
+import {
+    ll2ActualCNY,
+    ll2PreciseCNY,
+    type LL2ConnectedVideoModel,
+} from "@/lib/ll2-models";
+import {
+    ll2TextOf,
+    ll2VideoAdapter,
+    type LL2QueriedTask,
+    type LL2VideoProtocol,
+} from "@/services/ll2/ll2-video-adapters";
+import type { LL2MediaContent } from "@/services/ll2/ll2-media";
+
+export type { LL2VideoProtocol } from "@/services/ll2/ll2-video-adapters";
+
+export const LL2_GATEWAY_ORIGIN = "https://api.ll2.cn";
+
+export type LL2VideoRequest = {
+    apiKey: string;
+    model: LL2ConnectedVideoModel;
+    prompt: string;
+    seconds: number;
+    resolution: string;
+    ratio?: string;
+    signal?: AbortSignal;
+    /** 参考素材媒体项（图片 / 视频）。只有 MiniMax-H3 的 content[] 契约已核准。 */
+    media?: LL2MediaContent[];
+    /** 仅用于本地自测 / 将来切换环境，默认 LL2 官方网关。 */
+    baseUrl?: string;
+    idempotencyKey?: string;
+    pollIntervalMs?: number;
+    maxPolls?: number;
+};
+
+export type LL2VideoProgress = {
+    stage: "created" | "polling";
+    status: string;
+    elapsedMs: number;
+    pollCount: number;
+    taskId: string;
+};
+
+export type LL2VideoResult = {
+    taskId: string;
+    protocol: LL2VideoProtocol;
+    url: string;
+    model: LL2ConnectedVideoModel;
+    prompt: string;
+    seconds: number;
+    chargedSeconds: number;
+    resolution: string;
+    ratio: string;
+    estimateCNY: number;
+    actualCNY: number;
+    actualLabel: string;
+    actualBasis: string;
+    createdAt: number;
+};
+
+type Json = Record<string, any>;
+
+function originOf(req: LL2VideoRequest) {
+    return String(req.baseUrl || LL2_GATEWAY_ORIGIN).replace(/\/+$/, "");
+}
+
+function httpErrorMessage(status: number, payload: unknown, label: string) {
+    const detail = ll2TextOf(payload, "message", "msg") || ll2TextOf((payload as Json)?.error, "message", "msg") || "";
+    if (status === 401) return "LL2 Key 无效或已过期，请在「连接 LL2」里重新填入";
+    if (status === 403) return "这个 Key 没有调用该模型的权限，请到 LL2 控制台确认";
+    if (status === 429) return "LL2 账户触发限流，请稍后再试";
+    // new-api 网关刚创建完任务时，查询可能短暂返回 task_not_exist，属于同步延迟而非失败。
+    if (/task_not_exist/i.test(detail)) return "任务还在同步中";
+    // 2026-11-19 实测：503 也可能是「这个 Key 的分组没挂该模型渠道」，
+    // 不是 LL2 挂了。必须说清楚，否则用户会一直以为平台故障。
+    if (/model_not_found|无可用渠道|no available channel/i.test(detail)) {
+        return "这个模型在你的 LL2 Key 所在分组里没有可用渠道：到 LL2 控制台给该分组开通这个模型，或者换一个已开通的模型";
+    }
+    if (status === 400) return detail ? `请求参数不被接受：${detail}` : "请求参数不被接受，请检查时长、清晰度与比例";
+    if (status >= 500) return `LL2 服务暂时不可用（HTTP ${status}），请稍后重试`;
+    return `${label}失败（HTTP ${status}）${detail ? `：${detail}` : ""}`;
+}
+
+async function ll2Fetch(url: string, init: RequestInit, req: LL2VideoRequest, label: string): Promise<Json> {
+    let response: Response;
+    try {
+        response = await fetch(url, { ...init, signal: req.signal });
+    } catch (error) {
+        if (req.signal?.aborted) throw error;
+        throw new Error("连不上 LL2，请检查网络或稍后重试");
+    }
+    const raw = await response.text().catch(() => "");
+    let payload: Json = {};
+    try {
+        payload = raw ? (JSON.parse(raw) as Json) : {};
+    } catch {
+        payload = {};
+    }
+    if (!response.ok) throw new Error(httpErrorMessage(response.status, payload, label));
+    return payload;
+}
+
+function authHeaders(req: LL2VideoRequest, extra: Record<string, string> = {}) {
+    return {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${String(req.apiKey || "").trim()}`,
+        ...extra,
+    };
+}
+
+function newIdempotencyKey() {
+    try {
+        return `ll2-${crypto.randomUUID()}`;
+    } catch {
+        return `ll2-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+}
+
+// ── 通用状态与错误 ────────────────────────────────────────────────────────
+
+function statusKind(status: string): "pending" | "succeeded" | "failed" {
+    const value = status.trim().toLowerCase();
+    if (["succeeded", "success", "completed", "complete", "done"].includes(value)) return "succeeded";
+    if (["failed", "failure", "fail", "cancelled", "canceled", "error"].includes(value)) return "failed";
+    return "pending";
+}
+
+const TASK_ERROR_LABELS: Record<string, string> = {
+    input_download_failed: "参考素材下载失败",
+    input_security_violation: "参考素材地址不符合安全策略",
+    input_too_large: "参考素材超过大小限制",
+    input_probe_failed: "参考素材无法识别",
+    input_format_unsupported: "参考素材格式不支持",
+    input_duration_out_of_range: "参考视频或音频时长超出范围",
+    input_dimensions_out_of_range: "画面尺寸超出范围",
+    input_aspect_ratio_mismatch: "首尾帧比例不一致",
+    input_transcode_failed: "素材标准化失败",
+    content_policy_violation: "内容审核未通过（已扣费用会全额退回）",
+    content_review_required: "内容需要人工复核，任务已终止（已扣费用会全额退回）",
+    content_moderation_failed: "审核服务未返回结果（已扣费用会全额退回）",
+    fail_to_fetch_task: "服务繁忙，任务未能开始（已预扣会全额退回）",
+    task_not_exist: "任务还在同步中",
+};
+
+function taskErrorMessage(code: string, message: string) {
+    if (code === "task_not_exist") return "任务还在同步中，请稍后重试";
+    const label = TASK_ERROR_LABELS[code];
+    if (label) return message ? `${label}：${message}` : label;
+    return message || (code ? `生成失败（${code}）` : "生成失败，未返回具体原因");
+}
+
+function sleep(ms: number, signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        if (!signal) return;
+        if (signal.aborted) {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+            return;
+        }
+        signal.addEventListener("abort", () => {
+            clearTimeout(timer);
+            reject(new DOMException("Aborted", "AbortError"));
+        }, { once: true });
+    });
+}
+
+/**
+ * 完整生成：创建 → 轮询 → 出片。返回公开 mp4 直链与按 usage 换算的实付。
+ * 结果直链上游只保证 ≥24h，调用方应提示用户尽快下载保存。
+ */
+export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progress: LL2VideoProgress) => void): Promise<LL2VideoResult> {
+    const key = String(req.apiKey || "").trim();
+    if (!key) throw new Error("还没填 LL2 Key，填一次就能用，不用注册账号");
+    const prompt = String(req.prompt || "").trim();
+    if (!prompt) throw new Error("先写一句话，说清你想要的画面");
+    const media = req.media || [];
+    // wan3.0-video 走 /v1 统一网关，官方只核准了它的纯文本字段；
+    // 参考素材字段没有契约，宁可明确挡住，也不编一个 payload 让客户白扣一次费用。
+    if (media.length > 0 && req.model !== "MiniMax-H3") {
+        throw new Error("带图片或视频参考时请选 MiniMax-H3；其它模型目前按纯文字出片");
+    }
+    // 2026-11-19 真网关实测：图片的 data URI 能出片；视频 / 音频必须是自己能下载的公网 HTTPS 地址，
+    // 本机文件转 Base64 会被 400 打回（content[n].video_url.url must be a public HTTPS URL）。
+    // 这里做最后一道防御，避免界面漏检时又把注定失败的请求发出去。
+    for (const item of media) {
+        const url = item.video_url?.url || item.audio_url?.url || "";
+        if (url && !/^https:\/\//i.test(url)) {
+            throw new Error("参考视频 / 音频要用公网 HTTPS 地址；本机文件传不上去，换成图片做首帧或首尾帧可以直接出片");
+        }
+    }
+
+    // 适配表决定端点、payload、查询解析与参数合法范围；客户端主流程不含模型特判。
+    const adapter = ll2VideoAdapter(req.model);
+    const args = adapter.normalize({
+        model: req.model,
+        prompt,
+        seconds: req.seconds,
+        resolution: req.resolution || (req.model === "MiniMax-H3" ? "768P" : "480P"),
+        ratio: req.ratio || "16:9",
+        media,
+    });
+    const { seconds, resolution, ratio } = args;
+    const protocol = adapter.protocol;
+    const startedAt = Date.now();
+    const interval = Math.max(1000, req.pollIntervalMs ?? 5000);
+    const maxPolls = Math.max(1, req.maxPolls ?? 120);
+    const estimate = ll2PreciseCNY(req.model, seconds, resolution);
+
+    const created = await ll2Fetch(
+        `${originOf(req)}${adapter.createPath}`,
+        {
+            method: "POST",
+            headers: authHeaders(req, { "Idempotency-Key": req.idempotencyKey || newIdempotencyKey() }),
+            body: JSON.stringify(adapter.buildCreatePayload(args)),
+        },
+        req,
+        `创建${adapter.label}任务`,
+    );
+    const taskId = adapter.taskIdOf(created);
+    if (!taskId) throw new Error("LL2 已受理请求但没有返回任务号，请稍后重试");
+
+    onProgress?.({ stage: "created", status: "queued", elapsedMs: Date.now() - startedAt, pollCount: 0, taskId });
+
+    for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
+        await sleep(interval, req.signal);
+        let queried: LL2QueriedTask;
+        try {
+            const payload = await ll2Fetch(
+                `${originOf(req)}${adapter.queryPath(taskId)}`,
+                { method: "GET", headers: authHeaders(req) },
+                req,
+                `查询${adapter.label}任务`,
+            );
+            queried = adapter.parseQuery(payload);
+        } catch (error) {
+            // 网关刚创建完偶尔会短暂返回 task_not_exist；这不算失败，继续轮询。
+            if (error instanceof Error && error.message.includes("任务还在同步中")) {
+                onProgress?.({ stage: "polling", status: "queued", elapsedMs: Date.now() - startedAt, pollCount: attempt, taskId });
+                continue;
+            }
+            throw error;
+        }
+        const { status, url, chargedSeconds, errorCode, errorMessage } = queried;
+        const kind = statusKind(status);
+        onProgress?.({ stage: "polling", status, elapsedMs: Date.now() - startedAt, pollCount: attempt, taskId });
+
+        if (kind === "failed") throw new Error(taskErrorMessage(errorCode, errorMessage));
+        if (kind === "succeeded") {
+            if (!url || !/^https?:\/\//i.test(url)) throw new Error("任务已完成，但 LL2 没有返回可播放的视频地址");
+            const billedSeconds = chargedSeconds > 0 ? chargedSeconds : seconds;
+            const actual = ll2ActualCNY(req.model, billedSeconds, resolution);
+            return {
+                taskId,
+                protocol,
+                url,
+                model: req.model,
+                prompt,
+                seconds,
+                chargedSeconds: billedSeconds,
+                resolution,
+                ratio,
+                estimateCNY: estimate.amount,
+                actualCNY: actual.amount,
+                actualLabel: actual.label,
+                actualBasis: actual.basis,
+                createdAt: Date.now(),
+            };
+        }
+    }
+    throw new Error("生成超时，请到 LL2 控制台查看任务状态，或稍后重试");
+}
+
+/** 连接自检：只查 /v1/models，不产生费用。 */
+export async function ll2CheckConnection(apiKey: string, baseUrl?: string, signal?: AbortSignal): Promise<{ ok: boolean; message: string }> {
+    const req: LL2VideoRequest = { apiKey, baseUrl, model: "MiniMax-H3", prompt: "", seconds: 1, resolution: "768P", signal };
+    try {
+        await ll2Fetch(`${originOf(req)}/v1/models`, { method: "GET", headers: authHeaders(req) }, req, "校验 Key");
+        return { ok: true, message: "Key 有效" };
+    } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : "校验失败" };
+    }
+}

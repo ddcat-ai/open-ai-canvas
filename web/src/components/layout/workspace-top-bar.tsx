@@ -1,34 +1,20 @@
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Images, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { currentLocale } from "@/i18n";
 
-import { TopbarFeedbackButton } from "@/components/feedback/topbar-feedback-button";
-import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
-import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
 import { WorkspaceTopBarExtensionSlot } from "@/components/layout/workspace-top-bar-extension";
-import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
-import { LanguageMenu } from "@/components/layout/language-menu";
-import { useThemeStore } from "@/stores/use-theme-store";
-import { useUserStore } from "@/stores/use-user-store";
-import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { useWalletBalance } from "@/hooks/use-wallet-balance";
-import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { workspacePageTitleKey } from "@/lib/workspace-page-title";
 
+const BRAND = "DMC";
+
+// C 端顶栏只做两件事：标明当前在哪、提供账户入口。
+// 语言切换、反馈、积分钱包、系统公告、主题开关都从顶栏撤下，避免把运营后台感带进创作台。
 export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen: boolean; onToggleSidebar: () => void }) {
-    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const { t } = useTranslation();
-    const theme = useThemeStore((state) => state.theme);
-    const setTheme = useThemeStore((state) => state.setTheme);
-    const user = useUserStore((state) => state.user);
-    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const { pathname } = useLocation();
     const sectionKey = workspacePageTitleKey(pathname);
-    const pageTitle = sectionKey ? t(sectionKey) : brandName;
-    const balance = availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString(currentLocale(), { maximumFractionDigits: 2 });
+    const pageTitle = sectionKey ? t(sectionKey) : t("ll2.nav.create", { defaultValue: "创作" });
 
     return (
         <header className="app-workspace-topbar">
@@ -37,24 +23,21 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
             </button>
             <nav className="app-workspace-topbar-breadcrumb" aria-label={t("shell.breadcrumb")}>
                 <Link to="/" className="font-medium text-foreground/65 transition-colors hover:text-foreground">
-                    {brandName}
+                    {BRAND}
                 </Link>
                 <span aria-hidden="true">/</span>
                 <span className="truncate font-medium text-foreground">{pageTitle}</span>
             </nav>
             <WorkspaceTopBarExtensionSlot />
             <div className="app-workspace-topbar-actions">
-                <LanguageMenu />
-                {user ? <TopbarFeedbackButton /> : null}
-                {creditsEnabled ? (
-                    <button type="button" className="app-workspace-topbar-credit-pill" aria-label={t("shell.openWallet", { balance })} onClick={() => openWorkspaceWallet()}>
-                        <WorkspaceCreditGiftMark />
-                        <span>{t("shell.credits")}</span>
-                        <strong>{balance}</strong>
-                    </button>
-                ) : null}
-                {user ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-topbar-icon-button" autoOpen /> : null}
-                <AnimatedThemeToggler className="app-workspace-topbar-icon-button" theme={theme} onThemeChange={setTheme} aria-label={t("shell.toggleTheme")} />
+                {/* 窄窗（<1024px）侧栏默认收起，资产入口必须常驻在顶栏，
+                    否则用户要先点开菜单才找得到刚做好的本机素材库。宽窗由侧栏承担，这里隐藏。 */}
+                <Link to="/assets" className="ll2-topbar-assets" title="打开本机素材库">
+                    <Images className="size-3.5" aria-hidden /> 资产
+                </Link>
+                <Link to="/models" className="ll2-topbar-price" title="查看 21 个模型的单价与每次调用价格">
+                    模型与价格
+                </Link>
                 <WorkspaceAccountMenu />
             </div>
         </header>

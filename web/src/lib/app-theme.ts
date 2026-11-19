@@ -411,8 +411,11 @@ export function getAntThemeConfig(dark: boolean, skinID: unknown = "classic"): T
  * 管理后台使用更高密度的控件节奏；只在 AdminShell 内挂载，避免改变创作端的视觉契约。
  */
 /** 用户端与后台共享业务控件，但使用独立的产品尺寸和柔和表面。 */
-export function getWorkspaceAntThemeConfig(): ThemeConfig {
+export function getWorkspaceAntThemeConfig(dark = false): ThemeConfig {
     return {
+        // 工作台内层 ConfigProvider 会盖住 AppProviders 的外层主题，这里必须自己带暗色算法，
+        // 否则填 Key / 设置页里的 antd 输入框、下拉、浮层在黑夜模式下仍是白底。
+        algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         // 控件尺度与 globals.css 的 --user-control-height / --user-radius-button 保持同值：
         // 34px 常规、28px 紧凑、8px 圆角；按钮、输入框、选择器在同一工具栏里等高对齐。
         token: {
@@ -425,6 +428,19 @@ export function getWorkspaceAntThemeConfig(): ThemeConfig {
             // antd 默认 Back 曲线会越界（Checkbox 勾选、Badge 弹出像回弹），工作台统一不越界。
             motionEaseOutBack: "cubic-bezier(0.16, 1, 0.3, 1)",
             motionEaseInBack: "cubic-bezier(0.7, 0, 0.84, 0)",
+            // 浮层挂在 body，取不到工作台元素上的 --user-* 变量，暗色下给一组实底。
+            ...(dark
+                ? {
+                      colorBgElevated: "#202128",
+                      colorBgContainer: "#191a20",
+                      colorText: "rgba(242, 242, 245, 0.92)",
+                      colorTextSecondary: "rgba(242, 242, 245, 0.62)",
+                      colorBorder: "rgba(242, 242, 245, 0.18)",
+                      colorBorderSecondary: "rgba(242, 242, 245, 0.1)",
+                      colorPrimary: "#8b5cf6",
+                      colorLink: "#b18cff",
+                  }
+                : {}),
         },
         components: {
             // 用户工作台与根主题、后台共用同一套按钮规范（docs/ui-design-system.md §3.0），这里只收紧高度。

@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from "react-router";
 import { lazyAdminPage } from "@/pages/admin/admin-page-loader";
 
-import { AuthDialogHost } from "@/components/auth/auth-dialog-host";
+// DMC C 端不挂载登录弹窗宿主：产品没有登录界面。
 import { RequireAuth } from "@/components/auth/require-auth";
 import { RequireSkillAdmin } from "@/components/auth/require-skill-admin";
 // 功能开关守卫包在页面 Suspense 之外，懒加载会让整个工作区退回全屏加载页；体积很小，直接静态引入。
@@ -10,7 +10,6 @@ import { RequireFeature } from "@/components/auth/require-feature";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { workspaceRoutePages } from "@/lib/workspace-route-modules";
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
-import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
@@ -57,9 +56,6 @@ const AdminFeedbacksPage = lazyAdminPage(() => import("@/pages/admin/feedbacks/f
 const UsersPage = lazyAdminPage(() => import("@/pages/admin/users/users-page"));
 const UserGroupsPage = lazyAdminPage(() => import("@/pages/admin/user-groups/user-groups-page"));
 const AssetsPage = workspaceRoutePages.assets;
-const LoginPage = lazy(() => import("@/pages/auth/login"));
-const RegisterPage = lazy(() => import("@/pages/auth/register"));
-const ForgotPasswordPage = lazy(() => import("@/pages/auth/forgot-password"));
 const CanvasPage = workspaceRoutePages.canvas;
 const CanvasProjectPage = workspaceRoutePages.canvasProject;
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
@@ -69,10 +65,17 @@ const EcommercePage = workspaceRoutePages.ecommerce;
 const ImageWorkbenchPage = workspaceRoutePages.imageWorkbench;
 const VideoWorkbenchPage = workspaceRoutePages.videoWorkbench;
 const NotFound = lazy(() => import("@/pages/not-found"));
+// DMC C 端创作台：一句话成片首页，主区保持影策体验站「一句话想法」的简洁形态。
+const LL2HomePage = lazy(() => import("@/pages/ll2-home"));
+// DMC 模型广场：21 个模型的单价与「一次调用多少钱」，独立路由级懒加载，不进首屏。
+const LL2ModelPlazaPage = lazy(() => import("@/pages/models/ll2-model-plaza"));
+// 工作台四页：全部免登录、纯前端或 DMC 直连，路由级懒加载不进首屏。
+const LL2CanvasWorkbench = lazy(() => import("@/pages/ll2-workspace/canvas"));
+const LL2InspirationPage = lazy(() => import("@/pages/ll2-workspace/inspiration"));
+const LL2ConfigPage = lazy(() => import("@/pages/ll2-workspace/config"));
+const LL2FilmsPage = lazy(() => import("@/pages/ll2-workspace/films"));
 const SkillsPage = workspaceRoutePages.skills;
 const SkillWorkbenchPage = workspaceRoutePages.skillWorkbench;
-const PluginsPage = workspaceRoutePages.plugins;
-const EagleLibraryPage = workspaceRoutePages.eagleLibrary;
 const TasksPage = workspaceRoutePages.tasks;
 const ProjectsPage = workspaceRoutePages.projects;
 const ProjectDetailPage = workspaceRoutePages.projectDetail;
@@ -109,7 +112,6 @@ function RootLayout() {
     return (
         <>
             <Outlet />
-            <AuthDialogHost />
         </>
     );
 }
@@ -134,15 +136,10 @@ function devRoutes() {
 }
 
 const routes: RouteObject[] = [
-    {
-        element: <AuthScene />,
-        errorElement: <RouteErrorPage />,
-        children: [
-            { path: "/login", element: fullScreenDeferred(<LoginPage />) },
-            { path: "/register", element: fullScreenDeferred(<RegisterPage />) },
-            { path: "/forgot-password", element: fullScreenDeferred(<ForgotPasswordPage />) },
-        ],
-    },
+    // DMC C 端不提供登录 / 注册 / 找回密码界面；任何残留跳转都回到创作台。
+    { path: "/login", element: <Navigate to="/" replace /> },
+    { path: "/register", element: <Navigate to="/" replace /> },
+    { path: "/forgot-password", element: <Navigate to="/" replace /> },
     { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
     // H5 真人认证回跳页：多在未登录的手机上打开，不进入工作区登录守卫。
     { path: "/ark-portrait/result", element: fullScreenDeferred(<ArkPortraitResultPage />), errorElement: <RouteErrorPage /> },
@@ -151,58 +148,31 @@ const routes: RouteObject[] = [
         element: <AuthenticatedWorkspaceLayout />,
         errorElement: <RouteErrorPage />,
         children: [
-            { path: "/", element: deferred(<CreatePage />) },
-            { path: "/create", element: deferred(<CreatePage />) },
-            { path: "/ecommerce", element: <RequireAuth>{deferred(<EcommercePage />)}</RequireAuth> },
-            {
-                path: "/toolbox/image",
-                element: (
-                    <RequireAuth>
-                        <RequireFeature feature="imageWorkbenchEnabled">{deferred(<ImageWorkbenchPage />)}</RequireFeature>
-                    </RequireAuth>
-                ),
-            },
-            {
-                path: "/toolbox/video",
-                element: (
-                    <RequireAuth>
-                        <RequireFeature feature="videoWorkbenchEnabled">{deferred(<VideoWorkbenchPage />)}</RequireFeature>
-                    </RequireAuth>
-                ),
-            },
-            {
-                path: "/tasks",
-                element: (
-                    <RequireAuth>
-                        <RequireFeature feature="taskCenterEnabled">{deferred(<TasksPage />)}</RequireFeature>
-                    </RequireAuth>
-                ),
-            },
-            { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
+            { path: "/", element: deferred(<LL2HomePage />) },
+            { path: "/create", element: deferred(<LL2HomePage />) },
+            // 影策原创作台保留在 /studio 供对照，但不进任何用户端入口。
+            { path: "/studio", element: deferred(<CreatePage />) },
+            // 左侧工作栏的四个工作台入口，全部免登录、不依赖影策登录态后端。
+            { path: "/inspiration", element: deferred(<LL2InspirationPage />) },
+            { path: "/config", element: deferred(<LL2ConfigPage />) },
+            { path: "/films", element: deferred(<LL2FilmsPage />) },
+            { path: "/models", element: deferred(<LL2ModelPlazaPage />) },
+            // 原「生图 / 生视频」工作台、任务中心、素材与账户页都依赖影策登录态后端。
+            // C 端免登录后点了只会报未登录，统一回创作台的两个模式，不再留可达的登录入口。
+            { path: "/ecommerce", element: <Navigate to="/" replace /> },
+            { path: "/toolbox/image", element: <Navigate to="/" replace /> },
+            { path: "/toolbox/video", element: <Navigate to="/" replace /> },
+            { path: "/tasks", element: <Navigate to="/" replace /> },
+            // C 端资产页：直接使用影策原版资产页（2026-11-19 用户口径「照搬影策」）。
+            { path: "/assets", element: deferred(<AssetsPage />) },
             { path: "/skills", element: <RequireSkillAdmin>{deferred(<SkillsPage />)}</RequireSkillAdmin> },
             { path: "/skills/:skillId/edit", element: <RequireSkillAdmin>{deferred(<SkillWorkbenchPage />)}</RequireSkillAdmin> },
-            {
-                path: "/plugins",
-                element: (
-                    <RequireAuth>
-                        <RequireFeature feature="pluginCenterEnabled">{deferred(<PluginsPage />)}</RequireFeature>
-                    </RequireAuth>
-                ),
-            },
-            {
-                path: "/plugins/eagle",
-                element: (
-                    <RequireAuth>
-                        <RequireFeature feature="pluginCenterEnabled">{deferred(<EagleLibraryPage />)}</RequireFeature>
-                    </RequireAuth>
-                ),
-            },
-            {
-                path: "/wallet",
-                element: <RequireAuth>{null}</RequireAuth>,
-            },
-            { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
-            { path: "/referral", element: <RequireAuth>{deferred(<ReferralPage />)}</RequireAuth> },
+            // C 端工具不做第三方平台：原「插件中心 / Eagle 素材库」一律回首页，不给外部平台留入口。
+            { path: "/plugins", element: <Navigate to="/" replace /> },
+            { path: "/plugins/eagle", element: <Navigate to="/" replace /> },
+            { path: "/wallet", element: <Navigate to="/" replace /> },
+            { path: "/settings", element: <Navigate to="/" replace /> },
+            { path: "/referral", element: <Navigate to="/" replace /> },
             {
                 path: "/projects",
                 element: (
@@ -236,7 +206,10 @@ const routes: RouteObject[] = [
                 ),
             },
             { path: "/projects/:projectId/*", element: <Navigate to=".." relative="path" replace /> },
-            { path: "/canvas", element: <RequireAuth>{deferred(<CanvasPage />)}</RequireAuth> },
+            // 无限画布列表换成 BeeFTV 式本机工作台；原影策画布列表依赖登录态云端项目，
+            // 免登录下点了会 401，保留在 /studio/canvas 供对照。
+            { path: "/canvas", element: deferred(<LL2CanvasWorkbench />) },
+            { path: "/studio/canvas", element: <RequireAuth>{deferred(<CanvasPage />)}</RequireAuth> },
             {
                 path: "/canvas/:id",
                 element: (

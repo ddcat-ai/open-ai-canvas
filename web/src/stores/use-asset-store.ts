@@ -323,8 +323,18 @@ async function normalizePersistedAsset(asset: Asset): Promise<Asset> {
         };
     }
     if (!asset.data.dataUrl.startsWith("data:image/")) return asset;
-    const image = await uploadImage(asset.data.dataUrl);
-    return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
+    // C 端免登录 BYOK 的本机素材库把图片直接存成 data URI、没有 storageKey。
+    // 上游这段会把「无 storageKey 的 data URI」当成待上传的旧格式，调 /api/resources
+    // 在免登录下直接抛 ResourceUploadError「请先登录」，导致 assetStorage.getItem
+    // 整体 reject、zustand 水合永远不完成 —— 表现是刷新后整个素材库变空。
+    if (asset.source === "dmc-local") return asset;
+    try {
+        const image = await uploadImage(asset.data.dataUrl);
+        return { ...asset, coverUrl: asset.coverUrl.startsWith("data:image/") ? image.url : asset.coverUrl, data: { ...asset.data, dataUrl: image.url, storageKey: image.storageKey, bytes: image.bytes, mimeType: image.mimeType } };
+    } catch {
+        // 没登录 / 后端不可用时，data URI 自己就能显示，不能因为一张图拖垮整库水合。
+        return asset;
+    }
 }
 
 export async function generationAssetId(effectKey: string) {

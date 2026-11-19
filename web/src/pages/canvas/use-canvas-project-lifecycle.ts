@@ -15,7 +15,7 @@ import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestam
 import { canvasPersistentNodes } from "@/lib/canvas/canvas-persistent-nodes";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
-import { deleteCanvasProjectsWithRemoteSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, prepareCanvasForCloudAction, subscribeAgentCanvasRefresh, refreshCanvasAfterAgent } from "@/services/user-data-sync";
+import { deleteCanvasProjectsWithRemoteSync, hasRemoteUserDataSyncSession, loadCanvasProjectForEditing, saveRemoteUserDataNow, prepareCanvasForCloudAction, subscribeAgentCanvasRefresh, refreshCanvasAfterAgent } from "@/services/user-data-sync";
 import { getCanvasSyncStatus } from "@/services/api/user-data";
 import { canvasEditLeases } from "@/services/canvas-edit-leases";
 import { startCanvasSyncPolling } from "@/services/canvas-sync-polling";
@@ -497,12 +497,13 @@ export function useCanvasProjectLifecycle({
                 console.warn("画布本地持久化暂未完成", error);
             }
             try {
+                const savedMessage = hasRemoteUserDataSyncSession() ? translate("canvasPage.lifecycle.savedToCloud") : "画布已保存在这台电脑";
                 if (options.requireRemote === false) {
                     await saveRemoteUserDataNow(projectId);
-                    message.success(translate("canvasPage.lifecycle.savedToCloud"));
+                    message.success(savedMessage);
                 } else {
                     await prepareCanvasForCloudAction(projectId);
-                    message.success(translate("canvasPage.lifecycle.savedToCloud"));
+                    message.success(savedMessage);
                 }
                 return true;
             } catch (error) {

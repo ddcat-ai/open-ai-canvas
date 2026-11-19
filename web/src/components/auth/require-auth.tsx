@@ -1,28 +1,20 @@
-import { useEffect, type ReactNode } from "react";
-import { Navigate, useLocation } from "react-router";
+import { type ReactNode } from "react";
 
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { useAuthLoginMode } from "@/hooks/use-auth-entry";
-import { authPageURL } from "@/lib/auth-entry";
-import { useAuthDialogStore } from "@/stores/use-auth-dialog-store";
 import { useUserStore } from "@/stores/use-user-store";
 
+/**
+ * DMC C 端不需要登录界面：用户填自己的 DMC API Key 即可使用。
+ *
+ * 这里只保留「会话状态恢复完成前显示加载态」，不再跳转 /login，
+ * 也不再打开登录弹窗。Key 的连接引导由 LL2KeyNotice / LL2ConnectBadge 承担，
+ * 它们是设置项，不是认证流程。
+ *
+ * allowAnonymous 参数保留以兼容现有路由调用，但不再影响放行结果。
+ */
 export function RequireAuth({ children, allowAnonymous = false }: { children: ReactNode; allowAnonymous?: boolean }) {
-    const location = useLocation();
+    void allowAnonymous;
     const hydrated = useUserStore((state) => state.hydrated);
-    const user = useUserStore((state) => state.user);
-
     if (!hydrated) return <FullScreenLoader />;
-    if (!user && !allowAnonymous) return <LoginRequired next={location.pathname + location.search} />;
-    return children;
-}
-
-/** 未登录访问受保护页面：独立页面模式跳转 /login；弹窗模式回到首页并打开登录框，登录后再进入原页面。 */
-function LoginRequired({ next }: { next: string }) {
-    const mode = useAuthLoginMode();
-    useEffect(() => {
-        if (mode === "modal") useAuthDialogStore.getState().openDialog("login", next);
-    }, [mode, next]);
-    if (mode === null) return <FullScreenLoader />;
-    return <Navigate to={mode === "page" ? authPageURL("login", next) : "/"} replace />;
+    return <>{children}</>;
 }

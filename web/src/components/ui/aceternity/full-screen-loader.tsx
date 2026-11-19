@@ -45,7 +45,16 @@ export function FullScreenLoader({ label = translate("account.ui.loader.label"),
 
     return (
         <div data-full-screen-loader role="status" aria-live="polite" aria-label={translate("account.ui.loader.aria", { label, detail })} className={cn("full-screen-loader", className)} style={timeline}>
-            {appearanceResolved ? <BrandLogoFrame className={cn("full-screen-loader-mark", builtinLogo && "is-builtin")} logoClassName="full-screen-loader-mark-image" alt="" fallback={<span className="loader-brand-glyph" aria-hidden="true" />} /> : null}
+            {appearanceResolved ? (
+                <BrandLogoFrame
+                    className={cn("full-screen-loader-mark", builtinLogo && "is-builtin", builtinLogo && "is-dmc")}
+                    logoClassName="full-screen-loader-mark-image"
+                    alt=""
+                    // 内置品牌用 DMC 官方朱红方标（/logo.svg），不再显示上游影策的双方块字形；
+                    // 自定义品牌的部署仍走 BrandLogo 自己的 logoUrl。
+                    fallback={<img className="full-screen-loader-dmc-mark" src="/logo.svg" alt="" aria-hidden="true" draggable={false} />}
+                />
+            ) : null}
             <LoadingSignal />
             <div className="full-screen-loader-copy">
                 <strong>{label}</strong>

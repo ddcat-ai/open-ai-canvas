@@ -1,0 +1,630 @@
+/* C 端资产页：左侧一级入口对应的整页素材库。
+   颜色一律走 var(--ll2-*, 原字面量)，浅色走兜底、黑夜由 ll2-c-theme.css 翻面。
+   页面级 import，只有进 /assets 才加载，不占首屏。 */
+
+.ll2-assets-page {
+    max-width: 1180px;
+}
+
+.ll2-assets-head p {
+    max-width: 720px;
+}
+
+.ll2-assets-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.ll2-assets-stats > span {
+    padding: 7px 12px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 8px;
+    background: var(--ll2-wb-surface);
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+}
+
+.ll2-assets-stats strong {
+    margin-right: 4px;
+    color: var(--ll2-wb-ink);
+    font-size: 15px;
+}
+
+.ll2-assets-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 14px;
+    margin-bottom: 14px;
+}
+
+.ll2-assets-toolbar-left,
+.ll2-assets-toolbar-right {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.ll2-assets-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--ll2-wb-accent);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ll2-assets-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ll2-assets-filters {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 9px;
+    background: var(--ll2-wb-surface);
+}
+
+.ll2-assets-filters > button {
+    min-height: 26px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ll2-wb-muted);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ll2-assets-filters > button.is-active {
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-weight: 600;
+}
+
+.ll2-assets-search {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 8px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-wb-muted);
+}
+
+.ll2-assets-search > input {
+    width: 150px;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--ll2-wb-ink);
+    font: inherit;
+    font-size: 12.5px;
+}
+
+.ll2-assets-search > button {
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--ll2-wb-muted);
+    cursor: pointer;
+}
+
+.ll2-assets-sort {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.ll2-assets-sort > select {
+    min-height: 34px;
+    padding: 0 26px 0 10px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 8px;
+    appearance: none;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-wb-ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.ll2-assets-sort > svg {
+    position: absolute;
+    right: 8px;
+    pointer-events: none;
+    color: var(--ll2-wb-muted);
+}
+
+.ll2-assets-view {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 8px;
+}
+
+.ll2-assets-view > button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 26px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ll2-wb-muted);
+    cursor: pointer;
+}
+
+.ll2-assets-view > button.is-active {
+    background: var(--ll2-t-f3f3f3, #f3f3f3);
+    color: var(--ll2-wb-ink);
+}
+
+.ll2-assets-trash-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 34px;
+    padding: 0 11px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ll2-wb-muted);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ll2-assets-trash-toggle.is-active {
+    border-color: var(--ll2-t-e5442a, #E5442A);
+    color: var(--ll2-t-c53a22, #c53a22);
+}
+
+.ll2-assets-dropzone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 13px;
+    border: 1px dashed var(--ll2-wb-line);
+    border-radius: 10px;
+    background: var(--ll2-wb-surface);
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+}
+
+.ll2-assets-dropzone.is-drag-over {
+    border-color: var(--ll2-wb-accent);
+    background: var(--ll2-ap-0_05, rgba(103, 32, 255, 0.05));
+}
+
+.ll2-assets-message {
+    margin: 0 0 12px;
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.ll2-assets-message.is-error {
+    color: var(--ll2-t-c53a22, #c53a22);
+}
+
+.ll2-assets-batch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 9px 12px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 9px;
+    background: var(--ll2-ap-0_05, rgba(103, 32, 255, 0.05));
+    font-size: 12px;
+}
+
+.ll2-assets-batch > span {
+    margin-right: auto;
+    color: var(--ll2-wb-ink);
+}
+
+.ll2-assets-batch > button,
+.ll2-assets-card-actions > button,
+.ll2-assets-lightbox footer button,
+.ll2-assets-dialog-actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 7px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-wb-ink);
+    font-family: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.ll2-assets-batch > button:disabled,
+.ll2-assets-card-actions > button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ll2-assets-batch > button.is-primary,
+.ll2-assets-card-actions > button.is-primary,
+.ll2-assets-lightbox footer button.is-primary,
+.ll2-assets-dialog-actions > button.is-primary {
+    border-color: var(--ll2-wb-accent);
+    background: var(--ll2-wb-accent);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.ll2-assets-batch > button.is-danger,
+.ll2-assets-card-actions > button.is-danger,
+.ll2-assets-dialog-actions > button.is-danger {
+    color: var(--ll2-t-c53a22, #c53a22);
+    border-color: var(--ll2-t-e5442a, #E5442A);
+}
+
+.ll2-assets-collection.is-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+    gap: 12px;
+}
+
+.ll2-assets-collection.is-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ll2-assets-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 11px;
+    background: var(--ll2-t-ffffff, #ffffff);
+}
+
+.ll2-assets-card.is-selected {
+    border-color: var(--ll2-wb-accent);
+}
+
+.ll2-assets-card-check {
+    position: absolute;
+    z-index: 2;
+    top: 14px;
+    left: 14px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 6px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.ll2-assets-card.is-selected .ll2-assets-card-check {
+    border-color: var(--ll2-wb-accent);
+    background: var(--ll2-wb-accent);
+}
+
+.ll2-assets-card-cover {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 132px;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: var(--ll2-wb-surface);
+    cursor: pointer;
+}
+
+.ll2-assets-card-cover > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ll2-assets-card-placeholder {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 4px;
+    color: var(--ll2-wb-muted);
+}
+
+.ll2-assets-card-placeholder small {
+    font-size: 10px;
+}
+
+.ll2-assets-card-play {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #ffffff;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.ll2-assets-card:hover .ll2-assets-card-play {
+    opacity: 1;
+}
+
+.ll2-assets-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 9px 2px;
+    min-width: 0;
+}
+
+.ll2-assets-card-info strong {
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-assets-card-info small {
+    color: var(--ll2-wb-muted);
+    font-size: 10.5px;
+}
+
+.ll2-assets-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.ll2-assets-card-actions > button {
+    min-height: 26px;
+    padding: 0 8px;
+    white-space: nowrap;
+}
+
+/* 卡片只有 178px 宽时，四个按钮挤一行会把「@ 引用」折成两行、把删除挤到第二行。
+   直接让主按钮占满第一行，三个图标按钮整齐排在第二行。 */
+.ll2-assets-card-actions > button.is-primary {
+    flex: 1 1 100%;
+}
+
+.ll2-assets-card-actions > button:not(.is-primary) {
+    flex: 1 1 0;
+}
+
+.ll2-assets-collection.is-list .ll2-assets-card {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+
+.ll2-assets-collection.is-list .ll2-assets-card-cover {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 48px;
+}
+
+.ll2-assets-collection.is-list .ll2-assets-card-check {
+    top: 20px;
+    left: 12px;
+    width: 16px;
+    height: 16px;
+}
+
+.ll2-assets-collection.is-list .ll2-assets-card-info {
+    flex: 1;
+    margin: 0;
+}
+
+.ll2-assets-collection.is-list .ll2-assets-card-actions {
+    flex: none;
+    flex-wrap: nowrap;
+}
+
+.ll2-assets-collection.is-list .ll2-assets-card-actions > button.is-primary,
+.ll2-assets-collection.is-list .ll2-assets-card-actions > button:not(.is-primary) {
+    flex: 0 0 auto;
+}
+
+.ll2-assets-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 46px 20px;
+    border: 1px dashed var(--ll2-wb-line);
+    border-radius: 12px;
+    color: var(--ll2-wb-muted);
+    text-align: center;
+}
+
+.ll2-assets-empty strong {
+    color: var(--ll2-wb-ink);
+    font-size: 15px;
+}
+
+.ll2-assets-empty p {
+    max-width: 460px;
+    margin: 0 0 6px;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.ll2-assets-foot {
+    margin: 16px 0 0;
+    color: var(--ll2-wb-muted);
+    font-size: 11.5px;
+    line-height: 1.7;
+}
+
+.ll2-assets-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1950;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(14, 14, 16, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.ll2-assets-lightbox,
+.ll2-assets-dialog {
+    width: min(760px, 100%);
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 14px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-wb-ink);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.ll2-assets-lightbox > header,
+.ll2-assets-lightbox > footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+}
+
+.ll2-assets-lightbox > header strong {
+    overflow: hidden;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-assets-lightbox > header > button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ll2-wb-muted);
+    cursor: pointer;
+}
+
+.ll2-assets-lightbox-media {
+    display: grid;
+    place-items: center;
+    min-height: 240px;
+    max-height: 62vh;
+    overflow: hidden;
+    /* 预览幕布是「看片子的底」，两套主题都固定深色，不随界面翻面。 */
+    background: #101014;
+    color: #ffffff;
+}
+
+.ll2-assets-lightbox-media > img,
+.ll2-assets-lightbox-media > video {
+    display: block;
+    max-width: 100%;
+    max-height: 62vh;
+    object-fit: contain;
+}
+
+.ll2-assets-lightbox > footer {
+    border-top: 1px solid var(--ll2-wb-line);
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+}
+
+.ll2-assets-lightbox > footer > div {
+    display: flex;
+    gap: 8px;
+}
+
+.ll2-assets-dialog {
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+}
+
+.ll2-assets-dialog > strong {
+    font-size: 16px;
+}
+
+.ll2-assets-dialog > p {
+    margin: 0;
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.ll2-assets-dialog > input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 8px;
+    outline: none;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-wb-ink);
+    font: inherit;
+    font-size: 13px;
+}
+
+.ll2-assets-dialog > input:focus {
+    border-color: var(--ll2-wb-accent);
+}
+
+.ll2-assets-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+@media (max-width: 760px) {
+    .ll2-assets-toolbar-left,
+    .ll2-assets-toolbar-right { width: 100%; }
+    .ll2-assets-search > input { width: 110px; }
+    .ll2-assets-collection.is-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    .ll2-assets-collection.is-list .ll2-assets-card { flex-wrap: wrap; }
+}

@@ -1,0 +1,1106 @@
+/*
+ * 2026-11-18 C 端白话改造补充样式。
+ * 放在所有工作台样式之后，压过原版影策的浅色卡片与按钮。
+ */
+
+/* ── 全局唯一的填 Key 弹窗 ───────────────────────────────────────────── */
+.ll2-key-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(14, 14, 16, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.ll2-key-dialog {
+    width: min(460px, 100%);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    padding: 22px 22px 16px;
+    background: var(--ll2-t-fff, #fff);
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+.ll2-key-dialog .ll2-key-panel {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.ll2-key-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ll2-key-dialog-close {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ll2-t-777, #777);
+    cursor: pointer;
+}
+
+.ll2-key-dialog-close:hover {
+    background: var(--ll2-t-f3f3f3, #f3f3f3);
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+}
+
+.ll2-key-lead {
+    margin: 14px 0 16px;
+    font-size: 14px;
+    line-height: 1.85;
+    color: var(--ll2-t-444, #444);
+}
+
+.ll2-key-console-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid var(--ll2-ar-0_55, rgba(229, 68, 42, 0.55));
+    border-radius: 10px;
+    background: var(--ll2-ar-0_05, rgba(229, 68, 42, 0.05));
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ll2-key-console-button:hover {
+    background: var(--ll2-ar-0_12, rgba(229, 68, 42, 0.12));
+}
+
+.ll2-key-console-note {
+    display: block;
+    margin: 8px 0 18px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ll2-t-888, #888);
+}
+
+.ll2-key-panel-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--ll2-t-eee, #eee);
+    font-size: 12px;
+    color: var(--ll2-t-777, #777);
+}
+
+.ll2-key-panel-foot a {
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+    text-decoration: none;
+}
+
+.ll2-key-later {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    padding: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--ll2-t-888, #888);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.ll2-key-later:hover {
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+}
+
+/* ── 一句话成片：起步卡片 / 提示条 ─────────────────────────────────── */
+.ll2-quick-idea-tag {
+    display: inline-block;
+    margin-bottom: 8px;
+    padding: 1px 7px;
+    border: 1px solid var(--ll2-ar-0_35, rgba(229, 68, 42, 0.35));
+    border-radius: 4px;
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+    font-size: 10px;
+    line-height: 1.6;
+}
+
+.ll2-oneshot-status.is-hint {
+    background: var(--ll2-ar-0_06, rgba(229, 68, 42, 0.06));
+    border-color: var(--ll2-ar-0_2, rgba(229, 68, 42, 0.2));
+    color: var(--ll2-t-8a3a29-fg, #8a3a29);
+    line-height: 1.7;
+}
+
+.ll2-inline-link {
+    margin-left: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.ll2-oneshot-empty p {
+    line-height: 1.8;
+}
+
+/* ── 设置页 / 聊天改稿的小控件 ─────────────────────────────────────── */
+.ll2-config-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.ll2-agent-foot-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* ── 侧栏：四步引导与收进底部的设置链接 ───────────────────────────── */
+.ll2-sidebar-links {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+button.ll2-sidebar-guide {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ll2-sidebar-guide-panel {
+    padding: 12px;
+    border: 1px solid var(--ll2-ar-0_18, rgba(229, 68, 42, 0.18));
+    border-radius: 10px;
+    background: var(--ll2-t-faf7f6, #faf7f6);
+    font-size: 12px;
+    line-height: 1.75;
+    color: var(--ll2-t-444, #444);
+}
+
+.ll2-sidebar-guide-panel strong {
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+}
+
+.ll2-sidebar-guide-panel ol {
+    margin: 8px 0 10px;
+    padding-left: 18px;
+}
+
+.ll2-sidebar-guide-panel button {
+    padding: 5px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--ll2-t-e5442a, #e5442a);
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ll2-sidebar-sublinks {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ll2-sidebar-sublinks a {
+    color: var(--ll2-t-6b6b6b, #6b6b6b);
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.ll2-sidebar-sublinks a:hover {
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+}
+
+/* ── 画布编辑器：回一句话成片的固定入口 ──────────────────────────── */
+.ll2-canvas-back {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 90;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 13px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    background: var(--ll2-t-fff, #fff);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.1);
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.ll2-canvas-back:hover {
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+}
+
+/* ── 画布里唯一的内嵌文本助手 + 「交给 Agent 出片」 ──────────────────── */
+/* 画布编辑器顶栏是浮层，助手从顶栏下方开始停靠，不遮住标题与工具按钮。 */
+.ll2-agent.is-canvas {
+    top: var(--canvas-topbar-offset, 72px);
+    right: 12px;
+    bottom: 12px;
+    width: min(368px, calc(100vw - 24px));
+}
+
+.ll2-agent-fab.is-canvas {
+    right: 18px;
+    bottom: 18px;
+}
+
+.ll2-agent-msg-actions button.is-primary {
+    border-color: var(--ll2-t-e5442a, #E5442A);
+    background: var(--ll2-t-fff5f2, #fff5f2);
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+    font-weight: 600;
+}
+
+.ll2-agent-msg-actions button.is-primary:hover {
+    background: var(--ll2-t-e5442a, #E5442A);
+    color: #fff;
+}
+
+.ll2-agent-video {
+    flex: none;
+    max-height: 46%;
+    overflow-y: auto;
+    padding: 12px 14px;
+    border-top: 1px solid var(--ll2-t-e8e8e8, #e8e8e8);
+    background: var(--ll2-t-fafafa, #fafafa);
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+    font-size: 12px;
+}
+
+.ll2-agent-video-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-size: 12.5px;
+}
+
+.ll2-agent-video-head strong {
+    flex: 1;
+}
+
+.ll2-agent-video-head button {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ll2-t-777, #777);
+    cursor: pointer;
+}
+
+.ll2-agent-video-head button:hover {
+    background: var(--ll2-t-ececec, #ececec);
+}
+
+.ll2-agent-video-note {
+    margin: 0 0 8px;
+    line-height: 1.6;
+    color: var(--ll2-t-444, #444);
+}
+
+.ll2-agent-video-note.is-error {
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+}
+
+.ll2-agent-video textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--ll2-t-dedede, #dedede);
+    border-radius: 8px;
+    background: var(--ll2-t-fff, #fff);
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.ll2-agent-video textarea:focus {
+    outline: none;
+    border-color: var(--ll2-t-e5442a, #E5442A);
+}
+
+.ll2-agent-video-price {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 8px 0 2px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--ll2-t-fff, #fff);
+    border: 1px solid var(--ll2-t-ececec, #ececec);
+}
+
+.ll2-agent-video-price strong {
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+    font-size: 15px;
+}
+
+.ll2-agent-video > small {
+    display: block;
+    margin-top: 5px;
+    color: var(--ll2-t-777, #777);
+    line-height: 1.5;
+}
+
+.ll2-agent-video-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 4px;
+}
+
+.ll2-agent-video-actions button,
+.ll2-agent-video-actions a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 11px;
+    border: 1px solid var(--ll2-t-dedede, #dedede);
+    border-radius: 8px;
+    background: var(--ll2-t-fff, #fff);
+    color: var(--ll2-t-1c1c1e, #1c1c1e);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.ll2-agent-video-actions button.is-primary {
+    border-color: var(--ll2-t-e5442a, #E5442A);
+    background: var(--ll2-t-e5442a, #E5442A);
+    color: #fff;
+}
+
+.ll2-agent-video-actions button.is-primary:hover {
+    background: var(--ll2-t-c53a22, #c53a22);
+}
+
+.ll2-agent-video-actions button:hover,
+.ll2-agent-video-actions a:hover {
+    border-color: var(--ll2-t-e5442a, #E5442A);
+}
+
+/* ── 首页素材拖放区：文生 / 图生 / 视频生共用一条链路 ─────────────────────
+   颜色一律走 var(--ll2-*, 原字面量)：浅色走兜底值，黑夜由 ll2-c-theme.css 翻面。
+   缩略图上的遮罩是「盖在图片上」的，不属于界面表面，两套主题都固定深底白字。 */
+.ll2-oneshot.is-drag-over {
+    border-color: var(--ll2-wb-accent);
+    box-shadow: 0 0 0 3px var(--ll2-ap-0_12, rgba(103, 32, 255, 0.12));
+}
+
+.ll2-media-drop {
+    margin: 0 18px 14px;
+    padding: 12px 14px 10px;
+    border: 1px dashed var(--ll2-wb-line);
+    border-radius: 12px;
+    background: var(--ll2-wb-surface);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.ll2-media-drop.is-drag-over {
+    border-color: var(--ll2-wb-accent);
+    background: var(--ll2-ap-0_05, rgba(103, 32, 255, 0.05));
+}
+
+.ll2-media-drop-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+    margin-bottom: 10px;
+}
+
+.ll2-media-drop-head strong {
+    color: var(--ll2-wb-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ll2-media-drop-head span {
+    color: var(--ll2-wb-muted);
+    font-size: 11.5px;
+}
+
+.ll2-media-drop-head-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.ll2-media-mention {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--ll2-wb-accent);
+    border-radius: 7px;
+    background: var(--ll2-ap-0_05, rgba(103, 32, 255, 0.05));
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ll2-media-mention:hover {
+    background: var(--ll2-ap-0_12, rgba(103, 32, 255, 0.12));
+}
+
+.ll2-media-mention:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ll2-media-drop-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ll2-media-thumb {
+    position: relative;
+    width: 78px;
+    height: 78px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 9px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    overflow: hidden;
+}
+
+.ll2-media-thumb > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ll2-media-thumb-video {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 2px;
+    width: 100%;
+    height: 100%;
+    color: var(--ll2-wb-muted);
+}
+
+.ll2-media-thumb-video small {
+    font-size: 10px;
+}
+
+.ll2-media-thumb-name {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 3px 5px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-media-thumb-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #ffffff;
+    cursor: pointer;
+}
+
+.ll2-media-thumb-remove:hover {
+    background: var(--ll2-t-e5442a, #E5442A);
+}
+
+.ll2-media-add {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 78px;
+    height: 78px;
+    border: 1px dashed var(--ll2-wb-line);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--ll2-wb-muted);
+    font-family: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.ll2-media-add:hover {
+    border-color: var(--ll2-wb-accent);
+    color: var(--ll2-wb-accent);
+}
+
+.ll2-media-add:disabled,
+.ll2-media-thumb-remove:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ll2-media-drop-note {
+    margin: 9px 0 0;
+    color: var(--ll2-wb-muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+    .ll2-media-drop {
+        margin: 0 12px 12px;
+        padding: 10px;
+    }
+}
+
+/* ── 素材库抽屉：上传 → 本机保存 → @ 引用 ─────────────────────────────────
+   同样走 var(--ll2-*, 原字面量)，浅色不变、黑夜由 ll2-c-theme.css 翻面。 */
+.ll2-library-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1900;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(14, 14, 16, 0.55);
+    backdrop-filter: blur(4px);
+}
+
+.ll2-library {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: min(720px, 100%);
+    max-height: min(680px, calc(100vh - 40px));
+    padding: 20px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 18px;
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-wb-ink);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+.ll2-library-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ll2-library-head strong {
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.ll2-library-head p {
+    margin: 5px 0 0;
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.ll2-library-close {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ll2-wb-muted);
+    cursor: pointer;
+}
+
+.ll2-library-close:hover {
+    background: var(--ll2-t-f3f3f3, #f3f3f3);
+    color: var(--ll2-wb-ink);
+}
+
+.ll2-library-upload {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 14px;
+    border: 1px dashed var(--ll2-wb-line);
+    border-radius: 12px;
+    background: var(--ll2-wb-surface);
+}
+
+.ll2-library-upload.is-drag-over {
+    border-color: var(--ll2-wb-accent);
+    background: var(--ll2-ap-0_05, rgba(103, 32, 255, 0.05));
+}
+
+.ll2-library-upload > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--ll2-wb-accent);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ll2-library-upload > button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ll2-library-upload > span {
+    color: var(--ll2-wb-muted);
+    font-size: 11.5px;
+    line-height: 1.6;
+}
+
+.ll2-library-message {
+    margin: 0;
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.ll2-library-message.is-error {
+    color: var(--ll2-t-c53a22, #c53a22);
+}
+
+.ll2-library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 12px;
+    min-height: 120px;
+    overflow-y: auto;
+    padding: 2px;
+}
+
+.ll2-library-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 11px;
+    background: var(--ll2-t-ffffff, #ffffff);
+}
+
+.ll2-library-cover {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 88px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--ll2-wb-surface);
+}
+
+.ll2-library-cover > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ll2-library-cover-icon {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 3px;
+    color: var(--ll2-wb-muted);
+}
+
+.ll2-library-cover-icon small {
+    font-size: 10px;
+}
+
+.ll2-library-card > strong {
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-library-card > small {
+    color: var(--ll2-wb-muted);
+    font-size: 10.5px;
+}
+
+.ll2-library-card-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.ll2-library-card-actions > button {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 0 6px;
+    border: 1px solid var(--ll2-wb-line);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ll2-wb-ink);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ll2-library-card-actions > button.is-primary {
+    border-color: var(--ll2-wb-accent);
+    background: var(--ll2-ap-0_08, rgba(103, 32, 255, 0.08));
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-weight: 600;
+}
+
+.ll2-library-card-actions > button:not(.is-primary) {
+    flex: 0 0 28px;
+    color: var(--ll2-wb-muted);
+}
+
+.ll2-library-card-actions > button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ll2-library-empty {
+    grid-column: 1 / -1;
+    padding: 28px 16px;
+    border: 1px dashed var(--ll2-wb-line);
+    border-radius: 11px;
+    text-align: center;
+}
+
+.ll2-library-empty strong {
+    font-size: 14px;
+}
+
+.ll2-library-empty p {
+    margin: 8px 0 0;
+    color: var(--ll2-wb-muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.ll2-library-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ll2-wb-line);
+}
+
+.ll2-library-foot > span {
+    color: var(--ll2-wb-muted);
+    font-size: 11.5px;
+    line-height: 1.6;
+}
+
+.ll2-library-foot-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.ll2-library-foot-actions > button {
+    padding: 8px 18px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--ll2-wb-accent);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ll2-library-foot-actions > button.is-ghost {
+    border: 1px solid var(--ll2-wb-accent);
+    background: transparent;
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+}
+
+@media (max-width: 760px) {
+    .ll2-library { padding: 14px; }
+    .ll2-library-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+}
+
+/* ===== 保存到资产库弹窗（首页拖图后出现） =====
+   刻意手写、不引 antd：这个弹窗进的是首页首屏，antd 表单会把首屏 chunk 重新撑大。
+   颜色全走 --ll2-t-* / --ll2-a-* 令牌，浅色与黑夜都能用。 */
+.ll2-save-asset-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgba(10, 10, 12, 0.46);
+}
+
+.ll2-save-asset-dialog {
+    width: min(880px, 100%);
+    max-height: min(86vh, 700px);
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 22px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--ll2-a-0_10, rgba(10, 10, 10, 0.1));
+    background: var(--ll2-t-ffffff, #ffffff);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+}
+
+.ll2-save-asset-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ll2-save-asset-head strong {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+}
+
+.ll2-save-asset-head button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ll2-t-6b6b76, #6b6b76);
+    cursor: pointer;
+}
+
+.ll2-save-asset-head button:hover {
+    background: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+}
+
+.ll2-save-asset-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 20px;
+    align-items: start;
+}
+
+.ll2-save-asset-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ll2-save-asset-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ll2-save-asset-form label > span {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ll2-t-6b6b76, #6b6b76);
+}
+
+.ll2-save-asset-form input,
+.ll2-save-asset-form select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 11px;
+    border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
+    border-radius: 8px;
+    background: var(--ll2-t-f7f7f9, #f7f7f9);
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.ll2-save-asset-form input[readonly] {
+    color: var(--ll2-t-6b6b76, #6b6b76);
+    cursor: default;
+}
+
+.ll2-save-asset-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 24px;
+}
+
+.ll2-save-asset-tags button {
+    padding: 3px 9px;
+    border: 1px solid var(--ll2-ap-0_18, rgba(103, 32, 255, 0.18));
+    border-radius: 999px;
+    background: var(--ll2-ap-0_10, rgba(103, 32, 255, 0.1));
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ll2-save-asset-tags em {
+    font-size: 11px;
+    font-style: normal;
+    color: var(--ll2-t-9a9aa4, #9a9aa4);
+}
+
+.ll2-save-asset-error {
+    margin: 0;
+    font-size: 12px;
+    color: #d4380d;
+}
+
+.ll2-save-asset-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--ll2-a-0_10, rgba(10, 10, 10, 0.1));
+    border-radius: 10px;
+    background: var(--ll2-t-f7f7f9, #f7f7f9);
+}
+
+.ll2-save-asset-preview > span {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ll2-t-6b6b76, #6b6b76);
+}
+
+.ll2-save-asset-preview img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--ll2-t-e9e9ee, #e9e9ee);
+}
+
+.ll2-save-asset-preview strong {
+    font-size: 13px;
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-save-asset-preview div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ll2-save-asset-preview em {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
+    font-size: 11px;
+    font-style: normal;
+    color: var(--ll2-t-6b6b76, #6b6b76);
+}
+
+.ll2-save-asset-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 4px;
+}
+
+.ll2-save-asset-foot button {
+    min-height: 34px;
+    padding: 0 18px;
+    border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ll2-save-asset-foot button.is-primary {
+    border-color: transparent;
+    background: var(--ll2-wb-accent, #6720ff);
+    color: #ffffff;
+}
+
+.ll2-save-asset-foot button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+@media (max-width: 720px) {
+    .ll2-save-asset-body { grid-template-columns: minmax(0, 1fr); }
+    .ll2-save-asset-preview { order: -1; }
+    .ll2-save-asset-preview img { aspect-ratio: 16 / 9; }
+}

@@ -12,6 +12,9 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	// 本地开发适配：Windows 无 C 编译器时，用纯 Go SQLite 驱动替代 cgo 版
+	_ "modernc.org/sqlite"
 )
 
 type Config struct {
@@ -32,9 +35,10 @@ func Open(config Config) (*gorm.DB, error) {
 			if err := os.MkdirAll(config.DataDir, 0o755); err != nil {
 				return nil, err
 			}
-			dsn = config.DataDir + "/open_ai_canvas.db?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on&_synchronous=NORMAL"
+			// modernc 纯 Go 驱动用 _pragma 参数，等价于原 cgo 驱动的 DSN 参数
+			dsn = config.DataDir + "/open_ai_canvas.db?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
 		}
-		return gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logging.GormLogger()})
+		return gorm.Open(sqlite.New(sqlite.Config{DriverName: "sqlite", DSN: dsn}), &gorm.Config{Logger: logging.GormLogger()})
 	case "postgres", "postgresql":
 		dsn := strings.TrimSpace(config.DSN)
 		if dsn == "" {

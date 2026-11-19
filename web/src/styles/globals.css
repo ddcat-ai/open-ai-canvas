@@ -2734,6 +2734,23 @@
         color: var(--background);
     }
 
+    /* 全屏加载显示 DMC 官方朱红方标：方标自带底色与白色 D，框架只负责裁圆角，
+       不能再盖一层墨色实底，否则朱红被吃掉。放在 is-builtin 之后以压过它。 */
+    .full-screen-loader-mark.is-dmc {
+        padding: 0;
+        border: 0;
+        border-radius: 16px;
+        background: transparent;
+        overflow: hidden;
+    }
+
+    .full-screen-loader-dmc-mark {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
     .full-screen-loader-mark-image {
         width: 32px;
         height: 32px;
@@ -2744,8 +2761,8 @@
         width: 34px;
         height: 34px;
         background: currentColor;
-        mask: url("/logo.svg") center / contain no-repeat;
-        -webkit-mask: url("/logo.svg") center / contain no-repeat;
+        mask: url("/dmc-glyph.svg") center / contain no-repeat;
+        -webkit-mask: url("/dmc-glyph.svg") center / contain no-repeat;
     }
 
     .full-screen-loader .loading-signal {
@@ -23695,8 +23712,8 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap {
     width: 18px;
     height: 18px;
     background: currentColor;
-    mask: url("/logo.svg") center / contain no-repeat;
-    -webkit-mask: url("/logo.svg") center / contain no-repeat;
+    mask: url("/dmc-glyph.svg") center / contain no-repeat;
+    -webkit-mask: url("/dmc-glyph.svg") center / contain no-repeat;
 }
 
 .app-user-workspace .app-workspace-nav-link {

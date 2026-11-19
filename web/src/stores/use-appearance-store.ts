@@ -12,9 +12,9 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     updates: DEFAULT_UPDATE_ANNOUNCEMENT,
     canvas: DEFAULT_CANVAS_APPEARANCE,
     schemaVersion: 10,
-    brandName: "影策",
+    brandName: "DMC",
     brandSlug: "open-ai-canvas",
-    authHeroTitle: "让一个故事，\n从文字走向银幕。",
+    authHeroTitle: "一句话，\n出一支片子。",
     authHeroDescription: "",
     logoUrl: "/logo.svg",
     darkLogoUrl: "/logo.svg",
@@ -24,10 +24,10 @@ export const DEFAULT_PUBLIC_APPEARANCE: PublicAppearance = {
     authVideoAutoplay: true,
     skinId: "classic",
     activeSkin: DEFAULT_CLASSIC_SKIN,
-    seoTitle: "影策",
-    seoDescription: "影策，面向 AI 影视与短剧创作的工作台。",
+    seoTitle: "DMC",
+    seoDescription: "DMC，一句话，出一支片子。",
     seoKeywords: "",
-    footerCopyright: `© ${new Date().getFullYear()} 影策. All rights reserved.`,
+    footerCopyright: `© ${new Date().getFullYear()} DMC`,
     icpFilingEnabled: false,
     icpFilingNumber: "",
     redeemPurchaseUrl: "",
@@ -51,10 +51,10 @@ export const useAppearanceStore = create<AppearanceStore>((set) => ({
     setAppearance: (appearance) => set({ appearance, resolved: true }),
 }));
 
-/** 标签页标题 =（后台提醒）+ 页面名称 + 品牌；没有页面名称时用 SEO 标题。 */
+/** C 端标签页固定显示品牌名 DMC。首屏 <title> 就是 DMC，React 接管后不再拼页面名，避免跳字。 */
 function documentTitleFor(appearance: PublicAppearance) {
-    const { pageTitle, attentionCount, attentionLabel } = useDocumentTitleStore.getState();
-    return composeDocumentTitle({ pageTitle, brandName: appearance.brandName, seoTitle: appearance.seoTitle, attentionCount, attentionLabel });
+    const { attentionCount, attentionLabel } = useDocumentTitleStore.getState();
+    return composeDocumentTitle({ brandName: appearance.brandName, seoTitle: appearance.seoTitle, attentionCount, attentionLabel });
 }
 
 // 页面名称或后台提醒变化时只改标题；外观解析前保持首屏的中性标题。
@@ -64,18 +64,18 @@ useDocumentTitleStore.subscribe(() => {
 });
 
 export function normalizePublicAppearance(value?: Partial<PublicAppearance> | null): PublicAppearance {
-    const brandName = String(value?.brandName || "").trim();
+    // C 端品牌固定为 DMC，后台外观配置里的品牌文案不再覆盖用户端界面。
     const brandSlug = normalizeBrandSlug(value?.brandSlug);
     const authHeroTitle = normalizeAppearanceCopy(value?.authHeroTitle, DEFAULT_PUBLIC_APPEARANCE.authHeroTitle);
     const authHeroDescription = normalizeAppearanceCopy(value?.authHeroDescription, DEFAULT_PUBLIC_APPEARANCE.authHeroDescription, true);
     const customVideo = Boolean(value?.authVideoConfigured);
     const logoUrl = safeAppearanceURL(value?.logoUrl, DEFAULT_PUBLIC_APPEARANCE.logoUrl);
     const darkLogoUrl = safeAppearanceURL(value?.darkLogoUrl, logoUrl);
-    const resolvedBrandName = brandName || DEFAULT_PUBLIC_APPEARANCE.brandName;
-    const seoTitle = normalizeAppearanceCopy(value?.seoTitle, resolvedBrandName);
-    const seoDescription = normalizeAppearanceCopy(value?.seoDescription, `${resolvedBrandName}，面向 AI 影视与短剧创作的工作台。`, true);
+    const resolvedBrandName = "DMC";
+    const seoTitle = "DMC";
+    const seoDescription = "DMC，一句话，出一支片子。";
     const seoKeywords = normalizeAppearanceCopy(value?.seoKeywords, "", true);
-    const footerCopyright = normalizeAppearanceCopy(value?.footerCopyright, `© ${new Date().getFullYear()} ${resolvedBrandName}. All rights reserved.`);
+    const footerCopyright = `© ${new Date().getFullYear()} DMC`;
     const icpFilingNumber = normalizeAppearanceCopy(value?.icpFilingNumber, "", true);
     const redeemPurchaseUrl = typeof value?.redeemPurchaseUrl === "string" ? safeAppearanceURL(value.redeemPurchaseUrl, "") : "";
     return {
@@ -181,7 +181,7 @@ export function appearanceLogoURL(appearance: PublicAppearance, theme: "light" |
 }
 
 export function brandStudioLabel(appearance: PublicAppearance) {
-    if (appearance.brandName === DEFAULT_PUBLIC_APPEARANCE.brandName && appearance.brandSlug === DEFAULT_PUBLIC_APPEARANCE.brandSlug) return "YINGCE STUDIO";
+    if (appearance.brandName === DEFAULT_PUBLIC_APPEARANCE.brandName && appearance.brandSlug === DEFAULT_PUBLIC_APPEARANCE.brandSlug) return "DMC STUDIO";
     return appearance.brandSlug.replace(/-+/g, " ").toLocaleUpperCase();
 }
 

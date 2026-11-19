@@ -270,8 +270,8 @@ export function CreationComposer(props: ComposerProps) {
     // user knows a new send is possible.
     const showWorkingSpinner = interactionBusy || (props.generationActive && !canSubmit);
     const showWorkingGlow = props.generationActive && !canSubmit;
-    const placeholder = props.mode === "text" ? "描述你的故事、角色或想继续讨论的创意" : props.mode === "image" ? "描述画面、人物、场景、构图与风格" : "描述镜头内容、运动、光线与节奏";
-    const emptyPlaceholder = "输入你的镜头、画面或故事。也可以添加参考图开始创作";
+    const placeholder = props.mode === "text" ? "接着聊你的故事" : props.mode === "image" ? "说说想要的画面、人物和风格" : "说说镜头里发生什么、镜头怎么走";
+    const emptyPlaceholder = "一句话，说清你想要的画面";
     const imageReferencesSupported = props.imageProfile.references.maxImages > 0;
     const referencesSupported = props.mode === "image" ? imageReferencesSupported : props.mode !== "video" || props.maxReferences > 0;
     const canAddMoreReferences = referencesSupported && props.attachments.length < props.maxReferences;

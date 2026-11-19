@@ -4,7 +4,7 @@
 
 import { Dropdown, type MenuProps } from "antd";
 import type { MouseEvent } from "react";
-import { AlertTriangle, AudioLines, Box, Clock3, Copy, Download, FileText, FolderOpen, MoreHorizontal, PencilLine, Play, RotateCcw, Send, ShieldAlert, ShieldCheck, ShieldX, Trash2 } from "lucide-react";
+import { AlertTriangle, AtSign, AudioLines, Box, Clock3, Copy, Download, FileText, FolderOpen, MoreHorizontal, PencilLine, Play, RotateCcw, Send, ShieldAlert, ShieldCheck, ShieldX, Trash2 } from "lucide-react";
 import { AssetLibraryCard, AssetLibraryCardMedia } from "@/components/assets/asset-library-card";
 import { type AssetKind } from "@/stores/use-asset-store";
 import { AssetMediaPreview } from "@/components/asset-media-preview";
@@ -54,6 +54,7 @@ export function AssetCard({
     folderOptions,
     onMoveToFolder,
     onRecommend,
+    onQuote,
     arkProgress,
 }: {
     asset: LibraryAsset;
@@ -73,6 +74,8 @@ export function AssetCard({
     folderOptions: Array<{ label: string; value: string }>;
     onMoveToFolder: (folderId: string) => void;
     onRecommend?: (asset: LibraryAsset) => void;
+    /** C 端：把这张素材 @ 引用到「一句话成片」。 */
+    onQuote?: (asset: LibraryAsset) => void;
     /** 这张图片最近一次方舟认证提交；已认证的展示以素材自身的 arkCertification 为准。 */
     arkProgress?: ArkLibraryProgress;
 }) {
@@ -83,6 +86,16 @@ export function AssetCard({
               ...(onRename ? [{ key: "rename", icon: <PencilLine className="size-3.5" />, label: "修改名称", onClick: onRename }] : []),
               ...(asset.kind === "text" || asset.kind === "image" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: "编辑", onClick: onEdit }] : []),
               ...(asset.kind === "text" ? [{ key: "copy", icon: <Copy className="size-3.5" />, label: "复制文本", onClick: () => void onCopy(asset) }] : []),
+              // C 端闭环：图片可 @ 引用到首页；参考视频只认公网 HTTPS，本机视频先置灰。
+              ...(onQuote && asset.kind !== "entity"
+                  ? [{
+                        key: "quote",
+                        icon: <AtSign className="size-3.5" />,
+                        label: asset.kind === "video" ? "视频需公网链接，暂不能引用" : "引用到创作台",
+                        disabled: asset.kind === "video",
+                        onClick: () => onQuote(asset),
+                    }]
+                  : []),
               ...(asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? [{ key: "download", icon: <Download className="size-3.5" />, label: "下载", onClick: () => onDownload(asset) }] : []),
               ...(onRecommend && (asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "entity")
                   ? [{ key: "recommend", icon: <Send className="size-3.5" />, label: "推荐为官方素材", onClick: () => onRecommend(asset) }]

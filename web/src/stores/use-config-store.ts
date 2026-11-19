@@ -254,6 +254,11 @@ function isVideoModelName(model: string) {
     return (
         value.includes("seedance") ||
         value.includes("video") ||
+        // DMC 模型目录：这些模型名不含 "video"，影策原版会把它们误判成文本模型。
+        value.includes("minimax-h3") ||
+        value.includes("super vega") ||
+        value.includes("auto-hd") ||
+        value.includes("viduq") ||
         value.includes("sora") ||
         value.includes("veo") ||
         value.includes("kling") ||

@@ -62,6 +62,8 @@ data/
 /.local/docker-compose.postgres.yml
 coverage/
 dist/
+# 生产构建校验用的临时输出目录（沙箱回收站不可用时会留在工作区）
+web/dist-verify*/
 *.log
 *.tsbuildinfo
 *.db

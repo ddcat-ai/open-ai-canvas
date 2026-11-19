@@ -100,7 +100,7 @@ function AuthPageScene() {
                     <div aria-hidden className="auth-scene-video-blend absolute inset-y-0 right-0 hidden w-[clamp(120px,14vw,240px)] lg:block" />
                     <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-4 p-5 sm:p-7 lg:p-9">
                         <Link to="/" className="auth-scene-brand inline-flex items-center gap-2 text-sm font-semibold drop-shadow-sm transition-opacity hover:opacity-80">
-                            <BrandLogo theme={theme} className="size-7" alt="" fallback={<span className="size-7 bg-current" style={{ mask: "url(/logo.svg) center / contain no-repeat", WebkitMask: "url(/logo.svg) center / contain no-repeat" }} />} />
+                            <BrandLogo theme={theme} className="size-7" alt="" fallback={<span className="size-7 bg-current" style={{ mask: "url(/dmc-glyph.svg) center / contain no-repeat", WebkitMask: "url(/dmc-glyph.svg) center / contain no-repeat" }} />} />
                             {appearance.brandName}
                         </Link>
                         <button

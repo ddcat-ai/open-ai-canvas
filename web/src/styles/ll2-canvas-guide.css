@@ -1,0 +1,257 @@
+/* C 端画布新手引导样式。由入口文件全局引入一次即可（@/styles/ll2-canvas-guide.css）。 */
+
+/* ---------- 输入框下方的完整例句 ---------- */
+.ll2-canvas-entry-example {
+    margin: var(--space-2, 8px) 0 0;
+    color: color-mix(in srgb, var(--canvas-entry-muted, var(--cn-muted, var(--ll2-t-888, #888))) 78%, transparent);
+    font-size: var(--fs-label, 12px);
+    line-height: 1.6;
+    text-align: center;
+}
+
+/* ---------- 「画布怎么用」折叠面板，默认收起，不挡创作区 ---------- */
+.ll2-canvas-howto {
+    width: 100%;
+    margin-top: var(--space-6, 24px);
+    border: 1px solid var(--canvas-entry-hairline, var(--cn-stroke, var(--ll2-t-e5e5e5, #e5e5e5)));
+    border-radius: var(--r-xl, 14px);
+    background: color-mix(in srgb, var(--canvas-entry-surface, var(--surface, var(--ll2-t-fff, #fff))) 55%, transparent);
+    text-align: left;
+}
+
+.ll2-canvas-howto > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2, 8px);
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    color: var(--canvas-entry-muted, var(--cn-muted, var(--ll2-t-888, #888)));
+    font-size: var(--fs-caption, 13px);
+    cursor: pointer;
+    list-style: none;
+}
+
+.ll2-canvas-howto > summary::-webkit-details-marker {
+    display: none;
+}
+
+.ll2-canvas-howto > summary::before {
+    content: "▸";
+    font-size: 12px;
+    transition: transform var(--motion-state, 150ms) ease;
+}
+
+.ll2-canvas-howto[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.ll2-canvas-howto > summary:hover {
+    color: var(--canvas-entry-text, var(--cn-text, var(--ll2-t-1a1a1a, #1a1a1a)));
+}
+
+.ll2-canvas-howto-list {
+    display: grid;
+    gap: var(--space-2, 8px);
+    margin: 0;
+    padding: 0 var(--space-3, 12px) var(--space-1, 4px);
+    list-style: none;
+}
+
+.ll2-canvas-howto-list > li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2, 8px);
+    color: var(--canvas-entry-text, var(--cn-text, var(--ll2-t-1a1a1a, #1a1a1a)));
+    font-size: var(--fs-caption, 13px);
+    line-height: 1.6;
+}
+
+.ll2-canvas-howto-step {
+    display: grid;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    place-items: center;
+    border-radius: var(--r-full, 999px);
+    background: var(--canvas-entry-chip, rgba(127, 127, 127, 0.12));
+    color: var(--canvas-entry-muted, var(--cn-muted, var(--ll2-t-888, #888)));
+    font-size: var(--fs-tiny, 11px);
+    font-weight: 600;
+}
+
+.ll2-canvas-howto-note {
+    margin: var(--space-2, 8px) 0 0;
+    padding: 0 var(--space-3, 12px) var(--space-3, 12px);
+    color: var(--canvas-entry-muted, var(--cn-muted, var(--ll2-t-888, #888)));
+    font-size: var(--fs-label, 12px);
+}
+
+/* ---------- 五步导引条：当前步的白话说明（贴在导引条下方） ---------- */
+.ll2-canvas-guide-step-hint {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2, 8px);
+    padding: 6px var(--space-3, 12px);
+    border: 1px solid var(--cn-stroke, var(--ll2-t-e5e5e5, #e5e5e5));
+    border-radius: var(--r-lg, 10px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    font-size: var(--fs-label, 12px);
+    text-align: center;
+    pointer-events: none;
+}
+
+.ll2-canvas-guide-step-hint strong {
+    font-weight: 600;
+}
+
+/* ---------- 「先挑一个好看的」：自动选画风前的轻量白话引导 ---------- */
+.ll2-quick-style-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    padding: var(--space-6, 24px);
+    background: rgba(0, 0, 0, 0.42);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+
+.ll2-quick-style-card {
+    position: relative;
+    width: min(100%, 460px);
+    max-height: 100%;
+    overflow-y: auto;
+    padding: var(--space-6, 24px);
+    border: 1px solid var(--cn-stroke, var(--ll2-t-e5e5e5, #e5e5e5));
+    border-radius: var(--r-2xl, 20px);
+    background: var(--surface, var(--ll2-t-fff, #fff));
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+    color: var(--cn-text, var(--ll2-t-1a1a1a, #1a1a1a));
+    text-align: center;
+}
+
+.ll2-quick-style-close {
+    position: absolute;
+    top: var(--space-3, 12px);
+    right: var(--space-3, 12px);
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-md, 8px);
+    background: transparent;
+    color: var(--cn-muted, var(--ll2-t-888, #888));
+    cursor: pointer;
+}
+
+.ll2-quick-style-close:hover {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
+}
+
+.ll2-quick-style-close svg {
+    width: 16px;
+    height: 16px;
+}
+
+.ll2-quick-style-title {
+    margin: 0;
+    font-size: var(--typ-display-sm, 22px);
+    font-weight: 600;
+}
+
+.ll2-quick-style-lead {
+    margin: var(--space-2, 8px) 0 0;
+    color: var(--cn-muted, var(--ll2-t-888, #888));
+    font-size: var(--fs-caption, 13px);
+}
+
+.ll2-quick-style-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3, 12px);
+    margin-top: var(--space-5, 20px);
+}
+
+.ll2-quick-style-grid > button {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2, 8px);
+    padding: var(--space-2, 8px);
+    border: 1px solid var(--cn-stroke, var(--ll2-t-e5e5e5, #e5e5e5));
+    border-radius: var(--r-xl, 14px);
+    background: var(--cn-fill, var(--ll2-t-fafafa, #fafafa));
+    color: inherit;
+    cursor: pointer;
+    transition:
+        border-color var(--motion-state, 150ms) ease,
+        transform var(--motion-state, 150ms) ease;
+}
+
+.ll2-quick-style-grid > button:hover:not(:disabled) {
+    border-color: var(--workspace-accent, #7d9cff);
+    transform: translateY(-2px);
+}
+
+.ll2-quick-style-grid > button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.ll2-quick-style-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: var(--r-lg, 10px);
+    background-color: var(--surface-hover, rgba(0, 0, 0, 0.05));
+    background-image: linear-gradient(135deg, rgba(125, 156, 255, 0.35), rgba(255, 170, 190, 0.3));
+    background-position: center;
+    background-size: cover;
+}
+
+.ll2-quick-style-label {
+    font-size: var(--fs-caption, 13px);
+    font-weight: 600;
+}
+
+.ll2-quick-style-more {
+    margin-top: var(--space-4, 16px);
+    padding: var(--space-2, 8px) var(--space-4, 16px);
+    border: 1px solid var(--cn-stroke, var(--ll2-t-e5e5e5, #e5e5e5));
+    border-radius: var(--r-full, 999px);
+    background: transparent;
+    color: var(--cn-muted, var(--ll2-t-888, #888));
+    font-size: var(--fs-caption, 13px);
+    cursor: pointer;
+}
+
+.ll2-quick-style-more:hover {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
+    color: var(--cn-text, var(--ll2-t-1a1a1a, #1a1a1a));
+}
+
+.ll2-quick-style-note {
+    margin: var(--space-3, 12px) 0 0;
+    color: var(--cn-faint, var(--cn-muted, var(--ll2-t-888, #888)));
+    font-size: var(--fs-label, 12px);
+}
+
+@media (max-width: 480px) {
+    .ll2-quick-style-card {
+        padding: var(--space-4, 16px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ll2-quick-style-grid > button:hover:not(:disabled),
+    .ll2-canvas-howto > summary::before {
+        transform: none;
+        transition: none;
+    }
+}

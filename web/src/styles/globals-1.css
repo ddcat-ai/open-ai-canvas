@@ -2707,7 +2707,7 @@
     }
 
     .full-screen-loader-logo-image { width: 38px; height: 38px; }
-    .full-screen-loader-logo-fallback { display: block; width: 36px; height: 36px; background: currentColor; mask: url('/logo.svg') center / contain no-repeat; -webkit-mask: url('/logo.svg') center / contain no-repeat; }
+    .full-screen-loader-logo-fallback { display: block; width: 36px; height: 36px; background: currentColor; mask: url('/dmc-glyph.svg') center / contain no-repeat; -webkit-mask: url('/dmc-glyph.svg') center / contain no-repeat; }
     .workspace-route-loader-logo .full-screen-loader-logo-fallback { width: 16px; height: 16px; }
 
     .full-screen-loader-orbit {

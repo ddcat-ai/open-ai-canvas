@@ -1,7 +1,8 @@
 import { Tooltip } from "@/components/ui/base/tooltip";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { motion, useReducedMotion } from "motion/react";
-import { PanelBottom, X, ZoomIn, ZoomOut } from "lucide-react";
+import { LayoutGrid, PanelBottom, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -40,6 +41,18 @@ export function CanvasFocusModeBar({ syncIcon, dockRevealed, zoomPercent, onTogg
                     </button>
                 </Tooltip>
                 {syncIcon}
+                {/* 2026-11-19 走查：专注模式下左上角整套顶栏是隐藏的，返回画布列表只能在菜单里找。
+                    这里补一颗常驻返回，位置紧挨「退出专注」，不打断创作。 */}
+                <Tooltip title="返回画布列表">
+                    <Link
+                        to="/canvas"
+                        className="grid size-8 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10"
+                        style={{ color: theme.node.text }}
+                        aria-label="返回画布列表"
+                    >
+                        <LayoutGrid className="size-4" />
+                    </Link>
+                </Tooltip>
                 <span className="mx-0.5 h-4 w-px" style={{ background: theme.toolbar.border }} />
                 <Tooltip title={dockRevealed ? t("canvasA.focusBar.hideTools") : t("canvasA.focusBar.tools")}>
                     <button

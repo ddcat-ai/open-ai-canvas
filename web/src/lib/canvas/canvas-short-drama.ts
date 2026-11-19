@@ -11,6 +11,8 @@ export type CanvasShortDramaStepStatus = "pending" | "current" | "completed";
 export type CanvasShortDramaStep = {
     id: CanvasShortDramaStepId;
     label: string;
+    /** 白话短说明：这一步点哪里、要不要花钱。 */
+    hint: string;
     status: CanvasShortDramaStepStatus;
     nodeId?: string;
 };
@@ -101,12 +103,12 @@ export function deriveShortDramaProgress(nodes: CanvasNodeData[], connections: C
     const done = [styleDone, storyDone, storyboardDone, videoDone, Boolean(finalNode)];
     const firstIncomplete = done.findIndex((value) => !value);
     const firstShotNode = shotNodes[0];
-    const definitions: Array<{ id: CanvasShortDramaStepId; label: string; nodeId?: string }> = [
-        { id: "style", label: "选择画风", nodeId: styleNode?.id },
-        { id: "story", label: "输入故事", nodeId: storyNode?.id },
-        { id: "storyboard", label: "生成分镜", nodeId: scriptNode?.id || firstShotNode?.id },
-        { id: "video", label: "生成视频", nodeId: scriptNode?.id || firstShotNode?.id || completedShotVideos[0]?.id },
-        { id: "final", label: "合并成片", nodeId: finalNode?.id || finalNodes[0]?.id || completedShotVideos[0]?.id },
+    const definitions: Array<{ id: CanvasShortDramaStepId; label: string; hint: string; nodeId?: string }> = [
+        { id: "style", label: "先挑一个好看的画风", hint: "点这步挑个好看的，不花钱", nodeId: styleNode?.id },
+        { id: "story", label: "写下你的故事", hint: "写下你想拍的故事，不花钱", nodeId: storyNode?.id },
+        { id: "storyboard", label: "生成分镜", hint: "点生成分镜，只花几分钱", nodeId: scriptNode?.id || firstShotNode?.id },
+        { id: "video", label: "生成视频", hint: "按秒算钱，会先告诉你大约多少", nodeId: scriptNode?.id || firstShotNode?.id || completedShotVideos[0]?.id },
+        { id: "final", label: "合并成片", hint: "点合并成片，不多花钱", nodeId: finalNode?.id || finalNodes[0]?.id || completedShotVideos[0]?.id },
     ];
     const steps = definitions.map((step, index): CanvasShortDramaStep => ({
         ...step,

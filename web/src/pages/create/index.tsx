@@ -87,9 +87,9 @@ import {
     type PersistedCreationTask,
 } from "./creation-conversations";
 import { CreationComposer, CreationEmptySuggest, CreationHistoryDrawer, CreationMessageView, CreationModeCard, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
-import { declaredInspirationSources } from "@/lib/inspirations/catalog";
-import { fillablePrompt } from "@/lib/inspirations/resolve";
-import { CreationRecentCanvases } from "./creation-recent-canvases";
+import { LL2KeyNotice } from "@/components/ll2/ll2-connect";
+import { LL2GeneratePanel } from "@/components/ll2/ll2-generate";
+import { LL2PriceHint } from "@/components/ll2/ll2-price-hint";
 import { CreationAgentEntry } from "./creation-agent-entry";
 import { CreationHistoryConflicts } from "./creation-history-conflicts";
 import { createCreationSubmitGate } from "./creation-submit-gate";
@@ -98,7 +98,6 @@ import { creationVideoConfig, creationVideoSettings } from "./creation-generatio
 import { trackSiteTrafficAction } from "@/services/site-traffic";
 
 const AssetLibraryPickerModal = lazy(() => import("@/components/assets/asset-library-picker-modal").then((module) => ({ default: module.AssetLibraryPickerModal })));
-const InspirationHall = lazy(() => import("@/pages/inspirations"));
 const loadCreationRuntime = () => import("./creation-runtime");
 type CreationRuntime = Awaited<ReturnType<typeof loadCreationRuntime>>;
 
@@ -181,7 +180,6 @@ export default function CreatePage() {
     const historyTimerRef = useRef<number | null>(null);
     const remoteHistorySnapshots = useRef(new WeakSet<CreationConversation[]>());
     const [historySync, setHistorySync] = useState<HistorySyncStatus>({ phase: "local" });
-    const inspirationSourcesVisible = useUserStore((state) => state.features.inspirationSourcesVisible);
     const [conversationScope, setConversationScope] = useState<string | null>(() => (initialConversationSnapshot ? activeConversationScope : null));
     const [mode, setMode] = useState<CreationMode>(() => initialComposerPreferences.mode || defaultCreationMode);
     const [prompt, setPrompt] = useState("");
@@ -206,12 +204,9 @@ export default function CreatePage() {
     const [historyOpen, setHistoryOpen] = useState(false);
     const { openAuth } = useAuthEntry();
     const [libraryOpen, setLibraryOpen] = useState(false);
-    const requireCreationLogin = useCallback(() => {
-        if (useUserStore.getState().user) return true;
-        setLibraryOpen(false);
-        openAuth({ preferDialog: true });
-        return false;
-    }, [openAuth]);
+    // DMC C 端免登录：不再弹登录框，也不因为「没有账号」打断加参考图等操作。
+    // 未填 Key 时由创作台顶部的 LL2KeyNotice 引导，不构成认证流程。
+    const requireCreationLogin = useCallback(() => true, []);
     const openReferenceLibrary = () => {
         if (!requireCreationLogin()) return;
         setLibraryOpen(true);
@@ -933,13 +928,7 @@ export default function CreatePage() {
             releaseSubmitGate();
             return;
         }
-        if (!useUserStore.getState().user) {
-            // 未发送的提示词只保存在本页内存里，跳转登录页会丢失；两种登录模式都改用弹窗。
-            openAuth({ preferDialog: true });
-            releaseRetryLock();
-            releaseSubmitGate();
-            return;
-        }
+        // DMC C 端免登录：提交不再要求账号会话。未填 Key 时由模型配置与 Key 引导负责提示。
         if (!selectedModel) {
             toast.warning(t("create.page.configureModel", { mode: modeLabels[mode] }));
             releaseRetryLock();
@@ -1651,6 +1640,9 @@ export default function CreatePage() {
                                         <span>{t("create.history.title")}</span>
                                     </button>
                                 </header>
+                                <LL2KeyNotice />
+                                {/* DMC 直连生成：本轮已配通的两个视频模型走用户自己的 Key，不经影策登录态后端。 */}
+                                <LL2GeneratePanel />
                                 <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
                                     <CreationModeCard
                                         mode={mode}
@@ -1680,36 +1672,9 @@ export default function CreatePage() {
                                     }}
                                 />
                             </section>
-                            <CreationRecentCanvases onRequireLogin={() => openAuth()} />
-                            <Suspense
-                                fallback={
-                                    <div className="creation-hall-loading" role="status">
-                                        {t("create.page.hallLoading")}
-                                    </div>
-                                }
-                            >
-                                <InspirationHall onUse={(item) => startPrompt(item.mode, fillablePrompt(item))} />
-                            </Suspense>
-                            {inspirationSourcesVisible ? (
-                                <div className="creation-source-notice">
-                                    <details>
-                                        <summary>{t("create.page.sourcesSummary")}</summary>
-                                        {declaredInspirationSources().map((source) => (
-                                            <p key={source.name ?? source.label}>
-                                                {source.notice}
-                                                {source.repository ? (
-                                                    <>
-                                                        {" "}
-                                                        <a href={source.repository} target="_blank" rel="noreferrer">
-                                                            {source.name} · {source.license}
-                                                        </a>
-                                                    </>
-                                                ) : null}
-                                            </p>
-                                        ))}
-                                    </details>
-                                </div>
-                            ) : null}
+                            {/* C 端创作台只保留一条主链路：输入 → 出片。
+                                最近画布、灵感大厅与来源声明都从首屏撤下；路由仍在，
+                                后续按产品边界在路由层统一下线，不靠 UI 隐藏假装不存在。 */}
                         </main>
                     </>
                 ) : (
@@ -1748,6 +1713,7 @@ export default function CreatePage() {
                             </section>
                         </main>
                         <section className="creation-thread-composer">
+                            <LL2PriceHint model={composerProps.model} mode={composerProps.mode} seconds={composerProps.seconds} />
                             <CreationComposer {...composerProps} variant="thread" />
                         </section>
                     </div>

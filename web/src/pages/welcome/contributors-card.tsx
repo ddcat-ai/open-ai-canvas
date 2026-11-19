@@ -1,11 +1,9 @@
-import { ArrowUpRight, BadgeCheck, UsersRound } from "lucide-react";
+import { BadgeCheck, UsersRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { CometCard } from "@/components/ui/aceternity/comet-card";
 
 import { welcomeContributors } from "./contributors";
-
-const githubContributors = "https://github.com/ddcat-ai/open-ai-canvas#贡献者与团队";
 
 export function WelcomeContributorsCard() {
     const { t } = useTranslation();
@@ -23,10 +21,6 @@ export function WelcomeContributorsCard() {
                         <h3 id="welcome-contributors-title">{t("account.welcome.contributors.title")}</h3>
                         <p>{t("account.welcome.contributors.description", { count: welcomeContributors.length })}</p>
                     </div>
-                    <a href={githubContributors} target="_blank" rel="noreferrer" aria-label={t("account.welcome.contributors.viewLabel")}>
-                        {t("account.welcome.contributors.view")}
-                        <ArrowUpRight size={14} />
-                    </a>
                 </div>
                 <ul className="welcome-contributors-list" aria-label={t("account.welcome.contributors.list")}>
                     {welcomeContributors.map((contributor) => (
@@ -34,7 +28,7 @@ export function WelcomeContributorsCard() {
                             key={contributor.name}
                             className={contributor.isFounder ? "is-founder" : undefined}
                             title={contributor.signature || contributor.name}
-                            aria-label={[contributor.name, contributor.wechat && t("account.welcome.contributors.wechat", { id: contributor.wechat }), contributor.email].filter(Boolean).join(t("account.welcome.contributors.separator"))}
+                            aria-label={contributor.name}
                         >
                             <img src={contributor.avatar} alt="" loading="lazy" />
                             {contributor.isFounder ? (
@@ -46,7 +40,6 @@ export function WelcomeContributorsCard() {
                                             {t("account.welcome.contributors.founder")}
                                         </span>
                                     </div>
-                                    <p className="welcome-contributor-meta">{[contributor.wechat && t("account.welcome.contributors.wechat", { id: contributor.wechat }), contributor.email].filter(Boolean).join(" · ")}</p>
                                     <p className="welcome-contributor-signature">{contributor.signature}</p>
                                 </div>
                             ) : (

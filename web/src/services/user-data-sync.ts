@@ -309,6 +309,14 @@ export async function loadCanvasProjectForEditing(id: string, options: { onLoad?
         options.onLoad?.(draft);
         return draft;
     }
+    // C 端免登录「本机模式」：没有远端会话时画布只存在这台电脑，
+    // 直接读本地持久化数据。否则 requireRemoteUserDataBaseline() 会因为
+    // remoteUserDataPhase === "inactive" 抛错，刷新 /canvas/:id 就是一片错误页。
+    if (!activeRemoteUserId) {
+        const local = useCanvasStore.getState().openProject(id);
+        if (local) options.onLoad?.(local);
+        return local;
+    }
     const mode = "normal";
     const existing = remoteProjectLoadPromises.get(id);
     const existingRequest = existing?.promise;
@@ -1184,9 +1192,11 @@ export async function prepareCanvasForCloudAction(id: string) {
 }
 
 async function performRemoteUserDataSave(input?: string | readonly string[]) {
+    // 免登录本机模式：没有远端会话就不该报错，也不该提示「已保存到云端」。
+    // 调用方在此之前已经做了本地持久化（flushCanvasStorePersistence）。
+    if (!activeRemoteUserId) return;
     const projectId = input;
     const epoch = sessionEpoch;
-    if (!activeRemoteUserId) throw new Error("云端同步会话尚未建立，当前内容已保留在本地");
     requireRemoteUserDataBaseline();
     await waitForRemoteProjectLoads(projectId);
     // Share serialization, not outcomes: a foreground save must run its own

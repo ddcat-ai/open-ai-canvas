@@ -1,0 +1,211 @@
+/* ==========================================================================
+   DMC 创作台 · 黑夜模式（2026-11-18）
+   工作方式：C 端 CSS 里的浅色字面量已改写成 var(--ll2-t-*, 原字面量)。
+   浅色下走兜底值，视觉与此前完全一致；暗色下本文件的 html.dark token 表
+   统一翻面，一处改色即可覆盖全部页面，不需要逐条重写选择器。
+   本文件必须在 user-layout.tsx 里最后引入，压过所有 C 端浅色样式。
+   ========================================================================== */
+
+html.dark {
+    --ll2-t-0a0a0a: #f2f2f5;
+    --ll2-t-16a34a: #4ade80;
+    --ll2-t-1a1a1a: #e8e8ec;
+    --ll2-t-1c1c1e: #e8e8ec;
+    --ll2-t-444: #b6b6c0;
+    --ll2-t-5421d6: #7442ea;
+    --ll2-t-606060: #a2a2ac;
+    --ll2-t-6720ff: #8b5cf6;
+    --ll2-t-6720ff-fg: #b18cff;
+    --ll2-t-6b6b6b: #a2a2ac;
+    --ll2-t-6fcf97: #6ee7a8;
+    --ll2-t-777: #9a9aa6;
+    --ll2-t-7b3fff: #9b72ff;
+    --ll2-t-888: #9a9aa6;
+    --ll2-t-8a3a29: #ffb09c;
+    --ll2-t-8a3a29-fg: #ffc0ae;
+    --ll2-t-8d54ff: #b998ff;
+    --ll2-t-8d54ff-fg: #cbb4ff;
+    --ll2-t-e5442a: #ff6b4a;
+    --ll2-t-b73324: #ff6b4a;
+    --ll2-t-b73324-fg: #ff8b70;
+    --ll2-t-c53a22: #ff8b70;
+    --ll2-t-c53a22-fg: #ff9c85;
+    --ll2-t-dedede: #363842;
+    --ll2-t-e5442a: #ff6b4a;
+    --ll2-t-e5a03c: #fbbf24;
+    --ll2-t-e5e5e5: #33353e;
+    --ll2-t-e8e8e8: #2e3038;
+    --ll2-t-ececec: #2e3038;
+    --ll2-t-eee: #2a2c34;
+    --ll2-t-f0f0f3: #26272f;
+    --ll2-t-f0f0f4: #26272f;
+    --ll2-t-f1ecff: #241d38;
+    --ll2-t-f2f2f4: #26272f;
+    --ll2-t-f3f3f3: #202128;
+    --ll2-t-f4f4f7: #202128;
+    --ll2-t-f5f5f5: #202128;
+    --ll2-t-f6f2ff: #241d38;
+    --ll2-t-f7f7fa: #171820;
+    --ll2-t-faf7f6: #241f1e;
+    --ll2-t-faf8ff: #201c2c;
+    --ll2-t-fafafa: #202128;
+    --ll2-t-fbfbfd: #1b1c22;
+    --ll2-t-fcfbff: #1d1b26;
+    --ll2-t-fcfcfd: #1b1c22;
+    --ll2-t-fff: #191a20;
+    --ll2-t-fff2f0: #2a1d1b;
+    --ll2-t-fff5f2: #2a201d;
+    --ll2-t-ffffff: #191a20;
+    --ll2-a-0_025: rgba(242, 242, 245, 0.025);
+    --ll2-a-0_04: rgba(242, 242, 245, 0.04);
+    --ll2-a-0_045: rgba(242, 242, 245, 0.045);
+    --ll2-a-0_05: rgba(242, 242, 245, 0.05);
+    --ll2-a-0_06: rgba(242, 242, 245, 0.06);
+    --ll2-a-0_08: rgba(242, 242, 245, 0.08);
+    --ll2-a-0_09: rgba(242, 242, 245, 0.09);
+    --ll2-a-0_1: rgba(242, 242, 245, 0.1);
+    --ll2-a-0_12: rgba(242, 242, 245, 0.12);
+    --ll2-a-0_14: rgba(242, 242, 245, 0.14);
+    --ll2-a-0_16: rgba(242, 242, 245, 0.16);
+    --ll2-a-0_18: rgba(242, 242, 245, 0.18);
+    --ll2-a-0_26: rgba(242, 242, 245, 0.26);
+    --ll2-a-0_28: rgba(242, 242, 245, 0.28);
+    --ll2-a-0_32: rgba(242, 242, 245, 0.32);
+    --ll2-a-0_35: rgba(242, 242, 245, 0.35);
+    --ll2-a-0_38: rgba(242, 242, 245, 0.38);
+    --ll2-a-0_4: rgba(242, 242, 245, 0.4);
+    --ll2-a-0_42: rgba(242, 242, 245, 0.42);
+    --ll2-a-0_45: rgba(242, 242, 245, 0.45);
+    --ll2-a-0_48: rgba(242, 242, 245, 0.48);
+    --ll2-a-0_5: rgba(242, 242, 245, 0.5);
+    --ll2-a-0_52: rgba(242, 242, 245, 0.52);
+    --ll2-a-0_55: rgba(242, 242, 245, 0.55);
+    --ll2-a-0_56: rgba(242, 242, 245, 0.56);
+    --ll2-a-0_58: rgba(242, 242, 245, 0.58);
+    --ll2-a-0_6: rgba(242, 242, 245, 0.6);
+    --ll2-a-0_62: rgba(242, 242, 245, 0.62);
+    --ll2-a-0_65: rgba(242, 242, 245, 0.65);
+    --ll2-a-0_68: rgba(242, 242, 245, 0.68);
+    --ll2-a-0_7: rgba(242, 242, 245, 0.7);
+    --ll2-a-0_75: rgba(242, 242, 245, 0.75);
+    --ll2-a-0_8: rgba(242, 242, 245, 0.8);
+    --ll2-a-0_88: rgba(242, 242, 245, 0.88);
+    --ll2-ap-0_05: rgba(139, 92, 246, 0.05);
+    --ll2-ap-0_07: rgba(139, 92, 246, 0.07);
+    --ll2-ap-0_08: rgba(139, 92, 246, 0.08);
+    --ll2-ap-0_1: rgba(139, 92, 246, 0.1);
+    --ll2-ap-0_12: rgba(139, 92, 246, 0.12);
+    --ll2-ap-0_13: rgba(139, 92, 246, 0.13);
+    --ll2-ap-0_14: rgba(139, 92, 246, 0.14);
+    --ll2-ap-0_28: rgba(139, 92, 246, 0.28);
+    --ll2-ap-0_3: rgba(139, 92, 246, 0.3);
+    --ll2-ap-0_35: rgba(139, 92, 246, 0.35);
+    --ll2-ap-0_4: rgba(139, 92, 246, 0.4);
+    --ll2-ap-0_45: rgba(139, 92, 246, 0.45);
+    --ll2-ap-0_5: rgba(139, 92, 246, 0.5);
+    --ll2-ap-0_55: rgba(139, 92, 246, 0.55);
+    --ll2-ar-0_05: rgba(255, 107, 74, 0.05);
+    --ll2-ar-0_06: rgba(255, 107, 74, 0.06);
+    --ll2-ar-0_12: rgba(255, 107, 74, 0.12);
+    --ll2-ar-0_18: rgba(255, 107, 74, 0.18);
+    --ll2-ar-0_2: rgba(255, 107, 74, 0.2);
+    --ll2-ar-0_35: rgba(255, 107, 74, 0.35);
+    --ll2-ar-0_55: rgba(255, 107, 74, 0.55);
+}
+
+
+/* 工作台外壳：页面底比卡片再深一档，层次和浅色模式一致。 */
+html.dark {
+    --ll2-bg: #101014;
+}
+
+/* 半透明顶栏：浅色是白玻璃，暗色换成深玻璃，不能留成一条白。 */
+html.dark .ll2-site-header {
+    background: rgba(16, 16, 20, 0.94);
+}
+
+/* 悬浮层的投影在暗色下加深，避免浮层像贴在页面上。 */
+html.dark .ll2-key-dialog { box-shadow: 0 24px 70px rgba(0, 0, 0, 0.62); }
+html.dark .ll2-key-panel { box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5); }
+html.dark .ll2-canvas-back { box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55); }
+
+/* 品牌方标 / 站点 Logo 是朱红实底白字，两套主题都保持品牌原色。 */
+html.dark .app-user-workspace.app-product-workspace .app-workspace-brand-mark.is-builtin,
+html.dark .ll2-site-logo {
+    background: #b73324 !important;
+    color: #ffffff !important;
+}
+
+/* 视频预览底永远是纯黑，不跟随主题翻面。 */
+html.dark .ll2-result-video { background: #000; }
+
+/* 暗色下原生控件与滚动条也跟着走，避免输入框/下拉仍是白底。 */
+html.dark .app-user-workspace.app-product-workspace :is(input, textarea, select) { color-scheme: dark; }
+html.dark .app-user-workspace.app-product-workspace ::selection { background: rgba(139, 92, 246, 0.42); }
+
+/* ── 左下角主题开关：免登录也能用，三档偏好写在本机 ─────────────────── */
+.ll2-theme-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    padding: 0 2px;
+}
+
+.ll2-theme-picker-label {
+    flex: none;
+    color: var(--ll2-t-777, #777);
+    font-size: 11px;
+}
+
+.ll2-theme-picker-options {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--ll2-t-e8e8e8, #e8e8e8);
+    border-radius: 9px;
+    background: var(--ll2-t-fafafa, #fafafa);
+}
+
+.ll2-theme-picker-option {
+    display: inline-flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 5px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ll2-t-777, #777);
+    font-family: inherit;
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ll2-theme-picker-option:hover {
+    background: var(--ll2-t-f0f0f3, #f0f0f3);
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+}
+
+.ll2-theme-picker-option.is-active {
+    background: var(--ll2-t-ffffff, #ffffff);
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ll2-theme-picker.is-collapsed {
+    justify-content: center;
+    margin-bottom: 8px;
+    padding: 0;
+}
+
+.ll2-theme-picker.is-collapsed .ll2-theme-picker-options { flex: none; width: 100%; }
+.ll2-theme-picker.is-collapsed .ll2-theme-picker-option { padding: 0 3px; }

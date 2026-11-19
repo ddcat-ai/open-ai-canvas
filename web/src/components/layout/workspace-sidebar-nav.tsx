@@ -1,13 +1,13 @@
 import { Popover } from "antd";
-import { ChevronRight, CircleUserRound, History as HistoryIcon, Image as ImageIcon, PanelLeftClose, PanelLeftOpen, ShoppingBag, Video } from "lucide-react";
+import { ChevronRight, CircleHelp, Clapperboard, Film, Images, LayoutGrid, Monitor, Moon, Plus, Sparkles, Sun, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
-import { Link, useLocation, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 
-import { AuthLoginLink } from "@/components/auth/auth-login-link";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
+import { LL2ConnectBadge } from "@/components/ll2/ll2-connect";
 import { UserAvatar } from "@/components/layout/user-avatar";
 import { UserGroupAvatarRing, UserGroupBadge } from "@/components/layout/user-group-badge";
 import { Kbd } from "@/components/ui/base/kbd";
@@ -16,16 +16,19 @@ import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
-import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
-import { useSkillLibraryAccess } from "@/lib/skill-access";
+import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useThemeStore, type ThemePreference } from "@/stores/use-theme-store";
+import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { useAssetStore } from "@/stores/use-asset-store";
+import { ll2CreateLocalCanvas, ll2NewCanvasName } from "@/lib/ll2-workspace";
+import { ll2OpenKeyDialog } from "@/stores/use-ll2-store";
 import { WorkspaceAccountCard } from "./workspace-account-card";
-import { WorkspaceSidebarCheckin } from "./workspace-sidebar-checkin";
-import { WorkspaceSidebarStorageMeter } from "./workspace-sidebar-storage-meter";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { trackSiteTrafficAction } from "@/services/site-traffic";
-import { WorkspaceSidebarHistory } from "./workspace-sidebar-history";
-import "./workspace-sidebar-history.css";
+
+/** 版本号只认构建注入的 APP_VERSION，不再另写 v0.1。 */
+const APP_VERSION_LABEL = typeof __APP_VERSION__ === "string" && __APP_VERSION__ ? __APP_VERSION__ : "v1.8.5";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -45,13 +48,11 @@ type WorkspaceNavGroup = {
 
 // 收起侧栏时只显示短名称。
 const COLLAPSED_TITLE_KEYS: Record<string, string> = {
-    home: "nav.collapsed.home",
-    projects: "nav.collapsed.projects",
-    canvas: "nav.collapsed.canvas",
-    assets: "nav.collapsed.assets",
-    skills: "nav.collapsed.skills",
-    plugins: "nav.collapsed.plugins",
-    tasks: "nav.collapsed.tasks",
+    home: "出片",
+    canvas: "画布",
+    assets: "资产",
+    inspiration: "灵感",
+    films: "片子",
 };
 
 function toolItem(slug: NavigationToolSlug, to: string, t: TFunction): WorkspaceNavItem {
@@ -59,31 +60,23 @@ function toolItem(slug: NavigationToolSlug, to: string, t: TFunction): Workspace
     return { id: slug, title: tool ? t(tool.labelKey) : slug, icon: tool?.icon, to };
 }
 
-function buildNav(features: FeatureAvailability, t: TFunction, canUseSkills: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+/**
+ * 2026-11-18 18:57：按用户口径补回「资产」一级入口（对齐影策体验站左侧「资源与工具 / 资产」）。
+ * 素材库是整页，不再只藏在一句话成片的小弹窗里；badge 显示本机素材数，让人一眼知道入口有内容。
+ * 「模型广场」和「模型配置（设置）」仍收在底部小链接，不与创作入口并列。
+ */
+function buildNav(t: TFunction, assetCount: number): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { ...toolItem("create", "/", t), id: "home", title: t("nav.sidebar.home") },
-                { ...toolItem("assets", "/assets", t), title: t("nav.sidebar.assets") },
-                { ...toolItem("canvas", "/canvas", t), title: t("nav.sidebar.canvas") },
-                ...(features.shortDramaEnabled ? [{ ...toolItem("projects", "/projects", t), title: t("nav.sidebar.projects") }] : []),
-                ...(features.ecommerceEnabled ? [{ id: "ecommerce", title: t("nav.sidebar.ecommerce"), icon: ShoppingBag, to: "/ecommerce" }] : []),
-            ],
-        },
-        {
-            heading: t("nav.sidebar.headingTools"),
-            items: [
-                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: t("nav.sidebar.toolboxImage"), icon: ImageIcon, to: "/toolbox/image" }] : []),
-                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: t("nav.sidebar.toolboxVideo"), icon: Video, to: "/toolbox/video" }] : []),
-                ...(canUseSkills ? [{ ...toolItem("skills", "/skills", t), title: t("nav.sidebar.skills") }] : []),
-                ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins", t), title: t("nav.sidebar.plugins") }] : []),
-                ...(features.taskCenterEnabled ? [{ id: "tasks", title: t("nav.sidebar.history"), icon: HistoryIcon, to: "/tasks" }] : []),
+                { ...toolItem("create", "/", t), id: "home", icon: Clapperboard, title: t("ll2.nav.create", { defaultValue: "一句话成片" }) },
+                { id: "canvas", title: t("ll2.nav.canvas", { defaultValue: "无限画布" }), icon: LayoutGrid, to: "/canvas" },
+                { id: "assets", title: t("ll2.nav.assets", { defaultValue: "资产" }), icon: Images, to: "/assets", ...(assetCount ? { badge: assetCount } : {}) },
+                { id: "inspiration", title: t("ll2.nav.inspiration", { defaultValue: "灵感广场" }), icon: Sparkles, to: "/inspiration" },
+                { id: "films", title: t("ll2.nav.films", { defaultValue: "我的片子" }), icon: Film, to: "/films" },
             ],
         },
     ];
-
-    // 管理、设置和退出登录不再占据参考站式侧栏底部，而是通过用户卡片菜单进入。
-    // 路由和写操作仍保留，避免把用户端导航变成无法访问的装饰。
     return { groups, footer: [] };
 }
 
@@ -93,14 +86,12 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
     const userGroup = useUserStore((state) => state.userGroup);
     const profileName = user?.displayName || user?.username || t("shell.guest");
 
+    // 没有登录界面：未登录时这里显示的是 LL2 Key 连接状态与唯一填写入口。
     if (!user) {
         return (
-            <AuthLoginLink className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label={t("shell.login")} title={t("shell.login")}>
-                <span className="app-workspace-sidebar-profile-avatar">
-                    <CircleUserRound aria-hidden />
-                </span>
-                {!collapsed ? <span>{t("shell.guest")}</span> : null}
-            </AuthLoginLink>
+            <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
+                <LL2ConnectBadge compact={collapsed} />
+            </div>
         );
     }
 
@@ -116,8 +107,6 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
 
     return (
         <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
-            <WorkspaceSidebarCheckin collapsed={collapsed} />
-            <WorkspaceSidebarStorageMeter collapsed={collapsed} />
             <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
                 <Popover open={menuOpen} onOpenChange={setMenuOpen} trigger="click" placement="topLeft" arrow={false} rootClassName="workspace-account-popover" content={content}>
                     <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label={t("shell.openAccountMenu")} title={profileName}>
@@ -140,8 +129,6 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance);
     const { t } = useTranslation();
-    // 未上传自定义 Logo 时用内置取景框字形（与欢迎页、登录框、加载页同一个 /logo.svg），放在墨色实底方块里；
-    // 自定义 Logo 的配色不可预知，改用中性浅底方块承托。
     const mark = (
         <BrandLogoFrame
             className={cn("app-workspace-brand-mark grid shrink-0 place-items-center", !appearance.logoConfigured && "is-builtin")}
@@ -154,7 +141,7 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
         <div className={cn("app-workspace-sidebar-brand-row relative shrink-0", collapsed && "is-collapsed")}>
             <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={t("shell.brandHome", { brand: appearance.brandName })}>
                 {mark}
-                {!collapsed ? <span className="app-workspace-brand-wordmark truncate">{appearance.brandName}</span> : null}
+                {!collapsed ? <span className="app-workspace-brand-wordmark truncate">DMC</span> : null}
             </Link>
             <button
                 type="button"
@@ -192,7 +179,6 @@ function NavItem({
     const [isOpen, setIsOpen] = useState(false);
     const reducedMotion = useReducedMotion();
 
-    // 激活分支自动展开（如设置分区子项），保证当前位置可见。
     useEffect(() => {
         if (isActive && hasChildren) setIsOpen(true);
     }, [isActive, hasChildren]);
@@ -246,7 +232,6 @@ function NavItem({
         onSelect(item.id);
     };
 
-    // 局部 const：闭包内 TS 保留窄化，供 preload 回调使用。
     const linkTo = item.to;
 
     return (
@@ -301,7 +286,6 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
     const hasActive = group.items.some((item) => item.id === activeId || (item.id === "settings" && activeId.startsWith("settings:")));
     const [isOpen, setIsOpen] = useState(true);
 
-    // 激活项所在分组自动展开，保证当前位置可见。
     useEffect(() => {
         if (hasActive) setIsOpen(true);
     }, [hasActive]);
@@ -314,7 +298,6 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
         </div>
     );
 
-    // 无标题分组（核心导航入口）常驻展示，不做折叠。
     if (!group.heading || collapsed) {
         return (
             <div className="app-workspace-nav-group flex shrink-0 flex-col" data-nav-group-heading={group.heading || ""}>
@@ -334,8 +317,6 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, onLogout, collaps
     );
 }
 
-// 菜单项 id 与实际路由不一定同名：/toolbox/image 和 /toolbox/video 共用 toolbox 前缀，
-// 只取首段会让两者都匹配不到任何菜单项，侧栏因此没有高亮。
 export function workspaceNavActiveId(pathname: string, section?: string | null) {
     const segments = pathname.split("/").filter(Boolean);
     if (segments[0] === "toolbox" && segments[1]) return `toolbox-${segments[1]}`;
@@ -344,15 +325,92 @@ export function workspaceNavActiveId(pathname: string, section?: string | null) 
     return slug === "settings" && section ? `settings:${section}` : slug;
 }
 
+/** 工作台顶部的「+ 新建画布」：建一张真正落本机的画布并打开。 */
+function NewCanvasButton({ collapsed, onNavigate }: { collapsed: boolean; onNavigate: () => void }) {
+    const navigate = useNavigate();
+    const { t } = useTranslation();
+    const create = () => {
+        const count = useCanvasStore.getState().projects.length;
+        onNavigate();
+        void ll2CreateLocalCanvas(ll2NewCanvasName(count)).then((id) => navigate(`/canvas/${id}`));
+    };
+    return (
+        <button type="button" className={`ll2-sidebar-new ${collapsed ? "is-collapsed" : ""}`} onClick={create} title={collapsed ? t("ll2.nav.newCanvas", { defaultValue: "新建画布" }) : undefined}>
+            <Plus className="size-4 shrink-0" aria-hidden />
+            {!collapsed ? <span>{t("ll2.nav.newCanvas", { defaultValue: "新建画布" })}</span> : null}
+        </button>
+    );
+}
+
+/** 「怎么出第一支片子」：不跳接口文档，就地展开四步白话。 */
+function FirstFilmGuide() {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="ll2-sidebar-links">
+            <button type="button" className="ll2-sidebar-guide" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+                <CircleHelp className="size-3.5" aria-hidden /> 怎么出第一支片子
+            </button>
+            {open ? (
+                <div className="ll2-sidebar-guide-panel">
+                    <strong>四步就能出片</strong>
+                    <ol>
+                        <li>写一句话，说清想拍的画面</li>
+                        <li>看「本次一共」，先知道花多少钱</li>
+                        <li>第一次用，填一次 LL2 Key</li>
+                        <li>点「开始创作」，片子进「我的片子」</li>
+                    </ol>
+                    <button type="button" onClick={ll2OpenKeyDialog}>去填 Key</button>
+                </div>
+            ) : null}
+            <div className="ll2-sidebar-sublinks">
+                <Link to="/models">模型广场 · 看看价格</Link>
+                <Link to="/config">设置 · 填 Key 与默认参数</Link>
+            </div>
+        </div>
+    );
+}
+
+/** 黑夜模式开关：放在一级侧栏底部，免登录游客也能看到、也能记住。 */
+const THEME_CHOICES: { value: ThemePreference; label: string; icon: ComponentType<{ className?: string }> }[] = [
+    { value: "light", label: "浅色", icon: Sun },
+    { value: "dark", label: "黑夜", icon: Moon },
+    { value: "system", label: "跟随系统", icon: Monitor },
+];
+
+function ThemePicker({ collapsed }: { collapsed: boolean }) {
+    const preference = useThemeStore((state) => state.preference);
+    const setPreference = useThemeStore((state) => state.setPreference);
+    return (
+        <div className={cn("ll2-theme-picker", collapsed && "is-collapsed")} role="group" aria-label="界面主题">
+            {!collapsed ? <span className="ll2-theme-picker-label">界面</span> : null}
+            <div className="ll2-theme-picker-options">
+                {THEME_CHOICES.map(({ value, label, icon: Icon }) => (
+                    <button
+                        key={value}
+                        type="button"
+                        className={cn("ll2-theme-picker-option", preference === value && "is-active")}
+                        aria-pressed={preference === value}
+                        title={label}
+                        onClick={() => setPreference(value)}
+                    >
+                        <Icon className="size-3.5 shrink-0" aria-hidden />
+                        {!collapsed ? <span>{label}</span> : null}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onOpenSearch: () => void; onExpand: () => void; onCollapse: () => void }) {
     const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
-    const features = useUserStore((state) => state.features);
     const user = useUserStore((state) => state.user);
     const { handleLogout } = useWorkspaceLogout();
     const { t, i18n } = useTranslation();
-    const canUseSkills = useSkillLibraryAccess();
-    const { groups, footer } = useMemo(() => buildNav(features, t, canUseSkills), [features, t, i18n.language, canUseSkills]);
+    // 资产入口上的数字只算正常状态（回收站里的不算），素材增删后即时更新。
+    const assetCount = useAssetStore((state) => state.assets.filter((a) => (a.kind === "image" || a.kind === "video") && a.status !== "archived").length);
+    const { groups, footer } = useMemo(() => buildNav(t, assetCount), [t, i18n.language, assetCount]);
 
     const activeId = workspaceNavActiveId(pathname, searchParams.get("section"));
 
@@ -381,6 +439,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     return (
         <div className={cn("app-workspace-sidebar-nav flex h-full shrink-0 flex-col", collapsed && "is-collapsed")}>
             <WorkspaceSwitcher collapsed={collapsed} onNavigate={onNavigate} onExpand={onExpand} onCollapse={onCollapse} />
+            <NewCanvasButton collapsed={collapsed} onNavigate={onNavigate} />
 
             <LayoutGroup id="workspace-sidebar-nav">
                 <div
@@ -399,13 +458,15 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                                 <NavGroup key={index} group={group} activeId={activeId} onNavigate={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                             ))}
                         </nav>
-                        {!collapsed && user ? <WorkspaceSidebarHistory key={user.id} userId={user.id} onNavigate={onNavigate} /> : null}
                     </div>
                 </div>
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
+                {!collapsed ? <FirstFilmGuide /> : null}
                 <WorkspaceSidebarProfile collapsed={collapsed} user={user} />
+                <ThemePicker collapsed={collapsed} />
+                {!collapsed ? <div className="ll2-sidebar-version">不用注册账号，只要填一次 Key · {APP_VERSION_LABEL} · 存这台电脑</div> : null}
                 {footer.length ? (
                     <div className="mt-2 flex flex-col gap-0.5">
                         {footer.map((item) => (

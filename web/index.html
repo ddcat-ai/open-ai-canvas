@@ -3,11 +3,11 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="description" content="AI 影视与短剧创作工作台" />
+        <meta name="description" content="写一句话，出一支片子。不用注册，填一次 LL2 Key 就能用。" />
         <!-- 不写内置品牌资源：首屏必须品牌中性，favicon 由 use-appearance-store 解析出外观后写入。
              空 data URL 只是为了不让浏览器去请求 /favicon.ico（那会是一条 404）。 -->
         <link rel="icon" href="data:," />
-        <title>正在加载</title>
+        <title>DMC</title>
         <style>
             /* Fix layer order before production chunks can register utilities ahead of base. */
             @layer theme, base, components, utilities;
@@ -17,10 +17,10 @@
                 margin: 0;
                 background: #ffffff;
             }
-            /* 与 globals.css 的 .dark --background 一致；暗色主题下切页或首屏不透出白底。 */
+            /* 与黑夜模式 --ll2-bg (#101014) 一致；暗色主题下切页或首屏不透出白底。 */
             html.dark,
             html.dark body {
-                background: #0f0f11;
+                background: #101014;
             }
             #boot-recovery {
                 color: #171717;
@@ -79,9 +79,17 @@
             }
         </style>
         <script>
+            // 首帧前定色，避免闪白：三档偏好写在本机，system 直接问操作系统。
+            // 老版本只存 theme，按它当时的明确选择处理；全新安装默认跟随系统。
             try {
                 var s = JSON.parse(localStorage.getItem("yingce:theme_store") || "{}");
-                var t = s.state && s.state.theme === "dark" ? "dark" : "light";
+                var st = s.state || {};
+                var p = st.preference;
+                var systemDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+                var t;
+                if (p === "dark" || p === "light") t = p;
+                else if (p === "system" || !st.theme) t = systemDark ? "dark" : "light";
+                else t = st.theme === "dark" ? "dark" : "light";
                 document.documentElement.classList.toggle("dark", t === "dark");
                 document.documentElement.style.colorScheme = t;
             } catch (e) {}

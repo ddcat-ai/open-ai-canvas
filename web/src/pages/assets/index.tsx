@@ -117,6 +117,25 @@ const ASSET_LIBRARY_QUERY_KEY = ["asset-library"] as const;
 const ASSET_FOLDER_QUERY_KEY = ["asset-folders"] as const;
 type AssetFolderFilter = "all" | "uncategorized" | string;
 
+// C 端免登录没有账号后端，文件夹定义改存本机（素材本身的 folderId 本来就在本机 store 里）。
+const LOCAL_FOLDER_KEY = "ll2:asset-folders";
+function readLocalFolders(): AssetFolder[] {
+    try {
+        const raw = JSON.parse(window.localStorage.getItem(LOCAL_FOLDER_KEY) || "[]");
+        if (!Array.isArray(raw)) return [];
+        return raw.filter((item) => item && typeof item.id === "string" && typeof item.name === "string");
+    } catch {
+        return [];
+    }
+}
+function writeLocalFolders(folders: AssetFolder[]) {
+    try {
+        window.localStorage.setItem(LOCAL_FOLDER_KEY, JSON.stringify(folders));
+    } catch {
+        // 本机存不下（隐私模式/配额满）时保持内存态，不阻塞用户继续整理。
+    }
+}
+
 export default function AssetsPage() {
     const { message } = App.useApp();
     const { t } = useTranslation();
@@ -174,6 +193,7 @@ export default function AssetsPage() {
     const [recommendConsent, setRecommendConsent] = useState(false);
     const [recommendNote, setRecommendNote] = useState("");
     const [recommendSaving, setRecommendSaving] = useState(false);
+    const [localFolders, setLocalFolders] = useState<AssetFolder[]>(readLocalFolders);
 
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
@@ -191,7 +211,8 @@ export default function AssetsPage() {
         queryFn: () => listAssetFolders(),
         enabled: Boolean(userId),
     });
-    const folders = foldersQuery.data?.folders || [];
+    // 免登录：文件夹列表用本机存的，不再拉 /api/user-data/asset-folders。
+    const folders = userId ? foldersQuery.data?.folders || [] : localFolders;
 
     const allLibraryAssets = useMemo(() => assets, [assets]);
     const activeAssets = useMemo(() => allLibraryAssets.filter((asset) => asset.status !== "archived"), [allLibraryAssets]);
@@ -244,13 +265,18 @@ export default function AssetsPage() {
     const allFilteredSelected = visibleAssetIds.length > 0 && visibleAssetIds.every((id) => selectedIds.includes(id));
     const selectionMode = selecting || selectedIds.length > 0;
     const totalAssets = useRemotePage ? remoteTotal : filteredAssets.length;
+    // 免登录没有方舟认证能力，分类页签里不要留一个恒为 0 的「方舟认证」死入口。
+    const visibleCategoryOptions = useMemo(
+        () => (userId ? categoryOptions : categoryOptions.filter((option) => option.value !== ARK_ASSET_CATEGORY)),
+        [userId],
+    );
     const kindCounts = useMemo(
         () => assetCountMap(kindOptions, useRemotePage ? assetPageQuery.data?.kindCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.kind),
         [activeAssets, assetPageQuery.data?.kindCounts, trashAssets, useRemotePage, viewMode],
     );
     const categoryCounts = useMemo(
-        () => assetCountMap(categoryOptions, useRemotePage ? assetPageQuery.data?.categoryCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.category || "other"),
-        [activeAssets, assetPageQuery.data?.categoryCounts, trashAssets, useRemotePage, viewMode],
+        () => assetCountMap(visibleCategoryOptions, useRemotePage ? assetPageQuery.data?.categoryCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.category || "other"),
+        [activeAssets, assetPageQuery.data?.categoryCounts, trashAssets, useRemotePage, viewMode, visibleCategoryOptions],
     );
     const folderCounts = assetPageQuery.data?.folderCounts || {};
 
@@ -288,11 +314,21 @@ export default function AssetsPage() {
         if (!name || !folderEditor) return;
         setFolderSaving(true);
         try {
-            if (folderEditor === "new") await createAssetFolder(name);
-            else await updateAssetFolder(folderEditor.id, name);
+            if (!userId) {
+                const now = new Date().toISOString();
+                const next = folderEditor === "new"
+                    ? [...localFolders, { id: `local-${Date.now().toString(36)}`, name, position: localFolders.length, createdAt: now, updatedAt: now }]
+                    : localFolders.map((folder) => (folder.id === folderEditor.id ? { ...folder, name, updatedAt: now } : folder));
+                writeLocalFolders(next);
+                setLocalFolders(next);
+            } else if (folderEditor === "new") {
+                await createAssetFolder(name);
+            } else {
+                await updateAssetFolder(folderEditor.id, name);
+            }
             setFolderEditor(null);
             setFolderName("");
-            await invalidateAssetLibrary();
+            if (userId) await invalidateAssetLibrary();
             message.success(folderEditor === "new" ? t("library.assets.folder.created") : t("library.assets.folder.renamed"));
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("library.assets.folder.saveFailed"));
@@ -303,14 +339,20 @@ export default function AssetsPage() {
 
     const removeFolder = async (folder: AssetFolder) => {
         try {
-            await deleteAssetFolder(folder.id);
+            if (!userId) {
+                const next = localFolders.filter((item) => item.id !== folder.id);
+                writeLocalFolders(next);
+                setLocalFolders(next);
+            } else {
+                await deleteAssetFolder(folder.id);
+            }
             for (const asset of useAssetStore.getState().assets) {
                 if (asset.folderId === folder.id) updateAsset(asset.id, { folderId: undefined });
             }
             await flushAssetStorePersistence();
             if (folderFilter === folder.id) setFolderFilter("all");
             setPage(1);
-            await invalidateAssetLibrary();
+            if (userId) await invalidateAssetLibrary();
             message.success(t("library.assets.folder.deleted", { name: folder.name }));
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("library.assets.folder.deleteFailed"));
@@ -321,11 +363,12 @@ export default function AssetsPage() {
     const moveAssetsToFolder = async (assetIds: string[], folderId: string) => {
         if (!assetIds.length) return;
         try {
-            await moveRemoteAssetsToFolder(assetIds, folderId);
+            // 免登录只改本机 folderId；登录态才需要让服务端一起挪。
+            if (userId) await moveRemoteAssetsToFolder(assetIds, folderId);
             assetIds.forEach((id) => updateAsset(id, { folderId: folderId || undefined }));
             await flushAssetStorePersistence();
             setSelectedIds([]);
-            await invalidateAssetLibrary();
+            if (userId) await invalidateAssetLibrary();
             message.success(t("library.assets.moved", { count: assetIds.length }));
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("library.assets.moveFailed"));
@@ -391,21 +434,27 @@ export default function AssetsPage() {
         const values = await form.validateFields();
         let imageData = imageDraft;
         if (values.kind === "image" && imageFile) {
-            setImageUploading(true);
-            setImageUploadProgress({ phase: "uploading", percent: 0 });
-            try {
-                const image = await uploadImage(imageFile);
-                setImageUploadProgress({ phase: "confirming" });
-                imageData = { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
-                setImageDraft(imageData);
+            // C 端免登录：/api/resources 会 401。本机 imageDraft 已经是 data URI，直接用它，
+            // 不为拿 storageKey 去传后端（传了只会失败并弹错）。
+            if (userId) {
+                setImageUploading(true);
+                setImageUploadProgress({ phase: "uploading", percent: 0 });
+                try {
+                    const image = await uploadImage(imageFile);
+                    setImageUploadProgress({ phase: "confirming" });
+                    imageData = { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
+                    setImageDraft(imageData);
+                    setImageFile(null);
+                    void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
+                } catch (error) {
+                    message.error(error instanceof Error ? error.message : t("library.assets.imageUploadFailed"));
+                    return;
+                } finally {
+                    setImageUploading(false);
+                    setImageUploadProgress(null);
+                }
+            } else {
                 setImageFile(null);
-                void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
-            } catch (error) {
-                message.error(error instanceof Error ? error.message : t("library.assets.imageUploadFailed"));
-                return;
-            } finally {
-                setImageUploading(false);
-                setImageUploadProgress(null);
             }
         }
 
@@ -443,6 +492,12 @@ export default function AssetsPage() {
         }
 
         await flushAssetStorePersistence();
+        if (!userId) {
+            // 免登录：没有云端可同步，保存成功就是成功，不该每次弹「仅保存在本机」。
+            message.success(editingAsset ? t("library.assets.updated") : t("library.assets.saved"));
+            setIsAssetOpen(false);
+            return;
+        }
         try {
             await saveRemoteUserDataNow([]);
             await invalidateAssetLibrary();
@@ -476,6 +531,22 @@ export default function AssetsPage() {
 
     const readModelFile = async (file?: File) => {
         if (!file || !/\.(glb|gltf)$/i.test(file.name)) return;
+        if (!userId) {
+            // 免登录：3D 文件存成本机 data URL，够预览和下载；不传 /api/resources。
+            const dataUrl = await readFileAsDataUrl(file);
+            addAsset({
+                kind: "model",
+                title: file.name.replace(/\.(glb|gltf)$/i, ""),
+                coverUrl: "",
+                tags: ["3D模型"],
+                source: "手动上传",
+                data: { url: dataUrl, bytes: file.size, mimeType: file.type || "model/gltf-binary", fileName: file.name },
+                metadata: { source: "manual" },
+            });
+            await flushAssetStorePersistence();
+            message.success(t("library.assets.modelSaved"));
+            return;
+        }
         const uploaded = await uploadMediaFile(file, "model");
         void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
         addAsset({
@@ -824,7 +895,7 @@ export default function AssetsPage() {
                                 />
                                 <AssetFilterGroup
                                     title={t("library.assets.batch.category")}
-                                    options={categoryOptions}
+                                    options={visibleCategoryOptions}
                                     icons={assetCategoryIcons}
                                     value={viewMode === "library" ? categoryFilter : ""}
                                     counts={categoryCounts}
@@ -1004,11 +1075,20 @@ export default function AssetsPage() {
                                                     onDelete={() => setDeletingAsset(asset)}
                                                     folderOptions={folderSelectOptions}
                                                     onMoveToFolder={(folderId) => void moveAssetsToFolder([asset.id], folderId)}
-                                                    onRecommend={(candidate) => {
+                                                    onQuote={(item) => {
+                                                        // @ 引用按标题反查，同名会认第一个，先让用户改名再引。
+                                                        const sameTitle = useAssetStore.getState().assets.filter((asset) => asset.status !== "archived" && asset.title === item.title);
+                                                        if (sameTitle.length > 1) {
+                                                            message.warning("有多个同名素材，@ 引用会认第一个；先改个不同的名字再引用");
+                                                            return;
+                                                        }
+                                                        navigate(`/?quote=${encodeURIComponent(item.title)}`);
+                                                    }}
+                                                    onRecommend={userId ? (candidate) => {
                                                         setRecommendAsset(candidate);
                                                         setRecommendNote("");
                                                         setRecommendConsent(false);
-                                                    }}
+                                                    } : undefined}
                                                     arkProgress={arkEnabled ? arkProgress.get(asset.id) : undefined}
                                                 />
                                             ))}

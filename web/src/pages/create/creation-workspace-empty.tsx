@@ -2,7 +2,7 @@
 
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import type { CreationMode } from "./creation-assets";
-import { ArrowUp, ChevronDown, Clapperboard, FileText, Image as ImageIcon, Blocks, Bookmark } from "lucide-react";
+import { ArrowUp, ChevronDown, Clapperboard, FileText, Image as ImageIcon, Bookmark } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -86,17 +86,6 @@ export const creationEmptySuggestions: Array<{ mode: CreationMode; icon: typeof 
             return translate("create.empty.suggest.storyHint");
         },
         prompt: "帮我续写一个短剧故事，先聊聊剧情走向：",
-    },
-    {
-        mode: "video",
-        icon: Blocks,
-        get title() {
-            return translate("create.empty.suggest.skillTitle");
-        },
-        get hint() {
-            return translate("create.empty.suggest.skillHint");
-        },
-        prompt: "调用分镜技能，帮我规划这个镜头的拍摄方案：",
     },
 ];
 

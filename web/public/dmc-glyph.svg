@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 32 32" role="img" aria-label="DMC">
+  <!-- DMC 单色字形：透明底，只留官方方标里的白色 D，专供 CSS mask 使用。
+       路径与 https://ll2.cn/dmc-mark-vermilion.svg 完全一致，仅去掉朱红实底；
+       实底方标见 /logo.svg。这里不能有 rect，否则 mask 会变成一整块方块。 -->
+  <path fill="#fff" d="M7 6h4.2v20H7z"/>
+  <path fill="#fff" d="M11.2 6H16c5.6 0 9.2 4.2 9.2 10S21.6 26 16 26h-4.8v-4.2H15.6c3.1 0 5.2-2.4 5.2-5.8s-2.1-5.8-5.2-5.8H11.2z"/>
+</svg>

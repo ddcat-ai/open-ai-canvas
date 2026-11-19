@@ -16,7 +16,6 @@ import "./welcome.css";
 import { Select } from "@/components/ui/base/select";
 
 const StoryReel = lazy(() => import("./story-reel"));
-const github = "https://github.com/ddcat-ai/open-ai-canvas";
 
 export default function WelcomePage() {
     const [look, setLook] = useState(getWelcomeLook);
@@ -111,7 +110,6 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
                 <nav className={menu ? "welcome-nav is-open" : "welcome-nav"} aria-label={t("account.welcome.nav")}>
                     <a href="#workbench" onClick={() => setMenu(false)}>{t("account.welcome.navWorkbench")}</a>
                     <a href="#contributors" onClick={() => setMenu(false)}>{t("account.welcome.navContributors")}</a>
-                    <a href={github} target="_blank" rel="noreferrer">GitHub<ArrowUpRight size={13} /></a>
                 </nav>
                 <Button className="welcome-header-cta" type="primary" href="/create" icon={<ArrowUpRight size={16} />} iconPlacement="end">{t("account.welcome.start")}</Button>
                 <IconButton className="welcome-icon mobile-menu" variant="ghost" size="lg" icon={menu ? X : Menu} aria-label={menu ? t("account.welcome.closeMenu") : t("account.welcome.openMenu")} aria-expanded={menu} onClick={() => setMenu(!menu)} />
@@ -151,7 +149,7 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
                 <section className="welcome-ending"><h2>{t("account.welcome.endingLine1")}<br />{t("account.welcome.endingLine2")}</h2>
                 <WelcomeContributorsCard /></section>
             </main>
-            <footer className="welcome-footer"><a href="/welcome">{brandName}</a><span>{t("account.welcome.footer")}</span><a href={`${github}/blob/main/LICENSE`} target="_blank" rel="noreferrer">Open Source · MIT License<ArrowUpRight size={12} /></a></footer>
+            <footer className="welcome-footer"><a href="/welcome">{brandName}</a><span>{t("account.welcome.footer")}</span></footer>
             {look.credit && <div className="welcome-media-credit"><a href={`/welcome/credits.html#${look.id}`} target="_blank" rel="noreferrer">{t("account.welcome.creditLicense", { credit: t(look.credit) })}<ArrowUpRight size={12} /></a></div>}
             {playing && look.video && <FilmDialog look={look} onClose={() => setPlaying(false)} videoRef={videoRef} />}
         </div>

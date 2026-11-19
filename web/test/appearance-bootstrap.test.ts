@@ -7,7 +7,8 @@ test("initial HTML stays brand neutral until the public appearance is resolved",
     const [html, mainSource] = await Promise.all([Bun.file(new URL("../index.html", import.meta.url)).text(), Bun.file(new URL("../src/main.tsx", import.meta.url)).text()]);
 
     expect(html).not.toContain("影策");
-    expect(html).toContain("<title>正在加载</title>");
+    // C 端首屏标题固定为品牌名 DMC（早前「把加载中改成 DMC」的口径），不再显示中性的加载文案。
+    expect(html).toContain("<title>DMC</title>");
     expect(mainSource).toContain("bootstrapAppearance()");
     expect(mainSource).toContain('import("./application")');
     expect(mainSource.indexOf("bootstrapAppearance()")).toBeLessThan(mainSource.indexOf('import("./application")'));
@@ -25,7 +26,8 @@ test("a custom login video never falls back to the built-in poster", () => {
         authVideoPosterUrl: "",
     });
 
-    expect(appearance.brandName).toBe("HIMA Studio");
+    // 品牌名固定 DMC：后台配置里的自定义品牌文案不再覆盖用户端界面。
+    expect(appearance.brandName).toBe("DMC");
     expect(appearance.brandSlug).toBe("hima-studio");
     expect(appearance.authHeroTitle).toBe("把灵感，\n变成可见的故事。");
     expect(appearance.authHeroDescription).toBe("从同一个创作空间持续推进。");

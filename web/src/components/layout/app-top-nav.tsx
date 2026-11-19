@@ -1,14 +1,13 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
+import { Clapperboard } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { BannerAnnouncementsSlider } from "@/components/layout/banner-announcements-slider";
 import { ModelSetupGuide } from "@/components/layout/model-setup-guide";
 import { WorkspaceSidebarNav } from "@/components/layout/workspace-sidebar-nav";
 import { readWorkspaceSidebarCollapsed, writeWorkspaceSidebarCollapsed } from "@/components/layout/workspace-sidebar-state";
 import { WorkspaceTopBar } from "@/components/layout/workspace-top-bar";
 import { WorkspaceTopBarExtensionProvider } from "@/components/layout/workspace-top-bar-extension";
-import { WorkspaceStorageLimitNotice } from "@/components/layout/workspace-storage-limit-notice";
 import { WorkspaceWalletHost } from "@/components/layout/workspace-wallet-modal";
 import { GenerationSuccessNotifier } from "@/components/layout/generation-success-notifier";
 import { useWorkspaceDocumentTitle } from "@/hooks/use-workspace-document-title";
@@ -26,10 +25,14 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const [paletteOpen, setPaletteOpen] = useState(false);
     useWorkspaceDocumentTitle();
 
-    const hideChrome = pathname.startsWith("/admin") || /^\/canvas\/[^/]+/.test(pathname);
+    // 2026-11-18：画布编辑器会隐藏整条侧栏，不能再让「一句话成片」跟着消失。
+    // 这里挂一个不依赖登录、不打断画布的固定返回入口。
+    const ll2Home = pathname === "/" || pathname === "/create";
+    const canvasEditor = /^\/canvas\/[^/]+/.test(pathname);
+    const hideChrome = pathname.startsWith("/admin") || canvasEditor;
     const showGlobalTopBar = !hideChrome;
     const spatialWorkbench = isSpatialWorkbenchPath(pathname);
-    const creationWorkspace = pathname === "/" || pathname === "/create";
+    const creationWorkspace = ll2Home;
 
     const isMobileViewport = () => window.innerWidth < 1024;
 
@@ -88,8 +91,6 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                 <div className={cn("app-workspace-shell flex h-dvh min-h-0 w-full flex-col overflow-hidden", spatialWorkbench && "is-spatial", creationWorkspace && "is-creation-workspace")}>
                     {!hideChrome && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label={t("shell.collapseSidebar")} onClick={() => setMobileSidebarExpanded(false)} /> : null}
 
-                    {showGlobalTopBar ? <BannerAnnouncementsSlider /> : null}
-
                     <div className="app-workspace-main-row flex min-h-0 min-w-0 flex-1 overflow-hidden">
                         {!hideChrome ? (
                             <aside
@@ -118,10 +119,14 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
                     {paletteOpen ? <Suspense fallback={null}><WorkspaceCommandPalette open onClose={() => setPaletteOpen(false)} /></Suspense> : null}
                 </div>
             </WorkspaceTopBarExtensionProvider>
+            {canvasEditor ? (
+                <Link to="/" className="ll2-canvas-back" title="回一句话成片；这张画布会留在这台电脑">
+                    <Clapperboard className="size-4" aria-hidden /> 回一句话成片
+                </Link>
+            ) : null}
             <WorkspaceWalletHost />
-            <WorkspaceStorageLimitNotice />
             <GenerationSuccessNotifier />
-            <ModelSetupGuide hidden={pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin")} />
+            <ModelSetupGuide hidden={ll2Home || pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin")} />
         </>
     );
 }

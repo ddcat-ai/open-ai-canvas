@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CopyPlus, Focus, FolderKanban, Home, LayoutGrid, Workflow, LoaderCircle, Menu, PanelsLeftBottom, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, Focus, FolderKanban, Home, LayoutGrid, Workflow, LoaderCircle, Menu, PanelsLeftBottom, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 
@@ -33,8 +33,6 @@ type CanvasTopBarProps = {
     onDeleteProject: () => void;
     onSave: () => void | Promise<void>;
     onImportImage: () => void;
-    onImportLibTV: () => void;
-    onImportTapNow: () => void;
     onUndo: () => void;
     onRedo: () => void;
     onShare: () => void;
@@ -63,8 +61,6 @@ export function CanvasTopBar({
     onDeleteProject,
     onSave,
     onImportImage,
-    onImportLibTV,
-    onImportTapNow,
     onUndo,
     onRedo,
     onShare,
@@ -82,7 +78,6 @@ export function CanvasTopBar({
     const { availableMicrocredits, refreshing } = useWalletBalance(user?.id, creditsEnabled);
     const titleRef = useRef<HTMLDivElement>(null);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
-    const [importMenuOpen, setImportMenuOpen] = useState(false);
 
     const handleShortDramaGuideToggle = () => {
         shortDramaGuide?.onToggle();
@@ -136,6 +131,19 @@ export function CanvasTopBar({
                                 <Menu className="size-5" />
                             </button>
                         </Dropdown>
+                    </CanvasTopBarTooltip>
+
+                    {/* 2026-11-19 走查：返回画布列表原来只藏在菜单里，新手容易困在单张画布。
+                        常驻一颗按钮，放在菜单旁边，不占标题区。 */}
+                    <CanvasTopBarTooltip label="返回画布列表">
+                        <Link
+                            to="/canvas"
+                            className="canvas-topbar-action grid size-9 place-items-center rounded-full"
+                            style={{ color: theme.node.text }}
+                            aria-label="返回画布列表"
+                        >
+                            <LayoutGrid className="size-4" />
+                        </Link>
                     </CanvasTopBarTooltip>
 
                     <div ref={titleRef} className="canvas-topbar-title-block flex min-w-0 flex-auto flex-col items-start overflow-hidden">
@@ -206,23 +214,6 @@ export function CanvasTopBar({
                             onClick={onOpenSearch}
                             aria-label="搜索画布节点"
                         />
-                    </CanvasTopBarTooltip>
-                    <CanvasTopBarTooltip label="导入第三方画布" suppressed={importMenuOpen}>
-                        <Dropdown
-                            trigger={["click"]}
-                            placement="bottomRight"
-                            onOpenChange={setImportMenuOpen}
-                            menu={{
-                                items: [
-                                    { key: "libtv", icon: <CopyPlus className="size-4" />, label: "导入 LibTV 画布", onClick: onImportLibTV },
-                                    { key: "tapnow", icon: <CloudDownload className="size-4" />, label: "导入 TapNow 画布", onClick: onImportTapNow },
-                                ],
-                            }}
-                        >
-                            <Button type="text" className="canvas-topbar-action canvas-topbar-import-button !h-10 !rounded-xl !px-2 !font-medium" style={{ color: theme.node.text }} icon={<CloudDownload className="size-4" />} aria-label="导入第三方画布">
-                                <span className="hidden lg:inline">导入第三方画布</span>
-                            </Button>
-                        </Dropdown>
                     </CanvasTopBarTooltip>
                     {user && creditsEnabled ? (
                         <CanvasTopBarTooltip label="打开积分中心">

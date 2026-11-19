@@ -1,45 +1,47 @@
-import i18next, { type Resource } from "i18next";
+import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
 
 import { useLocaleStore } from "@/stores/use-locale-store";
-import { AREA_CATALOGS } from "./areas";
-import { DEFAULT_LOCALE, SUPPORTED_LOCALES, type AppLocale } from "./locales";
-import { deDE } from "./messages/de-DE";
-import { enUS } from "./messages/en-US";
-import { frFR } from "./messages/fr-FR";
-import { jaJP } from "./messages/ja-JP";
-import { koKR } from "./messages/ko-KR";
-import { zhCN } from "./messages/zh-CN";
+import { DEFAULT_LOCALE, type AppLocale } from "./locales";
+import { pack as zhCNPack } from "./messages/packs/zh-CN";
+import type { LocalePack } from "./messages/packs/types";
 import { personalAppearanceMessages } from "./personal-appearance-messages";
 import { personalAvatarMessages } from "./personal-avatar-messages";
 
-const CORE_CATALOGS: Record<AppLocale, object> = { "zh-CN": zhCN, "en-US": enUS, "fr-FR": frFR, "de-DE": deDE, "ja-JP": jaJP, "ko-KR": koKR };
+/**
+ * 非中文文案包按需加载。
+ *
+ * 2026-11-19 真实构建取证：原来 6 种语言的 core + 9 个区域目录全部静态内联，
+ * 单个 i18n chunk 1.05MB，且被 modulepreload 塞进首屏（首屏 preload 合计 1.75MB）。
+ * C 端界面已撤掉语言切换入口，默认与兜底都是简体中文，所以只把中文同步打进首屏；
+ * 其余 5 种语言拆成独立 chunk，检测到非中文偏好时再异步补，失败就继续用中文，不白屏。
+ */
+const LAZY_PACKS: Partial<Record<AppLocale, () => Promise<{ pack: LocalePack }>>> = {
+    "en-US": () => import("./messages/packs/en-US"),
+    "fr-FR": () => import("./messages/packs/fr-FR"),
+    "de-DE": () => import("./messages/packs/de-DE"),
+    "ja-JP": () => import("./messages/packs/ja-JP"),
+    "ko-KR": () => import("./messages/packs/ko-KR"),
+};
 
-/** 每种语言 = 公共目录 + 各页面区域目录（区域名作为顶级命名空间）。 */
-function buildResources(): Resource {
-    return Object.fromEntries(
-        SUPPORTED_LOCALES.map(({ code }) => [
-            code,
-            {
-                translation: {
-                    ...CORE_CATALOGS[code],
-                    personalAppearance: personalAppearanceMessages[code],
-                    personalAvatar: personalAvatarMessages[code],
-                    ...Object.fromEntries(Object.entries(AREA_CATALOGS).map(([area, catalog]) => [area, catalog[code]])),
-                },
-            },
-        ]),
-    );
+/** 一种语言 = 公共目录 + 个人外观/形象 + 各页面区域目录（区域名作为顶级命名空间）。 */
+function translationFor(locale: AppLocale, pack: LocalePack) {
+    return {
+        ...pack.core,
+        personalAppearance: personalAppearanceMessages[locale],
+        personalAvatar: personalAvatarMessages[locale],
+        ...pack.areas,
+    };
 }
 
 /**
- * 应用唯一的 i18next 实例。语言来自 useLocaleStore（本设备偏好，首次按浏览器语言），
- * 缺失的键回退到简体中文，保证未翻译的页面仍可用。资源随包内联，初始化同步完成。
+ * 应用唯一的 i18next 实例。初始化保持同步（initAsync: false），
+ * 中文资源随包内联，首屏不会出现「先闪 key 再出文案」。
  */
 export const i18n = i18next.createInstance();
 
 void i18n.use(initReactI18next).init({
-    resources: buildResources(),
+    resources: { [DEFAULT_LOCALE]: { translation: translationFor(DEFAULT_LOCALE, zhCNPack) } },
     lng: useLocaleStore.getState().locale,
     fallbackLng: DEFAULT_LOCALE,
     initAsync: false,
@@ -47,8 +49,23 @@ void i18n.use(initReactI18next).init({
     interpolation: { escapeValue: false },
 });
 
+async function ensureLocale(locale: AppLocale) {
+    if (locale === DEFAULT_LOCALE || i18n.hasResourceBundle(locale, "translation")) return;
+    const loader = LAZY_PACKS[locale];
+    if (!loader) return;
+    try {
+        const { pack } = await loader();
+        i18n.addResourceBundle(locale, "translation", translationFor(locale, pack), true, true);
+        await i18n.changeLanguage(locale);
+    } catch {
+        // 语言包加载失败时保持中文兜底，不让整页白屏。
+    }
+}
+
+void ensureLocale(useLocaleStore.getState().locale);
+
 useLocaleStore.subscribe((state, previous) => {
-    if (state.locale !== previous.locale) void i18n.changeLanguage(state.locale);
+    if (state.locale !== previous.locale) void ensureLocale(state.locale);
 });
 
 /** 当前界面语言；用于 Intl 日期与数字格式化。 */

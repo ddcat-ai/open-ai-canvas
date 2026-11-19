@@ -11,6 +11,20 @@ export type AgentPrefillRequest = CloudAgentMessagePresentation & { id: number; 
 export type AgentInsertedNode = { nodeId: string; title: string; kind: "image" | "text" | "video" | "audio"; previewUrl?: string };
 
 /**
+ * C 端「文本助手 → Agent 出片」：成片要写回当前这张画布。
+ * 由画布编辑器发布回调，助手只传结果，不自己改画布 store，避免和编辑器的本地节点状态打架。
+ */
+export type CanvasVideoInsert = {
+    url: string;
+    title: string;
+    prompt: string;
+    model: string;
+    seconds: number;
+    resolution: string;
+    taskId: string;
+};
+
+/**
  * 当前页面提供给平台级 Agent 的画布上下文。只有画布编辑器会发布它；
  * 离开画布时清空，此后的对话轮次不再绑定该画布。
  */
@@ -33,6 +47,8 @@ export type AgentCanvasContext = {
     insertAgentText?: (text: string, title: string) => string;
     /** 问卷的「决策确认单」等需要排版的内容放成 Markdown 节点，返回节点 ID。 */
     insertAgentMarkdown?: (markdown: string, title: string) => string;
+    /** C 端文本助手交给 Agent 生成完的片子，直接落到当前画布，返回节点 ID。 */
+    insertAgentVideo?: (payload: CanvasVideoInsert) => string;
     /** 从素材库选中的内容放到画布，返回新节点（一个素材可能生成多个节点）。 */
     insertAgentAssets?: (payloads: InsertAssetPayload[]) => Promise<AgentInsertedNode[]>;
     /** 从素材托盘拖进 Agent 面板的图片放到画布，返回节点 ID。 */

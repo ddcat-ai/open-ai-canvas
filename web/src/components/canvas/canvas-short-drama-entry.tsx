@@ -5,6 +5,7 @@ import { AlignLeft, ArrowUp, Check, ChevronUp, Clapperboard, FolderKanban, Image
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
+import { recommendedCanvasStylePresets, type CanvasStylePreset } from "@/lib/canvas/canvas-style-system";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
@@ -71,7 +72,7 @@ export function CanvasDramaEmptyState({ dramaName, studioPath, episodeLabel, onP
                     <div className="min-w-0">
                         <h2 className="truncate text-sm font-semibold">{dramaName} · 精修画布</h2>
                         <p className="mt-0.5 text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                            从左侧短剧侧栏投送设定、剧情段或成片；精修后在节点工具栏点“采用到短剧”写回。
+                            从左边短剧送内容进来，做好后点“采用到短剧”就行。
                         </p>
                     </div>
                 </div>
@@ -141,14 +142,10 @@ export function CanvasShortDramaEmptyState({
         <div ref={stageRef} className="canvas-entry-stage" style={entryStyle}>
             <CanvasEntryAmbientRipple />
             <div className="canvas-entry-shell" data-canvas-no-zoom data-canvas-wheel-scroll>
-                <span className="canvas-entry-eyebrow">
-                    <Clapperboard aria-hidden="true" />
-                    AI 短剧工作台
-                </span>
                 <h2 className="canvas-entry-title">
                     让灵感，<strong>开始成片。</strong>
                 </h2>
-                <p className="canvas-entry-subtitle">写下一句故事，Agent 帮你拆剧本、定角色、出分镜和视频。</p>
+                <p className="canvas-entry-subtitle">写下一句故事，帮你拆剧本、定角色、出分镜和视频。</p>
                 <form
                     className="canvas-entry-composer"
                     onSubmit={(event) => {
@@ -175,11 +172,13 @@ export function CanvasShortDramaEmptyState({
                             导入素材
                         </button>
                         <span className="canvas-entry-hint">Enter 发送 · Shift+Enter 换行</span>
-                        <button type="submit" className="canvas-entry-send" disabled={!prompt.trim()} aria-label="交给 Agent">
+                        <button type="submit" className="canvas-entry-send" disabled={!prompt.trim()} aria-label="发送这句话">
                             <ArrowUp aria-hidden="true" />
                         </button>
                     </div>
                 </form>
+                <p className="ll2-canvas-entry-example">例如：一个外卖员意外捡到会说话的猫</p>
+                <p className="ll2-canvas-entry-example">这句话会交给画布里的同一个文本助手，先帮你把想法理清楚。</p>
                 <div className="canvas-entry-suggestions" role="list" aria-label="灵感示例">
                     {ENTRY_SUGGESTIONS.map((item) => (
                         <button key={item} type="button" role="listitem" onClick={() => setPrompt(item)}>
@@ -192,7 +191,7 @@ export function CanvasShortDramaEmptyState({
                         <Workflow aria-hidden="true" />
                         <span>
                             <strong>自己创作</strong>
-                            <small>按短剧流程搭好节点</small>
+                            <small>跟着五步走，一步步做出片子</small>
                         </span>
                     </button>
                     <button type="button" onClick={onAddScript}>
@@ -213,10 +212,11 @@ export function CanvasShortDramaEmptyState({
                         <LayoutGrid aria-hidden="true" />
                         <span>
                             <strong>空白画布</strong>
-                            <small>不预设流程</small>
+                            <small>想加什么就加什么</small>
                         </span>
                     </button>
                 </div>
+                <CanvasHowToGuide />
             </div>
         </div>
     );
@@ -277,10 +277,7 @@ export function CanvasFreeformEmptyState({ commands }: { commands: CanvasCreateC
                 data-canvas-no-zoom
                 style={{ background: theme.node.fill, borderColor: theme.node.edge, boxShadow: theme.node.shadow, color: theme.node.text }}
             >
-                <h2 className="text-base font-semibold">自由空白画布</h2>
-                <p className="mt-1 text-xs" style={{ color: theme.node.muted }}>
-                    不预设流程，从任意一种素材开始创作。
-                </p>
+                <h2 className="text-base font-semibold">空白画布</h2>
                 <Popover
                     arrow={false}
                     open={createOpen}
@@ -313,6 +310,7 @@ export function CanvasFreeformEmptyState({ commands }: { commands: CanvasCreateC
 export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, onStepClick }: { progress: CanvasShortDramaProgress; collapsed: boolean; onToggle: () => void; onSkip: () => void; onStepClick: (stepId: CanvasShortDramaStepId) => void }) {
     const theme = canvasThemes[useActiveTheme()];
     if (!progress.active || collapsed) return null;
+    const currentStep = progress.steps.find((step) => step.status === "current");
     return (
         <div
             data-canvas-no-zoom
@@ -335,6 +333,7 @@ export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, o
                                 aria-current={step.status === "current" ? "step" : undefined}
                                 className="flex h-8 shrink-0 items-center gap-[var(--flow-step-gap)] rounded-md px-[var(--space-2)] outline-none transition-colors motion-reduce:transition-none hover:bg-black/5 focus-visible:ring-1 focus-visible:ring-inset dark:hover:bg-white/10"
                                 style={{ "--tw-ring-color": theme.accent.primary } as CSSProperties}
+                                title={step.hint}
                                 onClick={() => onStepClick(step.id)}
                             >
                                 <span
@@ -383,6 +382,12 @@ export function CanvasShortDramaGuide({ progress, collapsed, onToggle, onSkip, o
             >
                 <ChevronUp className="size-3.5" />
             </button>
+            {currentStep ? (
+                <div className="ll2-canvas-guide-step-hint" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.muted }}>
+                    <strong style={{ color: theme.node.text }}>现在这步 · {currentStep.label}</strong>
+                    <span>{currentStep.hint}</span>
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -444,6 +449,79 @@ export function CanvasStoryInputNodeContent({ node, onEdit }: { node: CanvasNode
                 <Pencil className="size-3.5" />
                 编辑故事
             </button>
+        </div>
+    );
+}
+
+/** 给完全不懂画布的新手看的白话分步说明，默认收起，不挡创作区。 */
+function CanvasHowToGuide() {
+    return (
+        <details className="ll2-canvas-howto">
+            <summary>画布怎么用？新手看这里</summary>
+            <ol className="ll2-canvas-howto-list">
+                <li>
+                    <span className="ll2-canvas-howto-step">1</span>
+                    <span>无限画布，就是一张可以随便摆东西的大纸。</span>
+                </li>
+                <li>
+                    <span className="ll2-canvas-howto-step">2</span>
+                    <span>点 +，就能加文本、图片或视频。</span>
+                </li>
+                <li>
+                    <span className="ll2-canvas-howto-step">3</span>
+                    <span>从卡片边上的小圆点，拖到另一张卡片，就连起来了。</span>
+                </li>
+                <li>
+                    <span className="ll2-canvas-howto-step">4</span>
+                    <span>在画布里的文本助手把想法写清楚，点「交给 Agent 出片」；先看要花多少钱，片子会直接放进画布。</span>
+                </li>
+            </ol>
+            <p className="ll2-canvas-howto-note">不记得也没关系，随时点开再看。</p>
+        </details>
+    );
+}
+
+const QUICK_STYLES: Array<{ label: string; index: number }> = [
+    { label: "仙侠大片", index: 0 },
+    { label: "真人实拍", index: 4 },
+    { label: "可爱卡通", index: 2 },
+    { label: "悬疑暗黑", index: 5 },
+];
+
+/** 自动选画风时先给白话引导 + 几个常见风格，专业分类留到「更多」。 */
+export function CanvasStyleQuickPick({ open, applying, onClose, onPick, onMore }: {
+    open: boolean;
+    applying: boolean;
+    onClose: () => void;
+    onPick: (preset: CanvasStylePreset) => void;
+    onMore: () => void;
+}) {
+    if (!open) return null;
+    return (
+        <div className="ll2-quick-style-backdrop" data-canvas-no-zoom onMouseDown={onClose}>
+            <div className="ll2-quick-style-card" data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()}>
+                <button type="button" className="ll2-quick-style-close" onClick={onClose} aria-label="关闭">
+                    <X aria-hidden="true" />
+                </button>
+                <h3 className="ll2-quick-style-title">先挑一个好看的</h3>
+                <p className="ll2-quick-style-lead">选个大概的感觉，之后随时能改。</p>
+                <div className="ll2-quick-style-grid">
+                    {QUICK_STYLES.map(({ label, index }) => {
+                        const preset = recommendedCanvasStylePresets[index];
+                        if (!preset) return null;
+                        return (
+                            <button key={preset.id} type="button" disabled={applying} onClick={() => onPick(preset)}>
+                                <span className="ll2-quick-style-thumb" style={preset.imageUrl ? { backgroundImage: `url(${preset.imageUrl})` } : undefined} />
+                                <span className="ll2-quick-style-label">{label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+                <button type="button" className="ll2-quick-style-more" onClick={onMore}>
+                    更多画风 →
+                </button>
+                <p className="ll2-quick-style-note">点一下就能用，挑画风不花钱。</p>
+            </div>
         </div>
     );
 }

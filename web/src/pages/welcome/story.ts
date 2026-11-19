@@ -1,6 +1,6 @@
-/** 界面文案字段（label、title、subtitle 等）保存 i18n 键，渲染时翻译；首幕标题是品牌名，直接显示。 */
+/** 界面文案字段（label、title、subtitle 等）保存 i18n 键，渲染时翻译；首幕标题直接显示、不走翻译。 */
 export const chapters = [
-    { id: "opening", label: "account.welcome.chapters.opening.label", title: "影策", subtitle: "account.welcome.chapters.opening.subtitle", description: "account.welcome.chapters.opening.description" },
+    { id: "opening", label: "account.welcome.chapters.opening.label", title: "写一句话，出一支片子", subtitle: "account.welcome.chapters.opening.subtitle", description: "account.welcome.chapters.opening.description" },
     { id: "story", label: "account.welcome.chapters.story.label", title: "account.welcome.chapters.story.title" },
     { id: "world", label: "account.welcome.chapters.world.label", title: "account.welcome.chapters.world.title" },
     { id: "shots", label: "account.welcome.chapters.shots.label", title: "account.welcome.chapters.shots.title" },

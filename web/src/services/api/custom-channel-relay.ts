@@ -9,11 +9,37 @@ export type ChannelRequest = {
     credentials: RequestCredentials;
 };
 
+/**
+ * DMC 官方网关的 CORS 是全开的（实测 2026-11-17：OPTIONS 204，
+ * Access-Control-Allow-Origin: * / Allow-Headers: * / Allow-Methods: GET,POST,...）。
+ * 且这里用的是用户自己填的 DMC Key，不该经影策登录态后端中转。
+ * 只对 DMC 官方域名放行直连，其他第三方渠道仍按原逻辑走 /ai/custom。
+ */
+function isLL2DirectBaseUrl(value: string) {
+    try {
+        const host = new URL(String(value || "").trim()).hostname.toLowerCase();
+        return host === "api.ll2.cn" || host === "ll2.cn";
+    } catch {
+        return false;
+    }
+}
+
 /** 自定义渠道统一经登录态后端中转，避免依赖第三方服务的浏览器 CORS。 */
 export function channelRequest(config: RelayConfig, upstreamUrl: string, headers: HeadersInit = {}): ChannelRequest {
     const normalizedHeaders = new Headers(headers);
     if (isSystemProxyBaseUrl(config.baseUrl)) {
         return { url: upstreamUrl, headers: Object.fromEntries(normalizedHeaders.entries()), credentials: "include" };
+    }
+
+    if (isLL2DirectBaseUrl(config.baseUrl)) {
+        const directUrl = requireHttpUrl(upstreamUrl, "DMC 请求地址");
+        const apiKey = String(config.apiKey || "").trim();
+        if (apiKey) normalizedHeaders.set("Authorization", `Bearer ${apiKey}`);
+        // 中转专用头不能发给 DMC，否则会被网关当成未知字段或误路由。
+        for (const name of ["X-Canvas-Upstream-Headers", "X-Canvas-Upstream-URL", "X-Canvas-Upstream-Format", "X-Canvas-Upstream-Base-URL", "X-Canvas-Scene", "X-Idempotency-Key"]) {
+            normalizedHeaders.delete(name);
+        }
+        return { url: directUrl, headers: Object.fromEntries(normalizedHeaders.entries()), credentials: "omit" };
     }
 
     const normalizedBaseUrl = requireHttpUrl(config.baseUrl, "当前模型渠道 Base URL");

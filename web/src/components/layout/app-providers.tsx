@@ -27,6 +27,7 @@ import { isIsolatedPrevisRepro } from "@/lib/dev-repro";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { applyAppearanceMetadata, useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { useThemeStore } from "@/stores/use-theme-store";
 import { refreshPublicAppearance } from "@/services/appearance-bootstrap";
 import { i18n } from "@/i18n";
 import type { AppLocale } from "@/i18n/locales";
@@ -52,8 +53,13 @@ function ClientRootBoundary({ children }: { children: ReactNode }) {
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {
-    const theme = useActiveTheme();
+    // 画布编辑器有自己的主题作用域，这里保持订阅，不让工作台主题覆盖画布皮肤。
+    useActiveTheme();
+    // 三档主题偏好：浅色 / 黑夜 / 跟随系统。appliedTheme 同时驱动 Ant 浮层、皮肤变量与语义 token。
+    const theme = useThemeStore((state) => state.theme);
+    const preference = useThemeStore((state) => state.preference);
     const dark = theme === "dark";
+    const appliedTheme = theme;
     const appearance = useAppearanceStore((state) => state.appearance);
     const skin = useEffectiveSkin();
     const locale = useLocaleStore((state) => state.locale);
@@ -63,13 +69,32 @@ export function AppProviders({ children }: { children: ReactNode }) {
         dayjs.locale(DAYJS_LOCALES[locale]);
     }, [locale]);
 
+    // 首屏脚本按 localStorage 抢先上色；这里再按当前系统色校准一次，
+    // 修掉「上次存的是系统深色、这次开机系统变浅色」这类跨次启动的偏差。
+    useLayoutEffect(() => {
+        if (preference === "system") useThemeStore.getState().applySystemTheme();
+    }, [preference]);
+
+    // 不重启页面就跟着 Windows / macOS 的深浅切换；偏好为 light/dark 时 applySystemTheme 是空操作。
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+        const query = window.matchMedia("(prefers-color-scheme: dark)");
+        const onChange = () => useThemeStore.getState().applySystemTheme();
+        if (typeof query.addEventListener === "function") {
+            query.addEventListener("change", onChange);
+            return () => query.removeEventListener("change", onChange);
+        }
+        query.addListener(onChange);
+        return () => query.removeListener(onChange);
+    }, []);
+
     useLayoutEffect(() => {
         document.documentElement.classList.toggle("dark", dark);
-        document.documentElement.style.colorScheme = theme;
+        document.documentElement.style.colorScheme = appliedTheme;
         applyThemePackCanvas(skin.id);
-        applySkinTheme(skin, theme);
+        applySkinTheme(skin, appliedTheme);
         applyAppearanceMetadata({ ...appearance, activeSkin: skin });
-    }, [appearance, dark, theme, skin]);
+    }, [appearance, dark, appliedTheme, skin]);
 
     // DEV 复现台必须是同源本地确定性场景：AuthSessionHydrator 会打 /api/auth/session，
     // ClientRootInit 会打 /api/model-catalog，没有后端时产生真实 502，与导演台无关却会污染判据。

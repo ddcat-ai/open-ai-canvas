@@ -55,7 +55,9 @@ export const modeLabels: Record<CreationMode, string> = {
     get image() { return translate("create.mode.image"); },
     get video() { return translate("create.mode.video"); },
 };
-export const defaultCreationMode: CreationMode = "image";
+// DMC 目录以视频 / 超分模型为主（21 个模型里没有图片模型），
+// 创作台默认落在「视频」，避免新用户打开后停在选不到模型的图片模式。
+export const defaultCreationMode: CreationMode = "video";
 export const shotScriptLabels: Record<CreationMode, string> = {
     get text() { return translate("create.shotScript.text"); },
     get image() { return translate("create.shotScript.image"); },
