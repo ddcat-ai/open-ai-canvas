@@ -377,6 +377,10 @@ export type CanvasNodeMetadata = {
     ll2UpscaleTarget?: string;
     /** 画布节点由 LL2 客户端直连生成（没有后端任务号，状态区不显示排队/任务恢复提示）。 */
     ll2Direct?: boolean;
+    /** LL2 直连当前阶段（排队中 / 生成中 / 正在超分），显示在状态区。 */
+    ll2Stage?: string;
+    /** LL2 任务号，便于刷新后排查或恢复。 */
+    ll2TaskId?: string;
     generateAudio?: string;
     watermark?: string;
     audioVoice?: string;

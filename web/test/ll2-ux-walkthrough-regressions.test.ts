@@ -224,6 +224,19 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("画布 LL2 节点会显示排队/生成/超分阶段，并对中断给出提示", async () => {
+    const exec = await read("../src/pages/canvas/canvas-ll2-video-execution.ts");
+    expect(exec).toContain("onStage");
+    expect(exec).toContain("正在超分");
+    expect(exec).toContain("fetchBlobWithTimeout");
+    const status = await read("../src/components/canvas/canvas-node-status-content.tsx");
+    expect(status).toContain("ll2Stale");
+    expect(status).toContain("生成状态未确认");
+    expect(status).toContain("metadata?.ll2Stage");
+    const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
+    expect(executor).toContain("ll2TaskId");
+});
+
 test("画布文本助手使用 DMC 深色玻璃样式", async () => {
     const css = await read("../src/styles/ll2-c-polish.css");
     expect(css).toContain(".ll2-agent.is-canvas");

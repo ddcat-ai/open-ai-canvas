@@ -83,12 +83,18 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     // LL2 直连没有后端任务号：不套「排队 → 生成 → 保存」三段，也没有任务恢复诊断。
     const ll2Direct = Boolean(metadata?.ll2Direct);
     const phase: GenerationPhase = ll2Direct ? "generating" : taskId ? generationTaskPhase(displayTask) : "submitting";
+    // LL2 是浏览器直连轮询；页面刷新/热更新会打断它，但 LL2 服务端仍会把任务跑完。
+    // 超时后别一直转圈，明确告诉用户去控制台取片或重新生成。
+    const ll2Stale = Boolean(ll2Direct && metadata?.taskCreatedAt && Date.now() - new Date(metadata.taskCreatedAt).getTime() > 10 * 60 * 1000);
+    const ll2StageHint = ll2Stale ? "页面刷新或重载可能中断了这次生成；LL2 已出片可到控制台下载，或重新生成" : metadata?.ll2Stage || "";
     const kind = canvasNodeGenerationKind(node.type);
     const Icon = generationKindIcon[kind];
     const uncertain = phase === "uncertain";
-    const title = ll2Direct
-        ? "正在生成"
-        : workflow
+    const title = ll2Stale
+        ? "生成状态未确认"
+        : ll2Direct
+          ? "正在生成"
+          : workflow
           ? (workflow.stage === "planning" ? "正在规划拆层" : `正在拆层 · 共 ${workflow.total} 张`)
           : metadata?.experimentalLayerPlan?.progress || generationPhaseLabel(phase, kind, metadata?.taskStage);
     const progress = taskId && generationTaskShowsProgress(displayTask) && typeof metadata?.taskProgress === "number" ? Math.max(0, Math.min(100, Math.round(metadata.taskProgress))) : null;
@@ -96,7 +102,7 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     const elapsed = useTaskElapsed(startedAt, taskTerminalStatus(metadata?.taskStatus) ? metadata?.taskCompletedAt : undefined);
     // 恢复监听没能确认状态时会在生成中节点上留下诊断（例如“最近任务中未找到对应记录”），以前完全不可见。
     const diagnostic = !ll2Direct && metadata?.errorDetails ? generationErrorMessage(metadata.errorDetails) : "";
-    const hint = ll2Direct || workflow ? "" : generationPhaseHint(phase, kind, metadata?.taskStage);
+    const hint = ll2Direct ? ll2StageHint : workflow ? "" : generationPhaseHint(phase, kind, metadata?.taskStage);
     const meta = uncertain ? "" : [progress !== null ? `${progress}%` : "", startedAt ? `已用时 ${elapsed}` : ""].filter(Boolean).join(" · ");
     return (
         <div className="canvas-gen-state" data-phase={phase} data-saving={phase === "saving" ? generationTaskSavingState(metadata?.taskStage) : undefined} style={canvasGenerationStateStyle(theme)}>

@@ -124,6 +124,9 @@ export async function executeVideoGeneration({
                 referenceImages: generationContext.referenceImages,
                 referenceVideos: generationContext.referenceVideos,
                 signal: controller.signal,
+                // 把「排队 / 生成 / 超分 / 取回」写回节点，避免 LL2 已出片而画布只显示转圈。
+                onStage: (detail) => setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ll2Stage: detail } } : node))),
+                onTaskId: (taskId) => setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ll2TaskId: taskId } } : node))),
             });
             setNodes((current) =>
                 current.map((node) =>
@@ -146,6 +149,7 @@ export async function executeVideoGeneration({
                                   seconds: String(Math.max(1, Math.round(done.seconds))),
                                   vquality: done.resolution,
                                   requiresAuth: done.requiresAuth,
+                                  ll2Stage: undefined,
                                   errorDetails: undefined,
                               },
                           }
@@ -154,7 +158,7 @@ export async function executeVideoGeneration({
             );
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
-            setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: reason } } : node)));
+            setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: reason, ll2Stage: undefined } } : node)));
             throw error;
         } finally {
             finishGenerationRequest(videoId, controller);
