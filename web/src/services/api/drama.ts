@@ -27,11 +27,13 @@ export type DramaMediaMode = "manual" | "auto";
 
 export type DramaAssetMode = "portrait" | "turnaround" | "fourview" | "custom";
 
-/** 角色/场景参考图方案：保存的是全文提示词，用户看到的就是实际发送的内容。道具参考图使用固定模板。 */
+/** 角色/场景/道具参考图方案：保存的是全文提示词，用户看到的就是实际发送的内容。 */
 export type DramaAssetSettings = {
     mode: DramaAssetMode;
     characterPrompt: string;
     scenePrompt: string;
+    /** 老草稿可能没有这个字段，缺省按默认道具模板。 */
+    propPrompt?: string;
     characterRatio: string;
     /** 角色 / 道具 / 场景参考图的分辨率档位（1k / 1.5k / 2k / 4k）；空串或缺省按该类所用图片模型的默认档位。 */
     resolution?: string;
@@ -51,7 +53,7 @@ export type DramaAssetScheme = {
     characterPrompt: string;
 };
 
-export type DramaAssetSchemeCatalog = { schemes: DramaAssetScheme[]; scenePrompt: string; characterVariables: string[]; sceneVariables: string[] };
+export type DramaAssetSchemeCatalog = { schemes: DramaAssetScheme[]; scenePrompt: string; propPrompt: string; characterVariables: string[]; sceneVariables: string[]; propVariables: string[] };
 
 /** 剧情段怎么切：智能按场景与冲突切、单段不超过模型上限；固定每段 segmentSeconds 秒；范围在 segmentMin–MaxSeconds 之间。 */
 export type DramaSegmentMode = "auto" | "fixed" | "range";

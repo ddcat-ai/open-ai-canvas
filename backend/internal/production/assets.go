@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// 角色与场景参考图方案。参考图是后续每个镜头首帧的身份锚点，方案决定它的版式、
+// 角色、场景与道具参考图方案。参考图是后续每个镜头首帧的身份锚点，方案决定它的版式、
 // 比例和约束提示词。模板在作品设置里保存为全文，用户看到的就是实际发送的内容。
 
 const (
@@ -20,6 +20,7 @@ const (
 var (
 	CharacterAssetVariables = []string{"{{角色名称}}", "{{角色设定}}", "{{项目画风}}", "{{画面规则}}"}
 	SceneAssetVariables     = []string{"{{场景名称}}", "{{场景设定}}", "{{项目画风}}", "{{画面规则}}"}
+	PropAssetVariables      = []string{"{{道具名称}}", "{{道具设定}}", "{{项目画风}}", "{{画面规则}}"}
 )
 
 // AssetImageRatio 是资产参考图（场景、道具与内置角色方案）的统一画幅。
@@ -40,8 +41,8 @@ const defaultScenePrompt = `{{项目画风}}。场景概念设定图：{{场景�
 横版宽景构图，无人物，空镜，构图完整，主体空间与出入口清晰，前中后景层次分明；光源方向明确，色调与时代服化道统一。
 禁止文字、水印、边框。{{画面规则}}`
 
-// propPrompt 是关键道具参考图模板：单件道具居中、无人物，供视频生成时保持道具外观一致。
-const propPrompt = `{{项目画风}}。道具设定图：{{道具名称}}。{{道具设定}}。
+// defaultPropPrompt 是关键道具参考图默认模板：单件道具居中、无人物，供视频生成时保持道具外观一致。
+const defaultPropPrompt = `{{项目画风}}。道具设定图：{{道具名称}}。{{道具设定}}。
 横版构图，单件道具居中完整展示，四周留白，干净浅灰背景，柔和棚拍光，外形、材质、颜色与细节清晰；无人物、无手部。
 禁止文字、水印、边框。{{画面规则}}`
 
@@ -86,6 +87,8 @@ func AssetSchemes() []AssetScheme {
 
 func DefaultScenePrompt() string { return defaultScenePrompt }
 
+func DefaultPropPrompt() string { return defaultPropPrompt }
+
 func assetScheme(mode string) (AssetScheme, bool) {
 	for _, scheme := range assetSchemes {
 		if scheme.Mode == mode {
@@ -100,6 +103,7 @@ type AssetSettings struct {
 	Mode            string `json:"mode"`
 	CharacterPrompt string `json:"characterPrompt"`
 	ScenePrompt     string `json:"scenePrompt"`
+	PropPrompt      string `json:"propPrompt"`
 	CharacterRatio  string `json:"characterRatio"`
 	// Resolution / PropResolution / SceneResolution 是角色、道具、场景参考图的分辨率档位（1k / 1.5k / 2k / 4k），
 	// 空串按该类参考图所用图片模型的默认档位。
@@ -121,6 +125,7 @@ func (a AssetSettings) Normalized() AssetSettings {
 	}
 	a.CharacterPrompt = truncateRunes(strings.TrimSpace(a.CharacterPrompt), assetPromptLimit)
 	a.ScenePrompt = truncateRunes(strings.TrimSpace(a.ScenePrompt), assetPromptLimit)
+	a.PropPrompt = truncateRunes(strings.TrimSpace(a.PropPrompt), assetPromptLimit)
 	if a.CharacterPrompt == "" {
 		if a.Mode == AssetModeCustom {
 			a.Mode = AssetModeFourView
@@ -130,6 +135,9 @@ func (a AssetSettings) Normalized() AssetSettings {
 	}
 	if a.ScenePrompt == "" {
 		a.ScenePrompt = defaultScenePrompt
+	}
+	if a.PropPrompt == "" {
+		a.PropPrompt = defaultPropPrompt
 	}
 	switch a.CharacterRatio {
 	case "3:4", "9:16", "1:1", "16:9", "4:3":
@@ -252,7 +260,10 @@ func ValidateAssetPrompts(a AssetSettings) string {
 	if problem := check("角色参考图提示词", a.CharacterPrompt, CharacterAssetVariables); problem != "" {
 		return problem
 	}
-	return check("场景参考图提示词", a.ScenePrompt, SceneAssetVariables)
+	if problem := check("场景参考图提示词", a.ScenePrompt, SceneAssetVariables); problem != "" {
+		return problem
+	}
+	return check("道具参考图提示词", a.PropPrompt, PropAssetVariables)
 }
 
 func renderAssetTemplate(template string, values map[string]string) string {

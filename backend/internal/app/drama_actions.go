@@ -757,12 +757,14 @@ func (s *Service) restyleDramaCastSegments(projectID, castID string) (int, error
 type DramaAssetSchemeCatalog struct {
 	Schemes            []production.AssetScheme `json:"schemes"`
 	ScenePrompt        string                   `json:"scenePrompt"`
+	PropPrompt         string                   `json:"propPrompt"`
 	CharacterVariables []string                 `json:"characterVariables"`
 	SceneVariables     []string                 `json:"sceneVariables"`
+	PropVariables      []string                 `json:"propVariables"`
 }
 
 func (s *Service) DramaAssetSchemes() DramaAssetSchemeCatalog {
-	return DramaAssetSchemeCatalog{Schemes: production.AssetSchemes(), ScenePrompt: production.DefaultScenePrompt(), CharacterVariables: production.CharacterAssetVariables, SceneVariables: production.SceneAssetVariables}
+	return DramaAssetSchemeCatalog{Schemes: production.AssetSchemes(), ScenePrompt: production.DefaultScenePrompt(), PropPrompt: production.DefaultPropPrompt(), CharacterVariables: production.CharacterAssetVariables, SceneVariables: production.SceneAssetVariables, PropVariables: production.PropAssetVariables}
 }
 
 type RegenerateDramaCastsRequest struct {
