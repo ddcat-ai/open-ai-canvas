@@ -27,11 +27,15 @@
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
 }
 
+/* 弹窗是「一整块」：里面这块面板必须铺满弹窗、不要自己的宽度和阴影，
+   否则内容只有 320px（弹窗 420px），底部那条线会半截、右边留一条空。 */
 .ll2-key-dialog .ll2-key-panel {
+    width: 100%;
     padding: 0;
     border: 0;
     background: transparent;
-    box-shadow: none;
+    border-radius: 0;
+    box-shadow: none !important;
 }
 
 .ll2-key-panel-head {
@@ -230,15 +234,15 @@
     color: var(--ll2-t-0a0a0a, #0a0a0a);
 }
 
-/* 底部两个入口靠左排在一起，不要一头一个、中间空一大截。 */
+/* 底部两个入口靠左排在一起；不画分割线，整个弹窗是一块完整的面。 */
 .ll2-key-panel-foot {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 16px;
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--ll2-t-eee, #eee);
+    margin-top: 18px;
+    padding-top: 0;
+    border-top: 0;
     font-size: 12px;
     color: var(--ll2-t-777, #777);
 }
