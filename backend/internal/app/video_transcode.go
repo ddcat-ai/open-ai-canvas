@@ -278,6 +278,7 @@ func runH264Transcode(src string, dst string) error {
 		"-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
 		"-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
 		dst)
+	hideCommandWindow(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

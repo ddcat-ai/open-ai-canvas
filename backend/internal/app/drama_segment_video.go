@@ -771,6 +771,7 @@ func (s *Service) saveDramaTailFrame(userID string, resource *model.Resource, in
 	defer cancel()
 	// Decode every remaining frame and update the same output, so the saved image is the actual final frame.
 	cmd := exec.CommandContext(ctx, ffmpegBin, "-hide_banner", "-loglevel", "error", "-sseof", "-1", "-i", input, "-an", "-update", "1", "-y", output)
+	hideCommandWindow(cmd)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		detail := strings.TrimSpace(string(out))
 		if detail == "" {
