@@ -46,6 +46,8 @@ export type LL2VideoAdapter = {
     protocol: LL2VideoProtocol;
     label: string;
     createPath: string;
+    /** 同一模型族按素材数量换路径时用（vidu：文生/图生/首尾帧）。 */
+    createPathFor?: (args: LL2AdapterArgs) => string;
     /** 个别协议要额外请求头（如 DashScope 的 X-DashScope-Async）。 */
     headers?: Record<string, string>;
     /** 把 UI 参数收敛到该模型真实支持的范围，避免把非法档位发给网关。 */
@@ -225,6 +227,58 @@ function makeSeedanceAdapter(model: "doubao-seedance-2-0" | "doubao-seedance-2-0
     };
 }
 
+/**
+ * Vidu Q3：网关透传 /vidu/ent/v2/*。
+ *   无图 → text2video；1 张图 → img2video（首帧）；2 张图 → start-end2video（首尾帧）
+ *   images 支持公网 URL 或 data:image/...;base64。
+ *   查询 /vidu/ent/v2/tasks/{id}/creations，creations[0].url 是带鉴权的相对 artifact。
+ */
+function makeViduAdapter(model: "viduq3-pro" | "viduq3-turbo"): LL2VideoAdapter {
+    return {
+        model,
+        protocol: "openai-video-v1",
+        label: OPENAI_VIDEO_LABELS[model],
+        createPath: "/vidu/ent/v2/text2video",
+        createPathFor: (args) => {
+            const images = (args.media || []).filter((item) => item.image_url?.url);
+            if (images.length >= 2) return "/vidu/ent/v2/start-end2video";
+            if (images.length === 1) return "/vidu/ent/v2/img2video";
+            return "/vidu/ent/v2/text2video";
+        },
+        normalize: (args) => {
+            const base = normalizeBase(args);
+            const tier = ll2TierFor(model, base.resolution);
+            return { ...base, resolution: tier?.resolution || base.resolution };
+        },
+        buildCreatePayload: (args) => {
+            const images = (args.media || []).filter((item) => item.image_url?.url).map((item) => item.image_url!.url);
+            const withImages = images.length > 0;
+            return {
+                model,
+                prompt: args.prompt,
+                ...(withImages ? { images } : {}),
+                duration: args.seconds,
+                resolution: String(args.resolution).toLowerCase(),
+                ...(withImages ? {} : { aspect_ratio: args.ratio }),
+            };
+        },
+        taskIdOf: (payload) => ll2TextOf(payload, "task_id", "id"),
+        queryPath: (taskId) => `/vidu/ent/v2/tasks/${encodeURIComponent(taskId)}/creations`,
+        parseQuery: (payload) => {
+            const creations = Array.isArray(payload.creations) ? payload.creations : [];
+            const relative = String(creations[0]?.url || "");
+            return {
+                status: String(payload.state || payload.status || "").toLowerCase(),
+                url: relative ? (relative.startsWith("http") ? relative : `${GATEWAY_ORIGIN}${relative.startsWith("/") ? "" : "/"}${relative}`) : "",
+                requiresAuth: true,
+                chargedSeconds: 0,
+                errorCode: ll2TextOf(payload, "err_code"),
+                errorMessage: ll2TextOf(payload, "err_code", "message"),
+            };
+        },
+    };
+}
+
 /** 走 /v1/video/generations 的模型及其中文名（H3 单独走 /v2，不在这里）。 */
 const OPENAI_VIDEO_LABELS = {
     "wan3.0-video": "万相 3.0",
@@ -313,9 +367,11 @@ export const LL2_VIDEO_ADAPTERS = {
     "doubao-seedance-2-0-fast": makeSeedanceAdapter("doubao-seedance-2-0-fast"),
     "doubao-seedance-2-0-mini": makeSeedanceAdapter("doubao-seedance-2-0-mini"),
     "doubao-seedance-2-5": makeSeedanceAdapter("doubao-seedance-2-5"),
+    "viduq3-pro": makeViduAdapter("viduq3-pro"),
+    "viduq3-turbo": makeViduAdapter("viduq3-turbo"),
     ...Object.fromEntries(
         (Object.keys(OPENAI_VIDEO_LABELS) as OpenAIVideoModel[])
-            .filter((model) => !model.startsWith("wan3.0-") && !model.startsWith("doubao-seedance-2-"))
+            .filter((model) => !model.startsWith("wan3.0-") && !model.startsWith("doubao-seedance-2-") && !model.startsWith("viduq3-"))
             .map((model) => [model, makeOpenAIVideoAdapter(model)]),
     ),
 } as Record<LL2ConnectedVideoModel, LL2VideoAdapter>;

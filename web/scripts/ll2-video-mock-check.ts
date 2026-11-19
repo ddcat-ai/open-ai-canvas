@@ -19,6 +19,7 @@ let hdQueryCount = 0;
 let h3CreateBody = null;
 let wan3CreateBody = null;
 let seedanceCreateBody = null;
+let viduCreateBody = null;
 
 const server = Bun.serve({
     port: 0,
@@ -26,6 +27,17 @@ const server = Bun.serve({
         const url = new URL(req.url);
         // 非 H3 的 13 个模型走 /v1/video/generations，字段与 H3 完全不同：
         // seconds 必须是字符串，比例字段叫 aspect_ratio，结果在 data.result_url。
+        if (req.method === "POST" && url.pathname === "/vidu/ent/v2/img2video") {
+            viduCreateBody = await req.json();
+            createCount += 1;
+            return Response.json({ task_id: "vidu-1", state: "created" });
+        }
+        if (req.method === "GET" && url.pathname === "/vidu/ent/v2/tasks/vidu-1/creations") {
+            return Response.json({ id: "vidu-1", state: "success", creations: [{ id: "c1", url: "/v1/tasks/vidu-1/artifacts/video/content" }] });
+        }
+        if (req.method === "GET" && url.pathname === "/v1/tasks/vidu-1/artifacts/video/content") {
+            return new Response(new Uint8Array([0, 1, 2]), { status: 200, headers: { "content-type": "video/mp4" } });
+        }
         if (req.method === "POST" && url.pathname === "/seedance/api/v3/contents/generations/tasks") {
             seedanceCreateBody = await req.json();
             createCount += 1;
@@ -155,7 +167,6 @@ out.push(`   显式传同一 key 时为 ${last3[2]}（复用同一任务，可�
 // ⑥ 非 H3 模型：走 /v1/video/generations，同一个工厂适配器，验证 payload 与查询解析。
 // 用户点名先测 seedance 2.0 / viduq3-pro / Super Vega 1.0-pro 三档。
 const OPENAI_MODELS = [
-    { model: "viduq3-pro", resolution: "720p" },
     { model: "Super Vega 1.0-pro", resolution: "720P" },
 ];
 let openaiFails = 0;
@@ -213,7 +224,7 @@ if (!hdOk) {
 scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
 let mediaBlocked = "";
 try {
-    await ll2GenerateVideo(common({ model: "viduq3-pro", resolution: "720p", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
+    await ll2GenerateVideo(common({ model: "Super Vega 1.0-pro", resolution: "720P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
 } catch (error) {
     mediaBlocked = error instanceof Error ? error.message : String(error);
 }
@@ -260,6 +271,20 @@ const seedOk =
 out.push(`⑪ seedance 图生视频：${seedOk ? "PASS" : "FAIL"} preview=${Boolean(seed.previewUrl)} body=${JSON.stringify(seedanceCreateBody).slice(0, 120)}`);
 if (!seedOk) {
     console.error("⑪ 失败：seedance content/artifact 鉴权不符合预期");
+    process.exitCode = 1;
+}
+
+// ⑫ vidu：1 张图走 img2video，images[] 原样给 data URI，artifact 鉴权
+scenario = "success"; createCount = 0; queryCount = 0; viduCreateBody = null;
+const vidu = await ll2GenerateVideo(common({ model: "viduq3-pro", resolution: "720P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
+const viduOk =
+    viduCreateBody?.model === "viduq3-pro" &&
+    Array.isArray(viduCreateBody?.images) && viduCreateBody.images[0] === "data:image/png;base64,AAAA" &&
+    viduCreateBody?.resolution === "720p" &&
+    vidu.requiresAuth === true && Boolean(vidu.previewUrl);
+out.push(`⑫ vidu 图生视频：${viduOk ? "PASS" : "FAIL"} ${JSON.stringify(viduCreateBody).slice(0, 120)}`);
+if (!viduOk) {
+    console.error("⑫ 失败：vidu payload/artifact 鉴权不符合预期");
     process.exitCode = 1;
 }
 

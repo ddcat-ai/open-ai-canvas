@@ -196,9 +196,15 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     // 2026-11-19 真机反馈：非 H3 模型把 image_urls 发到 /v1 后，网关没有真的按首帧出片
     // （用户引用了图，成片却是按文字生成的，还扣了钱）。其它模型的素材协议还没逐个接通前，
     // 先明确挡住，避免再花冤枉钱。H3 的 content[] 是已实测的契约。
-    const mediaProtocolReady = req.model === "MiniMax-H3" || req.model.startsWith("wan3.0-") || req.model.startsWith("doubao-seedance-2-");
+    const mediaProtocolReady = req.model === "MiniMax-H3" || req.model.startsWith("wan3.0-") || req.model.startsWith("doubao-seedance-2-") || req.model.startsWith("viduq3-");
     if (media.length > 0 && !mediaProtocolReady) {
         throw new Error("这个模型带图/视频出片的协议还没接通：现在只有 MiniMax-H3 会真的按参考图出片。先换 H3，或把参考素材去掉再生成。");
+    }
+    // Vidu Q3 只支持图片参考：0 张文生、1 张首帧、2 张首尾帧；视频/音频和 3 张以上图都没开通。
+    if (req.model.startsWith("viduq3-") && media.length > 0) {
+        const images = media.filter((item) => item.image_url?.url);
+        if (images.length !== media.length) throw new Error("Vidu 只支持图片参考；视频/音频参考还没接通，换图片或去掉再生成");
+        if (images.length > 2) throw new Error("Vidu Q3 最多两张图（首帧 + 尾帧）；想用多张参考图请换 MiniMax-H3");
     }
     // 2026-11-19 真网关实测：图片的 data URI 能出片；视频 / 音频必须是自己能下载的公网 HTTPS 地址，
     // 本机文件转 Base64 会被 400 打回（content[n].video_url.url must be a public HTTPS URL）。
@@ -228,8 +234,9 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     const maxPolls = Math.max(1, req.maxPolls ?? 120);
     const estimate = ll2PreciseCNY(req.model, seconds, resolution);
 
+    const createPath = adapter.createPathFor ? adapter.createPathFor(args) : adapter.createPath;
     const created = await ll2Fetch(
-        `${originOf(req)}${adapter.createPath}`,
+        `${originOf(req)}${createPath}`,
         {
             method: "POST",
             headers: authHeaders(req, { ...(adapter.headers || {}), "Idempotency-Key": req.idempotencyKey || newIdempotencyKey() }),
