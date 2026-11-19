@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Switch } from "@/components/ui/base/switch";
-import { Palette, Info } from "lucide-react";
+import { Ellipsis, Palette, Info, Settings2 } from "lucide-react";
 
 import { FloatingDock } from "@/components/ui/aceternity/floating-dock";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
@@ -10,11 +10,12 @@ import { useCanvasOverlayLayer } from "@/components/canvas/canvas-overlay-layer"
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
 import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-commands";
 import { ToolbarSettingsModal } from "@/components/canvas/toolbars/toolbar-settings-modal";
+import { CanvasToolbarMoreMenu } from "./toolbars/canvas-toolbar-more-menu";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import type { CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes, type CanvasBackgroundMode, type CanvasTheme } from "@/lib/canvas-theme";
-import { defaultToolbarPrefs, readToolbarPrefs, resolveToolbarEntries, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
+import { readToolbarPrefs, resolveMainToolbarLayout, type ToolContext, type ToolbarHandlers, type ToolbarPrefs } from "@/lib/canvas/tool-registry";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useTranslation } from "react-i18next";
 import type { CanvasNodeTypeId, CanvasToolMode, CanvasWorkspaceMode } from "@/types/canvas";
@@ -104,50 +105,56 @@ export function CanvasToolbar({
     const dockRef = useRef<HTMLDivElement>(null);
     const colorTheme = useActiveTheme();
     const theme = canvasThemes[colorTheme];
-    const [addOpen, setAddOpen] = useState(false);
-    const [appearanceOpen, setAppearanceOpen] = useState(false);
+    const [panel, setPanel] = useState<"add" | "appearance" | "more" | null>(null);
+    const panelAnchor = useRef<HTMLElement | null>(null);
+    const moreId = useId();
+    const moreLabel = t("canvasC.toolbar.moreTools", "更多工具");
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [panelX, setPanelX] = useState("50%");
     const [prefs, setPrefs] = useState<ToolbarPrefs | null>(() => readToolbarPrefs("main"));
 
     useEffect(() => {
-        if (addOpen || appearanceOpen) bringToFront();
-    }, [addOpen, appearanceOpen, bringToFront]);
+        if (panel) bringToFront();
+    }, [panel, bringToFront]);
 
     // 设置面板关闭后重新读取偏好（用户可能调整了排序/显隐）
     useEffect(() => {
         if (!settingsOpen) setPrefs(readToolbarPrefs("main"));
     }, [settingsOpen]);
 
-    const placePanel = (event: ReactMouseEvent<HTMLElement>, width: number) => setPanelX(getPanelX(dockRef.current, event.currentTarget, width));
+    const togglePanel = (next: NonNullable<typeof panel>, event: ReactMouseEvent<HTMLElement>, width: number) => {
+        if (dockRef.current?.contains(event.currentTarget)) panelAnchor.current = event.currentTarget;
+        if (panelAnchor.current) setPanelX(getPanelX(dockRef.current, panelAnchor.current, width));
+        setPanel((current) => (current === next ? null : next));
+    };
     const runAddAction = (action: () => void) => {
         action();
-        setAddOpen(false);
+        setPanel(null);
     };
 
     // 点击外部关闭浮层面板
     useEffect(() => {
-        if (!addOpen && !appearanceOpen) return;
+        if (!panel) return;
         const closeFloatingPanels = (event: PointerEvent) => {
-            const target = event.target instanceof Node ? event.target : null;
-            if (target && rootRef.current?.contains(target)) return;
             const element = event.target instanceof Element ? event.target : null;
+            if (panelAnchor.current?.contains(element)) return;
+            if (rootRef.current?.contains(element) && !dockRef.current?.contains(element)) return;
             if (element?.closest(".ant-color-picker,.ant-popover")) return;
-            setAddOpen(false);
-            setAppearanceOpen(false);
+            setPanel(null);
         };
         document.addEventListener("pointerdown", closeFloatingPanels, true);
         const closeOnEscape = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
-            setAddOpen(false);
-            setAppearanceOpen(false);
+            event.stopPropagation();
+            setPanel(null);
+            panelAnchor.current?.focus({ preventScroll: true });
         };
         document.addEventListener("keydown", closeOnEscape, true);
         return () => {
             document.removeEventListener("pointerdown", closeFloatingPanels, true);
             document.removeEventListener("keydown", closeOnEscape, true);
         };
-    }, [addOpen, appearanceOpen]);
+    }, [panel]);
 
     // 构建 handlers（主工具栏只需要部分回调，其余用 no-op 占位满足类型）
     const handlers: ToolbarHandlers = {
@@ -175,22 +182,11 @@ export function CanvasToolbar({
         onOpenPoseLibrary,
         onBackgroundModeChange,
         onShowImageInfoChange,
-        onToggleAddPanel: (event: ReactMouseEvent<HTMLElement>) => {
-            placePanel(event, 420);
-            setAppearanceOpen(false);
-            setSettingsOpen(false);
-            setAddOpen((value) => !value);
-        },
-        onToggleAppearancePanel: (event: ReactMouseEvent<HTMLElement>) => {
-            placePanel(event, 296);
-            setAddOpen(false);
-            setSettingsOpen(false);
-            setAppearanceOpen((value) => !value);
-        },
+        onToggleAddPanel: (event) => togglePanel("add", event, 420),
+        onToggleAppearancePanel: (event) => togglePanel("appearance", event, 296),
         onToggleSettingsPanel: () => {
-            setAddOpen(false);
-            setAppearanceOpen(false);
-            setSettingsOpen((value) => !value);
+            setPanel(null);
+            setSettingsOpen(true);
         },
         onDeleteSelected: onDelete,
         // 以下为多选/节点悬停工具栏回调，主工具栏不使用，用 no-op 占位
@@ -247,13 +243,14 @@ export function CanvasToolbar({
         extractingAudio: false,
         trimmingVideo: false,
         mergingVideos: false,
-        addPanelOpen: addOpen,
-        appearancePanelOpen: appearanceOpen,
+        addPanelOpen: panel === "add",
+        appearancePanelOpen: panel === "appearance",
         settingsPanelOpen: settingsOpen,
         handlers,
     };
 
-    const items = resolveToolbarEntries("main", ctx, prefs ?? defaultToolbarPrefs("main"));
+    const { dock, more, destructive } = resolveMainToolbarLayout(ctx, prefs);
+    const settingsCommand = { id: "tool-settings", label: t("canvasC.toolbar.settings", "工具栏设置"), icon: <Settings2 />, onClick: handlers.onToggleSettingsPanel };
 
     // 中央空白起点与主工具栏共用同一份命令解析，避免素材类型和插件节点逐渐分叉。
     const createCommands = useCanvasCreateCommands(ctx, runAddAction);
@@ -267,20 +264,36 @@ export function CanvasToolbar({
             onPointerDownCapture={bringToFront}
             onFocusCapture={bringToFront}
         >
-            <AnimatePresence>{addOpen ? <AddNodeMenu x={panelX} theme={theme} commands={createCommands} /> : null}</AnimatePresence>
+            <AnimatePresence>{panel === "add" ? <AddNodeMenu x={panelX} theme={theme} commands={createCommands} /> : null}</AnimatePresence>
 
             {/* canvas-zoom-controls 按底部同排规则（canvasBottomRowLayout）写入 --canvas-main-toolbar-shift。 */}
             <FloatingDock
                 ref={dockRef}
-                items={items}
+                items={[...dock, { id: "tool-more", label: moreLabel, icon: <Ellipsis />, expands: true, menuId: moreId, active: panel === "more", onClick: (event) => togglePanel("more", event, 192) }]}
                 variant="toolbar"
                 size={compact ? "compact" : "default"}
                 className="canvas-floating-dock canvas-bottom-dock pointer-events-auto relative left-[var(--canvas-main-toolbar-shift,0px)]"
-                style={canvasDockStyle(theme)}
+                style={canvasDockStyle(theme, "var(--cn-muted)")}
             />
 
+            {panel === "more" && (
+                <CanvasToolbarMoreMenu
+                    id={moreId}
+                    label={moreLabel}
+                    x={panelX}
+                    commands={[...more, settingsCommand]}
+                    destructive={destructive}
+                    onDismiss={() => setPanel(null)}
+                    onChoose={(command, event) => {
+                        setPanel(null);
+                        panelAnchor.current?.focus({ preventScroll: true });
+                        command.onClick?.(event);
+                    }}
+                />
+            )}
+
             <AnimatePresence>
-                {appearanceOpen ? (
+                {panel === "appearance" ? (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}

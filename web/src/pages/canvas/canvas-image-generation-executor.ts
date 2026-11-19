@@ -106,7 +106,7 @@ export async function executeImageGeneration(
     };
     const rootPosition = reuseSourceNode ? parentPosition : findAvailableGenerationGroupPosition(workingNodes, preferredPosition, imageGenerationGroupSize({ width: rootWidth, height: rootHeight }, outputNodeSize, childIds.length));
     // 原位重新生成沿用用户起的名称，同批子图按「名称 · 序号」命名；新建的结果组仍按提示词命名。
-    const keptTitle = reuseSourceNode ? manualNodeTitle(sourceNode) : undefined;
+    const keptTitle = reuseSourceNode ? manualNodeTitle(canvasNodes.find((node) => node.id === nodeId)) : undefined;
 
     const rootNode: CanvasNodeData = {
         id: rootId,
@@ -117,6 +117,7 @@ export async function executeImageGeneration(
         height: rootHeight,
         metadata: {
             ...resetGenerationTaskMetadata(reuseSourceNode ? sourceNode?.metadata : undefined, NODE_STATUS_LOADING),
+            manualTitle: Boolean(keptTitle),
             // 原位生成会清空旧图，先把它登记进版本历史，失败时也能从版本面板恢复。
             ...(reuseSourceNode && count <= 1 ? mediaVersionFieldsBeforeReplace(sourceNode) : {}),
             imageLayerGroup: undefined,
@@ -154,6 +155,7 @@ export async function executeImageGeneration(
         height: outputNodeSize.height,
         metadata: {
             ...canvasGenerationPromptMetadata(prompt, effectivePrompt),
+            manualTitle: Boolean(keptTitle),
             status: NODE_STATUS_LOADING,
             size: generationConfig.size,
             ...sizeSourceMetadata,
@@ -179,13 +181,14 @@ export async function executeImageGeneration(
             if (isConfigNode) return { ...node, metadata: { ...node.metadata, ...canvasGenerationPromptMetadata(prompt, effectivePrompt), status: NODE_STATUS_LOADING, errorDetails: undefined } };
             if (reuseSourceNode) return { ...node, position: rootNode.position, width: rootNode.width, height: rootNode.height, title: rootNode.title, metadata: rootNode.metadata };
             if (isImageNode) return node;
+            const sourceTitle = manualNodeTitle(node);
             return {
                 ...node,
                 type: CanvasNodeType.Text,
-                title: manualNodeTitle(node) ?? (prompt.slice(0, 32) || "Prompt"),
+                title: sourceTitle ?? (prompt.slice(0, 32) || "Prompt"),
                 width: parentConfig.width,
                 height: parentConfig.height,
-                metadata: { ...node.metadata, content: prompt, richText: undefined, prompt, composerContent: prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined },
+                metadata: { ...node.metadata, manualTitle: Boolean(sourceTitle), content: prompt, richText: undefined, prompt, composerContent: prompt, status: NODE_STATUS_SUCCESS, fontSize: 14, errorDetails: undefined },
             };
         }),
         ...(reuseSourceNode ? [] : [rootNode]),

@@ -2,11 +2,18 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 export const koKR: DeepStringRecord<typeof zhCN> = {
     toolbar: {
+        moreTools: "도구 더 보기",
+        settings: "도구 모음 설정",
         appearance: "캔버스 외관",
         appearanceSubtitle: "색상과 그리드",
         mediaInfo: "미디어 정보",
     },
     videoPromptTools: {
+        mode: "동영상 참조 모드",
+        textMode: "텍스트로 생성",
+        allMode: "통합 참조",
+        frameMode: "시작·끝 프레임",
+        swap: "시작·끝 프레임 바꾸기",
         imageCount: "이미지 {{count}}개",
         videoCount: "동영상 {{count}}개",
         audioCount: "오디오 {{count}}개",

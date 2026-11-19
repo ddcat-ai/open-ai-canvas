@@ -15,6 +15,7 @@ import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import { interruptFileUpload } from "@/lib/canvas/canvas-file-upload";
 import { isCanvasWorkflowProvider, resolveCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
+import { canvasVideoOperation, canvasVideoReferenceMode, usesProjectedVideoReferences } from "./canvas-video-reference-mode";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasImageGenerationType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasVideoEditOperation } from "@/types/canvas";
 import type { ReferenceImage } from "@/types/image";
@@ -70,7 +71,7 @@ export async function runBackendCanvasGenerationTask(
             referenceAudios,
             mask,
             signal,
-            metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
+            metadata: { nodeId, ...metadata },
             onTaskUpdate: onTaskCreated,
             clientOperationId,
             retryOf,
@@ -310,7 +311,6 @@ function resolveVideoEditOperation(
         referenceAudios: ReferenceAudio[];
     },
 ): CanvasVideoEditOperation {
-    const storedOperation = node?.metadata?.videoEditOperation;
     const input = {
         textCount: 0,
         imageCount: context?.referenceImages.length || 0,
@@ -318,7 +318,7 @@ function resolveVideoEditOperation(
         audioCount: context?.referenceAudios.length || 0,
         characterCount: 0,
     };
-    return resolveVideoOperation(input, storedOperation) as CanvasVideoEditOperation;
+    return resolveVideoOperation(input, canvasVideoOperation(node, input)) as CanvasVideoEditOperation;
 }
 
 export function buildVideoGenerationMetadata(
@@ -332,11 +332,11 @@ export function buildVideoGenerationMetadata(
 ): CanvasNodeMetadata {
     const metadata = node?.metadata;
     const referenceImageIds = new Set((context?.referenceImages || []).map((image) => image.id));
-    // 工作流视频把已连接媒体交给字段映射处理，不再把历史首尾帧选择当成硬约束。
-    // 工作流视频把已连接媒体交给字段映射处理，不再把历史首尾帧选择当成硬约束。
     const workflowVideo = node?.type === CanvasNodeType.Config && (config?.taskWorkflowProvider === "runninghub" || isCanvasWorkflowProvider(metadata));
-    const startFrame = workflowVideo ? undefined : requireConnectedVideoFrame(metadata?.videoStartFrameNodeId, "首帧", referenceImageIds);
-    const endFrame = workflowVideo ? undefined : requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, "尾帧", referenceImageIds);
+    const videoMode = canvasVideoReferenceMode(node, referenceImageIds.size > 0);
+    const useFrames = !workflowVideo && (videoMode === undefined || videoMode === "frames" || usesProjectedVideoReferences(node));
+    const startFrame = useFrames ? requireConnectedVideoFrame(metadata?.videoStartFrameNodeId, "首帧", referenceImageIds) : undefined;
+    const endFrame = useFrames ? requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, "尾帧", referenceImageIds) : undefined;
     return {
         ...(config ? generationWorkflowMetadata(config) : {}),
         videoEditOperation: resolveVideoEditOperation(node, context),

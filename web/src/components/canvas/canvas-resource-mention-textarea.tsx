@@ -35,6 +35,7 @@ type MentionState = {
     start: number;
     end: number;
     query: string;
+    fromShelf?: boolean;
 };
 
 export type EditableSelection = {
@@ -55,6 +56,7 @@ export type MentionTextPart =
 
 export type CanvasResourceMentionTextareaActions = {
     insertTextAtSelection: (text: string) => boolean;
+    openReferencePicker: () => void;
 };
 
 type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "onSubmit" | "value"> & {
@@ -307,8 +309,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         return true;
     };
 
-    const insertTextAtSelection = (text: string) => {
-        if (readOnly) return false;
+    const currentEditorRange = () => {
         const editor = editorRef.current;
         const textarea = textareaRef.current;
         const currentValue = editor ? serializeEditableValue(editor) : (textarea?.value ?? value);
@@ -317,6 +318,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         const selection =
             liveSelection ||
             (remembered ? { start: mapCanvasTextOffset(remembered.value, currentValue, remembered.start), end: mapCanvasTextOffset(remembered.value, currentValue, remembered.end) } : { start: currentValue.length, end: currentValue.length });
+        return { currentValue, selection };
+    };
+
+    const insertTextAtSelection = (text: string) => {
+        if (readOnly) return false;
+        const { currentValue, selection } = currentEditorRange();
         const result = insertPromptReferenceAtSelection(currentValue, selection, text);
         if (!updateValue(result.value, result.selection.start)) return false;
         lastSelectionRef.current = { value: result.value, ...result.selection };
@@ -326,7 +333,15 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
 
     useLayoutEffect(() => {
         if (!actionsRef) return;
-        const actions = { insertTextAtSelection };
+        const actions = {
+            insertTextAtSelection,
+            openReferencePicker() {
+                if (readOnly) return;
+                const { selection } = currentEditorRange();
+                (editorRef.current ?? textareaRef.current)?.focus({ preventScroll: true });
+                setMention({ ...selection, query: "", fromShelf: true });
+            },
+        };
         actionsRef.current = actions;
         return () => {
             if (actionsRef.current === actions) actionsRef.current = null;
@@ -363,6 +378,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (readOnly || !mention) return;
         const selected = onSelectReference ? onSelectReference(reference) : reference;
         if (!selected) return;
+        if (mention.fromShelf) {
+            const result = insertPromptReferenceAtSelection(value, mention, canvasResourceMentionToken(selected));
+            closeMention();
+            updateValue(result.value, result.selection.start);
+            return;
+        }
         const insertText = `${canvasResourceMentionToken(selected)} `;
         const next = `${value.slice(0, mention.start)}${insertText}${value.slice(mention.end)}`;
         closeMention();
@@ -468,7 +489,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     } as CSSProperties;
     const menuAnchor = useRichEditor ? editorRef.current : textareaRef.current;
     const menu =
-        !readOnly && mention && availableReferences.length && menuAnchor ? (
+        !readOnly && mention && (mention.fromShelf || availableReferences.length > 0) && menuAnchor ? (
             <MentionMenu
                 // 换到另一个 @ 时重置分类和高亮。
                 key={mention.start}

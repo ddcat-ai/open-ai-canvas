@@ -336,7 +336,7 @@ export function useCanvasGenerationRetry({
                 message.warning(translate("canvasPage.retry.notRetryable"));
                 return;
             }
-            const sourceNode = findRetrySourceNode(node.id, nodesRef.current, connectionsRef.current) || node;
+            const sourceNode = node.type === CanvasNodeType.Video && node.metadata?.videoReferenceMode ? node : findRetrySourceNode(node.id, nodesRef.current, connectionsRef.current) || node;
             const batchRoot = node.metadata?.batchRootId ? nodesRef.current.find((item) => item.id === node.metadata?.batchRootId) : null;
             const savedImageMetadata = node.type === CanvasNodeType.Image ? { ...batchRoot?.metadata, ...node.metadata } : undefined;
             const hasSavedImageMetadata = Boolean(savedImageMetadata?.generationType);
@@ -462,7 +462,7 @@ export function useCanvasGenerationRetry({
                     return;
                 }
             }
-            const storedVideoImages = node.type === CanvasNodeType.Video && !context?.referenceImages.length ? await resolveStoredReferenceImages(node.metadata?.references) : [];
+            const storedVideoImages = node.type === CanvasNodeType.Video && !node.metadata?.videoReferenceMode && !context?.referenceImages.length ? await resolveStoredReferenceImages(node.metadata?.references) : [];
             if (storedVideoImages === null) {
                 markMissingReferences(node.id, setNodes);
                 message.error(translate("canvasPage.retry.referenceLost"));

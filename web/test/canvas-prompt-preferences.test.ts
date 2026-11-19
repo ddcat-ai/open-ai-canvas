@@ -13,10 +13,11 @@ describe("canvas prompt reading preferences", () => {
     });
 
     test("reserves a useful writing area and counts references separately", () => {
-        expect(promptEditorBounds(false, false).min).toBe(160);
+        expect(promptEditorBounds(false, false).min).toBe(104);
         expect(promptEditorBounds(true, false).min).toBe(280);
-        expect(promptEditorBounds(false, true).min).toBe(218);
-        expect(estimatePromptContentHeight("", false)).toBe(160);
+        expect(promptEditorBounds(false, true).min).toBe(168);
+        expect(promptEditorBounds(true, true).min).toBe(344);
+        expect(estimatePromptContentHeight("", false)).toBe(104);
     });
 
     test("larger fonts get larger scroll and resize bounds without invalid ranges", () => {

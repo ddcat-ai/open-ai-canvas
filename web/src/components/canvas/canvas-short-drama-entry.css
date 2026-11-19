@@ -85,7 +85,7 @@
 }
 
 /* 交互期暂停涟漪，不和画布平移/缩放争抢合成。 */
-[data-canvas-viewport-interacting="true"] .canvas-entry-ripple > span {
+[data-canvas-viewport-interacting="true"] .canvas-entry-ripple-ring {
     animation-play-state: paused;
 }
 

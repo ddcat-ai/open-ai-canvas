@@ -1,10 +1,27 @@
 import { useEffect, useRef } from "react";
+import { observeCanvasGestureActive } from "@/lib/canvas/canvas-live-viewport";
 
 /**
  * 绿幕形象视频：每帧把视频画到画布上做抠像。抠像在主线程逐像素处理，开销不小，
  * 所以 paused（入口被面板挡住时）和页面隐藏时都不处理帧，也暂停视频解码。
  */
-export function AgentAvatarVideo({ src, loop = true, paused = false, onReady, onError, className }: { src: string; loop?: boolean; paused?: boolean; onReady?: (src: string) => void; onError?: () => void; className?: string }) {
+export function AgentAvatarVideo({
+    src,
+    loop = true,
+    paused = false,
+    pauseDuringCanvasGesture = false,
+    onReady,
+    onError,
+    className,
+}: {
+    src: string;
+    loop?: boolean;
+    paused?: boolean;
+    pauseDuringCanvasGesture?: boolean;
+    onReady?: (src: string) => void;
+    onError?: () => void;
+    className?: string;
+}) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const errorRef = useRef(onError);
@@ -17,10 +34,15 @@ export function AgentAvatarVideo({ src, loop = true, paused = false, onReady, on
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const context = canvas?.getContext("2d", { willReadFrequently: true });
-        if (paused || !video || !canvas || !context) return;
+        if (!video || !canvas || !context) return;
+        if (paused) {
+            video.pause();
+            return;
+        }
         let animationFrame = 0;
         let videoFrame = 0;
         let disposed = false;
+        let canvasBusy = false;
         let lastFrameTime = -1;
         const drawFrame = () => {
             if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth <= 0 || video.videoHeight <= 0 || video.currentTime === lastFrameTime) return;
@@ -54,7 +76,7 @@ export function AgentAvatarVideo({ src, loop = true, paused = false, onReady, on
             }
         };
         const scheduleFrame = () => {
-            if (disposed || document.visibilityState === "hidden") return;
+            if (disposed || canvasBusy || document.hidden) return;
             if (typeof video.requestVideoFrameCallback === "function") {
                 videoFrame = video.requestVideoFrameCallback(() => {
                     drawFrame();
@@ -73,33 +95,31 @@ export function AgentAvatarVideo({ src, loop = true, paused = false, onReady, on
             animationFrame = 0;
             videoFrame = 0;
         };
-        // 回到前台时重新排帧；隐藏时 scheduleFrame 不再续排。
-        const resumeWhenVisible = () => {
-            if (document.visibilityState === "hidden") return;
+        const updatePlayback = () => {
             cancelFrame();
+            if (canvasBusy || document.hidden) {
+                video.pause();
+                return;
+            }
+            if (video.ended && !video.loop) return;
+            void video.play().catch(() => undefined);
             scheduleFrame();
         };
-        document.addEventListener("visibilitychange", resumeWhenVisible);
-        drawFrame();
-        scheduleFrame();
+        document.addEventListener("visibilitychange", updatePlayback);
+        const stopObserving = pauseDuringCanvasGesture
+            ? observeCanvasGestureActive(video.ownerDocument, (active) => {
+                  canvasBusy = active;
+                  updatePlayback();
+              })
+            : undefined;
+        if (!stopObserving) updatePlayback();
         return () => {
             disposed = true;
             cancelFrame();
-            document.removeEventListener("visibilitychange", resumeWhenVisible);
+            stopObserving?.();
+            document.removeEventListener("visibilitychange", updatePlayback);
         };
-    }, [src, paused]);
-
-    useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
-        video.loop = loop;
-        if (paused) {
-            video.pause();
-            return;
-        }
-        // pause() 会清掉 autoplay 标记，恢复时必须显式播放；已在播放时 play() 不会重来。
-        void video.play().catch(() => undefined);
-    }, [src, loop, paused]);
+    }, [src, paused, pauseDuringCanvasGesture]);
 
     return (
         <>
@@ -107,7 +127,6 @@ export function AgentAvatarVideo({ src, loop = true, paused = false, onReady, on
             <video
                 ref={videoRef}
                 src={src}
-                autoPlay={!paused}
                 muted
                 loop={loop}
                 playsInline

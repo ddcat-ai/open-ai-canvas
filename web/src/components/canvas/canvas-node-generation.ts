@@ -15,6 +15,7 @@ import { compileCharacterReferencePrompt, normalizeCharacterImageMentions } from
 import { createCanvasReferenceLabeler } from "@/lib/canvas/canvas-reference-slots";
 import { nodeReferenceImage } from "@/lib/canvas/canvas-project-generation";
 import { isCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
+import { canvasVideoFrameIssue, canvasVideoReferenceMode, videoMediaMentionIssue } from "@/lib/canvas/canvas-video-reference-mode";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import type { ModelReferenceLimits } from "@/lib/model-selection";
 import type { Asset } from "@/stores/use-asset-store";
@@ -114,18 +115,22 @@ function buildRawNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], 
     const hasExplicitResourceMention = hasResolvableGenerationMention(prompt, mentionInputs);
     const isWorkflowSource = sourceNode?.type === CanvasNodeType.Config && isCanvasWorkflowProvider(sourceNode.metadata);
     const hasConnectedMedia = connectedInputs.some((input) => input.type === "image" || input.type === "video" || input.type === "audio" || input.type === "character");
+    const videoMode = canvasVideoReferenceMode(sourceNode, hasConnectedMedia);
+    const frameIds = [sourceNode?.metadata?.videoStartFrameNodeId, sourceNode?.metadata?.videoEndFrameNodeId].filter((id): id is string => Boolean(id));
+    if (videoMode === "frames") {
+        const issue = canvasVideoFrameIssue(
+            sourceNode?.metadata,
+            connectedInputs.filter((input) => input.image).map((input) => input.nodeId),
+        );
+        if (issue) throw new Error(issue);
+    }
+    const onlyMediaIds = videoMode === "frames" ? frameIds : videoMode === "text" && sourceNode?.metadata?.videoReferenceMode === "text" ? [] : undefined;
     // 豆包音频按连线决定纯文本、参考音频或参考图片，不能因为提示词里没有逐个 @ 就丢掉已连接素材。
     const includeConnectedAudioMedia = Boolean(sourceNode && getNodeGenerationMode(sourceNode) === "audio");
-    if ((promptOnly && hasConnectedMedia) || (sourceNode ? Boolean(nodeGenerationPrompt(sourceNode).trim()) && (sourceNode.type === CanvasNodeType.Config || isWorkflowSource) : false) || hasExplicitResourceMention) {
-        const autoIncludeWorkflowMedia = isWorkflowSource || includeConnectedAudioMedia;
-        return buildComposerGenerationContext(
-            mentionInputs,
-            prompt,
-            // 工作流节点由字段映射接收全部连线媒体；视频节点的历史首尾帧字段不能再额外追加参考图。
-            autoIncludeWorkflowMedia || (promptOnly && hasConnectedMedia) ? [] : [sourceNode?.metadata?.videoStartFrameNodeId, sourceNode?.metadata?.videoEndFrameNodeId].filter((id): id is string => Boolean(id)),
-            autoIncludeWorkflowMedia || (promptOnly && hasConnectedMedia),
-            connectedInputs,
-        );
+    if (onlyMediaIds || (promptOnly && hasConnectedMedia) || (sourceNode ? Boolean(nodeGenerationPrompt(sourceNode).trim()) && (sourceNode.type === CanvasNodeType.Config || isWorkflowSource) : false) || hasExplicitResourceMention) {
+        const includeConnectedMedia = isWorkflowSource || includeConnectedAudioMedia || (promptOnly && hasConnectedMedia);
+        const autoMediaIds = onlyMediaIds ?? (includeConnectedMedia ? connectedInputs.filter((input) => input.type !== "text").map((input) => input.nodeId) : videoMode ? [] : frameIds);
+        return buildComposerGenerationContext(mentionInputs, prompt, autoMediaIds, onlyMediaIds);
     }
 
     const isStoryboardMedia = sourceNode?.type === CanvasNodeType.Image || sourceNode?.type === CanvasNodeType.Video;
@@ -205,7 +210,7 @@ function removeTrailingInputBlocks(prompt: string, inputs: NodeGenerationInput[]
     return next;
 }
 
-function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: string, videoFrameNodeIds: string[] = [], autoIncludeWorkflowMedia = false, workflowMediaInputs: NodeGenerationInput[] = []): NodeGenerationContext {
+function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: string, autoMediaIds: string[], onlyMediaIds?: string[]): NodeGenerationContext {
     const normalizedPrompt = normalizeGenerationNodeMentionTokens(prompt, inputs);
     const slotInputByToken = new Map(generationSlotEntries(inputs).map(({ token, input }) => [token, input]));
     const assetInputById = new Map(inputs.filter((input) => input.nodeId.startsWith("asset:")).map((input) => [input.nodeId.slice("asset:".length), input]));
@@ -214,16 +219,17 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
         match,
         input: resolveGenerationMention(normalizedPrompt, match, slotInputByToken, nodeInputById, assetInputById),
     }));
-    const selectedIds = new Set(mentions.flatMap(({ input }) => (input ? [input.nodeId] : [])));
-    if (autoIncludeWorkflowMedia)
-        workflowMediaInputs.forEach((input) => {
-            if (input.type !== "text") selectedIds.add(input.nodeId);
-        });
-    videoFrameNodeIds.forEach((id) => {
-        if (nodeInputById.get(id)?.image) selectedIds.add(id);
-    });
+    const selectedIds = new Set(autoMediaIds);
+    for (const { input } of mentions) {
+        if (!input) continue;
+        if (onlyMediaIds && input.type !== "text" && !onlyMediaIds.includes(input.nodeId)) {
+            throw new Error(videoMediaMentionIssue(onlyMediaIds.length ? "frames" : "text"));
+        }
+        selectedIds.add(input.nodeId);
+    }
     // 始终先按槽位选定资源，再一次性编译提示词；提及先后不能改变 URL 顺序。
     const selected = inputs.filter((input) => selectedIds.has(input.nodeId));
+    if (onlyMediaIds?.length) selected.sort((left, right) => onlyMediaIds.indexOf(left.nodeId) - onlyMediaIds.indexOf(right.nodeId));
     const selectedInputs = selected.filter((input) => input.type !== "text");
     const nextLabel = createCanvasReferenceLabeler();
     const providerLabels = new Map(selected.map((input) => [input.nodeId, nextLabel(input.type === "character" ? "image" : input.type)]));

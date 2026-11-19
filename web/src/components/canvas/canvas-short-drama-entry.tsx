@@ -226,10 +226,10 @@ export function CanvasShortDramaEmptyState({
 function CanvasEntryAmbientRipple() {
     return (
         <div className="canvas-entry-ripple" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <span />
+            <span className="canvas-entry-ripple-ring" />
+            <span className="canvas-entry-ripple-ring" />
+            <span className="canvas-entry-ripple-ring" />
+            <span className="canvas-entry-ripple-ring" />
         </div>
     );
 }

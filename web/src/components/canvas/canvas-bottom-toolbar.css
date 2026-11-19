@@ -1,15 +1,14 @@
-/* Only the two bottom canvas bars use this solid, compact material. */
 .canvas-bottom-dock {
-    --dock-surface: var(--canvas-bottom-surface);
-    --dock-border: var(--canvas-bottom-border);
-    --dock-shadow: var(--elevation-card);
-    --dock-item-radius: var(--button-radius);
-    gap: var(--space-1);
+    --dock-border: var(--cn-stroke);
+    --dock-shadow: var(--shadow-sm);
+    --dock-item-radius: var(--r-full);
+    --canvas-main-tool-size: calc(var(--space-8) - var(--space-half));
+    gap: var(--space-half);
     min-width: 0;
     max-width: 100%;
     padding: var(--space-1);
-    border: 1px solid var(--dock-border);
-    border-radius: var(--r-lg);
+    border: var(--stroke-1) solid var(--dock-border);
+    border-radius: var(--r-full);
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
@@ -26,21 +25,34 @@
     max-width: min(100%, var(--canvas-main-toolbar-max-width, 100%));
 }
 
+.canvas-bottom-dock[data-dock-size="compact"] {
+    --canvas-main-tool-size: var(--button-height-sm);
+}
+
+.canvas-bottom-dock :is(.aceternity-dock-command, .aceternity-dock-switch-option) {
+    width: var(--canvas-main-tool-size);
+    height: var(--canvas-main-tool-size);
+    border-radius: var(--r-full);
+}
+
 .canvas-bottom-dock .aceternity-dock-switch {
-    gap: var(--space-1);
+    gap: var(--space-half);
     padding: 0;
     background: transparent;
 }
 
 .canvas-bottom-dock .aceternity-dock-switch-option {
-    width: var(--dock-item-size);
-    height: var(--dock-item-size);
     opacity: 1;
 }
 
 .canvas-bottom-dock .aceternity-dock-switch-thumb {
-    background: var(--dock-command-active);
+    border-radius: var(--r-full);
+    background: var(--button-tonal-hover-bg);
     box-shadow: none;
+}
+
+.canvas-bottom-dock .aceternity-dock-switch-option[aria-checked="true"] {
+    color: var(--cn-text);
 }
 
 .canvas-bottom-dock .aceternity-dock-switch-option:hover:not([aria-checked="true"]) {
@@ -49,17 +61,21 @@
 
 .canvas-bottom-dock .aceternity-dock-separator {
     height: var(--space-4);
-    margin-inline: var(--space-1);
+    margin-inline: var(--space-half);
     background: var(--dock-border);
 }
 
-.canvas-bottom-dock .aceternity-dock-danger-group {
-    gap: var(--space-1);
+.canvas-bottom-dock .aceternity-dock-command:is(:hover:not(:disabled), [aria-expanded="true"]) {
+    background: var(--button-tonal-hover-bg);
+    color: var(--cn-text);
+}
+.canvas-bottom-dock .aceternity-dock-command[aria-expanded="true"] > span:first-child svg {
+    color: var(--cn-text);
 }
 
 .canvas-bottom-dock :is(.aceternity-dock-command, .aceternity-dock-switch-option):focus-visible {
     outline: var(--focus-ring-width) solid var(--ring);
-    outline-offset: 2px;
+    outline-offset: -2px;
     box-shadow: none;
 }
 
@@ -67,7 +83,83 @@
     opacity: var(--button-disabled-opacity);
 }
 
+.canvas-toolbar-more-menu {
+    position: absolute;
+    bottom: var(--canvas-dock-popover-offset);
+    z-index: var(--dock-z-popover);
+    transform: translateX(-50%);
+    width: min(192px, 100%);
+    max-height: calc(100dvh - var(--canvas-inset-y) - var(--canvas-dock-popover-offset) - var(--space-3));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+    padding: var(--space-1);
+    border: var(--stroke-1) solid var(--cn-stroke);
+    border-radius: var(--panel-radius);
+    background: var(--canvas-composer-surface);
+    box-shadow: var(--elevation-overlay);
+    color: var(--cn-text);
+}
+.canvas-toolbar-more-menu button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: var(--space-8);
+    padding: var(--space-1) var(--space-2);
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: inherit;
+    text-align: start;
+    font-size: var(--fs-body);
+    cursor: pointer;
+}
+.canvas-toolbar-more-menu svg {
+    width: var(--space-4);
+    height: var(--space-4);
+    flex-shrink: 0;
+    color: var(--cn-muted);
+    stroke-width: var(--button-icon-stroke);
+}
+.canvas-toolbar-more-menu button:is(:hover, :focus-visible):not(:disabled) {
+    background: var(--button-tonal-hover-bg);
+}
+.canvas-toolbar-more-menu button:focus-visible {
+    outline: var(--stroke-2) solid var(--control-focus-ring);
+    outline-offset: -2px;
+}
+.canvas-toolbar-more-menu button[data-danger]:not(:disabled):is(:hover, :focus-visible),
+.canvas-toolbar-more-menu button[data-danger]:not(:disabled):is(:hover, :focus-visible) svg {
+    color: var(--button-danger-text);
+}
+.canvas-toolbar-more-menu button:disabled {
+    cursor: default;
+    opacity: var(--button-disabled-opacity);
+}
+.canvas-toolbar-more-menu [role="separator"] {
+    border-top: var(--stroke-1) solid var(--cn-stroke);
+    margin: var(--space-1);
+}
+@media (prefers-reduced-motion: no-preference) {
+    .canvas-toolbar-more-menu {
+        animation: canvas-main-menu-enter var(--motion-dur-fast) var(--motion-ease-out);
+    }
+    @keyframes canvas-main-menu-enter {
+        from {
+            opacity: 0;
+            translate: 0 var(--space-1);
+        }
+    }
+}
+
 @media (pointer: coarse) {
+    .canvas-bottom-dock[data-dock-size] {
+        --canvas-main-tool-size: var(--button-height-lg);
+    }
+    .canvas-toolbar-more-menu button {
+        min-height: var(--button-height-lg);
+    }
     .canvas-main-toolbar {
         --canvas-dock-popover-offset: calc(var(--button-height-lg) + var(--space-4));
     }

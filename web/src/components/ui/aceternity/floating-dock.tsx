@@ -21,6 +21,7 @@ export type FloatingDockCommand = {
     danger?: boolean;
     /** 面板展开型工具——使用 aria-expanded 而非 aria-pressed */
     expands?: boolean;
+    menuId?: string;
 };
 
 export type FloatingDockSwitchOption = {
@@ -208,6 +209,19 @@ function DockCommandButton({ command, compact, showLabel, nativeTitle, motionEna
     const tooltip = useDockTooltip();
     const pressed = command.expands ? undefined : command.active;
     const expanded = command.expands ? Boolean(command.active) : undefined;
+    const menuProps = command.menuId
+        ? {
+              "aria-haspopup": "menu" as const,
+              "aria-controls": expanded ? command.menuId : undefined,
+              onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+                  if (!expanded && event.key === "ArrowDown") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      event.currentTarget.click();
+                  }
+              },
+          }
+        : undefined;
     const tap = motionEnabled && !command.disabled ? { scale: 0.92 } : undefined;
 
     if (showLabel) {
@@ -216,6 +230,7 @@ function DockCommandButton({ command, compact, showLabel, nativeTitle, motionEna
                 type="button"
                 aria-label={command.label}
                 aria-expanded={expanded}
+                {...menuProps}
                 aria-pressed={pressed}
                 disabled={command.disabled}
                 className={cn(
@@ -243,6 +258,7 @@ function DockCommandButton({ command, compact, showLabel, nativeTitle, motionEna
                     title={nativeTitle ? command.label : undefined}
                     data-icon-only
                     aria-expanded={expanded}
+                    {...menuProps}
                     aria-pressed={pressed}
                     disabled={command.disabled}
                     className={cn(
@@ -323,6 +339,7 @@ function DockSwitch({ entry, compact, showLabel, nativeTitle, motionEnabled, por
                                     <motion.span
                                         aria-hidden
                                         layoutId={`dock-switch-thumb-${entry.id}`}
+                                        layoutDependency={entry.value}
                                         className="aceternity-dock-switch-thumb pointer-events-none absolute inset-0 rounded-[var(--dock-item-radius)]"
                                         transition={motionEnabled ? aceternityMotion.spring.dock : { duration: 0 }}
                                     />

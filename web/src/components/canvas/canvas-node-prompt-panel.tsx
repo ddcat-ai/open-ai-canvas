@@ -1,29 +1,35 @@
 import { mediaSettingIssues } from "@/lib/media-settings";
-import { Button, InputNumber, Modal } from "antd";
+import { InputNumber } from "antd";
+import { AppModal } from "@/components/ui/product/app-modal";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ArrowUp, ChevronDown, FileText, ImagePlus, LayoutList, LoaderCircle, Maximize2, Music2, SlidersHorizontal, Video, X, PenLine } from "lucide-react";
+import { ArrowUp, FileText, ImagePlus, LayoutList, LoaderCircle, Maximize2, Music2, Video, X, PenLine } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { SegmentedControl } from "@/components/ui/base/segmented-control";
 
 import { ModelPicker } from "@/components/model-picker";
 import { modelOptionName, resolveModelChannel, useEffectiveConfig } from "@/stores/use-config-store";
 import { canonicalGenerationMetadata, nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
-import { PROMPT_EDITOR_VIEWPORT_MARGIN, insertPromptReferenceAtSelection } from "@/lib/canvas/canvas-prompt-editor-size";
+import { PROMPT_EDITOR_VIEWPORT_MARGIN } from "@/lib/canvas/canvas-prompt-editor-size";
 import { useCanvasPromptPreferencesStore } from "@/stores/canvas/use-canvas-prompt-preferences-store";
 import { CanvasPromptFontSizeControl } from "./canvas-prompt-font-size-control";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
-import { modelRequestOptions, defaultImageParamsForModel, type ModelRequirements } from "@/lib/model-selection";
+import { modelCompatibilityError, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
+import { canvasVideoFrameIssue, canvasVideoOperation, canvasVideoReferenceMode, usesProjectedVideoReferences, videoMediaMentionIssue, videoReferenceOperation } from "@/lib/canvas/canvas-video-reference-mode";
 import { useGenerationBatchLimit, batchQuoteTotal } from "@/lib/generation-batch-limit";
 import { getGenerationCount } from "@/lib/canvas/canvas-project-generation";
-import { referenceImageSizeSelection, type ImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
+import type { ImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { CanvasCameraControlPopover } from "./canvas-camera-control-popover";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasAudioSettingsPopover } from "./canvas-audio-settings-popover";
-import { canvasReferenceDisplayName } from "@/lib/canvas/canvas-resource-references";
+import { buildAssetMentionReferences, canvasPromptAssetMentionIds, canvasReferenceDisplayName } from "@/lib/canvas/canvas-resource-references";
+import { splitMentionText } from "./canvas-mention-editable";
+import { useAssetStore } from "@/stores/use-asset-store";
 import { canvasAudioVoiceBindings } from "@/lib/canvas/canvas-audio-voice-bindings";
 import { CanvasResourceMentionTextarea, type CanvasResourceMentionTextareaActions } from "./canvas-resource-mention-textarea";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
@@ -36,7 +42,7 @@ import { CanvasChooseEffectPicker } from "./canvas-choose-effect-picker";
 import { CanvasChooseMotionPicker } from "./canvas-choose-motion-picker";
 import { CanvasPortraitTexturePopover } from "./canvas-portrait-texture-popover";
 import { CanvasPromptOptimizerDrawer } from "./canvas-prompt-optimizer-drawer";
-import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode } from "@/types/canvas";
+import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata, type CanvasVideoReferenceMode, type CanvasWorkspaceMode } from "@/types/canvas";
 import {
     applyToolMention,
     removeToolMentions,
@@ -44,7 +50,6 @@ import {
     buildToolMentionReference,
     canvasResourceMentionToken,
     normalizeCanvasNodeMentionTokens,
-    overwriteSameTypeToolMention,
     parseToolMentionTokens,
     type CanvasResourceReference,
 } from "@/lib/canvas/canvas-resource-references";
@@ -85,9 +90,9 @@ type CanvasNodePromptPanelProps = {
 
 export type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
-export const PROMPT_REFERENCE_SHELF_HEIGHT = 58;
+export const PROMPT_REFERENCE_SHELF_HEIGHT = 64;
 // Reserve a useful writing area before content grows; references use their own shelf.
-export const PROMPT_EDITOR_MIN_HEIGHT = 160;
+export const PROMPT_EDITOR_MIN_HEIGHT = 104;
 export const PROMPT_EDITOR_EXPANDED_MIN_HEIGHT = 280;
 export const PROMPT_EDITOR_LINE_HEIGHT = 26;
 export const PROMPT_EDITOR_EXPANDED_LINE_HEIGHT = 26;
@@ -120,6 +125,7 @@ export function CanvasNodePromptPanel({
     onListGenerate,
     referenceImageSize,
 }: CanvasNodePromptPanelProps) {
+    const { t } = useTranslation();
     const globalConfig = useEffectiveConfig();
     const fontSize = useCanvasPromptPreferencesStore((state) => state.fontSize);
     const themeName = useActiveTheme();
@@ -156,7 +162,6 @@ export function CanvasNodePromptPanel({
     const [promptContentHeight, setPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, false, fontSize));
     const [expandedPromptContentHeight, setExpandedPromptContentHeight] = useState(() => estimatePromptContentHeight(savedPrompt, true, fontSize));
     const [manualPromptHeight, setManualPromptHeight] = useState<number | null>(null);
-    const [paramsExpanded, setParamsExpanded] = useState(false); // #98 决策2：B区参数区折叠状态（手风琴）
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [autoLinkEnabled, setAutoLinkEnabled] = useState(true);
     const resolvedMentionReferences = useResolvedCanvasResourceReferences(mentionReferences, { projectId });
@@ -178,16 +183,28 @@ export function CanvasNodePromptPanel({
     const activeMotionTool = activeMotionTools[0];
     const normalizedSavedPrompt = useMemo(() => normalizeCanvasNodeMentionTokens(savedPrompt, mentionReferences), [mentionReferences, savedPrompt]);
     const activeReferences = resolvedMentionReferences.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
+    const assetIds = useMemo(() => (mode === "video" ? canvasPromptAssetMentionIds(prompt) : []), [mode, prompt]);
+    const assets = useAssetStore((state) => (assetIds.length ? state.assets : undefined));
+    const mentionedAssets = useMemo(() => (assets ? buildAssetMentionReferences(assets.filter((asset) => assetIds.includes(asset.id))) : []), [assets, assetIds]);
+    const mediaMentions = mode === "video" && prompt.includes("@") ? splitMentionText(prompt, [...activeReferences, ...mentionedAssets]).flatMap((part) => (part.type === "mention" && part.reference.kind !== "text" ? [part.reference] : [])) : [];
+    const inputReferences = mode === "video" ? [...activeReferences.filter((item) => item.nodeId !== node.id || mediaMentions.includes(item)), ...mentionedAssets] : activeReferences;
+    const hasMedia = inputReferences.some((item) => item.kind !== "text");
+    const videoMode = canvasVideoReferenceMode(node, hasMedia);
+    const videoFrameOptions = activeReferences.filter((item) => item.kind === "image");
+    const frameIds = [node.metadata?.videoStartFrameNodeId, node.metadata?.videoEndFrameNodeId];
+    const usedReferences = videoMode === "text" || videoMode === "frames" ? inputReferences.filter((item) => item.kind === "text" || (videoMode === "frames" && item.kind === "image" && frameIds.includes(item.nodeId))) : inputReferences;
+    const inputSummary = {
+        textCount: (prompt.trim() ? 1 : 0) + usedReferences.filter((item) => item.kind === "text").length,
+        imageCount: usedReferences.filter((item) => item.kind === "image").length,
+        videoCount: usedReferences.filter((item) => item.kind === "video").length,
+        audioCount: usedReferences.filter((item) => item.kind === "audio").length,
+        characterCount: usedReferences.filter((item) => item.kind === "character").length,
+        videoDurationsMs: mode === "video" ? usedReferences.filter((item) => item.kind === "video").map((item) => item.durationMs ?? 0) : undefined,
+    };
     const requirements: ModelRequirements = {
         capability: mode,
-        input: {
-            textCount: (prompt.trim() ? 1 : 0) + activeReferences.filter((item) => item.kind === "text").length,
-            imageCount: activeReferences.filter((item) => item.kind === "image").length,
-            videoCount: activeReferences.filter((item) => item.kind === "video").length,
-            audioCount: activeReferences.filter((item) => item.kind === "audio").length,
-            characterCount: activeReferences.filter((item) => item.kind === "character").length,
-        },
-        videoOperation: node.metadata?.videoEditOperation,
+        input: inputSummary,
+        videoOperation: mode === "video" ? canvasVideoOperation(node, inputSummary) : undefined,
         videoSeconds: mode === "video" ? (node.metadata?.seconds ?? globalConfig.videoSeconds) : undefined,
         options: modelRequestOptions(
             {
@@ -237,26 +254,22 @@ export function CanvasNodePromptPanel({
     const [routeQuote, setRouteQuote] = useState<LogicalModelQuote | null>(null);
     const credits = routeQuote ? batchQuoteTotal(routeQuote.amountMicrocredits, mode === "image" ? generationCount : 1) : configuredCredits;
     const activeReferenceCount = activeReferences.length;
-    const videoFrameOptions = resolvedMentionReferences.filter((item) => item.active && item.kind === "image").map((item) => ({ nodeId: item.nodeId, label: item.label, title: item.title, previewUrl: item.previewUrl }));
-    const hasVideoPromptTools = mode === "video" && !simpleMode && videoFrameOptions.length > 0;
+    const canPickReferences = Boolean(onAddReference && !node.metadata?.locked);
+    const hasShelf = activeReferenceCount > 0 || canPickReferences;
     const monochromeAccent = theme.node.activeStroke;
     const composerTokens = {
         "--canvas-composer-surface": theme.node.panel,
         "--canvas-composer-control-surface": theme.toolbar.itemHover,
         "--canvas-composer-control-hover": theme.toolbar.activeBg,
         "--canvas-composer-shadow": theme.node.shadow,
+        "--canvas-composer-edge": theme.node.stroke,
         "--cn-text": theme.node.text,
     } as CSSProperties;
-    const composerSurfaceStyle = {
-        ...composerTokens,
-        background: theme.node.panel,
-        color: theme.node.text,
-        boxShadow: theme.node.shadow,
-    } as CSSProperties;
-    const promptBounds = promptEditorBounds(false, activeReferenceCount > 0, fontSize);
-    const expandedPromptBounds = promptEditorBounds(true, activeReferenceCount > 0, fontSize);
-    const composerHeight = clampPromptHeight(manualPromptHeight ?? promptContentHeight + (activeReferenceCount ? PROMPT_REFERENCE_SHELF_HEIGHT : 0), promptBounds);
-    const expandedComposerHeight = clampPromptHeight(expandedPromptContentHeight + (activeReferenceCount ? PROMPT_REFERENCE_SHELF_HEIGHT : 0), expandedPromptBounds);
+    const promptBounds = promptEditorBounds(false, hasShelf, fontSize);
+    const expandedPromptBounds = promptEditorBounds(true, hasShelf, fontSize);
+    const shelfHeight = hasShelf ? PROMPT_REFERENCE_SHELF_HEIGHT : 0;
+    const composerHeight = clampPromptHeight(manualPromptHeight ?? promptContentHeight + shelfHeight, promptBounds);
+    const expandedComposerHeight = clampPromptHeight(expandedPromptContentHeight + shelfHeight, expandedPromptBounds);
     const measureExpandedModalSize = () => {
         const rect = expandedModalRef.current?.getBoundingClientRect();
         if (!rect?.width || !rect.height) return { width: PROMPT_EDITOR_MODAL_DEFAULT_WIDTH, height: PROMPT_EDITOR_MODAL_DEFAULT_HEIGHT };
@@ -265,7 +278,16 @@ export function CanvasNodePromptPanel({
     const settingsError = mediaSettingIssues(config, mode)
         .map((item) => item.message)
         .join("；");
-    const isSubmitDisabled = Boolean(settingsError) || (!isRunning && !prompt.trim());
+    const frameIssue =
+        videoMode === "frames"
+            ? canvasVideoFrameIssue(
+                  node.metadata,
+                  videoFrameOptions.map((item) => item.nodeId),
+              )
+            : "";
+    const mentionIssue = (videoMode === "text" || videoMode === "frames") && mediaMentions.some((item) => videoMode === "text" || !frameIds.includes(item.nodeId)) ? videoMediaMentionIssue(videoMode) : "";
+    const videoIssue = frameIssue || mentionIssue || (videoMode && config.model ? modelCompatibilityError(config, config.model, resolvedRequirements) : "");
+    const isSubmitDisabled = Boolean(settingsError || videoIssue || !prompt.trim() || isRunning);
     const canExpandPrompt = mode === "image" || mode === "video";
     const canOptimizePrompt = Boolean(promptOptimizerProvider) && canExpandPrompt;
     const isPortraitTexture = mode === "image" && Boolean(node.metadata?.portraitTexture);
@@ -358,9 +380,22 @@ export function CanvasNodePromptPanel({
         if (model !== config.model) onConfigChange(node.id, { model });
     };
 
+    const changeVideoMode = (next: CanvasVideoReferenceMode) => {
+        if (next === videoMode && !usesProjectedVideoReferences(node)) return;
+        onConfigChange(node.id, {
+            videoReferenceMode: next,
+            videoEditOperation: videoReferenceOperation(
+                next,
+                inputReferences.some((item) => item.kind === "image" || item.kind === "video" || item.kind === "character"),
+            ),
+            videoStartFrameNodeId: next === "frames" ? videoFrameOptions[0]?.nodeId : undefined,
+            videoEndFrameNodeId: next === "frames" ? videoFrameOptions[1]?.nodeId : undefined,
+        });
+    };
+
     const submit = () => {
         const text = prompt.trim();
-        if (!text || isRunning) return false;
+        if (isSubmitDisabled) return false;
         if (mode === "text" && node.metadata?.listMode && onListGenerate) onListGenerate(node.id, text);
         else onGenerate(node.id, mode, text);
         return true;
@@ -396,10 +431,24 @@ export function CanvasNodePromptPanel({
                     </span>
                     <span className="canvas-node-composer-mode-title truncate">{modeDisplayName(mode)}生成</span>
                     {activeReferenceCount > 0 ? <span className="canvas-node-composer-reference-heading">{referenceShelfHeading(activeReferences)}</span> : null}
+                    {videoMode && (
+                        <SegmentedControl<CanvasVideoReferenceMode>
+                            className="canvas-video-reference-switch"
+                            size="sm"
+                            ariaLabel={t("canvasC.videoPromptTools.mode")}
+                            value={videoMode}
+                            disabled={Boolean(node.metadata?.locked) || isRunning}
+                            options={[
+                                { value: "text", label: t("canvasC.videoPromptTools.textMode") },
+                                { value: "all", label: t("canvasC.videoPromptTools.allMode"), disabled: !hasMedia },
+                                { value: "frames", label: t("canvasC.videoPromptTools.frameMode"), disabled: !videoFrameOptions.length && videoMode !== "frames" },
+                            ]}
+                            onChange={changeVideoMode}
+                        />
+                    )}
                 </div>
             )}
-            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-                <CanvasPromptFontSizeControl />
+            <div className="canvas-node-composer-header-tools">
                 {!simpleMode && (mode === "image" || mode === "video") ? (
                     <div className="canvas-node-tool-controls canvas-node-tool-controls-inline flex items-center gap-1" data-canvas-no-zoom data-canvas-wheel-scroll onPointerDown={(e) => e.stopPropagation()}>
                         {mode === "image" ? (
@@ -452,8 +501,9 @@ export function CanvasNodePromptPanel({
                         </button>
                     </Tooltip>
                 ) : null}
-                {/* 工具类操作与窗口类操作（放大/关闭）分组，避免关闭按钮混在命令里。 */}
-                {!expanded && (canExpandPrompt || onClose) && ((!simpleMode && (mode === "image" || mode === "video")) || showPromptTemplates || canOptimizePrompt) ? <span className="canvas-node-composer-header-divider" aria-hidden /> : null}
+            </div>
+            <div className="canvas-node-composer-window-tools" data-canvas-no-drag>
+                <CanvasPromptFontSizeControl compact />
                 {!expanded && canExpandPrompt ? (
                     <Tooltip title="放大编辑">
                         <button type="button" className="canvas-node-composer-header-action is-icon" onClick={() => setExpandedPromptOpen(true)} aria-label="放大编辑提示词">
@@ -483,31 +533,20 @@ export function CanvasNodePromptPanel({
         const formattedCredits = credits?.toLocaleString("zh-CN", { maximumFractionDigits: 6 });
         const actionLabel = isRunning ? "生成中" : showCost ? `${routeQuote?.estimated ? "预估" : "消耗"} ${formattedCredits} 积分，生成` : "生成";
         return (
-            <Button
-                type="text"
-                className={`canvas-node-composer-submit canvas-node-composer-submit-canvas ${showCost ? "has-cost" : ""}`}
-                disabled={isRunning || isSubmitDisabled}
-                style={
-                    {
-                        color: isSubmitDisabled ? theme.node.faint : theme.node.text,
-                        "--canvas-composer-submit-action": isSubmitDisabled ? theme.toolbar.itemHover : monochromeAccent,
-                        "--canvas-composer-submit-action-fg": isSubmitDisabled ? theme.node.faint : theme.canvas.background,
-                    } as CSSProperties
-                }
-                onClick={() => (expanded ? submitExpandedPrompt() : submit())}
-                aria-label={actionLabel}
-                title={routeQuote ? modelQuoteDescription(routeQuote) : actionLabel}
-            >
+            <div className="canvas-node-generate">
                 {showCost ? (
-                    <span className="canvas-node-composer-submit-cost">
+                    <span className="canvas-node-generate-cost" title={routeQuote ? modelQuoteDescription(routeQuote) : actionLabel}>
                         <CreditSymbol />
-                        <span>{routeQuote?.estimated ? `预估:${formattedCredits}` : formattedCredits}</span>
+                        <span>
+                            {routeQuote?.estimated ? "约 " : ""}
+                            {formattedCredits} 积分
+                        </span>
                     </span>
                 ) : null}
-                <span className="canvas-node-composer-submit-action" aria-hidden>
-                    {isRunning ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : <ArrowUp className="size-3.5" strokeWidth={2.4} />}
-                </span>
-            </Button>
+                <button type="button" className="canvas-node-generate-button" disabled={isSubmitDisabled} aria-busy={isRunning} aria-label={actionLabel} title={videoIssue || actionLabel} onClick={() => (expanded ? submitExpandedPrompt() : submit())}>
+                    {isRunning ? <LoaderCircle className="animate-spin motion-reduce:animate-none" aria-hidden /> : <ArrowUp aria-hidden />}
+                </button>
+            </div>
         );
     };
 
@@ -522,9 +561,9 @@ export function CanvasNodePromptPanel({
             </div>
         ) : (
             <div className="canvas-node-composer-footer">
-                <div className={expanded ? "min-w-0 flex-1" : "canvas-node-composer-model"}>
+                <div className="canvas-node-composer-model">
                     <ModelPicker
-                        className="canvas-node-composer-model-trigger !h-8 !w-full !min-w-0 !text-[var(--fs-tiny)] !font-normal [&_img]:!size-3 [&_.lucide]:!size-3"
+                        className="canvas-node-composer-model-trigger"
                         fullWidth
                         config={config}
                         value={config.model}
@@ -538,15 +577,7 @@ export function CanvasNodePromptPanel({
                         showConfiguredModelName
                     />
                 </div>
-                <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1">
-                    <ReferenceToolsPopover
-                        canAutoMention={canAutoMention}
-                        autoLinkEnabled={autoLinkEnabled}
-                        onAutoMention={() => updatePrompt(autoMentionedPrompt)}
-                        onAutoLinkEnabledChange={setAutoLinkEnabled}
-                        accent={monochromeAccent}
-                        compact={!expanded}
-                    />
+                <div className="canvas-node-composer-output-tools">
                     {mode === "text" ? (
                         <>
                             <div className="flex h-7 items-center overflow-hidden rounded-md border" style={{ borderColor: theme.node.stroke }}>
@@ -619,6 +650,9 @@ export function CanvasNodePromptPanel({
                             onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))}
                         />
                     ) : null}
+                </div>
+                <div className="canvas-node-composer-send-tools">
+                    <ReferenceToolsPopover canAutoMention={canAutoMention} autoLinkEnabled={autoLinkEnabled} onAutoMention={() => updatePrompt(autoMentionedPrompt)} onAutoLinkEnabledChange={setAutoLinkEnabled} accent={monochromeAccent} compact />
                     {renderSubmitButton(expanded)}
                 </div>
             </div>
@@ -635,6 +669,7 @@ export function CanvasNodePromptPanel({
                         references={resolvedMentionReferences}
                         theme={theme}
                         onInsert={insertPromptReference}
+                        onPick={canPickReferences ? () => (expanded ? expandedPromptEditorActionsRef : promptEditorActionsRef).current?.openReferencePicker() : undefined}
                         onRemove={(reference) => onRemoveReference?.(node.id, reference)}
                         onReorder={onReorderReferences ? (orderedNodeIds) => onReorderReferences(node.id, orderedNodeIds) : undefined}
                         onReplaceReference={onReplaceReference ? (oldReference, sourceNodeId) => onReplaceReference(node.id, oldReference, sourceNodeId) : undefined}
@@ -656,8 +691,8 @@ export function CanvasNodePromptPanel({
                         containerClassName="min-h-0 flex-1"
                         className={
                             expanded
-                                ? "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-3 py-2 text-[var(--fs-body-lg)] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
-                                : "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent px-2 py-2 text-[var(--fs-body)] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                                ? "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent py-2 text-[var(--fs-body-lg)] leading-6 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
+                                : "thin-scrollbar h-full w-full resize-none overflow-y-auto border-none bg-transparent py-2 text-[var(--fs-body)] leading-5 !outline-none !ring-0 !shadow-none focus:!outline-none focus:!ring-0 focus:!shadow-none placeholder:text-current placeholder:opacity-35"
                         }
                         style={{ color: theme.node.text, outline: "none", boxShadow: "none", fontSize, lineHeight: 1.6 }}
                         placeholder={selectedPresetPlaceholder || promptPlaceholder(mode, hasImageContent, hasTextContent)}
@@ -665,6 +700,16 @@ export function CanvasNodePromptPanel({
                     />
                 </div>
                 {!expanded && <PromptResizeHandle height={height} min={bounds.min} max={bounds.max} onResize={setManualPromptHeight} />}
+                {videoMode === "frames" && (
+                    <div className="canvas-node-composer-parameters shrink-0">
+                        <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} disabled={Boolean(node.metadata?.locked) || isRunning} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
+                    </div>
+                )}
+                {videoIssue ? (
+                    <span role="status" className="canvas-video-reference-issue">
+                        {videoIssue}
+                    </span>
+                ) : null}
             </>
         );
     };
@@ -683,37 +728,15 @@ export function CanvasNodePromptPanel({
             onClose={() => setPromptOptimizerOpen(false)}
             onApply={(nextPrompt) => updatePrompt(nextPrompt)}
         >
-            <div className="canvas-node-composer" style={composerSurfaceStyle} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+            <div className="canvas-node-composer" style={composerTokens} onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
                 {renderComposerHeader(false)}
 
                 {renderPromptEditor(false)}
 
-                {/* B区 参数区（对应 #98 决策2：默认折叠，手风琴展开）*/}
-                {hasVideoPromptTools ? (
-                    <div className="canvas-node-composer-parameters overflow-hidden">
-                        <button
-                            type="button"
-                            className="canvas-node-composer-parameters-toggle flex w-full items-center gap-2 rounded-[var(--r-md)] px-2 py-1 text-[var(--fs-micro)] font-medium transition-colors"
-                            style={{ color: theme.node.muted }}
-                            onClick={() => setParamsExpanded(!paramsExpanded)}
-                            aria-expanded={paramsExpanded}
-                            aria-label={paramsExpanded ? "收起参数" : "展开参数"}
-                        >
-                            <SlidersHorizontal className="size-3" strokeWidth={1.8} />
-                            <span className="flex-1 text-left">参数</span>
-                            <ChevronDown className={`size-3 transition-transform duration-200 ${paramsExpanded ? "rotate-180" : ""}`} strokeWidth={1.8} />
-                        </button>
-                        {paramsExpanded ? (
-                            <div className="pt-1">
-                                <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
-                            </div>
-                        ) : null}
-                    </div>
-                ) : null}
-
                 {renderComposerControls(false)}
 
-                <Modal
+                <AppModal
+                    flush
                     className="canvas-prompt-editor-modal"
                     open={expandedPromptOpen}
                     title={null}
@@ -721,15 +744,14 @@ export function CanvasNodePromptPanel({
                     centered
                     width={expandedModalSize ? expandedModalSize.width : PROMPT_EDITOR_MODAL_WIDTH}
                     style={{ maxWidth: `calc(100vw - ${PROMPT_EDITOR_VIEWPORT_MARGIN}px)` }}
-                    destroyOnHidden
                     onCancel={() => {
                         setExpandedPresetOpen(false);
                         setExpandedNineGridOpen(false);
                         setExpandedPromptOpen(false);
                     }}
                     styles={{
-                        container: { border: 0, borderRadius: "var(--canvas-composer-radius)", padding: 0, overflow: "hidden", background: theme.node.panel, boxShadow: theme.node.shadow },
-                        body: { minHeight: 0, padding: 0 },
+                        container: { borderRadius: "var(--canvas-composer-radius)", background: theme.node.panel, boxShadow: theme.node.shadow },
+                        body: { minHeight: 0 },
                     }}
                 >
                     <div
@@ -740,16 +762,11 @@ export function CanvasNodePromptPanel({
                         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
                             <div className="shrink-0 pr-8">{renderComposerHeader(true)}</div>
                             {renderPromptEditor(true, Boolean(expandedModalSize))}
-                            {hasVideoPromptTools ? (
-                                <div className="canvas-node-composer-parameters shrink-0">
-                                    <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
-                                </div>
-                            ) : null}
                             <div className="shrink-0">{renderComposerControls(true)}</div>
                         </div>
                         <PromptModalResizeHandle size={expandedModalSize} measure={measureExpandedModalSize} onResize={setExpandedModalSize} accent={theme.node.muted} />
                     </div>
-                </Modal>
+                </AppModal>
             </div>
         </CanvasPromptOptimizerDrawer>
     );

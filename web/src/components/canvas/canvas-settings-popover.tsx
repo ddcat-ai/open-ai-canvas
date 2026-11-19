@@ -72,7 +72,6 @@ export function CanvasSettingsPopover({ label, summary, children, placement = "t
                 aria-label={`${label}：${summary}`}
                 title={`${label} · ${summary}`}
                 className={`canvas-generation-settings-trigger ${buttonClassName || "!h-8 !max-w-[180px] !justify-start !rounded-full !px-2"}`}
-                style={{ background: theme.node.fill, color: theme.node.text }}
                 icon={<Settings2 className="size-3.5" />}
             >
                 <span className="truncate">{summary}</span>

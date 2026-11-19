@@ -2,11 +2,18 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 export const jaJP: DeepStringRecord<typeof zhCN> = {
     toolbar: {
+        moreTools: "その他のツール",
+        settings: "ツールバー設定",
         appearance: "キャンバスの外観",
         appearanceSubtitle: "配色とグリッド",
         mediaInfo: "メディア情報",
     },
     videoPromptTools: {
+        mode: "動画の参照モード",
+        textMode: "テキストから動画",
+        allMode: "素材参照",
+        frameMode: "開始・終了フレーム",
+        swap: "開始・終了フレームを入れ替える",
         imageCount: "画像 {{count}}",
         videoCount: "動画 {{count}}",
         audioCount: "音声 {{count}}",

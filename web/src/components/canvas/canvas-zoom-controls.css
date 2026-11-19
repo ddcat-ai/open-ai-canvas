@@ -5,8 +5,176 @@
 }
 
 .canvas-zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
     min-width: 0;
     max-width: 100%;
+}
+
+.canvas-view-pill,
+.canvas-view-help,
+.canvas-zoom-menu {
+    border: var(--stroke-1) solid var(--cn-stroke);
+    background: var(--dock-surface);
+    color: var(--cn-muted);
+    box-shadow: var(--dock-shadow);
+}
+.canvas-view-pill,
+.canvas-view-help {
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--r-full);
+    padding: var(--space-1);
+    height: 40px;
+}
+.canvas-view-pill > button,
+.canvas-view-help {
+    justify-content: center;
+    cursor: pointer;
+}
+.canvas-view-pill > button {
+    display: inline-flex;
+    align-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-full);
+    background: transparent;
+    color: inherit;
+}
+.canvas-view-help {
+    width: 40px;
+    flex: none;
+}
+.canvas-view-pill > button:is(:hover, [aria-pressed="true"], [aria-expanded="true"]),
+.canvas-view-help:hover,
+.canvas-zoom-menu button:hover {
+    color: var(--cn-text);
+    background: var(--button-tonal-hover-bg);
+}
+.canvas-view-help:hover {
+    background: var(--cn-fill);
+}
+.canvas-zoom-controls :is(button, input):focus-visible {
+    outline: var(--stroke-2) solid var(--control-focus-ring);
+    outline-offset: -2px;
+}
+.canvas-zoom-controls svg {
+    width: var(--space-4);
+    height: var(--space-4);
+    stroke-width: var(--button-icon-stroke);
+}
+.canvas-view-divider {
+    margin-inline: var(--space-1);
+    height: var(--space-4);
+    width: var(--stroke-1);
+    background: var(--cn-stroke);
+}
+.canvas-view-pill > .canvas-view-scale {
+    width: auto;
+    gap: var(--space-1);
+    padding-inline: var(--space-2);
+}
+.canvas-zoom-readout,
+.canvas-zoom-range-row,
+.canvas-zoom-stops {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-caption);
+}
+.canvas-zoom-readout,
+.canvas-zoom-digit {
+    display: inline-flex;
+    line-height: 1;
+}
+.canvas-zoom-digit {
+    display: block;
+    width: 1ch;
+    height: 1em;
+    overflow: hidden;
+}
+.canvas-zoom-digit > span {
+    display: block;
+    line-height: 1em;
+    white-space: pre;
+}
+.canvas-zoom-menu {
+    position: absolute;
+    z-index: var(--dock-z-popover);
+    inset-inline-start: 0;
+    bottom: calc(100% + var(--space-2));
+    width: min(212px, calc(100vw - 32px));
+    max-height: 60dvh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-1);
+    border-radius: var(--panel-radius);
+    background: var(--canvas-composer-surface);
+    box-shadow: var(--elevation-overlay);
+    color: var(--cn-text);
+}
+.canvas-zoom-menu button {
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    border-radius: var(--r-md);
+}
+.canvas-zoom-menu > button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: var(--space-8);
+    padding-inline: var(--space-2);
+    font-size: var(--fs-body);
+}
+.canvas-zoom-menu kbd {
+    margin-inline-start: auto;
+    font: inherit;
+    font-size: var(--fs-caption);
+    color: var(--cn-muted);
+}
+.canvas-zoom-menu hr {
+    border: 0;
+    border-top: var(--stroke-1) solid var(--cn-stroke);
+    margin: var(--space-1);
+}
+.canvas-zoom-range-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+}
+.canvas-zoom-range-row input {
+    min-width: 0;
+    flex: 1;
+    accent-color: var(--cn-text);
+}
+.canvas-zoom-range-row span {
+    min-width: 4ch;
+    text-align: end;
+}
+.canvas-zoom-stops {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-1);
+    color: var(--cn-muted);
+}
+.canvas-zoom-stops button {
+    min-height: var(--space-7);
+}
+@media (prefers-reduced-motion: no-preference) {
+    .canvas-zoom-menu {
+        animation: canvas-zoom-reveal var(--motion-dur-fast) var(--motion-ease-out);
+    }
+    @keyframes canvas-zoom-reveal {
+        from {
+            opacity: 0;
+            transform: translateY(4px);
+        }
+    }
 }
 
 .canvas-workspace-zoom-controls > .canvas-zoom-controls {

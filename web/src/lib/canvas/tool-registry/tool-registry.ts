@@ -1,7 +1,7 @@
 import { ScanSearch, Shapes } from "lucide-react";
 import { createElement } from "react";
 
-import type { FloatingDockEntry } from "@/components/ui/aceternity/floating-dock";
+import type { FloatingDockCommand, FloatingDockEntry, FloatingDockSwitch } from "@/components/ui/aceternity/floating-dock";
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { listCreatableNodeDefinitions } from "@/lib/canvas/node-registry";
 
@@ -83,6 +83,33 @@ export function resolveToolbarEntries(toolbar: ToolbarId, ctx: ToolContext, pref
     return buildEntriesWithSeparators(tools, ctx);
 }
 
+export function resolveMainToolbarLayout(ctx: ToolContext, prefs: ToolbarPrefs | null) {
+    const dock: FloatingDockEntry[] = [];
+    const more: FloatingDockCommand[] = [];
+    const destructive: FloatingDockCommand[] = [];
+    let quickCommands = 0;
+    let previousGroup: string | undefined;
+    for (const tool of resolveToolbarTools("main", ctx, prefs)) {
+        const entry = toolToEntry(tool, ctx);
+        if (entry.kind !== "switch") {
+            if (entry.danger) {
+                destructive.push(entry);
+                continue;
+            }
+            if (quickCommands >= 4) {
+                more.push(entry);
+                continue;
+            }
+            quickCommands++;
+        }
+        const group = entry.kind === "switch" ? "mode" : tool.category === "history" ? "history" : "action";
+        if (previousGroup && group !== previousGroup) dock.push({ kind: "separator", id: `before-${entry.id}` });
+        dock.push(entry);
+        previousGroup = group;
+    }
+    return { dock, more, destructive };
+}
+
 /**
  * 解析工具栏工具——返回过滤排序后的 ToolDefinition[]（不含 separator）。
  * 供需要后处理工具列表的场景使用（如节点悬停工具栏合并图片工具）。
@@ -107,7 +134,7 @@ export function resolveNodeToolbarPlacement(tool: ToolDefinition, ctx: ToolConte
     const placement = tool.nodeToolbar;
     return {
         group: typeof placement?.group === "function" ? placement.group(ctx) : placement?.group || "more",
-        order: typeof placement?.order === "function" ? placement.order(ctx) : placement?.order ?? tool.defaultOrder,
+        order: typeof placement?.order === "function" ? placement.order(ctx) : (placement?.order ?? tool.defaultOrder),
     };
 }
 
@@ -135,7 +162,7 @@ function buildEntriesWithSeparators(tools: ToolDefinition[], ctx: ToolContext): 
     return entries;
 }
 
-function toolToEntry(tool: ToolDefinition, ctx: ToolContext): FloatingDockEntry {
+function toolToEntry(tool: ToolDefinition, ctx: ToolContext): FloatingDockCommand | FloatingDockSwitch {
     if (tool.switchGroup) {
         return {
             kind: "switch",

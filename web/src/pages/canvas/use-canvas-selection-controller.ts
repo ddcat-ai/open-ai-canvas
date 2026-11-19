@@ -86,7 +86,6 @@ export function useCanvasSelectionController({
 }: UseCanvasSelectionControllerOptions) {
     const dragFrameRef = useRef<number | null>(null);
     const pendingNodeDragRef = useRef<Position>({ x: 0, y: 0 });
-    const pendingAlignmentGuidesRef = useRef<{ vertical?: number; horizontal?: number }>({});
     const alignmentContextRef = useRef<NodeAlignmentContext | null>(null);
     const lastFrameDropCheckRef = useRef(0);
     const selectionFrameRef = useRef<number | null>(null);
@@ -102,7 +101,6 @@ export function useCanvasSelectionController({
     const [frameDropTargetId, setFrameDropTargetId] = useState<string | null>(null);
     const [isNodeDragging, setIsNodeDragging] = useState(false);
     const [dragPreview, setDragPreview] = useState<{ x: number; y: number; nodeIds: Set<string> } | null>(null);
-    const [alignmentGuides, setAlignmentGuides] = useState<{ vertical?: number; horizontal?: number }>({});
 
     const resetSelectionBox = useCallback(() => {
         selectionGestureRef.current = { phase: "idle" };
@@ -237,9 +235,8 @@ export function useCanvasSelectionController({
             alignmentContextRef.current = createNodeAlignmentContext(currentNodes, initialSelectedNodes);
             lastFrameDropCheckRef.current = 0;
             setIsNodeDragging(true);
-            setAlignmentGuides({});
             setDragPreview({ x: 0, y: 0, nodeIds: draggedRenderNodeIdSet });
-            applyCanvasNodeDragPreview(containerRef.current, { x: 0, y: 0, nodeIds: draggedRenderNodeIdSet });
+            applyCanvasNodeDragPreview(containerRef.current, { x: 0, y: 0, nodeIds: draggedRenderNodeIdSet }, selectionBoundsElementRef.current);
         },
         [containerRef, historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeBringToFront, onNodeClick, onNodeInteractionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds],
     );
@@ -266,7 +263,6 @@ export function useCanvasSelectionController({
             applyCanvasNodeDragPreview(containerRef.current, null);
             setIsNodeDragging(false);
             setDragPreview(null);
-            setAlignmentGuides({});
             if (dragRef.current.hasMoved) {
                 const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
                 const positioned =
@@ -314,20 +310,13 @@ export function useCanvasSelectionController({
             dragFrameRef.current = requestAnimationFrame(() => {
                 const aligned = calculateNodeAlignment(alignmentContextRef.current, pendingNodeDragRef.current, 7 / viewportRef.current.k);
                 const latest = aligned.offset;
-                pendingAlignmentGuidesRef.current = aligned.guides;
                 const now = performance.now();
                 if (now - lastFrameDropCheckRef.current >= 100) {
                     lastFrameDropCheckRef.current = now;
                     const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
                     setFrameDropTargetId(findFrameDropTargetFromIndex(frameDropIndexRef.current, draggedNodesRef.current, draggedNodeIds, latest));
                 }
-                applyCanvasNodeDragPreview(containerRef.current, {
-                    x: latest.x,
-                    y: latest.y,
-                    nodeIds: dragRef.current.draggedRenderNodeIdSet,
-                });
-                const nextGuides = dragRef.current.hasMoved ? pendingAlignmentGuidesRef.current : {};
-                setAlignmentGuides((current) => (current.vertical === nextGuides.vertical && current.horizontal === nextGuides.horizontal ? current : nextGuides));
+                applyCanvasNodeDragPreview(containerRef.current, { ...latest, nodeIds: dragRef.current.draggedRenderNodeIdSet, guides: aligned.guides }, selectionBoundsElementRef.current);
                 dragFrameRef.current = null;
             });
         },
@@ -446,7 +435,6 @@ export function useCanvasSelectionController({
     }, [containerRef]);
 
     return {
-        alignmentGuides,
         cancelSelectionBox,
         deselectCanvas,
         dragPreview,

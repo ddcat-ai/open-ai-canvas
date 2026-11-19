@@ -29,7 +29,6 @@ type CanvasLeaferGraphicsLayerProps = {
     nodeById: Map<string, CanvasNodeData>;
     selectionBox: SelectionBox | null;
     selectedNodeBounds: NodeBounds;
-    alignmentGuides: { vertical?: number; horizontal?: number };
 };
 
 type LeaferScene = {
@@ -125,7 +124,11 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         });
         const unsubscribeNodeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
             applyConnectionDragPreview(underlay, propsRef.current, preview);
+            const previous = overlay.dragPreview?.guides;
             overlay.dragPreview = preview;
+            if (previous?.vertical !== preview?.guides?.vertical || previous?.horizontal !== preview?.guides?.horizontal) {
+                syncGuidePath(overlay, rasterViewportRef.current, containerSizeRef.current.width, containerSizeRef.current.height);
+            }
             syncLiveSelectionBounds(overlay, propsRef.current, viewportRef.current.k);
         });
         const unsubscribeResize = resizeMotion?.subscribe((nodeId) => {
@@ -188,7 +191,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         if (isViewportPreview(container, viewportRef.current, rasterViewportRef.current)) {
             applyScenePreview(viewportRef.current, rasterViewportRef.current, underlay, overlay);
         }
-    }, [props.alignmentGuides, props.containerRef, props.theme]);
+    }, [props.containerRef, props.theme]);
 
     return (
         <>
@@ -390,13 +393,12 @@ function syncViewport(viewport: ViewportTransform, width: number, height: number
         opacity: 0.68,
     });
     overlay.guides.set({
-        visible: typeof props.alignmentGuides.vertical === "number" || typeof props.alignmentGuides.horizontal === "number",
-        path: guidePath(viewport, width, height, props.alignmentGuides),
         stroke: props.theme.accent.primary,
         strokeWidth: 1 / scale,
         dashPattern: [5 / scale, 5 / scale],
         opacity: 0.72,
     });
+    syncGuidePath(overlay, viewport, width, height);
 }
 
 function isViewportPreview(container: HTMLDivElement, viewport: ViewportTransform, rasterViewport: ViewportTransform) {
@@ -454,7 +456,12 @@ function syncSelectionBounds(rect: Rect, bounds: NonNullable<NodeBounds>, viewpo
     });
 }
 
-function guidePath(viewport: ViewportTransform, width: number, height: number, guides: { vertical?: number; horizontal?: number }) {
+function syncGuidePath(overlay: OverlayScene, viewport: ViewportTransform, width: number, height: number) {
+    const guides = overlay.dragPreview?.guides;
+    if (guides?.vertical === undefined && guides?.horizontal === undefined) {
+        overlay.guides.visible = false;
+        return;
+    }
     const scale = Math.max(viewport.k, 0.05);
     const left = -viewport.x / scale;
     const top = -viewport.y / scale;
@@ -463,7 +470,7 @@ function guidePath(viewport: ViewportTransform, width: number, height: number, g
     const commands: string[] = [];
     if (typeof guides.vertical === "number") commands.push(`M ${guides.vertical} ${top} L ${guides.vertical} ${bottom}`);
     if (typeof guides.horizontal === "number") commands.push(`M ${left} ${guides.horizontal} L ${right} ${guides.horizontal}`);
-    return commands.join(" ");
+    overlay.guides.set({ visible: true, path: commands.join(" ") });
 }
 
 function canvasPixelRatio() {

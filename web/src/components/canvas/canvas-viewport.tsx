@@ -5,7 +5,7 @@ import { resolveCanvasPointerIntent } from "@/lib/canvas/canvas-selection";
 import { isDiscreteCanvasWheel } from "@/lib/canvas/canvas-wheel";
 import { canvasWheelBelongsToViewport, canvasWheelIntentTarget, createCanvasWheelIntent } from "@/lib/canvas/canvas-wheel-intent";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
-import { applyCanvasLiveViewport, CANVAS_GRID_BLEED, canvasGridMetrics, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
+import { applyCanvasLiveViewport, CANVAS_GRID_BLEED, canvasGridMetrics, setCanvasGestureActive, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { ViewportTransform } from "@/types/canvas";
 
@@ -114,10 +114,9 @@ export function CanvasViewport({
         frameRef.current = null;
         syncTimerRef.current = null;
         nextViewportRef.current = null;
-        delete container?.dataset.canvasViewportInteracting;
+        setCanvasGestureActive(container, "canvasViewportInteracting", false);
         setIsPanning(false);
         setIsSpacePressed(false);
-        document.body.style.cursor = "default";
     }, [interactive, containerRef]);
 
     useLayoutEffect(() => {
@@ -136,15 +135,15 @@ export function CanvasViewport({
         });
     }, [containerRef]);
 
-    useEffect(
-        () => () => {
+    useEffect(() => {
+        const container = containerRef.current;
+        return () => {
             if (frameRef.current) cancelAnimationFrame(frameRef.current);
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-            delete containerRef.current?.dataset.canvasViewportInteracting;
-            document.body.style.cursor = "";
-        },
-        [containerRef],
-    );
+            setCanvasGestureActive(container, "canvasViewportInteracting", false);
+            setCanvasGestureActive(container, "canvasNodeDragging", false);
+        };
+    }, [containerRef]);
 
     const syncViewport = useCallback(() => {
         if (interactive) onViewportChange(viewportRef.current);
@@ -156,7 +155,7 @@ export function CanvasViewport({
             scaleRef.current = next.k;
             onViewportPreviewChange?.(next);
             const container = containerRef.current;
-            if (container) container.dataset.canvasViewportInteracting = "true";
+            setCanvasGestureActive(container, "canvasViewportInteracting", true);
             nextViewportRef.current = next;
             if (!frameRef.current)
                 frameRef.current = requestAnimationFrame((now) => {
@@ -171,7 +170,7 @@ export function CanvasViewport({
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
             syncTimerRef.current = setTimeout(() => {
                 interactingRef.current = false;
-                delete containerRef.current?.dataset.canvasViewportInteracting;
+                setCanvasGestureActive(containerRef.current, "canvasViewportInteracting", false);
                 syncViewport();
                 syncTimerRef.current = null;
             }, 120);
@@ -344,7 +343,6 @@ export function CanvasViewport({
                 hasMoved: false,
             };
             setIsPanning(true);
-            document.body.style.cursor = "grabbing";
             return;
         }
 
@@ -365,7 +363,6 @@ export function CanvasViewport({
                 hasMoved: false,
             };
             setIsPanning(true);
-            document.body.style.cursor = "grabbing";
         }
     };
 
@@ -420,10 +417,9 @@ export function CanvasViewport({
                 panState.current.button = -1;
                 interactingRef.current = false;
                 if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-                delete containerRef.current?.dataset.canvasViewportInteracting;
+                setCanvasGestureActive(containerRef.current, "canvasViewportInteracting", false);
                 syncViewport();
                 setIsPanning(false);
-                document.body.style.cursor = "";
                 return;
             }
 
@@ -442,11 +438,10 @@ export function CanvasViewport({
             panState.current.button = -1;
             interactingRef.current = false;
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-            delete containerRef.current?.dataset.canvasViewportInteracting;
+            setCanvasGestureActive(containerRef.current, "canvasViewportInteracting", false);
             // Edge 等浏览器可能先派发 contextmenu；单击不能提交视口并关闭刚打开的菜单。
             if (hasMoved) syncViewport();
             setIsPanning(false);
-            document.body.style.cursor = "";
         };
 
         window.addEventListener("pointermove", handlePointerMove);
@@ -492,18 +487,15 @@ export function CanvasViewport({
             ref={containerRef}
             data-canvas-viewport
             data-popover-anchor-container
-            data-canvas-pan-state={isPanning ? "grabbing" : isSpacePressed || !boxSelectEnabled ? "grab" : undefined}
-            className={`relative h-full w-full select-none overflow-clip touch-none ${isPanning ? "cursor-grabbing" : isSpacePressed || !boxSelectEnabled ? "cursor-grab" : "canvas-cursor-select"}`}
+            data-canvas-pan-state={isSpacePressed || !boxSelectEnabled ? "grab" : undefined}
+            className={`relative h-full w-full select-none overflow-clip touch-none ${isSpacePressed || !boxSelectEnabled ? "cursor-grab" : "canvas-cursor-select"}`}
             style={
                 {
                     background: resolvedAppearance.background,
                     overscrollBehavior: "none",
-                    "--canvas-live-x": `${viewport.x}px`,
-                    "--canvas-live-y": `${viewport.y}px`,
                     "--canvas-live-scale": viewport.k,
                     "--canvas-live-inverse-scale": 1 / Math.max(viewport.k, 0.05),
                     "--canvas-committed-scale": viewport.k,
-                    "--canvas-live-scale-ratio": 1,
                 } as React.CSSProperties
             }
             onPointerDown={handlePointerDown}
@@ -555,11 +547,12 @@ export function CanvasViewport({
         >
             <CanvasGrid appearance={appearance} mode={backgroundMode} viewport={viewport} />
             {graphicsLayer}
-            <div data-canvas-world-layer data-popover-anchor-container className="canvas-world-layer absolute origin-top-left">
+            <div data-canvas-world-layer data-popover-anchor-container className="canvas-world-layer absolute origin-top-left" style={{ transform: `translate3d(${viewport.x}px, ${viewport.y}px, 0)` }}>
                 <div data-canvas-world-raster-layer data-popover-anchor-container className="canvas-world-raster-layer absolute origin-top-left">
                     {children}
                 </div>
             </div>
+            {isPanning ? <div aria-hidden className="absolute inset-0 z-[var(--z-canvas-overlay)] cursor-grabbing" /> : null}
         </div>
     );
 }

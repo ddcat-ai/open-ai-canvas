@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Image as ImageIcon } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronDown, Image as ImageIcon } from "lucide-react";
 import { observeMovablePopupAnchor } from "@/lib/movable-popup-anchor";
 
 import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
@@ -27,6 +27,7 @@ type CanvasVideoPromptToolsProps = {
     onMetadataChange: (patch: Partial<CanvasNodeMetadata>) => void;
     referenceMode?: "frames" | "all";
     referenceSummary?: { imageCount: number; videoCount: number; audioCount: number };
+    disabled?: boolean;
 };
 
 const EMPTY_FRAME_VALUE = "__none__";
@@ -35,7 +36,7 @@ const MENU_MARGIN = 8;
 const MENU_ITEM_HEIGHT = 28;
 const CONTROL_TEXT_STYLE: CSSProperties = { fontFamily: "inherit", fontSize: 11, fontWeight: 400, letterSpacing: 0, lineHeight: 1 };
 
-export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChange, referenceMode = "frames", referenceSummary }: CanvasVideoPromptToolsProps) {
+export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChange, referenceMode = "frames", referenceSummary, disabled }: CanvasVideoPromptToolsProps) {
     const { t } = useTranslation();
     const theme = canvasThemes[useActiveTheme()];
     const startFrame = metadata?.videoStartFrameNodeId || EMPTY_FRAME_VALUE;
@@ -52,7 +53,9 @@ export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChang
                   referenceSummary.imageCount ? t("canvasC.videoPromptTools.imageCount", { count: referenceSummary.imageCount }) : "",
                   referenceSummary.videoCount ? t("canvasC.videoPromptTools.videoCount", { count: referenceSummary.videoCount }) : "",
                   referenceSummary.audioCount ? t("canvasC.videoPromptTools.audioCount", { count: referenceSummary.audioCount }) : "",
-              ].filter(Boolean).join(" · ")
+              ]
+                  .filter(Boolean)
+                  .join(" · ")
             : "";
         return (
             <div
@@ -73,19 +76,31 @@ export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChang
     if (!frameOptions.length) return null;
 
     return (
-        <div
-            className="grid min-w-0 grid-cols-2 items-center gap-1"
-            data-canvas-no-zoom
-            onMouseDown={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-        >
-            <FrameMenu label={t("canvasC.videoPromptTools.startFrame")} value={startFrame} options={frameOptions} theme={theme} onChange={(value) => setFrame("videoStartFrameNodeId", value)} />
-            <FrameMenu label={t("canvasC.videoPromptTools.endFrame")} value={endFrame} options={frameOptions} theme={theme} onChange={(value) => setFrame("videoEndFrameNodeId", value)} />
+        <div className="canvas-video-frame-pair" data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            <FrameMenu
+                label={t("canvasC.videoPromptTools.startFrame")}
+                value={startFrame}
+                options={frameOptions.filter((item) => item.nodeId !== endFrame)}
+                theme={theme}
+                disabled={disabled}
+                onChange={(value) => setFrame("videoStartFrameNodeId", value)}
+            />
+            <button
+                type="button"
+                className="canvas-video-frame-swap"
+                title={t("canvasC.videoPromptTools.swap")}
+                aria-label={t("canvasC.videoPromptTools.swap")}
+                disabled={disabled || !frameOptions.some((item) => item.nodeId === startFrame) || !frameOptions.some((item) => item.nodeId === endFrame)}
+                onClick={() => onMetadataChange({ videoStartFrameNodeId: endFrame, videoEndFrameNodeId: startFrame })}
+            >
+                <ArrowLeftRight aria-hidden />
+            </button>
+            <FrameMenu label={t("canvasC.videoPromptTools.endFrame")} value={endFrame} options={frameOptions.filter((item) => item.nodeId !== startFrame)} theme={theme} disabled={disabled} onChange={(value) => setFrame("videoEndFrameNodeId", value)} />
         </div>
     );
 }
 
-function FrameMenu({ label, value, options, theme, onChange }: { label: string; value: string; options: VideoFrameOption[]; theme: CanvasTheme; onChange: (value: string) => void }) {
+function FrameMenu({ label, value, options, theme, onChange, disabled }: { label: string; value: string; options: VideoFrameOption[]; theme: CanvasTheme; onChange: (value: string) => void; disabled?: boolean }) {
     const { t } = useTranslation();
     const selected = options.find((item) => item.nodeId === value);
     const items = [{ value: EMPTY_FRAME_VALUE, label: t("canvasC.videoPromptTools.none") }, ...options.map((option) => ({ value: option.nodeId, label: `${option.label} · ${option.title}`, previewUrl: option.previewUrl }))];
@@ -93,8 +108,9 @@ function FrameMenu({ label, value, options, theme, onChange }: { label: string; 
         <CompactMenuButton
             theme={theme}
             title={label}
-            label={selected?.label || label}
-            icon={<ImageIcon className="size-3.5 shrink-0 opacity-90" />}
+            label={selected?.label || t("canvasC.videoPromptTools.none")}
+            icon={selected?.previewUrl ? <img src={selected.previewUrl} alt="" className="size-6 shrink-0 rounded object-cover" /> : <ImageIcon className="size-5 shrink-0 opacity-60" />}
+            disabled={disabled}
             value={value}
             items={items}
             menuWidth={220}
@@ -114,6 +130,7 @@ function CompactMenuButton({
     menuWidth,
     maxMenuHeight,
     onSelect,
+    disabled,
 }: {
     theme: CanvasTheme;
     title: string;
@@ -124,6 +141,7 @@ function CompactMenuButton({
     menuWidth: number;
     maxMenuHeight: number;
     onSelect: (value: string) => void;
+    disabled?: boolean;
 }) {
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -236,15 +254,21 @@ function CompactMenuButton({
             <button
                 ref={triggerRef}
                 type="button"
-                className="inline-flex h-6 w-full min-w-0 items-center gap-1 rounded-[var(--dock-item-radius)] border-0 bg-transparent px-2 shadow-none transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-1"
+                className="canvas-video-frame-trigger"
                 style={buttonStyle}
                 title={title}
+                aria-label={`${title}：${label}`}
+                aria-expanded={open}
+                disabled={disabled}
                 onClick={() => setOpen((value) => !value)}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 {icon}
-                <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+                <span className="min-w-0 flex-1 truncate text-left">
+                    <span className="canvas-video-frame-label">{title}</span>
+                    {label}
+                </span>
                 <ChevronDown className="size-3 shrink-0 opacity-55" />
             </button>
             {menu}
