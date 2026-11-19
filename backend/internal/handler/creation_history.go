@@ -8,12 +8,12 @@ import (
 
 func registerCreationHistoryRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/creation-conversations", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		value, err := svc.ListCreationHistory(user.ID, c.Query("after"))
+		value, err := svc.ListCreationHistory(ownerKey, c.Query("after"))
 		if err != nil {
 			failService(c, err)
 			return
@@ -21,12 +21,12 @@ func registerCreationHistoryRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, value)
 	})
 	r.GET("/creation-conversations/:id", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		value, err := svc.GetCreationHistory(user.ID, c.Param("id"))
+		value, err := svc.GetCreationHistory(ownerKey, c.Param("id"))
 		if err != nil {
 			failService(c, err)
 			return
@@ -34,7 +34,7 @@ func registerCreationHistoryRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, value)
 	})
 	r.POST("/creation-conversations/:id/sync", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
@@ -45,7 +45,7 @@ func registerCreationHistoryRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		value, err := svc.SyncCreationHistory(user.ID, c.Param("id"), req)
+		value, err := svc.SyncCreationHistory(ownerKey, c.Param("id"), req)
 		if err != nil {
 			failService(c, err)
 			return

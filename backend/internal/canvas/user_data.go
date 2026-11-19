@@ -85,11 +85,16 @@ func (s *Service) UserAsset(userID string, id string) (json.RawMessage, error) {
 }
 
 func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataSummary, error) {
+	return s.UpsertAssetAs(userID, raw, userID, true)
+}
+
+func (s *Service) UpsertAssetAs(userID string, raw json.RawMessage, actorID string, manageAll bool) (UserDataSummary, error) {
 	asset, err := AssetFromJSON(userID, raw)
 	if err != nil {
 		return UserDataSummary{}, err
 	}
 	err = s.host.WithStorageLock(func() error {
+		asset.CreatedBy = actorID
 		if asset.FolderID != "" {
 			if _, err := s.repo.AssetFolderForUser(userID, asset.FolderID); err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -101,6 +106,9 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 		existing, existingErr := s.repo.AssetForUser(userID, asset.ID)
 		if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 			return existingErr
+		}
+		if !manageAll && existing != nil && existing.CreatedBy != actorID && (existing.Status == model.AssetVersionStatusArchived) != (asset.Status == model.AssetVersionStatusArchived) {
+			return kernel.Forbidden("仅素材贡献者或空间所有者可以归档和恢复此素材")
 		}
 		// 方舟认证分类只由服务端写入认证结果时设置；客户端只能保留已在该分类的素材。
 		if asset.Category == model.AssetCategoryArk && (existing == nil || existing.Category != model.AssetCategoryArk) {
@@ -376,7 +384,11 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 						return err
 					}
 				}
-				if err := New(tx, nil).ValidateCanvasMediaAssets(userID, raw); err != nil {
+				guard := New(tx, nil)
+				if err := guard.validateNewWorkspaceBindings(userID, existing, raw); err != nil {
+					return err
+				}
+				if err := guard.ValidateCanvasMediaAssets(userID, raw); err != nil {
 					return err
 				}
 			}
@@ -461,6 +473,9 @@ func (s *Service) upsertUserCanvasProjectWithHistory(userID string, raw json.Raw
 		existing, existingErr := s.repo.CanvasProjectForUser(userID, project.ID)
 		if existingErr != nil && !errors.Is(existingErr, gorm.ErrRecordNotFound) {
 			return existingErr
+		}
+		if err := s.validateNewWorkspaceBindings(userID, existing, raw); err != nil {
+			return err
 		}
 		existingBytes := int64(0)
 		project.Revision = *version.Revision
@@ -615,6 +630,9 @@ func canvasProjectFromJSONWithValidation(userID string, raw json.RawMessage, val
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return model.CanvasProject{}, kernel.WrapAppError(http.StatusBadRequest, "画布数据格式错误", err)
+	}
+	if _, team := model.TeamIDFromContentKey(userID); team && strings.TrimSpace(payload.ProjectID) != "" {
+		return model.CanvasProject{}, kernel.BadAuthRequest("团队空间不能关联个人项目")
 	}
 	now := time.Now()
 	createdAt := parseClientTime(payload.CreatedAt, now)

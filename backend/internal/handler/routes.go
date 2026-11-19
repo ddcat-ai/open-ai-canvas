@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"yingce/backend/internal/service"
@@ -27,7 +28,14 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, stats)
 	})
-	r.POST("/tasks", func(c *gin.Context) {
+	registerTaskSubmissionRoutes(r, svc)
+	registerTaskReadRoutes(r, svc)
+	registerTaskTextReadRoutes(r, svc)
+	registerPersonalTaskActions(r, svc)
+}
+
+func registerTaskSubmissionRoutes(r *gin.RouterGroup, svc *service.Service) {
+	submit := func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -45,15 +53,31 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		req.TraceID = TraceID(c)
 		req.RequestID = RequestID(c)
+		if teamID := c.Param("teamId"); teamID != "" {
+			result, err := svc.TeamWorkspaceTask(user.ID, teamID, req, strings.HasSuffix(c.FullPath(), "/quote"))
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			ok(c, result)
+			return
+		}
 		task, err := svc.CreateTask(user.ID, req)
 		if err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
 		ok(c, task)
-	})
+	}
+	r.POST("/tasks", submit)
+	if strings.Contains(r.BasePath(), ":teamId") {
+		r.POST("/tasks/quote", submit)
+	}
+}
+
+func registerTaskReadRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/tasks", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
@@ -63,7 +87,7 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		tasks, err := svc.TasksWithOptions(user.ID, service.TaskListOptions{
+		tasks, err := svc.TasksWithOptions(ownerKey, service.TaskListOptions{
 			Limit:      pageSize,
 			ProjectID:  c.Query("projectId"),
 			ActiveOnly: c.Query("activeOnly") == "true",
@@ -75,18 +99,21 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, tasks)
 	})
 	r.GET("/tasks/:id", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		task, err := svc.Task(user.ID, c.Param("id"))
+		task, err := svc.Task(ownerKey, c.Param("id"))
 		if err != nil {
 			fail(c, http.StatusNotFound, err)
 			return
 		}
 		ok(c, task)
 	})
+}
+
+func registerPersonalTaskActions(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/tasks/:id/text-deltas", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -107,8 +134,12 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, item)
 	})
+	registerPersonalTaskLifecycleRoutes(r, svc)
+}
+
+func registerTaskTextReadRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/tasks/:id/text-deltas", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
@@ -118,7 +149,7 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		result, err := svc.TaskTextReplay(user.ID, c.Param("id"), after)
+		result, err := svc.TaskTextReplay(ownerKey, c.Param("id"), after)
 		if err != nil {
 			failService(c, err)
 			return
@@ -126,7 +157,7 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, result)
 	})
 	r.GET("/tasks/:id/text-events", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
@@ -136,13 +167,16 @@ func RegisterTaskRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		initial, err := svc.CachedTaskTextReplay(c.Request.Context(), user.ID, c.Param("id"), after)
+		initial, err := svc.CachedTaskTextReplay(c.Request.Context(), ownerKey, c.Param("id"), after)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		streamTaskTextEvents(c, svc, user.ID, c.Param("id"), after, initial)
+		streamTaskTextEvents(c, svc, ownerKey, c.Param("id"), after, initial)
 	})
+}
+
+func registerPersonalTaskLifecycleRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/tasks/:id/retry", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -290,6 +324,11 @@ func streamTaskTextEvents(c *gin.Context, svc *service.Service, userID string, t
 		case <-c.Request.Context().Done():
 			return
 		case <-heartbeatTicker.C:
+			if c.Param("teamId") != "" {
+				if _, err := currentContentKey(c, svc); err != nil {
+					return
+				}
+			}
 			if _, err := fmt.Fprint(c.Writer, ": heartbeat\n\n"); err != nil {
 				return
 			}

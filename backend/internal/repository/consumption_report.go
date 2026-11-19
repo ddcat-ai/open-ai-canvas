@@ -23,7 +23,7 @@ func (r *Repository) ConsumptionLedger(userID string, from, to time.Time) ([]Con
 	err := r.db.Table("credit_ledger_entries AS l").
 		Select("l.type, l.amount_microcredits, l.model, l.scene, COALESCE(o.capability, '') AS capability, l.billing_order_id, l.created_at").
 		Joins("LEFT JOIN billing_orders o ON o.id = l.billing_order_id").
-		Where("l.user_id = ? AND l.type IN ? AND l.created_at >= ? AND l.created_at < ?", userID, []model.CreditLedgerType{model.CreditLedgerConsume, model.CreditLedgerRefund}, from.UTC(), to.UTC()).
+		Where("l.account_id = ? AND l.type IN ? AND l.created_at >= ? AND l.created_at < ?", model.PersonalCreditAccountID(userID), []model.CreditLedgerType{model.CreditLedgerConsume, model.CreditLedgerRefund}, from.UTC(), to.UTC()).
 		Order("l.created_at").
 		Scan(&rows).Error
 	return rows, err
@@ -36,7 +36,7 @@ func (r *Repository) ConsumptionReportCandidates(date string, from, to time.Time
 		Joins("JOIN user_notification_settings n ON n.user_id = users.id").
 		Where("n.consumption_report_enabled = ? AND n.last_consumption_report_date <> ?", true, date).
 		Where("users.status = ? AND users.email <> ''", model.UserStatusActive).
-		Where("EXISTS (SELECT 1 FROM credit_ledger_entries l WHERE l.user_id = users.id AND l.type = ? AND l.created_at >= ? AND l.created_at < ?)", model.CreditLedgerConsume, from.UTC(), to.UTC()).
+		Where("EXISTS (SELECT 1 FROM credit_ledger_entries l WHERE l.account_id = ('personal:' || users.id) AND l.type = ? AND l.created_at >= ? AND l.created_at < ?)", model.CreditLedgerConsume, from.UTC(), to.UTC()).
 		Order("users.id").Limit(limit).Find(&users).Error
 	return users, err
 }

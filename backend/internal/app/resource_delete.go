@@ -50,7 +50,15 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	//   - purge=false 是内部普通删除：回收站（archived）素材同样直接删除，其余素材保留引用保护。
 	//   - 无论哪种，被其他素材复用的资源与物理对象都保留，物理删除一律经 Outbox 异步执行。
 	deleteReferencedResources := purge
-	if !purge {
+	_, team := model.TeamIDFromContentKey(userID)
+	if team {
+		for _, asset := range assetRecords {
+			if asset.Status != model.AssetVersionStatusArchived {
+				return BadAuthRequest("请先归档素材，再执行清理")
+			}
+		}
+		deleteReferencedResources = false
+	} else if !purge {
 		if len(assetRecords) != 1 {
 			return BadAuthRequest("普通删除仅支持单个素材")
 		}
@@ -105,7 +113,7 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 			}
 		}
 	}
-	if len(ownedIDs) > 0 {
+	if len(ownedIDs) > 0 || team {
 		retained, retainedErr := s.repo.OfficialRecommendationResourceIDs()
 		if retainedErr != nil {
 			return retainedErr
@@ -165,6 +173,18 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 					document.SecondaryJSON = ""
 				}
 			}
+			if team {
+				for _, raw := range []string{document.PrimaryJSON, document.SecondaryJSON} {
+					found, err := referencesWorkspaceAsset(raw, seen)
+					if err != nil {
+						return fmt.Errorf("%s引用无法解析，已停止清理：%w", document.Kind, err)
+					}
+					if found {
+						usages = append(usages, resourceUsage{Kind: document.Kind, ID: document.ID, Title: document.Title})
+						break
+					}
+				}
+			}
 			referencedIDs := documentReferencedResourceIDs(document.PrimaryJSON, ownedIDSet)
 			for resourceID := range documentReferencedResourceIDs(document.SecondaryJSON, ownedIDSet) {
 				referencedIDs[resourceID] = struct{}{}
@@ -192,6 +212,9 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		}
 	}
 	if message := resourceOccupiedMessage(usages); message != "" {
+		if team {
+			return teamError(409, "team_asset_referenced", message)
+		}
 		return BadAuthRequest(message)
 	}
 

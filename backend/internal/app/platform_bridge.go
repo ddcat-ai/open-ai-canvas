@@ -26,6 +26,7 @@ const (
 	FeatureShortDrama            = platform.FeatureShortDrama
 	FeatureTaskCenter            = platform.FeatureTaskCenter
 	FeatureCredits               = platform.FeatureCredits
+	FeatureTeams                 = platform.FeatureTeams
 	FeatureCustomChannels        = platform.FeatureCustomChannels
 	FeatureFrontendModels        = platform.FeatureFrontendModels
 	FeaturePluginCenter          = platform.FeaturePluginCenter

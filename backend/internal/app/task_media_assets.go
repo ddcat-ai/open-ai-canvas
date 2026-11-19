@@ -85,7 +85,7 @@ func generationMediaAssetTitle(task model.Task, kind string, index, count int) s
 		}
 	}
 	if title == "" {
-		title = map[string]string{"image": "生成图片", "video": "生成视频", "audio": "生成音频"}[kind] + " · " + task.ID[:min(len(task.ID), 8)]
+		title = map[string]string{"text": "生成文本", "image": "生成图片", "video": "生成视频", "audio": "生成音频"}[kind] + " · " + task.ID[:min(len(task.ID), 8)]
 	}
 	if count > 1 {
 		title += fmt.Sprintf(" · %d", index+1)

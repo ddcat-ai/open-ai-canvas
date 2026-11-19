@@ -12,14 +12,14 @@ import (
 
 func RegisterCanvasRealtimeRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/canvas-projects/:id/realtime", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		session, peers, err := svc.OpenCanvasRealtime(ctx, user.ID, c.Param("id"))
+		session, peers, err := svc.OpenCanvasRealtime(ctx, ownerKey, c.Param("id"))
 		if err != nil {
 			failService(c, err)
 			return
@@ -84,11 +84,11 @@ func RegisterCanvasRealtimeRoutes(r *gin.RouterGroup, svc *service.Service) {
 				}
 			case <-ticker.C:
 				// Revoked login sessions and deleted canvases cannot retain a subscription.
-				if _, err := svc.CurrentUser(sessionCookie(c)); err != nil {
+				if _, err := currentContentKey(c, svc); err != nil {
 					_ = conn.Close(websocket.StatusPolicyViolation, "session expired")
 					return
 				}
-				if _, err := svc.UserCanvasProjectMetadata(user.ID, c.Param("id")); err != nil {
+				if _, err := svc.UserCanvasProjectMetadata(ownerKey, c.Param("id")); err != nil {
 					_ = conn.Close(websocket.StatusPolicyViolation, "canvas unavailable")
 					return
 				}

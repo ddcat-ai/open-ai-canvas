@@ -95,6 +95,7 @@ type AnnouncementImageDraft struct {
 }
 
 type Asset struct {
+	CreatedBy        string             `json:"-" gorm:"size:36"`
 	ID               string             `json:"id" gorm:"primaryKey;size:80"`
 	UserID           string             `json:"userId" gorm:"index;size:36;index:idx_assets_user_updated,priority:1"`
 	FolderID         string             `json:"folderId,omitempty" gorm:"index;size:36"`

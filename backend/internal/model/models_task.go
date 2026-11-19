@@ -20,6 +20,7 @@ type Task struct {
 	CancellationActorID          string                   `json:"cancellationActorId,omitempty" gorm:"size:36"`
 	CancellationRequestedAt      *time.Time               `json:"cancellationRequestedAt,omitempty"`
 	CreationSubmissionID         *string                  `json:"creationSubmissionId,omitempty" gorm:"size:36;uniqueIndex"`
+	SubmissionHash               string                   `json:"-" gorm:"size:64"`
 	WorkbenchKind                string                   `json:"workbenchKind,omitempty" gorm:"size:16;index"`
 	ID                           string                   `json:"id" gorm:"primaryKey;size:36"`
 	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1"`

@@ -88,7 +88,7 @@ func (r *Repository) CreditAccounts(userIDs []string) ([]model.CreditAccount, er
 func (r *Repository) CreditLedger(userID string, entryType string, limit int, offset int) ([]model.CreditLedgerEntry, int64, error) {
 	var items []model.CreditLedgerEntry
 	var total int64
-	query := r.db.Model(&model.CreditLedgerEntry{}).Where("user_id = ? AND type <> ?", userID, model.CreditLedgerReserve)
+	query := r.db.Model(&model.CreditLedgerEntry{}).Where("account_id = ? AND type <> ?", model.PersonalCreditAccountID(userID), model.CreditLedgerReserve)
 	switch entryType {
 	case "income":
 		query = query.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerRedeem, model.CreditLedgerAdminGrant, model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus})

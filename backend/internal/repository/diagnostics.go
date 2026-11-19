@@ -49,7 +49,7 @@ func (r *Repository) DiagnosticTaskLogs(userID string, from time.Time, to time.T
 
 func (r *Repository) DiagnosticAPICallLogs(userID string, from time.Time, to time.Time, taskID string, projectID string) ([]model.ApiCallLog, error) {
 	var logs []model.ApiCallLog
-	query := r.db.Where("user_id = ?", userID)
+	query := r.db.Where("user_id = ?", userID).Where("NOT EXISTS (SELECT 1 FROM billing_orders b WHERE b.id = api_call_logs.billing_order_id AND b.team_id <> '')")
 	if taskID = strings.TrimSpace(taskID); taskID != "" {
 		query = query.Where("task_id = ?", taskID)
 	} else {

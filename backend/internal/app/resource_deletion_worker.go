@@ -18,6 +18,7 @@ const detachedReadyResourceRetention = 24 * time.Hour
 func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 	s.runWorkerLoop(func(ctx context.Context) {
 		s.drainResourceDeletionJobs(32)
+		s.cleanupExpiredTeamAssetPublications()
 		s.cleanupStaleAnnouncementImageDrafts()
 		s.cleanupExpiredArchivedAssets()
 		s.cleanupDetachedResources()
@@ -30,6 +31,7 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 				return
 			case <-ticker.C:
 				s.drainResourceDeletionJobs(32)
+				s.cleanupExpiredTeamAssetPublications()
 				if time.Since(lastPeriodicCleanup) >= time.Hour {
 					s.cleanupStaleAnnouncementImageDrafts()
 					s.cleanupExpiredArchivedAssets()

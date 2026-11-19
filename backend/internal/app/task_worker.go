@@ -207,6 +207,11 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		return err
 	}
 	if task.ProviderRequestID == "" && task.PollStage != "accepted" && task.PollStage != "poll" {
+		if teamID, ok := model.TeamIDFromContentKey(task.UserID); ok {
+			if err := s.authorizeQueuedTeamTask(task, teamID); err != nil {
+				return terminal.markPreparationFailure(task, "团队授权不可用", err, task.Attempts > 1, "团队授权已失效")
+			}
+		}
 		if featureErr := s.requireTaskGenerationFeatures(task.UserID, task.ProjectID, task.Type, task.Operation, task.WorkbenchKind, admissionInput); featureErr != nil {
 			attempts, readErr := s.repo.RouteAttempts(task.ID, task.RouteRun)
 			if readErr != nil {

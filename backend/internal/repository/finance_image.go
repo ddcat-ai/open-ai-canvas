@@ -56,8 +56,8 @@ func settleImageBillingOrder(tx *gorm.DB, order model.BillingOrder, providerRequ
 		return errors.New("图片实际费用或用量超过本次预留上限，需人工核对")
 	}
 	refund := reserved - actual
-	updated := tx.Model(&model.CreditAccount{}).
-		Where("user_id = ? AND reserved_microcredits >= ?", order.UserID, reserved).
+	updated := billingAccountQuery(tx, order).
+		Where("reserved_microcredits >= ?", reserved).
 		Updates(map[string]any{"available_microcredits": gorm.Expr("available_microcredits + ?", refund), "reserved_microcredits": gorm.Expr("reserved_microcredits - ?", reserved), "version": gorm.Expr("version + 1"), "updated_at": time.Now()})
 	if updated.Error != nil {
 		return updated.Error
@@ -66,11 +66,11 @@ func settleImageBillingOrder(tx *gorm.DB, order model.BillingOrder, providerRequ
 		return errors.New("预留积分不足以完成图片结算")
 	}
 	var account model.CreditAccount
-	if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+	if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
 		return err
 	}
 	now := time.Now()
-	updates := map[string]any{"status": model.BillingStatusSettled, "quantity": len(order.ImageUsage.Outputs), "actual_amount_microcredits": actual, "refunded_amount_microcredits": refund, "settled_at": &now, "updated_at": now}
+	updates := map[string]any{"status": model.BillingStatusSettled, "quantity": len(order.ImageUsage.Outputs), "actual_amount_microcredits": actual, "uncapped_amount_microcredits": actual, "refunded_amount_microcredits": refund, "settled_at": &now, "updated_at": now}
 	if providerRequestID != "" {
 		updates["provider_request_id"] = providerRequestID
 	}

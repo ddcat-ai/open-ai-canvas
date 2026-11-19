@@ -120,7 +120,7 @@ func (r *Repository) ApiCallLogs(userID string, admin bool, limit int) ([]model.
 	}
 	query := r.db.Order("created_at desc").Limit(limit)
 	if !admin {
-		query = query.Where("user_id = ?", userID)
+		query = query.Where("user_id = ?", userID).Where("NOT EXISTS (SELECT 1 FROM billing_orders b WHERE b.id = api_call_logs.billing_order_id AND b.team_id <> '')")
 	}
 	err := query.Omit("RequestBody", "ResponseBody", "GenerationContentJSON").Find(&logs).Error
 	return logs, err

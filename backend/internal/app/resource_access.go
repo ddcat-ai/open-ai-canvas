@@ -63,6 +63,16 @@ func (s *Service) resolveResourceAccess(resource *model.Resource, options Resour
 	if resource == nil {
 		return nil, NotFound("资源不存在")
 	}
+	if teamID, team := model.TeamIDFromContentKey(resource.UserID); team {
+		if options.Purpose == assets.PurposeProvider {
+			return nil, Forbidden("空间媒体不能生成公开访问地址")
+		}
+		if resource.Status != model.ResourceStatusReady {
+			return nil, assets.AccessError(409, "resource_not_ready", "资源尚未上传完成")
+		}
+		now := time.Now().UTC()
+		return &ResourceAccess{ResourceID: resource.ID, RequestedVariant: options.Variant, ActualVariant: assets.VariantOriginal, Delivery: assets.DeliveryProxy, IssuedAt: now, RefreshAt: now.Add(time.Hour), Revision: resource.ETag, URL: "/api/teams/" + url.PathEscape(teamID) + "/workspace/resources/" + url.PathEscape(resource.ID) + "/file"}, nil
+	}
 	var setting ossSettingValue
 	if resource.Provider != "local" {
 		var err error
@@ -197,6 +207,9 @@ func (s *Service) PreparePublicResourceDelivery(id, expires, signature string, o
 	resource, err := s.repo.Resource(id)
 	if err != nil {
 		return nil, Forbidden("匿名下载链接无效")
+	}
+	if _, team := model.TeamIDFromContentKey(resource.UserID); team {
+		return nil, Forbidden("空间媒体需要成员身份")
 	}
 	seconds, _ := strconv.ParseInt(expires, 10, 64)
 	options.ExpiresAt = time.Unix(seconds, 0)

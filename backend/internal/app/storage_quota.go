@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/canvas"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -119,6 +120,18 @@ func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJ
 	if err != nil {
 		return err
 	}
+	var register func(*repository.Repository) error
+	if _, team := model.TeamIDFromContentKey(task.UserID); team && task.Type == "canvas_text" {
+		asset, encoded, err := s.workspaceTextResultAsset(task, resultJSON)
+		if err != nil {
+			return err
+		}
+		if err := validateStructuredStorageQuotaWithPolicy(usage, "asset", true, int64(len(asset.PayloadJSON)), policy.Resource); err != nil {
+			return err
+		}
+		register = func(repo *repository.Repository) error { return repo.UpsertAsset(&asset) }
+		resultJSON = encoded
+	}
 	publicInputJSON := publicTaskInputJSON(task.InputJSON)
 	taskDelta := int64(len(resultJSON) + len(publicInputJSON) - len(task.ResultJSON) - len(task.InputJSON))
 
@@ -145,9 +158,8 @@ func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJ
 	completed.ResultJSON = string(resultJSON)
 	completed.InputJSON = publicInputJSON
 	completed.CompletedAt = ptr(time.Now())
-	var register func(*repository.Repository) error
 	visualImage := strings.Contains(task.InputJSON, "project_asset_image")
-	if task.MediaRecoveryJSON != "" || visualImage {
+	if register == nil && (task.MediaRecoveryJSON != "" || visualImage) {
 		completed.MediaStage = "completed"
 		register = func(repo *repository.Repository) error {
 			writer := &Service{repo: repo, dataDir: s.dataDir}
@@ -182,4 +194,36 @@ func (s *Service) saveTaskCompletionWithinStorageQuota(task *model.Task, resultJ
 	}
 	*task = completed
 	return nil
+}
+
+func (s *Service) workspaceTextResultAsset(task *model.Task, resultJSON []byte) (model.Asset, []byte, error) {
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(resultJSON, &result); err != nil {
+		return model.Asset{}, nil, err
+	}
+	var text string
+	if err := json.Unmarshal(result["text"], &text); err != nil || strings.TrimSpace(text) == "" {
+		return model.Asset{}, nil, errors.New("生成结果缺少文本")
+	}
+	actor, err := s.taskModelActor(task)
+	if err != nil {
+		return model.Asset{}, nil, err
+	}
+	assetID := generationMediaAssetID(task.ID, 0)
+	now := time.Now().UTC()
+	raw, err := json.Marshal(map[string]any{"id": assetID, "kind": "text", "title": generationMediaAssetTitle(*task, "text", 0, 1), "tags": []string{}, "coverUrl": "", "data": map[string]string{"content": text}, "metadata": map[string]string{"source": "generation-task", "taskId": task.ID}, "createdAt": now, "updatedAt": now})
+	if err != nil {
+		return model.Asset{}, nil, err
+	}
+	asset, err := canvas.AssetFromJSON(task.UserID, raw)
+	if err != nil {
+		return model.Asset{}, nil, err
+	}
+	asset.CreatedBy = actor
+	result["assetId"], err = json.Marshal(assetID)
+	if err != nil {
+		return model.Asset{}, nil, err
+	}
+	encoded, err := json.Marshal(result)
+	return asset, encoded, err
 }

@@ -243,7 +243,11 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 	for _, attempt := range attempts {
 		tried[attempt.RouteID] = true
 	}
-	access, err := s.userGroupAccess(task.UserID)
+	actorID, err := s.taskModelActor(task)
+	if err != nil {
+		return nil, err
+	}
+	access, err := s.userGroupAccess(actorID)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +288,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 		if loadErr != nil {
 			return nil, loadErr
 		}
-		replacement, err = s.newBillingOrderWithPriceTierAt(current.CreatedAt, task.UserID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), s.estimateTaskBilling(task.UserID, nextInput, capability), strings.TrimSpace(priceTierID), intent)
+		replacement, err = s.newBillingOrderWithPriceTierAt(current.CreatedAt, actorID, task.ID, "route-switch:"+task.ID+":"+selected.Route.ID, selected.ChannelModel.ChannelID, selected.ChannelModel.ModelKey, capability, firstNonEmpty(strings.TrimSpace(task.Operation), task.Type), requestedBillingQuantity(capability, config), s.estimateTaskBilling(actorID, nextInput, capability), strings.TrimSpace(priceTierID), intent)
 		if err != nil {
 			return nil, err
 		}

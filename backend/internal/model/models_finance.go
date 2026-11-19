@@ -3,7 +3,11 @@ package model
 import "time"
 
 type CreditAccount struct {
-	UserID                string    `json:"userId" gorm:"primaryKey;size:36"`
+	ID                    string    `json:"id" gorm:"primaryKey;size:80"`
+	Kind                  string    `json:"kind" gorm:"size:24;index"`
+	UserID                string    `json:"userId,omitempty" gorm:"size:36;uniqueIndex:idx_credit_account_personal_user,where:user_id <> ''"`
+	TeamID                string    `json:"teamId,omitempty" gorm:"size:36;index"`
+	MembershipID          string    `json:"membershipId,omitempty" gorm:"size:36;index"`
 	AvailableMicrocredits int64     `json:"availableMicrocredits"`
 	ReservedMicrocredits  int64     `json:"reservedMicrocredits"`
 	Version               int64     `json:"version"`
@@ -13,6 +17,10 @@ type CreditAccount struct {
 
 type CreditLedgerEntry struct {
 	ID                         string           `json:"id" gorm:"primaryKey;size:36"`
+	AccountID                  string           `json:"accountId" gorm:"size:80;index"`
+	TeamID                     string           `json:"teamId,omitempty" gorm:"size:36;index"`
+	MembershipID               string           `json:"membershipId,omitempty" gorm:"size:36;index"`
+	TransferID                 string           `json:"transferId,omitempty" gorm:"size:36;index"`
 	UserID                     string           `json:"userId" gorm:"size:36;index;index:idx_credit_ledger_user_created,priority:1;index:idx_credit_ledger_user_type,priority:1"`
 	Type                       CreditLedgerType `json:"type" gorm:"size:32;index;index:idx_credit_ledger_user_type,priority:2"`
 	AmountMicrocredits         int64            `json:"amountMicrocredits"`
@@ -40,6 +48,9 @@ type BillingOrder struct {
 	BillingCostSnapshot  `json:"-" gorm:"embedded"`
 	ID                   string `json:"id" gorm:"primaryKey;size:36"`
 	UserID               string `json:"userId" gorm:"size:36;index;uniqueIndex:idx_billing_user_idempotency,priority:1"`
+	BillingAccountID     string `json:"billingAccountId" gorm:"size:80;index"`
+	TeamID               string `json:"teamId,omitempty" gorm:"size:36;index"`
+	MembershipID         string `json:"membershipId,omitempty" gorm:"size:36;index"`
 	// 仅管理端列表填充，不入库。
 	UserDisplayName string `json:"userDisplayName,omitempty" gorm:"-"`
 	UserAccount     string `json:"userAccount,omitempty" gorm:"-"`
@@ -70,6 +81,7 @@ type BillingOrder struct {
 	// All Agent prices remain capped across route changes and settlement.
 	ChargeLimitSet                   bool  `json:"chargeLimitSet,omitempty" gorm:"not null;default:false"`
 	ChargeLimitMicrocredits          int64 `json:"chargeLimitMicrocredits,omitempty"`
+	UncappedAmountMicrocredits       int64 `json:"uncappedAmountMicrocredits" gorm:"not null;default:0"`
 	ActualAmountMicrocredits         int64 `json:"actualAmountMicrocredits"`
 	RefundedAmountMicrocredits       int64 `json:"refundedAmountMicrocredits"`
 	InputTokenPriceMicrocredits      int64 `json:"inputTokenPriceMicrocredits"`

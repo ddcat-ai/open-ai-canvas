@@ -30,7 +30,7 @@ func (r *Repository) WalletHistory(userID string, entryType string, limit int, o
 			'' AS billing_order_id, '' AS billing_status, 0 AS reserved_microcredits,
 			0 AS charged_microcredits, 0 AS refunded_microcredits, COALESCE(payment_orders.provider_id, '') AS payment_provider_id`).
 		Joins("LEFT JOIN payment_orders ON payment_orders.id = credit_ledger_entries.payment_order_id AND payment_orders.user_id = credit_ledger_entries.user_id").
-		Where("credit_ledger_entries.user_id = ? AND billing_order_id = ? AND type <> ?", userID, "", model.CreditLedgerReserve)
+		Where("credit_ledger_entries.account_id = ? AND billing_order_id = ? AND type <> ?", model.PersonalCreditAccountID(userID), "", model.CreditLedgerReserve)
 	orders := r.db.Model(&model.BillingOrder{}).
 		Select(`id, 'billing' AS type, 0 AS amount_microcredits, model, scene,
 			CASE WHEN status = 'settled' THEN COALESCE((
@@ -42,16 +42,16 @@ func (r *Repository) WalletHistory(userID string, entryType string, limit int, o
 			reserved_amount_microcredits AS reserved_microcredits,
 			actual_amount_microcredits AS charged_microcredits,
 			refunded_amount_microcredits AS refunded_microcredits, '' AS payment_provider_id`).
-		Where("user_id = ?", userID)
+		Where("billing_account_id = ?", model.PersonalCreditAccountID(userID))
 	switch entryType {
 	case "income":
-		ledger = ledger.Where("type IN ?", []model.CreditLedgerType{
+		ledger = ledger.Where("(type IN ? OR (type = ? AND amount_microcredits > 0))", []model.CreditLedgerType{
 			model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerAdminGrant,
 			model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus, model.CreditLedgerReferral,
-		})
+		}, model.CreditLedgerTeamTransfer)
 		orders = orders.Where("1 = 0")
 	case "expenses":
-		ledger = ledger.Where("type IN ?", []model.CreditLedgerType{model.CreditLedgerConsume, model.CreditLedgerRefund})
+		ledger = ledger.Where("(type IN ? OR (type = ? AND amount_microcredits < 0))", []model.CreditLedgerType{model.CreditLedgerConsume, model.CreditLedgerRefund}, model.CreditLedgerTeamTransfer)
 	case "consume":
 		ledger = ledger.Where("type = ?", model.CreditLedgerConsume)
 		orders = orders.Where("status = ?", model.BillingStatusSettled)

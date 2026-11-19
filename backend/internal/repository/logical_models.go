@@ -330,7 +330,7 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 			}
 			delta := replacement.AmountMicrocredits - reserved
 			accountUpdates := map[string]any{"version": gorm.Expr("version + 1"), "updated_at": now}
-			accountQuery := tx.Model(&model.CreditAccount{}).Where("user_id = ?", order.UserID)
+			accountQuery := billingAccountQuery(tx, order)
 			if delta > 0 {
 				accountQuery = accountQuery.Where("available_microcredits >= ?", delta)
 				accountUpdates["available_microcredits"] = gorm.Expr("available_microcredits - ?", delta)
@@ -353,7 +353,7 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 					return errors.New("reserved credit balance is inconsistent")
 				}
 				var account model.CreditAccount
-				if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+				if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
 					return err
 				}
 				entryType := model.CreditLedgerReserve
@@ -362,6 +362,7 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 				}
 				if err := tx.Create(&model.CreditLedgerEntry{
 					ID: newRepositoryID(), UserID: order.UserID, Type: entryType,
+					AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID,
 					AvailableDeltaMicrocredits: -delta, ReservedDeltaMicrocredits: delta,
 					AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
 					BillingOrderID: order.ID, Model: order.Model, ChannelID: channelID, Scene: order.Scene,

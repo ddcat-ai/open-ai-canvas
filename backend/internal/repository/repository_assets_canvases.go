@@ -62,7 +62,7 @@ func (r *Repository) FindExpiredArchivedAssets(cutoff time.Time, limit int) ([]m
 	if limit <= 0 {
 		limit = 100
 	}
-	err := r.db.Where("status = ? AND updated_at <= ?", model.AssetVersionStatusArchived, cutoff).
+	err := r.db.Where("status = ? AND updated_at <= ? AND user_id NOT LIKE ?", model.AssetVersionStatusArchived, cutoff, model.TeamContentKey("%")).
 		Order("updated_at asc, id asc").
 		Limit(limit).
 		Find(&assets).Error

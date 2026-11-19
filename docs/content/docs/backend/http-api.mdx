@@ -5,6 +5,28 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 团队空间
+
+以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。
+
+`GET /features` 返回 `data.features.teamsEnabled`，默认 `false`。平台管理员通过 `PATCH /admin/settings/features` 提交 `{ "teamsEnabled": true }` 开启。关闭时所有团队接口（含邀请、媒体、划转和生成）对已登录账号返回 403 `team_feature_disabled`，存量数据保留。团队开启且 `creditsEnabled` 关闭时仍可邀请、共享和编辑画布，积分接口与收费生成暂停。
+
+| 操作 | 路径与结果 |
+| --- | --- |
+| 进入团队 | `GET/POST /teams` 列出已加入的空间或创建根空间。公司所有者以 `POST /teams/:teamId/groups` 提交 `name` 创建直属小组。`GET /teams/:teamId` 返回本人 `role`、`membershipId`，小组另有 `parentId`、`parentName`。 |
+| 空间积分总览 | `GET /teams/credit-overview` 在一次读取中返回 `personal`（个人可用与冻结）和 `spaces` 数组。每行包含 `teamId`、名称、所属公司、本人角色、`availableMicrocredits`、`reservedMicrocredits` 和公共池的 `poolAvailableMicrocredits`。无团队时数组为空。汇总只加本人的可用额度，成员无法读取他人账户。 |
+| 邀请、接受和拒绝 | 所有者用 `GET /teams/:teamId/invite-candidates?q=...` 按完整账号或显示名片段搜索，`POST /teams/:teamId/invitations` 传 `inviteeUserId`。本人用 `GET /team-invitations`、`POST /team-invitations/:id/accept` 或 `reject`；所有者可 `POST /teams/:teamId/invitations/:id/revoke`。有效期 7 天。重复同一决定不新增成员；相反决定、撤回后接受或过期返回 409。 |
+| 成员 | `GET /teams/:teamId/members`。所有者可 `DELETE /teams/:teamId/members/:membershipId`，普通成员可 `POST /teams/:teamId/leave`。离队释放编辑权并回收可用余额，不删除已共享素材。 |
+| 额度 | 在 `/teams/:teamId` 下，`GET /wallet`、`GET /wallet/ledger` 查询本人团队账；所有者另见资金池和成员账。`POST /wallet/fund`、`/wallet/withdraw`、`/members/:membershipId/allocate`、`/members/:membershipId/reclaim` 均为所有者操作，传正整数 `amountMicrocredits` 和 `idempotencyKey`。相同请求可安全重放；相同键改变参数或余额不足返回 409，冻结额度不能转出。 |
+| 跨空间发布 | `POST /teams/:teamId/asset-publications` 接受 `assetIds`（每批最多 20 项）和 `idempotencyKey`。逐项读取 `data.results`，整批 HTTP 200 不代表全部发布成功。 |
+| 素材和媒体 | 在 `/teams/:teamId/workspace` 下使用现有 `/assets`、`/asset-folders`、`/resources` 和分片上传接口。`GET/HEAD /resources/:id/file` 逐请求鉴权，支持 `Range`。贡献者和所有者可归档；只有所有者能清理已归档且未被使用的素材。 |
+| 自由画布 | 在同一前缀下使用 `/canvas-projects`、`/:id/operations`、`/:id/sync-status`、`/:id/edit-lease` 和 `/:id/realtime`。创建和更新均使用自由画布的 operations 合同，不另设整张画布锁。 |
+| 创作和任务 | 在同一前缀下使用 `/creation-conversations`、`/tasks` 和 `GET /tasks/:id/text-events`。先 `POST /tasks/quote` 计算 `maxChargeMicrocredits`，再 `POST /tasks` 提交原参数、确认上限和 `idempotencyKey`。仅接受系统文本模型；超过确认上限返回 409，不创建订单。产物属于当前团队，订单支付方是发起成员的团队额度。 |
+
+权限、资金及引用冲突应读信封 `reason`，例如 `team_owner_required`、`team_invitation_expired`、`team_credits_insufficient` 和 `team_asset_referenced`。请求规范见 `GET /api/openapi.yaml`。
+
+小组的邀请候选限所属公司成员，小组邀请另带 `parentName`。离开公司会撤销其直属小组未处理的邀请并退出已加入的小组，各空间分别回收可用额度。所有成员可以查看当前公共池余额，只有所有者可见完整池账户和全员额度。根空间的 `fund` 和 `withdraw` 在所有者个人钱包与公司池之间划转，小组的同名操作只在公司池与本组池之间划转。公司与小组分别记录自己的划转流水，所有者个人账只记真实进出其个人钱包的部分。
+
 ## 镜头对白与完整提示词同步
 
 现有镜头修改接口在仅修改 `dialogue` 且旧对白能唯一定位为独立引语时，直接替换本段生效提示词中的对白，不调用文本模型，不改变周围手写内容。原对白重复、缺失、无法定位、超出模型提示词上限或同时修改其他镜头字段时，保存镜头并保留原稿，返回 `promptStatus=conflict` 与核对原因。修改镜头和提示词在同一事务中保存，修订号与镜头更新时间不一致时拒绝覆盖。
@@ -1237,7 +1259,11 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 
 参考编号：编辑器以资产名称显示引用，段提示词持久化仍使用逻辑「参考图N」。重排参考时按 `castId` / `resourceId` 同步改写人工正文，交换编号一次完成；删除仍被人工正文引用的资产会被拒绝。同名资产分别保留各自编号。任务保存逻辑编号与稳定媒体身份的绑定，资源解析、上传与协议编排完成后，发送前对照实际图片槽位编译正文和参考说明；首帧是否占号由最终协议结构决定。正文引用缺图或本次不发送的资产时，预演提示具体资产并拒绝提交；协议丢弃参考图或无法核对编号时同样拒绝，不能用猜测的顺序发送。普通画布请求没有短剧绑定元数据，不经过这层重编号。
 
-带显式素材 token 的 WAN 拼车协议按上传 ID 核对 `media[].token`，不按数组下标覆盖它；MINI1 和 MaxForAI 分别使用其 `@ImageN` / `@imageN` 合同。编辑文本、`Task.Prompt` 和生成快照保留逻辑标签；排查供应商收到的编号应查看实际 HTTP 请求正文。未知编号合同和动态工作流拒绝带逻辑编号的短剧请求；KM、Rolldek、Lxmone WAN 混合首尾帧时需改用纯参考图模式。
+视频插件在 `contributes.providers[].videoReferences` 声明参考图布局 `layout` 和编号模板 `token`。`{n}` 从 1 开始。显式 token 布局从实际媒体项读取标识。可选的 `models` 指定已核对的工作流 ID 和图片上限。`maxImagesByOperation` 在声明时列出各生成方式的图片上限，数值表示张数，`null` 表示由模型配置决定，未列出的方式没有图片槽位。预演和准入取协议上限与渠道模型上限中较小的值。带编号的短剧请求须有适用的编号合同，导出的任务和编辑正文仍使用逻辑编号。
+
+- AutoDL 的 `minimax_h3_zm_u30`、`minimax_h3_zm_u24` 和 `minimax_h3_zm_u08` 支持 9 个图片槽位，`minimax_h3_z0902` 和 `minimax_h3_z0903` 支持 6 个。实际请求的 `ref_image_0` 对应提示词里的 `@图片1`，独立音频字段不占图片编号。其他工作流可继续通过原有方式调用，含逻辑参考图的短剧须先声明该工作流的编号规则。
+- `newapi` 的标准图生视频使用单个 multipart `input_reference` 文件。支持兼容扩展的网关在渠道模型开启 `reference_to_video` 后，多张图片按顺序写入 `input_reference[]`，单张仍写入 `input_reference`。渠道只接受标准单图时，应使用图生视频模式。真实上游是否接受数组以该网关为准。
+- WAN 拼车协议按上传 ID 核对 `media[].token`。MINI1 和 MaxForAI 分别使用 `@ImageN` 和 `@imageN`。KM、Rolldek、Lxmone WAN 混合首尾帧时须使用纯参考图模式才能核对编号。
 
 剧情段视频按作品画幅出片，画面参数只按所选视频模型的能力合同换算，与任务准入同一份配置：
 
