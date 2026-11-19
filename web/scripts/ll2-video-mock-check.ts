@@ -10,11 +10,26 @@ let scenario = "success";
 let createCount = 0;
 let queryCount = 0;
 const idempotencyKeys = [];
+let openaiCreateBody = null;
 
 const server = Bun.serve({
     port: 0,
-    fetch(req) {
+    async fetch(req) {
         const url = new URL(req.url);
+        // 非 H3 的 13 个模型走 /v1/video/generations，字段与 H3 完全不同：
+        // seconds 必须是字符串，比例字段叫 aspect_ratio，结果在 data.result_url。
+        if (req.method === "POST" && url.pathname === "/v1/video/generations") {
+            createCount += 1;
+            openaiCreateBody = await req.json();
+            return Response.json({ data: { id: `openai-${createCount}` } });
+        }
+        if (req.method === "GET" && url.pathname.startsWith("/v1/video/generations/")) {
+            queryCount += 1;
+            if (queryCount < 2) return Response.json({ data: { status: "processing" } });
+            return Response.json({
+                data: { status: "succeeded", result_url: "https://example.invalid/openai.mp4", usage: { output_seconds: 2 } },
+            });
+        }
         if (req.method === "POST" && url.pathname === "/v2/video_generation") {
             if (scenario === "http401") return Response.json({ message: "invalid token" }, { status: 401 });
             createCount += 1;
@@ -95,6 +110,35 @@ await ll2GenerateVideo(common({ idempotencyKey: "ll2-fixed-retry-key" }));
 const last3 = idempotencyKeys.slice(-3);
 out.push(`⑤ 重试：两次普通重试的幂等键 ${last3[0] === last3[1] ? "相同" : "不同"} → ${last3[0] === last3[1] ? "可能复用任务" : "会新建任务、重新计费"}`);
 out.push(`   显式传同一 key 时为 ${last3[2]}（复用同一任务，可避免重复扣费）`);
+
+// ⑥ 非 H3 模型：走 /v1/video/generations，同一个工厂适配器，验证 payload 与查询解析。
+// 用户点名先测 seedance 2.0 / viduq3-pro / Super Vega 1.0-pro 三档。
+const OPENAI_MODELS = [
+    { model: "doubao-seedance-2-0", resolution: "720p" },
+    { model: "viduq3-pro", resolution: "720p" },
+    { model: "Super Vega 1.0-pro", resolution: "720P" },
+];
+let openaiFails = 0;
+for (const item of OPENAI_MODELS) {
+    scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
+    const result = await ll2GenerateVideo(common({ model: item.model, resolution: item.resolution, seconds: 2 }));
+    const bodyOk =
+        !!openaiCreateBody &&
+        openaiCreateBody.model === item.model &&
+        openaiCreateBody.seconds === "2" &&
+        openaiCreateBody.aspect_ratio === "16:9" &&
+        openaiCreateBody.resolution === item.resolution;
+    out.push(`⑥ ${item.model}：${bodyOk ? "PASS" : "FAIL"} 创建体 ${JSON.stringify(openaiCreateBody)}`);
+    out.push(`   任务号 ${result.taskId} · 协议 ${result.protocol} · 结果 ${result.url} · 实付 ${result.actualLabel}`);
+    // 豆包四款按 Token 计费：出片后不能显示「实付 ¥0」，必须说「按 Token 计费」。
+    const tokenBilledOk = !item.model.startsWith("doubao") || String(result.actualLabel).includes("Token");
+    if (tokenBilledOk) out.push(`   实付口径 ${result.actualLabel}（${result.actualBasis.slice(0, 40)}…）`);
+    if (!bodyOk || !tokenBilledOk || String(result.taskId) !== "openai-1" || result.url !== "https://example.invalid/openai.mp4") openaiFails += 1;
+}
+if (openaiFails) {
+    console.error(`⑥ 失败：${openaiFails} 个非 H3 模型的 payload 或查询解析不符合契约`);
+    process.exitCode = 1;
+}
 
 console.log(out.join("\n"));
 server.stop(true);

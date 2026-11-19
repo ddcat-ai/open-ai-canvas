@@ -91,7 +91,7 @@ export function AssetCard({
                   ? [{
                         key: "quote",
                         icon: <AtSign className="size-3.5" />,
-                        label: asset.kind === "video" ? "视频需公网链接，暂不能引用" : "引用到创作台",
+                        label: asset.kind === "video" ? "视频只能保存，不能引用（需公网地址）" : "引用到创作台",
                         disabled: asset.kind === "video",
                         onClick: () => onQuote(asset),
                     }]

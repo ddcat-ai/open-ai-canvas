@@ -15,7 +15,8 @@ export type LL2SaveAssetDraft = {
 type Props = {
     draft: LL2SaveAssetDraft | null;
     onClose: () => void;
-    onSaved: (result: { id: string; title: string }) => void;
+    /** mode=quote 表示「保存并引用」：存完直接把 @[标题] 插回句子，拖图到出片只差一句描述。 */
+    onSaved: (result: { id: string; title: string }, mode: "save" | "quote") => void;
 };
 
 /**
@@ -50,7 +51,7 @@ export function LL2SaveAssetDialog({ draft, onClose, onSaved }: Props) {
         setTagText("");
     };
 
-    const save = async () => {
+    const save = async (mode: "save" | "quote") => {
         if (saving) return;
         setSaving(true);
         setError("");
@@ -60,7 +61,7 @@ export function LL2SaveAssetDialog({ draft, onClose, onSaved }: Props) {
                 category,
                 tags,
             });
-            onSaved({ id: result.id, title: result.title });
+            onSaved({ id: result.id, title: result.title }, mode);
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "保存失败，再试一次");
         } finally {
@@ -160,8 +161,11 @@ export function LL2SaveAssetDialog({ draft, onClose, onSaved }: Props) {
                     <button type="button" onClick={onClose} disabled={saving}>
                         取消
                     </button>
-                    <button type="button" className="is-primary" onClick={() => void save()} disabled={saving}>
-                        {saving ? "正在保存" : "保存到资产库"}
+                    <button type="button" onClick={() => void save("save")} disabled={saving} title="只存进资产库，这次不参与生成">
+                        只保存
+                    </button>
+                    <button type="button" className="is-primary" onClick={() => void save("quote")} disabled={saving} title="存进资产库，并把 @ 引用插进这句话">
+                        {saving ? "正在保存" : "保存并引用"}
                     </button>
                 </footer>
             </section>

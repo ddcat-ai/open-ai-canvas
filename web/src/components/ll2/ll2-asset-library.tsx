@@ -83,7 +83,10 @@ export function LL2AssetLibrary({ open, onClose, onQuote }: { open: boolean; onC
                 <header className="ll2-library-head">
                     <div>
                         <strong>素材库</strong>
-                        <p>先上传图片或视频，写句子时打 @ 就能引用。素材只存在这台电脑，不用登录。</p>
+                        <p>
+                            先上传图片或视频。素材只存在这台电脑，不用登录；图片打 @ 就能引用，
+                            <strong>视频只能存着预览下载（生成需要公网地址）</strong>。
+                        </p>
                     </div>
                     <button type="button" className="ll2-library-close" onClick={onClose} aria-label="关闭素材库"><X className="size-4" /></button>
                 </header>

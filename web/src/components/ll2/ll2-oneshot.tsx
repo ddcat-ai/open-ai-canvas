@@ -21,6 +21,7 @@ import {
     ll2BuildMediaContent,
     ll2MediaModeLabel,
     ll2MediaSummary,
+    ll2MentionToken,
     ll2ParseMentionTitles,
     ll2ReadDroppedImage,
     ll2ValidateMedia,
@@ -179,16 +180,14 @@ export function LL2OneShot() {
         setLibraryOpen(true);
     };
 
-    const insertMention = (token: string) => {
-        const at = mentionAnchor;
+    /** 把 @[素材名] 插到 anchor 处；anchor 为空则追加到句尾。拖图「保存并引用」与素材库 @ 共用这段。 */
+    const applyMention = (token: string, anchor: number | null) => {
         setPrompt((previous) => {
-            const pos = typeof at === "number" ? Math.min(at, previous.length) : previous.length;
+            const pos = typeof anchor === "number" ? Math.min(anchor, previous.length) : previous.length;
             const before = previous.slice(0, pos);
             const spacer = before && !/\s$/.test(before) ? " " : "";
             return `${before}${spacer}${token} ${previous.slice(pos)}`;
         });
-        setLibraryOpen(false);
-        setMentionAnchor(null);
         // 一旦有 @ 引用，模型下拉会被禁用；这里必须先切回已核准 content[] 契约的 H3，
         // 否则用户先选了万相再引用图片，就卡在「不能切也生成不了」。
         if (model !== "MiniMax-H3") {
@@ -196,6 +195,12 @@ export function LL2OneShot() {
             setResolution("768P");
             syncSettings({ videoModel: "MiniMax-H3", resolution: "768P" });
         }
+    };
+
+    const insertMention = (token: string) => {
+        applyMention(token, mentionAnchor);
+        setLibraryOpen(false);
+        setMentionAnchor(null);
         setHint(`已引用 ${token}。句子里的 @ 会和素材一起送去生成。`);
     };
 
@@ -561,8 +566,14 @@ export function LL2OneShot() {
             <LL2SaveAssetDialog
                 draft={saveAssetDraft}
                 onClose={() => setSaveAssetDraft(null)}
-                onSaved={(result) => {
+                onSaved={(result, mode) => {
                     setSaveAssetDraft(null);
+                    if (mode === "quote") {
+                        // 拖图的最简路径：存进资产库的同时直接引用，不让用户再手动打一次 @。
+                        applyMention(ll2MentionToken(result.title), null);
+                        setHint(`「${result.title}」已存进资产库，也引用到这句话里了；再写一句画面描述就能出片。`);
+                        return;
+                    }
                     setHint(`「${result.title}」已存进资产库。在句子里打 @ 就能引用它。`);
                 }}
             />

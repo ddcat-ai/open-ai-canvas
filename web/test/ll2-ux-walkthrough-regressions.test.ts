@@ -79,12 +79,12 @@ test("参考视频只认公网 HTTPS：本机视频在提交前就被挡住", as
     expect(media).toContain('kind !== "image" && item.dataUrl.startsWith("data:")');
     const video = await read("../src/services/ll2/ll2-video.ts");
     expect(video).toContain("/^https:\\/\\//i.test(url)");
-    // 首页 @ 素材库抽屉里的本机视频也不能引用。
+    // 首页 @ 素材库抽屉里写明「视频只能存着预览下载」，不留半开状态。
     const library = await read("../src/components/ll2/ll2-asset-library.tsx");
-    expect(library).toContain("视频需公网链接");
-    // 真正在用的资产页是影策原版卡片：视频项置灰，同时补了「引用到创作台」。
+    expect(library).toContain("视频只能存着预览下载");
+    // 真正在用的资产页是影策原版卡片：视频项置灰并说明原因，同时补了「引用到创作台」。
     const cards = await read("../src/pages/assets/asset-library-cards.tsx");
-    expect(cards).toContain("视频需公网链接，暂不能引用");
+    expect(cards).toContain("视频只能保存，不能引用（需公网地址）");
     expect(cards).toContain("引用到创作台");
 });
 
@@ -116,6 +116,11 @@ test("首页拖图先存资产库：没有「素材库 @」页签，弹保存框
     const dialog = await read("../src/components/ll2/ll2-save-asset-dialog.tsx");
     expect(dialog).toContain("保存到资产库");
     expect(dialog).toContain("ll2SaveImageAsset");
+    // 「保存并引用」：拖图存进资产库的同时把 @ 引用插回句子，不用再手动打一次 @。
+    expect(dialog).toContain('save("quote")');
+    expect(dialog).toContain("保存并引用");
+    expect(source).toContain("applyMention(ll2MentionToken(result.title), null)");
+    expect(source).toContain('mode === "quote"');
 });
 
 test("14 个视频模型全部适配，秒数按字符串发，渠道缺失要说人话", async () => {

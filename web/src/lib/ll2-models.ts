@@ -528,6 +528,11 @@ export function ll2PreciseCNY(modelId: LL2ConnectedVideoModel, seconds: number, 
 /** 按任务返回的 usage 秒数换算实付，用于出片后显示。 */
 export function ll2ActualCNY(modelId: LL2ConnectedVideoModel, seconds: number, resolution: string) {
     const precise = ll2PreciseCNY(modelId, seconds, resolution);
+    // 豆包四款按 Token 计费，perSecond=0：套下面那条公式会显示「实付 ¥0」，等于骗人。
+    // 直接把预估里的「按 Token 计费」口径带出来，金额以控制台账单为准。
+    if (ll2IsTokenBilled(modelId)) {
+        return { ...precise, label: "按 Token 计费", basis: `按 Token 用量计费 · ${precise.basis}` };
+    }
     return {
         ...precise,
         label: `¥${ll2FormatCNY(precise.amount)}`,

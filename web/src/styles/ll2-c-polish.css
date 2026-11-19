@@ -942,7 +942,7 @@ button.ll2-sidebar-guide {
     border: 0;
     border-radius: 7px;
     background: transparent;
-    color: var(--ll2-t-6b6b76, #6b6b76);
+    color: var(--ll2-t-6b6b6b, #6b6b76);
     cursor: pointer;
 }
 
@@ -972,7 +972,7 @@ button.ll2-sidebar-guide {
 .ll2-save-asset-form label > span {
     font-size: 12px;
     font-weight: 600;
-    color: var(--ll2-t-6b6b76, #6b6b76);
+    color: var(--ll2-t-6b6b6b, #6b6b76);
 }
 
 .ll2-save-asset-form input,
@@ -982,14 +982,14 @@ button.ll2-sidebar-guide {
     padding: 9px 11px;
     border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
     border-radius: 8px;
-    background: var(--ll2-t-f7f7f9, #f7f7f9);
+    background: var(--ll2-t-f7f7fa, #f7f7f9);
     color: var(--ll2-t-0a0a0a, #0a0a0a);
     font-size: 13px;
     font-family: inherit;
 }
 
 .ll2-save-asset-form input[readonly] {
-    color: var(--ll2-t-6b6b76, #6b6b76);
+    color: var(--ll2-t-6b6b6b, #6b6b76);
     cursor: default;
 }
 
@@ -1013,7 +1013,7 @@ button.ll2-sidebar-guide {
 .ll2-save-asset-tags em {
     font-size: 11px;
     font-style: normal;
-    color: var(--ll2-t-9a9aa4, #9a9aa4);
+    color: var(--ll2-t-888, #9a9aa4);
 }
 
 .ll2-save-asset-error {
@@ -1029,13 +1029,13 @@ button.ll2-sidebar-guide {
     padding: 12px;
     border: 1px solid var(--ll2-a-0_10, rgba(10, 10, 10, 0.1));
     border-radius: 10px;
-    background: var(--ll2-t-f7f7f9, #f7f7f9);
+    background: var(--ll2-t-f7f7fa, #f7f7f9);
 }
 
 .ll2-save-asset-preview > span {
     font-size: 12px;
     font-weight: 600;
-    color: var(--ll2-t-6b6b76, #6b6b76);
+    color: var(--ll2-t-6b6b6b, #6b6b76);
 }
 
 .ll2-save-asset-preview img {
@@ -1043,7 +1043,7 @@ button.ll2-sidebar-guide {
     aspect-ratio: 4 / 3;
     object-fit: cover;
     border-radius: 8px;
-    background: var(--ll2-t-e9e9ee, #e9e9ee);
+    background: var(--ll2-t-e5e5e5, #e9e9ee);
 }
 
 .ll2-save-asset-preview strong {
@@ -1066,7 +1066,7 @@ button.ll2-sidebar-guide {
     background: var(--ll2-a-0_06, rgba(10, 10, 10, 0.06));
     font-size: 11px;
     font-style: normal;
-    color: var(--ll2-t-6b6b76, #6b6b76);
+    color: var(--ll2-t-6b6b6b, #6b6b76);
 }
 
 .ll2-save-asset-foot {
