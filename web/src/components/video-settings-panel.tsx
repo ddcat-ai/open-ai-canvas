@@ -433,8 +433,13 @@ function SwitchRow({ label, checked, theme, onChange }: { label: string; checked
 // 影策原生的能力表不知道 LL2 的档位/时长（H3 固定 768P、全模型 4 秒起），
 // 在 LL2 模型下改用这张表，避免画布里显示出 720P / 6 秒这种错参数。
 
+/** 画布里的模型是「渠道::模型名」；取最后一段去和 LL2 模型表比对。 */
+function ll2BaseModel(model: string): string {
+    return String(model || "").split("::").pop() || "";
+}
+
 function isLL2VideoModel(model: string): model is LL2ConnectedVideoModel {
-    return (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(model);
+    return (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(ll2BaseModel(model));
 }
 
 const LL2_H3_RATIOS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
@@ -454,7 +459,10 @@ function ll2RadioDimensions(ratio: string, height: number) {
 }
 
 function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[292px] space-y-3" }: VideoSettingsPanelProps) {
-    const model = config.model as LL2ConnectedVideoModel;
+    // 画布的模型可能带渠道前缀，个别渠道还会带上奇怪后缀；按「包含 H3」兜底，
+    // 避免 H3 面板落回空档位、提示词优化卡片消失。
+    const rawModel = ll2BaseModel(config.model);
+    const model = (rawModel.includes("H3") ? "MiniMax-H3" : rawModel) as LL2ConnectedVideoModel;
     const tiers = ll2TiersFor(model) || [];
     const range = LL2_VIDEO_DURATION[model] || { min: 4, max: 15, default: 5 };
     const resolutions = tiers.map((tier) => tier.label);

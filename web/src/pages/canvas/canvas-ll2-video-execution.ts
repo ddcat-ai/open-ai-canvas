@@ -13,9 +13,14 @@ import type { ReferenceVideo } from "@/types/media";
  * 画布视频节点的 LL2 直连执行：复用首页一句话成片的同一条客户端链路。
  * 生成 →（可选）超分 → 本地/远端落盘，返回可直接写进节点 metadata 的内容。
  */
+/** 画布配置里的模型带渠道前缀（ll2-primary::MiniMax-H3），生成时要用最后一段。 */
+export function ll2BaseVideoModel(model: string): string {
+    return String(model || "").split("::").pop() || "";
+}
+
 export function isLL2CanvasVideoModel(config: AiConfig): boolean {
     if (!useLL2Store.getState().apiKey.trim()) return false;
-    return (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(config.model);
+    return (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(ll2BaseVideoModel(config.model));
 }
 
 export type LL2CanvasVideoResult = {
@@ -40,7 +45,7 @@ export async function runLL2CanvasVideo(input: {
 }): Promise<LL2CanvasVideoResult> {
     const apiKey = useLL2Store.getState().apiKey.trim();
     if (!apiKey) throw new Error("先连接 LL2 Key 才能在画布里生成");
-    const model = input.config.model as LL2ConnectedVideoModel;
+    const model = ll2BaseVideoModel(input.config.model) as LL2ConnectedVideoModel;
     if (!(LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(model)) throw new Error(`${model} 不是 LL2 视频模型`);
 
     const items: LL2MediaInput[] = [];
