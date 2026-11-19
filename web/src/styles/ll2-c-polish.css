@@ -51,40 +51,53 @@
 .ll2-key-status {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    border: 1px solid var(--ll2-ap-0_28, rgba(103, 32, 255, 0.28));
-    border-radius: 12px;
-    background: var(--ll2-ap-0_08, rgba(103, 32, 255, 0.08));
+    gap: 8px;
 }
 
 .ll2-key-status-icon {
     display: grid;
     flex: none;
     place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: var(--ll2-ap-0_18, rgba(103, 32, 255, 0.18));
+    background: var(--ll2-ap-0_14, rgba(103, 32, 255, 0.14));
     color: var(--ll2-t-6720ff-fg, #6720ff);
 }
 
-.ll2-key-status-text {
-    display: flex;
+.ll2-key-status-key {
     min-width: 0;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.ll2-key-status-text strong {
+    overflow: hidden;
     color: var(--ll2-t-0a0a0a, #0a0a0a);
     font-size: 13px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.ll2-key-status-text small {
-    color: var(--ll2-t-6b6b6b, #6b6b76);
+.ll2-key-status-actions {
+    display: flex;
+    flex: none;
+    gap: 12px;
+    margin-left: auto;
+}
+
+.ll2-key-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+    font-family: inherit;
     font-size: 12px;
+    cursor: pointer;
+}
+
+.ll2-key-link:hover {
+    text-decoration: underline;
+}
+
+.ll2-key-link.is-danger {
+    color: var(--ll2-t-c53a22-fg, #c53a22);
 }
 
 .ll2-key-lead.is-tight {
@@ -164,10 +177,9 @@
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 10px;
-    padding: 9px 12px;
-    border: 1px dashed var(--ll2-a-0_14, rgba(10, 10, 10, 0.14));
-    border-radius: 10px;
-    background: var(--ll2-a-0_025, rgba(10, 10, 10, 0.025));
+    padding: 0;
+    border: 0;
+    background: transparent;
     font-size: 12px;
 }
 
@@ -218,12 +230,12 @@
     color: var(--ll2-t-0a0a0a, #0a0a0a);
 }
 
+/* 底部两个入口靠左排在一起，不要一头一个、中间空一大截。 */
 .ll2-key-panel-foot {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 16px;
     margin-top: 16px;
     padding-top: 12px;
     border-top: 1px solid var(--ll2-t-eee, #eee);

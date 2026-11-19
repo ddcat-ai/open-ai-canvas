@@ -67,28 +67,26 @@ function LL2KeyPanel() {
                 <>
                     <div className="ll2-key-status">
                         <span className="ll2-key-status-icon">
-                            <Check className="size-4" aria-hidden />
+                            <Check className="size-3.5" aria-hidden />
                         </span>
-                        <div className="ll2-key-status-text">
-                            <strong>{ll2MaskedKey(apiKey)}</strong>
-                            <small>Key 只保存在这台电脑。</small>
-                        </div>
+                        <span className="ll2-key-status-key">{ll2MaskedKey(apiKey)}</span>
+                        <span className="ll2-key-status-actions">
+                            <button type="button" className="ll2-key-link" onClick={startReplacing}>
+                                更换
+                            </button>
+                            <button
+                                type="button"
+                                className="ll2-key-link is-danger"
+                                onClick={() => {
+                                    disconnect();
+                                    startReplacing();
+                                }}
+                            >
+                                断开
+                            </button>
+                        </span>
                     </div>
-                    <div className="ll2-key-actions is-pair">
-                        <button type="button" className="ll2-key-ghost" onClick={startReplacing}>
-                            更换 Key
-                        </button>
-                        <button
-                            type="button"
-                            className="ll2-key-ghost is-danger"
-                            onClick={() => {
-                                disconnect();
-                                startReplacing();
-                            }}
-                        >
-                            断开
-                        </button>
-                    </div>
+                    <p className="ll2-key-lead is-tight">Key 只保存在这台电脑。</p>
                 </>
             ) : (
                 <>

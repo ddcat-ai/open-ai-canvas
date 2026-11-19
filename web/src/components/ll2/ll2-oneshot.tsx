@@ -562,23 +562,21 @@ export function LL2OneShot() {
                                         />
                                         <span>生成后顺便超分</span>
                                     </label>
-                                    <select
-                                        value={upscale || ""}
-                                        disabled={!upscale || running}
-                                        onChange={(event) => setUpscale(event.target.value as LL2UpscaleTarget)}
-                                        aria-label="超分到"
-                                    >
-                                        {upscaleTargets.length
-                                            ? upscaleTargets.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)
-                                            : <option value="">已是最高档</option>}
-                                    </select>
-                                    <small>
-                                        {hdEstimate
-                                            ? `+ ${hdEstimate.label} · ${hdEstimate.basis}`
-                                            : upscaleTargets.length
-                                                ? "不勾就只生成，不多花钱"
-                                                : "这个清晰度已经最高，不能再超"}
-                                    </small>
+                                    {upscale ? (
+                                        <>
+                                            <select
+                                                value={upscale}
+                                                disabled={running}
+                                                onChange={(event) => setUpscale(event.target.value as LL2UpscaleTarget)}
+                                                aria-label="超分到"
+                                            >
+                                                {upscaleTargets.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
+                                            </select>
+                                            <small>{hdEstimate ? `+ ${hdEstimate.label} · ${hdEstimate.basis}` : ""}</small>
+                                        </>
+                                    ) : (
+                                        <small>{upscaleTargets.length ? "不勾就只生成，不多花钱" : "这个清晰度已经最高，不能再超"}</small>
+                                    )}
                                 </div>
                                 <div className="ll2-price-total">
                                     <div className="ll2-price-total-text">

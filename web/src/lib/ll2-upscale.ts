@@ -1,4 +1,4 @@
-import { LL2_MODEL_SPECS, ll2FriendlyCNY } from "@/lib/ll2-models";
+import { LL2_MODEL_SPECS, ll2FormatCNY, ll2FriendlyCNY } from "@/lib/ll2-models";
 
 /**
  * auto-hd 超分档位（后处理，不是生成模型）。
@@ -53,6 +53,6 @@ export function ll2UpscaleEstimate(seconds: number, target: string) {
         amount,
         perSecond,
         label: `约 ${ll2FriendlyCNY(amount)}`,
-        basis: `${ll2UpscaleTargetLabel(target)} ${ll2FriendlyCNY(perSecond)}/秒 × ${duration} 秒（按成片秒数）`,
+        basis: `${ll2UpscaleTargetLabel(target)} ¥${ll2FormatCNY(perSecond)}/秒 × ${duration} 秒（按成片秒数）`,
     };
 }
