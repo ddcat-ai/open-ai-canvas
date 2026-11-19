@@ -1239,6 +1239,7 @@ function CanvasViewportPage() {
             const node = nodesRef.current.find((item) => item.id === nodeId);
             if (
                 !node ||
+                node.type === CanvasNodeType.Frame ||
                 node.type === CanvasNodeType.Script ||
                 node.type === CanvasNodeType.Drawing ||
                 node.type === CanvasNodeType.Panorama ||
