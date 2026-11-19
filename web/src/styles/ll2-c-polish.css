@@ -93,6 +93,58 @@
     gap: 14px;
 }
 
+/* ── 生成后超分：默认不勾，勾了才多花钱 ───────────────────────────── */
+.ll2-upscale-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 9px 12px;
+    border: 1px dashed var(--ll2-a-0_14, rgba(10, 10, 10, 0.14));
+    border-radius: 10px;
+    background: var(--ll2-a-0_025, rgba(10, 10, 10, 0.025));
+    font-size: 12px;
+}
+
+.ll2-upscale-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ll2-upscale-row input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--ll2-t-6720ff, #6720ff);
+    cursor: pointer;
+}
+
+.ll2-upscale-row select {
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--ll2-a-0_16, rgba(10, 10, 10, 0.16));
+    border-radius: 8px;
+    background: var(--ll2-t-f7f7fa, #f7f7f9);
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ll2-upscale-row select:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.ll2-upscale-row small {
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+}
+
 .ll2-key-foot-right a {
     color: var(--ll2-t-777, #777);
     text-decoration: none;

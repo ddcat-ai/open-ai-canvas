@@ -166,6 +166,24 @@ test("文本模型下拉显示真实模型名与 Token 单价，填 Key 弹窗�
     expect(connect).toContain("粘贴 LL2 Key，只保存在这台电脑。");
 });
 
+test("生成后超分：默认不勾、只能往上超、1080P 就是 1K", async () => {
+    // 用户口径：1080P 就写 1080P；勾选才超分，不勾不多花钱；不能反向超分。
+    const upscale = await read("../src/lib/ll2-upscale.ts");
+    expect(upscale).toContain('label: "1080P"');
+    expect(upscale).not.toContain("1080P（1K）");
+    expect(upscale).toContain("target.rank > sourceRank");
+    const oneshot = await read("../src/components/ll2/ll2-oneshot.tsx");
+    expect(oneshot).toContain("生成后顺便超分");
+    expect(oneshot).toContain("checked={Boolean(upscale)}");
+    expect(oneshot).toContain("ll2RunHd");
+    expect(oneshot).toContain("previewUrl");
+    // 超分走独立协议 /hd/tasks，结果要带 Bearer 才能下载。
+    const hd = await read("../src/services/ll2/ll2-hd.ts");
+    expect(hd).toContain("/hd/tasks");
+    expect(hd).toContain("auto-hd");
+    expect(hd).toContain("Bearer");
+});
+
 test("14 个视频模型全部适配，秒数按字符串发，渠道缺失要说人话", async () => {
     const models = await read("../src/lib/ll2-models.ts");
     // 清单里每个非 H3 的视频模型都要在册，不能再退回「只有两个」。

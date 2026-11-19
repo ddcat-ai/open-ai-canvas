@@ -5,12 +5,17 @@
  * 运行：cd web && bun run scripts/ll2-video-mock-check.ts
  */
 import { ll2GenerateVideo } from "../src/services/ll2/ll2-video";
+import { ll2FetchHdBlob, ll2RunHd } from "../src/services/ll2/ll2-hd";
 
 let scenario = "success";
 let createCount = 0;
 let queryCount = 0;
 const idempotencyKeys = [];
 let openaiCreateBody = null;
+// 超分（/hd/tasks）是独立协议，单独记录请求体与下载鉴权头。
+let hdCreateBody = null;
+let hdDownloadAuth = "";
+let hdQueryCount = 0;
 
 const server = Bun.serve({
     port: 0,
@@ -29,6 +34,19 @@ const server = Bun.serve({
             return Response.json({
                 data: { status: "succeeded", result_url: "https://example.invalid/openai.mp4", usage: { output_seconds: 2 } },
             });
+        }
+        if (req.method === "POST" && url.pathname === "/hd/tasks") {
+            hdCreateBody = await req.json();
+            return Response.json({ id: "hd-1", model: "auto-hd" });
+        }
+        if (req.method === "GET" && url.pathname === "/hd/tasks/hd-1") {
+            hdQueryCount += 1;
+            if (hdQueryCount < 2) return Response.json({ id: "hd-1", model: "auto-hd", status: "RUNNING" });
+            return Response.json({ id: "hd-1", model: "auto-hd", status: "FINISHED", url: "/v1/tasks/hd-1/artifacts/video/content" });
+        }
+        if (req.method === "GET" && url.pathname === "/v1/tasks/hd-1/artifacts/video/content") {
+            hdDownloadAuth = String(req.headers.get("authorization") || "");
+            return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "video/mp4" } });
         }
         if (req.method === "POST" && url.pathname === "/v2/video_generation") {
             if (scenario === "http401") return Response.json({ message: "invalid token" }, { status: 401 });
@@ -137,6 +155,34 @@ for (const item of OPENAI_MODELS) {
 }
 if (openaiFails) {
     console.error(`⑥ 失败：${openaiFails} 个非 H3 模型的 payload 或查询解析不符合契约`);
+    process.exitCode = 1;
+}
+
+// ⑦ 超分：独立协议 /hd/tasks，结果要带 Bearer 才能下载
+hdCreateBody = null; hdDownloadAuth = ""; hdQueryCount = 0;
+const hd = await ll2RunHd({
+    apiKey: "local-mock-key-not-real",
+    videoUrl: "https://example.invalid/in.mp4",
+    resolution: "2k",
+    duration: 5,
+    baseUrl: baseUrl,
+    pollIntervalMs: 10,
+    maxPolls: 5,
+});
+const hdBlob = await ll2FetchHdBlob(hd.url, "local-mock-key-not-real");
+const hdOk =
+    !!hdCreateBody &&
+    hdCreateBody.model === "auto-hd" &&
+    hdCreateBody.video_url === "https://example.invalid/in.mp4" &&
+    hdCreateBody.resolution === "2k" &&
+    hdCreateBody.duration === 5 &&
+    hd.url === baseUrl + "/v1/tasks/hd-1/artifacts/video/content" &&
+    hdDownloadAuth === "Bearer local-mock-key-not-real" &&
+    hdBlob.size === 3;
+out.push(`⑦ 超分协议：${hdOk ? "PASS" : "FAIL"} 创建体 ${JSON.stringify(hdCreateBody)}`);
+out.push(`   任务 ${hd.taskId} → ${hd.url}，带 Bearer 下载 ${hdBlob.size} 字节`);
+if (!hdOk) {
+    console.error("⑦ 失败：超分协议 payload / 结果地址 / Bearer 下载不符合契约");
     process.exitCode = 1;
 }
 

@@ -24,6 +24,10 @@ export type LL2Film = {
     actualCNY: number;
     url: string;
     createdAt: number;
+    /** 超分版：成片地址要带 Bearer Key 才能下载，不能直接 <video src>。 */
+    requiresAuth?: boolean;
+    /** 超分版对应的原片任务号；原片记录仍然保留。 */
+    upscaledFrom?: string;
 };
 
 function safeParse(raw: string | null): LL2Film[] {

@@ -1,10 +1,12 @@
 import { ChevronsUpDown, Film } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { LL2GeneratePanel } from "@/components/ll2/ll2-generate";
 import { ll2FormatCNY } from "@/lib/ll2-models";
+import { ll2FetchHdBlob } from "@/services/ll2/ll2-hd";
 import { ll2DownloadFilm, ll2FilmAgeLabel, ll2ListFilms, ll2RemoveFilm, type LL2Film } from "@/services/ll2/ll2-films";
+import { useLL2Store } from "@/stores/use-ll2-store";
 
 /**
  * 我的片子：本机作品库（胶片带）+ 完整生成面板。
@@ -15,6 +17,65 @@ export default function LL2Films() {
     const [active, setActive] = useState<LL2Film | null>(null);
     const [advanced, setAdvanced] = useState(false);
     const [message, setMessage] = useState("");
+    const apiKey = useLL2Store((state) => state.apiKey);
+    /** 超分版地址要带 Key 下载成 blob 才能播，普通片子直接播直链。 */
+    const [playerUrl, setPlayerUrl] = useState("");
+    const [playerMessage, setPlayerMessage] = useState("");
+
+    useEffect(() => {
+        let cancelled = false;
+        let objectUrl = "";
+        setPlayerUrl("");
+        setPlayerMessage("");
+        if (!active) return;
+        if (!active.requiresAuth) {
+            setPlayerUrl(active.url);
+            return;
+        }
+        if (!apiKey.trim()) {
+            setPlayerMessage("超分版要连上 LL2 才能播放：点侧栏「连接 LL2」填一次 Key");
+            return;
+        }
+        void ll2FetchHdBlob(active.url, apiKey)
+            .then((blob) => {
+                if (cancelled) return;
+                objectUrl = URL.createObjectURL(blob);
+                setPlayerUrl(objectUrl);
+            })
+            .catch((cause) => {
+                if (!cancelled) setPlayerMessage(cause instanceof Error ? cause.message : "超分版加载失败，稍后再试");
+            });
+        return () => {
+            cancelled = true;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [active, apiKey]);
+
+    const downloadActive = async () => {
+        if (!active) return;
+        if (!active.requiresAuth) {
+            setMessage((await ll2DownloadFilm(active)).message);
+            return;
+        }
+        if (!apiKey.trim()) {
+            setMessage("超分版要连上 LL2 才能下载：先点侧栏「连接 LL2」填一次 Key");
+            return;
+        }
+        try {
+            const blob = await ll2FetchHdBlob(active.url, apiKey);
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `LL2_${active.resolution.replace(/[^\w.-]+/g, "_")}_${active.seconds}s.mp4`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            setMessage("已下载到本机");
+        } catch (cause) {
+            setMessage(cause instanceof Error ? cause.message : "下载失败，请稍后再试");
+        }
+    };
 
     return (
         <div className="ll2-wb">
@@ -43,7 +104,7 @@ export default function LL2Films() {
                                             <span className="ll2-film-card-model">{film.model}</span>
                                             <span className="ll2-film-card-cost">¥{ll2FormatCNY(film.actualCNY)}</span>
                                             <span className="ll2-film-card-prompt">{film.prompt}</span>
-                                            <span className="ll2-film-card-time">{film.seconds}s · {film.resolution} · {ll2FilmAgeLabel(film.createdAt)}</span>
+                                            <span className="ll2-film-card-time">{film.seconds}s · {film.resolution}{film.requiresAuth ? " · 超分版" : ""} · {ll2FilmAgeLabel(film.createdAt)}</span>
                                         </button>
                                         <button
                                             type="button"
@@ -62,12 +123,16 @@ export default function LL2Films() {
 
                             {active ? (
                                 <div className="ll2-wb-player">
-                                    <video src={active.url} controls playsInline preload="metadata" />
+                                    {playerUrl ? (
+                                        <video src={playerUrl} controls playsInline preload="metadata" />
+                                    ) : (
+                                        <div className="ll2-wb-empty">{playerMessage || "正在取回超分版…"}</div>
+                                    )}
                                     <div>
                                         <strong>{active.model} · {active.seconds}s · {active.resolution}</strong>
                                         <p>{active.prompt}</p>
                                         <small>预估 ¥{ll2FormatCNY(active.estimateCNY)} · 实际扣费 ¥{ll2FormatCNY(active.actualCNY)} · {ll2FilmAgeLabel(active.createdAt)}</small>
-                                        <button type="button" onClick={async () => setMessage((await ll2DownloadFilm(active)).message)}>下载到本机</button>
+                                        <button type="button" onClick={() => void downloadActive()}>下载到本机</button>
                                         {message ? <p className="ll2-wb-player-message">{message}</p> : null}
                                     </div>
                                 </div>

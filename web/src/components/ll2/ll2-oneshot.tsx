@@ -8,6 +8,7 @@ import {
     LL2_CONNECTED_VIDEO_MODELS,
     LL2_VIDEO_DURATION,
     ll2FormatCNY,
+    ll2FriendlyCNY,
     ll2PreciseCNY,
     ll2SpecFor,
     ll2TiersFor,
@@ -27,7 +28,9 @@ import {
     ll2ValidateMedia,
     type LL2MediaInput,
 } from "@/services/ll2/ll2-media";
+import { ll2FetchHdBlob, ll2RunHd, type LL2HdProgress } from "@/services/ll2/ll2-hd";
 import { ll2GenerateVideo, type LL2VideoProgress } from "@/services/ll2/ll2-video";
+import { ll2UpscaleEstimate, ll2UpscaleTargetLabel, ll2UpscaleTargetsFor, type LL2UpscaleTarget } from "@/lib/ll2-upscale";
 import { useLL2AgentStore } from "@/stores/use-ll2-agent-store";
 import { ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
 import { LL2SaveAssetDialog, type LL2SaveAssetDraft } from "@/components/ll2/ll2-save-asset-dialog";
@@ -80,7 +83,10 @@ export function LL2OneShot() {
     const [progress, setProgress] = useState<LL2VideoProgress | null>(null);
     const [error, setError] = useState("");
     const [hint, setHint] = useState("");
-    const [result, setResult] = useState<{ film: LL2Film; label: string; basis: string } | null>(null);
+    const [result, setResult] = useState<{ film: LL2Film; label: string; basis: string; previewUrl?: string } | null>(null);
+    /** 生成后是否顺便超分：默认不勾，客户不勾就不多花钱。 */
+    const [upscale, setUpscale] = useState<LL2UpscaleTarget | "">("");
+    const [hdProgress, setHdProgress] = useState<LL2HdProgress | null>(null);
     const [downloadMessage, setDownloadMessage] = useState("");
     /** media 只放「拖进来的那一张图」；@ 引用的素材从提示词里的 @[名称] 解析。 */
     const [media, setMedia] = useState<LL2MediaInput[]>([]);
@@ -90,6 +96,8 @@ export function LL2OneShot() {
     const [libraryOpen, setLibraryOpen] = useState(false);
     const [mentionAnchor, setMentionAnchor] = useState<number | null>(null);
     const abortRef = useRef<AbortController | null>(null);
+    /** 超分结果要带 Key 下载成 blob 才能播，临时 objectURL 用完要回收。 */
+    const previewUrlRef = useRef<string>("");
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     // 读文件是异步的。用 ref 保存最新拖图 + 同步互斥，避免连续拖两次互相覆盖。
     const mediaRef = useRef<LL2MediaInput[]>([]);
@@ -141,6 +149,16 @@ export function LL2OneShot() {
     const tiers = useMemo(() => ll2TiersFor(model), [model]);
     const range = LL2_VIDEO_DURATION[model];
     const estimate = ll2PreciseCNY(model, seconds, resolution);
+    const upscaleTargets = useMemo(() => ll2UpscaleTargetsFor(resolution), [resolution]);
+
+    useEffect(() => {
+        // 换模型/清晰度后，原来选的超分档可能不合法（比如已经是 4K），自动收回。
+        setUpscale((current) => (current && upscaleTargets.some((target) => target.id === current) ? current : ""));
+    }, [upscaleTargets]);
+    const hdEstimate = upscale ? ll2UpscaleEstimate(seconds, upscale) : null;
+    // 合计只用于展示：生成 + 超分是两笔账单，明细里分开写。
+    const totalLabel = hdEstimate ? `约 ${ll2FriendlyCNY(estimate.amount + hdEstimate.amount)}` : estimate.label;
+    const totalBasis = hdEstimate ? `生成 ${estimate.label} + 超分 ${hdEstimate.label} · 按 LL2 官网单价估算` : estimate.basis;
     const spec = ll2SpecFor(model);
     const mentionTitles = useMemo(() => ll2ParseMentionTitles(prompt), [prompt]);
     const hasMedia = media.length > 0;
@@ -253,6 +271,29 @@ export function LL2OneShot() {
         void addDroppedImage(files);
     };
 
+    /** 超分版要带 Bearer 下载成 blob 再存；普通片子沿用原来的直链下载。 */
+    const downloadResult = async () => {
+        if (!result) return;
+        if (!result.film.requiresAuth) {
+            setDownloadMessage((await ll2DownloadFilm(result.film)).message);
+            return;
+        }
+        try {
+            const blob = await ll2FetchHdBlob(result.film.url, apiKey);
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = `LL2_${result.film.resolution.replace(/[^\w.-]+/g, "_")}_${result.film.seconds}s.mp4`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            setDownloadMessage("已下载到本机");
+        } catch (cause) {
+            setDownloadMessage(cause instanceof Error ? cause.message : "下载失败，请稍后再试");
+        }
+    };
+
     const start = async () => {
         if (!connected) {
             ll2OpenKeyDialog();
@@ -266,11 +307,16 @@ export function LL2OneShot() {
         setHint("");
         setResult(null);
         setDownloadMessage("");
+        if (previewUrlRef.current) {
+            URL.revokeObjectURL(previewUrlRef.current);
+            previewUrlRef.current = "";
+        }
         setRunning(true);
         const controller = new AbortController();
         abortRef.current = controller;
-        // 准备阶段的错误（引用失效 / 素材超限）不该带上「再试一次会新建任务」的计费话术。
-        let phase: "prepare" | "generate" = "prepare";
+        // 准备 / 生成 / 超分三段，错误文案要分清是哪一段失败。
+        let phase: "prepare" | "generate" | "upscale" = "prepare";
+        let generated: { film: LL2Film; label: string; basis: string } | null = null;
         try {
             // @ 引用按提示词里出现的顺序还原成素材；资产库里的视频可能要从本机 Blob 读出来。
             const mentioned: LL2MediaInput[] = [];
@@ -306,16 +352,63 @@ export function LL2OneShot() {
                 url: outcome.url,
                 createdAt: outcome.createdAt,
             }).find((item) => item.id === outcome.taskId)!;
-            setResult({ film, label: outcome.actualLabel, basis: outcome.actualBasis });
+            generated = { film, label: outcome.actualLabel, basis: outcome.actualBasis };
+            if (!upscale) {
+                setResult(generated);
+            } else {
+                // 超分是第二段：必须等生成拿到公网直链后才能提交 /hd/tasks。
+                phase = "upscale";
+                setProgress(null);
+                setHint(`片子生成好了，正在超分到 ${ll2UpscaleTargetLabel(upscale)}…`);
+                const hd = await ll2RunHd(
+                    { apiKey, videoUrl: outcome.url, resolution: upscale, duration: outcome.seconds, signal: controller.signal },
+                    setHdProgress,
+                );
+                setHdProgress((current) => (current ? { ...current, stage: "downloading" } : current));
+                const blob = await ll2FetchHdBlob(hd.url, apiKey, controller.signal);
+                const previewUrl = URL.createObjectURL(blob);
+                previewUrlRef.current = previewUrl;
+                const hdFilm = ll2AddFilm({
+                    id: `hd-${hd.taskId}`,
+                    taskId: hd.taskId,
+                    model: outcome.model,
+                    prompt: prompt.trim(),
+                    seconds: outcome.seconds,
+                    chargedSeconds: outcome.chargedSeconds,
+                    resolution: ll2UpscaleTargetLabel(hd.resolution),
+                    ratio: outcome.ratio,
+                    estimateCNY: hdEstimate?.amount || 0,
+                    actualCNY: hdEstimate?.amount || 0,
+                    url: hd.url,
+                    createdAt: Date.now(),
+                    requiresAuth: true,
+                    upscaledFrom: outcome.taskId,
+                }).find((item) => item.id === `hd-${hd.taskId}`)!;
+                setResult({
+                    film: hdFilm,
+                    label: `超分 ${hdEstimate?.label || ""}`,
+                    basis: `${hdEstimate?.basis || ""} · 原片也留在「我的片子」`,
+                    previewUrl,
+                });
+                setHint(`已超分到 ${ll2UpscaleTargetLabel(hd.resolution)}，可以直接下载高清版；原片也留着。`);
+            }
         } catch (cause) {
-            if (cause instanceof DOMException && cause.name === "AbortError") setError("已停止等待。任务可能还在生成，费用以 LL2 控制台账单为准");
-            else {
+            if (cause instanceof DOMException && cause.name === "AbortError") {
+                setError(phase === "upscale" ? "已停止等待超分，原片已经生成好了" : "已停止等待。任务可能还在生成，费用以 LL2 控制台账单为准");
+            } else {
                 const message = cause instanceof Error ? cause.message : "生成失败，请稍后重试";
-                setError(phase === "generate" ? `${message} · 再试一次会新建任务` : message);
+                if (phase === "upscale" && generated) {
+                    // 超分失败不能把已经生成的片子吞掉：结果卡退回原片，再给一句可重试的说明。
+                    setResult(generated);
+                    setError(`片子已经生成好了；超分没成功，可以再点一次试试。${message}`);
+                } else {
+                    setError(phase === "generate" ? `${message} · 再试一次会新建任务` : message);
+                }
             }
         } finally {
             setRunning(false);
             setProgress(null);
+            setHdProgress(null);
             abortRef.current = null;
         }
     };
@@ -459,11 +552,39 @@ export function LL2OneShot() {
                                         <small>想要几秒就选几秒</small>
                                     </div>
                                 </div>
+                                <div className="ll2-upscale-row">
+                                    <label>
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(upscale)}
+                                            disabled={running || !upscaleTargets.length}
+                                            onChange={(event) => setUpscale(event.target.checked ? (upscaleTargets[0]?.id || "") : "")}
+                                        />
+                                        <span>生成后顺便超分</span>
+                                    </label>
+                                    <select
+                                        value={upscale || ""}
+                                        disabled={!upscale || running}
+                                        onChange={(event) => setUpscale(event.target.value as LL2UpscaleTarget)}
+                                        aria-label="超分到"
+                                    >
+                                        {upscaleTargets.length
+                                            ? upscaleTargets.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)
+                                            : <option value="">已是最高档</option>}
+                                    </select>
+                                    <small>
+                                        {hdEstimate
+                                            ? `+ ${hdEstimate.label} · ${hdEstimate.basis}`
+                                            : upscaleTargets.length
+                                                ? "不勾就只生成，不多花钱"
+                                                : "这个清晰度已经最高，不能再超"}
+                                    </small>
+                                </div>
                                 <div className="ll2-price-total">
                                     <div className="ll2-price-total-text">
                                         <span>本次一共</span>
-                                        <strong>{estimate.label}</strong>
-                                        <small>{estimate.basis}</small>
+                                        <strong>{totalLabel}</strong>
+                                        <small>{totalBasis}</small>
                                     </div>
                                     <div className="ll2-price-actions">
                                         <button
@@ -516,20 +637,24 @@ export function LL2OneShot() {
                         {running && progress ? (
                             <div className="ll2-oneshot-status" role="status"><LoaderCircle className="size-3.5 is-spinning" /> 任务已受理 · {progress.status || "排队中"} · 已等待 {Math.round(progress.elapsedMs / 1000)} 秒</div>
                         ) : null}
+                        {running && hdProgress ? (
+                            <div className="ll2-oneshot-status" role="status">
+                                <LoaderCircle className="size-3.5 is-spinning" />
+                                {hdProgress.stage === "created" ? "已提交超分" : hdProgress.stage === "downloading" ? "超分完成，正在取回高清版" : "正在超分"} · 已等待 {Math.round(hdProgress.elapsedMs / 1000)} 秒
+                            </div>
+                        ) : null}
                         {hint ? <div className="ll2-oneshot-status is-hint" role="note">{hint}</div> : null}
                         {error ? <div className="ll2-oneshot-status is-error" role="alert">{error}</div> : null}
                         {result ? (
                             <div className="ll2-oneshot-result">
-                                <video src={result.film.url} controls playsInline preload="metadata" />
+                                <video src={result.previewUrl || result.film.url} controls playsInline preload="metadata" />
                                 <div>
                                     <span className="ll2-oneshot-result-cost">实际扣费 <strong>{result.label}</strong></span>
                                     <small>{result.basis}</small>
                                     <small>生成的片子在云端保留 24 小时，请及时下载到这台电脑。</small>
                                     <small>再做一版会新建任务、重新计费；取消或失败前的费用以 LL2 控制台账单为准。</small>
                                     <div className="ll2-oneshot-result-actions">
-                                        <button type="button" onClick={async () => {
-                                            setDownloadMessage((await ll2DownloadFilm(result.film)).message);
-                                        }}><Download className="size-3.5" /> 下载到本机</button>
+                                        <button type="button" onClick={() => void downloadResult()}><Download className="size-3.5" /> 下载到本机</button>
                                         <Link to="/films"><Film className="size-3.5" /> 我的片子</Link>
                                     </div>
                                     {downloadMessage ? <p>{downloadMessage}</p> : null}
