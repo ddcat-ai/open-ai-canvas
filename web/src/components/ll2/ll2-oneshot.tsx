@@ -174,23 +174,12 @@ export function LL2OneShot() {
     // 合计只用于展示：生成 + 超分是两笔账单，明细里分开写。
     const totalLabel = hdEstimate ? `约 ${ll2FriendlyCNY(estimate.amount + hdEstimate.amount)}` : estimate.label;
     const totalBasis = hdEstimate ? `生成 ${estimate.label} + 超分 ${hdEstimate.label} · 按 LL2 官网单价估算` : estimate.basis;
-    // 等待态文案：标题说现在在干什么，副文案说大概要多久、能不能走开。
+    // 等待态只留一句「正在生成」，不写解释文字。
     const waiting = !running
         ? null
         : hdProgress
-            ? {
-                title: hdProgress.stage === "downloading" ? "正在取回高清版" : `正在超分到 ${ll2UpscaleTargetLabel(upscale || "")}`,
-                note: hdProgress.stage === "created" ? "已提交超分任务，马上开始。" : "片子已经生成好了，正在处理高清版；通常 1–3 分钟。",
-            }
-            : {
-                title: `正在生成 · ${(() => {
-                    const status = String(progress?.status || "queued").toLowerCase();
-                    if (status.includes("queue") || status.includes("pending")) return "排队中";
-                    if (status.includes("process") || status.includes("running")) return "生成中";
-                    return "已提交";
-                })()}`,
-                note: "通常 1–3 分钟；可以先去做别的，这一页不会丢。想停就点「取消」。",
-            };
+            ? { title: hdProgress.stage === "downloading" ? "正在取回高清版" : "正在超分" }
+            : { title: "正在生成" };
     const spec = ll2SpecFor(model);
     const mentionTitles = useMemo(() => ll2ParseMentionTitles(prompt), [prompt]);
     const hasMedia = media.length > 0;
@@ -631,35 +620,7 @@ export function LL2OneShot() {
                             </div>
                         )}
 
-                        {waiting ? (
-                            <div className="ll2-oneshot-waiting" role="status" aria-live="polite">
-                                <div className="ll2-oneshot-waiting-head">
-                                    <LoaderCircle className="size-4 is-spinning" aria-hidden />
-                                    <strong>{waiting.title}</strong>
-                                    <span className="ll2-oneshot-waiting-time">已等待 {waitSeconds} 秒</span>
-                                </div>
-                                <div className="ll2-oneshot-waiting-bar" aria-hidden="true"><span /></div>
-                                <small>{waiting.note}</small>
-                            </div>
-                        ) : null}
-                        {hint ? <div className="ll2-oneshot-status is-hint" role="note">{hint}</div> : null}
-                        {error ? <div className="ll2-oneshot-status is-error" role="alert">{error}</div> : null}
-                        {result ? (
-                            <div className="ll2-oneshot-result">
-                                <video src={result.previewUrl || result.film.url} controls playsInline preload="metadata" />
-                                <div>
-                                    <span className="ll2-oneshot-result-cost">实际扣费 <strong>{result.label}</strong></span>
-                                    <small>{result.basis}</small>
-                                    <small>生成的片子在云端保留 24 小时，请及时下载到这台电脑。</small>
-                                    <small>再做一版会新建任务、重新计费；取消或失败前的费用以 LL2 控制台账单为准。</small>
-                                    <div className="ll2-oneshot-result-actions">
-                                        <button type="button" onClick={() => void downloadResult()}><Download className="size-3.5" /> 下载到本机</button>
-                                        <Link to="/films"><Film className="size-3.5" /> 我的片子</Link>
-                                    </div>
-                                    {downloadMessage ? <p>{downloadMessage}</p> : null}
-                                </div>
-                            </div>
-                        ) : null}
+
                     </>
                 ) : null}
 
@@ -669,6 +630,38 @@ export function LL2OneShot() {
                         <p>「聊天改稿」用的是我们自己的文本模型，陪你写漫剧、短剧、改提示词，也能回答创作里卡住的问题。点下面的按钮才打开，不会自己弹出来挡住这一页。</p>
                         <p>聊好的句子可以一键送回这里出片；在无限画布里，还能直接交给 Agent 生成视频并放进那张画布。</p>
                         <button type="button" className="ll2-oneshot-submit" onClick={() => openAgentWith(prompt)}><Sparkles className="size-3.5" /> 打开聊天改稿</button>
+                    </div>
+                ) : null}
+
+                {waiting ? (
+                    <div className="ll2-oneshot-waiting" role="status" aria-live="polite">
+                        <div className="ll2-oneshot-waiting-head">
+                            <LoaderCircle className="size-4 is-spinning" aria-hidden />
+                            <strong>{waiting.title}</strong>
+                            <span className="ll2-oneshot-waiting-time">已等待 {waitSeconds} 秒</span>
+                            <button type="button" className="ll2-oneshot-waiting-cancel" onClick={() => abortRef.current?.abort()}>
+                                取消
+                            </button>
+                        </div>
+                        <div className="ll2-oneshot-waiting-bar" aria-hidden="true"><span /></div>
+                    </div>
+                ) : null}
+                {hint ? <div className="ll2-oneshot-status is-hint" role="note">{hint}</div> : null}
+                {error ? <div className="ll2-oneshot-status is-error" role="alert">{error}</div> : null}
+                {result ? (
+                    <div className="ll2-oneshot-result">
+                        <video src={result.previewUrl || result.film.url} controls playsInline preload="metadata" />
+                        <div>
+                            <span className="ll2-oneshot-result-cost">实际扣费 <strong>{result.label}</strong></span>
+                            <small>{result.basis}</small>
+                            <small>生成的片子在云端保留 24 小时，请及时下载到这台电脑。</small>
+                            <small>再做一版会新建任务、重新计费；取消或失败前的费用以 LL2 控制台账单为准。</small>
+                            <div className="ll2-oneshot-result-actions">
+                                <button type="button" onClick={() => void downloadResult()}><Download className="size-3.5" /> 下载到本机</button>
+                                <Link to="/films"><Film className="size-3.5" /> 我的片子</Link>
+                            </div>
+                            {downloadMessage ? <p>{downloadMessage}</p> : null}
+                        </div>
                     </div>
                 ) : null}
 
