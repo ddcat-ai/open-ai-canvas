@@ -297,7 +297,8 @@
 /* ── 首页 @ 素材库：贴输入框的紧凑菜单（和画布 @ 菜单同一种体验） ──── */
 .ll2-ref-menu {
     position: fixed;
-    z-index: 90;
+    z-index: 400;
+    pointer-events: auto;
     overflow: hidden;
     border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
     border-radius: 14px;

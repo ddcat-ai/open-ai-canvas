@@ -224,12 +224,19 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
-test("画布入口输入框打 @ 会弹出本机素材库", async () => {
+test("画布入口输入框打 @ 会弹出本机素材库，且素材菜单可点", async () => {
     const entry = await read("../src/components/canvas/canvas-short-drama-entry.tsx");
     expect(entry).toContain("LL2AssetLibrary");
     expect(entry).toContain("handlePromptChange");
     expect(entry).toContain("insertAssetMention");
     expect(entry).toContain("打 @ 可以引用素材");
+    // 菜单必须挂到 body，否则会被入口 stage 的 pointer-events: none 吞掉。
+    expect(entry).toContain("createPortal");
+    // 回调已带 @[名称]，不能再包一层 -> 不能出现 @[${title}]。
+    expect(entry).not.toContain("@[${title}]");
+    const css = await read("../src/styles/ll2-c-polish.css");
+    expect(css).toContain("pointer-events: auto");
+    expect(css).toContain("z-index: 400");
 });
 
 test("wan3 连两张图会明确提示换模型，不静默丢尾帧", async () => {

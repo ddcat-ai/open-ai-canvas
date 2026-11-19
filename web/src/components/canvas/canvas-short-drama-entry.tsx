@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Popover } from "antd";
 import { Link } from "react-router";
+import { createPortal } from "react-dom";
 import { AlignLeft, ArrowUp, Check, ChevronUp, Clapperboard, FolderKanban, Images, LayoutGrid, Palette, Pencil, Plus, Type, Upload, Workflow, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -156,8 +157,8 @@ export function CanvasShortDramaEmptyState({
         }
         setPrompt(next);
     };
-    const insertAssetMention = (title: string) => {
-        const token = `@[${title}]`;
+    const insertAssetMention = (token: string) => {
+        // LL2AssetLibrary 回调已经是完整的 @[名称]，不要再包一层。
         setPrompt((previous) => {
             const pos = Math.min(mentionCaret ?? previous.length, previous.length);
             const before = previous.slice(0, pos);
@@ -250,12 +251,17 @@ export function CanvasShortDramaEmptyState({
                 </div>
                 <CanvasHowToGuide />
             </div>
-            <LL2AssetLibrary
-                open={assetMenuOpen}
-                anchor={assetMenuAnchor}
-                onClose={() => { setAssetMenuOpen(false); setMentionCaret(null); }}
-                onQuote={insertAssetMention}
-            />
+            {assetMenuOpen
+                ? createPortal(
+                      <LL2AssetLibrary
+                          open
+                          anchor={assetMenuAnchor}
+                          onClose={() => { setAssetMenuOpen(false); setMentionCaret(null); }}
+                          onQuote={insertAssetMention}
+                      />,
+                      document.body,
+                  )
+                : null}
         </div>
     );
 }
