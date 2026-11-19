@@ -333,9 +333,25 @@
     align-items: center;
     gap: 6px;
     padding: 5px 11px;
-    border: 1px solid var(--ll2-a-0_10, rgba(10, 10, 10, 0.1));
+    border: 0;
     border-radius: 999px;
-    background: var(--ll2-a-0_035, rgba(10, 10, 10, 0.035));
+    background: var(--ll2-a-0_05, rgba(10, 10, 10, 0.05));
+}
+
+.ll2-oneshot .ll2-price-cell:hover {
+    background: var(--ll2-a-0_08, rgba(10, 10, 10, 0.08));
+}
+
+.ll2-oneshot .ll2-price-cell select:focus,
+.ll2-oneshot .ll2-price-cell select:focus-visible,
+.ll2-oneshot .ll2-chip:focus,
+.ll2-oneshot .ll2-chip:focus-visible {
+    outline: none;
+}
+
+.ll2-oneshot .ll2-chip {
+    border: 0;
+    background: var(--ll2-a-0_05, rgba(10, 10, 10, 0.05));
 }
 
 .ll2-price-cell > span,
@@ -352,7 +368,9 @@
     min-width: 30px;
     height: 30px;
     padding: 0;
+    border: 0;
     border-radius: 999px;
+    background: var(--ll2-a-0_05, rgba(10, 10, 10, 0.05));
     color: var(--ll2-wb-accent, #6720ff);
 }
 

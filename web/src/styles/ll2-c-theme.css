@@ -136,8 +136,12 @@ html.dark .ll2-oneshot {
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 html.dark .ll2-oneshot .ll2-price-cell {
-    border-color: rgba(242, 242, 245, 0.14);
-    background: rgba(242, 242, 245, 0.05);
+    border: 0;
+    background: rgba(242, 242, 245, 0.07);
+}
+
+html.dark .ll2-oneshot .ll2-price-cell:hover {
+    background: rgba(242, 242, 245, 0.11);
 }
 html.dark .ll2-oneshot .ll2-oneshot-tabs { background: rgba(242, 242, 245, 0.06); }
 html.dark .ll2-oneshot .ll2-oneshot-tabs button.is-active {
@@ -146,8 +150,8 @@ html.dark .ll2-oneshot .ll2-oneshot-tabs button.is-active {
     box-shadow: none;
 }
 html.dark .ll2-oneshot .ll2-chip {
-    border-color: rgba(242, 242, 245, 0.14);
-    background: rgba(242, 242, 245, 0.04);
+    border: 0;
+    background: rgba(242, 242, 245, 0.07);
 }
 html.dark .ll2-key-panel { box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5); }
 html.dark .ll2-canvas-back { box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55); }
