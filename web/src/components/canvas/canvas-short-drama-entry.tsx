@@ -5,6 +5,7 @@ import { AlignLeft, ArrowUp, Check, ChevronUp, Clapperboard, FolderKanban, Image
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
+import { LL2AssetLibrary } from "@/components/ll2/ll2-asset-library";
 import { recommendedCanvasStylePresets, type CanvasStylePreset } from "@/lib/canvas/canvas-style-system";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -123,6 +124,10 @@ export function CanvasShortDramaEmptyState({
     const theme = canvasThemes[useActiveTheme()];
     const [prompt, setPrompt] = useState("");
     const stageRef = useRef<HTMLDivElement>(null);
+    const promptRef = useRef<HTMLTextAreaElement | null>(null);
+    const [assetMenuOpen, setAssetMenuOpen] = useState(false);
+    const [assetMenuAnchor, setAssetMenuAnchor] = useState<{ left: number; top: number } | null>(null);
+    const [mentionCaret, setMentionCaret] = useState<number | null>(null);
     const entryStyle = {
         "--canvas-entry-text": theme.node.text,
         "--canvas-entry-muted": theme.node.muted,
@@ -136,6 +141,32 @@ export function CanvasShortDramaEmptyState({
         if (!value) return;
         onSubmitPrompt(value);
         setPrompt("");
+    };
+    /** 在和一句话想法一样的输入框里打 @：弹出本机素材库，选完插入 @[名称]。 */
+    const handlePromptChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const next = event.target.value;
+        const caret = event.target.selectionStart ?? next.length;
+        if (caret > 0 && next[caret - 1] === "@") {
+            setPrompt(next.slice(0, caret - 1) + next.slice(caret));
+            setMentionCaret(caret - 1);
+            const rect = promptRef.current?.getBoundingClientRect();
+            setAssetMenuAnchor(rect ? { left: rect.left, top: rect.bottom + 8 } : null);
+            setAssetMenuOpen(true);
+            return;
+        }
+        setPrompt(next);
+    };
+    const insertAssetMention = (title: string) => {
+        const token = `@[${title}]`;
+        setPrompt((previous) => {
+            const pos = Math.min(mentionCaret ?? previous.length, previous.length);
+            const before = previous.slice(0, pos);
+            const spacer = before && !/\s$/.test(before) ? " " : "";
+            return `${before}${spacer}${token} ${previous.slice(pos)}`;
+        });
+        setAssetMenuOpen(false);
+        setMentionCaret(null);
+        window.setTimeout(() => promptRef.current?.focus(), 0);
     };
     useCanvasEntryClickRipple(stageRef);
     return (
@@ -154,11 +185,12 @@ export function CanvasShortDramaEmptyState({
                     }}
                 >
                     <textarea
+                        ref={promptRef}
                         value={prompt}
                         rows={2}
-                        placeholder="描述你想拍的故事…"
+                        placeholder="描述你想拍的故事…打 @ 可以引用素材"
                         aria-label="描述你想拍的故事"
-                        onChange={(event) => setPrompt(event.target.value)}
+                        onChange={handlePromptChange}
                         onKeyDown={(event) => {
                             if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                                 event.preventDefault();
@@ -218,6 +250,12 @@ export function CanvasShortDramaEmptyState({
                 </div>
                 <CanvasHowToGuide />
             </div>
+            <LL2AssetLibrary
+                open={assetMenuOpen}
+                anchor={assetMenuAnchor}
+                onClose={() => { setAssetMenuOpen(false); setMentionCaret(null); }}
+                onQuote={insertAssetMention}
+            />
         </div>
     );
 }

@@ -224,6 +224,14 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("画布入口输入框打 @ 会弹出本机素材库", async () => {
+    const entry = await read("../src/components/canvas/canvas-short-drama-entry.tsx");
+    expect(entry).toContain("LL2AssetLibrary");
+    expect(entry).toContain("handlePromptChange");
+    expect(entry).toContain("insertAssetMention");
+    expect(entry).toContain("打 @ 可以引用素材");
+});
+
 test("wan3 连两张图会明确提示换模型，不静默丢尾帧", async () => {
     const video = await read("../src/services/ll2/ll2-video.ts");
     expect(video).toContain("万相 3.0 只支持 1 张首帧图");
