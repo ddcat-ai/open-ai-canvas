@@ -224,6 +224,22 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("画布 LL2 模型的能力表支持参考图/参考视频，不再误判不可用", async () => {
+    const caps = await read("../src/lib/model-capabilities.ts");
+    expect(caps).toContain('channel?.id === "ll2-primary"');
+    expect(caps).toContain("ll2VideoCapabilityConfig");
+    expect(caps).toContain("reference_to_video");
+    expect(caps).toContain("const maxVideos = isH3 ? 3");
+    expect(caps).toContain("isVidu ? 2");
+});
+
+test("画布生成配置会带上 LL2 提示词优化/超分开关，并不归一化 LL2 清晰度", async () => {
+    const gen = await read("../src/lib/canvas/canvas-project-generation.ts");
+    expect(gen).toContain("ll2PromptOptimizer: node?.metadata?.ll2PromptOptimizer");
+    expect(gen).toContain("ll2Upscale: node?.metadata?.ll2UpscaleTarget");
+    expect(gen).toContain("workflowProvider === \"model\" && !isLL2Model");
+});
+
 test("LL2 的 4K 档不会被上游归一化打回 720p；改分辨率会清掉不合法超分", async () => {
     const cfg = await read("../src/components/canvas/canvas-node-prompt-config.ts");
     expect(cfg).toContain("isLL2Model");

@@ -7,6 +7,7 @@ import { kemeiSeedreamPresets } from "./kemei-image-presets";
 import { seedream55ImagePresets } from "./seedream-image-presets";
 import { type WorkflowVideoFieldLike, workflowImageCapabilityConfig, workflowVideoCapabilityConfig } from "./model-capabilities-workflow";
 import { resolveWorkflowVideoScreenSpec } from "./video-screen-specs";
+import { LL2_CONNECTED_VIDEO_MODELS, LL2_VIDEO_DURATION, ll2TiersFor } from "@/lib/ll2-models";
 
 export {
     workflowFieldChoiceValues,
@@ -452,6 +453,50 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
     return image;
 }
 
+function ll2VideoCapabilityConfig(model: string): VideoCapabilityConfig {
+    const base = model as Parameters<typeof ll2TiersFor>[0];
+    const tiers = ll2TiersFor(base);
+    const range = LL2_VIDEO_DURATION[base];
+    const isH3 = model.includes("H3");
+    const isWan = model.startsWith("wan3.");
+    const isSeedance = model.startsWith("doubao-seedance");
+    const isVidu = model.startsWith("viduq3");
+    const isVega = model.startsWith("Super Vega");
+    const maxVideos = isH3 ? 3 : isSeedance ? (model.includes("2-5") ? 10 : 3) : isVega ? (model.includes("1.5") ? 10 : 3) : 0;
+    const maxAudios = maxVideos;
+    const maxImages = isH3 ? 9 : isWan ? 1 : isVidu ? 2 : isVega ? (model.includes("1.5") ? 30 : 9) : 9;
+    const ratios = isH3
+        ? ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"]
+        : isWan
+          ? ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4"]
+          : isSeedance
+            ? ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"]
+            : ["16:9", "9:16", "1:1", "4:3", "3:4"];
+    return {
+        references: {
+            promptMaxChars: DEFAULT_VIDEO_PROMPT_MAX_CHARS,
+            minImages: 0,
+            maxImages,
+            maxImageBytes: 30 * 1024 * 1024,
+            maxVideos,
+            maxVideoBytes: 50 * 1024 * 1024,
+            maxVideoDurationSeconds: 15,
+            maxAudios,
+            maxAudioBytes: 15 * 1024 * 1024,
+            maxAudioDurationSeconds: 15,
+        },
+        duration: { selection: "range", min: range?.min ?? 4, max: range?.max ?? 15, step: 1, default: range?.default ?? 5 },
+        ratios,
+        defaultRatio: "16:9",
+        resolutions: tiers.length ? tiers.map((tier) => String(tier.label).toLowerCase()) : ["768p"],
+        defaultResolution: tiers.length ? String(tiers[0].label).toLowerCase() : "768p",
+        generateAudio: { supported: false, default: false },
+        watermark: { supported: false, default: false },
+        operations: maxVideos > 0 ? ["text_to_video", "image_to_video", "reference_to_video"] : ["text_to_video", "image_to_video"],
+        defaultOperation: "text_to_video",
+    };
+}
+
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const text: TextCapabilityConfig = {
         streaming: true,
@@ -584,6 +629,11 @@ export function modelCapabilityConfigFor(config: { channels: Array<{ id: string;
     const channel = config.channels.find((item) => item.id === channelId) || config.channels.find((item) => item.models.includes(modelName));
     const cost = channel?.modelCosts?.find((item) => item.model === modelName);
     const fallback = defaultModelCapabilityConfig(cost?.protocol, modelName);
+    // LL2（BYOK）渠道：模型能力表由 LL2 官方文档决定，不能用影策默认表（默认表 maxVideos=0，
+    // 会让「视频生成」在连了参考图/参考视频时被误判为不可用）。
+    if (channel?.id === "ll2-primary" && (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(modelName)) {
+        return { ...fallback, video: ll2VideoCapabilityConfig(modelName) };
+    }
     if (!cost?.capabilityConfig) return fallback;
     const capabilityConfig = normalizeModelCapabilityConfig(cost.capabilityConfig);
     const text = capabilityConfig.text ? { ...fallback.text!, ...capabilityConfig.text, references: { ...fallback.text!.references, ...capabilityConfig.text.references } } : fallback.text;

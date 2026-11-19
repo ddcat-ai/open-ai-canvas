@@ -201,7 +201,8 @@ export function CanvasNodePanelOverlay({
 
 function resolveNodePanelWidth(node: CanvasNodeData, viewport: ViewportTransform, requestedWidth?: number) {
     if (requestedWidth) return requestedWidth;
-    return clamp(Math.round(node.width * viewport.k * 1.5), 680, 920);
+    // 面板不需要跟节点一样宽：节点 768~1024 宽时，浮层控制在 500~620 之间不挡画布。
+    return clamp(Math.round(node.width * viewport.k * 1.25), 500, 620);
 }
 
 type ConnectionCreateNodeType = CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Script | CanvasNodeType.BatchTable | CanvasNodeType.Video | CanvasNodeType.Audio | CanvasNodeType.Drawing | CanvasNodeType.Config | CanvasNodeType.MediaConversion;

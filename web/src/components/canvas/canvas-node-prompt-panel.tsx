@@ -87,13 +87,13 @@ export type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 export const PROMPT_REFERENCE_SHELF_HEIGHT = 58;
 // Reserve a useful writing area before content grows; references use their own shelf.
-export const PROMPT_EDITOR_MIN_HEIGHT = 160;
+export const PROMPT_EDITOR_MIN_HEIGHT = 112;
 export const PROMPT_EDITOR_EXPANDED_MIN_HEIGHT = 280;
 export const PROMPT_EDITOR_LINE_HEIGHT = 26;
 export const PROMPT_EDITOR_EXPANDED_LINE_HEIGHT = 26;
 export const PROMPT_EDITOR_VERTICAL_PADDING = 16;
 export const PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING = 16;
-export const PROMPT_EDITOR_MAX_LINES = 10;
+export const PROMPT_EDITOR_MAX_LINES = 7;
 export const PROMPT_EDITOR_EXPANDED_MAX_LINES = 18;
 const PROMPT_EDITOR_MODAL_WIDTH = "min(1200px, 92vw)";
 const PROMPT_EDITOR_MODAL_DEFAULT_WIDTH = 1200;

@@ -7,6 +7,7 @@ import { resolveMediaUrl, resolveVideoMediaUrl } from "@/services/file-storage";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import { LL2_CONNECTED_VIDEO_MODELS } from "@/lib/ll2-models";
 import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
 import { currentGenerationBatchLimit } from "@/lib/generation-batch-limit";
@@ -427,6 +428,9 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
     const storedModel = resolveCanvasGenerationModel(config, selectedModel || node?.metadata?.model, mode);
     if (selection && selectedModel && !storedModel && !displayOnly) throw new Error("节点选择的模型不支持当前生成模式，请重新选择");
     const preferredModel = storedModel || resolveCanvasGenerationModel(config, defaultModel, mode) || fallbackModel;
+    // 画布里的 LL2 模型：清晰度用 LL2 自己的档位，附加开关从节点/全局带进生成配置。
+    const ll2BaseModel = String(preferredModel || "").split("::").pop() || "";
+    const isLL2Model = (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(ll2BaseModel);
     // 图生图未明确选择尺寸时按参考图比例生成；随后的路由与默认值都把它当作节点选择。
     if (mode === "image" && workflowProvider === "model" && node) node = withReferenceImageSize(config, node, preferredModel, referenceImage);
     // 先合并节点上的实时选择，再做兼容性匹配。否则路由只看到全局默认值，节点改过的时长、分辨率或布尔能力无法参与分流。
@@ -454,9 +458,11 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
                 ? normalizeVideoDuration(node?.metadata?.seconds ?? workflowParameterValue("videoSeconds") ?? config.videoSeconds ?? defaultConfig.videoSeconds)
                 : String(node?.metadata?.seconds ?? workflowParameterValue("videoSeconds") ?? config.videoSeconds ?? defaultConfig.videoSeconds),
         vquality:
-            workflowProvider === "model"
+            workflowProvider === "model" && !isLL2Model
                 ? normalizeVideoResolution(node?.metadata?.vquality ?? workflowParameterValue("vquality") ?? config.vquality ?? defaultConfig.vquality)
                 : String(node?.metadata?.vquality ?? workflowParameterValue("vquality") ?? config.vquality ?? defaultConfig.vquality),
+        ll2PromptOptimizer: node?.metadata?.ll2PromptOptimizer ?? config.ll2PromptOptimizer ?? "",
+        ll2Upscale: node?.metadata?.ll2UpscaleTarget ?? config.ll2Upscale ?? "",
         videoGenerateAudio: node?.metadata?.generateAudio ?? config.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: node?.metadata?.watermark ?? config.videoWatermark ?? defaultConfig.videoWatermark,
         videoArkPrivateAssetUpload: node?.metadata?.arkPrivateAssetUpload ?? config.videoArkPrivateAssetUpload ?? defaultConfig.videoArkPrivateAssetUpload,
