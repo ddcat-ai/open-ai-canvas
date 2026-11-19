@@ -47,6 +47,70 @@
     flex-direction: row;
 }
 
+/* 已连接：一块信息卡 + 两个等宽次按钮。不要再出现「整宽大紫按钮 + 小灰按钮」那种失衡排布。 */
+.ll2-key-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--ll2-ap-0_28, rgba(103, 32, 255, 0.28));
+    border-radius: 12px;
+    background: var(--ll2-ap-0_08, rgba(103, 32, 255, 0.08));
+}
+
+.ll2-key-status-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--ll2-ap-0_18, rgba(103, 32, 255, 0.18));
+    color: var(--ll2-t-6720ff-fg, #6720ff);
+}
+
+.ll2-key-status-text {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ll2-key-status-text strong {
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ll2-key-status-text small {
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    font-size: 12px;
+}
+
+.ll2-key-lead.is-tight {
+    margin: 12px 0 0;
+}
+
+.ll2-key-actions.is-pair {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.ll2-key-actions.is-pair :is(.ll2-key-ghost, .ll2-key-primary) {
+    flex: 1 1 0;
+    height: 36px;
+}
+
+.ll2-key-ghost.is-danger {
+    border-color: var(--ll2-ar-0_35, rgba(229, 68, 42, 0.35));
+    color: var(--ll2-t-c53a22-fg, #c53a22);
+}
+
+.ll2-key-ghost.is-danger:hover {
+    background: var(--ll2-ar-0_06, rgba(229, 68, 42, 0.06));
+}
+
 .ll2-key-dialog-close {
     display: grid;
     place-items: center;

@@ -65,18 +65,22 @@ function LL2KeyPanel() {
 
             {showStatus ? (
                 <>
-                    <p className="ll2-key-lead">Key 只保存在这台电脑。</p>
-                    <div className="ll2-key-connected">
-                        <Check className="size-4" aria-hidden />
-                        <span>已连接 · {ll2MaskedKey(apiKey)}</span>
+                    <div className="ll2-key-status">
+                        <span className="ll2-key-status-icon">
+                            <Check className="size-4" aria-hidden />
+                        </span>
+                        <div className="ll2-key-status-text">
+                            <strong>{ll2MaskedKey(apiKey)}</strong>
+                            <small>Key 只保存在这台电脑。</small>
+                        </div>
                     </div>
-                    <div className="ll2-key-actions">
-                        <button type="button" className="ll2-key-primary" onClick={startReplacing}>
+                    <div className="ll2-key-actions is-pair">
+                        <button type="button" className="ll2-key-ghost" onClick={startReplacing}>
                             更换 Key
                         </button>
                         <button
                             type="button"
-                            className="ll2-key-ghost"
+                            className="ll2-key-ghost is-danger"
                             onClick={() => {
                                 disconnect();
                                 startReplacing();
@@ -113,7 +117,7 @@ function LL2KeyPanel() {
                         </button>
                     </div>
                     {error ? <p className="ll2-key-error" role="alert">{error}</p> : null}
-                    <div className="ll2-key-actions">
+                    <div className="ll2-key-actions is-pair">
                         <button type="button" className="ll2-key-primary" onClick={save}>
                             {apiKey ? "保存新 Key" : "保存并使用"}
                         </button>
@@ -127,16 +131,11 @@ function LL2KeyPanel() {
             )}
 
             <div className="ll2-key-panel-foot">
-                {showStatus ? (
-                    <span />
-                ) : (
-                    <button type="button" className="ll2-key-console" onClick={openConsoleInNewTab}>
-                        去 LL2 控制台复制 Key <ExternalLink className="size-3" aria-hidden />
-                    </button>
-                )}
+                <button type="button" className="ll2-key-console" onClick={openConsoleInNewTab}>
+                    去 LL2 控制台 <ExternalLink className="size-3" aria-hidden />
+                </button>
                 <div className="ll2-key-foot-right">
                     <Link to="/models" onClick={close}>价格</Link>
-                    <button type="button" className="ll2-key-later" onClick={close}>稍后</button>
                 </div>
             </div>
         </div>
