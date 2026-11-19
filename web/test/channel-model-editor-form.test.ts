@@ -361,7 +361,8 @@ test("admin lazy routes share a persistent boundary instead of replaying page lo
     const shell = await Bun.file(new URL("../src/pages/admin/components/admin-shell.tsx", import.meta.url)).text();
     const pages = await Bun.file(new URL("../src/pages/admin/admin-route-pages.tsx", import.meta.url)).text();
     const css = await Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text();
-    const admin = router.slice(router.indexOf('path: "/admin"'), router.indexOf('{ path: "*"'));
+    const adminStart = router.indexOf('path: "/admin"');
+    const admin = router.slice(adminStart, router.indexOf('{ path: "*"', adminStart));
     expect(admin.match(/deferred\(/g)).toHaveLength(1);
     expect(shell).toMatch(/<Suspense[^]*?<Outlet \/>\s*<\/Suspense>/);
     expect(pages).not.toContain("<Suspense");

@@ -141,7 +141,7 @@ describe("workspace wallet entry", () => {
 
         expect(router).toContain('path: "/wallet"');
         expect(router).toContain("element: <RequireAuth>{null}</RequireAuth>");
-        expect(router).not.toContain("WalletPage");
+        expect(router).not.toMatch(/\bWalletPage\b/);
         expect(router).not.toContain("loadWalletPage");
         expect(modules).not.toContain("pages/wallet");
         expect(host).toContain('pathname !== "/wallet"');

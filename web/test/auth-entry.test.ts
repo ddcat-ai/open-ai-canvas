@@ -61,7 +61,7 @@ describe("登录入口打开方式", () => {
         const router = source("router.tsx");
         expect(router).toContain("<Outlet />");
         expect(router).toContain("<AuthDialogHost />");
-        expect(router).toContain("createBrowserRouter([{ element: <RootLayout />, children: routes }])");
+        expect(router).toMatch(/createBrowserRouter\(\[\s*\{\s*element: <RootLayout \/>,\s*children: routes\b/);
     });
 
     test("后台登录与注册页提供打开方式选择并保留原有分区", () => {
