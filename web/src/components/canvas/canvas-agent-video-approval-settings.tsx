@@ -50,7 +50,9 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
         });
     };
 
-    const changeOption = (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", next: string) => {
+    const changeOption = (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload" | "ll2PromptOptimizer" | "ll2Upscale", next: string) => {
+        // 审批设置只关心通用视频参数；LL2 的两个开关只作用于手动画布生成。
+        if (key === "ll2PromptOptimizer" || key === "ll2Upscale") return;
         if (disabled) return;
         const nextSettings: AgentMediaSettings = {
             ...settings,

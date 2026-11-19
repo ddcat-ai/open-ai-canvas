@@ -13,6 +13,7 @@ import { isDoubaoAudioConfig } from "@/lib/audio-generation";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
+import { isLL2CanvasVideoModel, runLL2CanvasVideo } from "./canvas-ll2-video-execution";
 
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
@@ -113,6 +114,49 @@ export async function executeVideoGeneration({
     }
 
     startGenerationRequest(videoId, nodeId, nodeId, controller);
+    // LL2 直连：和首页「一句话想法」走同一条客户端链路（含提示词优化 / 超分），不走后端任务。
+    if (isLL2CanvasVideoModel(generationConfig)) {
+        try {
+            const done = await runLL2CanvasVideo({
+                config: generationConfig,
+                prompt: effectivePrompt,
+                referenceImages: generationContext.referenceImages,
+                referenceVideos: generationContext.referenceVideos,
+                signal: controller.signal,
+            });
+            setNodes((current) =>
+                current.map((node) =>
+                    node.id === videoId
+                        ? {
+                              ...node,
+                              metadata: {
+                                  ...node.metadata,
+                                  status: NODE_STATUS_SUCCESS,
+                                  content: done.content,
+                                  storageKey: done.storageKey,
+                                  durationMs: done.durationMs,
+                                  naturalWidth: done.width,
+                                  naturalHeight: done.height,
+                                  bytes: done.bytes,
+                                  mimeType: done.mimeType,
+                                  seconds: String(Math.max(1, Math.round(done.seconds))),
+                                  vquality: done.resolution,
+                                  requiresAuth: done.requiresAuth,
+                                  errorDetails: undefined,
+                              },
+                          }
+                        : node,
+                ),
+            );
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: reason } } : node)));
+            throw error;
+        } finally {
+            finishGenerationRequest(videoId, controller);
+        }
+        return;
+    }
     try {
         await runCanvasGenerationTaskToConsumer(
             {

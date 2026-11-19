@@ -11,6 +11,7 @@ import { formatVideoResolutionLabel, isVideoResolutionMatch, normalizeVideoDurat
 import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { LL2_CONNECTED_VIDEO_MODELS, LL2_VIDEO_DURATION, ll2TiersFor, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
+import { ll2UpscaleTargetLabel, ll2UpscaleTargetsFor } from "@/lib/ll2-upscale";
 
 const sizeOptions = [
     { value: "1280x720", label: "横屏", width: 1280, height: 720 },
@@ -23,7 +24,7 @@ const sizeOptions = [
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", value: string) => void;
+    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload" | "ll2PromptOptimizer" | "ll2Upscale", value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
     className?: string;
@@ -511,6 +512,40 @@ function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true
                     <span>{range.min}s 起（LL2 最少 4 秒）</span>
                     <span>{range.max}s</span>
                 </div>
+            </div>
+            <div className="space-y-2">
+                <div className="text-xs" style={{ color: theme.node.muted }}>附加</div>
+                {model === "MiniMax-H3" ? (
+                    <label className="flex items-center gap-2 rounded-md px-2 py-2 text-xs" style={{ background: theme.toolbar.itemHover }}>
+                        <input
+                            type="checkbox"
+                            checked={config.ll2PromptOptimizer === "1"}
+                            onChange={(event) => onConfigChange("ll2PromptOptimizer", event.target.checked ? "1" : "")}
+                        />
+                        <span>提示词优化（H3 先按官方格式整理）</span>
+                    </label>
+                ) : null}
+                {ll2UpscaleTargetsFor(resolution).length ? (
+                    <div className="space-y-1 rounded-md px-2 py-2" style={{ background: theme.toolbar.itemHover }}>
+                        <label className="flex items-center gap-2 text-xs">
+                            <input
+                                type="checkbox"
+                                checked={Boolean(config.ll2Upscale)}
+                                onChange={(event) => onConfigChange("ll2Upscale", event.target.checked ? (ll2UpscaleTargetsFor(resolution)[0]?.id || "") : "")}
+                            />
+                            <span>生成后顺便超分</span>
+                        </label>
+                        {config.ll2Upscale ? (
+                            <div className="grid grid-cols-3 gap-2 pt-1">
+                                {ll2UpscaleTargetsFor(resolution).map((item) => (
+                                    <LL2Pill key={item.id} selected={config.ll2Upscale === item.id} theme={theme} onClick={() => onConfigChange("ll2Upscale", item.id)}>
+                                        {ll2UpscaleTargetLabel(item.id)}
+                                    </LL2Pill>
+                                ))}
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
             </div>
         </div>
     );

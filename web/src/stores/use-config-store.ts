@@ -167,6 +167,10 @@ export type AiConfig = {
     videoGenerateAudio: string;
     videoWatermark: string;
     videoArkPrivateAssetUpload: string;
+    /** 画布 LL2 直连：H3 提示词优化（"1" 开 / "" 关）。 */
+    ll2PromptOptimizer?: string;
+    /** 画布 LL2 直连：生成后超分档位（"1080p" | "2k" | "4k" | ""）。 */
+    ll2Upscale?: string;
     systemPrompt: string;
     models: string[];
     imageModels: string[];
@@ -223,6 +227,8 @@ export const defaultConfig: AiConfig = {
     videoGenerateAudio: "true",
     videoWatermark: "false",
     videoArkPrivateAssetUpload: "true",
+    ll2PromptOptimizer: "",
+    ll2Upscale: "",
     systemPrompt: "",
     models: [],
     imageModels: [],
