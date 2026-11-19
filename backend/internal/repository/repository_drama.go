@@ -1340,7 +1340,9 @@ func (r *Repository) RequestDramaSegmentVideos(projectID, episodeID string, inde
 				return err
 			}
 		}
-		return tx.Model(&model.DramaEpisode{}).Where("id = ?", episodeID).Updates(map[string]any{"approved": true, "media_released": true}).Error
+		// 显式生成剧情段只放行本集素材，不顺带确认整集；确认整集只走 ApproveDramaEpisode，
+		// 否则点一段会让调度把其余未生成的段一起排队。
+		return tx.Model(&model.DramaEpisode{}).Where("id = ?", episodeID).Updates(map[string]any{"media_released": true}).Error
 	})
 }
 
