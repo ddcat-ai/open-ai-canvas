@@ -26,6 +26,7 @@ import {
     UserRound,
     Video,
     ImageUpscale,
+    Sparkles,
 } from "lucide-react";
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
@@ -219,6 +220,19 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeEnhanceVideo) && ctx.nodeMetadata?.status !== "loading",
         disabled: (ctx) => !ctx.nodeMetadata?.storageKey && !ctx.nodeMetadata?.content,
         run: (ctx) => ctx.handlers.onNodeEnhanceVideo?.(ctx.node!),
+    },
+    {
+        id: "llmUpscale",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "超分：用 LL2 auto-hd 生成 1080P/2K/4K 新视频节点",
+        displayLabel: "超分",
+        icon: <Sparkles className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 46,
+        nodeToolbar: { group: "process", order: 31, section: "画质", description: "LL2 超分，另存为新视频" },
+        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeLlmUpscale) && ctx.nodeMetadata?.status !== "loading",
+        run: (ctx) => ctx.handlers.onNodeLlmUpscale?.(ctx.node!),
     },
     {
         id: "saveAsset",

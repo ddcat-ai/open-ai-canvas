@@ -191,6 +191,23 @@ test("生成后超分：默认不勾、只能往上超、1080P 就是 1K", async
     expect(hd).toContain("Bearer");
 });
 
+test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", async () => {
+    const toolsRegistry = await read("../src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx");
+    expect(toolsRegistry).toContain('id: "llmUpscale"');
+    expect(toolsRegistry).toContain("onNodeLlmUpscale");
+    const hook = await read("../src/pages/canvas/use-ll2-canvas-upscale.ts");
+    expect(hook).toContain("ll2RunHd");
+    expect(hook).toContain("ll2FetchHdBlob");
+    expect(hook).toContain("uploadMediaFile");
+    expect(hook).toContain("ll2Upscale");
+    const dialog = await read("../src/components/ll2/ll2-canvas-upscale-dialog.tsx");
+    expect(dialog).toContain("超分这条视频");
+    expect(dialog).toContain("只存在本机");
+    const project = await read("../src/pages/canvas/project.tsx");
+    expect(project).toContain("<LL2CanvasUpscaleDialog");
+    expect(project).toContain("onLlmUpscale={openLl2Upscale}");
+});
+
 test("H3 提示词优化：勾选才传 prompt_optimizer", async () => {
     const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
     expect(adapters).toContain("prompt_optimizer");

@@ -58,6 +58,8 @@ import { CanvasMediaVersionModal } from "@/components/canvas/canvas-media-versio
 import { CanvasVideoFrameDialog } from "@/components/canvas/canvas-video-frame-dialog";
 import { CanvasVideoSegmentDialog } from "@/components/canvas/canvas-video-segment-dialog";
 import { CanvasVideoEnhanceDialog } from "@/components/canvas/canvas-video-enhance-dialog";
+import { LL2CanvasUpscaleDialog } from "@/components/ll2/ll2-canvas-upscale-dialog";
+import { useLL2CanvasUpscale } from "@/pages/canvas/use-ll2-canvas-upscale";
 import { listVideoEnhanceModels } from "@/lib/canvas/canvas-video-enhance";
 import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dialog";
 import { CanvasNodeLightingPanel } from "@/components/canvas/canvas-node-lighting-dialog";
@@ -953,6 +955,13 @@ function CanvasViewportPage() {
     });
 
     useCanvasImageLayerGroups({ projectId, enabled: projectLoaded, nodes, nodesRef, setNodes, runningNodeId, activeLayerGroupIds });
+
+    const {
+        upscaleNodeId: ll2UpscaleNodeId,
+        openUpscale: openLl2Upscale,
+        closeUpscale: closeLl2Upscale,
+        confirmUpscale: confirmLl2Upscale,
+    } = useLL2CanvasUpscale({ projectId, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId });
     const extractLayerMaterials = useCanvasImageLayerMaterials({ projectId, domainProjectId: currentProject?.projectId, enabled: projectLoaded, nodes, nodesRef, setNodes, setConnections });
 
     const handleNodesDeleted = useCallback(
@@ -1545,6 +1554,7 @@ function CanvasViewportPage() {
     const frameNode = frameDialogNodeId ? nodeById.get(frameDialogNodeId) || null : null;
     const segmentNode = segmentDialogNodeId ? nodeById.get(segmentDialogNodeId) || null : null;
     const enhanceNode = enhanceDialogNodeId ? nodeById.get(enhanceDialogNodeId) || null : null;
+    const ll2UpscaleNode = ll2UpscaleNodeId ? nodeById.get(ll2UpscaleNodeId) || null : null;
     const hasVideoEnhanceModels = useMemo(() => listVideoEnhanceModels(effectiveConfig).length > 0, [effectiveConfig]);
     const textEditorNode = textEditorNodeId ? nodeById.get(textEditorNodeId) || null : null;
     const characterReferenceNode = characterReferenceNodeId ? nodeById.get(characterReferenceNodeId) || null : null;
@@ -3365,6 +3375,7 @@ function CanvasViewportPage() {
                                 onExtractAudioFromVideo={(node) => void extractAudioFromVideo(node)}
                                 onTrimVideoSegments={openVideoSegmentExtractor}
                                 onEnhanceVideo={hasVideoEnhanceModels ? openVideoEnhance : undefined}
+                                onLlmUpscale={openLl2Upscale}
                                 onVersions={(node) => setMediaVersionNodeId(node.id)}
                                 onAdoptToDrama={drama.active ? drama.openAdopt : undefined}
                                 onRefreshFromDrama={toolbarNode && drama.staleNodeIds.has(toolbarNode.id) ? drama.refreshNode : undefined}
@@ -3492,6 +3503,15 @@ function CanvasViewportPage() {
 
                             {enhanceNode ? (
                                 <CanvasVideoEnhanceDialog node={enhanceNode} open={Boolean(enhanceNode)} config={effectiveConfig} onClose={() => setEnhanceDialogNodeId(null)} onConfirm={(params) => void enhanceVideoNode(enhanceNode, params)} />
+                            ) : null}
+
+                            {ll2UpscaleNode ? (
+                                <LL2CanvasUpscaleDialog
+                                    node={ll2UpscaleNode}
+                                    open={Boolean(ll2UpscaleNode)}
+                                    onClose={closeLl2Upscale}
+                                    onConfirm={(target) => void confirmLl2Upscale(ll2UpscaleNode, target)}
+                                />
                             ) : null}
 
                             <CanvasCharacterReferenceModal
