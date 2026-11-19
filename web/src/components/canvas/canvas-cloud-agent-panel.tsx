@@ -7,6 +7,7 @@ import { sameAgentRequestTarget, type AgentRequestTarget } from "@/lib/agent-pag
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { EyeOff, FileText, ImagePlus, MoveDiagonal2, X } from "lucide-react";
 import { canvasNodeMentionToken } from "@/lib/canvas/canvas-resource-references";
+import { observeCanvasGestureActive } from "@/lib/canvas/canvas-live-viewport";
 import { CANVAS_IMAGE_ASSET_DND_TYPE } from "@/lib/canvas/canvas-asset-dnd";
 import {
     AGENT_ATTACHMENT_MAX,
@@ -134,6 +135,7 @@ import { useAgentReasoningPreference } from "./use-agent-reasoning-preference";
 import "./canvas-cloud-agent.css";
 import { appendAgentError, appendUniqueMessage, applyAgentEvent, positiveNumber, type ApprovalState } from "./canvas-cloud-agent-events";
 import { AgentContextRing, AgentConversation, AgentHeader, AgentHistory, AgentLauncher, ComposerControls } from "./canvas-cloud-agent-panel-parts";
+import { ModelPicker } from "@/components/model-picker";
 import { useGlobalAgentStore, type AgentInsertedNode } from "@/stores/use-global-agent-store";
 
 type AgentPanelView = "chat" | "history" | "settings";
@@ -195,6 +197,11 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
     const onFocusNode = useGlobalAgentStore((state) => state.canvas?.onFocusNode);
     const insertAgentMarkdown = useGlobalAgentStore((state) => state.canvas?.insertAgentMarkdown);
     const open = useGlobalAgentStore((state) => state.open);
+    const panelElementRef = useRef<HTMLElement>(null);
+    useEffect(() => {
+        const panel = panelElementRef.current;
+        if (open && panel) return observeCanvasGestureActive(panel.ownerDocument, (active) => panel.toggleAttribute("data-canvas-busy", active));
+    }, [open]);
     const onOpen = useGlobalAgentStore((state) => state.openAgent);
     const onCollapse = useGlobalAgentStore((state) => state.closeAgent);
     const setDocked = useGlobalAgentStore((state) => state.setDocked);
@@ -2451,7 +2458,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
         return parts.join(" · ");
     };
 
-    const showPendingRetry = Boolean(pendingRetryText) && !retryingPending;
+    const showPendingRetry = !busy && Boolean(pendingRetryText) && !retryingPending;
     const outboxTray =
         outbox.items.length || showPendingRetry ? (
             <AgentOutboxTray
@@ -2460,7 +2467,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 subtitle={outboxSubtitle}
                 primaryAction={outboxPrimaryAction}
                 itemMeta={outboxItemMeta}
-                pendingRetry={showPendingRetry ? { text: pendingRetryText, disabled: busy || !historyHydrated || !pendingHydrated, onRetry: () => void submit(pendingRetryText) } : null}
+                pendingRetry={showPendingRetry ? { text: pendingRetryText, disabled: !historyHydrated || !pendingHydrated, onRetry: () => void submit(pendingRetryText) } : null}
                 onPrimary={runOutboxPrimary}
                 onEdit={startOutboxEdit}
                 onRemove={removeOutboxItem}
@@ -2476,6 +2483,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
             <AnimatePresence>
                 {open ? (
                     <motion.aside
+                        ref={panelElementRef}
                         initial={reducedMotion ? { opacity: 0 } : dock.active ? { opacity: 0, x: 24 } : { opacity: 0, y: 20, scale: 0.975 }}
                         animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
                         exit={reducedMotion ? { opacity: 0 } : dock.active ? { opacity: 0, x: 24 } : { opacity: 0, y: 12, scale: 0.985 }}
@@ -2523,7 +2531,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                     aria-label="调整 Agent 面板大小"
                                     title="拖动调整宽高，也可用方向键调整"
                                     data-agent-resize="northwest"
-                                    className="agent-panel-resize-corner absolute left-2 top-2 z-10 hidden size-5 cursor-nw-resize touch-none place-items-center rounded-md opacity-60 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 sm:grid"
+                                    className="agent-panel-resize-corner absolute left-1 top-2 z-10 hidden size-5 cursor-nw-resize touch-none place-items-center rounded-md opacity-60 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 sm:grid"
                                     onKeyDown={panelLayout.onResizeKeyDown}
                                     style={{ color: theme.node.muted }}
                                 >
@@ -2583,7 +2591,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                     <AgentHistory
                                         conversations={conversations}
                                         activeConversationId={activeConversationId}
-                                        theme={theme}
+                                        disabledReason={canSwitchConversation() ? undefined : running || busy ? "本轮结束后可切换对话" : cloudOpeningId ? "正在打开对话…" : "当前对话尚未就绪，暂时无法切换"}
                                         onBack={() => setView("chat")}
                                         onNew={newConversation}
                                         onOpen={(conversation) => void openConversation(conversation)}
@@ -2596,7 +2604,14 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                     />
                                 </motion.div>
                             ) : (
-                                <motion.div key="chat" className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: reducedMotion ? 0 : 0.18 }}>
+                                <motion.div
+                                    key="chat"
+                                    className={`flex min-h-0 flex-1 flex-col${pendingQuestion ? " overflow-y-auto overscroll-contain" : ""}`}
+                                    initial={{ opacity: 0, x: -12 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -12 }}
+                                    transition={{ duration: reducedMotion ? 0 : 0.18 }}
+                                >
                                     <AgentHeader
                                         theme={theme}
                                         hasMessages={messages.length > 0}
@@ -2753,7 +2768,7 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                         primaryDisabled={composerSubmitMode === "queue" && outboxIsFull}
                                         sending={busy}
                                         running={running}
-                                        placeholder={canvasId ? "说说要做什么，@ 引用节点，/ 或 、 引用技能，可粘贴图片" : pageContext ? "说说这个分镜想怎么改，或让小影先读本集镜头" : "说说要做什么，/ 或 、 引用技能；进入画布后可引用节点和图片"}
+                                        placeholder={!canvasId && pageContext ? "想调整哪个镜头？也可以先读本集分镜" : ["说说你的创作想法", canvasId && "@ 引用节点", canUseSkills && "/ 或 、 引用技能"].filter(Boolean).join("，")}
                                         theme={theme}
                                         onPromptChange={(value) => {
                                             if (!outboxEdit && !resolveAgentPromptPrefill(value, prefilledSubmissionRef.current)) prefilledSubmissionRef.current = null;
@@ -2791,14 +2806,30 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                                         references={conversationReferences}
                                         slashSkills={installedSkills}
                                         includeAssetLibrary={false}
-                                        submitAccessory={<AgentContextRing view={presentAgentContextUsage(contextUsage)} theme={theme} />}
+                                        submitAccessory={
+                                            <>
+                                                <ModelPicker
+                                                    config={config}
+                                                    value={selectedModel}
+                                                    capability="text"
+                                                    onChange={setModel}
+                                                    variant="creation"
+                                                    fullWidth
+                                                    className="agent-composer-model-trigger !h-8 !min-w-0 !w-full !max-w-full !border-0 !shadow-none"
+                                                    popoverClassName="agent-model-picker-popover"
+                                                    showSelectedPrice={false}
+                                                    showOptionPrices
+                                                    placeholder="选择文本模型"
+                                                />
+                                                <AgentContextRing view={presentAgentContextUsage(contextUsage)} theme={theme} />
+                                            </>
+                                        }
                                         left={
                                             <ComposerControls
                                                 config={config}
                                                 selectedModel={selectedModel}
                                                 permissionMode={permissionMode}
                                                 theme={theme}
-                                                onModelChange={setModel}
                                                 onPermissionChange={setPermissionMode}
                                                 reasoningMode={reasoningMode}
                                                 onReasoningModeChange={setReasoningMode}

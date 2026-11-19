@@ -99,6 +99,24 @@ test("选择题正常提交选项和默认方案", async () => {
     }
 });
 
+test("选择题的最后一项在内容滚动区，默认操作独立于选项滚动", async () => {
+    const fixture = await questionFixture({ kind: "choice", question: "选择方向", options: Array.from({ length: 6 }, (_, index) => ({ label: `方向 ${index + 1}`, detail: "选项说明" })) });
+    try {
+        const scroll = fixture.host.querySelector<HTMLElement>('[role="region"][aria-label="确认选项"]')!;
+        const last = scroll.querySelectorAll<HTMLButtonElement>(".agent-reply-option")[5];
+        const footer = fixture.host.querySelector<HTMLButtonElement>(".agent-question-default")!;
+        expect(scroll.contains(footer)).toBe(false);
+        Object.defineProperty(scroll, "clientHeight", { configurable: true, value: 90 });
+        Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 340 });
+        await act(async () => scroll.dispatchEvent(new dom.Event("scroll")));
+        expect(fixture.host.querySelector<HTMLButtonElement>('[aria-label="向下查看更多选项"]')?.disabled).toBe(false);
+        await act(async () => last.click());
+        expect(fixture.answers).toEqual(["方向 6"]);
+    } finally {
+        await fixture.dispose();
+    }
+});
+
 test("同一表单保留已选值，切换新问题后使用新默认值", async () => {
     const question: CloudAgentUserQuestion = {
         kind: "form",
