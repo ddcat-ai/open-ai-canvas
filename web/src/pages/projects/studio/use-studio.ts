@@ -4,7 +4,8 @@ import { App } from "antd";
 import { useNavigate } from "react-router";
 
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
-import { getDrama, getDramaEpisode, listDramaCast, type DramaCast, type DramaEpisodeDetail, type DramaSummary } from "@/services/api/drama";
+import { dramaSummaryQuery } from "@/lib/drama/drama-summary-query";
+import { getDramaEpisode, listDramaCast, type DramaCast, type DramaEpisodeDetail, type DramaSummary } from "@/services/api/drama";
 import { encodeDramaCanvasFocus, openDramaCanvasPath, type DramaCanvasEditor, type DramaCanvasFocus } from "@/services/drama-canvas";
 
 export { dramaKeys };
@@ -16,8 +17,7 @@ function summaryActive(summary?: DramaSummary) {
 
 export function useDramaSummary(projectId: string) {
     return useQuery({
-        queryKey: dramaKeys.summary(projectId),
-        queryFn: ({ signal }) => getDrama(projectId, signal),
+        ...dramaSummaryQuery(projectId),
         enabled: Boolean(projectId),
         refetchInterval: (query) => (summaryActive(query.state.data) ? 3_000 : 20_000),
         refetchOnWindowFocus: true,

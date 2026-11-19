@@ -52,9 +52,25 @@ function hasVideo(segment: DramaSegment) {
 
 /** 还没有尾帧缩略图时，用视频本身的开头画面作封面。 */
 function CoverVideo({ resourceId }: { resourceId: string }) {
-    const url = useResourceMediaUrl(resourceId, "playback");
-    if (!url) return <span className="drama-sg-cover-empty is-busy" aria-hidden />;
-    return <video className="drama-sg-cover-media" src={`${url}#t=0.1`} muted playsInline preload="metadata" aria-hidden tabIndex={-1} />;
+    const target = useRef<HTMLSpanElement>(null);
+    const [visible, setVisible] = useState(false);
+    useEffect(() => {
+        const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { rootMargin: "80px" });
+        observer.observe(target.current!);
+        return () => observer.disconnect();
+    }, []);
+    const url = useResourceMediaUrl(visible ? resourceId : undefined, "playback");
+    return (
+        <span ref={target} className="absolute inset-0" aria-hidden>
+            {visible && url ? (
+                <video className="drama-sg-cover-media" src={`${url}#t=0.1`} muted playsInline preload="metadata" tabIndex={-1} />
+            ) : (
+                <span className="drama-sg-cover-empty">
+                    <Film className="size-4" />
+                </span>
+            )}
+        </span>
+    );
 }
 
 function writable(segment: DramaSegment) {
@@ -139,7 +155,7 @@ const SegmentCard = memo(function SegmentCard({ segment, segmentShots, aspectRat
                     {segment.tailFrameResourceId && segment.videoResourceId ? (
                         <MediaThumb resourceId={segment.tailFrameResourceId} alt="" />
                     ) : segment.videoResourceId && hasVideo(segment) ? (
-                        <CoverVideo resourceId={segment.videoResourceId} />
+                        <CoverVideo key={segment.videoResourceId} resourceId={segment.videoResourceId} />
                     ) : (
                         <span className={`drama-sg-cover-empty ${state.tone === "busy" ? "is-busy" : ""}`}>
                             <Film className="size-4" aria-hidden />

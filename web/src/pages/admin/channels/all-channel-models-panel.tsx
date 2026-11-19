@@ -13,6 +13,7 @@ import type { ModelChannel } from "@/stores/use-config-store";
 import { AdminBatchBar, AdminDataTable, AdminStatusBadge, AdminTableEmpty, PaginationBar } from "../components/admin-ui";
 import { AdminSearchInput } from "../components/admin-search-input";
 import { ChannelModelCostSummary } from "../components/channel-model-cost-summary";
+import { ChannelModelDetailsCell } from "../components/channel-model-details-cell";
 import { ChannelModelEditor } from "../components/channel-model-editor";
 import { ChannelModelHealthCell, channelModelHealthKey } from "../components/channel-model-health";
 import { ChannelModelRepriceDialog } from "../components/channel-model-reprice-dialog";
@@ -199,6 +200,7 @@ export function AllChannelModelsPanel({
                 </div>
             ),
         },
+        { title: "描述 / 标签", key: "details", width: 220, render: (_, item) => <ChannelModelDetailsCell description={item.description} tags={item.tags} /> },
         {
             title: "渠道",
             width: 170,
@@ -309,7 +311,7 @@ export function AllChannelModelsPanel({
                     columns,
                     dataSource: paged,
                     pagination: false,
-                    scroll: { x: 1220 },
+                    scroll: { x: 1440 },
                 }}
                 empty={
                     loadError ? (

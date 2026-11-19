@@ -28,6 +28,7 @@ import { ChannelModelEditor } from "./channel-model-editor";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 import { ChannelOrderDialog } from "./channel-order-dialog";
 import { ChannelModelCostSummary } from "./channel-model-cost-summary";
+import { ChannelModelDetailsCell } from "./channel-model-details-cell";
 import { ChannelModelRepriceDialog } from "./channel-model-reprice-dialog";
 import { ChannelModelBatchEditDialog } from "./channel-model-batch-edit-dialog";
 import { deselectVisibleModels, filterImportModels, normalizeFetchModelKey, selectExistingImportModels, selectVisibleModels } from "./channel-model-import-selection";
@@ -340,6 +341,7 @@ export function ChannelModelManager({
                 </div>
             ),
         },
+        { title: "描述 / 标签", key: "details", width: 220, render: (_, item) => <ChannelModelDetailsCell description={item.description} tags={item.tags} /> },
         { title: "能力", dataIndex: "capability", width: 80, render: capabilityLabel },
         { title: "稳定性（24h）", key: "health", width: 150, render: (_, item) => <ChannelModelHealthCell health={health?.get(channelModelHealthKey(channel.id, item.modelKey))} loading={healthLoading} /> },
         {
@@ -584,7 +586,7 @@ export function ChannelModelManager({
                     columns,
                     dataSource: pagedItems,
                     pagination: false,
-                    scroll: { x: 1300 },
+                    scroll: { x: 1520 },
                 }}
                 footer={
                     filteredItems.length > pageSize ? (

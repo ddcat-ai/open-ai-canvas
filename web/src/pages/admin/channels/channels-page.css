@@ -354,6 +354,21 @@
     background: var(--admin-surface-2);
 }
 
+.admin-channel-model-details .model-tags {
+    flex-wrap: nowrap;
+    margin: 0;
+}
+
+.admin-channel-model-details .model-tag {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 4px;
+    line-height: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .admin-model-cost-summary {
     padding: 4px 0;
     font-size: 12px;

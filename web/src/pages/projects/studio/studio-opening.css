@@ -1,0 +1,62 @@
+.drama-studio-opening {
+    height: 100%;
+    overflow: hidden;
+    background: var(--background);
+    color: var(--text-secondary);
+}
+.drama-studio-opening header {
+    display: flex;
+    height: 56px;
+    align-items: center;
+    gap: var(--space-2);
+    padding-inline: var(--space-3);
+    border-bottom: var(--stroke-1) solid var(--user-border);
+    font-size: var(--fs-body);
+}
+.drama-studio-opening header a {
+    display: grid;
+    width: var(--space-8);
+    height: var(--space-8);
+    place-items: center;
+    border-radius: var(--r-full);
+}
+.drama-studio-opening header svg {
+    width: var(--space-4);
+}
+.drama-opening-body {
+    display: grid;
+    height: 100%;
+    grid-template-columns: min(25%, 292px) minmax(0, 1fr);
+}
+.drama-opening-body > * {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-5);
+}
+.drama-opening-body aside {
+    border-inline-end: var(--stroke-1) solid var(--user-border);
+}
+.drama-opening-body i {
+    display: block;
+    width: min(75%, 44rem);
+    height: var(--space-4);
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+}
+.drama-opening-body i:first-child {
+    width: min(40%, 18rem);
+    height: var(--space-5);
+    margin-bottom: var(--space-4);
+}
+.drama-opening-body i:last-child {
+    width: min(58%, 36rem);
+}
+@media (max-width: 760px) {
+    .drama-opening-body {
+        display: block;
+    }
+    .drama-opening-body aside {
+        display: none;
+    }
+}

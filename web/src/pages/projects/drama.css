@@ -1031,6 +1031,17 @@
 }
 
 /* ===== 制作台 ===== */
+.drama-dialog-loading {
+    position: fixed;
+    inset-block-end: var(--space-5);
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    border-radius: var(--r-full);
+    background: var(--surface);
+    color: var(--foreground);
+    box-shadow: var(--elevation-card);
+    padding: var(--space-2) var(--space-4);
+}
 .drama-studio {
     display: grid;
     grid-template-rows: 56px minmax(0, 1fr) auto;
@@ -2954,6 +2965,8 @@
 .drama-library-card {
     position: relative;
     min-width: 0;
+    content-visibility: auto;
+    contain-intrinsic-block-size: auto 260px;
     padding: 8px;
     border-radius: var(--user-radius-card);
     background: var(--user-surface);
@@ -3037,14 +3050,15 @@
     height: 18px;
     color: color-mix(in srgb, var(--user-ink) 30%, transparent);
 }
-.drama-library-badge {
+.drama-chip.drama-library-badge {
     position: absolute;
-    top: 18px;
-    left: 18px;
+    top: 16px;
+    left: 16px;
     z-index: 1;
-    height: 24px;
-    backdrop-filter: blur(10px);
-    background: color-mix(in srgb, var(--user-surface) 82%, transparent);
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11px;
+    background: var(--user-surface);
     border-color: transparent;
 }
 .drama-library-body {
@@ -3127,8 +3141,7 @@
     transition: opacity 150ms ease-out;
 }
 .drama-library-menu .product-icon-button {
-    background: color-mix(in srgb, var(--user-surface) 86%, transparent);
-    backdrop-filter: blur(10px);
+    background: var(--user-surface);
     box-shadow: inset 0 0 0 1px var(--user-border);
 }
 .drama-library-card:hover .drama-library-menu,
@@ -3154,7 +3167,6 @@
     border: 2px dashed var(--user-accent);
     border-radius: var(--user-radius-card);
     background: color-mix(in srgb, var(--user-page-bg) 80%, var(--user-accent-soft));
-    backdrop-filter: blur(4px);
     pointer-events: none;
 }
 .drama-library-drop > div {
@@ -4534,13 +4546,6 @@
 .drama-library-glyph {
     font-size: 32px;
 }
-.drama-library-badge {
-    top: 16px;
-    left: 16px;
-    height: 22px;
-    padding: 0 8px;
-    font-size: 11px;
-}
 .drama-library-menu {
     top: 14px;
     right: 14px;
@@ -5460,6 +5465,8 @@
     display: grid;
     gap: 8px;
     min-width: 0;
+    content-visibility: auto;
+    contain-intrinsic-block-size: auto 210px;
     padding: 8px;
     border: 1px solid var(--drama-line);
     border-radius: var(--radius-lg);
