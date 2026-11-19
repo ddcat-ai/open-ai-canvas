@@ -1324,6 +1324,10 @@ func (r *Repository) UpdateDramaShotScript(shot model.DramaShot, fields map[stri
 
 func (r *Repository) RequestDramaSegmentVideos(projectID, episodeID string, indexes []int, modelJSON *string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		var episode model.DramaEpisode
+		if err := tx.Select("approved").Where("id = ? AND project_id = ?", episodeID, projectID).First(&episode).Error; err != nil {
+			return err
+		}
 		for _, index := range indexes {
 			var segment model.DramaSegment
 			if err := tx.Where("project_id = ? AND episode_id = ? AND segment_index = ?", projectID, episodeID, index).First(&segment).Error; err != nil {
@@ -1340,7 +1344,9 @@ func (r *Repository) RequestDramaSegmentVideos(projectID, episodeID string, inde
 				return err
 			}
 		}
-		return tx.Model(&model.DramaEpisode{}).Where("id = ?", episodeID).Updates(map[string]any{"approved": true, "media_released": true}).Error
+		// 显式生成剧情段只放行本集素材，整集确认状态保持原样：未确认的集不因点了一段就被确认
+		// （否则调度会把其余未生成的段一起排队），已确认的集重做一段也不必重新确认。
+		return tx.Model(&model.DramaEpisode{}).Where("id = ?", episodeID).Updates(map[string]any{"media_released": true, "approved": episode.Approved}).Error
 	})
 }
 

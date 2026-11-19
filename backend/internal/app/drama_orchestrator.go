@@ -698,6 +698,11 @@ func (r *dramaRun) advanceEpisode(e *model.DramaEpisode, loadedStage string) err
 			return err
 		}
 	case model.DramaEpisodeVideo:
+		if r.needsReview(e) {
+			// 逐段生成会把本集推到视频阶段；未确认的集退回审阅，只生成用户点过的段，确认整集后再生成其余段。
+			e.Stage = model.DramaEpisodeReview
+			break
+		}
 		ready, err := r.enqueueSegmentVideos(e, segments, false)
 		if err != nil {
 			return err

@@ -331,6 +331,53 @@ func TestDramaEveryEpisodeRequiresPromptApproval(t *testing.T) {
 	}
 }
 
+// 每集确认模式下，逐段点「生成视频」只生成这一段，不能顺带确认整集把其余段一起排队。
+func TestDramaEveryEpisodeSingleSegmentDoesNotApproveEpisode(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	project := createTestDrama(t, svc, DramaReviewEvery).Project.ID
+	runDramaTicks(t, svc, project, 20)
+	summary, _ := svc.DramaSummary("usr-drama", project)
+	episode := summary.Episodes[0].ID
+	if summary.Episodes[0].Stage != "review" || fake.byKind["video"] != 0 {
+		t.Fatalf("episode must wait for review before any video: %+v %v", summary.Episodes[0], fake.byKind)
+	}
+	if _, err := svc.GenerateDramaSegments("usr-drama", project, episode, GenerateDramaSegmentsRequest{Segments: []int{0}}); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 20)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	if fake.byKind["video"] != 1 {
+		t.Fatalf("single-segment generation must submit only that segment, videos=%d", fake.byKind["video"])
+	}
+	if summary.Episodes[0].Approved || summary.Episodes[0].Stage != "review" {
+		t.Fatalf("single-segment generation must not approve the episode: %+v", summary.Episodes[0])
+	}
+	rows, err := svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) < 2 || mediaBusyStatus(rows[1].VideoStatus) || rows[1].VideoResourceID != "" {
+		t.Fatalf("other segments must stay ungenerated: %+v", rows)
+	}
+	if _, err := svc.ApproveDramaEpisode("usr-drama", project, episode); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 20)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	if summary.Episodes[0].Stage != "done" || fake.byKind["video"] != 2 {
+		t.Fatalf("approving the episode must generate the rest: %+v %v", summary.Episodes[0], fake.byKind)
+	}
+	// 已确认的集重做最后一段：只生成这一段并重新成片，不需要再次确认。
+	if _, err := svc.GenerateDramaSegments("usr-drama", project, episode, GenerateDramaSegmentsRequest{Segments: []int{rows[1].SegmentIndex}}); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 20)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	if !summary.Episodes[0].Approved || summary.Episodes[0].Stage != "done" || fake.byKind["video"] != 3 || fake.byKind["render"] != 2 {
+		t.Fatalf("regenerating a segment of an approved episode must keep approval and re-render: %+v %v", summary.Episodes[0], fake.byKind)
+	}
+}
+
 func TestDramaFailedSegmentSurfacesAndRetries(t *testing.T) {
 	svc, fake := newDramaTestService(t)
 	fake.fail = func(req CreateTaskRequest) bool { return req.Type == "canvas_video" }
