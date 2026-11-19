@@ -193,6 +193,7 @@ export function CanvasToolbar({
         onAlign: () => {},
         onArrange: () => {},
         onCreateStoryboard: () => {},
+        onCreateFrame: () => {},
         onCreateReferenceGroup: () => {},
         onBatchConnect: () => {},
         onSendSelectionToAgent: () => {},

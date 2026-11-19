@@ -59,6 +59,7 @@ export type ToolbarHandlers = {
     onAlign: (mode: CanvasAlignmentMode) => void;
     onArrange: (mode: "row" | "column" | "grid" | "flow") => void;
     onCreateStoryboard: () => void;
+    onCreateFrame: () => void;
     onCreateReferenceGroup: () => void;
     onBatchConnect: () => void;
     onCompareImages?: () => void;
