@@ -59,6 +59,10 @@ export type LL2VideoResult = {
     taskId: string;
     protocol: LL2VideoProtocol;
     url: string;
+    /** 成片地址要带 Bearer 才能下载（seedance / vega 的 artifact 相对路径）。 */
+    requiresAuth?: boolean;
+    /** 需要鉴权时，客户端已经带 Key 取回的 blob URL，可直接给 <video>。 */
+    previewUrl?: string;
     model: LL2ConnectedVideoModel;
     prompt: string;
     seconds: number;
@@ -192,7 +196,7 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     // 2026-11-19 真机反馈：非 H3 模型把 image_urls 发到 /v1 后，网关没有真的按首帧出片
     // （用户引用了图，成片却是按文字生成的，还扣了钱）。其它模型的素材协议还没逐个接通前，
     // 先明确挡住，避免再花冤枉钱。H3 的 content[] 是已实测的契约。
-    const mediaProtocolReady = req.model === "MiniMax-H3" || req.model.startsWith("wan3.0-");
+    const mediaProtocolReady = req.model === "MiniMax-H3" || req.model.startsWith("wan3.0-") || req.model.startsWith("doubao-seedance-2-");
     if (media.length > 0 && !mediaProtocolReady) {
         throw new Error("这个模型带图/视频出片的协议还没接通：现在只有 MiniMax-H3 会真的按参考图出片。先换 H3，或把参考素材去掉再生成。");
     }
@@ -267,10 +271,21 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
             if (!url || !/^https?:\/\//i.test(url)) throw new Error("任务已完成，但 LL2 没有返回可播放的视频地址");
             const billedSeconds = chargedSeconds > 0 ? chargedSeconds : seconds;
             const actual = ll2ActualCNY(req.model, billedSeconds, resolution);
+            // seedance / vega 返回的是 /v1/tasks/.../artifacts 相对地址，必须带同一个 Key 取回 blob，
+            // 否则 <video> 直连会 401；这里先取回，返回临时 objectURL 给界面播放。
+            // 自定义 baseUrl（自测/代理）时，artifact 地址也要跟着换 origin。
+            const artifactUrl = queried.requiresAuth ? url.replace(/^https?:\/\/[^/]+/, originOf(req)) : url;
+            let previewUrl = "";
+            if (queried.requiresAuth) {
+                const mediaResponse = await fetch(artifactUrl, { headers: { Authorization: `Bearer ${key}` }, credentials: "omit", signal: req.signal });
+                if (mediaResponse.ok) previewUrl = URL.createObjectURL(await mediaResponse.blob());
+            }
             return {
                 taskId,
                 protocol,
-                url,
+                url: artifactUrl,
+                requiresAuth: queried.requiresAuth,
+                previewUrl,
                 model: req.model,
                 prompt,
                 seconds,

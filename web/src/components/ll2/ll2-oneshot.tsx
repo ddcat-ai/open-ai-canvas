@@ -341,7 +341,7 @@ export function LL2OneShot() {
         abortRef.current = controller;
         // 准备 / 生成 / 超分三段，错误文案要分清是哪一段失败。
         let phase: "prepare" | "generate" | "upscale" = "prepare";
-        let generated: { film: LL2Film; label: string; basis: string } | null = null;
+        let generated: { film: LL2Film; label: string; basis: string; previewUrl?: string } | null = null;
         try {
             // @ 引用按提示词里出现的顺序还原成素材；资产库里的视频可能要从本机 Blob 读出来。
             const mentioned: LL2MediaInput[] = [];
@@ -376,8 +376,10 @@ export function LL2OneShot() {
                 actualCNY: outcome.actualCNY,
                 url: outcome.url,
                 createdAt: outcome.createdAt,
+                requiresAuth: outcome.requiresAuth,
             }).find((item) => item.id === outcome.taskId)!;
-            generated = { film, label: outcome.actualLabel, basis: outcome.actualBasis };
+            if (outcome.previewUrl) previewUrlRef.current = outcome.previewUrl;
+            generated = { film, label: outcome.actualLabel, basis: outcome.actualBasis, previewUrl: outcome.previewUrl };
             if (!upscale) {
                 setResult(generated);
             } else {

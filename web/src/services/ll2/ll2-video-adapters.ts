@@ -34,6 +34,8 @@ export type LL2AdapterArgs = {
 export type LL2QueriedTask = {
     status: string;
     url: string;
+    /** artifact 相对路径要走 Bearer 下载，不能直接 <video src>。 */
+    requiresAuth?: boolean;
     chargedSeconds: number;
     errorCode: string;
     errorMessage: string;
@@ -172,6 +174,57 @@ function makeWan3Adapter(model: "wan3.0-video" | "wan3.0-video-prime"): LL2Video
     };
 }
 
+/**
+ * Seedance：网关透传方舟 content[] 协议。
+ *   POST /seedance/api/v3/contents/generations/tasks
+ *   GET  /seedance/api/v3/contents/generations/tasks/{id}
+ * 图片 data URI 未在文档承诺；先按 H3 同一形状提交，真机验证。
+ */
+const GATEWAY_ORIGIN = "https://api.ll2.cn";
+
+function makeSeedanceAdapter(model: "doubao-seedance-2-0" | "doubao-seedance-2-0-fast" | "doubao-seedance-2-0-mini" | "doubao-seedance-2-5"): LL2VideoAdapter {
+    const content = (args: LL2AdapterArgs) => [
+        { type: "text" as const, text: args.prompt },
+        ...(args.media || []).map((item) => {
+            if (item.image_url?.url) return { type: "image_url" as const, image_url: { url: item.image_url.url }, role: item.role || "reference_image" };
+            if (item.video_url?.url) return { type: "video_url" as const, video_url: { url: item.video_url.url }, role: "reference_video" };
+            return { type: "audio_url" as const, audio_url: { url: item.audio_url?.url || "" }, role: "reference_audio" };
+        }),
+    ];
+    return {
+        model,
+        protocol: "openai-video-v1",
+        label: OPENAI_VIDEO_LABELS[model],
+        createPath: "/seedance/api/v3/contents/generations/tasks",
+        normalize: (args) => {
+            const base = normalizeBase(args);
+            const tier = ll2TierFor(model, base.resolution);
+            return { ...base, resolution: tier?.resolution || base.resolution };
+        },
+        buildCreatePayload: (args) => ({
+            model,
+            content: content(args),
+            resolution: String(args.resolution).toLowerCase(),
+            duration: args.seconds,
+            ratio: args.ratio,
+        }),
+        taskIdOf: (payload) => ll2TextOf(payload, "id", "task_id"),
+        queryPath: (taskId) => `/seedance/api/v3/contents/generations/tasks/${encodeURIComponent(taskId)}`,
+        parseQuery: (payload) => {
+            const content = (payload.content || {}) as Json;
+            const relative = ll2TextOf(content, "video_url");
+            return {
+                status: String(payload.status || "").toLowerCase(),
+                url: relative ? (relative.startsWith("http") ? relative : `${GATEWAY_ORIGIN}${relative.startsWith("/") ? "" : "/"}${relative}`) : "",
+                requiresAuth: true,
+                chargedSeconds: Number(payload.duration || 0) || 0,
+                errorCode: ll2TextOf(payload, "code", "error_code"),
+                errorMessage: ll2TextOf(payload.error, "message") || ll2TextOf(payload, "message"),
+            };
+        },
+    };
+}
+
 /** 走 /v1/video/generations 的模型及其中文名（H3 单独走 /v2，不在这里）。 */
 const OPENAI_VIDEO_LABELS = {
     "wan3.0-video": "万相 3.0",
@@ -256,8 +309,14 @@ export const LL2_VIDEO_ADAPTERS = {
     "MiniMax-H3": h3Adapter,
     "wan3.0-video": makeWan3Adapter("wan3.0-video"),
     "wan3.0-video-prime": makeWan3Adapter("wan3.0-video-prime"),
+    "doubao-seedance-2-0": makeSeedanceAdapter("doubao-seedance-2-0"),
+    "doubao-seedance-2-0-fast": makeSeedanceAdapter("doubao-seedance-2-0-fast"),
+    "doubao-seedance-2-0-mini": makeSeedanceAdapter("doubao-seedance-2-0-mini"),
+    "doubao-seedance-2-5": makeSeedanceAdapter("doubao-seedance-2-5"),
     ...Object.fromEntries(
-        (Object.keys(OPENAI_VIDEO_LABELS) as OpenAIVideoModel[]).filter((model) => !model.startsWith("wan3.0-")).map((model) => [model, makeOpenAIVideoAdapter(model)]),
+        (Object.keys(OPENAI_VIDEO_LABELS) as OpenAIVideoModel[])
+            .filter((model) => !model.startsWith("wan3.0-") && !model.startsWith("doubao-seedance-2-"))
+            .map((model) => [model, makeOpenAIVideoAdapter(model)]),
     ),
 } as Record<LL2ConnectedVideoModel, LL2VideoAdapter>;
 

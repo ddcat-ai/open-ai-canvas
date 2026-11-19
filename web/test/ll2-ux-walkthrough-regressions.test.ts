@@ -51,11 +51,14 @@ test("带素材：H3 / wan3 已接协议，其它模型明确拦截", async () =
     const video = await read("../src/services/ll2/ll2-video.ts");
     expect(video).toContain("mediaProtocolReady");
     expect(video).toContain('req.model.startsWith("wan3.0-")');
+    expect(video).toContain('req.model.startsWith("doubao-seedance-2-")');
     expect(video).toContain("协议还没接通");
     const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
     expect(adapters).toContain("/ali/api/v1/services/aigc/video-generation/video-synthesis");
     expect(adapters).toContain("img_url");
     expect(adapters).toContain("X-DashScope-Async");
+    expect(adapters).toContain("/seedance/api/v3/contents/generations/tasks");
+    expect(adapters).toContain("requiresAuth: true");
     const source = await read("../src/components/ll2/ll2-oneshot.tsx");
     expect(source).not.toContain('setModel("MiniMax-H3")');
     expect(source).not.toContain("disabled={hasAnyReference}");

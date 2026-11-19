@@ -18,6 +18,7 @@ let hdDownloadAuth = "";
 let hdQueryCount = 0;
 let h3CreateBody = null;
 let wan3CreateBody = null;
+let seedanceCreateBody = null;
 
 const server = Bun.serve({
     port: 0,
@@ -25,6 +26,17 @@ const server = Bun.serve({
         const url = new URL(req.url);
         // 非 H3 的 13 个模型走 /v1/video/generations，字段与 H3 完全不同：
         // seconds 必须是字符串，比例字段叫 aspect_ratio，结果在 data.result_url。
+        if (req.method === "POST" && url.pathname === "/seedance/api/v3/contents/generations/tasks") {
+            seedanceCreateBody = await req.json();
+            createCount += 1;
+            return Response.json({ id: "seed-1", status: "queued" });
+        }
+        if (req.method === "GET" && url.pathname === "/seedance/api/v3/contents/generations/tasks/seed-1") {
+            return Response.json({ id: "seed-1", status: "succeeded", content: { video_url: "/v1/tasks/seed-1/artifacts/video/content" }, duration: 4 });
+        }
+        if (req.method === "GET" && url.pathname === "/v1/tasks/seed-1/artifacts/video/content") {
+            return new Response(new Uint8Array([0, 1, 2]), { status: 200, headers: { "content-type": "video/mp4" } });
+        }
         if (req.method === "POST" && url.pathname === "/ali/api/v1/services/aigc/video-generation/video-synthesis") {
             wan3CreateBody = await req.json();
             createCount += 1;
@@ -143,7 +155,6 @@ out.push(`   显式传同一 key 时为 ${last3[2]}（复用同一任务，可�
 // ⑥ 非 H3 模型：走 /v1/video/generations，同一个工厂适配器，验证 payload 与查询解析。
 // 用户点名先测 seedance 2.0 / viduq3-pro / Super Vega 1.0-pro 三档。
 const OPENAI_MODELS = [
-    { model: "doubao-seedance-2-0", resolution: "720p" },
     { model: "viduq3-pro", resolution: "720p" },
     { model: "Super Vega 1.0-pro", resolution: "720P" },
 ];
@@ -233,6 +244,22 @@ const wanOk = wan3CreateBody?.input?.img_url === "data:image/png;base64,AAAA" &&
 out.push(`⑩ wan3 图生视频：${wanOk ? "PASS" : "FAIL"} ${JSON.stringify(wan3CreateBody)}`);
 if (!wanOk) {
     console.error("⑩ 失败：wan3 没有把图片放进 input.img_url");
+    process.exitCode = 1;
+}
+
+// ⑪ seedance：content[] + 相对 artifact 地址（必须带 Bearer 取 blob）
+scenario = "success"; createCount = 0; queryCount = 0; seedanceCreateBody = null;
+const seed = await ll2GenerateVideo(common({ model: "doubao-seedance-2-0", resolution: "480P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
+const seedOk =
+    seedanceCreateBody?.content?.[0]?.type === "text" &&
+    seedanceCreateBody?.content?.[1]?.image_url?.url === "data:image/png;base64,AAAA" &&
+    seedanceCreateBody?.content?.[1]?.role === "first_frame" &&
+    seedanceCreateBody?.resolution === "480p" &&
+    seed.requiresAuth === true &&
+    Boolean(seed.previewUrl);
+out.push(`⑪ seedance 图生视频：${seedOk ? "PASS" : "FAIL"} preview=${Boolean(seed.previewUrl)} body=${JSON.stringify(seedanceCreateBody).slice(0, 120)}`);
+if (!seedOk) {
+    console.error("⑪ 失败：seedance content/artifact 鉴权不符合预期");
     process.exitCode = 1;
 }
 
