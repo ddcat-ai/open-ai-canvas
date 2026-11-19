@@ -279,6 +279,66 @@ function makeViduAdapter(model: "viduq3-pro" | "viduq3-turbo"): LL2VideoAdapter 
     };
 }
 
+/**
+ * Super Vega：/super-vega/tasks（User-Agent 由浏览器自带，非空即可）。
+ * FileInfos 要公网可下载地址；本地 data URI 不一定被接受，真机验证后再决定是否放开。
+ */
+function makeVegaAdapter(model: "Super Vega 1.0-lite" | "Super Vega 1.0-pro" | "Super Vega 1.0-pro-fast" | "Super Vega 1.0-pro-mini" | "Super Vega 1.5-pro"): LL2VideoAdapter {
+    return {
+        model,
+        protocol: "openai-video-v1",
+        label: OPENAI_VIDEO_LABELS[model],
+        createPath: "/super-vega/tasks",
+        normalize: (args) => {
+            const base = normalizeBase(args);
+            const tier = ll2TierFor(model, base.resolution);
+            return { ...base, resolution: tier?.resolution || base.resolution };
+        },
+        buildCreatePayload: (args) => {
+            const files = (args.media || []).map((item) => {
+                if (item.image_url?.url) {
+                    const usage = item.role === "last_frame" ? "LastFrame" : item.role === "first_frame" ? "FirstFrame" : "Reference";
+                    return { Type: "Url", Category: "Image", Url: item.image_url.url, Usage: usage };
+                }
+                if (item.video_url?.url) return { Type: "Url", Category: "Video", Url: item.video_url.url, Usage: "Reference" };
+                return { Type: "Url", Category: "Audio", Url: item.audio_url?.url || "", Usage: "Reference" };
+            });
+            return {
+                model,
+                ...(args.prompt.trim() ? { Prompt: args.prompt } : {}),
+                ...(files.length ? { FileInfos: files } : {}),
+                OutputConfig: {
+                    Resolution: String(args.resolution).toUpperCase(),
+                    Duration: args.seconds,
+                    ...(args.ratio === "adaptive" ? { AspectRatio: "adaptive" } : { AspectRatio: args.ratio }),
+                    AudioGeneration: "Disabled",
+                },
+            };
+        },
+        taskIdOf: (payload) => ll2TextOf(payload, "TaskId", "task_id"),
+        queryPath: (taskId) => `/super-vega/tasks/${encodeURIComponent(taskId)}`,
+        parseQuery: (payload) => {
+            const response = (payload.Response || {}) as Json;
+            const task = (response.AigcVideoTask || {}) as Json;
+            const output = (task.Output || {}) as Json;
+            const files = Array.isArray(output.FileInfos) ? output.FileInfos : [];
+            const finished = String(task.Status || "").toUpperCase() === "FINISH";
+            const errCode = Number(task.ErrCode ?? 0) || 0;
+            const main = files.find((file: Json) => !file.UsageType || file.UsageType === "video") || files[0] || {};
+            const relative = String(main.FileUrl || "");
+            const usage = (output.Usage || {}) as Json;
+            return {
+                status: finished ? (errCode === 0 ? "succeeded" : "failed") : String(task.Status || "processing").toLowerCase(),
+                url: relative ? (relative.startsWith("http") ? relative : `${GATEWAY_ORIGIN}${relative.startsWith("/") ? "" : "/"}${relative}`) : "",
+                requiresAuth: true,
+                chargedSeconds: Number(usage.OutputSeconds || 0) || 0,
+                errorCode: errCode ? String(errCode) : "",
+                errorMessage: ll2TextOf(task, "Message"),
+            };
+        },
+    };
+}
+
 /** 走 /v1/video/generations 的模型及其中文名（H3 单独走 /v2，不在这里）。 */
 const OPENAI_VIDEO_LABELS = {
     "wan3.0-video": "万相 3.0",
@@ -369,9 +429,14 @@ export const LL2_VIDEO_ADAPTERS = {
     "doubao-seedance-2-5": makeSeedanceAdapter("doubao-seedance-2-5"),
     "viduq3-pro": makeViduAdapter("viduq3-pro"),
     "viduq3-turbo": makeViduAdapter("viduq3-turbo"),
+    "Super Vega 1.0-lite": makeVegaAdapter("Super Vega 1.0-lite"),
+    "Super Vega 1.0-pro": makeVegaAdapter("Super Vega 1.0-pro"),
+    "Super Vega 1.0-pro-fast": makeVegaAdapter("Super Vega 1.0-pro-fast"),
+    "Super Vega 1.0-pro-mini": makeVegaAdapter("Super Vega 1.0-pro-mini"),
+    "Super Vega 1.5-pro": makeVegaAdapter("Super Vega 1.5-pro"),
     ...Object.fromEntries(
         (Object.keys(OPENAI_VIDEO_LABELS) as OpenAIVideoModel[])
-            .filter((model) => !model.startsWith("wan3.0-") && !model.startsWith("doubao-seedance-2-") && !model.startsWith("viduq3-"))
+            .filter((model) => !model.startsWith("wan3.0-") && !model.startsWith("doubao-seedance-2-") && !model.startsWith("viduq3-") && !model.startsWith("Super Vega"))
             .map((model) => [model, makeOpenAIVideoAdapter(model)]),
     ),
 } as Record<LL2ConnectedVideoModel, LL2VideoAdapter>;

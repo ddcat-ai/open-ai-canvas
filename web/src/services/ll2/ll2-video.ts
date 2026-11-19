@@ -196,9 +196,11 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     // 2026-11-19 真机反馈：非 H3 模型把 image_urls 发到 /v1 后，网关没有真的按首帧出片
     // （用户引用了图，成片却是按文字生成的，还扣了钱）。其它模型的素材协议还没逐个接通前，
     // 先明确挡住，避免再花冤枉钱。H3 的 content[] 是已实测的契约。
+    // 2026-11-19 真机验证结果：H3 / wan3 / seedance / vidu 的首帧图能真的用上；
+    // Super Vega 按文档接了 FileInfos，但真机任务返回 FAIL（还在排查图片 URL 约束），暂不放开。
     const mediaProtocolReady = req.model === "MiniMax-H3" || req.model.startsWith("wan3.0-") || req.model.startsWith("doubao-seedance-2-") || req.model.startsWith("viduq3-");
     if (media.length > 0 && !mediaProtocolReady) {
-        throw new Error("这个模型带图/视频出片的协议还没接通：现在只有 MiniMax-H3 会真的按参考图出片。先换 H3，或把参考素材去掉再生成。");
+        throw new Error("这个模型带图/视频出片的协议还没验证通过：现在 H3 / wan3 / seedance / vidu 会真的按参考图出片，Super Vega 还在验证。先换一个，或把参考素材去掉再生成。");
     }
     // Vidu Q3 只支持图片参考：0 张文生、1 张首帧、2 张首尾帧；视频/音频和 3 张以上图都没开通。
     if (req.model.startsWith("viduq3-") && media.length > 0) {

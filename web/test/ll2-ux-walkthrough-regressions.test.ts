@@ -53,7 +53,7 @@ test("带素材：H3 / wan3 已接协议，其它模型明确拦截", async () =
     expect(video).toContain('req.model.startsWith("wan3.0-")');
     expect(video).toContain('req.model.startsWith("doubao-seedance-2-")');
     expect(video).toContain('req.model.startsWith("viduq3-")');
-    expect(video).toContain("协议还没接通");
+    expect(video).toContain("协议还没验证通过");
     const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
     expect(adapters).toContain("/ali/api/v1/services/aigc/video-generation/video-synthesis");
     expect(adapters).toContain("img_url");

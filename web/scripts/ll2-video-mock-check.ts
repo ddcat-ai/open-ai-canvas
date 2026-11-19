@@ -4,6 +4,8 @@
  * 覆盖「进度 / 取消 / 失败 / 重试计费」四条路径，给 UI 文案提供可复现证据。
  * 运行：cd web && bun run scripts/ll2-video-mock-check.ts
  */
+import { LL2_VIDEO_ADAPTERS } from "../src/services/ll2/ll2-video-adapters";
+import { LL2_CONNECTED_VIDEO_MODELS } from "../src/lib/ll2-models";
 import { ll2GenerateVideo } from "../src/services/ll2/ll2-video";
 import { ll2FetchHdBlob, ll2RunHd } from "../src/services/ll2/ll2-hd";
 
@@ -20,6 +22,7 @@ let h3CreateBody = null;
 let wan3CreateBody = null;
 let seedanceCreateBody = null;
 let viduCreateBody = null;
+let vegaCreateBody = null;
 
 const server = Bun.serve({
     port: 0,
@@ -27,6 +30,17 @@ const server = Bun.serve({
         const url = new URL(req.url);
         // 非 H3 的 13 个模型走 /v1/video/generations，字段与 H3 完全不同：
         // seconds 必须是字符串，比例字段叫 aspect_ratio，结果在 data.result_url。
+        if (req.method === "POST" && url.pathname === "/super-vega/tasks") {
+            vegaCreateBody = await req.json();
+            createCount += 1;
+            return Response.json({ TaskId: "vega-1", model: "Super Vega 1.0-lite" });
+        }
+        if (req.method === "GET" && url.pathname === "/super-vega/tasks/vega-1") {
+            return Response.json({ Response: { Status: "FINISH", TaskId: "vega-1", TaskType: "AigcVideoTask", AigcVideoTask: { Status: "FINISH", ErrCode: 0, TaskId: "vega-1", Output: { FileInfos: [{ UsageType: "", FileUrl: "/v1/tasks/vega-1/artifacts/video/content" }], Usage: { OutputSeconds: 4, InputSeconds: 0, InputImageCount: 1 } } } } });
+        }
+        if (req.method === "GET" && url.pathname === "/v1/tasks/vega-1/artifacts/video/content") {
+            return new Response(new Uint8Array([0, 1, 2]), { status: 200, headers: { "content-type": "video/mp4" } });
+        }
         if (req.method === "POST" && url.pathname === "/vidu/ent/v2/img2video") {
             viduCreateBody = await req.json();
             createCount += 1;
@@ -164,33 +178,15 @@ const last3 = idempotencyKeys.slice(-3);
 out.push(`⑤ 重试：两次普通重试的幂等键 ${last3[0] === last3[1] ? "相同" : "不同"} → ${last3[0] === last3[1] ? "可能复用任务" : "会新建任务、重新计费"}`);
 out.push(`   显式传同一 key 时为 ${last3[2]}（复用同一任务，可避免重复扣费）`);
 
-// ⑥ 非 H3 模型：走 /v1/video/generations，同一个工厂适配器，验证 payload 与查询解析。
-// 用户点名先测 seedance 2.0 / viduq3-pro / Super Vega 1.0-pro 三档。
-const OPENAI_MODELS = [
-    { model: "Super Vega 1.0-pro", resolution: "720P" },
-];
-let openaiFails = 0;
-for (const item of OPENAI_MODELS) {
-    scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
-    // 视频模型 4 秒起：请求 4 秒，恰好等于下限，payload 也应原样是 "4"。
-    const result = await ll2GenerateVideo(common({ model: item.model, resolution: item.resolution, seconds: 4 }));
-    const bodyOk =
-        !!openaiCreateBody &&
-        openaiCreateBody.model === item.model &&
-        openaiCreateBody.seconds === "4" &&
-        openaiCreateBody.aspect_ratio === "16:9" &&
-        openaiCreateBody.resolution === item.resolution;
-    out.push(`⑥ ${item.model}：${bodyOk ? "PASS" : "FAIL"} 创建体 ${JSON.stringify(openaiCreateBody)}`);
-    out.push(`   任务号 ${result.taskId} · 协议 ${result.protocol} · 结果 ${result.url} · 实付 ${result.actualLabel}`);
-    // 豆包四款按 Token 计费：出片后不能显示「实付 ¥0」，必须说「按 Token 计费」。
-    const tokenBilledOk = !item.model.startsWith("doubao") || String(result.actualLabel).includes("Token");
-    if (tokenBilledOk) out.push(`   实付口径 ${result.actualLabel}（${result.actualBasis.slice(0, 40)}…）`);
-    if (!bodyOk || !tokenBilledOk || String(result.taskId) !== "openai-1" || result.url !== "https://example.invalid/openai.mp4") openaiFails += 1;
-}
-if (openaiFails) {
-    console.error(`⑥ 失败：${openaiFails} 个非 H3 模型的 payload 或查询解析不符合契约`);
+// ⑥ 14 个模型全部走专用协议，不再有「通用 openai-video」兜底
+const protocols = LL2_CONNECTED_VIDEO_MODELS.map((model) => LL2_VIDEO_ADAPTERS[model]?.createPath || "");
+const missing = LL2_CONNECTED_VIDEO_MODELS.filter((model) => !LL2_VIDEO_ADAPTERS[model] || !LL2_VIDEO_ADAPTERS[model].createPath);
+out.push(`⑥ 专用协议覆盖：${missing.length ? "FAIL" : "PASS"} ${missing.length ? `缺 ${missing.join(",")}` : "14/14"}`);
+if (missing.length) {
+    console.error("⑥ 失败：有模型没有专用适配");
     process.exitCode = 1;
 }
+void protocols;
 
 // ⑦ 超分：独立协议 /hd/tasks，结果要带 Bearer 才能下载
 hdCreateBody = null; hdDownloadAuth = ""; hdQueryCount = 0;
@@ -217,21 +213,6 @@ out.push(`⑦ 超分协议：${hdOk ? "PASS" : "FAIL"} 创建体 ${JSON.stringif
 out.push(`   任务 ${hd.taskId} → ${hd.url}，带 Bearer 下载 ${hdBlob.size} 字节`);
 if (!hdOk) {
     console.error("⑦ 失败：超分协议 payload / 结果地址 / Bearer 下载不符合契约");
-    process.exitCode = 1;
-}
-
-// ⑧ 非 H3 模型带素材：明确拦截，不能把 image_urls 发出去白扣费
-scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
-let mediaBlocked = "";
-try {
-    await ll2GenerateVideo(common({ model: "Super Vega 1.0-pro", resolution: "720P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
-} catch (error) {
-    mediaBlocked = error instanceof Error ? error.message : String(error);
-}
-const mediaOk = mediaBlocked.includes("协议还没接通") && !openaiCreateBody;
-out.push(`⑧ 未接协议的模型带素材：${mediaOk ? "PASS" : "FAIL"} ${mediaBlocked.slice(0, 40)}`);
-if (!mediaOk) {
-    console.error("⑧ 失败：非 H3 模型带素材没有被拦住");
     process.exitCode = 1;
 }
 
@@ -285,6 +266,28 @@ const viduOk =
 out.push(`⑫ vidu 图生视频：${viduOk ? "PASS" : "FAIL"} ${JSON.stringify(viduCreateBody).slice(0, 120)}`);
 if (!viduOk) {
     console.error("⑫ 失败：vidu payload/artifact 鉴权不符合预期");
+    process.exitCode = 1;
+}
+
+// ⑬ Super Vega：协议形状已按文档组好，但真机任务返回 FAIL，素材入口暂不放开
+const vegaAdapter = LL2_VIDEO_ADAPTERS["Super Vega 1.0-lite"];
+const vegaBody = vegaAdapter.buildCreatePayload(
+    vegaAdapter.normalize({ model: "Super Vega 1.0-lite", prompt: "一只猫", seconds: 4, resolution: "768P", ratio: "16:9", media: [{ type: "image_url", image_url: { url: "https://example.com/first.png" }, role: "first_frame" }] }),
+);
+const vegaShapeOk =
+    vegaBody.FileInfos?.[0]?.Category === "Image" &&
+    vegaBody.FileInfos?.[0]?.Usage === "FirstFrame" &&
+    vegaBody.OutputConfig?.Resolution === "768P";
+let vegaBlocked = "";
+try {
+    await ll2GenerateVideo(common({ model: "Super Vega 1.0-lite", resolution: "768P", media: [{ type: "image_url", image_url: { url: "https://example.com/first.png" }, role: "first_frame" }] }));
+} catch (error) {
+    vegaBlocked = error instanceof Error ? error.message : String(error);
+}
+const vegaOk = vegaShapeOk && vegaBlocked.includes("还在验证");
+out.push(`⑬ Super Vega：协议形状组件 ${vegaShapeOk ? "PASS" : "FAIL"}，素材入口${vegaBlocked.includes("还在验证") ? "已拦截" : "未拦截"}`);
+if (!vegaOk) {
+    console.error("⑬ 失败：vega 协议形状或素材拦截不符合预期");
     process.exitCode = 1;
 }
 
