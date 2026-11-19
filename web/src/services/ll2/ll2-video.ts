@@ -192,7 +192,8 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     // 2026-11-19 真机反馈：非 H3 模型把 image_urls 发到 /v1 后，网关没有真的按首帧出片
     // （用户引用了图，成片却是按文字生成的，还扣了钱）。其它模型的素材协议还没逐个接通前，
     // 先明确挡住，避免再花冤枉钱。H3 的 content[] 是已实测的契约。
-    if (media.length > 0 && req.model !== "MiniMax-H3") {
+    const mediaProtocolReady = req.model === "MiniMax-H3" || req.model.startsWith("wan3.0-");
+    if (media.length > 0 && !mediaProtocolReady) {
         throw new Error("这个模型带图/视频出片的协议还没接通：现在只有 MiniMax-H3 会真的按参考图出片。先换 H3，或把参考素材去掉再生成。");
     }
     // 2026-11-19 真网关实测：图片的 data URI 能出片；视频 / 音频必须是自己能下载的公网 HTTPS 地址，
@@ -227,7 +228,7 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
         `${originOf(req)}${adapter.createPath}`,
         {
             method: "POST",
-            headers: authHeaders(req, { "Idempotency-Key": req.idempotencyKey || newIdempotencyKey() }),
+            headers: authHeaders(req, { ...(adapter.headers || {}), "Idempotency-Key": req.idempotencyKey || newIdempotencyKey() }),
             body: JSON.stringify(adapter.buildCreatePayload(args)),
         },
         req,

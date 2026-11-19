@@ -44,6 +44,8 @@ export type LL2VideoAdapter = {
     protocol: LL2VideoProtocol;
     label: string;
     createPath: string;
+    /** 个别协议要额外请求头（如 DashScope 的 X-DashScope-Async）。 */
+    headers?: Record<string, string>;
     /** 把 UI 参数收敛到该模型真实支持的范围，避免把非法档位发给网关。 */
     normalize: (args: LL2AdapterArgs) => LL2AdapterArgs;
     buildCreatePayload: (args: LL2AdapterArgs) => Json;
@@ -115,6 +117,60 @@ const h3Adapter: LL2VideoAdapter = {
         };
     },
 };
+
+/**
+ * wan3 / wan3-prime：网关透传阿里百炼 DashScope 异步协议。
+ *   POST /ali/api/v1/services/aigc/video-generation/video-synthesis
+ *   GET  /ali/api/v1/tasks/{task_id}
+ * 有参考图时进 input.img_url（首帧），没有走纯文字。
+ */
+function makeWan3Adapter(model: "wan3.0-video" | "wan3.0-video-prime"): LL2VideoAdapter {
+    return {
+        model,
+        protocol: "openai-video-v1",
+        label: OPENAI_VIDEO_LABELS[model],
+        createPath: "/ali/api/v1/services/aigc/video-generation/video-synthesis",
+        headers: { "X-DashScope-Async": "enable" },
+        normalize: (args) => {
+            const base = normalizeBase(args);
+            const tier = ll2TierFor(model, base.resolution);
+            return { ...base, resolution: tier?.resolution || base.resolution };
+        },
+        buildCreatePayload: (args) => {
+            const image = args.media?.find((item) => item.image_url?.url)?.image_url?.url || "";
+            return {
+                model,
+                input: {
+                    prompt: args.prompt,
+                    ...(image ? { img_url: image } : {}),
+                },
+                parameters: {
+                    resolution: String(args.resolution).toUpperCase(),
+                    ratio: args.ratio,
+                    duration: args.seconds,
+                },
+            };
+        },
+        taskIdOf: (payload) => {
+            const output = (payload.output || {}) as Json;
+            return ll2TextOf(output, "task_id") || ll2TextOf(payload, "task_id", "id");
+        },
+        queryPath: (taskId) => `/ali/api/v1/tasks/${encodeURIComponent(taskId)}`,
+        parseQuery: (payload) => {
+            const output = (payload.output || {}) as Json;
+            const rawStatus = String(output.task_status || output.status || "").toLowerCase();
+            const status = rawStatus === "succeeded" ? "succeeded" : rawStatus === "failed" || rawStatus === "canceled" ? "failed" : rawStatus;
+            const usage = (payload.usage || {}) as Json;
+            return {
+                status,
+                url: ll2TextOf(output, "video_url", "url"),
+                chargedSeconds: Number(usage.duration ?? usage.output_seconds ?? 0) || 0,
+                errorCode: ll2TextOf(output, "code", "error_code"),
+                errorMessage: ll2TextOf(output, "message", "error_message"),
+            };
+        },
+    };
+}
 
 /** 走 /v1/video/generations 的模型及其中文名（H3 单独走 /v2，不在这里）。 */
 const OPENAI_VIDEO_LABELS = {
@@ -198,8 +254,10 @@ function makeOpenAIVideoAdapter(model: OpenAIVideoModel): LL2VideoAdapter {
 /** H3 走 /v2，其余 13 个走 /v1；合计覆盖 LL2_CONNECTED_VIDEO_MODELS 全部 14 个。 */
 export const LL2_VIDEO_ADAPTERS = {
     "MiniMax-H3": h3Adapter,
+    "wan3.0-video": makeWan3Adapter("wan3.0-video"),
+    "wan3.0-video-prime": makeWan3Adapter("wan3.0-video-prime"),
     ...Object.fromEntries(
-        (Object.keys(OPENAI_VIDEO_LABELS) as OpenAIVideoModel[]).map((model) => [model, makeOpenAIVideoAdapter(model)]),
+        (Object.keys(OPENAI_VIDEO_LABELS) as OpenAIVideoModel[]).filter((model) => !model.startsWith("wan3.0-")).map((model) => [model, makeOpenAIVideoAdapter(model)]),
     ),
 } as Record<LL2ConnectedVideoModel, LL2VideoAdapter>;
 

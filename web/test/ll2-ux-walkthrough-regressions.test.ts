@@ -45,11 +45,17 @@ test("首页不再挂重复的聊天改稿悬浮按钮", async () => {
     expect(source).toContain('pathname === "/" || pathname === "/create"');
 });
 
-test("带素材：只有已实测的 H3 放行，其它模型明确拦截", async () => {
+test("带素材：H3 / wan3 已接协议，其它模型明确拦截", async () => {
     // 2026-11-19 真机反馈：非 H3 的 image_urls 被网关忽略，成片与参考图无关还扣费。
+    // wan3 已改走 DashScope 的 input.img_url，并用洋红测试卡真机验证首帧一致。
     const video = await read("../src/services/ll2/ll2-video.ts");
-    expect(video).toContain('media.length > 0 && req.model !== "MiniMax-H3"');
+    expect(video).toContain("mediaProtocolReady");
+    expect(video).toContain('req.model.startsWith("wan3.0-")');
     expect(video).toContain("协议还没接通");
+    const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
+    expect(adapters).toContain("/ali/api/v1/services/aigc/video-generation/video-synthesis");
+    expect(adapters).toContain("img_url");
+    expect(adapters).toContain("X-DashScope-Async");
     const source = await read("../src/components/ll2/ll2-oneshot.tsx");
     expect(source).not.toContain('setModel("MiniMax-H3")');
     expect(source).not.toContain("disabled={hasAnyReference}");

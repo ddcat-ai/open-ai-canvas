@@ -86,9 +86,11 @@ check("H3 参数仍校准为 768P", framePayload.resolution, "768P");
 check("首尾帧 content[] = 1 文本 + 2 图片", framePayload.content.length, 3);
 check("首尾帧角色顺序", framePayload.content.slice(1).map((x: { role: string }) => x.role), ["first_frame", "last_frame"]);
 check("没有编造额外媒体字段", Object.keys(framePayload).sort(), ["content", "duration", "model", "ratio", "resolution"]);
-check("万相 3.0 纯文本 payload 未受影响", LL2_VIDEO_ADAPTERS["wan3.0-video"].buildCreatePayload(
+const wan3TextPayload = LL2_VIDEO_ADAPTERS["wan3.0-video"].buildCreatePayload(
     LL2_VIDEO_ADAPTERS["wan3.0-video"].normalize({ model: "wan3.0-video", prompt: "一只猫", seconds: 5, resolution: "480P", ratio: "16:9" }),
-).prompt, "一只猫");
+);
+check("万相 3.0 纯文本走 DashScope input.prompt", wan3TextPayload.input.prompt, "一只猫");
+check("纯文本不带 img_url", "img_url" in wan3TextPayload.input, false);
 
 console.log("\n③ @ 引用：从资产库选多个，提示词就地换成网关标签");
 
@@ -140,7 +142,7 @@ console.log("\n⑥ 非 H3 模型带素材：服务层明确拦截（素材协议
 
 let blocked = "";
 try {
-    await ll2GenerateVideo({ apiKey: "mock-key", model: "wan3.0-video", prompt: "一只猫", seconds: 5, resolution: "480P", media: oneImage.items });
+    await ll2GenerateVideo({ apiKey: "mock-key", model: "viduq3-pro", prompt: "一只猫", seconds: 5, resolution: "480P", media: oneImage.items });
 } catch (error) {
     blocked = error instanceof Error ? error.message : String(error);
 }

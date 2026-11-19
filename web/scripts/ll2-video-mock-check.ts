@@ -17,6 +17,7 @@ let hdCreateBody = null;
 let hdDownloadAuth = "";
 let hdQueryCount = 0;
 let h3CreateBody = null;
+let wan3CreateBody = null;
 
 const server = Bun.serve({
     port: 0,
@@ -24,6 +25,14 @@ const server = Bun.serve({
         const url = new URL(req.url);
         // 非 H3 的 13 个模型走 /v1/video/generations，字段与 H3 完全不同：
         // seconds 必须是字符串，比例字段叫 aspect_ratio，结果在 data.result_url。
+        if (req.method === "POST" && url.pathname === "/ali/api/v1/services/aigc/video-generation/video-synthesis") {
+            wan3CreateBody = await req.json();
+            createCount += 1;
+            return Response.json({ output: { task_id: "wan3-mock-1", task_status: "PENDING" } });
+        }
+        if (req.method === "GET" && url.pathname.startsWith("/ali/api/v1/tasks/")) {
+            return Response.json({ output: { task_id: "wan3-mock-1", task_status: "SUCCEEDED", video_url: "https://example.invalid/wan3.mp4" }, usage: { duration: 4 } });
+        }
         if (req.method === "POST" && url.pathname === "/v1/video/generations") {
             createCount += 1;
             openaiCreateBody = await req.json();
@@ -193,12 +202,12 @@ if (!hdOk) {
 scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
 let mediaBlocked = "";
 try {
-    await ll2GenerateVideo(common({ model: "wan3.0-video", resolution: "720P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
+    await ll2GenerateVideo(common({ model: "viduq3-pro", resolution: "720p", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
 } catch (error) {
     mediaBlocked = error instanceof Error ? error.message : String(error);
 }
 const mediaOk = mediaBlocked.includes("协议还没接通") && !openaiCreateBody;
-out.push(`⑧ 非 H3 带素材：${mediaOk ? "PASS" : "FAIL"} ${mediaBlocked.slice(0, 40)}`);
+out.push(`⑧ 未接协议的模型带素材：${mediaOk ? "PASS" : "FAIL"} ${mediaBlocked.slice(0, 40)}`);
 if (!mediaOk) {
     console.error("⑧ 失败：非 H3 模型带素材没有被拦住");
     process.exitCode = 1;
@@ -214,6 +223,16 @@ const optOff = !h3CreateBody || !("prompt_optimizer" in h3CreateBody);
 out.push(`⑨ H3 提示词优化：${optOn && optOff ? "PASS" : "FAIL"} 勾选=${optOn}，不勾不传=${optOff}`);
 if (!optOn || !optOff) {
     console.error("⑨ 失败：prompt_optimizer 只在勾选时传 true");
+    process.exitCode = 1;
+}
+
+// ⑩ wan3 图生视频：走 DashScope 透传，图片进 input.img_url
+scenario = "success"; createCount = 0; queryCount = 0; h3CreateBody = null; wan3CreateBody = null;
+await ll2GenerateVideo(common({ model: "wan3.0-video", resolution: "480P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
+const wanOk = wan3CreateBody?.input?.img_url === "data:image/png;base64,AAAA" && wan3CreateBody?.model === "wan3.0-video";
+out.push(`⑩ wan3 图生视频：${wanOk ? "PASS" : "FAIL"} ${JSON.stringify(wan3CreateBody)}`);
+if (!wanOk) {
+    console.error("⑩ 失败：wan3 没有把图片放进 input.img_url");
     process.exitCode = 1;
 }
 
