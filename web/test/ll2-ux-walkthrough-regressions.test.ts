@@ -224,6 +224,13 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("画布文本助手使用 DMC 深色玻璃样式", async () => {
+    const css = await read("../src/styles/ll2-c-polish.css");
+    expect(css).toContain(".ll2-agent.is-canvas");
+    expect(css).toContain("rgba(22, 22, 26, 0.92)");
+    expect(css).toContain(".ll2-agent.is-canvas .ll2-agent-compose textarea");
+});
+
 test("旧配置里的 auto-hd 也会从所有模型下拉里清掉", async () => {
     const store = await read("../src/stores/use-config-store.ts");
     expect(store).toContain('channel.models.filter((model) => model !== "auto-hd")');

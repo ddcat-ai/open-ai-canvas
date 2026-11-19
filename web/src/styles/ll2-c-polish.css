@@ -2152,3 +2152,190 @@ button.ll2-sidebar-guide {
     .ll2-save-asset-preview { order: -1; }
     .ll2-save-asset-preview img { aspect-ratio: 16 / 9; }
 }
+
+/* 画布里的文本助手：跟 DMC 的深色玻璃卡片同一套观感，不再用大圆球 + 大白卡。 */
+.ll2-agent.is-canvas {
+    width: min(360px, calc(100vw - 24px));
+    border: 1px solid rgba(242, 242, 245, 0.12);
+    border-radius: 16px;
+    background: rgba(22, 22, 26, 0.92);
+    color: #f2f2f5;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(24px) saturate(1.1);
+}
+
+.ll2-agent.is-canvas .ll2-agent-head {
+    padding: 10px 12px;
+    border-bottom-color: rgba(242, 242, 245, 0.08);
+}
+
+.ll2-agent.is-canvas .ll2-agent-new {
+    gap: 4px;
+    color: rgba(242, 242, 245, 0.86);
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.ll2-agent.is-canvas .ll2-agent-head-meta {
+    color: rgba(242, 242, 245, 0.42);
+    font-size: 10px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-icon {
+    color: rgba(242, 242, 245, 0.45);
+}
+
+.ll2-agent.is-canvas .ll2-agent-scroll {
+    padding: 14px 12px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-welcome {
+    align-items: flex-start;
+    padding-top: 8px;
+    text-align: left;
+}
+
+.ll2-agent.is-canvas .ll2-agent-orb {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 14px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #8d54ff, #6720ff);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px rgba(103, 32, 255, 0.28);
+}
+
+.ll2-agent.is-canvas .ll2-agent-welcome h2 {
+    margin-bottom: 6px;
+    font-size: 14.5px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.ll2-agent.is-canvas .ll2-agent-welcome > p {
+    color: rgba(242, 242, 245, 0.5);
+    font-size: 11.5px;
+    line-height: 1.6;
+}
+
+.ll2-agent.is-canvas .ll2-agent-starters {
+    gap: 6px;
+    margin-top: 16px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-starters button {
+    padding: 9px 10px;
+    border-color: rgba(242, 242, 245, 0.09);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.035);
+    color: rgba(242, 242, 245, 0.9);
+}
+
+.ll2-agent.is-canvas .ll2-agent-starters button:hover {
+    border-color: rgba(141, 84, 255, 0.5);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.ll2-agent.is-canvas .ll2-agent-starters strong {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.ll2-agent.is-canvas .ll2-agent-starters small {
+    color: rgba(242, 242, 245, 0.42);
+    font-size: 10.5px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-tip {
+    margin-top: 14px !important;
+    color: rgba(242, 242, 245, 0.34) !important;
+    font-size: 10.5px !important;
+}
+
+.ll2-agent.is-canvas .ll2-agent-compose {
+    padding: 10px 12px 12px;
+    border-top: 1px solid rgba(242, 242, 245, 0.08);
+    background: rgba(18, 18, 21, 0.55);
+}
+
+.ll2-agent.is-canvas .ll2-agent-context {
+    margin-bottom: 6px;
+    color: rgba(242, 242, 245, 0.38);
+    font-size: 10px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-compose textarea {
+    min-height: 74px;
+    padding: 10px 12px;
+    border: 1px solid rgba(242, 242, 245, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    color: #f2f2f5;
+    font-size: 12.5px;
+    line-height: 1.6;
+    resize: none;
+}
+
+.ll2-agent.is-canvas .ll2-agent-compose textarea::placeholder {
+    color: rgba(242, 242, 245, 0.3);
+}
+
+.ll2-agent.is-canvas .ll2-agent-compose textarea:focus {
+    border-color: rgba(141, 84, 255, 0.65);
+    box-shadow: 0 0 0 3px rgba(141, 84, 255, 0.14);
+}
+
+.ll2-agent.is-canvas .ll2-agent-compose-bar {
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-send {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 9px;
+    background: #8d54ff;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(141, 84, 255, 0.3);
+}
+
+.ll2-agent.is-canvas .ll2-agent-send:disabled {
+    opacity: 0.45;
+    box-shadow: none;
+}
+
+.ll2-agent.is-canvas .ll2-agent-compose-foot {
+    margin-top: 8px;
+    color: rgba(242, 242, 245, 0.4);
+    font-size: 10.5px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-compose-foot a,
+.ll2-agent.is-canvas .ll2-agent-foot-link {
+    color: rgba(180, 150, 255, 0.92);
+    font-size: 10.5px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-msg {
+    border: 1px solid rgba(242, 242, 245, 0.07);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #f2f2f5;
+    font-size: 12px;
+}
+
+.ll2-agent.is-canvas .ll2-agent-msg.is-user {
+    border-color: rgba(141, 84, 255, 0.25);
+    background: rgba(141, 84, 255, 0.14);
+}
+
+.ll2-agent.is-canvas .ll2-agent-msg-foot {
+    color: rgba(242, 242, 245, 0.38);
+}
+
+.ll2-agent.is-canvas .ll2-agent-msg-actions button {
+    border-color: rgba(242, 242, 245, 0.1);
+    background: transparent;
+    color: rgba(242, 242, 245, 0.6);
+}
