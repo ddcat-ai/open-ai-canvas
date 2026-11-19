@@ -5,7 +5,9 @@ import { StatusBadge } from "@/components/ui/base/badges";
 import { FileImage, UploadCloud, X } from "lucide-react";
 
 import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS, type AssetCategory } from "@/lib/asset-category";
+import { readFileAsDataUrl, readImageMeta } from "@/lib/image-utils";
 import { uploadImage } from "@/services/image-storage";
+import { useUserStore } from "@/stores/use-user-store";
 import { localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
 import type { AssetFolder } from "@/services/api/user-data";
@@ -17,6 +19,9 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
     const { message } = App.useApp();
     const { t } = useTranslation();
     const addAsset = useAssetStore((state) => state.addAsset);
+    // 免登录（BYOK）下没有服务端资源存储：批量上传必须走本机 data URI，
+    // 否则 uploadImage 会去打 /api/resources 并抛「请先登录」，部分文件静默失败。
+    const userId = useUserStore((state) => state.user?.id || "");
     const [items, setItems] = useState<BatchItem[]>([]);
     const [category, setCategory] = useState<AssetCategory>("material");
     const [folderId, setFolderId] = useState(defaultFolderId);
@@ -48,6 +53,24 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
                 const item = pending[cursor++];
                 setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "uploading", percent: 10, error: undefined } : entry));
                 try {
+                    if (!userId) {
+                        const dataUrl = await readFileAsDataUrl(item.file);
+                        const meta = await readImageMeta(dataUrl);
+                        addAsset({
+                            kind: "image",
+                            title: item.file.name.replace(/\.[^.]+$/, ""),
+                            category,
+                            folderId: folderId || undefined,
+                            coverUrl: dataUrl,
+                            tags,
+                            source: "批量上传",
+                            metadata: { source: "manual-batch" },
+                            data: { dataUrl, storageKey: "", width: meta.width, height: meta.height, bytes: item.file.size, mimeType: item.file.type || meta.mimeType },
+                        });
+                        setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "done", percent: 100 } : entry));
+                        succeeded++;
+                        continue;
+                    }
                     // uploadImage 已从本地文件读取尺寸，不再回读远端地址。
                     const uploaded = await uploadImage(item.file, (loaded, total) => {
                         const percent = total > 0 ? Math.min(95, Math.max(10, Math.round((loaded / total) * 95))) : 10;

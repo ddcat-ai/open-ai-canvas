@@ -589,11 +589,10 @@ html body .app-user-workspace.app-product-workspace .app-workspace-shell.is-crea
     animation: ll2-spin 0.9s linear infinite;
 }
 
-/* 官网价格读不到时，别做成「坏了」的样子：低调文字 + 点状下划线表示可重试。 */
-.ll2-plaza-refresh.is-stale {
+/* 价格来自内置快照：纯说明文字，不做成可点的重试（官网接口跨域必然失败）。 */
+.ll2-plaza-refresh.is-static {
     color: var(--ll2-a-0_45, rgba(10, 10, 10, 0.45));
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
+    cursor: default;
 }
 
 @keyframes ll2-spin {

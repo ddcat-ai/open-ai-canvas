@@ -134,10 +134,20 @@ test("免登录不偷偷打登录态接口，价格页与悬浮按钮不挡内�
     // 价格页是满宽表格，悬浮按钮会压住最后一列。
     const panel = await read("../src/components/ll2/ll2-agent-panel.tsx");
     expect(panel).toContain('pathname === "/models"');
-    // 官网价格接口跨域读不到时，不能报成「坏了」。
+    // 官网价格接口跨域必然失败：不要再摆「点此重试」这种假承诺，价格页只做静态说明。
     const plaza = await read("../src/pages/models/ll2-model-plaza.tsx");
     expect(plaza).toContain("价格按内置快照展示");
     expect(plaza).not.toContain("官网价格暂时读不到，点此重试");
+    expect(plaza).not.toContain("loadLive");
+    expect(plaza).not.toContain("fetchLL2LivePricing");
+    // 设置页的「从官网刷新」同样是永远失败的入口，一并去掉。
+    const config = await read("../src/pages/ll2-workspace/config.tsx");
+    expect(config).not.toContain("官网暂时读不到");
+    expect(config).not.toContain("fetchLL2LivePricing");
+    // 批量上传在免登录时必须走本机 data URI，不能拿 File 直传 /api/resources（会「请先登录」）。
+    const batch = await read("../src/pages/assets/asset-batch-upload-modal.tsx");
+    expect(batch).toContain("readFileAsDataUrl(item.file)");
+    expect(batch).toContain("if (!userId)");
 });
 
 test("14 个视频模型全部适配，秒数按字符串发，渠道缺失要说人话", async () => {

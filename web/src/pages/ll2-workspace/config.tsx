@@ -1,4 +1,4 @@
-import { Check, ExternalLink, KeyRound, RefreshCw } from "lucide-react";
+import { Check, ExternalLink, KeyRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -8,7 +8,6 @@ import {
     LL2_PRICING_URL,
     LL2_VIDEO_DURATION,
     LL2_VIDEO_TIERS,
-    fetchLL2LivePricing,
     type LL2ConnectedVideoModel,
 } from "@/lib/ll2-models";
 import { ll2MaskedKey, ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
@@ -24,12 +23,8 @@ const RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
  */
 export default function LL2Config() {
     const apiKey = useLL2Store((state) => state.apiKey);
-    const liveModels = useLL2Store((state) => state.liveModels);
-    const setLiveModels = useLL2Store((state) => state.setLiveModels);
     const [settings, setSettings] = useState<LL2WorkspaceSettings>(() => ll2ReadSettings());
     const [saved, setSaved] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
-    const [refreshMessage, setRefreshMessage] = useState("");
     const tiers = LL2_VIDEO_TIERS[settings.videoModel];
     const range = LL2_VIDEO_DURATION[settings.videoModel];
     const textModelName = useMemo(() => ll2TextFriendlyName(settings.textModel), [settings.textModel]);
@@ -39,20 +34,6 @@ export default function LL2Config() {
         setSettings(next);
         setSaved(true);
         setTimeout(() => setSaved(false), 1600);
-    };
-
-    const refresh = async () => {
-        setRefreshing(true);
-        setRefreshMessage("");
-        try {
-            const list = await fetchLL2LivePricing();
-            setLiveModels(list);
-            setRefreshMessage(`已从 LL2 官网读到 ${list.length} 个模型，新上架的会自动加进来`);
-        } catch {
-            setRefreshMessage(`官网暂时读不到，先用本机已存好的 ${LL2_MODEL_COUNT} 个模型`);
-        } finally {
-            setRefreshing(false);
-        }
     };
 
     return (
@@ -131,15 +112,11 @@ export default function LL2Config() {
                 <section className="ll2-config-block">
                     <div className="ll2-config-block-head">
                         <span>模型清单</span>
-                        <button type="button" className="ll2-config-refresh" onClick={() => void refresh()} disabled={refreshing}>
-                            <RefreshCw className={`size-3.5 ${refreshing ? "is-spinning" : ""}`} /> 从官网刷新
-                        </button>
                     </div>
                     <p className="ll2-config-note">
-                        本机已存 {LL2_MODEL_COUNT} 个模型的价格，官网实时清单 {liveModels.length ? `${liveModels.length} 个` : "还没读"}。
-                        官网新上的模型会自动加进来，价格以官网为准。
+                        本机已存 {LL2_MODEL_COUNT} 个模型的价格，和 LL2 官网的计费系数一致。
+                        浏览器里读不到官网实时清单（跨域拦截），要看最新价格请点下面的「LL2 官网价格页」。
                     </p>
-                    {refreshMessage ? <p className="ll2-config-note is-message">{refreshMessage}</p> : null}
                     <div className="ll2-config-links">
                         <Link to="/models">模型广场 · 每次调用多少钱 <ExternalLink className="size-3.5" /></Link>
                         <a href={LL2_PRICING_URL} target="_blank" rel="noreferrer">LL2 官网价格页 <ExternalLink className="size-3.5" /></a>

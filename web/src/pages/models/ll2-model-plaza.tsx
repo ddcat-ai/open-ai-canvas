@@ -1,5 +1,5 @@
 import { ArrowUpRight, CheckCircle2, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
 import {
@@ -9,7 +9,6 @@ import {
     LL2_PRICE_SNAPSHOT_DATE,
     LL2_PRICING_URL,
     LL2_STATUS_URL,
-    fetchLL2LivePricing,
     ll2ConnectionSummary,
     ll2EstimateCNY,
     ll2FriendlyCNY,
@@ -102,31 +101,9 @@ function CostCalculator() {
 
 export default function LL2ModelPlaza() {
     const [filter, setFilter] = useState<Filter>("all");
-    const [liveCount, setLiveCount] = useState<number | null>(null);
-    const [liveError, setLiveError] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
+    // 价格快照是内置的：浏览器直连 ll2.cn/api/pricing 会被跨域拦死（实测），
+    // 所以不再做「拉取 + 失败提示」，也不摆一个永远失败的重试按钮。
     const liveModels = useLL2Store((state) => state.liveModels);
-    const setLiveModels = useLL2Store((state) => state.setLiveModels);
-
-    const loadLive = useCallback(async () => {
-        setRefreshing(true);
-        try {
-            const list = await fetchLL2LivePricing();
-            setLiveCount(list.length);
-            setLiveError(false);
-            // 官网实时清单并入渠道：以后新上架的模型也会自动接上。
-            setLiveModels(list);
-        } catch {
-            setLiveError(true);
-        } finally {
-            setRefreshing(false);
-        }
-    }, [setLiveModels]);
-
-    useEffect(() => {
-        void loadLive();
-    }, [loadLive]);
-
     const models = useMemo(() => (filter === "all" ? LL2_MODELS : LL2_MODELS.filter((model) => model.category === filter)), [filter]);
     const summary = useMemo(() => ll2ConnectionSummary(liveModels), [liveModels]);
     const cheapest = useMemo(() => {
@@ -172,16 +149,13 @@ export default function LL2ModelPlaza() {
                         </button>
                     ))}
                 </div>
-                <button
-                    type="button"
-                    className={`ll2-plaza-refresh${liveError ? " is-stale" : ""}`}
-                    onClick={() => void loadLive()}
-                    disabled={refreshing}
-                    title={liveError ? "浏览器直连 ll2.cn 的价格接口会被跨域拦截，表格用内置快照（与官网同一份计费系数）；点一下可再试" : "与官网公开价格核对模型清单"}
+                <span
+                    className="ll2-plaza-refresh is-static"
+                    title="浏览器直连 ll2.cn 的价格接口会被跨域拦截；这张表用的是内置快照，与官网同一套计费系数。要看最新价格，点右上「官网实时价格」。"
                 >
-                    <RefreshCw className={`size-3.5 ${refreshing ? "is-spinning" : ""}`} />
-                    {liveError ? "价格按内置快照展示（官网接口跨域）" : liveCount === null ? "核对中…" : `已与官网核对 ${liveCount} 个模型`}
-                </button>
+                    <RefreshCw className="size-3.5" />
+                    价格按内置快照展示
+                </span>
             </div>
 
             <div className="ll2-plaza-table-wrap">
