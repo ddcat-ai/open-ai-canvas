@@ -177,10 +177,10 @@ export default function LL2ModelPlaza() {
                     className={`ll2-plaza-refresh${liveError ? " is-stale" : ""}`}
                     onClick={() => void loadLive()}
                     disabled={refreshing}
-                    title={liveError ? "官网价格暂时读不到（跨域或网络受限），表格里仍是内置价格；点一下可重试" : "与官网公开价格核对模型清单"}
+                    title={liveError ? "浏览器直连 ll2.cn 的价格接口会被跨域拦截，表格用内置快照（与官网同一份计费系数）；点一下可再试" : "与官网公开价格核对模型清单"}
                 >
                     <RefreshCw className={`size-3.5 ${refreshing ? "is-spinning" : ""}`} />
-                    {liveCount === null ? (liveError ? "官网价格暂时读不到，点此重试" : "核对中…") : liveError ? "官网价格暂时读不到，点此重试" : `已与官网核对 ${liveCount} 个模型`}
+                    {liveError ? "价格按内置快照展示（官网接口跨域）" : liveCount === null ? "核对中…" : `已与官网核对 ${liveCount} 个模型`}
                 </button>
             </div>
 

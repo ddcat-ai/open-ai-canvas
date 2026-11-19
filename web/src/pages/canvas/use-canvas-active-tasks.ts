@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listGenerationTasks, subscribeGenerationTasks, type GenerationTask } from "@/services/api/task-center";
+import { hasRemoteUserDataSyncSession } from "@/services/user-data-sync";
 
 export function useCanvasActiveTasks(projectId: string, enabled: boolean) {
     const queryClient = useQueryClient();
@@ -10,7 +11,8 @@ export function useCanvasActiveTasks(projectId: string, enabled: boolean) {
         // Agent 的持久化执行仍复用任务队列/计费生命周期，但不应占据画布右上角的“生成任务”浮层。
         // 多取一页再过滤，避免 Agent 排在前面时把真正的画布生成任务挤掉。
         queryFn: ({ signal }) => listGenerationTasks(30, { projectId, activeOnly: true }, undefined, signal).then((tasks) => tasks.filter((task) => !isInternalAgentTask(task)).slice(0, 5)),
-        enabled: enabled && Boolean(projectId),
+        // 任务队列是登录态接口；免登录本机画布不会有云端任务，别每 10 秒打一次 401。
+        enabled: enabled && Boolean(projectId) && hasRemoteUserDataSyncSession(),
         // Shared task observers provide live updates. Lists only discover missed/new tasks.
         refetchInterval: 10_000,
         refetchIntervalInBackground: false,

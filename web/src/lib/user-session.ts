@@ -127,6 +127,9 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
     }
 
     void (async () => {
+        // BYOK 免登录只用本地默认配置：`/api/model-catalog` 是登录态接口，游客打必然 401，
+        // 还会在控制台刷「模型目录后台刷新失败」，直接把这段省掉。
+        if (!userId) return;
         try {
             const catalog = await getModelCatalog();
             if (!isCurrentSession(generation, userId)) return;

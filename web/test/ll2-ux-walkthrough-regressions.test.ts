@@ -123,6 +123,23 @@ test("首页拖图先存资产库：没有「素材库 @」页签，弹保存框
     expect(source).toContain('mode === "quote"');
 });
 
+test("免登录不偷偷打登录态接口，价格页与悬浮按钮不挡内容", async () => {
+    // 走查发现：每条路由都打 /api/model-catalog（401），画布编辑器还打 /tasks 和 /sync-status。
+    const session = await read("../src/lib/user-session.ts");
+    expect(session).toContain("if (!userId) return;");
+    const lifecycle = await read("../src/pages/canvas/use-canvas-project-lifecycle.ts");
+    expect(lifecycle).toContain("if (!hasRemoteUserDataSyncSession()) return;");
+    const tasks = await read("../src/pages/canvas/use-canvas-active-tasks.ts");
+    expect(tasks).toContain("enabled && Boolean(projectId) && hasRemoteUserDataSyncSession()");
+    // 价格页是满宽表格，悬浮按钮会压住最后一列。
+    const panel = await read("../src/components/ll2/ll2-agent-panel.tsx");
+    expect(panel).toContain('pathname === "/models"');
+    // 官网价格接口跨域读不到时，不能报成「坏了」。
+    const plaza = await read("../src/pages/models/ll2-model-plaza.tsx");
+    expect(plaza).toContain("价格按内置快照展示");
+    expect(plaza).not.toContain("官网价格暂时读不到，点此重试");
+});
+
 test("14 个视频模型全部适配，秒数按字符串发，渠道缺失要说人话", async () => {
     const models = await read("../src/lib/ll2-models.ts");
     // 清单里每个非 H3 的视频模型都要在册，不能再退回「只有两个」。

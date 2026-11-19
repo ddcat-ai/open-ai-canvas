@@ -350,6 +350,9 @@ export function useCanvasProjectLifecycle({
 
     useEffect(() => {
         if (!projectLoaded || !sessionHydrated || isDraft) return;
+        // 免登录本机画布没有云端项目：`/sync-status` 与编辑租约都是登录态接口，
+        // 游客每 2–30 秒打一次 401 没有意义，直接跳过（本地保存链路不受影响）。
+        if (!hasRemoteUserDataSyncSession()) return;
         const scope = getActiveUserScope();
         let connected = false;
         let agentActive = false;

@@ -307,7 +307,8 @@ export function LL2AgentPanel() {
     if (!open) {
         // 首页已经有「聊天改稿」页签和「打开聊天改稿」按钮，再挂一个悬浮按钮
         // 只是重复入口，还会压住底部示例卡片和「开始创作」。其它页面保留悬浮入口。
-        if (pathname === "/" || pathname === "/create") return null;
+        // /models 是满宽价格表，右下角悬浮按钮会压住「一次大概多少」那一列；价格页不是创作页。
+        if (pathname === "/" || pathname === "/create" || pathname === "/models") return null;
         return (
             <button type="button" className={`ll2-agent-fab${inCanvas ? " is-canvas" : ""}`} onClick={() => setOpen(true)} aria-label={inCanvas ? "打开画布里的文本助手" : "打开聊天改稿"}>
                 <Sparkles className="size-4.5" aria-hidden />
