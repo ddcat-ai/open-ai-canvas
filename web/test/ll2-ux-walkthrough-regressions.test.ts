@@ -45,13 +45,18 @@ test("首页不再挂重复的聊天改稿悬浮按钮", async () => {
     expect(source).toContain('pathname === "/" || pathname === "/create"');
 });
 
-test("带素材时自动锁 MiniMax-H3 且模型下拉不可改", async () => {
+test("带素材不再强制锁 H3：所有模型都按统一网关的素材字段发送", async () => {
+    // 2026-11-19 用户口径：什么模型都能带素材；不再自动切 H3、也不禁用模型下拉。
     const source = await read("../src/components/ll2/ll2-oneshot.tsx");
-    // 拖图 / @ 引用后必须无条件切 H3 + 768P，不能靠用户自己挑（wan3 带素材没有已核准契约）。
-    expect(source).toContain('setModel("MiniMax-H3")');
-    expect(source).toContain('syncSettings({ videoModel: "MiniMax-H3", resolution: "768P" })');
-    expect(source).toContain("disabled={hasAnyReference}");
-    expect(source).toContain("带素材时自动用 H3");
+    expect(source).not.toContain('setModel("MiniMax-H3")');
+    expect(source).not.toContain("disabled={hasAnyReference}");
+    expect(source).not.toContain("带素材时自动用 H3");
+    const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
+    expect(adapters).toContain("image_urls");
+    expect(adapters).toContain("video_urls");
+    expect(adapters).toContain("audio_urls");
+    const video = await read("../src/services/ll2/ll2-video.ts");
+    expect(video).not.toContain("带图片或视频参考时请选 MiniMax-H3");
 });
 
 test("窄窗顶栏常驻资产入口，宽屏交给侧栏", async () => {

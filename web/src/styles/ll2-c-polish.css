@@ -225,6 +225,85 @@
     color: var(--ll2-t-6b6b6b, #6b6b76);
 }
 
+/* ── 生成 / 超分等待：要有明显反应，不能一行静止文字 ───────────────── */
+.ll2-oneshot-waiting {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--ll2-a-0_12, rgba(10, 10, 10, 0.12));
+    border-radius: 12px;
+    background: var(--ll2-a-0_04, rgba(10, 10, 10, 0.04));
+}
+
+.ll2-oneshot-waiting-head {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+
+.ll2-oneshot-waiting-head > svg {
+    flex: none;
+    color: var(--ll2-t-6720ff, #6720ff);
+}
+
+.ll2-oneshot-waiting-head strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ll2-t-0a0a0a, #0a0a0a);
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-oneshot-waiting-time {
+    flex: none;
+    margin-left: auto;
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.ll2-oneshot-waiting-bar {
+    position: relative;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--ll2-a-0_08, rgba(10, 10, 10, 0.08));
+}
+
+.ll2-oneshot-waiting-bar span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 38%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, transparent, var(--ll2-t-6720ff, #6720ff), transparent);
+    animation: ll2-waiting-sweep 1.25s ease-in-out infinite;
+}
+
+.ll2-oneshot-waiting small {
+    color: var(--ll2-t-6b6b6b, #6b6b76);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+@keyframes ll2-waiting-sweep {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(380%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ll2-oneshot-waiting-bar span {
+        width: 100%;
+        opacity: 0.45;
+        animation: none;
+    }
+}
+
 .ll2-key-foot-right a {
     color: var(--ll2-t-777, #777);
     text-decoration: none;

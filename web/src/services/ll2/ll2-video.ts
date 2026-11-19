@@ -187,11 +187,8 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     const prompt = String(req.prompt || "").trim();
     if (!prompt) throw new Error("先写一句话，说清你想要的画面");
     const media = req.media || [];
-    // wan3.0-video 走 /v1 统一网关，官方只核准了它的纯文本字段；
-    // 参考素材字段没有契约，宁可明确挡住，也不编一个 payload 让客户白扣一次费用。
-    if (media.length > 0 && req.model !== "MiniMax-H3") {
-        throw new Error("带图片或视频参考时请选 MiniMax-H3；其它模型目前按纯文字出片");
-    }
+    // 2026-11-19 用户口径：什么模型都能带素材。
+    // H3 走 content[]；其余模型走统一网关的 image_urls / video_urls / audio_urls（见适配器）。
     // 2026-11-19 真网关实测：图片的 data URI 能出片；视频 / 音频必须是自己能下载的公网 HTTPS 地址，
     // 本机文件转 Base64 会被 400 打回（content[n].video_url.url must be a public HTTPS URL）。
     // 这里做最后一道防御，避免界面漏检时又把注定失败的请求发出去。

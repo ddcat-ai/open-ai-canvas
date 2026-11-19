@@ -186,5 +186,15 @@ if (!hdOk) {
     process.exitCode = 1;
 }
 
+// ⑧ 非 H3 模型带素材：统一网关用 image_urls / video_urls / audio_urls
+scenario = "success"; createCount = 0; queryCount = 0; openaiCreateBody = null;
+await ll2GenerateVideo(common({ model: "wan3.0-video", resolution: "720P", media: [{ type: "image_url", image_url: { url: "data:image/png;base64,AAAA" }, role: "first_frame" }] }));
+const mediaOk = Array.isArray(openaiCreateBody?.image_urls) && openaiCreateBody.image_urls[0] === "data:image/png;base64,AAAA";
+out.push(`⑧ 带素材的通用模型：${mediaOk ? "PASS" : "FAIL"} image_urls=${JSON.stringify(openaiCreateBody?.image_urls)}`);
+if (!mediaOk) {
+    console.error("⑧ 失败：非 H3 模型没有把素材放进 image_urls");
+    process.exitCode = 1;
+}
+
 console.log(out.join("\n"));
 server.stop(true);

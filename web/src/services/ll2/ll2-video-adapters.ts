@@ -150,15 +150,26 @@ function makeOpenAIVideoAdapter(model: OpenAIVideoModel): LL2VideoAdapter {
             const tier = ll2TierFor(model, base.resolution);
             return { ...base, resolution: tier?.resolution || base.resolution };
         },
-        buildCreatePayload: (args) => ({
-            model,
-            prompt: args.prompt,
-            // 2026-11-19 实测：网关 JSON 解析要求 seconds 是字符串，
-            // 传数字会 400（cannot unmarshal number into ... seconds of type string）。
-            seconds: String(args.seconds),
-            aspect_ratio: args.ratio,
-            resolution: args.resolution,
-        }),
+        buildCreatePayload: (args) => {
+            const items = args.media || [];
+            // 统一网关的素材字段与影策上游 video-provider-newapi.ts 一致：
+            // 图片 image_urls（data URI 可用）、视频 video_urls、音频 audio_urls，顺序即参考顺序。
+            const images = items.filter((item) => item.image_url?.url).map((item) => item.image_url!.url);
+            const videos = items.filter((item) => item.video_url?.url).map((item) => item.video_url!.url);
+            const audios = items.filter((item) => item.audio_url?.url).map((item) => item.audio_url!.url);
+            return {
+                model,
+                prompt: args.prompt,
+                // 2026-11-19 实测：网关 JSON 解析要求 seconds 是字符串，
+                // 传数字会 400（cannot unmarshal number into ... seconds of type string）。
+                seconds: String(args.seconds),
+                aspect_ratio: args.ratio,
+                resolution: args.resolution,
+                ...(images.length ? { image_urls: images } : {}),
+                ...(videos.length ? { video_urls: videos } : {}),
+                ...(audios.length ? { audio_urls: audios } : {}),
+            };
+        },
         taskIdOf: (payload) => {
             const data = (payload.data && typeof payload.data === "object" ? payload.data : payload) as Json;
             return ll2TextOf(data, "id", "task_id", "request_id") || ll2TextOf(payload, "id", "task_id", "request_id");

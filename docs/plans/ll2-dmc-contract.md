@@ -10,7 +10,7 @@
 | 创建 | `POST /v2/video_generation` | `POST /v1/video/generations` |
 | 查询 | `GET /v2/query/video_generation/{id}` | `GET /v1/video/generations/{id}` |
 | 请求体 | `{ model, content:[{type:"text",text}, ...media], resolution, duration, ratio }` | `{ model, prompt, seconds, aspect_ratio, resolution }` |
-| 素材 | `content[]` 支持 first_frame / last_frame / reference_* | 只做纯文字；带素材在提交前就被产品拦下 |
+| 素材 | `content[]` 支持 first_frame / last_frame / reference_* | 统一网关字段 `image_urls` / `video_urls` / `audio_urls`（按出现顺序） |
 
 实现位置：`web/src/services/ll2/ll2-video-adapters.ts`（`LL2_VIDEO_ADAPTERS`，H3 一条 + 工厂生成 13 条）；
 字段来源与上游 `web/src/services/api/video-provider-newapi.ts` 一致，不是猜的。
@@ -38,6 +38,11 @@
 - 2 张图 = `first_frame` + `last_frame`（用户要的首尾帧）；
 - ≥3 张图或含视频/音频 = 全部 `reference_*`，提示词里用 `<Picture N>` / `<Video N>` / `<Audio N>` 引用；
 - `first_frame` 不得与 `reference_*` 混用（官方契约），首帧/尾帧分支会把 `@` 标记剥离不发给网关；
+- 非 H3 走统一网关时，素材按顺序放进 `image_urls` / `video_urls` / `audio_urls`，**不再强制切 H3**；
+  图片可用 data URI（H3 已实测，通用网关需按模型复验），视频/音频仍必须公网 HTTPS；
+- 各模型另有自己的素材协议（seedance `/seedance/api/v3/contents/generations/tasks` content[]、
+  vidu `/vidu/ent/v2/*` 支持 base64 图片、Super Vega `/super-vega/tasks` FileInfos、wan3 走 DashScope 透传），
+  统一网关若拒绝某模型的素材字段，再按模型落专门适配。
 - 客户端按编码后体积卡上限（单文件 30/50/15MB、合计 24MB；视频 ≥2 秒；图片 ≤9；总数 ≤12）。
 
 ## 4. 模型清单与计费
@@ -95,6 +100,7 @@ bun run scripts/ll2-real-smoke.ts --model=MiniMax-H3 --scenario=text --probe-ide
 ## 7. 已知缺口（按优先级）
 
 1. **13 个模型未逐个真跑**：需先在 LL2 控制台给分组挂渠道，再按 `--model=` 逐个冒烟。
+   素材也一样：统一网关的 `image_urls` 已按上游契约接上，但哪些模型、哪种素材（data URI / 首帧 / 首尾帧）被接受，要拿真 Key 逐模型验。
 2. **首尾帧 10 分钟不出片**：代码只有轮询上限，UI 没有「会更慢」的预期提示，也没有中途放弃入口。
 3. **全量测试慢**：511 个测试文件，本地只跑定向；全量交给 CI。
 4. **画布内部交互**（拖拽/连线/缩放/五步生成/Agent 出片）无法自动化验证，需人工走查。

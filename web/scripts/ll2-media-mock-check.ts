@@ -3,7 +3,7 @@
  * 运行：cd web && bun run scripts/ll2-media-mock-check.ts
  *
  * 覆盖：文生 / 单图首帧 / 两张图首尾帧 / 多图与视频多参考 / @ 就地替换 /
- * 角色不混用 / 校验上限 / 视频必须是公网 HTTPS / wan3 防御性拦截。
+ * 角色不混用 / 校验上限 / 视频必须是公网 HTTPS / 非 H3 也能带素材（image_urls）。
  */
 import {
     HOME_DROP_IMAGE_MAX,
@@ -136,16 +136,13 @@ check("MOV 识别为视频", ll2MediaKindOf({ name: "a.mov", type: "video/quickt
 check("首页不开放音频入口", ll2HomeMediaKindOf({ name: "a.mp3", type: "audio/mpeg" }), null);
 check("未知类型不收", ll2MediaKindOf({ name: "a.exe", type: "application/octet-stream" }), null);
 
-console.log("\n⑥ 非 H3 模型没有素材契约时明确拦住，不发请求");
+console.log("\n⑥ 非 H3 模型也能带素材：图片进 image_urls，不再强制切 H3");
 
-let wan3Error = "";
-try {
-    await ll2GenerateVideo({ apiKey: "mock-key", model: "wan3.0-video", prompt: "一只猫", seconds: 5, resolution: "480P", media: oneImage.items });
-} catch (error) {
-    wan3Error = error instanceof Error ? error.message : String(error);
-}
-check("带素材 + wan3 返回中文提示", wan3Error.includes("带图片或视频参考时请选 MiniMax-H3"), true);
-check("没有真的发起网络请求", wan3Error.includes("连不上"), false);
+const wan3Payload = LL2_VIDEO_ADAPTERS["wan3.0-video"].buildCreatePayload(
+    LL2_VIDEO_ADAPTERS["wan3.0-video"].normalize({ model: "wan3.0-video", prompt: "一只猫", seconds: 5, resolution: "480P", ratio: "16:9", media: oneImage.items }),
+);
+check("带素材 + wan3 走 image_urls", Array.isArray(wan3Payload.image_urls) && wan3Payload.image_urls.length, 1);
+check("prompt 保持纯文本", typeof wan3Payload.prompt, "string");
 
 console.log(`\n${failed === 0 ? "全部通过" : `${failed} 项失败`}：${passed} pass / ${failed} fail`);
 if (failed) process.exit(1);

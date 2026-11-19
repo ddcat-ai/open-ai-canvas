@@ -98,6 +98,9 @@ export function LL2OneShot() {
     const abortRef = useRef<AbortController | null>(null);
     /** 超分结果要带 Key 下载成 blob 才能播，临时 objectURL 用完要回收。 */
     const previewUrlRef = useRef<string>("");
+    /** 等待计时器：不依赖网关轮询，每秒自己走，页面看起来是活的。 */
+    const waitStartRef = useRef(0);
+    const [waitSeconds, setWaitSeconds] = useState(0);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     // 读文件是异步的。用 ref 保存最新拖图 + 同步互斥，避免连续拖两次互相覆盖。
     const mediaRef = useRef<LL2MediaInput[]>([]);
@@ -146,6 +149,18 @@ export function LL2OneShot() {
 
     useEffect(() => () => abortRef.current?.abort(), []);
 
+    // 等待期间每秒刷新「已等待 N 秒」，不要等 5 秒一次的轮询才动。
+    useEffect(() => {
+        if (!running) {
+            setWaitSeconds(0);
+            return;
+        }
+        const timer = window.setInterval(() => {
+            setWaitSeconds(Math.max(0, Math.floor((Date.now() - waitStartRef.current) / 1000)));
+        }, 1000);
+        return () => window.clearInterval(timer);
+    }, [running]);
+
     const tiers = useMemo(() => ll2TiersFor(model), [model]);
     const range = LL2_VIDEO_DURATION[model];
     const estimate = ll2PreciseCNY(model, seconds, resolution);
@@ -159,6 +174,23 @@ export function LL2OneShot() {
     // 合计只用于展示：生成 + 超分是两笔账单，明细里分开写。
     const totalLabel = hdEstimate ? `约 ${ll2FriendlyCNY(estimate.amount + hdEstimate.amount)}` : estimate.label;
     const totalBasis = hdEstimate ? `生成 ${estimate.label} + 超分 ${hdEstimate.label} · 按 LL2 官网单价估算` : estimate.basis;
+    // 等待态文案：标题说现在在干什么，副文案说大概要多久、能不能走开。
+    const waiting = !running
+        ? null
+        : hdProgress
+            ? {
+                title: hdProgress.stage === "downloading" ? "正在取回高清版" : `正在超分到 ${ll2UpscaleTargetLabel(upscale || "")}`,
+                note: hdProgress.stage === "created" ? "已提交超分任务，马上开始。" : "片子已经生成好了，正在处理高清版；通常 1–3 分钟。",
+            }
+            : {
+                title: `正在生成 · ${(() => {
+                    const status = String(progress?.status || "queued").toLowerCase();
+                    if (status.includes("queue") || status.includes("pending")) return "排队中";
+                    if (status.includes("process") || status.includes("running")) return "生成中";
+                    return "已提交";
+                })()}`,
+                note: "通常 1–3 分钟；可以先去做别的，这一页不会丢。想停就点「取消」。",
+            };
     const spec = ll2SpecFor(model);
     const mentionTitles = useMemo(() => ll2ParseMentionTitles(prompt), [prompt]);
     const hasMedia = media.length > 0;
@@ -206,13 +238,6 @@ export function LL2OneShot() {
             const spacer = before && !/\s$/.test(before) ? " " : "";
             return `${before}${spacer}${token} ${previous.slice(pos)}`;
         });
-        // 一旦有 @ 引用，模型下拉会被禁用；这里必须先切回已核准 content[] 契约的 H3，
-        // 否则用户先选了万相再引用图片，就卡在「不能切也生成不了」。
-        if (model !== "MiniMax-H3") {
-            setModel("MiniMax-H3");
-            setResolution("768P");
-            syncSettings({ videoModel: "MiniMax-H3", resolution: "768P" });
-        }
     };
 
     const insertMention = (token: string) => {
@@ -312,6 +337,8 @@ export function LL2OneShot() {
             previewUrlRef.current = "";
         }
         setRunning(true);
+        waitStartRef.current = Date.now();
+        setWaitSeconds(0);
         const controller = new AbortController();
         abortRef.current = controller;
         // 准备 / 生成 / 超分三段，错误文案要分清是哪一段失败。
@@ -359,6 +386,8 @@ export function LL2OneShot() {
                 // 超分是第二段：必须等生成拿到公网直链后才能提交 /hd/tasks。
                 phase = "upscale";
                 setProgress(null);
+                waitStartRef.current = Date.now();
+                setWaitSeconds(0);
                 setHint(`片子生成好了，正在超分到 ${ll2UpscaleTargetLabel(upscale)}…`);
                 const hd = await ll2RunHd(
                     { apiKey, videoUrl: outcome.url, resolution: upscale, duration: outcome.seconds, signal: controller.signal },
@@ -520,10 +549,10 @@ export function LL2OneShot() {
                                             const nextTiers = ll2TiersFor(next);
                                             setResolution(nextTiers[0]?.resolution || "768P");
                                             syncSettings({ videoModel: next, resolution: nextTiers[0]?.resolution || "768P" });
-                                        }} aria-label="选择视频模型" disabled={hasAnyReference}>
+                                        }} aria-label="选择视频模型">
                                             {LL2_CONNECTED_VIDEO_MODELS.map((id) => <option key={id} value={id}>{id}</option>)}
                                         </select>
-                                        <small>{hasAnyReference ? "带素材时自动用 H3" : spec?.resolutions || "—"}</small>
+                                        <small>{spec?.resolutions || "—"}</small>
                                     </div>
                                     <div className="ll2-price-cell">
                                         <span>分辨率</span>
@@ -632,13 +661,15 @@ export function LL2OneShot() {
                             </div>
                         )}
 
-                        {running && progress ? (
-                            <div className="ll2-oneshot-status" role="status"><LoaderCircle className="size-3.5 is-spinning" /> 任务已受理 · {progress.status || "排队中"} · 已等待 {Math.round(progress.elapsedMs / 1000)} 秒</div>
-                        ) : null}
-                        {running && hdProgress ? (
-                            <div className="ll2-oneshot-status" role="status">
-                                <LoaderCircle className="size-3.5 is-spinning" />
-                                {hdProgress.stage === "created" ? "已提交超分" : hdProgress.stage === "downloading" ? "超分完成，正在取回高清版" : "正在超分"} · 已等待 {Math.round(hdProgress.elapsedMs / 1000)} 秒
+                        {waiting ? (
+                            <div className="ll2-oneshot-waiting" role="status" aria-live="polite">
+                                <div className="ll2-oneshot-waiting-head">
+                                    <LoaderCircle className="size-4 is-spinning" aria-hidden />
+                                    <strong>{waiting.title}</strong>
+                                    <span className="ll2-oneshot-waiting-time">已等待 {waitSeconds} 秒</span>
+                                </div>
+                                <div className="ll2-oneshot-waiting-bar" aria-hidden="true"><span /></div>
+                                <small>{waiting.note}</small>
                             </div>
                         ) : null}
                         {hint ? <div className="ll2-oneshot-status is-hint" role="note">{hint}</div> : null}
