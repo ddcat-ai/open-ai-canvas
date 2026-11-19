@@ -410,7 +410,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                     <div className="absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 max-w-[calc(100%-24px)]">
                         {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} theme={theme} /> : null}
                         {data.type === CanvasNodeType.Image && hasImageContent && data.metadata?.assetId ? <ArkCertificationBadge assetId={data.metadata.assetId} storageKey={data.metadata.storageKey} /> : null}
-                        {hasMediaContent && !readOnly ? <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} /> : null}
+                        {/* 远程直链结果没有 storageKey，不是“未同步”；只有本机文件（data/blob/本地 key）才需要存储徽标。 */}
+                {hasMediaContent && !readOnly && (data.metadata?.storageKey || /^(data|blob):/i.test(String(data.metadata?.content || ""))) ? (
+                    <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} />
+                ) : null}
                         {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
                         {data.metadata?.imageLayerGroup && !readOnly ? <CanvasImageLayerControls node={data} /> : null}
                         {isBatchChild && !data.metadata?.imageLayer && !data.metadata?.layerExtraction && !readOnly ? (
