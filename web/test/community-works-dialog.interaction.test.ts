@@ -22,7 +22,7 @@ test("the publishing dialog requires consent and resubmits the selected resource
         if (!output) throw new Error("Publishing dialog harness produced no JavaScript");
         await Bun.write(file, output);
         // 用 Node 验证 Ant Design 的异步表单校验，测试与清理完成后退出子进程。
-        const child = Bun.spawnSync(["node", "--test", "--test-force-exit", file], { timeout: 20_000 });
+        const child = Bun.spawnSync(["node", "--test", "--test-reporter=tap", "--test-force-exit", file], { timeout: 20_000 });
         const logs = new TextDecoder().decode(child.stdout) + new TextDecoder().decode(child.stderr);
         expect(child.exitCode, logs).toBe(0);
         expect(logs).toContain("# pass 1");
