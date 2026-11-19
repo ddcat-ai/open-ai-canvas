@@ -72,7 +72,18 @@ export function ModelPicker({
     useLayoutEffect(() => {
         setInSpatialWorkspace(Boolean(triggerRef.current?.closest(".app-spatial-workspace")));
     }, []);
-    const options = useMemo(() => Array.from(new Set(selectableModelsByCapability(config, capability).filter((model) => Boolean(model) && (!modelFilter || modelFilter(model))))), [capability, config, modelFilter]);
+    const options = useMemo(
+        () =>
+            Array.from(
+                new Set(
+                    selectableModelsByCapability(config, capability).filter(
+                        // auto-hd 是生成后的超分后处理，不是可选的生成模型；旧配置残留也不让它进下拉。
+                        (model) => Boolean(model) && model !== "auto-hd" && (!modelFilter || modelFilter(model)),
+                    ),
+                ),
+            ),
+        [capability, config, modelFilter],
+    );
     const optionGroups = useMemo(() => groupModelsForPicker(config, options), [config, options]);
     const storedCurrent = value?.trim() || "";
     // 参数档位会在选中模型后由调用方归一到其能力配置，不能因为旧模型留下的参数而禁止切换。

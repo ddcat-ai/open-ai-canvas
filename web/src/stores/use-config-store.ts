@@ -359,7 +359,8 @@ export function selectableModelsByCapability(config: AiConfig, capability?: Mode
     // 这样旧版本内置模型、未绑定渠道的裸模型不会再次进入创作端。
     const models = modelOptionsFromChannels(config.channels);
     if (!capability) return models;
-    return filterModelsByCapability(models, capability, config.channels);
+    // auto-hd 是超分后处理档位，任何模型下拉都不应出现它。
+    return filterModelsByCapability(models, capability, config.channels).filter((model) => model !== "auto-hd");
 }
 
 export function configuredModelMatchesCapability(config: AiConfig, model: string, capability?: ModelCapability) {
