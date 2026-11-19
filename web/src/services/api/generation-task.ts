@@ -30,6 +30,7 @@ export type BackendGenerationResult = {
     audio?: { dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string };
     audios?: Array<{ dataUrl: string; storageKey?: string; durationMs?: number; bytes?: number; mimeType?: string; format?: string }>;
     text?: string;
+    assetId?: string;
     toolCalls?: Array<{ id: string; type: "function"; function: { name: string; arguments: string }; thoughtSignature?: string }>;
     reasoning?: string;
 };
@@ -322,6 +323,7 @@ function backendGenerationTaskInput(options: BackendGenerationTaskOptions, prepa
             referenceAudios: prepared.referenceAudios,
             mask: prepared.mask,
             metadata: generationMetadata(config, {
+                ...(mode === "video" ? { videoEditOperation: videoOperation } : {}),
                 ...metadata,
                 ...(options.clientOperationId ? { clientOperationId: options.clientOperationId } : {}),
                 ...(options.retryOf ? { retryOf: options.retryOf } : {}),

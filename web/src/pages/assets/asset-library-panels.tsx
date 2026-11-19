@@ -33,6 +33,7 @@ export function AssetsBatchBar({
     onExport,
     onRestore,
     onArchive,
+    onShareTeam,
     onDelete,
 }: {
     count: number;
@@ -45,6 +46,7 @@ export function AssetsBatchBar({
     onExport: () => void;
     onRestore?: () => void;
     onArchive?: () => void;
+    onShareTeam?: () => void;
     onDelete: () => void;
 }) {
     return (
@@ -70,6 +72,11 @@ export function AssetsBatchBar({
                     </>
                 ) : (
                     <>
+                        {onShareTeam ? (
+                            <Button size="small" disabled={!count || busy} onClick={onShareTeam}>
+                                共享到团队
+                            </Button>
+                        ) : null}
                         <Button size="small" disabled={!count || busy} icon={<Download className="size-3.5" />} onClick={onExport}>
                             导出
                         </Button>

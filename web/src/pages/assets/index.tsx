@@ -1,9 +1,10 @@
+import { workspacePath, workspaceTeamId } from "@/lib/workspace-routes";
 import { uploadImage } from "@/services/image-storage";
 import { assetStorageUsageQueryKey, AssetStorageUsage } from "./asset-storage-usage";
 import { readFileAsDataUrl, readImageMeta, formatBytes } from "@/lib/image-utils";
 import { uploadMediaFile } from "@/services/file-storage";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
-import { WorkspacePage, PageHeader, CollectionGrid, PaginationBar } from "@/components/layout/workspace-page";
+import { WorkspacePage, CollectionGrid, PaginationBar } from "@/components/layout/workspace-page";
 import { Trash2, RotateCcw, Plus, Images, FolderOpen, FileUp, Upload, Download, MoreHorizontal, Search, LayoutGrid, FolderPlus, PencilLine, AlertTriangle, ShieldCheck } from "lucide-react";
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
 import { Select } from "@/components/ui/base/select";
@@ -39,6 +40,7 @@ import { createAssetFolder, deleteAssetFolder, listAssetFolders, listRemoteAsset
 import { assetCountMap, assetSearchText, readAssetGridDensity, assetKindIcons, assetCategoryIcons } from "./asset-library-format";
 import { ASSET_GRID_DENSITY_KEY, type LibraryAsset } from "./asset-library-format";
 import { selectAssetIds } from "./asset-library-selection";
+import { TeamAssetShareModal } from "@/components/assets/team-asset-share-modal";
 
 export { ASSET_GRID_DENSITY_KEY, type LibraryAsset, assetKindIcons } from "./asset-library-format";
 
@@ -134,12 +136,13 @@ export default function AssetsPage() {
 
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const userId = useUserStore((state) => state.user?.id || "");
-    const retentionDays = useUserStore((state) => state.runtimeLimits.recycleBinRetentionDays ?? 30);
+    const teamsEnabled = useUserStore((state) => state.features.teamsEnabled) && !workspaceTeamId;
+    const retentionDays = useUserStore((state) => (workspaceTeamId ? 0 : (state.runtimeLimits.recycleBinRetentionDays ?? 30)));
     // 方舟审核由服务端定时刷新；有审核中的素材时降频轮询概览，让认证角标跟上结果。
     const arkQuery = useQuery({
         queryKey: arkPortraitOverviewQueryKey,
         queryFn: ({ signal }) => getArkPortraitOverview(signal),
-        enabled: Boolean(userId),
+        enabled: Boolean(userId) && !workspaceTeamId,
         staleTime: 60_000,
         refetchInterval: (query) => (query.state.data?.groups.some((group) => group.owned && group.assets.some((asset) => asset.status === "processing")) ? 30_000 : false),
     });
@@ -161,6 +164,7 @@ export default function AssetsPage() {
     const [deletingAsset, setDeletingAsset] = useState<LibraryAsset | null>(null);
     const [archivingAsset, setArchivingAsset] = useState<LibraryAsset | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [teamShareIds, setTeamShareIds] = useState<string[] | null>(null);
     const [selecting, setSelecting] = useState(false);
     const selectionAnchor = useRef<string | undefined>(undefined);
     const [batchWorking, setBatchWorking] = useState(false);
@@ -696,74 +700,74 @@ export default function AssetsPage() {
     return (
         <>
             <WorkspacePage grid className="library-page assets-library-page canvas-library-page">
-                <div className="studio-band">
-                    <PageHeader
-                        title={viewMode === "trash" ? t("library.assets.page.trashTitle") : t("library.assets.page.title")}
-                        description={viewMode === "trash" ? t("library.assets.page.trashDescription") : t("library.assets.page.description")}
-                        meta={<span className="app-projects-header-meta assets-header-meta">{t("library.assets.page.count", { count: totalAssets })}</span>}
-                        actions={
-                            <div className="assets-header-actions">
-                                <AssetStorageUsage />
-                                <div className="assets-header-action-buttons">
-                                    {viewMode === "trash" ? (
-                                        <>
-                                            {userId || trashAssets.length > 0 ? (
-                                                <Popconfirm
-                                                    title={t("library.assets.trash.confirmTitle")}
-                                                    description={t("library.assets.trash.confirmDescription")}
-                                                    onConfirm={() => void emptyTrash()}
-                                                    okText={t("library.assets.trash.confirmOk")}
-                                                    okButtonProps={{ danger: true }}
-                                                    cancelText={t("common.cancel")}
-                                                >
-                                                    <Button danger loading={batchWorking} icon={<Trash2 className="size-3.5" />}>
-                                                        {t("library.assets.trash.empty")}
-                                                    </Button>
-                                                </Popconfirm>
-                                            ) : null}
-                                            <Button
-                                                icon={<RotateCcw className="size-3.5" />}
-                                                onClick={() => {
-                                                    setViewMode("library");
-                                                    setPage(1);
-                                                    setSelectedIds([]);
-                                                }}
-                                            >
-                                                {t("library.assets.page.backToLibrary")}
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Button type="primary" icon={<Plus />} onClick={openCreate}>
-                                                {t("library.assets.page.create")}
-                                            </Button>
-                                            <Button icon={<Images />} onClick={() => setBatchUploadOpen(true)}>
-                                                {t("library.assets.page.uploadImages")}
-                                            </Button>
-                                            {arkEnabled ? (
-                                                <Button icon={<ShieldCheck />} onClick={() => navigate("/settings?section=ark-assets")}>
-                                                    {t("library.assets.page.ark")}
-                                                </Button>
-                                            ) : null}
-                                            <Dropdown
-                                                trigger={["click"]}
-                                                menu={{
-                                                    items: [
-                                                        { key: "eagle", icon: <FolderOpen />, label: t("library.assets.page.eagle"), onClick: () => navigate("/plugins/eagle") },
-                                                        { key: "package", icon: <FileUp />, label: t("library.assets.page.importPackage"), onClick: () => assetInputRef.current?.click() },
-                                                        { key: "model", icon: <Upload />, label: t("library.assets.page.uploadModel"), onClick: () => modelInputRef.current?.click() },
-                                                        { key: "export", icon: <Download />, label: t("library.assets.page.exportAll"), onClick: () => void exportAllAssets() },
-                                                    ],
-                                                }}
-                                            >
-                                                <Button type="text" aria-label={t("library.assets.page.moreActions")} icon={<MoreHorizontal />} />
-                                            </Dropdown>
-                                        </>
-                                    )}
-                                </div>
+                <header className="assets-library-header">
+                    <div className="assets-header-main">
+                        <div className="assets-header-identity">
+                            <div className="assets-header-title-row">
+                                <h1>{viewMode === "trash" ? t("library.assets.page.trashTitle") : t("library.assets.page.title")}</h1>
+                                <span>{t("library.assets.page.count", { count: totalAssets })}</span>
                             </div>
-                        }
-                    />
+                            <AssetStorageUsage />
+                            {viewMode === "trash" ? <p>{t("library.assets.page.trashDescription")}</p> : null}
+                        </div>
+                        <div className="assets-header-action-buttons">
+                            {viewMode === "trash" ? (
+                                <>
+                                    {userId || trashAssets.length > 0 ? (
+                                        <Popconfirm
+                                            title={t("library.assets.trash.confirmTitle")}
+                                            description={t("library.assets.trash.confirmDescription")}
+                                            onConfirm={() => void emptyTrash()}
+                                            okText={t("library.assets.trash.confirmOk")}
+                                            okButtonProps={{ danger: true }}
+                                            cancelText={t("common.cancel")}
+                                        >
+                                            <Button danger loading={batchWorking} icon={<Trash2 className="size-3.5" />}>
+                                                {t("library.assets.trash.empty")}
+                                            </Button>
+                                        </Popconfirm>
+                                    ) : null}
+                                    <Button
+                                        icon={<RotateCcw className="size-3.5" />}
+                                        onClick={() => {
+                                            setViewMode("library");
+                                            setPage(1);
+                                            setSelectedIds([]);
+                                        }}
+                                    >
+                                        {t("library.assets.page.backToLibrary")}
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button type="primary" icon={<Plus />} onClick={openCreate}>
+                                        {t("library.assets.page.create")}
+                                    </Button>
+                                    <Button icon={<Images />} onClick={() => setBatchUploadOpen(true)}>
+                                        {t("library.assets.page.uploadImages")}
+                                    </Button>
+                                    {arkEnabled ? (
+                                        <Button icon={<ShieldCheck />} onClick={() => navigate("/settings?section=ark-assets")}>
+                                            {t("library.assets.page.ark")}
+                                        </Button>
+                                    ) : null}
+                                    <Dropdown
+                                        trigger={["click"]}
+                                        menu={{
+                                            items: [
+                                                { key: "eagle", icon: <FolderOpen />, label: t("library.assets.page.eagle"), onClick: () => navigate("/plugins/eagle") },
+                                                { key: "package", icon: <FileUp />, label: t("library.assets.page.importPackage"), onClick: () => assetInputRef.current?.click() },
+                                                { key: "model", icon: <Upload />, label: t("library.assets.page.uploadModel"), onClick: () => modelInputRef.current?.click() },
+                                                { key: "export", icon: <Download />, label: t("library.assets.page.exportAll"), onClick: () => void exportAllAssets() },
+                                            ],
+                                        }}
+                                    >
+                                        <Button type="text" aria-label={t("library.assets.page.moreActions")} icon={<MoreHorizontal />} />
+                                    </Dropdown>
+                                </>
+                            )}
+                        </div>
+                    </div>
                     <CollectionToolbar
                         active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all" || folderFilter !== "all")}
                         onReset={() => {
@@ -773,10 +777,33 @@ export default function AssetsPage() {
                             setFolderFilter("all");
                             setPage(1);
                         }}
+                        trailing={
+                            <>
+                                <Select
+                                    aria-label={t("library.assets.page.density")}
+                                    value={gridDensity}
+                                    className="assets-density-select"
+                                    prefix={<LayoutGrid aria-hidden className="size-3.5" />}
+                                    options={assetGridDensityOptions}
+                                    onChange={(value) => setGridDensity(parseAssetGridDensity(value))}
+                                />
+                                <Button
+                                    aria-pressed={selectionMode}
+                                    onClick={() => {
+                                        setSelecting(!selectionMode);
+                                        setSelectedIds([]);
+                                        selectionAnchor.current = undefined;
+                                    }}
+                                    disabled={batchWorking}
+                                >
+                                    {selectionMode ? t("library.assets.page.exitSelection") : t("library.assets.page.batchSelect")}
+                                </Button>
+                            </>
+                        }
                     >
                         <Input
                             allowClear
-                            className="w-full sm:w-80"
+                            aria-label={t("library.assets.page.searchPlaceholder")}
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
                             placeholder={t("library.assets.page.searchPlaceholder")}
@@ -785,27 +812,8 @@ export default function AssetsPage() {
                                 setKeyword(event.target.value);
                             }}
                         />
-                        <Select
-                            aria-label={t("library.assets.page.density")}
-                            value={gridDensity}
-                            className="w-full sm:w-32"
-                            prefix={<LayoutGrid aria-hidden className="size-3.5" />}
-                            options={assetGridDensityOptions}
-                            onChange={(value) => setGridDensity(parseAssetGridDensity(value))}
-                        />
-                        <Button
-                            aria-pressed={selectionMode}
-                            onClick={() => {
-                                setSelecting(!selectionMode);
-                                setSelectedIds([]);
-                                selectionAnchor.current = undefined;
-                            }}
-                            disabled={batchWorking}
-                        >
-                            {selectionMode ? t("library.assets.page.exitSelection") : t("library.assets.page.batchSelect")}
-                        </Button>
                     </CollectionToolbar>
-                </div>
+                </header>
 
                 <div className="collection-content assets-collection-content">
                     <div className="assets-collection-layout">
@@ -956,6 +964,7 @@ export default function AssetsPage() {
                                         selectionAnchor.current = undefined;
                                     }}
                                     onExport={() => void exportSelectedAssets()}
+                                    onShareTeam={userId && teamsEnabled ? () => setTeamShareIds([...selectedIds]) : undefined}
                                     onRestore={() => void changeAssetStatus(selectedIds, "confirmed")}
                                     onArchive={() => setBatchArchiveOpen(true)}
                                     onDelete={() => setBatchDeleteOpen(true)}
@@ -965,7 +974,7 @@ export default function AssetsPage() {
                                 viewMode === "trash" ? (
                                     <WorkspaceState icon="assets" compact title={t("library.picker.recycleBinEmpty")} description={t("library.assets.trash.emptyDescription")} />
                                 ) : (
-                                    <AssetsEmptyState onNew={openCreate} onImport={() => assetInputRef.current?.click()} onGoCanvas={() => navigate("/canvas")} />
+                                    <AssetsEmptyState onNew={openCreate} onImport={() => assetInputRef.current?.click()} onGoCanvas={() => navigate(workspacePath("/canvas"))} />
                                 )
                             ) : (
                                 <>
@@ -1004,11 +1013,15 @@ export default function AssetsPage() {
                                                     onDelete={() => setDeletingAsset(asset)}
                                                     folderOptions={folderSelectOptions}
                                                     onMoveToFolder={(folderId) => void moveAssetsToFolder([asset.id], folderId)}
-                                                    onRecommend={(candidate) => {
-                                                        setRecommendAsset(candidate);
-                                                        setRecommendNote("");
-                                                        setRecommendConsent(false);
-                                                    }}
+                                                    onRecommend={
+                                                        workspaceTeamId
+                                                            ? undefined
+                                                            : (candidate) => {
+                                                                  setRecommendAsset(candidate);
+                                                                  setRecommendNote("");
+                                                                  setRecommendConsent(false);
+                                                              }
+                                                    }
                                                     arkProgress={arkEnabled ? arkProgress.get(asset.id) : undefined}
                                                 />
                                             ))}
@@ -1329,6 +1342,7 @@ export default function AssetsPage() {
             >
                 {t("library.assets.delete.batchConfirm", { count: selectedIds.length })}
             </Modal>
+            {teamsEnabled && teamShareIds ? <TeamAssetShareModal key={userId} assetIds={teamShareIds} onClose={() => setTeamShareIds(null)} /> : null}
         </>
     );
 }

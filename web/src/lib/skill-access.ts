@@ -1,8 +1,9 @@
 import { useUserStore } from "@/stores/use-user-store";
+import { workspaceTeamId } from "./workspace-routes";
 
 /** Skill usage requires a loaded, active account; content management is administrator-only. */
 export function hasSkillLibraryAccess(state = useUserStore.getState()) {
-    return state.hydrated && Boolean(state.user?.id) && state.user?.status === "active";
+    return !workspaceTeamId && state.hydrated && Boolean(state.user?.id) && state.user?.status === "active";
 }
 
 export function useSkillLibraryAccess() {

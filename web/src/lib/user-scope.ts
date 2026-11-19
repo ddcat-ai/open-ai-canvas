@@ -1,3 +1,5 @@
+import { workspaceTeamId } from "./workspace-routes";
+
 const ACTIVE_USER_SCOPE_KEY = "yingce:active-user-scope";
 const GUEST_SCOPE = "guest";
 let userScopedPersistenceSuppressionDepth = 0;
@@ -12,6 +14,7 @@ let storageHintAvailable = true;
 const invalidationListeners = new Set<() => void>();
 
 export type UserSessionSnapshot = {
+    userId: string;
     scope: string;
     version: number;
     signal: AbortSignal;
@@ -85,7 +88,7 @@ export function subscribeUserSessionInvalidation(listener: () => void) {
 export function captureUserSession(allowInvalidated = false): UserSessionSnapshot {
     checkStorageScope();
     if (sessionInvalidated && !allowInvalidated) throw changedSessionError();
-    return { scope: activeUserScope, version: sessionVersion, signal: sessionController.signal };
+    return { scope: getActiveUserScope(), userId: activeUserScope, version: sessionVersion, signal: sessionController.signal };
 }
 
 export function assertCurrentUserSession(snapshot: UserSessionSnapshot, allowInvalidated = false) {
@@ -113,7 +116,7 @@ export function isUserScopedPersistenceSuppressed() {
 
 export function getActiveUserScope() {
     ensureSessionWindow();
-    return activeUserScope;
+    return workspaceTeamId ? `${activeUserScope}:team:${workspaceTeamId}` : activeUserScope;
 }
 
 export function setActiveUserScope(userId?: string | null, expectedSession?: UserSessionSnapshot) {

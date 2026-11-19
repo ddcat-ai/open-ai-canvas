@@ -249,6 +249,7 @@ export const zhCN = {
             paymentSource: "充值渠道：{{channel}}",
             adminAdjustment: "后台调整",
             signupBonus: "注册奖励",
+            teamTransfer: "团队积分划转",
             checkinBonus: "签到奖励",
             redeem: "兑换码充值",
             referral: "推广返佣",

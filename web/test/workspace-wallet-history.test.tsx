@@ -79,6 +79,9 @@ describe("wallet order history", () => {
         expect(retired).toContain("充值渠道：retired-channel");
         const redeem = renderToStaticMarkup(<WalletHistoryRow entry={{ ...base, type: "redeem" }} />);
         expect(redeem).toContain("兑换码充值");
+        const transfer = renderToStaticMarkup(<WalletHistoryRow entry={{ ...base, type: "team_transfer", amountMicrocredits: -1_000_000, note: "fund" }} />);
+        expect(transfer).toContain("团队积分划转");
+        expect(transfer).not.toContain(">fund<");
         for (const type of ["admin_grant", "admin_adjustment"] as const) {
             const amountMicrocredits = type === "admin_grant" ? 1_000_000 : -1_000_000;
             const adjustment = renderToStaticMarkup(<WalletHistoryRow entry={{ ...base, type, amountMicrocredits, note: "人工调整原因" }} />);

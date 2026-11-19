@@ -1,3 +1,5 @@
+import { workspaceApiPath } from "@/lib/workspace-routes";
+
 export type PresencePoint = { x: number; y: number };
 export type PresenceNode = PresencePoint & { id: string; width: number; height: number };
 export type CanvasPresence = { id: string; number: number; cursor: PresencePoint | null; drag: PresenceNode[] | null; updatedAt: number };
@@ -7,7 +9,7 @@ type Listener = (snapshot: CanvasRealtimeSnapshot, event: CanvasRealtimeEvent) =
 type Timer = ReturnType<typeof setTimeout>;
 
 export function canvasRealtimeURL(apiBase: string, canvasId: string, pageURL: string) {
-    const url = new URL(`${apiBase.replace(/\/+$/, "")}/canvas-projects/${encodeURIComponent(canvasId)}/realtime`, pageURL);
+    const url = new URL(`${apiBase.replace(/\/+$/, "")}${workspaceApiPath(`/canvas-projects/${encodeURIComponent(canvasId)}/realtime`)}`, pageURL);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     return url.href;
 }

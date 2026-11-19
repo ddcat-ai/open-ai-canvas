@@ -3,6 +3,7 @@ import axios, { AxiosHeaders, type AxiosRequestConfig, type AxiosResponse, type 
 import { translate } from "@/i18n";
 import { assertCurrentUserSession, captureUserSession } from "@/lib/user-scope";
 import { localizedApiErrorMessage } from "@/services/api/error-codes";
+import { workspaceApiPath } from "@/lib/workspace-routes";
 
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
 
@@ -151,8 +152,8 @@ async function sendWithSession<T>(config: AxiosRequestConfig, mode?: "public"): 
     }
     if (mode !== "public") {
         const expectedUser = headers.get("X-Canvas-Expected-User");
-        if (expectedUser && expectedUser !== snapshot.scope) throw new DOMException("请求所属账号已变化", "AbortError");
-        headers.set("X-Canvas-Expected-User", snapshot.scope, true);
+        if (expectedUser && expectedUser !== snapshot.scope && expectedUser !== snapshot.userId) throw new DOMException("请求所属账号已变化", "AbortError");
+        headers.set("X-Canvas-Expected-User", snapshot.userId, true);
     }
     const controller = new AbortController();
     const abort = () => controller.abort();
@@ -160,7 +161,7 @@ async function sendWithSession<T>(config: AxiosRequestConfig, mode?: "public"): 
     config.signal?.addEventListener?.("abort", abort, { once: true });
     if (snapshot.signal.aborted || config.signal?.aborted) abort();
     try {
-        const response = await apiClient.request<T>({ ...config, headers, signal: controller.signal });
+        const response = await apiClient.request<T>({ ...config, url: config.url && workspaceApiPath(config.url, undefined, config.method), headers, signal: controller.signal });
         assertCurrentUserSession(snapshot, mode === "public");
         return response;
     } catch (error) {

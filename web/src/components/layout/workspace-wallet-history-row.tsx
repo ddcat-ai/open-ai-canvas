@@ -16,6 +16,7 @@ const ledgerTitleKeys = {
     admin_grant: "account.wallet.ledger.adminAdjustment",
     admin_adjustment: "account.wallet.ledger.adminAdjustment",
     signup_bonus: "account.wallet.ledger.signupBonus",
+    team_transfer: "account.wallet.ledger.teamTransfer",
     checkin_bonus: "account.wallet.ledger.checkinBonus",
 } satisfies Record<WalletCreditEntry["type"], string>;
 
@@ -24,7 +25,7 @@ export function WalletHistoryRow({ entry }: { entry: WalletHistoryEntry }) {
     const billing = entry.type === "billing" ? entry : null;
     const positive = entry.type !== "billing" && entry.amountMicrocredits > 0;
     const arkGroup = entry.scene === "ark_asset_group";
-    const note = entry.note ? (arkGroup ? entry.note : generationErrorMessage(entry.note)) : "";
+    const note = entry.note && entry.type !== "team_transfer" ? (arkGroup ? entry.note : generationErrorMessage(entry.note)) : "";
     const title = arkGroup ? t("account.wallet.ledger.arkAssetGroup") : entry.type === "billing" ? t("account.wallet.ledger.consume") : t(ledgerTitleKeys[entry.type]);
     let summary = "";
     let detail = "";

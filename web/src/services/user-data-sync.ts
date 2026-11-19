@@ -580,6 +580,7 @@ export async function loadAssetLibraryPage(options: Parameters<typeof listRemote
 
 function acceptRemoteAssets(remoteAssets: Asset[], refresh = false) {
     const assets = parseAssetRecordList(remoteAssets);
+    if (!assets.length) return;
     const current = new Map(useAssetStore.getState().assets.map((asset) => [asset.id, asset]));
     for (const asset of assets) {
         const local = current.get(asset.id);

@@ -261,6 +261,7 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
             paymentSource: "チャージ経路：{{channel}}",
             adminAdjustment: "管理者による調整",
             signupBonus: "登録報酬",
+            teamTransfer: "チームとのクレジット振替",
             checkinBonus: "チェックイン報酬",
             actualCharge: "実際の消費額 {{amount}} クレジット",
             releasedDetail: "当初の確保額は {{reserved}}、未使用の {{released}} は解除されました。",

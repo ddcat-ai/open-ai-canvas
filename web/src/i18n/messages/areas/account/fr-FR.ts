@@ -261,6 +261,7 @@ export const frFR: DeepStringRecord<typeof zhCN> = {
             paymentSource: "Canal de recharge : {{channel}}",
             adminAdjustment: "Ajustement administratif",
             signupBonus: "Récompense d’inscription",
+            teamTransfer: "Transfert de crédits d’équipe",
             checkinBonus: "Récompense de connexion",
             actualCharge: "Coût réel : {{amount}} crédits",
             releasedDetail: "Réservation initiale de {{reserved}} ; les {{released}} non utilisés ont été libérés.",

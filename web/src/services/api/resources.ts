@@ -1,4 +1,5 @@
 import { getActiveUserScope } from "@/lib/user-scope";
+import { workspaceApiPath } from "@/lib/workspace-routes";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { http, apiBaseURL, ApiError } from "@/services/api/request";
 import type { OSSConnectionTestInput, OSSConnectionTestResult, OSSProvider, S3Preset } from "@/lib/oss-settings";
@@ -587,7 +588,7 @@ function resourceCacheKey(id: string) {
 
 export function resourceFileUrl(id: string) {
     const base = String(apiBaseURL).replace(/\/+$/, "");
-    return `${base}/resources/${encodeURIComponent(id)}/file`;
+    return `${base}${workspaceApiPath(`/resources/${encodeURIComponent(id)}/file`)}`;
 }
 
 export function resolveResourceUrl(storageKey?: string, fallback = "") {

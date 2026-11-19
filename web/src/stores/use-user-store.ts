@@ -36,6 +36,7 @@ export type FeatureAvailability = {
     shortDramaEnabled: boolean;
     taskCenterEnabled: boolean;
     creditsEnabled: boolean;
+    teamsEnabled: boolean;
     customChannelsEnabled: boolean;
     frontendModelsEnabled: boolean;
     pluginCenterEnabled: boolean;
@@ -55,6 +56,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     shortDramaEnabled: true,
     taskCenterEnabled: true,
     creditsEnabled: true,
+    teamsEnabled: false,
     customChannelsEnabled: true,
     frontendModelsEnabled: false,
     pluginCenterEnabled: true,

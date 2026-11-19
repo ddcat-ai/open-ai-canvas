@@ -1,4 +1,6 @@
 import { generationErrorMessage } from "@/lib/generation-error";
+import { workspaceApiPath, workspaceTeamId } from "@/lib/workspace-routes";
+import { createClientUUID } from "@/lib/client-id";
 import { http, apiBaseURL, type BackendEnvelope } from "@/services/api/request";
 import { consumeTaskTextStream, createTaskTextStreamParser, type TaskTextStreamEvent } from "@/services/api/task-text-stream";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
@@ -131,6 +133,8 @@ export type TaskLog = {
 };
 
 export type CreateTaskInput = {
+    idempotencyKey?: string;
+    maxChargeMicrocredits?: number;
     projectId?: string;
     type?: string;
     operation?: string;
@@ -140,7 +144,17 @@ export type CreateTaskInput = {
     logicalModelId?: string;
     input?: Record<string, unknown>;
 };
-export function createGenerationTask(input: CreateTaskInput) {
+export async function createGenerationTask(input: CreateTaskInput) {
+    if (workspaceTeamId) {
+        if (input.type !== "canvas_text" || input.operation !== "text") throw new Error("当前空间仅开放系统模型的文本生成");
+        const session = captureUserSession();
+        const quote = await http.post<{ maxChargeMicrocredits: number }>("/tasks/quote", input);
+        assertCurrentUserSession(session);
+        if (!Number.isSafeInteger(quote.maxChargeMicrocredits) || quote.maxChargeMicrocredits < 0) throw new Error("未取得有效的积分报价");
+        if (!window.confirm(`本次生成将从你的团队额度中扣除最多 ${quote.maxChargeMicrocredits / 1_000_000} 积分，继续生成？`)) throw new DOMException("已取消生成", "AbortError");
+        const metadata = input.input?.metadata as { clientOperationId?: string; messageId?: string } | undefined;
+        input = { ...input, maxChargeMicrocredits: quote.maxChargeMicrocredits, idempotencyKey: input.idempotencyKey || metadata?.clientOperationId || metadata?.messageId || createClientUUID() };
+    }
     return http.post<GenerationTask>("/tasks", input).then((task) => {
         recordDiagnosticEvent({ level: "info", category: "task", message: "任务已创建", taskId: task.id, projectId: task.projectId });
         observeGenerationTaskStatus(task);
@@ -548,8 +562,8 @@ async function waitForGenerationTaskTextEvents(id: string, options: WaitForGener
             const base = String(apiBaseURL).replace(/\/+$/, "");
             const cursor = lastEventId > 0 ? `?after=${encodeURIComponent(String(lastEventId))}` : "";
             const path = options.textEventsSource === "agent" ? `/agent/runs/${encodeURIComponent(id)}/events` : `/tasks/${encodeURIComponent(id)}/text-events`;
-            const response = await fetch(`${base}${path}${cursor}`, {
-                headers: { Accept: "text/event-stream", "X-Canvas-Expected-User": session.scope },
+            const response = await fetch(`${base}${workspaceApiPath(path)}${cursor}`, {
+                headers: { Accept: "text/event-stream", "X-Canvas-Expected-User": session.userId },
                 credentials: "include",
                 signal: options.signal,
             });

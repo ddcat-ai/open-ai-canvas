@@ -1,14 +1,17 @@
-import { lazy, Suspense, useLayoutEffect, useRef, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { ConfigProvider } from "antd";
 
 import { AppWorkspaceShell } from "@/components/layout/app-top-nav";
 import { useAgentPanelDock } from "@/components/canvas/use-agent-panel-dock";
 import { cn } from "@/lib/utils";
-import { isSpatialWorkbenchPath } from "@/lib/workspace-routes";
+import { isSpatialWorkbenchPath, workspacePagePath } from "@/lib/workspace-routes";
 import { getWorkspaceAntThemeConfig } from "@/lib/app-theme";
 import { useGlobalAgentStore } from "@/stores/use-global-agent-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { TeamInvitationCenter } from "@/components/layout/team-invitation-center";
+import { TeamSpaceDirectoryHost } from "@/components/layout/team-space-directory";
+import { getFeatureAvailability } from "@/services/api/auth";
 import "@/styles/workspace-product.css";
 import "@/styles/workspace-menus.css";
 
@@ -19,15 +22,38 @@ const GlobalAgentPanel = lazy(() => import("@/components/canvas/canvas-cloud-age
 export default function UserLayout({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
     const adminWorkspace = pathname === "/admin" || pathname.startsWith("/admin/");
+    const teamWorkspace = pathname.startsWith("/teams/");
     const spatialWorkbench = isSpatialWorkbenchPath(pathname);
-    const canvasEditor = /^\/canvas\/[^/]+(?:\/|$)/.test(pathname);
+    const canvasEditor = /^\/canvas\/[^/]+(?:\/|$)/.test(workspacePagePath(pathname));
     const productWorkspace = !adminWorkspace && !canvasEditor;
     const userId = useUserStore((state) => state.user?.id);
+    const teamsEnabled = useUserStore((state) => state.features.teamsEnabled);
+    useEffect(() => {
+        if (!userId || adminWorkspace) return;
+        let active = true;
+        const refresh = async () => {
+            if (document.visibilityState !== "visible") return;
+            try {
+                const { features } = await getFeatureAvailability();
+                if (active && useUserStore.getState().user?.id === userId) useUserStore.getState().setFeatures(features);
+            } catch (error) {
+                if (active) console.warn("工作台功能开放状态刷新失败", error);
+            }
+        };
+        document.addEventListener("visibilitychange", refresh);
+        return () => {
+            active = false;
+            document.removeEventListener("visibilitychange", refresh);
+        };
+    }, [userId, adminWorkspace]);
     // Agent 停靠在画布右侧时，工作区让出同样的宽度，画布、顶栏和角落控件都不被遮挡。
     const agentDock = useAgentPanelDock();
     const agentDocked = Boolean(userId) && canvasEditor && agentDock.active;
     const creationWorkspace = pathname === "/" || pathname === "/create";
     const wasCanvasEditorRef = useRef(canvasEditor);
+    useLayoutEffect(() => {
+        if (teamWorkspace) useGlobalAgentStore.getState().reset();
+    }, [teamWorkspace]);
     // 从画布编辑器回到创作首页时收起 Agent：画布里停靠在右侧的面板到首页会变成浮窗，挡住首页。
     // 只收起面板，对话和运行照常继续；在绘制前收起，首页不会先闪出浮窗。
     useLayoutEffect(() => {
@@ -49,11 +75,12 @@ export default function UserLayout({ children }: { children: ReactNode }) {
     }, [adminWorkspace, spatialWorkbench, productWorkspace]);
 
     // 所有登录页面共用同一个面板实例：跨路由不卸载，对话、运行和事件流都不中断。
-    const globalAgent = userId ? (
-        <Suspense fallback={null}>
-            <GlobalAgentPanel key={userId} />
-        </Suspense>
-    ) : null;
+    const globalAgent =
+        userId && !teamWorkspace ? (
+            <Suspense fallback={null}>
+                <GlobalAgentPanel key={userId} />
+            </Suspense>
+        ) : null;
 
     if (adminWorkspace)
         return (
@@ -78,6 +105,12 @@ export default function UserLayout({ children }: { children: ReactNode }) {
                 <AppWorkspaceShell>{children}</AppWorkspaceShell>
             </div>
             {globalAgent}
+            {userId && teamsEnabled ? (
+                <>
+                    <TeamSpaceDirectoryHost key={`directory:${userId}`} userId={userId} />
+                    <TeamInvitationCenter key={userId} />
+                </>
+            ) : null}
         </ConfigProvider>
     );
 }

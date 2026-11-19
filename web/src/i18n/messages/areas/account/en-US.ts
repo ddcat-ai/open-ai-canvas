@@ -255,6 +255,7 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
             paymentSource: "Top-up channel: {{channel}}",
             adminAdjustment: "Admin adjustment",
             signupBonus: "Sign-up reward",
+            teamTransfer: "Team credit transfer",
             checkinBonus: "Check-in reward",
             redeem: "Code redemption",
             referral: "Referral commission",

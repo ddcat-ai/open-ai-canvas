@@ -1,0 +1,183 @@
+.space-directory {
+    display: grid;
+    gap: var(--space-3);
+}
+.space-directory-caption,
+.space-credit-home header p {
+    color: var(--workspace-text-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+}
+.space-directory-scroll,
+.space-credit-home-list {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    max-height: min(48dvh, 28rem);
+}
+.space-directory-rows {
+    display: grid;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.space-directory-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    min-height: 3.5rem;
+    border-radius: var(--r-md);
+    text-align: left;
+    color: var(--foreground);
+}
+.space-directory-row:hover {
+    background: var(--surface-hover);
+}
+.space-directory-row[aria-current] {
+    background: var(--workspace-nav-active-bg);
+}
+.space-directory-row:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: -2px;
+}
+.space-directory-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    background: var(--workspace-accent-soft);
+    border-radius: var(--r-md);
+}
+.space-directory-icon svg {
+    width: 1rem;
+    height: 1rem;
+}
+.space-directory-row[data-group] {
+    padding-left: var(--space-6);
+}
+.space-directory-row[data-group] .space-directory-icon {
+    background: transparent;
+    color: var(--workspace-text-muted);
+}
+.space-directory-name,
+.space-directory-amount {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+.space-directory-name {
+    flex: 1;
+}
+.space-directory-name strong,
+.space-directory-name small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.space-directory-name strong,
+.space-directory-amount strong {
+    font-weight: 600;
+    font-size: var(--fs-ui);
+}
+.space-directory-amount {
+    flex: none;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.space-directory-row small {
+    font-size: var(--fs-caption);
+    color: var(--workspace-text-muted);
+    font-weight: 400;
+}
+.space-directory-empty {
+    padding: var(--space-5);
+    text-align: center;
+    color: var(--workspace-text-muted);
+}
+.space-directory-footer {
+    display: flex;
+    justify-content: space-between;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--workspace-border);
+}
+.space-credit-home {
+    margin-block: var(--space-6);
+    padding: var(--space-4);
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--r-xl);
+    background: var(--workspace-surface);
+}
+.space-credit-home header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: var(--space-3);
+    padding: 0 var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--workspace-border);
+}
+.space-credit-home h2,
+.space-credit-home header a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+.space-credit-home h2 {
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+.space-credit-home header a {
+    flex: none;
+    color: var(--workspace-text-muted);
+    font-size: var(--fs-caption);
+}
+.space-credit-home-list {
+    max-height: 19rem;
+    margin-top: var(--space-2);
+}
+.app-workspace-topbar-credit-pill.space-credit-pill {
+    max-width: min(42vw, 28rem);
+    min-width: 0;
+}
+.space-credit-pill strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+@media (max-width: 850px) {
+    .app-workspace-topbar-credit-pill.space-credit-pill small {
+        display: inline;
+        margin-inline-start: 0;
+        padding-inline-start: var(--space-1);
+        font-variant-numeric: tabular-nums;
+    }
+}
+@media (max-width: 540px) {
+    .space-directory-row {
+        gap: var(--space-2);
+    }
+    .space-directory-row[data-group] {
+        padding-left: var(--space-3);
+    }
+    .app-workspace-topbar-credit-pill.space-credit-pill {
+        max-width: 36vw;
+    }
+    .app-workspace-topbar-credit-pill.space-credit-pill:has(small) {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0 var(--space-1);
+        line-height: 1.1;
+    }
+    .app-workspace-topbar-credit-pill.space-credit-pill:has(small) > svg {
+        display: none;
+    }
+    .app-workspace-topbar-credit-pill.space-credit-pill small {
+        grid-column: 1 / -1;
+        padding-inline-start: 0;
+        border: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}

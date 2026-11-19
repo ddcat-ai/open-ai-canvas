@@ -1,3 +1,5 @@
+import { workspacePath, workspaceTeamId } from "./workspace-routes";
+
 export const WORKSPACE_WALLET_OPEN_EVENT = "wallet:open";
 
 export type WorkspaceWalletOpenDetail = {
@@ -11,5 +13,9 @@ export type WorkspaceWalletOpenDetail = {
 
 /** 工作台任意入口打开积分中心弹窗，不再进入独立钱包页。 */
 export function openWorkspaceWallet(detail: WorkspaceWalletOpenDetail = {}) {
+    if (workspaceTeamId) {
+        window.location.assign(workspacePath("/wallet"));
+        return;
+    }
     window.dispatchEvent(new CustomEvent<WorkspaceWalletOpenDetail>(WORKSPACE_WALLET_OPEN_EVENT, { detail }));
 }

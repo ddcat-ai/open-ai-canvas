@@ -259,6 +259,7 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
             paymentSource: "충전 채널: {{channel}}",
             adminAdjustment: "관리자 조정",
             signupBonus: "가입 보상",
+            teamTransfer: "팀 크레딧 이체",
             checkinBonus: "출석 보상",
             actualCharge: "실제 사용액 {{amount}} 크레딧",
             releasedDetail: "처음 예약한 {{reserved}} 중 사용하지 않은 {{released}}이(가) 해제되었습니다.",

@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-routes";
 import { useTranslation } from "react-i18next";
 import { useRef, useState } from "react";
 import { App, Button } from "antd";
@@ -39,7 +40,7 @@ export function CreationAgentEntry() {
                 created.current = { id, userId };
             }
             if (useUserStore.getState().user?.id !== userId) return;
-            navigate(`/canvas/${encodeURIComponent(created.current.id)}?agent=1`, { state: canvasDraftNavigationState(created.current.id) });
+            navigate(workspacePath(`/canvas/${encodeURIComponent(created.current.id)}?agent=1`), { state: canvasDraftNavigationState(created.current.id) });
         } catch (cause) {
             if (useUserStore.getState().user?.id === userId) {
                 const detail = cause instanceof Error ? cause.message : t("create.agentEntry.startFailed");
@@ -66,7 +67,7 @@ export function CreationAgentEntry() {
                     {created.current ? t("create.agentEntry.retryEnter") : t("create.agentEntry.newCanvas")}
                     <ArrowUpRight />
                 </Button>
-                <Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate("/canvas?agent=1")}>
+                <Button icon={<FolderOpen />} disabled={busy} onClick={() => navigate(workspacePath("/canvas?agent=1"))}>
                     {t("create.agentEntry.continueExisting")}
                 </Button>
             </div>
