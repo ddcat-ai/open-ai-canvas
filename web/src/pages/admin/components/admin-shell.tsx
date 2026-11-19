@@ -108,6 +108,7 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/announcements", keywords: "公告 更新 弹窗", label: "系统公告", shortLabel: "公告", icon: <BellRing className="size-4" /> },
             { path: "/admin/banner-announcements", keywords: "通知 横幅", label: "常驻通知", shortLabel: "通知", icon: <Megaphone className="size-4" /> },
             { path: "/admin/feedbacks", keywords: "反馈 工单 建议 问题", label: "用户反馈", shortLabel: "反馈", icon: <Inbox className="size-4" /> },
+            { path: "/admin/works", keywords: "作品 投稿 审核 精选", label: "作品投稿", shortLabel: "投稿", icon: <Inbox className="size-4" /> },
             { path: "/admin/agent-lessons", keywords: "Agent 记忆 经验", label: "Agent 记忆", shortLabel: "记忆", icon: <BookMarked className="size-4" /> },
         ],
     },

@@ -136,6 +136,11 @@ func (r *Repository) ResourceReferenceSnapshotExcludingAssets(userID string, exc
 	if len(resourceIDs) == 0 {
 		return snapshot, nil
 	}
+	workReferences, err := r.CommunityWorkResourceReferences(userID, resourceIDs)
+	if err != nil {
+		return snapshot, err
+	}
+	snapshot.Direct = append(snapshot.Direct, workReferences...)
 	history, err := r.CanvasHistoryResourceReferences(resourceIDs)
 	if err != nil {
 		return snapshot, err

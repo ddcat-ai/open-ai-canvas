@@ -12,6 +12,7 @@ import { koKR } from "./messages/ko-KR";
 import { zhCN } from "./messages/zh-CN";
 import { personalAppearanceMessages } from "./personal-appearance-messages";
 import { personalAvatarMessages } from "./personal-avatar-messages";
+import { communityWorkMessages } from "./community-work-messages";
 
 const CORE_CATALOGS: Record<AppLocale, object> = { "zh-CN": zhCN, "en-US": enUS, "fr-FR": frFR, "de-DE": deDE, "ja-JP": jaJP, "ko-KR": koKR };
 
@@ -25,6 +26,7 @@ function buildResources(): Resource {
                     ...CORE_CATALOGS[code],
                     personalAppearance: personalAppearanceMessages[code],
                     personalAvatar: personalAvatarMessages[code],
+                    communityWorks: communityWorkMessages[code],
                     ...Object.fromEntries(Object.entries(AREA_CATALOGS).map(([area, catalog]) => [area, catalog[code]])),
                 },
             },
