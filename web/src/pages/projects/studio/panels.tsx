@@ -934,7 +934,15 @@ export function SettingsPanel({ projectId, summary, cast, onChanged }: { project
                                 <AssetSchemePicker
                                     value={settings.assets}
                                     onChange={(assets) => setSettings({ ...settings, assets })}
-                                    sample={{ style: settings.stylePrompt, characterName: sampleCharacter?.name, characterAppearance: sampleCharacter?.appearance, sceneName: sampleScene?.name, sceneAppearance: sampleScene?.appearance, propName: sampleProp?.name, propAppearance: sampleProp?.appearance }}
+                                    sample={{
+                                        style: settings.stylePrompt,
+                                        characterName: sampleCharacter?.name,
+                                        characterAppearance: sampleCharacter?.appearance,
+                                        sceneName: sampleScene?.name,
+                                        sceneAppearance: sampleScene?.appearance,
+                                        propName: sampleProp?.name,
+                                        propAppearance: sampleProp?.appearance,
+                                    }}
                                     imageModel={imageOption}
                                 />
                                 <div className="drama-settings-regen">

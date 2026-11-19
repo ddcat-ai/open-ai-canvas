@@ -28,7 +28,16 @@ export function defaultAssetSettings(catalog?: DramaAssetSchemeCatalog): DramaAs
 
 export type AssetPreviewSample = { characterName: string; characterAppearance: string; sceneName: string; sceneAppearance: string; propName: string; propAppearance: string; style: string; rules: string };
 
-const FALLBACK_SAMPLE: AssetPreviewSample = { characterName: "主角", characterAppearance: "（作品圣经建立后自动填入角色外貌）", sceneName: "主场景", sceneAppearance: "（作品圣经建立后自动填入环境描述）", propName: "关键道具", propAppearance: "（作品圣经建立后自动填入道具外观）", style: "写实电影感", rules: "" };
+const FALLBACK_SAMPLE: AssetPreviewSample = {
+    characterName: "主角",
+    characterAppearance: "（作品圣经建立后自动填入角色外貌）",
+    sceneName: "主场景",
+    sceneAppearance: "（作品圣经建立后自动填入环境描述）",
+    propName: "关键道具",
+    propAppearance: "（作品圣经建立后自动填入道具外观）",
+    style: "写实电影感",
+    rules: "",
+};
 
 type AssetTab = "character" | "scene" | "prop";
 const TAB_SUBJECT: Record<AssetTab, "角色" | "场景" | "道具"> = { character: "角色", scene: "场景", prop: "道具" };
