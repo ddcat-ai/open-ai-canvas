@@ -75,6 +75,7 @@ export async function executeVideoGeneration({
             generateAudio: generationConfig.videoGenerateAudio,
             watermark: generationConfig.videoWatermark,
             references: generationReferenceUrls(generationContext),
+            ll2Direct: isLL2CanvasVideoModel(generationConfig) ? true : undefined,
             ...videoGenerationMetadata,
             ...styleMetadata,
             ...skillMetadata,

@@ -375,6 +375,8 @@ export type CanvasNodeMetadata = {
     ll2PromptOptimizer?: string;
     /** 画布 LL2 生成：生成后超分档位（"1080p" | "2k" | "4k"）。 */
     ll2UpscaleTarget?: string;
+    /** 画布节点由 LL2 客户端直连生成（没有后端任务号，状态区不显示排队/任务恢复提示）。 */
+    ll2Direct?: boolean;
     generateAudio?: string;
     watermark?: string;
     audioVoice?: string;

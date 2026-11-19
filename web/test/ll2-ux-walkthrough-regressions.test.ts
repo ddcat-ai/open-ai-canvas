@@ -224,6 +224,15 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("画布 LL2 直连节点不显示「排队」三段进度", async () => {
+    const status = await read("../src/components/canvas/canvas-node-status-content.tsx");
+    expect(status).toContain("ll2Direct");
+    expect(status).toContain('"正在生成"');
+    expect(status).toContain("!uncertain && !workflow && !ll2Direct");
+    const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
+    expect(executor).toContain("ll2Direct: isLL2CanvasVideoModel(generationConfig) ? true : undefined");
+});
+
 test("画布 LL2 模型的能力表支持参考图/参考视频，不再误判不可用", async () => {
     const caps = await read("../src/lib/model-capabilities.ts");
     expect(caps).toContain('channel?.id === "ll2-primary"');
