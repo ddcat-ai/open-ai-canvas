@@ -8,6 +8,8 @@ import { canonicalGenerationMetadata } from "@/lib/canvas/generation-contract";
 import { resolveCanvasGenerationModel } from "@/lib/canvas/canvas-project-generation";
 import { withReferenceImageSize, type ImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
+import { LL2_CONNECTED_VIDEO_MODELS, ll2TiersFor } from "@/lib/ll2-models";
+import { ll2UpscaleTargetsFor } from "@/lib/ll2-upscale";
 import { resolvedMediaConfig } from "@/lib/media-settings";
 import type { CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
 import type { CanvasNodeGenerationMode } from "./canvas-node-prompt-panel";
@@ -31,6 +33,9 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
     // 与 buildGenerationConfig 使用同一规则，面板显示的尺寸就是提交的尺寸。
     if (mode === "image") node = withReferenceImageSize(globalConfig, node, preferredModel, referenceImage);
     const model = resolveCompatibleModel(globalConfig, preferredModel, mode === "image" ? { ...requirements, imageSize: node.metadata?.size || globalConfig.size || defaultConfig.size } : requirements) || preferredModel;
+    // LL2 模型的清晰度档位是 LL2 自己的（480p/720p/1080p/4k 等），不能被上游 normalizeVideoResolution 打回默认值。
+    const ll2BaseModel = String(model).split("::").pop() || "";
+    const isLL2Model = (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(ll2BaseModel);
     const defaults = resolveModelGenerationDefaults(
         globalConfig,
         model,
@@ -74,7 +79,9 @@ export function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mo
         size: defaults.size ?? globalConfig.size ?? defaultConfig.size,
         transparentBackground: defaults.transparentBackground ?? "false",
         videoSeconds: defaults.videoSeconds ?? normalizeVideoDuration(globalConfig.videoSeconds ?? defaultConfig.videoSeconds),
-        vquality: defaults.vquality ?? normalizeVideoResolution(globalConfig.vquality || defaultConfig.vquality),
+        vquality: isLL2Model
+            ? node.metadata?.vquality || globalConfig.vquality || ll2TiersFor(ll2BaseModel as Parameters<typeof ll2TiersFor>[0])[0]?.label || "720p"
+            : defaults.vquality ?? normalizeVideoResolution(globalConfig.vquality || defaultConfig.vquality),
         videoGenerateAudio: defaults.videoGenerateAudio ?? globalConfig.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: defaults.videoWatermark ?? globalConfig.videoWatermark ?? defaultConfig.videoWatermark,
         ll2PromptOptimizer: node.metadata?.ll2PromptOptimizer ?? globalConfig.ll2PromptOptimizer ?? "",
@@ -114,6 +121,11 @@ export function videoConfigPatch(key: keyof AiConfig, value: string) {
     if (key === "ll2PromptOptimizer") return { ll2PromptOptimizer: value };
     if (key === "ll2Upscale") return { ll2UpscaleTarget: value };
     if (key === "videoSeconds") return { seconds: value };
+    if (key === "vquality") {
+        // 分辨率改到更高档时，之前选的超分目标可能已经不合法，顺手清掉，避免面板显示“4K 还能超到 4K”。
+        const validTargets = ll2UpscaleTargetsFor(value).map((item) => item.id);
+        return validTargets.length ? { vquality: value } : { vquality: value, ll2UpscaleTarget: "" };
+    }
     if (key === "videoGenerateAudio") return { generateAudio: value };
     if (key === "videoWatermark") return { watermark: value };
     if (key === "videoArkPrivateAssetUpload") return { arkPrivateAssetUpload: value };
