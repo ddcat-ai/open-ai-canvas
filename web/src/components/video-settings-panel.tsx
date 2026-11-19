@@ -10,6 +10,7 @@ import { type CanvasTheme } from "@/lib/canvas-theme";
 import { formatVideoResolutionLabel, isVideoResolutionMatch, normalizeVideoDuration, videoDimensionsForRatioAndResolution, videoResolutionComparisonKey, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
+import { LL2_CONNECTED_VIDEO_MODELS, LL2_VIDEO_DURATION, ll2TiersFor, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
 
 const sizeOptions = [
     { value: "1280x720", label: "横屏", width: 1280, height: 720 },
@@ -38,6 +39,9 @@ export function VideoSettingsPanel(props: VideoSettingsPanelProps) {
 }
 
 function VideoSettingsControls({ config, onConfigChange, theme, showTitle = true, className = "w-[292px] space-y-3" }: VideoSettingsPanelProps) {
+    if (isLL2VideoModel(config.model)) {
+        return <LL2VideoSettingsPanel config={config} onConfigChange={onConfigChange} theme={theme} showTitle={showTitle} className={className} />;
+    }
     const profile = modelCapabilityConfigFor(config, config.model).video!;
     const priceTiers = modelPriceTiers(config);
     if (resolveModelRequestConfig(config, config.model).interfaceType === "volcengine-jimeng-video") {
@@ -421,5 +425,117 @@ function SwitchRow({ label, checked, theme, onChange }: { label: string; checked
                 <Switch size="sm" checked={checked} onChange={onChange} />
             </span>
         </div>
+    );
+}
+
+// ── LL2（BYOK）视频参数面板 ──────────────────────────────────────────────
+// 影策原生的能力表不知道 LL2 的档位/时长（H3 固定 768P、全模型 4 秒起），
+// 在 LL2 模型下改用这张表，避免画布里显示出 720P / 6 秒这种错参数。
+
+function isLL2VideoModel(model: string): model is LL2ConnectedVideoModel {
+    return (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(model);
+}
+
+const LL2_H3_RATIOS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
+const LL2_WAN_RATIOS = ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4"];
+const LL2_COMMON_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"];
+
+function ll2RatioOptions(model: LL2ConnectedVideoModel) {
+    if (model === "MiniMax-H3") return LL2_H3_RATIOS;
+    if (model.startsWith("wan3.")) return LL2_WAN_RATIOS;
+    return LL2_COMMON_RATIOS;
+}
+
+function ll2RadioDimensions(ratio: string, height: number) {
+    if (ratio === "adaptive") return null;
+    const [w, h] = ratio.split(":").map((part) => Number(part) || 1);
+    return { width: Math.round((height * w) / h), height };
+}
+
+function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[292px] space-y-3" }: VideoSettingsPanelProps) {
+    const model = config.model as LL2ConnectedVideoModel;
+    const tiers = ll2TiersFor(model) || [];
+    const range = LL2_VIDEO_DURATION[model] || { min: 4, max: 15, default: 5 };
+    const resolutions = tiers.map((tier) => tier.label);
+    const ratios = ll2RatioOptions(model);
+    const resolution = resolutions.includes(config.vquality) ? config.vquality : (resolutions[0] || "768P");
+    const ratio = ratios.includes(config.size) ? config.size : "16:9";
+    const rawSeconds = Number(config.videoSeconds) || range.default;
+    const seconds = Math.min(range.max, Math.max(range.min, Math.round(rawSeconds)));
+    const sourceHeight = Number(resolution.replace(/[^0-9]/g, "")) || 768;
+    const dimensions = ll2RadioDimensions(ratio, Math.min(2160, Math.max(480, sourceHeight)));
+    return (
+        <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
+            {showTitle ? <div className="text-sm font-semibold">视频设置</div> : null}
+            <div className="space-y-2">
+                <div className="text-xs" style={{ color: theme.node.muted }}>分辨率</div>
+                <div className="grid grid-cols-3 gap-2">
+                    {resolutions.map((value) => (
+                        <LL2Pill key={value} selected={resolution === value} theme={theme} onClick={() => onConfigChange("vquality", value)}>
+                            {value}
+                        </LL2Pill>
+                    ))}
+                </div>
+            </div>
+            <div className="space-y-2">
+                <div className="text-xs" style={{ color: theme.node.muted }}>尺寸</div>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                    <LL2Dimension label="W" value={dimensions ? String(dimensions.width) : "跟随参考"} theme={theme} />
+                    <span className="text-xs opacity-45">×</span>
+                    <LL2Dimension label="H" value={dimensions ? String(dimensions.height) : "跟随参考"} theme={theme} />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                    {ratios.map((value) => (
+                        <LL2Pill key={value} selected={ratio === value} theme={theme} onClick={() => onConfigChange("size", value)}>
+                            {value === "adaptive" ? "自适应" : value}
+                        </LL2Pill>
+                    ))}
+                </div>
+            </div>
+            <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs" style={{ color: theme.node.muted }}>
+                    <span>秒数</span>
+                    <span>{seconds} 秒</span>
+                </div>
+                <input
+                    type="range"
+                    aria-label="视频秒数"
+                    min={range.min}
+                    max={range.max}
+                    step={1}
+                    value={seconds}
+                    className="w-full accent-[var(--ll2-t-6720ff,#6720ff)]"
+                    onChange={(event) => onConfigChange("videoSeconds", event.target.value)}
+                />
+                <div className="flex justify-between text-[10px]" style={{ color: theme.node.muted }}>
+                    <span>{range.min}s 起（LL2 最少 4 秒）</span>
+                    <span>{range.max}s</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function LL2Pill({ selected, theme, onClick, children }: { selected: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
+    return (
+        <button
+            type="button"
+            aria-pressed={selected}
+            className="flex h-8 items-center justify-center rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110"
+            style={{ background: selected ? theme.toolbar.activeBg : theme.toolbar.itemHover, color: theme.node.text }}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={onClick}
+        >
+            {children}
+        </button>
+    );
+}
+
+function LL2Dimension({ label, value, theme }: { label: string; value: string; theme: CanvasTheme }) {
+    return (
+        <span className="flex h-8 items-center gap-2 rounded-md px-2 text-xs" style={{ background: theme.toolbar.itemHover }}>
+            <span style={{ color: theme.node.muted }}>{label}</span>
+            <span>{value}</span>
+        </span>
     );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { App, Button, Modal } from "antd";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { FileText, Images, Plus, RefreshCw } from "lucide-react";
@@ -13,7 +13,7 @@ import { resourceFileUrl } from "@/services/api/resources";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { CanvasCharacterReferenceModal } from "./canvas-character-reference-modal";
 import { useUserStore } from "@/stores/use-user-store";
-import type { Asset } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { assetPickerItemsToInsertPayloads, officialAssetToInsertPayload, type InsertAssetPayload } from "./asset-picker-modal";
 import { Select } from "@/components/ui/base/select";
 import { CanvasWorkspacePersonalAssetPreview, personalAssetIcon } from "./canvas-workspace-personal-asset-preview";
@@ -127,6 +127,19 @@ export function CanvasWorkspaceAssetPanel({ onInsert, onManage, onProjectAssets 
     });
     const assets = query.data?.pages.flatMap((page) => page.assets) ?? [];
     const officialAssets = officialQuery.data?.pages.flatMap((page) => page.items) ?? [];
+    // 免登录客户（LL2 BYOK）没有 /api/assets 权限，直接用本机素材库，和首页 @ 素材库看的是同一份数据。
+    const storeAssets = useAssetStore((state) => state.assets);
+    const localAssets = useMemo(() => {
+        const keyword = search.toLowerCase();
+        return storeAssets
+            .filter((asset) => ["image", "video", "text"].includes(asset.kind))
+            .filter((asset) => (category === "material" ? true : asset.category === category))
+            .filter((asset) => (kind === "all" ? true : asset.kind === kind))
+            .filter((asset) => (!keyword ? true : asset.title.toLowerCase().includes(keyword) || (asset.tags || []).some((tag) => tag.toLowerCase().includes(keyword))))
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }, [storeAssets, category, kind, search]);
+    const personalAssets = userId ? assets : localAssets;
+    const personalPending = Boolean(userId) && query.isPending;
     const insert = async (asset: Asset) => {
         if (inserting) return;
         setInserting(asset.id);
@@ -163,9 +176,11 @@ export function CanvasWorkspaceAssetPanel({ onInsert, onManage, onProjectAssets 
                 <button type="button" className={source === "personal" ? "active" : ""} aria-selected={source === "personal"} role="tab" onClick={() => setSource("personal")}>
                     个人资产
                 </button>
-                <button type="button" className={source === "official" ? "active" : ""} aria-selected={source === "official"} role="tab" onClick={() => setSource("official")}>
-                    官方素材
-                </button>
+                {userId ? (
+                    <button type="button" className={source === "official" ? "active" : ""} aria-selected={source === "official"} role="tab" onClick={() => setSource("official")}>
+                        官方素材
+                    </button>
+                ) : null}
             </div>
             <div className="sidebar-subtabs border-b border-border p-2">
                 {categories.map((id) => (
@@ -199,14 +214,17 @@ export function CanvasWorkspaceAssetPanel({ onInsert, onManage, onProjectAssets 
                 <input className="w-full rounded-md border border-border bg-transparent px-2 py-2 text-sm" aria-label="搜索资产名称或标签" placeholder="搜索名称/标签" value={input} onChange={(event) => setInput(event.target.value)} />
             </div>
             <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-                {!userId ? (
-                    <p className="p-3 text-sm">登录后查看资产。</p>
-                ) : (source === "official" ? officialQuery.isPending : query.isPending) ? (
+                {(source === "official" ? officialQuery.isPending : personalPending) ? (
                     <p role="status" className="p-3 text-sm">
                         正在加载资产…
                     </p>
                 ) : null}
-                {(source === "official" ? officialQuery.isError : query.isError) ? (
+                {source === "personal" && !userId && !localAssets.length ? (
+                    <div className="p-3 text-sm text-muted-foreground">
+                        本机素材库还是空的。去「资产」页或首页「＋」上传后，这里就能直接插入画布。
+                    </div>
+                ) : null}
+                {(source === "official" ? officialQuery.isError : userId && query.isError) ? (
                     <div role="alert" className="p-3 text-sm">
                         资产读取失败，已加载的内容仍保留。<Button onClick={() => void (source === "official" ? officialQuery.refetch() : query.refetch())}>重试</Button>
                     </div>
@@ -243,7 +261,7 @@ export function CanvasWorkspaceAssetPanel({ onInsert, onManage, onProjectAssets 
                               </div>
                           );
                       })
-                    : assets.map((asset) => {
+                    : personalAssets.map((asset) => {
                           const insertable = ["image", "video", "audio", "text"].includes(asset.kind);
                           const KindIcon = personalAssetIcon(asset.kind);
                           const coverStorageKey = asset.kind === "entity" ? asset.data.coverStorageKey : asset.kind === "image" ? asset.data.storageKey : undefined;
