@@ -24,6 +24,8 @@ function LL2KeyPanel() {
     const [draft, setDraft] = useState(apiKey);
     const [visible, setVisible] = useState(false);
     const [error, setError] = useState("");
+    // 已连接时默认只看状态；点「更换 Key」才展开输入框，避免「已连接 + 一长串 Key + 两个按钮」堆在一起。
+    const [editing, setEditing] = useState(!apiKey);
 
     const save = () => {
         const value = draft.trim();
@@ -36,71 +38,102 @@ function LL2KeyPanel() {
         connect(value);
     };
 
+    const startReplacing = () => {
+        setDraft("");
+        setVisible(false);
+        setError("");
+        setEditing(true);
+    };
+
+    const cancelReplacing = () => {
+        setDraft("");
+        setVisible(false);
+        setError("");
+        setEditing(false);
+    };
+
+    const showStatus = Boolean(apiKey) && !editing;
+
     return (
         <div className="ll2-key-panel">
             <div className="ll2-key-panel-head">
-                <span className="ll2-key-panel-title">连接 LL2</span>
+                <span className="ll2-key-panel-title">{showStatus ? "LL2 已连接" : "连接 LL2"}</span>
                 <button type="button" className="ll2-key-dialog-close" onClick={close} aria-label="关闭填 Key 窗口">
                     <X className="size-4" aria-hidden />
                 </button>
             </div>
 
-            <p className="ll2-key-lead">粘贴 LL2 Key，只保存在这台电脑。</p>
-
-            {apiKey ? (
-                <div className="ll2-key-connected">
-                    <Check className="size-4" aria-hidden />
-                    <span>已连接 · {ll2MaskedKey(apiKey)}</span>
-                </div>
-            ) : null}
-
-            <div className="ll2-key-input-row">
-                <input
-                    id="ll2-api-key-input"
-                    className="ll2-key-input"
-                    aria-label="LL2 API Key"
-                    type={visible ? "text" : "password"}
-                    value={draft}
-                    autoComplete="off"
-                    spellCheck={false}
-                    autoFocus
-                    placeholder="把 Key 粘贴在这里"
-                    onChange={(event) => {
-                        setDraft(event.target.value);
-                        setError("");
-                    }}
-                    onKeyDown={(event) => {
-                        if (event.key === "Enter") save();
-                    }}
-                />
-                <button type="button" className="ll2-key-eye" onClick={() => setVisible((value) => !value)} aria-label={visible ? "隐藏 Key" : "显示 Key"}>
-                    {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-            </div>
-            {error ? <p className="ll2-key-error" role="alert">{error}</p> : null}
-
-            <div className="ll2-key-actions">
-                <button type="button" className="ll2-key-primary" onClick={save}>
-                    {apiKey ? "更新 Key" : "保存并使用"}
-                </button>
-                {apiKey ? (
-                    <button
-                        type="button"
-                        className="ll2-key-ghost"
-                        onClick={() => {
-                            disconnect();
-                            setDraft("");
-                        }}
-                    >
-                        断开
-                    </button>
-                ) : null}
-            </div>
+            {showStatus ? (
+                <>
+                    <p className="ll2-key-lead">Key 只保存在这台电脑。</p>
+                    <div className="ll2-key-connected">
+                        <Check className="size-4" aria-hidden />
+                        <span>已连接 · {ll2MaskedKey(apiKey)}</span>
+                    </div>
+                    <div className="ll2-key-actions">
+                        <button type="button" className="ll2-key-primary" onClick={startReplacing}>
+                            更换 Key
+                        </button>
+                        <button
+                            type="button"
+                            className="ll2-key-ghost"
+                            onClick={() => {
+                                disconnect();
+                                startReplacing();
+                            }}
+                        >
+                            断开
+                        </button>
+                    </div>
+                </>
+            ) : (
+                <>
+                    <p className="ll2-key-lead">粘贴 LL2 Key，只保存在这台电脑。</p>
+                    <div className="ll2-key-input-row">
+                        <input
+                            id="ll2-api-key-input"
+                            className="ll2-key-input"
+                            aria-label="LL2 API Key"
+                            type={visible ? "text" : "password"}
+                            value={draft}
+                            autoComplete="off"
+                            spellCheck={false}
+                            autoFocus
+                            placeholder="把 Key 粘贴在这里"
+                            onChange={(event) => {
+                                setDraft(event.target.value);
+                                setError("");
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") save();
+                            }}
+                        />
+                        <button type="button" className="ll2-key-eye" onClick={() => setVisible((value) => !value)} aria-label={visible ? "隐藏 Key" : "显示 Key"}>
+                            {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                        </button>
+                    </div>
+                    {error ? <p className="ll2-key-error" role="alert">{error}</p> : null}
+                    <div className="ll2-key-actions">
+                        <button type="button" className="ll2-key-primary" onClick={save}>
+                            {apiKey ? "保存新 Key" : "保存并使用"}
+                        </button>
+                        {apiKey ? (
+                            <button type="button" className="ll2-key-ghost" onClick={cancelReplacing}>
+                                取消
+                            </button>
+                        ) : null}
+                    </div>
+                </>
+            )}
 
             <div className="ll2-key-panel-foot">
-                <button type="button" className="ll2-key-console" onClick={openConsoleInNewTab}>
-                    去 LL2 控制台复制 Key <ExternalLink className="size-3" aria-hidden />
-                </button>
+                {showStatus ? (
+                    <span />
+                ) : (
+                    <button type="button" className="ll2-key-console" onClick={openConsoleInNewTab}>
+                        去 LL2 控制台复制 Key <ExternalLink className="size-3" aria-hidden />
+                    </button>
+                )}
                 <div className="ll2-key-foot-right">
                     <Link to="/models" onClick={close}>价格</Link>
                     <button type="button" className="ll2-key-later" onClick={close}>稍后</button>
