@@ -4,6 +4,7 @@ import { ll2FetchHdBlob, ll2RunHd } from "@/services/ll2/ll2-hd";
 import { ll2BuildMediaContent, type LL2MediaInput } from "@/services/ll2/ll2-media";
 import { ll2GenerateVideo } from "@/services/ll2/ll2-video";
 import { uploadMediaFile } from "@/services/file-storage";
+import { captureVideoPoster } from "@/lib/video-poster";
 import { useLL2Store } from "@/stores/use-ll2-store";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -26,6 +27,8 @@ export function isLL2CanvasVideoModel(config: AiConfig): boolean {
 export type LL2CanvasVideoResult = {
     content: string;
     storageKey?: string;
+    /** 首帧海报 dataURL，给画布节点当预览图，避免只显示相机占位。 */
+    posterUrl?: string;
     seconds: number;
     resolution: string;
     requiresAuth?: boolean;
@@ -112,27 +115,60 @@ export async function runLL2CanvasVideo(input: {
         try { blob = await fetch(finalUrl, { signal: input.signal }).then((response) => response.blob()); } catch { blob = null; }
     }
 
-    if (blob) {
+    // 公开直链（H3 / wan3）直接写远程地址：画布能播放，也不会出现「未同步」。
+    // 只有需要 Bearer 的 artifact（seedance / vidu / vega）才落盘成本机/远端资源。
+    const mustPersist = generated.requiresAuth || Boolean(canUpscale);
+    if (blob && mustPersist) {
         const uploaded = await uploadMediaFile(blob, "ll2-canvas");
-        finalUrl = uploaded.url;
-        finalSeconds = uploaded.durationMs ? uploaded.durationMs / 1000 : finalSeconds;
+        const poster = await posterDataUrl(blob);
         return {
             content: uploaded.url,
             storageKey: uploaded.storageKey,
-            seconds: finalSeconds,
+            posterUrl: poster?.dataUrl,
+            seconds: uploaded.durationMs ? uploaded.durationMs / 1000 : finalSeconds,
             resolution: finalResolution,
             durationMs: uploaded.durationMs,
-            width: uploaded.width,
-            height: uploaded.height,
+            width: uploaded.width || poster?.width,
+            height: uploaded.height || poster?.height,
             bytes: uploaded.bytes,
             mimeType: uploaded.mimeType,
         };
     }
 
+    let poster = blob ? await posterDataUrl(blob) : null;
+    if (!poster && !generated.requiresAuth) {
+        // 公开直链也尽量取一次首帧当海报；CORS 不通就退化成占位图，不影响播放。
+        try {
+            const posterBlob = await fetch(finalUrl, { signal: input.signal }).then((response) => response.blob());
+            poster = await posterDataUrl(posterBlob);
+        } catch { poster = null; }
+    }
     return {
         content: finalUrl,
         seconds: finalSeconds,
         resolution: finalResolution,
-        requiresAuth: generated.requiresAuth,
+        posterUrl: poster?.dataUrl,
+        width: poster?.width,
+        height: poster?.height,
+        durationMs: poster?.durationMs,
+        requiresAuth: false,
     };
+}
+async function posterDataUrl(blob: Blob): Promise<{ dataUrl: string; width?: number; height?: number; durationMs?: number } | null> {
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+        const captured = await captureVideoPoster(objectUrl, { maxWidth: 480, timeoutMs: 8000 });
+        if (!captured.poster) return null;
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("读取视频首帧失败"));
+            reader.readAsDataURL(captured.poster!);
+        });
+        return { dataUrl, width: captured.width, height: captured.height, durationMs: captured.durationMs };
+    } catch {
+        return null;
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
 }

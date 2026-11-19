@@ -134,6 +134,9 @@ export async function executeVideoGeneration({
                                   status: NODE_STATUS_SUCCESS,
                                   content: done.content,
                                   storageKey: done.storageKey,
+                                  ...(done.posterUrl
+                                      ? { videoPreview: { content: done.posterUrl, width: done.width || 1280, height: done.height || 720 } }
+                                      : {}),
                                   durationMs: done.durationMs,
                                   naturalWidth: done.width,
                                   naturalHeight: done.height,
