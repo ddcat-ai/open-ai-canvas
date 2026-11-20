@@ -255,7 +255,63 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     if (!taskId) throw new Error("LL2 已受理请求但没有返回任务号，请稍后重试");
 
     onProgress?.({ stage: "created", status: "queued", elapsedMs: Date.now() - startedAt, pollCount: 0, taskId });
+    return waitForLL2Video({ req, adapter, taskId, startedAt, interval, maxPolls, seconds, resolution, ratio, prompt, estimate, onProgress });
+}
 
+/**
+ * 刷新后恢复：不再创建任务，直接按已有 taskId 继续查询并收尾。
+ * 页面刷新/热更新会打断浏览器轮询，但 LL2 服务端会继续跑；用这个方法把已出片补回节点。
+ */
+export async function ll2ResumeVideo(req: LL2VideoRequest, taskId: string, onProgress?: (progress: LL2VideoProgress) => void): Promise<LL2VideoResult> {
+    const key = String(req.apiKey || "").trim();
+    if (!key) throw new Error("先连接 LL2 Key 才能恢复生成");
+    const task = String(taskId || "").trim();
+    if (!task) throw new Error("缺少 LL2 任务号，无法恢复");
+    const adapter = ll2VideoAdapter(req.model);
+    const args = adapter.normalize({
+        model: req.model,
+        prompt: String(req.prompt || ""),
+        seconds: req.seconds,
+        resolution: req.resolution || (req.model === "MiniMax-H3" ? "768P" : "480P"),
+        ratio: req.ratio || "16:9",
+        media: req.media || [],
+        promptOptimizer: false,
+    });
+    const interval = Math.max(1000, req.pollIntervalMs ?? 5000);
+    const maxPolls = Math.max(1, req.maxPolls ?? 120);
+    return waitForLL2Video({
+        req,
+        adapter,
+        taskId: task,
+        startedAt: Date.now(),
+        interval,
+        maxPolls,
+        seconds: args.seconds,
+        resolution: args.resolution,
+        ratio: args.ratio,
+        prompt: String(req.prompt || ""),
+        estimate: ll2PreciseCNY(req.model, args.seconds, args.resolution),
+        onProgress,
+    });
+}
+
+async function waitForLL2Video(input: {
+    req: LL2VideoRequest;
+    adapter: ReturnType<typeof ll2VideoAdapter>;
+    taskId: string;
+    startedAt: number;
+    interval: number;
+    maxPolls: number;
+    seconds: number;
+    resolution: string;
+    ratio: string;
+    prompt: string;
+    estimate: ReturnType<typeof ll2PreciseCNY>;
+    onProgress?: (progress: LL2VideoProgress) => void;
+}): Promise<LL2VideoResult> {
+    const { req, adapter, taskId, startedAt, interval, maxPolls, seconds, resolution, ratio, prompt, estimate, onProgress } = input;
+    const key = String(req.apiKey || "").trim();
+    const protocol = adapter.protocol;
     for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
         await sleep(interval, req.signal);
         let queried: LL2QueriedTask;

@@ -73,6 +73,7 @@ import { CanvasViewport } from "@/components/canvas/canvas-viewport";
 import { CanvasCollaborationLayer } from "@/components/canvas/canvas-collaboration-layer";
 import { Minimap } from "@/components/canvas/canvas-mini-map";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
+import { useCanvasLL2Recovery } from "./use-canvas-ll2-recovery";
 import { handleListGenerate } from "./list-mode-generator";
 import { CanvasToolbar } from "@/components/canvas/canvas-toolbar";
 import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-commands";
@@ -288,6 +289,8 @@ function CanvasViewportPage() {
     const [hideNodeConnections, setHideNodeConnections] = useState(readCanvasHideNodeConnections);
     const [agentFollowCamera] = useState(readCanvasAgentCameraFollow);
     const [projectLoaded, setProjectLoaded] = useState(false);
+    // 画布重新打开时，把刷新打断的 LL2 直连任务按 taskId 查回来。
+    useCanvasLL2Recovery({ nodes, setNodes, enabled: projectLoaded });
     useLayoutEffect(() => {
         if (!projectLoaded) return;
         const nextNodes = syncBatchColumnReferences(nodesRef.current, connectionsRef.current);

@@ -2,7 +2,7 @@ import { LL2_CONNECTED_VIDEO_MODELS, type LL2ConnectedVideoModel } from "@/lib/l
 import { ll2UpscaleTargetsFor } from "@/lib/ll2-upscale";
 import { ll2FetchHdBlob, ll2RunHd } from "@/services/ll2/ll2-hd";
 import { ll2BuildMediaContent, type LL2MediaInput } from "@/services/ll2/ll2-media";
-import { ll2GenerateVideo } from "@/services/ll2/ll2-video";
+import { ll2GenerateVideo, ll2ResumeVideo } from "@/services/ll2/ll2-video";
 import { uploadMediaFile } from "@/services/file-storage";
 import { captureVideoPoster } from "@/lib/video-poster";
 import { useLL2Store } from "@/stores/use-ll2-store";
@@ -106,27 +106,74 @@ export async function runLL2CanvasVideo(input: {
         input.onStage?.(queued ? "排队中" : `生成中 · 已查询 ${progress.pollCount || 0} 次`);
     });
 
+    return finalizeLL2CanvasVideo(generated, {
+        apiKey,
+        upscaleTarget: String(input.config.ll2Upscale || ""),
+        signal: input.signal,
+        onStage: input.onStage,
+    });
+}
+
+/** 刷新后恢复：按已保存的 LL2 taskId 继续查询，然后把成片按同样的落盘/超分规则写回节点。 */
+export async function resumeLL2CanvasVideo(input: {
+    model: string;
+    taskId: string;
+    prompt?: string;
+    seconds?: number;
+    resolution?: string;
+    ratio?: string;
+    upscaleTarget?: string;
+    signal?: AbortSignal;
+    onStage?: (detail: string) => void;
+}): Promise<LL2CanvasVideoResult> {
+    const apiKey = useLL2Store.getState().apiKey.trim();
+    if (!apiKey) throw new Error("先连接 LL2 Key 才能恢复生成");
+    const model = ll2BaseVideoModel(input.model) as LL2ConnectedVideoModel;
+    if (!(LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(model)) throw new Error(`${model} 不是 LL2 视频模型`);
+    const generated = await ll2ResumeVideo(
+        {
+            apiKey,
+            model,
+            prompt: String(input.prompt || ""),
+            seconds: Math.max(1, Number(input.seconds) || 4),
+            resolution: String(input.resolution || (model === "MiniMax-H3" ? "768P" : "480P")),
+            ratio: input.ratio,
+            signal: input.signal,
+        },
+        input.taskId,
+        (progress) => {
+            const status = String(progress.status || "").toLowerCase();
+            input.onStage?.(status.includes("queued") || status.includes("pending") ? "恢复中 · 排队" : `恢复中 · 已查询 ${progress.pollCount || 0} 次`);
+        },
+    );
+    return finalizeLL2CanvasVideo(generated, { apiKey, upscaleTarget: input.upscaleTarget, signal: input.signal, onStage: input.onStage });
+}
+
+async function finalizeLL2CanvasVideo(
+    generated: Awaited<ReturnType<typeof ll2GenerateVideo>>,
+    options: { apiKey: string; upscaleTarget?: string; signal?: AbortSignal; onStage?: (detail: string) => void },
+): Promise<LL2CanvasVideoResult> {
+    const { apiKey, upscaleTarget = "", signal, onStage } = options;
     let blob: Blob | null = null;
     let finalUrl = generated.url;
     let finalResolution = generated.resolution;
     let finalSeconds = generated.seconds;
 
     // 超分只接受公网视频直链；需要 Bearer 的 artifact 不能作为 /hd/tasks 的输入。
-    const upscaleTarget = String(input.config.ll2Upscale || "");
-    const canUpscale = upscaleTarget && !generated.requiresAuth && ll2UpscaleTargetsFor(generated.resolution).some((item) => item.id === upscaleTarget);
+    const canUpscale = Boolean(upscaleTarget) && !generated.requiresAuth && ll2UpscaleTargetsFor(generated.resolution).some((item) => item.id === upscaleTarget);
     if (canUpscale) {
         // 超分比生成更慢；这一步必须让用户看到，别让节点一直只显示「正在生成」。
-        input.onStage?.(`视频已生成，正在超分 ${upscaleTarget.toUpperCase()}（会更久一点）`);
-        const hd = await ll2RunHd({ apiKey, videoUrl: generated.url, resolution: upscaleTarget as "1080p" | "2k" | "4k", duration: generated.seconds, signal: input.signal });
-        input.onStage?.("超分完成，正在取回成片");
-        blob = await ll2FetchHdBlob(hd.url, apiKey, input.signal);
+        onStage?.(`视频已生成，正在超分 ${upscaleTarget.toUpperCase()}（会更久一点）`);
+        const hd = await ll2RunHd({ apiKey, videoUrl: generated.url, resolution: upscaleTarget as "1080p" | "2k" | "4k", duration: generated.seconds, signal });
+        onStage?.("超分完成，正在取回成片");
+        blob = await ll2FetchHdBlob(hd.url, apiKey, signal);
         finalResolution = hd.resolution;
     } else if (generated.previewUrl) {
-        try { blob = await fetch(generated.previewUrl, { signal: input.signal }).then((response) => response.blob()); } catch { blob = null; }
+        try { blob = await fetch(generated.previewUrl, { signal }).then((response) => response.blob()); } catch { blob = null; }
     } else if (!generated.requiresAuth) {
         // 公开直链只用来取首帧海报；COS 卡住/不支持 CORS 时不能把节点一直挂在生成中。
-        input.onStage?.("生成完成，正在取回首帧");
-        blob = await fetchBlobWithTimeout(finalUrl, 12000, input.signal);
+        onStage?.("生成完成，正在取回首帧");
+        blob = await fetchBlobWithTimeout(finalUrl, 12000, signal);
     }
 
     // 公开直链（H3 / wan3）直接写远程地址：画布能播放，也不会出现「未同步」。
@@ -153,7 +200,7 @@ export async function runLL2CanvasVideo(input: {
     if (!poster && !generated.requiresAuth) {
         // 公开直链也尽量取一次首帧当海报；CORS 不通就退化成占位图，不影响播放。
         try {
-            const posterBlob = await fetchBlobWithTimeout(finalUrl, 12000, input.signal);
+            const posterBlob = await fetchBlobWithTimeout(finalUrl, 12000, signal);
             poster = posterBlob ? await posterDataUrl(posterBlob) : null;
         } catch { poster = null; }
     }

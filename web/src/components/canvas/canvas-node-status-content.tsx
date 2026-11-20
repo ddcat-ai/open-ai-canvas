@@ -87,7 +87,7 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     // 超时后别一直转圈，明确告诉用户去控制台取片或重新生成。
     // H3 本身就可能要十几分钟；给到 40 分钟再提示中断，避免正常慢任务被误判。
     const ll2Stale = Boolean(ll2Direct && metadata?.taskCreatedAt && Date.now() - new Date(metadata.taskCreatedAt).getTime() > 40 * 60 * 1000);
-    const ll2StageHint = ll2Stale ? "页面刷新或重载可能中断了这次生成；LL2 已出片可到控制台下载，或重新生成" : metadata?.ll2Stage || "";
+    const ll2StageHint = ll2Stale ? "正在按任务号尝试恢复；仍无结果可到 LL2 控制台下载，或重新生成" : metadata?.ll2Stage || "";
     const kind = canvasNodeGenerationKind(node.type);
     const Icon = generationKindIcon[kind];
     const uncertain = phase === "uncertain";
