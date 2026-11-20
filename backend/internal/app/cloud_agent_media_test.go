@@ -335,6 +335,9 @@ func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	if nodes[a.NodeID]["type"] != "image" || len(creationMaps(doc["connections"])) != 2 {
 		t.Fatal("image node/references missing")
 	}
+	if width, _ := nodes[a.NodeID]["width"].(float64); width != 540 {
+		t.Fatalf("square draft frame width = %v, want 540", nodes[a.NodeID]["width"])
+	}
 }
 
 func TestCloudAgentCanvasReadsFullPromptAssetsAndConnections(t *testing.T) {
