@@ -29,6 +29,9 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	for _, plugin := range plugins {
 		pluginsByID[plugin.Manifest.ID] = plugin
 	}
+	if manifest := pluginsByID["kling-v4-official"].Manifest; manifest.APIVersion != "yingce.plugin/v2" || manifest.Version != "1.2.0" {
+		t.Fatalf("Kling manifest schema=%q release=%q", manifest.APIVersion, manifest.Version)
+	}
 	packages, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))
 	if err != nil {
 		t.Fatal(err)
@@ -228,12 +231,21 @@ func TestPluginRuntimeIsTheProtocolSourceOfTruth(t *testing.T) {
 		t.Fatal("bare JSON manifest was accepted by the upload runtime")
 	}
 	manifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-runtime","version":"1.0.0","name":"Uploaded Runtime","author":"Test","documentation":"# Uploaded Runtime","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
-	plugin, err := center.install(testPluginPackage(t, manifest), "uploaded-runtime.yingce-plugin")
+	archive := testPluginPackage(t, manifest)
+	plugin, err := center.install(archive, "uploaded-runtime.yingce-plugin")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if plugin.Status != "enabled" || !center.registrySnapshot().IsCapability("uploaded-runtime", protocol.CapabilityVideo) {
 		t.Fatalf("installed plugin was not activated: %#v", plugin)
+	}
+	repeated, err := center.install(archive, "same-package.yingce-plugin")
+	if err != nil || repeated.SHA256 != plugin.SHA256 || !repeated.UpdatedAt.Equal(plugin.UpdatedAt) {
+		t.Fatalf("reinstall changed release: %#v err=%v", repeated, err)
+	}
+	changed := testPluginPackage(t, bytes.ReplaceAll(manifest, []byte("/tasks"), []byte("/other")))
+	if _, err := center.install(changed, "changed-package.yingce-plugin"); err == nil || !strings.Contains(err.Error(), "摘要不同") {
+		t.Fatalf("same version replacement: %v", err)
 	}
 	updatedManifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-runtime","version":"2.0.0","name":"Uploaded Runtime v2","author":"Test","documentation":"# Uploaded Runtime v2","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime v2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
 	updated, err := center.install(testPluginPackage(t, updatedManifest), "uploaded-runtime-v2.yingce-plugin")

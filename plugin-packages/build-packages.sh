@@ -7,12 +7,41 @@ payment_plugins="official-payment-wechat-native official-payment-alipay-page off
 payments_only=false
 default_payment_targets="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64"
 
+package_plugin() {
+  package_id=$1
+  package_dir="$root_dir/$package_id"
+  output_file="$root_dir/$package_id.yingce-plugin"
+  temporary_file="$root_dir/.$package_id.yingce-plugin.tmp"
+  rm -f "$temporary_file"
+  (
+    cd "$package_dir"
+    if [ "$package_id" = kling-v4-official ]; then
+      stage=$(mktemp -d)
+      trap 'rm -rf "$stage"' EXIT
+      cp -R manifest.json README.md docs LICENSE "$stage/"
+      cd "$stage"
+      export TZ=UTC
+      find . -type f -exec chmod 644 {} + -exec touch -t 200001010000 {} +
+    fi
+    find manifest.json README.md docs assets web backend LICENSE -type f 2>/dev/null | LC_ALL=C sort | zip -X -q "$temporary_file" -@
+  )
+  mv "$temporary_file" "$output_file"
+}
+
+if [ "${1:-}" = "--protocol" ] && [ "$#" -eq 2 ]; then
+  case "$2" in ''|*[!a-z0-9-]*|official-payment-*) exit 2 ;; esac
+  [ -f "$root_dir/$2/manifest.json" ]
+  node "$root_dir/embed-documentation.mjs" "$2"
+  package_plugin "$2"
+  exit 0
+fi
+
 if [ "${1:-}" = "--payments-only" ]; then
   payments_only=true
   shift
 fi
 if [ "$#" -ne 0 ]; then
-  echo "usage: $0 [--payments-only]" >&2
+  echo "usage: $0 [--payments-only | --protocol ID]" >&2
   exit 2
 fi
 
@@ -121,19 +150,6 @@ for target in $payment_targets; do
   build_payment_provider official-payment-zhifufm ./cmd/payment-zhifufm "$target_goos" "$target_goarch"
   build_payment_provider official-payment-epay ./cmd/payment-epay "$target_goos" "$target_goarch"
 done
-
-package_plugin() {
-  package_id=$1
-  package_dir="$root_dir/$package_id"
-  output_file="$root_dir/$package_id.yingce-plugin"
-  temporary_file="$root_dir/.$package_id.yingce-plugin.tmp"
-  rm -f "$temporary_file"
-  (
-    cd "$package_dir"
-    find manifest.json README.md docs assets web backend LICENSE -type f 2>/dev/null | LC_ALL=C sort | zip -X -q "$temporary_file" -@
-  )
-  mv "$temporary_file" "$output_file"
-}
 
 if [ "$payments_only" = true ]; then
   for payment_plugin in $payment_plugins; do

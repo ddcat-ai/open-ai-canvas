@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+
+	"yingce/backend/internal/outbound"
 )
 
 // Manifest expressions are JSON values with a deliberately small set of
@@ -248,6 +251,42 @@ func evaluateManifestOperator(operator string, operand any, env map[string]any) 
 		default:
 			return 0, nil
 		}
+	case "$publicHttpsUrl":
+		value, err := evaluateManifestValue(operand, env)
+		return outbound.IsPublicHTTPSMediaURL(manifestString(value)), err
+	case "$sum":
+		value, err := evaluateManifestValue(operand, env)
+		if err != nil {
+			return nil, err
+		}
+		items, ok := value.([]any)
+		if !ok {
+			return nil, fmt.Errorf("$sum requires an array")
+		}
+		var total float64
+		for _, item := range items {
+			total += manifestFloat(item)
+		}
+		return normalizeManifestNumber(total), nil
+	case "$countMatches":
+		args, ok := operand.([]any)
+		if !ok || len(args) != 2 {
+			return nil, fmt.Errorf("$countMatches requires [text, literal pattern]")
+		}
+		pattern, ok := args[1].(string)
+		if !ok || pattern == "" {
+			return nil, fmt.Errorf("$countMatches requires a literal pattern")
+		}
+		match, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, err
+		}
+		value, err := evaluateManifestValue(args[0], env)
+		if err != nil {
+			return nil, err
+		}
+		text, _ := value.(string)
+		return len(match.FindAllStringIndex(text, -1)), nil
 	case "$split":
 		spec, ok := operand.([]any)
 		if !ok || len(spec) != 2 {

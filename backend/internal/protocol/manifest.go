@@ -388,6 +388,28 @@ func ValidateManifest(manifest Manifest) error {
 				return fmt.Errorf("provider %q result operation: %w", provider.ID, err)
 			}
 		}
+		bindingNames := make(map[string]bool, len(provider.RequestBindings))
+		for modelID, output := range provider.VideoOutputs {
+			if len(provider.VideoModes[modelID]) == 0 || output.MinSeconds < 1 || output.MaxSeconds < output.MinSeconds || len(output.Resolutions) == 0 {
+				return fmt.Errorf("provider %q has invalid video output limits for %q", provider.ID, modelID)
+			}
+		}
+		for modelID, modes := range provider.VideoModes {
+			if strings.TrimSpace(modelID) == "" || len(modes) == 0 || !hasCapability(provider.Capabilities, CapabilityVideo) {
+				return fmt.Errorf("provider %q has invalid video modes for %q", provider.ID, modelID)
+			}
+			for operation, limits := range modes {
+				if strings.TrimSpace(operation) == "" || limits.MaxImages < 0 || limits.Ratios == nil {
+					return fmt.Errorf("provider %q has invalid video mode %q for %q", provider.ID, operation, modelID)
+				}
+			}
+		}
+		for _, binding := range provider.RequestBindings {
+			if strings.TrimSpace(binding.Name) == "" || strings.ContainsAny(binding.Name, ".[] ") || binding.Value == nil || bindingNames[binding.Name] {
+				return fmt.Errorf("provider %q has invalid or duplicate request binding %q", provider.ID, binding.Name)
+			}
+			bindingNames[binding.Name] = true
+		}
 		for ruleIndex, rule := range provider.Validations {
 			if rule.Assert == nil || strings.TrimSpace(rule.Message) == "" {
 				return fmt.Errorf("provider %q validation %d requires assert and message", provider.ID, ruleIndex)
@@ -496,6 +518,8 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.Parameters = provider.Parameters
 	manifest.Metadata.ImageParameters = provider.ImageParameters
 	manifest.Metadata.VideoReferences = provider.VideoReferences
+	manifest.Metadata.VideoModes = provider.VideoModes
+	manifest.Metadata.VideoOutputs = provider.VideoOutputs
 	manifest.Metadata.Create = operationSummary(provider.Create)
 	manifest.Metadata.Agent = operationSummaryPtr(provider.Agent)
 	manifest.Metadata.Poll = operationSummaryPtr(provider.Poll)
@@ -524,6 +548,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.AgentResponse = provider.AgentResponse
 	manifest.Auth = provider.Auth
 	manifest.Validations = provider.Validations
+	manifest.RequestBindings = provider.RequestBindings
 	return nil
 }
 

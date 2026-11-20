@@ -19,13 +19,20 @@ func buildManifestOperation(operation ManifestOperation, auth ManifestAuth, requ
 // buildManifestOperationWithEnv 允许宿主为单次请求追加只读变量（如上传步骤的当前 media）；
 // request 与 taskId 始终由宿主提供，追加变量不能覆盖它们。
 func buildManifestOperationWithEnv(operation ManifestOperation, auth ManifestAuth, request GenerationRequest, taskID string, extra map[string]any) (RequestSpec, error) {
-	requestValues := manifestRequestValues(request)
-	env := map[string]any{"request": requestValues, "taskId": taskID}
+	return renderManifestOperation(operation, auth, request, taskID, manifestRequestEnv(request, taskID, extra))
+}
+
+func manifestRequestEnv(request GenerationRequest, taskID string, extra map[string]any) map[string]any {
+	env := map[string]any{"request": manifestRequestValues(request), "taskId": taskID}
 	for key, value := range extra {
 		if _, reserved := env[key]; !reserved {
 			env[key] = value
 		}
 	}
+	return env
+}
+
+func renderManifestOperation(operation ManifestOperation, auth ManifestAuth, request GenerationRequest, taskID string, env map[string]any) (RequestSpec, error) {
 	var body any
 	if operation.Body != nil {
 		value, err := evaluateManifestValue(operation.Body, env)

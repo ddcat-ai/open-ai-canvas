@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { packageDirectories } from "./package-directories.mjs";
+import { klingV4Spec } from "./kling-v4-official/protocol.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const scopes = ["admin.system-channel", "user.custom-channel", "canvas", "creation", "agent"];
@@ -92,6 +93,8 @@ const specs = [];
 function add(spec) {
   specs.push(spec);
 }
+
+add(klingV4Spec({ ref, omit, coalesce, addNumbers, multiply, map, filter, eq, ne, gt, gte, lte, and, len, trim, at, conditional, first, sorted }));
 
 add({
   id: "openai-images", providerId: "openai-image", name: "OpenAI Images", vendor: "OpenAI", capability: "image",
@@ -646,7 +649,7 @@ add({
 });
 
 add({
-  id: "xai-video", providerId: "xai-video", name: "xAI Video", vendor: "xAI", capability: "video",
+  id: "xai-video", providerId: "xai-video", name: "xAI Video", vendor: "xAI", capability: "video", version: "2.0.1",
   videoReferences: numberedImages("reference-only-images"),
   baseUrl: "https://api.x.ai", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
@@ -660,6 +663,7 @@ add({
     reference_images: omit(map(filter(ref("request.images"), "media", { $in: [ref("media.role"), ["reference_image", "subject_reference", "style_reference"]] }), "media", { url: ref("media.value") }))
   }),
   poll: { method: "GET", path: "/v1/videos/{{taskId}}" }, response: asyncResponse("video", {
+    taskId: coalesce(ref("response.request_id"), ref("response.id"), ref("response.task_id"), ref("response.taskId"), ref("response.data.id"), ref("taskId")),
     videos: coalesce(ref("response.video.url"), ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.url"), ref("response.data.video_url"), ref("response.output.url"))
   })
 });
@@ -1059,31 +1063,51 @@ add({
 });
 
 const wan3MediaType = coalesce(
-  ref("media.role"),
+  conditional({ $in: [ref("media.role"), ["subject_reference", "style_reference"]] }, "reference_image", conditional(eq(ref("media.role"), "reference_voice"), "reference_audio", ref("media.role"))),
   conditional(eq(ref("media.kind"), "image"), "reference_image", conditional(
     eq(ref("media.kind"), "video"), "reference_video", conditional(
       eq(ref("media.kind"), "audio"), "reference_audio", ref("media.kind")
     )
   ))
 );
+const wan3Inputs = ref("request.inputs");
+const wan3ExtraMedia = ref("request.providerOptions.dashscope-wan3-video.media");
+const wan3ExtraURL = split(ref("extra.url"), "://");
+const wan3Files = filter(wan3ExtraMedia, "extra", and({ $in: [ref("extra.type"), ["file", "link"]] }, at(wan3ExtraURL, 1), { $in: [lower(first(wan3ExtraURL)), conditional(eq(ref("extra.type"), "file"), ["http", "https", "oss"], ["http", "https"])] }));
+const wan3Frames = len(filter(wan3Inputs, "media", { $in: [wan3MediaType, ["first_frame", "last_frame"]] }));
+const wan3Count = (type) => len(filter(wan3Inputs, "media", eq(wan3MediaType, type)));
+const wan3PromptExtend = coalesce(ref("request.providerOptions.dashscope-wan3-video.prompt_extend"), true);
+const wan3DurationMs = (kind) => {
+  const durations = map(filter(wan3Inputs, "media", eq(ref("media.kind"), kind)), "media", ref("media.metadata.durationMs"));
+  return addNumbers(...Array.from({ length: 5 }, (_, index) => at(durations, index)));
+};
 
 add({
   id: "dashscope-wan3-video", providerId: "dashscope-wan3-video", name: "DashScope Wan 3.0 Video", vendor: "Alibaba Cloud", capability: "video",
-  version: "2.0.1", videoReferences: numberedImages("input-media"),
-  baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
+  version: "2.1.0", videoReferences: numberedImages("input-media"),
+  baseUrl: "", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
     { assert: { $in: [lower(ref("request.model")), ["wan3.0-video-prime", "wan3.0-video"]] }, message: "Wan 3.0 Video 仅支持 wan3.0-video-prime 或 wan3.0-video" },
-    { assert: { $lte: [len(mediaWithRoles("request.images", ["first_frame"])), 1] }, message: "Wan 3.0 Video 最多只能有一个 first_frame" },
-    { assert: { $lte: [len(mediaWithRoles("request.images", ["last_frame"])), 1] }, message: "Wan 3.0 Video 最多只能有一个 last_frame" }
+    { assert: { $or: [trim(ref("request.prompt")), gt(len(wan3Inputs), 0), gt(len(wan3ExtraMedia), 0)] }, message: "Wan 3.0 需要提示词或输入素材" },
+    { assert: { $in: [lower(ref("request.resolution")), ["", "480p", "720p", "1080p"]] }, message: "Wan 3.0 只支持 480P、720P、1080P" },
+    { assert: { $in: [ref("request.aspectRatio"), ["", "adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"]] }, message: "Wan 3.0 不支持该画幅比例" },
+    { assert: { $or: [{ $in: [ref("request.duration"), [0, -1]] }, and(gte(ref("request.duration"), 2), lte(ref("request.duration"), 30))] }, message: "Wan 3.0 输出时长须为 2～30 秒或智能时长 -1" },
+    { assert: lte(wan3Count("first_frame"), 1), message: "Wan 3.0 最多一个首帧" },
+    { assert: lte(wan3Count("last_frame"), wan3Count("first_frame")), message: "Wan 3.0 尾帧必须与首帧配对" },
+    { assert: { $or: [eq(wan3Frames, 0), eq(wan3Frames, addNumbers(len(wan3Inputs), len(wan3ExtraMedia)))] }, message: "Wan 3.0 首尾帧不能与全能参考素材混用" },
+    ...[["reference_image", 10], ["reference_video", 5], ["reference_audio", 5]].map(([role, max]) => ({ assert: lte(wan3Count(role), max), message: `Wan 3.0 ${role} 上限为 ${max}` })),
+    ...["video", "audio"].map((kind) => ({ assert: lte(wan3DurationMs(kind), 15000), message: `Wan 3.0 ${kind} 素材总时长不能超过 15 秒` })),
+    { assert: lte(addNumbers(wan3DurationMs("video"), multiply(ref("request.duration"), 1000)), 30000), message: "Wan 3.0 输入视频和输出时长之和不能超过 30 秒" },
+    { assert: eq(len(wan3Inputs), len(filter(wan3Inputs, "media", { $in: [wan3MediaType, ["first_frame", "last_frame", "reference_image", "reference_video", "reference_audio"]] }))), message: "Wan 3.0 不支持该输入角色" },
+    ...[["image", ["first_frame", "last_frame", "reference_image"]], ["audio", ["reference_audio"]], ["video", ["reference_video"]]].map(([kind, roles]) => ({ assert: eq(len(filter(wan3Inputs, "media", and(eq(ref("media.kind"), kind), { $not: { $in: [wan3MediaType, roles] } }))), 0), message: `Wan 3.0 ${kind} 素材与所选角色不匹配` })),
+    { assert: { $or: [eq(wan3ExtraMedia, null), and(eq(wan3ExtraMedia, wan3Files), lte(len(wan3Files), 1))] }, message: "Wan 3.0 媒体扩展仅接受一个文件或网页，图像、视频和音频须使用宿主引用" },
+    { assert: { $or: [eq(len(wan3ExtraMedia), 0), eq(wan3PromptExtend, true)] }, message: "Wan 3.0 文件或网页输入必须开启 prompt_extend" }
   ],
   create: jsonCreate("/api/v1/services/aigc/video-generation/video-synthesis", {
     model: ref("request.model"),
     input: {
       prompt: omit(ref("request.prompt")),
-      media: omit(coalesce(
-        ref("request.providerOptions.dashscope-wan3-video.media"),
-        map(sorted(ref("request.inputs")), "media", { type: wan3MediaType, url: ref("media.value") })
-      ))
+      media: omit({ $concatArrays: [map(sorted(wan3Inputs), "media", { type: wan3MediaType, url: ref("media.value") }), map(wan3ExtraMedia, "extra", { type: ref("extra.type"), url: ref("extra.url") })] })
     },
     parameters: {
       resolution: omit({ $upper: ref("request.resolution") }),
@@ -1091,17 +1115,18 @@ add({
       duration: omit(ref("request.duration")),
       audio: coalesce(ref("request.providerOptions.dashscope-wan3-video.audio"), ref("request.generateAudio")),
       seed: omit(ref("request.providerOptions.dashscope-wan3-video.seed")),
-      prompt_extend: coalesce(ref("request.providerOptions.dashscope-wan3-video.prompt_extend"), true),
+      prompt_extend: wan3PromptExtend,
       watermark: ref("request.watermark")
     }
   }, { headers: { "X-DashScope-Async": "enable" }, originPath: true }),
   poll: { method: "GET", path: "/api/v1/tasks/{{taskId}}", originPath: true },
   response: asyncResponse("video", {
-    taskId: coalesce(ref("response.output.task_id"), ref("response.task_id"), ref("taskId")),
-    status: conditional(eq(lower(ref("response.output.task_status")), "unknown"), "failed", coalesce(ref("response.output.task_status"), ref("response.status"), "pending")),
+    taskId: ref("response.output.task_id"),
+    status: conditional(eq(lower(ref("response.output.task_status")), "unknown"), "failed", ref("response.output.task_status")),
     videos: ref("response.output.video_url"),
     usage: ref("response.usage"), errorPaths: ["code", "output.code"], messagePaths: ["message", "output.message"]
-  })
+  }),
+  notes: "渠道 Base URL 应填写已开通地域的百炼业务空间 Endpoint。关键帧仅限首帧或首尾帧，不能混用全能参考。全能参考支持图、视频、音频组合；可附一个 file 或 link，此时必须开启 prompt_extend。参考视频和音频各自总长不超过 15 秒；输入视频总时长与输出时长之和不超过 30 秒。音频素材与输出声轨开关是不同能力。参考来源：[万相 3.0 视频生成 API](https://help.aliyun.com/zh/model-studio/wan3-video-generation-api-reference)。"
 });
 
 add({
@@ -1355,10 +1380,14 @@ function manifestFor(spec) {
         scopes,
         baseUrl: spec.baseUrl,
         requiresPublicMediaUrls: spec.requiresPublicMediaUrls === true,
+        ...(spec.detachedPolling ? { detachedPolling: true } : {}),
         auth: spec.auth,
         ...(spec.imageParameters ? { imageParameters: spec.imageParameters } : {}),
         ...(spec.videoReferences ? { videoReferences: spec.videoReferences } : {}),
+        ...(spec.videoModes ? { videoModes: spec.videoModes } : {}),
+        ...(spec.videoOutputs ? { videoOutputs: spec.videoOutputs } : {}),
         parameters: parameters(spec.params),
+        ...(spec.requestBindings ? { requestBindings: spec.requestBindings } : {}),
         ...(spec.validations ? { validations: spec.validations } : {}),
         create: spec.create,
         ...(spec.agent ? { agent: spec.agent } : {}),

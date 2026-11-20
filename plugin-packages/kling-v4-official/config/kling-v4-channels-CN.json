@@ -1,0 +1,469 @@
+{
+  "format": "yingce.system-channels",
+  "version": 1,
+  "exportedAt": "2026-11-13T00:33:17.52397Z",
+  "channels": [
+    {
+      "websiteName": "Kling 4.0 · China",
+      "apiFormat": "openai",
+      "mediaTransport": {
+        "image": "url",
+        "audio": "protocol",
+        "video": "url"
+      },
+      "name": "Kling 4.0 · China",
+      "baseUrl": "https://api-beijing.klingai.com",
+      "sortOrder": 0,
+      "enabled": false,
+      "concurrencyLimit": 1,
+      "models": [
+        {
+          "expectedUpdatedAt": "0001-01-01T00:00:00Z",
+          "modelKey": "kling-4.0",
+          "providerModelKey": "kling-4.0",
+          "displayName": "Kling 4.0 官方",
+          "channelLabel": "Kling 4.0 · China",
+          "tags": [],
+          "description": "中国区北京 API，使用新版 Bearer Key。标准版支持文生、多关键帧图生和全能参考，3～30 秒，720p/1080p。Omni 可引用图、视频、主体和音色 ID。此示例仅开放无输入视频的价格档，启用前请核对人民币单价及用户组倍率。",
+          "icon": "Kling",
+          "capability": "video",
+          "protocol": "kling-v4-official",
+          "billingMode": "per_second",
+          "unitPriceMicrocredits": 1500000,
+          "inputTokenPriceMicrocredits": 0,
+          "outputTokenPriceMicrocredits": 0,
+          "cachedTokenPriceMicrocredits": 0,
+          "cacheWriteTokenPriceMicrocredits": 0,
+          "priceConfigured": true,
+          "priceCurrency": "CNY",
+          "enabled": true,
+          "capabilityConfig": {
+            "mediaTransport": {
+              "image": "url",
+              "audio": "protocol",
+              "video": "url"
+            },
+            "version": 1,
+            "video": {
+              "references": {
+                "promptMaxChars": 26000,
+                "minImages": 0,
+                "maxImages": 10,
+                "maxImageBytes": 30000000,
+                "maxVideos": 0,
+                "maxVideoBytes": 300000000,
+                "maxVideoDurationSeconds": 30,
+                "maxAudios": 0,
+                "maxAudioBytes": 0,
+                "maxAudioDurationSeconds": 0
+              },
+              "duration": {
+                "selection": "range",
+                "min": 3,
+                "max": 30,
+                "step": 1,
+                "default": 10
+              },
+              "durationSupported": true,
+              "ratios": [
+                "16:9",
+                "9:16",
+                "1:1",
+                "21:9",
+                "4:3",
+                "3:4",
+                "adaptive"
+              ],
+              "defaultRatio": "16:9",
+              "resolutions": [
+                "720p",
+                "1080p"
+              ],
+              "defaultResolution": "1080p",
+              "generateAudio": {
+                "supported": false,
+                "default": false
+              },
+              "watermark": {
+                "supported": true,
+                "default": false
+              },
+              "operations": [
+                "text_to_video",
+                "image_to_video",
+                "reference_to_video"
+              ],
+              "defaultOperation": "text_to_video"
+            }
+          },
+          "priceTiers": [
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "image_to_video",
+                "vquality": "1080p"
+              },
+              "resolution": "1080p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 1500000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": true,
+              "enabled": true
+            },
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "image_to_video",
+                "vquality": "720p"
+              },
+              "resolution": "720p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 1000000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": true,
+              "enabled": true
+            },
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "text_to_video",
+                "vquality": "1080p"
+              },
+              "resolution": "1080p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 1500000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": true,
+              "enabled": true
+            },
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "text_to_video",
+                "vquality": "720p"
+              },
+              "resolution": "720p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 1000000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": true,
+              "enabled": true
+            },
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "video_to_video",
+                "vquality": "1080p"
+              },
+              "resolution": "1080p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 900000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": false,
+              "enabled": false
+            },
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "video_to_video",
+                "vquality": "720p"
+              },
+              "resolution": "720p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 600000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": false,
+              "enabled": false
+            }
+          ],
+          "referenceVideoBilling": false,
+          "sortOrder": 0
+        },
+        {
+          "expectedUpdatedAt": "0001-01-01T00:00:00Z",
+          "modelKey": "kling-4.0-flash",
+          "providerModelKey": "kling-4.0-flash",
+          "displayName": "Kling 4.0 官方",
+          "channelLabel": "Kling 4.0 Flash · China",
+          "tags": [],
+          "description": "中国区北京 API，使用新版 Bearer Key。Flash 支持文生、单首帧图生和全能参考，3～20 秒，720p。Omni 可引用图、视频和主体。此示例仅开放无输入视频的价格档，启用前请核对人民币单价及用户组倍率。",
+          "icon": "Kling",
+          "capability": "video",
+          "protocol": "kling-v4-official",
+          "billingMode": "per_second",
+          "unitPriceMicrocredits": 600000,
+          "inputTokenPriceMicrocredits": 0,
+          "outputTokenPriceMicrocredits": 0,
+          "cachedTokenPriceMicrocredits": 0,
+          "cacheWriteTokenPriceMicrocredits": 0,
+          "priceConfigured": true,
+          "priceCurrency": "CNY",
+          "enabled": true,
+          "capabilityConfig": {
+            "mediaTransport": {
+              "image": "url",
+              "audio": "protocol",
+              "video": "url"
+            },
+            "version": 1,
+            "video": {
+              "references": {
+                "promptMaxChars": 26000,
+                "minImages": 0,
+                "maxImages": 10,
+                "maxImageBytes": 30000000,
+                "maxVideos": 0,
+                "maxVideoBytes": 300000000,
+                "maxVideoDurationSeconds": 20,
+                "maxAudios": 0,
+                "maxAudioBytes": 0,
+                "maxAudioDurationSeconds": 0
+              },
+              "duration": {
+                "selection": "range",
+                "min": 3,
+                "max": 20,
+                "step": 1,
+                "default": 10
+              },
+              "durationSupported": true,
+              "ratios": [
+                "16:9",
+                "9:16",
+                "1:1",
+                "21:9",
+                "4:3",
+                "3:4",
+                "adaptive"
+              ],
+              "defaultRatio": "16:9",
+              "resolutions": [
+                "720p"
+              ],
+              "defaultResolution": "720p",
+              "generateAudio": {
+                "supported": false,
+                "default": false
+              },
+              "watermark": {
+                "supported": true,
+                "default": false
+              },
+              "operations": [
+                "text_to_video",
+                "image_to_video",
+                "reference_to_video"
+              ],
+              "defaultOperation": "text_to_video"
+            }
+          },
+          "priceTiers": [
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "image_to_video",
+                "vquality": "720p"
+              },
+              "resolution": "720p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0-flash",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 600000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": true,
+              "enabled": true
+            },
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "text_to_video",
+                "vquality": "720p"
+              },
+              "resolution": "720p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0-flash",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 600000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": true,
+              "enabled": true
+            },
+            {
+              "costPricing": {
+                "configured": false,
+                "unitPriceMicrocredits": 0,
+                "inputTokenPriceMicrocredits": 0,
+                "outputTokenPriceMicrocredits": 0,
+                "cachedTokenPriceMicrocredits": 0,
+                "cacheWriteTokenPriceMicrocredits": 0,
+                "referenceVideoUnitPriceMicrocredits": 0,
+                "referenceVideoOutputTokenPriceMicrocredits": 0
+              },
+              "selector": {
+                "operation": "video_to_video",
+                "vquality": "720p"
+              },
+              "resolution": "720p",
+              "videoSeconds": 0,
+              "providerModelKey": "kling-4.0-flash",
+              "billingMode": "per_second",
+              "unitPriceMicrocredits": 400000,
+              "inputTokenPriceMicrocredits": 0,
+              "outputTokenPriceMicrocredits": 0,
+              "cachedTokenPriceMicrocredits": 0,
+              "cacheWriteTokenPriceMicrocredits": 0,
+              "tokenPriceRulesEnabled": false,
+              "tokenPriceRules": [],
+              "referenceVideoUnitPriceMicrocredits": 0,
+              "referenceVideoOutputTokenPriceMicrocredits": 0,
+              "priceConfigured": false,
+              "enabled": false
+            }
+          ],
+          "referenceVideoBilling": false,
+          "sortOrder": 1
+        }
+      ]
+    }
+  ]
+}

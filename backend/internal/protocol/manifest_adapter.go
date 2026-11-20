@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -66,15 +67,52 @@ func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (Reque
 	if err != nil {
 		return RequestSpec{}, err
 	}
-	if err := validateManifestRequest(a.manifest.Validations, request); err != nil {
+	env := manifestRequestEnv(request, "", nil)
+	bindings := make(map[string]any, len(a.manifest.RequestBindings))
+	env["bindings"] = bindings
+	for _, binding := range a.manifest.RequestBindings {
+		value, err := evaluateManifestValue(binding.Value, env)
+		if err != nil {
+			return RequestSpec{}, fmt.Errorf("evaluate request binding %s: %w", binding.Name, err)
+		}
+		bindings[binding.Name] = value
+	}
+	if err := validateManifestRequest(a.manifest.Validations, env); err != nil {
 		return RequestSpec{}, err
+	}
+	if modes := a.manifest.Metadata.VideoModes; len(modes) > 0 {
+		operation := defaultValue(request.Operation, manifestString(bindings["operation"]))
+		limit, ok := modes[request.Model][operation]
+		if !ok {
+			return RequestSpec{}, fmt.Errorf("%s 未声明生成模式 %s", request.Model, operation)
+		}
+		if len(request.Images) > limit.MaxImages {
+			return RequestSpec{}, fmt.Errorf("%s 的 %s 模式最多接受 %d 张图片", request.Model, operation, limit.MaxImages)
+		}
+		if output, declared := a.manifest.Metadata.VideoOutputs[request.Model]; declared {
+			resolution := defaultValue(request.Output.Resolution, request.Resolution)
+			seconds := request.Output.Duration
+			if seconds == 0 {
+				seconds = request.Duration
+			}
+			if resolution != "" && !slices.Contains(output.Resolutions, resolution) {
+				return RequestSpec{}, fmt.Errorf("%s 不支持输出分辨率 %s", request.Model, resolution)
+			}
+			if seconds != 0 && (seconds < output.MinSeconds || seconds > output.MaxSeconds) {
+				return RequestSpec{}, fmt.Errorf("%s 的输出时长须在 %d–%d 秒之间", request.Model, output.MinSeconds, output.MaxSeconds)
+			}
+		}
+		ratio := defaultValue(request.Output.AspectRatio, request.AspectRatio)
+		if ratio != "" && len(limit.Ratios) > 0 && !slices.Contains(limit.Ratios, ratio) {
+			return RequestSpec{}, fmt.Errorf("%s 的 %s 模式不支持画幅 %s", request.Model, operation, ratio)
+		}
 	}
 	if request.Capability == "" || request.Capability == CapabilityVideo {
 		if limit, limited := a.manifest.Metadata.VideoReferences.ImageLimit(request.Model, request.Operation); limited && len(request.Images) > limit {
 			return RequestSpec{}, fmt.Errorf("视频协议 %s 的当前工作流和生成方式最多发送 %d 张图片，当前有 %d 张", a.manifest.Metadata.ID, limit, len(request.Images))
 		}
 	}
-	spec, err := buildManifestOperation(a.manifest.Create, a.manifest.Auth, request, "")
+	spec, err := renderManifestOperation(a.manifest.Create, a.manifest.Auth, request, "", env)
 	if err != nil {
 		return RequestSpec{}, err
 	}
@@ -410,11 +448,7 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	return CreateResult{TaskID: id, Status: status, Result: result, Message: message, Stage: stage, QueueAhead: queueAhead}
 }
 
-func validateManifestRequest(rules []ManifestValidation, request GenerationRequest) error {
-	if len(rules) == 0 {
-		return nil
-	}
-	env := map[string]any{"request": manifestRequestValues(request)}
+func validateManifestRequest(rules []ManifestValidation, env map[string]any) error {
 	for _, rule := range rules {
 		value, err := evaluateManifestValue(rule.Assert, env)
 		if err != nil {

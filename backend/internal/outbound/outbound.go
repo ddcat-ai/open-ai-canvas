@@ -486,6 +486,18 @@ func blockedCustomRelayIP(ip net.IP) bool {
 	return false
 }
 
+func IsPublicHTTPSMediaURL(raw string) bool {
+	parsed, err := url.ParseRequestURI(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	if ip := net.ParseIP(host); ip != nil {
+		return !blockedCustomRelayIP(ip)
+	}
+	return strings.Contains(host, ".") && !strings.ContainsAny(host, ":%") && !strings.HasSuffix(host, ".localhost") && !strings.HasSuffix(host, ".local")
+}
+
 func allowPrivateUpstreams() bool {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS")))
 	return value == "1" || value == "true" || value == "yes"

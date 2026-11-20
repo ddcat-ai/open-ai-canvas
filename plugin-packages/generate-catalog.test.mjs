@@ -15,7 +15,7 @@ const normalize = (value) => value.replace(/\r\n?/g, "\n").trimEnd();
 async function fixture(t) {
   const temp = await mkdtemp(join(tmpdir(), "yingce-catalog-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
-  for (const name of ["generate-catalog.mjs", "embed-documentation.mjs", "package-directories.mjs"]) {
+  for (const name of ["generate-catalog.mjs", "embed-documentation.mjs", "package-directories.mjs", "kling-v4-official/protocol.mjs", "kling-v4-official/video-modes.json"]) {
     await cp(join(root, name), join(temp, name));
   }
   const ids = [];

@@ -29,16 +29,17 @@ const (
 // plugin center. Protocol-specific runtime data is nested under Protocol so
 // the public plugin contract can grow without adding another center API.
 type PluginView struct {
-	Manifest    PluginManifestView   `json:"manifest"`
-	Source      string               `json:"source"`
-	FileName    string               `json:"fileName"`
-	Package     string               `json:"package"`
-	SHA256      string               `json:"sha256"`
-	InstalledAt time.Time            `json:"installedAt"`
-	UpdatedAt   time.Time            `json:"updatedAt"`
-	Status      string               `json:"status"`
-	Error       string               `json:"error,omitempty"`
-	Management  PluginManagementView `json:"management"`
+	Manifest    PluginManifestView      `json:"manifest"`
+	Source      string                  `json:"source"`
+	FileName    string                  `json:"fileName"`
+	Package     string                  `json:"package"`
+	SHA256      string                  `json:"sha256"`
+	InstalledAt time.Time               `json:"installedAt"`
+	UpdatedAt   time.Time               `json:"updatedAt"`
+	Status      string                  `json:"status"`
+	Error       string                  `json:"error,omitempty"`
+	Management  PluginManagementView    `json:"management"`
+	Releases    []requestPackageVersion `json:"releases,omitempty"`
 }
 
 type PluginManifestView struct {
@@ -70,6 +71,7 @@ type pluginRecord struct {
 	UpdatedAt     time.Time
 	Status        string
 	Error         string
+	History       []requestPackageVersion
 }
 
 type pluginRuntime struct {
@@ -83,14 +85,53 @@ type pluginRuntime struct {
 }
 
 type pluginRegistryRecord struct {
-	ID            string          `json:"id"`
-	Raw           json.RawMessage `json:"manifest"`
-	Source        string          `json:"source"`
-	FileName      string          `json:"fileName,omitempty"`
-	PackagePath   string          `json:"packagePath,omitempty"`
-	PackageSHA256 string          `json:"packageSha256,omitempty"`
-	InstalledAt   time.Time       `json:"installedAt"`
-	UpdatedAt     time.Time       `json:"updatedAt"`
+	ID            string                  `json:"id"`
+	Raw           json.RawMessage         `json:"manifest"`
+	Source        string                  `json:"source"`
+	FileName      string                  `json:"fileName,omitempty"`
+	PackagePath   string                  `json:"packagePath,omitempty"`
+	PackageSHA256 string                  `json:"packageSha256,omitempty"`
+	InstalledAt   time.Time               `json:"installedAt"`
+	UpdatedAt     time.Time               `json:"updatedAt"`
+	History       []requestPackageVersion `json:"requestReleases,omitempty"`
+	Withdrawn     bool                    `json:"withdrawn,omitempty"`
+}
+
+type requestPackageVersion struct {
+	Version string `json:"version"`
+	SHA256  string `json:"sha256"`
+}
+
+func retainRequestPackage(record pluginRegistryRecord, next protocol.Manifest, digest string) ([]requestPackageVersion, error) {
+	history := append([]requestPackageVersion(nil), record.History...)
+	if record.PackageSHA256 == "" || record.PackagePath == "" {
+		return history, nil
+	}
+	var previous protocol.Manifest
+	if err := json.Unmarshal(record.Raw, &previous); err != nil {
+		return nil, err
+	}
+	if len(previous.Contributes.Providers) == 0 {
+		return history, nil
+	}
+	if len(next.Contributes.Providers) == 0 {
+		return nil, fmt.Errorf("请求插件 %s 的新版本必须提供请求协议", record.ID)
+	}
+	if previous.Metadata.Version != next.Metadata.Version {
+		history = append(history, requestPackageVersion{Version: previous.Metadata.Version, SHA256: record.PackageSHA256})
+	} else if record.PackageSHA256 != digest {
+		return nil, fmt.Errorf("请求插件 %s@%s 已安装，但包摘要不同；请发布新版本", record.ID, next.Metadata.Version)
+	}
+	for index, release := range history {
+		if release.Version != next.Metadata.Version {
+			continue
+		}
+		if release.SHA256 != digest {
+			return nil, fmt.Errorf("请求插件 %s@%s 已安装，但包摘要不同；请发布新版本", record.ID, release.Version)
+		}
+		return append(history[:index], history[index+1:]...), nil
+	}
+	return history, nil
 }
 
 func newPluginRuntime(dataDir string) (*pluginRuntime, error) {
@@ -173,6 +214,11 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 			return fmt.Errorf("编码官方插件 %q：%w", id, err)
 		}
 		hash := official.hash
+		record.History, err = retainRequestPackage(record, manifest, hash)
+		if err != nil {
+			return err
+		}
+		record.Withdrawn = false
 		packageName := hash + ".yingce-plugin"
 		if err := cachePluginPackage(filepath.Join(c.packageDir, packageName), official); err != nil {
 			return fmt.Errorf("缓存官方插件 %q：%w", id, err)
@@ -235,7 +281,14 @@ func (c *pluginRuntime) bootstrapBuiltInPlugins() error {
 			if _, exists := builtInIDs[record.ID]; !exists {
 				// Built-in records are reconciled from repository packages and host
 				// manifests on every startup, so removed plugins cannot survive stale.
-				continue
+				var manifest protocol.Manifest
+				if err := json.Unmarshal(record.Raw, &manifest); err != nil {
+					return err
+				}
+				if record.PackageSHA256 == "" || len(manifest.Contributes.Providers) == 0 {
+					continue
+				}
+				record.Withdrawn = true
 			}
 		}
 		result = append(result, record)
@@ -367,6 +420,10 @@ func (c *pluginRuntime) reload() error {
 		return err
 	}
 	plugins := make(map[string]pluginRecord)
+	registry, err := protocol.NewRegistry()
+	if err != nil {
+		return err
+	}
 	for _, storedRecord := range stored {
 		data := storedRecord.Raw
 		if len(data) > protocolPluginMaxBytes {
@@ -387,11 +444,32 @@ func (c *pluginRuntime) reload() error {
 		if packageSHA256 == "" && strings.TrimSpace(storedRecord.PackagePath) == "" {
 			packageSHA256 = pluginHash(data)
 		}
-		plugins[metadata.ID] = pluginRecord{Raw: data, Metadata: metadata, Source: storedRecord.Source, FileName: storedRecord.FileName, PackagePath: storedRecord.PackagePath, PackageSHA256: packageSHA256, SHA256: packageSHA256, InstalledAt: storedRecord.InstalledAt, UpdatedAt: storedRecord.UpdatedAt, Status: "invalid"}
-	}
-	registry, err := protocol.NewRegistry()
-	if err != nil {
-		return err
+		if storedRecord.PackagePath != "" && len(manifest.Contributes.Providers) > 0 {
+			current := requestPackageVersion{Version: metadata.Version, SHA256: packageSHA256}
+			for _, release := range append([]requestPackageVersion{current}, storedRecord.History...) {
+				verified, err := c.verifiedRequestManifest(metadata.ID, release, metadata.Enabled)
+				if err != nil {
+					return err
+				}
+				raw, err := json.Marshal(verified)
+				if err != nil {
+					return err
+				}
+				if release == current {
+					data = raw
+				}
+				adapters, err := protocol.LoadInstalledProviders(raw, nil)
+				if err != nil {
+					return err
+				}
+				if err := registry.RegisterRelease(metadata.ID, release.Version, release.SHA256, release == current, metadata.Enabled && !storedRecord.Withdrawn, adapters, verified.Contributes.Workflows); err != nil {
+					return err
+				}
+			}
+		}
+		if !storedRecord.Withdrawn {
+			plugins[metadata.ID] = pluginRecord{Raw: data, Metadata: metadata, Source: storedRecord.Source, FileName: storedRecord.FileName, PackagePath: storedRecord.PackagePath, PackageSHA256: packageSHA256, SHA256: packageSHA256, InstalledAt: storedRecord.InstalledAt, UpdatedAt: storedRecord.UpdatedAt, Status: "invalid", History: storedRecord.History}
+		}
 	}
 	for id, record := range plugins {
 		var manifest protocol.Manifest
@@ -717,16 +795,47 @@ func (c *pluginRuntime) list() []PluginView {
 	defer c.mu.RUnlock()
 	items := make([]PluginView, 0, len(c.plugins))
 	for _, item := range c.plugins {
-		items = append(items, PluginView{Manifest: pluginManifestView(item.Raw, item.Metadata, item.Source), Source: item.Source, FileName: item.FileName, Package: protocol.PluginPackageFormat, SHA256: item.SHA256, InstalledAt: item.InstalledAt, UpdatedAt: item.UpdatedAt, Status: item.Status, Error: item.Error})
+		items = append(items, item.view())
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Manifest.ID < items[j].Manifest.ID })
 	return items
+}
+
+func (item pluginRecord) view() PluginView {
+	view := PluginView{Manifest: pluginManifestView(item.Raw, item.Metadata, item.Source), Source: item.Source, FileName: item.FileName, Package: protocol.PluginPackageFormat, SHA256: item.SHA256, InstalledAt: item.InstalledAt, UpdatedAt: item.UpdatedAt, Status: item.Status, Error: item.Error}
+	if item.PackagePath != "" && len(view.Manifest.Contributes.Providers) > 0 {
+		view.Releases = append([]requestPackageVersion{{Version: item.Metadata.Version, SHA256: item.SHA256}}, item.History...)
+	}
+	return view
 }
 
 func (c *pluginRuntime) registrySnapshot() *protocol.Registry {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.registry
+}
+
+func (c *pluginRuntime) verifiedRequestManifest(id string, release requestPackageVersion, enabled bool) (*protocol.Manifest, error) {
+	digest, err := hex.DecodeString(release.SHA256)
+	if err != nil || len(digest) != sha256.Size {
+		return nil, fmt.Errorf("请求插件 %s@%s 包摘要无效", id, release.Version)
+	}
+	data, err := os.ReadFile(filepath.Join(c.packageDir, release.SHA256+".yingce-plugin"))
+	if err != nil {
+		return nil, fmt.Errorf("读取请求插件 %s@%s：%w", id, release.Version, err)
+	}
+	if pluginHash(data) != release.SHA256 {
+		return nil, fmt.Errorf("请求插件 %s@%s 包摘要校验失败", id, release.Version)
+	}
+	pkg, err := protocol.InspectPluginPackage(data)
+	if err != nil {
+		return nil, err
+	}
+	if pkg.Manifest.Metadata.ID != id || pkg.Manifest.Metadata.Version != release.Version {
+		return nil, fmt.Errorf("请求插件 %s@%s 与原包清单不符", id, release.Version)
+	}
+	pkg.Manifest.Metadata.Enabled = enabled
+	return &pkg.Manifest, nil
 }
 
 func (c *pluginRuntime) paymentRegistrySnapshot() *payment.Registry {
@@ -760,50 +869,68 @@ func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error
 	if exists && isBuiltInPluginSource(existing.Source) && !isPaymentPluginManifest(manifest) {
 		return PluginView{}, fmt.Errorf("内置插件 %q 不能通过上传覆盖", manifest.Metadata.ID)
 	}
+	hash := pluginHash(data)
+	if exists && len(manifest.Contributes.Providers) != 0 && existing.Metadata.Version == manifest.Metadata.Version {
+		if existing.PackageSHA256 != hash {
+			return PluginView{}, fmt.Errorf("请求插件 %s@%s 已安装，但包摘要不同；请发布新版本", manifest.Metadata.ID, manifest.Metadata.Version)
+		}
+		return existing.view(), nil
+	}
 	manifest.Metadata.Enabled = !exists || existing.Metadata.Enabled
 	manifestData, err := json.Marshal(manifest)
 	if err != nil {
 		return PluginView{}, err
 	}
-	hash := pluginHash(data)
 	packageName := filepath.Base(strings.TrimSpace(fileName))
 	if packageName == "." || packageName == "" || packageName == string(filepath.Separator) {
 		packageName = manifest.Metadata.ID + ".yingce-plugin"
 	}
 	packagePath := filepath.Join(c.packageDir, hash+".yingce-plugin")
-	if err := writePluginFile(packagePath, data); err != nil {
-		return PluginView{}, fmt.Errorf("保存插件包失败：%w", err)
-	}
 	stored, err := c.readRegistry()
 	if err != nil {
-		_ = os.Remove(packagePath)
 		return PluginView{}, err
 	}
 	previousStored := append([]pluginRegistryRecord(nil), stored...)
 	now := time.Now().UTC()
 	newRecord := pluginRegistryRecord{ID: manifest.Metadata.ID, Raw: manifestData, Source: "uploaded", FileName: packageName, PackagePath: filepath.Base(packagePath), PackageSHA256: hash, InstalledAt: now, UpdatedAt: now}
-	if exists {
-		newRecord.InstalledAt = existing.InstalledAt
-		for index := range stored {
-			if stored[index].ID == manifest.Metadata.ID {
-				stored[index] = newRecord
-				break
+	replaced := false
+	for index, old := range stored {
+		if old.ID != newRecord.ID {
+			continue
+		}
+		if isBuiltInPluginSource(old.Source) && !isPaymentPluginManifest(manifest) {
+			return PluginView{}, fmt.Errorf("内置插件 %q 不能通过上传覆盖", old.ID)
+		}
+		if !old.Withdrawn && exists {
+			for _, release := range existing.History {
+				if release.Version == manifest.Metadata.Version && release.SHA256 == hash {
+					return existing.view(), nil
+				}
 			}
 		}
-	} else {
+		newRecord.History, err = retainRequestPackage(old, manifest, hash)
+		if err != nil {
+			return PluginView{}, err
+		}
+		newRecord.InstalledAt = old.InstalledAt
+		stored[index], replaced = newRecord, true
+		break
+	}
+	if !replaced {
 		stored = append(stored, newRecord)
 	}
+	if err := writePluginFile(packagePath, data); err != nil {
+		return PluginView{}, fmt.Errorf("保存插件包失败：%w", err)
+	}
 	if err := c.writeRegistry(stored); err != nil {
-		_ = os.Remove(packagePath)
 		return PluginView{}, fmt.Errorf("保存插件失败：%w", err)
 	}
 	if err := c.reload(); err != nil {
 		_ = c.writeRegistry(previousStored)
 		_ = c.reload()
-		_ = os.Remove(packagePath)
 		return PluginView{}, err
 	}
-	if exists && existing.PackagePath != "" && existing.PackagePath != filepath.Base(packagePath) {
+	if len(newRecord.History) == 0 && exists && existing.PackagePath != "" && existing.PackagePath != filepath.Base(packagePath) {
 		_ = os.Remove(filepath.Join(c.packageDir, filepath.Base(existing.PackagePath)))
 	}
 	for _, item := range c.list() {
@@ -868,7 +995,7 @@ func pluginManifestView(raw []byte, metadata protocol.Metadata, source string) P
 		manifest.Metadata = metadata
 	}
 	return PluginManifestView{
-		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: "yingce.plugin/v1", Entry: manifest.Entry, Surfaces: manifest.Surfaces,
+		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: manifest.APIVersion, Entry: manifest.Entry, Surfaces: manifest.Surfaces,
 		Description: metadata.Description, Documentation: metadata.Documentation, Author: metadata.Vendor,
 		Permissions: manifest.Permissions, Trusted: isBuiltInPluginSource(source), Runtime: manifest.Runtime,
 		Configuration: manifest.Configuration, Contributes: manifest.Contributes,
@@ -892,8 +1019,18 @@ func (c *pluginRuntime) uninstall(id string) error {
 		return err
 	}
 	filtered := stored[:0]
+	retained := false
 	for _, item := range stored {
-		if item.ID != record.Metadata.ID {
+		if item.ID == record.Metadata.ID {
+			var manifest protocol.Manifest
+			if err := json.Unmarshal(item.Raw, &manifest); err != nil {
+				return err
+			}
+			if len(manifest.Contributes.Providers) > 0 && item.PackagePath != "" {
+				item.Withdrawn, retained = true, true
+				filtered = append(filtered, item)
+			}
+		} else {
 			filtered = append(filtered, item)
 		}
 	}
@@ -903,7 +1040,7 @@ func (c *pluginRuntime) uninstall(id string) error {
 	if err := c.reload(); err != nil {
 		return err
 	}
-	if record.PackagePath != "" {
+	if !retained && record.PackagePath != "" {
 		_ = os.Remove(filepath.Join(c.packageDir, filepath.Base(record.PackagePath)))
 	}
 	return nil
