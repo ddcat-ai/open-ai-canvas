@@ -140,6 +140,8 @@ const routes: RouteObject[] = [
     { path: "/login", element: <Navigate to="/" replace /> },
     { path: "/register", element: <Navigate to="/" replace /> },
     { path: "/forgot-password", element: <Navigate to="/" replace /> },
+    // welcome 欢迎页已删除；旧链接统一回创作台。
+    { path: "/welcome", element: <Navigate to="/" replace /> },
     { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
     // H5 真人认证回跳页：多在未登录的手机上打开，不进入工作区登录守卫。
     { path: "/ark-portrait/result", element: fullScreenDeferred(<ArkPortraitResultPage />), errorElement: <RouteErrorPage /> },

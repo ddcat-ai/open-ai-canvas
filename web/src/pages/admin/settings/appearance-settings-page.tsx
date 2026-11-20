@@ -5,7 +5,7 @@ import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
 import { Palette, RefreshCw, Undo2, RotateCcw, Save, Sun, Moon, MonitorPlay, Globe2, Search, Copyright, Type, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/pages/admin/ui/controls";
-import { WelcomeSetting } from "@/pages/admin/settings/components/welcome-setting";
+
 import { SkinThemeEditor } from "@/pages/admin/settings/components/skin-theme-editor";
 import { CanvasAppearanceEditor } from "./components/canvas-appearance-editor";
 import { UpdateAnnouncementEditor } from "./components/update-announcement-editor";
@@ -825,7 +825,7 @@ export default function AppearanceSettingsPage() {
                                 children: (
                                     <SettingsSectionCard className="admin-appearance-section" icon={<Globe2 className="size-4" aria-hidden="true" />} title="欢迎页" description="控制访客是否可以访问欢迎页，开关修改后立即保存。">
                                         <div className="admin-appearance-section-form">
-                                            <WelcomeSetting />
+            
                                         </div>
                                     </SettingsSectionCard>
                                 ),
