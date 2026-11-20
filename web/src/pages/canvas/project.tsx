@@ -3529,6 +3529,7 @@ function CanvasViewportPage() {
                                 onUpscaleVideo={(targetNode, target) => {
                                     void handleUpscaleVideo(targetNode, target);
                                 }}
+                                onDownloadMedia={(targetNode) => void downloadNodesMedia([targetNode])}
                             />
 
                             <CanvasUploadModal open={uploadModalOpen} onClose={closeUploadModal} onUpload={handleUploadFiles} />

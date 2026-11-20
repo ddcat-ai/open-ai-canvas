@@ -54,6 +54,7 @@ type CanvasProjectContextMenuProps = {
     onCreateDramaFromStoryboard?: (node: CanvasNodeData) => void;
     /** 已生成的视频：按当前清晰度直接超分到更高档。 */
     onUpscaleVideo?: (node: CanvasNodeData, target: LL2UpscaleTarget) => void;
+    onDownloadMedia?: (node: CanvasNodeData) => void;
 };
 
 export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props }: CanvasProjectContextMenuProps) {
@@ -109,6 +110,7 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
                 if (node) props.onOpenVersions(node);
             }}
             onUpscaleVideo={props.onUpscaleVideo && node ? (target) => props.onUpscaleVideo?.(node, target) : undefined}
+            onDownloadMedia={props.onDownloadMedia && node ? () => props.onDownloadMedia?.(node) : undefined}
             onEditText={() => {
                 if (node) props.onEditText(node);
             }}

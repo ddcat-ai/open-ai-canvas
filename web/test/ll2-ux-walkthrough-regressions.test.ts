@@ -224,6 +224,17 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("视频节点右键提供下载到本机和存到资产库两个出口", async () => {
+    const menu = await read("../src/components/canvas/canvas-context-menu.tsx");
+    expect(menu).toContain("保存与导出");
+    expect(menu).toContain("下载到本机");
+    expect(menu).toContain("存到资产库");
+    const wrapper = await read("../src/pages/canvas/canvas-project-context-menu.tsx");
+    expect(wrapper).toContain("onDownloadMedia");
+    const project = await read("../src/pages/canvas/project.tsx");
+    expect(project).toContain("onDownloadMedia={(targetNode) => void downloadNodesMedia([targetNode])}");
+});
+
 test("超分会重置计时起点，标题显示正在超分", async () => {
     const project = await read("../src/pages/canvas/project.tsx");
     expect(project).toContain("超分是一段新的等待");

@@ -71,6 +71,8 @@ type CanvasNodeContextMenuProps = {
     onCreateDramaFromStoryboard?: () => void;
     /** 已生成的视频：按当前清晰度直接超分到更高档。 */
     onUpscaleVideo?: (target: LL2UpscaleTarget) => void;
+    /** 单个图片/视频下载到本机（与批量下载同一个实现）。 */
+    onDownloadMedia?: (node: CanvasNodeData) => void;
 };
 
 export function CanvasNodeContextMenu({
@@ -118,6 +120,7 @@ export function CanvasNodeContextMenu({
     onAdoptToDrama,
     onCreateDramaFromStoryboard,
     onUpscaleVideo,
+    onDownloadMedia,
 }: CanvasNodeContextMenuProps) {
     const theme = canvasThemes[useActiveTheme()];
     const [addOpen, setAddOpen] = useState(false);
@@ -267,6 +270,9 @@ export function CanvasNodeContextMenu({
                                     <MenuButton icon={<Maximize2 />} label="进入全景预览" disabled={!canOpenPreview} onClick={() => runAction(onViewMedia)} />
                                     {onAdoptToDrama ? <MenuButton icon={<CircleCheckBig />} label="采用到短剧" detail={isImage ? "设为设定参考图" : "设为剧情段视频"} disabled={!hasNodeContent} onClick={() => runAction(onAdoptToDrama)} /> : null}
                                     {versionMenuButton}
+                                    <MenuSection label="保存与导出" />
+                                    <MenuButton icon={<Download />} label="下载到本机" disabled={!hasNodeContent || !onDownloadMedia} onClick={() => node && runAction(() => onDownloadMedia?.(node))} />
+                                    <MenuButton icon={<FolderPlus />} label="存到资产库" disabled={!canSaveAsset} onClick={() => runAction(onSaveAsset)} />
                                     {videoUpscaleOptions.length ? (
                                         <>
                                             <MenuDivider />
