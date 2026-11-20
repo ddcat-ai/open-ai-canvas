@@ -30,7 +30,7 @@ import {
 } from "@/services/ll2/ll2-media";
 import { ll2FetchHdBlob, ll2RunHd, type LL2HdProgress } from "@/services/ll2/ll2-hd";
 import { ll2GenerateVideo, type LL2VideoProgress } from "@/services/ll2/ll2-video";
-import { LL2_DEFAULT_TEXT_MODEL, ll2ChatText } from "@/services/ll2/ll2-text";
+import { LL2_PROMPT_SYSTEM, ll2ChatText } from "@/services/ll2/ll2-text";
 import { ll2UpscaleEstimate, ll2UpscaleTargetLabel, ll2UpscaleTargetsFor, type LL2UpscaleTarget } from "@/lib/ll2-upscale";
 import { useLL2AgentStore } from "@/stores/use-ll2-agent-store";
 import { ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
@@ -272,15 +272,12 @@ export function LL2OneShot() {
         try {
             const result = await ll2ChatText({
                 apiKey,
-                model: LL2_DEFAULT_TEXT_MODEL,
-                temperature: 0.6,
+                // deepseek-v4.1-flash 实测比默认文本模型快 3~4 倍，专用于润色短句。
+                model: "deepseek-v4.1-flash",
+                temperature: 0.4,
                 signal: controller.signal,
                 messages: [
-                    {
-                        role: "system",
-                        content:
-                            "你是短视频与漫剧的画面提示词编辑。把用户这句话改写成可以直接交给视频模型的中文提示词：保留原意和人物/场景设定，补足主体、动作、场景、光线、镜头运动与风格；不要添加与原意冲突的内容，不要解释、不要分点、不要加引号，只输出润色后的提示词，控制在 300 字以内。",
-                    },
+                    { role: "system", content: LL2_PROMPT_SYSTEM },
                     { role: "user", content: text },
                 ],
             });
@@ -291,7 +288,7 @@ export function LL2OneShot() {
             if (!cleaned) throw new Error("没有拿到润色结果，再试一次");
             setPrompt(cleaned);
             promptRef.current?.focus();
-            setPolishNote("已润色 · " + result.costLabel);
+            setPolishNote("已润色");
         } catch (error) {
             if (!controller.signal.aborted) setPolishNote(error instanceof Error ? error.message : "润色失败，稍后再试");
         } finally {

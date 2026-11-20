@@ -229,6 +229,8 @@ test("一句话成片输入框有 AI 润色提示词按钮", async () => {
     expect(page).toContain("AI 润色提示词");
     expect(page).toContain("polishPrompt");
     expect(page).toContain("ll2ChatText");
+    expect(page).toContain('model: "deepseek-v4.1-flash"');
+    expect(page).toContain('setPolishNote("已润色")');
     const css = await read("../src/styles/ll2-c-polish.css");
     expect(css).toContain(".ll2-oneshot-polish-btn");
 });
