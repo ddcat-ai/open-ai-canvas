@@ -86,12 +86,16 @@
 | --- | --- |
 | `response.status` | `"succeeded"` |
 | `response.textPaths[0]` | `"output_text"` |
+| `response.textPaths[1]` | `"output.*.content.*.text"` |
 | `response.reasoningPaths[0]` | `"reasoning.summary.0.text"` |
+| `response.reasoningPaths[1]` | `"output.*.summary.*.text"` |
 | `response.usage` | `{"$ref":"response.usage"}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.messagePaths[0]` | `"error.message"` |
 | `agentResponse.textPaths[0]` | `"output_text"` |
+| `agentResponse.textPaths[1]` | `"output.*.content.*.text"` |
 | `agentResponse.reasoningPaths[0]` | `"reasoning.summary.0.text"` |
+| `agentResponse.reasoningPaths[1]` | `"output.*.summary.*.text"` |
 | `agentResponse.toolCallsPath` | `"output"` |
 | `agentResponse.toolCallIdPaths[0]` | `"call_id"` |
 | `agentResponse.toolCallIdPaths[1]` | `"id"` |
@@ -99,6 +103,8 @@
 | `agentResponse.toolCallArgumentsPaths[0]` | `"arguments"` |
 
 ## 响应与错误
+
+2.0.2 的普通文本与 Agent 响应优先读取顶层 `output_text`，缺失时按顺序拼接 `output[].content[].text`，保留块内空白；推理内容从 `output[].summary[].text` 提取。`*` 遍历数组，不依赖 reasoning 或 message 的固定下标。需要支持文本路径通配符的宿主版本。
 
 插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。
 
@@ -116,7 +122,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "openai-responses",
   "name": "OpenAI Responses",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "author": "OpenAI / 影策",
   "description": "OpenAI Responses 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -423,10 +429,12 @@
         "response": {
           "status": "succeeded",
           "textPaths": [
-            "output_text"
+            "output_text",
+            "output.*.content.*.text"
           ],
           "reasoningPaths": [
-            "reasoning.summary.0.text"
+            "reasoning.summary.0.text",
+            "output.*.summary.*.text"
           ],
           "usage": {
             "$ref": "response.usage"
@@ -440,10 +448,12 @@
         },
         "agentResponse": {
           "textPaths": [
-            "output_text"
+            "output_text",
+            "output.*.content.*.text"
           ],
           "reasoningPaths": [
-            "reasoning.summary.0.text"
+            "reasoning.summary.0.text",
+            "output.*.summary.*.text"
           ],
           "toolCallsPath": "output",
           "toolCallIdPaths": [

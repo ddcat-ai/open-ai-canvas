@@ -567,12 +567,36 @@ func arrayValue(value any) []any {
 
 func firstPathValue(payload map[string]any, paths ...string) string {
 	for _, path := range paths {
+		if strings.Contains(path, "*") {
+			if text := strings.Join(manifestTextPathValues(payload, strings.Split(path, ".")), ""); strings.TrimSpace(text) != "" {
+				return text
+			}
+			continue
+		}
 		value := pathValue(payload, path)
 		if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
 			return strings.TrimSpace(text)
 		}
 	}
 	return ""
+}
+
+// Wildcards concatenate text blocks in provider order without losing whitespace.
+func manifestTextPathValues(value any, parts []string) []string {
+	if len(parts) == 0 {
+		if text, ok := value.(string); ok {
+			return []string{text}
+		}
+		return nil
+	}
+	if parts[0] == "*" {
+		var texts []string
+		for _, item := range arrayValue(value) {
+			texts = append(texts, manifestTextPathValues(item, parts[1:])...)
+		}
+		return texts
+	}
+	return manifestTextPathValues(manifestPathValue(value, parts[0]), parts[1:])
 }
 
 // manifestSplitDataURL 解析 data:<mime>;base64,<data> 形式的内嵌媒体，

@@ -106,6 +106,34 @@ func TestDoubaoSeedAudioCreateUsesTextPromptWithoutResourceHeader(t *testing.T) 
 	}
 }
 
+func TestDoubaoSeedAudioOmitsOpenAIDefaultVoice(t *testing.T) {
+	manifest, err := os.ReadFile("../../../plugin-packages/doubao-streaming-tts/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := LoadManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, audios := range [][]MediaReference{nil, {{URL: "https://cdn.example.com/voice.mp3", Kind: "audio"}}} {
+		spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+			Capability: CapabilityAudio, Model: "seed-audio-1.0", Prompt: "你好", Audios: audios,
+			Extra: map[string]any{"audioVoice": "alloy"},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := spec.Body.(map[string]any)
+		if len(audios) == 0 {
+			if body["references"] != nil {
+				t.Fatalf("text-only references = %#v", body["references"])
+			}
+		} else if references, ok := body["references"].([]any); !ok || len(references) != 1 || references[0].(map[string]any)["speaker"] != nil {
+			t.Fatalf("audio references = %#v", body["references"])
+		}
+	}
+}
+
 func TestDoubaoSeedAudioCreateSendsReferenceAudioAndImage(t *testing.T) {
 	manifest, err := os.ReadFile("../../../plugin-packages/doubao-streaming-tts/manifest.json")
 	if err != nil {
