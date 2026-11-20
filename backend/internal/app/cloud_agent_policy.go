@@ -107,10 +107,8 @@ func cloudAgentCapabilityGuide() string {
 	return b.String()
 }
 
-// compileCloudAgentPolicies 编译稳定 system：行为合同 + 能力速查 + 本轮执行事实 + 已安装技能目录。
-// 技能目录只含名称、短简介和 skillId（有预算），正文由 skill_read_file 按需读取；skillCatalog 为 nil
-// 表示本轮不发布目录（隔离的合同测试）。
-func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skillCatalog *cloudAgentSkillCatalog, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
+// compileCloudAgentPolicies 编译行为合同、能力速查和本轮执行事实。
+func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, canvasSummary string, profile cloudAgentProfileSnapshot, anchors ...cloudAgentCreativeAnchor) (string, cloudAgentPolicySnapshot, error) {
 	system, media, err := prompts.LoadAgentPolicies()
 	if err != nil {
 		return "", cloudAgentPolicySnapshot{}, err
@@ -150,9 +148,6 @@ func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skillCat
 		// User intent remains in user messages, never frozen into system context.
 		context["referenceCandidates"] = anchors[0].ReferenceAssets
 	}
-	if skillCatalog != nil {
-		context["skillCatalog"] = map[string]int{"installed": skillCatalog.Installed, "described": skillCatalog.Described, "namesOnly": skillCatalog.NamesOnly, "omitted": skillCatalog.Omitted}
-	}
 	layers := make([]map[string]any, 0, len(profile.Layers))
 	for _, layer := range profile.Layers {
 		layers = append(layers, map[string]any{"scope": layer.Scope, "revision": layer.Revision, "hash": layer.Hash, "characters": utf8.RuneCountInString(layer.Content)})
@@ -164,10 +159,6 @@ func compileCloudAgentPolicies(req CloudAgentRequest, agentName string, skillCat
 	}
 	b.WriteString("\n\n本轮执行上下文：\n")
 	b.Write(encoded)
-	if skillCatalog != nil && strings.TrimSpace(skillCatalog.Text) != "" {
-		b.WriteString("\n\n")
-		b.WriteString(skillCatalog.Text)
-	}
 	text := strings.TrimSpace(b.String())
 	if text == "" {
 		return "", cloudAgentPolicySnapshot{}, fmt.Errorf("compiled Agent policy is empty")

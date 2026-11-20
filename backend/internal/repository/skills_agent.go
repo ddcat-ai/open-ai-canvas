@@ -51,14 +51,33 @@ func (r *Repository) AgentSkillCatalogRows(userID string) ([]AgentSkillCatalogRo
 		return nil, gorm.ErrRecordNotFound
 	}
 	var rows []AgentSkillCatalogRow
-	err := r.db.Model(&model.Skill{}).
-		Select(agentSkillCatalogColumns).
-		Joins("LEFT JOIN user_skill_states ON user_skill_states.skill_id = skills.id AND user_skill_states.user_id = ?", userID).
-		Where("skills.status = ?", 1).
-		Where("skills.owner_id = ? OR (user_skill_states.added = ? AND skills.is_private = ?)", userID, true, false).
+	err := r.installedAgentSkills(userID).Select(agentSkillCatalogColumns).
 		Order("skills.id ASC").
 		Scan(&rows).Error
 	return rows, err
+}
+
+func (r *Repository) installedAgentSkills(userID string) *gorm.DB {
+	return r.db.Model(&model.Skill{}).
+		Joins("LEFT JOIN user_skill_states ON user_skill_states.skill_id = skills.id AND user_skill_states.user_id = ?", userID).
+		Where("skills.status = ?", 1).
+		Where("skills.owner_id = ? OR (user_skill_states.added = ? AND skills.is_private = ?)", userID, true, false)
+}
+
+func (r *Repository) AgentAutoSkillVersions(userID string, limit int) (map[string]string, error) {
+	var rows []struct{ ID, CurrentVersionID string }
+	err := r.installedAgentSkills(userID).Select("skills.id, skills.current_version_id").
+		Where("TRIM(skills.current_version_id) <> '' AND COALESCE(TRIM(user_skill_states.agent_mode), '') <> ?", model.UserSkillAgentModeManual).
+		Order("COALESCE(user_skill_states.agent_use_count, 0) DESC, skills.sort_weight DESC, user_skill_states.created_at DESC NULLS LAST, skills.id ASC").
+		Limit(limit).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	versions := make(map[string]string, len(rows))
+	for _, row := range rows {
+		versions[row.ID] = row.CurrentVersionID
+	}
+	return versions, nil
 }
 
 // AgentSkillCatalogRowsByIDs 只取指定技能的目录字段，范围仍限于该用户可见的启用技能。

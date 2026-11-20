@@ -42,7 +42,7 @@ func skillFeedbackFixture(t *testing.T, packs map[string]map[string]string) (*Se
 		}
 		ids[name] = created.SkillID
 	}
-	pool, err := s.cloudAgentBuildSkillPool("user", "", nil, defaultCloudAgentContextBudget())
+	pool, err := s.cloudAgentBuildSkillPool("user", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

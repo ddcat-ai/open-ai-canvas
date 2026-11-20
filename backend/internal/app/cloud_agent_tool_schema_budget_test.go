@@ -68,7 +68,7 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// 因此显式上调到 35,000；视频生成支持 Agent 设置首尾帧（#696）后为 35,050 字节，
 	// 再显式上调到 36,000，保留约2.7%的余量。skill_search 补触发时机与零命中行为
 	// 描述后为 36,072 字节；启用视觉工具后为 29 个工具、36,883 字节，预算显式上调到
-	// 37,500，保留约1.7%的余量。长期记忆改用 memory_update（替换 remember_lesson /
+	// 37,500，保留约1.7%的余量。技能检索改为按需查询且零命中返回空结果；长期记忆改用 memory_update（替换 remember_lesson /
 	// recall_lessons）并新增 skill_market_search、skill_recommend 后为 30 个工具、37,277 字节，
 	// 预算不变。新增 generate_media_batch、media_batch_control、canvas_build_board、
 	// canvas_preflight（描述已压缩，批量参数复用同一份结构）并把 ask_user 放宽到 16 个字段后为

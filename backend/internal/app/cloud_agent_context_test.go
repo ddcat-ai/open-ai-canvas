@@ -173,7 +173,7 @@ func TestCloudAgentSkillsLoadOnDemandAndPage(t *testing.T) {
 		}
 		ids = append(ids, skill.SkillID)
 	}
-	pool, err := s.cloudAgentBuildSkillPool("user", "写一个故事", nil, defaultCloudAgentContextBudget())
+	pool, err := s.cloudAgentBuildSkillPool("user", "写一个故事", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,8 +182,8 @@ func TestCloudAgentSkillsLoadOnDemandAndPage(t *testing.T) {
 			t.Fatalf("installed skill missing from the run pool: %s", id)
 		}
 	}
-	if strings.Contains(pool.Catalog.Text, "中文中文") {
-		t.Fatal("eager skill content in catalog")
+	if strings.Contains(pool.Hints, "中文中文") {
+		t.Fatal("eager skill content in dynamic hints")
 	}
 	state := cloudAgentRuntime{SkillVersions: pool.Versions}
 	call := skillFeedbackCall(ids[0], cloudAgentSkillEntryPath)

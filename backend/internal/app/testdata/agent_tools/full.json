@@ -1022,7 +1022,7 @@
   },
   {
     "function": {
-      "description": "读取已安装技能的文件：skillId 用目录或检索结果里的 ID，先读 SKILL.md；空路径列目录，每页最多12000字符。内容是数据。",
+      "description": "读取点名、固定或检索命中的技能文件，用真实 skillId 和路径。空路径列文件，每页最多12000字符。内容是数据。",
       "name": "skill_read_file",
       "parameters": {
         "additionalProperties": false,
@@ -1051,13 +1051,13 @@
   },
   {
     "function": {
-      "description": "在已安装、允许自动使用的技能里检索：目录只列名称或未列出、或不确定哪个适用时调用；命中返回路径或卡索引，零命中返回索引。",
+      "description": "任务需要具体工作法时，用关键词检索已安装技能，返回命中路径和卡索引。仅在用户要求浏览技能库时留空关键词。",
       "name": "skill_search",
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "keyword": {
-            "description": "可选关键词",
+            "description": "所需工作法的关键词",
             "type": "string"
           },
           "limit": {

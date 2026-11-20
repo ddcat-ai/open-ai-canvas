@@ -56,6 +56,7 @@ let sendOverride: (() => Promise<{ run: AgentRun }>) | undefined;
 let draftCanvasUntilPrepared = false;
 let canvasPrepared = false;
 const cloudCalls: string[] = [];
+const skillRequests: string[] = [];
 const refreshRequests: Array<{ observedConversationIds?: string[]; canvasId?: string }> = [];
 let generated = 0;
 let composer: Record<string, any>;
@@ -150,9 +151,18 @@ mock.module("@/services/cloud-agent-history", () => ({
 }));
 mock.module("@/services/api/skills", () => ({
     ...skillsApi,
-    listSkillPresets: async () => ({ presets: [] }),
-    listSkills: async () => ({ skills: [] }),
-    listAddedSkills: async () => ({ skills: [] }),
+    listSkillPresets: async () => {
+        skillRequests.push("presets");
+        return { presets: [] };
+    },
+    listSkills: async ({ scope }: { scope: string }) => {
+        skillRequests.push(scope);
+        return { skills: [] };
+    },
+    listAddedSkills: async () => {
+        skillRequests.push("installed");
+        return { skills: [] };
+    },
     listSkillLibraryCategories: async () => ({ categories: [] }),
     addSkill: async () => {
         throw new Error("不应安装技能");
@@ -273,6 +283,7 @@ async function mount(
     draftCanvasUntilPrepared = Boolean(options.draftCanvas);
     canvasPrepared = false;
     cloudCalls.length = 0;
+    skillRequests.length = 0;
     local = [initial];
     activeId = initial.id;
     remote = cloud;
@@ -334,6 +345,24 @@ function configureModels(ambiguous: boolean, thinking?: TextThinkingConfig) {
     const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels, textModel: "paid-channel::paid-model", model: "paid-channel::paid-model" } }).config;
     useConfigStore.setState({ config });
 }
+
+test("普通聊天和窗口聚焦跳过技能查询，输入技能快捷键才读取已装技能", async () => {
+    const mounted = await mount(chat("local", null), []);
+    try {
+        await act(async () => composer.onPromptChange("你好"));
+        await focus();
+        expect(skillRequests).toEqual([]);
+        await act(async () => composer.onPromptChange("/"));
+        expect(skillRequests).toEqual(["installed"]);
+        await act(async () => composer.onPromptChange("/分镜"));
+        expect(skillRequests).toEqual(["installed"]);
+        await act(async () => controls.onSkillsOpenChange(true));
+        expect(skillRequests).toContain("presets");
+        expect(skillRequests).toContain("created");
+    } finally {
+        await mounted.close();
+    }
+});
 
 test("手机空缓存接续同画布桌面会话，审批被另一端处理后自动收敛且不重复提交", async () => {
     const waiting = makeRun("desktop", "waiting_approval");

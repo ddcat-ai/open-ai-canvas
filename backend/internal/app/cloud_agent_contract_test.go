@@ -12,7 +12,6 @@ import (
 
 	"yingce/backend/internal/canvas/capability"
 	"yingce/backend/internal/model"
-	"yingce/backend/internal/skills"
 )
 
 func TestCloudAgentMixedCanvasReadsUnsupportedNodesWithoutGrantingCapabilities(t *testing.T) {
@@ -315,36 +314,21 @@ func TestCloudAgentAnnotationRenderFeedsControlledTransientReference(t *testing.
 	}
 }
 
-func TestCloudAgentPolicyPublishesSkillCatalogWithoutBodyOrFileLists(t *testing.T) {
-	catalog := buildCloudAgentSkillCatalog([]skills.AgentSkillCatalogEntry{
-		{SkillID: "skill-1", Name: "任务技能", Description: "当用户要写短剧剧本时调用", Tag: "drama", VersionID: "v1", FileCount: 3},
-	}, 2000)
-	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, &catalog, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+func TestCloudAgentPolicyDoesNotInlineSkillCatalog(t *testing.T) {
+	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(text, "## 已安装技能目录") || !strings.Contains(text, "任务技能 [skill-1]：当用户要写短剧剧本时调用（另有 2 个文件）") {
-		t.Fatalf("compiled policy did not publish the skill catalog: %s", text)
+	if strings.Contains(text, "## 已安装技能目录") || strings.Contains(text, "任务技能 [skill-1]") {
+		t.Fatalf("compiled policy must not publish the full skill catalog: %s", text)
 	}
-	if strings.Contains(text, `"files":`) || strings.Contains(text, `"entryPath"`) {
-		t.Fatalf("catalog must not inline per-skill file lists: %s", text)
-	}
-}
-
-func TestCloudAgentPolicyTrimsLongSkillDescriptionInCatalog(t *testing.T) {
-	long := strings.Repeat("描", 600)
-	catalog := buildCloudAgentSkillCatalog([]skills.AgentSkillCatalogEntry{{SkillID: "skill-2", Name: "长描述技能", Description: long, VersionID: "v1"}}, 2000)
-	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, &catalog, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(text, strings.Repeat("描", cloudAgentSkillCatalogSummaryRunes+1)) || !strings.Contains(text, strings.Repeat("描", cloudAgentSkillCatalogSummaryRunes)+"…") {
-		t.Fatalf("catalog description was not trimmed to %d runes", cloudAgentSkillCatalogSummaryRunes)
+	if !strings.Contains(text, "skill_search") || !strings.Contains(text, "skill_read_file") {
+		t.Fatalf("compiled policy must explain on-demand skill discovery: %s", text)
 	}
 }
 
 func TestCloudAgentPolicyPublishesCapabilityRoutingGuide(t *testing.T) {
-	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+	text, _, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,7 +561,7 @@ func TestCloudAgentCanvasStateDoesNotForwardUnknownObjectFields(t *testing.T) {
 }
 
 func TestCloudAgentDurablePolicySnapshotRejectsMissingOrUnsupportedContracts(t *testing.T) {
-	_, snapshot, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+	_, snapshot, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 	if err != nil || validateCloudAgentPolicySnapshot(snapshot) != nil {
 		t.Fatalf("valid policy snapshot rejected: %v", err)
 	}

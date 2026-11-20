@@ -440,7 +440,7 @@ func TestCloudAgentThinkingLevelIntent(t *testing.T) {
 		if cloudAgentReasoningEnabled(mode) != (want != ThinkingLevelOff) {
 			t.Fatalf("Pi reasoning support lost for mode %q", mode)
 		}
-		_, snapshot, err := compileCloudAgentPolicies(req, "test", nil, "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
+		_, snapshot, err := compileCloudAgentPolicies(req, "test", "", cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")})
 		if err != nil {
 			t.Fatal(err)
 		}

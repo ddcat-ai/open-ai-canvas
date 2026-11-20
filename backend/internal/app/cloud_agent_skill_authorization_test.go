@@ -88,20 +88,32 @@ func TestCloudAgentSkillAuthorizationOrdinaryFreshConversation(t *testing.T) {
 }
 
 func TestCloudAgentSkillAuthorizationRejectsUninstalledSkills(t *testing.T) {
-	s, _, _, _ := creationTestService(t)
+	s, db, _, _ := creationTestService(t)
+	skillAdministratorFixture(t, db, "author")
+	public, err := s.CreateSkill("author", SkillMutationRequest{SkillName: "分镜构图", Description: "分镜构图方法", Instruction: "# 分镜构图\n\n步骤", Tag: "drama"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, test := range []struct {
 		name string
 		ids  []string
 		text string
-	}{{"pinned", []string{"private-skill"}, "hello"}, {"mention", nil, "使用 @[skill:private-skill]"}} {
+	}{{"pinned", []string{public.SkillID}, "hello"}, {"mention", nil, "使用 @[skill:" + public.SkillID + "]"}, {"unknown", []string{"missing-skill"}, "hello"}} {
 		t.Run(test.name, func(t *testing.T) {
 			req := skillAuthorizationRequest()
 			req.PinnedSkillIDs, req.Prompt = test.ids, test.text
 			_, err := s.CreateCloudAgentRun("user", req, "")
 			assertSkillRuntimeStatus(t, err, 400)
-			_, err = s.cloudAgentBuildSkillPool("user", test.text, test.ids, defaultCloudAgentContextBudget())
+			_, err = s.cloudAgentBuildSkillPool("user", test.text, test.ids)
 			assertSkillRuntimeStatus(t, err, 400)
 		})
+	}
+	if _, err := s.SetSkillAdded("user", public.SkillID, true); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := s.cloudAgentBuildSkillPool("user", "使用 @[skill:"+public.SkillID+"]", nil)
+	if err != nil || len(pool.Pinned) != 1 || pool.Versions[public.SkillID] == "" {
+		t.Fatalf("installed public skill unavailable to member: %+v, %v", pool, err)
 	}
 	if _, err := s.CloudAgentSkillUsage("user"); err != nil {
 		t.Fatalf("ordinary user cannot read own skill usage: %v", err)
@@ -115,7 +127,7 @@ func TestCloudAgentSkillAuthorizationCachedReadSurvivesDemotionButRejectsDisable
 	if err != nil {
 		t.Fatal(err)
 	}
-	pool, err := s.cloudAgentBuildSkillPool("user", "hello", nil, defaultCloudAgentContextBudget())
+	pool, err := s.cloudAgentBuildSkillPool("user", "hello", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

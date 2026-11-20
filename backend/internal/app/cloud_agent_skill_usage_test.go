@@ -187,8 +187,8 @@ func TestCloudAgentSkillUsageIgnoresNonSkillToolsAndPayloads(t *testing.T) {
 	if usage.SearchCalls != 1 {
 		t.Fatalf("searchCalls = %d, want 1", usage.SearchCalls)
 	}
-	if usage.ScannedRuns != 0 {
-		t.Fatalf("scannedRuns = %d, want 0 without a skills_load event", usage.ScannedRuns)
+	if usage.ScannedRuns != 1 {
+		t.Fatalf("scannedRuns = %d, want 1 when skill_search was used", usage.ScannedRuns)
 	}
 }
 

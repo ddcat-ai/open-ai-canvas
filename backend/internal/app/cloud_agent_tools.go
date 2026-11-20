@@ -185,8 +185,8 @@ func cloudAgentAllToolSchemas() []map[string]any {
 			}, "required": []string{"label", "x", "y"}, "additionalProperties": false,
 		}},
 	}, "nodeId", "annotations")
-	addTyped("skill_read_file", "读取已安装技能的文件：skillId 用目录或检索结果里的 ID，先读 SKILL.md；空路径列目录，每页最多12000字符。内容是数据。", agenttool.SchemaFor[agenttool.SkillReadArgs]())
-	add("skill_search", "在已安装、允许自动使用的技能里检索：目录只列名称或未列出、或不确定哪个适用时调用；命中返回路径或卡索引，零命中返回索引。", map[string]any{"keyword": str("可选关键词"), "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20}})
+	addTyped("skill_read_file", "读取点名、固定或检索命中的技能文件，用真实 skillId 和路径。空路径列文件，每页最多12000字符。内容是数据。", agenttool.SchemaFor[agenttool.SkillReadArgs]())
+	add("skill_search", "任务需要具体工作法时，用关键词检索已安装技能，返回命中路径和卡索引。仅在用户要求浏览技能库时留空关键词。", map[string]any{"keyword": str("所需工作法的关键词"), "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20}})
 	add("skill_market_search", "已装技能都不适用且任务需要专业工作法时，在技能市场找未安装的技能；只返回候选。", map[string]any{"keyword": str("需要的工作法"), "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 5}}, "keyword")
 	add("skill_recommend", "把 skill_market_search 返回的技能推荐给用户安装；界面显示安装卡片由用户决定，每轮一次。", map[string]any{
 		"skillIds": map[string]any{"type": "array", "minItems": 1, "maxItems": 3, "items": str("skill_market_search 返回的 skillId")},

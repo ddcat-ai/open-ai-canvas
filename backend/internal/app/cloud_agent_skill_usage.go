@@ -106,6 +106,7 @@ func cloudAgentSkillUsageFromEvents(events []CloudAgentEvent) *CloudAgentSkillUs
 				entry(id).RunsEnabled++
 			}
 		case "skill_search":
+			scannedRuns[event.RunID] = true
 			usage.SearchCalls++
 			result, _ := payload["result"].(map[string]any)
 			matches, _ := result["matches"].([]any)
@@ -121,6 +122,7 @@ func cloudAgentSkillUsageFromEvents(events []CloudAgentEvent) *CloudAgentSkillUs
 				entry(id).SearchHits++
 			}
 		case "skill_read_file":
+			scannedRuns[event.RunID] = true
 			id, _ := payload["skillId"].(string)
 			if strings.TrimSpace(id) == "" {
 				continue

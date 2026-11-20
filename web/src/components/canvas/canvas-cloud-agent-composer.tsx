@@ -382,7 +382,7 @@ export function AgentChatComposer({
     const handlePromptChange = (value: string) => {
         onPromptChange(value);
         const match = /(^|\s)[/、]([^\s/、]*)$/.exec(value);
-        if (match && availableSlashSkills.length) {
+        if (match) {
             const next = { start: match.index + match[1].length, query: match[2] };
             setSlash((current) => (current && current.start === next.start && current.query === next.query ? current : next));
             setSlashIndex(0);

@@ -270,7 +270,7 @@ func cloudAgentSearchSkills(skills []cloudAgentSkill, keyword string, limit int)
 			"guidance": "本轮没有可用的已安装技能；任务明显需要专业工作法时可以用 skill_market_search 找候选推荐给用户。"}, nil
 	}
 	tokens := cloudAgentSkillSearchTokens(keyword)
-	if len(tokens) == 0 {
+	if keyword == "" {
 		entries := make([]map[string]any, 0, len(skills))
 		for _, skill := range skills {
 			entries = append(entries, map[string]any{
@@ -326,25 +326,7 @@ func cloudAgentSearchSkills(skills []cloudAgentSkill, keyword string, limit int)
 		entries = append(entries, item)
 	}
 	if len(entries) == 0 {
-		// 零命中降级：直接返回已启用技能索引（与空关键词同构），不再让模型面对
-		// 空结果自行「换个说法」——那通常等于放弃技能，把「没搜到」误判成
-		// 「没有适用技能」。total 仍是全量技能数，matches 受 limit 截断。
-		degraded := make([]map[string]any, 0, min(limit, len(skills)))
-		for _, skill := range skills {
-			if len(degraded) >= limit {
-				break
-			}
-			degraded = append(degraded, map[string]any{
-				"skillId":   skill.ID,
-				"skillName": skill.Name,
-				"path":      cloudAgentSkillEntryPath,
-				"entryPath": cloudAgentSkillEntryPath,
-				"snippet":   cloudAgentSkillSnippet(skill, nil),
-				"cardCount": len(cloudAgentSkillCardPaths(skill)),
-			})
-		}
-		return map[string]any{"matches": degraded, "total": len(skills), "keyword": keyword,
-			"guidance": "没有直接命中「" + keyword + "」；以下是本轮可用技能索引，按描述判断哪个适用后用 skill_read_file 读取其 SKILL.md 或卡，也可换个说法重试；都不适用时可用 skill_market_search。只能读取返回的 path，不要猜路径。"}, nil
+		guidance = "没有匹配的已安装技能，可直接按任务需求继续。"
 	}
 	// total counts all matched candidates before limit; matches contains only this response page.
 	return map[string]any{"matches": entries, "total": len(ranked), "keyword": keyword, "guidance": guidance}, nil
@@ -405,7 +387,7 @@ func (s *Service) cloudAgentSkillForRead(userID string, state *cloudAgentRuntime
 		version = state.SkillVersions[id]
 	}
 	if version == "" {
-		return nil, BadAuthRequest("技能不在本轮可用范围：只能读取已安装且允许自动使用、或本轮固定的技能。先看技能目录或用 skill_search 找到 skillId")
+		return nil, BadAuthRequest("技能不在本轮可用范围：只能读取已安装且允许自动使用、或本轮固定的技能。可用 skill_search 找到 skillId")
 	}
 	detail, err := s.SkillDetail(userID, id)
 	if err != nil {

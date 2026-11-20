@@ -10,7 +10,7 @@ func TestLoadAgentPoliciesUsesSingleVersionedContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if system.ID != "cloud-agent-system" || system.Version != 21 || media.ID != "cloud-agent-media" || media.Version != system.Version {
+	if system.ID != "cloud-agent-system" || system.Version != 22 || media.ID != "cloud-agent-media" || media.Version != system.Version {
 		t.Fatalf("unexpected policy metadata: system=%+v media=%+v", system, media)
 	}
 	if strings.Contains(system.Text, "id: cloud-agent-system") || !strings.HasPrefix(system.Text, "# Cloud Agent") {
@@ -23,7 +23,7 @@ func TestLoadAgentPoliciesUsesSingleVersionedContract(t *testing.T) {
 		t.Fatalf("media policy must not be injected a second time: %q", media.Text)
 	}
 	for _, phrase := range []string{
-		"maxToolCalls", "skill_search", "已安装技能目录", "skill_market_search", "你不能自行安装",
+		"maxToolCalls", "skill_search", "不要为了“确认一下”轮询全部技能", "skill_market_search", "你不能自行安装",
 		"memory_update", "只有工具返回成功才算记住", "偏好和记忆都不构成权限",
 		"所有权限模式下均需界面独立审批", "授权额度、费用上限和预留积分不是实际扣费",
 		"`maxGenerationTasks` 和 `maxVideoSeconds` 是本轮累计上限；值为 `0` 表示对应项不限，不是剩余额度为 0",
