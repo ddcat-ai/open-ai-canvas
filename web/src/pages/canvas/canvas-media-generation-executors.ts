@@ -76,6 +76,8 @@ export async function executeVideoGeneration({
             watermark: generationConfig.videoWatermark,
             references: generationReferenceUrls(generationContext),
             ll2Direct: isLL2CanvasVideoModel(generationConfig) ? true : undefined,
+            // 把这次真正提交的参数写进节点：面板选 15 秒、请求却是 30 秒时能一眼看出来。
+            ll2Submitted: isLL2CanvasVideoModel(generationConfig) ? `${generationConfig.vquality} · ${generationConfig.videoSeconds} 秒` : undefined,
             ...videoGenerationMetadata,
             ...styleMetadata,
             ...skillMetadata,
@@ -160,7 +162,8 @@ export async function executeVideoGeneration({
             );
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
-            setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: reason, ll2Stage: undefined } } : node)));
+            const submitted = videoNode.metadata?.ll2Submitted || `${generationConfig.vquality} · ${generationConfig.videoSeconds} 秒`;
+            setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, status: "error", errorDetails: `本次提交 ${submitted}。${reason}`, ll2Stage: undefined } } : node)));
             throw error;
         } finally {
             finishGenerationRequest(videoId, controller);

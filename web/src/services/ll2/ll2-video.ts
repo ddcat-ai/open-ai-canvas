@@ -247,7 +247,8 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     const protocol = adapter.protocol;
     const startedAt = Date.now();
     const interval = Math.max(1000, req.pollIntervalMs ?? 5000);
-    const maxPolls = Math.max(1, req.maxPolls ?? 120);
+    // 15/30 秒的长视频排队+生成可能超过 10 分钟；轮询上限按时长放宽，避免 LL2 还在跑、画布先报超时。
+    const maxPolls = Math.max(1, req.maxPolls ?? Math.max(120, Math.ceil((seconds * 90) / interval)));
     const estimate = ll2PreciseCNY(req.model, seconds, resolution);
 
     const createPath = adapter.createPathFor ? adapter.createPathFor(args) : adapter.createPath;
@@ -288,7 +289,7 @@ export async function ll2ResumeVideo(req: LL2VideoRequest, taskId: string, onPro
         promptOptimizer: false,
     });
     const interval = Math.max(1000, req.pollIntervalMs ?? 5000);
-    const maxPolls = Math.max(1, req.maxPolls ?? 120);
+    const maxPolls = Math.max(1, req.maxPolls ?? Math.max(120, Math.ceil((args.seconds * 90) / interval)));
     return waitForLL2Video({
         req,
         adapter,

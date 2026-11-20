@@ -379,6 +379,8 @@ export type CanvasNodeMetadata = {
     ll2Direct?: boolean;
     /** LL2 直连当前阶段（排队中 / 生成中 / 正在超分），显示在状态区。 */
     ll2Stage?: string;
+    /** 本次真正提交给 LL2 的分辨率/秒数快照，用于排查“面板选的和账单不一致”。 */
+    ll2Submitted?: string;
     /** LL2 任务号，便于刷新后排查或恢复。 */
     ll2TaskId?: string;
     /** LL2 超分任务号；超分阶段刷新后按它续查，避免重复提交。 */

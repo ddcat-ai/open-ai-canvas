@@ -224,6 +224,16 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("画布记录本次提交参数，长视频轮询按秒数放宽", async () => {
+    const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
+    expect(executor).toContain("ll2Submitted");
+    expect(executor).toContain("本次提交");
+    const video = await read("../src/services/ll2/ll2-video.ts");
+    expect(video).toContain("Math.ceil((seconds * 90) / interval)");
+    const types = await read("../src/types/canvas.ts");
+    expect(types).toContain("ll2Submitted?: string");
+});
+
 test("wan3 按官方 media[] 适配参考图/参考视频，不再只塞 img_url", async () => {
     const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
     expect(adapters).toContain("reference_video");
