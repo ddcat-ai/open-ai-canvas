@@ -16,10 +16,11 @@ import (
 // Only expose known failure categories; raw provider errors can contain URLs and credentials.
 func cloudAgentModelFailure(task *model.Task) (string, string) {
 	detail, reason := "模型任务未成功", "model_task_failed"
-	if diagnostic := taskExecutionDiagnostic(task); diagnostic != nil && diagnostic.Code == string(ReasonUpstreamDNSFailed) {
-		return "模型服务域名解析失败，请检查渠道域名和后端 DNS 配置；本轮已停止。请在任务中心检查模型任务 " + task.ID, string(ReasonUpstreamDNSFailed)
-	}
 	switch agentModelTaskReason(task) {
+	case agentModelFailureSubmission:
+		return "上一次对话模型调用的受理状态待确认，已停止自动重发。请在任务中心查看模型任务 " + task.ID + " 并核对积分订单。", string(agentModelFailureSubmission)
+	case agentModelFailureDNS:
+		return "模型服务域名解析失败，请检查渠道域名和后端 DNS 配置；本轮已停止。请在任务中心检查模型任务 " + task.ID, string(ReasonUpstreamDNSFailed)
 	case agentModelFailureEmpty:
 		// 思考模型的典型失败：整个输出预算被推理吃掉，正文与工具调用皆空。
 		detail, reason = "上游连续返回空内容（通常是思考占满输出预算）；已自动关思考并放大预算重试仍失败，建议换用非思考模型或调小上下文", "model_empty_output"

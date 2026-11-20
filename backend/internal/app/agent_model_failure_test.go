@@ -88,6 +88,7 @@ func TestAgentFailureTypedSourcesAndBillingSemantics(t *testing.T) {
 		{"eof", io.EOF, agentModelFailureEOF},
 		{"unexpected eof", io.ErrUnexpectedEOF, agentModelFailureEOF},
 		{"dns", &net.DNSError{Name: "private.invalid", Err: "resolver failed", IsTimeout: true}, agentModelFailureDNS},
+		{"uncertain dispatch", routeDispatchUncertainError{"dispatch state unavailable"}, agentModelFailureSubmission},
 		{"unknown words", errors.New("timeout connection reset api_error"), agentModelFailureUnknown},
 		{"unknown provider code", providerPayloadError{raw: `{"error":{"code":"vendor_other","message":"api_error timeout"}}`, message: "失败"}, agentModelFailureUnknown},
 		{"known provider code", providerPayloadError{raw: `{"error":{"code":"api_error","message":"authentication"}}`, message: "失败"}, agentModelFailureTransient},
@@ -107,6 +108,18 @@ func TestAgentFailureTypedSourcesAndBillingSemantics(t *testing.T) {
 				t.Fatal("typing changed upstream billing classification")
 			}
 		})
+	}
+}
+
+func TestAgentFailurePreparationKeepsInputCorrectionDistinctFromUncertainSubmission(t *testing.T) {
+	task := &model.Task{ID: "model-step", Operation: cloudAgentStepOperation, Status: model.TaskStatusFailed}
+	recordTaskDiagnostic(task, "preparation", "preparation_failed", "not_submitted", "correct_input", BadAuthRequest("请修正参数"))
+	if agentModelTaskReason(task) == agentModelFailureSubmission || taskExecutionDiagnostic(task).RetryClass != "correct_input" {
+		t.Fatalf("unsubmitted input lost its correction class: %s", task.ExecutionDiagnosticJSON)
+	}
+	recordTaskDiagnostic(task, "preparation", "preparation_failed", "unknown", "reconcile_submission", nil)
+	if got := agentModelTaskReason(task); got != agentModelFailureSubmission {
+		t.Fatalf("uncertain preparation reason = %s", got)
 	}
 }
 

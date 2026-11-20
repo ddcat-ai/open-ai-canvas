@@ -28,6 +28,7 @@ const (
 	agentModelFailureDNS         agentModelFailureReason = "upstream_dns_failed"
 	agentModelFailureTransient   agentModelFailureReason = "model_upstream_transient"
 	agentModelFailurePermanent   agentModelFailureReason = "model_upstream_permanent"
+	agentModelFailureSubmission  agentModelFailureReason = "model_submission_uncertain"
 	agentModelFailureUnknown     agentModelFailureReason = "model_task_failed"
 )
 
@@ -47,6 +48,9 @@ func agentModelErrorReason(err error) agentModelFailureReason {
 	var local agentModelFailureError
 	if errors.As(err, &local) {
 		return local.reason
+	}
+	if isRouteDispatchUncertain(err) {
+		return agentModelFailureSubmission
 	}
 	var appErr *AppError
 	if errors.As(err, &appErr) && appErr.Reason == ReasonUpstreamDNSFailed {
@@ -95,6 +99,9 @@ func agentModelProviderCode(raw string) string {
 
 func agentModelTaskReason(task *model.Task) agentModelFailureReason {
 	if diagnostic := taskExecutionDiagnostic(task); diagnostic != nil {
+		if diagnostic.Phase == "preparation" && diagnostic.RetryClass == "reconcile_submission" {
+			return agentModelFailureSubmission
+		}
 		return agentModelFailureReason(diagnostic.Code)
 	}
 	return agentModelFailureUnknown
