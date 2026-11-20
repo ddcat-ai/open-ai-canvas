@@ -16,8 +16,8 @@ const DRAMA_CAST_ASSET_CATEGORY: Record<DramaCastKind, "character" | "prop" | "e
 export const DRAMA_TAKE_PROJECTION_LIMIT = 6;
 
 const GROUP_GAP = 32;
-const REF_SIZE = 160;
-const REF_GAP = 16;
+const REF_SIZE = 240;
+const REF_GAP = 48;
 const PROMPT_WIDTH = 360;
 const PROMPT_HEIGHT = 300;
 const SCRIPT_MIN_WIDTH = 920;
@@ -30,6 +30,7 @@ export type DramaProjectionMedia = {
     assetIdOf: (resourceId: string) => string | undefined;
     /** 资源文件地址；节点实际展示时按 storageKey 换取授权地址。 */
     urlOf: (resourceId: string) => string;
+    imageSizeOf?: (resourceId: string) => { width: number; height: number } | undefined;
 };
 
 export function dramaCastAssetCategory(kind: DramaCastKind) {
@@ -120,10 +121,17 @@ export function dramaRefOf(node: CanvasNodeData | undefined, nodes: CanvasNodeDa
     return parent?.metadata?.dramaRef;
 }
 
-/** 设定节点：优先返回独立放置的那个（不在剧情段框里的参考图副本）。 */
-export function findDramaCastNode(nodes: CanvasNodeData[], castId: string) {
-    const matches = nodes.filter((node) => node.metadata?.dramaRef?.kind === "cast" && node.metadata.dramaRef.id === castId);
-    return matches.find((node) => !node.parentId) || matches[0];
+/** 旧节点没有记录投送用途，按所在的剧情段框识别参考图副本。 */
+export function dramaSettingNodes(nodes: CanvasNodeData[], projectId: string) {
+    const segments = new Set(nodes.filter((node) => node.type === CanvasNodeType.Frame && node.metadata?.dramaRef?.kind === "segment").map((node) => node.id));
+    const settings = new Map<string, CanvasNodeData>();
+    for (const node of nodes) {
+        const ref = node.metadata?.dramaRef;
+        if (node.type !== CanvasNodeType.Image || ref?.projectId !== projectId || ref.kind !== "cast" || ref.castRole === "reference") continue;
+        if (!ref.castRole && node.parentId && segments.has(node.parentId)) continue;
+        if (!settings.has(ref.id)) settings.set(ref.id, node);
+    }
+    return settings;
 }
 
 export function findDramaSegmentFrame(nodes: CanvasNodeData[], segmentId: string) {
@@ -153,7 +161,41 @@ export function dramaSegmentRequiredResourceIds(segment: DramaSegment) {
     return unique([...segment.request.references.filter((reference) => reference.sent).map((reference) => reference.resourceId), segment.request.firstFrameResourceId, segment.videoResourceId]);
 }
 
-/** 投送一个剧情段需要登记素材的资源：实际发送的参考图、首帧、当前视频与最近的历史版本。 */
+/** 卡片上显示的设定即使超出模型参考上限，也可以在画布里查看。 */
+export function dramaSegmentReferences(segment: DramaSegment, castById: Map<string, DramaCast>) {
+    return segment.request.references.flatMap((reference) => {
+        const resourceId = reference.resourceId || castById.get(reference.castId)?.imageResourceId;
+        return resourceId ? [{ ...reference, resourceId }] : [];
+    });
+}
+
+export function dramaReferenceSlot(reference: { castId: string; resourceId: string }) {
+    return reference.castId ? `cast:${reference.castId}` : `image:${reference.resourceId}`;
+}
+
+/** 已有段框只补缺失的图片；没有槽标记的旧画布按短剧绑定、资源和原首帧连线识别。 */
+export function missingSegmentImages(nodes: CanvasNodeData[], frame: CanvasNodeData, segment: DramaSegment, castById: Map<string, DramaCast>) {
+    const slots = new Set<string>();
+    const video = findDramaSegmentVideoNode(nodes, segment.id);
+    for (const node of nodes) {
+        const source = node.metadata?.dramaSegmentImage;
+        if (source?.segmentId === segment.id) slots.add(source.slot);
+        if (source || node.parentId !== frame.id || node.type !== CanvasNodeType.Image) continue;
+        const ref = node.metadata?.dramaRef;
+        if (node.id === video?.metadata?.videoStartFrameNodeId || node.title.startsWith("首帧 ·")) slots.add("first");
+        else if (ref?.kind === "cast") slots.add(`cast:${ref.id}`);
+        else if (node.metadata?.storageKey?.startsWith("resource:")) slots.add(`image:${node.metadata.storageKey.slice(9)}`);
+    }
+    const missing = new Set(
+        dramaSegmentReferences(segment, castById)
+            .map(dramaReferenceSlot)
+            .filter((slot) => !slots.has(slot)),
+    );
+    if (segment.request.firstFrameResourceId && !slots.has("first")) missing.add("first");
+    return missing;
+}
+
+/** 投送一个剧情段需要登记素材的资源：参考图、首帧、当前视频与最近的历史版本。 */
 export function dramaSegmentResourceIds(segment: DramaSegment, takes?: DramaTake[]) {
     return unique([...dramaSegmentRequiredResourceIds(segment), ...(takes || []).slice(0, DRAMA_TAKE_PROJECTION_LIMIT).map((take) => take.resourceId)]);
 }
@@ -167,11 +209,7 @@ export function dramaPlacement(nodes: CanvasNodeData[], size: { width: number; h
     const topLevel = nodes.filter((node) => !node.parentId);
     const area = bounds(topLevel);
     let preferred: Position = area ? { x: area.right + 240, y: area.top } : { x: 0, y: 0 };
-    if (anchor.kind === "cast") {
-        const casts = topLevel.filter((node) => node.metadata?.dramaRef?.kind === "cast");
-        const lastCast = casts.sort((left, right) => left.position.y + left.height - (right.position.y + right.height)).at(-1);
-        preferred = lastCast ? { x: lastCast.position.x, y: lastCast.position.y + lastCast.height + 48 } : area ? { x: area.left - size.width - 240, y: area.top } : { x: 0, y: 0 };
-    } else if (anchor.episodeId) {
+    if (anchor.episodeId) {
         const sameEpisode = topLevel.filter((node) => node.metadata?.dramaRef?.episodeId === anchor.episodeId || (anchor.kind === "final" && node.metadata?.dramaRef?.kind === "final" && node.metadata.dramaRef.id === anchor.episodeId));
         const last = sameEpisode.sort((left, right) => left.position.y + left.height - (right.position.y + right.height)).at(-1);
         if (last) preferred = { x: last.position.x, y: last.position.y + last.height + SEGMENT_STACK_GAP };
@@ -188,10 +226,56 @@ export function buildDramaCastNode(input: { projectId: string; cast: DramaCast; 
         prompt,
         composerContent: prompt,
         assetCategory: DRAMA_CAST_ASSET_CATEGORY[cast.kind],
-        dramaRef: { projectId: input.projectId, kind: "cast", id: cast.id, baseResourceId: cast.imageResourceId || undefined },
+        dramaRef: { projectId: input.projectId, kind: "cast", id: cast.id, castRole: "setting", baseResourceId: cast.imageResourceId || undefined },
         ...dramaTakeVersions(input.takes, cast.imageResourceId, media, "image"),
     });
     return { ...node, position: input.topLeft, width: size.width, height: size.height };
+}
+
+/** 分组沿用画布的绝对坐标。补入新行时只扩大框的展开尺寸，保留已有子节点及折叠状态。 */
+export function placeDramaCastGroups(nodes: CanvasNodeData[], projectId: string, drafts: { cast: DramaCast; node: CanvasNodeData }[]) {
+    const placed = dramaSettingNodes(nodes, projectId);
+    const missing = drafts.filter(({ cast }) => !placed.has(cast.id));
+    const occupiedIds = new Set(nodes.map((node) => node.id));
+    let result = nodes;
+    for (const kind of ["character", "look", "prop", "scene"] as const) {
+        const group = missing.filter(({ cast }) => (cast.parentId ? "look" : cast.kind) === kind);
+        if (!group.length) continue;
+        const id = `drama-cast-group-${kind}-${projectId}`;
+        const existing = result.find((node) => node.id === id && node.type === CanvasNodeType.Frame);
+        const state = existing?.metadata?.frame;
+        const cellWidth = Math.max(...group.map(({ node }) => node.width));
+        const cellHeight = Math.max(...group.map(({ node }) => node.height));
+        const existingWidth = state?.expandedWidth || existing?.width || 0;
+        const fittingColumns = Math.floor((existingWidth - FRAME_PADDING * 2 + GROUP_GAP) / (cellWidth + GROUP_GAP));
+        const columns = existing ? Math.min(group.length, Math.max(1, fittingColumns)) : Math.min(3, Math.ceil(Math.sqrt(group.length)));
+        const children = result.filter((node) => node.parentId === id);
+        const rowTop = existing ? Math.max(FRAME_HEADER_HEIGHT + FRAME_PADDING, ...children.map((node) => node.position.y + node.height - existing.position.y + GROUP_GAP)) : FRAME_HEADER_HEIGHT + FRAME_PADDING;
+        const rows = Math.ceil(group.length / columns);
+        const width = Math.max(existingWidth, FRAME_PADDING * 2 + columns * cellWidth + (columns - 1) * GROUP_GAP);
+        const height = Math.max(state?.expandedHeight || existing?.height || 0, rowTop + rows * cellHeight + (rows - 1) * GROUP_GAP + FRAME_PADDING);
+        const position = existing?.position || dramaPlacement(result, { width, height }, { kind: "cast" });
+        const frame = existing || { ...createCanvasNode(CanvasNodeType.Frame, position), id, title: kind === "look" ? "造型" : DRAMA_CAST_KIND_LABEL[kind] };
+        const updated = {
+            ...frame,
+            position,
+            width: state?.collapsed ? frame.width : width,
+            height: state?.collapsed ? frame.height : height,
+            metadata: { ...frame.metadata, frame: { ...state, collapsed: Boolean(state?.collapsed), expandedWidth: width, expandedHeight: height } },
+        };
+        const added = group.map(({ cast, node }, index) => {
+            // 同时打开同一画布生成相同节点 ID。旧节点已采用为其他设定时须保留其 ID。
+            const settingId = `drama-cast-${cast.id}`;
+            return {
+                ...node,
+                id: occupiedIds.has(settingId) ? node.id : settingId,
+                parentId: id,
+                position: { x: position.x + FRAME_PADDING + (index % columns) * (cellWidth + GROUP_GAP), y: position.y + rowTop + Math.floor(index / columns) * (cellHeight + GROUP_GAP) },
+            };
+        });
+        result = existing ? [...result.map((node) => (node.id === id ? updated : node)), ...added] : [...result, updated, ...added];
+    }
+    return result;
 }
 
 const SEGMENT_SCRIPT_COLUMNS: StoryboardColumn[] = ["shotNumber", "durationSeconds", "plotDescription", "dialogue", "shotSize", "camera", "videoMotionPrompt"];
@@ -260,27 +344,44 @@ export function buildDramaSegmentGroup(input: {
     children.push({ ...promptNode, position: { x, y: contentTop }, width: PROMPT_WIDTH, height: PROMPT_HEIGHT });
     x += PROMPT_WIDTH + GROUP_GAP;
 
-    const references = segment.request.references.filter((reference) => reference.sent && reference.resourceId);
-    const columns = references.length > 1 ? 2 : 1;
-    const referenceNodes = references.map((reference, index) => {
+    const references = dramaSegmentReferences(segment, input.castById);
+    const referenceNodes: CanvasNodeData[] = [];
+    const columns = Math.min(3, Math.ceil(Math.sqrt(references.length)));
+    const wrapWidth = columns * REF_SIZE + (columns - 1) * REF_GAP;
+    let rowX = 0,
+        rowY = 0,
+        imageRowHeight = 0,
+        referencesWidth = 0;
+    for (const reference of references) {
+        if (!media.assetIdOf(reference.resourceId)) continue;
         const cast = input.castById.get(reference.castId);
-        const node = mediaNode(CanvasNodeType.Image, `${reference.label} · ${reference.name}`, reference.resourceId, media, {
+        const original = media.imageSizeOf?.(reference.resourceId);
+        const size = original ? dramaMediaSize(`${original.width}:${original.height}`, REF_SIZE) : { width: REF_SIZE, height: REF_SIZE };
+        if (rowX && rowX + size.width > wrapWidth) {
+            rowX = 0;
+            rowY += imageRowHeight + REF_GAP;
+            imageRowHeight = 0;
+        }
+        const node = mediaNode(CanvasNodeType.Image, `${reference.label} · ${reference.name}${reference.sent ? "" : "（未随请求发送）"}`, reference.resourceId, media, {
+            manualSize: true,
+            dramaSegmentImage: { segmentId: segment.id, slot: dramaReferenceSlot(reference) },
             assetCategory: reference.kind === "image" ? "material" : DRAMA_CAST_ASSET_CATEGORY[reference.kind],
-            ...(reference.castId ? { dramaRef: { projectId: input.projectId, kind: "cast" as const, id: reference.castId, baseResourceId: cast?.imageResourceId || reference.resourceId } } : {}),
+            ...(reference.castId ? { dramaRef: { projectId: input.projectId, kind: "cast" as const, id: reference.castId, castRole: "reference" as const, baseResourceId: cast?.imageResourceId || reference.resourceId } } : {}),
         });
-        return { ...node, position: { x: x + (index % columns) * (REF_SIZE + REF_GAP), y: contentTop + Math.floor(index / columns) * (REF_SIZE + REF_GAP) }, width: REF_SIZE, height: REF_SIZE };
-    });
-    const referenceRows = Math.ceil(references.length / columns);
-    const referencesHeight = referenceRows ? referenceRows * REF_SIZE + (referenceRows - 1) * REF_GAP : 0;
-    if (referenceNodes.length) {
-        children.push(...referenceNodes);
-        x += columns * REF_SIZE + (columns - 1) * REF_GAP + GROUP_GAP;
+        children.push({ ...node, position: { x: x + rowX, y: contentTop + rowY }, ...size });
+        if (reference.sent) referenceNodes.push(node);
+        referencesWidth = Math.max(referencesWidth, rowX + size.width);
+        rowX += size.width + REF_GAP;
+        imageRowHeight = Math.max(imageRowHeight, size.height);
     }
+    const referencesHeight = rowY + imageRowHeight;
+    if (referencesWidth) x += referencesWidth + GROUP_GAP;
 
     let firstFrameNode: CanvasNodeData | undefined;
-    if (segment.request.firstFrameResourceId) {
-        const size = dramaMediaSize(input.aspectRatio, 288);
-        const node = mediaNode(CanvasNodeType.Image, `首帧 · 第 ${segment.index} 段尾帧`, segment.request.firstFrameResourceId, media, { assetCategory: "material" });
+    if (segment.request.firstFrameResourceId && media.assetIdOf(segment.request.firstFrameResourceId)) {
+        const original = media.imageSizeOf?.(segment.request.firstFrameResourceId);
+        const size = dramaMediaSize(original ? `${original.width}:${original.height}` : input.aspectRatio, 288);
+        const node = mediaNode(CanvasNodeType.Image, `首帧 · 第 ${segment.index} 段尾帧`, segment.request.firstFrameResourceId, media, { assetCategory: "material", manualSize: true, dramaSegmentImage: { segmentId: segment.id, slot: "first" } });
         firstFrameNode = { ...node, position: { x, y: contentTop }, width: size.width, height: size.height };
         children.push(firstFrameNode);
         x += size.width + GROUP_GAP;
@@ -289,6 +390,7 @@ export function buildDramaSegmentGroup(input: {
     const videoSize = dramaMediaSize(input.aspectRatio, 480);
     const seconds = segment.videoSeconds || segment.request.seconds || Math.round(segment.durationMs / 1000);
     const videoNode = mediaNode(CanvasNodeType.Video, `第 ${segment.index + 1} 段 · 视频`, segment.videoResourceId, media, {
+        manualSize: true,
         prompt,
         composerContent: prompt,
         generationMode: "video",
@@ -348,6 +450,91 @@ export function buildDramaSegmentGroup(input: {
 export function placeDramaGroup(nodes: CanvasNodeData[], topLeft: Position) {
     const area = bounds(nodes);
     return area ? translate(nodes, topLeft.x - area.left, topLeft.y - area.top) : nodes;
+}
+
+export function appendSegmentImages(nodes: CanvasNodeData[], connections: CanvasConnection[], frame: CanvasNodeData, segment: DramaSegment, group: ReturnType<typeof buildDramaSegmentGroup>, slots: Set<string>) {
+    const images = group.nodes.filter((node) => node.metadata?.dramaSegmentImage && slots.has(node.metadata.dramaSegmentImage.slot));
+    if (!images.length) return { nodes, connections };
+    const video = findDramaSegmentVideoNode(nodes, segment.id);
+    const state = frame.metadata?.frame;
+    const width = state?.expandedWidth || frame.width;
+    let x = FRAME_PADDING;
+    let y = Math.max(FRAME_HEADER_HEIGHT + FRAME_PADDING, ...nodes.filter((node) => node.parentId === frame.id).map((node) => node.position.y + node.height - frame.position.y + REF_GAP));
+    let rowHeight = 0;
+    const added = images.map((image) => {
+        if (x > FRAME_PADDING && x + image.width + FRAME_PADDING > width) {
+            x = FRAME_PADDING;
+            y += rowHeight + REF_GAP;
+            rowHeight = 0;
+        }
+        const position = { x: frame.position.x + x, y: frame.position.y + y };
+        x += image.width + REF_GAP;
+        rowHeight = Math.max(rowHeight, image.height);
+        return { ...image, parentId: frame.id, position };
+    });
+    const oldHeight = state?.expandedHeight || frame.height;
+    let height = Math.max(oldHeight, y + rowHeight + FRAME_PADDING);
+    let expandedWidth = Math.max(width, ...images.map((image) => image.width + FRAME_PADDING * 2));
+    // 下一段已在下方时，在框的右侧续列，保留已排好的段框位置。
+    const belowOccupied = nodes.some(
+        (node) =>
+            !node.parentId &&
+            node.id !== frame.id &&
+            node.position.y >= frame.position.y + oldHeight &&
+            node.position.y < frame.position.y + height + GROUP_GAP &&
+            node.position.x < frame.position.x + expandedWidth &&
+            node.position.x + node.width > frame.position.x,
+    );
+    if (belowOccupied) {
+        x = width + REF_GAP;
+        y = FRAME_HEADER_HEIGHT + FRAME_PADDING;
+        let columnWidth = 0;
+        height = oldHeight;
+        for (const image of added) {
+            if (columnWidth && y + image.height + FRAME_PADDING > oldHeight) {
+                x += columnWidth + REF_GAP;
+                y = FRAME_HEADER_HEIGHT + FRAME_PADDING;
+                columnWidth = 0;
+            }
+            image.position = { x: frame.position.x + x, y: frame.position.y + y };
+            expandedWidth = Math.max(expandedWidth, x + image.width + FRAME_PADDING);
+            height = Math.max(height, y + image.height + FRAME_PADDING);
+            columnWidth = Math.max(columnWidth, image.width);
+            y += image.height + REF_GAP;
+        }
+    }
+    const first = added.find((node) => node.metadata?.dramaSegmentImage?.slot === "first");
+    const result = nodes.map((node) => {
+        if (node.id === frame.id)
+            return {
+                ...node,
+                width: state?.collapsed ? node.width : expandedWidth,
+                height: state?.collapsed ? node.height : height,
+                metadata: { ...node.metadata, frame: { ...state, collapsed: Boolean(state?.collapsed), expandedWidth, expandedHeight: height } },
+            };
+        if (first && node.id === video?.id && !node.metadata?.videoStartFrameNodeId) return { ...node, metadata: { ...node.metadata, videoStartFrameNodeId: first.id } };
+        return node;
+    });
+    if (!video) return { nodes: [...result, ...added], connections };
+    const addedIds = new Set(added.filter((node) => node !== first || !video.metadata?.videoStartFrameNodeId).map((node) => node.id));
+    const newEdges = group.connections.filter((connection) => addedIds.has(connection.fromNodeId)).map((connection) => ({ ...connection, toNodeId: video.id }));
+    // 仅在已有输入之间插入缺失的编号，已有连线的相对顺序和 ID 保留。
+    const ranks = new Map(segment.request.references.map((ref, index) => [dramaReferenceSlot({ castId: ref.castId, resourceId: ref.resourceId || "" }), index]));
+    const order = new Map(
+        [...nodes, ...added].map((node) => {
+            const source = node.metadata?.dramaSegmentImage;
+            const ref = node.metadata?.dramaRef;
+            const slot = source?.slot || (ref?.kind === "cast" ? `cast:${ref.id}` : `image:${node.metadata?.storageKey?.slice(9)}`);
+            return [node.id, ranks.get(slot) ?? Infinity];
+        }),
+    );
+    const edges = [...connections];
+    for (const connection of newEdges) {
+        const rank = order.get(connection.fromNodeId) ?? Infinity;
+        const after = edges.findIndex((item) => item.toNodeId === video.id && (order.get(item.fromNodeId) ?? Infinity) > rank);
+        edges.splice(after < 0 ? edges.length : after, 0, connection);
+    }
+    return { nodes: [...result, ...added], connections: edges };
 }
 
 /** 成片节点：成片视频与历史成片版本；剪辑在画布时间线里进行。 */

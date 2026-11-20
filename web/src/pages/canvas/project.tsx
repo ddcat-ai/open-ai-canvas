@@ -745,6 +745,7 @@ function CanvasViewportPage() {
         projectLoaded,
         nodes,
         nodesRef,
+        connectionsRef,
         setNodes,
         setConnections,
         focusNodes: focusDramaNodes,
@@ -2754,8 +2755,12 @@ function CanvasViewportPage() {
     );
     // 短剧投送或定位后：切回画布视图，选中这些节点并把视口移过去。
     dramaFocusRef.current = (nodeIds: string[]) => {
-        const ids = nodeIds.filter((id) => nodesRef.current.some((node) => node.id === id));
+        const byId = new Map(nodesRef.current.map((node) => [node.id, node]));
+        const ids = nodeIds.filter((id) => byId.has(id));
         if (!ids.length) return;
+        for (const parentId of new Set(ids.map((id) => byId.get(id)?.parentId))) {
+            if (parentId && byId.get(parentId)?.metadata?.frame?.collapsed) toggleFrameCollapsed(parentId);
+        }
         if (canvasView === "assets") changeCanvasView("canvas");
         const selection = new Set(ids);
         selectedNodeIdsRef.current = selection;

@@ -1,25 +1,23 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 import { useNavigate } from "react-router";
 
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { dramaSummaryQuery } from "@/lib/drama/drama-summary-query";
-import { getDramaEpisode, listDramaCast, type DramaCast, type DramaEpisodeDetail, type DramaSummary } from "@/services/api/drama";
+import { dramaIsWorking } from "@/lib/drama/use-drama-cast";
+import { getDramaEpisode, type DramaCast, type DramaEpisodeDetail, type DramaSummary } from "@/services/api/drama";
 import { encodeDramaCanvasFocus, openDramaCanvasPath, type DramaCanvasEditor, type DramaCanvasFocus } from "@/services/drama-canvas";
 
 export { dramaKeys };
 
-function summaryActive(summary?: DramaSummary) {
-    if (!summary) return false;
-    return summary.production.status === "running" || (summary.jobCounts.running || 0) > 0;
-}
+export { useDramaCast } from "@/lib/drama/use-drama-cast";
 
 export function useDramaSummary(projectId: string) {
     return useQuery({
         ...dramaSummaryQuery(projectId),
         enabled: Boolean(projectId),
-        refetchInterval: (query) => (summaryActive(query.state.data) ? 3_000 : 20_000),
+        refetchInterval: (query) => (dramaIsWorking(query.state.data) ? 3_000 : 20_000),
         refetchOnWindowFocus: true,
     });
 }
@@ -40,17 +38,6 @@ export function useDramaEpisode(projectId: string, episodeId: string, active: bo
     });
 }
 
-export function useDramaCast(projectId: string, active: boolean) {
-    const query = useQuery({
-        queryKey: dramaKeys.cast(projectId),
-        queryFn: ({ signal }) => listDramaCast(projectId, signal),
-        enabled: Boolean(projectId),
-        refetchInterval: (state) => (active && state.state.data?.cast.some((cast) => cast.imageStatus !== "ready" && cast.imageStatus !== "failed" && !cast.locked) ? 4_000 : false),
-    });
-    const byId = useMemo(() => new Map((query.data?.cast || []).map((cast) => [cast.id, cast] as const)), [query.data]);
-    return { ...query, cast: query.data?.cast || [], byId };
-}
-
 /**
  * renumbered=true 用于插入或删除集：后续各集集号都变了，全部单集详情一起失效。
  * removedEpisodeId 是刚删除的集，先移出缓存，避免仍挂着的旧查询被重新请求成 404。
@@ -61,6 +48,7 @@ export function useDramaInvalidate(projectId: string) {
         if (options.removedEpisodeId) queryClient.removeQueries({ queryKey: dramaKeys.episode(projectId, options.removedEpisodeId), exact: true });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.summary(projectId), exact: true });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.cast(projectId) });
+        void queryClient.invalidateQueries({ queryKey: ["drama", projectId, "cast-impact"] });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.jobs(projectId) });
         void queryClient.invalidateQueries({ queryKey: ["drama", projectId, "takes"] });
         void queryClient.invalidateQueries({ queryKey: dramaKeys.chapters(projectId) });

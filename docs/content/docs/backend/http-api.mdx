@@ -1296,7 +1296,7 @@ install 的 Base URL、协议、能力和成本全部从服务端快照读取，
 
 ### 精修画布
 
-短剧是事实源与调度方，关联的画布是精修台：前端按需把设定、剧情段与成片投送到画布（节点 `metadata.dramaRef` 回指短剧对象），写回只经显式采用（设定参考图走 `PUT …/cast/:castId/image`，段视频走 `PUT …/segments/:index/video`），没有双向自动同步。
+从制作台顶栏打开精修画布时，前端读取当前集的剧情段并按段登记素材。参考图按卡片顺序显示，`sent` 决定到视频的连线，`firstFrameResourceId` 决定首帧。尚无剧情段时按类别补入已有设定图。画布节点通过 `metadata.dramaRef` 回指短剧对象，`castRole` 区分作品设定和段内参考图。用户显式采用时才写回短剧，设定参考图走 `PUT …/cast/:castId/image`，段视频走 `PUT …/segments/:index/video`。
 
 - 预算口径：`GET /dramas/:id` 的 `production.spentMicrocredits` 是作品总花费，含关联画布上生成任务的花费；其中画布部分为 `canvasSpentMicrocredits`。画布花费在读取时汇总：任务的 `project_id` 是关联到作品的画布，按其计费订单下单金额计（已退款除外，在途订单也计入），口径与流水线一致。派发、继续制作与修改设置都按总花费判断预算；关联画布上创建生成任务时作品预算已用完返回 400 `drama_budget_exhausted`。
 - 资源保护：短剧表直接持有的资源（设定参考图、剧情段视频与尾帧、成片以及全部版本记录）在资源引用快照里记为 `短剧` 引用，素材“彻底删除”与 24 小时孤儿资源清理都会保留它们。
