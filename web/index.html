@@ -104,6 +104,17 @@
             var bootRoot = document.getElementById("root");
             var bootTimer = setTimeout(function () {
                 if (bootRoot.childNodes.length) return;
+                // 开发时 Vite 重编译/依赖优化偶尔会超过 20 秒；先自动带缓存戳重载一次，
+                // 避免用户被“页面资源加载时间过长”卡住，还要手动点。
+                try {
+                    if (!sessionStorage.getItem("boot-recovery-reloaded")) {
+                        sessionStorage.setItem("boot-recovery-reloaded", "1");
+                        var retryUrl = new URL(location.href);
+                        retryUrl.searchParams.set("__chunk_recovery", String(Date.now()));
+                        location.replace(retryUrl.toString());
+                        return;
+                    }
+                } catch (error) {}
                 var notice = document.createElement("section");
                 notice.id = "boot-recovery";
                 notice.setAttribute("role", "alert");
@@ -123,10 +134,13 @@
                 };
                 notice.append(title, detail, retry);
                 document.body.appendChild(notice);
-            }, 20000);
+            }, 45000);
             var bootObserver = new MutationObserver(function () {
                 if (!bootRoot.childNodes.length) return;
                 clearTimeout(bootTimer);
+                try {
+                    sessionStorage.removeItem("boot-recovery-reloaded");
+                } catch (error) {}
                 bootObserver.disconnect();
                 var notice = document.getElementById("boot-recovery");
                 if (notice) notice.remove();
