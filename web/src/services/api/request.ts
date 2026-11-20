@@ -1,4 +1,9 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
+import axios, { AxiosHeaders, type AxiosRequestConfig, type AxiosResponse, type RawAxiosRequestHeaders } from "axios";
+
+import { translate } from "@/i18n";
+import { assertCurrentUserSession, captureUserSession } from "@/lib/user-scope";
+import { localizedApiErrorMessage } from "@/services/api/error-codes";
+import { workspaceApiPath } from "@/lib/workspace-routes";
 
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
 
@@ -51,7 +56,7 @@ export async function request<T>(promise: Promise<{ data: BackendEnvelope<T>; st
         const response = await promise;
         if (response.status === 304 && options.allowNotModified) return { notModified: true } as T;
         if (response.data.code !== 0) {
-            throw new ApiError(response.data.msg || "请求失败", {
+            throw new ApiError(localizedApiErrorMessage(response.data.reason, response.data.msg || translate("errors.requestFailed")), {
                 status: response.status,
                 code: response.data.code,
                 reason: response.data.reason,
@@ -71,15 +76,16 @@ function unwrapTransportError(error: unknown): never {
         throw error;
     }
     if (axios.isCancel(error) || (axios.isAxiosError(error) && error.code === axios.AxiosError.ERR_CANCELED)) {
-        throw new DOMException("请求已取消", "AbortError");
+        throw new DOMException(translate("errors.canceled"), "AbortError");
     }
     if (axios.isAxiosError<BackendEnvelope<unknown>>(error)) {
         const status = error.response?.status;
         const code = error.response?.data?.code;
-        throw new ApiError(error.response?.data?.msg || transportFailureMessage(status, error.message), {
+        const reason = error.response?.data?.reason;
+        throw new ApiError(localizedApiErrorMessage(reason, error.response?.data?.msg || transportFailureMessage(status, error.message)), {
             status,
             code,
-            reason: error.response?.data?.reason,
+            reason,
             details: error.response?.data?.details,
             // 没有 response 的 AxiosError 代表请求没有拿到 HTTP 响应（断网、连接重置、DNS、超时等）。
             // 这类错误不能靠 status 判断，但对保存来说通常是暂时性的，应交给上层有限退避重试。
@@ -94,13 +100,13 @@ function unwrapTransportError(error: unknown): never {
 function transportFailureMessage(status?: number, fallback?: string) {
     switch (status) {
         case 502:
-            return "后端服务暂时不可用，请稍后重试";
+            return translate("errors.badGateway");
         case 503:
-            return "服务暂时不可用，请稍后重试";
+            return translate("errors.unavailable");
         case 504:
-            return "服务响应超时，请稍后重试";
+            return translate("errors.timeout");
         default:
-            return fallback || "请求失败";
+            return fallback || translate("errors.requestFailed");
     }
 }
 
@@ -125,11 +131,47 @@ function retryAfterMilliseconds(headers: unknown) {
 
 export type HttpRequestConfig = Omit<AxiosRequestConfig, "method" | "url" | "data" | "baseURL"> & {
     allowNotModified?: boolean;
+    /** 仅登录、注册和会话恢复等公开认证接口使用；账户业务接口始终绑定当前身份。 */
+    session?: "public";
 };
 
 async function send<T>(method: string, url: string, data?: unknown, config?: HttpRequestConfig) {
-    const { allowNotModified, ...axiosConfig } = config || {};
-    return request<T>(apiClient.request<BackendEnvelope<T>>({ method, url, data, ...axiosConfig }), { allowNotModified });
+    const { allowNotModified, session, ...axiosConfig } = config || {};
+    return request<T>(sendWithSession<BackendEnvelope<T>>({ method, url, data, ...axiosConfig }, session), { allowNotModified });
+}
+
+async function sendWithSession<T>(config: AxiosRequestConfig, mode?: "public"): Promise<AxiosResponse<T>> {
+    const snapshot = captureUserSession(mode === "public");
+    const headers = new AxiosHeaders();
+    const methodHeaderNames = new Set(["common", "delete", "get", "head", "post", "put", "patch", "options"]);
+    const headerSources: Array<RawAxiosRequestHeaders | undefined> = [config.headers?.common, config.headers?.[config.method?.toLowerCase() || "get"], config.headers];
+    for (const source of headerSources) {
+        for (const [name, value] of Object.entries(source || {})) {
+            if (value !== undefined && !methodHeaderNames.has(name.toLowerCase())) headers.set(name, value);
+        }
+    }
+    if (mode !== "public") {
+        const expectedUser = headers.get("X-Canvas-Expected-User");
+        if (expectedUser && expectedUser !== snapshot.scope && expectedUser !== snapshot.userId) throw new DOMException("请求所属账号已变化", "AbortError");
+        headers.set("X-Canvas-Expected-User", snapshot.userId, true);
+    }
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    snapshot.signal.addEventListener("abort", abort, { once: true });
+    config.signal?.addEventListener?.("abort", abort, { once: true });
+    if (snapshot.signal.aborted || config.signal?.aborted) abort();
+    try {
+        const response = await apiClient.request<T>({ ...config, url: config.url && workspaceApiPath(config.url, undefined, config.method), headers, signal: controller.signal });
+        assertCurrentUserSession(snapshot, mode === "public");
+        return response;
+    } catch (error) {
+        // 即使传输层忽略取消，旧会话的响应和错误也不能进入新账号的缓存或重试路径。
+        assertCurrentUserSession(snapshot, mode === "public");
+        throw error;
+    } finally {
+        snapshot.signal.removeEventListener("abort", abort);
+        config.signal?.removeEventListener?.("abort", abort);
+    }
 }
 
 /**
@@ -142,9 +184,10 @@ export const http = {
     put: <T>(url: string, data?: unknown, config?: HttpRequestConfig) => send<T>("put", url, data, config),
     patch: <T>(url: string, data?: unknown, config?: HttpRequestConfig) => send<T>("patch", url, data, config),
     delete: <T>(url: string, config?: HttpRequestConfig) => send<T>("delete", url, undefined, config),
+    deleteWithBody: <T>(url: string, data?: unknown, config?: HttpRequestConfig) => send<T>("delete", url, data, config),
     async raw<T>(config: AxiosRequestConfig): Promise<AxiosResponse<T>> {
         try {
-            return await apiClient.request<T>(config);
+            return await sendWithSession<T>(config);
         } catch (error) {
             throw unwrapTransportError(error);
         }

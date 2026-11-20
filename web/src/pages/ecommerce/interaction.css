@@ -1,0 +1,266 @@
+/* 电商 Agent 交互层：画布框选、对齐排布、拖动吸附参考线、输入框拖放与粘贴、参考图预览。
+ * 在 workspace.css、studio.css 之后加载；只追加新类名或提高选择器层级覆盖，不改动原有规则。 */
+
+/* ------------------------------ 画布：框选与对齐排布 ------------------------------ */
+
+.commerce-result-canvas .commerce-canvas-selection-box {
+    border: 1px solid color-mix(in srgb, var(--cm-accent) 72%, transparent);
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--cm-accent) 11%, transparent);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 5%);
+}
+.commerce-canvas-results .ecommerce-result[data-marquee-hit] {
+    outline: 2px solid color-mix(in srgb, var(--cm-accent) 80%, transparent);
+    outline-offset: 3px;
+}
+
+/* 排布时图片沿过渡滑到新位置；外框与排布按钮在动画结束后按新位置重新出现。 */
+.commerce-result-canvas[data-arranging] .commerce-canvas-results .ecommerce-result {
+    transition:
+        translate 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+        outline-color 0.35s ease,
+        box-shadow 0.45s ease;
+}
+.commerce-result-canvas[data-arranging] .commerce-canvas-group-outline,
+.commerce-result-canvas[data-arranging] .commerce-arrange-bar,
+.commerce-result-canvas:has([data-node-dragging]) .commerce-arrange-bar,
+.commerce-result-canvas:has(> [data-canvas-viewport-interacting="true"]) .commerce-arrange-bar,
+.commerce-result-canvas:has(> [data-canvas-viewport-interacting="true"]) .commerce-canvas-group-outline {
+    opacity: 0;
+    pointer-events: none;
+}
+.commerce-result-canvas .commerce-canvas-group-outline {
+    transition: opacity 0.14s ease;
+}
+
+.commerce-arrange-bar {
+    position: absolute;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    overflow-x: auto;
+    border: 1px solid var(--cm-line);
+    border-radius: 12px;
+    background: var(--user-surface);
+    box-shadow: var(--cm-pop-shadow);
+    transform: translateX(-50%);
+    transition: opacity 0.14s ease;
+}
+.commerce-selection-count {
+    flex: none;
+    padding: 0 8px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.commerce-arrange-bar[data-compact] > button {
+    padding-inline: 7px;
+}
+.commerce-arrange-bar[data-compact] > button:disabled > span {
+    display: none;
+}
+.commerce-arrange-bar > button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.commerce-arrange-bar > button {
+    flex: none;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+.commerce-result-canvas[data-result-dragging] .commerce-selected-tools,
+.commerce-result-canvas:has(> [data-canvas-viewport-interacting="true"]) .commerce-selected-tools {
+    visibility: hidden;
+    pointer-events: none;
+}
+.commerce-result-canvas[data-result-dragging] .ecommerce-result {
+    transition: none !important;
+}
+.commerce-result-canvas[data-result-dragging] .ecommerce-result,
+.commerce-result-canvas:has(> [data-canvas-viewport-interacting="true"]) .ecommerce-result {
+    box-shadow: none;
+}
+.commerce-arrange-bar > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 10px 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--user-ink);
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: none;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
+}
+.commerce-arrange-bar > button:hover,
+.commerce-arrange-bar > button[aria-expanded="true"] {
+    border-color: color-mix(in srgb, var(--user-accent) 45%, var(--user-border));
+    background: color-mix(in srgb, var(--user-accent) 10%, var(--user-surface));
+}
+.commerce-arrange-bar > button:focus-visible {
+    outline: 2px solid var(--user-accent);
+    outline-offset: 2px;
+}
+.commerce-arrange-bar > button svg {
+    color: var(--user-ink-muted);
+}
+@keyframes commerce-arrange-in {
+    from {
+        opacity: 0;
+        translate: 0 6px;
+    }
+}
+
+/* ------------------------------ 画布：拖动吸附参考线 ------------------------------ */
+
+/* 参考线画在世界坐标层里，线宽与字号按缩放反算（--commerce-snap-inverse），屏幕上保持 1px。 */
+.commerce-snap-guides {
+    --commerce-snap-color: #ff4d8f;
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 30;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+.commerce-snap-guides > i {
+    position: absolute;
+    display: block;
+    background: var(--commerce-snap-color);
+    font-style: normal;
+}
+.commerce-snap-line.is-x,
+.commerce-snap-gap.is-y {
+    width: calc(1px * var(--commerce-snap-inverse, 1));
+    transform: translateX(-50%);
+}
+.commerce-snap-line.is-y,
+.commerce-snap-gap.is-x {
+    height: calc(1px * var(--commerce-snap-inverse, 1));
+    transform: translateY(-50%);
+}
+.commerce-snap-gap::after {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    content: attr(data-label);
+    padding: calc(1px * var(--commerce-snap-inverse, 1)) calc(5px * var(--commerce-snap-inverse, 1));
+    border-radius: calc(4px * var(--commerce-snap-inverse, 1));
+    background: var(--commerce-snap-color);
+    color: white;
+    font-size: calc(10px * var(--commerce-snap-inverse, 1));
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+}
+
+/* ------------------------------ 输入框：拖放、粘贴与自适应高度 ------------------------------ */
+
+/* 文本框随内容自适应增高，输入区整体可多容纳几行再滚动。 */
+.flylep-prompt-box .flylep-composer-input {
+    max-height: min(260px, 36dvh);
+}
+.flylep-prompt-box > .flylep-prompt-drop {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 6px;
+    border: 1.5px dashed color-mix(in srgb, var(--user-accent) 78%, transparent);
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--user-accent) 12%, color-mix(in srgb, var(--user-surface) 90%, transparent));
+    color: var(--user-ink);
+    text-align: center;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+    animation: commerce-drop-in 0.16s ease both;
+}
+.flylep-prompt-drop strong {
+    font-size: 14px;
+    font-weight: 600;
+}
+.flylep-prompt-drop span {
+    color: var(--user-ink-muted);
+    font-size: 11px;
+}
+@keyframes commerce-drop-in {
+    from {
+        opacity: 0;
+    }
+}
+
+/* ------------------------------ 参考图：上传中与悬停预览 ------------------------------ */
+
+.commerce-reference-spinner {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border: 2px solid color-mix(in srgb, currentColor 22%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: commerce-ring-spin 0.8s linear infinite;
+}
+@keyframes commerce-ring-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+.commerce-reference-thumb {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+}
+.commerce-reference-preview-popover .ant-popover-inner {
+    padding: 6px;
+    border-radius: 14px;
+}
+.commerce-reference-preview {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+}
+.commerce-reference-preview img {
+    display: block;
+    width: 200px;
+    max-height: 240px;
+    object-fit: contain;
+    border-radius: 9px;
+    background: var(--user-surface-muted, rgb(127 127 127 / 12%));
+}
+.commerce-reference-preview figcaption {
+    max-width: 200px;
+    overflow: hidden;
+    color: var(--user-ink-muted, rgb(127 127 127));
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .commerce-result-canvas[data-arranging] .commerce-canvas-results .ecommerce-result,
+    .commerce-arrange-bar,
+    .commerce-arrange-bar > button {
+        animation: none;
+        transition: none;
+    }
+    .flylep-prompt-box > .flylep-prompt-drop {
+        animation: none;
+    }
+    .commerce-reference-spinner {
+        animation-duration: 2s;
+    }
+}

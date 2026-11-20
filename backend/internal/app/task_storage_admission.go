@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // 产出媒体文件的任务类型：这些任务成功后必须把结果回存为资源文件。
@@ -43,7 +44,29 @@ func (s *Service) requireStoredFileCapacityWhileLocked(userID string, taskType s
 	if err != nil {
 		return err
 	}
-	return validateStoredFileCapacity(storedBytes, s.pendingStorage[userID], storedLimit)
+	if err := validateStoredFileCapacity(storedBytes, s.pendingStorage[userID], storedLimit); err != nil {
+		return err
+	}
+
+	usage, err := s.repo.UserStorageUsage(userID)
+	if err != nil {
+		return err
+	}
+	if err := validateStructuredStorageQuotaWithPolicy(usage, "asset", true, 0, policy.Resource); err != nil {
+		return err
+	}
+
+	day := time.Now().UTC().Format("2006-01-02")
+	dailyBytes, err := s.repo.DailyUploadBytes(userID, day)
+	if err != nil {
+		return err
+	}
+	dailyLimit := megabytes(policy.Resource.DailyUploadMB)
+	generatedFileBytes := megabytes(policy.Resource.GeneratedFileMB)
+	if dailyLimit-dailyBytes <= generatedFileBytes {
+		return QuotaExceeded(fmt.Sprintf("每个账号 UTC 自然日上传额度不足以容纳一个最大生成文件（%dMB）", policy.Resource.GeneratedFileMB))
+	}
+	return nil
 }
 
 func validateStoredFileCapacity(storedBytes int64, pendingBytes int64, storedLimit int64) error {

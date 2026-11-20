@@ -12,7 +12,7 @@ func paymentLimitTestOrder(id, productID string) *model.PaymentOrder {
 	return &model.PaymentOrder{
 		ID: id, UserID: "user-1", IdempotencyKey: "idem-" + id, MerchantOrderNo: "merchant-" + id,
 		ProductID: productID, ProductName: "周卡", ProviderID: "wechat-native", PluginID: "plugin-1",
-		ProviderConfigID: "config-1", ProviderConfigVersion: 1, AmountFen: 100, Currency: "CNY",
+		ProviderConfigID: "config-1", ProviderConfigVersion: 1, AmountFen: 100, Currency: "CNY", ChargeAmountFen: 100, ChargeCurrency: "CNY",
 		CreditsMicrocredits: 100_000_000, Status: model.PaymentOrderCreated, ExpiresAt: time.Now().Add(time.Hour),
 	}
 }

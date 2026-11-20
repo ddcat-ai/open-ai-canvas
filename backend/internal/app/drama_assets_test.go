@@ -67,6 +67,29 @@ func TestDramaImageSizeKeepsRatioModelsAndRejectsUndeclared(t *testing.T) {
 	}
 }
 
+// 声明为大写档位时，短剧参考图也按声明原值下发，不能把小写档位透传给上游。
+func TestDramaImageResolutionUsesDeclaredCasing(t *testing.T) {
+	spec := CapabilitySpec{Capability: "image", Options: map[string]OptionConstraint{
+		"size":            {Values: []any{"16:9"}},
+		"imageResolution": {Values: []any{"1K", "2K", "4K"}},
+	}}
+	for tier, want := range map[string]string{"2k": "2K", "4K": "4K"} {
+		got := dramaImageRequestForSpec(spec, nil, "16:9", tier)
+		if got.Issue != "" || got.Resolution != want {
+			t.Fatalf("tier %q => %+v, want resolution %q", tier, got, want)
+		}
+		config := map[string]any{}
+		got.apply(config)
+		if config["imageResolution"] != want {
+			t.Fatalf("tier %q applied %#v, want %q", tier, config["imageResolution"], want)
+		}
+	}
+	// 模型默认档位同样按声明原值下发。
+	if got := dramaImageRequestForSpec(spec, map[string]any{"imageResolution": "2K"}, "16:9", ""); got.Resolution != "2K" {
+		t.Fatalf("default tier => %+v, want declared 2K", got)
+	}
+}
+
 func TestDramaAssetSchemesRenderWithoutPlaceholders(t *testing.T) {
 	for _, scheme := range production.AssetSchemes() {
 		assets := production.AssetSettings{Mode: scheme.Mode}.Normalized()
@@ -86,6 +109,45 @@ func TestDramaAssetSchemesRenderWithoutPlaceholders(t *testing.T) {
 	}
 	if custom.CharacterRatio != production.AssetImageRatio {
 		t.Fatalf("custom scheme keeps a valid ratio: %q", custom.CharacterRatio)
+	}
+}
+
+func TestDramaAssetPromptsEnforceRatio(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	// 竖屏作品的画风写着竖屏构图：设定图（16:9）的提示词里不能再出现竖屏要求，其余画风保留。
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaAuto, Concurrency: 16, Models: fakeDramaModels}
+	settings.EpisodeSeconds = 60
+	settings.StylePrompt = "真人实拍质感，9:16 竖屏构图，主体居中"
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "画幅", Start: true, Settings: settings, Chapters: []DramaChapterInput{{Title: "第一章", Text: "萧炎……"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectID := summary.Project.ID
+	runDramaTicks(t, svc, projectID, 20)
+	seen := map[string]bool{}
+	for _, req := range fake.requests {
+		if req.Type != "canvas_image" {
+			continue
+		}
+		if strings.Contains(req.Prompt, "9:16") || strings.Contains(req.Prompt, "竖屏") {
+			t.Fatalf("conflicting visual rule survived submission: %s", req.Prompt)
+		}
+		if !strings.Contains(req.Prompt, "真人实拍质感") || !strings.Contains(req.Prompt, "主体居中") {
+			t.Fatalf("non-frame style text was dropped: %s", req.Prompt)
+		}
+		if !strings.Contains(req.Prompt, "最终输出画幅必须为 16:9，横版，宽度大于高度") {
+			t.Fatalf("asset ratio missing from submission: %s", req.Prompt)
+		}
+		for kind, marker := range map[string]string{"character": "角色四格资产参考图", "prop": "道具设定图", "scene": "场景概念设定图"} {
+			if strings.Contains(req.Prompt, marker) {
+				seen[kind] = true
+			}
+		}
+	}
+	for _, kind := range []string{"character", "prop", "scene"} {
+		if !seen[kind] {
+			t.Fatalf("no %s image request was submitted", kind)
+		}
 	}
 }
 

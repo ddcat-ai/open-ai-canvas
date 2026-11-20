@@ -151,6 +151,9 @@ func EnsureBuiltinTools(repo Repository) error {
 	if err := repo.UpsertBuiltinTools(tools); err != nil {
 		return fmt.Errorf("同步内置工具失败: %w", err)
 	}
+	if err := repo.RetireLegacyBuiltinTools(legacyBuiltinTools); err != nil {
+		return fmt.Errorf("停用已改号的内置工具失败: %w", err)
+	}
 	return nil
 }
 

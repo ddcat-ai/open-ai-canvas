@@ -210,6 +210,7 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 		Fields []struct {
 			ID      string `json:"id"`
 			Title   string `json:"title"`
+			Section string `json:"section"`
 			Type    string `json:"type"`
 			Options []struct {
 				ID          string `json:"id"`
@@ -222,9 +223,10 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 			AllowCustom  bool            `json:"allowCustom"`
 			Placeholder  string          `json:"placeholder"`
 		} `json:"fields"`
-		AllowFreeform *bool `json:"allowFreeform"`
-		Round         int   `json:"round"`
-		MaxRounds     int   `json:"maxRounds"`
+		AllowFreeform  *bool `json:"allowFreeform"`
+		RecordDecision bool  `json:"recordDecision"`
+		Round          int   `json:"round"`
+		MaxRounds      int   `json:"maxRounds"`
 	}
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
 		return nil, BadAuthRequest("工具参数必须是只含支持字段的JSON对象")
@@ -254,6 +256,9 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 			continue
 		}
 		entry := map[string]any{"id": truncateRunes(id, 80), "title": truncateRunes(title, 80), "type": field.Type, "required": field.Required, "allowCustom": field.AllowCustom}
+		if section := strings.TrimSpace(field.Section); section != "" {
+			entry["section"] = truncateRunes(section, 40)
+		}
 		var defaultValue string
 		if len(field.DefaultValue) > 0 && json.Unmarshal(field.DefaultValue, &defaultValue) == nil {
 			if value := strings.TrimSpace(defaultValue); value != "" {
@@ -294,8 +299,8 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 		}
 		fields = append(fields, entry)
 	}
-	if len(fields) > 6 {
-		fields = fields[:6]
+	if len(fields) > cloudAgentAskUserMaxFields {
+		fields = fields[:cloudAgentAskUserMaxFields]
 	}
 	if len(fields) > 0 && len(options) > 0 {
 		return nil, BadAuthRequest("ask_user 的 options 与 fields 只能二选一；多个参数请只使用 fields")
@@ -329,6 +334,9 @@ func cloudAgentAskUser(call cloudAgentCall, states ...*cloudAgentRuntime) (any, 
 	if len(fields) == 0 {
 		payload["kind"] = "choice"
 		delete(payload, "fields")
+	}
+	if args.RecordDecision && len(fields) > 0 {
+		payload["recordDecision"] = true
 	}
 	if duplicate || currentRound > maxRounds {
 		payload["phase"] = "defaulted"

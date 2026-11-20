@@ -2,12 +2,127 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
+
+func TestCloudAgentPiVisionWorkerPreservesImagesWithEmptySystemHistory(t *testing.T) {
+	for _, scenario := range []struct {
+		name         string
+		emptySystems int
+	}{
+		{"no_empty_messages", 0},
+		{"raw_history_same_length", 2},
+		{"raw_history_longer", 6},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+			s, _, pixels := cloudAgentVisionFixture(t)
+			call := cloudAgentStoryboardCall(t, "canvas_inspect_image", "inspect-cat", map[string]any{"nodeId": "cat"})
+			call.ItemID = "fc-inspect-cat"
+			state := cloudAgentPairingState(call)
+			state.Request = agentTestRequest()
+			state.Request.VisionEnabled = true
+			state.Canonical.ToolChoice = "auto"
+			state.Canonical.SystemPrompt = "Inspect the requested canvas image."
+			state.Canonical.Messages = append([]map[string]any{
+				{"role": "system", "content": state.Canonical.SystemPrompt},
+				{"role": "user", "content": "Describe the image."},
+			}, state.Canonical.Messages...)
+			inspection, err := s.prepareCloudAgentImageInspection("user", "agent-canvas", state, call)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cloudAgentToolResult("run", state, call, inspection, nil)
+			assertPiBatchImages(t, state, 1)
+			receipt, _ := cloudAgentToolMessage(state, call.ID)
+
+			projected := make([]map[string]any, 0, scenario.emptySystems+3)
+			for index := 0; index < scenario.emptySystems; index++ {
+				projected = append(projected, map[string]any{"role": "system", "content": ""})
+			}
+			projected = append(projected,
+				map[string]any{"role": "user", "content": "Describe the image."},
+				map[string]any{"role": "assistant", "content": []any{map[string]any{
+					"type": "toolCall", "id": call.ID, "itemId": call.ItemID, "name": call.Function.Name, "arguments": map[string]any{"nodeId": "cat"},
+				}}},
+				map[string]any{"role": "toolResult", "toolCallId": call.ID, "content": []any{map[string]any{"type": "text", "text": receipt}}},
+			)
+			canonical, err := cloudAgentPiCanonicalForModelRequest(projected, state.Canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			references, err := s.cloudAgentPiStepImageReferences("user", state.Request, &canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			limits, err := s.cloudAgentVisionReferences(state.Request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			received := make(chan []string, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Input []map[string]any `json:"input"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				if r.URL.Path != "/v1/responses" {
+					t.Errorf("request path = %q", r.URL.Path)
+				}
+				var imageURLs []string
+				for _, message := range body.Input {
+					parts, _ := message["content"].([]any)
+					for _, value := range parts {
+						part, _ := value.(map[string]any)
+						if stringField(part, "type") == "input_image" {
+							imageURLs = append(imageURLs, stringField(part, "image_url"))
+						}
+					}
+				}
+				received <- imageURLs
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = w.Write([]byte("event: response.output_text.delta\ndata: {\"delta\":\"pixels received\"}\n\nevent: response.completed\ndata: {\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"))
+			}))
+			defer server.Close()
+			stream := true
+			input := canvasGenerationInput{
+				Mode: "text", Prompt: "Describe the image.", ReferenceImages: references,
+				AgentRequests: &agentToolRequests{Canonical: &canonical},
+				TextOptions:   canvasTextOptions{Stream: &stream},
+				Config: providerConfig{
+					Model: "text-test", InterfaceType: string(model.ChannelInterfaceOpenAIResponse), APIKey: "test-only", BaseURL: server.URL,
+					CapabilityConfig: &ModelCapabilityConfig{Text: &TextCapabilityConfig{References: limits}},
+				},
+			}
+			raw, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.processCanvasGenerationTask(context.Background(), "user", "agent-canvas", "canvas_text", "", string(raw)); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case imageURLs := <-received:
+				if len(imageURLs) != 1 || imageURLs[0] != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(pixels) {
+					t.Fatalf("Responses request received %d images; expected the exact stored image bytes", len(imageURLs))
+				}
+			default:
+				t.Fatal("worker did not call the local upstream")
+			}
+		})
+	}
+}
 
 func TestCloudAgentPiMixedBatchFlushesImages(t *testing.T) {
 	for _, failed := range []bool{false, true} {

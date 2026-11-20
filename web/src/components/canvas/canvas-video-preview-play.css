@@ -1,0 +1,21 @@
+.canvas-video-preview-play {
+    background: var(--canvas-card-media-chip-bg, color-mix(in srgb, var(--color-neutral-950) 76%, transparent));
+    border: var(--stroke-1) solid color-mix(in srgb, var(--canvas-card-media-chip-ink, var(--color-neutral-0)) 55%, transparent);
+    box-shadow: var(--elevation-overlay);
+    transition: background-color var(--motion-state) ease;
+}
+
+.canvas-video-preview-play:hover {
+    background: color-mix(in srgb, var(--color-neutral-950) 92%, transparent);
+}
+
+.canvas-video-preview-play:focus-visible {
+    outline: var(--stroke-2) solid var(--canvas-card-media-chip-ink, var(--color-neutral-0));
+    outline-offset: var(--space-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .canvas-video-preview-play {
+        transition: none;
+    }
+}

@@ -15,10 +15,11 @@ import (
 )
 
 type Status struct {
-	OK     bool `json:"ok"`
-	Active int  `json:"active"`
-	Limit  int  `json:"limit"`
-	Queued int  `json:"queued"`
+	OK         bool `json:"ok"`
+	Active     int  `json:"active"`
+	Limit      int  `json:"limit"`
+	SessionCap int  `json:"sessionCap"`
+	Queued     int  `json:"queued"`
 }
 
 func Inspect(ctx context.Context, endpoint string) (Status, error) {

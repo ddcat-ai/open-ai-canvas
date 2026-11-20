@@ -1,0 +1,806 @@
+/* 姿势库弹窗。叠在姿势图上的角标不随主题反色：素体图是浅底线稿，明暗主题下都用深色角标。 */
+.pose-library-modal {
+    --pose-ink: color-mix(in srgb, var(--color-neutral-900) 86%, transparent);
+    --pose-paper: var(--color-neutral-0);
+    --pose-radius-card: 14px;
+    --pose-radius-media: 10px;
+    --pose-side-width: 216px;
+}
+
+.pose-library {
+    display: flex;
+    flex-direction: column;
+    height: min(860px, calc(100dvh - 48px));
+    min-height: 0;
+    color: var(--text-primary);
+}
+
+/* ---- 顶栏 ---- */
+.pose-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 64px var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--border);
+}
+
+.pose-header-icon {
+    display: grid;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+.pose-header-title {
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.pose-header-subtitle {
+    margin-top: 2px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pose-header-search {
+    flex: none;
+    width: min(300px, 40%);
+    margin-left: auto;
+}
+
+/* ---- 主体：左侧筛选 + 右侧网格 ---- */
+.pose-layout {
+    display: grid;
+    flex: 1;
+    grid-template-columns: var(--pose-side-width) minmax(0, 1fr);
+    min-height: 0;
+}
+
+.pose-layout[data-empty] {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.pose-side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-4) var(--space-3);
+    border-right: 1px solid var(--border);
+}
+
+.pose-side-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pose-side-label {
+    padding: 0 10px 6px;
+    color: var(--text-tertiary);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+.pose-side-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--fs-ui);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.pose-side-item:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.pose-side-item[aria-pressed="true"] {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    font-weight: 500;
+}
+
+.pose-side-count {
+    flex: none;
+    color: var(--text-tertiary);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+}
+
+.pose-side-item[aria-pressed="true"] .pose-side-count {
+    color: inherit;
+    opacity: 0.7;
+}
+
+.pose-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.pose-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-3) var(--space-5);
+}
+
+.pose-toolbar-scope {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+}
+
+.pose-toolbar-count {
+    flex: none;
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.pose-toolbar-reset {
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.pose-toolbar-reset:hover {
+    color: var(--text-primary);
+}
+
+.pose-toolbar-angles {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.pose-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px var(--space-5) var(--space-5);
+}
+
+.pose-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+    gap: var(--space-3);
+    transition: opacity 0.2s ease;
+}
+
+.pose-grid[data-refreshing] {
+    opacity: 0.55;
+}
+
+.pose-grid-end {
+    display: flex;
+    justify-content: center;
+    min-height: 1px;
+    padding-top: var(--space-5);
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+}
+
+/* ---- 姿势卡片 ---- */
+.pose-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid transparent;
+    border-radius: var(--pose-radius-card);
+    background: var(--library-surface);
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.pose-card:hover,
+.pose-card:focus-within {
+    background: var(--library-surface-hover);
+}
+
+.pose-card[data-selected] {
+    border-color: var(--library-selected-stroke);
+    background: var(--library-surface-hover);
+}
+
+.pose-card-media {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: var(--pose-radius-media);
+    background: var(--library-cover-surface);
+}
+
+.pose-card-hit {
+    position: absolute;
+    inset: 0;
+    display: block;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+.pose-card-code,
+.pose-card-check,
+.pose-card-zoom {
+    z-index: 1;
+}
+
+.pose-card-code {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--pose-ink);
+    color: var(--pose-paper);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    line-height: 18px;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+.pose-card-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border: 1.5px solid var(--pose-ink);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--pose-paper) 84%, transparent);
+    color: transparent;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.pose-card:hover .pose-card-check,
+.pose-card:focus-within .pose-card-check,
+.pose-card[data-selected] .pose-card-check {
+    opacity: 1;
+}
+
+.pose-card[data-selected] .pose-card-check {
+    border-color: transparent;
+    background: var(--pose-ink);
+    color: var(--pose-paper);
+}
+
+.pose-card-zoom {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: var(--pose-ink);
+    color: var(--pose-paper);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+
+.pose-card:hover .pose-card-zoom,
+.pose-card:focus-within .pose-card-zoom {
+    opacity: 1;
+}
+
+.pose-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    padding: 0 4px;
+}
+
+.pose-card-name {
+    overflow: hidden;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pose-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+
+.pose-card-angle {
+    flex: none;
+    color: var(--text-tertiary);
+}
+
+.pose-card-angles {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 4px;
+    padding: 0 2px 2px;
+}
+
+/* 视角缩略图不用透明度区分状态：浅底线稿叠在暗色卡片上会发灰，改用描边。 */
+.pose-card-angle-thumb {
+    position: relative;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: var(--library-cover-surface);
+    box-shadow: inset 0 0 0 1px var(--border);
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
+}
+
+.pose-card-angle-thumb:hover {
+    box-shadow: 0 0 0 1px var(--text-tertiary);
+}
+
+/* 选中视角用带间隙的双圈：浅底缩略图在明暗卡片上都能看出当前项。 */
+.pose-card-angle-thumb[aria-pressed="true"] {
+    box-shadow:
+        0 0 0 2px var(--library-surface-hover),
+        0 0 0 3.5px var(--text-primary);
+}
+
+.pose-card-angle-thumb[data-picked]::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 6px;
+    height: 6px;
+    border: 1px solid var(--pose-paper);
+    border-radius: 999px;
+    background: var(--pose-ink);
+}
+
+.pose-card.is-skeleton {
+    pointer-events: none;
+}
+
+.pose-skeleton-line {
+    display: block;
+    height: 12px;
+    border-radius: 4px;
+    background: var(--skeleton-surface);
+}
+
+.pose-skeleton-line.is-sm {
+    height: 10px;
+}
+
+/* ---- 图片加载：扫光骨架 → 淡入；失败给占位图标 ---- */
+.pose-image {
+    position: relative;
+    /* 自成层叠上下文：内部 img 的 z-index 不会盖过卡片上的编号、勾选和放大按钮。 */
+    isolation: isolate;
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--library-cover-surface);
+}
+
+.pose-image::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: none;
+    background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--foreground) 7%, transparent) 50%, transparent 80%);
+    transform: translateX(-100%);
+    animation: pose-image-shimmer 1.4s ease-in-out infinite;
+}
+
+.pose-image[data-state="loading"]::before {
+    display: block;
+}
+
+.pose-image img {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+}
+
+.pose-image[data-state="loaded"] img {
+    opacity: 1;
+}
+
+.pose-image img.pose-image-placeholder {
+    z-index: 0;
+    filter: blur(8px);
+    opacity: 1;
+    transform: scale(1.04);
+}
+
+.pose-image[data-state="loaded"] img.pose-image-placeholder {
+    opacity: 0;
+    transition-delay: 0.28s;
+}
+
+.pose-image-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    color: var(--text-tertiary);
+}
+
+@keyframes pose-image-shimmer {
+    to {
+        transform: translateX(100%);
+    }
+}
+
+/* ---- 底部已选托盘 ---- */
+.pose-dock {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid var(--border);
+}
+
+.pose-dock-tray {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 48px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.pose-dock-item {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 48px;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: var(--library-cover-surface);
+    cursor: pointer;
+}
+
+.pose-dock-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 3;
+    display: grid;
+    width: 16px;
+    height: 16px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--pose-ink);
+    color: var(--pose-paper);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.pose-dock-item:hover .pose-dock-remove,
+.pose-dock-item:focus-visible .pose-dock-remove {
+    opacity: 1;
+}
+
+.pose-dock-hint {
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+}
+
+.pose-dock-count {
+    flex: none;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    font-variant-numeric: tabular-nums;
+}
+
+.pose-dock-count strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* ---- 大图预览 ---- */
+.pose-preview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    height: min(760px, calc(100dvh - 64px));
+    color: var(--text-primary);
+}
+
+.pose-preview-stage {
+    min-height: 0;
+    padding: var(--space-5);
+    background: var(--library-cover-surface);
+}
+
+.pose-preview-stage .pose-image {
+    border-radius: var(--pose-radius-media);
+}
+
+.pose-preview-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--space-6) var(--space-5) var(--space-5);
+    border-left: 1px solid var(--border);
+}
+
+.pose-preview-code {
+    display: inline-block;
+    margin-bottom: var(--space-2);
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+    font-size: var(--fs-label);
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.pose-preview-title {
+    padding-right: 32px;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.pose-preview-meta {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+
+.pose-preview-label {
+    margin-bottom: var(--space-2);
+    color: var(--text-tertiary);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+}
+
+.pose-preview-angles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+
+.pose-preview-angle {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    cursor: pointer;
+}
+
+.pose-preview-angle .pose-image {
+    aspect-ratio: 3 / 4;
+    height: auto;
+    border-radius: 6px;
+}
+
+.pose-preview-angle:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.pose-preview-angle[aria-pressed="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+.pose-preview-angle[data-picked]::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 3;
+    width: 8px;
+    height: 8px;
+    border: 1.5px solid var(--pose-paper);
+    border-radius: 999px;
+    background: var(--pose-ink);
+}
+
+.pose-preview-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: auto;
+}
+
+/* ---- 焦点 ---- */
+.pose-side-item:focus-visible,
+.pose-card-zoom:focus-visible,
+.pose-card-angle-thumb:focus-visible,
+.pose-dock-item:focus-visible,
+.pose-preview-angle:focus-visible,
+.pose-toolbar-reset:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+
+.pose-card-hit:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: -2px;
+}
+
+/* ---- 窄屏：筛选改为横向滚动胶囊 ---- */
+@media (max-width: 760px) {
+    .pose-header {
+        flex-wrap: wrap;
+        padding: var(--space-3) 56px var(--space-3) var(--space-4);
+    }
+
+    .pose-header-subtitle {
+        white-space: normal;
+    }
+
+    .pose-header-search {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .pose-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .pose-side {
+        gap: 6px;
+        overflow: visible;
+        padding: var(--space-2) var(--space-4);
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .pose-side-group {
+        flex-direction: row;
+        gap: 6px;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .pose-side-label {
+        display: none;
+    }
+
+    .pose-side-item {
+        flex: none;
+        width: auto;
+        height: 30px;
+        border-radius: 999px;
+        background: var(--library-surface);
+    }
+
+    .pose-toolbar,
+    .pose-body,
+    .pose-dock {
+        padding-left: var(--space-4);
+        padding-right: var(--space-4);
+    }
+
+    .pose-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-2);
+    }
+
+    .pose-dock-count {
+        display: none;
+    }
+
+    .pose-preview {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
+        height: calc(100dvh - 48px);
+    }
+
+    .pose-preview-panel {
+        gap: var(--space-3);
+        padding: var(--space-4);
+        border-top: 1px solid var(--border);
+        border-left: 0;
+    }
+
+    .pose-preview-angles {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pose-image::before {
+        animation: none;
+        transform: none;
+        background: var(--skeleton-surface);
+    }
+
+    .pose-image img,
+    .pose-grid,
+    .pose-card,
+    .pose-card-check,
+    .pose-card-zoom,
+    .pose-card-angle-thumb,
+    .pose-side-item,
+    .pose-dock-remove {
+        transition: none;
+    }
+}

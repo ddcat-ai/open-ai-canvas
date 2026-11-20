@@ -79,7 +79,7 @@ export function listRemoteCanvasProjectsPage(options: { page: number; pageSize: 
 }
 
 export function getRemoteUserDataSnapshot() {
-    return http.get<RemoteUserDataSnapshot>("/user-data/snapshot", { timeout: 15_000 });
+    return http.get<RemoteUserDataSnapshot>("/user-data/snapshot", { timeout: 15_000 }).then((snapshot) => ({ ...snapshot, projects: snapshot.projects.map(normalizeRemoteCanvasProject) }));
 }
 
 export function listRemoteAssets() {
@@ -146,9 +146,16 @@ export function listRemoteCanvasProjects() {
     return http.get<{ projects: RemoteUserDataSummary[] }>("/canvas-projects");
 }
 
+function normalizeRemoteCanvasProject(project: CanvasProject): CanvasProject {
+    // API 创建及旧画布可缺省空会话；在读边界统一成持久层要求的数组。
+    if (project.chatSessions === undefined) return { ...project, chatSessions: [] };
+    if (!Array.isArray(project.chatSessions)) throw new Error("画布会话数据格式无效，请重新读取或修复画布");
+    return project;
+}
+
 export function getRemoteCanvasProject(id: string, knownProject?: CanvasProject) {
     if (!knownProject || knownProject.id !== id || !Number.isSafeInteger(knownProject.revision)) {
-        return http.get<{ project: CanvasProject }>(`/canvas-projects/${encodeURIComponent(id)}`, { timeout: 15_000 }).then((result) => ({ ...result, notModified: false }));
+        return http.get<{ project: CanvasProject }>(`/canvas-projects/${encodeURIComponent(id)}`, { timeout: 15_000 }).then((result) => ({ ...result, project: normalizeRemoteCanvasProject(result.project), notModified: false }));
     }
     const etag = `"canvas-${knownProject.revision}"`;
     return http
@@ -158,7 +165,7 @@ export function getRemoteCanvasProject(id: string, knownProject?: CanvasProject)
             validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
             allowNotModified: true,
         })
-        .then((result) => ("notModified" in result ? { project: knownProject, notModified: true } : { ...result, notModified: false }));
+        .then((result) => ("notModified" in result ? { project: normalizeRemoteCanvasProject(knownProject), notModified: true } : { ...result, project: normalizeRemoteCanvasProject(result.project), notModified: false }));
 }
 
 export function applyRemoteCanvasOperations(id: string, request: CanvasOperationsRequest) {

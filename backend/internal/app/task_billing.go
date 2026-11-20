@@ -115,12 +115,21 @@ func (c *taskBillingCoordinator) BillingFailureRequiresReview(orderID string, ta
 	if orderID == "" {
 		return false
 	}
-	if billingFailureUncertain(err) {
+	// 上游已明确返回失败终态时，原因里的 timeout、524 等字样是上游自述，不代表本地连接中断；
+	// 是否仍有成功的计费调用照常由下面的订单和调用日志检查决定。
+	var terminal providerTaskTerminalError
+	if !errors.As(err, &terminal) && billingFailureUncertain(err) {
 		return true
 	}
 	order, orderErr := c.repo.BillingOrder(orderID)
 	if orderErr != nil || order == nil || order.Status == model.BillingStatusUncertain {
 		return true
+	}
+	if order.BillingMode == "image_usage" {
+		var upstream providerHTTPError
+		if errors.As(err, &upstream) {
+			return true
+		}
 	}
 	hasSuccessfulCall, logErr := c.repo.TaskHasSuccessfulBillableCall(taskID)
 	return logErr != nil || hasSuccessfulCall

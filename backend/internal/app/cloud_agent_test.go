@@ -557,7 +557,7 @@ func TestCloudAgentToolLoopPersistsApprovalAndAppliesCanvasWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rootInput canvasGenerationInput
-	if err := json.Unmarshal([]byte(rootTask.InputJSON), &rootInput); err != nil || !rootInput.TextOptions.Thinking {
+	if err := json.Unmarshal([]byte(rootTask.InputJSON), &rootInput); err != nil || rootInput.TextOptions.ThinkingLevel != ThinkingIntentDeep {
 		t.Fatalf("initial task lost thinking option: %v", err)
 	}
 	if err := db.Model(&model.Task{}).Where("id = ?", root.ID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": string(result), "input_json": publicTaskInputJSON(rootTask.InputJSON)}).Error; err != nil {
@@ -627,7 +627,7 @@ func TestCloudAgentToolLoopPersistsApprovalAndAppliesCanvasWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	var nextInput canvasGenerationInput
-	if err := json.Unmarshal([]byte(nextTask.InputJSON), &nextInput); err != nil || !nextInput.TextOptions.Thinking || nextTask.ID == root.ID {
+	if err := json.Unmarshal([]byte(nextTask.InputJSON), &nextInput); err != nil || nextInput.TextOptions.ThinkingLevel != ThinkingIntentDeep || nextTask.ID == root.ID {
 		t.Fatalf("tool continuation lost thinking option or failed to enqueue: %v", err)
 	}
 }
@@ -635,13 +635,14 @@ func TestCloudAgentToolLoopPersistsApprovalAndAppliesCanvasWrite(t *testing.T) {
 func TestCloudAgentNodeTypesExposeExecutableAllowList(t *testing.T) {
 	result := cloudAgentNodeTypes()
 	nodes, ok := result["nodes"].([]map[string]any)
-	if !ok || len(nodes) != 10 {
+	if !ok || len(nodes) != 9 {
 		t.Fatalf("unexpected node registry: %#v", result)
 	}
 	var character map[string]any
 	for _, node := range nodes {
-		if node["type"] == "panorama" {
-			t.Fatal("UI-only node must not be exposed")
+		switch node["type"] {
+		case "panorama", "markdown", "html", "svg", "chart", "compare":
+			t.Fatalf("retired or UI-only node must not be exposed: %s", node["type"])
 		}
 		if node["type"] == "character" {
 			character = node

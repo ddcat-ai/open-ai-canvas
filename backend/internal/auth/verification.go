@@ -7,10 +7,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"gorm.io/gorm"
 	"strings"
 	"time"
+	"yingce/backend/internal/emailtpl"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -30,10 +30,12 @@ type VerificationTicket struct {
 	RetryAfter int    `json:"retryAfter"`
 }
 type VerificationConfirm struct {
-	LoginContext LoginContext `json:"-"`
-	Ticket       string       `json:"ticket"`
-	EmailCode    string       `json:"emailCode"`
-	SMSCode      string       `json:"smsCode"`
+	Context        context.Context `json:"-"`
+	LoginContext   LoginContext    `json:"-"`
+	Ticket         string          `json:"ticket"`
+	EmailCode      string          `json:"emailCode"`
+	SMSCode        string          `json:"smsCode"`
+	TurnstileToken string          `json:"turnstileToken"`
 }
 
 func (s *Service) verificationHash(value string) (string, error) {
@@ -194,7 +196,11 @@ func (s *Service) StartVerification(ctx context.Context, actor *model.User, req 
 			return nil, err
 		}
 		setting = resolveEmailSender(setting, s.host.BrandName())
-		if err := s.deliverEmail(setting, email, setting.FromName+"身份验证码", fmt.Sprintf("您的验证码是：%s\n10 分钟内有效，仅用于本次身份验证。请勿向他人透露验证码。", emailCode)); err != nil {
+		rendered, err := codeMail(emailtpl.CodeEmail{Brand: setting.FromName, Heading: verificationHeading(req.Purpose), Intro: "你正在" + setting.FromName + "进行" + verificationHeading(req.Purpose) + "。请在页面中输入下方验证码完成身份验证。", Code: emailCode, TTLMinutes: 10, Recipient: email})
+		if err != nil {
+			return nil, err
+		}
+		if err := s.deliverEmail(setting, EmailDelivery{Purpose: EmailPurposeVerification, UserID: userID, Recipient: email, Mail: rendered}); err != nil {
 			return nil, kernel.NewAppError(503, "邮件发送失败，请稍后重试")
 		}
 	}
@@ -291,6 +297,9 @@ func (s *Service) LoginVerification(req VerificationConfirm) (result *AuthSessio
 			err = s.recordLoginFailure(event, err)
 		}
 	}()
+	if err := s.VerifyTurnstile(req.Context, req.TurnstileToken, req.LoginContext.IP); err != nil {
+		return nil, err
+	}
 	if id, secret, ok := strings.Cut(req.Ticket, "."); ok && len(id) <= 36 && len(secret) == 64 {
 		candidate, lookupErr := s.repo.AuthVerification(id)
 		if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
@@ -319,9 +328,6 @@ func (s *Service) LoginVerification(req VerificationConfirm) (result *AuthSessio
 		}
 		return nil, err
 	}
-	if err := s.host.EnsureSignupBonus(user.ID); err != nil {
-		return nil, err
-	}
 	event.Method = v.Method
 	return s.createAuthSession(user, event)
 }
@@ -345,4 +351,17 @@ func (s *Service) BindVerification(actor *model.User, req VerificationConfirm) (
 	}
 	result, err := s.PublicAuthUser(user)
 	return &result, err
+}
+
+func verificationHeading(purpose string) string {
+	switch purpose {
+	case "login":
+		return "登录"
+	case "register":
+		return "注册"
+	case "bind":
+		return "绑定邮箱"
+	default:
+		return "身份验证"
+	}
 }

@@ -237,6 +237,22 @@ export function emotionGenerationSize(region: CanvasEmotionEditRegion) {
     return "1024x1024";
 }
 
+/** 表情编辑一次提交两张参考图（裁切的编辑区域 + 人物脸部），模型声明的参考图上限至少为 2。 */
+export function supportsEmotionEdit(references: { maxImages: number }) {
+    return references.maxImages >= 2;
+}
+
+const EMOTION_SIZE_RATIOS: Record<string, string> = { "1536x1024": "3:2", "1024x1536": "2:3", "1024x1024": "1:1" };
+
+/** 按模型声明的尺寸参数选出图尺寸：接受像素尺寸就发像素，只接受比例时发同方向的比例。 */
+export function emotionGenerationSizeFor(size: { parameter: string; values: string[]; allowCustom: boolean; default: string }, region: CanvasEmotionEditRegion) {
+    const pixel = emotionGenerationSize(region);
+    if (size.parameter === "size" && (size.allowCustom || size.values.includes(pixel))) return pixel;
+    const ratio = EMOTION_SIZE_RATIOS[pixel];
+    if (size.values.includes(ratio) || (size.parameter === "aspect_ratio" && size.allowCustom)) return ratio;
+    return size.default || pixel;
+}
+
 // 模型只负责局部重绘；最终结果始终以源图为底，仅在羽化人脸蒙版内混合生成像素。
 export async function compositeEmotionImage(sourceDataUrl: string, generatedDataUrl: string, region: CanvasEmotionEditRegion, faceBox: CanvasFaceBox) {
     const [source, generated] = await Promise.all([loadImageBitmap(sourceDataUrl), loadImageBitmap(generatedDataUrl)]);
@@ -421,7 +437,8 @@ function drawFaceCrop(image: ImageBitmap, box: CanvasFaceBox, imageWidth: number
 }
 
 async function loadImageBitmap(dataUrl: string) {
-    const response = await fetch(dataUrl);
+    // 同识别人脸：避免复用画布图片缓存里不带 CORS 头的响应。
+    const response = await fetch(dataUrl, { cache: "no-store" });
     if (!response.ok) throw new Error("无法读取源图片，请重新上传后再试");
     return createImageBitmap(await response.blob());
 }

@@ -125,18 +125,18 @@ export function createGenerationTaskMaterializer(dependencies: { effects: Genera
     }
 
     async function releaseClaim(effectKey: string, taskId: string, binding: string | undefined, stopHeartbeat: () => Promise<void>, original: unknown): Promise<never> {
-        let failure = original;
+        // 释放租约失败是次要问题，保留真正导致失败的原因，便于在节点上展示和排查。
         try {
             await stopHeartbeat();
-        } catch (error) {
-            failure = error;
+        } catch {
+            /* original error wins */
         }
         try {
             await dependencies.effects.release(effectKey, taskId, binding);
-        } catch (error) {
-            failure = error;
+        } catch {
+            /* original error wins */
         }
-        throw failure;
+        throw original;
     }
     async function consumeEffect(
         effectKey: string,

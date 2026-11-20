@@ -56,6 +56,8 @@ func TestLoginLogVerificationMethodsAndInvalidCode(t *testing.T) {
 		for _, valid := range []bool{true, false} {
 			t.Run(method+map[bool]string{true: "/success", false: "/failure"}[valid], func(t *testing.T) {
 				s, db, u, _ := newProfileTestService(t)
+				bonusHost := &signupBonusSpyHost{Host: s.host}
+				s.host = bonusHost
 				policy := VerificationPolicy{SMSLogin: true, EmailLogin: true}
 				raw, _ := json.Marshal(policy)
 				if err := db.Create(&model.SystemSetting{Key: authPolicyKey, ValueJSON: string(raw)}).Error; err != nil {
@@ -97,6 +99,9 @@ func TestLoginLogVerificationMethodsAndInvalidCode(t *testing.T) {
 				}
 				if event.Method != method || event.Result != want || event.UserID == nil || *event.UserID != u.ID {
 					t.Fatalf("verification log: %#v", event)
+				}
+				if len(bonusHost.userIDs) != 0 {
+					t.Fatalf("login verification signup bonus calls = %v, want none", bonusHost.userIDs)
 				}
 			})
 		}

@@ -1,10 +1,13 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
 
+	agenttool "yingce/backend/internal/agent/tool"
 	"yingce/backend/internal/canvas/layout"
 	"yingce/backend/internal/repository"
 )
@@ -16,18 +19,18 @@ const (
 
 // cloudAgentCharacterDefinitionArgs 是 Agent 可写的角色设定字段；未声明的字段会被拒绝。
 type cloudAgentCharacterDefinitionArgs struct {
-	Role              string   `json:"role"`
-	Aliases           []string `json:"aliases"`
-	Appearance        string   `json:"appearance"`
-	Physique          string   `json:"physique"`
-	Clothing          string   `json:"clothing"`
-	Personality       string   `json:"personality"`
-	Props             string   `json:"props"`
-	ConsistencyPrompt string   `json:"consistencyPrompt"`
-	MultiViewPrompt   string   `json:"multiViewPrompt"`
-	VoiceLanguage     string   `json:"voiceLanguage"`
-	VoiceAge          string   `json:"voiceAge"`
-	VoiceTimbre       string   `json:"voiceTimbre"`
+	Role              string   `json:"role,omitempty"`
+	Aliases           []string `json:"aliases,omitempty"`
+	Appearance        string   `json:"appearance,omitempty"`
+	Physique          string   `json:"physique,omitempty"`
+	Clothing          string   `json:"clothing,omitempty"`
+	Personality       string   `json:"personality,omitempty"`
+	Props             string   `json:"props,omitempty"`
+	ConsistencyPrompt string   `json:"consistencyPrompt,omitempty"`
+	MultiViewPrompt   string   `json:"multiViewPrompt,omitempty"`
+	VoiceLanguage     string   `json:"voiceLanguage,omitempty"`
+	VoiceAge          string   `json:"voiceAge,omitempty"`
+	VoiceTimbre       string   `json:"voiceTimbre,omitempty"`
 }
 
 type cloudAgentCharacterCreateArgs struct {
@@ -50,14 +53,14 @@ type cloudAgentCharacterCreatePlan struct {
 	Preview         cloudAgentApprovalPreview
 }
 
-// 设定字段只在描述里列出键名以控制工具 schema 体积；解码时 DisallowUnknownFields 会拒绝未声明的键。
+// 设定 schema 与解码类型同源，避免模型只看到 object 而猜错嵌套字段类型。
 func cloudAgentCharacterCreateSchema() map[string]any {
 	str := func(description string) map[string]any {
 		return map[string]any{"type": "string", "description": description}
 	}
 	return map[string]any{
 		"nodeId": str("新节点ID"), "name": str("角色名"), "imageNodeId": str("就绪的形象图片节点ID"), "audioNodeId": str("可选，就绪的声音音频节点ID"),
-		"definition": map[string]any{"type": "object", "description": "可选设定：role/appearance/physique/clothing/personality/props/consistencyPrompt/multiViewPrompt/voiceLanguage/voiceAge/voiceTimbre 为字符串，aliases 为字符串数组"},
+		"definition": agenttool.SchemaFor[cloudAgentCharacterDefinitionArgs](),
 		"x":          map[string]any{"type": "number"}, "y": map[string]any{"type": "number"},
 	}
 }
@@ -126,7 +129,11 @@ func cloudAgentCharacterMediaResource(repo *repository.Repository, userID string
 func prepareCloudAgentCharacterCreate(repo *repository.Repository, userID, canvasID string, call cloudAgentCall) (*cloudAgentCharacterCreatePlan, error) {
 	var args cloudAgentCharacterCreateArgs
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
-		return nil, &cloudAgentArgumentError{BadAuthRequest("创建角色卡参数无效：仅允许 nodeId、name、imageNodeId、audioNodeId、definition、x、y")}
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) && typeErr.Field != "" {
+			return nil, cloudAgentFieldError(typeErr.Field, "type_mismatch", fmt.Sprintf("创建角色卡参数 %s 类型错误，需要 %s", typeErr.Field, typeErr.Type))
+		}
+		return nil, cloudAgentJSONArgumentError(err)
 	}
 	if err := validateCloudAgentID(args.NodeID, "角色卡节点ID", 80); err != nil {
 		return nil, &cloudAgentArgumentError{err}

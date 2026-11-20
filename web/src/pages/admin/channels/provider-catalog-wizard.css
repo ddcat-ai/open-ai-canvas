@@ -1,6 +1,7 @@
 .pcw {
     display: flex;
-    height: min(760px, calc(100vh - 96px));
+    /* 居中弹窗上下各留 24px：1280×800 等缩放后的视口里不再出现弹窗外层与内层两道滚动条。 */
+    height: min(760px, calc(100dvh - 48px));
     flex-direction: column;
     color: var(--admin-text);
     font-family: var(--admin-font);

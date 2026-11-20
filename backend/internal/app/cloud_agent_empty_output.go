@@ -1,8 +1,6 @@
 package app
 
 import (
-	"strings"
-
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -13,12 +11,12 @@ const cloudAgentMaxEmptyOutputNudges = 2
 const cloudAgentMaxEmptyOutputEscalations = 1
 
 // cloudAgentEmptyModelOutput 判断模型任务是不是「上游成功、但正文与工具调用都为空」。
-// 开思考时偶发只流 reasoning、可见正文和工具调用都空，解析层会归为「没有返回内容」。
+// 开思考时偶发只流 reasoning、可见正文和工具调用都空，解析层记录结构化原因。
 func cloudAgentEmptyModelOutput(task *model.Task) bool {
 	if task == nil || task.Status == model.TaskStatusSucceeded {
 		return false
 	}
-	return strings.Contains(task.Error, "没有返回内容")
+	return agentModelTaskReason(task) == agentModelFailureEmpty
 }
 
 func (s *Service) correctCloudAgentEmptyOutput(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {

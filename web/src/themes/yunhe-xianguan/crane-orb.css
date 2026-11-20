@@ -1,0 +1,113 @@
+/* 云鹤仙观助手形象（鹤首圆窗）。颜色读 yunhe-xianguan.css 的皮肤变量，缺省时给月白值。 */
+.crane-orb {
+    display: block;
+    flex: 0 0 auto;
+    pointer-events: none;
+}
+.crane-orb svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+.crane-orb-bg {
+    fill: var(--yx-sheet, #f8faf9);
+    stroke: var(--yx-line-strong, rgba(26, 36, 44, 0.18));
+    stroke-width: 1;
+}
+.crane-orb-ring {
+    fill: none;
+    stroke: var(--yx-sky, #3b7484);
+    stroke-dasharray: 5 9;
+    stroke-linecap: round;
+    stroke-width: 1.6;
+    opacity: 0;
+    transform-origin: 32px 32px;
+}
+.crane-orb-mist {
+    fill: none;
+    stroke: var(--yx-sky, #3b7484);
+    stroke-linecap: round;
+    stroke-opacity: 0.4;
+    stroke-width: 1.6;
+}
+.crane-orb-neck {
+    fill: none;
+    stroke: var(--yx-ink, #1a242c);
+    stroke-linecap: round;
+    stroke-width: 3.2;
+}
+.crane-orb-head {
+    fill: var(--yx-ink, #1a242c);
+}
+.crane-orb-beak {
+    fill: none;
+    stroke: var(--yx-ink, #1a242c);
+    stroke-linecap: round;
+    stroke-width: 2;
+}
+.crane-orb-eye {
+    fill: var(--yx-sheet, #f8faf9);
+}
+.crane-orb-crown {
+    fill: var(--yx-crown, #c3352a);
+}
+.crane-orb-seal {
+    opacity: 0;
+    transform-origin: 50px 50px;
+}
+.crane-orb-seal circle {
+    fill: var(--yx-crown, #c3352a);
+}
+.crane-orb-seal text {
+    fill: var(--yx-on-crown, #fff8f4);
+    font-family: var(--yx-display-font, serif);
+    font-size: 11px;
+}
+.crane-orb.is-work .crane-orb-ring {
+    opacity: 1;
+}
+.crane-orb.is-done .crane-orb-seal {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .crane-orb.is-idle svg {
+        animation: crane-orb-breathe 3.6s ease-in-out infinite;
+    }
+    .crane-orb.is-work .crane-orb-ring {
+        animation: crane-orb-spin 7s linear infinite;
+    }
+    .crane-orb.is-work .crane-orb-crown {
+        animation: crane-orb-blink 1.4s ease-in-out infinite;
+    }
+    .crane-orb.is-done .crane-orb-seal {
+        animation: crane-orb-stamp 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+}
+
+@keyframes crane-orb-breathe {
+    50% {
+        transform: scale(1.04);
+    }
+}
+@keyframes crane-orb-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@keyframes crane-orb-blink {
+    50% {
+        opacity: 0.35;
+    }
+}
+@keyframes crane-orb-stamp {
+    from {
+        opacity: 0;
+        transform: scale(1.5);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

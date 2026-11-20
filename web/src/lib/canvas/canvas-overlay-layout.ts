@@ -65,6 +65,27 @@ export function observeCanvasOverlayBounds(container: HTMLElement, onChange: (bo
     };
 }
 
+/**
+ * 画布底部一行：左边是视图控制条，右边是主工具条。
+ * - 右侧停靠着面板（Agent）时，主工具条放在控制条右侧剩余空间的正中，到控制条和到面板的留白相等。
+ * - 右侧没有停靠面板时（Agent 收起成悬浮头像或浮窗），主工具条与顶栏一样在让开左侧轨道 / 工作区面板后的画布正中；
+ *   只有居中会压到控制条时才右移，且只移到刚好让开，宽度变化时位置连续、不跳。
+ * 同排放不下时视图控制条抬到上一行，主工具条改在控制条左缘以右居中，空间不够时尽量靠右。
+ * 只看控制条左右缘、行范围和主工具条宽度，右移或抬高都不会改变下一次的输入，不会来回跳。
+ * 返回的 shift 是相对整行居中的右移量。
+ */
+export function canvasBottomRowLayout(controls: { left: number; right: number }, row: { left: number; right: number }, toolbarWidth: number, gap: number, { evenGaps = false }: { evenGaps?: boolean } = {}) {
+    // 在 [start, row.right] 居中与在整行居中，差的正好是左侧让出宽度的一半；最多右移到贴住行右缘。
+    const maxShift = Math.max(0, Math.floor((row.right - row.left - toolbarWidth) / 2));
+    const shiftFrom = (start: number) => Math.min(maxShift, Math.max(0, Math.round((start - row.left) / 2)));
+    const besideControls = controls.right + gap;
+    if (besideControls + toolbarWidth > row.right) return { shift: shiftFrom(controls.left), stacked: true };
+    if (evenGaps) return { shift: shiftFrom(besideControls), stacked: false };
+    // 控制条左缘以右的画布正中（与顶栏对齐）；居中时左缘落在 row.left + (行宽 - 工具条宽) / 2 + shift。
+    const clearControls = Math.ceil(besideControls - (row.left + row.right - toolbarWidth) / 2);
+    return { shift: Math.min(maxShift, Math.max(shiftFrom(controls.left), clearControls, 0)), stacked: false };
+}
+
 export function canvasToolbarLayoutLevel(availableWidth: number, measuredWidths: readonly number[], current: number) {
     for (let level = 0; level < current; level++) {
         if (measuredWidths[level] > 0 && measuredWidths[level] <= availableWidth) return level;

@@ -7,7 +7,11 @@ import (
 )
 
 func (req ChannelRequest) presentationOnly() bool {
-	return req.SortOrder != nil && req.Name == "" && req.BaseURL == "" && req.APIKey == "" && req.SecretKey == "" && req.ConcurrencyLimit == nil && req.UseGlobalConcurrency == nil && req.Models == nil && req.Headers == nil && req.Enabled == nil && req.ProxyURL == nil
+	return req.SortOrder != nil && req.WebsiteID == "" && req.APIFormat == nil && req.Name == "" && req.BaseURL == "" && req.APIKey == "" && req.SecretKey == "" && req.ConcurrencyLimit == nil && req.UseGlobalConcurrency == nil && req.Models == nil && req.Headers == nil && req.Enabled == nil && req.ProxyURL == nil && req.MediaTransport == nil
+}
+
+func (req ChannelRequest) enabledOnly() bool {
+	return req.Enabled != nil && req.SortOrder == nil && req.WebsiteID == "" && req.APIFormat == nil && req.Name == "" && req.BaseURL == "" && req.APIKey == "" && req.SecretKey == "" && req.ConcurrencyLimit == nil && req.UseGlobalConcurrency == nil && req.Models == nil && req.Headers == nil && req.ProxyURL == nil && req.MediaTransport == nil
 }
 
 func (s *Service) updateChannelPresentation(id string, req ChannelRequest) (*PublicModelChannel, error) {
@@ -29,6 +33,9 @@ func (s *Service) updateChannelPresentation(id string, req ChannelRequest) (*Pub
 		return nil, err
 	}
 	public := publicChannel(*channel, true, items)
+	if err := s.decorateChannelMediaTransport(&public); err != nil {
+		return nil, err
+	}
 	return &public, nil
 }
 

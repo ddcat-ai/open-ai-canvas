@@ -97,7 +97,8 @@
     background: color-mix(in srgb, var(--warning, #f59e0b) 12%, transparent) !important;
 }
 
-:where(.ant-input-disabled, .ant-input-affix-wrapper-disabled, .ant-input-number-disabled, .ant-input-number-affix-wrapper-disabled) {
+/* 带前后缀的禁用输入由外壳承担底色；内层 input 同样带 disabled 类，排除后才不会出现第二层底。 */
+:where(.ant-input-disabled:not(.ant-input-affix-wrapper > .ant-input), .ant-input-affix-wrapper-disabled, .ant-input-number-disabled, .ant-input-number-affix-wrapper-disabled) {
     background: color-mix(in srgb, var(--foreground) 4%, transparent) !important;
     color: color-mix(in srgb, var(--foreground) 42%, transparent) !important;
     box-shadow: none !important;
@@ -117,7 +118,7 @@
 }
 
 /* inset：父容器已经是输入表面，子输入框退成纯文字区。 */
-:where(.auth-code-field, .canvas-prompt-optimizer-sender, .ant-input-group, .ant-space-compact) :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number) {
+:where(.canvas-prompt-optimizer-sender, .ant-input-group, .ant-space-compact) :where(.ant-input, .ant-input-affix-wrapper, .ant-input-number) {
     border: 0 !important;
     background: transparent !important;
     box-shadow: none !important;

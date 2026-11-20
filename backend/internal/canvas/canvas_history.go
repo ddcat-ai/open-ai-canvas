@@ -30,6 +30,25 @@ func SaveDocumentWithHistory(repo *repository.Repository, before *model.CanvasPr
 	if err := assets.CollectOwnedDocumentReferences(after.PayloadJSON, refs); err != nil {
 		return err
 	}
+	if len(resourceIDs) > 0 {
+		resources, err := repo.ResourcesForUserIDs(after.UserID, resourceIDs)
+		if err != nil {
+			return err
+		}
+		ready := make(map[string]struct{}, len(resources))
+		for _, resource := range resources {
+			if resource.Status == model.ResourceStatusReady {
+				ready[resource.ID] = struct{}{}
+			}
+		}
+		retained := resourceIDs[:0]
+		for _, id := range resourceIDs {
+			if _, exists := ready[id]; exists {
+				retained = append(retained, id)
+			}
+		}
+		resourceIDs = retained
+	}
 	return repo.SaveCanvasWithSnapshot(after, snapshot, resourceIDs, assets.SortedIDs(refs), after.UpdatedAt.Add(-canvasHistoryInterval), canvasHistoryLimit, reason == "before_restore" || reason == "before_resource_repair")
 }
 

@@ -6,56 +6,176 @@ import { canvasResourceMentionToken, type CanvasResourceReference } from "@/lib/
 import type { EditableSelection, MentionTextPart } from "./canvas-resource-mention-textarea";
 import { createInlineMentionChip } from "./canvas-mention-chips";
 
-export function splitMentionText(value: string, references: CanvasResourceReference[]) {
-    if (!references.length || !value) return value ? [{ type: "text", text: value } as MentionTextPart] : [];
+const NAME_MENTION_BOUNDARY = /\s|[,.!?;:，。！？；：、)\]}】）]/u;
+// contentEditable 无法在首个 contentEditable=false 节点前稳定放置光标。
+// 零宽锚点只存在于编辑器 DOM，序列化和偏移计算会把它们忽略。
+const CARET_ANCHOR = "\u200B";
+
+function editableText(text: string) {
+    return text.split(CARET_ANCHOR).join("");
+}
+
+/**
+ * 令牌在 end 处结束是否成立：
+ * - @[kind:...] 自带右括号，后面紧跟任何文字都不改变它指向谁；
+ * - 以数字结尾的编号引用（@图片1、@参考图2、参考图3、@区域1）只要求后面不是数字，与生成侧解析一致；
+ * - 其余名称引用（@技能名、@素材名）仍要求后面是空白或标点，避免“@猫咪”被认成“@猫”。
+ */
+export function hasMentionTokenBoundary(token: string, value: string, end: number) {
+    const next = value[end];
+    if (!next || (token.startsWith("@[") && token.endsWith("]"))) return true;
+    if (/\d$/u.test(token)) return !/\d/u.test(next);
+    return NAME_MENTION_BOUNDARY.test(next);
+}
+
+export function splitMentionText(value: string, references: CanvasResourceReference[]): MentionTextPart[] {
+    if (!value) return [];
+    if (!references.length) return [{ type: "text", text: value }];
     const referenceByToken = new Map<string, { reference: CanvasResourceReference; serializedToken: string }>();
+    // 别名（@名称、@[node:ID]）先登记、规范令牌后登记：同名时别的引用不能抢走已有的规范令牌。
+    references.forEach((reference) => {
+        const serializedToken = canvasResourceMentionToken(reference);
+        if (reference.label) referenceByToken.set(`@${reference.label}`, { reference, serializedToken });
+        if (reference.nodeId && !reference.assetId) referenceByToken.set(`@[node:${reference.nodeId}]`, { reference, serializedToken });
+    });
     references.forEach((reference) => {
         const serializedToken = canvasResourceMentionToken(reference);
         referenceByToken.set(serializedToken, { reference, serializedToken });
-        referenceByToken.set(`@${reference.label}`, { reference, serializedToken });
-        if (reference.nodeId && !reference.assetId) referenceByToken.set(`@[node:${reference.nodeId}]`, { reference, serializedToken });
     });
-    const tokens = [...referenceByToken.keys()].sort((a, b) => b.length - a.length);
+    const tokens = [...referenceByToken.keys()].filter((token) => token.length > 1).sort((a, b) => b.length - a.length);
+    const leadingCharacters = new Set(tokens.map((token) => token[0]));
     const parts: MentionTextPart[] = [];
+    let textStart = 0;
     let index = 0;
     while (index < value.length) {
-        const token = tokens.find((item) => value.startsWith(item, index) && hasMentionBoundary(value, index + item.length));
+        const token = leadingCharacters.has(value[index]) ? tokens.find((item) => value.startsWith(item, index) && hasMentionTokenBoundary(item, value, index + item.length)) : undefined;
         if (!token) {
-            const nextTokenIndex = findNextMentionIndex(value, tokens, index + 1);
-            const end = nextTokenIndex < 0 ? value.length : nextTokenIndex;
-            parts.push({ type: "text", text: value.slice(index, end) });
-            index = end;
+            index += 1;
             continue;
         }
+        if (index > textStart) parts.push({ type: "text", text: value.slice(textStart, index) });
         const matched = referenceByToken.get(token)!;
         parts.push({ type: "mention", token: matched.serializedToken, reference: matched.reference });
         index += token.length;
+        textStart = index;
     }
+    if (textStart < value.length) parts.push({ type: "text", text: value.slice(textStart) });
     return parts;
 }
 
-export function renderEditableContent(editor: HTMLElement, value: string, references: CanvasResourceReference[]) {
-    const parts = splitMentionText(value, references);
-    const nodes = parts.map((part) => (part.type === "mention" ? createInlineMentionChip(part.reference, part.token) : document.createTextNode(part.text)));
+export function renderEditableParts(editor: HTMLElement, parts: MentionTextPart[]) {
+    const nodes = parts.flatMap((part) => (part.type === "mention" ? [document.createTextNode(CARET_ANCHOR), createInlineMentionChip(part.reference, part.token), document.createTextNode(CARET_ANCHOR)] : [document.createTextNode(part.text)]));
     editor.replaceChildren(...nodes);
 }
 
-export function findNextMentionIndex(value: string, tokens: string[], fromIndex: number) {
-    let next = -1;
-    tokens.forEach((token) => {
-        const index = value.indexOf(token, fromIndex);
-        if (index >= 0 && hasMentionBoundary(value, index + token.length) && (next < 0 || index < next)) next = index;
-    });
+export function renderEditableContent(editor: HTMLElement, value: string, references: CanvasResourceReference[]) {
+    renderEditableParts(editor, splitMentionText(value, references));
+}
+
+/** 序列化文本不变时重画胶囊：选区按序列化偏移原样放回，滚动位置不跳。 */
+export function redrawEditableParts(editor: HTMLElement, parts: MentionTextPart[], selection: EditableSelection | null) {
+    const scrollTop = editor.scrollTop;
+    renderEditableParts(editor, parts);
+    if (selection) setEditableSelection(editor, selection.start, selection.end);
+    editor.scrollTop = scrollTop;
+}
+
+type EditableLeaf = { node: Node; text: string; offset: number; token?: string };
+
+/** 按文档顺序列出胶囊、文本和换行，并记下各自在序列化文本里的起点。 */
+function editableLeaves(root: Node) {
+    const leaves: EditableLeaf[] = [];
+    let offset = 0;
+    const visit = (node: Node) => {
+        if (isMentionElement(node)) {
+            const token = node.dataset.mentionToken || "";
+            leaves.push({ node, text: token, offset, token });
+            offset += token.length;
+            return;
+        }
+        if (node.nodeType === Node.TEXT_NODE) {
+            const text = editableText(node.textContent || "");
+            leaves.push({ node, text, offset });
+            offset += text.length;
+            return;
+        }
+        if (node instanceof HTMLElement && node.tagName === "BR") {
+            leaves.push({ node, text: "\n", offset });
+            offset += 1;
+            return;
+        }
+        node.childNodes.forEach(visit);
+    };
+    root.childNodes.forEach(visit);
+    return leaves;
+}
+
+function mentionLayoutEntry(offset: number, referenceId: string, token: string) {
+    return `${offset}\u0000${referenceId}\u0000${token}`;
+}
+
+/**
+ * 文本没变、胶囊却与当前引用不符时返回应重画的片段，否则返回 null。
+ * 引用晚到或被替换、手动输完 @图片1 后接着输入，都要把文字换成胶囊（或反过来）。
+ * 光标处刚输完、DOM 里还是文字的令牌先保持文字，免得 @图片1 被提前锁成胶囊、输不出 @图片12。
+ * 重画会改写序列化文本时（@素材名 这类别名要换成 @[asset:ID]）不在这里处理，留给下一次输入。
+ */
+export function staleEditableMentionParts(editor: HTMLElement, value: string, references: CanvasResourceReference[], caret: number | null = null) {
+    const parts = splitMentionText(value, references);
+    if (parts.map((part) => (part.type === "mention" ? part.token : part.text)).join("") !== value) return null;
+    const current = editableLeaves(editor).flatMap((leaf) => (leaf.token === undefined ? [] : [mentionLayoutEntry(leaf.offset, (leaf.node as HTMLElement).dataset.mentionReferenceId || "", leaf.token)]));
+    const existing = new Set(current);
+    const expected: string[] = [];
+    const next: MentionTextPart[] = [];
+    let offset = 0;
+    for (const part of parts) {
+        const text = part.type === "mention" ? part.token : part.text;
+        const entry = part.type === "mention" ? mentionLayoutEntry(offset, part.reference.id, part.token) : "";
+        offset += text.length;
+        if (part.type === "mention" && (caret !== offset || existing.has(entry))) {
+            expected.push(entry);
+            next.push(part);
+            continue;
+        }
+        const previous = next[next.length - 1];
+        if (previous?.type === "text") next[next.length - 1] = { type: "text", text: previous.text + text };
+        else next.push({ type: "text", text });
+    }
+    if (expected.length === current.length && expected.every((entry, index) => entry === current[index])) return null;
     return next;
 }
 
-export function hasMentionBoundary(value: string, index: number) {
-    const char = value[index];
-    return !char || /\s|[,.!?;:，。！？；：、)\]}】）]/.test(char);
+/**
+ * 胶囊后紧贴的字会让令牌读成别的内容（@图片1 接“2”成了 @图片12，@技能名 接中文就不再是技能引用），
+ * 这时在胶囊后补一个空格。光标正好停在胶囊右侧时留在空格前，继续退格仍能删掉胶囊。
+ * 返回是否改动了 DOM。
+ */
+export function repairEditableMentionBoundaries(root: HTMLElement) {
+    const leaves = editableLeaves(root);
+    const glued = leaves.filter((leaf, index) => {
+        if (leaf.token === undefined) return false;
+        const following = leaves.slice(index + 1).find((item) => item.text.length > 0);
+        return Boolean(following && !hasMentionTokenBoundary(leaf.token, following.text, 0));
+    });
+    if (!glued.length) return false;
+    // 选区按补空格之前的偏移读取再统一平移；浏览器对活动选区的自动调整随插入位置而不同。
+    const selection = getEditableSelection(root);
+    const insertions = glued.map((leaf) => leaf.offset + leaf.text.length);
+    glued.forEach((leaf) => (leaf.node as ChildNode).after(document.createTextNode(" ")));
+    if (selection) {
+        const shift = (offset: number) => offset + insertions.filter((position) => position < offset).length;
+        setEditableSelection(root, shift(selection.start), shift(selection.end));
+    }
+    return true;
+}
+
+/** offset 正好落在某个胶囊右侧时返回该胶囊的令牌。 */
+export function editableMentionTokenEndingAt(root: HTMLElement, offset: number) {
+    return editableLeaves(root).find((leaf) => leaf.token !== undefined && leaf.offset + leaf.token.length === offset)?.token ?? null;
 }
 
 export function serializeEditableValue(root: HTMLElement) {
-    return serializeNodeList(root.childNodes).replace(/\u00a0/g, " ");
+    return editableText(serializeNodeList(root.childNodes)).replace(/\u00a0/g, " ");
 }
 
 export function serializeNodeList(nodes: NodeListOf<ChildNode> | ChildNode[]) {
@@ -67,7 +187,7 @@ export function serializeNodeList(nodes: NodeListOf<ChildNode> | ChildNode[]) {
 }
 
 export function serializeNode(node: ChildNode): string {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent || "";
+    if (node.nodeType === Node.TEXT_NODE) return editableText(node.textContent || "");
     if (!(node instanceof HTMLElement)) return "";
     const token = node.dataset.mentionToken;
     if (token) return token;
@@ -106,7 +226,7 @@ export function getEditableSelection(root: HTMLElement | null): EditableSelectio
 
 export function offsetForPoint(root: Node, target: Node, targetOffset: number): number {
     if (root === target) {
-        if (root.nodeType === Node.TEXT_NODE) return targetOffset;
+        if (root.nodeType === Node.TEXT_NODE) return editableText((root.textContent || "").slice(0, targetOffset)).length;
         return Array.from(root.childNodes)
             .slice(0, targetOffset)
             .reduce((offset, node) => offset + plainTextLength(node), 0);
@@ -119,11 +239,16 @@ export function offsetForPoint(root: Node, target: Node, targetOffset: number): 
     return offset;
 }
 
-export function setEditableSelection(root: HTMLElement, offset: number) {
+export function setEditableSelection(root: HTMLElement, offset: number, endOffset = offset) {
     const range = document.createRange();
-    const point = pointForOffset(root, Math.max(0, offset));
-    range.setStart(point.node, point.offset);
-    range.collapse(true);
+    const start = pointForOffset(root, Math.max(0, offset));
+    range.setStart(start.node, start.offset);
+    if (endOffset > offset) {
+        const end = pointForOffset(root, endOffset);
+        range.setEnd(end.node, end.offset);
+    } else {
+        range.collapse(true);
+    }
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
@@ -140,6 +265,7 @@ export function pointForOffset(root: Node, offset: number): { node: Node; offset
             remaining -= length;
             continue;
         }
+        if (child.nodeType === Node.TEXT_NODE && editableText(child.textContent || "").length === 0 && child.textContent?.includes(CARET_ANCHOR)) return { node: child, offset: child.textContent.length };
         if (isMentionElement(child)) return { node: root, offset: remaining <= length / 2 ? index : index + 1 };
         return pointForOffset(child, remaining);
     }
@@ -147,7 +273,7 @@ export function pointForOffset(root: Node, offset: number): { node: Node; offset
 }
 
 export function plainTextLength(node: Node): number {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length || 0;
+    if (node.nodeType === Node.TEXT_NODE) return editableText(node.textContent || "").length;
     if (node instanceof HTMLElement) {
         const token = node.dataset.mentionToken;
         if (token) return token.length;

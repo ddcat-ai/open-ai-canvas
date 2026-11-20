@@ -72,9 +72,13 @@ func ClientAssetPayload(asset model.Asset) json.RawMessage {
 			}
 		}
 		switch kind {
-		case "image", "video":
+		case "image":
+			// 前端图片合同要求正尺寸（web/src/lib/asset-record.ts）；标准库读不出尺寸的 WebP/AVIF 以 1 占位。
 			ensurePositiveAssetDimension(data, "width")
 			ensurePositiveAssetDimension(data, "height")
+		case "video":
+			// 视频合同允许 0 表示尺寸未知，不伪造尺寸。
+			normalizeVideoAssetDimensions(data)
 		}
 	}
 	encoded, err := json.Marshal(payload)
@@ -164,6 +168,22 @@ func ensurePositiveAssetDimension(data map[string]any, key string) {
 	value, ok := jsonNumberValue(data[key])
 	if !ok || value <= 0 {
 		data[key] = 1
+	}
+}
+
+// normalizeVideoAssetDimensions 让视频宽高始终是非负数字（素材校验要求字段存在）。
+// 缺失或无效记为 0；旧版本把未知尺寸写成的 1×1 占位同样还原为 0。
+func normalizeVideoAssetDimensions(data map[string]any) {
+	width, widthOK := jsonNumberValue(data["width"])
+	height, heightOK := jsonNumberValue(data["height"])
+	if !widthOK || width < 0 {
+		width, data["width"] = 0, 0
+	}
+	if !heightOK || height < 0 {
+		height, data["height"] = 0, 0
+	}
+	if width <= 1 && height <= 1 {
+		data["width"], data["height"] = 0, 0
 	}
 }
 

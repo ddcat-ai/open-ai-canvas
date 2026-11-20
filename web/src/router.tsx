@@ -1,17 +1,27 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
+import { createBrowserRouter, Navigate, Outlet, redirectDocument, useLocation, type RouteObject } from "react-router";
 import { lazyAdminPage } from "@/pages/admin/admin-page-loader";
 
+import { AuthDialogHost } from "@/components/auth/auth-dialog-host";
 import { RequireAuth } from "@/components/auth/require-auth";
+import { RequireSkillAdmin } from "@/components/auth/require-skill-admin";
+// 功能开关守卫包在页面 Suspense 之外，懒加载会让整个工作区退回全屏加载页；体积很小，直接静态引入。
+import { RequireFeature } from "@/components/auth/require-feature";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadProjectCreatePage, loadProjectDetailPage, loadProjectsPage, loadSkillWorkbenchPage } from "@/lib/workspace-route-modules";
+import { StudioOpening } from "@/pages/projects/studio/studio-opening";
+import { workspaceRoutePages } from "@/lib/workspace-route-modules";
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import { AuthScene } from "@/pages/auth/auth-scene";
 import RouteErrorPage from "@/pages/route-error";
 import { isGuestWorkspacePath } from "@/lib/guest-workspace";
+import { teamIdFromPath } from "@/lib/team-query-keys";
+import { workspacePagePath, workspaceTeamId } from "@/lib/workspace-routes";
 
 const AdminPage = lazy(() => import("@/pages/admin"));
+const EcommerceManagementPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-management-page"));
+const EcommerceAgentConfigPage = lazyAdminPage(() => import("@/pages/admin/ecommerce-agent-config-page"));
 const AnalyticsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnalyticsPage })));
+const TrafficPage = lazyAdminPage(() => import("@/pages/admin/traffic/traffic-page"));
 const AnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.AnnouncementsPage })));
 const BannerAnnouncementsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.BannerAnnouncementsPage })));
 const StorageResourcesPage = lazyAdminPage(() => import("@/pages/admin/admin-route-pages").then((module) => ({ default: module.StorageResourcesPage })));
@@ -23,10 +33,16 @@ const AgentLessonsPage = lazyAdminPage(() => import("@/pages/admin/admin-route-p
 const ChannelsPage = lazyAdminPage(() => import("@/pages/admin/channels/channels-page"));
 const LogicalModelsPage = lazyAdminPage(() => import("@/pages/admin/logical-models/logical-models-page"));
 const AdminPluginsPage = lazyAdminPage(() => import("@/pages/admin/plugins/plugins-page"));
+const AdminOfficialAssetsPage = lazyAdminPage(() => import("@/pages/admin/official-assets-page"));
+const AdminOfficialAssetRecommendationsPage = lazyAdminPage(() => import("@/pages/admin/official-asset-recommendations-page"));
+const AdminMCPPage = lazyAdminPage(() => import("@/pages/admin/mcp/mcp-page"));
 const SkillCurationPage = lazyAdminPage(() => import("@/pages/admin/skill-curation-page"));
+const AdminSkillsPage = lazyAdminPage(() => import("@/pages/admin/skills/skills-page"));
+const AdminSkillWorkbenchPage = lazyAdminPage(() => import("@/pages/admin/skills/admin-skill-workbench-page"));
 const AdminPaymentsPage = lazyAdminPage(() => import("@/pages/admin/payments/payments-page"));
 const LogsPage = lazyAdminPage(() => import("@/pages/admin/logs/logs-page"));
 const LoginLogsPage = lazyAdminPage(() => import("@/pages/admin/login-logs/login-logs-page"));
+const EmailLogsPage = lazyAdminPage(() => import("@/pages/admin/email-logs/email-logs-page"));
 const RedemptionCodesPage = lazyAdminPage(() => import("@/pages/admin/redemption-codes/redemption-codes-page"));
 const RuntimePolicySettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/runtime-policy-settings-page"));
 const AppearanceSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/appearance-settings-page"));
@@ -36,40 +52,45 @@ const ArkPrivateAssetsSettingsPage = lazyAdminPage(() => import("@/pages/admin/s
 const ResponseInterceptionSettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/response-interception-settings-page"));
 const ThirdPartySettingsPage = lazyAdminPage(() => import("@/pages/admin/settings/libtv-settings-page"));
 const WorkbenchToolsPage = lazyAdminPage(() => import("@/pages/admin/workbench-tools/workbench-tools-page"));
+const PoseLibraryAdminPage = lazyAdminPage(() => import("@/pages/admin/pose-library/pose-library-page"));
 const SystemUpdatePage = lazyAdminPage(() => import("@/pages/admin/settings/system-update-page"));
 const SystemPerformancePage = lazyAdminPage(() => import("@/pages/admin/settings/system-performance-page"));
 const StoryboardPromptsPage = lazyAdminPage(() => import("@/pages/admin/storyboard-prompts/storyboard-prompts-page"));
 const AdminFeedbacksPage = lazyAdminPage(() => import("@/pages/admin/feedbacks/feedbacks-page"));
 const UsersPage = lazyAdminPage(() => import("@/pages/admin/users/users-page"));
 const UserGroupsPage = lazyAdminPage(() => import("@/pages/admin/user-groups/user-groups-page"));
-const AssetsPage = lazy(loadAssetsPage);
+const AssetsPage = workspaceRoutePages.assets;
 const LoginPage = lazy(() => import("@/pages/auth/login"));
 const RegisterPage = lazy(() => import("@/pages/auth/register"));
 const ForgotPasswordPage = lazy(() => import("@/pages/auth/forgot-password"));
-const CanvasPage = lazy(loadCanvasPage);
-const CanvasProjectPage = lazy(loadCanvasProjectPage);
+const CanvasPage = workspaceRoutePages.canvas;
+const CanvasProjectPage = workspaceRoutePages.canvasProject;
 const SharedCanvasPage = lazy(() => import("@/pages/canvas/shared"));
-const CreatePage = lazy(loadCreatePage);
-const ImageWorkbenchPage = lazy(() => import("@/pages/workbench/image-workbench-route"));
-const VideoWorkbenchPage = lazy(() => import("@/pages/workbench/video-workbench-page"));
+const ArkPortraitResultPage = lazy(() => import("@/pages/ark-portrait-result"));
+const CreatePage = workspaceRoutePages.create;
+const EcommercePage = workspaceRoutePages.ecommerce;
+const ImageWorkbenchPage = workspaceRoutePages.imageWorkbench;
+const VideoWorkbenchPage = workspaceRoutePages.videoWorkbench;
 const NotFound = lazy(() => import("@/pages/not-found"));
-const SkillsPage = lazy(() => import("@/pages/skills"));
-const SkillWorkbenchPage = lazy(loadSkillWorkbenchPage);
-const PluginsPage = lazy(() => import("@/pages/plugins"));
-const EagleLibraryPage = lazy(() => import("@/pages/plugins/eagle"));
-const TasksPage = lazy(() => import("@/pages/tasks"));
-const ProjectsPage = lazy(loadProjectsPage);
-const ProjectDetailPage = lazy(loadProjectDetailPage);
-const ProjectCreatePage = lazy(loadProjectCreatePage);
-const SettingsPage = lazy(() => import("@/pages/settings"));
-const ReferralPage = lazy(() => import("@/pages/referral"));
+const SkillsPage = workspaceRoutePages.skills;
+const SkillWorkbenchPage = workspaceRoutePages.skillWorkbench;
+const PluginsPage = workspaceRoutePages.plugins;
+const EagleLibraryPage = workspaceRoutePages.eagleLibrary;
+const TasksPage = workspaceRoutePages.tasks;
+const ProjectsPage = workspaceRoutePages.projects;
+const ProjectDetailPage = workspaceRoutePages.projectDetail;
+const ProjectCreatePage = workspaceRoutePages.projectCreate;
+const SettingsPage = workspaceRoutePages.settings;
+const ReferralPage = workspaceRoutePages.referral;
 const AdminReferralPage = lazyAdminPage(() => import("@/pages/admin/referral/referral-admin-page"));
-const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
 const UserLayout = lazy(() => import("@/layouts/user-layout"));
-const RequireFeature = lazy(() => import("@/components/auth/require-feature").then((module) => ({ default: module.RequireFeature })));
+const TeamsPage = lazy(() => import("@/pages/teams"));
+const TeamWorkspacePage = lazy(() => import("@/pages/teams").then((module) => ({ default: module.TeamWorkspacePage })));
+const TeamMembersPage = lazy(() => import("@/pages/teams/members").then((module) => ({ default: module.TeamMembersPane })));
+const TeamWalletPage = lazy(() => import("@/pages/teams/wallet").then((module) => ({ default: module.TeamWalletPane })));
 
-function deferred(element: ReactNode) {
-    return <Suspense fallback={<WorkspaceRouteLoader />}>{element}</Suspense>;
+function deferred(element: ReactNode, fallback: ReactNode = <WorkspaceRouteLoader />) {
+    return <Suspense fallback={fallback}>{element}</Suspense>;
 }
 
 function fullScreenDeferred(element: ReactNode) {
@@ -78,7 +99,7 @@ function fullScreenDeferred(element: ReactNode) {
 
 function AuthenticatedWorkspaceLayout() {
     const { pathname } = useLocation();
-    const isCanvasProjectRoute = pathname.startsWith("/canvas/");
+    const isCanvasProjectRoute = workspacePagePath(pathname).startsWith("/canvas/");
     const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
     return (
         <RequireAuth allowAnonymous={isGuestWorkspacePath(pathname)}>
@@ -88,6 +109,15 @@ function AuthenticatedWorkspaceLayout() {
                 </UserLayout>
             </Suspense>
         </RequireAuth>
+    );
+}
+
+function RootLayout() {
+    return (
+        <>
+            <Outlet />
+            <AuthDialogHost />
+        </>
     );
 }
 
@@ -102,13 +132,15 @@ function AuthenticatedWorkspaceLayout() {
 function devRoutes() {
     const FolderPreviewLab = lazy(() => import("@/pages/dev/folder-preview-lab"));
     const PrevisReproLab = lazy(() => import("@/pages/dev/previs-repro-lab"));
+    const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
     return [
         { path: "/dev/folders", element: fullScreenDeferred(<FolderPreviewLab />), errorElement: <RouteErrorPage /> },
         { path: "/dev/previs-repro", element: fullScreenDeferred(<PrevisReproLab />), errorElement: <RouteErrorPage /> },
+        { path: "/test-voice-recording", element: <RequireAuth>{fullScreenDeferred(<TestVoiceRecording />)}</RequireAuth>, errorElement: <RouteErrorPage /> },
     ];
 }
 
-export const router = createBrowserRouter([
+const routes: RouteObject[] = [
     {
         element: <AuthScene />,
         errorElement: <RouteErrorPage />,
@@ -119,6 +151,8 @@ export const router = createBrowserRouter([
         ],
     },
     { path: "/share/canvas/:token", element: fullScreenDeferred(<SharedCanvasPage />), errorElement: <RouteErrorPage /> },
+    // H5 真人认证回跳页：多在未登录的手机上打开，不进入工作区登录守卫。
+    { path: "/ark-portrait/result", element: fullScreenDeferred(<ArkPortraitResultPage />), errorElement: <RouteErrorPage /> },
     ...(import.meta.env.DEV ? devRoutes() : []),
     {
         element: <AuthenticatedWorkspaceLayout />,
@@ -126,6 +160,7 @@ export const router = createBrowserRouter([
         children: [
             { path: "/", element: deferred(<CreatePage />) },
             { path: "/create", element: deferred(<CreatePage />) },
+            { path: "/ecommerce", element: <RequireAuth>{deferred(<EcommercePage />)}</RequireAuth> },
             {
                 path: "/toolbox/image",
                 element: (
@@ -151,8 +186,34 @@ export const router = createBrowserRouter([
                 ),
             },
             { path: "/assets", element: <RequireAuth>{deferred(<AssetsPage />)}</RequireAuth> },
+            {
+                path: "/teams",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="teamsEnabled">{deferred(<TeamsPage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+            },
+            {
+                path: "/teams/:teamId",
+                element: (
+                    <RequireAuth>
+                        <RequireFeature feature="teamsEnabled">{deferred(<TeamWorkspacePage />)}</RequireFeature>
+                    </RequireAuth>
+                ),
+                children: [
+                    { index: true, element: <Navigate to="canvas" replace /> },
+                    { path: "canvas", element: deferred(<CanvasPage />) },
+                    { path: "canvas/:id", element: deferred(<CanvasProjectPage />, <CanvasRefreshShell />) },
+                    { path: "assets", element: deferred(<AssetsPage />) },
+                    { path: "create", element: <RequireFeature feature="creditsEnabled">{deferred(<CreatePage />)}</RequireFeature> },
+                    { path: "members", element: deferred(<TeamMembersPage />) },
+                    { path: "wallet", element: <RequireFeature feature="creditsEnabled">{deferred(<TeamWalletPage />)}</RequireFeature> },
+                    { path: "*", element: deferred(<NotFound />) },
+                ],
+            },
             { path: "/skills", element: <RequireAuth>{deferred(<SkillsPage />)}</RequireAuth> },
-            { path: "/skills/:skillId/edit", element: <RequireAuth>{deferred(<SkillWorkbenchPage />)}</RequireAuth> },
+            { path: "/skills/:skillId/edit", element: <RequireSkillAdmin>{deferred(<SkillWorkbenchPage />)}</RequireSkillAdmin> },
             {
                 path: "/plugins",
                 element: (
@@ -175,7 +236,6 @@ export const router = createBrowserRouter([
             },
             { path: "/settings", element: <RequireAuth>{deferred(<SettingsPage />)}</RequireAuth> },
             { path: "/referral", element: <RequireAuth>{deferred(<ReferralPage />)}</RequireAuth> },
-            { path: "/test-voice-recording", element: <RequireAuth>{deferred(<TestVoiceRecording />)}</RequireAuth> },
             {
                 path: "/projects",
                 element: (
@@ -196,7 +256,7 @@ export const router = createBrowserRouter([
                 path: "/projects/:projectId",
                 element: (
                     <RequireAuth>
-                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature>
+                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />, <StudioOpening />)}</RequireFeature>
                     </RequireAuth>
                 ),
             },
@@ -204,7 +264,7 @@ export const router = createBrowserRouter([
                 path: "/projects/:projectId/e/:episodeId",
                 element: (
                     <RequireAuth>
-                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />)}</RequireFeature>
+                        <RequireFeature feature="shortDramaEnabled">{deferred(<ProjectDetailPage />, <StudioOpening />)}</RequireFeature>
                     </RequireAuth>
                 ),
             },
@@ -223,15 +283,34 @@ export const router = createBrowserRouter([
                 element: <RequireAuth>{deferred(<AdminPage />)}</RequireAuth>,
                 children: [
                     { index: true, element: <AnalyticsPage /> },
+                    { path: "traffic", element: <TrafficPage /> },
                     { path: "users", element: <UsersPage /> },
                     { path: "user-groups", element: <UserGroupsPage /> },
                     { path: "login-logs", element: <LoginLogsPage /> },
+                    { path: "email-logs", element: <EmailLogsPage /> },
                     { path: "feedbacks", element: <AdminFeedbacksPage /> },
                     { path: "channels", element: <ChannelsPage /> },
                     // 关闭前台模型只影响用户端模型来源；后台仍可进入，便于开启前先配置。
                     { path: "models", element: <LogicalModelsPage /> },
+                    { path: "ecommerce", element: <Navigate to="/admin/ecommerce/agent" replace /> },
+                    { path: "ecommerce/agent", element: <EcommerceAgentConfigPage /> },
+                    { path: "ecommerce/library", element: <EcommerceManagementPage /> },
+                    { path: "ecommerce/library/skills", element: <EcommerceManagementPage /> },
+                    { path: "ecommerce/library/categories", element: <EcommerceManagementPage /> },
+                    // 旧地址：知识库、Skills、品类并入「知识与技能」，小夜设置并入「电商 Agent 配置」
+                    { path: "ecommerce/skills", element: <Navigate to="/admin/ecommerce/library/skills" replace /> },
+                    { path: "ecommerce/categories", element: <Navigate to="/admin/ecommerce/library/categories" replace /> },
+                    { path: "ecommerce-knowledge", element: <Navigate to="/admin/ecommerce/library" replace /> },
+                    { path: "ecommerce-skills", element: <Navigate to="/admin/ecommerce/library/skills" replace /> },
+                    { path: "ecommerce-categories", element: <Navigate to="/admin/ecommerce/library/categories" replace /> },
                     { path: "plugins", element: <AdminPluginsPage /> },
+                    { path: "official-assets", element: <AdminOfficialAssetsPage /> },
+                    { path: "official-asset-recommendations", element: <AdminOfficialAssetRecommendationsPage /> },
+                    { path: "mcp", element: <AdminMCPPage /> },
                     { path: "workbench-tools", element: <WorkbenchToolsPage /> },
+                    { path: "pose-library", element: <PoseLibraryAdminPage /> },
+                    { path: "skills", element: <AdminSkillsPage /> },
+                    { path: "skills/:skillId/edit", element: <AdminSkillWorkbenchPage /> },
                     { path: "skill-curation", element: <SkillCurationPage /> },
                     { path: "payments", element: <AdminPaymentsPage /> },
                     { path: "prompt-templates", element: <StoryboardPromptsPage /> },
@@ -264,4 +343,13 @@ export const router = createBrowserRouter([
         ],
     },
     { path: "*", element: fullScreenDeferred(<NotFound />) },
+];
+
+export const router = createBrowserRouter([
+    {
+        element: <RootLayout />,
+        children: routes,
+        loader: ({ request }) => (teamIdFromPath(new URL(request.url).pathname) !== workspaceTeamId ? redirectDocument(request.url) : null),
+        shouldRevalidate: ({ nextUrl }) => teamIdFromPath(nextUrl.pathname) !== workspaceTeamId,
+    },
 ]);

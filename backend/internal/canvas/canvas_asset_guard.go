@@ -13,6 +13,7 @@ import (
 
 type MediaAssetReference struct {
 	AssetID       string
+	VersionID     string
 	ResourceID    string
 	NodeID        string
 	Path          string
@@ -24,6 +25,12 @@ type MediaAssetReference struct {
 // owned by the same user. The client writes Assets before canvases, so rejecting
 // an incomplete pair prevents a durable Resource-only (ghost capacity) state.
 func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) error {
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &identity); err != nil {
+		return kernel.BadAuthRequest("画布媒体数据格式错误")
+	}
 	references, err := MediaAssetReferences(raw)
 	if err != nil {
 		return kernel.BadAuthRequest("画布媒体数据格式错误")
@@ -39,10 +46,9 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 	assetIDSet := make(map[string]struct{}, len(references))
 	resourceIDSet := make(map[string]struct{}, len(references)+len(allResourceReferences))
 	for _, reference := range references {
-		if reference.AssetID == "" {
-			return canvasMediaAssetsPendingError()
+		if reference.AssetID != "" {
+			assetIDSet[reference.AssetID] = struct{}{}
 		}
-		assetIDSet[reference.AssetID] = struct{}{}
 		resourceIDSet[reference.ResourceID] = struct{}{}
 	}
 	for _, reference := range allResourceReferences {
@@ -77,6 +83,26 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 			readyResources[resource.ID] = struct{}{}
 		}
 	}
+	officialResources := make(map[string]bool)
+	for resourceID := range resourceIDSet {
+		if _, owned := readyResources[resourceID]; owned {
+			continue
+		}
+		published, err := s.repo.PublishedOfficialResource(resourceID)
+		if err != nil {
+			return err
+		}
+		if !published {
+			published, err = s.repo.RetainedCanvasOfficialResource(userID, identity.ID, resourceID)
+			if err != nil {
+				return err
+			}
+		}
+		if published {
+			officialResources[resourceID] = true
+			readyResources[resourceID] = struct{}{}
+		}
+	}
 	missing := make([]assets.DocumentResourceReference, 0)
 	for _, reference := range allResourceReferences {
 		if _, exists := readyResources[reference.ResourceID]; !exists {
@@ -89,6 +115,24 @@ func (s *Service) ValidateCanvasMediaAssets(userID string, raw json.RawMessage) 
 	}
 
 	for _, reference := range references {
+		if reference.AssetID == "" {
+			allowed := officialResources[reference.ResourceID]
+			if !allowed {
+				allowed, err = s.repo.PublishedOfficialResource(reference.ResourceID)
+				if err != nil {
+					return err
+				}
+			}
+			if !allowed {
+				allowed, err = s.repo.RetainedCanvasOfficialResource(userID, identity.ID, reference.ResourceID)
+				if err != nil {
+					return err
+				}
+			}
+			if allowed {
+				continue
+			}
+		}
 		resourceIDs, assetExists := assetResources[reference.AssetID]
 		if !assetExists {
 			return canvasMediaAssetsPendingError()
@@ -203,25 +247,50 @@ func (s *Service) projectImageHistory(userID string, candidates []model.Asset) (
 		}
 		history[reference.AssetID][reference.ResourceID] = struct{}{}
 	}
+	if _, team := model.TeamIDFromContentKey(userID); team && len(candidates) != 0 {
+		ids = ids[:0]
+		for _, asset := range candidates {
+			ids = append(ids, asset.ID)
+		}
+		versions, err := s.repo.AssetVersionsForAssets(ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, version := range versions {
+			if history[version.AssetID] == nil {
+				history[version.AssetID] = map[string]struct{}{}
+			}
+			if err := assets.CollectOwnedDocumentReferences(version.DefinitionJSON, history[version.AssetID]); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return history, nil
 }
 
 func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
+	return canvasAssetReferences(raw, false)
+}
+
+func canvasAssetReferences(raw json.RawMessage, includeAssetBindings bool) ([]MediaAssetReference, error) {
 	var payload struct {
 		Nodes []struct {
 			ID       string `json:"id"`
 			Type     string `json:"type"`
 			Metadata struct {
 				AssetID    string `json:"assetId"`
+				VersionID  string `json:"assetVersionId"`
 				StorageKey string `json:"storageKey"`
 				Content    string `json:"content"`
 			} `json:"metadata"`
 		} `json:"nodes"`
 		Timeline struct {
 			Clips []struct {
+				ID          string `json:"id"`
 				DirectMedia *struct {
 					Kind       string `json:"kind"`
 					AssetID    string `json:"assetId"`
+					VersionID  string `json:"assetVersionId"`
 					StorageKey string `json:"storageKey"`
 					URL        string `json:"url"`
 					DataURL    string `json:"dataUrl"`
@@ -236,14 +305,14 @@ func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
 
 	references := make([]MediaAssetReference, 0)
 	for _, node := range payload.Nodes {
-		if !isCanvasMediaKind(node.Type) {
-			continue
-		}
 		assetID := strings.TrimSpace(node.Metadata.AssetID)
-		resourceID := firstCanvasResourceID(node.Metadata.StorageKey, node.Metadata.Content)
-		if resourceID != "" {
+		var resourceID string
+		if isCanvasMediaKind(node.Type) {
+			resourceID = firstCanvasResourceID(node.Metadata.StorageKey, node.Metadata.Content)
+		}
+		if resourceID != "" || (includeAssetBindings && assetID != "") {
 			references = append(references, MediaAssetReference{
-				AssetID: assetID, ResourceID: resourceID, NodeID: node.ID,
+				AssetID: assetID, VersionID: node.Metadata.VersionID, ResourceID: resourceID, NodeID: node.ID,
 				Path: "nodes[" + node.ID + "].metadata.storageKey", ReferenceType: "storageKey",
 			})
 		}
@@ -254,15 +323,86 @@ func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
 			continue
 		}
 		resourceID := firstCanvasResourceID(media.StorageKey, media.URL, media.DataURL, media.Content)
-		if resourceID == "" {
+		if resourceID == "" && (!includeAssetBindings || media.AssetID == "") {
 			continue
 		}
+		clipKey := strconv.Itoa(index)
+		if includeAssetBindings && clip.ID != "" {
+			clipKey = clip.ID
+		}
 		references = append(references, MediaAssetReference{
-			AssetID: strings.TrimSpace(media.AssetID), ResourceID: resourceID,
-			Path: "timeline.clips[" + strconv.Itoa(index) + "].directMedia", ReferenceType: "directMedia",
+			AssetID: strings.TrimSpace(media.AssetID), VersionID: media.VersionID, ResourceID: resourceID,
+			Path: "timeline.clips[" + clipKey + "].directMedia", ReferenceType: "directMedia",
 		})
 	}
 	return references, nil
+}
+
+func (s *Service) validateNewWorkspaceBindings(ownerKey string, existing *model.CanvasProject, raw json.RawMessage) error {
+	if _, team := model.TeamIDFromContentKey(ownerKey); !team {
+		return nil
+	}
+	current, err := canvasAssetReferences(raw, true)
+	if err != nil || len(current) == 0 {
+		return err
+	}
+	retained := map[MediaAssetReference]bool{}
+	if existing != nil {
+		previous, err := canvasAssetReferences(json.RawMessage(existing.PayloadJSON), true)
+		if err != nil {
+			return err
+		}
+		for _, ref := range previous {
+			retained[ref] = true
+		}
+	}
+	assetIDs := map[string]struct{}{}
+	versionAssets := map[string]struct{}{}
+	for _, ref := range current {
+		if ref.AssetID == "" || retained[ref] {
+			continue
+		}
+		assetIDs[ref.AssetID] = struct{}{}
+		if ref.VersionID != "" {
+			versionAssets[ref.AssetID] = struct{}{}
+		}
+	}
+	if len(assetIDs) == 0 {
+		return nil
+	}
+	owned, err := s.repo.AssetsForUserIDs(ownerKey, assets.SortedIDs(assetIDs))
+	if err != nil {
+		return err
+	}
+	if len(owned) != len(assetIDs) {
+		return canvasMediaAssetsPendingError()
+	}
+	for _, asset := range owned {
+		if asset.Status == model.AssetVersionStatusArchived {
+			return canvasMutationError("asset_archived", "不能新增已归档素材的引用，请先恢复素材")
+		}
+	}
+	if len(versionAssets) == 0 {
+		return nil
+	}
+	versions, err := s.repo.AssetVersionsForAssets(assets.SortedIDs(versionAssets))
+	if err != nil {
+		return err
+	}
+	byVersion := make(map[string]model.AssetVersion, len(versions))
+	for _, version := range versions {
+		byVersion[version.ID] = version
+	}
+	for _, ref := range current {
+		if ref.VersionID == "" || retained[ref] || ref.AssetID == "" {
+			continue
+		}
+		version, ok := byVersion[ref.VersionID]
+		if !ok || version.AssetID != ref.AssetID || (ref.ResourceID != "" && !assets.DocumentReferences(version.DefinitionJSON, map[string]struct{}{ref.ResourceID: {}})) {
+			return canvasMediaAssetsPendingError()
+		}
+	}
+	return nil
 }
 
 func firstCanvasResourceID(values ...string) string {

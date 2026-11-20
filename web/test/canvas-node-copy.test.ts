@@ -58,6 +58,106 @@ describe("canvas generation copy metadata", () => {
         expect(source.metadata?.generationEffectKeys).toEqual(["attach-node:source-task:source:0"]);
     });
 
+    test("视频参数变体清除旧视频和结果附属字段，但保留生成参数与引用", () => {
+        const source: CanvasNodeData = {
+            id: "source",
+            type: CanvasNodeType.Video,
+            title: "镜头",
+            position: { x: 0, y: 0 },
+            width: 340,
+            height: 240,
+            metadata: {
+                content: "video-url",
+                previewContent: "preview-url",
+                videoPreview: { content: "video-preview", storageKey: "resource:preview" },
+                storageKey: "resource:video",
+                mimeType: "video/mp4",
+                bytes: 1024,
+                durationMs: 5000,
+                waveform: [0.1, 0.8],
+                waveformVersion: 1,
+                hasAudio: true,
+                naturalWidth: 1280,
+                naturalHeight: 720,
+                assetId: "asset-video",
+                producedModel: "model-used",
+                producedModelCandidate: "model-pending",
+                subtitleEntries: [{ index: 0, startMs: 0, endMs: 1000, text: "旧字幕" }],
+                subtitleHighlights: [{ entryIndex: 0, start: 0, end: 1, highlightText: "旧", sourceText: "旧字幕" }],
+                subtitleUpdatedAt: "2026-11-01T00:00:00Z",
+                prompt: "保留这个提示词",
+                composerContent: "保留编辑器内容",
+                model: "model-next",
+                size: "1280x720",
+                seconds: "5",
+                vquality: "720p",
+                generateAudio: "true",
+                watermark: "false",
+                references: ["resource:reference"],
+                referenceAssetNodeIds: ["reference-node"],
+                videoStartFrameNodeId: "start-frame",
+                videoEndFrameNodeId: "end-frame",
+                dramaRef: { projectId: "drama", kind: "segment", id: "segment-1" },
+                versionOfNodeId: "source-root",
+                versionLabel: "B",
+                versionPrimary: false,
+                generationResultPlacement: "new-version",
+                generationEffectKeys: ["old-effect"],
+                status: "success",
+            },
+        };
+
+        const metadata = isolateCopiedNodeMetadata(source, new Map([[source.id, "copy"]]), { clearMediaResult: true, preserveExternalReferences: true, clearDramaBinding: true });
+
+        expect(metadata).toMatchObject({
+            prompt: "保留这个提示词",
+            composerContent: "保留编辑器内容",
+            model: "model-next",
+            size: "1280x720",
+            seconds: "5",
+            vquality: "720p",
+            generateAudio: "true",
+            watermark: "false",
+            references: ["resource:reference"],
+            referenceAssetNodeIds: ["reference-node"],
+            videoStartFrameNodeId: "start-frame",
+            videoEndFrameNodeId: "end-frame",
+            copiedFromNodeId: "source",
+            generationResultPlacement: "replace-node",
+            status: "idle",
+        });
+        for (const field of [
+            "content",
+            "previewContent",
+            "videoPreview",
+            "storageKey",
+            "mimeType",
+            "bytes",
+            "durationMs",
+            "waveform",
+            "waveformVersion",
+            "hasAudio",
+            "naturalWidth",
+            "naturalHeight",
+            "assetId",
+            "producedModel",
+            "producedModelCandidate",
+            "subtitleEntries",
+            "subtitleHighlights",
+            "subtitleUpdatedAt",
+        ] as const) {
+            expect(metadata[field]).toBeUndefined();
+        }
+        expect(metadata.generationEffectKeys).toBeUndefined();
+        expect(metadata.dramaRef).toBeUndefined();
+        expect(metadata.versionOfNodeId).toBeUndefined();
+        expect(metadata.versionLabel).toBeUndefined();
+        expect(metadata.versionPrimary).toBeUndefined();
+        expect(source.metadata?.content).toBe("video-url");
+        expect(source.metadata?.dramaRef?.id).toBe("segment-1");
+        expect(source.metadata?.subtitleEntries).toHaveLength(1);
+    });
+
     test("复制到副本的入边继续解析为同一张参考图", () => {
         const reference: CanvasNodeData = {
             id: "reference",

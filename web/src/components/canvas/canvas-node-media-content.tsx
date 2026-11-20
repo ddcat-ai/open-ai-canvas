@@ -5,6 +5,7 @@
 
 import { Image as ImageIcon, ImageOff, LoaderCircle, Music2, Play, RotateCw, Video } from "lucide-react";
 import "./canvas-image-state.css";
+import "./canvas-video-preview-play.css";
 import { type CSSProperties, type ReactNode, type RefObject, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import { canvasNodeVideoPreviewReference } from "@/lib/canvas/canvas-media-preview";
@@ -19,10 +20,10 @@ import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-pre
 import { resolveVideoMediaUrl } from "@/services/file-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { fitImageMaterialNodeSize, fitImageNodeSize } from "@/lib/canvas/canvas-node-size";
+import { fitImageMaterialNodeSize, fitImageNodeSize, fitVideoNodeToSource } from "@/lib/canvas/canvas-node-size";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { isCanvasImageActive, prepareCanvasImage, subscribeCanvasImageActivity } from "@/services/canvas-image-loader";
-import { peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
+import { useCachedResourceUrl } from "@/hooks/use-cached-resource-url";
 import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL } from "@/services/api/resources";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
 import { ErrorContent, LoadingContent } from "./canvas-node-status-content";
@@ -143,7 +144,10 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
                     nextMetadata.durationMs = durationMs;
                     changed = true;
                 }
-                return changed ? { ...current, metadata: nextMetadata } : current;
+                // 占位框可能是默认 16:9；拿到真实画面后按比例校正（手动尺寸、锁定节点不动）。
+                const fitted = width > 0 && height > 0 ? fitVideoNodeToSource(current, width, height) : current;
+                if (!changed && fitted === current) return current;
+                return { ...fitted, metadata: changed ? nextMetadata : metadata };
             });
         };
         video.addEventListener("loadedmetadata", handleLoadedMetadata);
@@ -229,8 +233,9 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
     const persistedPreviewSource = persistedPreview?.src || "";
     const persistedPreviewStorageKey = persistedPreview?.storageKey || "";
     const hasPersistedPreview = Boolean(persistedPreviewSource || persistedPreviewStorageKey);
-    const { updateMetadata } = useCanvasNodeActions();
+    const { updateMetadata, updateMediaNode } = useCanvasNodeActions();
     const updateMetadataRef = useRef(updateMetadata);
+    const updateMediaNodeRef = useRef(updateMediaNode);
     const [hydrating, setHydrating] = useState(false);
     const [localPreviewUrl, setLocalPreviewUrl] = useState("");
     const localPreviewUrlRef = useRef("");
@@ -245,7 +250,8 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
 
     useEffect(() => {
         updateMetadataRef.current = updateMetadata;
-    }, [updateMetadata]);
+        updateMediaNodeRef.current = updateMediaNode;
+    }, [updateMediaNode, updateMetadata]);
 
     useEffect(
         () => () => {
@@ -281,7 +287,18 @@ export function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeCon
                 localPreviewUrlRef.current = hydrated.localUrl;
                 setLocalPreviewUrl(hydrated.localUrl);
                 void hydrated.persisted.then((videoPreview) => {
-                    if (!controller.signal.aborted && videoPreview) updateMetadataRef.current?.(node.id, { videoPreview });
+                    if (controller.signal.aborted || !videoPreview) return;
+                    const update = updateMediaNodeRef.current;
+                    if (!update) {
+                        updateMetadataRef.current?.(node.id, { videoPreview });
+                        return;
+                    }
+                    // 首帧就是画面本身：未播放过的节点也按首帧比例校正，不再横着显示竖屏视频。
+                    update(node.id, (current) => {
+                        const withPreview = { ...current, metadata: { ...current.metadata, videoPreview } };
+                        const natural = current.metadata?.naturalWidth && current.metadata.naturalHeight ? { width: current.metadata.naturalWidth, height: current.metadata.naturalHeight } : { width: videoPreview.width, height: videoPreview.height };
+                        return fitVideoNodeToSource(withPreview, natural.width, natural.height);
+                    });
                 });
             })
             .catch(() => undefined)
@@ -326,7 +343,8 @@ export function VideoPreviewPlayButton({ title, onPlay }: { title: string; onPla
     return (
         <button
             type="button"
-            className="absolute left-1/2 top-1/2 z-[var(--node-z-overlay)] grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/62 text-white shadow-lg backdrop-blur transition-[background-color,opacity] duration-150 hover:bg-black/78 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="canvas-video-preview-play absolute left-1/2 top-1/2 z-[var(--node-z-overlay)] grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full backdrop-blur"
+            style={{ color: "var(--canvas-card-media-chip-ink, var(--color-neutral-0))" }}
             aria-label={`播放 ${title}`}
             title="播放视频"
             onPointerDown={(event) => event.stopPropagation()}
@@ -772,9 +790,9 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
     // resources; otherwise DOM virtualization does not reduce image work.
     const isLazyVisual = node.type === CanvasNodeType.Image;
     const isHttpUrl = Boolean(fallback && !fallback.startsWith("data:"));
-    // 本会话刚上传的图片已在内存里有 Blob URL（primeResourceBlobCache），直接上屏，
-    // 不必再请求访问地址并把原图从服务器完整下载一遍。只用于图片：音视频播放仍走播放副本合同。
-    const sessionBlobUrl = eager && isRemoteResource && isLazyVisual ? peekCachedResourceObjectUrl(storageKey) : "";
+    // 上传后的有界缓存可直接借用；节点卸载再释放租约，不会被磁盘/LRU 淘汰撤销正在显示的地址。
+    // 只用于图片：音视频播放仍走播放副本合同。
+    const sessionBlobUrl = useCachedResourceUrl(isRemoteResource && isLazyVisual ? storageKey : undefined, eager);
     const initialUrl = sessionBlobUrl || (eager && !isRemoteResource && isLazyVisual && isHttpUrl ? fallback : isRemoteResource || isLazyVisual ? "" : fallback);
     const scope = getActiveUserScope();
     const identity = `${scope}:${node.id}:${storageKey || fallback}`;
@@ -790,7 +808,7 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
             setResolved({ identity, url: "", loading: false });
             return;
         }
-        const localUrl = isLazyVisual ? peekCachedResourceObjectUrl(storageKey) : "";
+        const localUrl = sessionBlobUrl;
         if (localUrl) {
             setResolved({ identity, url: localUrl, loading: false });
             return;
@@ -808,7 +826,7 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
         return () => {
             cancelled = true;
         };
-    }, [eager, fallback, identity, isLazyVisual, isRemoteResource, storageKey, variant]);
+    }, [eager, fallback, identity, isLazyVisual, isRemoteResource, storageKey, variant, sessionBlobUrl]);
 
     const isThumbnail = variant === "thumbnail";
     return { url: current.url, loading: current.loading, failed: Boolean(current.failed), originalWidth: isThumbnail ? current.originalWidth : undefined, originalHeight: isThumbnail ? current.originalHeight : undefined };

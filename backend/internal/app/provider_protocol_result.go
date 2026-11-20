@@ -79,6 +79,12 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 			return nil, err
 		}
 		item := map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}
+		if len(reference.Metadata) > 0 {
+			item["metadata"] = reference.Metadata
+		}
+		if reference.Name != "" {
+			item["name"] = reference.Name
+		}
 		items = append(items, item)
 	}
 	var output map[string]interface{}
@@ -97,7 +103,7 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 // attachProtocolUsage 把视频结果的上游 usage（如输出时长、帧率）写入任务结果，
 // 供按实际输出时长结算时在资源未探测到时长时兜底。
 func attachProtocolUsage(output map[string]interface{}, mode string, result *protocol.Result) {
-	if output == nil || result == nil || mode != "video" || len(result.Usage) == 0 {
+	if output == nil || result == nil || (mode != "video" && mode != "image") || len(result.Usage) == 0 {
 		return
 	}
 	output["usage"] = result.Usage
@@ -108,11 +114,13 @@ func attachProtocolUsage(output map[string]interface{}, mode string, result *pro
 // 不会把未知内容伪装成具体图片、视频或音频 MIME。
 func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, request protocol.GenerationRequest, taskID string, result *protocol.Result, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	if protocolResultHasOutput(input.Mode, result) {
+		if err := recordProtocolImageUsage(ctx, input, request, result); err != nil {
+			return nil, err
+		}
 		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, result, pollPolicy)
 	}
-	resultAdapter, ok := adapter.(protocol.ResultAdapter)
-	capability, hasCapability := adapter.(protocol.ResultCapability)
-	if !ok || !hasCapability || !capability.ResultAvailable() {
+	resultAdapter, ok := protocolResultEndpoint(adapter)
+	if !ok {
 		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, result, pollPolicy)
 	}
 	spec, err := resultAdapter.BuildResult(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
@@ -136,11 +144,50 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 		return nil, errors.New("声明式协议结果下载返回空内容")
 	}
 	mimeType = strings.TrimSpace(strings.Split(mimeType, ";")[0])
+	if mimeType == "application/json" || strings.HasSuffix(mimeType, "+json") {
+		state, parseErr := adapter.ParsePoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}, data)
+		if parseErr != nil {
+			return nil, fmt.Errorf("解析声明式协议结果清单失败：%w", parseErr)
+		}
+		if state.Status == protocol.StatusFailed || state.Status == protocol.StatusCancelled {
+			return nil, protocolTaskFailure(ctx, state.Status, state.Message, taskID)
+		}
+		if !protocolResultHasOutput(input.Mode, state.Result) {
+			return nil, errProtocolResultNotReady
+		}
+		manifestURL, parseErr := protocolRequestURL(input.Config.BaseURL, spec)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		base, parseErr := url.Parse(manifestURL)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		for _, media := range [][]protocol.MediaReference{state.Result.Images, state.Result.Videos, state.Result.Audios} {
+			for index := range media {
+				if media[index].URL == "" {
+					continue
+				}
+				reference, err := url.Parse(media[index].URL)
+				if err != nil {
+					return nil, err
+				}
+				media[index].URL = base.ResolveReference(reference).String()
+			}
+		}
+		if err := recordProtocolImageUsage(ctx, input, request, state.Result); err != nil {
+			return nil, err
+		}
+		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, state.Result, pollPolicy)
+	}
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
 	reference := protocol.MediaReference{DataURL: dataURL(mimeType, data), MIMEType: mimeType}
 	downloaded := &protocol.Result{}
+	if result != nil {
+		downloaded.Usage = result.Usage
+	}
 	switch input.Mode {
 	case "image":
 		downloaded.Images = []protocol.MediaReference{reference}
@@ -151,7 +198,56 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 	default:
 		return nil, fmt.Errorf("声明式协议结果下载不支持生成模式 %s", input.Mode)
 	}
+	if err := recordProtocolImageUsage(ctx, input, request, downloaded); err != nil {
+		return nil, err
+	}
 	return finishProtocolResult(ctx, input.Config, input.Mode, taskID, downloaded, pollPolicy)
+}
+
+// errProtocolResultNotReady 表示上游已报告完成，但独立结果接口返回的清单里还没有媒体。
+// 轮询方把它和“完成但没有媒体地址”同样处理：宽限期内继续查原任务，过后按此错误失败。
+var errProtocolResultNotReady = errors.New("声明式协议结果清单没有返回媒体地址")
+
+// 有些上游先报告完成、稍后才给出媒体地址。宽限期按查询次数和时长取先到者：
+// 视频每 30 秒查一次约等 2 分钟，图片每 2.5 秒查一次约等 1 分钟；超过后按“没有媒体地址”失败，
+// 不等到轮询总时限（视频 1 小时、分离式 48 小时）。
+const (
+	protocolLateResultGrace    = 2 * time.Minute
+	protocolLateResultMaxPolls = 24
+	protocolLateResultStage    = "上游已完成，等待结果地址"
+)
+
+type protocolLateResultWait struct {
+	since time.Time
+	polls int
+}
+
+// keepWaiting 记录一次“已完成但没有媒体”的查询，返回是否仍在宽限期内。
+func (w *protocolLateResultWait) keepWaiting(now time.Time) bool {
+	if w.since.IsZero() {
+		w.since = now
+	}
+	w.polls++
+	return w.polls <= protocolLateResultMaxPolls && now.Sub(w.since) < protocolLateResultGrace
+}
+
+// protocolResultEndpoint 返回插件声明的独立结果接口；下载与就绪判断共用同一条件。
+func protocolResultEndpoint(adapter protocol.Adapter) (protocol.ResultAdapter, bool) {
+	resultAdapter, ok := adapter.(protocol.ResultAdapter)
+	capability, hasCapability := adapter.(protocol.ResultCapability)
+	return resultAdapter, ok && hasCapability && capability.ResultAvailable()
+}
+
+// protocolResultReady 判断“已完成”的结果能否收尾：媒体任务要么已带媒体，要么有独立结果接口可下载。
+func protocolResultReady(mode string, result *protocol.Result, adapter protocol.Adapter) bool {
+	if mode != "video" && mode != "audio" && mode != "image" {
+		return true
+	}
+	if protocolResultHasOutput(mode, result) {
+		return true
+	}
+	_, ok := protocolResultEndpoint(adapter)
+	return ok
 }
 
 func protocolResultHasOutput(mode string, result *protocol.Result) bool {
@@ -200,8 +296,38 @@ func protocolMediaBytesOnce(ctx context.Context, config providerConfig, referenc
 	if value == "" {
 		return nil, "", errors.New("声明式协议媒体结果地址为空")
 	}
+	value, err := resolveProtocolMediaURL(config.BaseURL, value)
+	if err != nil {
+		return nil, "", err
+	}
 	data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
 	return data, normalizedMediaMimeType(mimeType, data), err
+}
+
+func resolveProtocolMediaURL(baseURL, rawURL string) (string, error) {
+	reference, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", fmt.Errorf("解析声明式协议媒体结果地址失败：%w", err)
+	}
+	if reference.IsAbs() {
+		if (reference.Scheme != "http" && reference.Scheme != "https") || reference.Host == "" {
+			return "", errors.New("声明式协议媒体结果地址只支持完整的 HTTP 或 HTTPS URL")
+		}
+		return reference.String(), nil
+	}
+	if reference.Host != "" {
+		return "", errors.New("声明式协议媒体结果地址不能使用 scheme-relative URL")
+	}
+
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || !base.IsAbs() || base.Host == "" || (base.Scheme != "http" && base.Scheme != "https") {
+		return "", errors.New("解析声明式协议媒体结果地址失败：渠道 Base URL 无效")
+	}
+	resolved := base.ResolveReference(reference)
+	if !sameProviderOrigin(baseURL, resolved.String()) {
+		return "", errors.New("声明式协议媒体结果地址超出渠道来源")
+	}
+	return resolved.String(), nil
 }
 
 func retryableProtocolMediaDownload(err error) bool {
@@ -221,13 +347,30 @@ func retryableProtocolMediaDownload(err error) bool {
 	return false
 }
 
-func protocolResultError(message, taskID string) error {
+// providerTaskTerminalError 表示协议适配器已从上游响应解析出明确的失败或取消终态。
+// 它和超时、断线不同：上游已确认任务结束，调用日志与账单都按失败收尾，不进入待核对。
+type providerTaskTerminalError struct {
+	TaskID  string
+	Status  protocol.Status
+	Message string
+}
+
+func (e providerTaskTerminalError) Error() string {
+	if e.TaskID == "" {
+		return e.Message
+	}
+	return fmt.Sprintf("声明式协议任务失败（任务 %s）：%s", e.TaskID, e.Message)
+}
+
+// protocolTaskFailure 构造终态错误，并把同一个终态写回本次上游任务的计费根日志。
+// 调用日志在适配器解析响应之前就已落库，日志侧只能按通用字段猜状态；manifest 的 status 表达式、
+// statusPaths 和 errorPaths 它都看不到。不回写时，失败任务的根日志仍是 succeeded，账单随之进入待核对。
+func protocolTaskFailure(ctx context.Context, status protocol.Status, message, taskID string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		message = "上游返回失败状态"
 	}
-	if taskID == "" {
-		return errors.New(message)
-	}
-	return fmt.Errorf("声明式协议任务失败（任务 %s）：%s", taskID, message)
+	failure := providerTaskTerminalError{TaskID: taskID, Status: status, Message: message}
+	recordProviderTaskTerminalFailure(ctx, failure)
+	return failure
 }

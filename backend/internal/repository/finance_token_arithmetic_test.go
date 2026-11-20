@@ -35,6 +35,26 @@ func TestTokenUsageAmountUsesExactArithmetic(t *testing.T) {
 			want:  22_500_000_000_000,
 		},
 		{
+			// InputTokens 含缓存命中和缓存写入，两者都从普通输入中扣出后按各自单价计费。
+			name: "text bills cache writes at their own price",
+			order: model.BillingOrder{
+				Capability: "text", MultiplierBasisPoints: 10_000,
+				InputTokenPriceMicrocredits: 1_000_000, OutputTokenPriceMicrocredits: 2_000_000,
+				CachedTokenPriceMicrocredits: 100_000, CacheWriteTokenPriceMicrocredits: 1_250_000,
+			},
+			usage: BillingUsage{InputTokens: 3_000_000, OutputTokens: 1_000_000, CachedTokens: 1_000_000, CacheWriteTokens: 1_000_000},
+			want:  4_350_000,
+		},
+		{
+			name: "default zero cache write price leaves writes uncharged",
+			order: model.BillingOrder{
+				Capability: "text", MultiplierBasisPoints: 10_000,
+				InputTokenPriceMicrocredits: 1_000_000, OutputTokenPriceMicrocredits: 2_000_000, CachedTokenPriceMicrocredits: 100_000,
+			},
+			usage: BillingUsage{InputTokens: 3_000_000, OutputTokens: 1_000_000, CachedTokens: 1_000_000, CacheWriteTokens: 1_000_000},
+			want:  3_100_000,
+		},
+		{
 			name: "round once after all text charges",
 			order: model.BillingOrder{
 				Capability: "text", MultiplierBasisPoints: 10_000,
@@ -50,7 +70,7 @@ func TestTokenUsageAmountUsesExactArithmetic(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			amount, err := tokenUsageAmount(test.order, &test.usage)
+			amount, _, err := tokenUsageAmount(test.order, &test.usage)
 			if err != nil || amount != test.want {
 				t.Fatalf("tokenUsageAmount() = %d, %v; want %d", amount, err, test.want)
 			}
@@ -75,6 +95,11 @@ func TestTokenUsageAmountRejectsInvalidArithmetic(t *testing.T) {
 			usage: BillingUsage{OutputTokens: 1},
 		},
 		{
+			name:  "negative cache write usage",
+			order: model.BillingOrder{Capability: "text", MultiplierBasisPoints: 10_000, CacheWriteTokenPriceMicrocredits: 1},
+			usage: BillingUsage{OutputTokens: 1, CacheWriteTokens: -1},
+		},
+		{
 			name:  "zero multiplier",
 			order: model.BillingOrder{Capability: "video", OutputTokenPriceMicrocredits: 1},
 			usage: BillingUsage{OutputTokens: 1},
@@ -86,7 +111,7 @@ func TestTokenUsageAmountRejectsInvalidArithmetic(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if amount, err := tokenUsageAmount(test.order, &test.usage); amount != 0 || err == nil {
+			if amount, _, err := tokenUsageAmount(test.order, &test.usage); amount != 0 || err == nil {
 				t.Fatalf("invalid usage billed %d, %v", amount, err)
 			}
 		})

@@ -13,7 +13,7 @@ func TestVideoTokenUsageAmountIgnoresTextCharges(t *testing.T) {
 		MultiplierBasisPoints: 10_000,
 	}
 	usage := &BillingUsage{InputTokens: 1000, OutputTokens: 108900, CachedTokens: 200}
-	amount, err := tokenUsageAmount(order, usage)
+	amount, _, err := tokenUsageAmount(order, usage)
 	if err != nil || amount != 1_742_400 {
 		t.Fatalf("video settlement = %d, %v, want 1742400", amount, err)
 	}
@@ -36,7 +36,7 @@ func TestVideoTokenUsageAmountRejectsInvalidUsage(t *testing.T) {
 		{name: "overflow", usage: &BillingUsage{OutputTokens: 1<<63 - 1}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if amount, err := tokenUsageAmount(order, test.usage); err == nil {
+			if amount, _, err := tokenUsageAmount(order, test.usage); err == nil {
 				t.Fatalf("invalid usage settled to %d", amount)
 			}
 		})
@@ -44,7 +44,7 @@ func TestVideoTokenUsageAmountRejectsInvalidUsage(t *testing.T) {
 }
 
 func TestTextTokenUsageAmountPreservesInputOutputAndCachePrices(t *testing.T) {
-	amount, err := tokenUsageAmount(model.BillingOrder{
+	amount, _, err := tokenUsageAmount(model.BillingOrder{
 		Capability: "text", InputTokenPriceMicrocredits: 2_000_000,
 		OutputTokenPriceMicrocredits: 5_000_000, CachedTokenPriceMicrocredits: 1_000_000,
 		MultiplierBasisPoints: 10_000,

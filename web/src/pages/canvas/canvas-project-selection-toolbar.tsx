@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { RefObject } from "react";
 
 import { CanvasSelectionToolbar } from "@/components/canvas/canvas-workspace-overlays";
@@ -17,17 +18,40 @@ type CanvasProjectSelectionToolbarProps = {
     onAlign: (mode: CanvasAlignmentMode) => void;
     onArrange: (mode: "row" | "column" | "grid" | "flow") => void;
     onCreateStoryboard: () => void;
+    onCreateFrame: () => void;
     onCreateReferenceGroup: () => void;
     onBatchConnect: () => void;
-    onMergeVideos: () => void;
+    onCompareImages?: () => void;
     onSendSelectionToAgent: () => void;
 };
 
-export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, selectedVideoCount, mergingVideos, onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent }: CanvasProjectSelectionToolbarProps) {
+export function CanvasProjectSelectionToolbar({
+    anchorRef,
+    containerRef,
+    count,
+    selectedVideoCount,
+    mergingVideos,
+    onAlign,
+    onArrange,
+    onCreateStoryboard,
+    onCreateFrame,
+    onCreateReferenceGroup,
+    onBatchConnect,
+    onCompareImages,
+    onSendSelectionToAgent,
+}: CanvasProjectSelectionToolbarProps) {
+    const { t } = useTranslation();
     const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
 
     const handlers = {
-        onAlign, onArrange, onCreateStoryboard, onCreateReferenceGroup, onBatchConnect, onMergeVideos, onSendSelectionToAgent,
+        onAlign,
+        onArrange,
+        onCreateStoryboard,
+        onCreateFrame,
+        onCreateReferenceGroup,
+        onBatchConnect,
+        onCompareImages,
+        onSendSelectionToAgent,
     } as Partial<ToolbarHandlers> as ToolbarHandlers;
 
     const ctx: ToolContext = {
@@ -54,7 +78,7 @@ export function CanvasProjectSelectionToolbar({ anchorRef, containerRef, count, 
 
     return (
         <CanvasSelectionToolbar anchorRef={anchorRef} containerRef={containerRef} count={count}>
-            <FloatingDock items={items} size="compact" className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel="多选节点布局工具" />
+            <FloatingDock items={items} size="compact" className="canvas-floating-dock" style={canvasDockStyle(theme)} ariaLabel={t("canvasPage.selectionToolbar.ariaLabel")} />
         </CanvasSelectionToolbar>
     );
 }

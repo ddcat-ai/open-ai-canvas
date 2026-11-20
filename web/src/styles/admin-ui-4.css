@@ -1,4 +1,3 @@
-
 .admin-redemption-detail-summary {
     display: flex;
     min-height: 40px;
@@ -1280,6 +1279,99 @@
     padding: 2px;
 }
 
+/* 分时与上下文价格：复用价格档卡片外壳，只定义规则正文布局。 */
+.admin-token-rules-header {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-token-rules-header .admin-price-tier-toggle {
+    flex: 0 0 auto;
+}
+
+.admin-token-rules-content {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.admin-token-rules-toolbar {
+    display: flex;
+    min-width: 0;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+}
+
+.admin-token-rules-tier-picker {
+    display: grid;
+    min-width: 220px;
+    gap: 4px;
+}
+
+.admin-token-rules-tier-picker > span,
+.admin-token-rules-tier-name,
+.admin-token-rule-label {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.admin-token-rules-empty {
+    margin: 0;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--foreground) 1.8%, var(--admin-layer-2));
+    padding: 12px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.admin-token-rule-body {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: start;
+    gap: 14px;
+    padding: 10px 12px 12px;
+}
+
+.admin-token-rule-column {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+}
+
+.admin-token-rule-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.admin-token-rule-range {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-token-rule-prices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+}
+
+@media (max-width: 900px) {
+    .admin-token-rule-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 .admin-price-tier-mode-control .ant-segmented-item,
 .admin-price-tier-billing-mode .ant-segmented-item {
     min-height: 28px;
@@ -1558,7 +1650,8 @@
 }
 
 .admin-channel-modal .ant-modal-body {
-    max-height: min(70vh, 620px);
+    /* 视口高度减去上下 24px 留白与约 124px 的标题栏、底栏，只让正文滚动。 */
+    max-height: min(620px, calc(100dvh - 172px));
     overflow-y: auto;
 }
 

@@ -30,9 +30,11 @@ func providerFailureDetails(payload map[string]any) (string, string) {
 			code = normalizedProviderErrorCode(candidate["code"])
 		}
 		if message == "" {
-			message = strings.TrimSpace(stringField(candidate, "message"))
-			if message == "" {
-				message = strings.TrimSpace(stringField(candidate, "msg"))
+			// NewAPI 等中转站的异步任务失败原因放在 data.fail_reason，外层 message 为空。
+			for _, key := range []string{"message", "msg", "fail_reason"} {
+				if message = strings.TrimSpace(stringField(candidate, key)); message != "" {
+					break
+				}
 			}
 		}
 	}
@@ -102,7 +104,7 @@ func providerBusinessFailure(payload map[string]any) (string, string, bool) {
 	code := strings.ToLower(strings.TrimSpace(fmt.Sprint(payload["code"])))
 	if code != "" && code != "0" &&
 		code != "success" && code != "succeeded" &&
-		code != "ok" && code != "<nil>" {
+		code != "ok" && code != "<nil>" && !volcengineVisualSuccessEnvelope(code, payload) {
 		code, message := providerFailureDetails(payload)
 		return code, message, true
 	}
@@ -118,6 +120,12 @@ func providerBusinessFailure(payload map[string]any) (string, string, bool) {
 	}
 
 	return "", "", false
+}
+
+// volcengineVisualSuccessEnvelope 识别火山视觉 OpenAPI（即梦等）的成功信封：code=10000 且 message=Success。
+// 只放行这一组合，其他协议里的 10000 仍按业务失败处理。
+func volcengineVisualSuccessEnvelope(code string, payload map[string]any) bool {
+	return code == "10000" && strings.EqualFold(strings.TrimSpace(stringField(payload, "message")), "success")
 }
 
 func normalizedProviderErrorCode(value any) string {
@@ -141,7 +149,9 @@ func normalizedProviderErrorCode(value any) string {
 		}
 	}
 	code = strings.TrimSpace(code)
-	if code == "0" {
+	// 外层 code=success 只是信封成功，失败终态在 data.status 里；它不能被记成错误码。
+	switch strings.ToLower(code) {
+	case "0", "success", "succeeded", "ok":
 		return ""
 	}
 	return truncateRunes(code, 80)

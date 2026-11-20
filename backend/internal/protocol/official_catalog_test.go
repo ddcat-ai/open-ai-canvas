@@ -156,6 +156,117 @@ func TestOfficialCheaperInferenceChatProfile(t *testing.T) {
 	}
 }
 
+func TestOfficialRuncrateChatProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "runcrate-chat.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	if provider.ID != "runcrate-chat" || provider.BaseURL != "https://api.runcrate.ai" || provider.Auth.Type != "bearer" {
+		t.Fatalf("Runcrate provider metadata = %#v", provider)
+	}
+
+	adapter := officialPackageAdapter(t, "runcrate-chat.yingce-plugin", "runcrate-chat")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:    "deepseek-ai/DeepSeek-V4-Flash",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if spec.Method != "POST" || spec.Path != "/v1/chat/completions" || body["model"] != "deepseek-ai/DeepSeek-V4-Flash" {
+		t.Fatalf("Runcrate request = %#v, body = %#v", spec, body)
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"runcrate ok"}}],"usage":{"total_tokens":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "runcrate ok" {
+		t.Fatalf("Runcrate response = %#v", result)
+	}
+}
+
+func TestOfficialUberLLMChatProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "uberllm-chat.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	if provider.ID != "uberllm-chat" || provider.BaseURL != "https://api.uberllm.dev" || provider.Auth.Type != "bearer" {
+		t.Fatalf("UberLLM provider metadata = %#v", provider)
+	}
+
+	adapter := officialPackageAdapter(t, "uberllm-chat.yingce-plugin", "uberllm-chat")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:    "deepseek/deepseek-v4-flash",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if spec.Method != "POST" || spec.Path != "/v1/chat/completions" || body["model"] != "deepseek/deepseek-v4-flash" {
+		t.Fatalf("UberLLM request = %#v, body = %#v", spec, body)
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"uberllm ok"}}],"usage":{"total_tokens":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "uberllm ok" {
+		t.Fatalf("UberLLM response = %#v", result)
+	}
+}
+
+func TestOfficialMiniMaxH3ImageProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "minimax-h3-image.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pkg.Manifest.Metadata.ID != "minimax-h3-image" || len(pkg.Manifest.Contributes.Providers) != 1 {
+		t.Fatalf("MiniMax H3 Image manifest = %#v", pkg.Manifest.Metadata)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	// 独立 provider ID，与旧 minimax-image（/v1/image_generation）和 openai-image 共存。
+	if provider.ID != "minimax-h3-image" || provider.BaseURL != "https://api.minimax.cn" || provider.Auth.Type != "bearer" || provider.Auth.Field != "apiKey" || provider.RequiresPublicMediaURLs {
+		t.Fatalf("MiniMax H3 Image provider metadata = %#v", provider)
+	}
+	legacy := officialPackageAdapter(t, "minimax-image.yingce-plugin", "minimax-image")
+	if legacy.Metadata().Create != "POST /v1/image_generation" {
+		t.Fatalf("legacy minimax-image create = %q, 旧协议必须保持不变", legacy.Metadata().Create)
+	}
+
+	adapter := officialPackageAdapter(t, "minimax-h3-image.yingce-plugin", "minimax-h3-image")
+	for _, model := range []string{"MiniMax-H3-Image", "MiniMax-H3-Image-Highspeed"} {
+		spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{Model: model, Prompt: "hello", AspectRatio: "1:1"}})
+		if err != nil {
+			t.Fatalf("%s: %v", model, err)
+		}
+		if body := manifestTestBody(t, spec); spec.Path != "/v1/images/generations" || body["model"] != model || body["area"] != "2K" {
+			t.Fatalf("%s request = %#v, body = %#v", model, spec, body)
+		}
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"data":[{"url":"https://example.com/h3.jpg"}],"output_format":"jpeg"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || len(result.Result.Images) != 1 || !result.Result.Images[0].Ephemeral {
+		t.Fatalf("MiniMax H3 Image response = %#v", result)
+	}
+}
+
 func assertManifestContractMatchesPackage(t *testing.T, packageName string, manifestRaw []byte, interfaceDocs string) {
 	t.Helper()
 	start := strings.Index(interfaceDocs, manifestContractStart)
@@ -493,6 +604,89 @@ func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
 			}
 			if state.Result.Videos[0].URL != test.wantURL {
 				t.Fatalf("video = %#v, want URL %q", state.Result.Videos[0], test.wantURL)
+			}
+		})
+	}
+}
+
+func TestNewAPITaskFailureKeepsUpstreamReason(t *testing.T) {
+	// NewAPI 失败任务的外层是 code=success、message 为空，原因只在 data.fail_reason。
+	payload := `{"code":"success","message":"","data":{"task_id":"task-upstream","status":"FAILURE","fail_reason":"内容审核未通过","progress":"100%"}}`
+	for _, profile := range []struct{ packageName, providerID string }{
+		{"newapi-video-generations-v1.yingce-plugin", "newapi-channel-2"},
+		{"newapi-media-task-v1.yingce-plugin", "newapi-channel-1"},
+	} {
+		t.Run(profile.providerID, func(t *testing.T) {
+			state, err := officialPackageAdapter(t, profile.packageName, profile.providerID).ParsePoll(context.Background(), PollContext{TaskID: "task-upstream"}, []byte(payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Status != StatusFailed || state.Message != "内容审核未通过" {
+				t.Fatalf("state = %#v, want failed with upstream reason", state)
+			}
+		})
+	}
+}
+
+func TestOfficialNovitaVideoParsesTaskResultEnvelope(t *testing.T) {
+	adapter := officialPackageAdapter(t, "novita-video.yingce-plugin", "novita-video")
+	tests := []struct {
+		name, payload, wantURL, wantMessage string
+		wantStatus                          Status
+	}{
+		{name: "queued", payload: `{"extra":{},"task":{"task_id":"novita-1","status":"TASK_STATUS_QUEUED","reason":""},"videos":[]}`, wantStatus: StatusPending},
+		{name: "processing", payload: `{"task":{"task_id":"novita-1","status":"TASK_STATUS_PROCESSING","progress_percent":40},"videos":[]}`, wantStatus: StatusProcessing},
+		{name: "succeeded", payload: `{"task":{"task_id":"novita-1","status":"TASK_STATUS_SUCCEED"},"videos":[{"video_url":"https://cdn.example/novita.mp4","video_url_ttl":"3600","video_type":"mp4"}]}`, wantStatus: StatusSucceeded, wantURL: "https://cdn.example/novita.mp4"},
+		{name: "failed", payload: `{"task":{"task_id":"novita-1","status":"TASK_STATUS_FAILED","reason":"image is not accessible"},"videos":[]}`, wantStatus: StatusFailed, wantMessage: "image is not accessible"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "novita-1"}, []byte(test.payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state.Status != test.wantStatus || state.TaskID != "novita-1" || state.Message != test.wantMessage {
+				t.Fatalf("state = %#v, want %s with message %q", state, test.wantStatus, test.wantMessage)
+			}
+			if test.wantURL != "" && (state.Result == nil || len(state.Result.Videos) != 1 || state.Result.Videos[0].URL != test.wantURL) {
+				t.Fatalf("result = %#v, want %s", state.Result, test.wantURL)
+			}
+		})
+	}
+}
+
+func TestOfficialJimengTreatsVolcengineSuccessCodeAsSuccess(t *testing.T) {
+	for _, profile := range []struct{ packageName, providerID, results string }{
+		{"volcengine-jimeng-video.yingce-plugin", "volcengine-jimeng-video", `"video_url":"https://cdn.example/jimeng.mp4"`},
+		{"volcengine-jimeng-image.yingce-plugin", "volcengine-jimeng-image", `"image_urls":["https://cdn.example/jimeng.png"]`},
+	} {
+		t.Run(profile.providerID, func(t *testing.T) {
+			adapter := officialPackageAdapter(t, profile.packageName, profile.providerID)
+			// 火山视觉 OpenAPI 成功信封：code=10000、顶层 status 也是 10000。
+			created, err := adapter.ParseCreate(context.Background(), []byte(`{"code":10000,"data":{"task_id":"jimeng-1"},"message":"Success","request_id":"req-1","status":10000,"time_elapsed":"20ms"}`))
+			if err != nil || created.Status != StatusPending || created.TaskID != "jimeng-1" {
+				t.Fatalf("created = %#v err=%v, want pending jimeng-1", created, err)
+			}
+			for _, test := range []struct {
+				name, payload, wantMessage string
+				wantStatus                 Status
+			}{
+				{name: "in queue", payload: `{"code":10000,"data":{"status":"in_queue"},"message":"Success","status":10000}`, wantStatus: StatusPending},
+				{name: "done", payload: `{"code":10000,"data":{"status":"done",` + profile.results + `},"message":"Success","status":10000}`, wantStatus: StatusSucceeded},
+				{name: "business failure", payload: `{"code":50411,"data":null,"message":"Pre Img Risk Not Pass","status":50411}`, wantStatus: StatusFailed, wantMessage: "Pre Img Risk Not Pass"},
+				{name: "done with failure code", payload: `{"code":50413,"data":{"status":"done"},"message":"Post Text Risk Not Pass","status":50413}`, wantStatus: StatusFailed, wantMessage: "Post Text Risk Not Pass"},
+				{name: "task gone", payload: `{"code":10000,"data":{"status":"not_found"},"message":"Success","status":10000}`, wantStatus: StatusFailed, wantMessage: "即梦任务不存在或已过期，请重新生成"},
+			} {
+				state, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "jimeng-1"}, []byte(test.payload))
+				if err != nil {
+					t.Fatalf("%s: %v", test.name, err)
+				}
+				if state.Status != test.wantStatus || (test.wantMessage != "" && state.Message != test.wantMessage) {
+					t.Fatalf("%s: state = %#v, want %s %q", test.name, state, test.wantStatus, test.wantMessage)
+				}
+				if test.wantStatus == StatusSucceeded && (state.Result == nil || len(state.Result.Videos)+len(state.Result.Images) != 1) {
+					t.Fatalf("%s: result = %#v, want one media", test.name, state.Result)
+				}
 			}
 		})
 	}

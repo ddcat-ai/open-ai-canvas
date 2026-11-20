@@ -22,6 +22,7 @@ const REASON_MESSAGES: Record<string, string> = {
     model_catalog_mismatch: "模型配置已更新，请重新选择模型后再试。",
     invalid_model_selection: "模型选择无效，请重新选择模型后再试。",
     quota_exceeded: "积分或额度不足，请充值后再试。",
+    agent_history_capacity_exceeded: "Agent 历史容量不足，请联系管理员调高 Agent 历史额度或清理历史。",
     storage_capacity_exceeded: "账号存储空间不足，请清理素材或购买存储空间后再试。",
     storage_read_only: "账号已超出存储容量且宽限期已结束，当前为只读状态。请删除素材或购买存储空间。",
     drama_budget_exhausted: "这部短剧已达到预算上限（含画布精修花费），请在短剧设置里提高预算后再生成。",
@@ -250,7 +251,7 @@ function containsInfrastructureDetails(value: string) {
 function resourceStorageFailureMessage(value: string) {
     if (!value) return "";
     if (/\bUserDisable\b/i.test(value)) return "对象存储账号已停用，请检查或更换对象存储配置。";
-    if (/(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云)/i.test(value)) {
+    if (/(?:参考(?:图片|媒体)上传失败|OSS 上传失败|对象存储|腾讯云 COS|七牛云|火山引擎 TOS)/i.test(value)) {
         return "参考素材上传到对象存储失败，请检查对象存储配置后重试。";
     }
     return "";

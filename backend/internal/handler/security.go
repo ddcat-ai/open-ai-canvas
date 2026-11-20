@@ -168,7 +168,9 @@ func loadRuntimePolicy(c *gin.Context, svc *service.Service) (service.RuntimePol
 	return policy, true
 }
 
-func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInterfaceType, method string, requestPath string, contentType string, body []byte) error {
+// authorizeSystemProxy 校验系统代理请求。declaredPaths 是已安装插件声明的 POST 路径
+// （见 SystemProxyDeclaredPostPaths），只用于内置合同之外的协议。
+func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInterfaceType, declaredPaths []string, method string, requestPath string, contentType string, body []byte) error {
 	requestPath, err := normalizedProxyPath(requestPath)
 	if err != nil {
 		return err
@@ -224,7 +226,7 @@ func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInt
 	if method != http.MethodPost || !openAIPostEndpoints[requestPath] {
 		return errors.New("系统渠道不允许访问该上游接口")
 	}
-	if protocol != "" && !interfaceAllowsProxyPath(protocol, requestPath) {
+	if protocol != "" && !interfaceAllowsProxyPath(protocol, requestPath, declaredPaths) {
 		return errors.New("当前接口类型不允许访问该上游接口")
 	}
 	modelName := proxyRequestModel(contentType, body)
@@ -234,7 +236,7 @@ func authorizeSystemProxy(channel *model.ModelChannel, protocol model.ChannelInt
 	return nil
 }
 
-func interfaceAllowsProxyPath(interfaceType model.ChannelInterfaceType, requestPath string) bool {
+func interfaceAllowsProxyPath(interfaceType model.ChannelInterfaceType, requestPath string, declaredPaths []string) bool {
 	switch interfaceType {
 	case model.ChannelInterfaceChatCompletion:
 		return requestPath == "/chat/completions"
@@ -251,7 +253,13 @@ func interfaceAllowsProxyPath(interfaceType model.ChannelInterfaceType, requestP
 	case model.ChannelInterfaceAsyncAudio, model.ChannelInterfaceNewAPIVideo, model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2, model.ChannelInterfaceXAIVideo, model.ChannelInterfaceVolcengineArkVideo, model.ChannelInterfaceVolcengineArkAgentPlanVideo, model.ChannelInterfaceVolcengineJiMengImage, model.ChannelInterfaceVolcengineJiMengVideo, model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceGeminiImage, model.ChannelInterfaceNovitaVideo, model.ChannelInterfaceMiniMaxVideo:
 		return false
 	default:
-		return true
+		// 内置合同之外的协议只能访问插件自己声明的 create / agent 路径；未安装插件时失败关闭。
+		for _, declared := range declaredPaths {
+			if declared == requestPath {
+				return true
+			}
+		}
+		return false
 	}
 }
 

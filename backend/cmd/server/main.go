@@ -92,6 +92,9 @@ func run(ctx context.Context) error {
 	if err := svc.EnsureDefaultPromptTemplates(); err != nil {
 		return err
 	}
+	if _, err := svc.EnsureBundledEcommerceKnowledge(); err != nil {
+		return err
+	}
 	if err := svc.EnsureBuiltinProjectWorkflowTemplate(); err != nil {
 		return err
 	}
@@ -106,6 +109,18 @@ func run(ctx context.Context) error {
 	}
 	if err := ensureBuiltinWorkbenchCatalog(svc); err != nil {
 		return err
+	}
+	// Initialize the shipped domains and industry dictionary before accepting
+	// requests so a failed upgrade cannot serve an incomplete knowledge catalog.
+	if report, err := svc.EnsureBuiltinEcommerceKnowledge(); err != nil {
+		return fmt.Errorf("initialize builtin ecommerce knowledge: %w", err)
+	} else {
+		slog.Info("builtin ecommerce knowledge ready", "shipped", report.Shipped, "inserted", len(report.Inserted), "updated", len(report.Updated), "unchanged", report.Unchanged, "preservedLocal", len(report.PreservedLocal))
+	}
+	if report, err := svc.EnsureIndustryTaxonomyKnowledge(); err != nil {
+		return fmt.Errorf("initialize industry taxonomy knowledge: %w", err)
+	} else {
+		slog.Info("industry taxonomy ready", "shipped", report.Shipped, "inserted", report.Inserted, "installed", report.AlreadyInstalled)
 	}
 	if summary, err := svc.MigrateLegacyStorage(); err != nil {
 		slog.Warn("storage migration skipped after error", "error", err)
@@ -142,6 +157,8 @@ func run(ctx context.Context) error {
 	svc.StartWorker()
 	// 启动后回填存量视频的播放副本转码（幂等，无待处理项即退出）。
 	go svc.BackfillPlaybackTranscodes()
+	// 启动后为本地存储中尺寸未知的存量视频补探测宽高（有界、幂等；对象存储视频在短剧投送时按需修复）。
+	go svc.BackfillVideoResourceDimensions(ctx)
 	status.markStarted()
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- httpServer.Serve(listener) }()
@@ -227,7 +244,7 @@ func envDuration(key string, fallback time.Duration) (time.Duration, error) {
 	return parsed, nil
 }
 
-const corsAllowedHeaders = "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Trace-ID, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format, X-Canvas-Upstream-Base-URL"
+const corsAllowedHeaders = "Accept, Content-Type, Authorization, X-Requested-With, X-Canvas-Scene, X-Idempotency-Key, X-Canvas-Expected-User, X-Canvas-Trace-ID, X-Canvas-Upstream-URL, X-Canvas-Upstream-Format, X-Canvas-Upstream-Base-URL"
 
 const corsAllowedMethods = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 

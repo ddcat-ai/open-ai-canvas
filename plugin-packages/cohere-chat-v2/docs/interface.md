@@ -1,5 +1,14 @@
 # Cohere Chat v2 接口字段
 
+## FORMA-TEXT-MULTIMODAL：原生同步合同
+
+POST /v2/chat，正文 model/messages。request.textMessages 的纯文本转为字符串；user 图片转为 {type:"image_url",image_url:{url}}，URL 可以是 HTTP(S) 或内联 data URL。system/assistant 只接受文本；音频、视频、gs URL、未知或无效内容（包括历史）明确拒绝。图片兼容性由所选模型决定，不修改模型能力、限额或价格。
+
+保留原有 temperature、stop_sequences、tools、tool_choice、response_format、documents、citation_options、safety_mode、seed 选项。原生 p 优先，其次统一 top_p，输出为 p 而不是 top_p；max_tokens 支持命名空间值并回退 request.extra.max_tokens。同步入口拒绝 stream=true。响应拼接 message.content 中全部 type=text 块；thinking 单独归一，不只读取第一个块，usage 保留原生对象。
+
+官方依据：[Chat v2](https://docs.cohere.com/v2/reference/chat)。
+
+
 ## 协议身份
 
 - 插件 ID：`cohere-chat-v2`。
@@ -10,30 +19,31 @@
 - 创建：`POST /v2/chat`。
 - 生命周期：同步响应。
 
+
 ## 配置字段
 
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
 | `apiKey` | secret | 是 | API Key |
 
+
 ## 统一字段映射
 
 | 统一字段 | 类型 | 必填 | 上游映射 | 说明 |
 | --- | --- | --- | --- | --- |
 | `model` | string | 是 | `model` | 上游模型 ID。 |
-| `messages` | message[] | 是 | `provider message container` | 包含历史消息和当前用户输入。 |
+| `messages` | message[] | 是 | `messages` | 包含历史消息和当前用户输入。 |
 | `instructions` | string | 否 | `system/instructions` | 系统指令。 |
 | `temperature` | number | 否 | `temperature` | 采样温度。 |
-| `top_p` | number | 否 | `top_p` | 核采样参数。 |
+| `top_p` | number | 否 | `p` | 核采样参数。 |
 | `max_tokens` | integer | 否 | `max_tokens/max_output_tokens` | 最大输出 token。 |
 | `tools` | array | 否 | `tools/toolConfig` | 工具定义。 |
 | `tool_choice` | object|string | 否 | `tool_choice` | 工具选择策略。 |
 | `response_format` | object | 否 | `response_format/text` | 结构化输出配置。 |
 | `stream` | boolean | 否 | `stream` | 流式开关；后台任务当前以最终响应归一。 |
 
-## 上游请求模板逐字段清单
 
-下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。
+## 上游请求模板逐字段清单
 
 | 上游位置 | 值或转换表达式 |
 | --- | --- |
@@ -41,9 +51,9 @@
 | `create.path` | `"/v2/chat"` |
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
-| `create.body.messages` | `{"$ref":"request.messages"}` |
+| `create.body.messages` | `{"$map":{"from":{"$ref":"request.textMessages"},"as":"m","in":{"role":{"$ref":"m.role"},"content":{"$if":{"condition":{"$eq":[{"$len":{"$filter":{"from":{"$ref":"m.parts"},"as":"p","where":{"$not":{"$eq":[{"$ref":"p.type"},"text"]}}}}},0]},"then":{"$ref":"m.text"},"else":{"$map":{"from":{"$ref":"m.parts"},"as":"p","in":{"$if":{"condition":{"$eq":[{"$ref":"p.type"},"text"]},"then":{"type":"text","text":{"$ref":"p.text"}},"else":{"type":"image_url","image_url":{"url":{"$ref":"p.value"}}}}}}}}}}}}` |
 | `create.body.temperature` | `{"$omitEmpty":{"$ref":"request.providerOptions.cohere-chat-v2.temperature"}}` |
-| `create.body.max_tokens` | `{"$omitEmpty":{"$ref":"request.extra.max_tokens"}}` |
+| `create.body.max_tokens` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.cohere-chat-v2.max_tokens"},{"$ref":"request.extra.max_tokens"}]}}` |
 | `create.body.stop_sequences` | `{"$omitEmpty":{"$ref":"request.providerOptions.cohere-chat-v2.stop_sequences"}}` |
 | `create.body.tools` | `{"$omitEmpty":{"$ref":"request.providerOptions.cohere-chat-v2.tools"}}` |
 | `create.body.tool_choice` | `{"$omitEmpty":{"$ref":"request.providerOptions.cohere-chat-v2.tool_choice"}}` |
@@ -53,11 +63,15 @@
 | `create.body.safety_mode` | `{"$omitEmpty":{"$ref":"request.providerOptions.cohere-chat-v2.safety_mode"}}` |
 | `create.body.seed` | `{"$omitEmpty":{"$ref":"request.providerOptions.cohere-chat-v2.seed"}}` |
 | `create.body.stream` | `{"$omitEmpty":{"$ref":"request.providerOptions.cohere-chat-v2.stream"}}` |
+| `create.body.p` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.cohere-chat-v2.p"},{"$ref":"request.providerOptions.cohere-chat-v2.top_p"}]}}` |
+
 
 ## Provider 扩展键
 
 - `providerOptions.cohere-chat-v2.citation_options`
 - `providerOptions.cohere-chat-v2.documents`
+- `providerOptions.cohere-chat-v2.max_tokens`
+- `providerOptions.cohere-chat-v2.p`
 - `providerOptions.cohere-chat-v2.response_format`
 - `providerOptions.cohere-chat-v2.safety_mode`
 - `providerOptions.cohere-chat-v2.seed`
@@ -66,27 +80,19 @@
 - `providerOptions.cohere-chat-v2.temperature`
 - `providerOptions.cohere-chat-v2.tool_choice`
 - `providerOptions.cohere-chat-v2.tools`
+- `providerOptions.cohere-chat-v2.top_p`
 
-动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。
 
 ## 响应映射逐字段清单
 
 | 映射位置 | 上游路径或转换表达式 |
 | --- | --- |
 | `response.status` | `"succeeded"` |
-| `response.textPaths[0]` | `"message.content.0.text"` |
-| `response.textPaths[1]` | `"text"` |
 | `response.usage` | `{"$ref":"response.usage"}` |
 | `response.errorPaths[0]` | `"error.type"` |
 | `response.messagePaths[0]` | `"message"` |
-
-## 响应与错误
-
-插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。
-
-## 兼容边界
-
-该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。
+| `response.text` | `{"$map":{"from":{"$filter":{"from":{"$ref":"response.message.content"},"as":"part","where":{"$eq":[{"$ref":"part.type"},"text"]}}},"as":"part","in":{"$ref":"part.text"}}}` |
+| `response.reasoning` | `{"$map":{"from":{"$filter":{"from":{"$ref":"response.message.content"},"as":"part","where":{"$eq":[{"$ref":"part.type"},"thinking"]}}},"as":"part","in":{"$ref":"part.thinking"}}}` |
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -98,7 +104,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "cohere-chat-v2",
   "name": "Cohere Chat v2",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Cohere / 影策",
   "description": "Cohere Chat v2 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -149,7 +155,7 @@
             "name": "messages",
             "type": "message[]",
             "required": true,
-            "mapping": "provider message container",
+            "mapping": "messages",
             "description": "包含历史消息和当前用户输入。"
           },
           {
@@ -170,7 +176,7 @@
             "name": "top_p",
             "type": "number",
             "required": false,
-            "mapping": "top_p",
+            "mapping": "p",
             "description": "核采样参数。"
           },
           {
@@ -218,7 +224,83 @@
               "$ref": "request.model"
             },
             "messages": {
-              "$ref": "request.messages"
+              "$map": {
+                "from": {
+                  "$ref": "request.textMessages"
+                },
+                "as": "m",
+                "in": {
+                  "role": {
+                    "$ref": "m.role"
+                  },
+                  "content": {
+                    "$if": {
+                      "condition": {
+                        "$eq": [
+                          {
+                            "$len": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "m.parts"
+                                },
+                                "as": "p",
+                                "where": {
+                                  "$not": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "p.type"
+                                      },
+                                      "text"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      "then": {
+                        "$ref": "m.text"
+                      },
+                      "else": {
+                        "$map": {
+                          "from": {
+                            "$ref": "m.parts"
+                          },
+                          "as": "p",
+                          "in": {
+                            "$if": {
+                              "condition": {
+                                "$eq": [
+                                  {
+                                    "$ref": "p.type"
+                                  },
+                                  "text"
+                                ]
+                              },
+                              "then": {
+                                "type": "text",
+                                "text": {
+                                  "$ref": "p.text"
+                                }
+                              },
+                              "else": {
+                                "type": "image_url",
+                                "image_url": {
+                                  "url": {
+                                    "$ref": "p.value"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             },
             "temperature": {
               "$omitEmpty": {
@@ -227,7 +309,14 @@
             },
             "max_tokens": {
               "$omitEmpty": {
-                "$ref": "request.extra.max_tokens"
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.cohere-chat-v2.max_tokens"
+                  },
+                  {
+                    "$ref": "request.extra.max_tokens"
+                  }
+                ]
               }
             },
             "stop_sequences": {
@@ -274,15 +363,23 @@
               "$omitEmpty": {
                 "$ref": "request.providerOptions.cohere-chat-v2.stream"
               }
+            },
+            "p": {
+              "$omitEmpty": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.cohere-chat-v2.p"
+                  },
+                  {
+                    "$ref": "request.providerOptions.cohere-chat-v2.top_p"
+                  }
+                ]
+              }
             }
           }
         },
         "response": {
           "status": "succeeded",
-          "textPaths": [
-            "message.content.0.text",
-            "text"
-          ],
           "usage": {
             "$ref": "response.usage"
           },
@@ -291,8 +388,267 @@
           ],
           "messagePaths": [
             "message"
-          ]
-        }
+          ],
+          "text": {
+            "$map": {
+              "from": {
+                "$filter": {
+                  "from": {
+                    "$ref": "response.message.content"
+                  },
+                  "as": "part",
+                  "where": {
+                    "$eq": [
+                      {
+                        "$ref": "part.type"
+                      },
+                      "text"
+                    ]
+                  }
+                }
+              },
+              "as": "part",
+              "in": {
+                "$ref": "part.text"
+              }
+            }
+          },
+          "reasoning": {
+            "$map": {
+              "from": {
+                "$filter": {
+                  "from": {
+                    "$ref": "response.message.content"
+                  },
+                  "as": "part",
+                  "where": {
+                    "$eq": [
+                      {
+                        "$ref": "part.type"
+                      },
+                      "thinking"
+                    ]
+                  }
+                }
+              },
+              "as": "part",
+              "in": {
+                "$ref": "part.thinking"
+              }
+            }
+          }
+        },
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$ref": "request.textInput.invalidCount"
+                },
+                0
+              ]
+            },
+            "message": "输入或历史消息包含无效或未识别的内容块"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "p",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "p.type"
+                            },
+                            [
+                              "text",
+                              "image"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议不支持输入或历史消息中的媒体类型"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textMessages"
+                      },
+                      "as": "m",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "m.role"
+                            },
+                            [
+                              "system",
+                              "user",
+                              "assistant"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议只接受 system、user、assistant 消息"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textMessages"
+                      },
+                      "as": "m",
+                      "where": {
+                        "$and": [
+                          {
+                            "$not": {
+                              "$eq": [
+                                {
+                                  "$ref": "m.role"
+                                },
+                                "user"
+                              ]
+                            }
+                          },
+                          {
+                            "$gt": [
+                              {
+                                "$len": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "m.parts"
+                                    },
+                                    "as": "p",
+                                    "where": {
+                                      "$not": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "p.type"
+                                          },
+                                          "text"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议仅支持 user 消息中的媒体"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "p",
+                      "where": {
+                        "$and": [
+                          {
+                            "$not": {
+                              "$eq": [
+                                {
+                                  "$ref": "p.type"
+                                },
+                                "text"
+                              ]
+                            }
+                          },
+                          {
+                            "$not": {
+                              "$ref": "p.isInline"
+                            }
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$first": {
+                                    "$split": [
+                                      {
+                                        "$ref": "p.value"
+                                      },
+                                      ":"
+                                    ]
+                                  }
+                                },
+                                [
+                                  "http",
+                                  "https"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议仅支持 HTTP(S) 媒体 URL 或内联数据"
+          },
+          {
+            "assert": {
+              "$not": {
+                "$or": [
+                  {
+                    "$ref": "request.providerOptions.cohere-chat-v2.stream"
+                  },
+                  {
+                    "$ref": "request.providerOptions.cohere-chat-v2.body.stream"
+                  },
+                  {
+                    "$ref": "request.providerOptions.cohere-chat-v2.extra_body.stream"
+                  },
+                  {
+                    "$ref": "request.providerOptions.cohere-chat-v2.parameters.stream"
+                  }
+                ]
+              }
+            },
+            "message": "该同步协议不支持 stream=true"
+          }
+        ]
       }
     ]
   }

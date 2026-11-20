@@ -14,13 +14,14 @@ type ResourceVariant string
 type DeliveryMode string
 
 const (
-	PurposeDisplay  AccessPurpose   = "display"
-	PurposeCopy     AccessPurpose   = "copy"
-	PurposeDownload AccessPurpose   = "download"
-	PurposeProcess  AccessPurpose   = "browser-process"
-	PurposeProvider AccessPurpose   = "provider-input"
-	VariantOriginal ResourceVariant = "original"
-	VariantPlayback ResourceVariant = "playback"
+	PurposeDisplay         AccessPurpose   = "display"
+	PurposeCopy            AccessPurpose   = "copy"
+	PurposeDownload        AccessPurpose   = "download"
+	PurposeProcess         AccessPurpose   = "browser-process"
+	PurposeEcommerceExport AccessPurpose   = "ecommerce-export"
+	PurposeProvider        AccessPurpose   = "provider-input"
+	VariantOriginal        ResourceVariant = "original"
+	VariantPlayback        ResourceVariant = "playback"
 	// VariantThumbnail 是画布展示档位；缩略图未生成前回落原件，保证请求不会因变体失败而退回平台重定向。
 	VariantThumbnail ResourceVariant = "thumbnail"
 	DeliveryCDN      DeliveryMode    = "cdn"
@@ -70,7 +71,7 @@ func NormalizeAccessOptions(options AccessOptions, allowProvider bool) (AccessOp
 		options.Variant = VariantOriginal
 	}
 	switch options.Purpose {
-	case PurposeDisplay, PurposeCopy, PurposeDownload, PurposeProcess:
+	case PurposeDisplay, PurposeCopy, PurposeDownload, PurposeProcess, PurposeEcommerceExport:
 	case PurposeProvider:
 		if !allowProvider {
 			return options, kernel.Forbidden("不允许请求模型输入凭据")
@@ -81,7 +82,7 @@ func NormalizeAccessOptions(options AccessOptions, allowProvider bool) (AccessOp
 	if options.Variant != VariantOriginal && options.Variant != VariantPlayback && options.Variant != VariantThumbnail {
 		return options, kernel.BadAuthRequest("资源变体无效")
 	}
-	if options.Purpose == PurposeCopy || options.Purpose == PurposeDownload || options.Purpose == PurposeProvider {
+	if options.Purpose == PurposeCopy || options.Purpose == PurposeDownload || options.Purpose == PurposeProvider || options.Purpose == PurposeEcommerceExport {
 		options.Variant = VariantOriginal
 	}
 	if options.Purpose != PurposeDownload {
@@ -103,6 +104,9 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	}
 	if resource.Status != model.ResourceStatusReady {
 		return nil, AccessError(http.StatusConflict, "resource_not_ready", "资源尚未上传完成")
+	}
+	if options.Purpose == PurposeEcommerceExport && (resource.Kind != "image" || resource.Size > 32*1024*1024 || resource.Size <= 0 || (resource.MimeType != "image/png" && resource.MimeType != "image/jpeg" && resource.MimeType != "image/webp")) {
+		return nil, AccessError(http.StatusBadRequest, "ecommerce_export_invalid", "电商导出仅支持32 MB以内的PNG、JPEG和WebP商品图片")
 	}
 	// 有效期来自后台「资源与请求策略」；未注入运行时策略时回落到存储层默认值（均为 4 小时）。
 	runtime := storage.NormalizeSettings(storage.Settings{Runtime: setting.Runtime}).Runtime
@@ -138,7 +142,11 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	if options.Variant == VariantThumbnail {
 		access.FallbackReason = "thumbnail_not_ready"
 	}
-	if resource.Provider == "local" {
+	if options.Purpose == PurposeEcommerceExport {
+		access.Delivery = DeliveryProxy
+		access.FallbackReason = "ecommerce_export_processing"
+		access.ExpiresAt = nil
+	} else if resource.Provider == "local" {
 		access.Delivery = DeliveryLocal
 	} else if !InlineMediaType(resource.MimeType) {
 		// A redirect cannot enforce our attachment and sandbox response headers.

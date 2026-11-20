@@ -30,7 +30,15 @@ func (s *Service) SkillPackageFiles(userID string, skillID string) ([]SkillPacka
 }
 
 func (s *Service) SkillPackageFile(userID string, skillID string, filePath string) (*SkillPackageFileContent, error) {
-	_, file, content, err := s.readSkillPackageSnapshotFile(userID, skillID, filePath)
+	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	if err != nil {
+		return nil, err
+	}
+	return s.skillPackageFileContent(snapshot, filePath)
+}
+
+func (s *Service) skillPackageFileContent(snapshot *skillPackageSnapshot, filePath string) (*SkillPackageFileContent, error) {
+	file, content, err := s.readSkillPackageSnapshotFile(snapshot, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +53,15 @@ func (s *Service) SkillPackageFile(userID string, skillID string, filePath strin
 }
 
 func (s *Service) SkillPackageRawFile(userID string, skillID string, filePath string) ([]byte, string, string, error) {
-	_, file, content, err := s.readSkillPackageSnapshotFile(userID, skillID, filePath)
+	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return s.skillPackageRawFile(snapshot, filePath)
+}
+
+func (s *Service) skillPackageRawFile(snapshot *skillPackageSnapshot, filePath string) ([]byte, string, string, error) {
+	file, content, err := s.readSkillPackageSnapshotFile(snapshot, filePath)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -99,23 +115,19 @@ func (s *Service) SearchSkillPackage(userID string, skillID string, query string
 	return results, nil
 }
 
-func (s *Service) readSkillPackageSnapshotFile(userID string, skillID string, filePath string) (*skillPackageSnapshot, *model.SkillFile, []byte, error) {
-	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+func (s *Service) readSkillPackageSnapshotFile(snapshot *skillPackageSnapshot, filePath string) (*model.SkillFile, []byte, error) {
+	filePath, err := normalizeSkillPath(filePath)
 	if err != nil {
-		return nil, nil, nil, err
-	}
-	filePath, err = normalizeSkillPath(filePath)
-	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	for index := range snapshot.files {
 		if snapshot.files[index].Path != filePath {
 			continue
 		}
 		content, err := s.readSkillPackageSnapshotEntry(snapshot, filePath)
-		return snapshot, &snapshot.files[index], content, err
+		return &snapshot.files[index], content, err
 	}
-	return nil, nil, nil, kernel.BadAuthRequest("技能文件不存在")
+	return nil, nil, kernel.BadAuthRequest("技能文件不存在")
 }
 
 func (s *Service) loadSkillPackageSnapshot(userID string, skillID string) (*skillPackageSnapshot, error) {
@@ -123,6 +135,11 @@ func (s *Service) loadSkillPackageSnapshot(userID string, skillID string) (*skil
 	if err != nil {
 		return nil, err
 	}
+	return s.skillPackageSnapshot(skill)
+}
+
+// skillPackageSnapshot 读取技能当前版本的文件快照；调用方负责先完成可见性或管理员校验。
+func (s *Service) skillPackageSnapshot(skill *model.Skill) (*skillPackageSnapshot, error) {
 	version, err := s.repo.SkillVersion(skill.CurrentVersionID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return legacySkillPackageSnapshot(skill)

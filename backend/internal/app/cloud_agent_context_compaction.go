@@ -402,7 +402,7 @@ func (s *Service) enqueueCloudAgentContextCompaction(run *model.CloudAgentExecut
 	input := map[string]any{
 		"mode": "text", "prompt": prompt,
 		"config":      map[string]any{"channelId": state.Request.ChannelID, "channelModelKey": state.Request.ChannelModelKey, "model": firstNonEmpty(state.Request.ChannelModelKey, state.Request.Model), "systemPrompt": "只执行服务端上下文压缩合同。不要调用工具，不要生成面向用户的回复。"},
-		"textOptions": map[string]any{"stream": false, "thinking": false},
+		"textOptions": map[string]any{"stream": false, "thinkingLevel": ThinkingLevelOff},
 	}
 	req := CreateTaskRequest{ProjectID: state.Request.CanvasID, Type: "canvas_text", Operation: cloudAgentContextCompactionOperation, Prompt: prompt, Model: state.Request.Model, LogicalModelID: state.Request.LogicalModelID, Input: input}
 	return s.enqueueCloudAgentTask(run, state, req, nil)

@@ -101,12 +101,12 @@ func (w *taskWorkerCoordinator) failTimelineTask(task *model.Task, stage string,
 	s := w.service
 	done, err := s.repo.UpdateTaskTerminalState(task.ID, task.LeaseOwner, model.TaskStatusRunning, model.TaskStatusFailed, stage, message, time.Now())
 	if err != nil {
-		return fmt.Errorf("写入转写失败态失败: %w", err)
+		return fmt.Errorf("写入时间线任务失败态失败: %w", err)
 	}
 	if !done {
 		return fmt.Errorf("时间线任务状态或租约已变化：%w", repository.ErrTaskStateConflict)
 	}
-	s.logInfo(task.UserID, task.ID, fmt.Sprintf("时间线转写失败: %s", message), "")
+	s.logInfo(task.UserID, task.ID, fmt.Sprintf("%s: %s", stage, message), "")
 	return nil
 }
 
@@ -153,6 +153,7 @@ func prepareWhisperWav(ctx context.Context, reader io.Reader, mime string) (stri
 	}
 	wavPath := filepath.Join(tmpDir, "audio16k.wav")
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-nostdin", "-y", "-i", inPath, "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wavPath)
+	hideCommandWindow(cmd)
 	output, runErr := cmd.CombinedOutput()
 	if runErr != nil {
 		cleanup()
@@ -188,63 +189,13 @@ func extForMime(mime string) string {
 	}
 }
 
-// TimelineTranscriptionCreateRequest 是画布提交字幕转写任务的入参。
-type TimelineTranscriptionCreateRequest struct {
-	ResourceID string `json:"resourceId"`
-	Language   string `json:"language"`
-	ProjectID  string `json:"projectId"`
-}
-
-// CreateTimelineTranscriptionTask 创建时间线字幕转写任务：转写由本地
-// whisper.cpp 执行，不经模型路由与计费；创建时校验功能门控、资源归属
-// 与可转写类型，排队计入 active 限额。
-func (s *Service) CreateTimelineTranscriptionTask(userID string, req TimelineTranscriptionCreateRequest) (*model.Task, error) {
-	if s.IsDraining() {
-		return nil, &AppError{Status: 503, Code: 503, Message: "服务正在维护，暂不接受新的生成任务", Retryable: true}
-	}
-	if err := s.RequireFeature(FeatureTimelineTranscription); err != nil {
-		return nil, err
-	}
-	resourceID := strings.TrimSpace(req.ResourceID)
-	if resourceID == "" {
-		return nil, BadAuthRequest("必须指定待转写媒体")
-	}
-	resource, err := s.Resource(userID, resourceID)
-	if err != nil || resource == nil {
-		return nil, BadAuthRequest("无法读取待转写媒体，可能已被删除")
-	}
-	if !isTranscribableMime(resource.MimeType) {
-		return nil, BadAuthRequest("仅支持音视频文件转写")
-	}
-	policy, err := s.RuntimePolicy()
-	if err != nil {
-		return nil, err
-	}
-	input := timelineTranscriptionInput{ResourceID: resourceID, Language: strings.TrimSpace(req.Language)}
-	inputJSON, _ := json.Marshal(input)
-	task := model.Task{
-		ID: newID(), UserID: userID, ProjectID: req.ProjectID,
-		Type: model.TaskTypeTimelineTranscription, Status: model.TaskStatusQueued,
-		Stage: "等待队列调度", Progress: 5, Prompt: "字幕转写",
-		Provider: "local", Model: "whisper.cpp", InputJSON: string(inputJSON),
-	}
-	if err := s.createTaskWithinStorageQuota(&task, nil, policy); err != nil {
-		if errors.Is(err, repository.ErrActiveTaskLimit) {
-			return nil, BadAuthRequest(fmt.Sprintf("同时排队或运行的任务最多 %d 个，请等待已有任务完成", policy.Task.ActiveTaskLimit))
-		}
-		return nil, err
-	}
-	s.recordActivity(userID, "task", 1)
-	_ = s.log(userID, task.ID, "info", "字幕转写任务已进入队列", "")
-	return taskForOutput(task), nil
-}
-
 // TimelineRenderCreateRequest 是画布提交时间线渲染任务的入参；
 // Timeline 为前端 TimelineProject 快照（v2：tracks/clips 平铺）。
 // 片段通过 directMedia.storageKey=resource:<id> 引用后端资源。
 type TimelineRenderCreateRequest struct {
-	ProjectID string        `json:"projectId"`
-	Timeline  renderProject `json:"timeline"`
+	prepareOnly bool
+	ProjectID   string        `json:"projectId"`
+	Timeline    renderProject `json:"timeline"`
 }
 
 type timelineRenderInput struct {
@@ -281,6 +232,9 @@ func (s *Service) CreateTimelineRenderTask(userID string, req TimelineRenderCrea
 		Type: model.TaskTypeTimelineRender, Status: model.TaskStatusQueued,
 		Stage: "等待队列调度", Progress: 5, Prompt: "时间线渲染",
 		Provider: "local", Model: "ffmpeg", InputJSON: string(inputJSON),
+	}
+	if req.prepareOnly {
+		return &task, nil
 	}
 	if err := s.createTaskWithinStorageQuota(&task, nil, policy); err != nil {
 		if errors.Is(err, repository.ErrActiveTaskLimit) {

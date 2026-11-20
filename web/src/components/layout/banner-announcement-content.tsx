@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { bannerNoticeSurfaceCSS } from "@/lib/announcements/banner-notice";
 import { bannerTitleRunStyle, type BannerTitleRun } from "@/lib/announcements/banner-title";
@@ -18,9 +19,10 @@ export function bannerAnnouncementBarStyle(noticeType?: string | null) {
 
 /** 「详情 ›」入口；仅在通知可点击时由调用方渲染。 */
 export function BannerAnnouncementLinkHint({ chevronClassName }: { chevronClassName?: string }) {
+    const { t } = useTranslation();
     return (
         <span className="flex shrink-0 items-center gap-1 text-[var(--fs-label)] font-semibold text-white">
-            <span>详情</span>
+            <span>{t("account.layout.banner.details")}</span>
             <ChevronRight className={chevronClassName || "size-3.5"} aria-hidden="true" />
         </span>
     );

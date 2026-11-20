@@ -11,37 +11,44 @@ import (
 const SessionCookieName = auth.SessionCookieName
 
 type (
-	EmailCodeCooldownError     = auth.EmailCodeCooldownError
-	RegisterRequest            = auth.RegisterRequest
-	LoginRequest               = auth.LoginRequest
-	LoginContext               = auth.LoginContext
-	PublicAuthSettings         = auth.PublicAuthSettings
-	AuthSessionResult          = auth.AuthSessionResult
-	AuthUser                   = auth.AuthUser
-	RegistrationSettingRequest = auth.RegistrationSettingRequest
-	PublicRegistrationSetting  = auth.PublicRegistrationSetting
-	PasswordResetRequest       = auth.PasswordResetRequest
-	EmailSettingRequest        = auth.EmailSettingRequest
-	PublicEmailSetting         = auth.PublicEmailSetting
-	LinuxDOSettingRequest      = auth.LinuxDOSettingRequest
-	PublicLinuxDOSetting       = auth.PublicLinuxDOSetting
-	LinuxDOCallbackResult      = auth.LinuxDOCallbackResult
-	LibTVSettingRequest        = auth.LibTVSettingRequest
-	PublicLibTVSetting         = auth.PublicLibTVSetting
-	LibTVImportRequest         = auth.LibTVImportRequest
-	LibTVImportResult          = auth.LibTVImportResult
-	LibTVCanvasConnection      = auth.LibTVCanvasConnection
-	LibTVCanvasNode            = auth.LibTVCanvasNode
-	LibTVImportIssue           = auth.LibTVImportIssue
-	LibTVImportMetadata        = auth.LibTVImportMetadata
-	LibTVImportWarning         = auth.LibTVImportWarning
-	TapNowImportRequest        = auth.TapNowImportRequest
-	TapNowImportResult         = auth.TapNowImportResult
-	TapNowCanvasConnection     = auth.TapNowCanvasConnection
-	TapNowCanvasNode           = auth.TapNowCanvasNode
-	TapNowImportIssue          = auth.TapNowImportIssue
-	TapNowImportMetadata       = auth.TapNowImportMetadata
-	TapNowImportWarning        = auth.TapNowImportWarning
+	EmailCodeCooldownError      = auth.EmailCodeCooldownError
+	RegisterRequest             = auth.RegisterRequest
+	LoginRequest                = auth.LoginRequest
+	LoginContext                = auth.LoginContext
+	PublicAuthSettings          = auth.PublicAuthSettings
+	AuthSessionResult           = auth.AuthSessionResult
+	AuthUser                    = auth.AuthUser
+	RegistrationSettingRequest  = auth.RegistrationSettingRequest
+	PublicRegistrationSetting   = auth.PublicRegistrationSetting
+	TurnstileSettingRequest     = auth.TurnstileSettingRequest
+	PublicTurnstileSetting      = auth.PublicTurnstileSetting
+	PasswordResetRequest        = auth.PasswordResetRequest
+	EmailSettingRequest         = auth.EmailSettingRequest
+	PublicEmailSetting          = auth.PublicEmailSetting
+	EmailLogQuery               = auth.EmailLogQuery
+	EmailLogPage                = auth.EmailLogPage
+	LinuxDOSettingRequest       = auth.LinuxDOSettingRequest
+	PublicLinuxDOSetting        = auth.PublicLinuxDOSetting
+	LinuxDOCallbackResult       = auth.OAuthCallbackResult
+	LibTVSettingRequest         = auth.LibTVSettingRequest
+	PublicLibTVSetting          = auth.PublicLibTVSetting
+	LibTVConnectStartRequest    = auth.LibTVConnectStartRequest
+	LibTVConnectStartResult     = auth.LibTVConnectStartResult
+	LibTVConnectCompleteRequest = auth.LibTVConnectCompleteRequest
+	LibTVImportRequest          = auth.LibTVImportRequest
+	LibTVImportResult           = auth.LibTVImportResult
+	LibTVCanvasConnection       = auth.LibTVCanvasConnection
+	LibTVCanvasNode             = auth.LibTVCanvasNode
+	LibTVImportIssue            = auth.LibTVImportIssue
+	LibTVImportMetadata         = auth.LibTVImportMetadata
+	LibTVImportWarning          = auth.LibTVImportWarning
+	TapNowImportRequest         = auth.TapNowImportRequest
+	TapNowImportResult          = auth.TapNowImportResult
+	TapNowCanvasConnection      = auth.TapNowCanvasConnection
+	TapNowCanvasNode            = auth.TapNowCanvasNode
+	TapNowImportIssue           = auth.TapNowImportIssue
+	TapNowImportMetadata        = auth.TapNowImportMetadata
+	TapNowImportWarning         = auth.TapNowImportWarning
 )
 
 type authHost struct {
@@ -149,6 +156,10 @@ func (s *Service) Logout(cookieValue string, contexts ...LoginContext) error {
 	return s.authDomain().Logout(cookieValue, contexts...)
 }
 
+func (s *Service) LogoutForExpectedUser(cookieValue, expectedUserID string, contexts ...LoginContext) error {
+	return s.authDomain().LogoutForExpectedUser(cookieValue, expectedUserID, contexts...)
+}
+
 func (s *Service) CurrentUser(cookieValue string) (*model.User, error) {
 	return s.authDomain().CurrentUser(cookieValue)
 }
@@ -163,6 +174,14 @@ func (s *Service) AdminRegistrationSetting(actor *model.User) (*PublicRegistrati
 
 func (s *Service) UpdateRegistrationSetting(actor *model.User, req RegistrationSettingRequest) (*PublicRegistrationSetting, error) {
 	return s.authDomain().UpdateRegistrationSetting(actor, req)
+}
+
+func (s *Service) AdminTurnstileSetting(actor *model.User) (*PublicTurnstileSetting, error) {
+	return s.authDomain().AdminTurnstileSetting(actor)
+}
+
+func (s *Service) UpdateTurnstileSetting(actor *model.User, req TurnstileSettingRequest) (*PublicTurnstileSetting, error) {
+	return s.authDomain().UpdateTurnstileSetting(actor, req)
 }
 
 func (s *Service) RegistrationEnabled() (bool, error) {
@@ -217,6 +236,14 @@ func (s *Service) CompleteLinuxDOLogin(stateValue string, code string, cookieVal
 	return s.authDomain().CompleteLinuxDOLogin(stateValue, code, cookieValue, contexts...)
 }
 
+func (s *Service) BeginOIDCLogin(ctx context.Context, next string, acceptedTerms bool) (string, string, error) {
+	return s.authDomain().BeginOIDCLogin(ctx, next, acceptedTerms)
+}
+
+func (s *Service) CompleteOIDCLogin(ctx context.Context, state, code string, login LoginContext) (*auth.OAuthCallbackResult, error) {
+	return s.authDomain().CompleteOIDCLogin(ctx, state, code, login)
+}
+
 func (s *Service) AdminLibTVSetting(actor *model.User) (*PublicLibTVSetting, error) {
 	return s.authDomain().AdminLibTVSetting(actor)
 }
@@ -231,6 +258,22 @@ func (s *Service) TestLibTV(actor *model.User, projectUUID string) error {
 
 func (s *Service) ImportLibTV(userID, canvasProjectID, projectUUID string) (*LibTVImportResult, error) {
 	return s.authDomain().ImportLibTV(userID, canvasProjectID, projectUUID)
+}
+
+func (s *Service) StartLibTVOAuth(actor *model.User, req LibTVConnectStartRequest) (*LibTVConnectStartResult, error) {
+	return s.authDomain().StartLibTVOAuth(actor, req)
+}
+
+func (s *Service) CompleteLibTVOAuth(actor *model.User, req LibTVConnectCompleteRequest) (*PublicLibTVSetting, error) {
+	return s.authDomain().CompleteLibTVOAuth(actor, req)
+}
+
+func (s *Service) CompleteLibTVOAuthCallback(code, state, errorCode, errorDescription string) (string, int, error) {
+	return s.authDomain().CompleteLibTVOAuthCallback(code, state, errorCode, errorDescription)
+}
+
+func (s *Service) DisconnectLibTV(actor *model.User) (*PublicLibTVSetting, error) {
+	return s.authDomain().DisconnectLibTV(actor)
 }
 
 func (s *Service) ImportTapNow(userID, canvasProjectID, shareID string) (*TapNowImportResult, error) {
@@ -271,4 +314,12 @@ func hashToken(token string) string {
 
 func randomToken() string {
 	return auth.RandomToken()
+}
+
+func (s *Service) AdminEmailLogs(actor *model.User, query EmailLogQuery, page, pageSize int) (*EmailLogPage, error) {
+	return s.authDomain().AdminEmailLogs(actor, query, page, pageSize)
+}
+
+func (s *Service) SendTestEmail(actor *model.User, recipient string) error {
+	return s.authDomain().SendTestEmail(actor, recipient)
 }

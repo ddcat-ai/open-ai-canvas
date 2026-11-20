@@ -1,0 +1,1027 @@
+@import "./fonts.css";
+
+/* =========================================================================
+   龙影水墨主题层
+   只在后台外观启用“龙影水墨”皮肤（html[data-skin="longying-ink"]）时生效；
+   颜色、圆角、按钮由皮肤数据负责，这里只补皮肤管不到的部分：
+   用户工作区的 --user-* 色板、宣纸纹理、标题字体、笔触与印章点缀、节点颜料色。
+   ========================================================================= */
+
+:root[data-skin="longying-ink"] {
+    --ink-paper: #f5f1e8;
+    --ink-sheet: #fbf8f2;
+    --ink-ink: #1f1c18;
+    --ink-wash: rgba(46, 36, 22, 0.07);
+    --ink-wash-strong: rgba(46, 36, 22, 0.12);
+    --ink-seal: #b0402d;
+    --ink-seal-soft: rgba(176, 64, 45, 0.12);
+    --ink-teal: #2f5d58;
+    --ink-heading-font: "Longying Serif", "Songti SC", "STSong", "SimSun", serif;
+    /* 宣纸：一层很淡的细纤维噪点，只在大面积底色上用。不用大块墨晕：它按 900px 平铺，
+       侧栏、顶栏、正文各自从自己的左上角铺起，暗色下能看出拼接缝。 */
+    --ink-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .32 0 0 0 0 .25 0 0 0 0 .16 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+    /* 侧栏选中项：一笔淡墨。 */
+    --ink-stroke: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 44' preserveAspectRatio='none'%3E%3Cfilter id='r' x='-5%25' y='-30%25' width='110%25' height='160%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.035 .7' numOctaves='2' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='6'/%3E%3C/filter%3E%3Cpath filter='url(%23r)' d='M4 23C28 9 118 6 196 13c3 8-2 18-7 21-66 5-128 7-182 2-4-3-5-8-3-13z' fill='%232e2416' fill-opacity='.1'/%3E%3C/svg%3E");
+
+    /* 画布节点类型色换成国画颜料：藤黄、胭脂、花青、石青、赭石、石绿、朱膘。 */
+    --palette-node-image: #b5832f;
+    --palette-node-video: #a23b45;
+    --palette-node-text: #3f5470;
+    --palette-node-audio: #2c6f7c;
+    --palette-node-config: #6f695e;
+    --palette-node-script: #66507f;
+    --palette-node-drawing: #9b5a32;
+    --palette-node-frame: #3f7a59;
+    --palette-node-character: #b85a4a;
+    --palette-node-skill: #c08a2e;
+}
+
+:root[data-skin="longying-ink"].dark {
+    --ink-paper: #12110e;
+    --ink-sheet: #1b1915;
+    --ink-ink: #ece5d6;
+    --ink-wash: rgba(236, 229, 214, 0.07);
+    --ink-wash-strong: rgba(236, 229, 214, 0.12);
+    --ink-seal: #e2765b;
+    --ink-seal-soft: rgba(226, 118, 91, 0.16);
+    --ink-teal: #6fa59c;
+    --ink-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .93 0 0 0 0 .89 0 0 0 0 .8 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+    --ink-stroke: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 44' preserveAspectRatio='none'%3E%3Cfilter id='r' x='-5%25' y='-30%25' width='110%25' height='160%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.035 .7' numOctaves='2' seed='4'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='6'/%3E%3C/filter%3E%3Cpath filter='url(%23r)' d='M4 23C28 9 118 6 196 13c3 8-2 18-7 21-66 5-128 7-182 2-4-3-5-8-3-13z' fill='%23ece5d6' fill-opacity='.1'/%3E%3C/svg%3E");
+    --palette-node-image: #d9a650;
+    --palette-node-video: #d0636c;
+    --palette-node-text: #8ea3bf;
+    --palette-node-audio: #6bb0bb;
+    --palette-node-config: #a39c8e;
+    --palette-node-script: #a68fc4;
+    --palette-node-drawing: #c98a5f;
+    --palette-node-frame: #7fb894;
+    --palette-node-character: #e08b7b;
+    --palette-node-skill: #e0b45c;
+}
+
+/* ---------- 用户工作区色板（上游在 .app-user-workspace 上写死了一套中性灰） ---------- */
+:root[data-skin="longying-ink"] .app-user-workspace,
+:root[data-skin="longying-ink"] .app-user-overlays {
+    --user-page-bg: #f5f1e8;
+    --user-surface: #fbf8f2;
+    --user-surface-raised: #fdfbf7;
+    --user-surface-muted: #efe9de;
+    --user-surface-hover: #e8e1d3;
+    --user-control-pressed: #e0d7c6;
+    --user-border: rgba(62, 46, 24, 0.12);
+    --user-border-strong: rgba(62, 46, 24, 0.2);
+    --user-ink: #1f1c18;
+    --workspace-canvas: #f1ece2;
+    --workspace-navigation: #eee8dc;
+    --workspace-content: #f5f1e8;
+    --workspace-surface: #fbf8f2;
+    --workspace-surface-strong: #fbf8f2;
+    --workspace-border: rgba(62, 46, 24, 0.1);
+    --workspace-border-strong: rgba(62, 46, 24, 0.17);
+    --workspace-accent: #1f1c18;
+    --workspace-accent-soft: rgba(31, 28, 24, 0.06);
+    --workspace-nav-active-bg: transparent;
+    --workspace-nav-active-hover-bg: rgba(31, 28, 24, 0.06);
+}
+
+:root[data-skin="longying-ink"].dark .app-user-workspace,
+:root[data-skin="longying-ink"].dark .app-user-overlays {
+    --user-page-bg: #12110e;
+    --user-surface: #1b1915;
+    --user-surface-raised: #211e1a;
+    --user-surface-muted: #24211c;
+    --user-surface-hover: #2e2a24;
+    --user-control-pressed: #38332b;
+    --user-border: rgba(236, 229, 214, 0.09);
+    --user-border-strong: rgba(236, 229, 214, 0.16);
+    --user-ink: #ece5d6;
+    --workspace-canvas: #100f0c;
+    --workspace-navigation: #161411;
+    --workspace-content: #12110e;
+    --workspace-surface: #1b1915;
+    --workspace-surface-strong: #221f1a;
+    --workspace-border: rgba(236, 229, 214, 0.08);
+    --workspace-border-strong: rgba(236, 229, 214, 0.15);
+    --workspace-accent: #ece5d6;
+    --workspace-accent-soft: rgba(236, 229, 214, 0.07);
+    --workspace-nav-active-bg: transparent;
+    --workspace-nav-active-hover-bg: rgba(236, 229, 214, 0.07);
+}
+
+/* ---------- 侧栏：比正文略深一层的纸色 ---------- */
+:root[data-skin="longying-ink"] .app-user-workspace :is(.app-workspace-sidebar, .app-workspace-sidebar-nav) {
+    background-color: #eee8dc;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar {
+    border-right-color: rgba(62, 46, 24, 0.08);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar-footer {
+    border-top-color: rgba(62, 46, 24, 0.08);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-nav-link {
+    color: #625b51;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-nav-link:hover:not(.is-active),
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) {
+    background: rgba(62, 46, 24, 0.06);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-nav-group-toggle {
+    color: #948b7c;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace :is(.app-workspace-sidebar, .app-workspace-sidebar-nav) {
+    background-color: #171511;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace :is(.app-workspace-sidebar, .app-workspace-sidebar-footer) {
+    border-color: rgba(236, 229, 214, 0.07);
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .app-workspace-nav-link {
+    color: #b3ab9c;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .app-workspace-nav-link:hover:not(.is-active) {
+    background: rgba(236, 229, 214, 0.06);
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace :is(.creation-home, .creation-composer, .creation-empty-suggest .creation-hero-prompt, .creation-empty-suggest .suggest-card) {
+    background-color: #12110e;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .creation-composer {
+    background-color: #1b1915;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .app-workspace-topbar-credit-pill {
+    border-color: rgba(236, 229, 214, 0.11);
+    background: #1f1c18;
+    color: rgba(236, 229, 214, 0.72);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar-profile-menu :is(a, button):hover {
+    background: rgba(62, 46, 24, 0.07);
+    color: inherit;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .app-workspace-sidebar-profile-menu :is(a, button):hover {
+    background: rgba(236, 229, 214, 0.07);
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .creation-home-heading h1 {
+    color: #ece5d6;
+}
+
+/* 侧栏签到卡：亮色是素笺，暗色保留上游“浅色卡片”的醒目感，换成陈纸色 */
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar-checkin {
+    background: #fbf8f2;
+    color: #1f1c18;
+    box-shadow:
+        0 0 0 1px rgba(62, 46, 24, 0.08),
+        0 10px 24px rgba(62, 46, 24, 0.12);
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .app-workspace-sidebar-checkin {
+    background: #e9e1d1;
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.3),
+        0 12px 28px rgba(0, 0, 0, 0.38);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar-checkin-title {
+    color: #1f1c18;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar-checkin-offer {
+    color: #6b645a;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar-checkin-offer em {
+    color: #b0402d;
+}
+:root[data-skin="longying-ink"] .app-user-workspace :is(.app-workspace-sidebar-checkin-claim, .app-workspace-sidebar-checkin.is-collapsed) {
+    background: #1f1c18;
+    color: #f7f3ea;
+}
+
+/* 积分中心弹窗：上游是紫青粉流光，换成墨、朱砂、黛青三团淡墨晕 */
+:root[data-skin="longying-ink"] .workspace-wallet-modal .ant-modal-container::before {
+    background: radial-gradient(22% 26% at 25% 25%, rgba(46, 36, 22, 0.22), transparent 70%), radial-gradient(20% 24% at 72% 30%, rgba(176, 64, 45, 0.2), transparent 70%), radial-gradient(22% 24% at 60% 72%, rgba(47, 93, 88, 0.16), transparent 70%);
+}
+:root[data-skin="longying-ink"] .workspace-wallet-shell::before {
+    background: radial-gradient(20% 24% at 75% 20%, rgba(46, 36, 22, 0.16), transparent 70%), radial-gradient(18% 22% at 30% 70%, rgba(47, 93, 88, 0.14), transparent 70%), radial-gradient(18% 20% at 82% 78%, rgba(181, 131, 47, 0.14), transparent 70%);
+    mix-blend-mode: multiply;
+}
+:root[data-skin="longying-ink"].dark .workspace-wallet-modal .ant-modal-container::before {
+    background:
+        radial-gradient(22% 26% at 25% 25%, rgba(236, 229, 214, 0.16), transparent 70%), radial-gradient(20% 24% at 72% 30%, rgba(226, 118, 91, 0.24), transparent 70%), radial-gradient(22% 24% at 60% 72%, rgba(111, 165, 156, 0.18), transparent 70%);
+}
+:root[data-skin="longying-ink"].dark .workspace-wallet-shell::before {
+    background:
+        radial-gradient(20% 24% at 75% 20%, rgba(236, 229, 214, 0.1), transparent 70%), radial-gradient(18% 22% at 30% 70%, rgba(111, 165, 156, 0.14), transparent 70%), radial-gradient(18% 20% at 82% 78%, rgba(217, 166, 80, 0.12), transparent 70%);
+    mix-blend-mode: screen;
+}
+
+/* ---------- 画布浮动工具条：半透明纸面 ---------- */
+:root[data-skin="longying-ink"] .app-spatial-surface {
+    border-color: rgba(62, 46, 24, 0.12);
+    background: rgba(251, 248, 242, 0.9);
+    box-shadow:
+        0 18px 48px rgba(62, 46, 24, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+:root[data-skin="longying-ink"].dark .app-spatial-surface {
+    border-color: rgba(236, 229, 214, 0.1);
+    background: rgba(27, 25, 21, 0.9);
+    box-shadow:
+        0 22px 60px rgba(0, 0, 0, 0.38),
+        inset 0 1px 0 rgba(236, 229, 214, 0.05);
+}
+:root[data-skin="longying-ink"] .app-spatial-interactive:hover {
+    border-color: rgba(62, 46, 24, 0.28);
+    box-shadow:
+        0 24px 68px rgba(62, 46, 24, 0.14),
+        0 0 0 1px rgba(62, 46, 24, 0.06);
+}
+:root[data-skin="longying-ink"].dark .app-spatial-interactive:hover {
+    border-color: rgba(236, 229, 214, 0.26);
+    box-shadow:
+        0 28px 76px rgba(0, 0, 0, 0.46),
+        0 0 0 1px rgba(236, 229, 214, 0.06);
+}
+
+/* ---------- 管理后台：上游让后台忽略皮肤，这里按同一套纸墨色重设后台色板 ---------- */
+:root[data-skin="longying-ink"] :is([data-admin-root], body.admin-overlays, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root, .admin-mobile-navigation-menu) {
+    --admin-canvas: #f3eee4;
+    --admin-sidebar: #eee8dc;
+    --admin-surface: #fbf8f2;
+    --admin-surface-2: #f2ece1;
+    --admin-surface-3: #e8e0d1;
+    --admin-text: #1f1c18;
+    --admin-text-secondary: #4e4840;
+    --admin-text-muted: #6b645a;
+    --admin-text-placeholder: #a39b8d;
+    --admin-border: rgba(62, 46, 24, 0.12);
+    --admin-border-strong: rgba(62, 46, 24, 0.19);
+    --admin-divider: rgba(62, 46, 24, 0.09);
+    --admin-row-border: rgba(62, 46, 24, 0.07);
+    --admin-row-hover: #f1ebe0;
+    --admin-nav-hover: rgba(62, 46, 24, 0.06);
+    --admin-nav-active: #e6ddcc;
+    --admin-accent: #1f1c18;
+    --admin-accent-fg: #f7f3ea;
+    --admin-focus: rgba(31, 28, 24, 0.3);
+    --admin-status-success: #3b7651;
+    --admin-status-warning: #a8682a;
+    --admin-status-error: #b0392b;
+    --admin-status-info: #2d5b6d;
+    --admin-switch-on: #2f5d58;
+    --admin-chart-primary: #1f1c18;
+    --admin-chart-secondary: #2f5d58;
+    --admin-chart-warning: #a8682a;
+}
+:root[data-skin="longying-ink"].dark :is([data-admin-root], .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root, .admin-mobile-navigation-menu),
+:root[data-skin="longying-ink"].dark body.admin-overlays {
+    --admin-canvas: #12110e;
+    --admin-sidebar: #12110e;
+    --admin-surface: #1b1915;
+    --admin-surface-2: #24211c;
+    --admin-surface-3: #2d2922;
+    --admin-text: #ece5d6;
+    --admin-text-secondary: #c6beaf;
+    --admin-text-muted: #948c7e;
+    --admin-text-placeholder: #6f685c;
+    --admin-border: rgba(236, 229, 214, 0.1);
+    --admin-border-strong: rgba(236, 229, 214, 0.16);
+    --admin-divider: rgba(236, 229, 214, 0.08);
+    --admin-row-border: rgba(236, 229, 214, 0.06);
+    --admin-row-hover: #1f1c18;
+    --admin-nav-hover: rgba(236, 229, 214, 0.05);
+    --admin-nav-active: #29251f;
+    --admin-accent: #ece5d6;
+    --admin-accent-fg: #16140f;
+    --admin-focus: rgba(236, 229, 214, 0.28);
+    --admin-status-success: #7fbf8e;
+    --admin-status-warning: #e0a85a;
+    --admin-status-error: #e2735c;
+    --admin-status-info: #82b2c4;
+    --admin-switch-on: #6fa59c;
+    --admin-chart-primary: #ece5d6;
+    --admin-chart-secondary: #6fa59c;
+    --admin-chart-warning: #e0a85a;
+}
+:root[data-skin="longying-ink"] [data-admin-root] {
+    background-image: var(--ink-grain);
+}
+:root[data-skin="longying-ink"] [data-admin-root] :is(h1, h2) {
+    font-family: var(--ink-heading-font);
+    letter-spacing: 0.02em;
+}
+
+/* ---------- 宣纸：只铺在大面积底色上，卡片和输入区保持干净 ---------- */
+:root[data-skin="longying-ink"] .app-workspace-sidebar,
+:root[data-skin="longying-ink"] .app-workspace-stage,
+:root[data-skin="longying-ink"] .app-user-content,
+:root[data-skin="longying-ink"] .creation-home,
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-grid {
+    background-image: var(--ink-grain);
+}
+
+/* ---------- 标题用宋体，正文保持黑体 ---------- */
+:root[data-skin="longying-ink"] :is(.app-user-workspace, .app-user-overlays, .auth-scene) :is(h1, h2),
+:root[data-skin="longying-ink"] .app-page-header-title,
+:root[data-skin="longying-ink"] .ant-modal-title {
+    font-family: var(--ink-heading-font);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* 区块标题前一方小朱印 */
+:root[data-skin="longying-ink"] .app-user-workspace :is(#inspiration-hall-title, .app-page-header-title)::before {
+    content: "";
+    display: inline-block;
+    width: 0.42em;
+    height: 0.42em;
+    margin: 0 0.5em 0.12em 0;
+    border-radius: 1px;
+    background: var(--ink-seal);
+    vertical-align: middle;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink-seal) 30%, transparent);
+}
+
+/* ---------- 侧栏：选中项是一笔淡墨，图标点朱砂 ---------- */
+:root[data-skin="longying-ink"] .app-workspace-nav-active-pill {
+    background: var(--ink-stroke) center / 100% 100% no-repeat !important;
+    box-shadow: none !important;
+}
+:root[data-skin="longying-ink"] .app-workspace-nav-link.is-active .app-workspace-nav-icon {
+    color: var(--ink-seal);
+}
+
+/* ---------- 首页：右上角一片淡墨云（复用登录页水墨原图） ---------- */
+:root[data-skin="longying-ink"] .creation-home {
+    isolation: isolate;
+}
+:root[data-skin="longying-ink"] .creation-home::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: -60px;
+    right: -40px;
+    width: min(760px, 62%);
+    height: 520px;
+    pointer-events: none;
+    background: url("/themes/longying-ink/hero.webp") 70% 18% / 150% auto no-repeat;
+    mix-blend-mode: multiply;
+    opacity: 0.22;
+    -webkit-mask-image: radial-gradient(ellipse 66% 58% at 66% 46%, #000 26%, transparent 76%);
+    mask-image: radial-gradient(ellipse 66% 58% at 66% 46%, #000 26%, transparent 76%);
+}
+:root[data-skin="longying-ink"].dark .creation-home::before {
+    filter: invert(1) hue-rotate(180deg);
+    mix-blend-mode: screen;
+    opacity: 0.16;
+}
+
+/* 输入框：纸面 + 一圈淡墨描边 */
+:root[data-skin="longying-ink"] .creation-chat-composer {
+    box-shadow:
+        0 1px 0 rgba(62, 46, 24, 0.04),
+        0 12px 32px -18px rgba(62, 46, 24, 0.28);
+}
+
+/* Agent 页签的小灯：上游是靛蓝，换成朱砂 */
+:root[data-skin="longying-ink"] .creation-mode-spark {
+    background: var(--ink-seal);
+    box-shadow: 0 0 6px var(--ink-seal-soft);
+    animation-name: ink-seal-pulse;
+}
+@keyframes ink-seal-pulse {
+    0%,
+    100% {
+        transform: scale(0.85);
+        opacity: 0.5;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+/* 阿影的流光球：上游写死紫色（WebGL），这里用滤镜收成一颗墨珠 */
+:root[data-skin="longying-ink"] .fluid-orb {
+    filter: grayscale(1) sepia(0.28) brightness(0.62) contrast(1.15);
+}
+:root[data-skin="longying-ink"].dark .fluid-orb {
+    filter: grayscale(1) sepia(0.32) brightness(1.08) contrast(0.95);
+}
+
+/* 选中文字用朱砂淡色 */
+:root[data-skin="longying-ink"] ::selection {
+    background: var(--ink-seal-soft);
+}
+
+/* =========================================================================
+   登录：独立登录页（.auth-scene）与登录弹窗（.auth-dialog）共用一张“宣纸信笺”。
+   两处的表单都是同一个 .auth-panel，所以信笺、印章、笔触、输入框、按钮只写一遍。
+   只改样式不改结构；关掉“龙影水墨”皮肤就回到上游样式。
+   ========================================================================= */
+
+:root[data-skin="longying-ink"] {
+    /* 一笔横向的墨痕，当遮罩用：颜色由背景色决定，明暗主题共用一张。 */
+    --ink-brush-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cfilter id='r' x='-5%25' y='-60%25' width='110%25' height='220%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.04 .9' numOctaves='2' seed='7'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='3'/%3E%3C/filter%3E%3Cpath filter='url(%23r)' d='M2 7C30 3 90 2 150 3c20 0 40 1 47 3-2 3-16 4-40 4-55 1-110 2-154 0-3-1-3-2-1-3z'/%3E%3C/svg%3E");
+    --ink-auth-field: color-mix(in srgb, var(--ink-paper) 72%, var(--ink-sheet));
+    --ink-auth-line: color-mix(in srgb, var(--ink-ink) 14%, transparent);
+    --ink-auth-line-strong: color-mix(in srgb, var(--ink-ink) 30%, transparent);
+}
+
+/* ---------- 信笺：宣纸底、淡墨细边、很轻的落纸阴影 ---------- */
+:root[data-skin="longying-ink"] .auth-panel.is-page,
+:root[data-skin="longying-ink"] .auth-dialog .auth-dialog-form {
+    background-color: var(--ink-sheet);
+    background-image: var(--ink-grain), radial-gradient(120% 70% at 100% 0%, var(--ink-wash), transparent 60%);
+}
+
+:root[data-skin="longying-ink"] .auth-panel.is-page {
+    border: 1px solid var(--ink-auth-line);
+    border-radius: var(--r-xl);
+    box-shadow:
+        0 1px 0 color-mix(in srgb, var(--ink-sheet) 60%, white) inset,
+        0 2px 6px -2px rgba(46, 36, 22, 0.08),
+        0 22px 48px -28px rgba(46, 36, 22, 0.32);
+    animation: ink-auth-bleed 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:root[data-skin="longying-ink"].dark .auth-panel.is-page {
+    box-shadow:
+        0 1px 0 rgba(236, 229, 214, 0.05) inset,
+        0 24px 54px -26px rgba(0, 0, 0, 0.7);
+}
+
+/* 落笔洇开：从微糊到清晰。 */
+@keyframes ink-auth-bleed {
+    from {
+        opacity: 0;
+        filter: blur(6px);
+        transform: translateY(6px) scale(0.985);
+    }
+    55% {
+        filter: blur(0.6px);
+    }
+    to {
+        opacity: 1;
+        filter: none;
+        transform: none;
+    }
+}
+
+/* ---------- 标题：宋体 + 右侧一方小朱印 ---------- */
+:root[data-skin="longying-ink"] :is(.auth-scene, .auth-dialog) :is(h1, h2, .auth-dialog-stage-title) {
+    font-family: var(--ink-heading-font);
+}
+
+:root[data-skin="longying-ink"] .auth-panel-header {
+    position: relative;
+    padding-inline-end: 44px;
+}
+
+:root[data-skin="longying-ink"] .auth-panel-title {
+    color: var(--ink-ink);
+    font-size: calc(var(--fs-title) * 1.12);
+    letter-spacing: 0.04em;
+}
+
+:root[data-skin="longying-ink"] .auth-panel-header::after {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    padding-top: 1px;
+    border-radius: 3px;
+    background: var(--ink-seal);
+    box-shadow:
+        inset 0 0 0 1.5px color-mix(in srgb, var(--ink-sheet) 55%, transparent),
+        0 1px 2px color-mix(in srgb, var(--ink-seal) 30%, transparent);
+    color: var(--ink-sheet);
+    /* 印章里的字取后台品牌名的前两个字（见 themes/apply.ts）。 */
+    content: var(--theme-brand-seal, "");
+    font-family: var(--ink-heading-font);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.05;
+    opacity: 0.92;
+    pointer-events: none;
+    transform: translateY(-50%) rotate(-4deg);
+    writing-mode: vertical-rl;
+}
+
+/* ---------- 方式切换：选中项下面一笔朱砂 ---------- */
+:root[data-skin="longying-ink"] .auth-tabs {
+    border-bottom-color: var(--ink-auth-line);
+}
+
+:root[data-skin="longying-ink"] .auth-tab {
+    color: color-mix(in srgb, var(--ink-ink) 55%, transparent);
+    letter-spacing: 0.06em;
+}
+
+:root[data-skin="longying-ink"] .auth-tab:hover,
+:root[data-skin="longying-ink"] .auth-tab[aria-selected="true"] {
+    color: var(--ink-ink);
+}
+
+:root[data-skin="longying-ink"] .auth-tab[aria-selected="true"]::after {
+    right: -6px;
+    bottom: -4px;
+    left: -6px;
+    height: 7px;
+    border-radius: 0;
+    background: var(--ink-seal);
+    -webkit-mask: var(--ink-brush-mask) center / 100% 100% no-repeat;
+    mask: var(--ink-brush-mask) center / 100% 100% no-repeat;
+    opacity: 0.85;
+}
+
+/* ---------- 输入框：纸色底、淡墨边；落笔时墨边 + 一圈淡朱砂 ----------
+   全站统一输入框（unified-inputs.css）用变量定底色、用 !important 去掉描边和焦点圈；
+   这里在登录表单里改那几个变量，描边与焦点圈也只在登录表单里用 !important 加回。 */
+:root[data-skin="longying-ink"] .auth-panel {
+    --unified-input-surface: var(--ink-auth-field);
+    --unified-input-surface-hover: color-mix(in srgb, var(--ink-auth-field) 55%, var(--ink-sheet));
+    --unified-input-surface-focus: var(--ink-sheet);
+    --unified-input-placeholder: color-mix(in srgb, var(--ink-ink) 40%, transparent);
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-input-outlined {
+    border-color: var(--ink-auth-line) !important;
+    color: var(--ink-ink);
+    transition:
+        border-color var(--motion-instant) ease-out,
+        box-shadow var(--motion-instant) ease-out,
+        background-color var(--motion-instant) ease-out !important;
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-input-outlined .ant-input {
+    color: var(--ink-ink);
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-input-outlined:hover {
+    border-color: var(--ink-auth-line-strong) !important;
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-input-outlined:is(:focus, :focus-within, .ant-input-affix-wrapper-focused) {
+    border-color: color-mix(in srgb, var(--ink-ink) 62%, transparent) !important;
+    box-shadow: 0 0 0 3px var(--ink-seal-soft) !important;
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-input-password-icon {
+    color: color-mix(in srgb, var(--ink-ink) 45%, transparent);
+}
+
+:root[data-skin="longying-ink"] .auth-panel input:-webkit-autofill,
+:root[data-skin="longying-ink"] .auth-panel input:-webkit-autofill:hover,
+:root[data-skin="longying-ink"] .auth-panel input:-webkit-autofill:focus {
+    box-shadow: 0 0 0 1000px var(--ink-sheet) inset;
+    -webkit-text-fill-color: var(--ink-ink);
+}
+
+/* ---------- 主按钮：焦墨，悬停时墨里透一点朱砂 ---------- */
+:root[data-skin="longying-ink"] .auth-panel .ant-btn-primary {
+    border: 0;
+    background: radial-gradient(130% 160% at 20% 0%, color-mix(in srgb, var(--ink-ink) 82%, var(--ink-sheet)), transparent 60%), var(--ink-ink);
+    box-shadow:
+        inset 0 -2px 0 rgba(0, 0, 0, 0.18),
+        0 8px 18px -12px color-mix(in srgb, var(--ink-ink) 80%, transparent);
+    color: var(--ink-sheet);
+    font-family: var(--ink-heading-font);
+    letter-spacing: 0.32em;
+    text-indent: 0.32em;
+    transition:
+        background-color var(--motion-instant) ease-out,
+        box-shadow var(--motion-instant) ease-out,
+        transform var(--motion-instant) ease-out;
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-btn-primary:not(:disabled):hover {
+    background: radial-gradient(120% 180% at 85% 120%, color-mix(in srgb, var(--ink-seal) 55%, transparent), transparent 62%), var(--ink-ink);
+    box-shadow:
+        inset 0 -2px 0 rgba(0, 0, 0, 0.18),
+        0 10px 22px -12px color-mix(in srgb, var(--ink-seal) 70%, transparent);
+    color: var(--ink-sheet);
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-btn-primary:not(:disabled):active {
+    transform: translateY(1px);
+}
+
+:root[data-skin="longying-ink"] .auth-panel .ant-btn-primary:disabled {
+    background: color-mix(in srgb, var(--ink-ink) 22%, var(--ink-paper));
+    box-shadow: none;
+    color: color-mix(in srgb, var(--ink-sheet) 85%, transparent);
+}
+
+/* 其他按钮（Linux.do、发送验证码）：纸色描边 */
+:root[data-skin="longying-ink"] .auth-panel .ant-btn-default {
+    border-color: var(--ink-auth-line-strong);
+    background: transparent;
+    color: var(--ink-ink);
+}
+
+/* ---------- 文字链接：黛青；“立即注册”和协议名用朱砂 ---------- */
+:root[data-skin="longying-ink"] .auth-form-link {
+    color: var(--ink-teal);
+}
+
+:root[data-skin="longying-ink"] .auth-form-link.is-strong {
+    color: var(--ink-seal);
+}
+
+:root[data-skin="longying-ink"] .auth-form-link:hover {
+    color: var(--ink-seal);
+    text-decoration-color: color-mix(in srgb, var(--ink-seal) 45%, transparent);
+}
+
+:root[data-skin="longying-ink"] :is(.auth-form-switch, .auth-form-legal, .auth-panel-description) {
+    color: color-mix(in srgb, var(--ink-ink) 56%, transparent);
+}
+
+:root[data-skin="longying-ink"] .auth-form-legal {
+    padding-top: var(--space-3);
+    border-top: 1px dashed var(--ink-auth-line);
+}
+
+:root[data-skin="longying-ink"] .auth-form-divider.ant-divider {
+    color: color-mix(in srgb, var(--ink-ink) 45%, transparent);
+}
+
+:root[data-skin="longying-ink"] .auth-form-divider.ant-divider::before,
+:root[data-skin="longying-ink"] .auth-form-divider.ant-divider::after {
+    border-block-start-color: var(--ink-auth-line);
+}
+
+/* =========================== 独立登录页 =========================== */
+
+/* 右半边和影片区连成一张纸：宣纸纹 + 两团很淡的墨晕 */
+:root[data-skin="longying-ink"] .auth-scene,
+:root[data-skin="longying-ink"] .auth-scene-form-pane {
+    background-color: var(--ink-paper);
+}
+
+:root[data-skin="longying-ink"] .auth-scene-form-pane {
+    background-image: var(--ink-grain), radial-gradient(55% 42% at 96% 4%, var(--ink-wash-strong), transparent 70%), radial-gradient(50% 36% at 70% 104%, var(--ink-wash), transparent 72%);
+}
+
+/* 后台没配登录影片和封面时，用主题自带的墨龙主图垫底；配了影片或封面会盖在上面 */
+:root[data-skin="longying-ink"] .auth-scene-hero::before {
+    position: absolute;
+    inset: 0;
+    background: url("/themes/longying-ink/hero.webp") 60% 30% / cover no-repeat;
+    content: "";
+    pointer-events: none;
+}
+
+:root[data-skin="longying-ink"].dark .auth-scene-hero::before {
+    filter: invert(0.92) hue-rotate(180deg) saturate(0.9) contrast(0.96);
+}
+
+/* 影片右缘用纸色晕开，取代上游的直线渐变；最外一段叠同样的纸纹，和右半边接得上 */
+:root[data-skin="longying-ink"] .auth-scene-video-blend {
+    width: clamp(200px, 22vw, 340px);
+    background:
+        var(--ink-grain), radial-gradient(70% 55% at 100% 30%, var(--ink-paper), transparent 72%), radial-gradient(60% 45% at 100% 82%, var(--ink-paper), transparent 70%),
+        linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--ink-paper) 55%, transparent) 46%, var(--ink-paper) 88%, var(--ink-paper) 100%);
+    /* 纸纹从左缘渐入，不留竖边 */
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 55%);
+    mask-image: linear-gradient(90deg, transparent 0%, #000 55%);
+}
+
+/* 标语区：底部垫一层宣纸晕，任何画面上都读得清 */
+:root[data-skin="longying-ink"] .auth-scene-hero-overlay {
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--ink-paper) 46%, transparent), transparent 30%), radial-gradient(85% 55% at 18% 100%, color-mix(in srgb, var(--ink-paper) 94%, transparent), transparent 74%),
+        linear-gradient(0deg, color-mix(in srgb, var(--ink-paper) 72%, transparent), transparent 46%);
+}
+
+:root[data-skin="longying-ink"] .auth-scene-hero-title {
+    color: var(--ink-ink);
+    letter-spacing: 0.04em;
+    text-wrap: balance;
+}
+
+:root[data-skin="longying-ink"] .auth-scene-hero-muted {
+    color: color-mix(in srgb, var(--ink-ink) 66%, transparent);
+    /* 中文只在标点和空格处换行，不把“角色”“成片”拆开 */
+    text-wrap: pretty;
+    word-break: keep-all;
+}
+
+/* “RYUU STUDIO”：朱砂细框小印 */
+:root[data-skin="longying-ink"] .auth-scene-hero p.auth-scene-hero-muted:first-child {
+    display: inline-block;
+    padding: 3px 7px 2px 9px;
+    border: 1px solid color-mix(in srgb, var(--ink-seal) 70%, transparent);
+    border-radius: 2px;
+    color: var(--ink-seal);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+}
+
+/* 顶部按钮：纸色底、细墨边 */
+:root[data-skin="longying-ink"] :is(.auth-scene-hero-control, .auth-scene-return) {
+    border: 1px solid var(--ink-auth-line-strong);
+    background: color-mix(in srgb, var(--ink-sheet) 78%, transparent);
+    color: color-mix(in srgb, var(--ink-ink) 82%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+
+:root[data-skin="longying-ink"] :is(.auth-scene-hero-control, .auth-scene-return):hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--ink-ink) 45%, transparent);
+    background: var(--ink-sheet);
+    color: var(--ink-ink);
+}
+
+:root[data-skin="longying-ink"] .auth-scene-hero-control svg {
+    color: var(--ink-seal);
+}
+
+/* 页脚备案：纸上的小注脚 */
+:root[data-skin="longying-ink"] .site-compliance-footer.is-auth {
+    border-top-color: var(--ink-auth-line);
+    color: color-mix(in srgb, var(--ink-ink) 48%, transparent);
+}
+
+:root[data-skin="longying-ink"] .site-compliance-footer.is-auth a {
+    color: inherit;
+}
+
+:root[data-skin="longying-ink"] .site-compliance-footer.is-auth a:hover {
+    color: var(--ink-seal);
+}
+
+/* 夜墨：影片按负片处理成浅墨深纸，红日仍是红色 */
+:root[data-skin="longying-ink"].dark .auth-scene-hero > :is(video, img) {
+    filter: invert(0.92) hue-rotate(180deg) saturate(0.9) contrast(0.96);
+}
+
+/* 手机：影片缩成顶部一条，语言 / 返回首页挪到最上面一行，登录信笺第一屏可见 */
+@media (max-width: 1023px) {
+    :root[data-skin="longying-ink"] .auth-scene > div {
+        position: relative;
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-form-pane {
+        position: static;
+        min-height: 0;
+        padding-top: var(--space-6);
+        padding-bottom: var(--space-4);
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-form-pane > div:first-child {
+        top: 14px;
+        right: 14px;
+    }
+
+    /* 影片自动播放，手机上让出位置给语言和返回首页 */
+    :root[data-skin="longying-ink"] .auth-scene-hero-control {
+        display: none;
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-hero {
+        min-height: 300px;
+    }
+
+    /* 标语压在影片下半截：下半截整片铺纸，墨迹只留在上面；底边就是纸色，和下面的信笺区连成一片 */
+    :root[data-skin="longying-ink"] .auth-scene-hero-overlay {
+        background:
+            var(--ink-grain), linear-gradient(180deg, color-mix(in srgb, var(--ink-paper) 40%, transparent), transparent 24%),
+            linear-gradient(0deg, var(--ink-paper) 0%, color-mix(in srgb, var(--ink-paper) 92%, transparent) 34%, color-mix(in srgb, var(--ink-paper) 60%, transparent) 58%, transparent 82%);
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-form-pane {
+        background-image: var(--ink-grain);
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-hero > div.absolute.bottom-0 {
+        padding-bottom: var(--space-4);
+    }
+}
+
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] .auth-scene-hero {
+        min-height: 292px;
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-hero-title {
+        font-size: 1.75rem;
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-hero p.auth-scene-hero-muted:last-child {
+        font-size: var(--fs-ui);
+        line-height: 1.6;
+    }
+
+    :root[data-skin="longying-ink"] .auth-panel.is-page {
+        padding: var(--space-6) var(--space-5);
+    }
+
+    :root[data-skin="longying-ink"] .auth-scene-form-pane > div:first-child .auth-scene-return {
+        height: 32px;
+        padding-inline: 12px;
+    }
+}
+
+/* =========================== 登录弹窗 =========================== */
+
+:root[data-skin="longying-ink"] .auth-dialog {
+    --auth-dialog-glow: transparent;
+    --auth-dialog-orb: transparent;
+}
+
+:root[data-skin="longying-ink"] .auth-dialog :is(.ant-modal-content, .ant-modal-container) {
+    border: 1px solid var(--ink-auth-line);
+    background: var(--ink-sheet);
+}
+
+/* 左侧品牌：宣纸 + 一幅淡淡的墨龙山水（与创作首页同一张图） */
+:root[data-skin="longying-ink"] .auth-dialog-stage {
+    background-color: var(--ink-paper);
+    background-image: var(--ink-grain);
+    border-inline-end: 1px solid var(--ink-auth-line);
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-stage::before {
+    top: -40px;
+    right: -60px;
+    width: 120%;
+    height: 78%;
+    border-radius: 0;
+    background: url("/themes/longying-ink/hero.webp") 62% 20% / 135% auto no-repeat;
+    mix-blend-mode: multiply;
+    opacity: 0.3;
+    -webkit-mask-image: radial-gradient(ellipse 70% 62% at 62% 40%, #000 30%, transparent 78%);
+    mask-image: radial-gradient(ellipse 70% 62% at 62% 40%, #000 30%, transparent 78%);
+}
+
+:root[data-skin="longying-ink"].dark .auth-dialog-stage::before {
+    filter: invert(1) hue-rotate(180deg);
+    mix-blend-mode: screen;
+    opacity: 0.22;
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-stage::after {
+    display: none;
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-stage-title {
+    color: var(--ink-ink);
+    letter-spacing: 0.04em;
+    text-wrap: balance;
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-stage-tagline {
+    color: color-mix(in srgb, var(--ink-ink) 64%, transparent);
+    text-wrap: pretty;
+    word-break: keep-all;
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-feature {
+    border: 1px solid var(--ink-auth-line);
+    background: color-mix(in srgb, var(--ink-sheet) 82%, transparent);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-feature-icon {
+    border: 1px solid color-mix(in srgb, var(--ink-seal) 45%, transparent);
+    border-radius: 3px;
+    background: var(--ink-seal-soft);
+    color: var(--ink-seal);
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-feature small {
+    color: color-mix(in srgb, var(--ink-ink) 55%, transparent);
+}
+
+:root[data-skin="longying-ink"] .auth-dialog-form-inner {
+    animation: ink-auth-bleed 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="longying-ink"] :is(.auth-panel.is-page, .auth-dialog-form-inner) {
+        animation: none;
+    }
+}
+
+/* ===== 第二批（2026-11-06）：404 远山、加载墨晕、积分朱印、技能与插件小图标归墨 ===== */
+
+/* 404：页面底部两层淡墨远山（只在水墨皮肤下显示），标题用宋体。 */
+.not-found-hills {
+    display: none;
+}
+
+:root[data-skin="longying-ink"] .not-found-hills {
+    position: absolute;
+    inset: auto 0 0;
+    display: block;
+    width: 100%;
+    height: 38%;
+    color: var(--ink-ink);
+    pointer-events: none;
+}
+
+:root[data-skin="longying-ink"] .not-found-title {
+    font-family: var(--ink-heading-font);
+    font-weight: 700;
+}
+
+/* 加载：一滴墨在纸上晕开再淡去，两滴交替；占位仍是原来那条 112×2 的轨道，位置不变。
+   网页刚打开时 index.html 里的启动信号是同一个动画，改动时两边一起改。 */
+:root[data-skin="longying-ink"] .loading-signal {
+    overflow: visible;
+    background: transparent;
+}
+
+:root[data-skin="longying-ink"] .loading-signal i,
+:root[data-skin="longying-ink"] .loading-signal::before {
+    position: absolute;
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 30px;
+    height: 30px;
+    margin: -15px 0 0 -15px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--ink-ink) 0 34%, color-mix(in srgb, var(--ink-ink) 40%, transparent) 52%, transparent 70%);
+    content: "";
+    opacity: 0;
+    transform: scale(0.18);
+    animation: ink-loading-bloom 2200ms cubic-bezier(0.2, 0.7, 0.3, 1) calc(-1 * var(--loader-clock, 0ms)) infinite;
+}
+
+:root[data-skin="longying-ink"] .loading-signal::before {
+    animation-delay: calc(1100ms - var(--loader-clock, 0ms));
+}
+
+@keyframes ink-loading-bloom {
+    0% {
+        opacity: 0.85;
+        transform: scale(0.18);
+        filter: blur(0);
+    }
+    70% {
+        opacity: 0.18;
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.5);
+        filter: blur(2.5px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="longying-ink"] .loading-signal i {
+        animation: none;
+        opacity: 0.7;
+        transform: scale(0.6);
+    }
+
+    :root[data-skin="longying-ink"] .loading-signal::before {
+        display: none;
+    }
+}
+
+/* 技能、插件等卡片的分类强调色（上游蓝 / 粉 / 橙 / 紫 / 青）统一收成墨色。 */
+:root[data-skin="longying-ink"] :is(.app-user-workspace, .app-product-workspace, .app-product-overlays) {
+    --product-accent-blue: var(--ink-ink);
+    --product-accent-green: var(--ink-ink);
+    --product-accent-orange: var(--ink-ink);
+    --product-accent-pink: var(--ink-ink);
+    --product-accent-violet: var(--ink-ink);
+    --product-accent-cyan: var(--ink-ink);
+}
+
+/* 技能卡片的字头：淡墨底、细墨边、宋体字；已加入「我的技能」的盖一方朱印。 */
+:root[data-skin="longying-ink"] .skill-tile-glyph {
+    background: var(--ink-wash);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-ink) 14%, transparent);
+    color: var(--ink-ink);
+    font-family: var(--ink-heading-font);
+    font-weight: 700;
+}
+
+:root[data-skin="longying-ink"] .skill-tile.is-added .skill-tile-glyph {
+    background: var(--ink-seal);
+    box-shadow: none;
+    color: var(--ink-sheet);
+    transform: rotate(-4deg);
+}
+
+/* 积分朱印：比礼盒小一号，不要礼盒的投影；悬停时胶囊不再泛橙色。 */
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-credit-gift.is-ink-seal,
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-credit-gift.is-ink-seal svg {
+    width: 18px;
+    height: 18px;
+    filter: none;
+}
+
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-topbar-credit-pill:hover {
+    border-color: color-mix(in srgb, var(--ink-ink) 22%, transparent);
+    background: var(--ink-sheet);
+}
+
+/* 素材库空状态说明：品牌名和后半句之间留一点空，品牌名用宋体。 */
+:root[data-skin="longying-ink"] .assets-empty-banner-caption > span {
+    margin-right: 0.5em;
+    font-family: var(--ink-heading-font);
+}

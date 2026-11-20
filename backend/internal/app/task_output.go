@@ -8,6 +8,7 @@ import (
 
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/workbench"
 )
 
 // TaskSummary 是任务列表/会话详情的读模型，不直接复用数据库 Task，避免把
@@ -46,8 +47,10 @@ type TaskSummary struct {
 
 type TaskClientContext struct {
 	NodeID           string `json:"nodeId,omitempty"`
+	AssetTitle       string `json:"assetTitle,omitempty"`
 	ConversationID   string `json:"conversationId,omitempty"`
 	MessageID        string `json:"messageId,omitempty"`
+	BatchID          string `json:"batchId,omitempty"`
 	BatchIndex       int    `json:"batchIndex,omitempty"`
 	BatchCount       int    `json:"batchCount,omitempty"`
 	DomainProjectID  string `json:"domainProjectId,omitempty"`
@@ -58,9 +61,28 @@ type TaskClientContext struct {
 	ArtifactType     string `json:"artifactType,omitempty"`
 }
 
+// TaskBillingSummary 是任务列表展示的计费摘要。冻结额与实收分列：只有已结算订单才有实收。
 type TaskBillingSummary struct {
-	AmountMicrocredits int64               `json:"amountMicrocredits"`
-	Status             model.BillingStatus `json:"status"`
+	// AmountMicrocredits 是下单时的冻结额（预授权），不是实际扣费；与 ReservedMicrocredits 相同。
+	AmountMicrocredits   int64 `json:"amountMicrocredits"`
+	ReservedMicrocredits int64 `json:"reservedMicrocredits"`
+	// ChargedMicrocredits 只在订单已结算（settled）时给出，是扣除差额退回后的实收。
+	ChargedMicrocredits *int64 `json:"chargedMicrocredits,omitempty"`
+	// RefundedMicrocredits 是已退回的金额：结算时的差额退回，或失败后整笔退回。
+	RefundedMicrocredits int64               `json:"refundedMicrocredits"`
+	Status               model.BillingStatus `json:"status"`
+}
+
+func taskBillingSummary(order model.BillingOrder) *TaskBillingSummary {
+	summary := &TaskBillingSummary{
+		AmountMicrocredits: order.AmountMicrocredits, ReservedMicrocredits: order.AmountMicrocredits,
+		RefundedMicrocredits: order.RefundedAmountMicrocredits, Status: order.Status,
+	}
+	if order.Status == model.BillingStatusSettled {
+		charged := order.ActualAmountMicrocredits
+		summary.ChargedMicrocredits = &charged
+	}
+	return summary
 }
 
 func taskSummariesForOutput(tasks []model.Task) []TaskSummary {
@@ -72,7 +94,7 @@ func taskSummariesForOutputWithBilling(tasks []model.Task, orders map[string]mod
 	for _, task := range tasks {
 		summary := taskSummaryForOutput(task)
 		if order, ok := orders[task.ID]; ok {
-			summary.Billing = &TaskBillingSummary{AmountMicrocredits: order.AmountMicrocredits, Status: order.Status}
+			summary.Billing = taskBillingSummary(order)
 			if summary.ProviderRequestID == "" {
 				summary.ProviderRequestID = order.ProviderRequestID
 			}
@@ -136,12 +158,13 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	}
 }
 
-// 列表只暴露页面恢复所需的非敏感关联 ID，不下发完整任务输入或其他 metadata。
+// 列表只暴露页面恢复所需的关联 ID 和素材显示名，不下发完整任务输入或其他 metadata。
 func taskClientContext(raw string) *TaskClientContext {
 	var input struct {
 		Metadata struct {
 			Source          string `json:"source"`
 			NodeID          string `json:"nodeId"`
+			AssetTitle      string `json:"assetTitle"`
 			ConversationID  string `json:"conversationId"`
 			MessageID       string `json:"messageId"`
 			BatchIndex      int    `json:"batchIndex"`
@@ -152,18 +175,33 @@ func taskClientContext(raw string) *TaskClientContext {
 			ShotID          string `json:"shotId"`
 			WorkflowStepID  string `json:"workflowStepId"`
 			ArtifactType    string `json:"artifactType"`
+			Workbench       struct {
+				Batch struct {
+					ID    string `json:"id"`
+					Index int    `json:"index"`
+					Count int    `json:"count"`
+				} `json:"batch"`
+			} `json:"workbench"`
 		} `json:"metadata"`
 	}
 	if json.Unmarshal([]byte(raw), &input) != nil {
 		return nil
 	}
 	metadata := input.Metadata
-	context := &TaskClientContext{NodeID: metadata.NodeID}
+	title := []rune(strings.TrimSpace(metadata.AssetTitle))
+	context := &TaskClientContext{NodeID: metadata.NodeID, AssetTitle: string(title[:min(len(title), 200)])}
 	if metadata.Source == "create-page" && metadata.ConversationID != "" && metadata.MessageID != "" {
 		context.ConversationID = metadata.ConversationID
 		context.MessageID = metadata.MessageID
 		context.BatchIndex = metadata.BatchIndex
 		context.BatchCount = metadata.BatchCount
+		return context
+	}
+	// 工作台一次提交拆出的多个任务按批次 ID 在页面上归为一组；字段非法时按单任务展示。
+	if batch := metadata.Workbench.Batch; metadata.Source == "workbench" && workbench.ValidTaskBatch(batch.ID, batch.Index, batch.Count) {
+		context.BatchID = batch.ID
+		context.BatchIndex = batch.Index
+		context.BatchCount = batch.Count
 		return context
 	}
 	if metadata.ShotID != "" && metadata.WorkflowStepID != "" {
@@ -180,7 +218,7 @@ func taskClientContext(raw string) *TaskClientContext {
 		chapterOperation = "storyboard"
 	}
 	if chapterOperation == "" || metadata.DomainProjectID == "" || metadata.ChapterID == "" {
-		if context.NodeID == "" {
+		if context.NodeID == "" && context.AssetTitle == "" {
 			return nil
 		}
 		return context
@@ -352,7 +390,34 @@ func publicWorkbenchInput(input map[string]any) map[string]any {
 		result["presetId"] = presetID
 	}
 	result["references"] = publicWorkbenchReferences(snapshot["references"], input)
+	if batch, ok := snapshot["batch"].(map[string]any); ok {
+		id := strings.TrimSpace(stringValue(batch["id"]))
+		index, indexOK := workbenchBatchInteger(batch["index"])
+		count, countOK := workbenchBatchInteger(batch["count"])
+		if indexOK && countOK && workbench.ValidTaskBatch(id, index, count) {
+			result["batch"] = map[string]any{"id": id, "index": index, "count": count}
+		}
+	}
 	return result
+}
+
+// 批次序号从 0 开始，不能复用 workbenchInteger（它要求 >= 1）。
+func workbenchBatchInteger(value any) (int, bool) {
+	switch number := value.(type) {
+	case float64:
+		parsed := int(number)
+		return parsed, float64(parsed) == number
+	case int:
+		return number, true
+	case int64:
+		parsed := int(number)
+		return parsed, int64(parsed) == number
+	case json.Number:
+		parsed, err := strconv.Atoi(number.String())
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func publicWorkbenchParameters(kind string, snapshot, input map[string]any) map[string]any {

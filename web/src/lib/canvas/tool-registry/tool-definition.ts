@@ -11,17 +11,7 @@ export type ToolbarId = "main" | "selection" | "node-hover" | "add-node-menu";
 export type NodeToolbarGroup = "primary" | "adjust" | "camera" | "sheet" | "process" | "workspace" | "utility" | "more";
 
 /** 工具分类——用于分组渲染、危险隔离与 separator 自动插入 */
-export type ToolCategory =
-    | "navigation"
-    | "history"
-    | "create"
-    | "appearance"
-    | "selection"
-    | "layout"
-    | "arrange"
-    | "danger"
-    | "node-state"
-    | "resource";
+export type ToolCategory = "navigation" | "history" | "create" | "appearance" | "selection" | "layout" | "arrange" | "danger" | "node-state" | "resource";
 
 /** 所有工具栏回调的聚合类型。工具定义通过 ctx.handlers.onXxx 访问 */
 export type ToolbarHandlers = {
@@ -54,6 +44,8 @@ export type ToolbarHandlers = {
     onOpenWorkspace?: () => void;
     onOpenMyAssets: () => void;
     onOpenProjectCharacters: () => void;
+    /** 站点姿势库；只读分享页等不提供时入口自动隐藏。 */
+    onOpenPoseLibrary?: () => void;
     // 主工具栏——外观
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
@@ -67,9 +59,10 @@ export type ToolbarHandlers = {
     onAlign: (mode: CanvasAlignmentMode) => void;
     onArrange: (mode: "row" | "column" | "grid" | "flow") => void;
     onCreateStoryboard: () => void;
+    onCreateFrame: () => void;
     onCreateReferenceGroup: () => void;
     onBatchConnect: () => void;
-    onMergeVideos: () => void;
+    onCompareImages?: () => void;
     onSendSelectionToAgent: () => void;
     // 节点悬停工具栏——节点操作（均接收当前节点）
     onNodeInfo: (node: CanvasNodeData) => void;
@@ -99,11 +92,12 @@ export type ToolbarHandlers = {
     onNodeViewImage: (node: CanvasNodeData) => void;
     onNodeExtractVideoFrames: (node: CanvasNodeData) => void;
     onNodeExtractAudioFromVideo: (node: CanvasNodeData) => void;
+    onNodeRemakeVideo?: (node: CanvasNodeData) => void;
     onNodeTrimVideoSegments: (node: CanvasNodeData) => void;
     /** 视频画质增强；只在存在 processing 视频模型时由项目页提供。 */
     onNodeEnhanceVideo?: (node: CanvasNodeData) => void;
-    onNodeSubtitles: (node: CanvasNodeData) => void;
-    onNodeTimeline: (node: CanvasNodeData) => void;
+    onNodeDepthVideo?: (node: CanvasNodeData) => void;
+    onNodeDownloadSubtitles?: (node: CanvasNodeData) => void;
     /** 打开媒体版本面板；只读分享页不提供。 */
     onNodeVersions?: (node: CanvasNodeData) => void;
     /** 采用到短剧（设定参考图或剧情段视频）；只在关联短剧的精修画布上提供。 */
@@ -151,7 +145,8 @@ export type AddNodeMenuContext = {
     isProjectLinked: boolean;
     /** 内置应用插件的启用状态；未声明时视为未提供 gating 信息。 */
     enabledPluginIds?: ReadonlySet<string>;
-    handlers: Pick<ToolbarHandlers,
+    handlers: Pick<
+        ToolbarHandlers,
         | "onAddText"
         | "onAddImage"
         | "onAddVideo"
@@ -167,6 +162,7 @@ export type AddNodeMenuContext = {
         | "onUpload"
         | "onOpenMyAssets"
         | "onOpenProjectCharacters"
+        | "onOpenPoseLibrary"
     >;
 };
 

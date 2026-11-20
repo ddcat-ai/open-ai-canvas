@@ -1,8 +1,9 @@
+import { translate } from "@/i18n";
+import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
 import { CheckCircle2, CloudUpload, Eye, LoaderCircle, RotateCcw, TriangleAlert, X } from "lucide-react";
 
 import type { GenerationTask } from "@/services/api/task-center";
-import type { MergeVideoProgress } from "@/lib/canvas/canvas-video-merge";
 import { canvasThemes } from "@/lib/canvas-theme";
 import type { CanvasOperationChange } from "./use-canvas-operation-history";
 import { aceternityMotion } from "@/lib/aceternity-motion";
@@ -20,6 +21,7 @@ export type CanvasUploadStatus = {
 type CanvasTheme = (typeof canvasThemes)[keyof typeof canvasThemes];
 
 export function CanvasUploadStatusToast({ status, theme }: { status: CanvasUploadStatus; theme: CanvasTheme }) {
+    const { t } = useTranslation();
     const accent = status.error ? theme.accent.danger : status.done ? "#22c55e" : theme.node.activeStroke;
     return (
         <motion.div
@@ -66,7 +68,7 @@ export function CanvasUploadStatusToast({ status, theme }: { status: CanvasUploa
                     />
                 ))}
             </div>
-            <span className="sr-only">处理步骤 {status.step}/{status.total}</span>
+            <span className="sr-only">{t("canvasPage.feedback.processingStep", { step: status.step, total: status.total })}</span>
         </motion.div>
     );
 }
@@ -82,38 +84,8 @@ export function TaskDetailItem({ label, value }: { label: string; value: string 
     );
 }
 
-export function CanvasMergeStatusToast({ progress, theme }: { progress: MergeVideoProgress; theme: CanvasTheme }) {
-    const detail = progress.phase === "loading" ? "加载视频工具" : progress.phase === "reading" ? "读取选中视频" : "正在编码合并成片";
-    const percent = Math.max(0, Math.min(100, Math.round(progress.progress)));
-    return (
-        <div
-            data-canvas-no-zoom
-            aria-live="polite"
-            className="pointer-events-none absolute right-4 top-[164px] z-[var(--z-panel-floating)] w-[292px] overflow-hidden rounded-2xl border px-3 py-3 shadow-lg backdrop-blur-xl"
-            style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
-        >
-            <div className="flex items-start gap-2">
-                <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-xl" style={{ background: theme.toolbar.itemHover, color: theme.node.activeStroke }}>
-                    <LoaderCircle className="size-4 animate-spin" />
-                </span>
-                <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-semibold">合并成片</span>
-                    <span className="mt-0.5 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                        {detail}
-                    </span>
-                </span>
-                <span className="shrink-0 text-[var(--fs-tiny)] tabular-nums" style={{ color: theme.node.faint }}>
-                    {percent}%
-                </span>
-            </div>
-            <div className="mt-2 h-1 overflow-hidden rounded-full" style={{ background: theme.toolbar.itemHover }}>
-                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${percent}%`, background: theme.node.activeStroke }} />
-            </div>
-        </div>
-    );
-}
-
 export function CanvasOperationChangeToast({ change, theme, onView, onUndo, onClose }: { change: CanvasOperationChange; theme: CanvasTheme; onView: () => void; onUndo: () => void; onClose: () => void }) {
+    const { t } = useTranslation();
     return (
         <div
             data-canvas-no-zoom
@@ -126,12 +98,12 @@ export function CanvasOperationChangeToast({ change, theme, onView, onUndo, onCl
                     <span className="size-2 rounded-full bg-current" />
                 </span>
                 <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold">Agent 已写回画布</span>
+                    <span className="block text-xs font-semibold">{t("canvasPage.feedback.agentWroteBack")}</span>
                     <span className="mt-0.5 block truncate text-[var(--fs-label)]" style={{ color: theme.node.muted }}>
-                        {change.summary} · 可撤销最近 {change.undoCount} 批
+                        {t("canvasPage.feedback.undoSummary", { summary: change.summary, count: change.undoCount })}
                     </span>
                 </span>
-                <button type="button" className="grid size-7 place-items-center rounded-md opacity-55 transition hover:opacity-100" onClick={onClose} aria-label="关闭">
+                <button type="button" className="grid size-7 place-items-center rounded-md opacity-55 transition hover:opacity-100" onClick={onClose} aria-label={t("common.close")}>
                     <X className="size-3.5" />
                 </button>
             </div>
@@ -139,12 +111,12 @@ export function CanvasOperationChangeToast({ change, theme, onView, onUndo, onCl
                 {change.nodeIds.length ? (
                     <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onView}>
                         <Eye className="size-3.5" />
-                        查看本次改动
+                        {t("canvasPage.feedback.viewChanges")}
                     </button>
                 ) : null}
                 <button type="button" className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-xs font-medium transition hover:bg-black/5 dark:hover:bg-white/10" onClick={onUndo}>
                     <RotateCcw className="size-3.5" />
-                    撤销本次操作
+                    {t("canvasPage.feedback.undoChanges")}
                 </button>
             </div>
         </div>
@@ -152,9 +124,9 @@ export function CanvasOperationChangeToast({ change, theme, onView, onUndo, onCl
 }
 
 export function taskStatusText(status: GenerationTask["status"]) {
-    if (status === "queued") return "排队中";
-    if (status === "running") return "生成中";
-    if (status === "succeeded") return "任务完成";
-    if (status === "failed") return "任务失败";
-    return "任务已取消";
+    if (status === "queued") return translate("canvasPage.taskStatus.queued");
+    if (status === "running") return translate("canvasPage.taskStatus.running");
+    if (status === "succeeded") return translate("canvasPage.taskStatus.succeeded");
+    if (status === "failed") return translate("canvasPage.taskStatus.failed");
+    return translate("canvasPage.taskStatus.canceled");
 }

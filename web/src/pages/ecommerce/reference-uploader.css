@@ -1,0 +1,108 @@
+.commerce-reference-dropzone {
+    margin-bottom: 16px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+}
+.commerce-reference-dropzone:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 3px;
+}
+.commerce-reference-dropzone.is-dragging {
+    border-color: var(--user-accent);
+    background: var(--user-accent-soft, var(--user-surface-muted));
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 3px;
+}
+.commerce-reference-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+    gap: 9px;
+}
+.commerce-reference-help,
+.commerce-reference-status,
+.commerce-reference-error {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--user-ink-muted);
+    overflow-wrap: anywhere;
+}
+.commerce-reference-status {
+    color: var(--user-ink);
+}
+.commerce-reference-error {
+    color: var(--destructive);
+}
+.commerce-reference-item {
+    position: relative;
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid var(--user-border);
+    border-radius: 11px;
+}
+.commerce-reference-item img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    border-radius: 7px;
+    background: var(--user-surface-muted);
+}
+.commerce-reference-item .ant-select {
+    width: 100%;
+    margin-top: 6px;
+    font-size: 12px;
+}
+.commerce-reference-remove {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--user-border);
+    border-radius: 50%;
+    color: var(--user-ink);
+    background: var(--user-surface);
+    cursor: pointer;
+}
+.commerce-reference-add {
+    position: relative;
+    display: flex;
+    min-height: 116px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 9px;
+    border: 1px dashed var(--user-border);
+    border-radius: 11px;
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+.commerce-reference-add input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+.commerce-reference-add:focus-within {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: 2px;
+}
+.commerce-reference-add:hover {
+    border-color: var(--user-accent);
+    color: var(--user-ink);
+}
+.commerce-reference-add.is-uploading {
+    opacity: 0.6;
+    cursor: wait;
+}
+.commerce-reference-add input:disabled {
+    cursor: not-allowed;
+}

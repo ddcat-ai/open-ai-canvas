@@ -4,11 +4,27 @@ export const CANVAS_VIEWPORT_PREVIEW_EVENT = "canvas:viewport-preview";
 export const CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT = "canvas:graphics-viewport-preview";
 export const CANVAS_SELECTION_PREVIEW_EVENT = "canvas:selection-preview";
 export const CANVAS_NODE_DRAG_PREVIEW_EVENT = "canvas:node-drag-preview";
+const CANVAS_INTERACTION_CHANGE_EVENT = "canvas:interaction-change";
+
+export function setCanvasGestureActive(container: HTMLDivElement | null, attribute: "canvasNodeDragging" | "canvasViewportInteracting", active: boolean) {
+    if (!container || (container.dataset[attribute] === "true") === active) return;
+    if (active) container.dataset[attribute] = "true";
+    else delete container.dataset[attribute];
+    container.ownerDocument.dispatchEvent(new Event(CANVAS_INTERACTION_CHANGE_EVENT));
+}
+
+export function observeCanvasGestureActive(doc: Document, listener: (active: boolean) => void) {
+    const update = () => listener(Boolean(doc.querySelector('[data-canvas-viewport-interacting="true"],[data-canvas-node-dragging="true"]')));
+    doc.addEventListener(CANVAS_INTERACTION_CHANGE_EVENT, update);
+    update();
+    return () => doc.removeEventListener(CANVAS_INTERACTION_CHANGE_EVENT, update);
+}
 
 export type CanvasNodeDragPreview = {
     x: number;
     y: number;
     nodeIds: ReadonlySet<string>;
+    guides?: { vertical?: number; horizontal?: number };
 };
 
 type NodeDragPreviewDomState = {
@@ -108,10 +124,9 @@ export function subscribeCanvasViewportPreview(container: HTMLDivElement, listen
  * currently mounted in the virtualized world are touched; the committed
  * positions are still written by the drag-end path.
  */
-export function applyCanvasNodeDragPreview(container: HTMLDivElement | null, preview: CanvasNodeDragPreview | null) {
+export function applyCanvasNodeDragPreview(container: HTMLDivElement | null, preview: CanvasNodeDragPreview | null, selectionBounds: HTMLElement | null = null) {
     if (!container) return;
-    if (preview) container.dataset.canvasNodeDragging = "true";
-    else delete container.dataset.canvasNodeDragging;
+    setCanvasGestureActive(container, "canvasNodeDragging", Boolean(preview));
 
     let state = nodeDragPreviewDomStates.get(container);
     if (!state) {
@@ -120,9 +135,10 @@ export function applyCanvasNodeDragPreview(container: HTMLDivElement | null, pre
     }
 
     for (const nodeId of state.previousIds) {
-        state.elementsById.get(nodeId)?.style.removeProperty("translate");
+        if (!preview?.nodeIds.has(nodeId)) state.elementsById.get(nodeId)?.style.removeProperty("translate");
     }
-    state.selectionBounds?.style.removeProperty("translate");
+    if (state.selectionBounds !== selectionBounds) state.selectionBounds?.style.removeProperty("translate");
+    state.selectionBounds = selectionBounds;
 
     state.previousIds.clear();
     if (preview) {
@@ -133,16 +149,12 @@ export function applyCanvasNodeDragPreview(container: HTMLDivElement | null, pre
                 const nodeId = element.dataset.nodeId;
                 if (nodeId) state?.elementsById.set(nodeId, element);
             });
-            state.selectionBounds = container.querySelector<HTMLElement>("[data-canvas-selection-bounds]");
         }
         for (const nodeId of preview.nodeIds) {
             const element = state.elementsById.get(nodeId);
             if (!element || !element.isConnected) continue;
             element.style.setProperty("translate", `${preview.x}px ${preview.y}px`);
             state.previousIds.add(nodeId);
-        }
-        if (!state.selectionBounds?.isConnected) {
-            state.selectionBounds = container.querySelector<HTMLElement>("[data-canvas-selection-bounds]");
         }
         state.selectionBounds?.style.setProperty("translate", `${preview.x}px ${preview.y}px`);
     } else {

@@ -21,6 +21,11 @@ func creationTestService(t *testing.T) (*Service, *gorm.DB, string, CreationGuar
 	if err != nil {
 		t.Fatal(err)
 	}
+	return creationTestServiceOnDatabase(t, db)
+}
+
+func creationTestServiceOnDatabase(t *testing.T, db *gorm.DB) (*Service, *gorm.DB, string, CreationGuard) {
+	t.Helper()
 	sqlDB, err := db.DB()
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +38,7 @@ func creationTestService(t *testing.T) (*Service, *gorm.DB, string, CreationGuar
 		disablePiRuntime: true, legacyCloudAgentRootTask: true,
 	}
 	t.Cleanup(func() {
+		s.closeCloudAgentApprovalFollowUps()
 		s.closeCloudAgentPiRunners()
 		s.closeApprovedCloudAgentMediaWaiters()
 		_ = sqlDB.Close()

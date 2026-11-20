@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import type { SyntheticEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { AgentReplyOption } from "@/lib/canvas/agent-reply-options";
 
@@ -18,9 +19,10 @@ const stop = (event: SyntheticEvent) => event.stopPropagation();
  * 可点击的回复选项卡片。Agent 回复末尾的编号选项与 ask_user 的单选提问共用这一套样式；
  * 点一下就把该选项作为用户回复发出，不用再手动输入编号。
  */
-export function AgentReplyOptionCards({ options, onSelect, disabled = false, label = "可选的下一步" }: AgentReplyOptionCardsProps) {
+export function AgentReplyOptionCards({ options, onSelect, disabled = false, label }: AgentReplyOptionCardsProps) {
+    const { t } = useTranslation();
     return (
-        <div className="agent-reply-options" role="group" aria-label={label}>
+        <div className="agent-reply-options" role="group" aria-label={label ?? t("canvasA.replyOptions.label")}>
             {options.map((option) => (
                 <button
                     key={`${option.marker}-${option.text}`}

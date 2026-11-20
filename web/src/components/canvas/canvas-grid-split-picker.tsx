@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { CANVAS_GRID_SPLIT_MAX, CANVAS_GRID_SPLIT_PRESETS, clampGridSplitSize, isValidGridSplit } from "@/lib/canvas/canvas-grid-split";
 import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
@@ -15,6 +16,7 @@ function MiniGridIcon({ n }: { n: number }) {
 }
 
 export function CanvasGridSplitPicker({ onPick }: { onPick: (params: ImageSplitParams) => void }) {
+    const { t } = useTranslation();
     const [customOpen, setCustomOpen] = useState(false);
     const [hoverRows, setHoverRows] = useState(2);
     const [hoverCols, setHoverCols] = useState(2);
@@ -30,7 +32,7 @@ export function CanvasGridSplitPicker({ onPick }: { onPick: (params: ImageSplitP
             className="canvas-grid-split-picker"
             data-canvas-no-zoom
             role="dialog"
-            aria-label="宫格切分"
+            aria-label={t("canvasB.gridSplit.label")}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
@@ -54,14 +56,14 @@ export function CanvasGridSplitPicker({ onPick }: { onPick: (params: ImageSplitP
                     }}
                 >
                     <span className="canvas-grid-split-icon"><MiniGridIcon n={3} /></span>
-                    <span className="canvas-grid-split-item-label">自定义</span>
+                    <span className="canvas-grid-split-item-label">{t("canvasB.common.custom")}</span>
                     <ChevronRight className="canvas-grid-split-chevron" strokeWidth={2} />
                 </button>
             </div>
             {customOpen ? (
                 <div className="canvas-grid-split-custom">
                     <div className="canvas-grid-split-custom-head">
-                        <span>自定义宫格</span>
+                        <span>{t("canvasB.gridSplit.customGrid")}</span>
                         <span className="canvas-grid-split-custom-size">{hoverCols} × {hoverRows}</span>
                     </div>
                     <div

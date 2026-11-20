@@ -113,6 +113,7 @@ func (r *Repository) requireCurrentCloudAgentParent(task *model.Task) error {
 	// another child, including when the conversation moves to another canvas.
 	var reservations []model.Task
 	if err := r.db.Select("id", "input_json").Where(`user_id = ? AND operation = 'cloud_agent' AND agent_execution_ready = false
+		AND status NOT IN ('succeeded', 'failed', 'cancelled')
 		AND NOT EXISTS (SELECT 1 FROM cloud_agent_executions e WHERE e.id = tasks.id AND e.user_id = tasks.user_id)`, task.UserID).
 		Find(&reservations).Error; err != nil {
 		return err

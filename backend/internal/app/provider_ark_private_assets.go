@@ -376,7 +376,7 @@ func callArkPrivateAssetAPI(ctx context.Context, setting arkPrivateAssetSettingV
 	if err != nil {
 		return nil, err
 	}
-	baseURL, err := arkPrivateAssetControlPlaneURL(setting.Region)
+	baseURL, err := arkPrivateAssetControlPlaneURL(setting.Site, setting.Region)
 	if err != nil {
 		return nil, err
 	}
@@ -441,9 +441,20 @@ func arkPrivateAssetUpstreamDetail(response map[string]interface{}) string {
 	return detail
 }
 
-func arkPrivateAssetControlPlaneURL(region string) (string, error) {
+// arkPrivateAssetControlPlaneURL 按站点和 Region 推导方舟控制面（OpenAPI）地址：
+// 火山引擎为 ark.<region>.volcengineapi.com，BytePlus 海外站为 ark.<region>.byteplusapi.com。
+// 两个站点使用相同的 HMAC-SHA256 签名与 2024-01-01 接口版本。
+func arkPrivateAssetControlPlaneURL(site, region string) (string, error) {
 	if override := strings.TrimSpace(arkPrivateAssetAPIBaseURLOverride); override != "" {
 		return override, nil
+	}
+	host := "volcengineapi.com"
+	switch strings.ToLower(strings.TrimSpace(site)) {
+	case "", arkSiteVolcengine:
+	case arkSiteBytePlus:
+		host = "byteplusapi.com"
+	default:
+		return "", errors.New("方舟站点无效")
 	}
 	region = strings.ToLower(strings.TrimSpace(region))
 	if region == "" {
@@ -454,7 +465,7 @@ func arkPrivateAssetControlPlaneURL(region string) (string, error) {
 			return "", errors.New("方舟素材库 Region 格式无效")
 		}
 	}
-	return "https://ark." + region + ".volcengineapi.com", nil
+	return "https://ark." + region + "." + host, nil
 }
 
 func arkPrivateAssetResponseField(response map[string]interface{}, keys ...string) string {

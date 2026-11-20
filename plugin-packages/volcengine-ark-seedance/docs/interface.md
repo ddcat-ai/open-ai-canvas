@@ -1,4 +1,4 @@
-# Volcengine Ark Seedance 接口字段
+# 火山方舟 Seedance 官方视频生成 接口字段
 
 ## 协议身份
 
@@ -54,10 +54,8 @@
 | `create.body.camera_fixed` | `{"$omitEmpty":{"$ref":"request.providerOptions.volcengine-ark-video.camera_fixed"}}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/api/v3/contents/generations/tasks/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 | `cancel.method` | `"DELETE"` |
 | `cancel.path` | `"/api/v3/contents/generations/tasks/{{taskId}}"` |
-| `cancel.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -95,10 +93,10 @@
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-seedance",
-  "name": "Volcengine Ark Seedance",
+  "name": "火山方舟 Seedance 官方视频生成",
   "version": "2.0.0",
   "author": "Volcengine / 影策",
-  "description": "Volcengine Ark Seedance 独立请求协议插件。",
+  "description": "火山方舟官方 Seedance 视频生成接口，使用普通 /api/v3 Contents Generations Tasks 和方舟推理 API Key；不是 Agent Plan 专用线路。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
   "permissions": [
     "generation.run",
@@ -118,7 +116,7 @@
     "providers": [
       {
         "id": "volcengine-ark-video",
-        "label": "Volcengine Ark Seedance",
+        "label": "火山方舟 Seedance 官方视频生成",
         "capabilities": [
           "video"
         ],
@@ -134,6 +132,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "content",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

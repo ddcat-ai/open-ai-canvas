@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -76,6 +77,83 @@ func TestCloudAgentModelStepAdoptsOrphanedStepTask(t *testing.T) {
 	}
 	if state.ActiveTaskID != "" {
 		t.Fatalf("adopted step was not released: active=%s", state.ActiveTaskID)
+	}
+}
+
+func TestCloudAgentPiRecoversFailedStepUsingOriginalSubmissionFacts(t *testing.T) {
+	for _, uncertain := range []bool{true, false} {
+		name := "transient-retried"
+		if uncertain {
+			name = "submission-uncertain"
+		}
+		t.Run(name, func(t *testing.T) {
+			s, db, runID := piOutputLimitFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			firstCtx, interrupt := context.WithCancel(ctx)
+			defer interrupt()
+			done := make(chan error, 1)
+			payload := map[string]json.RawMessage{"messages": json.RawMessage(`[{"role":"user","content":"你好"}]`)}
+			call := func(callCtx context.Context) {
+				_, err := s.cloudAgentPiModel(callCtx, "user", runID, payload)
+				done <- err
+			}
+			go call(firstCtx)
+			taskID := waitCloudAgentModelTask(t, ctx, s, runID, "", done)
+			interrupt()
+			<-done
+			task, err := s.repo.TaskForUser("user", taskID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if uncertain {
+				recordTaskDiagnostic(task, "preparation", "preparation_failed", "unknown", "reconcile_submission", routeDispatchUncertainError{"上一次提交结果不明确"})
+			} else {
+				recordTaskDiagnostic(task, "execution", "provider_execution_failed", "not_submitted", "correct_input", providerHTTPError{StatusCode: 429})
+			}
+			if err := db.Create(&model.ApiCallLog{ID: "orphan-call", UserID: "user", TaskID: taskID, Status: model.ApiCallStatusFailed, StatusCode: 429}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Model(task).Updates(map[string]any{"status": model.TaskStatusFailed, "execution_diagnostic_json": task.ExecutionDiagnosticJSON}).Error; err != nil {
+				t.Fatal(err)
+			}
+			go call(ctx)
+			wantTasks := int64(1)
+			if uncertain {
+				if err := <-done; agentModelErrorReason(err) != agentModelFailureSubmission {
+					t.Fatalf("original failure not surfaced: %v", err)
+				}
+				run, state := agentInterjectionState(t, s, runID)
+				last := state.Events[len(state.Events)-1]
+				if run.Status != "failed" || !strings.Contains(run.FailureMessage, "任务中心") || !strings.Contains(run.FailureMessage, taskID) || last.Type != "run_failed" || last.Payload["reason"] != string(agentModelFailureSubmission) || last.Payload["taskId"] != taskID || last.Payload["text"] != run.FailureMessage {
+					t.Fatalf("missing actionable terminal event: status=%s event=%v", run.Status, last)
+				}
+				if err := s.finishCloudAgentCleanup(ctx, run); err != nil {
+					t.Fatal(err)
+				}
+				stored, err := s.repo.CloudAgent("user", runID)
+				if err != nil || stored.Status != "failed" || stored.ActiveTaskID != "" || stored.CleanupPending {
+					t.Fatalf("failed run did not settle: %+v %v", stored, err)
+				}
+			} else {
+				wantTasks++
+				retryID := waitCloudAgentModelTask(t, ctx, s, runID, taskID, done)
+				if err := db.Model(&model.Task{}).Where("id = ?", retryID).Updates(map[string]any{"status": model.TaskStatusSucceeded, "result_json": `{"text":"你好"}`}).Error; err != nil {
+					t.Fatal(err)
+				}
+				if err := <-done; err != nil {
+					t.Fatal(err)
+				}
+			}
+			steps := db.Model(&model.Task{}).Where("agent_run_id = ? AND operation = ?", runID, cloudAgentStepOperation)
+			var count, orders int64
+			if err := steps.Count(&count).Error; err != nil || count != wantTasks {
+				t.Fatalf("step count=%d want=%d err=%v", count, wantTasks, err)
+			}
+			if err := db.Model(&model.BillingOrder{}).Where("task_id IN (?)", steps.Select("id")).Count(&orders).Error; err != nil || orders != wantTasks {
+				t.Fatalf("order count=%d want=%d err=%v", orders, wantTasks, err)
+			}
+		})
 	}
 }
 

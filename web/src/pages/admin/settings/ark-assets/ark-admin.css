@@ -1,0 +1,416 @@
+/* 管理端方舟素材库：素材组详情、审核缩略图与平台真人认证面板。只取 --admin-* token。 */
+.admin-ark-tabs-body {
+    min-width: 0;
+}
+.admin-ark-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.admin-ark-detail-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    margin: 0;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-divider);
+}
+.admin-ark-detail-facts > div {
+    min-width: 0;
+    padding: 10px 14px;
+    background: var(--admin-layer-1);
+}
+.admin-ark-detail-facts dt {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+}
+.admin-ark-detail-facts dd {
+    overflow: hidden;
+    margin: 2px 0 0;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-ark-detail-facts dd button,
+.admin-ark-tile-body button {
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-ark-detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid var(--admin-divider);
+}
+.admin-ark-detail-section h3 {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+.admin-ark-detail-section small,
+.admin-ark-field small {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+.admin-ark-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.admin-ark-field > span {
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+}
+.admin-ark-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.admin-ark-tile {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    gap: 10px;
+    padding: 8px;
+    border: 1px solid var(--admin-card-border);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+}
+.admin-ark-tile img,
+.admin-ark-review-thumb img {
+    width: 56px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--admin-divider);
+}
+.admin-ark-tile-body {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+}
+.admin-ark-tile-body strong {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--admin-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-ark-tile-body .is-error {
+    color: var(--admin-status-error);
+    overflow-wrap: anywhere;
+}
+.admin-ark-review-thumb {
+    display: inline-flex;
+    flex-shrink: 0;
+}
+.admin-ark-review-thumb img {
+    width: 40px;
+    height: 52px;
+}
+.admin-ark-empty {
+    padding: 24px 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    text-align: center;
+}
+.admin-ark-session {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 8px 0;
+}
+.admin-ark-session-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 10px;
+}
+.admin-ark-session-copy strong {
+    color: var(--admin-text-primary);
+    font-size: 16px;
+    font-weight: 600;
+}
+.admin-ark-session-copy p {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.admin-ark-number-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0 16px;
+}
+
+/* 素材组视图：概览卡片兼作类型筛选，工具栏单行，表格单元两行信息。 */
+[data-admin-root] .admin-ark-groups {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 12px;
+}
+[data-admin-root] .admin-ark-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+[data-admin-root] .admin-ark-stat {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    color: var(--admin-text);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color var(--admin-motion),
+        background-color var(--admin-motion);
+}
+[data-admin-root] .admin-ark-stat:hover {
+    border-color: var(--admin-border-strong);
+    background: color-mix(in srgb, var(--admin-surface-2) 45%, var(--admin-surface));
+}
+[data-admin-root] .admin-ark-stat:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+[data-admin-root] .admin-ark-stat.is-active {
+    border-color: color-mix(in srgb, var(--admin-text) 45%, transparent);
+    background: var(--admin-surface-2);
+}
+[data-admin-root] .admin-ark-stat-head {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+[data-admin-root] .admin-ark-stat-icon,
+[data-admin-root] .admin-ark-group-avatar,
+[data-admin-root] .admin-ark-empty-icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid var(--admin-border);
+    background: var(--admin-surface-2);
+    color: var(--admin-text-secondary);
+}
+[data-admin-root] .admin-ark-stat-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--admin-radius);
+}
+[data-admin-root] .admin-ark-stat-label {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+[data-admin-root] .admin-ark-stat-flag {
+    flex: 0 0 auto;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--admin-accent);
+    color: var(--admin-accent-fg);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+}
+[data-admin-root] .admin-ark-stat-value {
+    color: var(--admin-text);
+    font-size: 26px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 30px;
+}
+[data-admin-root] .admin-ark-stat-detail {
+    max-width: 100%;
+    min-height: 18px;
+    overflow: hidden;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+[data-admin-root] .admin-ark-stat-detail .is-warning {
+    color: var(--admin-status-warning);
+}
+[data-admin-root] .admin-ark-stat-detail .is-error {
+    color: var(--admin-status-error);
+}
+[data-admin-root] .admin-ark-stat.is-warning {
+    border-color: color-mix(in srgb, var(--admin-status-warning) 36%, var(--admin-border));
+}
+[data-admin-root] .admin-ark-stat.is-warning .admin-ark-stat-icon {
+    border-color: color-mix(in srgb, var(--admin-status-warning) 30%, transparent);
+    background: color-mix(in srgb, var(--admin-status-warning) 12%, var(--admin-surface));
+    color: var(--admin-status-warning);
+}
+[data-admin-root] .admin-ark-stat.is-warning .admin-ark-stat-value,
+[data-admin-root] .admin-ark-stat-link {
+    color: var(--admin-status-warning);
+}
+[data-admin-root] .admin-ark-stat-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+}
+[data-admin-root] .admin-ark-groups .admin-list-toolbar {
+    flex-wrap: nowrap;
+    margin-bottom: 8px;
+}
+[data-admin-root] .admin-ark-groups .admin-list-toolbar-main {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+[data-admin-root] .admin-ark-groups .admin-list-toolbar-filters {
+    width: auto;
+    padding-top: 0;
+}
+[data-admin-root] .admin-ark-groups .admin-list-toolbar-filters .ant-select {
+    min-width: 128px;
+}
+[data-admin-root] .admin-ark-groups .admin-list-toolbar-chips {
+    width: auto;
+}
+[data-admin-root] .admin-ark-groups .admin-list-toolbar-actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+}
+[data-admin-root] .admin-ark-search {
+    width: 280px;
+    max-width: 100%;
+}
+[data-admin-root] .admin-ark-group-cell {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+}
+[data-admin-root] .admin-ark-group-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--admin-radius-lg);
+}
+[data-admin-root] .admin-ark-group-id {
+    overflow: hidden;
+    margin-top: 2px;
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-mono);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+[data-admin-root] .admin-ark-muted {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+[data-admin-root] .admin-ark-count {
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+[data-admin-root] .admin-ark-count strong {
+    color: var(--admin-text);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+[data-admin-root] .admin-ark-empty-state {
+    display: flex;
+    min-height: 300px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 32px 24px;
+    text-align: center;
+}
+[data-admin-root] .admin-ark-empty-icon {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 4px;
+    border-radius: 999px;
+}
+[data-admin-root] .admin-ark-empty-state h3 {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+[data-admin-root] .admin-ark-empty-state p {
+    max-width: 440px;
+    margin: 0 0 8px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+@media (prefers-reduced-motion: reduce) {
+    [data-admin-root] .admin-ark-stat {
+        transition: none;
+    }
+}
+@media (max-width: 1100px) {
+    [data-admin-root] .admin-ark-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    [data-admin-root] .admin-ark-groups .admin-list-toolbar {
+        flex-wrap: wrap;
+    }
+}
+@media (max-width: 639px) {
+    [data-admin-root] .admin-ark-stats {
+        gap: 8px;
+    }
+    [data-admin-root] .admin-ark-stat {
+        padding: 12px;
+    }
+    [data-admin-root] .admin-ark-search {
+        width: 100%;
+    }
+    [data-admin-root] .admin-ark-groups .admin-list-toolbar-filters {
+        width: 100%;
+    }
+}
+@media (max-width: 720px) {
+    .admin-ark-session {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .admin-ark-detail-facts,
+    .admin-ark-number-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

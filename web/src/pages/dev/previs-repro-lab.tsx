@@ -97,7 +97,19 @@ export default function PrevisReproLab() {
             <ReproMatrix />
 
             {workbenchOpen ? (
-                <CanvasPrevisWorkbench canvasId="previs-repro-lab" open scene={scene} imageNodes={[]} onboardingScope="previs-repro-lab" onClose={() => setWorkbenchOpen(false)} onChange={onChange} onApply={onApply} onDeleteImageNode={() => undefined} onFlush={onFlush} />
+                <CanvasPrevisWorkbench
+                    canvasId="previs-repro-lab"
+                    open
+                    scene={scene}
+                    imageNodes={[]}
+                    onboardingScope="previs-repro-lab"
+                    onClose={() => setWorkbenchOpen(false)}
+                    onChange={onChange}
+                    onApply={onApply}
+                    onAddToCanvas={onApply}
+                    onDeleteImageNode={() => undefined}
+                    onFlush={onFlush}
+                />
             ) : null}
         </div>
     );

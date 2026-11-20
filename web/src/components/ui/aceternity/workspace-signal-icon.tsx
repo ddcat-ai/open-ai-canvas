@@ -1,17 +1,21 @@
 import { motion, useReducedMotion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { useThemePack } from "@/themes/use-theme-pack";
 
 export type WorkspaceSignalIconVariant = "home" | "canvas" | "projects" | "assets" | "skills" | "tasks" | "wallet" | "settings" | "empty" | "error" | "loading";
 
 /**
  * 页面空态、加载与错误的统一图标：单色低饱和线条 + 一个强调点（主色；错误为危险色）。
  * 不使用多色渐变，不在悬停时缩放；入场总时长不超过 300ms，减少动态效果时直接显示。
+ * 当前皮肤的主题包提供了 signalArt 时，48×48 画布里的内容改由主题包绘制。
  */
 export function WorkspaceSignalIcon({ variant, size = "md", className }: { variant: WorkspaceSignalIconVariant; size?: "sm" | "md" | "lg"; className?: string }) {
-    const reducedMotion = useReducedMotion();
+    const reducedMotion = Boolean(useReducedMotion());
     const dimension = size === "sm" ? 32 : size === "lg" ? 64 : 44;
     const dotColor = variant === "error" ? "var(--status-error)" : "var(--workspace-accent)";
+    const ThemeArt = useThemePack()?.signalArt;
+    const [dotX, dotY] = signalDot(variant);
 
     return (
         <motion.span
@@ -23,18 +27,24 @@ export function WorkspaceSignalIcon({ variant, size = "md", className }: { varia
             aria-hidden="true"
         >
             <svg viewBox="0 0 48 48" className="h-full w-full overflow-visible" fill="none">
-                <rect x="3.5" y="3.5" width="41" height="41" rx="12" className="fill-[var(--library-icon-surface,var(--background))] stroke-border" />
-                <motion.path
-                    d={signalPath(variant)}
-                    stroke="var(--text-tertiary)"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    initial={reducedMotion ? false : { pathLength: 0, opacity: 0 }}
-                    animate={{ pathLength: 1, opacity: 1 }}
-                    transition={{ duration: 0.25, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
-                />
-                <motion.circle cx={signalDot(variant)[0]} cy={signalDot(variant)[1]} r="2.5" fill={dotColor} initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15, delay: 0.15, ease: "easeOut" }} />
+                {ThemeArt ? (
+                    <ThemeArt path={signalPath(variant)} dot={[dotX, dotY]} error={variant === "error"} reducedMotion={reducedMotion} />
+                ) : (
+                    <>
+                        <rect x="3.5" y="3.5" width="41" height="41" rx="12" className="fill-[var(--library-icon-surface,var(--background))] stroke-border" />
+                        <motion.path
+                            d={signalPath(variant)}
+                            stroke="var(--text-tertiary)"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            initial={reducedMotion ? false : { pathLength: 0, opacity: 0 }}
+                            animate={{ pathLength: 1, opacity: 1 }}
+                            transition={{ duration: 0.25, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
+                        />
+                        <motion.circle cx={dotX} cy={dotY} r="2.5" fill={dotColor} initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15, delay: 0.15, ease: "easeOut" }} />
+                    </>
+                )}
             </svg>
         </motion.span>
     );

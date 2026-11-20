@@ -11,18 +11,41 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 管理员浏览器 → Backend 管理 API → 带 Token 的 Unix Socket → Host Updater → Docker Compose
 ```
 
+## 更新来源
+
+在系统更新页面选择并保存来源，随后重新检查版本：
+
+| 预设 | GitHub 版本与更新文件 | 容器镜像 |
+| --- | --- | --- |
+| 官方直连（默认） | GitHub API、Release、Raw | `ghcr.io` |
+| 镜像加速 | `https://gh-proxy.com/` 加原始 HTTPS 地址 | `ghcr.nju.edu.cn` |
+
+展开“分别设置 GitHub 与容器镜像来源”可使用混合配置。GitHub 来源覆盖 Release 列表、目标版本 Compose、Host Updater 二进制和 `SHA256SUMS`；容器来源覆盖 backend、web、yingce-agent，迁移服务复用 backend 镜像。
+
+来源配置保存在宿主机更新器的 `state.json`，独立于部署 `.env`，重启和应用回退不会重置选择。保存新来源会清除上次版本检查及来源检测结果。检查、检测、更新和回退互斥，更新任务记录并固定自己的来源快照；请求失败不会自动切换到其他来源。GitHub Token 只用于官方 API 直连，不发送给 GH-Proxy。
+
+“测试连通性”在宿主机异步执行，页面关闭后仍会继续。检测会查询目标 Release、下载并校验 Compose 配置、验证当前 CPU 架构的更新器校验条目，并读取三个镜像的多架构清单，确认包含当前 `linux/amd64` 或 `linux/arm64`。每项单独显示失败详情，HTTP 403/429 提示拒绝或限流，404 提示版本不存在或镜像尚未同步。
+
+检测不下载完整容器层，也不安装更新器，不能替代更新前的完整拉取与 SHA-256 校验。正式更新在全部准备成功后才停服；通过所选镜像源拉取后，实际 `仓库@sha256:...` 写入 `.env`，不会再因仓库名固定为 `ghcr.io` 而拒绝南大源摘要。回退恢复原 `.env` 和本地旧镜像，使用 `--pull never`；旧镜像被清理时会报错。
+
+镜像服务属于第三方公共服务，其可用性以目标服务器实测为准。SHA-256 与 digest 验证内容完整性，不能单独证明第三方源的发布者身份。
+
 ## 安全更新顺序
 
 1. 从 GitHub Releases 读取包含预览版在内的最高语义版本，并与 `.env` 中固定的 `CANVAS_IMAGE_TAG` 比较。`sha-*` 这类非正式镜像标签一律视为低于正式 Release，避免把 `vsha-5509b17` 字典序比较成比 `v1.5.0` 更新。
 2. 下载目标版本的 `docker-compose.deploy.yml`，执行 `docker compose config --quiet`，检查部署文件、磁盘空间和当前版本。当前标签不是 `vX.Y.Z` 或 `vX.Y.Z.N` 时，健康检查只确认服务就绪，不要求构建号和镜像标签逐字相同。
-3. 创建 `backup-YYYYMMDD-HHMMSS.zip.partial`，其中包含 PostgreSQL custom-format dump、后端数据目录 tar 和元数据；写入完成后 `fsync`、原子改名，并复核 ZIP 结构和 SHA-256。
-4. 拉取目标 backend/web 镜像并要求存在仓库 `sha256` 摘要。任何失败都在停服前中止。
-5. 停止 web/backend，等待 Backend 的 SIGTERM drain 完成；PostgreSQL 和 Redis 保持运行。
+3. 拉取目标 backend/web/yingce-agent 镜像并要求存在仓库 `sha256` 摘要；下载期间旧服务继续运行，准备失败在停服前中止。
+4. 停止 web/backend/yingce-agent，等待旧服务退出；PostgreSQL 和 Redis 保持运行。
+5. 创建停服后的 `backup-YYYYMMDD-HHMMSS.zip.partial`，包含 PostgreSQL custom-format dump、后端数据目录 tar 和元数据；写入完成后 `fsync`、原子改名，并复核 ZIP 结构和 SHA-256。保存旧 Compose 与部署环境后才进入迁移。
 6. 用目标 backend 镜像独立执行 `migrate-schema up`。整批迁移在事务和 PostgreSQL advisory lock 内完成，迁移名称与 checksum 必须匹配。
 7. 解析目标 backend/web 镜像的仓库 digest，原子更新 `CANVAS_IMAGE_TAG`、`CANVAS_BACKEND_IMAGE`、`CANVAS_WEB_IMAGE` 和 Compose 文件，启动目标版本；运行容器始终使用 `image@sha256:...`，不使用 `latest`。
 8. 连续检查 `/api/health/ready` 的数据库、运行时、schema 和 build version，并经过稳定窗口后才标记成功。
 
 更新状态写入 `/var/lib/open-ai-canvas-updater/state.json`。Backend 或浏览器在切换期间断线不会终止宿主机操作，恢复后可继续读取日志。
+
+停止服务或最终备份失败且尚未开始迁移时，直接启动原容器并验证健康，不恢复旧数据库快照。原容器恢复失败会进入 `manual_intervention`。备份耗时计入停服窗口。
+
+数据目录归档通过原 backend 镜像的一次性容器执行 `tar`，挂载原数据卷，不启动业务入口或依赖服务，不重新拉取镜像；不再依赖已停止容器上的 `exec`。
 
 ## 自动回退
 
@@ -37,9 +60,11 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 
 回退任一步失败时状态变为 `manual_intervention`，不伪造成功。管理后台仅在存在旧版本和已校验备份时开放人工回退按钮。
 
+该备份覆盖旧服务停止前的写入。新版本启动后产生的业务写入不在此快照中，历史备份回退仍可能覆盖这些写入；需按恢复时的数据和 schema 状态另行确认。
+
 ## 安装与升级约束
 
-GHCR 镜像部署必须把 `CANVAS_IMAGE_TAG` 固定到具体 Release，并把 `CANVAS_BACKEND_IMAGE`、`CANVAS_WEB_IMAGE` 固定到对应 GHCR digest，不可使用 `latest` 或仅使用可变 tag。首次安装时显式指定 Release：
+GHCR 镜像部署必须把 `CANVAS_IMAGE_TAG` 固定到具体 Release，并把 `CANVAS_BACKEND_IMAGE`、`CANVAS_WEB_IMAGE` 固定到所选 GHCR 或南大源的 digest，不可使用 `latest` 或仅使用可变 tag。首次安装时显式指定 Release：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/main/scripts/install-server-image.sh \

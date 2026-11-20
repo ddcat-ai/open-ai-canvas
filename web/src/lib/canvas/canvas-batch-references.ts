@@ -206,7 +206,7 @@ function inputToken(node: CanvasNodeData | undefined) {
     if (!node) return "missing";
     const cached = inputTokens.get(node);
     if (cached) return cached;
-    const content = node.type === "text" || node.type === "markdown" ? node.metadata?.content || node.metadata?.prompt || "" : node.metadata?.storageKey || node.metadata?.content || node.metadata?.prompt || "";
+    const content = node.type === "text" ? node.metadata?.content || node.metadata?.prompt || "" : node.metadata?.storageKey || node.metadata?.content || node.metadata?.prompt || "";
     const token = canvasBatchInputToken(node.id, content);
     inputTokens.set(node, token);
     return token;

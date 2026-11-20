@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// 角色与场景参考图方案。参考图是后续每个镜头首帧的身份锚点，方案决定它的版式、
+// 角色、场景与道具参考图方案。参考图是后续每个镜头首帧的身份锚点，方案决定它的版式、
 // 比例和约束提示词。模板在作品设置里保存为全文，用户看到的就是实际发送的内容。
 
 const (
@@ -20,6 +20,7 @@ const (
 var (
 	CharacterAssetVariables = []string{"{{角色名称}}", "{{角色设定}}", "{{项目画风}}", "{{画面规则}}"}
 	SceneAssetVariables     = []string{"{{场景名称}}", "{{场景设定}}", "{{项目画风}}", "{{画面规则}}"}
+	PropAssetVariables      = []string{"{{道具名称}}", "{{道具设定}}", "{{项目画风}}", "{{画面规则}}"}
 )
 
 // AssetImageRatio 是资产参考图（场景、道具与内置角色方案）的统一画幅。
@@ -40,8 +41,8 @@ const defaultScenePrompt = `{{项目画风}}。场景概念设定图：{{场景�
 横版宽景构图，无人物，空镜，构图完整，主体空间与出入口清晰，前中后景层次分明；光源方向明确，色调与时代服化道统一。
 禁止文字、水印、边框。{{画面规则}}`
 
-// propPrompt 是关键道具参考图模板：单件道具居中、无人物，供视频生成时保持道具外观一致。
-const propPrompt = `{{项目画风}}。道具设定图：{{道具名称}}。{{道具设定}}。
+// defaultPropPrompt 是关键道具参考图默认模板：单件道具居中、无人物，供视频生成时保持道具外观一致。
+const defaultPropPrompt = `{{项目画风}}。道具设定图：{{道具名称}}。{{道具设定}}。
 横版构图，单件道具居中完整展示，四周留白，干净浅灰背景，柔和棚拍光，外形、材质、颜色与细节清晰；无人物、无手部。
 禁止文字、水印、边框。{{画面规则}}`
 
@@ -86,6 +87,8 @@ func AssetSchemes() []AssetScheme {
 
 func DefaultScenePrompt() string { return defaultScenePrompt }
 
+func DefaultPropPrompt() string { return defaultPropPrompt }
+
 func assetScheme(mode string) (AssetScheme, bool) {
 	for _, scheme := range assetSchemes {
 		if scheme.Mode == mode {
@@ -100,6 +103,7 @@ type AssetSettings struct {
 	Mode            string `json:"mode"`
 	CharacterPrompt string `json:"characterPrompt"`
 	ScenePrompt     string `json:"scenePrompt"`
+	PropPrompt      string `json:"propPrompt"`
 	CharacterRatio  string `json:"characterRatio"`
 	// Resolution / PropResolution / SceneResolution 是角色、道具、场景参考图的分辨率档位（1k / 1.5k / 2k / 4k），
 	// 空串按该类参考图所用图片模型的默认档位。
@@ -116,20 +120,24 @@ const assetPromptLimit = 4000
 func (a AssetSettings) Normalized() AssetSettings {
 	scheme, known := assetScheme(a.Mode)
 	if !known && a.Mode != AssetModeCustom {
-		a.Mode = AssetModePortrait
-		scheme, _ = assetScheme(AssetModePortrait)
+		a.Mode = AssetModeFourView
+		scheme, _ = assetScheme(AssetModeFourView)
 	}
 	a.CharacterPrompt = truncateRunes(strings.TrimSpace(a.CharacterPrompt), assetPromptLimit)
 	a.ScenePrompt = truncateRunes(strings.TrimSpace(a.ScenePrompt), assetPromptLimit)
+	a.PropPrompt = truncateRunes(strings.TrimSpace(a.PropPrompt), assetPromptLimit)
 	if a.CharacterPrompt == "" {
 		if a.Mode == AssetModeCustom {
-			a.Mode = AssetModePortrait
-			scheme, _ = assetScheme(AssetModePortrait)
+			a.Mode = AssetModeFourView
+			scheme, _ = assetScheme(AssetModeFourView)
 		}
 		a.CharacterPrompt = scheme.CharacterPrompt
 	}
 	if a.ScenePrompt == "" {
 		a.ScenePrompt = defaultScenePrompt
+	}
+	if a.PropPrompt == "" {
+		a.PropPrompt = defaultPropPrompt
 	}
 	switch a.CharacterRatio {
 	case "3:4", "9:16", "1:1", "16:9", "4:3":
@@ -177,6 +185,59 @@ func (a AssetSettings) FrameHint() string {
 
 var assetPlaceholderPattern = regexp.MustCompile(`\{\{[^{}]+\}\}`)
 
+// 作品的画风与画面规则写的是成片（视频）的画幅，竖屏作品常带“9:16 竖屏构图”；设定图有自己的画幅
+// （场景、道具固定 16:9，角色按方案）。这两段文字带进设定图提示词前先去掉画幅与横竖构图要求，
+// 再由 WithAssetRatio 写明设定图自己的画幅。角色、道具、场景设定和方案模板不经过这里，原样保留。
+//
+// 比例只认常见画幅写法，并要求两侧不是数字，“12:30 的暖光”这类时间不会被删。
+const frameRatioToken = `\b(?:9\s*[:：]\s*16|16\s*[:：]\s*9|3\s*[:：]\s*4|4\s*[:：]\s*3|1\s*[:：]\s*1|21\s*[:：]\s*9|9\s*[:：]\s*21|2\s*[:：]\s*3|3\s*[:：]\s*2|4\s*[:：]\s*5|5\s*[:：]\s*4)\b`
+
+var (
+	// “画幅 9:16”“画面比例为 9:16”“9:16 竖屏构图”“16:9画幅比例”
+	frameRatioDirective = regexp.MustCompile(`(?:(?:画幅|画面|比例|宽高比|尺寸)+\s*(?:为|是|采用|[:：])?\s*)?` + frameRatioToken + `(?:\s*(?:横屏|横版|竖屏|竖版|横向|竖向|横|竖))?(?:构图|画面|画幅|比例|拍摄|格式|视频)*`)
+	// “竖屏构图”“竖屏”“横版画面”“竖向构图”“竖构图”
+	frameOrientationDirective = regexp.MustCompile(`(?:横屏|横版|竖屏|竖版)(?:构图|画面|画幅|比例|拍摄|格式|视频)*|(?:横向|竖向|横|竖)(?:构图|画幅)+`)
+	frameSeparatorRun         = regexp.MustCompile(`[，,、；;。]+(?:\s*[，,、；;。]+)*`)
+)
+
+// StripFrameDirectives 去掉画风或画面规则里关于成片画幅、横竖构图的要求，其余描述保留。
+func StripFrameDirectives(text string) string {
+	text = frameRatioDirective.ReplaceAllString(text, "")
+	text = frameOrientationDirective.ReplaceAllString(text, "")
+	// 删除后相邻的标点合成一个，保留语气最重的那个。
+	text = frameSeparatorRun.ReplaceAllStringFunc(text, func(run string) string {
+		switch {
+		case strings.Contains(run, "。"):
+			return "。"
+		case strings.ContainsAny(run, "；;"):
+			return "；"
+		default:
+			return "，"
+		}
+	})
+	text = strings.TrimLeft(strings.TrimSpace(text), "，,、；;。")
+	return strings.TrimSpace(strings.TrimRight(text, "，,、；;"))
+}
+
+// WithAssetRatio 在设定图提示词末尾写明本张设定图的画幅，与尺寸参数一致。
+func WithAssetRatio(prompt, ratio string) string {
+	prompt = strings.TrimSpace(prompt)
+	ratio = strings.TrimSpace(ratio)
+	if ratio == "" {
+		return prompt
+	}
+	orientation := "，严格保持该宽高比"
+	switch ratio {
+	case "16:9", "4:3":
+		orientation = "，横版，宽度大于高度"
+	case "9:16", "3:4":
+		orientation = "，竖版，高度大于宽度"
+	case "1:1":
+		orientation = "，方图，宽度与高度相等"
+	}
+	return strings.TrimSpace(prompt + "\n最终输出画幅必须为 " + ratio + orientation + "；不得改成其他比例。")
+}
+
 // ValidateAssetPrompts 拒绝未知变量；返回第一个问题的说明。
 func ValidateAssetPrompts(a AssetSettings) string {
 	check := func(label string, content string, allowed []string) string {
@@ -199,7 +260,10 @@ func ValidateAssetPrompts(a AssetSettings) string {
 	if problem := check("角色参考图提示词", a.CharacterPrompt, CharacterAssetVariables); problem != "" {
 		return problem
 	}
-	return check("场景参考图提示词", a.ScenePrompt, SceneAssetVariables)
+	if problem := check("场景参考图提示词", a.ScenePrompt, SceneAssetVariables); problem != "" {
+		return problem
+	}
+	return check("道具参考图提示词", a.PropPrompt, PropAssetVariables)
 }
 
 func renderAssetTemplate(template string, values map[string]string) string {

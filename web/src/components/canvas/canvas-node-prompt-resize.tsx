@@ -1,6 +1,7 @@
 // 节点提示词编辑器的高度拖拽与展开弹窗尺寸控制。
 
-import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useRef } from "react";
+import { type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { clampPromptEditorModalSize } from "@/lib/canvas/canvas-prompt-editor-size";
 import {
     PROMPT_EDITOR_EXPANDED_LINE_HEIGHT,
@@ -15,6 +16,7 @@ import {
 } from "./canvas-node-prompt-panel";
 
 export function PromptResizeHandle({ height, min, max, onResize }: { height: number; min: number; max: number; onResize: (height: number) => void }) {
+    const { t } = useTranslation();
     const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
     const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -44,7 +46,7 @@ export function PromptResizeHandle({ height, min, max, onResize }: { height: num
             type="button"
             className="canvas-node-composer-resize-handle"
             role="separator"
-            aria-label="调整提示词输入高度"
+            aria-label={t("canvasB.promptResize.inputHeight")}
             aria-orientation="horizontal"
             aria-valuemin={min}
             aria-valuemax={max}
@@ -96,7 +98,8 @@ export function PromptModalResizeHandle({
     onResize: (size: { width: number; height: number }) => void;
     accent: string;
 }) {
-    const dragRef = useRef<{ pointerId: number; startX: number; startY: number; width: number; height: number } | null>(null);
+    const { t } = useTranslation();
+    const dragRef = useRef<{ pointerId: number; axis: "width" | "height"; start: number; size: { width: number; height: number } } | null>(null);
 
     const finishResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
         if (dragRef.current?.pointerId !== event.pointerId) return;
@@ -104,71 +107,101 @@ export function PromptModalResizeHandle({
         dragRef.current = null;
     };
 
-    const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-        const step = event.shiftKey ? 40 : 12;
-        const widthDelta = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
-        const heightDelta = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
-        if (!widthDelta && !heightDelta) return;
+    const resizeKey = (axis: "width" | "height", event: ReactKeyboardEvent<HTMLButtonElement>) => {
+        const negative = axis === "width" ? event.key === "ArrowLeft" : event.key === "ArrowUp";
+        const positive = axis === "width" ? event.key === "ArrowRight" : event.key === "ArrowDown";
+        if (!negative && !positive) return;
         event.preventDefault();
         event.stopPropagation();
         const base = size ?? measure();
-        onResize(clampExpandedModalSize({ width: base.width + widthDelta, height: base.height + heightDelta }));
+        const step = event.shiftKey ? 80 : 24;
+        onResize(clampExpandedModalSize({ ...base, [axis]: base[axis] + (positive ? step : -step) }));
+    };
+
+    const startResize = (axis: "width" | "height", event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0 || !event.isPrimary) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const base = size ?? measure();
+        dragRef.current = { pointerId: event.pointerId, axis, start: axis === "width" ? event.clientX : event.clientY, size: base };
+        onResize(clampExpandedModalSize(base));
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+
+    const moveResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+            dragRef.current = null;
+            return;
+        }
+        if ((event.buttons & 1) === 0) {
+            finishResize(event);
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const pointer = drag.axis === "width" ? event.clientX : event.clientY;
+        const dimension = drag.axis === "width" ? "width" : "height";
+        onResize(clampExpandedModalSize({ ...drag.size, [dimension]: drag.size[dimension] + 2 * (pointer - drag.start) }));
+    };
+
+    const trackPointer = {
+        onPointerMove: moveResize,
+        onPointerUp: finishResize,
+        onPointerCancel: finishResize,
+        onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) => {
+            if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
+        },
     };
 
     return (
-        <button
-            type="button"
-            className="absolute bottom-1.5 right-1.5 z-10 grid size-5 cursor-nwse-resize touch-none place-items-center opacity-60 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2"
-            aria-label="拖动调整窗口大小"
-            title="拖动调整窗口宽高，也可用方向键调整"
-            onKeyDown={handleKeyDown}
-            onPointerDown={(event) => {
-                if (event.button !== 0 || !event.isPrimary) return;
-                event.preventDefault();
-                event.stopPropagation();
-                const base = measure();
-                dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, ...base };
-                onResize(clampExpandedModalSize(base));
-                event.currentTarget.setPointerCapture(event.pointerId);
-            }}
-            onPointerMove={(event) => {
-                const drag = dragRef.current;
-                if (!drag || drag.pointerId !== event.pointerId) return;
-                if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    dragRef.current = null;
-                    return;
-                }
-                if ((event.buttons & 1) === 0) {
-                    finishResize(event);
-                    return;
-                }
-                event.stopPropagation();
-                // The modal stays centered, so each edge moves by half the size change.
-                onResize(clampExpandedModalSize({ width: drag.width + 2 * (event.clientX - drag.startX), height: drag.height + 2 * (event.clientY - drag.startY) }));
-            }}
-            onPointerUp={finishResize}
-            onPointerCancel={finishResize}
-            onLostPointerCapture={(event) => {
-                if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
-            }}
-        >
-            <span aria-hidden className="absolute bottom-1 right-1 size-2 rounded-br border-b-2 border-r-2" style={{ borderColor: accent }} />
-        </button>
+        <>
+            <button
+                type="button"
+                className="canvas-prompt-modal-resize-width"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t("canvasB.promptResize.widthLabel")}
+                title={t("canvasB.promptResize.widthTitle")}
+                style={{ "--prompt-resize-accent": accent } as CSSProperties}
+                onKeyDown={(event) => resizeKey("width", event)}
+                onPointerDown={(event) => startResize("width", event)}
+                {...trackPointer}
+            >
+                <span aria-hidden />
+            </button>
+            <button
+                type="button"
+                className="canvas-prompt-modal-resize-height"
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label={t("canvasB.promptResize.heightLabel")}
+                title={t("canvasB.promptResize.heightTitle")}
+                style={{ "--prompt-resize-accent": accent } as CSSProperties}
+                onKeyDown={(event) => resizeKey("height", event)}
+                onPointerDown={(event) => startResize("height", event)}
+                {...trackPointer}
+            >
+                <span aria-hidden />
+            </button>
+        </>
     );
 }
 
-export function promptEditorBounds(expanded: boolean, hasReferences: boolean) {
+export function promptEditorBounds(expanded: boolean, hasReferences: boolean, fontSize = 16) {
     const shelfHeight = hasReferences ? PROMPT_REFERENCE_SHELF_HEIGHT : 0;
     const min = (expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT) + shelfHeight;
-    const max = (expanded ? PROMPT_EDITOR_EXPANDED_LINE_HEIGHT * PROMPT_EDITOR_EXPANDED_MAX_LINES + PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING : PROMPT_EDITOR_LINE_HEIGHT * PROMPT_EDITOR_MAX_LINES + PROMPT_EDITOR_VERTICAL_PADDING) + shelfHeight;
+    const lineHeight = Math.ceil(fontSize * 1.6);
+    const max = Math.max(min, (expanded ? lineHeight * PROMPT_EDITOR_EXPANDED_MAX_LINES + PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING : lineHeight * PROMPT_EDITOR_MAX_LINES + PROMPT_EDITOR_VERTICAL_PADDING) + shelfHeight);
     return { min, max };
 }
 
-export function estimatePromptContentHeight(value: string, expanded: boolean) {
+export function estimatePromptContentHeight(value: string, expanded: boolean, fontSize = 16) {
     if (!value.trim()) return expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT;
-    const charsPerLine = expanded ? 34 : 38;
+    const charsPerLine = Math.max(1, Math.floor(((expanded ? 34 : 38) * 16) / fontSize));
     const lineCount = value.split("\n").reduce((total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)), 0);
-    const lineHeight = expanded ? PROMPT_EDITOR_EXPANDED_LINE_HEIGHT : PROMPT_EDITOR_LINE_HEIGHT;
+    const lineHeight = fontSize === 16 ? (expanded ? PROMPT_EDITOR_EXPANDED_LINE_HEIGHT : PROMPT_EDITOR_LINE_HEIGHT) : Math.ceil(fontSize * 1.6);
     const verticalPadding = expanded ? PROMPT_EDITOR_EXPANDED_VERTICAL_PADDING : PROMPT_EDITOR_VERTICAL_PADDING;
     return Math.max(expanded ? PROMPT_EDITOR_EXPANDED_MIN_HEIGHT : PROMPT_EDITOR_MIN_HEIGHT, lineCount * lineHeight + verticalPadding);
 }

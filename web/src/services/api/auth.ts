@@ -11,9 +11,12 @@ import type { PublicUserGroup } from "@/services/api/user-groups";
 
 let authSessionRequest: Promise<AuthSessionPayload> | null = null;
 let authSessionCache: { payload: AuthSessionPayload; expiresAt: number } | null = null;
+let authSessionGeneration = 0;
 
 export function invalidateAuthSessionCache() {
+    authSessionGeneration += 1;
     authSessionCache = null;
+    authSessionRequest = null;
 }
 
 export type LocalUser = {
@@ -66,6 +69,25 @@ export type RuntimeLimits = {
     recycleBinRetentionDays?: number;
 };
 
+export type ApiLogGenerationReference = {
+    id: string;
+    kind: "image" | "video" | "audio";
+    label: string;
+    name: string;
+    role?: string;
+    available: boolean;
+    unavailableReason?: string;
+    mediaUrl?: string;
+};
+
+export type ApiLogGenerationContent = {
+    prompt: string;
+    references: ApiLogGenerationReference[];
+    source: "snapshot" | "task" | "request";
+    incomplete: boolean;
+    note?: string;
+};
+
 export type ApiCallLog = {
     id: string;
     userId: string;
@@ -100,6 +122,7 @@ export type ApiCallLog = {
     inputTokens: number;
     outputTokens: number;
     cachedTokens: number;
+    cacheWriteTokens?: number;
     usageAvailable: boolean;
     mediaCount: number;
     mediaPreviewUrl?: string;
@@ -118,9 +141,14 @@ export type ApiCallLog = {
     requestContentType?: string;
     requestBody?: string;
     responseBody?: string;
+    generationContent?: ApiLogGenerationContent;
     startedAt?: string;
     createdAt: string;
 };
+
+export function adminApiLogReferenceMediaURL(logId: string, referenceId: string) {
+    return `${String(apiBaseURL).replace(/\/+$/, "")}/admin/api-logs/${encodeURIComponent(logId)}/references/${encodeURIComponent(referenceId)}/media`;
+}
 
 export type AdminProviderTaskQueryResult = {
     task: GenerationTask;
@@ -152,6 +180,10 @@ export type AdminUserDetail = {
         taskCount: number;
         taskBytes: number;
         apiCallCount: number;
+        agentBytes: number;
+        agentLimitBytes: number;
+        mcpBytes: number;
+        mcpLimitBytes: number;
     };
     storedFileBytes: number;
     dailyUploadBytes: number;
@@ -325,7 +357,24 @@ export type AdminOSSSetting = {
 };
 
 export type AdminArkPrivateAssetSetting = {
+    /** Seedance 可信参考素材自动同步。 */
     enabled: boolean;
+    /** 开放用户自建真人 / 虚拟素材组，与可信素材自动同步相互独立。 */
+    realEnabled: boolean;
+    virtualEnabled: boolean;
+    realGroupLimit: number;
+    virtualGroupLimit: number;
+    /** 按组一次性收费；平台积分功能关闭时不生效。 */
+    billingEnabled: boolean;
+    realGroupPriceMicrocredits: number;
+    virtualGroupPriceMicrocredits: number;
+    realReviewRequired: boolean;
+    virtualReviewRequired: boolean;
+    realAuthorizationDays: number;
+    /** 方舟站点：火山引擎或 BytePlus 海外站，决定控制面域名。 */
+    site: "volcengine" | "byteplus";
+    /** 真人认证回调使用的站点公网根地址；为空时后端使用 CANVAS_PUBLIC_BASE_URL。 */
+    callbackBaseUrl: string;
     region: string;
     projectName: string;
     accessKeyId: string;
@@ -342,6 +391,7 @@ export type RuntimeResourcePolicy = {
     dailyUploadMB: number;
     storedFileGB: number;
     structuredDataMB: number;
+    agentHistoryMB: number;
     taskDataGB: number;
     assetCount: number;
     canvasCount: number;
@@ -362,6 +412,8 @@ export type RuntimeTaskPolicy = {
     workerConcurrency: number;
     channelConcurrency: number;
     activeTaskLimit: number;
+    /** 单账号进行中的 Agent 轮次上限，包含排队与等待确认。 */
+    agentMaxRunsPerUser: number;
     imageTimeoutMinutes: number;
     textTimeoutMinutes: number;
     audioTimeoutMinutes: number;
@@ -409,20 +461,33 @@ export type RuntimePolicySetting = {
     updatedAt?: string;
 };
 
+/** 登录注册打开方式：modal 在当前页面弹窗，page 跳转独立的 /login 页面。 */
+export type AuthLoginMode = "modal" | "page";
+
+export type AuthSettings = VerificationPolicy & {
+    firstUser: boolean;
+    registrationEnabled: boolean;
+    linuxdoEnabled: boolean;
+    wechatEnabled?: boolean;
+    oidcEnabled?: boolean;
+    emailEnabled: boolean;
+    emailCodeRequired: boolean;
+    /** 注册必须填写邮箱。旧服务端未返回时按选填处理。 */
+    emailRequired?: boolean;
+    /** 注册必须先通过验证码。旧服务端未返回时按必须处理。 */
+    emailVerificationRequired?: boolean;
+    smsBindingAvailable: boolean;
+    emailBindingAvailable: boolean;
+    agreementTitle?: string;
+    agreementContent?: string;
+    loginMode: AuthLoginMode;
+    /** Cloudflare Turnstile only exposes the public site key to the browser. */
+    turnstileEnabled: boolean;
+    turnstileSiteKey: string;
+};
+
 export function getAuthSettings() {
-    return http.get<
-        VerificationPolicy & {
-            firstUser: boolean;
-            registrationEnabled: boolean;
-            linuxdoEnabled: boolean;
-            emailEnabled: boolean;
-            emailCodeRequired: boolean;
-            smsBindingAvailable: boolean;
-            emailBindingAvailable: boolean;
-            agreementTitle?: string;
-            agreementContent?: string;
-        }
-    >("/auth/settings");
+    return http.get<AuthSettings>("/auth/settings", { session: "public" });
 }
 
 export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
@@ -431,19 +496,28 @@ export function linuxDOLoginURL(next: string, acceptedTerms?: boolean) {
     return `${base}/auth/linuxdo/start?next=${encodeURIComponent(next)}${termsQuery}`;
 }
 
+export function oidcLoginURL(next: string, acceptedTerms: boolean) {
+    const base = String(apiBaseURL).replace(/\/$/, "");
+    const query = new URLSearchParams({ next, acceptedTerms: String(acceptedTerms) });
+    return `${base}/auth/oidc/start?${query}`;
+}
+
 export function getAuthSession() {
     const now = Date.now();
     if (authSessionCache && authSessionCache.expiresAt > now) return Promise.resolve(authSessionCache.payload);
     if (authSessionRequest) return authSessionRequest;
-    authSessionRequest = http
-        .get<AuthSessionPayload>("/auth/session")
+    const generation = authSessionGeneration;
+    const pending = http
+        .get<AuthSessionPayload>("/auth/session", { session: "public" })
         .then((payload) => {
+            if (generation !== authSessionGeneration) throw new DOMException("认证会话已变化", "AbortError");
             authSessionCache = { payload, expiresAt: Date.now() + 5_000 };
             return payload;
         })
         .finally(() => {
-            authSessionRequest = null;
+            if (authSessionRequest === pending) authSessionRequest = null;
         });
+    authSessionRequest = pending;
     return authSessionRequest;
 }
 
@@ -460,32 +534,63 @@ export function getAdminFeatureAvailability() {
 }
 
 export function updateAdminFeatureAvailability(
-    features: Partial<Pick<FeatureAvailability, "welcomeEnabled" | "shortDramaEnabled" | "taskCenterEnabled" | "creditsEnabled" | "customChannelsEnabled" | "frontendModelsEnabled" | "pluginCenterEnabled" | "systemPluginsVisibleToUsers" | "inspirationSourcesVisible" | "imageWorkbenchEnabled" | "videoWorkbenchEnabled">>,
+    features: Partial<
+        Pick<
+            FeatureAvailability,
+            | "welcomeEnabled"
+            | "shortDramaEnabled"
+            | "taskCenterEnabled"
+            | "creditsEnabled"
+            | "teamsEnabled"
+            | "customChannelsEnabled"
+            | "frontendModelsEnabled"
+            | "pluginCenterEnabled"
+            | "systemPluginsVisibleToUsers"
+            | "inspirationSourcesVisible"
+            | "imageWorkbenchEnabled"
+            | "videoWorkbenchEnabled"
+            | "ecommerceEnabled"
+            | "ecommerceVideoEnabled"
+        >
+    >,
 ) {
     return http.patch<{ features: FeatureAvailability }>("/admin/settings/features", features);
 }
 
-export async function login(input: { username: string; password: string }) {
-    const result = await http.post<{ user: LocalUser }>("/auth/login", input);
+/** autoRegister：一体表单在账号不存在且允许注册时收到 reason=account_not_registered，而不是“密码不正确”。 */
+export async function login(input: { username: string; password: string; autoRegister?: boolean; turnstileToken?: string }) {
+    const result = await http.post<{ user: LocalUser }>("/auth/login", input, { session: "public" });
     // 登录会改变服务端会话身份，不能让登录前缓存的游客 session 污染后续恢复。
     invalidateAuthSessionCache();
     return result;
 }
 
 export function sendRegistrationEmailCode(email: string) {
-    return http.post<{ sent: boolean }>("/auth/email-code", { email });
+    return http.post<{ sent: boolean }>("/auth/email-code", { email }, { session: "public" });
 }
 
 export function sendPasswordResetEmailCode(email: string) {
-    return http.post<{ sent: boolean }>("/auth/password-reset-code", { email });
+    return http.post<{ sent: boolean }>("/auth/password-reset-code", { email }, { session: "public" });
 }
 
 export function resetPassword(input: { email: string; emailCode: string; password: string }) {
-    return http.post<{ reset: boolean }>("/auth/password-reset", input);
+    return http.post<{ reset: boolean }>("/auth/password-reset", input, { session: "public" });
 }
 
-export async function register(input: { username: string; email?: string; emailCode?: string; phone?: string; smsCode?: string; ticket?: string; displayName?: string; password: string; acceptedTerms: boolean; referralCode?: string }) {
-    const result = await http.post<{ user: LocalUser }>("/auth/register", input);
+export async function register(input: {
+    username: string;
+    email?: string;
+    emailCode?: string;
+    phone?: string;
+    smsCode?: string;
+    ticket?: string;
+    displayName?: string;
+    password: string;
+    acceptedTerms: boolean;
+    referralCode?: string;
+    turnstileToken?: string;
+}) {
+    const result = await http.post<{ user: LocalUser }>("/auth/register", input, { session: "public" });
     invalidateAuthSessionCache();
     return result;
 }
@@ -512,6 +617,10 @@ export function getAdminReferences() {
 
 export function getAdminUserDetail(id: string) {
     return http.get<AdminUserDetail>(`/admin/users/${encodeURIComponent(id)}/detail`);
+}
+
+export function clearAdminUserAgentHistory(id: string) {
+    return http.delete<{ freedBytes: number }>(`/admin/users/${encodeURIComponent(id)}/agent-history`);
 }
 
 export function listAdminUserLedger(id: string, params: { page?: number; pageSize?: number; type?: string } = {}) {
@@ -562,7 +671,7 @@ export function importAdminChannels(payload: SystemChannelExport) {
     return http.post<SystemChannelImportResult>("/admin/channels/import", payload);
 }
 
-export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean }) {
+export function updateAdminChannel(id: string, input: Partial<ModelChannel> & { useGlobalConcurrency?: boolean; expectedUpdatedAt?: string }) {
     return http.patch<{ channel: ModelChannel }>(`/admin/channels/${encodeURIComponent(id)}`, input);
 }
 
@@ -642,8 +751,7 @@ export function updateAdminDrawingEngineSetting(input: Pick<CanvasDrawingEngineS
     return http.patch<{ setting: CanvasDrawingEngineSetting }>("/admin/settings/drawing-engine", input);
 }
 
-export type AdminApiLogParams = AdminListParams &
-    Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
+export type AdminApiLogParams = AdminListParams & Pick<AnalyticsFilters, "from" | "to" | "userId" | "model" | "channelId"> & { recordType?: "request" | "download" | "all"; capability?: "text" | "image" | "video" | "audio" };
 
 export function listAdminApiLogs(params: AdminApiLogParams = {}) {
     return http.get<{ logs: ApiCallLog[]; total: number; page: number; pageSize: number }>("/admin/api-logs", { params });

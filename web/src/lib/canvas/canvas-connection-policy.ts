@@ -93,7 +93,10 @@ export function connectionInputSummary(targetNodeId: string, nodes: CanvasNodeDa
         if (!inputKind) return;
         // 角色卡是跨类型覆盖：落在可计数类型上时改记为角色。
         if (source.metadata?.workflowKind === "character") input.characterCount += 1;
-        else if (inputKind !== "table_data") input[`${inputKind}Count`] += 1;
+        else if (inputKind !== "table_data") {
+            input[`${inputKind}Count`] += 1;
+            if (inputKind === "video") (input.videoDurationsMs ??= []).push(Math.max(0, Math.round(Number(source.metadata?.durationMs) || 0)));
+        }
     });
     return input;
 }

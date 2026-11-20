@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 )
 
@@ -16,13 +17,17 @@ func (s *Service) PublicLogicalModels(access *userGroupAccess, intent *ModelRequ
 	if access == nil {
 		return nil, Unauthorized("请先登录")
 	}
+	policy, err := s.creditPolicy()
+	if err != nil {
+		return nil, err
+	}
 	snapshot, err := s.routeCatalogSnapshot()
 	if err != nil {
 		return nil, err
 	}
 	result := make([]PublicLogicalModel, 0, len(snapshot.Ordered))
 	for _, id := range snapshot.Ordered {
-		cached, visible, groupErr := s.groupLogicalModel(access, snapshot.Models[id])
+		cached, visible, groupErr := s.groupLogicalModel(policy, access, snapshot.Models[id])
 		if groupErr != nil || !visible {
 			continue
 		}
@@ -54,7 +59,7 @@ func (s *Service) PublicLogicalModels(access *userGroupAccess, intent *ModelRequ
 
 // groupLogicalModel 返回按分组过滤线路并换算价格后的副本，不修改共享路由快照。
 // 没有任何可见线路时 visible=false；分组缺少货币兑换比例的线路被跳过。
-func (s *Service) groupLogicalModel(access *userGroupAccess, cached cachedLogicalModel) (cachedLogicalModel, bool, error) {
+func (s *Service) groupLogicalModel(policy CreditPolicy, access *userGroupAccess, cached cachedLogicalModel) (cachedLogicalModel, bool, error) {
 	routes := make([]cachedLogicalRoute, 0, len(cached.Routes))
 	for _, route := range cached.Routes {
 		if !access.allowsChannel(route.ChannelModel.ChannelID) {
@@ -66,15 +71,29 @@ func (s *Service) groupLogicalModel(access *userGroupAccess, cached cachedLogica
 			copy(tiers, channelModel.PriceTiers)
 			skip := false
 			for index := range tiers {
-				pricing, prices, err := s.groupTierPrices(access, &channelModel, &tiers[index], channelModel.ModelKey)
+				pricing, prices, err := groupTierPricesWithPolicy(policy, access, &channelModel, &tiers[index], channelModel.ModelKey)
 				if err != nil {
 					skip = true
 					break
+				}
+				if tiers[index].ImagePricing != nil {
+					converted, err := imagebilling.MapPrices(tiers[index].ImagePricing, func(price int64) (int64, error) {
+						value, err := pricing.convertPrice(price)
+						if err != nil {
+							return 0, err
+						}
+						return effectiveCatalogPrice(value, pricing.MultiplierBPS), nil
+					})
+					if err != nil {
+						return cached, false, err
+					}
+					tiers[index].ImagePricing = converted
 				}
 				tiers[index].UnitPriceMicrocredits = effectiveCatalogPrice(prices.Unit, pricing.MultiplierBPS)
 				tiers[index].InputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Input, pricing.MultiplierBPS)
 				tiers[index].OutputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Output, pricing.MultiplierBPS)
 				tiers[index].CachedTokenPriceMicrocredits = effectiveCatalogPrice(prices.Cached, pricing.MultiplierBPS)
+				tiers[index].CacheWriteTokenPriceMicrocredits = effectiveCatalogPrice(prices.CacheWrite, pricing.MultiplierBPS)
 			}
 			if skip {
 				continue
@@ -94,10 +113,18 @@ func (s *Service) groupLogicalModel(access *userGroupAccess, cached cachedLogica
 			return cached, false, err
 		}
 		item := cached.Model
+		if item.ImagePricing != nil {
+			converted, err := imagebilling.MapPrices(item.ImagePricing, func(price int64) (int64, error) { return effectiveCatalogPrice(price, pricing.MultiplierBPS), nil })
+			if err != nil {
+				return cached, false, err
+			}
+			item.ImagePricing = converted
+		}
 		item.UnitPriceMicrocredits = effectiveCatalogPrice(item.UnitPriceMicrocredits, pricing.MultiplierBPS)
 		item.InputPriceMicrocredits = effectiveCatalogPrice(item.InputPriceMicrocredits, pricing.MultiplierBPS)
 		item.OutputPriceMicrocredits = effectiveCatalogPrice(item.OutputPriceMicrocredits, pricing.MultiplierBPS)
 		item.CachedPriceMicrocredits = effectiveCatalogPrice(item.CachedPriceMicrocredits, pricing.MultiplierBPS)
+		item.CacheWritePriceMicrocredits = effectiveCatalogPrice(item.CacheWritePriceMicrocredits, pricing.MultiplierBPS)
 		cached.Model = item
 	}
 	return cached, true, nil
@@ -123,15 +150,17 @@ func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogical
 	pricingMode, displayPrice, priceLabel := computeModelPriceDisplay(item, priceTiers)
 
 	return PublicLogicalModel{
-		ID: item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon,
+		ImagePricing: item.ImagePricing,
+		ID:           item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon,
 		Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder,
 		PricePolicy: item.PricePolicy, PricingMode: pricingMode, DisplayPrice: displayPrice,
 		PriceLabel: priceLabel, BillingMode: item.BillingMode,
-		UnitPriceMicrocredits:   item.UnitPriceMicrocredits,
-		InputPriceMicrocredits:  item.InputPriceMicrocredits,
-		OutputPriceMicrocredits: item.OutputPriceMicrocredits,
-		CachedPriceMicrocredits: item.CachedPriceMicrocredits,
-		PriceTiers:              priceTiers, LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON),
+		UnitPriceMicrocredits:       item.UnitPriceMicrocredits,
+		InputPriceMicrocredits:      item.InputPriceMicrocredits,
+		OutputPriceMicrocredits:     item.OutputPriceMicrocredits,
+		CachedPriceMicrocredits:     item.CachedPriceMicrocredits,
+		CacheWritePriceMicrocredits: item.CacheWritePriceMicrocredits,
+		PriceTiers:                  priceTiers, LegacyModelIDs: decodeLegacyModelIDs(item.LegacyModelIDsJSON),
 		CapabilitySpec: productSpec, CapabilityProfiles: profiles,
 		DefaultOptions: cached.Defaults, Available: available,
 	}
@@ -162,12 +191,19 @@ func publicLogicalModelPriceTiers(cached cachedLogicalModel) []PublicLogicalMode
 			if selectorErr != nil {
 				continue
 			}
-			key := fmt.Sprintf("%s:%s:%d:%d:%d:%d", selectorKey, tier.BillingMode, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits)
+			key := fmt.Sprintf("%s:%s:%d:%d:%d:%d:%d", selectorKey, tier.BillingMode, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits, tier.CacheWriteTokenPriceMicrocredits)
+			if tier.ImagePricing != nil {
+				raw, err := json.Marshal(tier.ImagePricing)
+				if err != nil {
+					continue
+				}
+				key += ":" + string(raw)
+			}
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
-			result = append(result, PublicLogicalModelPriceTier{Selector: selector, Resolution: normalizeChannelModelTierResolution(tier.Resolution), VideoSeconds: tier.VideoSeconds, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits})
+			result = append(result, PublicLogicalModelPriceTier{ImagePricing: tier.ImagePricing, Selector: selector, Resolution: normalizeChannelModelTierResolution(tier.Resolution), VideoSeconds: tier.VideoSeconds, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits})
 		}
 	}
 	return result

@@ -29,6 +29,14 @@ func (s *Service) createDirectTaskAttempt(task *model.Task) (*model.RouteAttempt
 		return nil, err
 	}
 	attempt := &model.RouteAttempt{ID: id, TaskID: task.ID, RouteRun: task.RouteRun, AttemptNumber: 1, ChannelModelID: task.ChannelModelID, Status: "selected", DispatchState: "not_sent", StartedAt: time.Now()}
+	attempt.ProtocolBindingJSON = task.ProtocolBindingJSON
+	if task.ProtocolBindingJSON != "" {
+		binding, err := decodeTaskProtocolBinding(task.ProtocolBindingJSON)
+		if err != nil {
+			return nil, err
+		}
+		attempt.ChannelID, attempt.ChannelModelID = binding.ChannelID, binding.ChannelModelID
+	}
 	if task.ProviderRequestID != "" {
 		attempt.ProviderRequestID, attempt.DispatchState = task.ProviderRequestID, "accepted"
 	}

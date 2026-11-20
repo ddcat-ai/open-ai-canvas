@@ -2,12 +2,7 @@ import { agentToolCategory, agentToolName, agentToolRetryLabel, agentToolStatus,
 import { agentToolRetry } from "./agent-tool-retry";
 
 /**
- * Agent 的"操作信息"（工具调用记录）在消息流里是一条条 `role === "tool"` 的消息。一轮运行动辄
- * 十几步，逐条铺开会把正文挤出可视区，所以界面上把它们折成一行：默认只报最新一步，点击展开
- * 完整记录（组件见 `canvas-cloud-agent-chat-ui` 的 `AgentOperationFeed`）。
- *
- * 这里只做纯切分与文案，不引入 React 或组件类型：调用方把 `CloudAgentChatMessage[]` 传进来，
- * 结构上满足 `AgentFeedRecord` 即可。
+ * 只把辅助活动折进工作记录。正文、错误和需要用户决定的事项始终是独立入口。
  */
 
 export type AgentFeedRecord = {
@@ -19,9 +14,10 @@ export type AgentFeedRecord = {
     detail?: unknown;
     planItems?: readonly unknown[];
     question?: unknown;
+    mediaBatch?: unknown;
 };
 
-export type AgentFeedSegment<T> = { kind: "operations"; key: string; items: T[] } | { kind: "reasoning"; key: string; items: T[] } | { kind: "message"; key: string; item: T };
+export type AgentFeedSegment<T> = { kind: "activity"; key: string; items: T[] } | { kind: "message"; key: string; item: T };
 
 function record(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -34,7 +30,8 @@ function record(value: unknown): Record<string, unknown> {
  */
 export function isAgentCarrierRecord(item: AgentFeedRecord): boolean {
     if (item.role === "user" || item.text || item.title) return false;
-    return Boolean(item.planItems?.length) || Boolean(item.question);
+    // 批量生成进度同理：由输入区上方的批次进度条渲染。
+    return Boolean(item.planItems?.length) || Boolean(item.question) || Boolean(item.mediaBatch);
 }
 
 /** 等用户确认的工具调用（审批卡）必须留在消息流里，不能被折进"操作记录"里藏起来。 */
@@ -56,7 +53,7 @@ export function agentOperationLabel(item: AgentFeedRecord): string {
     return friendlyAgentToolSummary(name, item.text, item.detail, agentToolStatus(name, item.text, item.detail) === "pending");
 }
 
-/** 失败/被拒的操作默认展开：错误不该被折进一行里看不见。 */
+/** 失败/被拒的操作在摘要中明确标记，详情仍由用户展开。 */
 export function agentOperationFailed(item: AgentFeedRecord): boolean {
     const status = agentToolStatus(agentToolName(item.title || "工具执行", item.detail), item.text, item.detail);
     return status === "failed" || status === "rejected";
@@ -77,11 +74,11 @@ export function agentOperationCategory(item: AgentFeedRecord) {
 export function agentOperationSegmentLabel(items: readonly AgentFeedRecord[]): string {
     const latest = items[items.length - 1];
     if (!latest) return "";
-    if (agentOperationCategory(latest) !== "vision") return agentOperationLabel(latest);
+    if (agentOperationCategory(latest) !== "vision" || agentOperationFailed(latest) || agentToolRetry(latest.detail)) return agentOperationLabel(latest);
     const viewed = new Set<string>();
     let latestTitle = "";
     for (const item of items) {
-        if (agentOperationCategory(item) !== "vision") continue;
+        if (agentOperationCategory(item) !== "vision" || agentOperationFailed(item)) continue;
         const result = record(record(item.detail).result);
         if (result.reuseObservation === true || result.repeat === true) continue;
         if (typeof result.nodeId === "string" && result.nodeId) {
@@ -100,10 +97,7 @@ export function agentOperationSegmentLabel(items: readonly AgentFeedRecord[]): s
 }
 
 /**
- * 把消息流切成「操作段」与「单条消息」：连续的非审批工具记录合成一段，其余消息各自成段。
- *
- * 段 key 取段内第一条消息的 id：运行中后续步骤是**追加**进同一段的，key 保持稳定，
- * 展开状态与滚动位置不会因为新步骤到达而被重置。
+ * 段 key 取第一条活动的 id；思考与工具交替追加时，用户展开的仍是同一份记录。
  */
 export function buildAgentFeedSegments<T extends AgentFeedRecord>(messages: readonly T[]): AgentFeedSegment<T>[] {
     const segments: AgentFeedSegment<T>[] = [];
@@ -113,16 +107,10 @@ export function buildAgentFeedSegments<T extends AgentFeedRecord>(messages: read
         const failureRunId = item.role === "error" ? item.id.match(/^(.+):\d+$/)?.[1] : undefined;
         if (failureRunId && terminalErrors.has(`terminal-${failureRunId}`)) continue;
         if (isAgentCarrierRecord(item)) continue;
-        if (isAgentReasoningRecord(item)) {
+        if (isAgentReasoningRecord(item) || isAgentOperationRecord(item)) {
             const last = segments[segments.length - 1];
-            if (last?.kind === "reasoning") last.items.push(item);
-            else segments.push({ kind: "reasoning", key: item.id, items: [item] });
-            continue;
-        }
-        if (isAgentOperationRecord(item)) {
-            const last = segments[segments.length - 1];
-            if (last?.kind === "operations") last.items.push(item);
-            else segments.push({ kind: "operations", key: item.id, items: [item] });
+            if (last?.kind === "activity") last.items.push(item);
+            else segments.push({ kind: "activity", key: item.id, items: [item] });
             continue;
         }
         segments.push({ kind: "message", key: item.id, item });

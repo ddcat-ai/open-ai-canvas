@@ -1,0 +1,398 @@
+.drama-asset-audit {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6);
+}
+
+.drama-audit-intro,
+.drama-audit-toolbar,
+.drama-audit-segment-head,
+.drama-audit-asset-title,
+.drama-audit-asset-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+}
+
+.drama-audit-intro {
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+.drama-audit-intro h2,
+.drama-audit-segment-heading h3 {
+    margin: 0;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+}
+
+.drama-audit-intro p,
+.drama-audit-note,
+.drama-audit-segment-heading > span,
+.drama-audit-asset-body small,
+.drama-audit-shot-description > span {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    line-height: var(--lh-body);
+}
+
+.drama-audit-intro p {
+    margin-top: var(--space-2);
+    font-size: var(--fs-ui);
+}
+
+.drama-audit-episodes {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--space-2);
+    overflow-x: auto;
+    padding: var(--space-1);
+    margin: calc(-1 * var(--space-1));
+}
+
+.drama-audit-episode {
+    display: grid;
+    flex: 0 0 180px;
+    gap: var(--space-1);
+    border: 0;
+    border-radius: var(--r-lg);
+    padding: var(--space-3);
+    background: var(--library-surface);
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--motion-state) ease-out;
+}
+
+.drama-audit-episode:hover,
+.drama-audit-episode:focus-visible {
+    background: var(--library-surface-hover);
+}
+
+.drama-audit-episode[aria-pressed="true"] {
+    box-shadow: inset 0 0 0 1px var(--library-selected-stroke);
+}
+
+.drama-audit-episode > span,
+.drama-audit-episode > small {
+    font-size: var(--fs-label);
+    color: var(--text-secondary);
+}
+
+.drama-audit-episode > strong {
+    overflow: hidden;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.drama-audit-toolbar {
+    flex-wrap: wrap;
+}
+
+.drama-audit-toolbar > .ant-input-affix-wrapper {
+    width: 220px;
+    max-width: 100%;
+}
+
+.drama-audit-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+}
+
+.drama-audit-filters button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    border: 0;
+    border-radius: var(--r-xs);
+    padding: var(--space-1) var(--space-2);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.drama-audit-filters button[aria-pressed="true"] {
+    background: var(--user-surface);
+    color: var(--text-primary);
+}
+
+.drama-audit-filters button > span {
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.drama-audit-content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    gap: var(--space-5);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: var(--space-1);
+    margin: calc(-1 * var(--space-1));
+}
+
+.drama-audit-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--status-warning) 8%, var(--workspace-page));
+    color: var(--text-primary);
+    font-size: var(--fs-label);
+}
+
+.drama-audit-notice > svg {
+    flex-shrink: 0;
+    color: var(--status-warning);
+}
+
+.drama-audit-notice p {
+    margin: 0;
+}
+
+.drama-audit-segment {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.drama-audit-segment-head {
+    flex-wrap: wrap;
+}
+
+.drama-audit-segment-index {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--r-md);
+    background: var(--library-surface);
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.drama-audit-segment-heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.drama-audit-segment-heading h3 {
+    font-size: var(--fs-body);
+}
+
+.drama-audit-assets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(156px, 100%), 1fr));
+    gap: var(--space-3);
+}
+
+.drama-audit-asset {
+    min-width: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--user-radius-card);
+    padding: var(--space-2);
+    background: var(--library-surface);
+    transition: background-color var(--motion-state) ease-out;
+}
+
+.drama-audit-asset:hover,
+.drama-audit-asset:focus-within {
+    background: var(--library-surface-hover);
+}
+
+.drama-audit-asset-media {
+    position: relative;
+    display: grid;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    place-items: center;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--user-radius-media);
+    padding: 0;
+    background: var(--library-cover-surface);
+    color: var(--text-tertiary);
+    cursor: pointer;
+}
+
+.drama-audit-asset-media:disabled {
+    cursor: default;
+}
+
+.drama-audit-asset-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.drama-audit-zoom {
+    position: absolute;
+    right: var(--space-2);
+    bottom: var(--space-2);
+    color: var(--text-secondary);
+    background: var(--library-icon-surface);
+    border-radius: var(--r-xs);
+}
+
+.drama-audit-asset-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-2) var(--space-2);
+}
+
+.drama-audit-asset-title {
+    justify-content: space-between;
+    gap: var(--space-1);
+}
+
+.drama-audit-asset-title > strong {
+    display: -webkit-box;
+    min-width: 0;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+    overflow-wrap: anywhere;
+}
+
+.drama-audit-asset-title > .ant-btn {
+    flex-shrink: 0;
+}
+
+.drama-audit-asset-meta {
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+}
+
+.drama-audit-asset-state {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-1);
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    line-height: var(--lh-body);
+    overflow-wrap: anywhere;
+}
+
+.drama-audit-asset-state > svg {
+    flex-shrink: 0;
+}
+
+.drama-audit-asset-state.has-issue {
+    color: var(--status-warning);
+}
+
+.drama-audit-shot-details > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: fit-content;
+    padding: var(--space-2) 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    cursor: pointer;
+    list-style: none;
+}
+
+.drama-audit-shot-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.drama-audit-shot-details > summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--r-xs);
+}
+
+.drama-audit-shots {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+.drama-audit-shot {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) minmax(160px, 1fr);
+    align-items: start;
+    gap: var(--space-3);
+    border-radius: var(--r-lg);
+    padding: var(--space-3);
+    background: var(--library-surface);
+}
+
+.drama-audit-shot-number {
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+}
+
+.drama-audit-shot-description p {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    margin: 0;
+    font-size: var(--fs-ui);
+    line-height: var(--lh-body);
+}
+
+.drama-audit-shot-assets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+.drama-audit-shot-assets button {
+    border: 0;
+    cursor: pointer;
+}
+
+.drama-audit-shot-assets button:disabled {
+    cursor: default;
+}
+
+@media (max-width: 767px) {
+    .drama-asset-audit {
+        padding: var(--space-4);
+    }
+
+    .drama-audit-intro > .drama-audit-note {
+        display: none;
+    }
+
+    .drama-audit-shot {
+        grid-template-columns: 64px minmax(0, 1fr);
+    }
+
+    .drama-audit-shot-assets {
+        grid-column: 1 / -1;
+    }
+}

@@ -18,6 +18,7 @@ const (
 	FeatureShortDrama            = "shortDrama"
 	FeatureTaskCenter            = "taskCenter"
 	FeatureCredits               = "credits"
+	FeatureTeams                 = "teams"
 	FeatureCustomChannels        = "customChannels"
 	FeatureFrontendModels        = "frontendModels"
 	FeaturePluginCenter          = "pluginCenter"
@@ -26,6 +27,8 @@ const (
 	FeatureTimelineTranscription = "timelineTranscription"
 	FeatureImageWorkbench        = "imageWorkbench"
 	FeatureVideoWorkbench        = "videoWorkbench"
+	FeatureEcommerce             = "ecommerce"
+	FeatureEcommerceVideo        = "ecommerceVideo"
 )
 
 type FeatureAvailability struct {
@@ -33,6 +36,7 @@ type FeatureAvailability struct {
 	ShortDramaEnabled            bool `json:"shortDramaEnabled"`
 	TaskCenterEnabled            bool `json:"taskCenterEnabled"`
 	CreditsEnabled               bool `json:"creditsEnabled"`
+	TeamsEnabled                 bool `json:"teamsEnabled"`
 	CustomChannelsEnabled        bool `json:"customChannelsEnabled"`
 	FrontendModelsEnabled        bool `json:"frontendModelsEnabled"`
 	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
@@ -41,6 +45,8 @@ type FeatureAvailability struct {
 	TimelineTranscriptionEnabled bool `json:"timelineTranscriptionEnabled"`
 	ImageWorkbenchEnabled        bool `json:"imageWorkbenchEnabled"`
 	VideoWorkbenchEnabled        bool `json:"videoWorkbenchEnabled"`
+	EcommerceEnabled             bool `json:"ecommerceEnabled"`
+	EcommerceVideoEnabled        bool `json:"ecommerceVideoEnabled"`
 }
 
 type PublicFeatureAvailability struct {
@@ -51,12 +57,13 @@ type PublicFeatureAvailability struct {
 }
 
 func DefaultFeatureAvailability() FeatureAvailability {
-	// 缺少配置代表尚未由运维接管；前台模型需要明确配置后才开放。
+	// 缺少配置时沿用产品默认值。团队空间须由管理员明确开启。
 	return FeatureAvailability{
 		WelcomeEnabled:               true,
 		ShortDramaEnabled:            true,
 		TaskCenterEnabled:            true,
 		CreditsEnabled:               true,
+		TeamsEnabled:                 false,
 		CustomChannelsEnabled:        true,
 		FrontendModelsEnabled:        false,
 		PluginCenterEnabled:          true,
@@ -65,6 +72,8 @@ func DefaultFeatureAvailability() FeatureAvailability {
 		TimelineTranscriptionEnabled: true,
 		ImageWorkbenchEnabled:        false,
 		VideoWorkbenchEnabled:        false,
+		EcommerceEnabled:             false,
+		EcommerceVideoEnabled:        false,
 	}
 }
 
@@ -120,6 +129,8 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.TaskCenterEnabled, nil
 	case FeatureCredits:
 		return value.CreditsEnabled, nil
+	case FeatureTeams:
+		return value.TeamsEnabled, nil
 	case FeatureCustomChannels:
 		return value.CustomChannelsEnabled, nil
 	case FeatureFrontendModels:
@@ -136,6 +147,10 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.ImageWorkbenchEnabled, nil
 	case FeatureVideoWorkbench:
 		return value.VideoWorkbenchEnabled, nil
+	case FeatureEcommerce:
+		return value.EcommerceEnabled, nil
+	case FeatureEcommerceVideo:
+		return value.EcommerceVideoEnabled, nil
 	default:
 		return false, errors.New("未知功能开放配置")
 	}
@@ -156,6 +171,10 @@ func (s *Service) RequireFeature(feature string) error {
 		return kernel.Forbidden("任务中心暂未开放")
 	case FeatureCredits:
 		return kernel.Forbidden("积分功能暂未开放")
+	case FeatureTeams:
+		err := kernel.Forbidden("团队空间暂未开放")
+		err.Reason = "team_feature_disabled"
+		return err
 	case FeatureCustomChannels:
 		return kernel.Forbidden("自定义渠道暂未开放")
 	case FeatureFrontendModels:
@@ -172,6 +191,10 @@ func (s *Service) RequireFeature(feature string) error {
 		return kernel.Forbidden("生图暂未开放")
 	case FeatureVideoWorkbench:
 		return kernel.Forbidden("视频暂未开放")
+	case FeatureEcommerce:
+		return kernel.Forbidden("电商创作暂未开放")
+	case FeatureEcommerceVideo:
+		return kernel.Forbidden("电商视频暂未开放")
 	default:
 		return kernel.Forbidden("该功能暂未开放")
 	}
@@ -185,7 +208,7 @@ func (s *Service) readFeatureAvailability() (*model.SystemSetting, FeatureAvaila
 	if err != nil {
 		return nil, FeatureAvailability{}, err
 	}
-	// 以全开放默认值为基底，避免已有三字段配置在升级后因缺少新字段而意外关闭功能。
+	// 升级时缺少的字段沿用各自的产品默认值。
 	value := DefaultFeatureAvailability()
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, FeatureAvailability{}, errors.New("功能开放配置格式无效")

@@ -157,21 +157,28 @@
     align-items: center;
     gap: 8px;
     min-width: 217px;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 /* Logo mark — film-frame motif */
 .previs-desk-logo {
-    display: grid;
-    place-items: center;
-    width: 40px;
+    display: block;
+    min-width: 40px;
+    max-width: 160px;
     height: 26px;
+    padding: 0 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    line-height: 26px;
     border-radius: var(--pd-r-sm);
     background: linear-gradient(135deg, oklch(0.92 0.04 240), oklch(0.98 0.01 240));
     color: var(--pd-s0);
     font-weight: 600;
     font-size: 14px;
     letter-spacing: -0.02em;
-    flex: 0 0 40px;
+    flex: 0 1 auto;
     box-shadow: 0 1px 3px oklch(0 0 0 / 0.3);
 }
 
@@ -2816,6 +2823,41 @@
 }
 .pv-prompt-copy:hover {
     color: var(--pd-accent-2);
+}
+.pv-prompt-copy:disabled {
+    color: var(--pd-muted);
+    cursor: not-allowed;
+}
+.pv-prompt-copy:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: 2px;
+}
+.pv-screenshot {
+    display: grid;
+    gap: var(--space-2);
+    margin: var(--space-3);
+    padding: var(--space-3);
+    border-radius: var(--r-lg);
+    background: var(--pd-surface-2);
+}
+.pv-screenshot__heading {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    color: var(--pd-muted);
+    font-size: var(--fs-label);
+}
+.pv-screenshot img {
+    display: block;
+    width: 100%;
+    max-height: 180px;
+    object-fit: contain;
+    border-radius: var(--r-md);
+}
+.pv-screenshot__caption {
+    overflow-wrap: anywhere;
+    font-size: var(--fs-label);
+    color: var(--pd-text);
 }
 .pv-prompt-preview__text {
     max-height: 72px;

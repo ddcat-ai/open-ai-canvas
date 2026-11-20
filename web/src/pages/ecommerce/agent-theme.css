@@ -1,0 +1,1992 @@
+/* ==========================================================================
+   电商 Agent 视觉层（与首页即梦式设计同源，最后加载）
+   - 令牌：中性面板 + 1px 细描边，白天 / 夜间各一套；不使用渐变。
+   - 按钮：单行按钮一律胶囊（999px），纯图标按钮为圆形；选中项与主操作用浅色胶囊（白天白底 + 发丝描边、夜间浅灰底）+ logo 色文字，
+     与首页“生成 / 画布”切换和发送圆一致，不用黑底蓝字。
+   - 小号数字（队列角标、参考数、已选数、图层数）：强调色底 + 主题对应的反差字色，11px / 700 / 等宽数字。
+   - 本文件是这些组件外观的唯一来源；workspace.css / studio.css 里被替代的旧规则已删除。
+   ========================================================================== */
+:is(.ecommerce-page, .flylep-popover, .commerce-market-layer, .commerce-queue-popover, .commerce-style-picker-root, .commerce-confirm-modal, .commerce-hint, .commerce-reference-preview-popover, .commerce-tool-tip) {
+    --cm-accent: #2a6df4;
+    --cm-accent-ink: #ffffff;
+    --cm-accent-soft: color-mix(in srgb, var(--cm-accent) 12%, transparent);
+    --cm-logo: var(--ecommerce-brand-accent, #157cf5);
+    --cm-line: color-mix(in srgb, var(--user-ink) 9%, transparent);
+    --cm-line-strong: color-mix(in srgb, var(--user-ink) 16%, transparent);
+    --cm-card: color-mix(in srgb, var(--user-ink) 3.5%, var(--user-surface));
+    --cm-card-hover: color-mix(in srgb, var(--user-ink) 6.5%, var(--user-surface));
+    --cm-chip: var(--user-surface);
+    --cm-track: color-mix(in srgb, var(--user-ink) 6%, transparent);
+    --cm-track-strong: color-mix(in srgb, var(--user-ink) 10%, transparent);
+    /* 选中项与主操作：与首页“生成 / 画布”切换、发送圆一致的浅色胶囊——白天白底 + 发丝描边，夜间浅灰底；文字和图标用 logo 色。 */
+    --cm-pill-bg: var(--ecommerce-control-bg, #ffffff);
+    --cm-pill-fg: var(--cm-logo);
+    --cm-pill-hover: #f5f6f8;
+    --cm-pill-shadow: 0 0 0 1px rgba(24, 24, 27, 0.12), 0 6px 16px -8px rgba(15, 23, 42, 0.3);
+    --cm-thumb-shadow: var(--ecommerce-control-shadow, 0 1px 2px rgba(15, 23, 42, 0.1), 0 4px 12px -6px rgba(15, 23, 42, 0.28));
+    --cm-glass: color-mix(in srgb, var(--user-surface) 94%, transparent);
+    --cm-panel-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 22px 50px -30px rgba(15, 23, 42, 0.3);
+    --cm-float-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 12px 30px -18px rgba(15, 23, 42, 0.32);
+    --cm-pop-shadow: 0 18px 48px -18px rgba(15, 23, 42, 0.26);
+    --cm-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html.dark :is(.ecommerce-page, .flylep-popover, .commerce-market-layer, .commerce-queue-popover, .commerce-style-picker-root, .commerce-confirm-modal, .commerce-hint, .commerce-reference-preview-popover, .commerce-tool-tip) {
+    --cm-accent: #5aa5ff;
+    --cm-accent-ink: #0b1220;
+    --cm-accent-soft: color-mix(in srgb, var(--cm-accent) 16%, transparent);
+    --cm-pill-bg: var(--ecommerce-control-bg, #f3f4f6);
+    --cm-pill-hover: #e6e8ec;
+    --cm-pill-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.45);
+    --cm-thumb-shadow: none;
+    --cm-card: color-mix(in srgb, #fff 4%, var(--user-surface));
+    --cm-card-hover: color-mix(in srgb, #fff 7.5%, var(--user-surface));
+    --cm-chip: rgba(255, 255, 255, 0.035);
+    --cm-track: rgba(255, 255, 255, 0.06);
+    --cm-track-strong: rgba(255, 255, 255, 0.1);
+    --cm-glass: color-mix(in srgb, var(--user-surface) 92%, transparent);
+    --cm-panel-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 26px 60px -34px rgba(0, 0, 0, 0.85);
+    --cm-float-shadow: 0 16px 36px -18px rgba(0, 0, 0, 0.75);
+    --cm-pop-shadow: 0 24px 60px -18px rgba(0, 0, 0, 0.62);
+}
+
+/* ---------- 通用：小号数字角标 ---------- */
+.commerce-count-badge,
+.commerce-queue-badge,
+.commerce-material-count,
+.commerce-style-upload > span {
+    display: inline-grid;
+    place-items: center;
+    box-sizing: border-box;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--cm-accent);
+    color: var(--cm-accent-ink);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: 0;
+}
+.commerce-count-badge.is-neutral {
+    background: var(--cm-track-strong);
+    color: var(--user-ink);
+}
+
+/* ---------- 左侧 Agent 面板 ---------- */
+.flylep-page {
+    overflow: clip;
+}
+.flylep-page .flylep-workspace {
+    border: 1px solid var(--cm-line);
+    border-radius: 22px;
+    background: var(--user-surface);
+    box-shadow: var(--cm-panel-shadow);
+}
+/* 右下角缩放提示：两道细线，不再用渐变绘制。 */
+.flylep-page .flylep-workspace::after {
+    right: 7px;
+    bottom: 7px;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid var(--user-ink-muted);
+    border-bottom: 1.5px solid var(--user-ink-muted);
+    border-radius: 0 0 3px 0;
+    background: none;
+    clip-path: none;
+    opacity: 0.4;
+}
+.flylep-workspace-topbar {
+    min-height: 66px;
+    padding: 14px 14px 13px 16px;
+    border-bottom: 1px solid var(--cm-line);
+}
+.flylep-project-heading {
+    gap: 10px;
+}
+.flylep-project-heading > div {
+    gap: 3px;
+}
+.flylep-project-heading strong {
+    color: var(--user-ink);
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+}
+.flylep-project-heading small {
+    overflow: hidden;
+    color: var(--user-ink-muted);
+    font-size: 11.5px;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.flylep-project-mark {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--cm-line);
+    border-radius: 50%;
+    background: var(--cm-track);
+    color: var(--user-ink);
+}
+.flylep-project-mark svg {
+    width: 17px;
+    height: 17px;
+}
+.flylep-project-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.flylep-project-actions button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--cm-line);
+    border-radius: 50%;
+    background: var(--cm-chip);
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        color 0.25s,
+        transform 0.25s var(--cm-ease);
+}
+.flylep-project-actions button svg {
+    width: 17px;
+    height: 17px;
+}
+.flylep-project-actions button:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+    color: var(--user-ink);
+    transform: translateY(-1px);
+}
+.flylep-project-actions button[aria-expanded="true"] {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-track-strong);
+    color: var(--user-ink);
+}
+.flylep-project-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+.flylep-stage-scroll {
+    gap: 14px;
+    padding: 18px 16px 20px;
+}
+
+/* 收起后的唤出按钮：胶囊。 */
+.commerce-workspace-dock {
+    width: auto;
+    height: 40px;
+    gap: 6px;
+    padding: 0 12px 0 6px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-glass);
+    color: var(--user-ink);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-workspace-dock img {
+    width: 28px;
+    height: 28px;
+}
+.commerce-workspace-dock svg {
+    width: 17px;
+    height: 17px;
+    color: var(--user-ink-muted);
+}
+.commerce-workspace-dock:hover {
+    border-color: var(--cm-line-strong);
+}
+
+/* ---------- 对话流 ---------- */
+.commerce-request-message > small {
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--cm-track);
+    color: var(--user-ink-muted);
+    font-size: 10.5px;
+    line-height: 1.5;
+}
+.commerce-request-bubble {
+    max-width: 88%;
+    padding: 10px 14px;
+    border: 1px solid var(--cm-line);
+    border-radius: 18px 18px 6px 18px;
+    background: var(--cm-track);
+    color: var(--user-ink);
+    font-size: 13px;
+    line-height: 1.7;
+}
+.commerce-request-references img {
+    border: 1px solid var(--cm-line);
+    border-radius: 12px;
+    background: var(--cm-card);
+}
+.commerce-assistant-intro {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 14px;
+    margin-top: 4px;
+    padding: 16px;
+    border: 1px solid var(--cm-line);
+    border-radius: 18px;
+    background: var(--cm-card);
+}
+.commerce-assistant-intro > img {
+    width: 76px;
+    height: 112px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    filter: none;
+}
+.commerce-assistant-intro strong {
+    color: var(--user-ink);
+    font-size: clamp(16px, 1.5vw, 20px);
+    font-weight: 700;
+}
+.commerce-assistant-intro b {
+    color: var(--cm-accent);
+    font-size: clamp(15px, 1.4vw, 18px);
+    font-weight: 650;
+}
+.commerce-assistant-intro p {
+    margin-top: 4px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+.commerce-assistant-status {
+    padding: 10px 14px;
+    border: 1px solid var(--cm-line);
+    border-radius: 14px;
+    background: var(--cm-card);
+    color: var(--user-ink-muted);
+}
+.commerce-assistant-progress {
+    gap: 10px;
+    min-height: 48px;
+    padding: 8px 14px 8px 8px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-card);
+    color: var(--user-ink-muted);
+    font-size: 12px;
+}
+.commerce-thinking-orbit {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--cm-track);
+}
+.commerce-thinking-orbit::before {
+    inset: -3px;
+    border: 1.5px solid transparent;
+    border-top-color: var(--cm-accent);
+    border-right-color: color-mix(in srgb, var(--cm-accent) 45%, transparent);
+}
+.commerce-assistant-error {
+    border-radius: 16px;
+}
+.commerce-assistant-error .ant-btn,
+.flylep-stage-scroll > .ant-btn,
+.commerce-generated-card .ant-btn,
+.commerce-queue-panel .ant-btn {
+    border-radius: 999px;
+}
+.flylep-stage-scroll > .ant-btn {
+    height: 40px;
+    font-weight: 600;
+}
+
+.commerce-direction-choice {
+    justify-self: end;
+    max-width: 88%;
+    padding: 11px 15px;
+    border: 1px solid var(--cm-line);
+    border-radius: 18px 18px 6px 18px;
+    background: var(--cm-track);
+    color: var(--user-ink);
+    box-shadow: none;
+}
+.commerce-direction-choice small {
+    color: var(--user-ink-muted);
+    opacity: 1;
+    font-size: 10.5px;
+}
+.commerce-direction-choice strong {
+    color: var(--user-ink);
+    font-size: 13px;
+}
+.commerce-direction-choice span {
+    color: var(--user-ink-muted);
+    font-size: 11.5px;
+}
+.commerce-generation-message,
+.commerce-generated-card {
+    padding: 14px;
+    border: 1px solid var(--cm-line);
+    border-radius: 18px;
+    background: var(--cm-card);
+    box-shadow: none;
+}
+.commerce-generation-glyph {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--cm-line);
+    border-radius: 50%;
+    background: var(--cm-track);
+    color: var(--user-ink);
+    box-shadow: none;
+}
+.commerce-generation-message header > span:last-child,
+.commerce-generated-card header small {
+    font-variant-numeric: tabular-nums;
+}
+.commerce-generation-visual {
+    border-radius: 14px;
+    background: var(--cm-track);
+}
+.commerce-generation-visual::before,
+.commerce-generation-visual::after {
+    border-color: color-mix(in srgb, var(--cm-accent) 22%, transparent);
+}
+.commerce-generation-visual img {
+    filter: drop-shadow(0 12px 14px rgba(0, 0, 0, 0.18));
+}
+.commerce-yoru-glow {
+    display: none;
+}
+.commerce-generation-track {
+    height: 4px;
+    background: var(--cm-track-strong);
+}
+.commerce-generation-track span {
+    background: var(--cm-accent);
+}
+.commerce-generated-preview {
+    border-radius: 12px;
+}
+.commerce-generated-plan {
+    border-color: var(--cm-line);
+    border-radius: 14px;
+    background: var(--user-surface);
+}
+.commerce-followup-retry {
+    min-height: 40px;
+    padding: 0 18px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink);
+    font-weight: 500;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        transform 0.25s var(--cm-ease);
+}
+.commerce-followup-retry:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+    transform: translateY(-1px);
+}
+
+/* ---------- 创意方向卡 ---------- */
+.flylep-directions-stage.commerce-direction-message {
+    padding: 16px;
+    border: 1px solid var(--cm-line);
+    border-radius: 20px;
+    background: var(--cm-card);
+    box-shadow: none;
+}
+.commerce-direction-message.is-followup {
+    background: var(--cm-card);
+}
+.commerce-direction-header {
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.commerce-direction-header h2,
+.is-followup .commerce-direction-header h2 {
+    color: var(--user-ink);
+    font-size: 15px;
+    font-weight: 650;
+}
+.commerce-direction-header h2 svg {
+    color: var(--cm-accent);
+}
+.commerce-direction-symbol,
+.is-followup .commerce-direction-symbol {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--cm-line);
+    border-radius: 50%;
+    background: var(--cm-track);
+    box-shadow: none;
+    color: var(--user-ink);
+}
+.commerce-direction-header .commerce-direction-library {
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink);
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: none;
+    transition:
+        border-color 0.25s,
+        background 0.25s;
+}
+.commerce-direction-header .commerce-direction-library:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+    box-shadow: none;
+}
+.commerce-direction-header .commerce-direction-library svg {
+    color: var(--user-ink-muted);
+}
+.commerce-direction-intro {
+    margin-bottom: 14px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.commerce-direction-message .flylep-direction-card {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid var(--cm-line);
+    border-radius: 16px;
+    background: var(--user-surface);
+    box-shadow: none;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        box-shadow 0.25s,
+        transform 0.25s var(--cm-ease);
+}
+.commerce-direction-message .flylep-direction-card:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    background: var(--user-surface);
+    box-shadow: var(--cm-float-shadow);
+    transform: translateY(-1px);
+}
+.commerce-direction-message .flylep-direction-card.is-chosen,
+.commerce-direction-message .flylep-direction-card.is-chosen:hover:not(:disabled) {
+    border-color: var(--cm-accent);
+    box-shadow: 0 0 0 3px var(--cm-accent-soft);
+}
+.commerce-direction-palette {
+    flex-basis: 40px;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px var(--cm-line);
+}
+.commerce-direction-palette.is-empty {
+    background: var(--cm-track);
+}
+.commerce-direction-message .flylep-direction-card strong {
+    font-size: 13.5px;
+    font-weight: 650;
+}
+.commerce-direction-specs {
+    border-radius: 10px;
+    background: var(--cm-track);
+}
+.commerce-direction-tags small {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--cm-track);
+    color: var(--user-ink-muted);
+}
+.commerce-direction-check {
+    color: var(--cm-accent);
+}
+.commerce-direction-edit {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--cm-line);
+    border-radius: 50%;
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+    opacity: 0.85;
+}
+.commerce-direction-item:hover .commerce-direction-edit,
+.commerce-direction-edit:focus-visible {
+    border-color: var(--cm-line-strong);
+    color: var(--user-ink);
+    opacity: 1;
+}
+.commerce-direction-message footer {
+    align-items: center;
+    margin-top: 14px;
+}
+.commerce-direction-message footer button,
+.commerce-direction-edit-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        color 0.25s,
+        transform 0.25s var(--cm-ease);
+}
+.commerce-direction-message footer button:hover:not(:disabled),
+.commerce-direction-edit-actions button:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+    transform: translateY(-1px);
+}
+.commerce-direction-message footer .commerce-direction-confirm,
+.commerce-direction-edit-actions button:last-child {
+    border-color: transparent;
+    background: var(--cm-pill-bg);
+    color: var(--cm-pill-fg);
+    font-weight: 600;
+    box-shadow: var(--cm-pill-shadow);
+}
+.commerce-direction-message footer .commerce-direction-confirm:hover:not(:disabled),
+.commerce-direction-edit-actions button:last-child:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--cm-pill-hover);
+}
+.commerce-direction-message footer button:disabled,
+.commerce-direction-edit-actions button:disabled {
+    border-color: var(--cm-line);
+    background: var(--cm-track);
+    color: var(--user-ink-muted);
+    cursor: not-allowed;
+    opacity: 1;
+    transform: none;
+}
+
+/* ---------- 输入框 ---------- */
+.flylep-composer-area {
+    border-top: 0;
+}
+.flylep-composer {
+    padding: 6px 10px 10px;
+    background: transparent;
+}
+.flylep-prompt-box {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 12px 12px 10px;
+    border: 1px solid var(--cm-line);
+    border-radius: 20px;
+    background: var(--cm-card);
+    box-shadow: none;
+    cursor: text;
+    transition:
+        border-color 0.3s var(--cm-ease),
+        box-shadow 0.3s var(--cm-ease);
+}
+.flylep-prompt-box::before {
+    content: none;
+    animation: none;
+}
+/* 点击输入框后直接输入：聚焦时外框与未聚焦一致，不出现蓝色描边和外环。 */
+.flylep-prompt-box:focus-within {
+    border-color: var(--cm-line);
+    background: var(--cm-card);
+    box-shadow: none;
+}
+.flylep-prompt-box.is-dropping {
+    border-color: color-mix(in srgb, var(--cm-accent) 60%, var(--cm-line));
+}
+.flylep-prompt-box > .flylep-prompt-drop {
+    border-color: color-mix(in srgb, var(--cm-accent) 70%, transparent);
+    background: color-mix(in srgb, var(--user-surface) 92%, transparent);
+}
+/* 产品图上传格保持圆角矩形（与首页上传格同色系）。 */
+.flylep-product-slot .commerce-reference-add {
+    border: 1px dashed var(--cm-line-strong);
+    border-radius: 12px;
+    background: var(--cm-track);
+    color: var(--user-ink-muted);
+}
+.flylep-product-slot .commerce-reference-add:hover,
+.flylep-product-slot .commerce-reference-add:focus-within {
+    border-color: color-mix(in srgb, var(--cm-accent) 55%, transparent);
+    background: var(--cm-track-strong);
+    color: var(--user-ink);
+    box-shadow: none;
+}
+.flylep-product-slot .commerce-reference-add span {
+    color: inherit;
+    font-weight: 500;
+}
+.flylep-product-slot .commerce-reference-item img {
+    border-radius: 12px;
+}
+.flylep-product-slot .commerce-reference-remove {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--cm-line);
+    border-radius: 50%;
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-style-reference-image img {
+    border-color: var(--cm-line);
+    border-radius: 10px;
+}
+.commerce-style-reference button {
+    border: 1px solid var(--cm-line);
+    background: var(--user-surface);
+    color: var(--user-ink);
+}
+
+/* 参数胶囊：与首页技能条同款（32px、细描边、中性底）。左右内边距 10px：面板最窄（340px）时第三行三个胶囊仍能排进一行，不额外占高度。 */
+.flylep-composer-toolbar {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 5px;
+    margin: 8px 0 0;
+    padding: 10px 0 0;
+    border-top: 1px solid var(--cm-line);
+}
+.flylep-composer-toolbar > :is(button, .flylep-upload-button) {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 10px;
+    overflow: visible;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        color 0.25s,
+        transform 0.25s var(--cm-ease);
+}
+.flylep-composer-toolbar > :is(button, .flylep-upload-button) > svg {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    color: var(--user-ink-muted);
+}
+.flylep-composer-toolbar > button > svg.lucide-chevron-down {
+    width: 12px;
+    height: 12px;
+    margin-left: -1px;
+}
+.flylep-composer-toolbar > :is(button, .flylep-upload-button):hover {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+    color: var(--user-ink);
+    transform: translateY(-1px);
+}
+.flylep-composer-toolbar > button[aria-expanded="true"] {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-track-strong);
+    color: var(--user-ink);
+}
+.flylep-composer-toolbar > button:first-child,
+.flylep-composer-toolbar > button:first-child > svg {
+    color: var(--cm-logo);
+    font-weight: 600;
+}
+.flylep-composer-toolbar .commerce-platform-logo {
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+.flylep-composer-toolbar .flylep-upload-button input {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    opacity: 0;
+}
+.flylep-composer-toolbar .flylep-upload-button:focus-within {
+    outline: 2px solid var(--cm-accent);
+    outline-offset: 2px;
+}
+.flylep-composer-toolbar > .commerce-material-trigger .commerce-material-count {
+    position: absolute;
+    top: -7px;
+    right: -6px;
+    border: 2px solid var(--user-surface);
+    box-shadow: none;
+    pointer-events: none;
+}
+.flylep-composer-toolbar > .commerce-style-upload > span {
+    min-width: 18px;
+    margin-left: 1px;
+}
+
+/* 示例 / 积分 / 发送：同一行垂直居中。 */
+.commerce-composer-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 34px;
+    margin: 10px 0 0;
+}
+.commerce-example {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 12px 0 10px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        color 0.25s;
+}
+.commerce-example svg {
+    width: 15px;
+    height: 15px;
+}
+.commerce-example:hover,
+.commerce-example:focus-visible {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+    color: var(--user-ink);
+}
+.commerce-example-preview {
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid var(--cm-line);
+    border-radius: 16px;
+    background: var(--user-surface);
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-example-preview img {
+    border-radius: 10px;
+    background: var(--cm-track);
+    object-fit: cover;
+}
+.commerce-submit-group {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 10px;
+    height: 34px;
+}
+.commerce-submit-credits {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 34px;
+    min-width: 0;
+    color: color-mix(in srgb, var(--user-ink) 74%, transparent);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.commerce-submit-credits > svg {
+    display: block;
+    flex: none;
+    width: 12px;
+    height: 12px;
+}
+.commerce-submit-credits .rolling-credit-text {
+    font-weight: 700;
+}
+.commerce-submit-credits .rolling-credit-digit {
+    vertical-align: baseline;
+}
+.commerce-submit-credits.is-pending {
+    color: var(--user-ink-muted);
+    font-weight: 500;
+}
+/* 发送：与首页 HomeSendOrb 一致的实心圆，可发送时为浅色实底（白天白底描边、夜间浅灰底）+ logo 色箭头。 */
+.flylep-composer .flylep-submit {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 50%;
+    background: var(--cm-pill-bg);
+    color: var(--cm-logo);
+    box-shadow: var(--cm-pill-shadow);
+    cursor: pointer;
+    letter-spacing: 0;
+    line-height: 1;
+    filter: none;
+    transition:
+        background 0.25s,
+        color 0.25s,
+        transform 0.3s var(--cm-ease),
+        box-shadow 0.3s;
+}
+.flylep-composer .flylep-submit::before {
+    content: none;
+}
+.flylep-composer .flylep-submit > svg {
+    display: block;
+    width: 17px;
+    height: 17px;
+    stroke-width: 2.2;
+    transition: transform 0.3s var(--cm-ease);
+}
+.flylep-composer .flylep-submit:not(:disabled):hover {
+    transform: scale(1.06);
+    filter: none;
+    box-shadow: var(--cm-pill-shadow);
+}
+.flylep-composer .flylep-submit:not(:disabled):hover > svg {
+    transform: translateY(-2px);
+}
+.flylep-composer .flylep-submit:not(:disabled):active {
+    transform: scale(0.94);
+}
+.flylep-composer .flylep-submit:disabled {
+    background: color-mix(in srgb, var(--user-ink) 10%, transparent);
+    color: color-mix(in srgb, var(--user-ink) 38%, transparent);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 1;
+}
+.flylep-composer .flylep-submit[aria-busy="true"] {
+    background: color-mix(in srgb, var(--user-ink) 14%, transparent);
+    color: var(--user-ink);
+    cursor: progress;
+    opacity: 1;
+}
+.flylep-composer .flylep-submit:focus-visible {
+    outline: 2px solid var(--cm-accent);
+    outline-offset: 3px;
+}
+.flylep-composer .flylep-submit .commerce-planning-spin {
+    animation: commerce-submit-spin 0.8s linear infinite;
+}
+@keyframes commerce-submit-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ---------- 参数弹层 ---------- */
+.flylep-popover {
+    padding: 12px;
+    border: 1px solid var(--cm-line);
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--user-surface) 97%, transparent);
+    box-shadow: var(--cm-pop-shadow);
+    backdrop-filter: blur(20px) saturate(1.2);
+}
+.flylep-popover-heading {
+    margin-bottom: 10px;
+    padding: 0 2px 0 4px;
+    color: var(--user-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+.flylep-popover-heading button,
+.commerce-material-close,
+.commerce-market-panel > header button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--cm-track);
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    transition:
+        background 0.2s,
+        color 0.2s;
+}
+.flylep-popover-heading button:hover,
+.commerce-material-close:hover,
+.commerce-market-panel > header button:hover {
+    background: var(--cm-track-strong);
+    color: var(--user-ink);
+}
+.flylep-type-menu {
+    gap: 3px;
+}
+.flylep-type-menu button {
+    gap: 10px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--user-ink);
+    font-size: 12.5px;
+    transition:
+        background 0.2s,
+        border-color 0.2s;
+}
+.flylep-type-menu button svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--user-ink-muted);
+}
+.flylep-type-menu button:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--cm-track);
+}
+.flylep-type-menu button.is-selected {
+    border-color: var(--cm-line);
+    background: var(--cm-track-strong);
+    font-weight: 600;
+}
+.flylep-type-menu button.is-selected svg {
+    color: var(--cm-logo);
+}
+.flylep-type-menu button span {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--cm-track);
+}
+.flylep-config-channel strong {
+    min-width: 0;
+    padding: 7px 14px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-track);
+    color: var(--user-ink);
+}
+.flylep-model-grid button,
+.flylep-ratio-grid button {
+    border: 1px solid var(--cm-line);
+    border-radius: 14px;
+    background: var(--cm-card);
+    box-shadow: none;
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        transform 0.25s var(--cm-ease);
+}
+.flylep-model-grid button:hover,
+.flylep-ratio-grid button:hover {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+    box-shadow: none;
+    transform: translateY(-1px);
+}
+.flylep-model-grid button.is-selected,
+.flylep-ratio-grid button.is-selected {
+    border-color: var(--cm-accent);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: 0 0 0 3px var(--cm-accent-soft);
+    animation: none;
+}
+.flylep-count-control input {
+    accent-color: var(--cm-accent);
+}
+.flylep-segment {
+    grid-template-columns: none;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--cm-track);
+}
+.flylep-segment button {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    transition:
+        color 0.2s,
+        background 0.25s;
+}
+.flylep-segment button:hover:not(:disabled):not(.is-selected) {
+    color: var(--user-ink);
+}
+.flylep-segment button.is-selected {
+    background: var(--cm-pill-bg);
+    color: var(--cm-pill-fg);
+    font-weight: 600;
+    box-shadow: var(--cm-thumb-shadow);
+}
+.flylep-segment button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.flylep-popover-material {
+    padding: 0;
+    border-color: var(--cm-line);
+    border-radius: 20px;
+}
+.commerce-material-categories button {
+    border-radius: 999px;
+}
+.commerce-material-categories button:hover,
+.commerce-material-categories button[aria-current="true"] {
+    background: var(--cm-track-strong);
+    color: var(--user-ink);
+}
+.commerce-material-actions button {
+    height: 32px;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink);
+}
+.commerce-material-actions button:first-child {
+    background: var(--cm-chip);
+}
+.commerce-material-actions button:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+}
+.commerce-material-actions > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 999px;
+    background: var(--cm-accent);
+    color: var(--cm-accent-ink);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.commerce-material-actions i {
+    font-style: normal;
+    opacity: 0.78;
+}
+.commerce-material-tile {
+    border: 1px solid var(--cm-line);
+    border-radius: 14px;
+    background: var(--cm-card);
+}
+.commerce-material-tile:hover {
+    border-color: var(--cm-line-strong);
+}
+.commerce-material-tile.is-selected {
+    border-color: var(--cm-accent);
+    background: var(--user-surface);
+    box-shadow: 0 0 0 3px var(--cm-accent-soft);
+}
+.commerce-material-check {
+    border-color: var(--cm-line-strong);
+}
+.is-selected .commerce-material-check,
+.commerce-material-tile.is-selected .commerce-material-check {
+    width: 18px;
+    height: 18px;
+    border-color: var(--cm-accent);
+    background: var(--cm-accent);
+    color: var(--cm-accent-ink);
+    box-shadow: none;
+}
+.commerce-material-controls button {
+    border-color: var(--cm-line);
+    background: var(--user-surface);
+}
+.commerce-material-controls > span {
+    min-width: 16px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 平台与语言 ---------- */
+.commerce-market-panel {
+    padding: 16px;
+    border: 1px solid var(--cm-line);
+    border-radius: 22px;
+    background: var(--user-surface);
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-market-panel > header {
+    font-weight: 600;
+}
+.commerce-market-groups {
+    border-color: var(--cm-line);
+    border-radius: 18px;
+}
+.commerce-market-grid {
+    border-radius: 16px;
+    background: var(--cm-track);
+}
+.commerce-market-grid > button {
+    border-radius: 14px;
+}
+.commerce-market-grid > button:hover {
+    background: var(--cm-track-strong);
+}
+.commerce-market-grid > button.is-selected {
+    border-color: var(--cm-line-strong);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-market-check,
+.commerce-language-options button > svg:last-child {
+    color: var(--cm-accent);
+}
+.commerce-language-trigger {
+    min-height: 40px;
+    padding: 0 14px;
+    border-color: var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-card);
+}
+.commerce-language-options {
+    border-color: var(--cm-line);
+    border-radius: 18px;
+}
+.commerce-language-options button {
+    border-radius: 999px;
+}
+.commerce-language-options button:hover,
+.commerce-language-options button[aria-selected="true"] {
+    background: var(--cm-track);
+}
+.commerce-market-region input {
+    min-height: 38px;
+    padding: 0 14px;
+    border-color: var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-card);
+}
+.commerce-market-region input:focus {
+    border-color: color-mix(in srgb, var(--cm-accent) 55%, var(--cm-line));
+    outline: 0;
+    box-shadow: 0 0 0 3px var(--cm-accent-soft);
+}
+
+/* ---------- 提示气泡 ---------- */
+.commerce-hint .ant-tooltip-container,
+.commerce-hint .ant-tooltip-inner {
+    padding: 8px 12px;
+    border: 1px solid var(--cm-line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--user-surface) 97%, transparent);
+    color: var(--user-ink);
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-hint .ant-tooltip-arrow::before {
+    background: color-mix(in srgb, var(--user-surface) 97%, transparent);
+}
+.commerce-hint-content svg {
+    color: var(--cm-accent);
+}
+
+/* ---------- 画布：右上角操作、右下角图层、底部工具条 ---------- */
+.commerce-result-canvas .commerce-canvas-actions {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ecommerce-page .commerce-canvas-actions .ant-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 15px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-glass);
+    color: var(--user-ink);
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: var(--cm-float-shadow);
+    backdrop-filter: blur(16px);
+    transition:
+        border-color 0.25s,
+        background 0.25s,
+        color 0.25s,
+        transform 0.25s var(--cm-ease);
+}
+.ecommerce-page .commerce-canvas-actions .ant-btn .ant-btn-icon {
+    display: inline-flex;
+    margin: 0;
+}
+.ecommerce-page .commerce-canvas-actions .ant-btn svg {
+    width: 16px;
+    height: 16px;
+    color: var(--user-ink-muted);
+}
+.ecommerce-page .commerce-canvas-actions .ant-btn:not(:disabled):hover {
+    border-color: var(--cm-line-strong);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    transform: translateY(-1px);
+}
+.ecommerce-page .commerce-canvas-actions .ant-btn[aria-expanded="true"] {
+    border-color: var(--cm-line-strong);
+    background: var(--user-surface);
+}
+.ecommerce-page .commerce-canvas-actions .ant-btn:disabled {
+    border-color: var(--cm-line);
+    background: var(--cm-glass);
+    color: var(--user-ink-muted);
+    box-shadow: none;
+    opacity: 0.55;
+}
+.commerce-queue-trigger {
+    position: relative;
+    overflow: visible;
+}
+.commerce-queue-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 20px;
+    height: 20px;
+    border: 2px solid var(--user-surface);
+    animation: commerce-badge-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes commerce-badge-pop {
+    from {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.commerce-result-canvas .commerce-canvas-layer-toggle {
+    position: absolute;
+    right: 16px;
+    bottom: 18px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-glass);
+    box-shadow: var(--cm-float-shadow);
+    backdrop-filter: blur(16px);
+}
+.commerce-result-canvas .commerce-canvas-layer-toggle button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 500;
+    transition:
+        background 0.2s,
+        color 0.2s;
+}
+.commerce-result-canvas .commerce-canvas-layer-toggle button svg {
+    width: 16px;
+    height: 16px;
+}
+.commerce-result-canvas .commerce-canvas-layer-toggle button:hover:not(:disabled) {
+    background: var(--cm-track);
+    color: var(--user-ink);
+}
+.commerce-result-canvas .commerce-canvas-layer-toggle button[aria-expanded="true"],
+.commerce-result-canvas .commerce-canvas-layer-toggle button[aria-expanded="true"]:hover:not(:disabled) {
+    background: var(--cm-pill-bg);
+    color: var(--cm-pill-fg);
+    box-shadow: var(--cm-pill-shadow);
+}
+.commerce-result-canvas .commerce-canvas-layer-toggle button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.commerce-canvas-layer-toggle .commerce-count-badge {
+    margin-left: 1px;
+}
+.commerce-canvas-layer-toggle button[aria-expanded="true"] .commerce-count-badge.is-neutral {
+    background: color-mix(in srgb, var(--cm-pill-fg) 18%, transparent);
+    color: var(--cm-pill-fg);
+}
+
+.commerce-canvas-layers {
+    border: 1px solid var(--cm-line);
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--user-surface) 97%, transparent);
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-canvas-layers header {
+    border-bottom-color: var(--cm-line);
+}
+.commerce-canvas-layers header strong svg {
+    width: 16px;
+    height: 16px;
+}
+.commerce-canvas-layers header button {
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink);
+    cursor: pointer;
+    font-size: 11.5px;
+}
+.commerce-canvas-layers header button:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+}
+.commerce-canvas-layers header button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.commerce-canvas-layer-list > button {
+    border-color: var(--cm-line);
+    border-radius: 14px;
+    background: var(--cm-card);
+}
+.commerce-canvas-layer-list > button:hover,
+.commerce-canvas-layer-list > button.is-selected {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+}
+.commerce-canvas-layer-list > button.is-selected {
+    border-color: var(--cm-accent);
+}
+.commerce-canvas-layer-list > button > img,
+.commerce-canvas-layer-thumb {
+    border-radius: 9px;
+    background: var(--cm-track);
+}
+.commerce-canvas-layer-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    border-color: var(--cm-line-strong);
+    color: var(--cm-accent-ink);
+}
+.commerce-canvas-layer-list > button.is-selected .commerce-canvas-layer-check {
+    border-color: var(--cm-accent);
+    background: var(--cm-accent);
+}
+
+/* 底部工具条：胶囊容器 + 36px 圆形工具；选中工具为浅色圆 + logo 色图标。
+   位置由画布按可见区域计算（--commerce-toolbar-x），始终落在左侧面板与右下角图层组之间。 */
+.commerce-result-canvas .commerce-canvas-toolbar {
+    position: absolute;
+    z-index: 5;
+    bottom: 18px;
+    left: var(--commerce-toolbar-x, calc(50% + var(--commerce-sidebar-width, 0px) / 2));
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px;
+    transform: translateX(-50%);
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-glass);
+    box-shadow: var(--cm-float-shadow);
+    backdrop-filter: blur(16px);
+}
+.commerce-result-canvas .commerce-canvas-toolbar button {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    transition:
+        background 0.2s,
+        color 0.2s,
+        transform 0.25s var(--cm-ease);
+}
+.commerce-result-canvas .commerce-canvas-toolbar button svg {
+    width: 19px;
+    height: 19px;
+}
+.commerce-result-canvas .commerce-canvas-toolbar button:hover:not(:disabled) {
+    background: var(--cm-track);
+    color: var(--user-ink);
+    transform: none;
+}
+.commerce-result-canvas .commerce-canvas-toolbar button:active:not(:disabled) {
+    transform: scale(0.94);
+}
+.commerce-result-canvas .commerce-canvas-toolbar button.is-active,
+.commerce-result-canvas .commerce-canvas-toolbar button.is-active:hover {
+    background: transparent;
+    color: var(--cm-pill-fg);
+}
+.commerce-result-canvas .commerce-canvas-toolbar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.38;
+}
+.commerce-result-canvas .commerce-canvas-toolbar button:focus-visible {
+    outline: 2px solid var(--cm-accent);
+    outline-offset: 2px;
+}
+.commerce-canvas-tool-active {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border: 0;
+    border-radius: 50%;
+    background: var(--cm-pill-bg);
+    box-shadow: var(--cm-pill-shadow);
+}
+.commerce-canvas-tool-divider {
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
+    background: var(--cm-line-strong);
+}
+.commerce-tool-hint kbd {
+    border-radius: 6px;
+}
+
+/* 画布元素 */
+.commerce-canvas-empty {
+    justify-items: center;
+    gap: 10px;
+    color: var(--user-ink-muted);
+}
+.commerce-canvas-empty > svg {
+    width: 30px;
+    height: 30px;
+    padding: 13px;
+    box-sizing: content-box;
+    border: 1px solid var(--cm-line);
+    border-radius: 50%;
+    background: var(--cm-glass);
+    color: var(--user-ink);
+}
+.commerce-canvas-empty strong {
+    color: var(--user-ink);
+    font-size: 18px;
+    font-weight: 600;
+}
+.commerce-canvas-empty span {
+    font-size: 12.5px;
+}
+.commerce-canvas-results .ecommerce-result {
+    background: var(--cm-card);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-canvas-layer > span {
+    border: 1px solid var(--cm-line);
+    border-radius: 10px;
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-canvas-layer.is-selected,
+.ecommerce-result.is-focused {
+    outline-color: var(--cm-accent);
+}
+.commerce-canvas-layer-actions {
+    border-color: var(--cm-line);
+    border-radius: 999px;
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-canvas-layer-actions button {
+    border-radius: 50%;
+}
+.commerce-canvas-layer-actions button:hover {
+    background: var(--cm-track);
+}
+.commerce-selection-handle,
+.commerce-canvas-group-outline > span {
+    border-color: var(--cm-accent);
+    background: var(--user-surface);
+}
+.commerce-result-canvas .commerce-canvas-group-outline {
+    border-color: var(--cm-accent);
+}
+.commerce-selection-rotate {
+    border-color: var(--cm-line);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-selection-dimensions {
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: var(--cm-pill-bg);
+    color: var(--cm-pill-fg);
+    box-shadow: var(--cm-pill-shadow);
+}
+.commerce-selected-tools,
+.commerce-multi-tools {
+    border: 1px solid var(--cm-line);
+    border-radius: 18px;
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-selected-tools button,
+.commerce-multi-tools > button {
+    border-radius: 999px;
+    background: transparent;
+    color: var(--user-ink);
+}
+.commerce-selected-tools button svg,
+.commerce-multi-tools > button svg {
+    color: var(--user-ink-muted);
+}
+.commerce-selected-tools button:hover:not(:disabled),
+.commerce-multi-tools > button:hover:not(:disabled) {
+    background: var(--cm-track);
+}
+.commerce-selected-tools-cost {
+    border-bottom-color: var(--cm-line);
+    color: var(--user-ink);
+}
+.commerce-selected-tools-cost small,
+.commerce-selected-tools button small,
+.commerce-multi-tools > button small,
+.commerce-multi-tools p {
+    color: var(--user-ink-muted);
+}
+.commerce-selected-tools-divider {
+    background: var(--cm-line);
+}
+.commerce-multi-tools header button {
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+    color: var(--user-ink-muted);
+}
+.commerce-multi-tools header button:hover {
+    color: var(--user-ink);
+}
+.commerce-arrange-bar > button {
+    height: 34px;
+    padding: 0 12px 0 14px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-glass);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-arrange-bar > button:hover,
+.commerce-arrange-bar > button[aria-expanded="true"] {
+    border-color: var(--cm-line-strong);
+    background: var(--user-surface);
+}
+
+/* ---------- 队列任务弹层 ---------- */
+.commerce-queue-popover :is(.ant-popover-container, .ant-popover-inner) {
+    padding: 0;
+    border: 1px solid var(--cm-line);
+    border-radius: 20px;
+    background: color-mix(in srgb, var(--user-surface) 97%, transparent);
+    box-shadow: var(--cm-pop-shadow);
+    backdrop-filter: blur(20px);
+}
+.commerce-queue-panel .ant-segmented {
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--cm-track);
+}
+.commerce-queue-panel .ant-segmented .ant-segmented-item,
+.commerce-queue-panel .ant-segmented .ant-segmented-thumb {
+    border-radius: 999px;
+}
+.commerce-queue-panel .ant-segmented .ant-segmented-item-selected,
+.commerce-queue-panel .ant-segmented .ant-segmented-thumb {
+    background: var(--cm-pill-bg);
+    color: var(--cm-pill-fg);
+    box-shadow: var(--cm-thumb-shadow);
+}
+.commerce-queue-panel .ant-segmented .ant-segmented-item-label {
+    font-variant-numeric: tabular-nums;
+}
+.commerce-queue-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.commerce-queue-panel .ant-segmented-item-selected .commerce-count-badge.is-neutral {
+    background: color-mix(in srgb, var(--cm-pill-fg) 22%, transparent);
+    color: var(--cm-pill-fg);
+}
+.commerce-queue-row {
+    border-color: var(--cm-line);
+    border-radius: 16px;
+    background: var(--cm-card);
+}
+.commerce-queue-thumb {
+    border-radius: 10px;
+    background: var(--cm-track);
+    color: var(--user-ink-muted);
+}
+
+/* ---------- 历史记录（紧凑） ---------- */
+.commerce-compact-history {
+    padding: 10px;
+    border: 1px solid var(--cm-line);
+    border-radius: 20px;
+    background: var(--user-surface);
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-compact-history-heading span {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--cm-track);
+    font-variant-numeric: tabular-nums;
+}
+.commerce-compact-history-row {
+    border-radius: 14px;
+}
+.commerce-compact-history-row:hover,
+.commerce-compact-history-row:focus-within,
+.commerce-compact-history-row.is-current {
+    background: var(--cm-track);
+}
+.commerce-compact-history-cover {
+    border-radius: 10px;
+    background: var(--cm-track);
+}
+.commerce-compact-history-more {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--cm-track-strong);
+}
+.commerce-compact-history-delete {
+    border-color: var(--cm-line);
+    border-radius: 999px;
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-compact-history-all {
+    margin-top: 6px;
+    border: 1px solid var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+}
+.commerce-compact-history-all:hover {
+    background: var(--cm-card-hover);
+}
+
+/* ---------- 确认生成弹窗 ---------- */
+.commerce-confirm-modal .ant-modal-container {
+    padding: 26px 28px 22px;
+    border: 1px solid var(--cm-line);
+    border-radius: 24px;
+    background: var(--user-surface);
+    box-shadow: var(--cm-pop-shadow);
+}
+.commerce-confirm-modal .ant-modal-title {
+    background: transparent;
+    color: var(--user-ink);
+    font-size: 17px;
+}
+.commerce-confirm-grid {
+    border-top-color: var(--cm-line);
+}
+.commerce-confirm-skip {
+    border-color: var(--cm-line);
+    border-radius: 14px;
+    background: var(--cm-card);
+}
+.commerce-confirm-skip input {
+    accent-color: var(--cm-accent);
+}
+.commerce-confirm-footer > span strong {
+    color: var(--user-ink);
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.commerce-confirm-footer .ant-btn {
+    height: 38px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+/* ---------- 风格库弹窗：去掉流光与渐变，选中态用主题反色胶囊 ---------- */
+.commerce-style-picker-modal .ant-modal-container {
+    border-color: var(--cm-line);
+    background: var(--user-surface) !important;
+    box-shadow: var(--cm-pop-shadow) !important;
+}
+.commerce-style-picker-avatar {
+    border-color: var(--cm-line);
+    background: var(--cm-track);
+    box-shadow: none;
+}
+.commerce-style-picker-head small {
+    color: var(--user-ink-muted);
+}
+.commerce-style-picker-tabs button {
+    border-color: var(--cm-line);
+    background: var(--cm-chip);
+    color: var(--user-ink-muted);
+}
+.commerce-style-picker-tabs button:hover {
+    border-color: var(--cm-line-strong);
+    color: var(--user-ink);
+}
+.commerce-style-picker-tabs button.is-active {
+    border-color: color-mix(in srgb, var(--cm-accent) 38%, transparent);
+    background: var(--cm-accent-soft);
+    color: var(--cm-logo);
+    font-weight: 600;
+    box-shadow: none;
+}
+.commerce-style-picker-tabs button small {
+    min-width: 18px;
+    padding: 0 5px;
+    background: var(--cm-track-strong);
+    color: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.commerce-style-picker-tabs button.is-active small {
+    background: var(--cm-accent);
+    color: var(--cm-accent-ink);
+}
+.commerce-style-card-select {
+    border-color: var(--cm-line);
+    background: var(--user-surface);
+}
+.commerce-style-card-select:hover:not(:disabled) {
+    border-color: var(--cm-line-strong);
+    box-shadow: var(--cm-float-shadow);
+}
+.commerce-style-card.is-chosen .commerce-style-card-select {
+    border-color: var(--cm-accent);
+    box-shadow: 0 0 0 3px var(--cm-accent-soft);
+}
+.commerce-style-card-check {
+    background: var(--cm-accent);
+    color: var(--cm-accent-ink);
+    box-shadow: none;
+}
+.commerce-style-card-meta em {
+    color: var(--user-ink);
+}
+.commerce-style-card-palette small {
+    border-radius: 999px;
+    background: var(--cm-track);
+}
+.commerce-style-card-edit {
+    border-radius: 50%;
+}
+.commerce-style-card.is-editing {
+    border-color: var(--cm-accent);
+    background: var(--user-surface);
+    box-shadow: 0 0 0 3px var(--cm-accent-soft);
+}
+.commerce-style-custom-form {
+    border-color: var(--cm-line);
+    background: var(--cm-card);
+}
+.commerce-style-custom-form input:focus,
+.commerce-style-custom-form textarea:focus {
+    border-color: color-mix(in srgb, var(--cm-accent) 55%, var(--cm-line));
+    box-shadow: 0 0 0 3px var(--cm-accent-soft);
+}
+.commerce-style-inspirations button {
+    border-color: var(--cm-line);
+    border-radius: 16px;
+    background: var(--cm-card);
+}
+.commerce-style-inspirations button:hover {
+    border-color: var(--cm-line-strong);
+    background: var(--cm-card-hover);
+}
+.commerce-style-picker-footer {
+    border-top-color: var(--cm-line);
+    background: var(--user-surface);
+}
+.commerce-style-picker-footer > span em {
+    background: var(--cm-track);
+    color: var(--user-ink-muted);
+}
+.commerce-style-picker-later {
+    height: 40px;
+    padding: 0 18px;
+    border-color: var(--cm-line);
+    border-radius: 999px;
+    background: var(--cm-chip);
+}
+.commerce-style-picker-later:hover {
+    border-color: var(--cm-line-strong);
+}
+.commerce-style-picker-confirm {
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 999px;
+    background: var(--cm-pill-bg);
+    color: var(--cm-pill-fg);
+    box-shadow: var(--cm-pill-shadow);
+}
+.commerce-style-picker-confirm:hover:not(:disabled) {
+    background: var(--cm-pill-hover);
+    box-shadow: var(--cm-pill-shadow);
+}
+.commerce-style-picker-confirm:disabled {
+    background: var(--cm-track-strong);
+    color: var(--user-ink-muted);
+    opacity: 1;
+}
+
+/* ---------- 与全局图标按钮悬停规则的优先级 ----------
+   styles/workspace-product.css 给“有 svg、没有 span 子元素”的按钮在悬停时强制中性底和正文色（!important），
+   还把过渡改成只有颜色。这里的主操作 / 选中态是浅色胶囊 + logo 色，悬停时需要同等优先级保持住，否则会变灰、文字变成正文色。 */
+.ecommerce-page .commerce-canvas-layer-toggle button[aria-expanded="true"]:not(:disabled):hover {
+    background: var(--cm-pill-bg) !important;
+    color: var(--cm-pill-fg) !important;
+}
+.ecommerce-page .flylep-composer .flylep-submit {
+    transition:
+        background 0.25s,
+        color 0.25s,
+        transform 0.3s var(--cm-ease),
+        box-shadow 0.3s !important;
+}
+.ecommerce-page .flylep-composer .flylep-submit:not(:disabled):not([aria-busy="true"]):hover {
+    background: var(--cm-pill-bg) !important;
+    color: var(--cm-logo) !important;
+}
+.ecommerce-page .commerce-direction-message footer .commerce-direction-confirm:not(:disabled):hover,
+.ecommerce-page .commerce-direction-edit-actions button:last-child:not(:disabled):hover,
+.commerce-style-picker-root .commerce-style-picker-confirm:not(:disabled):hover {
+    background: var(--cm-pill-hover) !important;
+    color: var(--cm-pill-fg) !important;
+}
+
+/* ---------- 焦点环 ---------- */
+.ecommerce-page :is(button, a, label):focus-visible,
+.flylep-popover button:focus-visible,
+.commerce-market-layer button:focus-visible {
+    outline: 2px solid var(--cm-accent);
+    outline-offset: 2px;
+}
+
+@media (max-width: 780px) {
+    .flylep-page {
+        overflow: visible;
+    }
+    .flylep-composer {
+        padding: 6px 10px 10px;
+    }
+    .commerce-result-canvas .commerce-canvas-actions {
+        top: 12px;
+        right: 10px;
+    }
+    .commerce-result-canvas .commerce-canvas-layer-toggle {
+        right: 10px;
+    }
+    .commerce-result-canvas .commerce-canvas-toolbar {
+        gap: 2px;
+    }
+    .commerce-result-canvas .commerce-canvas-toolbar button {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .flylep-project-actions button,
+    .flylep-composer-toolbar > :is(button, .flylep-upload-button),
+    .flylep-composer .flylep-submit,
+    .flylep-composer .flylep-submit > svg,
+    .commerce-direction-message .flylep-direction-card,
+    .commerce-direction-message footer button,
+    .ecommerce-page .commerce-canvas-actions .ant-btn,
+    .commerce-result-canvas .commerce-canvas-toolbar button,
+    .commerce-followup-retry {
+        transition: none;
+    }
+    .flylep-project-actions button:hover:not(:disabled),
+    .flylep-composer-toolbar > :is(button, .flylep-upload-button):hover,
+    .flylep-composer .flylep-submit:not(:disabled):hover,
+    .flylep-composer .flylep-submit:not(:disabled):hover > svg,
+    .commerce-direction-message .flylep-direction-card:hover:not(:disabled),
+    .commerce-direction-message footer button:hover:not(:disabled),
+    .ecommerce-page .commerce-canvas-actions .ant-btn:not(:disabled):hover,
+    .commerce-followup-retry:hover:not(:disabled) {
+        transform: none;
+    }
+    .flylep-composer .flylep-submit .commerce-planning-spin {
+        animation-duration: 2s;
+    }
+    .ecommerce-page .flylep-composer .flylep-submit {
+        transition: none !important;
+    }
+    .commerce-queue-badge {
+        animation: none;
+    }
+}

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"yingce/backend/internal/protocol"
+	paymentsdk "yingce/backend/payment-sdk"
 )
 
 const (
@@ -150,7 +151,16 @@ func (p *RPCProvider) call(ctx context.Context, request rpcRequest, output any) 
 		if message == "" {
 			message = "支付插件返回失败"
 		}
-		return &ProviderError{Code: response.Code, Message: message}
+		providerErr := &ProviderError{Code: response.Code, Message: message}
+		switch response.Code {
+		case paymentsdk.RPCCodeOrderNotFound:
+			providerErr.Cause = ErrOrderNotFound
+		case paymentsdk.RPCCodeOrderNotPaid:
+			providerErr.Cause = ErrOrderNotPaid
+		case paymentsdk.RPCCodeTradeBillNotFound:
+			providerErr.Cause = ErrTradeBillNotFound
+		}
+		return providerErr
 	}
 	if output == nil || len(response.Data) == 0 {
 		return nil

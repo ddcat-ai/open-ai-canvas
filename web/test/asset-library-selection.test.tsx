@@ -2,22 +2,56 @@ import { describe, expect, mock, test } from "bun:test";
 import type { MouseEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AssetCard, AssetCover } from "@/pages/assets/asset-library-cards";
-import { AssetsBatchBar } from "@/pages/assets/asset-library-panels";
+import { AssetImageZoom, AssetsBatchBar } from "@/pages/assets/asset-library-panels";
 import { selectAssetIds } from "@/pages/assets/asset-library-selection";
 import type { Asset } from "@/stores/use-asset-store";
 
 const asset: Asset = { id: "remote-page-2", kind: "text", title: "第二页素材", coverUrl: "", tags: [], createdAt: "2026-10-01", updatedAt: "2026-10-01", data: { content: "正文" } };
 const click = (keys: Partial<MouseEvent<HTMLButtonElement>> = {}) => ({ shiftKey: false, ctrlKey: false, metaKey: false, ...keys }) as MouseEvent<HTMLButtonElement>;
 
+test.each(["/api/resources/detail-image/file", "https://old.example/expired-original.png"])("素材详情通过资源标识加载原图，解析历史地址 %s", (dataUrl) => {
+    const image = {
+        ...asset,
+        kind: "image" as const,
+        coverUrl: "https://old.example/expired-cover.png",
+        data: { dataUrl, storageKey: "resource:detail-image", width: 1024, height: 1024, bytes: 100, mimeType: "image/png" },
+    };
+    const html = renderToStaticMarkup(<AssetImageZoom asset={image} />);
+    expect(html).toContain("cached-resource-image-shell");
+    expect(html).not.toContain("https://old.example/");
+    expect(html).not.toContain(dataUrl);
+    expect(html).toContain('aria-label="放大"');
+});
+
 function card(selected: boolean, selectionMode: boolean) {
     const onSelect = mock(() => {});
     const onOpen = mock(() => {});
     const element = AssetCard({ asset, selected, selectionMode, onSelect, onOpen, onEdit: () => {}, onCopy: () => {}, onDownload: () => {}, onDelete: () => {}, folderOptions: [], onMoveToFolder: () => {} });
     const [cover, body] = element.props.children;
-    return { onSelect, onOpen, cover: AssetCover(cover.props).props.children[0], body };
+    return { onSelect, onOpen, cover: AssetCover(cover.props).props.children[0], body: body.props.children[0] };
 }
 
 describe("素材库分页多选", () => {
+    test.each(["image", "video", "audio", "model", "text", "entity"] as const)("%s 素材有独立名称编辑入口", (kind) => {
+        const onRename = mock(() => {});
+        const element = AssetCard({
+            asset: { ...asset, kind, data: kind === "entity" ? { definition: {}, visualStatus: "draft" } : asset.data } as Asset,
+            selected: false,
+            onSelect: () => {},
+            onOpen: () => {},
+            onEdit: () => {},
+            onRename,
+            onCopy: () => {},
+            onDownload: () => {},
+            onDelete: () => {},
+            folderOptions: [],
+            onMoveToFolder: () => {},
+        });
+        const nameButton = element.props.children[1].props.children[1];
+        expect(nameButton.props["aria-label"]).toBe("修改素材名称：第二页素材");
+        nameButton.props.onClick();
+        expect(onRename).toHaveBeenCalledTimes(1);
+    });
     test("跨页选择合并去重，取消只影响指定素材", () => {
         let ids = selectAssetIds([], ["page-1"], "page-1", true);
         ids = selectAssetIds(ids, ["page-2-a", "page-2-b"], "page-2-a", true);

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="源点动力">
+  <rect width="512" height="512" fill="#F4F4F4"/>
+  <path d="M240 134 A122 122 0 1 0 362 256" fill="none" stroke="#1A1A1A" stroke-width="44"/>
+  <path d="M249 264 L348 166" fill="none" stroke="#1A1A1A" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="390" cy="134" r="33" fill="#F2402F"/>
+</svg>

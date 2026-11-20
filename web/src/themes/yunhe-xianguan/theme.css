@@ -1,0 +1,954 @@
+@import "./fonts.css";
+
+/* =========================================================================
+   云鹤仙观主题层
+   只在后台外观启用「云鹤仙观」皮肤（html[data-skin="yunhe-xianguan"]）时生效；
+   颜色、圆角、按钮由皮肤数据负责，这里补皮肤管不到的部分：工作区写死的色板、流云底纹、
+   标题字体、鹤顶红圆点、首页与登录页插图、空状态、404、加载、节点颜色与后台色板。
+   约定：全站只有鹤顶红一个暖色，只用在最要紧的一处；鎏金只做细线和小图标。
+   ========================================================================= */
+
+:root[data-skin="yunhe-xianguan"] {
+    --yx-cloud: #edf1ef;
+    --yx-sheet: #f8faf9;
+    --yx-eave: #e3e9e7;
+    --yx-ink: #1a242c;
+    --yx-mute: #5e6c71;
+    --yx-soft: #8b999d;
+    --yx-sky: #3b7484;
+    --yx-crown: #c3352a;
+    --yx-crown-soft: rgba(195, 53, 42, 0.12);
+    --yx-gilt: #a2864f;
+    --yx-on-crown: #fff8f4;
+    --yx-mist: rgba(59, 116, 132, 0.09);
+    --yx-mist-strong: rgba(59, 116, 132, 0.16);
+    --yx-line: rgba(26, 36, 44, 0.1);
+    --yx-line-strong: rgba(26, 36, 44, 0.18);
+    --yx-display-font: "Yunhe Display", "Kaiti SC", "STKaiti", "KaiTi", serif;
+    --yx-hero: url("/themes/yunhe-xianguan/hero-day.webp");
+    /* 流云：极淡的祥云线纹，只铺在大面积底色上，卡片和输入区保持干净。 */
+    --yx-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='100' viewBox='0 0 180 100'%3E%3Cg fill='none' stroke='%231A242C' stroke-opacity='.045' stroke-width='1.2' stroke-linecap='round'%3E%3Cpath d='M8 66c0-9 11-13 17-6 2-9 15-11 19-2 7-4 15 1 13 9'/%3E%3Cpath d='M27 58c-2 3 1 6 3 4s0-4-1.5-3'/%3E%3Cpath d='M102 26c0-7 9-10 13-5 2-7 12-8 15-2 5-3 12 1 10 7'/%3E%3Cpath d='M116 21c-1.6 2.4.8 4.8 2.4 3.2s0-3.2-1.2-2.4'/%3E%3C/g%3E%3C/svg%3E");
+
+    /* 画布节点类型色：取青绿山水与道观建筑里的颜色。 */
+    --palette-node-image: #b8955a;
+    --palette-node-video: #c3463a;
+    --palette-node-text: #46607a;
+    --palette-node-audio: #3b7484;
+    --palette-node-config: #6b787c;
+    --palette-node-script: #6a5a82;
+    --palette-node-drawing: #a06a48;
+    --palette-node-frame: #4f8a6b;
+    --palette-node-character: #a08aa8;
+    --palette-node-skill: #cda845;
+}
+
+:root[data-skin="yunhe-xianguan"].dark {
+    --yx-cloud: #0c1317;
+    --yx-sheet: #131c21;
+    --yx-eave: #0f181d;
+    --yx-ink: #e2e9e6;
+    --yx-mute: #93a3a6;
+    --yx-soft: #6f8085;
+    --yx-sky: #7db2bf;
+    --yx-crown: #e2594b;
+    --yx-crown-soft: rgba(226, 89, 75, 0.18);
+    --yx-gilt: #c8ad78;
+    --yx-mist: rgba(125, 178, 191, 0.1);
+    --yx-mist-strong: rgba(125, 178, 191, 0.18);
+    --yx-line: rgba(226, 233, 230, 0.09);
+    --yx-line-strong: rgba(226, 233, 230, 0.16);
+    --yx-hero: url("/themes/yunhe-xianguan/hero-night.webp");
+    --yx-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='100' viewBox='0 0 180 100'%3E%3Cg fill='none' stroke='%23E2E9E6' stroke-opacity='.04' stroke-width='1.2' stroke-linecap='round'%3E%3Cpath d='M8 66c0-9 11-13 17-6 2-9 15-11 19-2 7-4 15 1 13 9'/%3E%3Cpath d='M27 58c-2 3 1 6 3 4s0-4-1.5-3'/%3E%3Cpath d='M102 26c0-7 9-10 13-5 2-7 12-8 15-2 5-3 12 1 10 7'/%3E%3Cpath d='M116 21c-1.6 2.4.8 4.8 2.4 3.2s0-3.2-1.2-2.4'/%3E%3C/g%3E%3C/svg%3E");
+    --palette-node-image: #d9b878;
+    --palette-node-video: #e2766a;
+    --palette-node-text: #8ea6bf;
+    --palette-node-audio: #7db2bf;
+    --palette-node-config: #a3b0b3;
+    --palette-node-script: #a796c4;
+    --palette-node-drawing: #cf9773;
+    --palette-node-frame: #86c2a0;
+    --palette-node-character: #c9b3cf;
+    --palette-node-skill: #e3c46e;
+}
+
+/* ---------- 工作区色板（上游在工作区上写死了一套中性灰，这里换成月白 / 夜观） ---------- */
+:root[data-skin="yunhe-xianguan"] :is(.app-user-workspace, .app-user-overlays, .app-product-workspace, .app-product-overlays) {
+    --user-page-bg: #edf1ef;
+    --user-surface: #f8faf9;
+    --user-surface-raised: #fbfcfc;
+    --user-surface-muted: #e7edeb;
+    --user-surface-hover: #dfe7e5;
+    --user-control-pressed: #d5dfdd;
+    --user-border: rgba(26, 36, 44, 0.1);
+    --user-border-strong: rgba(26, 36, 44, 0.18);
+    --user-ink: #1a242c;
+    --user-ink-muted: #56656b;
+    --user-ink-soft: #7d8b90;
+    --user-accent: #3b7484;
+    --workspace-canvas: #eaf0ee;
+    --workspace-navigation: #e3e9e7;
+    --workspace-content: #edf1ef;
+    --workspace-surface: #f8faf9;
+    --workspace-surface-strong: #f8faf9;
+    --workspace-border: rgba(26, 36, 44, 0.09);
+    --workspace-border-strong: rgba(26, 36, 44, 0.16);
+    --workspace-accent: #1a242c;
+    --workspace-accent-soft: rgba(26, 36, 44, 0.06);
+    --workspace-nav-active-bg: transparent;
+    --workspace-nav-active-hover-bg: rgba(59, 116, 132, 0.08);
+    --product-accent-blue: #3b7484;
+    --product-accent-green: #3e7a5a;
+    --product-accent-orange: #a2864f;
+    --product-accent-pink: #8a6a86;
+    --product-accent-violet: #5c5f86;
+    --product-accent-cyan: #3b7484;
+}
+
+:root[data-skin="yunhe-xianguan"].dark :is(.app-user-workspace, .app-user-overlays, .app-product-workspace, .app-product-overlays) {
+    --user-page-bg: #0c1317;
+    --user-surface: #131c21;
+    --user-surface-raised: #182329;
+    --user-surface-muted: #1a252c;
+    --user-surface-hover: #22303a;
+    --user-control-pressed: #2a3a44;
+    --user-border: rgba(226, 233, 230, 0.09);
+    --user-border-strong: rgba(226, 233, 230, 0.16);
+    --user-ink: #e2e9e6;
+    --user-ink-muted: #a3b2b5;
+    --user-ink-soft: #7d8d92;
+    --user-accent: #7db2bf;
+    --workspace-canvas: #0a1014;
+    --workspace-navigation: #0f181d;
+    --workspace-content: #0c1317;
+    --workspace-surface: #131c21;
+    --workspace-surface-strong: #182329;
+    --workspace-border: rgba(226, 233, 230, 0.08);
+    --workspace-border-strong: rgba(226, 233, 230, 0.15);
+    --workspace-accent: #e2e9e6;
+    --workspace-accent-soft: rgba(226, 233, 230, 0.07);
+    --workspace-nav-active-hover-bg: rgba(125, 178, 191, 0.1);
+    --product-accent-blue: #7db2bf;
+    --product-accent-green: #7fbf9a;
+    --product-accent-orange: #c8ad78;
+    --product-accent-pink: #c9a3c3;
+    --product-accent-violet: #a7a9d4;
+    --product-accent-cyan: #7db2bf;
+}
+
+/* ---------- 侧栏：比正文深一层的观檐色；选中项是一缕淡云，后面一粒鹤顶红 ---------- */
+:root[data-skin="yunhe-xianguan"] .app-user-workspace :is(.app-workspace-sidebar, .app-workspace-sidebar-nav) {
+    background-color: #e3e9e7;
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-sidebar {
+    border-right-color: rgba(26, 36, 44, 0.07);
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-sidebar-footer {
+    border-top-color: rgba(26, 36, 44, 0.07);
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-nav-link {
+    color: #4f5e64;
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-nav-link:hover:not(.is-active),
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) {
+    background: rgba(59, 116, 132, 0.08);
+    color: var(--yx-ink);
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-nav-link.is-active {
+    background: transparent;
+    color: var(--yx-ink);
+}
+:root[data-skin="yunhe-xianguan"] .app-workspace-nav-link.is-active .app-workspace-nav-icon,
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-nav-link.is-active .app-workspace-nav-main > svg {
+    color: var(--yx-sky);
+    opacity: 1;
+}
+:root[data-skin="yunhe-xianguan"] .app-workspace-nav-active-pill {
+    background: linear-gradient(90deg, var(--yx-mist-strong), var(--yx-mist) 55%, transparent 96%) !important;
+    box-shadow: none !important;
+}
+:root[data-skin="yunhe-xianguan"] .app-workspace-nav-active-pill::before {
+    display: none;
+}
+:root[data-skin="yunhe-xianguan"] .app-workspace-nav-active-pill::after {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    width: 5px;
+    height: 5px;
+    margin-top: -2.5px;
+    border-radius: 50%;
+    background: var(--yx-crown);
+    content: "";
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-nav-group-toggle {
+    color: var(--yx-soft);
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace :is(.app-workspace-sidebar, .app-workspace-sidebar-nav) {
+    background-color: #0f181d;
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace :is(.app-workspace-sidebar, .app-workspace-sidebar-footer) {
+    border-color: rgba(226, 233, 230, 0.07);
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace .app-workspace-nav-link {
+    color: #a3b2b5;
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace .app-workspace-nav-link:hover:not(.is-active) {
+    background: rgba(125, 178, 191, 0.09);
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-sidebar-profile-menu :is(a, button):hover {
+    background: rgba(59, 116, 132, 0.08);
+    color: inherit;
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace :is(.creation-home, .creation-empty-suggest .creation-hero-prompt, .creation-empty-suggest .suggest-card) {
+    background-color: #0c1317;
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace .creation-composer {
+    background-color: #131c21;
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace .app-workspace-topbar-credit-pill {
+    border-color: rgba(226, 233, 230, 0.11);
+    background: #131c21;
+    color: rgba(226, 233, 230, 0.75);
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-topbar-credit-pill:hover {
+    border-color: var(--yx-line-strong);
+    background: var(--yx-sheet);
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace .creation-home-heading h1 {
+    color: #e2e9e6;
+}
+
+/* 侧栏签到卡：浅色是云笺，夜观是一张月光色的笺纸 */
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-sidebar-checkin {
+    background: var(--yx-sheet);
+    color: var(--yx-ink);
+    box-shadow:
+        0 0 0 1px rgba(26, 36, 44, 0.08),
+        0 10px 24px rgba(26, 36, 44, 0.1);
+}
+:root[data-skin="yunhe-xianguan"].dark .app-user-workspace .app-workspace-sidebar-checkin {
+    background: #dfe8e5;
+    color: #1a242c;
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-sidebar-checkin-title {
+    color: #1a242c;
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-sidebar-checkin-offer {
+    color: #56656b;
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-sidebar-checkin-offer em {
+    color: var(--yx-crown);
+}
+:root[data-skin="yunhe-xianguan"] .app-user-workspace :is(.app-workspace-sidebar-checkin-claim, .app-workspace-sidebar-checkin.is-collapsed) {
+    background: #1a242c;
+    color: #f4f8f7;
+}
+
+/* ---------- 积分中心：上游紫青粉流光换成天青、鎏金、一点鹤顶红 ---------- */
+:root[data-skin="yunhe-xianguan"] .workspace-wallet-modal .ant-modal-container::before {
+    background: radial-gradient(22% 26% at 25% 25%, rgba(59, 116, 132, 0.2), transparent 70%), radial-gradient(18% 22% at 74% 30%, rgba(195, 53, 42, 0.12), transparent 70%), radial-gradient(22% 24% at 60% 72%, rgba(162, 134, 79, 0.16), transparent 70%);
+}
+:root[data-skin="yunhe-xianguan"] .workspace-wallet-shell::before {
+    background: radial-gradient(20% 24% at 75% 20%, rgba(59, 116, 132, 0.16), transparent 70%), radial-gradient(18% 20% at 82% 78%, rgba(162, 134, 79, 0.14), transparent 70%);
+    mix-blend-mode: multiply;
+}
+:root[data-skin="yunhe-xianguan"].dark .workspace-wallet-modal .ant-modal-container::before {
+    background: radial-gradient(22% 26% at 25% 25%, rgba(125, 178, 191, 0.2), transparent 70%), radial-gradient(18% 22% at 74% 30%, rgba(226, 89, 75, 0.16), transparent 70%), radial-gradient(22% 24% at 60% 72%, rgba(200, 173, 120, 0.14), transparent 70%);
+}
+:root[data-skin="yunhe-xianguan"].dark .workspace-wallet-shell::before {
+    background: radial-gradient(20% 24% at 75% 20%, rgba(125, 178, 191, 0.12), transparent 70%), radial-gradient(18% 20% at 82% 78%, rgba(200, 173, 120, 0.12), transparent 70%);
+    mix-blend-mode: screen;
+}
+
+/* ---------- 画布浮动工具条：半透明云笺 ---------- */
+:root[data-skin="yunhe-xianguan"] .app-spatial-surface {
+    border-color: rgba(26, 36, 44, 0.1);
+    background: rgba(248, 250, 249, 0.92);
+    box-shadow:
+        0 18px 48px rgba(26, 36, 44, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+:root[data-skin="yunhe-xianguan"].dark .app-spatial-surface {
+    border-color: rgba(226, 233, 230, 0.1);
+    background: rgba(19, 28, 33, 0.92);
+    box-shadow:
+        0 22px 60px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(226, 233, 230, 0.05);
+}
+:root[data-skin="yunhe-xianguan"] .app-spatial-interactive:hover {
+    border-color: rgba(26, 36, 44, 0.26);
+    box-shadow:
+        0 24px 68px rgba(26, 36, 44, 0.13),
+        0 0 0 1px rgba(26, 36, 44, 0.06);
+}
+:root[data-skin="yunhe-xianguan"].dark .app-spatial-interactive:hover {
+    border-color: rgba(226, 233, 230, 0.24);
+    box-shadow:
+        0 28px 76px rgba(0, 0, 0, 0.46),
+        0 0 0 1px rgba(226, 233, 230, 0.06);
+}
+
+/* ---------- 管理后台：上游让后台忽略皮肤，这里按同一套月白 / 夜观重设后台色板 ---------- */
+:root[data-skin="yunhe-xianguan"] :is([data-admin-root], body.admin-overlays, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root, .admin-mobile-navigation-menu) {
+    --admin-canvas: #eaf0ee;
+    --admin-sidebar: #e3e9e7;
+    --admin-surface: #f8faf9;
+    --admin-surface-2: #eef3f1;
+    --admin-surface-3: #e2eae8;
+    --admin-text: #1a242c;
+    --admin-text-secondary: #3d4d55;
+    --admin-text-muted: #5e6c71;
+    --admin-text-placeholder: #94a3a6;
+    --admin-border: rgba(26, 36, 44, 0.12);
+    --admin-border-strong: rgba(26, 36, 44, 0.19);
+    --admin-divider: rgba(26, 36, 44, 0.09);
+    --admin-row-border: rgba(26, 36, 44, 0.07);
+    --admin-row-hover: #eef3f1;
+    --admin-nav-hover: rgba(59, 116, 132, 0.07);
+    --admin-nav-active: #dce6e4;
+    --admin-accent: #1a242c;
+    --admin-accent-fg: #f4f8f7;
+    --admin-focus: rgba(59, 116, 132, 0.32);
+    --admin-status-success: #3e7a5a;
+    --admin-status-warning: #a8742c;
+    --admin-status-error: #c3352a;
+    --admin-status-info: #3b7484;
+    --admin-switch-on: #3b7484;
+    --admin-chart-primary: #1a242c;
+    --admin-chart-secondary: #3b7484;
+    --admin-chart-warning: #a8742c;
+}
+:root[data-skin="yunhe-xianguan"].dark :is([data-admin-root], .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root, .admin-mobile-navigation-menu),
+:root[data-skin="yunhe-xianguan"].dark body.admin-overlays {
+    --admin-canvas: #0c1317;
+    --admin-sidebar: #0c1317;
+    --admin-surface: #131c21;
+    --admin-surface-2: #182329;
+    --admin-surface-3: #1f2c33;
+    --admin-text: #e2e9e6;
+    --admin-text-secondary: #c6d2d0;
+    --admin-text-muted: #93a3a6;
+    --admin-text-placeholder: #6f8085;
+    --admin-border: rgba(226, 233, 230, 0.1);
+    --admin-border-strong: rgba(226, 233, 230, 0.16);
+    --admin-divider: rgba(226, 233, 230, 0.08);
+    --admin-row-border: rgba(226, 233, 230, 0.06);
+    --admin-row-hover: #162026;
+    --admin-nav-hover: rgba(125, 178, 191, 0.07);
+    --admin-nav-active: #1e2b32;
+    --admin-accent: #e2e9e6;
+    --admin-accent-fg: #0e161b;
+    --admin-focus: rgba(125, 178, 191, 0.32);
+    --admin-status-success: #7fbf9a;
+    --admin-status-warning: #e0b46a;
+    --admin-status-error: #e2594b;
+    --admin-status-info: #7db2bf;
+    --admin-switch-on: #7db2bf;
+    --admin-chart-primary: #e2e9e6;
+    --admin-chart-secondary: #7db2bf;
+    --admin-chart-warning: #e0b46a;
+}
+:root[data-skin="yunhe-xianguan"] [data-admin-root] {
+    background-image: var(--yx-grain);
+}
+:root[data-skin="yunhe-xianguan"] [data-admin-root] :is(h1, h2) {
+    font-family: var(--yx-display-font);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+}
+
+/* ---------- 流云底纹：只铺在大面积底色上 ---------- */
+:root[data-skin="yunhe-xianguan"] .app-workspace-sidebar,
+:root[data-skin="yunhe-xianguan"] .app-workspace-stage,
+:root[data-skin="yunhe-xianguan"] .app-user-content,
+:root[data-skin="yunhe-xianguan"] .creation-home,
+:root[data-skin="yunhe-xianguan"] .app-user-workspace .app-workspace-grid {
+    background-image: var(--yx-grain);
+}
+
+/* ---------- 标题用霞鹜文楷，正文保持黑体 ---------- */
+:root[data-skin="yunhe-xianguan"] :is(.app-user-workspace, .app-user-overlays, .auth-scene) :is(h1, h2),
+:root[data-skin="yunhe-xianguan"] .app-page-header-title,
+:root[data-skin="yunhe-xianguan"] .ant-modal-title {
+    font-family: var(--yx-display-font);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+}
+
+/* 区块标题前一粒鹤顶红圆点 */
+:root[data-skin="yunhe-xianguan"] .app-user-workspace :is(#inspiration-hall-title, .app-page-header-title)::before {
+    display: inline-block;
+    width: 0.36em;
+    height: 0.36em;
+    margin: 0 0.55em 0.14em 0;
+    border-radius: 50%;
+    background: var(--yx-crown);
+    content: "";
+    vertical-align: middle;
+}
+
+/* ---------- 创作首页：右上角一片云海仙观（白天 / 夜观各一张），左侧淡入云雾 ---------- */
+:root[data-skin="yunhe-xianguan"] .creation-home {
+    isolation: isolate;
+}
+:root[data-skin="yunhe-xianguan"] .creation-home::before {
+    position: absolute;
+    z-index: -1;
+    top: -40px;
+    right: -20px;
+    width: min(820px, 66%);
+    height: 460px;
+    background: var(--yx-hero) 62% 34% / cover no-repeat;
+    content: "";
+    opacity: 0.5;
+    pointer-events: none;
+    -webkit-mask-image: radial-gradient(ellipse 68% 62% at 64% 40%, #000 30%, transparent 76%);
+    mask-image: radial-gradient(ellipse 68% 62% at 64% 40%, #000 30%, transparent 76%);
+}
+:root[data-skin="yunhe-xianguan"].dark .creation-home::before {
+    opacity: 0.42;
+}
+
+/* 输入框：云笺 + 一圈很淡的天青描边 */
+:root[data-skin="yunhe-xianguan"] .creation-chat-composer {
+    box-shadow:
+        0 1px 0 rgba(26, 36, 44, 0.03),
+        0 14px 34px -20px rgba(26, 36, 44, 0.3);
+}
+/* Agent 页签的小灯：鹤顶红 */
+:root[data-skin="yunhe-xianguan"] .creation-mode-spark {
+    background: var(--yx-crown);
+    box-shadow: 0 0 6px var(--yx-crown-soft);
+}
+
+/* 助手的上游流光球：WebGL 写死紫色，滤镜收成月白天青（皮肤下默认已换成鹤首圆窗） */
+:root[data-skin="yunhe-xianguan"] .fluid-orb {
+    filter: grayscale(1) sepia(0.2) hue-rotate(150deg) brightness(0.95) contrast(1.05);
+}
+
+/* 选中文字 */
+:root[data-skin="yunhe-xianguan"] ::selection {
+    background: var(--yx-crown-soft);
+}
+
+/* =========================================================================
+   登录：独立登录页（.auth-scene）与登录弹窗（.auth-dialog）共用一张「云笺」。
+   ========================================================================= */
+:root[data-skin="yunhe-xianguan"] {
+    --yx-auth-field: color-mix(in srgb, var(--yx-cloud) 72%, var(--yx-sheet));
+}
+
+/* 云笺：月白纸面、四角鎏金窗棂角花、淡天青细边 */
+:root[data-skin="yunhe-xianguan"] .auth-panel.is-page,
+:root[data-skin="yunhe-xianguan"] .auth-dialog .auth-dialog-form {
+    background-color: var(--yx-sheet);
+    background-image:
+        linear-gradient(var(--yx-gilt), var(--yx-gilt)), linear-gradient(var(--yx-gilt), var(--yx-gilt)), linear-gradient(var(--yx-gilt), var(--yx-gilt)), linear-gradient(var(--yx-gilt), var(--yx-gilt)), linear-gradient(var(--yx-gilt), var(--yx-gilt)),
+        linear-gradient(var(--yx-gilt), var(--yx-gilt)), linear-gradient(var(--yx-gilt), var(--yx-gilt)), linear-gradient(var(--yx-gilt), var(--yx-gilt)), radial-gradient(120% 60% at 100% 0%, var(--yx-mist), transparent 60%);
+    background-repeat: no-repeat;
+    background-size:
+        18px 1.5px,
+        1.5px 18px,
+        18px 1.5px,
+        1.5px 18px,
+        18px 1.5px,
+        1.5px 18px,
+        18px 1.5px,
+        1.5px 18px,
+        100% 100%;
+    background-position:
+        10px 10px,
+        10px 10px,
+        calc(100% - 10px) 10px,
+        calc(100% - 10px) 10px,
+        10px calc(100% - 10px),
+        10px calc(100% - 10px),
+        calc(100% - 10px) calc(100% - 10px),
+        calc(100% - 10px) calc(100% - 10px),
+        0 0;
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel.is-page {
+    border: 1px solid var(--yx-line);
+    border-radius: var(--r-xl);
+    box-shadow:
+        0 2px 6px -2px rgba(26, 36, 44, 0.08),
+        0 24px 52px -30px rgba(26, 36, 44, 0.34);
+    animation: yx-auth-rise 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+:root[data-skin="yunhe-xianguan"].dark .auth-panel.is-page {
+    box-shadow:
+        0 1px 0 rgba(226, 233, 230, 0.05) inset,
+        0 24px 54px -26px rgba(0, 0, 0, 0.7);
+}
+/* 云雾里浮现：从微糊到清晰 */
+@keyframes yx-auth-rise {
+    from {
+        opacity: 0;
+        filter: blur(5px);
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        filter: none;
+        transform: none;
+    }
+}
+
+/* 标题：霞鹜文楷 + 右侧一枚圆形「鹤」印 */
+:root[data-skin="yunhe-xianguan"] :is(.auth-scene, .auth-dialog) :is(h1, h2, .auth-dialog-stage-title) {
+    font-family: var(--yx-display-font);
+    font-weight: 400;
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel-header {
+    position: relative;
+    padding-inline-end: 44px;
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel-title {
+    color: var(--yx-ink);
+    font-size: calc(var(--fs-title) * 1.12);
+    letter-spacing: 0.06em;
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel-header::after {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border: 1.5px solid var(--yx-crown);
+    border-radius: 50%;
+    color: var(--yx-crown);
+    content: "鹤";
+    font-family: var(--yx-display-font);
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.92;
+    pointer-events: none;
+    transform: translateY(-50%) rotate(-8deg);
+}
+
+/* 方式切换：选中项下面一笔鹤顶红 */
+:root[data-skin="yunhe-xianguan"] .auth-tabs {
+    border-bottom-color: var(--yx-line);
+}
+:root[data-skin="yunhe-xianguan"] .auth-tab {
+    color: color-mix(in srgb, var(--yx-ink) 55%, transparent);
+    letter-spacing: 0.06em;
+}
+:root[data-skin="yunhe-xianguan"] .auth-tab:hover,
+:root[data-skin="yunhe-xianguan"] .auth-tab[aria-selected="true"] {
+    color: var(--yx-ink);
+}
+:root[data-skin="yunhe-xianguan"] .auth-tab[aria-selected="true"]::after {
+    background: var(--yx-crown);
+}
+
+/* 输入框：月白底、淡天青边，落笔时边线转天青、外圈一层淡云 */
+:root[data-skin="yunhe-xianguan"] .auth-panel {
+    --unified-input-surface: var(--yx-auth-field);
+    --unified-input-surface-hover: color-mix(in srgb, var(--yx-auth-field) 55%, var(--yx-sheet));
+    --unified-input-surface-focus: var(--yx-sheet);
+    --unified-input-placeholder: color-mix(in srgb, var(--yx-ink) 40%, transparent);
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel .ant-input-outlined {
+    border-color: var(--yx-line) !important;
+    color: var(--yx-ink);
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel .ant-input-outlined .ant-input {
+    color: var(--yx-ink);
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel .ant-input-outlined:hover {
+    border-color: var(--yx-line-strong) !important;
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel .ant-input-outlined:is(:focus, :focus-within, .ant-input-affix-wrapper-focused) {
+    border-color: color-mix(in srgb, var(--yx-sky) 70%, transparent) !important;
+    box-shadow: 0 0 0 3px var(--yx-mist-strong) !important;
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel input:-webkit-autofill,
+:root[data-skin="yunhe-xianguan"] .auth-panel input:-webkit-autofill:hover,
+:root[data-skin="yunhe-xianguan"] .auth-panel input:-webkit-autofill:focus {
+    box-shadow: 0 0 0 1000px var(--yx-sheet) inset;
+    -webkit-text-fill-color: var(--yx-ink);
+}
+
+/* 主按钮：玄青，标题字体加宽字距 */
+:root[data-skin="yunhe-xianguan"] .auth-panel .ant-btn-primary {
+    font-family: var(--yx-display-font);
+    font-weight: 400;
+    letter-spacing: 0.3em;
+    text-indent: 0.3em;
+}
+:root[data-skin="yunhe-xianguan"] .auth-panel .ant-btn-default {
+    border-color: var(--yx-line-strong);
+    background: transparent;
+    color: var(--yx-ink);
+}
+
+/* 文字链接：天青；「立即注册」和协议名用鹤顶红 */
+:root[data-skin="yunhe-xianguan"] .auth-form-link {
+    color: var(--yx-sky);
+}
+:root[data-skin="yunhe-xianguan"] .auth-form-link.is-strong,
+:root[data-skin="yunhe-xianguan"] .auth-form-link:hover {
+    color: var(--yx-crown);
+}
+:root[data-skin="yunhe-xianguan"] :is(.auth-form-switch, .auth-form-legal, .auth-panel-description) {
+    color: color-mix(in srgb, var(--yx-ink) 58%, transparent);
+}
+:root[data-skin="yunhe-xianguan"] .auth-form-legal {
+    padding-top: var(--space-3);
+    border-top: 1px dashed var(--yx-line);
+}
+:root[data-skin="yunhe-xianguan"] .auth-form-divider.ant-divider::before,
+:root[data-skin="yunhe-xianguan"] .auth-form-divider.ant-divider::after {
+    border-block-start-color: var(--yx-line);
+}
+
+/* =========================== 独立登录页 =========================== */
+:root[data-skin="yunhe-xianguan"] .auth-scene,
+:root[data-skin="yunhe-xianguan"] .auth-scene-form-pane {
+    background-color: var(--yx-cloud);
+}
+:root[data-skin="yunhe-xianguan"] .auth-scene-form-pane {
+    background-image: var(--yx-grain), radial-gradient(55% 40% at 96% 4%, var(--yx-mist-strong), transparent 70%), radial-gradient(50% 36% at 70% 104%, var(--yx-mist), transparent 72%);
+}
+/* 左侧插图：主题自带的云海仙观（白天 / 夜观）；后台配了品牌影片时影片照常盖在上面 */
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero {
+    background:
+        var(--yx-hero) 58% 42% / cover no-repeat,
+        var(--yx-cloud);
+}
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero > img {
+    display: none;
+}
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero-overlay {
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--yx-cloud) 42%, transparent), transparent 26%), radial-gradient(80% 50% at 16% 100%, color-mix(in srgb, var(--yx-cloud) 92%, transparent), transparent 74%),
+        linear-gradient(0deg, color-mix(in srgb, var(--yx-cloud) 66%, transparent), transparent 42%);
+}
+:root[data-skin="yunhe-xianguan"] .auth-scene-video-blend {
+    background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--yx-cloud) 55%, transparent) 50%, var(--yx-cloud) 96%);
+}
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero-title {
+    color: var(--yx-ink);
+    letter-spacing: 0.06em;
+    text-wrap: balance;
+}
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero-muted {
+    color: color-mix(in srgb, var(--yx-ink) 68%, transparent);
+    text-wrap: pretty;
+    word-break: keep-all;
+}
+/* 品牌英文标识：一圈鹤顶红细框 */
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero p.auth-scene-hero-muted:first-child {
+    display: inline-block;
+    padding: 3px 9px 2px 11px;
+    border: 1px solid color-mix(in srgb, var(--yx-crown) 70%, transparent);
+    border-radius: 999px;
+    color: var(--yx-crown);
+    font-size: 10px;
+    letter-spacing: 0.32em;
+}
+:root[data-skin="yunhe-xianguan"] :is(.auth-scene-hero-control, .auth-scene-return) {
+    border: 1px solid var(--yx-line-strong);
+    background: color-mix(in srgb, var(--yx-sheet) 80%, transparent);
+    color: color-mix(in srgb, var(--yx-ink) 84%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+:root[data-skin="yunhe-xianguan"] :is(.auth-scene-hero-control, .auth-scene-return):hover:not(:disabled) {
+    background: var(--yx-sheet);
+    color: var(--yx-ink);
+}
+/* 没配品牌影片时「播放品牌影片」是灰的，插图本身就是主角，直接收起 */
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero-control:disabled:not([aria-pressed="true"]) {
+    display: none;
+}
+:root[data-skin="yunhe-xianguan"] .auth-scene-hero-control svg {
+    color: var(--yx-crown);
+}
+:root[data-skin="yunhe-xianguan"] .site-compliance-footer.is-auth {
+    border-top-color: var(--yx-line);
+    color: color-mix(in srgb, var(--yx-ink) 50%, transparent);
+}
+:root[data-skin="yunhe-xianguan"] .site-compliance-footer.is-auth a {
+    color: inherit;
+}
+:root[data-skin="yunhe-xianguan"] .site-compliance-footer.is-auth a:hover {
+    color: var(--yx-crown);
+}
+
+/* 手机：插图收成顶部一条，标语压在下半截云上，登录云笺第一屏可见 */
+@media (max-width: 1023px) {
+    :root[data-skin="yunhe-xianguan"] .auth-scene > div {
+        position: relative;
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-scene-form-pane {
+        position: static;
+        min-height: 0;
+        padding-top: var(--space-6);
+        padding-bottom: var(--space-4);
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-scene-form-pane > div:first-child {
+        top: 14px;
+        right: 14px;
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-scene-hero-control {
+        display: none;
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-scene-hero {
+        min-height: 300px;
+        background-position: 60% 30%;
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-scene-hero-overlay {
+        background:
+            linear-gradient(180deg, color-mix(in srgb, var(--yx-cloud) 36%, transparent), transparent 22%),
+            linear-gradient(0deg, var(--yx-cloud) 0%, color-mix(in srgb, var(--yx-cloud) 88%, transparent) 30%, color-mix(in srgb, var(--yx-cloud) 50%, transparent) 56%, transparent 80%);
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-scene-hero > div.absolute.bottom-0 {
+        padding-bottom: var(--space-4);
+    }
+}
+@media (max-width: 639px) {
+    :root[data-skin="yunhe-xianguan"] .auth-scene-hero {
+        min-height: 292px;
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-scene-hero-title {
+        font-size: 1.85rem;
+    }
+    :root[data-skin="yunhe-xianguan"] .auth-panel.is-page {
+        padding: var(--space-6) var(--space-5);
+    }
+}
+
+/* =========================== 登录弹窗 =========================== */
+:root[data-skin="yunhe-xianguan"] .auth-dialog {
+    --auth-dialog-glow: transparent;
+    --auth-dialog-orb: transparent;
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog :is(.ant-modal-content, .ant-modal-container) {
+    border: 1px solid var(--yx-line);
+    background: var(--yx-sheet);
+}
+/* 左侧品牌：月白底 + 一幅淡淡的云海仙观 */
+:root[data-skin="yunhe-xianguan"] .auth-dialog-stage {
+    background-color: var(--yx-cloud);
+    background-image: var(--yx-grain);
+    border-inline-end: 1px solid var(--yx-line);
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-stage::before {
+    top: -30px;
+    right: -50px;
+    width: 120%;
+    height: 80%;
+    border-radius: 0;
+    background: var(--yx-hero) 60% 30% / cover no-repeat;
+    opacity: 0.55;
+    -webkit-mask-image: radial-gradient(ellipse 70% 62% at 62% 40%, #000 30%, transparent 78%);
+    mask-image: radial-gradient(ellipse 70% 62% at 62% 40%, #000 30%, transparent 78%);
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-stage::after {
+    display: none;
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-stage-title {
+    color: var(--yx-ink);
+    letter-spacing: 0.06em;
+    text-wrap: balance;
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-stage-tagline {
+    color: color-mix(in srgb, var(--yx-ink) 64%, transparent);
+    text-wrap: pretty;
+    word-break: keep-all;
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-feature {
+    border: 1px solid var(--yx-line);
+    background: color-mix(in srgb, var(--yx-sheet) 82%, transparent);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-feature-icon {
+    border: 1px solid color-mix(in srgb, var(--yx-sky) 40%, transparent);
+    border-radius: 50%;
+    background: var(--yx-mist);
+    color: var(--yx-sky);
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-feature small {
+    color: color-mix(in srgb, var(--yx-ink) 55%, transparent);
+}
+:root[data-skin="yunhe-xianguan"] .auth-dialog-form-inner {
+    animation: yx-auth-rise 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="yunhe-xianguan"] :is(.auth-panel.is-page, .auth-dialog-form-inner) {
+        animation: none;
+    }
+}
+
+/* ---------- 404：云海里的山门牌坊（主题包提供的图标，见 marks.tsx） ---------- */
+:root[data-skin="yunhe-xianguan"] .not-found-gate {
+    display: block;
+    width: min(260px, 70vw);
+    height: auto;
+    margin: 0 auto 6px;
+    color: var(--yx-ink);
+}
+:root[data-skin="yunhe-xianguan"] .not-found-title {
+    font-family: var(--yx-display-font);
+    font-weight: 400;
+    letter-spacing: 0.08em;
+}
+
+/* ---------- 加载：两团云聚拢，中间亮起一点鹤顶红；占位尺寸不变 ---------- */
+:root[data-skin="yunhe-xianguan"] .loading-signal {
+    position: relative;
+    width: 34px;
+    flex-basis: 34px;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    animation: none;
+}
+:root[data-skin="yunhe-xianguan"] .loading-signal::before,
+:root[data-skin="yunhe-xianguan"] .loading-signal::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 50%;
+    background: var(--yx-sky);
+    content: "";
+    opacity: 0.32;
+    animation: yx-cloud-left 2.2s ease-in-out infinite;
+}
+:root[data-skin="yunhe-xianguan"] .loading-signal::after {
+    animation-name: yx-cloud-right;
+}
+:root[data-skin="yunhe-xianguan"] .loading-signal i {
+    position: absolute;
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    margin: -3px 0 0 -3px;
+    border-radius: 50%;
+    background: var(--yx-crown);
+    animation: yx-crown-glow 2.2s ease-in-out infinite;
+}
+@keyframes yx-cloud-left {
+    0%,
+    100% {
+        transform: translateX(-12px) scale(0.75);
+    }
+    50% {
+        transform: translateX(-3px) scale(1.15);
+    }
+}
+@keyframes yx-cloud-right {
+    0%,
+    100% {
+        transform: translateX(12px) scale(0.75);
+    }
+    50% {
+        transform: translateX(3px) scale(1.15);
+    }
+}
+@keyframes yx-crown-glow {
+    0%,
+    30%,
+    100% {
+        opacity: 0;
+    }
+    50%,
+    70% {
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="yunhe-xianguan"] .loading-signal::before {
+        animation: none;
+        transform: translateX(-4px);
+    }
+    :root[data-skin="yunhe-xianguan"] .loading-signal::after {
+        animation: none;
+        transform: translateX(4px);
+    }
+    :root[data-skin="yunhe-xianguan"] .loading-signal i {
+        animation: none;
+        opacity: 1;
+    }
+}
+
+/* ---------- 技能、插件卡片：上游分类色收成天青和玄青 ---------- */
+:root[data-skin="yunhe-xianguan"] .skill-tile-glyph {
+    background: var(--yx-mist);
+    box-shadow: inset 0 0 0 1px var(--yx-line);
+    color: var(--yx-ink);
+    font-family: var(--yx-display-font);
+}
+:root[data-skin="yunhe-xianguan"] .skill-tile.is-added .skill-tile-glyph {
+    background: var(--yx-sky);
+    box-shadow: none;
+    color: var(--yx-sheet);
+}
+
+/* ---------- 顶栏积分小葫芦 ---------- */
+:root[data-skin="yunhe-xianguan"] .app-workspace-credit-gift.is-yx-gourd,
+:root[data-skin="yunhe-xianguan"] .app-workspace-credit-gift.is-yx-gourd svg {
+    width: 18px;
+    height: 18px;
+    filter: none;
+}
+:root[data-skin="yunhe-xianguan"] .app-workspace-credit-gift.is-yx-gourd {
+    color: var(--yx-gilt);
+}
+
+/* ---------- 素材库空状态 ---------- */
+:root[data-skin="yunhe-xianguan"] .assets-empty-banner-caption > span {
+    margin-right: 0.5em;
+    font-family: var(--yx-display-font);
+}
+:root[data-skin="yunhe-xianguan"] .assets-empty-banner-frame img {
+    filter: none;
+}
+
+/* ---------- 分享画布页落款：圆形「鹤」印（只在提供该落款的站点生效） ---------- */
+:root[data-skin="yunhe-xianguan"] .shared-canvas-signature {
+    font-family: var(--yx-display-font);
+}
+:root[data-skin="yunhe-xianguan"] .shared-canvas-signature i {
+    border: 1.2px solid var(--yx-crown);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--yx-crown);
+    font-family: var(--yx-display-font);
+}
+
+/* ---------- 空状态图标（signalArt 的颜色） ----------
+   空间工作区在 Tailwind utilities 层里用 !important 统一了图标线条和圆点颜色；
+   层内的 !important 会压过层外规则，所以放进同一层，用更具体的选择器覆盖。 */
+@layer utilities {
+    :root[data-skin="yunhe-xianguan"] .workspace-signal-icon .yx-signal-mist {
+        fill: var(--yx-mist-strong) !important;
+        stroke: none !important;
+    }
+    :root[data-skin="yunhe-xianguan"] .workspace-signal-icon .yx-signal-wave {
+        fill: none !important;
+        stroke: var(--yx-sky) !important;
+        stroke-opacity: 0.35;
+    }
+    :root[data-skin="yunhe-xianguan"] .workspace-signal-icon .yx-signal-line {
+        fill: none !important;
+        stroke: var(--yx-sky) !important;
+    }
+    :root[data-skin="yunhe-xianguan"] .workspace-signal-icon .yx-signal-dot {
+        fill: var(--yx-crown) !important;
+    }
+    :root[data-skin="yunhe-xianguan"] .workspace-signal-icon .yx-signal-dot.is-error {
+        fill: var(--status-error) !important;
+    }
+}

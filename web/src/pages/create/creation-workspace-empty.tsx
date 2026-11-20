@@ -9,14 +9,32 @@ import { aceternityMotion } from "@/lib/aceternity-motion";
 import { curatedInspirations, inspirationSourceOf, inspirationSources } from "@/lib/inspirations/catalog";
 import { modeLabels } from "./creation-types";
 import { Button } from "antd";
+import { useTranslation } from "react-i18next";
+import { translate } from "@/i18n";
 
 export const creationEmptyBannerFrames = [
-    { src: "/short-drama-styles/cyberpunk-neon.jpg", caption: "镜头01 · 雨夜霓虹" },
-    { src: "/short-drama-styles/suspense-noir.jpg", caption: "镜头02 · 暗巷追逐" },
-    { src: "/short-drama-styles/retro-hong-kong.jpg", caption: "镜头03 · 天台重逢" },
+    {
+        src: "/short-drama-styles/cyberpunk-neon.jpg",
+        get caption() {
+            return translate("create.empty.frameNeon");
+        },
+    },
+    {
+        src: "/short-drama-styles/suspense-noir.jpg",
+        get caption() {
+            return translate("create.empty.frameAlley");
+        },
+    },
+    {
+        src: "/short-drama-styles/retro-hong-kong.jpg",
+        get caption() {
+            return translate("create.empty.frameRooftop");
+        },
+    },
 ];
 
 export function CreationEmptyBanner() {
+    const { t } = useTranslation();
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     return (
         <div className="creation-empty-art" aria-hidden="true">
@@ -27,25 +45,68 @@ export function CreationEmptyBanner() {
                 </figure>
             ))}
             <span className="creation-empty-art-caption">
-                <span>{brandName}</span>把每一帧，交给镜头导演
+                <span>{brandName}</span>
+                {t("create.empty.bannerTagline")}
             </span>
         </div>
     );
 }
 
 export const creationEmptySuggestions: Array<{ mode: CreationMode; icon: typeof Clapperboard; title: string; hint: string; prompt: string; openLibrary?: boolean }> = [
-    { mode: "video", icon: Clapperboard, title: "生成第一个镜头", hint: "描述画面、镜头运动与光线", prompt: "雨夜天台，镜头缓缓推近霓虹灯牌下的主角，她回眸看向镜头，强对比电影感布光" },
-    { mode: "image", icon: ImageIcon, title: "从参考图开始", hint: "上传风格图，生成同风格画面", prompt: "", openLibrary: true },
-    { mode: "text", icon: FileText, title: "续写故事", hint: "和 AI 讨论剧情、角色与对白", prompt: "帮我续写一个短剧故事，先聊聊剧情走向：" },
-    { mode: "video", icon: Blocks, title: "引用技能增强", hint: "@技能 调用分镜、配音等专业能力", prompt: "调用分镜技能，帮我规划这个镜头的拍摄方案：" },
+    {
+        mode: "video",
+        icon: Clapperboard,
+        get title() {
+            return translate("create.empty.suggest.firstShotTitle");
+        },
+        get hint() {
+            return translate("create.empty.suggest.firstShotHint");
+        },
+        prompt: "雨夜天台，镜头缓缓推近霓虹灯牌下的主角，她回眸看向镜头，强对比电影感布光",
+    },
+    {
+        mode: "image",
+        icon: ImageIcon,
+        get title() {
+            return translate("create.empty.suggest.referenceTitle");
+        },
+        get hint() {
+            return translate("create.empty.suggest.referenceHint");
+        },
+        prompt: "",
+        openLibrary: true,
+    },
+    {
+        mode: "text",
+        icon: FileText,
+        get title() {
+            return translate("create.empty.suggest.storyTitle");
+        },
+        get hint() {
+            return translate("create.empty.suggest.storyHint");
+        },
+        prompt: "帮我续写一个短剧故事，先聊聊剧情走向：",
+    },
+    {
+        mode: "video",
+        icon: Blocks,
+        get title() {
+            return translate("create.empty.suggest.skillTitle");
+        },
+        get hint() {
+            return translate("create.empty.suggest.skillHint");
+        },
+        prompt: "调用分镜技能，帮我规划这个镜头的拍摄方案：",
+    },
 ];
 
 export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStartPrompt: (mode: CreationMode, prompt: string) => void; onOpenLibrary: () => void }) {
+    const { t } = useTranslation();
     const reducedMotion = useReducedMotion();
     const [hovered, setHovered] = useState<string | null>(null);
     return (
         <LayoutGroup id="creation-empty-suggest">
-            <div className="creation-empty-suggest" aria-label="快捷创作入口">
+            <div className="creation-empty-suggest" aria-label={t("create.empty.suggestLabel")}>
                 {creationEmptySuggestions.map((item) => {
                     const Icon = item.icon;
                     const start = () => {
@@ -80,6 +141,7 @@ export function CreationEmptySuggest({ onStartPrompt, onOpenLibrary }: { onStart
 }
 
 export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode: CreationMode, prompt: string) => void }) {
+    const { t } = useTranslation();
     const [filter, setFilter] = useState<"all" | CreationMode>("all");
     const [limit, setLimit] = useState(12);
     const filtered = curatedInspirations.filter((item) => filter === "all" || item.mode === filter);
@@ -91,11 +153,11 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
         <section className="creation-featured-works" aria-labelledby="creation-featured-title">
             <div className="creation-featured-heading">
                 <div>
-                    <h2 id="creation-featured-title">精选灵感</h2>
+                    <h2 id="creation-featured-title">{t("create.empty.featuredTitle")}</h2>
                 </div>
-                <p>{curatedInspirations.length} 个创意起点 · 点击填入提示词，不自动生成</p>
+                <p>{t("create.empty.featuredSummary", { count: curatedInspirations.length })}</p>
             </div>
-            <div className="creation-inspiration-filters" role="group" aria-label="灵感类型">
+            <div className="creation-inspiration-filters" role="group" aria-label={t("create.empty.filterLabel")}>
                 {(["all", "video", "image", "text"] as const).map((value) => (
                     <button
                         key={value}
@@ -106,7 +168,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                             setLimit(12);
                         }}
                     >
-                        {value === "all" ? "全部灵感" : modeLabels[value]}
+                        {value === "all" ? t("create.empty.allInspirations") : modeLabels[value]}
                         <span>{curatedInspirations.filter((item) => value === "all" || item.mode === value).length}</span>
                     </button>
                 ))}
@@ -118,7 +180,7 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
                             <img src={item.image} alt="" loading="lazy" />
                             <span className="creation-inspiration-overlay">
                                 <ArrowUp />
-                                使用这个创意
+                                {t("create.inspiration.useIdea")}
                             </span>
                         </span>
                         <span className="creation-featured-copy">
@@ -135,14 +197,14 @@ export function CreationFeaturedWorks({ onStartPrompt }: { onStartPrompt: (mode:
             <footer className="creation-inspiration-footer">
                 {limit < filtered.length ? (
                     <Button onClick={() => setLimit((count) => count + 12)}>
-                        展开更多灵感
+                        {t("create.empty.showMore")}
                         <ChevronDown />
                     </Button>
                 ) : (
-                    <span>已展示全部 {filtered.length} 个创意</span>
+                    <span>{t("create.empty.allShown", { count: filtered.length })}</span>
                 )}
                 <details>
-                    <summary>模板与封面来源</summary>
+                    <summary>{t("create.empty.sourcesSummary")}</summary>
                     {declaredSources.map((source) => (
                         <div key={source.name ?? source.label}>
                             <p>{source.notice}</p>

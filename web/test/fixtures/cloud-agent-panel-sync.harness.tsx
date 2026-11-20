@@ -2,6 +2,9 @@ import { afterAll, expect, mock, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { AgentEvent, AgentRun } from "@/services/api/agent";
 import type { CloudAgentConversation, CloudAgentPendingSubmission } from "@/services/cloud-agent-conversations";
+import type { TextThinkingConfig } from "@/lib/text-thinking";
+import type { AgentRequestTarget } from "@/lib/agent-page-context";
+import type { AgentPrefillRequest } from "@/stores/use-global-agent-store";
 
 const dom = new Window({ url: "http://localhost/" });
 for (const [key, value] of Object.entries({
@@ -28,8 +31,11 @@ const { createRoot } = await import("react-dom/client");
 const agent = await import("@/services/api/agent");
 const history = await import("@/services/cloud-agent-conversations");
 const awaitImportHistory = await import("@/services/cloud-agent-history");
+// mock.module 会改写已导入模块的导出，先留住真实的目录读取。
+const realRefreshCloudAgentConversations = awaitImportHistory.refreshCloudAgentConversations;
 const skillsApi = await import("@/services/api/skills");
 const { setActiveUserScope } = await import("@/lib/user-scope");
+const { defaultModelCapabilityConfig } = await import("@/lib/model-capabilities");
 const { useUserStore } = await import("@/stores/use-user-store");
 const { useGlobalAgentStore } = await import("@/stores/use-global-agent-store");
 const { createModelChannel, defaultConfig, normalizeConfigSnapshot, useConfigStore } = await import("@/stores/use-config-store");
@@ -46,6 +52,11 @@ const sendInputs: Array<Record<string, any>> = [];
 let sendFailure: Error | undefined;
 let capabilitiesOverride: (() => Promise<unknown>) | undefined;
 let sendOverride: (() => Promise<{ run: AgentRun }>) | undefined;
+// 新建画布首次保存前服务端没有这块画布：偏好要等 prepareCanvasForCloudAction 落库后才读得到。
+let draftCanvasUntilPrepared = false;
+let canvasPrepared = false;
+const cloudCalls: string[] = [];
+const skillRequests: string[] = [];
 const refreshRequests: Array<{ observedConversationIds?: string[]; canvasId?: string }> = [];
 let generated = 0;
 let composer: Record<string, any>;
@@ -53,6 +64,7 @@ let header: Record<string, any>;
 let conversationUI: Record<string, any>;
 let historyUI: Record<string, any>;
 let controls: Record<string, any>;
+let modelPicker: { value: string; onChange: (model: string) => void };
 const silent = () => {};
 mock.module("file-saver", () => ({ saveAs: silent }));
 const MotionBox = ({ children, className, style }: any) => (
@@ -62,7 +74,8 @@ const MotionBox = ({ children, className, style }: any) => (
 );
 mock.module("motion/react", () => ({ AnimatePresence: ({ children }: any) => children, motion: { aside: MotionBox, div: MotionBox }, useReducedMotion: () => true }));
 mock.module("antd", () => ({
-    App: { useApp: () => ({ message: { info: silent, error: silent } }) },
+    App: { useApp: () => ({ message: { info: silent, error: silent, warning: silent, success: silent } }) },
+    Dropdown: ({ children }: any) => children,
     Button: ({ children, loading: _loading, icon, size: _size, ...props }: any) => (
         <button {...props}>
             {icon}
@@ -72,7 +85,11 @@ mock.module("antd", () => ({
 }));
 mock.module("@/services/api/agent", () => ({
     ...agent,
-    getAgentProfile: async () => ({ revision: "profile", hash: "hash", layers: [] }),
+    getAgentProfile: async () => {
+        cloudCalls.push("profile");
+        if (draftCanvasUntilPrepared && !canvasPrepared) throw new Error("画布不存在或尚未保存到服务端，请先完成画布同步");
+        return { revision: "profile", hash: "hash", layers: [] };
+    },
     getAgentCapabilities: async () => (capabilitiesOverride ? capabilitiesOverride() : { permissionModes: ["request_approval"], skills: true }),
     subscribeAgentEvents: (id: string, event: (event: AgentEvent) => void, options: any) => {
         const subscription = { id, after: options.after, event, connection: options.onConnectionChange, closed: false };
@@ -87,7 +104,7 @@ mock.module("@/services/api/agent", () => ({
         sendInputs.push(input);
         if (sendFailure) throw sendFailure;
         if (sendOverride) return sendOverride();
-        return { run: { ...makeRun("submitted-child"), parentId: id, userPrompt: input.prompt, idempotencyKey: input.idempotencyKey } };
+        return { run: { ...makeRun("submitted-child"), canvasId: input.canvasId, pageContext: input.pageContext, parentId: id, userPrompt: input.prompt, idempotencyKey: input.idempotencyKey } };
     },
     createAgentRun: async () => {
         generated++;
@@ -121,22 +138,51 @@ mock.module("@/services/cloud-agent-history", () => ({
     refreshCloudAgentConversations: async (options: any) => {
         refreshRequests.push(options);
         if (options.scope !== "sync-user") return [];
+        // 草稿画布落库前，服务端的画布对话目录返回 404；走真实目录读取，验证它不会把面板卡在“正在准备”。
+        if (draftCanvasUntilPrepared && !canvasPrepared) {
+            const missing = async () => {
+                throw new ApiError("画布不存在", { status: 404, code: 404, reason: "not_found" });
+            };
+            return realRefreshCloudAgentConversations({ ...options, observedConversationIds: [], client: { listConversations: missing, getConversation: missing, listRuns: missing, getRun: missing } });
+        }
         return refreshOverride ? refreshOverride() : remote;
     },
     loadCloudAgentConversation: async (id: string) => remote.find((item) => item.serverConversationId === id)!,
 }));
 mock.module("@/services/api/skills", () => ({
     ...skillsApi,
-    listSkillPresets: async () => ({ presets: [] }),
-    listSkills: async () => ({ skills: [] }),
-    listAddedSkills: async () => ({ skills: [] }),
+    listSkillPresets: async () => {
+        skillRequests.push("presets");
+        return { presets: [] };
+    },
+    listSkills: async ({ scope }: { scope: string }) => {
+        skillRequests.push(scope);
+        return { skills: [] };
+    },
+    listAddedSkills: async () => {
+        skillRequests.push("installed");
+        return { skills: [] };
+    },
     listSkillLibraryCategories: async () => ({ categories: [] }),
     addSkill: async () => {
         throw new Error("不应安装技能");
     },
 }));
-mock.module("@/services/user-data-sync", () => ({ prepareCanvasForCloudAction: async () => {}, applyAgentCanvasPatches: async () => {}, refreshCanvasAfterAgent: async () => {} }));
+mock.module("@/services/user-data-sync", () => ({
+    prepareCanvasForCloudAction: async () => {
+        cloudCalls.push("prepare");
+        canvasPrepared = true;
+    },
+    applyAgentCanvasPatches: async () => {},
+    refreshCanvasAfterAgent: async () => {},
+}));
 mock.module("@/components/skills/skill-curation-browser", () => ({ useSkillCuration: () => ({ curation: null }), curationQuery: () => ({}) }));
+mock.module("@/components/model-picker", () => ({
+    ModelPicker: (props: typeof modelPicker) => {
+        modelPicker = props;
+        return null;
+    },
+}));
 mock.module("@/components/canvas/canvas-cloud-agent-chat-ui", () => ({
     AGENT_SCENE_DEFS: [],
     parseCloudAgentFormAnswer: () => undefined,
@@ -145,6 +191,7 @@ mock.module("@/components/canvas/canvas-cloud-agent-chat-ui", () => ({
         return (
             <>
                 {props.left}
+                {props.submitAccessory}
                 <textarea aria-label="草稿" value={props.prompt} readOnly />
             </>
         );
@@ -181,7 +228,9 @@ mock.module("@/components/canvas/canvas-cloud-agent-panel-parts", () => ({
 }));
 mock.module("@/components/canvas/canvas-agent-skill-library-modal", () => ({ CanvasAgentSkillLibraryModal: () => null }));
 mock.module("@/components/skills/skill-recommendations-modal", () => ({ SkillRecommendationsModal: () => null }));
-mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null }));
+mock.module("@/components/canvas/canvas-cloud-agent-settings", () => ({ CanvasCloudAgentSettings: () => null, agentPermissionLabel: (mode: string) => mode }));
+mock.module("@/components/canvas/canvas-cloud-agent-composer", () => ({ AgentContextChip: () => null }));
+mock.module("@/services/cloud-agent-outbox", () => ({ loadCloudAgentOutbox: async () => null, saveCloudAgentOutbox: async () => {}, clearCloudAgentOutbox: async () => {} }));
 mock.module("@/components/canvas/canvas-cloud-agent-connectors", () => ({ AgentConnectorsBar: () => null }));
 mock.module("@/components/canvas/use-agent-panel-layout", () => ({ useAgentPanelLayout: () => ({ style: {}, pointerHandlers: {}, reset: silent, onResizeKeyDown: silent }) }));
 
@@ -223,7 +272,18 @@ const persist = async () => {
         window.dispatchEvent(new Event("pagehide"));
     });
 };
-async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversation[], initialPending: CloudAgentPendingSubmission | null = null) {
+async function mount(
+    initial: CloudAgentConversation,
+    cloud: CloudAgentConversation[],
+    initialPending: CloudAgentPendingSubmission | null = null,
+    target: AgentRequestTarget = { canvasId: "shared-canvas" },
+    initialPrefill?: Omit<AgentPrefillRequest, "id">,
+    options: { draftCanvas?: boolean } = {},
+) {
+    draftCanvasUntilPrepared = Boolean(options.draftCanvas);
+    canvasPrepared = false;
+    cloudCalls.length = 0;
+    skillRequests.length = 0;
     local = [initial];
     activeId = initial.id;
     remote = cloud;
@@ -240,7 +300,13 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     setActiveUserScope("sync-user");
     useUserStore.setState({ hydrated: true, user: { id: "sync-user", username: "test", displayName: "test", role: "user", status: "active" } });
     configureModels(false);
-    useGlobalAgentStore.setState({ open: true, canvas: { canvasId: "shared-canvas", nodeCount: 2, selectedNodeIds: [], references: [] } });
+    useGlobalAgentStore.setState({
+        open: true,
+        canvas: target.canvasId ? { canvasId: target.canvasId, nodeCount: 2, selectedNodeIds: [], references: [] } : null,
+        page: target.pageContext ? { context: target.pageContext, label: "第 1 集 · 镜头 1" } : null,
+        prefillRequest: null,
+    });
+    if (initialPrefill) useGlobalAgentStore.getState().requestPrefill(initialPrefill);
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
@@ -258,13 +324,45 @@ async function mount(initial: CloudAgentConversation, cloud: CloudAgentConversat
     };
 }
 afterAll(() => dom.happyDOM.abort());
-function configureModels(ambiguous: boolean) {
+function configureModels(ambiguous: boolean, thinking?: TextThinkingConfig) {
     const entry = (id: string, model: string, price: number) =>
-        createModelChannel({ id, scope: "system", models: [model], modelCosts: [{ model, channelModelId: `${id}-${model}`, capability: "text", billingMode: "fixed_request", unitPriceMicrocredits: price }] });
+        createModelChannel({
+            id,
+            scope: "system",
+            models: [model],
+            modelCosts: [
+                {
+                    model,
+                    channelModelId: `${id}-${model}`,
+                    capability: "text",
+                    billingMode: "fixed_request",
+                    unitPriceMicrocredits: price,
+                    capabilityConfig: thinking ? { version: 1, text: { ...defaultModelCapabilityConfig().text!, thinking } } : undefined,
+                },
+            ],
+        });
     const channels = [entry("paid-channel", "paid-model", 10_000_000), entry("local-test", "local-agent-test", 0), ...(ambiguous ? [entry("another-test", "local-agent-test", 0)] : [])];
     const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels, textModel: "paid-channel::paid-model", model: "paid-channel::paid-model" } }).config;
     useConfigStore.setState({ config });
 }
+
+test("普通聊天和窗口聚焦跳过技能查询，输入技能快捷键才读取已装技能", async () => {
+    const mounted = await mount(chat("local", null), []);
+    try {
+        await act(async () => composer.onPromptChange("你好"));
+        await focus();
+        expect(skillRequests).toEqual([]);
+        await act(async () => composer.onPromptChange("/"));
+        expect(skillRequests).toEqual(["installed"]);
+        await act(async () => composer.onPromptChange("/分镜"));
+        expect(skillRequests).toEqual(["installed"]);
+        await act(async () => controls.onSkillsOpenChange(true));
+        expect(skillRequests).toContain("presets");
+        expect(skillRequests).toContain("created");
+    } finally {
+        await mounted.close();
+    }
+});
 
 test("手机空缓存接续同画布桌面会话，审批被另一端处理后自动收敛且不重复提交", async () => {
     const waiting = makeRun("desktop", "waiting_approval");
@@ -317,6 +415,50 @@ test("旧轮次结束后仍发现手机新轮次，电脑下一条消息使用�
         expect(sent).toEqual(["second"]);
         expect(generated).toBe(0);
         expect(pending).toBeNull();
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("新建草稿画布打开面板时读不到偏好，发送时先落库再读偏好，不会一直卡在排队", async () => {
+    const mounted = await mount(chat("draft-canvas", makeRun("first")), [], null, undefined, undefined, { draftCanvas: true });
+    try {
+        expect(cloudCalls).toEqual(["profile"]);
+        await act(async () => {
+            composer.onPromptChange("生成2个小海獭的图片");
+        });
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(cloudCalls).toEqual(["profile", "prepare", "profile"]);
+        expect(sent).toEqual(["first"]);
+        expect(sendInputs[0]?.profileRevision).toBe("profile");
+        expect(generated).toBe(0);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("新建草稿画布上排队的消息，在本轮结束后自动发出，不会一直显示正在准备", async () => {
+    const initial = chat("draft-queued", makeRun("working", "running"));
+    const mounted = await mount(initial, [initial], null, undefined, undefined, { draftCanvas: true });
+    try {
+        await act(async () => composer.onPromptChange("生成2个小海獭的图片"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(composer.tray.props.outbox.items).toHaveLength(1);
+        expect(sendInputs).toHaveLength(0);
+        await act(async () => {
+            subscriptions.at(-1)!.event({ eventId: "finished", runId: "working", seq: 5, type: "run_status", payload: { status: "completed" }, createdAt: initial.updatedAt });
+            await settle();
+        });
+        expect(cloudCalls).toEqual(["profile", "prepare", "profile"]);
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]?.profileRevision).toBe("profile");
+        expect(composer.tray?.props.outbox.items ?? []).toHaveLength(0);
     } finally {
         await mounted.close();
     }
@@ -459,7 +601,7 @@ test("第二端恢复裸模型key为唯一完整option，续发保持原零积�
     const cloud = { ...chat("server", { ...makeRun("mock-turn"), model: "local-agent-test" }), model: "local-agent-test" };
     const mounted = await mount(chat("new-device", null), [cloud]);
     try {
-        expect(controls.selectedModel).toBe("local-test::local-agent-test");
+        expect(modelPicker.value).toBe("local-test::local-agent-test");
         await act(async () => {
             composer.onPromptChange("接着免费测试模型继续");
         });
@@ -483,7 +625,7 @@ test("同名多渠道不能自动换到默认收费模型，手动选择后才�
         });
         remote = [{ ...chat("server", { ...makeRun("ambiguous"), model: "local-agent-test" }), model: "local-agent-test" }];
         await focus();
-        expect(controls.selectedModel).toBe("");
+        expect(modelPicker.value).toBe("");
         expect(composer.submitDisabled).toBe(true);
         await persist();
         expect(local.find((item) => item.id === activeId)?.model).toBe("local-agent-test");
@@ -494,9 +636,9 @@ test("同名多渠道不能自动换到默认收费模型，手动选择后才�
         });
         expect(sendInputs).toHaveLength(0);
         await act(async () => {
-            controls.onModelChange("another-test::local-agent-test");
+            modelPicker.onChange("another-test::local-agent-test");
         });
-        expect(controls.selectedModel).toBe("another-test::local-agent-test");
+        expect(modelPicker.value).toBe("another-test::local-agent-test");
         expect(composer.submitDisabled).toBe(false);
         await act(async () => {
             composer.onSubmit();
@@ -590,6 +732,43 @@ test("等待能力校验时切换账号，旧账号的请求不得以新账号�
     }
 });
 
+test.each(["accepted", "unknown"] as const)("提交在途不展示待重试行，新草稿和真实未确认请求分别保留：%s", async (outcome) => {
+    const initial = chat("pending-tray", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    const response = Promise.withResolvers<{ run: AgentRun }>();
+    try {
+        sendOverride = () => response.promise;
+        await act(async () => composer.onPromptChange("第一条消息"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toEqual(["first"]);
+        expect(pending?.request?.prompt).toBe("第一条消息");
+        expect(composer.sending).toBe(true);
+        expect(composer.tray).toBeNull();
+        await act(async () => composer.onPromptChange("下一条草稿"));
+        expect(composer.tray).toBeNull();
+        await act(async () => {
+            if (outcome === "accepted") response.resolve({ run: { ...makeRun("accepted"), parentId: "first" } });
+            else response.reject(new TypeError("network failed after POST"));
+            await settle();
+        });
+        expect(composer.sending).toBe(false);
+        expect(composer.prompt).toBe("下一条草稿");
+        if (outcome === "accepted") {
+            expect(pending).toBeNull();
+            expect(composer.tray).toBeNull();
+        } else {
+            expect(composer.tray.props.pendingRetry.text).toBe("第一条消息");
+            expect(pending?.request?.idempotencyKey).toBe(sendInputs[0].idempotencyKey);
+        }
+    } finally {
+        response.resolve({ run: makeRun("accepted") });
+        await mounted.close();
+    }
+});
+
 test("旧账号 POST 的迟到响应不覆盖新账号面板，清理也只使用原账号范围", async () => {
     const initial = chat("original", makeRun("first"));
     const mounted = await mount(initial, [initial]);
@@ -650,6 +829,356 @@ test("原样重试未知 POST 后得到明确 stale_parent 可解除旧身份，
         expect(conversationUI.messages.some((item: any) => item.text === "结果-other-device-child")).toBe(true);
         expect(generated).toBe(0);
     } finally {
+        await mounted.close();
+    }
+});
+
+test("思考期间快速切换模型只改变下一轮设置，当前订阅和历史连续", async () => {
+    const current = chat("local", { ...makeRun("thinking", "running"), model: "paid-model" });
+    const mounted = await mount(current, [current]);
+    try {
+        const observation = subscriptions.at(-1)!;
+        const subscriptionCount = subscriptions.length;
+        for (const model of ["local-test::local-agent-test", "paid-channel::paid-model", "local-test::local-agent-test"]) {
+            await act(async () => modelPicker.onChange(model));
+        }
+        expect(modelPicker.value).toBe("local-test::local-agent-test");
+        expect(subscriptions).toHaveLength(subscriptionCount);
+        expect(observation.closed).toBe(false);
+        await act(async () => {
+            observation.event({ eventId: "thinking:5", runId: "thinking", seq: 5, type: "assistant_delta", payload: { messageId: "thinking-answer", text: "思考中的模型继续回答" }, createdAt: current.updatedAt });
+        });
+        expect(conversationUI.messages.some((item: any) => item.text === "结果-thinking")).toBe(true);
+        expect(conversationUI.messages.find((item: any) => item.id === "thinking-answer")?.text).toBe("思考中的模型继续回答");
+        await persist();
+        expect(local.find((item) => item.id === activeId)?.run).toMatchObject({ id: "thinking", status: "running", model: "paid-model" });
+        expect(sent).toHaveLength(0);
+        expect(generated).toBe(0);
+    } finally {
+        await mounted.close();
+    }
+});
+
+const alwaysThinking: TextThinkingConfig = { mode: "always", levels: ["low", "medium", "high"], default: "medium", switch: { kind: "none" }, intensity: { kind: "effort" } };
+
+const dramaTarget: AgentRequestTarget = { canvasId: "", pageContext: { kind: "drama", projectId: "drama", episodeId: "episode", shotId: "shot-1" } };
+
+test("首次打开助手时先恢复历史，再保留镜头讨论预填且不自动发送", async () => {
+    const initial = chat("drama-first-open", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget, { text: "先读取镜头 shot-1 的最新内容", displayText: "讨论镜头 1" });
+    try {
+        expect(composer.prompt).toBe("讨论镜头 1");
+        expect(sendInputs).toHaveLength(0);
+        expect(useGlobalAgentStore.getState().prefillRequest).toBeNull();
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "先读取镜头 shot-1 的最新内容" });
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("短剧页讨论镜头只预填，补充要求后发送冻结身份和完整要求", async () => {
+    const initial = chat("drama-chat", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    try {
+        await act(async () => {
+            useGlobalAgentStore.getState().requestPrefill({ text: "先读取镜头 shot-1 的最新内容", displayText: "讨论镜头 1" });
+            await settle();
+        });
+        expect(sent).toHaveLength(0);
+        expect(composer.prompt).toBe("讨论镜头 1");
+        expect(useGlobalAgentStore.getState().prefillRequest).toBeNull();
+        await act(async () => composer.onPromptChange("讨论镜头 1，把对白缩短"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "先读取镜头 shot-1 的最新内容，把对白缩短", contextScope: [], focusNodeIds: [] });
+        expect(conversationUI.messages.some((item: any) => item.role === "user" && item.text === "讨论镜头 1，把对白缩短")).toBe(true);
+        expect(generated).toBe(0);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("讨论草稿跨页刷新后保留原镜头，回到原页才发送完整要求", async () => {
+    const initial = chat("drama-draft-reload", { ...makeRun("first"), ...dramaTarget });
+    const first = await mount(initial, [], null, dramaTarget);
+    let saved: CloudAgentConversation;
+    try {
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "先读取镜头 shot-1", displayText: "讨论镜头 1" }));
+        await act(async () => composer.onPromptChange("讨论镜头 1，把台词缩短"));
+        await persist();
+        saved = local.find((item) => item.id === activeId)!;
+        expect(saved.draftPrefill).toMatchObject({ text: "先读取镜头 shot-1，把台词缩短", target: dramaTarget });
+    } finally {
+        await first.close();
+    }
+    const secondTarget = { canvasId: "", pageContext: { ...dramaTarget.pageContext!, shotId: "shot-2" } };
+    const reloaded = await mount(saved!, [], null, secondTarget);
+    try {
+        expect(composer.prompt).toBe("讨论镜头 1，把台词缩短");
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(0);
+        await act(async () => useGlobalAgentStore.getState().setPage({ context: dramaTarget.pageContext!, label: "镜头 1" }));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "先读取镜头 shot-1，把台词缩短" });
+    } finally {
+        await reloaded.close();
+    }
+});
+
+test("切换同名镜头讨论草稿恢复各自目标，新建对话清除旧预填", async () => {
+    const initial = chat("drama-draft-a", { ...makeRun("first"), ...dramaTarget });
+    const otherTarget = { canvasId: "", pageContext: { ...dramaTarget.pageContext!, projectId: "project-b", episodeId: "episode-b", shotId: "shot-b" } };
+    const other = { ...chat("drama-draft-b", { ...makeRun("other"), conversationId: "other-session", ...otherTarget }), draft: "讨论镜头 1", draftPrefill: { text: "先读取另一个项目的 shot-b", displayText: "讨论镜头 1", target: otherTarget } };
+    const mounted = await mount(initial, [initial, other], null, dramaTarget);
+    try {
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "读取旧的 shot-1", displayText: "讨论镜头 1" }));
+        await act(async () => {
+            header.onHistory();
+            await settle();
+        });
+        await act(async () => {
+            useGlobalAgentStore.getState().setPage({ context: otherTarget.pageContext, label: "另一个项目的镜头 1" });
+            historyUI.onOpen(other);
+            await settle();
+        });
+        expect(composer.prompt).toBe("讨论镜头 1");
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...otherTarget, prompt: "先读取另一个项目的 shot-b" });
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "读取 shot-b", displayText: "讨论镜头 1" }));
+        await act(async () => {
+            header.onNew();
+            await settle();
+        });
+        await act(async () => composer.onPromptChange("讨论镜头 1"));
+        await persist();
+        expect(local.find((item) => item.id === activeId)?.draftPrefill).toBeUndefined();
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("等待提交时切换分镜，已点击发送的请求仍绑定原镜头", async () => {
+    const initial = chat("drama-frozen", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    let release: ((value: unknown) => void) | undefined;
+    try {
+        capabilitiesOverride = () =>
+            new Promise((resolve) => {
+                release = resolve;
+            });
+        await act(async () => composer.onPromptChange("优化当前镜头"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(release).toBeDefined();
+        await act(async () => {
+            useGlobalAgentStore.getState().setPage({ context: { ...dramaTarget.pageContext!, shotId: "shot-2" }, label: "镜头 2" });
+            release!({ permissionModes: ["request_approval"], skills: true });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].pageContext).toEqual(dramaTarget.pageContext);
+    } finally {
+        release?.({ permissionModes: ["request_approval"], skills: true });
+        await mounted.close();
+    }
+});
+
+test("运行中在镜头1排队后切到镜头2，本轮结束不会自动发送到新目标", async () => {
+    const initial = chat("drama-queued", { ...makeRun("working", "running"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    try {
+        await act(async () => composer.onPromptChange("这镜的动作再自然一点"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(composer.tray.props.outbox.items[0].pageContext).toEqual(dramaTarget.pageContext);
+        await act(async () => {
+            useGlobalAgentStore.getState().setPage({ context: { ...dramaTarget.pageContext!, shotId: "shot-2" }, label: "镜头 2" });
+            subscriptions.at(-1)!.event({ eventId: "finished", runId: "working", seq: 5, type: "run_status", payload: { status: "completed" }, createdAt: initial.updatedAt });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(0);
+        expect(composer.tray.props.subtitle).toContain("另一个页面");
+        expect(composer.tray.props.outbox.items).toHaveLength(1);
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("旧镜头的讨论草稿不会在切镜头后直接提交，回原镜头可继续发送", async () => {
+    const initial = chat("drama-prefill-target", { ...makeRun("first"), ...dramaTarget });
+    const mounted = await mount(initial, [initial], null, dramaTarget);
+    try {
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "读取镜头 shot-1", displayText: "讨论镜头 1" }));
+        await act(async () => useGlobalAgentStore.getState().setPage({ context: { ...dramaTarget.pageContext!, shotId: "shot-2" }, label: "镜头 2" }));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(0);
+        expect(composer.prompt).toBe("讨论镜头 1");
+        await act(async () => useGlobalAgentStore.getState().setPage({ context: dramaTarget.pageContext!, label: "镜头 1" }));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0]).toMatchObject({ ...dramaTarget, prompt: "读取镜头 shot-1" });
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("全局预填消费后不重放旧画布预填，自动发送也不留下重复草稿", async () => {
+    const initial = chat("prefill-once", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    try {
+        await act(async () => {
+            const current = useGlobalAgentStore.getState().canvas!;
+            useGlobalAgentStore.getState().setCanvas({ ...current, prefillRequest: { id: 1, text: "旧画布预填" } });
+        });
+        await act(async () => useGlobalAgentStore.getState().requestPrefill({ text: "当前镜头", displayText: "讨论镜头" }));
+        expect(composer.prompt).toBe("旧画布预填 讨论镜头");
+        await act(async () => composer.onPromptChange(""));
+        await act(async () => {
+            useGlobalAgentStore.getState().requestPrefill({ text: "自动发送一次", autoSubmit: true });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].prompt).toBe("自动发送一次");
+        expect(composer.prompt).toBe("");
+        expect(useGlobalAgentStore.getState().prefillRequest).toBeNull();
+    } finally {
+        await mounted.close();
+    }
+});
+
+test("Agent 推理档位按账号和模型保存，面板重建后恢复并用于下一轮", async () => {
+    const initial = chat("reasoning-preference", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, alwaysThinking));
+        expect(controls.reasoningMode).toBe("auto");
+        await act(async () => controls.onReasoningModeChange("high"));
+        await act(async () => modelPicker.onChange("local-test::local-agent-test"));
+        expect(controls.reasoningMode).toBe("auto");
+        await act(async () => controls.onReasoningModeChange("low"));
+    } finally {
+        await mounted.close();
+    }
+
+    const reloaded = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, alwaysThinking));
+        expect(controls.reasoningMode).toBe("high");
+        await act(async () => modelPicker.onChange("local-test::local-agent-test"));
+        expect(controls.reasoningMode).toBe("low");
+        await act(async () => modelPicker.onChange("paid-channel::paid-model"));
+        expect(controls.reasoningMode).toBe("high");
+        await act(async () => composer.onPromptChange("沿用上次的推理档位"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].reasoningMode).toBe("high");
+
+        await act(async () => {
+            setActiveUserScope("other-user");
+            useUserStore.setState({ user: { id: "other-user", username: "other", displayName: "other", role: "user", status: "active" } });
+            await settle();
+        });
+        expect(controls.reasoningMode).toBe("auto");
+    } finally {
+        await reloaded.close();
+    }
+});
+
+test("后台取消关闭档位后，Agent 读取和提交模型默认档", async () => {
+    const initial = chat("reasoning-default", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, { ...alwaysThinking, mode: "levels", levels: ["off", "low", "medium", "high"] }));
+        await act(async () => controls.onReasoningModeChange("off"));
+        expect(controls.reasoningMode).toBe("off");
+    } finally {
+        await mounted.close();
+    }
+
+    const reloaded = await mount(initial, [initial]);
+    try {
+        await act(async () => configureModels(false, alwaysThinking));
+        expect(controls.reasoningMode).toBe("auto");
+        await act(async () => composer.onPromptChange("使用模型默认的推理档位"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        expect(sendInputs[0].reasoningMode).toBe("auto");
+    } finally {
+        await reloaded.close();
+    }
+});
+
+test("提交等待与未确认重试之间切换模型，原请求正文、渠道和幂等键保持冻结", async () => {
+    const initial = chat("original", makeRun("first"));
+    const mounted = await mount(initial, [initial]);
+    let release: ((value: unknown) => void) | undefined;
+    try {
+        capabilitiesOverride = () => new Promise((resolve) => (release = resolve));
+        sendFailure = new TypeError("network failed after POST");
+        await act(async () => composer.onPromptChange("冻结提交时选择的模型"));
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(release).toBeDefined();
+        await act(async () => modelPicker.onChange("local-test::local-agent-test"));
+        await act(async () => {
+            release!({ permissionModes: ["request_approval"], skills: true });
+            await settle();
+        });
+        expect(sendInputs).toHaveLength(1);
+        const frozen = structuredClone(sendInputs[0]);
+        expect(frozen).toMatchObject({ model: "paid-model", channelId: "paid-channel", channelModelKey: "paid-model", prompt: "冻结提交时选择的模型" });
+        expect(pending?.request).toEqual(frozen);
+        expect(composer.prompt).toBe("冻结提交时选择的模型");
+        await act(async () => modelPicker.onChange("paid-channel::paid-model"));
+        await act(async () => modelPicker.onChange("local-test::local-agent-test"));
+        sendFailure = undefined;
+        await act(async () => {
+            composer.onSubmit();
+            await settle();
+        });
+        expect(sent).toEqual(["first", "first"]);
+        expect(sendInputs[1]).toEqual(frozen);
+        expect(pending).toBeNull();
+        expect(generated).toBe(0);
+    } finally {
+        release?.({ permissionModes: ["request_approval"], skills: true });
         await mounted.close();
     }
 });

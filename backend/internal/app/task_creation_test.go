@@ -493,9 +493,7 @@ func TestParameterizedOpenAIAspectPresetSystemChannelPersistsPixelExecutionSize(
 			{Tier: "1k", Ratio: "1:1", Size: "1024x1024", Width: 1024, Height: 1024},
 		},
 	}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceOpenAIImage, profile, []model.ChannelModelPriceTier{
 		newSelectionPriceTier("tier-1k", `{"size":"1824x1024"}`, "provider-1k", "fixed_request"),
 	})
@@ -542,9 +540,7 @@ func TestParameterizedOpenAIPixelSizeSelectionAcceptsDeclaredSizeAndResolution(t
 			{Tier: "4k", Ratio: "16:9", Size: "3840x2160", Width: 3840, Height: 2160},
 		},
 	}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	svc, _, channel, channelModel := createSystemChannelSelectionFixture(t, "image", model.ChannelInterfaceOpenAIImage, profile, []model.ChannelModelPriceTier{
 		newSelectionPriceTier("tier-1k", `{"imageResolution":"1k"}`, "provider-1k", "fixed_request"),
 		newSelectionPriceTier("tier-2k", `{"imageResolution":"2k"}`, "provider-2k", "fixed_request"),

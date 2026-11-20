@@ -56,19 +56,38 @@ func (s *Service) EnsureBuiltinSkills() error {
 		return nil
 	}
 
-	rows := make([]model.Skill, 0, len(packages))
+	ids := make([]string, 0, len(packages))
 	for _, item := range packages {
-		rows = append(rows, item.skill)
+		ids = append(ids, item.skill.ID)
 	}
-	if err := s.repo.UpsertBuiltinSkills(rows); err != nil {
-		return fmt.Errorf("同步内置技能目录失败: %w", err)
+	existing, err := s.repo.SkillsByIDsAnyStatus(ids)
+	if err != nil {
+		return fmt.Errorf("读取内置技能目录失败: %w", err)
+	}
+	edited := make(map[string]builtinSkillAdminEdits, len(existing))
+	for _, skill := range existing {
+		edited[skill.ID] = builtinSkillAdminEdits{info: skill.AdminInfoEditedAt != nil, content: skill.AdminContentEditedAt != nil}
+	}
+	groups := make(map[builtinSkillAdminEdits][]model.Skill, 4)
+	for _, item := range packages {
+		key := edited[item.skill.ID]
+		groups[key] = append(groups[key], item.skill)
+	}
+	for key, rows := range groups {
+		if err := s.repo.UpsertBuiltinSkills(rows, key.seedColumns()); err != nil {
+			return fmt.Errorf("同步内置技能目录失败: %w", err)
+		}
 	}
 	for _, item := range packages {
-		current, err := s.repo.Skill(item.skill.ID)
+		// 管理员下架的内置技能仍需读取，否则启动会因“技能不存在”失败。
+		current, err := s.repo.SkillAnyStatus(item.skill.ID)
 		if err != nil {
 			return fmt.Errorf("读取内置技能 %s 同步结果失败: %w", item.skill.ID, err)
 		}
 		if current.ContentHash == item.archive.ContentHash && current.CurrentVersionID != "" {
+			continue
+		}
+		if current.AdminContentEditedAt != nil && current.CurrentVersionID != "" {
 			continue
 		}
 		if err := s.addSkillArchiveVersion(current, item.archive, "builtin", "", "", "", "", false); err != nil {
@@ -76,6 +95,27 @@ func (s *Service) EnsureBuiltinSkills() error {
 		}
 	}
 	return nil
+}
+
+// builtinSkillAdminEdits 标记管理员改过内置技能的哪一部分；被改过的列在启动同步时保留数据库里的值。
+type builtinSkillAdminEdits struct {
+	info    bool
+	content bool
+}
+
+func (edits builtinSkillAdminEdits) seedColumns() []string {
+	// status 不在任何分组里：管理员下架的内置技能重启后保持下架，新技能插入时仍为上架。
+	columns := []string{"owner_id", "author_name", "author_avatar_url", "source", "sort_weight", "is_private", "initial_like_count", "initial_added_count", "created_at"}
+	if !edits.info {
+		columns = append(columns, "name", "description", "tag", "markdown_url", "showcase_media_json", "extra_info")
+	}
+	if !edits.content {
+		columns = append(columns, "instruction")
+	}
+	if !edits.info && !edits.content {
+		columns = append(columns, "updated_at")
+	}
+	return columns
 }
 
 func loadBuiltinSkillPackages(tombstones interface {

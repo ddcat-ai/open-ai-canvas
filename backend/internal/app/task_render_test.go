@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -127,7 +128,69 @@ func TestTimelineRenderFailsFastWhenSourceUnreadable(t *testing.T) {
 	if stored.Status != model.TaskStatusFailed {
 		t.Fatalf("status = %q, want failed", stored.Status)
 	}
+	if stored.Stage != "准备合成素材失败" {
+		t.Fatalf("stage = %q, want source preparation failure", stored.Stage)
+	}
 	if !strings.Contains(stored.Error, "时间线引用的媒体") {
 		t.Fatalf("error = %q, want mention of 无法读取时间线引用的媒体", stored.Error)
+	}
+}
+
+// 真实 ffmpeg 端到端：近似画幅的来源裁切铺满，成片写入 AIGC 隐式标识，结果记录尺寸、适配方式与来源标识。
+func TestTimelineRenderCropsNearAspectAndWritesProvenance(t *testing.T) {
+	requireFFmpegTools(t)
+	svc, db := newTimelineTaskTestService(t)
+	svc.dataDir = t.TempDir()
+	sourceTag := `{"Label":"1","ContentProducer":"upstream-co","ProduceID":"p-1"}`
+	source := seedLocalVideoResource(t, svc, "usr-render-test", 768, 1344, map[string]string{"AIGC": sourceTag, "comment": "upstream comment"})
+	project := renderTestProject("resource:" + source.ID)
+	project.Width, project.Height, project.DurationMs = 1080, 1920, 1000
+	project.Clips[0].DurationMs = 1000
+	task := seedRunningRenderTask(t, db, renderInputJSON(t, project))
+
+	if err := newTaskWorkerCoordinator(svc).processTimelineRender(task, context.Background()); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	var stored model.Task
+	if err := db.First(&stored, "id = ?", task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != model.TaskStatusSucceeded {
+		t.Fatalf("status = %s, error = %s", stored.Status, stored.Error)
+	}
+	var result timelineRenderOutput
+	if err := json.Unmarshal([]byte(stored.ResultJSON), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Width != 1080 || result.Height != 1920 || result.Fit != renderFitAuto || len(result.Sources) != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+	if record := result.Sources[0]; record.ResourceID != source.ID || record.Fit != renderFitCrop || record.Width != 768 || record.Height != 1344 || record.AIGC != sourceTag {
+		t.Fatalf("source record = %+v", record)
+	}
+	var label aigcImplicitLabel
+	if err := json.Unmarshal([]byte(result.AIGC), &label); err != nil {
+		t.Fatalf("result aigc: %v", err)
+	}
+	if label.Label != "1" || label.ContentProducer != "upstream-co" || label.ProduceID != "p-1" || label.PropagateID != task.ID || label.ContentPropagator != AIGCPlatformPropagator {
+		t.Fatalf("label = %+v", label)
+	}
+
+	output, err := svc.repo.ResourceForUser("usr-render-test", result.ResourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := probeMediaFile(context.Background(), filepath.Join(svc.dataDir, "resources", filepath.FromSlash(output.ObjectKey)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Width != 1080 || info.Height != 1920 {
+		t.Fatalf("output size = %dx%d", info.Width, info.Height)
+	}
+	if got := mediaProbeTag(info.Tags, "AIGC"); got != result.AIGC {
+		t.Fatalf("output AIGC tag = %q, want %q", got, result.AIGC)
+	}
+	if got := mediaProbeTag(info.Tags, "comment"); got != renderAIGCComment {
+		t.Fatalf("output comment = %q: source metadata leaked or label missing", got)
 	}
 }

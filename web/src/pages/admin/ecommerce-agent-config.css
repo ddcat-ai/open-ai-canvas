@@ -1,0 +1,83 @@
+/* 电商 Agent 配置页（/admin/ecommerce/agent）。分区沿用 SettingsSectionCard，卡内不再套卡：
+   分组之间只用分隔线，字段统一“标签 12px / 控件 / 说明 11px”三段。 */
+[data-admin-root] .eac-page {
+    max-width: 1080px;
+    padding-bottom: 32px;
+}
+[data-admin-root] .eac-section {
+    border: 1px solid var(--admin-card-border);
+}
+[data-admin-root] .eac-section .admin-settings-section-summary,
+[data-admin-root] .eac-section .admin-settings-section-content {
+    background: var(--admin-layer-1);
+}
+[data-admin-root] .eac-section .admin-settings-section-footer {
+    background: var(--admin-layer-1);
+}
+[data-admin-root] .eac-save-state {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+[data-admin-root] .eac-save-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* 上线检查 */
+[data-admin-root] .eac-availability {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+[data-admin-root] .eac-availability > li {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+}
+[data-admin-root] .eac-availability > li + li {
+    border-top: 1px solid var(--admin-divider);
+}
+[data-admin-root] .eac-availability-icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-layer-2);
+    color: var(--admin-text-secondary);
+}
+[data-admin-root] .eac-availability > li > div:not(.eac-readiness-actions) {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+[data-admin-root] .eac-availability strong {
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+[data-admin-root] .eac-availability > li > div:not(.eac-readiness-actions) > span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+[data-admin-root] .eac-availability > li > .eac-readiness-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 860px) {
+    [data-admin-root] .eac-availability > li {
+        grid-template-columns: 32px minmax(0, 1fr);
+    }
+    [data-admin-root] .eac-availability > li > .eac-readiness-actions {
+        grid-column: 2;
+        justify-self: start;
+    }
+}

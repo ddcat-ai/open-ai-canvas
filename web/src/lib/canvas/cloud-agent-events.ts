@@ -10,11 +10,22 @@ import type { CloudAgentChatMessage, CloudAgentPlanItem } from "@/components/can
 import { AGENT_APPROVAL_SUPERSEDED_BY_NODE } from "@/lib/canvas/agent-media-approval";
 import { agentToolRetry, mergeAgentToolRetry } from "@/lib/canvas/agent-tool-retry";
 import { agentErrorPresentation } from "@/lib/canvas/agent-error-presentation";
+import { mergeAgentMediaBatchProgress } from "@/lib/canvas/cloud-agent-media-batch";
 
 /** 待用户处理的 Agent 审批（面板状态与事件归约共用）。 */
 export type ApprovalState = { approvalId: string; detail: Record<string, unknown>; reason: string };
 
-const CANVAS_MUTATION_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_create_storyboard", "canvas_edit_storyboard", "canvas_create_character", "canvas_edit_batch_table", "previs_scene_create", "previs_apply_patch"]);
+const CANVAS_MUTATION_TOOLS = new Set([
+    "canvas_apply_ops",
+    "canvas_arrange_nodes",
+    "canvas_build_board",
+    "canvas_create_storyboard",
+    "canvas_edit_storyboard",
+    "canvas_create_character",
+    "canvas_edit_batch_table",
+    "previs_scene_create",
+    "previs_apply_patch",
+]);
 
 export function positiveNumber(value: string) {
     const number = Number(value);
@@ -45,7 +56,6 @@ export function applyAgentEvent(
     setMessages: Dispatch<SetStateAction<CloudAgentChatMessage[]>>,
     setRun: Dispatch<SetStateAction<AgentRun | null>>,
     setApproval: Dispatch<SetStateAction<ApprovalState | null>>,
-    setPrompt?: Dispatch<SetStateAction<string>>,
     requestPreview?: (detail: Record<string, unknown>) => void,
 ) {
     const payload = event.payload || {};
@@ -119,6 +129,22 @@ export function applyAgentEvent(
         setMessages((current) => upsertTextMessage(current, id, text, event.type === "reasoning_delta").map((item) => (item.id === id ? { ...item, reasoning: true } : item)));
         return;
     }
+    if (event.type === "media_batch_progress") {
+        const batchId = typeof payload.batchId === "string" ? payload.batchId : "";
+        if (!batchId) return;
+        const id = `media-batch-${event.runId}-${batchId}`;
+        setMessages((current) => {
+            const index = current.findIndex((entry) => entry.id === id);
+            const mediaBatch = mergeAgentMediaBatchProgress(index >= 0 ? current[index].mediaBatch : undefined, payload);
+            if (!mediaBatch) return current;
+            const message: CloudAgentChatMessage = { id, role: "tool", text: "", mediaBatch };
+            if (index < 0) return [...current, message];
+            const next = [...current];
+            next[index] = message;
+            return next;
+        });
+        return;
+    }
     if (event.type === "plan_updated" && Array.isArray(payload.items)) {
         const id = `plan-${event.runId}`;
         const planItems = payload.items as CloudAgentPlanItem[];
@@ -134,30 +160,35 @@ export function applyAgentEvent(
     }
     if (event.type === "user_interjection") {
         if (!text) return;
-        setMessages((current) => appendUniqueMessage(current, { id: String(payload.messageId || event.eventId), role: "user", text, interjection: "sent" }));
+        const messageId = String(payload.messageId || event.eventId);
+        // 本窗口发出的插话已有「发送中」气泡：服务端回显即表示已接收，改为等待送达，不再追加第二个。
+        setMessages((current) =>
+            current.some((item) => item.id === messageId)
+                ? current.map((item) => (item.id === messageId && item.interjection === "sending" ? { ...item, interjection: "sent" as const } : item))
+                : [...current, { id: messageId, role: "user", text, interjection: "sent" }],
+        );
         return;
     }
     if (event.type === "user_interjection_dropped") {
         const messageId = String(payload.messageId || event.eventId);
         const reason = String(payload.reason || "本轮已结束");
+        // 原话不再写回输入框（会覆盖正在输入的草稿）：消息上提供「作为下一轮发送 / 编辑」。
         setMessages((current) => {
-            const marked = current.map((item) => (item.id === messageId ? { ...item, interjection: "undelivered" as const } : item));
-            return appendUniqueMessage(marked, { id: `interjection-dropped-${messageId}`, role: "system", text: `${reason}，这条插话没有送到模型。需要的话重新发一次，它会作为新一轮。` });
+            const marked = current.map((item) => (item.id === messageId && item.interjection !== "requeued" ? { ...item, interjection: "undelivered" as const } : item));
+            return appendUniqueMessage(marked, { id: `interjection-dropped-${messageId}`, role: "system", text: `${reason}，这条插话没有送到模型。可以在这条消息上选择「作为下一轮发送」。` });
         });
-        setPrompt?.((current) => (current.trim() ? current : text));
         return;
     }
     if (event.type === "user_interjection_delivered") {
         // 送达后已进入模型上下文，撤回入口必须消失。
         const messageId = String(payload.messageId || "");
-        setMessages((current) => current.map((item) => (item.id === messageId && item.interjection === "sent" ? { ...item, interjection: "delivered" as const } : item)));
+        setMessages((current) => current.map((item) => (item.id === messageId && (item.interjection === "sent" || item.interjection === "sending") ? { ...item, interjection: "delivered" as const } : item)));
         return;
     }
     if (event.type === "user_interjection_withdrawn") {
         const messageId = String(payload.messageId || "");
+        // 撤回的原话由发起撤回的那个窗口放回排队队首，这里只更新状态，不碰输入框。
         setMessages((current) => current.map((item) => (item.id === messageId ? { ...item, interjection: "withdrawn" as const } : item)));
-        // 撤回的原话放回输入框，便于修改后重新插话；用户已经在输入新内容时不覆盖。
-        setPrompt?.((current) => (current.trim() ? current : text));
         return;
     }
     if (event.type === "run_cancelled") {
@@ -249,6 +280,7 @@ export function applyAgentEvent(
                       required: field.required === true,
                       allowCustom: field.allowCustom === true,
                       placeholder: field.placeholder === undefined ? undefined : String(field.placeholder),
+                      ...(typeof field.section === "string" && field.section.trim() ? { section: field.section.trim() } : {}),
                   }))
                   .filter((field) => field.id && field.title)
             : [];
@@ -270,6 +302,7 @@ export function applyAgentEvent(
                     allowFreeform: payload.allowFreeform !== false,
                     round: Number.isFinite(Number(payload.round)) ? Number(payload.round) : undefined,
                     maxRounds: Number.isFinite(Number(payload.maxRounds)) ? Number(payload.maxRounds) : undefined,
+                    ...(isForm && payload.recordDecision === true ? { recordDecision: true } : {}),
                 },
             }),
         );

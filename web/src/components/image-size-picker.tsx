@@ -2,7 +2,7 @@ import { useState } from "react";
 import "./image-size-picker.css";
 import { Input, Button } from "antd";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
-import { imageResolutionTiers, imagePresetForRatio, imagePresetValue, imageQualityForSelection, imageQualityForTier, imageResolutionUsesQuality, imageSizePresets, imageTierAvailable } from "@/lib/image-size-presets";
+import { imageResolutionTiers, imagePresetForRatio, imagePresetValue, imageQualityForSelection, imageQualityForTier, imageResolutionUsesQuality, imageSizePresets, imageTierAvailable, imageDeclaredSizePresets } from "@/lib/image-size-presets";
 import { buildImageResolutionOptions, type ImageResolutionOption, type ImageResolutionTier } from "@/lib/image-resolution-tiers";
 
 import { resolveImageRequestSize, validateImageSize } from "@/services/api/image-validation";
@@ -13,6 +13,8 @@ export function ImageSizePicker({
     quality,
     imageResolution,
     canSelectResolution,
+    ratioHint,
+    declaredSizeOptions,
     onChange,
 }: {
     profile: ImageCapabilityConfig;
@@ -20,11 +22,19 @@ export function ImageSizePicker({
     quality?: string;
     imageResolution?: string;
     canSelectResolution?: (resolution: string) => boolean;
+    /** 可选：在比例按钮下补一行用途说明（如电商“主图”），不改变可选值。 */
+    ratioHint?: (ratio: string) => { label: string; title?: string } | undefined;
+    /** 可选：模型只有参数声明（无 size.presets）时，按 size × imageResolution 合成比例选项；图片工作台显式开启。 */
+    declaredSizeOptions?: boolean;
     onChange: (size: string, quality?: string, resolution?: string) => void;
 }) {
     const ungrouped = Boolean(profile.parameters && !profile.resolution.supported);
-    const IMAGE_RESOLUTIONS = ungrouped ? [...new Set(imageSizePresets(profile).map((p) => p.tier))] : imageResolutionTiers(profile);
-    const presets = imageSizePresets(profile).filter((preset) => imageTierAvailable(profile, preset.tier));
+    // 只在显式开启且模型没有 size.presets 时合成，避免影响画布和创作页。
+    const declaredPresets = declaredSizeOptions ? imageDeclaredSizePresets(profile) : [];
+    const tierValues = ungrouped ? [...new Set(imageSizePresets(profile).map((p) => p.tier))] : imageResolutionTiers(profile);
+    // 声明值可能是大写的 1K/2K/4K，合成选项按小写档位对齐。
+    const IMAGE_RESOLUTIONS = declaredPresets.length ? tierValues.map((value) => value.trim().toLowerCase() as ImageResolutionTier) : tierValues;
+    const presets = (declaredPresets.length ? declaredPresets : imageSizePresets(profile)).filter((preset) => imageTierAvailable(profile, preset.tier));
     const visibleTiers = IMAGE_RESOLUTIONS.filter((value) => presets.some((preset) => preset.tier === value));
     const [chosenTier, setChosenTier] = useState<ImageResolutionTier>("1k");
     const [customPreset, setCustomPreset] = useState<ImageResolutionOption>();
@@ -177,7 +187,7 @@ export function ImageSizePicker({
                         ))}
                     </div>
                 </>
-            ) : !ungrouped && visibleTiers.length && (profile.size.parameter === "size" || !profile.quality.supported || imageResolutionUsesQuality(profile)) ? (
+            ) : (!ungrouped || imageResolutionUsesQuality(profile)) && visibleTiers.length && (profile.size.parameter === "size" || !profile.quality.supported || imageResolutionUsesQuality(profile)) ? (
                 <>
                     <div className="image-size-label">分辨率</div>
                     <div className="image-size-tiers">
@@ -204,22 +214,26 @@ export function ImageSizePicker({
             ) : null}
             {choices.length ? <div className="image-size-label">宽高比</div> : null}
             <div className="image-size-ratios">
-                {choices.map((preset) => (
-                    <button
-                        type="button"
-                        key={`${preset.ratio}:${preset.size}`}
-                        title={`${preset.ratio} · ${preset.width} × ${preset.height}`}
-                        aria-pressed={size !== "auto" && active?.size === preset.size && active?.tier === tier}
-                        onClick={() => select(preset)}
-                    >
-                        <span className="image-size-ratio-icon" style={{ width: 24 * Math.min(1, preset.width / preset.height), height: 24 * Math.min(1, preset.height / preset.width) }} />
-                        <span>{preset.ratio}</span>
-                    </button>
-                ))}
+                {choices.map((preset) => {
+                    const hint = ratioHint?.(preset.ratio);
+                    return (
+                        <button
+                            type="button"
+                            key={`${preset.ratio}:${preset.size}`}
+                            title={`${preset.ratio} · ${preset.width} × ${preset.height}${hint?.title ? `\n${hint.title}` : ""}`}
+                            aria-pressed={size !== "auto" && active?.size === preset.size && active?.tier === tier}
+                            onClick={() => select(preset)}
+                        >
+                            <span className="image-size-ratio-icon" style={{ width: 24 * Math.min(1, preset.width / preset.height), height: 24 * Math.min(1, preset.height / preset.width) }} />
+                            <span>{preset.ratio}</span>
+                            {hint ? <small className="image-size-ratio-hint">{hint.label}</small> : null}
+                        </button>
+                    );
+                })}
             </div>
             {!choices.length ? <p className="image-size-hint">未配置预设尺寸{profile.size.allowCustom ? "，可输入自定义比例或尺寸" : ""}</p> : null}
             <output aria-live="polite" className="image-size-output">
-                {size === "auto" ? "尺寸由模型决定" : active ? `${active.ratio} · ${active.width} × ${active.height} px` : size.replace("x", " × ")}
+                {size === "auto" || !size ? "尺寸由模型决定" : active ? `${active.ratio} · ${active.width} × ${active.height} px` : size.replace("x", " × ")}
             </output>
             {profile.size.parameter === "aspect_ratio" ? <p className="image-size-hint">尺寸为换算参考，实际像素由模型决定{!imageResolutionUsesQuality(profile) && visibleTiers.length <= 1 ? "；当前协议未配置独立分辨率" : ""}。</p> : null}
             {profile.size.allowCustom ? (

@@ -4,6 +4,7 @@ import { formatVideoResolutionLabel as videoResolutionLabel, VIDEO_RESOLUTION_OP
 import { imageQualityDescription, imageQualityLabel } from "@/lib/image-quality";
 import type { CreationAttachment, CreationMode } from "./creation-assets";
 import type { CreationReference } from "./creation-references";
+import { currentLocale, translate } from "@/i18n";
 
 export type { CreationMode };
 
@@ -49,25 +50,33 @@ export type CreationMessage = {
 };
 export type CreationConversation = { id: string; title: string; updatedAt: string; canvasId?: string; messages: CreationMessage[] };
 
-export const modeLabels: Record<CreationMode, string> = { text: "文本", image: "图片", video: "视频" };
+export const modeLabels: Record<CreationMode, string> = {
+    get text() { return translate("create.mode.text"); },
+    get image() { return translate("create.mode.image"); },
+    get video() { return translate("create.mode.video"); },
+};
 export const defaultCreationMode: CreationMode = "image";
-export const shotScriptLabels: Record<CreationMode, string> = { text: "创作思路", image: "画面指令", video: "镜头脚本" };
+export const shotScriptLabels: Record<CreationMode, string> = {
+    get text() { return translate("create.shotScript.text"); },
+    get image() { return translate("create.shotScript.image"); },
+    get video() { return translate("create.shotScript.video"); },
+};
 export const ratioOptions = [
-    { value: "1:1", label: "方形" },
-    { value: "16:9", label: "横屏" },
-    { value: "9:16", label: "竖屏" },
-    { value: "4:3", label: "标准横屏" },
-    { value: "3:4", label: "标准竖屏" },
-    { value: "21:9", label: "宽银幕" },
+    { value: "1:1", get label() { return translate("create.ratio.square"); } },
+    { value: "16:9", get label() { return translate("create.ratio.landscape"); } },
+    { value: "9:16", get label() { return translate("create.ratio.portrait"); } },
+    { value: "4:3", get label() { return translate("create.ratio.standardLandscape"); } },
+    { value: "3:4", get label() { return translate("create.ratio.standardPortrait"); } },
+    { value: "21:9", get label() { return translate("create.ratio.widescreen"); } },
 ];
 export const qualityOptions = [
     ...["auto", "low", "medium", "high", "xhigh", "max", "1k", "2k", "4k"].map((value) => ({ value, label: imageQualityLabel(value), description: imageQualityDescription(value) })),
 ];
 export const resolutionOptions = VIDEO_RESOLUTION_OPTIONS.map((value) => ({ value: String(value), label: videoResolutionLabel(value) }));
 export const countOptions = ["1", "2", "3", "4"];
-export const conversationTimeFormatter = new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-export const messageTimeFormatter = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+export const conversationTimeFormatter = new Intl.DateTimeFormat(currentLocale(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+export const messageTimeFormatter = new Intl.DateTimeFormat(currentLocale(), { hour: "2-digit", minute: "2-digit", hour12: false });
 
-export const historyDayFormatter = new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" });
+export const historyDayFormatter = new Intl.DateTimeFormat(currentLocale(), { month: "numeric", day: "numeric" });
 
 export type CreationShotRailEntry = { key: string; ordinal: number; user: CreationMessage; result?: CreationMessage };

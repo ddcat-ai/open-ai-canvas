@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func (s *Service) PublicSystemChannels() ([]PublicModelChannel, error) {
@@ -66,7 +67,11 @@ func (s *Service) AdminSystemChannelPage(actor *model.User, query AdminListQuery
 		if itemErr != nil {
 			return nil, itemErr
 		}
-		result = append(result, publicChannel(channel, true, items))
+		public := publicChannel(channel, true, items)
+		if err := s.decorateChannelMediaTransport(&public); err != nil {
+			return nil, err
+		}
+		result = append(result, public)
 	}
 	return &AdminChannelPage{Channels: result, Total: total, Page: page, Limit: limit}, nil
 }
@@ -85,6 +90,22 @@ func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*P
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	if req.WebsiteID != "" {
+		if req.Enabled == nil {
+			disabled := false
+			req.Enabled = &disabled
+		}
+		website, siteErr := s.repo.ChannelWebsite(req.WebsiteID)
+		if siteErr != nil {
+			return nil, siteErr
+		}
+		req.BaseURL, req.APIFormat, req.ProxyURL = website.BaseURL, &website.APIFormat, &website.ProxyURL
+		public, parseErr := ParseOutboundHeadersJSON(website.HeadersJSON)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		req.Headers = mergeWebsiteHeaders(req.Headers, public)
+	}
 	channelID, err := s.repo.NextPrefixedID("CHANNEL")
 	if err != nil {
 		return nil, err
@@ -93,10 +114,11 @@ func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*P
 	if err != nil {
 		return nil, err
 	}
+	channel.WebsiteID = req.WebsiteID
 	if err := s.encryptSystemChannelSecrets(&channel); err != nil {
 		return nil, err
 	}
-	if err := s.repo.Create(&channel); err != nil {
+	if err := s.saveChannelWithMediaTransport(&channel, actor.ID, req.MediaTransport, true); err != nil {
 		return nil, err
 	}
 	if err := s.syncInitialChannelModels(&channel, req.Models); err != nil {
@@ -108,6 +130,9 @@ func (s *Service) CreateSystemChannel(actor *model.User, req ChannelRequest) (*P
 		return nil, err
 	}
 	public := publicChannel(channel, true, items)
+	if err := s.decorateChannelMediaTransport(&public); err != nil {
+		return nil, err
+	}
 	return &public, nil
 }
 
@@ -174,7 +199,16 @@ func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicM
 			priceTiers = append(priceTiers, priceTier)
 		}
 	}
-	if err := s.repo.CreateDuplicatedSystemChannel(&channel, channelModels, priceTiers); err != nil {
+	transport, err := s.channelMediaTransport(source.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.Transaction(func(repo *repository.Repository) error {
+		if err := repo.CreateDuplicatedSystemChannel(&channel, channelModels, priceTiers); err != nil {
+			return err
+		}
+		return saveChannelMediaTransport(repo, channel.ID, actor.ID, transport)
+	}); err != nil {
 		return nil, err
 	}
 	s.invalidateRouteCatalog()
@@ -183,6 +217,9 @@ func (s *Service) DuplicateSystemChannel(actor *model.User, id string) (*PublicM
 		return nil, err
 	}
 	public := publicChannel(channel, true, items)
+	if err := s.decorateChannelMediaTransport(&public); err != nil {
+		return nil, err
+	}
 	return &public, nil
 }
 
@@ -210,6 +247,9 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err != nil {
 		return nil, err
 	}
+	if !req.enabledOnly() && (req.ExpectedUpdatedAt.IsZero() || !req.ExpectedUpdatedAt.Equal(channel.UpdatedAt)) {
+		return nil, BadAuthRequest("Key 分组已被修改或缺少编辑版本，请刷新后重新编辑；本次未保存任何修改")
+	}
 	if err := s.decryptSystemChannelSecrets(channel); err != nil {
 		return nil, err
 	}
@@ -222,6 +262,12 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	next.UserID = channel.UserID
 	next.Scope = model.ChannelScopeSystem
 	next.CreatedAt = channel.CreatedAt
+	if req.WebsiteID != "" && req.WebsiteID != channel.WebsiteID {
+		return nil, BadAuthRequest("不能通过渠道编辑移动网站归属")
+	}
+	if channel.WebsiteID != "" && !sameWebsiteConnection(*channel, next) {
+		next.WebsiteID = ""
+	}
 	if req.APIKey == "" {
 		next.APIKey = channel.APIKey
 	}
@@ -231,7 +277,10 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 	if err := s.encryptSystemChannelSecrets(&next); err != nil {
 		return nil, err
 	}
-	if err := s.repo.Save(&next); err != nil {
+	if err := s.saveChannelWithMediaTransport(&next, actor.ID, req.MediaTransport, false, channel.UpdatedAt); err != nil {
+		if errors.Is(err, repository.ErrTaskStateConflict) {
+			return nil, BadAuthRequest("Key 分组已被修改，请刷新后重新编辑；本次未保存任何修改")
+		}
 		return nil, err
 	}
 	if updateModels {
@@ -245,6 +294,9 @@ func (s *Service) UpdateSystemChannel(actor *model.User, id string, req ChannelR
 		return nil, err
 	}
 	public := publicChannel(next, true, items)
+	if err := s.decorateChannelMediaTransport(&public); err != nil {
+		return nil, err
+	}
 	return &public, nil
 }
 

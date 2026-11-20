@@ -146,7 +146,7 @@ cd web && bun run dev
 
 ## 8. 验证纪律
 
-项目当前默认不自动运行语法检查、类型检查、测试或构建。用户明确要求验证，或改动风险需要验证时，按范围选择最小充分命令，并在交付中如实记录：
+项目当前默认不自动运行语法检查、类型检查、测试或构建（推送前例外，见下方「推送前验证」）。用户明确要求验证，或改动风险需要验证时，按范围选择最小充分命令，并在交付中如实记录：
 
 - 前端：`cd web && bun run build`；专项测试用 `bun test ...`。UI 退场规则用 `bun run lint`（只禁 antd Empty 和静态 `Modal.confirm`，不是风格检查）。
 - 后端：`cd backend && go test ./...`；涉及 PostgreSQL、资源、任务或权限时补对应集成/冒烟路径。
@@ -156,6 +156,20 @@ cd web && bun run dev
 - 验证必须针对真实实现：优先专项测试、类型检查、项目 build 或真实路由浏览器验收。独立 HTML、静态仿制页面和脱离应用状态的截图不能作为真实页面通过的证据。
 
 同类失败连续三次时停止盲试，记录现象、已排除项和新假设，再切换路径或请求用户决策。
+
+### 推送前验证（必须）
+
+推送到 `main` 或任何会触发 CI 的分支前，必须在本地通过 CI「Quality checks」中与改动相关的检查；未通过不得推送，也不要推送后再看 CI 修。
+
+1. `git fetch` 后把本地提交 rebase 到最新的远端分支，再验证要推送的那组提交；工作区应干净（未提交改动会混进验证结果）。
+2. 在仓库根目录运行 `bun scripts/verify-before-push.mjs`。脚本按相对 `origin/main` 的改动挑选检查并行运行：
+   - Web：改动文件格式（`check-changed-formatting.mjs`，与 CI 同口径）、`typecheck`、`lint`、`bun run test`（含 `pretest`）；改动路径含 `previs` 时加跑预演台 Chrome E2E。
+   - 后端：`gofmt -l`、非 `internal/app` 包测试、`internal/app` 按 CI 方式分 4 片并行；装有 `golangci-lint` 时加跑 Agent 静态检查。
+   - 每项输出写入 `.local/cache/verify/`，失败时打印末尾。`--jobs <n>` 控制并行数（默认 CPU 核数），`--all` 跑全部（含 E2E），`--only web|backend` 只用于迭代，推送前最后一次用默认范围。
+3. 新增或修改的 `web/` 文件按 Prettier 格式化（`cd web && ./node_modules/.bin/prettier --write <文件>`）。只格式化本次改动的文件，不要对整个目录运行 `bun run format`。
+4. 交付说明里列出脚本的总结行，以及「本地未覆盖」的项（支付插件双架构、缺少 PostgreSQL/Redis 时跳过的用例）；这些由 CI 兜底，推送后要确认 CI 结果。
+
+迭代修改期间不必每次跑全量：只跑受影响的专项测试，最后推送前跑一次脚本。多个 Agent 同时工作时，各自在独立工作区或互不重叠的路径上验证，不要在同一工作区同时运行两份脚本。
 
 ## 9. 文档与交付
 

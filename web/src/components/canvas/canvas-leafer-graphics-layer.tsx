@@ -6,6 +6,7 @@ import { CanvasConnectionDrafts } from "./canvas-connection-drafts";
 import { useCanvasNodeResizeMotion } from "./canvas-node-resize-motion";
 import type { CanvasNodeResizeMotion } from "@/lib/canvas/canvas-node-resize-motion";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
+import { agentConnectionEntranceDelay, prefersReducedMotion } from "@/lib/canvas/agent-canvas-entrance";
 import { batchCellAnchor, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
@@ -28,7 +29,6 @@ type CanvasLeaferGraphicsLayerProps = {
     nodeById: Map<string, CanvasNodeData>;
     selectionBox: SelectionBox | null;
     selectedNodeBounds: NodeBounds;
-    alignmentGuides: { vertical?: number; horizontal?: number };
 };
 
 type LeaferScene = {
@@ -124,7 +124,11 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         });
         const unsubscribeNodeDrag = subscribeCanvasNodeDragPreview(container, (preview) => {
             applyConnectionDragPreview(underlay, propsRef.current, preview);
+            const previous = overlay.dragPreview?.guides;
             overlay.dragPreview = preview;
+            if (previous?.vertical !== preview?.guides?.vertical || previous?.horizontal !== preview?.guides?.horizontal) {
+                syncGuidePath(overlay, rasterViewportRef.current, containerSizeRef.current.width, containerSizeRef.current.height);
+            }
             syncLiveSelectionBounds(overlay, propsRef.current, viewportRef.current.k);
         });
         const unsubscribeResize = resizeMotion?.subscribe((nodeId) => {
@@ -187,7 +191,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         if (isViewportPreview(container, viewportRef.current, rasterViewportRef.current)) {
             applyScenePreview(viewportRef.current, rasterViewportRef.current, underlay, overlay);
         }
-    }, [props.alignmentGuides, props.containerRef, props.theme]);
+    }, [props.containerRef, props.theme]);
 
     return (
         <>
@@ -220,6 +224,22 @@ function createOverlayScene(host: HTMLDivElement): OverlayScene {
     return { leafer, world, host, selection, selectionBounds, guides, dragPreview: null };
 }
 
+const AGENT_CONNECTION_FADE_MS = 360;
+
+/** Agent 刚建的连线在两端节点入场后淡入；之后的路径同步会照常写回常规透明度。 */
+function fadeInAgentConnection(path: Path, delay: number) {
+    const target = typeof path.opacity === "number" ? path.opacity : 0.8;
+    path.opacity = 0;
+    const start = performance.now() + delay;
+    const step = (time: number) => {
+        if (!path.parent) return;
+        const progress = Math.min(1, Math.max(0, (time - start) / AGENT_CONNECTION_FADE_MS));
+        path.opacity = target * progress;
+        if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+}
+
 function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLayerProps) {
     const nextIds = new Set(props.displayConnections.map(({ connection }) => connection.id));
     for (const [connectionId, entry] of scene.connectionEntries) {
@@ -233,11 +253,13 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
     for (const { connection, from, to } of props.displayConnections) {
         const signature = connectionSceneSignature(connection, from, to, props);
         let entry = scene.connectionEntries.get(connection.id);
+        let entranceDelay: number | null = null;
         if (!entry) {
             const path = new Path({ hittable: false });
             scene.connections.add(path);
             entry = { path, connection, from, to, resizeMotion: scene.resizeMotion, signature: "" };
             scene.connectionEntries.set(connection.id, entry);
+            entranceDelay = agentConnectionEntranceDelay(connection.id);
         }
         entry.connection = connection;
         entry.from = from;
@@ -246,6 +268,7 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
             syncConnectionPath(entry, props, scene.dragPreview, previewIds);
             entry.signature = signature;
         }
+        if (entranceDelay !== null && !prefersReducedMotion()) fadeInAgentConnection(entry.path, entranceDelay);
         for (const nodeId of [from.id, to.id]) {
             const connectionIds = scene.connectionIdsByNodeId.get(nodeId) || new Set<string>();
             connectionIds.add(connection.id);
@@ -347,7 +370,7 @@ function syncSelection(rect: Rect, selection: SelectionBox, theme: CanvasTheme) 
         y: Math.min(selection.startWorldY, selection.currentWorldY),
         width: Math.abs(selection.currentWorldX - selection.startWorldX),
         height: Math.abs(selection.currentWorldY - selection.startWorldY),
-        fill: "transparent",
+        fill: theme.canvas.selectionFill,
         stroke: theme.node.label,
         opacity: selection.hitMode === "intersect" ? 0.82 : 0.68,
     });
@@ -370,13 +393,12 @@ function syncViewport(viewport: ViewportTransform, width: number, height: number
         opacity: 0.68,
     });
     overlay.guides.set({
-        visible: typeof props.alignmentGuides.vertical === "number" || typeof props.alignmentGuides.horizontal === "number",
-        path: guidePath(viewport, width, height, props.alignmentGuides),
         stroke: props.theme.accent.primary,
         strokeWidth: 1 / scale,
         dashPattern: [5 / scale, 5 / scale],
         opacity: 0.72,
     });
+    syncGuidePath(overlay, viewport, width, height);
 }
 
 function isViewportPreview(container: HTMLDivElement, viewport: ViewportTransform, rasterViewport: ViewportTransform) {
@@ -434,7 +456,12 @@ function syncSelectionBounds(rect: Rect, bounds: NonNullable<NodeBounds>, viewpo
     });
 }
 
-function guidePath(viewport: ViewportTransform, width: number, height: number, guides: { vertical?: number; horizontal?: number }) {
+function syncGuidePath(overlay: OverlayScene, viewport: ViewportTransform, width: number, height: number) {
+    const guides = overlay.dragPreview?.guides;
+    if (guides?.vertical === undefined && guides?.horizontal === undefined) {
+        overlay.guides.visible = false;
+        return;
+    }
     const scale = Math.max(viewport.k, 0.05);
     const left = -viewport.x / scale;
     const top = -viewport.y / scale;
@@ -443,7 +470,7 @@ function guidePath(viewport: ViewportTransform, width: number, height: number, g
     const commands: string[] = [];
     if (typeof guides.vertical === "number") commands.push(`M ${guides.vertical} ${top} L ${guides.vertical} ${bottom}`);
     if (typeof guides.horizontal === "number") commands.push(`M ${left} ${guides.horizontal} L ${right} ${guides.horizontal}`);
-    return commands.join(" ");
+    overlay.guides.set({ visible: true, path: commands.join(" ") });
 }
 
 function canvasPixelRatio() {

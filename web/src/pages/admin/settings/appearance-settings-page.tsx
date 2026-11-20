@@ -2,7 +2,7 @@ import { commitPublicAppearance, DEFAULT_PUBLIC_APPEARANCE } from "@/stores/use-
 import { deleteAdminResources } from "@/services/api/admin-storage";
 import { AdminStatusBadge, SettingsSectionCard } from "@/pages/admin/components/admin-ui";
 import { AdminPageFrame } from "@/pages/admin/components/admin-shell";
-import { Palette, RefreshCw, Undo2, RotateCcw, Save, Sun, Moon, MonitorPlay, Globe2, Search, Copyright, Type } from "lucide-react";
+import { Palette, RefreshCw, Undo2, RotateCcw, Save, Sun, Moon, MonitorPlay, Globe2, Search, Copyright, Type, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/pages/admin/ui/controls";
 import { WelcomeSetting } from "@/pages/admin/settings/components/welcome-setting";
@@ -15,7 +15,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useBlocker } from "react-router";
 import { cloneSkinDefinition, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition, type SkinDefinition, duplicateSkinDefinition } from "@/lib/skin-themes";
 import { DEFAULT_CANVAS_APPEARANCE, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
-import { getAdminAppearance, type AdminAppearance, type AppearanceAssetSlot, resetAdminAppearance, uploadAppearanceAsset, updateAdminAppearance } from "@/services/api/appearance";
+import {
+    getAdminAppearance,
+    getAdminTurnstileSetting,
+    type AdminAppearance,
+    type AdminTurnstileSetting,
+    type AppearanceAssetSlot,
+    resetAdminAppearance,
+    uploadAppearanceAsset,
+    updateAdminAppearance,
+    updateAdminTurnstileSetting,
+} from "@/services/api/appearance";
 import { normalizeDraftCopy, normalizeSingleLine, hasUnsupportedControlCharacter, validateSkinDrafts, useAppearancePreviews, AppearanceSkeleton, AssetPicker, LogoThemePreview } from "./appearance-settings-parts";
 import { type DraftFiles, FILE_RULES, type ResetState } from "./appearance-settings-parts";
 
@@ -23,6 +33,130 @@ export { type DraftFiles, FILE_RULES, type ResetState } from "./appearance-setti
 
 const EMPTY_FILES: DraftFiles = { logo: null, "logo-dark": null, video: null, poster: null };
 const EMPTY_RESETS: ResetState = { logo: false, "logo-dark": false, video: false, poster: false };
+
+function TurnstileProtectionPanel() {
+    const { message } = App.useApp();
+    const [setting, setSetting] = useState<AdminTurnstileSetting | null>(null);
+    const [enabled, setEnabled] = useState(false);
+    const [siteKey, setSiteKey] = useState("");
+    const [secretKey, setSecretKey] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const value = await getAdminTurnstileSetting();
+            setSetting(value);
+            setEnabled(value.enabled);
+            setSiteKey(value.siteKey);
+            setSecretKey("");
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "读取机器人保护配置失败");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void load();
+    }, [load]);
+
+    const dirty = Boolean(setting && (enabled !== setting.enabled || siteKey.trim() !== setting.siteKey || Boolean(secretKey.trim())));
+    const save = async () => {
+        if (saving) return;
+        const nextSiteKey = siteKey.trim();
+        const nextSecretKey = secretKey.trim();
+        if (enabled && !nextSiteKey) {
+            message.error("启用 Turnstile 前请填写站点密钥");
+            return;
+        }
+        if (enabled && !setting?.hasSecretKey && !nextSecretKey) {
+            message.error("启用 Turnstile 前请填写密钥");
+            return;
+        }
+        setSaving(true);
+        try {
+            const value = await updateAdminTurnstileSetting({ enabled, siteKey: nextSiteKey, secretKey: nextSecretKey });
+            setSetting(value);
+            setEnabled(value.enabled);
+            setSiteKey(value.siteKey);
+            setSecretKey("");
+            message.success("机器人保护配置已保存");
+        } catch (cause) {
+            message.error(cause instanceof Error ? cause.message : "保存机器人保护配置失败");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <AppearanceSkeleton />;
+    if (error) {
+        return (
+            <div className="admin-settings-stack admin-appearance-settings">
+                <div className="admin-appearance-load-error" role="alert">
+                    <span className="admin-appearance-load-error-icon">
+                        <ShieldCheck className="size-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                        <h2>无法读取机器人保护配置</h2>
+                        <p>{error}</p>
+                    </div>
+                    <Button icon={<RefreshCw className="size-4" />} onClick={() => void load()}>
+                        重新读取
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="admin-settings-stack admin-appearance-settings admin-turnstile-settings">
+            <div className={cn("admin-appearance-command-bar", dirty && "is-dirty")}>
+                <div className="admin-appearance-command-copy" aria-live="polite">
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <strong>{dirty ? "机器人保护有调整待保存" : "机器人保护已与服务端同步"}</strong>
+                            <AdminStatusBadge label={enabled ? "已开启" : "未开启"} tone={enabled ? "success" : "neutral"} />
+                        </div>
+                        <p>使用 Cloudflare Turnstile 保护登录和注册；密钥只在服务端保存，浏览器不会读取密钥原文。</p>
+                    </div>
+                </div>
+                <div className="admin-appearance-command-actions">
+                    <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty} onClick={() => void save()}>
+                        保存更改
+                    </Button>
+                </div>
+            </div>
+            <SettingsSectionCard className="admin-appearance-section" icon={<ShieldCheck className="size-4" aria-hidden="true" />} title="机器人保护" description="配置后，登录、注册和微信注册补充信息会要求完成 Cloudflare Turnstile 验证。">
+                <div className="admin-appearance-section-form">
+                    <div className="admin-appearance-logo-frame-option">
+                        <div className="admin-appearance-logo-frame-copy">
+                            <strong>启用 Turnstile</strong>
+                            <p id="appearance-turnstile-help">使用 Cloudflare Turnstile 保护登录和注册</p>
+                        </div>
+                        <div className="admin-appearance-logo-frame-control">
+                            <span>{enabled ? "已开启" : "已关闭"}</span>
+                            <Switch checked={enabled} disabled={saving} aria-label="启用 Turnstile" aria-describedby="appearance-turnstile-help" onChange={setEnabled} />
+                        </div>
+                    </div>
+                    <Form className="admin-appearance-form" layout="vertical" requiredMark={false} disabled={saving}>
+                        <div className="admin-appearance-form-grid">
+                            <Form.Item label="站点密钥" extra="Cloudflare Turnstile 的 Site key，可公开放在浏览器中。">
+                                <Input value={siteKey} maxLength={256} autoComplete="off" placeholder="您的 Turnstile 站点密钥" onChange={(event) => setSiteKey(event.target.value)} />
+                            </Form.Item>
+                            <Form.Item label="密钥" extra={setting?.hasSecretKey ? "已保存密钥；留空则保持不变。" : "Cloudflare Turnstile 的 Secret key，仅保存到服务端。"}>
+                                <Input.Password value={secretKey} maxLength={512} autoComplete="new-password" placeholder={setting?.hasSecretKey ? "留空以保持当前密钥" : "您的 Turnstile 密钥"} onChange={(event) => setSecretKey(event.target.value)} />
+                            </Form.Item>
+                        </div>
+                    </Form>
+                </div>
+            </SettingsSectionCard>
+        </div>
+    );
+}
 
 export default function AppearanceSettingsPage() {
     const { message, modal } = App.useApp();
@@ -679,6 +813,11 @@ export default function AppearanceSettingsPage() {
                                         </div>
                                     </SettingsSectionCard>
                                 ),
+                            },
+                            {
+                                key: "turnstile",
+                                label: "机器人保护",
+                                children: <TurnstileProtectionPanel />,
                             },
                             {
                                 key: "welcome",

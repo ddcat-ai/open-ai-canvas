@@ -6,12 +6,13 @@ import (
 )
 
 const (
-	aliyunOSSProvider    = "aliyun"
-	tencentCOSProvider   = "tencent"
-	qiniuKodoProvider    = "qiniu"
-	s3Provider           = "s3"
-	defaultOSSPathPrefix = "open-ai-canvas"
-	resourceAccessURLTTL = 4 * time.Hour
+	aliyunOSSProvider     = "aliyun"
+	tencentCOSProvider    = "tencent"
+	qiniuKodoProvider     = "qiniu"
+	volcengineTOSProvider = "volcengine"
+	s3Provider            = "s3"
+	defaultOSSPathPrefix  = "open-ai-canvas"
+	resourceAccessURLTTL  = 4 * time.Hour
 )
 
 type Settings struct {
@@ -76,6 +77,9 @@ func NormalizeSettings(value Settings) Settings {
 	value.CDNBaseURL = strings.TrimRight(strings.TrimSpace(value.CDNBaseURL), "/")
 	value.Delivery.CDNAuthMode = strings.ToLower(strings.TrimSpace(value.Delivery.CDNAuthMode))
 	value.Bucket = strings.TrimSpace(value.Bucket)
+	if value.Provider == volcengineTOSProvider {
+		value = normalizeVolcengineTOSLocation(value)
+	}
 	value.AccessKeyID = strings.TrimSpace(value.AccessKeyID)
 	value.AccessKeySecret = strings.TrimSpace(value.AccessKeySecret)
 	value.PublicBaseURL = strings.TrimRight(strings.TrimSpace(value.PublicBaseURL), "/")

@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Kbd } from "@/components/ui/base/kbd";
@@ -8,6 +9,7 @@ import { fileIconFor } from "@/pages/skills/workbench/skill-workbench-explorer";
 
 /** Cmd/Ctrl+P 快速打开：子序列模糊匹配文件路径，方向键选择，回车打开。 */
 export function SkillQuickOpen({ open, paths, onClose, onPick }: { open: boolean; paths: string[]; onClose: () => void; onPick: (path: string) => void }) {
+    const { t } = useTranslation();
     const [query, setQuery] = useState("");
     const [index, setIndex] = useState(0);
     const listRef = useRef<HTMLDivElement | null>(null);
@@ -47,8 +49,8 @@ export function SkillQuickOpen({ open, paths, onClose, onPick }: { open: boolean
                     <input
                         autoFocus
                         value={query}
-                        placeholder="按名称搜索文件"
-                        aria-label="按名称搜索文件"
+                        placeholder={t("library.workbench.quickOpen.placeholder")}
+                        aria-label={t("library.workbench.quickOpen.placeholder")}
                         role="combobox"
                         aria-expanded="true"
                         aria-controls="skill-wb-quick-open-list"
@@ -73,7 +75,7 @@ export function SkillQuickOpen({ open, paths, onClose, onPick }: { open: boolean
                     />
                     <Kbd>Esc</Kbd>
                 </label>
-                <div id="skill-wb-quick-open-list" ref={listRef} className="skill-wb-quick-open-list thin-scrollbar" role="listbox" aria-label="匹配的文件">
+                <div id="skill-wb-quick-open-list" ref={listRef} className="skill-wb-quick-open-list thin-scrollbar" role="listbox" aria-label={t("library.workbench.quickOpen.results")}>
                     {results.length ? (
                         results.map((item, itemIndex) => (
                             <div
@@ -92,7 +94,7 @@ export function SkillQuickOpen({ open, paths, onClose, onPick }: { open: boolean
                             </div>
                         ))
                     ) : (
-                        <div className="skill-wb-quick-open-empty">没有匹配的文件</div>
+                        <div className="skill-wb-quick-open-empty">{t("library.workbench.quickOpen.empty")}</div>
                     )}
                 </div>
             </div>

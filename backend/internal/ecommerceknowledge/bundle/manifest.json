@@ -1,0 +1,208 @@
+{
+  "formatVersion": 1,
+  "sha256": "ccceb5729d37eb6230b85d682066b784943c9d14442ef9792f6dab4272ce07e6",
+  "sourceCount": 23,
+  "entryCount": 14740,
+  "reviewCounts": {
+    "approved": 14739,
+    "rejected": 1
+  },
+  "domainCounts": {
+    "KB01": 11,
+    "KB02": 10,
+    "KB03": 10,
+    "KB04": 10,
+    "KB05": 10,
+    "KB06": 10,
+    "KB07": 10,
+    "KB08": 10,
+    "KB09": 10,
+    "KB10": 10
+  },
+  "sources": [
+    {
+      "id": "meiye-kb01",
+      "name": "电商 KB01 商品行业知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB01 Original",
+      "entries": 11
+    },
+    {
+      "id": "meiye-kb02",
+      "name": "电商 KB02 营销卖点知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB02 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb03",
+      "name": "电商 KB03 高级视觉设计知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB03 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb04",
+      "name": "电商 KB04 主图与详情页排版知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB04 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb05",
+      "name": "电商 KB05 商业文案知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB05 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb06",
+      "name": "电商 KB06 商业产品摄影知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB06 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb07",
+      "name": "电商 KB07 模特与场景知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB07 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb08",
+      "name": "电商 KB08 电商平台知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB08 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb09",
+      "name": "电商 KB09 设计趋势知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB09 Original",
+      "entries": 10
+    },
+    {
+      "id": "meiye-kb10",
+      "name": "电商 KB10 一致性与质量控制知识库",
+      "repository": "",
+      "commit": "",
+      "license": "MeiYeAI KB10 Original",
+      "entries": 10
+    },
+    {
+      "id": "src-buluslan-image2-ecommerce",
+      "name": "gpt-image2-ecommerce",
+      "repository": "buluslan/gpt-image2-ecommerce",
+      "commit": "73abd50bf2b689b5a453f28ddd7b0016415deec6",
+      "license": "MIT",
+      "entries": 1
+    },
+    {
+      "id": "src-copywriting-methods",
+      "name": "Copywriting",
+      "repository": "entpnomad/copywriting",
+      "commit": "c3b84cbda5bbc971bbfa31462a99563c15799506",
+      "license": "MIT",
+      "entries": 1
+    },
+    {
+      "id": "src-creative-photo-prompts",
+      "name": "Open Product Photography Prompts",
+      "repository": "JeremyGDM/awesome-ai-product-photography-prompts",
+      "commit": "6815dab9c17ce20c5c554df4ecf28336fd0aef0a",
+      "license": "CC0-1.0",
+      "entries": 2
+    },
+    {
+      "id": "src-dlazy",
+      "name": "ecommerce-skills",
+      "repository": "dlazy-ai/ecommerce-skills",
+      "commit": "87791a154beb9549aa32e57c9eeadc4ba0db0784",
+      "license": "MIT",
+      "entries": 6
+    },
+    {
+      "id": "src-image-style-craft",
+      "name": "Image Generation Style Craft",
+      "repository": "guinacio/claude-image-gen",
+      "commit": "9ae689d2f1163ccba1900fa58a75436ef4d8d75b",
+      "license": "MIT",
+      "entries": 1
+    },
+    {
+      "id": "src-kangise",
+      "name": "ecommerce-ai-skills",
+      "repository": "kangise/ecommerce-ai-skills",
+      "commit": "b1a727c3b2c2d27f2793e0d0fcd655ea446ba635",
+      "license": "CC0-1.0",
+      "entries": 7
+    },
+    {
+      "id": "src-motiful-product-shots",
+      "name": "product-shots",
+      "repository": "motiful/product-shots",
+      "commit": "063c508b0b7f4db5cda89f10bdf20df25026dfc5",
+      "license": "MIT",
+      "entries": 4
+    },
+    {
+      "id": "src-nexscope",
+      "name": "eCommerce-Skills",
+      "repository": "nexscope-ai/eCommerce-Skills",
+      "commit": "ee0fb29433d02ccc22e3e6cea9ab4586d49fd42e",
+      "license": "MIT",
+      "entries": 3
+    },
+    {
+      "id": "src-reference-image-analysis",
+      "name": "Image to Prompt",
+      "repository": "gpt-img-2/image-to-prompt",
+      "commit": "8f8d4b7ede9474a40941a3805165de68358e4c28",
+      "license": "MIT",
+      "entries": 1
+    },
+    {
+      "id": "src-shadcn-design-tokens",
+      "name": "shadcn/ui Design Tokens",
+      "repository": "shadcn-ui/ui",
+      "commit": "8f04138777c1b6996e709993362a7b0a12888ecf",
+      "license": "MIT",
+      "entries": 1
+    },
+    {
+      "id": "src-shopify-taxonomy",
+      "name": "Shopify Product Taxonomy",
+      "repository": "Shopify/product-taxonomy",
+      "commit": "2e9aa2e9b882383952c63d212add13eb80f46cf9",
+      "license": "MIT",
+      "entries": 14606
+    },
+    {
+      "id": "src-visual-copywriting",
+      "name": "Ecommerce Visual Copywriting",
+      "repository": "feichanggege/ecommerce-visual-copywriting-skill",
+      "commit": "4a5a6396cd54709a203a82065801f64d5cb7286e",
+      "license": "MIT",
+      "entries": 2
+    },
+    {
+      "id": "src-xianyu-image-skills",
+      "name": "ecommerce-image-skills",
+      "repository": "xianyu110/ecommerce-image-skills",
+      "commit": "f4566fdc812584425728862ad8e08c90883d81ee",
+      "license": "MIT",
+      "entries": 4
+    }
+  ]
+}

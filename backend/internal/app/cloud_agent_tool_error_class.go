@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	mcpintegration "yingce/backend/internal/integrations/mcp"
 )
 
 // 工具调用失败的稳定归类（handoff 工作项 B 的第一步：只加分类，不改执行行为）。
@@ -24,6 +26,7 @@ const (
 	cloudAgentToolErrorUpstream           = "upstream_failure"
 	cloudAgentToolErrorAdmission          = "admission_failure"
 	cloudAgentToolErrorApprovalDeferred   = "approval_deferred"
+	cloudAgentToolErrorExternalUncertain  = "external_result_uncertain"
 	cloudAgentToolErrorUnknown            = "tool_error"
 )
 
@@ -48,6 +51,10 @@ func cloudAgentToolErrorClass(req CloudAgentRequest, call cloudAgentCall, err er
 			return cloudAgentToolErrorInvalidModelOutput, true, "use_advertised_tools"
 		}
 		return cloudAgentToolErrorPermission, false, "ask_user"
+	}
+	var uncertainMCP *mcpintegration.UncertainExecutionError
+	if errors.As(err, &uncertainMCP) {
+		return cloudAgentToolErrorExternalUncertain, false, "verify_external_state"
 	}
 	// 过期快照在上游是结构化字段错误（Field/Issue），先于通用参数错误判定。
 	var fieldErr *cloudAgentFieldArgumentError
@@ -118,6 +125,8 @@ func cloudAgentToolErrorLabel(class string) string {
 		return "媒体生成准入失败"
 	case cloudAgentToolErrorApprovalDeferred:
 		return "审批暂停未执行"
+	case cloudAgentToolErrorExternalUncertain:
+		return "外部操作结果待核对"
 	default:
 		return "工具执行失败"
 	}

@@ -1,5 +1,6 @@
 import { Button, Skeleton } from "antd";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { WorkspaceSignalIcon, type WorkspaceSignalIconVariant } from "@/components/ui/aceternity/workspace-signal-icon";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +69,7 @@ export function WorkspaceNoResultsState({
     icon = "empty",
     title,
     description,
-    clearLabel = "清除筛选",
+    clearLabel,
     compact = false,
 }: {
     query?: string;
@@ -79,35 +80,39 @@ export function WorkspaceNoResultsState({
     clearLabel?: string;
     compact?: boolean;
 }) {
+    const { t } = useTranslation();
     const keyword = query?.trim();
     return (
         <WorkspaceState
             kind="no-results"
             icon={icon}
             compact={compact}
-            title={title || (keyword ? `没有找到与“${keyword}”相关的内容` : "没有符合筛选条件的内容")}
-            description={description ?? "换一个关键词，或清除筛选后查看全部。"}
-            action={onClear ? <Button onClick={onClear}>{clearLabel}</Button> : undefined}
+            title={title || (keyword ? t("account.layout.state.noResultsFor", { keyword }) : t("account.layout.state.noResults"))}
+            description={description ?? t("account.layout.state.noResultsHint")}
+            action={onClear ? <Button onClick={onClear}>{clearLabel ?? t("account.layout.state.clearFilters")}</Button> : undefined}
         />
     );
 }
 
-export function WorkspaceErrorState({ title = "暂时无法加载", description, actionLabel = "重新加载", onRetry, compact = false }: { title?: string; description?: string; actionLabel?: string; onRetry?: () => void; compact?: boolean }) {
-    return <WorkspaceState kind="error" icon="error" title={title} description={description || "请检查网络连接后重试，当前内容不会被覆盖。"} compact={compact} action={onRetry ? <Button onClick={onRetry}>{actionLabel}</Button> : undefined} />;
+export function WorkspaceErrorState({ title, description, actionLabel, onRetry, compact = false }: { title?: string; description?: string; actionLabel?: string; onRetry?: () => void; compact?: boolean }) {
+    const { t } = useTranslation();
+    return <WorkspaceState kind="error" icon="error" title={title ?? t("account.layout.state.errorTitle")} description={description || t("account.layout.state.errorDescription")} compact={compact} action={onRetry ? <Button onClick={onRetry}>{actionLabel ?? t("account.layout.state.reload")}</Button> : undefined} />;
 }
 
 /** 没有权限：说明原因，给出返回或申请的出口，不展示内容结构。 */
-export function WorkspaceForbiddenState({ title = "没有访问权限", description = "当前账号无法查看这里的内容。如需使用，请联系管理员开通。", action, compact = false }: { title?: string; description?: ReactNode; action?: ReactNode; compact?: boolean }) {
-    return <WorkspaceState kind="forbidden" icon="settings" title={title} description={description} compact={compact} action={action} />;
+export function WorkspaceForbiddenState({ title, description, action, compact = false }: { title?: string; description?: ReactNode; action?: ReactNode; compact?: boolean }) {
+    const { t } = useTranslation();
+    return <WorkspaceState kind="forbidden" icon="settings" title={title ?? t("account.layout.state.forbiddenTitle")} description={description ?? t("account.layout.state.forbiddenDescription")} compact={compact} action={action} />;
 }
 
-export function WorkspaceLoadingState({ label = "正在加载内容", detail, rows = 3, className }: { label?: string; detail?: string; rows?: number; className?: string }) {
+export function WorkspaceLoadingState({ label, detail, rows = 3, className }: { label?: string; detail?: string; rows?: number; className?: string }) {
+    const { t } = useTranslation();
     return (
         <section className={cn("workspace-loading-state py-8", className)} aria-busy="true" aria-live="polite">
             <div className="mb-5 flex items-center gap-3">
                 <WorkspaceSignalIcon variant="loading" size="sm" />
                 <div>
-                    <div className="text-sm font-medium">{label}</div>
+                    <div className="text-sm font-medium">{label ?? t("account.layout.state.loading")}</div>
                     {detail ? <div className="mt-1 text-xs text-[var(--text-tertiary)]">{detail}</div> : null}
                 </div>
             </div>

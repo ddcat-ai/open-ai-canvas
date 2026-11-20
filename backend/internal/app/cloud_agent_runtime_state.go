@@ -152,7 +152,7 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 	if len(state.SkillVersions) > cloudAgentSkillPoolMax+cloudAgentSkillPinnedMax {
 		return errors.New("Agent runtime skill pool is invalid")
 	}
-	if utf8.RuneCountInString(state.Memory.Text) > agentMemorySnapshotMaxRunes || utf8.RuneCountInString(state.SkillHints) > agentMemorySnapshotMaxRunes {
+	if utf8.RuneCountInString(state.Memory.Text) > agentMemorySnapshotMaxRunes || utf8.RuneCountInString(state.Memory.WorkText) > agentMemoryWorkSnapshotMaxRunes || utf8.RuneCountInString(state.SkillHints) > agentMemorySnapshotMaxRunes {
 		return errors.New("Agent runtime context snapshot is invalid")
 	}
 	switch state.Memory.Mode {
@@ -246,6 +246,9 @@ func validateCloudAgentRuntime(run *model.CloudAgentExecution, state *cloudAgent
 			return errors.New("Agent runtime media task is not attached to current call")
 		}
 	}
+	if err := validateCloudAgentMediaBatch(state); err != nil {
+		return err
+	}
 	if state.AutoPreparedMedia != nil {
 		if state.AutoPreparedCallHash == "" || state.CallIndex < 0 || state.CallIndex >= len(state.Calls) {
 			return errors.New("Agent runtime auto media preparation is invalid")
@@ -320,7 +323,7 @@ func validateCloudAgentPolicySnapshot(snapshot cloudAgentPolicySnapshot) error {
 	if snapshot.CapabilitySetVersion != cloudAgentCapabilitySetVersion {
 		return errors.New("Agent runtime capability contract is unsupported")
 	}
-	if snapshot.ReasoningMode != "off" && snapshot.ReasoningMode != "auto" && snapshot.ReasoningMode != "deep" {
+	if !validCloudAgentReasoningMode(snapshot.ReasoningMode) {
 		return errors.New("Agent runtime reasoning mode is invalid")
 	}
 	system, media, err := prompts.LoadAgentPolicies()
@@ -359,7 +362,7 @@ func validateCloudAgentPolicySnapshotStructure(snapshot cloudAgentPolicySnapshot
 	if snapshot.SystemPolicyVersion <= 0 || snapshot.MediaPolicyVersion <= 0 {
 		return errors.New("Agent runtime policy version is invalid")
 	}
-	if snapshot.ReasoningMode != "off" && snapshot.ReasoningMode != "auto" && snapshot.ReasoningMode != "deep" {
+	if !validCloudAgentReasoningMode(snapshot.ReasoningMode) {
 		return errors.New("Agent runtime reasoning mode is invalid")
 	}
 	for _, field := range []struct {

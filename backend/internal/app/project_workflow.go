@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -597,21 +598,17 @@ func (s *Service) ensureGeneratedProjectAsset(task model.Task, projectID string,
 		title = "镜头产物"
 	}
 	title += " · " + label
-	width := resource.Width
-	height := resource.Height
-	if width <= 0 {
-		width = 1
-	}
-	if height <= 0 {
-		height = 1
-	}
+	// 尺寸未知时先补探测已保存的文件；仍未知就如实写 0，不再伪造 1×1。
+	probeCtx, cancelProbe := context.WithTimeout(context.Background(), mediaProbeTimeout)
+	s.repairResourceDimensions(probeCtx, resource)
+	cancelProbe()
 	resourceURL := "/api/resources/" + resourceID + "/file"
 	data := map[string]any{
 		"storageKey": "resource:" + resourceID,
 		"mimeType":   resource.MimeType,
 		"bytes":      resource.Size,
-		"width":      width,
-		"height":     height,
+		"width":      max(resource.Width, 0),
+		"height":     max(resource.Height, 0),
 	}
 	if mediaType == "image" {
 		data["dataUrl"] = resourceURL

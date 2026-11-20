@@ -2,8 +2,11 @@ package app
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
+
+	"yingce/backend/internal/model"
 )
 
 func TestCloudAgentMediaReferencePrompt(t *testing.T) {
@@ -132,12 +135,118 @@ func TestCloudAgentMediaReferenceEdgesFollowApprovedOrder(t *testing.T) {
 		{"id": "hero-edge", "fromNodeId": "hero", "toNodeId": "target"},
 		{"id": "removed-edge", "fromNodeId": "removed", "toNodeId": "target"},
 	}
-	got := cloudAgentMediaConnections(edges, cloudAgentMediaArgs{NodeID: "target", ReferenceNodeIDs: []string{"hero", "cat"}, SourceNodeID: "text"})
-	ids := []string{}
+	got := cloudAgentMediaConnections(map[string]any{"connections": edges}, cloudAgentMediaArgs{NodeID: "target", ReferenceNodeIDs: []string{"hero", "cat"}, SourceNodeID: "text"})
+	sources := []string{}
 	for _, edge := range got {
-		ids = append(ids, stringValue(edge["id"]))
+		sources = append(sources, stringValue(edge["fromNodeId"]))
 	}
-	if strings.Join(ids, ",") != "other-edge,hero-edge,cat-edge,text-edge" {
-		t.Fatalf("wrong reference order or unrelated edge changed: %v", ids)
+	if got[0]["id"] != "other-edge" || strings.Join(sources, ",") != "cat,hero,cat,text" {
+		t.Fatalf("wrong reference order or unrelated edge changed: %v", got)
+	}
+}
+
+func TestCloudAgentMediaStoryboardConnectionsSurviveApproval(t *testing.T) {
+	for _, origin := range []string{"materialized", "row-handle", "row-binding"} {
+		t.Run(origin, func(t *testing.T) {
+			s, db, args := agentMediaFixture(t)
+			canvas, err := s.repo.CanvasProjectForUser("user", "agent-canvas")
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc, err := creationDocument(canvas.PayloadJSON)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc["nodes"] = append(creationMaps(doc["nodes"]), map[string]any{"id": args.NodeID, "type": "video", "metadata": map[string]any{"status": "idle"}}, map[string]any{
+				"id": "script", "type": "script", "metadata": map[string]any{"storyboard": map[string]any{"rows": []any{map[string]any{"id": "shot", "videoNodeId": args.NodeID}}}},
+			})
+			edges := []map[string]any{{"id": "cat-input", "fromNodeId": "cat", "toNodeId": args.NodeID, "relation": "storyboard-asset-reference", "storyboardRowId": "shot"}, {"id": "old-input", "fromNodeId": "shot-1", "toNodeId": args.NodeID}}
+			if origin != "row-binding" {
+				output := map[string]any{"id": "output", "fromNodeId": "script", "toNodeId": args.NodeID, "fromHandleId": "row:shot"}
+				if origin == "materialized" {
+					output["relation"], output["storyboardRowId"] = "storyboard-output", "shot"
+				}
+				edges = append(edges, output)
+			}
+			doc["connections"] = edges
+			raw, err := json.Marshal(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Model(&model.CanvasProject{}).Where("id = ?", canvas.ID).Update("payload_json", string(raw)).Error; err != nil {
+				t.Fatal(err)
+			}
+			args.SnapshotHash, args.SourceNodeID = cloudAgentCanvasHash(doc), ""
+			run, state := agentMediaRun(t, s, args, "request_approval")
+			if err := s.advanceCloudAgentTool(run, &state); err != nil {
+				t.Fatal(err)
+			}
+			readEdges := func() []map[string]any {
+				t.Helper()
+				stored, err := s.repo.CanvasProjectForUser("user", canvas.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				payload, err := creationDocument(stored.PayloadJSON)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return creationMaps(payload["connections"])
+			}
+			draft := readEdges()
+			var inputs []string
+			outputs := 0
+			for _, edge := range draft {
+				if edge["fromNodeId"] == "script" {
+					outputs++
+					if edge["fromHandleId"] != "row:shot" || edge["relation"] != "storyboard-output" || edge["storyboardRowId"] != "shot" || (origin != "row-binding" && edge["id"] != "output") {
+						t.Fatalf("incorrect output edge: %v", edge)
+					}
+					continue
+				}
+				if edge["relation"] != "storyboard-asset-reference" || edge["storyboardRowId"] != "shot" {
+					t.Fatalf("incorrect storyboard reference: %v", edge)
+				}
+				inputs = append(inputs, stringValue(edge["fromNodeId"]))
+			}
+			if outputs != 1 || !reflect.DeepEqual(inputs, args.ReferenceNodeIDs) {
+				t.Fatalf("persisted graph differs from the approved inputs: %v", draft)
+			}
+			approveAgentMediaDraft(t, s, run.ID)
+			if submitted := readEdges(); !reflect.DeepEqual(draft, submitted) {
+				t.Fatalf("approval rewrote edges: %v -> %v", draft, submitted)
+			}
+		})
+	}
+}
+
+func TestCloudAgentMediaDependencyTracksStoryboardBindingAndHandles(t *testing.T) {
+	args := cloudAgentMediaArgs{Mode: "video", NodeID: "clip"}
+	row := map[string]any{"id": "shot", "videoNodeId": args.NodeID}
+	edge := map[string]any{"id": "output", "fromNodeId": "script", "toNodeId": args.NodeID, "fromHandleId": "row:shot"}
+	doc := map[string]any{
+		"nodes": []any{
+			map[string]any{"id": "script", "type": "script", "metadata": map[string]any{"storyboard": map[string]any{"rows": []any{row}}}},
+			map[string]any{"id": args.NodeID, "type": "video"},
+		},
+		"connections": []any{edge},
+	}
+	dependency := func() string {
+		t.Helper()
+		hash, err := cloudAgentMediaDependencyHash(doc, args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return hash
+	}
+	approved := dependency()
+	edge["fromHandleId"] = "row:other"
+	if dependency() == approved {
+		t.Fatal("changing the output handle must invalidate approval")
+	}
+	edge["fromHandleId"] = "row:shot"
+	delete(row, "videoNodeId")
+	if dependency() == approved {
+		t.Fatal("removing the row binding must invalidate approval even when the edge remains")
 	}
 }

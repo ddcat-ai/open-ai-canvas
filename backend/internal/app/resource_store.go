@@ -177,26 +177,32 @@ func (s *Service) ImportResourceURL(userID string, rawURL string, kind string, w
 	if err != nil {
 		return nil, err
 	}
-	payload.mimeType, err = detectUploadedMimeType(bytes.NewReader(payload.data))
+	return s.storeFetchedResource(userID, existing, uploadKey, payload.fileName, payload.data, width, height, durationMs)
+}
+
+// storeFetchedResource 保存服务端已取得的字节（远程导入、姿势库选用），
+// 与普通上传共用媒体探测、上传幂等键和每日上传额度。
+func (s *Service) storeFetchedResource(userID string, existing *model.Resource, uploadKey *string, fileName string, data []byte, width int, height int, durationMs int64) (*model.Resource, error) {
+	mimeType, err := detectUploadedMimeType(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
-	kind = uploadedResourceKind(payload.mimeType)
+	kind := uploadedResourceKind(mimeType)
 	if kind == "image" && (width <= 0 || height <= 0) {
-		if decodedWidth, decodedHeight := imageDimensions(payload.data); decodedWidth > 0 && decodedHeight > 0 {
+		if decodedWidth, decodedHeight := imageDimensions(data); decodedWidth > 0 && decodedHeight > 0 {
 			width = decodedWidth
 			height = decodedHeight
 		}
 	}
-	size := int64(len(payload.data))
+	size := int64(len(data))
 	if existing != nil {
-		return s.retryStoredResource(userID, existing, kind, payload.mimeType, size, bytes.NewReader(payload.data))
+		return s.retryStoredResource(userID, existing, kind, mimeType, size, bytes.NewReader(data))
 	}
 	day, err := s.reserveUserUploadQuota(userID, size)
 	if err != nil {
 		return nil, err
 	}
-	resource, stored, err := s.storeResource(userID, kind, payload.fileName, payload.mimeType, size, width, height, durationMs, bytes.NewReader(payload.data), uploadKey, false)
+	resource, stored, err := s.storeResource(userID, kind, fileName, mimeType, size, width, height, durationMs, bytes.NewReader(data), uploadKey, false)
 	if err != nil {
 		s.releaseUserUploadQuota(userID, day, size)
 	} else if stored {
@@ -282,6 +288,15 @@ func (s *Service) storeResource(userID string, kind string, fileName string, mim
 	return s.storeResourceWithWriter(userID, kind, fileName, mimeType, size, width, height, durationMs, body, uploadKey, forceLocal, s.storeResourceObject, reservationIDs...)
 }
 
+// Preserve the storage boundary so callers can distinguish upload failures from database failures.
+type resourceObjectWriteError struct {
+	provider string
+	err      error
+}
+
+func (e *resourceObjectWriteError) Error() string { return e.err.Error() }
+func (e *resourceObjectWriteError) Unwrap() error { return e.err }
+
 func (s *Service) storeResourceWithWriter(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string, forceLocal bool, writeObject func(*model.Resource, string, io.Reader) (string, error), reservationIDs ...string) (*model.Resource, bool, error) {
 	reservationID := ""
 	if len(reservationIDs) > 0 {
@@ -341,6 +356,7 @@ func (s *Service) storeResourceWithWriter(userID string, kind string, fileName s
 	etag, err = writeObject(&resource, fileName, body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
+		err = &resourceObjectWriteError{provider: resource.Provider, err: err}
 		resource.Status = model.ResourceStatusFailed
 		resource.Error = err.Error()
 		if saveErr := s.repo.SaveResource(&resource); saveErr != nil {

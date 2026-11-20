@@ -169,7 +169,7 @@ func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminReso
 	if filter.Status != "" && !oneOf(filter.Status, string(model.ResourceStatusPending), string(model.ResourceStatusReady), string(model.ResourceStatusFailed), string(model.ResourceStatusDeleted)) {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源状态筛选无效")
 	}
-	if filter.Provider != "" && !oneOf(filter.Provider, "local", aliyunOSSProvider, tencentCOSProvider, qiniuKodoProvider, s3Provider) {
+	if filter.Provider != "" && filter.Provider != "local" && !supportedOSSProvider(filter.Provider) {
 		return repository.AdminResourceFilter{}, 0, 0, BadAuthRequest("资源存储位置筛选无效")
 	}
 	if len(filter.Keyword) > 200 || len(filter.UserQuery) > 160 {

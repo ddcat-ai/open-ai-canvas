@@ -39,7 +39,8 @@ func TestClientAssetPayloadRepairsWorkflowAssetDocument(t *testing.T) {
 		t.Fatalf("timestamps missing: %#v", payload)
 	}
 	data := payload["data"].(map[string]any)
-	if data["width"].(float64) != 1 || data["height"].(float64) != 1 {
+	// 视频尺寸未知如实返回 0（前端合同允许），不再伪造成 1×1。
+	if data["width"].(float64) != 0 || data["height"].(float64) != 0 {
 		t.Fatalf("dimensions = %#v", data)
 	}
 }
@@ -110,5 +111,37 @@ func TestClientAssetListPayloadDropsVerboseMetadata(t *testing.T) {
 	}
 	if payload["coverUrl"] != "" {
 		t.Fatalf("duplicate cover URL was not removed: %#v", payload["coverUrl"])
+	}
+}
+
+func TestClientAssetPayloadMediaDimensionContract(t *testing.T) {
+	cases := []struct {
+		name          string
+		kind          string
+		data          string
+		width, height float64
+	}{
+		{"legacy 1x1 video placeholder becomes unknown", "video", `"url":"/api/resources/r/file","storageKey":"resource:r","width":1,"height":1`, 0, 0},
+		{"missing video dimensions become unknown", "video", `"url":"/api/resources/r/file","storageKey":"resource:r"`, 0, 0},
+		{"real video dimensions are kept", "video", `"url":"/api/resources/r/file","storageKey":"resource:r","width":1080,"height":1920`, 1080, 1920},
+		{"unknown image dimensions keep the positive placeholder", "image", `"dataUrl":"/api/resources/r/file","storageKey":"resource:r","width":0,"height":0`, 1, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mimeType := map[string]string{"image": "image/png", "video": "video/mp4"}[tc.kind]
+			asset := model.Asset{ID: "asset-dim", Kind: tc.kind, Title: "尺寸", PayloadJSON: `{"id":"asset-dim","kind":"` + tc.kind + `","title":"尺寸","tags":[],"data":{` + tc.data + `,"bytes":1,"mimeType":"` + mimeType + `"}}`}
+			raw := ClientAssetPayload(asset)
+			var payload map[string]any
+			if err := json.Unmarshal(raw, &payload); err != nil {
+				t.Fatal(err)
+			}
+			data := payload["data"].(map[string]any)
+			if data["width"] != tc.width || data["height"] != tc.height {
+				t.Fatalf("dimensions = %v x %v, want %v x %v", data["width"], data["height"], tc.width, tc.height)
+			}
+			if err := validateUserAssetDocument(raw); err != nil {
+				t.Fatalf("normalized payload fails the asset contract: %v (%s)", err, raw)
+			}
+		})
 	}
 }

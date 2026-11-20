@@ -542,7 +542,7 @@ func TestCanonicalAgentBodiesPreserveAssistantToolCalls(t *testing.T) {
 		t.Fatalf("responses input = %#v", responseInput)
 	}
 	functionCall, _ := responseInput[2].(map[string]interface{})
-	if functionCall["type"] != "function_call" || functionCall["name"] != "canvas_get_state" || functionCall["id"] != "fc-5" || functionCall["item_reference"] != "fc-5" {
+	if functionCall["type"] != "function_call" || functionCall["name"] != "canvas_get_state" || functionCall["id"] != "fc-5" || functionCall["item_reference"] != nil {
 		t.Fatalf("responses function call = %#v", functionCall)
 	}
 }
@@ -575,7 +575,7 @@ func TestRunAgentToolTaskOmitsToolChoiceBeforeThinkingRequest(t *testing.T) {
 
 			result, err := runAgentToolTask(context.Background(), canvasGenerationInput{
 				Config:        providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model"},
-				TextOptions:   canvasTextOptions{Thinking: true},
+				TextOptions:   canvasTextOptions{ThinkingLevel: "medium"},
 				AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{"messages": []interface{}{}, "tool_choice": forcedChoice}},
 			})
 			server.Close()
@@ -648,7 +648,7 @@ func TestRunDeclarativeAgentTaskOmitsToolChoiceBeforeThinkingRequest(t *testing.
 	}
 	result, err := runAgentToolTask(withProtocolRegistry(context.Background(), registry), canvasGenerationInput{
 		Config:      providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model", InterfaceType: "chat-completion"},
-		TextOptions: canvasTextOptions{Thinking: true},
+		TextOptions: canvasTextOptions{ThinkingLevel: "medium"},
 		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{
 			"messages": []interface{}{}, "tools": []interface{}{}, "tool_choice": "required",
 		}},
@@ -738,7 +738,7 @@ data: [DONE]
 }
 
 func TestTextThinkingOptionsAndReasoningParsing(t *testing.T) {
-	input := canvasGenerationInput{TextOptions: canvasTextOptions{Thinking: true}}
+	input := canvasGenerationInput{TextOptions: canvasTextOptions{ThinkingLevel: "medium"}}
 	responsesBody := map[string]interface{}{}
 	applyTextThinking(responsesBody, input, "responses")
 	reasoning, _ := responsesBody["reasoning"].(map[string]interface{})
@@ -797,6 +797,9 @@ data: {"type":"response.function_call_arguments.delta","item_id":"fc-stream","de
 event: response.function_call_arguments.done
 data: {"type":"response.function_call_arguments.done","item_id":"fc-stream","arguments":"{\"nodeId\":\"n1\"}"}
 
+event: response.completed
+data: {"type":"response.completed","response":{"output":[{"type":"function_call","id":"fc-stream","call_id":"call-stream","name":"canvas_get_state","arguments":"{\"nodeId\":\"n1\"}"}]}}
+
 `))
 	parser.flush()
 	result, err := parser.result()
@@ -843,10 +846,76 @@ data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use"
 event: content_block_delta
 data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"include\":"}}
 
+event: message_stop
+data: {"type":"message_stop"}
+
 `))
 	parser.flush()
 	if _, err := parser.result(); err == nil || !strings.Contains(err.Error(), "完整 JSON") {
 		t.Fatalf("incomplete tool arguments error = %v", err)
+	}
+}
+
+func TestStreamingAgentParserRejectsTruncatedStreams(t *testing.T) {
+	cases := []struct {
+		name     string
+		protocol string
+		stream   string
+	}{
+		{"chat", "chat-completion", `data: {"choices":[{"delta":{"content":"写到一半"}}]}
+
+`},
+		{"responses", "responses", `event: response.output_text.delta
+data: {"type":"response.output_text.delta","delta":"写到一半"}
+
+`},
+		{"claude", "claude-api", `event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"写到一半"}}
+
+`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := newStreamingAgentParser(tc.protocol, nil)
+			parser.consume("text/event-stream", []byte(tc.stream))
+			parser.flush()
+			if _, err := parser.result(); err == nil || !strings.Contains(err.Error(), "提前中断") {
+				t.Fatalf("truncated stream result error = %v", err)
+			}
+		})
+	}
+}
+
+func TestStreamingAgentParserAcceptsProtocolTerminalMarkers(t *testing.T) {
+	cases := []struct {
+		name     string
+		protocol string
+		stream   string
+	}{
+		{"chat finish_reason", "chat-completion", `data: {"choices":[{"delta":{"content":"完整"},"finish_reason":"stop"}]}
+
+`},
+		{"claude message_delta stop_reason", "claude-api", `event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"完整"}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
+
+`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parser := newStreamingAgentParser(tc.protocol, nil)
+			parser.consume("text/event-stream", []byte(tc.stream))
+			parser.flush()
+			result, err := parser.result()
+			if err != nil {
+				t.Fatalf("terminal stream result error = %v", err)
+			}
+			if result["text"] != "完整" {
+				t.Fatalf("text = %v", result["text"])
+			}
+		})
 	}
 }
 
@@ -1250,8 +1319,12 @@ func TestRunGeminiImageTaskUsesInlineDataAndImageConfig(t *testing.T) {
 			t.Errorf("responseModalities = %#v", modalities)
 		}
 		imageConfig, _ := generationConfig["imageConfig"].(map[string]interface{})
-		if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "4K" {
+		if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "1K" {
 			t.Errorf("imageConfig = %#v", imageConfig)
+		}
+		thinkingConfig, _ := generationConfig["thinkingConfig"].(map[string]interface{})
+		if thinkingConfig["thinkingLevel"] != "LOW" {
+			t.Errorf("thinkingConfig = %#v", thinkingConfig)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}]}`))
@@ -1260,7 +1333,7 @@ func TestRunGeminiImageTaskUsesInlineDataAndImageConfig(t *testing.T) {
 
 	result, err := runImageTask(context.Background(), canvasGenerationInput{
 		Prompt:          "edit this image",
-		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image", Size: "16:9", Quality: "high"},
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image", Size: "16:9", Quality: "high", ImageResolution: "1K", ImageParameters: map[string]any{"thinkingLevel": "low"}},
 		ReferenceImages: []providerMedia{{DataURL: testGeminiReferenceImageDataURL}},
 	})
 	if err != nil {

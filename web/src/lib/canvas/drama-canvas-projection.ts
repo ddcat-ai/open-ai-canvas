@@ -3,13 +3,11 @@ import { nanoid } from "nanoid";
 import { createCanvasNode, createStoryboardRow } from "@/lib/canvas/canvas-project-domain";
 import { FRAME_HEADER_HEIGHT, FRAME_PADDING } from "@/lib/canvas/canvas-frame";
 import { findAvailableGenerationGroupPosition } from "@/lib/canvas/canvas-generation-layout";
-import { createDefaultTracks, DEFAULT_VIDEO_TRACK_ID } from "@/lib/timeline/timeline-tracks";
-import { DRAMA_CAST_KIND_LABEL } from "@/lib/drama/drama-format";
+import { DRAMA_CAST_KIND_LABEL, dramaCastDisplayName } from "@/lib/drama/drama-format";
 import type { DramaCast, DramaCastKind, DramaEpisode, DramaSegment, DramaShot, DramaTake } from "@/services/api/drama";
 import { CanvasNodeType, type CanvasConnection, type CanvasDramaRef, type CanvasMediaVersion, type CanvasNodeData, type CanvasVideoEditOperation, type Position, type StoryboardColumn, type StoryboardRow } from "@/types/canvas";
-import type { TimelineClip, TimelineProject } from "@/types/timeline";
 
-// 短剧 → 精修画布的投送：纯函数，只负责把短剧对象排成节点、连线与时间线；
+// 短剧 → 精修画布的投送：纯函数，只负责把短剧对象排成节点与连线；
 // 素材登记、写入画布和网络请求由调用方完成。节点通过 metadata.dramaRef 回指短剧对象。
 
 const DRAMA_CAST_ASSET_CATEGORY: Record<DramaCastKind, "character" | "prop" | "environment"> = { character: "character", prop: "prop", scene: "environment" };
@@ -185,8 +183,8 @@ export function dramaPlacement(nodes: CanvasNodeData[], size: { width: number; h
 export function buildDramaCastNode(input: { projectId: string; cast: DramaCast; ratio?: string; takes?: DramaTake[]; media: DramaProjectionMedia; topLeft: Position }): CanvasNodeData {
     const { cast, media } = input;
     const size = dramaMediaSize(input.ratio || "16:9", CAST_WIDTH * 1.3);
-    const prompt = [cast.appearance, cast.kind === "character" && cast.voiceInstructions ? `声线：${cast.voiceInstructions}` : ""].filter(Boolean).join("\n");
-    const node = mediaNode(CanvasNodeType.Image, `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${cast.name}`, cast.imageResourceId, media, {
+    const prompt = [cast.imagePrompt || cast.appearance, cast.kind === "character" && cast.voiceInstructions ? `声线：${cast.voiceInstructions}` : ""].filter(Boolean).join("\n");
+    const node = mediaNode(CanvasNodeType.Image, `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${dramaCastDisplayName(cast)}`, cast.imageResourceId, media, {
         prompt,
         composerContent: prompt,
         assetCategory: DRAMA_CAST_ASSET_CATEGORY[cast.kind],
@@ -267,8 +265,8 @@ export function buildDramaSegmentGroup(input: {
     const referenceNodes = references.map((reference, index) => {
         const cast = input.castById.get(reference.castId);
         const node = mediaNode(CanvasNodeType.Image, `${reference.label} · ${reference.name}`, reference.resourceId, media, {
-            assetCategory: DRAMA_CAST_ASSET_CATEGORY[reference.kind],
-            dramaRef: { projectId: input.projectId, kind: "cast", id: reference.castId, baseResourceId: cast?.imageResourceId || reference.resourceId },
+            assetCategory: reference.kind === "image" ? "material" : DRAMA_CAST_ASSET_CATEGORY[reference.kind],
+            ...(reference.castId ? { dramaRef: { projectId: input.projectId, kind: "cast" as const, id: reference.castId, baseResourceId: cast?.imageResourceId || reference.resourceId } } : {}),
         });
         return { ...node, position: { x: x + (index % columns) * (REF_SIZE + REF_GAP), y: contentTop + Math.floor(index / columns) * (REF_SIZE + REF_GAP) }, width: REF_SIZE, height: REF_SIZE };
     });
@@ -369,43 +367,6 @@ export function buildDramaFinalNode(input: {
         ...dramaTakeVersions(input.takes, input.episode.finalResourceId, input.media, "video"),
     });
     return { ...node, position: input.topLeft, width: size.width, height: size.height };
-}
-
-/**
- * 一集的剪辑时间线：各剧情段当前视频按顺序首尾相接，时长与成片合成一致（videoSeconds）。
- * 没有视频的段跳过并返回段号，由调用方提示。
- */
-export function buildDramaEpisodeTimeline(input: { episode: Pick<DramaEpisode, "number">; segments: DramaSegment[]; media: DramaProjectionMedia }): { timeline: TimelineProject; skipped: number[]; resourceIds: string[] } {
-    const clips: TimelineClip[] = [];
-    const skipped: number[] = [];
-    const resourceIds: string[] = [];
-    let cursor = 0;
-    for (const segment of input.segments) {
-        const resourceId = segment.videoResourceId;
-        const assetId = resourceId ? input.media.assetIdOf(resourceId) : undefined;
-        const durationMs = (segment.videoSeconds || segment.request.seconds || 0) * 1000;
-        if (!resourceId || !assetId || durationMs <= 0 || (segment.videoStatus !== "ready" && segment.videoStatus !== "stale")) {
-            skipped.push(segment.index + 1);
-            continue;
-        }
-        resourceIds.push(resourceId);
-        const title = `第 ${input.episode.number} 集 · 第 ${segment.index + 1} 段`;
-        clips.push({
-            id: `asset:${assetId}:${segment.index}`,
-            kind: "video",
-            nodeId: `asset:${assetId}`,
-            trackId: DEFAULT_VIDEO_TRACK_ID,
-            startMs: cursor,
-            durationMs,
-            sourceStartMs: 0,
-            sourceDurationMs: durationMs,
-            volume: 1,
-            title,
-            directMedia: { id: assetId, assetId, kind: "video", title, storageKey: resourceKey(resourceId), url: input.media.urlOf(resourceId), durationMs },
-        });
-        cursor += durationMs;
-    }
-    return { timeline: { version: 2, tracks: createDefaultTracks(), clips, durationMs: cursor, updatedAt: new Date().toISOString() }, skipped, resourceIds };
 }
 
 /** 画布上已有的短剧对象（设定按 castId、剧情段按 segmentId、成片按 episodeId）；值表示短剧侧是否已有更新的版本。 */

@@ -20,6 +20,7 @@ type Task struct {
 	CancellationActorID          string                   `json:"cancellationActorId,omitempty" gorm:"size:36"`
 	CancellationRequestedAt      *time.Time               `json:"cancellationRequestedAt,omitempty"`
 	CreationSubmissionID         *string                  `json:"creationSubmissionId,omitempty" gorm:"size:36;uniqueIndex"`
+	SubmissionHash               string                   `json:"-" gorm:"size:64"`
 	WorkbenchKind                string                   `json:"workbenchKind,omitempty" gorm:"size:16;index"`
 	ID                           string                   `json:"id" gorm:"primaryKey;size:36"`
 	UserID                       string                   `json:"userId" gorm:"index;size:36;index:idx_tasks_user_created,priority:1;index:idx_tasks_user_project_created,priority:1"`
@@ -38,6 +39,7 @@ type Task struct {
 	LogicalModelRevisionID       string                   `json:"logicalModelRevisionId,omitempty" gorm:"size:36;index"`
 	RouteID                      string                   `json:"routeId,omitempty" gorm:"size:36;index"`
 	ChannelModelID               string                   `json:"channelModelId,omitempty" gorm:"size:36;index"`
+	ProtocolBindingJSON          string                   `json:"-" gorm:"type:text"`
 	// RouteRun 只在用户主动重试时递增；worker 租约恢复不应创建新的路由选择世代。
 	RouteRun                  int                  `json:"-" gorm:"index"`
 	BillingOrderID            string               `json:"billingOrderId,omitempty" gorm:"index;size:36"`

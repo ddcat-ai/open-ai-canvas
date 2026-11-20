@@ -37,9 +37,9 @@ export const MEDIA_CONVERSION_OPERATION_LABELS: Record<MediaConversionOperation,
 export const MEDIA_CONVERSION_OPERATION_DESCRIPTIONS: Record<MediaConversionOperation, string> = {
     grayscale: "普通图像算法，适合先检查明暗层次",
     "edge-canny": "普通图像算法，提取清晰轮廓",
-    lineart: "本地 ControlNet Aux 线稿预处理，首次运行需要加载模型",
-    depth: "本地 Depth Anything V2 Small，首次运行需要加载模型",
-    pose: "本地 OpenPose 人体骨架预处理，未检测到人物时会跳过",
+    lineart: "本机 ControlNet Aux 线稿预处理，需要另行部署本机模型服务",
+    depth: "本机 Depth Anything V2 Small，需要另行部署本机模型服务",
+    pose: "本机 OpenPose 人体骨架预处理，需要另行部署本机模型服务",
     cutout: "需要安装并验证本地抠图模型",
 };
 

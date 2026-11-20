@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { zhCN as accountZh } from "../src/i18n/messages/areas/account/zh-CN";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -45,8 +46,10 @@ describe("workspace sidebar checkin card", () => {
 
         expect(checkinIndex).toBeGreaterThan(-1);
         expect(storageIndex).toBeGreaterThan(checkinIndex);
-        expect(card).toContain("立即领取");
-        expect(card).toContain("今日<em>{amount}</em>积分");
+        expect(card).toContain('t("account.layout.checkin.claim")');
+        expect(accountZh.layout.checkin.claim).toBe("立即领取");
+        expect(card).toContain('{t("account.layout.checkin.offerBefore")}\n                    <em>{amount}</em>\n                    {t("account.layout.checkin.offerAfter")}');
+        expect(accountZh.layout.checkin).toMatchObject({ offerBefore: "今日", offerAfter: "积分" });
         expect(card).toContain("checkinCredits()");
         expect(block).toContain("background: #fff;");
         expect(block).toContain("background: #171717;");

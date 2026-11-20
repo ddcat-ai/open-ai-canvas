@@ -125,6 +125,14 @@ eagle-asset-connector.yingce-plugin
 - `dependencies`：插件依赖的其他插件或宿主能力。
 - `integrity`：用于校验远程产物是否被替换。
 
+### 5.1 文本多模态声明式投影
+
+文本请求保留原有 `request.messages`，另提供 `request.textMessages`：每条含 `role`、有序规范化 `parts` 和文字拼接 `text`。媒体块带 `value/mimeType/format/isInline/data/valid`，`raw` 保留原始块；`request.textInput` 汇总所有历史和当前输入的 `parts/types/invalidCount` 及远程媒体数量，供现有 `validations` 使用。投影不下载媒体、不推断模型能力，也不改变准入、选线或计费。
+
+插件负责原生编码：Gemini/Vertex 使用 inlineData/fileData，Ollama 使用字符串和 Base64 images，Converse 使用原生 content/source.bytes，DashScope 使用 input.messages 和正确端点，Messages 转换历史与当前图片并保留原生缓存/工具/思考块。InvokeModel 必须提供模型专属非空 body/extra_body，不伪造通用格式。具体媒体、URI 和 MIME 边界见各包接口文档，不能把 profile 限制等同于供应商所有产品能力。Agent 原生路径不经过内容转换。
+
+文本协议以目录内 manifest 为事实源；`generate-catalog.mjs <插件ID...>` 从实际清单刷新字段表和完整嵌入文档，不再从重复模板覆盖修复。修改后必须同步重建实际 `.yingce-plugin`；启动刷新应保留管理员停用状态。
+
 ## 6. 宿主 API 边界
 
 插件不得直接导入页面组件、store 或内部 API 文件。宿主通过版本化 SDK 提供能力。

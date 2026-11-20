@@ -309,6 +309,11 @@ func ValidateManifest(manifest Manifest) error {
 		if err := ValidateImageParameters(provider.ImageParameters); err != nil {
 			return fmt.Errorf("provider %q image parameters: %w", provider.ID, err)
 		}
+		if rule := provider.VideoReferences; rule != nil {
+			if !hasCapability(provider.Capabilities, CapabilityVideo) || !rule.valid() {
+				return fmt.Errorf("provider %q has an invalid videoReferences contract", provider.ID)
+			}
+		}
 		for _, parameter := range provider.ImageParameters {
 			if parameter.Binding == "" {
 				return fmt.Errorf("provider %q image parameter %s requires a binding", provider.ID, parameter.Name)
@@ -383,6 +388,28 @@ func ValidateManifest(manifest Manifest) error {
 				return fmt.Errorf("provider %q result operation: %w", provider.ID, err)
 			}
 		}
+		bindingNames := make(map[string]bool, len(provider.RequestBindings))
+		for modelID, output := range provider.VideoOutputs {
+			if len(provider.VideoModes[modelID]) == 0 || output.MinSeconds < 1 || output.MaxSeconds < output.MinSeconds || len(output.Resolutions) == 0 {
+				return fmt.Errorf("provider %q has invalid video output limits for %q", provider.ID, modelID)
+			}
+		}
+		for modelID, modes := range provider.VideoModes {
+			if strings.TrimSpace(modelID) == "" || len(modes) == 0 || !hasCapability(provider.Capabilities, CapabilityVideo) {
+				return fmt.Errorf("provider %q has invalid video modes for %q", provider.ID, modelID)
+			}
+			for operation, limits := range modes {
+				if strings.TrimSpace(operation) == "" || limits.MaxImages < 0 || limits.Ratios == nil {
+					return fmt.Errorf("provider %q has invalid video mode %q for %q", provider.ID, operation, modelID)
+				}
+			}
+		}
+		for _, binding := range provider.RequestBindings {
+			if strings.TrimSpace(binding.Name) == "" || strings.ContainsAny(binding.Name, ".[] ") || binding.Value == nil || bindingNames[binding.Name] {
+				return fmt.Errorf("provider %q has invalid or duplicate request binding %q", provider.ID, binding.Name)
+			}
+			bindingNames[binding.Name] = true
+		}
 		for ruleIndex, rule := range provider.Validations {
 			if rule.Assert == nil || strings.TrimSpace(rule.Message) == "" {
 				return fmt.Errorf("provider %q validation %d requires assert and message", provider.ID, ruleIndex)
@@ -425,8 +452,48 @@ func validatePaymentProviderContributions(manifest Manifest) error {
 				return fmt.Errorf("payment provider contribution %q has invalid notification response status", provider.ID)
 			}
 		}
+		methods := make(map[string]struct{}, len(provider.Methods))
+		for _, method := range provider.Methods {
+			if !ValidPaymentMethodID(method.ID) || strings.TrimSpace(method.Label) == "" {
+				return fmt.Errorf("payment provider contribution %q has invalid method %q", provider.ID, method.ID)
+			}
+			if _, exists := methods[method.ID]; exists {
+				return fmt.Errorf("payment provider contribution %q has duplicate method %q", provider.ID, method.ID)
+			}
+			methods[method.ID] = struct{}{}
+		}
+		if field := strings.TrimSpace(provider.MethodsField); field != "" && !manifestHasConfigField(manifest, field) {
+			return fmt.Errorf("payment provider contribution %q methods field %q is not a configuration field", provider.ID, field)
+		}
 	}
 	return nil
+}
+
+// ValidPaymentMethodID 限定支付方式 ID 为 1-32 位小写字母、数字、- 或 _，且以字母或数字开头；
+// 该值会原样作为渠道下单参数，宿主据此拒绝任意字符串。
+func ValidPaymentMethodID(value string) bool {
+	if len(value) == 0 || len(value) > 32 {
+		return false
+	}
+	for index, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			continue
+		}
+		if index > 0 && (char == '-' || char == '_') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func manifestHasConfigField(manifest Manifest, name string) bool {
+	for _, field := range manifest.Configuration.Fields {
+		if field.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeManifest(manifest *Manifest) error {
@@ -450,10 +517,22 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.Scopes = provider.Scopes
 	manifest.Metadata.Parameters = provider.Parameters
 	manifest.Metadata.ImageParameters = provider.ImageParameters
+	manifest.Metadata.VideoReferences = provider.VideoReferences
+	manifest.Metadata.VideoModes = provider.VideoModes
+	manifest.Metadata.VideoOutputs = provider.VideoOutputs
 	manifest.Metadata.Create = operationSummary(provider.Create)
+	manifest.Metadata.Agent = operationSummaryPtr(provider.Agent)
 	manifest.Metadata.Poll = operationSummaryPtr(provider.Poll)
 	manifest.Metadata.Cancel = operationSummaryPtr(provider.Cancel)
 	manifest.Metadata.ContentType = provider.Create.ContentType
+	manifest.Metadata.TextWire, manifest.Metadata.AgentWire = "", ""
+	if hasCapability(provider.Capabilities, CapabilityText) {
+		manifest.Metadata.TextWire = TextWireForPath(provider.Create.Path)
+		if provider.Agent != nil {
+			manifest.Metadata.AgentWire = TextWireForPath(provider.Agent.Path)
+		}
+	}
+	manifest.Metadata.Auth = provider.Auth
 	manifest.Metadata.RequiresPublicMediaURLs = provider.RequiresPublicMediaURLs
 	manifest.Metadata.DetachedPolling = provider.DetachedPolling
 	manifest.Metadata.IdempotentCreate = provider.IdempotentCreate
@@ -469,6 +548,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.AgentResponse = provider.AgentResponse
 	manifest.Auth = provider.Auth
 	manifest.Validations = provider.Validations
+	manifest.RequestBindings = provider.RequestBindings
 	return nil
 }
 

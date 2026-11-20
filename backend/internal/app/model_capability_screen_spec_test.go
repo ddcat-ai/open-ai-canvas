@@ -195,10 +195,13 @@ func TestAutoDLScreenSpecSystemSaveCatalogAndExecutionIgnoreClientOverride(t *te
 	for _, subset := range []bool{true, false} {
 		profile := autoDLProfile(t, subset)
 		id := ""
+		version := ChannelModelRequest{}
 		if item, err := svc.repo.ChannelModelByKey(channel.ID, "minimax_h3_zm_u24"); err == nil {
 			id = item.ID
+			version.ExpectedUpdatedAt, version.ExpectedPriceVersion = item.UpdatedAt, item.PriceVersion
 		}
 		saved, err := svc.SaveAdminChannelModel(admin, channel.ID, id, ChannelModelRequest{
+			ExpectedUpdatedAt: version.ExpectedUpdatedAt, ExpectedPriceVersion: version.ExpectedPriceVersion,
 			ModelKey: "minimax_h3_zm_u24", ProviderModelKey: "minimax_h3_zm_u24", Capability: "video", Protocol: "autodl-comfyui", CapabilityConfig: profile, Enabled: &enabled,
 			PriceTiers: priceTiers,
 		})
@@ -251,7 +254,11 @@ func TestAutoDLScreenSpecSystemSaveCatalogAndExecutionIgnoreClientOverride(t *te
 		if err := json.Unmarshal(encoded, &execution); err != nil {
 			t.Fatal(err)
 		}
-		if err := svc.validateResolvedVideoCapability(&execution); err != nil {
+		execution.Config, err = svc.resolveProviderConfig(execution.Config, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validateResolvedVideoCapability(&execution); err != nil {
 			t.Fatal(err)
 		}
 		if execution.Config.VQuality != catalog.Video.DefaultResolution || execution.Config.Size != "" || !reflect.DeepEqual(execution.VideoCapability.Resolutions, catalog.Video.Resolutions) {

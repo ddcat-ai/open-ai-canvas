@@ -1,5 +1,14 @@
 # Azure OpenAI 接口字段
 
+## FORMA-TEXT-MULTIMODAL：部署型同步合同
+
+POST /openai/deployments/{{model}}/chat/completions，model 是 deployment ID。保留 api-key 鉴权及 api-version 查询（默认 2024-10-21），不迁移到新版 /openai/v1。正文为标准 model/messages 与采样/工具选项，不发送无效 input 或 parameters 包装。命名空间 parameters/body/extra_body 的原生选项合并到正文；最终 messages 使用 request.textMessages，纯文本为字符串，user 图片为 image_url.url（HTTP(S) 或内联 data URL）。
+
+本 profile 明确只实现该部署型端点的文本与图片输入：system/assistant 媒体、音频、视频、gs URL、未知或无效内容（包括历史）会拒绝。此边界不代表 Azure 的实时/音频专用或其他版本接口没有音视频能力；不能仅凭同品牌或 OpenAI 兼容性把它们映射到当前端点。图片能力仍由实际 deployment 和版本验证，不修改模型声明。同步入口拒绝 stream=true；响应读取 choices[0].message.content、reasoning_content、usage 与 error。
+
+官方依据：[Azure REST reference](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference)、[Vision-enabled models](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/gpt-with-vision)。未做真实部署调用。
+
+
 ## 协议身份
 
 - 插件 ID：`azure-openai`。
@@ -10,18 +19,20 @@
 - 创建：`POST /openai/deployments/{{model}}/chat/completions`。
 - 生命周期：同步响应。
 
+
 ## 配置字段
 
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
 | `apiKey` | secret | 是 | API Key |
 
+
 ## 统一字段映射
 
 | 统一字段 | 类型 | 必填 | 上游映射 | 说明 |
 | --- | --- | --- | --- | --- |
 | `model` | string | 是 | `model` | 上游模型 ID。 |
-| `messages` | message[] | 是 | `provider message container` | 包含历史消息和当前用户输入。 |
+| `messages` | message[] | 是 | `messages` | 包含历史消息和当前用户输入。 |
 | `instructions` | string | 否 | `system/instructions` | 系统指令。 |
 | `temperature` | number | 否 | `temperature` | 采样温度。 |
 | `top_p` | number | 否 | `top_p` | 核采样参数。 |
@@ -31,50 +42,44 @@
 | `response_format` | object | 否 | `response_format/text` | 结构化输出配置。 |
 | `stream` | boolean | 否 | `stream` | 流式开关；后台任务当前以最终响应归一。 |
 
-## 上游请求模板逐字段清单
 
-下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。
+## 上游请求模板逐字段清单
 
 | 上游位置 | 值或转换表达式 |
 | --- | --- |
 | `create.method` | `"POST"` |
 | `create.path` | `"/openai/deployments/{{model}}/chat/completions"` |
 | `create.contentType` | `"application/json"` |
-| `create.body` | `{"$merge":[{"model":{"$ref":"request.model"},"messages":{"$ref":"request.messages"},"input":{"$omitEmpty":{"$ref":"request.prompt"}},"parameters":{"$omitEmpty":{"$ref":"request.providerOptions.azure-openai.parameters"}}},{"$coalesce":[{"$ref":"request.providerOptions.azure-openai.body"},{"$ref":"request.providerOptions.azure-openai.extra_body"},{}]}]}` |
+| `create.body` | `{"$merge":[{"temperature":{"$omitEmpty":{"$ref":"request.providerOptions.azure-openai.temperature"}},"top_p":{"$omitEmpty":{"$ref":"request.providerOptions.azure-openai.top_p"}},"max_tokens":{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.azure-openai.max_tokens"},{"$ref":"request.extra.max_tokens"}]}},"tools":{"$omitEmpty":{"$ref":"request.providerOptions.azure-openai.tools"}},"tool_choice":{"$omitEmpty":{"$ref":"request.providerOptions.azure-openai.tool_choice"}},"response_format":{"$omitEmpty":{"$ref":"request.providerOptions.azure-openai.response_format"}}},{"$coalesce":[{"$ref":"request.providerOptions.azure-openai.parameters"},{}]},{"$coalesce":[{"$ref":"request.providerOptions.azure-openai.body"},{"$ref":"request.providerOptions.azure-openai.extra_body"},{}]},{"model":{"$ref":"request.model"},"messages":{"$map":{"from":{"$ref":"request.textMessages"},"as":"m","in":{"role":{"$ref":"m.role"},"content":{"$if":{"condition":{"$eq":[{"$len":{"$filter":{"from":{"$ref":"m.parts"},"as":"p","where":{"$not":{"$eq":[{"$ref":"p.type"},"text"]}}}}},0]},"then":{"$ref":"m.text"},"else":{"$map":{"from":{"$ref":"m.parts"},"as":"p","in":{"$if":{"condition":{"$eq":[{"$ref":"p.type"},"text"]},"then":{"type":"text","text":{"$ref":"p.text"}},"else":{"type":"image_url","image_url":{"url":{"$ref":"p.value"},"detail":{"$omitEmpty":{"$ref":"p.raw.image_url.detail"}}}}}}}}}}}}},"stream":false}]}` |
 | `create.query.api-version` | `{"$coalesce":[{"$ref":"request.providerOptions.azure-openai.api-version"},"2024-10-21"]}` |
+
 
 ## Provider 扩展键
 
 - `providerOptions.azure-openai.api-version`
 - `providerOptions.azure-openai.body`
 - `providerOptions.azure-openai.extra_body`
+- `providerOptions.azure-openai.max_tokens`
 - `providerOptions.azure-openai.parameters`
+- `providerOptions.azure-openai.response_format`
+- `providerOptions.azure-openai.temperature`
+- `providerOptions.azure-openai.tool_choice`
+- `providerOptions.azure-openai.tools`
+- `providerOptions.azure-openai.top_p`
 
-动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。
 
 ## 响应映射逐字段清单
 
 | 映射位置 | 上游路径或转换表达式 |
 | --- | --- |
 | `response.status` | `"succeeded"` |
-| `response.textPaths[0]` | `"output.text"` |
-| `response.textPaths[1]` | `"output_text"` |
-| `response.textPaths[2]` | `"choices.0.message.content"` |
-| `response.textPaths[3]` | `"result"` |
-| `response.reasoningPaths[0]` | `"reasoning_content"` |
+| `response.textPaths[0]` | `"choices.0.message.content"` |
+| `response.reasoningPaths[0]` | `"choices.0.message.reasoning_content"` |
 | `response.usage` | `{"$ref":"response.usage"}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.errorPaths[1]` | `"code"` |
 | `response.messagePaths[0]` | `"error.message"` |
 | `response.messagePaths[1]` | `"message"` |
-
-## 响应与错误
-
-插件把上游 task/status/text/media/usage 映射为统一结果。临时媒体 URL 标记为 ephemeral，由宿主立即下载持久化。HTTP 错误、业务 code 和 error object 保持失败语义，不包装成成功。
-
-## 兼容边界
-
-该协议的模型级字段变化快或依赖云资源配置。插件固定线协议入口和统一字段，完整厂商对象通过 providerOptions.azure-openai 的 parameters/input/extra_body 传入；OpenAI body + api-version query。云签名型入口在未配置对应鉴权驱动时会明确失败，不会伪装成 Bearer 成功。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -86,7 +91,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "azure-openai",
   "name": "Azure OpenAI",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Microsoft Azure / 影策",
   "description": "Azure OpenAI 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -138,7 +143,7 @@
             "name": "messages",
             "type": "message[]",
             "required": true,
-            "mapping": "provider message container",
+            "mapping": "messages",
             "description": "包含历史消息和当前用户输入。"
           },
           {
@@ -205,22 +210,51 @@
           "body": {
             "$merge": [
               {
-                "model": {
-                  "$ref": "request.model"
-                },
-                "messages": {
-                  "$ref": "request.messages"
-                },
-                "input": {
+                "temperature": {
                   "$omitEmpty": {
-                    "$ref": "request.prompt"
+                    "$ref": "request.providerOptions.azure-openai.temperature"
                   }
                 },
-                "parameters": {
+                "top_p": {
                   "$omitEmpty": {
-                    "$ref": "request.providerOptions.azure-openai.parameters"
+                    "$ref": "request.providerOptions.azure-openai.top_p"
+                  }
+                },
+                "max_tokens": {
+                  "$omitEmpty": {
+                    "$coalesce": [
+                      {
+                        "$ref": "request.providerOptions.azure-openai.max_tokens"
+                      },
+                      {
+                        "$ref": "request.extra.max_tokens"
+                      }
+                    ]
+                  }
+                },
+                "tools": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.azure-openai.tools"
+                  }
+                },
+                "tool_choice": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.azure-openai.tool_choice"
+                  }
+                },
+                "response_format": {
+                  "$omitEmpty": {
+                    "$ref": "request.providerOptions.azure-openai.response_format"
                   }
                 }
+              },
+              {
+                "$coalesce": [
+                  {
+                    "$ref": "request.providerOptions.azure-openai.parameters"
+                  },
+                  {}
+                ]
               },
               {
                 "$coalesce": [
@@ -232,6 +266,96 @@
                   },
                   {}
                 ]
+              },
+              {
+                "model": {
+                  "$ref": "request.model"
+                },
+                "messages": {
+                  "$map": {
+                    "from": {
+                      "$ref": "request.textMessages"
+                    },
+                    "as": "m",
+                    "in": {
+                      "role": {
+                        "$ref": "m.role"
+                      },
+                      "content": {
+                        "$if": {
+                          "condition": {
+                            "$eq": [
+                              {
+                                "$len": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "m.parts"
+                                    },
+                                    "as": "p",
+                                    "where": {
+                                      "$not": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "p.type"
+                                          },
+                                          "text"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              0
+                            ]
+                          },
+                          "then": {
+                            "$ref": "m.text"
+                          },
+                          "else": {
+                            "$map": {
+                              "from": {
+                                "$ref": "m.parts"
+                              },
+                              "as": "p",
+                              "in": {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "p.type"
+                                      },
+                                      "text"
+                                    ]
+                                  },
+                                  "then": {
+                                    "type": "text",
+                                    "text": {
+                                      "$ref": "p.text"
+                                    }
+                                  },
+                                  "else": {
+                                    "type": "image_url",
+                                    "image_url": {
+                                      "url": {
+                                        "$ref": "p.value"
+                                      },
+                                      "detail": {
+                                        "$omitEmpty": {
+                                          "$ref": "p.raw.image_url.detail"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "stream": false
               }
             ]
           },
@@ -249,13 +373,10 @@
         "response": {
           "status": "succeeded",
           "textPaths": [
-            "output.text",
-            "output_text",
-            "choices.0.message.content",
-            "result"
+            "choices.0.message.content"
           ],
           "reasoningPaths": [
-            "reasoning_content"
+            "choices.0.message.reasoning_content"
           ],
           "usage": {
             "$ref": "response.usage"
@@ -268,7 +389,218 @@
             "error.message",
             "message"
           ]
-        }
+        },
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$ref": "request.textInput.invalidCount"
+                },
+                0
+              ]
+            },
+            "message": "输入或历史消息包含无效或未识别的内容块"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "p",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "p.type"
+                            },
+                            [
+                              "text",
+                              "image"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议不支持输入或历史消息中的媒体类型"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textMessages"
+                      },
+                      "as": "m",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "m.role"
+                            },
+                            [
+                              "system",
+                              "user",
+                              "assistant"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议只接受 system、user、assistant 消息"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textMessages"
+                      },
+                      "as": "m",
+                      "where": {
+                        "$and": [
+                          {
+                            "$not": {
+                              "$eq": [
+                                {
+                                  "$ref": "m.role"
+                                },
+                                "user"
+                              ]
+                            }
+                          },
+                          {
+                            "$gt": [
+                              {
+                                "$len": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "m.parts"
+                                    },
+                                    "as": "p",
+                                    "where": {
+                                      "$not": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "p.type"
+                                          },
+                                          "text"
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议仅支持 user 消息中的媒体"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "p",
+                      "where": {
+                        "$and": [
+                          {
+                            "$not": {
+                              "$eq": [
+                                {
+                                  "$ref": "p.type"
+                                },
+                                "text"
+                              ]
+                            }
+                          },
+                          {
+                            "$not": {
+                              "$ref": "p.isInline"
+                            }
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$first": {
+                                    "$split": [
+                                      {
+                                        "$ref": "p.value"
+                                      },
+                                      ":"
+                                    ]
+                                  }
+                                },
+                                [
+                                  "http",
+                                  "https"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "该协议仅支持 HTTP(S) 媒体 URL 或内联数据"
+          },
+          {
+            "assert": {
+              "$not": {
+                "$or": [
+                  {
+                    "$ref": "request.providerOptions.azure-openai.stream"
+                  },
+                  {
+                    "$ref": "request.providerOptions.azure-openai.body.stream"
+                  },
+                  {
+                    "$ref": "request.providerOptions.azure-openai.extra_body.stream"
+                  },
+                  {
+                    "$ref": "request.providerOptions.azure-openai.parameters.stream"
+                  }
+                ]
+              }
+            },
+            "message": "该同步协议不支持 stream=true"
+          }
+        ]
       }
     ]
   }

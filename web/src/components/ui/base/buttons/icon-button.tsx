@@ -1,4 +1,4 @@
-import { useState, type ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2, type LucideIcon } from "lucide-react";
 
@@ -18,39 +18,32 @@ import { cn } from "@/lib/utils";
  *   AntD Button icon-only。
  * 明暗：全部颜色走 token；active 按压底用 bg-surface-active，明暗自动适配。
  */
-export const iconButtonVariants = cva(
-    [
-        "inline-flex shrink-0 items-center justify-center rounded-md",
-        "outline-none focus-visible:outline-none data-[input-modality=keyboard]:focus-visible:ring-2 data-[input-modality=keyboard]:focus-visible:ring-ring",
-        "disabled:pointer-events-none disabled:opacity-45",
-    ],
-    {
-        variants: {
-            variant: {
-                // 纯透明 + hover 浮底（最常用：面板/工具条）
-                ghost: "text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
-                // 常驻浅底
-                default: "bg-surface-secondary text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
-                // 描边
-                outline: "border border-border bg-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-                // 危险（文本色常驻红）
-                danger: "text-status-error hover:bg-surface-hover active:bg-surface-active",
-                // 实心（中性黑底白图标，主操作；active 反转成白底黑字 + 内描边，供选中态使用）
-                solid: "bg-foreground text-background hover:opacity-85 active:opacity-75 data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-border",
-            },
-            size: {
-                xs: "size-6 [&_svg]:size-3.5",
-                sm: "size-7 [&_svg]:size-4",
-                default: "size-8 [&_svg]:size-4",
-                lg: "size-9 [&_svg]:size-[18px]",
-            },
+export const iconButtonVariants = cva(["inline-flex shrink-0 items-center justify-center rounded-md", "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring", "disabled:pointer-events-none disabled:opacity-45"], {
+    variants: {
+        variant: {
+            // 纯透明 + hover 浮底（最常用：面板/工具条）
+            ghost: "text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
+            // 常驻浅底
+            default: "bg-surface-secondary text-muted-foreground hover:bg-surface-hover hover:text-foreground active:bg-surface-active",
+            // 描边
+            outline: "border border-border bg-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+            // 危险（文本色常驻红）
+            danger: "text-status-error hover:bg-surface-hover active:bg-surface-active",
+            // 实心（中性黑底白图标，主操作；active 反转成白底黑字 + 内描边，供选中态使用）
+            solid: "bg-foreground text-background hover:opacity-85 active:opacity-75 data-[active=true]:bg-background data-[active=true]:text-foreground data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-border",
         },
-        defaultVariants: {
-            variant: "ghost",
-            size: "default",
+        size: {
+            xs: "size-6 [&_svg]:size-3.5",
+            sm: "size-7 [&_svg]:size-4",
+            default: "size-8 [&_svg]:size-4",
+            lg: "size-9 [&_svg]:size-[18px]",
         },
     },
-);
+    defaultVariants: {
+        variant: "ghost",
+        size: "default",
+    },
+});
 
 export type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
     VariantProps<typeof iconButtonVariants> & {
@@ -62,32 +55,10 @@ export type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
         active?: boolean;
     };
 
-export function IconButton({ variant, size, icon: Icon, loading = false, active = false, className, type = "button", disabled, onPointerDown, onKeyDown, onBlur, ...props }: IconButtonProps) {
-    const [inputModality, setInputModality] = useState<"pointer" | "keyboard">("pointer");
+export function IconButton({ variant, size, icon: Icon, loading = false, active = false, className, type = "button", disabled, ...props }: IconButtonProps) {
     return (
-        <button
-            data-slot="icon-button"
-            data-input-modality={inputModality}
-            type={type}
-            disabled={disabled || loading}
-            aria-busy={loading || undefined}
-            data-active={active || undefined}
-            className={cn(iconButtonVariants({ variant, size }), className)}
-            onPointerDown={(event) => {
-                setInputModality("pointer");
-                onPointerDown?.(event);
-            }}
-            onKeyDown={(event) => {
-                if (event.key === "Tab" || event.key === "Enter" || event.key === " ") setInputModality("keyboard");
-                onKeyDown?.(event);
-            }}
-            onBlur={(event) => {
-                setInputModality("pointer");
-                onBlur?.(event);
-            }}
-            {...props}
-        >
-            {loading ? <Loader2 aria-hidden className="animate-spin" /> : <Icon aria-hidden />}
+        <button data-slot="icon-button" type={type} disabled={disabled || loading} aria-busy={loading || undefined} data-active={active || undefined} className={cn(iconButtonVariants({ variant, size }), className)} {...props}>
+            {loading ? <Loader2 aria-hidden className="motion-safe:animate-spin" /> : <Icon aria-hidden />}
         </button>
     );
 }

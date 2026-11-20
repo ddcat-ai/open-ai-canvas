@@ -84,12 +84,34 @@ func TestOnlyResumableNewAPIChannel2VideoDeadlinesStayRunning(t *testing.T) {
 	if svc.shouldDeferVideoProviderTask(base, string(input), providerHTTPError{StatusCode: 400, Body: `{"code":"task_not_exist"}`}) {
 		t.Fatal("untyped provider error must not be deferred")
 	}
-	other, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://93.184.216.34", InterfaceType: string(model.ChannelInterfaceNewAPIVideo)}})
+	other, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://93.184.216.34", InterfaceType: "legacy-unregistered-video"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if svc.shouldDeferVideoProviderTask(base, string(other), context.DeadlineExceeded) {
 		t.Fatal("providers without a verified query-only resume contract must fail closed")
+	}
+}
+
+// 声明式视频插件恢复时只回查原任务、不会再次 create，声明了 poll 就要在单次执行时限后继续回查，
+// 而不是判“等待超时”；总等待时长仍受分离式回查的上限约束。
+func TestDeclarativeVideoDeadlinesResumeByDeclaredPoll(t *testing.T) {
+	svc := &Service{}
+	startedAt := time.Now()
+	task := model.Task{ID: "task-1", Type: "canvas_video", ProviderRequestID: "provider-task-1", StartedAt: &startedAt}
+	for _, interfaceType := range []string{string(model.ChannelInterfaceNewAPIVideo), "kling-video", "minimax-video", "dashscope-wan-video"} {
+		input, err := json.Marshal(canvasGenerationInput{Mode: "video", Config: providerConfig{BaseURL: "https://93.184.216.34", InterfaceType: interfaceType}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !svc.shouldDeferVideoProviderTask(task, string(input), context.DeadlineExceeded) {
+			t.Fatalf("%s declares poll and must keep polling the existing upstream task", interfaceType)
+		}
+		expiredStartedAt := startedAt.Add(-detachedProviderTaskMaxAge - time.Second)
+		expired := model.Task{ID: task.ID, Type: task.Type, ProviderRequestID: task.ProviderRequestID, StartedAt: &expiredStartedAt}
+		if svc.shouldDeferVideoProviderTask(expired, string(input), context.DeadlineExceeded) {
+			t.Fatalf("%s must stop polling after the bounded total wait", interfaceType)
+		}
 	}
 }
 
@@ -133,7 +155,7 @@ func TestResumableVideoDeadlineUsesResolvedSystemChannelProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.ModelChannel{}, &model.ChannelModel{}); err != nil {
+	if err := db.AutoMigrate(&model.SystemSetting{}, &model.ModelChannel{}, &model.ChannelModel{}); err != nil {
 		t.Fatal(err)
 	}
 	channel := model.ModelChannel{

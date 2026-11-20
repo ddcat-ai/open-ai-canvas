@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 )
 
 type ChannelModelsRequest struct {
+	ProxyURL  string           `json:"-"`
 	BaseURL   string           `json:"baseUrl"`
 	APIKey    string           `json:"apiKey"`
 	APIFormat string           `json:"apiFormat"`
@@ -19,11 +21,20 @@ type ChannelModelsRequest struct {
 }
 
 type channelModelsPayload struct {
-	Data   []channelModelItem `json:"data"`
-	Models []channelModelItem `json:"models"`
-	Error  *providerError     `json:"error"`
-	Code   *int               `json:"code"`
-	Msg    string             `json:"msg"`
+	Complete      *bool              `json:"complete"`
+	HasMoreCamel  bool               `json:"hasMore"`
+	NextPage      json.RawMessage    `json:"next_page"`
+	NextCursor    string             `json:"next_cursor"`
+	Pagination    json.RawMessage    `json:"pagination"`
+	HasMore       bool               `json:"has_more"`
+	NextPageToken string             `json:"nextPageToken"`
+	Next          string             `json:"next"`
+	Total         *int               `json:"total"`
+	Data          []channelModelItem `json:"data"`
+	Models        []channelModelItem `json:"models"`
+	Error         *providerError     `json:"error"`
+	Code          *int               `json:"code"`
+	Msg           string             `json:"msg"`
 }
 
 type channelModelItem struct {
@@ -135,37 +146,81 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 	if _, err := ValidateOutboundURL(target); err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return nil, BadAuthRequest("模型服务地址无效")
-	}
-	if apiFormat == "gemini" {
-		request.Header.Set("x-goog-api-key", apiKey)
-	} else {
-		request.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-	ApplyOutboundHeaders(request, headers)
-
-	// 只代理固定的模型目录 GET；用户密钥仅用于本次请求，不写入数据库或日志。
-	data, _, err := doBinary(request)
-	if err != nil {
-		return nil, channelModelsUpstreamError(err)
-	}
+	ctx = context.WithValue(ctx, providerProxyURLKey{}, input.ProxyURL)
 	var payload channelModelsPayload
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, WrapAppError(http.StatusBadGateway, "模型服务返回的不是有效 JSON", err)
-	}
-	if payload.Error != nil && strings.TrimSpace(payload.Error.Message) != "" {
-		return nil, NewAppError(http.StatusBadGateway, "模型服务返回失败，请检查渠道配置")
-	}
-	if payload.Code != nil && *payload.Code != 0 {
-		return nil, NewAppError(http.StatusBadGateway, "模型服务返回失败，请检查渠道配置")
+	allItems := []channelModelItem{}
+	pageURL := target
+	seenPages := map[string]bool{}
+	for page := 0; ; page++ {
+		if page >= 20 || seenPages[pageURL] {
+			return nil, NewAppError(http.StatusBadGateway, "模型目录分页未完整结束，本次未更新读取结果")
+		}
+		seenPages[pageURL] = true
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+		if err != nil {
+			return nil, BadAuthRequest("模型服务地址无效")
+		}
+		if apiFormat == "gemini" {
+			request.Header.Set("x-goog-api-key", apiKey)
+		} else {
+			request.Header.Set("Authorization", "Bearer "+apiKey)
+		}
+		ApplyOutboundHeaders(request, headers)
+
+		// 只代理固定的模型目录 GET；用户密钥仅用于本次请求，不写入数据库或日志。
+		data, _, err := doBinary(request)
+		if err != nil {
+			return nil, channelModelsUpstreamError(err)
+		}
+		payload = channelModelsPayload{}
+		if err := json.Unmarshal(data, &payload); err != nil {
+			return nil, WrapAppError(http.StatusBadGateway, "模型服务返回的不是有效 JSON", err)
+		}
+		if payload.Error != nil && strings.TrimSpace(payload.Error.Message) != "" {
+			return nil, NewAppError(http.StatusBadGateway, "模型服务返回失败，请检查渠道配置")
+		}
+		if payload.Code != nil && *payload.Code != 0 {
+			return nil, NewAppError(http.StatusBadGateway, "模型服务返回失败，请检查渠道配置")
+		}
+		if (payload.Complete != nil && !*payload.Complete) || payload.HasMoreCamel || payload.NextCursor != "" || (len(payload.NextPage) > 0 && string(payload.NextPage) != "null") || (len(payload.Pagination) > 0 && string(payload.Pagination) != "null") {
+			return nil, NewAppError(http.StatusBadGateway, "模型目录未声明完整结束或使用不支持的分页格式，本次未更新读取结果")
+		}
+		pageItems := payload.Data
+		if apiFormat == "gemini" {
+			pageItems = payload.Models
+		}
+		if pageItems == nil {
+			return nil, NewAppError(http.StatusBadGateway, "模型服务未返回完整目录数组，本次未更新读取结果")
+		}
+		for _, item := range pageItems {
+			if strings.TrimSpace(firstNonEmpty(item.ID, item.Name)) == "" {
+				return nil, NewAppError(http.StatusBadGateway, "模型目录存在缺少标识的条目，本次未更新读取结果")
+			}
+		}
+		allItems = append(allItems, pageItems...)
+		if len(allItems) > 5000 {
+			return nil, NewAppError(http.StatusBadGateway, "模型目录超过 5000 条，本次未更新读取结果")
+		}
+		if payload.NextPageToken == "" && !payload.HasMore && payload.Next == "" {
+			if payload.Total != nil && *payload.Total > len(allItems) {
+				return nil, NewAppError(http.StatusBadGateway, "模型目录条数不完整，本次未更新读取结果")
+			}
+			break
+		}
+		next, _ := url.Parse(target)
+		query := next.Query()
+		if apiFormat == "gemini" && payload.NextPageToken != "" {
+			query.Set("pageToken", payload.NextPageToken)
+		} else if apiFormat == "openai" && payload.HasMore && len(pageItems) > 0 {
+			query.Set("after", firstNonEmpty(pageItems[len(pageItems)-1].ID, pageItems[len(pageItems)-1].Name))
+		} else {
+			return nil, NewAppError(http.StatusBadGateway, "模型目录使用不支持的分页格式，本次未更新读取结果")
+		}
+		next.RawQuery = query.Encode()
+		pageURL = next.String()
 	}
 
-	items := payload.Data
-	if apiFormat == "gemini" {
-		items = payload.Models
-	}
+	items := allItems
 	seen := make(map[string]bool, len(items))
 	catalog := make([]ChannelModelCatalogItem, 0, len(items))
 	for _, item := range items {

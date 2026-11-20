@@ -14,6 +14,7 @@
 // 慢的那几张只剩一块空面板，观感就是"右边出来了左边还空着"。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 
@@ -101,6 +102,7 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
      * 池子来自 gallery-pool.json，是单独一份静态 JSON，不打包。
      * 它没到之前整条画廊不渲染——先摆一小批再换成大池子，用户会看到画面整排重排一次。
      */
+    const { t } = useTranslation();
     const [pool, setPool] = useState<CreationInspiration[]>([]);
     const [poolReady, setPoolReady] = useState(false);
     const [shots, setShots] = useState<CreationInspiration[]>([]);
@@ -227,9 +229,9 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
                             key={id}
                             type="button"
                             tabIndex={-1}
-                            className={`creation-tunnel-card ${depth === 0 ? "is-active" : ""} ${readyIds.has(id) ? "is-ready" : ""}`}
+                            className={`creation-tunnel-card ${depth === 0 ? "is-active" : ""} ${depth > 0 && depth <= MAX_DEPTH ? "is-selectable" : ""} ${readyIds.has(id) ? "is-ready" : ""}`}
                             style={style}
-                            onClick={() => onStartPrompt(inspiration.mode, fillablePrompt(inspiration))}
+                            onClick={() => (relative === 0 ? onStartPrompt(inspiration.mode, fillablePrompt(inspiration)) : step(relative))}
                         >
                             <img
                                 src={inspiration.image}
@@ -247,7 +249,7 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
                             <span className="creation-tunnel-card-info">
                                 <span className="creation-tunnel-card-cta">
                                     <ArrowUp aria-hidden="true" />
-                                    使用这个创意
+                                    {t("create.inspiration.useIdea")}
                                 </span>
                                 <span className="creation-tunnel-card-title">{inspiration.title}</span>
                                 <span className="creation-tunnel-card-desc">{inspiration.description}</span>
@@ -261,12 +263,12 @@ export function CreationInspirationTunnel({ mode, onStartPrompt }: { mode: Creat
                 `button:has(> svg):not(:has(> span)):not(:disabled):hover` 会认领"纯图标按钮"，
                 用 !important 改写 color / background 并把 transform 顶成 translateY(-1px)，
                 按钮会当场掉半个身位。带 span 的按钮不在那条规则的射程内。 */}
-            <button type="button" className="creation-gallery-arrow is-prev" aria-label="上一张灵感" onClick={() => step(-1)}>
+            <button type="button" className="creation-gallery-arrow is-prev" aria-label={t("create.inspiration.previous")} onClick={() => step(-1)}>
                 <span className="creation-gallery-arrow-icon">
                     <ChevronLeft aria-hidden="true" />
                 </span>
             </button>
-            <button type="button" className="creation-gallery-arrow is-next" aria-label="下一张灵感" onClick={() => step(1)}>
+            <button type="button" className="creation-gallery-arrow is-next" aria-label={t("create.inspiration.next")} onClick={() => step(1)}>
                 <span className="creation-gallery-arrow-icon">
                     <ChevronRight aria-hidden="true" />
                 </span>

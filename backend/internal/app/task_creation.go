@@ -9,6 +9,8 @@ import (
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 // Internal admission constraints are not JSON fields. Callers cannot select a
@@ -42,6 +44,40 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	normalizedInput, err := normalizeTaskInput(req.Input)
 	if err != nil {
 		return nil, err
+	}
+	if err := s.requireTaskGenerationFeatures(userID, req.ProjectID, taskType, req.Operation, req.workbenchKind, normalizedInput); err != nil {
+		return nil, err
+	}
+	prompt, err = s.prepareEcommerceWorkbenchTask(userID, normalizedInput, prompt)
+	if err != nil {
+		return nil, err
+	}
+	if metadata, ok := normalizedInput["metadata"].(map[string]any); ok && stringValue(metadata["source"]) == "ecommerce-agent" {
+		stage := stringValue(metadata["stage"])
+		if stage == "planning" || stage == "creative-directions" || stage == "product-understanding" {
+			setting, settingErr := s.EcommerceAgentSetting()
+			if settingErr != nil {
+				return nil, settingErr
+			}
+			if stage == "planning" {
+				if !ecommerceTaskUsesModel(setting.planningRef(), req.LogicalModelID, normalizedInput) {
+					return nil, InvalidModelSelection("电商 Agent 策划模型已由管理员更新，请刷新页面后重试")
+				}
+			} else if !ecommerceTaskUsesModel(setting.visionRef(), req.LogicalModelID, normalizedInput) {
+				return nil, InvalidModelSelection("电商 Agent 识图模型已由管理员更新，请刷新页面后重试")
+			}
+			// 工作台走通用任务队列，阶段思考意图同模型一样由后台配置决定，不能信任客户端覆盖。
+			thinking := setting.VisionThinkingLevel
+			if stage == "planning" {
+				thinking = setting.ThinkingLevel
+			}
+			options, _ := normalizedInput["textOptions"].(map[string]any)
+			if options == nil {
+				options = map[string]any{}
+			}
+			options["thinkingLevel"] = defaultString(strings.TrimSpace(thinking), ThinkingIntentAuto)
+			normalizedInput["textOptions"] = options
+		}
 	}
 	// 视频处理（kind=processing）以源视频为主体，不要求 prompt；提示词由服务端生成，
 	// 源时长、帧率档和处理参数在这里按资源记录与后台配置重算。
@@ -145,6 +181,14 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		workbenchKind = workbenchKindFromTaskInput(normalizedInput, taskType)
 	}
 	task := model.Task{ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID, Type: taskType, WorkbenchKind: workbenchKind, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
+	var selected *model.ChannelModel
+	if routed != nil {
+		selected = &routed.ChannelModel
+	}
+	task.ProtocolBindingJSON, err = s.captureTaskProtocolBinding(normalizedInput, selected)
+	if err != nil {
+		return nil, err
+	}
 	if req.admission != nil {
 		task.ID = req.admission.ID
 		task.AgentRunID = req.admission.AgentRunID
@@ -242,6 +286,55 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	return taskForOutput(task), nil
 }
 
+// Admission uses server-owned workbench identity and an owned ecommerce project.
+// Client metadata can request a stricter gate, but cannot grant an exemption.
+func (s *Service) requireTaskGenerationFeatures(userID, projectID, taskType, operation, workbenchKind string, input map[string]any) error {
+	metadata, _ := input["metadata"].(map[string]any)
+	ecommerceID := strings.TrimSpace(stringValue(metadata["ecommerceProjectId"]))
+	ecommerce := false
+	if ecommerceID != "" {
+		if _, err := s.repo.EcommerceProject(userID, ecommerceID); err != nil {
+			return NotFound("电商项目不存在")
+		}
+		ecommerce = true
+	}
+	if projectID = strings.TrimSpace(projectID); projectID != "" && projectID != ecommerceID {
+		if _, err := s.repo.EcommerceProject(userID, projectID); err == nil {
+			ecommerce = true
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	}
+	if stringValue(metadata["source"]) == "ecommerce-agent" && !ecommerce {
+		return BadAuthRequest("电商任务必须关联当前用户的电商项目")
+	}
+	if ecommerce {
+		if err := s.RequireFeature(FeatureEcommerce); err != nil {
+			return err
+		}
+	}
+	if workbenchKind == "" {
+		workbenchKind = workbenchKindFromTaskInput(input, taskType)
+	}
+	if !ecommerce && workbenchKind == "" {
+		return nil
+	}
+	// The provider dispatches by mode; type and persisted kind are additional
+	// evidence so a mismatched public request cannot weaken media admission.
+	if isVideoTaskType(taskType) || stringValue(input["mode"]) == "video" || workbenchKind == WorkbenchKindVideo {
+		if ecommerce {
+			if err := s.RequireFeature(FeatureEcommerceVideo); err != nil {
+				return err
+			}
+		}
+		return s.RequireFeature(FeatureVideoWorkbench)
+	}
+	if taskType == "canvas_image" || stringValue(input["mode"]) == "image" || workbenchKind == WorkbenchKindImage {
+		return s.RequireFeature(FeatureImageWorkbench)
+	}
+	return nil
+}
+
 // resolveTaskModelSelection 根据请求实际携带的模型选择决定路由方式。
 // 显式系统渠道和用户自定义渠道请求不能被全局前台模型开关误判；
 // 它们仍分别进入系统目录校验或自定义渠道的功能、能力与安全校验。
@@ -322,6 +415,7 @@ func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map
 	// interfaceType；缺失会让依赖协议的尺寸换算（比例 → 像素）静默跳过，把 16:9 这类比例
 	// 原样发给只认 WIDTHxHEIGHT 的上游（OpenAI Images 直接拒绝）。
 	nextConfig["interfaceType"] = string(routed.ChannelModel.Protocol)
+	nextConfig["protocolRelease"], nextConfig["priceRevision"], nextConfig["profileRevision"] = routed.ChannelModel.ProtocolRelease, routed.ChannelModel.PriceVersion, routed.ChannelModel.CapabilityVersion
 	providerModelKey := routed.ChannelModel.ProviderModelKey
 	if routed.PriceTier != nil {
 		nextConfig["priceTierId"] = routed.PriceTier.ID
@@ -648,6 +742,7 @@ func (s *Service) resolveSystemChannelModelSelection(access *userGroupAccess, in
 	nextConfig["priceTierId"] = priceTier.ID
 	nextConfig["providerModelKey"] = firstNonEmpty(priceTier.ProviderModelKey, channelModel.ProviderModelKey, channelModel.ModelKey)
 	nextConfig["interfaceType"] = string(channelModel.Protocol)
+	nextConfig["protocolRelease"], nextConfig["priceRevision"], nextConfig["profileRevision"] = channelModel.ProtocolRelease, channelModel.PriceVersion, channelModel.CapabilityVersion
 	nextConfig["apiFormat"] = channelAPIFormatForProtocol(channel.APIFormat, channelModel.Protocol)
 	return input, nil
 }

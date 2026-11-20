@@ -1,4 +1,4 @@
-# Volcengine Ark Seedream Images 接口字段
+# 火山方舟 Seedream 官方图片生成 接口字段
 
 ## 协议身份
 
@@ -40,20 +40,30 @@
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
 | `create.body.prompt` | `{"$ref":"request.prompt"}` |
-| `create.body.size` | `{"$omitEmpty":{"$switch":{"cases":[{"when":{"$eq":[{"$ref":"request.aspectRatio"},"auto"]},"then":"2k"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"1:1"]},"then":"2048x2048"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"4:3"]},"then":"2304x1728"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"3:4"]},"then":"1728x2304"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"16:9"]},"then":"2560x1440"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"9:16"]},"then":"1440x2560"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"3:2"]},"then":"2496x1664"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"2:3"]},"then":"1664x2496"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"21:9"]},"then":"3024x1296"}],"default":{"$ref":"request.aspectRatio"}}}}` |
+| `create.body.size` | `{"$if":{"condition":{"$eq":[{"$ref":"request.providerOptions.volcengine-ark-image.layer_decomposition"},true]},"then":{"$coalesce":[{"$ref":"request.providerOptions.volcengine-ark-image.layer_size"},"auto"]},"else":{"$omitEmpty":{"$switch":{"cases":[{"when":{"$eq":[{"$ref":"request.aspectRatio"},"auto"]},"then":"2k"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"1:1"]},"then":"2048x2048"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"4:3"]},"then":"2304x1728"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"3:4"]},"then":"1728x2304"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"16:9"]},"then":"2560x1440"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"9:16"]},"then":"1440x2560"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"3:2"]},"then":"2496x1664"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"2:3"]},"then":"1664x2496"},{"when":{"$eq":[{"$ref":"request.aspectRatio"},"21:9"]},"then":"3024x1296"}],"default":{"$ref":"request.aspectRatio"}}}}}}` |
 | `create.body.image` | `{"$omitEmpty":{"$if":{"condition":{"$eq":[{"$len":{"$ref":"request.images"}},1]},"then":{"$first":{"$map":{"from":{"$ref":"request.images"},"as":"media","in":{"$ref":"media.value"}}}},"else":{"$if":{"condition":{"$gt":[{"$len":{"$ref":"request.images"}},1]},"then":{"$map":{"from":{"$ref":"request.images"},"as":"media","in":{"$ref":"media.value"}}},"else":null}}}}}` |
 | `create.body.sequential_image_generation` | `{"$omitEmpty":{"$ref":"request.providerOptions.volcengine-ark-image.sequential_image_generation"}}` |
 | `create.body.sequential_image_generation_options` | `{"$omitEmpty":{"$ref":"request.providerOptions.volcengine-ark-image.sequential_image_generation_options"}}` |
 | `create.body.watermark` | `{"$coalesce":[{"$ref":"request.providerOptions.volcengine-ark-image.watermark"},{"$ref":"request.watermark"},false]}` |
 | `create.body.seed` | `{"$omitEmpty":{"$ref":"request.providerOptions.volcengine-ark-image.seed"}}` |
 | `create.body.response_format` | `{"$coalesce":[{"$ref":"request.providerOptions.volcengine-ark-image.response_format"},"b64_json"]}` |
+| `create.body.layer_decomposition` | `{"$omitEmpty":{"$ref":"request.providerOptions.volcengine-ark-image.layer_decomposition"}}` |
+| `create.body.layer_decomposition_options` | `{"$omitEmpty":{"$if":{"condition":{"$eq":[{"$ref":"request.providerOptions.volcengine-ark-image.layer_decomposition"},true]},"then":{"max_images":{"$coalesce":[{"$ref":"request.providerOptions.volcengine-ark-image.max_images"},30]},"text_recognition":{"$coalesce":[{"$ref":"request.providerOptions.volcengine-ark-image.text_recognition"},false]}},"else":null}}}` |
+| `create.body.background` | `{"$omitEmpty":{"$if":{"condition":{"$eq":[{"$ref":"request.providerOptions.volcengine-ark-image.layer_decomposition"},true]},"then":null,"else":{"$ref":"request.providerOptions.volcengine-ark-image.background"}}}}` |
+| `create.body.output_format` | `{"$omitEmpty":{"$ref":"request.providerOptions.volcengine-ark-image.output_format"}}` |
 
 ## Provider 扩展键
 
+- `providerOptions.volcengine-ark-image.background`
+- `providerOptions.volcengine-ark-image.layer_decomposition`
+- `providerOptions.volcengine-ark-image.layer_size`
+- `providerOptions.volcengine-ark-image.max_images`
+- `providerOptions.volcengine-ark-image.output_format`
 - `providerOptions.volcengine-ark-image.response_format`
 - `providerOptions.volcengine-ark-image.seed`
 - `providerOptions.volcengine-ark-image.sequential_image_generation`
 - `providerOptions.volcengine-ark-image.sequential_image_generation_options`
+- `providerOptions.volcengine-ark-image.text_recognition`
 - `providerOptions.volcengine-ark-image.watermark`
 
 动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。
@@ -85,10 +95,10 @@
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-seedream",
-  "name": "Volcengine Ark Seedream Images",
-  "version": "2.0.0",
+  "name": "火山方舟 Seedream 官方图片生成",
+  "version": "2.1.0",
   "author": "Volcengine / 影策",
-  "description": "Volcengine Ark Seedream Images 独立请求协议插件。",
+  "description": "火山方舟官方 Seedream 图片生成接口，使用普通 /api/v3 推理 API Key；支持图片生成和参考图编辑。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
   "permissions": [
     "generation.run",
@@ -108,7 +118,7 @@
     "providers": [
       {
         "id": "volcengine-ark-image",
-        "label": "Volcengine Ark Seedream Images",
+        "label": "火山方舟 Seedream 官方图片生成",
         "capabilities": [
           "image"
         ],
@@ -125,6 +135,114 @@
           "type": "bearer",
           "field": "apiKey"
         },
+        "imageParameters": [
+          {
+            "name": "size",
+            "label": "画幅 / 尺寸",
+            "type": "string",
+            "pricing": true,
+            "binding": "aspectRatio",
+            "encoding": "pixels",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "imageResolution",
+            "label": "分辨率",
+            "type": "string",
+            "values": [
+              "1k",
+              "1.5k",
+              "2k"
+            ],
+            "default": "2k",
+            "pricing": true,
+            "binding": "resolution",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "layerDecomposition",
+            "label": "图层拆分",
+            "type": "boolean",
+            "default": false,
+            "pricing": true,
+            "binding": "providerOptions.volcengine-ark-image.layer_decomposition",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "maxImages",
+            "label": "最多输出张数（含底图）",
+            "type": "integer",
+            "min": 2,
+            "max": 100,
+            "step": 1,
+            "default": 30,
+            "binding": "providerOptions.volcengine-ark-image.max_images",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "layerSize",
+            "label": "拆层输出尺寸",
+            "type": "string",
+            "values": [
+              "1K",
+              "1.5K",
+              "2K",
+              "auto"
+            ],
+            "default": "auto",
+            "binding": "providerOptions.volcengine-ark-image.layer_size",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "background",
+            "label": "图片背景",
+            "type": "string",
+            "values": [
+              "auto",
+              "opaque",
+              "transparent"
+            ],
+            "default": "auto",
+            "binding": "providerOptions.volcengine-ark-image.background",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "outputFormat",
+            "label": "输出格式",
+            "type": "string",
+            "values": [
+              "png",
+              "jpeg"
+            ],
+            "default": "png",
+            "binding": "providerOptions.volcengine-ark-image.output_format",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          },
+          {
+            "name": "textRecognition",
+            "label": "拆层时识别文字",
+            "type": "boolean",
+            "default": false,
+            "binding": "providerOptions.volcengine-ark-image.text_recognition",
+            "models": [
+              "doubao-seedream-5-5-261028"
+            ]
+          }
+        ],
         "parameters": [
           {
             "name": "model",
@@ -195,111 +313,131 @@
               "$ref": "request.prompt"
             },
             "size": {
-              "$omitEmpty": {
-                "$switch": {
-                  "cases": [
+              "$if": {
+                "condition": {
+                  "$eq": [
                     {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
-                          },
-                          "auto"
-                        ]
-                      },
-                      "then": "2k"
+                      "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
                     },
+                    true
+                  ]
+                },
+                "then": {
+                  "$coalesce": [
                     {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
-                          },
-                          "1:1"
-                        ]
-                      },
-                      "then": "2048x2048"
+                      "$ref": "request.providerOptions.volcengine-ark-image.layer_size"
                     },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                    "auto"
+                  ]
+                },
+                "else": {
+                  "$omitEmpty": {
+                    "$switch": {
+                      "cases": [
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "auto"
+                            ]
                           },
-                          "4:3"
-                        ]
-                      },
-                      "then": "2304x1728"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2k"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "1:1"
+                            ]
                           },
-                          "3:4"
-                        ]
-                      },
-                      "then": "1728x2304"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2048x2048"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "4:3"
+                            ]
                           },
-                          "16:9"
-                        ]
-                      },
-                      "then": "2560x1440"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2304x1728"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "3:4"
+                            ]
                           },
-                          "9:16"
-                        ]
-                      },
-                      "then": "1440x2560"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "1728x2304"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "16:9"
+                            ]
                           },
-                          "3:2"
-                        ]
-                      },
-                      "then": "2496x1664"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "2560x1440"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "9:16"
+                            ]
                           },
-                          "2:3"
-                        ]
-                      },
-                      "then": "1664x2496"
-                    },
-                    {
-                      "when": {
-                        "$eq": [
-                          {
-                            "$ref": "request.aspectRatio"
+                          "then": "1440x2560"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "3:2"
+                            ]
                           },
-                          "21:9"
-                        ]
-                      },
-                      "then": "3024x1296"
+                          "then": "2496x1664"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "2:3"
+                            ]
+                          },
+                          "then": "1664x2496"
+                        },
+                        {
+                          "when": {
+                            "$eq": [
+                              {
+                                "$ref": "request.aspectRatio"
+                              },
+                              "21:9"
+                            ]
+                          },
+                          "then": "3024x1296"
+                        }
+                      ],
+                      "default": {
+                        "$ref": "request.aspectRatio"
+                      }
                     }
-                  ],
-                  "default": {
-                    "$ref": "request.aspectRatio"
                   }
                 }
               }
@@ -392,6 +530,67 @@
                 },
                 "b64_json"
               ]
+            },
+            "layer_decomposition": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
+              }
+            },
+            "layer_decomposition_options": {
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$eq": [
+                      {
+                        "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
+                      },
+                      true
+                    ]
+                  },
+                  "then": {
+                    "max_images": {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.providerOptions.volcengine-ark-image.max_images"
+                        },
+                        30
+                      ]
+                    },
+                    "text_recognition": {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.providerOptions.volcengine-ark-image.text_recognition"
+                        },
+                        false
+                      ]
+                    }
+                  },
+                  "else": null
+                }
+              }
+            },
+            "background": {
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$eq": [
+                      {
+                        "$ref": "request.providerOptions.volcengine-ark-image.layer_decomposition"
+                      },
+                      true
+                    ]
+                  },
+                  "then": null,
+                  "else": {
+                    "$ref": "request.providerOptions.volcengine-ark-image.background"
+                  }
+                }
+              }
+            },
+            "output_format": {
+              "$omitEmpty": {
+                "$ref": "request.providerOptions.volcengine-ark-image.output_format"
+              }
             }
           }
         },

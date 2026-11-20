@@ -39,6 +39,9 @@ type SkillLibraryCategoryAssignmentRequest struct {
 }
 
 func (s *Service) SkillLibraryCategories(userID string, scope string) (*SkillLibraryCategoryList, error) {
+	if err := s.RequireSkillAccess(userID); err != nil {
+		return nil, err
+	}
 	scope = normalizeSkillLibraryCategoryListScope(scope)
 	categories, err := s.repo.SkillLibraryCategories(userID)
 	if err != nil {
@@ -64,8 +67,11 @@ func (s *Service) SkillLibraryCategories(userID string, scope string) (*SkillLib
 }
 
 func (s *Service) CreateSkillLibraryCategory(actor *model.User, req SkillLibraryCategoryMutationRequest) (*SkillLibraryCategory, error) {
-	if actor == nil || strings.TrimSpace(actor.ID) == "" {
+	if actor == nil {
 		return nil, kernel.Unauthorized("请先登录")
+	}
+	if err := s.RequireSkillAccess(actor.ID); err != nil {
+		return nil, err
 	}
 	name, normalizedName := normalizeSkillLibraryCategoryName(req.Name)
 	if name == "" || utf8.RuneCountInString(name) > 64 {
@@ -78,8 +84,10 @@ func (s *Service) CreateSkillLibraryCategory(actor *model.User, req SkillLibrary
 	if scope != skillLibraryCategoryPersonal && scope != skillLibraryCategoryPlatform {
 		return nil, kernel.BadAuthRequest("分类范围必须是 personal 或 platform")
 	}
-	if scope == skillLibraryCategoryPlatform && actor.Role != model.UserRoleAdmin {
-		return nil, kernel.Forbidden("只有管理员可以创建平台分类")
+	if scope == skillLibraryCategoryPlatform {
+		if err := s.requireSkillAdmin(actor); err != nil {
+			return nil, err
+		}
 	}
 	category := &model.SkillLibraryCategory{
 		ID: kernel.NewID(), Name: name, NormalizedName: normalizedName, Scope: scope,
@@ -98,8 +106,11 @@ func (s *Service) CreateSkillLibraryCategory(actor *model.User, req SkillLibrary
 }
 
 func (s *Service) DeleteSkillLibraryCategory(actor *model.User, id string) error {
-	if actor == nil || strings.TrimSpace(actor.ID) == "" {
+	if actor == nil {
 		return kernel.Unauthorized("请先登录")
+	}
+	if err := s.RequireSkillAccess(actor.ID); err != nil {
+		return err
 	}
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -112,12 +123,13 @@ func (s *Service) DeleteSkillLibraryCategory(actor *model.User, id string) error
 	if err != nil {
 		return err
 	}
-	if category.Scope == skillLibraryCategoryPlatform {
-		if actor.Role != model.UserRoleAdmin {
-			return kernel.Forbidden("只有管理员可以删除平台分类")
-		}
-	} else if category.Scope != skillLibraryCategoryPersonal || category.OwnerID != actor.ID {
+	if category.Scope != skillLibraryCategoryPlatform && (category.Scope != skillLibraryCategoryPersonal || category.OwnerID != actor.ID) {
 		return kernel.Forbidden("无权删除该技能库分类")
+	}
+	if category.Scope == skillLibraryCategoryPlatform {
+		if err := s.requireSkillAdmin(actor); err != nil {
+			return err
+		}
 	}
 	return s.repo.DeleteSkillLibraryCategory(id)
 }

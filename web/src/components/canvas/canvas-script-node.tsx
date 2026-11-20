@@ -1,12 +1,10 @@
-import { Button, Input, InputNumber, Modal, Segmented, Table } from "antd";
+import { Button, Input, Modal, Popover } from "antd";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { CheckboxGroup } from "@/components/ui/base/checkbox";
 import type { MenuProps } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { Check, ChevronDown, ChevronUp, Clapperboard, Copy, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, Merge, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
+import { Check, Clapperboard, Expand, Film, Grid3X3, Image as ImageIcon, ListTree, MoreHorizontal, Plus, RefreshCw, Send, Square, Trash2, Video } from "lucide-react";
 
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { StoryboardAssetsCell } from "@/components/canvas/storyboard-assets-cell";
@@ -21,59 +19,16 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_COMPOSER_MIN_HEIGHT, STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
-import type {
-    CanvasGenerationBatch,
-    CanvasNodeData,
-    CanvasWorkspaceMode,
-    StoryboardColumn,
-    StoryboardRow,
-    StoryboardShotCount,
-    StoryboardShotDuration,
-    StoryboardVideoInputMode,
-} from "@/types/canvas";
+import type { CanvasGenerationBatch, CanvasNodeData, CanvasWorkspaceMode, StoryboardRow, StoryboardShotCount, StoryboardShotDuration, StoryboardVideoInputMode } from "@/types/canvas";
 import type { TaskStatus } from "@/services/api/task-center";
 import { Select } from "@/components/ui/base/select";
 import { GenerationBatchDetails, StoryboardMiniPipeline, batchItemTone, generationBatchItemLabel, generationBatchSummary } from "./canvas-script-node-parts";
+import "./canvas-script-editor.css";
+export { CanvasScriptEditor } from "./canvas-script-editor";
 
 const STORYBOARD_PROMPT_MIN_HEIGHT = 40;
 const STORYBOARD_PROMPT_MAX_HEIGHT = 116;
 const SCRIPT_GRID_TEMPLATE = "64px 76px minmax(300px, 1.55fr) minmax(220px, 1fr) 180px";
-const EMPTY_STORYBOARD_ROWS: StoryboardRow[] = [];
-const DEFAULT_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "durationSeconds", "videoMotionPrompt", "dialogue", "assets"];
-const LEGACY_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "durationSeconds", "plotDescription", "dialogue"];
-const PREVIOUS_DEFAULT_STORYBOARD_COLUMNS: StoryboardColumn[] = ["shotNumber", "plotDescription", "videoMotionPrompt", "dialogue"];
-
-function resolveStoryboardVisibleColumns(columns?: StoryboardColumn[]) {
-    const isLegacyDefault = columns?.length === LEGACY_STORYBOARD_COLUMNS.length && LEGACY_STORYBOARD_COLUMNS.every((column) => columns.includes(column));
-    const isPreviousDefault = columns?.length === PREVIOUS_DEFAULT_STORYBOARD_COLUMNS.length && PREVIOUS_DEFAULT_STORYBOARD_COLUMNS.every((column) => columns.includes(column));
-    if (!columns?.length || isLegacyDefault || isPreviousDefault) {
-        return DEFAULT_STORYBOARD_COLUMNS;
-    }
-    return columns;
-}
-
-const columnOptions: Array<{ label: string; value: StoryboardColumn }> = [
-    { label: "序号", value: "shotNumber" },
-    { label: "时长", value: "durationSeconds" },
-    { label: "画面描述", value: "plotDescription" },
-    { label: "台词/旁白", value: "dialogue" },
-    { label: "镜头意图", value: "narrativeIntent" },
-    { label: "观众视点", value: "viewerPOV" },
-    { label: "表演调度", value: "performanceBlocking" },
-    { label: "景别", value: "shotSize" },
-    { label: "情绪", value: "emotion" },
-    { label: "光影氛围", value: "lightingAndAtmosphere" },
-    { label: "音效", value: "audioEffects" },
-    { label: "镜头设计", value: "camera" },
-    { label: "运镜", value: "motion" },
-    { label: "时间节拍", value: "timeBeats" },
-    { label: "图片提示词", value: "imageGenerationPrompt" },
-    { label: "视频提示词", value: "videoMotionPrompt" },
-    { label: "关联资产", value: "assets" },
-    { label: "连续性出口", value: "continuityOut" },
-    { label: "负面要求", value: "negativePrompt" },
-];
-
 export function CanvasScriptNodeContent({
     node,
     nodes,
@@ -87,7 +42,6 @@ export function CanvasScriptNodeContent({
     onGenerateImages,
     onGenerateVideos,
     onVideoInputModeChange,
-    onMergeVideos,
     onCreateActionBoards,
     onRetryBatch,
     onRetryBatchItem,
@@ -118,7 +72,6 @@ export function CanvasScriptNodeContent({
     onGenerateImages: (rowIds: string[]) => void;
     onGenerateVideos: (rowIds: string[]) => void;
     onVideoInputModeChange: (mode: StoryboardVideoInputMode) => void;
-    onMergeVideos: () => void;
     onCreateActionBoards: () => void;
     onRetryBatch: (batchId: string) => void;
     onRetryBatchItem: (batchId: string, itemId: string) => void;
@@ -181,18 +134,10 @@ export function CanvasScriptNodeContent({
     const pipelineDisabled = !rows.length || node.metadata?.status === "loading" || hasActiveBatchItems;
     const missingImages = Math.max(0, pipeline.images.total - pipeline.images.created);
     const missingVideos = Math.max(0, pipeline.videos.total - pipeline.videos.created);
-    const canMerge = pipeline.successfulVideoNodeIds.length >= 2 && pipeline.final.success === 0;
     const allRowIds = pipeline.rows.map((item) => item.row.id);
     const moreMenuItems: MenuProps["items"] = [
         { key: "generate-images", icon: <ImageIcon className="size-3.5" />, label: "生成未完成分镜图", disabled: pipelineDisabled || pipeline.images.incomplete === 0, onClick: () => onGenerateImages(allRowIds) },
         { key: "generate-videos", icon: <Video className="size-3.5" />, label: "生成未完成视频", disabled: pipelineDisabled || pipeline.videos.incomplete === 0, onClick: () => onGenerateVideos(allRowIds) },
-        {
-            key: "merge",
-            icon: <Merge className="size-3.5" />,
-            label: pipeline.final.success ? "成片已完成" : pipeline.successfulVideoNodeIds.length >= 2 ? `合并 ${pipeline.successfulVideoNodeIds.length} 段视频` : "合并成片（至少 2 段视频）",
-            disabled: !canMerge,
-            onClick: () => onMergeVideos(),
-        },
         { type: "divider" },
         {
             key: "video-input",
@@ -242,13 +187,13 @@ export function CanvasScriptNodeContent({
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={node.title || "分镜脚本"}>
                     {node.title || "分镜脚本"}
                 </span>
-                {batchSummary ? (
-                    <span className="min-w-0 max-w-[42%] truncate text-[var(--fs-label)] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>
-                        {batchSummary}
-                    </span>
-                ) : taskFeedback ? (
+                {taskFeedback ? (
                     <span className="min-w-0 max-w-[38%] truncate text-[var(--fs-label)] font-medium" title={taskFeedback} style={{ color: node.metadata?.status === "error" ? theme.accent.danger : theme.node.muted }}>
                         {taskFeedback}
+                    </span>
+                ) : batchSummary ? (
+                    <span className="min-w-0 max-w-[42%] truncate text-[var(--fs-label)] font-medium" title={batchSummary} style={{ color: batch?.status === "partial_failed" ? theme.accent.danger : theme.node.muted }}>
+                        {batchSummary}
                     </span>
                 ) : null}
                 <span className="text-[var(--fs-caption)] font-semibold tabular-nums" style={{ color: theme.node.muted }}>
@@ -297,13 +242,16 @@ export function CanvasScriptNodeContent({
                 <HeaderCell borderColor={theme.node.stroke} align="center">
                     序号
                 </HeaderCell>
-                <HeaderCell borderColor={theme.node.stroke} align="center">时长</HeaderCell>
+                <HeaderCell borderColor={theme.node.stroke} align="center">
+                    时长
+                </HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>视频提示词</HeaderCell>
                 <HeaderCell borderColor={theme.node.stroke}>台词/旁白</HeaderCell>
                 <span className="px-3">关联资产</span>
             </div>
             <div
                 data-canvas-wheel-scroll
+                data-canvas-wheel-intent
                 tabIndex={0}
                 role="region"
                 aria-label="分镜镜头列表"
@@ -318,14 +266,11 @@ export function CanvasScriptNodeContent({
             >
                 {rows.length ? (
                     rows.map((row) => (
-                        <div key={row.id} className="relative grid border-b" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
+                        <div key={row.id} className="canvas-script-compact-row relative grid border-b" style={{ height: STORYBOARD_ROW_HEIGHT, borderColor: theme.node.stroke, gridTemplateColumns: SCRIPT_GRID_TEMPLATE }}>
                             <div className="flex flex-col items-center justify-center gap-0.5 border-r tabular-nums" style={{ color: theme.node.muted, borderColor: theme.node.stroke }}>
                                 <div className="flex items-center gap-0.5">
                                     <span className="text-sm">{row.shotNumber}</span>
-                                    <Dropdown
-                                        trigger={["click"]}
-                                        menu={{ items: [{ key: "delete", label: "删除镜头", icon: <Trash2 className="size-3.5" />, danger: true, disabled: rows.length <= 1, onClick: () => onRemoveRow(row.id) }] }}
-                                    >
+                                    <Dropdown trigger={["click"]} menu={{ items: [{ key: "delete", label: "删除镜头", icon: <Trash2 className="size-3.5" />, danger: true, disabled: rows.length <= 1, onClick: () => onRemoveRow(row.id) }] }}>
                                         <button
                                             type="button"
                                             className="grid size-5 place-items-center rounded outline-none opacity-45 transition hover:bg-black/5 hover:opacity-100 focus-visible:ring-2 dark:hover:bg-white/10"
@@ -486,165 +431,6 @@ export function CanvasScriptNodeContent({
     );
 }
 
-export function CanvasScriptEditor({
-    node,
-    nodes,
-    open,
-    onClose,
-    onUpdateRows,
-    onEditAssets,
-    onVisibleColumnsChange,
-    onGenerateImages,
-    onGenerateVideos,
-    onVideoInputModeChange,
-}: {
-    node: CanvasNodeData | null;
-    nodes: CanvasNodeData[];
-    open: boolean;
-    onClose: () => void;
-    onUpdateRows: (rows: StoryboardRow[]) => void;
-    onEditAssets: (rowId: string) => void;
-    onVisibleColumnsChange: (columns: StoryboardColumn[]) => void;
-    onGenerateImages: (rowIds: string[]) => void;
-    onGenerateVideos: (rowIds: string[]) => void;
-    onVideoInputModeChange: (mode: StoryboardVideoInputMode) => void;
-}) {
-    const [query, setQuery] = useState("");
-    const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const rows = node?.metadata?.storyboard?.rows || EMPTY_STORYBOARD_ROWS;
-    const visibleColumns = resolveStoryboardVisibleColumns(node?.metadata?.storyboard?.visibleColumns);
-    const videoInputMode = node?.metadata?.storyboardVideoInputMode || "direct";
-    const nodeById = useMemo(() => new Map(nodes.map((item) => [item.id, item])), [nodes]);
-    const filteredRows = useMemo(() => {
-        const keyword = query.trim().toLowerCase();
-        return keyword
-            ? rows.filter((row) =>
-                  [row.plotDescription, row.dialogue, row.camera, row.motion, row.timeBeats, row.imageGenerationPrompt, row.videoMotionPrompt, row.negativePrompt, ...(row.assetBindings || []).map((binding) => nodeById.get(binding.nodeId)?.title || "")].some((value) =>
-                      String(value || "")
-                          .toLowerCase()
-                          .includes(keyword),
-                  ),
-              )
-            : rows;
-    }, [nodeById, query, rows]);
-    useEffect(() => {
-        setSelectedIds((current) => {
-            const next = current.filter((id) => rows.some((row) => row.id === id));
-            return next.length === current.length && next.every((id, index) => id === current[index]) ? current : next;
-        });
-    }, [rows]);
-    const updateRow = (rowId: string, patch: Partial<StoryboardRow>) => onUpdateRows(rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
-    const moveRow = (rowId: string, direction: -1 | 1) => {
-        const index = rows.findIndex((row) => row.id === rowId);
-        const nextIndex = index + direction;
-        if (index < 0 || nextIndex < 0 || nextIndex >= rows.length) return;
-        const next = [...rows];
-        [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-        onUpdateRows(next.map((row, rowIndex) => ({ ...row, shotNumber: rowIndex + 1 })));
-    };
-    const duplicateRow = (row: StoryboardRow) => {
-        const index = rows.findIndex((item) => item.id === row.id);
-        const next = [...rows];
-        next.splice(index + 1, 0, { ...row, id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, imageNodeId: undefined, videoNodeId: undefined, status: "idle" });
-        onUpdateRows(next.map((item, rowIndex) => ({ ...item, shotNumber: rowIndex + 1 })));
-    };
-    const removeRow = (rowId: string) => onUpdateRows(rows.filter((row) => row.id !== rowId).map((row, index) => ({ ...row, shotNumber: index + 1 })));
-
-    const columns: ColumnsType<StoryboardRow> = columnOptions
-        .filter((option) => visibleColumns.includes(option.value))
-        .map((option) => ({
-            title: option.label,
-            dataIndex: option.value,
-            key: option.value,
-            width: option.value === "shotNumber" ? 72 : option.value === "durationSeconds" ? 100 : option.value === "assets" ? 220 : option.value === "plotDescription" || option.value === "dialogue" || option.value === "timeBeats" || option.value.endsWith("Prompt") ? 260 : 170,
-            fixed: option.value === "shotNumber" ? ("left" as const) : undefined,
-            render: (_: unknown, row: StoryboardRow) =>
-                option.value === "shotNumber" ? (
-                    <span className="font-semibold">{row.shotNumber}</span>
-                ) : option.value === "durationSeconds" ? (
-                    <InputNumber min={1} max={60} value={row.durationSeconds} addonAfter="s" onChange={(value) => updateRow(row.id, { durationSeconds: Number(value) || 1 })} />
-                ) : option.value === "assets" ? (
-                    <StoryboardAssetsCell bindings={row.assetBindings || []} nodes={nodes} onEdit={() => onEditAssets(row.id)} disabled={node?.metadata?.locked} />
-                ) : option.value === "shotSize" ? (
-                    <Select
-                        className="w-full"
-                        value={row.shotSize || undefined}
-                        placeholder="选择景别"
-                        options={["特写", "近景", "中景", "全景", "远景"].map((value) => ({ value, label: value }))}
-                        onChange={(shotSize) => updateRow(row.id, { shotSize })}
-                    />
-                ) : (
-                    <Input.TextArea
-                        autoSize={{ minRows: 1, maxRows: 4 }}
-                        value={String(row[option.value] || "")}
-                        placeholder={`填写${option.label}`}
-                        onChange={(event) => updateRow(row.id, { [option.value]: event.target.value } as Partial<StoryboardRow>)}
-                    />
-                ),
-        }));
-    columns.push({
-        title: "操作",
-        key: "actions",
-        dataIndex: "shotNumber",
-        width: 150,
-        fixed: "right" as const,
-        render: (_: unknown, row: StoryboardRow) => (
-            <div className="flex gap-1">
-                <SmallButton title="上移" onClick={() => moveRow(row.id, -1)}>
-                    <ChevronUp className="size-3.5" />
-                </SmallButton>
-                <SmallButton title="下移" onClick={() => moveRow(row.id, 1)}>
-                    <ChevronDown className="size-3.5" />
-                </SmallButton>
-                <SmallButton title="复制" onClick={() => duplicateRow(row)}>
-                    <Copy className="size-3.5" />
-                </SmallButton>
-                <SmallButton title="删除" onClick={() => removeRow(row.id)}>
-                    <Trash2 className="size-3.5" />
-                </SmallButton>
-            </div>
-        ),
-    });
-
-    return (
-        <Modal title={node?.title || "分镜脚本"} open={open} onCancel={onClose} footer={null} width="min(1480px, calc(100vw - 40px))" centered destroyOnHidden>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Input.Search className="w-72" allowClear placeholder="筛选画面、台词或提示词" value={query} onChange={(event) => setQuery(event.target.value)} />
-                    <CheckboxGroup className="script-column-picker" options={columnOptions} value={visibleColumns} onChange={(values) => onVisibleColumnsChange(values)} />
-                <span className="min-w-0 flex-1" />
-                <Button icon={<Plus className="size-4" />} onClick={() => onUpdateRows([...rows, editorRow(rows.length + 1)])}>
-                    新增镜头
-                </Button>
-                <Button icon={<ImageIcon className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateImages(selectedIds)}>
-                    生成{videoInputMode === "keyframe" ? "首帧" : "分镜图"}
-                </Button>
-                <Segmented<StoryboardVideoInputMode>
-                    value={videoInputMode}
-                    options={[
-                        { value: "direct", label: "直接生成" },
-                        { value: "keyframe", label: "先做首帧" },
-                    ]}
-                    onChange={onVideoInputModeChange}
-                />
-                <Button type="primary" icon={<Film className="size-4" />} disabled={!selectedIds.length} onClick={() => onGenerateVideos(selectedIds)}>
-                    {videoInputMode === "keyframe" ? "确认首帧并生成" : "生成视频"}
-                </Button>
-            </div>
-            <Table<StoryboardRow>
-                rowKey="id"
-                size="small"
-                bordered
-                sticky
-                pagination={false}
-                scroll={{ x: Math.max(900, columns.length * 180), y: "calc(78vh - 170px)" }}
-                dataSource={filteredRows}
-                columns={columns}
-                rowSelection={{ selectedRowKeys: selectedIds, onChange: (keys) => setSelectedIds(keys.map(String)) }}
-            />
-        </Modal>
-    );
-}
-
 function CompactInput({ value, placeholder, borderColor, onChange }: { value: string; placeholder: string; borderColor: string; onChange: (value: string) => void }) {
     return (
         <textarea
@@ -684,53 +470,6 @@ function HeaderCell({ children, borderColor, align = "left" }: { children: React
             {children}
         </span>
     );
-}
-
-function SmallButton({ title, children, onClick, disabled }: { title: string; children: ReactNode; onClick: () => void; disabled?: boolean }) {
-    return (
-        <button
-            type="button"
-            disabled={disabled}
-            className="grid size-7 shrink-0 place-items-center rounded opacity-65 transition enabled:hover:bg-black/5 enabled:hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-25 dark:enabled:hover:bg-white/10"
-            title={title}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-                event.stopPropagation();
-                onClick();
-            }}
-        >
-            {children}
-        </button>
-    );
-}
-
-function editorRow(shotNumber: number): StoryboardRow {
-    return {
-        id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        shotNumber,
-        durationSeconds: 6,
-        plotDescription: "",
-        dialogue: "",
-        characters: [],
-        narrativeIntent: "",
-        viewerPOV: "",
-        performanceBlocking: "",
-        shotSize: "",
-        emotion: "",
-        lightingAndAtmosphere: "",
-        audioEffects: "",
-        camera: "",
-        motion: "",
-        timeBeats: "",
-        imageGenerationPrompt: "",
-        videoMotionPrompt: "",
-        mustHave: [],
-        optionalDetails: [],
-        continuityOut: "",
-        negativePrompt: "",
-        assetBindings: [],
-        status: "idle",
-    };
 }
 
 function RowHandle({

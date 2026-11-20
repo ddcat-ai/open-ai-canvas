@@ -1,10 +1,11 @@
 import { http } from "@/services/api/request";
-import type { ModelProtocolDefinition, ProtocolCapability } from "@/lib/model-protocols";
+import { isTextWire, type ModelProtocolDefinition, type ProtocolCapability } from "@/lib/model-protocols";
 
 type PluginProviderCatalogItem = {
     imageParameters?: import("@/lib/image-parameters").ImageParameter[];
     id: string;
     version: string;
+    releases?: ModelProtocolDefinition["releases"];
     name: string;
     vendor: string;
     categories: string[];
@@ -31,11 +32,29 @@ type PluginProviderCatalogItem = {
         parameters: Array<{ name: string; type: string; required?: boolean; description?: string; values?: string[]; mapping?: string }>;
         defaults?: Record<string, string | number | boolean>;
     }>;
+    textWire?: string;
+    requiresSecretKey?: boolean;
 };
+
+export const USER_CUSTOM_CHANNEL_SCOPE = "user.custom-channel";
 
 export async function fetchPluginProviderCatalog(scope: string, capability?: ProtocolCapability) {
     const result = await http.get<{ providers: PluginProviderCatalogItem[] }>("/plugins/catalog", { params: { scope, capability } });
     return result.providers.filter((item) => item.enabled && !item.unavailableReason).map(toProviderDefinition);
+}
+
+let userProtocolCatalogRequest: Promise<ModelProtocolDefinition[]> | undefined;
+
+/**
+ * 浏览器直连自定义渠道时需要插件声明（例如文本请求格式）。插件目录不含账号数据，
+ * 同一页面会话只拉一次；请求失败不缓存，下次调用重新拉取。
+ */
+export function loadUserProtocolCatalog() {
+    userProtocolCatalogRequest ??= fetchPluginProviderCatalog(USER_CUSTOM_CHANNEL_SCOPE).catch((error: unknown) => {
+        userProtocolCatalogRequest = undefined;
+        throw error;
+    });
+    return userProtocolCatalogRequest;
 }
 
 function toProviderDefinition(item: PluginProviderCatalogItem): ModelProtocolDefinition {
@@ -43,6 +62,8 @@ function toProviderDefinition(item: PluginProviderCatalogItem): ModelProtocolDef
         value: item.id,
         label: item.name,
         vendor: item.vendor,
+        version: item.version,
+        releases: item.releases,
         capability: (item.categories[0] || "text") as ProtocolCapability,
         create: item.create || "",
         poll: item.poll,
@@ -53,5 +74,7 @@ function toProviderDefinition(item: PluginProviderCatalogItem): ModelProtocolDef
         parameters: item.parameters || [],
         imageParameters: item.imageParameters,
         workflows: item.workflows || [],
+        textWire: isTextWire(item.textWire) ? item.textWire : undefined,
+        requiresSecretKey: item.requiresSecretKey === true,
     };
 }

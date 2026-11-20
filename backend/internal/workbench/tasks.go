@@ -12,17 +12,43 @@ import (
 )
 
 type TaskInput struct {
-	Kind           string          `json:"kind"`
-	ToolID         string          `json:"toolId"`
-	PresetID       string          `json:"presetId,omitempty"`
-	Workbench      *TaskWorkbench  `json:"workbench,omitempty"`
-	Prompt         string          `json:"prompt"`
-	Model          string          `json:"model,omitempty"`
-	LogicalModelID string          `json:"logicalModelId,omitempty"`
-	ChannelID      string          `json:"channelId,omitempty"`
-	ModelChoice    *ModelChoice    `json:"modelChoice,omitempty"`
-	Parameters     map[string]any  `json:"parameters,omitempty"`
-	References     []TaskReference `json:"references,omitempty"`
+	EcommerceProjectID string          `json:"ecommerceProjectId,omitempty"`
+	Kind               string          `json:"kind"`
+	ToolID             string          `json:"toolId"`
+	PresetID           string          `json:"presetId,omitempty"`
+	Workbench          *TaskWorkbench  `json:"workbench,omitempty"`
+	Prompt             string          `json:"prompt"`
+	Model              string          `json:"model,omitempty"`
+	LogicalModelID     string          `json:"logicalModelId,omitempty"`
+	ChannelID          string          `json:"channelId,omitempty"`
+	ModelChoice        *ModelChoice    `json:"modelChoice,omitempty"`
+	Parameters         map[string]any  `json:"parameters,omitempty"`
+	References         []TaskReference `json:"references,omitempty"`
+	Batch              *TaskBatch      `json:"batch,omitempty"`
+}
+
+// TaskBatch 关联同一次提交拆出的多个任务（例如一次生成 3 条视频），
+// 只用于页面分组展示，不参与调度、准入和计费；每个任务仍各自校验与扣费。
+type TaskBatch struct {
+	ID    string `json:"id"`
+	Index int    `json:"index"`
+	Count int    `json:"count"`
+}
+
+// MaxTaskBatchCount 与单任务 count 上限一致，避免一次提交拆出过多任务。
+const MaxTaskBatchCount = 20
+
+// ValidTaskBatch 供写入和读模型共用：分组 ID 只允许 8-64 位字母、数字、- 和 _。
+func ValidTaskBatch(id string, index, count int) bool {
+	if len(id) < 8 || len(id) > 64 || count < 1 || count > MaxTaskBatchCount || index < 0 || index >= count {
+		return false
+	}
+	for _, char := range id {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 type TaskWorkbench struct {
@@ -101,6 +127,14 @@ func (s *Service) ResolveTask(userID string, req TaskInput) (*TaskResolution, er
 	if err != nil {
 		return nil, err
 	}
+	var batch map[string]any
+	if req.Batch != nil {
+		batchID := strings.TrimSpace(req.Batch.ID)
+		if !ValidTaskBatch(batchID, req.Batch.Index, req.Batch.Count) {
+			return nil, kernel.BadAuthRequest("批量生成分组字段无效")
+		}
+		batch = map[string]any{"id": batchID, "index": req.Batch.Index, "count": req.Batch.Count}
+	}
 	refs := make([]TaskReference, 0, len(req.References))
 	frameRoles := map[string]bool{}
 	for _, ref := range req.References {
@@ -159,6 +193,9 @@ func (s *Service) ResolveTask(userID string, req TaskInput) (*TaskResolution, er
 		snapshotReferences = append(snapshotReferences, reference)
 	}
 	workbenchSnapshot["references"] = snapshotReferences
+	if batch != nil {
+		workbenchSnapshot["batch"] = batch
+	}
 	if tool != nil {
 		metadata["workbenchToolId"], metadata["workbenchToolName"], metadata["workbenchToolVersion"] = tool.ID, tool.Name, tool.Version
 		workbenchSnapshot["toolId"], workbenchSnapshot["toolName"], workbenchSnapshot["toolVersion"] = tool.ID, tool.Name, tool.Version

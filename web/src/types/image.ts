@@ -7,6 +7,8 @@ export type ReferenceImage = {
     dataUrl: string;
     url?: string;
     storageKey?: string;
+    /** 方舟 asset 引用对应的原始资源，服务端仍核验归属与绑定。 */
+    sourceResourceId?: string;
     role?: "reference" | "first_frame" | "last_frame";
     slotKey?: string;
     bytes?: number;
@@ -20,15 +22,15 @@ export type ReferenceImage = {
     // 漏了会静默按普通图片处理（dataUrl 为空 → 参考图丢失）。
     source?:
         | {
-            kind: "drawing";
-            drawingId: string;
-            revision: number;
-            shapeCount: number;
-        }
+              kind: "drawing";
+              drawingId: string;
+              revision: number;
+              shapeCount: number;
+          }
         | {
-            kind: "colorgrade";
-            /** 上游源图地址 */
-            url: string;
-            grade: CanvasColorGrade;
-        };
+              kind: "colorgrade";
+              /** 上游源图地址 */
+              url: string;
+              grade: CanvasColorGrade;
+          };
 };

@@ -28,6 +28,9 @@ func newSkillEditTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(&model.Skill{}, &model.SkillVersion{}, &model.SkillFile{}, &model.UserSkillState{}, &model.User{}, &model.UserIdentity{}); err != nil {
 		t.Fatal(err)
 	}
+	// Both principals are administrators; ownership and private visibility remain distinct.
+	createSkillTestUser(t, db, "owner", model.UserRoleAdmin, model.UserStatusActive)
+	createSkillTestUser(t, db, "intruder", model.UserRoleAdmin, model.UserStatusActive)
 	return New(repository.New(db), t.TempDir(), nil), db
 }
 

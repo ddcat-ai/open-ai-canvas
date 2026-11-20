@@ -96,6 +96,10 @@ status 取值：queued / running / succeeded / failed / cancelled。
     "providers": [
       {
         "id": "metaso-h3",
+        "videoReferences": {
+          "layout": "content",
+          "token": "参考图{n}"
+        },
         "label": "METASO MiniMax H3",
         "capabilities": [
           "video"

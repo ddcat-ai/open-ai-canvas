@@ -20,7 +20,7 @@ func TestExportDiagnosticBundleRedactsSensitiveValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Task{}, &model.TaskLog{}, &model.ApiCallLog{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.TaskLog{}, &model.ApiCallLog{}, &model.BillingOrder{}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
@@ -34,6 +34,12 @@ func TestExportDiagnosticBundleRedactsSensitiveValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Create(&model.ApiCallLog{ID: "api-log-1", UserID: "user-1", TraceID: "trace-1", RequestID: "req-1", TaskID: "task-1", Path: "/v1/generations", RequestBody: "apiKey=body-secret", ResponseBody: "response-secret", UpstreamURL: "https://provider.example/result?signature=secret", Error: "token=api-secret", CreatedAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.BillingOrder{ID: "team-bill", UserID: "user-1", TeamID: "team-1", IdempotencyKey: "team-bill"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.ApiCallLog{ID: "team-api-log", UserID: "user-1", TaskID: "task-1", BillingOrderID: "team-bill", Model: "private-team-model", CreatedAt: now}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -51,7 +57,7 @@ func TestExportDiagnosticBundleRedactsSensitiveValues(t *testing.T) {
 		t.Fatalf("manifest = %s", manifest)
 	}
 	all := strings.Join([]string{manifest, files["client/events.jsonl"], files["backend/tasks.jsonl"], files["backend/task-logs.jsonl"], files["backend/upstream-calls.jsonl"]}, "\n")
-	for _, secret := range []string{"task-secret", "secret prompt", "log-secret", "body-secret", "response-secret", "api-secret", "signature=secret", "client-secret"} {
+	for _, secret := range []string{"task-secret", "secret prompt", "log-secret", "body-secret", "response-secret", "api-secret", "signature=secret", "client-secret", "team-api-log", "private-team-model"} {
 		if strings.Contains(all, secret) {
 			t.Fatalf("diagnostic bundle leaked %q: %s", secret, all)
 		}

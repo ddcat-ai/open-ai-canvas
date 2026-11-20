@@ -9,7 +9,9 @@ import { buildGenerationConfig } from "@/lib/canvas/canvas-project-generation";
 import { batchGenerationRows, removeLastBatchReferenceColumn, reorderBatchReferenceColumns } from "@/lib/canvas/canvas-batch-table";
 import { patchCanvasBatchTableData, prepareCanvasBatchTableGeneration } from "@/lib/canvas/canvas-batch-table-state";
 import { useCanvasGenerationBatches } from "@/pages/canvas/use-canvas-generation-batches";
-import { defaultConfig } from "@/stores/use-config-store";
+import { createModelChannel, defaultConfig } from "@/stores/use-config-store";
+import { defaultImageCapabilityConfig } from "@/lib/model-capabilities";
+import { projectImageParameters } from "@/lib/image-parameters";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
 
 function fixture() {
@@ -129,11 +131,25 @@ describe("batch table state transitions", () => {
 
     test("batch regeneration replaces stale generation specs with the current prompt and settings", () => {
         const state = fixture();
+        const image = projectImageParameters(defaultImageCapabilityConfig("openai-image"), [
+            { name: "size", label: "比例", type: "string", encoding: "ratio", values: ["1:1", "3:2"], default: "1:1" },
+            { name: "imageResolution", label: "分辨率", type: "string", values: ["1K", "4K"], default: "1K" },
+            { name: "quality", label: "质量", type: "string", values: ["low", "high"], default: "low" },
+            { name: "transparentBackground", label: "透明背景", type: "boolean", default: false },
+            { name: "ratio", label: "扩展比例", type: "string", values: ["1:1", "3:2"], default: "1:1" },
+        ]);
+        const channel = createModelChannel({
+            id: "batch",
+            interfaceType: "openai-image",
+            models: ["image"],
+            modelCosts: [{ model: "image", capability: "image", capabilityConfig: { version: 1, image }, billingMode: "fixed_request", unitPriceMicrocredits: 0 }],
+        });
+        const configured = { ...defaultConfig, channels: [channel], model: "batch::image", imageModel: "batch::image" };
         state.output.metadata = {
             ...state.output.metadata,
-            generationSpec: specFromConfig("image", "stale prompt", { ...defaultConfig, size: "1:1", imageResolution: "1K", imageParameters: JSON.stringify({ ratio: "1:1" }), quality: "low", transparentBackground: "false" }),
+            generationSpec: specFromConfig("image", "stale prompt", { ...configured, size: "1:1", imageResolution: "1K", imageParameters: JSON.stringify({ ratio: "1:1" }), quality: "low", transparentBackground: "false" }),
         };
-        const settings = { ...defaultConfig, size: "3:2", imageResolution: "4K", imageParameters: JSON.stringify({ ratio: "3:2" }), quality: "high", transparentBackground: "true" };
+        const settings = { ...configured, size: "3:2", imageResolution: "4K", imageParameters: JSON.stringify({ ratio: "3:2" }), quality: "high", transparentBackground: "true" };
         const candidate = prepare(state, state.nodes, settings);
         const output = candidate.nodes.find((node) => node.id === state.output.id)!;
         const spec = readNodeGenerationSpec(output)!;
@@ -154,6 +170,14 @@ describe("batch table state transitions", () => {
             transparentBackground: "true",
         });
         expect(candidate.targets[0].inputSnapshot.prompt).toBe("new prompt");
+
+        const restricted = projectImageParameters(image, [
+            { name: "size", label: "比例", type: "string", encoding: "ratio", values: ["1:1"], default: "1:1" },
+            { name: "imageResolution", label: "分辨率", type: "string", values: ["1K"], default: "1K" },
+        ]);
+        const changed = { ...settings, channels: [{ ...channel, modelCosts: [{ ...channel.modelCosts[0], capabilityConfig: { version: 1 as const, image: restricted } }] }] };
+        expect(buildGenerationConfig(changed, output, "image")).toMatchObject({ model: "batch::image", size: "1:1", imageResolution: "1K", imageParameters: "{}", quality: "", transparentBackground: "false" });
+        expect(readNodeGenerationSpec(output)?.prompt).toBe("new prompt");
     });
 
     test("legacy completed results become stale after changing, reordering or removing a reference", () => {

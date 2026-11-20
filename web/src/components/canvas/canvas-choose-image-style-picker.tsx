@@ -1,4 +1,5 @@
 import { useUserStore } from "@/stores/use-user-store";
+import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { CanvasToolPopover } from "./canvas-tool-popover";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -34,6 +35,7 @@ export function CanvasChooseImageStylePicker({
     /** 关闭已选风格：从提示词移除 style 工具标签。 */
     onClear?: () => void;
 }) {
+    const { t } = useTranslation();
     const [internalOpen, setInternalOpen] = useState(false);
     const [searchInput, setSearchInput] = useState("");
     const [searchText, setSearchText] = useState("");
@@ -69,7 +71,7 @@ export function CanvasChooseImageStylePicker({
 
     return (
         <CanvasToolPopover
-            label="选择风格"
+            label={t("canvasA.toolPicker.style.select")}
             open={actualOpen}
             onOpenChange={setOpen}
             trigger={["click"]}
@@ -94,37 +96,48 @@ export function CanvasChooseImageStylePicker({
                                         </button>
                                     ))}
                                 </div>
-                                <input className="asset-search min-w-0 flex-1" placeholder="搜索名称/标签" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} aria-label="搜索风格" />
+                                <input
+                                    className="asset-search min-w-0 flex-1"
+                                    placeholder={t("canvasA.toolPicker.searchPlaceholder")}
+                                    value={searchInput}
+                                    onChange={(event) => setSearchInput(event.target.value)}
+                                    aria-label={t("canvasA.toolPicker.style.search")}
+                                />
                                 {searchInput ? (
-                                    <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground" onClick={() => setSearchInput("")} aria-label="清空搜索">
+                                    <button
+                                        type="button"
+                                        className="grid size-5 shrink-0 place-items-center rounded text-foreground/32 hover:bg-surface-hover hover:text-foreground"
+                                        onClick={() => setSearchInput("")}
+                                        aria-label={t("canvasA.toolPicker.clearSearch")}
+                                    >
                                         <X className="size-3" />
                                     </button>
                                 ) : null}
                             </div>
                             <div className="col-tag-filter mt-2">
-                                {[{ id: "", label: "全部" }, ...SUB_TAB_TAGS.style].map((chip) => (
+                                {[{ id: "", label: t("canvasA.toolPicker.all") }, ...SUB_TAB_TAGS.style].map((chip) => (
                                     <button key={chip.id || "all"} type="button" className={`col-tag-chip${tagFilter === chip.id ? " on" : ""}`} aria-pressed={tagFilter === chip.id} onClick={() => setTagFilter(chip.id)}>
                                         {chip.label}
                                     </button>
                                 ))}
                             </div>
                         </div>
-                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-2 overflow-y-auto p-2" role="listbox" aria-label="风格工具">
+                        <div className="thin-scrollbar grid max-h-80 grid-cols-5 gap-2 overflow-y-auto p-2" role="listbox" aria-label={t("canvasA.toolPicker.style.list")}>
                             {toolsQuery.isPending ? (
                                 <div className="col-span-3 grid h-24 place-items-center text-foreground/40">
                                     <LoaderCircle className="size-4 animate-spin" />
                                 </div>
                             ) : toolsQuery.isError ? (
-                                <div className="col-span-3 grid h-24 place-items-center text-xs text-foreground/40">风格工具加载失败，请稍后重试</div>
+                                <div className="col-span-3 grid h-24 place-items-center text-xs text-foreground/40">{t("canvasA.toolPicker.style.loadFailed")}</div>
                             ) : tools.length === 0 ? (
-                                <div className="col-span-3 grid h-24 place-items-center text-xs text-foreground/40">{searchText ? "没有匹配的风格" : "暂无风格工具"}</div>
+                                <div className="col-span-3 grid h-24 place-items-center text-xs text-foreground/40">{searchText ? t("canvasA.toolPicker.style.noMatch") : t("canvasA.toolPicker.style.empty")}</div>
                             ) : (
                                 tools.map((tool) => <StyleToolCard key={tool.id} tool={tool} selected={tool.id === activeToolId} onSelect={handleSelect} />)
                             )}
                         </div>
                         {toolsQuery.hasNextPage && (
                             <button type="button" disabled={toolsQuery.isFetchingNextPage} onClick={() => void toolsQuery.fetchNextPage()}>
-                                加载更多
+                                {t("canvasA.toolPicker.loadMore")}
                             </button>
                         )}
                     </div>
@@ -135,7 +148,7 @@ export function CanvasChooseImageStylePicker({
                 role="button"
                 tabIndex={0}
                 className="canvas-node-composer-header-action canvas-node-fixed-chip relative overflow-hidden cursor-pointer"
-                title={resolvedLabel ? `风格：${resolvedLabel}` : "选择风格"}
+                title={resolvedLabel ? t("canvasA.toolPicker.style.withLabel", { label: resolvedLabel }) : t("canvasA.toolPicker.style.select")}
                 aria-expanded={actualOpen}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(true)}
@@ -148,11 +161,11 @@ export function CanvasChooseImageStylePicker({
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 <Palette className="size-3 shrink-0" />
-                <span className="truncate">{resolvedLabel || "风格"}</span>
+                <span className="truncate">{resolvedLabel || t("canvasA.toolPicker.style.short")}</span>
                 {activeToolId != null && onClear ? (
                     <button
                         type="button"
-                        aria-label="移除风格"
+                        aria-label={t("canvasA.toolPicker.style.remove")}
                         onClick={(event) => {
                             event.stopPropagation();
                             onClear();

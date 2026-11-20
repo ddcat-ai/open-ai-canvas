@@ -128,8 +128,8 @@ export function SegmentedControl<V extends string = string>({ value, onChange, o
             {thumb !== null && !disabled && (
                 <span
                     aria-hidden="true"
-                    className={["app-segmented-thumb pointer-events-none absolute inset-y-0.5 z-0 bg-surface-strong transition-[left,width] duration-200 ease-out motion-reduce:transition-none", SIZE_CLASS[size].thumb].join(" ")}
-                    style={{ left: thumb.left, width: thumb.width }}
+                    className={["app-segmented-thumb pointer-events-none absolute inset-y-0.5 left-0 z-0 bg-surface-strong transition-[transform,width] duration-200 ease-out motion-reduce:transition-none", SIZE_CLASS[size].thumb].join(" ")}
+                    style={{ transform: `translateX(${thumb.left}px)`, width: thumb.width }}
                 />
             )}
             {options.map((option, index) => {

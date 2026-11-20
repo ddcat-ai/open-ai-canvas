@@ -1,7 +1,5 @@
-import { rmSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import { Agent, setGlobalDispatcher } from "undici";
 import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
@@ -32,12 +30,17 @@ function emit(event, payload = {}) {
 
 function createMessage(model, result) {
   const content = [];
+  // 思考回传内容（签名、reasoning_content）由 Go 端打包，只经 thinkingSignature 往返，运行时不解读。
+  if (result.reasoningPassback) {
+    content.push({ type: "thinking", thinking: result.reasoning || "", thinkingSignature: result.reasoningPassback });
+  }
   if (result.text) content.push({ type: "text", text: result.text });
   for (const call of result.toolCalls ?? []) {
     content.push({
       type: "toolCall",
       id: call.id,
       ...(call.item_id ? { itemId: call.item_id } : {}),
+      ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}),
       name: call.name,
       arguments: call.arguments ?? {},
     });
@@ -82,17 +85,17 @@ async function run() {
     throw new Error("Agent runtime is missing its bridge, session, or model configuration");
   }
 
-  // 每次运行使用独立的空配置目录：SDK 的 auth.json / models.json / 锁文件都落在这里，
-  // 不读取宿主 ~/.pi，也不会执行预置 auth.json 里的 !command。运行结束即删除。
-  // 会话文件和工作目录同样放在这里：它们只是本轮的工作副本，真实来源是服务端
-  // 数据库里的会话快照（请求带 sessionJSONL，运行中回传）。不使用服务端的路径：
-  // 独立容器里没有服务端的数据目录；空工作目录也不会被发现任何项目级配置或技能。
-  const isolatedDir = await mkdtemp(join(tmpdir(), "agent-runtime-"));
+  // 父进程拥有目录生命周期，SIGKILL/OOM 后也能回收。路径只来自受控环境，
+  // 不接受请求里的路径；SDK 不读取宿主 HOME 或项目配置。
+  const runDir = process.env.YINGCE_AGENT_RUN_DIR;
+  if (!runDir || !isAbsolute(runDir)) throw new Error("Agent runtime requires a parent-owned temporary directory");
+  const directoryInfo = await lstat(runDir);
+  if (!directoryInfo.isDirectory() || directoryInfo.isSymbolicLink() || (directoryInfo.mode & 0o077) || (process.getuid && directoryInfo.uid !== process.getuid())) {
+    throw new Error("Agent runtime temporary directory is not private or is a symbolic link");
+  }
+  const isolatedDir = await realpath(runDir);
   process.env.HOME = isolatedDir;
   process.env.PI_CODING_AGENT_DIR = isolatedDir;
-  process.on("exit", () => {
-    try { rmSync(isolatedDir, { recursive: true, force: true }); } catch {}
-  });
   const agentDir = isolatedDir;
   const workDir = join(isolatedDir, "work");
   const sessionDir = join(isolatedDir, "sessions");
@@ -119,6 +122,7 @@ async function run() {
       name: request.model.name || request.model.id,
       api,
       reasoning: Boolean(request.model.reasoning),
+      // 档位由 Go 按运行策略和模型能力决定；这里只声明支持思考，避免 SDK 按自身档位表裁剪。
       input: request.model.input?.length ? request.model.input : ["text", "image"],
       cost: request.model.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: Math.max(1, Number(request.model.contextWindow || 128000)),
@@ -164,17 +168,30 @@ async function run() {
             thinkingLevel: options?.reasoning ?? "off",
             contextUsage: session.getContextUsage(),
           }, options?.signal);
+          if (result.pause === true && result.reason === "awaiting_approval") {
+            pausedForApproval = true;
+            emit("approval_wait", { reason: result.reason });
+            stream.push({ type: "error", reason: "aborted", error: { ...partial, stopReason: "aborted", errorMessage: "paused for approval" } });
+            stream.end();
+            return;
+          }
           for (const text of result.steeringMessages ?? []) {
             await session.steer(text);
           }
           const message = createMessage(model, result);
+          let contentIndex = 0;
+          const thinking = message.content.find((item) => item.type === "thinking");
+          if (thinking) {
+            partial.content.push(thinking);
+            contentIndex++;
+          }
           if (result.text) {
             partial.content.push({ type: "text", text: result.text });
-            stream.push({ type: "text_start", contentIndex: 0, partial });
-            stream.push({ type: "text_delta", contentIndex: 0, delta: result.text, partial });
-            stream.push({ type: "text_end", contentIndex: 0, content: result.text, partial });
+            stream.push({ type: "text_start", contentIndex, partial });
+            stream.push({ type: "text_delta", contentIndex, delta: result.text, partial });
+            stream.push({ type: "text_end", contentIndex, content: result.text, partial });
+            contentIndex++;
           }
-          let contentIndex = result.text ? 1 : 0;
           for (const call of result.toolCalls ?? []) {
             const toolCall = message.content.find((item) => item.type === "toolCall" && item.id === call.id);
             partial.content.push(toolCall);
@@ -254,11 +271,13 @@ async function run() {
   // 技能由服务端的读取工具提供，这里不再按路径加载；projectTrusted=false 让 SDK
   // 不读取 <cwd>/.pi 设置，也不向上层目录收集 .agents/skills。
   // 同一个设置管理器也交给 createAgentSession，否则 SDK 会另建一个读文件的实例。
-  const settingsManager = SettingsManager.inMemory({}, { projectTrusted: false });
+  const settingsManager = SettingsManager.inMemory({ cacheWarming: "off" }, { projectTrusted: false });
   const resourceLoader = new DefaultResourceLoader({
     cwd: workDir,
     agentDir,
     noExtensions: true,
+    // Platform connections are governed by the Go bridge; never discover host MCP servers.
+    disabledBuiltinExtensions: ["mcp", "codemode", "tool-search"],
     noSkills: true,
     noPromptTemplates: true,
     noThemes: true,
@@ -309,7 +328,6 @@ async function run() {
 
   const compactionConfig = request.compaction || {
     enabled: true,
-    strategy: "balanced",
     reserveTokens: Math.max(1024, Math.ceil(contextWindow * 0.2)),
     keepRecentTokens: Math.min(20000, Math.max(1024, Math.floor(contextWindow * 0.2))),
   };
@@ -388,6 +406,9 @@ async function run() {
         runtimeError = new Error(message.errorMessage || "Agent assistant message failed");
         return;
       }
+      // Pi may compact and retry a context-overflow error within this prompt.
+      // A later successful response settles that recovered error.
+      runtimeError = null;
       enqueueEvent({
         type: "message_end",
         message,

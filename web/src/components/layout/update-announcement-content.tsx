@@ -1,16 +1,18 @@
 import ReactMarkdown from "react-markdown";
+import { useTranslation } from "react-i18next";
 import type { UpdateAnnouncement, UpdateBlock } from "@/lib/update-announcement";
 import "./update-announcement-content.css";
 
 export function UpdateAnnouncementContent({ value, mediaURL }: { value: UpdateAnnouncement; mediaURL?: (block: UpdateBlock) => string }) {
+    const { t } = useTranslation();
     return (
         <div className="update-announcement-content">
             {value.releases.length ? (
                 value.releases.map((release) => (
-                    <section className="update-announcement-release" key={release.id} aria-label={`版本 ${release.version}`}>
+                    <section className="update-announcement-release" key={release.id} aria-label={t("account.layout.updates.versionLabel", { version: release.version })}>
                         <header className="update-announcement-release-heading">
-                            <h3>{release.version || "待填写版本"}</h3>
-                            {release.version === value.currentVersion ? <span className="update-announcement-badge">当前版本</span> : null}
+                            <h3>{release.version || t("account.layout.updates.versionPending")}</h3>
+                            {release.version === value.currentVersion ? <span className="update-announcement-badge">{t("account.layout.updates.currentVersion")}</span> : null}
                             {release.date ? <time dateTime={release.date}>{release.date}</time> : null}
                         </header>
                         {release.title ? <h4 className="update-announcement-release-title">{release.title}</h4> : null}
@@ -21,18 +23,18 @@ export function UpdateAnnouncementContent({ value, mediaURL }: { value: UpdateAn
                                     <div className={`update-announcement-block is-${block.layout}`} key={block.id}>
                                         {block.type === "text" ? (
                                             <div className="update-announcement-copy">
-                                                <ReactMarkdown components={{ img: () => null }}>{block.text || "待填写文字内容"}</ReactMarkdown>
+                                                <ReactMarkdown components={{ img: () => null }}>{block.text || t("account.layout.updates.textPending")}</ReactMarkdown>
                                             </div>
                                         ) : (
                                             <figure>
                                                 {url ? (
                                                     block.type === "image" ? (
-                                                        <img src={url} alt={block.caption || "更新公告配图"} loading="lazy" />
+                                                        <img src={url} alt={block.caption || t("account.layout.updates.imageAlt")} loading="lazy" />
                                                     ) : (
-                                                        <video src={url} controls playsInline preload="metadata" aria-label={block.caption || "更新公告视频"} />
+                                                        <video src={url} controls playsInline preload="metadata" aria-label={block.caption || t("account.layout.updates.videoLabel")} />
                                                     )
                                                 ) : (
-                                                    <div className="update-announcement-media-empty">待上传{block.type === "image" ? "图片" : "视频"}</div>
+                                                    <div className="update-announcement-media-empty">{block.type === "image" ? t("account.layout.updates.imagePending") : t("account.layout.updates.videoPending")}</div>
                                                 )}
                                                 {block.caption ? <figcaption>{block.caption}</figcaption> : null}
                                             </figure>
@@ -44,7 +46,7 @@ export function UpdateAnnouncementContent({ value, mediaURL }: { value: UpdateAn
                     </section>
                 ))
             ) : (
-                <p className="update-announcement-empty">添加版本与内容后，可在此预览公告。</p>
+                <p className="update-announcement-empty">{t("account.layout.updates.empty")}</p>
             )}
         </div>
     );

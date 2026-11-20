@@ -170,7 +170,7 @@ func repairToolHistory(messages []map[string]any, format toolHistoryFormat, rece
 // 占位，以及补齐的「未执行」结果。
 func cloudAgentToolResultIsPlaceholder(text string) bool {
 	trimmed := strings.TrimSpace(text)
-	return trimmed == cloudAgentPiApprovalPauseText || trimmed == cloudAgentPiUnansweredCallText ||
+	return trimmed == cloudAgentPiApprovalPauseText || trimmed == cloudAgentPiMediaBatchPauseText || trimmed == cloudAgentPiUnansweredCallText ||
 		strings.Contains(trimmed, `"errorClass":"`+cloudAgentToolErrorApprovalDeferred+`"`)
 }
 

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -197,5 +198,80 @@ func TestAdaptLibTVDetailKeepsReportListsNonNilAndResourceIndex(t *testing.T) {
 	}
 	if got := result.Nodes[0]; got.Content != "https://example.com/selected.png" || got.NaturalWidth != 200 || got.NaturalHeight != 300 {
 		t.Fatalf("selected media metadata = %#v", got)
+	}
+}
+
+func TestLibTVDetailFromMCPStructuredContentAndLegacyEnvelope(t *testing.T) {
+	structured, _ := json.Marshal(map[string]any{
+		"structuredContent": map[string]any{
+			"project": map[string]any{"id": "292a69d540774a9ab9872d8337c9fd0b", "name": "MCP 画布"},
+			"nodes": []any{
+				map[string]any{
+					"id":     "n1",
+					"title":  "图片",
+					"x":      10,
+					"y":      20,
+					"width":  100,
+					"height": 80,
+					"type":   "image",
+					"url":    []any{"https://example.com/a.png"},
+				},
+			},
+			"connections": []any{
+				map[string]any{"id": "c1", "from": "n1", "to": "n1"},
+			},
+		},
+	})
+	detail, err := libTVDetailFromMCPResult(structured, "292a69d540774a9ab9872d8337c9fd0b")
+	if err != nil {
+		t.Fatalf("structured content error = %v", err)
+	}
+	result, err := adaptLibTVDetail(detail)
+	if err != nil {
+		t.Fatalf("adapt structured detail error = %v", err)
+	}
+	if result.ImportedNodeCount != 1 || result.ImportedConnectionCount != 1 || result.Nodes[0].Content != "https://example.com/a.png" {
+		t.Fatalf("structured import = %#v", result)
+	}
+
+	envelope, _ := json.Marshal(map[string]any{
+		"content": []any{
+			map[string]any{"type": "text", "text": `{"code":0,"data":{"projectMeta":{"uuid":"292a69d540774a9ab9872d8337c9fd0b","name":"旧接口","effective":{"canRead":true,"canCopy":true}},"nodeList":[{"nodeKey":"image-1","name":"图","data":"{\"type\":\"image\",\"url\":[\"https://example.com/b.png\"]}","position":{"positionX":"1","positionY":"2"}}],"connectionList":[]}}`},
+		},
+	})
+	legacy, err := libTVDetailFromMCPResult(envelope, "292a69d540774a9ab9872d8337c9fd0b")
+	if err != nil {
+		t.Fatalf("legacy envelope error = %v", err)
+	}
+	legacyResult, err := adaptLibTVDetail(legacy)
+	if err != nil || legacyResult.ProjectName != "旧接口" || legacyResult.Nodes[0].Content != "https://example.com/b.png" {
+		t.Fatalf("legacy import = %#v err=%v", legacyResult, err)
+	}
+}
+
+func TestLibTVDetailFromMCPRejectsUncopyableProject(t *testing.T) {
+	raw, _ := json.Marshal(map[string]any{
+		"structuredContent": map[string]any{
+			"projectMeta": map[string]any{"uuid": "292a69d540774a9ab9872d8337c9fd0b", "effective": map[string]any{"canRead": true, "canCopy": false}},
+			"nodeList":    []any{},
+		},
+	})
+	detail, err := libTVDetailFromMCPResult(raw, "292a69d540774a9ab9872d8337c9fd0b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !detail.copyChecked || detail.copyAllowed {
+		t.Fatalf("copy flags = checked=%v allowed=%v", detail.copyChecked, detail.copyAllowed)
+	}
+}
+
+func TestLibTVProjectArgumentKeysPreferSchema(t *testing.T) {
+	keys := libTVProjectArgumentKeys(map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"uuid": map[string]any{"type": "string"}, "verbose": map[string]any{"type": "boolean"}},
+		"required":   []any{"uuid"},
+	})
+	if len(keys) != 1 || keys[0] != "uuid" {
+		t.Fatalf("keys = %#v", keys)
 	}
 }

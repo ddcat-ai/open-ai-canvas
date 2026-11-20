@@ -1,0 +1,158 @@
+.creation-thinking-inline {
+    display: flex;
+    align-items: center;
+    width: 180px;
+    flex: none;
+    padding: 0 4px;
+}
+.thinking-level-slider {
+    --thinking-blue: #3298ff;
+    --thinking-indigo: #2947da;
+    --thinking-violet: #8954ff;
+    --thinking-lilac: #ba83ff;
+    --thinking-thumb: #fff;
+    --thinking-rail: var(--control-selected-bg);
+    --thinking-thumb-border: var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    color: var(--foreground);
+}
+.thinking-level-track {
+    position: relative;
+    flex: 1;
+    min-width: 90px;
+    height: 28px;
+}
+.thinking-level-rail {
+    position: absolute;
+    inset: 7px 0;
+    border-radius: var(--radius-full, 999px);
+    background: var(--thinking-rail);
+    overflow: hidden;
+}
+.thinking-level-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(11px + (100% - 22px) * var(--thinking-fraction, 0));
+    background: var(--thinking-blue);
+}
+.thinking-level-slider[data-tone="off"] .thinking-level-fill {
+    opacity: 0;
+}
+.thinking-level-slider[data-tone="on"] .thinking-level-fill {
+    background: linear-gradient(100deg, var(--thinking-blue), color-mix(in srgb, var(--thinking-blue) 55%, var(--thinking-thumb)), var(--thinking-blue));
+    background-size: 250% 100%;
+    animation: thinking-color-flow 5s linear infinite;
+}
+.thinking-level-slider[data-tone="max"] .thinking-level-fill {
+    background: linear-gradient(100deg, var(--thinking-indigo), var(--thinking-lilac), var(--thinking-violet), var(--thinking-indigo));
+    background-size: 250% 100%;
+    animation: thinking-color-flow 5s linear infinite;
+}
+.thinking-level-slider:is([data-tone="on"], [data-tone="max"]) .thinking-level-fill::after {
+    content: "";
+    position: absolute;
+    inset: 0 -100%;
+    background: radial-gradient(circle at 12px 4px, var(--thinking-thumb) 0 1px, transparent 2px), radial-gradient(circle at 37px 10px, var(--thinking-thumb) 0 1px, transparent 2px);
+    background-size: 56px 14px;
+    opacity: 0.65;
+    animation: thinking-spark-flow 4s linear infinite;
+}
+@keyframes thinking-color-flow {
+    to {
+        background-position: 250% 0;
+    }
+}
+@keyframes thinking-spark-flow {
+    to {
+        transform: translateX(56px);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .thinking-level-slider .thinking-level-fill,
+    .thinking-level-slider .thinking-level-fill::after {
+        animation: none;
+    }
+}
+.thinking-level-slider[data-disabled] .thinking-level-fill,
+.thinking-level-slider[data-disabled] .thinking-level-fill::after {
+    animation-play-state: paused;
+}
+.thinking-level-dots {
+    position: absolute;
+    inset: 0 11px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.thinking-level-dots i {
+    width: 3px;
+    height: 3px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--muted-foreground);
+    opacity: 0.35;
+}
+.thinking-level-slider:not([data-tone="off"]) .thinking-level-dots i[data-filled] {
+    background: var(--thinking-thumb);
+    opacity: 0.5;
+}
+.thinking-level-track input {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+}
+.thinking-level-track input:active {
+    cursor: grabbing;
+}
+.thinking-level-track input::-webkit-slider-runnable-track {
+    height: 22px;
+    background: transparent;
+}
+.thinking-level-track input::-moz-range-track {
+    height: 22px;
+    background: transparent;
+}
+.thinking-level-track input::-webkit-slider-thumb {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--thinking-thumb);
+    border: 1px solid var(--thinking-thumb-border);
+}
+.thinking-level-track input::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full, 999px);
+    background: var(--thinking-thumb);
+    border: 1px solid var(--thinking-thumb-border);
+}
+.thinking-level-value,
+.thinking-level-unavailable {
+    flex: none;
+    min-width: 2em;
+    font-size: var(--fs-label);
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}
+.thinking-level-slider :focus-visible {
+    outline: var(--focus-ring-width, 2px) solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+.thinking-level-slider[data-disabled] {
+    opacity: 0.5;
+}
+.thinking-level-slider :disabled {
+    cursor: not-allowed;
+}

@@ -54,6 +54,9 @@ type ModelRequestIntent struct {
 	Operation  string         `json:"operation,omitempty"`
 	Inputs     map[string]int `json:"inputs,omitempty"`
 	Options    map[string]any `json:"options,omitempty"`
+	// ReferenceVideoDurationsMs 仅用于报价：按顺序给出参考视频时长，长度须等于 inputs.video。
+	// 真实任务不读取它，按秒计费的参考视频时长始终由后端实测。
+	ReferenceVideoDurationsMs []int64 `json:"referenceVideoDurationsMs,omitempty"`
 }
 
 // ModelRequestIntentFromTaskInput 从统一任务输入推导路由意图；它只统计实际输入和显式参数，不假设任何固定图片数或视频时长。

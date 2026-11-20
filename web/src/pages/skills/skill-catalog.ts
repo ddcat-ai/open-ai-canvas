@@ -1,15 +1,16 @@
+import { currentLocale, translate } from "@/i18n";
 import type { Skill, SkillCategory } from "@/services/api/skills";
 
 export const fallbackSkillCategories: SkillCategory[] = [
-    { value: "drama", label: "短剧影视" },
-    { value: "ecommerce", label: "电商营销" },
-    { value: "creative", label: "创意设计" },
-    { value: "social", label: "社媒内容" },
-    { value: "others", label: "其他" },
+    { value: "drama", get label() { return translate("library.skills.category.drama"); } },
+    { value: "ecommerce", get label() { return translate("library.skills.category.ecommerce"); } },
+    { value: "creative", get label() { return translate("library.skills.category.creative"); } },
+    { value: "social", get label() { return translate("library.skills.category.social"); } },
+    { value: "others", get label() { return translate("library.skills.category.others"); } },
 ];
 
 export function skillCategoryLabel(value: string, categories: SkillCategory[] = fallbackSkillCategories) {
-    return categories.find((item) => item.value === value)?.label || "其他";
+    return categories.find((item) => item.value === value)?.label || translate("library.skills.category.others");
 }
 
 export function groupSkills(skills: Skill[], categories: SkillCategory[]) {
@@ -36,17 +37,17 @@ export function skillAccent(category: string | undefined) {
 export function skillGlyph(name: string | undefined) {
     const value = (name || "").trim();
     const first = typeof Intl !== "undefined" && "Segmenter" in Intl
-        ? new Intl.Segmenter("zh-CN", { granularity: "grapheme" }).segment(value)[Symbol.iterator]().next().value?.segment
+        ? new Intl.Segmenter(currentLocale(), { granularity: "grapheme" }).segment(value)[Symbol.iterator]().next().value?.segment
         : Array.from(value)[0];
-    return first ? first.toLocaleUpperCase("en-US") : "技";
+    return first ? first.toLocaleUpperCase("en-US") : translate("library.skills.glyphFallback");
 }
 
 export function formatSkillCount(value: number) {
-    return new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+    return new Intl.NumberFormat(currentLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 export function formatSkillDate(value: string) {
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "未知时间";
-    return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric" }).format(date);
+    if (Number.isNaN(date.getTime())) return translate("library.skills.unknownTime");
+    return new Intl.DateTimeFormat(currentLocale(), { year: "numeric", month: "short", day: "numeric" }).format(date);
 }

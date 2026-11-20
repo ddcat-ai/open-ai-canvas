@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { translate } from "@/i18n";
 import { installLive2DLoader } from "@/services/live2d-loader";
 import { adaptLive2DRenderOrders } from "@/lib/canvas/live2d-core-adapter";
 
@@ -16,7 +18,7 @@ function loadCore() {
         const fail = () => {
             clearTimeout(timer);
             script.remove();
-            reject(new Error("Live2D 运行库加载失败，请确认部署产物包含 Cubism Core 且静态资源可访问后重试"));
+            reject(new Error(translate("canvasC.live2d.coreLoadFailed")));
         };
         script.onload = () => {
             if (!("Live2DCubismCore" in window)) {
@@ -86,6 +88,7 @@ export function Live2DAvatar({
     onReady?: () => void;
     onError?: (message: string) => void;
 }) {
+    const { t } = useTranslation();
     const host = useRef<HTMLSpanElement>(null);
     const callbacks = useRef({ onReady, onError });
     callbacks.current = { onReady, onError };
@@ -157,8 +160,7 @@ export function Live2DAvatar({
                     elapsed = now;
                     app.render();
                 } catch (error) {
-                    const detail = error instanceof Error && error.message ? `：${error.message}` : "";
-                    failRendering(`Live2D 渲染失败${detail}，已回退默认形象`);
+                    failRendering(error instanceof Error && error.message ? translate("canvasC.live2d.renderFailedWithDetail", { detail: error.message }) : translate("canvasC.live2d.renderFailed"));
                 }
             };
             const sync = () => {
@@ -175,7 +177,7 @@ export function Live2DAvatar({
             observer.observe(canvas);
             const contextLost = (event: Event) => {
                 event.preventDefault();
-                failRendering("Live2D 渲染上下文丢失，已回退默认形象");
+                failRendering(translate("canvasC.live2d.contextLost"));
             };
             canvas.addEventListener("webglcontextlost", contextLost);
             document.addEventListener("visibilitychange", sync);
@@ -203,7 +205,7 @@ export function Live2DAvatar({
                 cancelLoading?.();
                 cleanup?.();
                 setFailed(true);
-                callbacks.current.onError?.("Live2D 加载超时，请检查模型和网络后重试");
+                callbacks.current.onError?.(translate("canvasC.live2d.loadTimeout"));
             }, 30000);
             try {
                 await Live2DFactory.setupLive2DModel(loaded, url, { autoUpdate: false, autoInteract: false, crossOrigin: "use-credentials", motionPreload: MotionPreloadStrategy.IDLE });
@@ -221,9 +223,9 @@ export function Live2DAvatar({
             }
             model = loaded;
             app.stage.addChild(loaded);
-            if (!(loaded.internalModel instanceof Cubism4InternalModel)) throw new Error("不支持的 Live2D 模型运行时");
+            if (!(loaded.internalModel instanceof Cubism4InternalModel)) throw new Error(translate("canvasC.live2d.unsupportedRuntime"));
             adaptLive2DRenderOrders(loaded.internalModel.coreModel);
-            if (!(loaded.width > 0 && loaded.height > 0)) throw new Error("Live2D 模型尺寸无效");
+            if (!(loaded.width > 0 && loaded.height > 0)) throw new Error(translate("canvasC.live2d.invalidSize"));
             const scale = Math.min(width / loaded.width, height / loaded.height);
             loaded.scale.set(scale);
             loaded.anchor.set(0.5, 1);
@@ -239,7 +241,7 @@ export function Live2DAvatar({
             cleanup = undefined;
             if (!disposed) {
                 setFailed(true);
-                callbacks.current.onError?.(error instanceof Error ? error.message : "Live2D 加载失败");
+                callbacks.current.onError?.(error instanceof Error ? error.message : translate("canvasC.live2d.loadFailed"));
             }
         });
         const stop = () => {
@@ -266,7 +268,7 @@ export function Live2DAvatar({
             ) : !ready ? (
                 <span role="status" style={{ gridArea: "1 / 1" }}>
                     <LoaderCircle className={reducedMotion ? "size-6" : "size-6 motion-safe:animate-spin"} aria-hidden="true" />
-                    <span className="sr-only">正在加载 Live2D 模型</span>
+                    <span className="sr-only">{t("canvasC.live2d.loading")}</span>
                 </span>
             ) : null}
         </span>

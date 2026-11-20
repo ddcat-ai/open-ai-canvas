@@ -24,24 +24,28 @@ const (
 type ErrorReason = kernel.ErrorReason
 
 const (
-	ReasonInvalidArgument     = kernel.ReasonInvalidArgument
-	ReasonUnauthorized        = kernel.ReasonUnauthorized
-	ReasonForbidden           = kernel.ReasonForbidden
-	ReasonNotFound            = kernel.ReasonNotFound
-	ReasonConflict            = kernel.ReasonConflict
-	ReasonProjectNameConflict = kernel.ReasonProjectNameConflict
-	ReasonFailedPrecondition  = kernel.ReasonFailedPrecondition
-	ReasonQuotaExceeded       = kernel.ReasonQuotaExceeded
-	ReasonStorageCapacity     = kernel.ReasonStorageCapacityExceeded
-	ReasonStorageReadOnly     = kernel.ReasonStorageReadOnly
-	ReasonDramaBudget         = kernel.ReasonDramaBudgetExhausted
-	ReasonDramaSegmentChanged = kernel.ReasonDramaSegmentChanged
-	ReasonRateLimited         = kernel.ReasonRateLimited
-	ReasonUnavailable         = kernel.ReasonUnavailable
-	ReasonTimeout             = kernel.ReasonTimeout
-	ReasonInternal            = kernel.ReasonInternal
-	ReasonBadGateway          = kernel.ReasonBadGateway
-	ReasonUpstreamDNSFailed   = kernel.ReasonUpstreamDNSFailed
+	ReasonInvalidArgument              = kernel.ReasonInvalidArgument
+	ReasonUnauthorized                 = kernel.ReasonUnauthorized
+	ReasonForbidden                    = kernel.ReasonForbidden
+	ReasonNotFound                     = kernel.ReasonNotFound
+	ReasonConflict                     = kernel.ReasonConflict
+	ReasonProjectNameConflict          = kernel.ReasonProjectNameConflict
+	ReasonFailedPrecondition           = kernel.ReasonFailedPrecondition
+	ReasonQuotaExceeded                = kernel.ReasonQuotaExceeded
+	ReasonStorageCapacity              = kernel.ReasonStorageCapacityExceeded
+	ReasonStorageReadOnly              = kernel.ReasonStorageReadOnly
+	ReasonDramaBudget                  = kernel.ReasonDramaBudgetExhausted
+	ReasonDramaSegmentChanged          = kernel.ReasonDramaSegmentChanged
+	ReasonDramaEpisodeConfirmRequired  = kernel.ReasonDramaEpisodeConfirmRequired
+	ReasonAgentInterjectionRunFinished = kernel.ReasonAgentInterjectionRunFinished
+	ReasonAgentInterjectionDelivered   = kernel.ReasonAgentInterjectionDelivered
+	ReasonAgentRunStateBusy            = kernel.ReasonAgentRunStateBusy
+	ReasonRateLimited                  = kernel.ReasonRateLimited
+	ReasonUnavailable                  = kernel.ReasonUnavailable
+	ReasonTimeout                      = kernel.ReasonTimeout
+	ReasonInternal                     = kernel.ReasonInternal
+	ReasonBadGateway                   = kernel.ReasonBadGateway
+	ReasonUpstreamDNSFailed            = kernel.ReasonUpstreamDNSFailed
 )
 
 func ReasonForStatus(status int) ErrorReason {

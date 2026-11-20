@@ -35,7 +35,7 @@ func TestCloudAgentToolTableMatchesRuntimeDispatch(t *testing.T) {
 				t.Errorf("%s must use vision pipeline", name)
 			}
 		case p.Write():
-			if h.Write == nil || h.Preview == nil {
+			if (h.Write == nil || h.Preview == nil) && (h.PageWrite == nil || h.PagePreview == nil) {
 				t.Errorf("%s requires both execution and approval preview", name)
 			}
 		default:

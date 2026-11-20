@@ -1,0 +1,32 @@
+[data-admin-root] .admin-global-search-bar {
+    /* 暂时隐藏全局搜索栏，释放内容区高度。 */
+    display: none;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    padding: var(--admin-space) calc(var(--admin-space) * 2);
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+[data-admin-root] .admin-global-search {
+    width: min(100%, 24rem);
+    min-width: 0;
+}
+
+[data-admin-root] .admin-global-search .ant-select {
+    width: 100%;
+}
+
+.admin-global-search-result {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+}
+
+.admin-global-search-result strong {
+    font-weight: 500;
+}
+
+.admin-global-search-result small {
+    color: var(--admin-text-secondary);
+}

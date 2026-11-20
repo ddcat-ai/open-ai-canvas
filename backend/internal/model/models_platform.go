@@ -41,6 +41,84 @@ type ArkPrivateAssetBinding struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
+// ArkPortraitSession 是一次方舟真人认证（H5 活体）会话。State 是回调地址里的一次性随机凭据，
+// BytedToken 加密保存，30 分钟内用于换取本次认证创建的真人素材组 ID。
+// Scope 为 user 时由用户自建，可能冻结素材组费用（BillingOrderID）；platform 由管理员为平台素材组发起，不收费。
+type ArkPortraitSession struct {
+	ID               string    `json:"id" gorm:"primaryKey;size:36"`
+	UserID           string    `json:"userId" gorm:"index;size:36"`
+	Scope            string    `json:"scope" gorm:"size:16;not null;default:user"`
+	State            string    `json:"-" gorm:"uniqueIndex;size:64"`
+	Name             string    `json:"name" gorm:"size:80"`
+	Description      string    `json:"description" gorm:"size:500;not null;default:''"`
+	Site             string    `json:"site" gorm:"size:24"`
+	Region           string    `json:"region" gorm:"size:40"`
+	ProjectName      string    `json:"projectName" gorm:"size:160"`
+	BytedTokenCipher string    `json:"-" gorm:"type:text"`
+	Status           string    `json:"status" gorm:"index;size:24"`
+	ResultCode       string    `json:"resultCode,omitempty" gorm:"size:40"`
+	GroupID          string    `json:"groupId,omitempty" gorm:"size:120"`
+	Error            string    `json:"error,omitempty" gorm:"size:1000"`
+	BillingOrderID   string    `json:"-" gorm:"size:36;not null;default:''"`
+	ExpiresAt        time.Time `json:"expiresAt" gorm:"index"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+// ArkPortraitGroup 是平台方舟账号下的一个素材组。Kind 区分真人（LivenessFace，只能经 H5 认证生成）、
+// 虚拟与版权 IP（AIGC）；Scope=user 只属于创建者本人，Scope=platform 由管理员创建并按授权给用户只读使用。
+// 真人组的 ExpiresAt 是授权到期时间，到期后不能再上传或用于生成。
+type ArkPortraitGroup struct {
+	ID             string     `json:"id" gorm:"primaryKey;size:36"`
+	UserID         string     `json:"userId" gorm:"index;size:36"`
+	Kind           string     `json:"kind" gorm:"size:16;not null;default:real;index"`
+	Scope          string     `json:"scope" gorm:"size:16;not null;default:user;index"`
+	Name           string     `json:"name" gorm:"size:80"`
+	Description    string     `json:"description" gorm:"size:500;not null;default:''"`
+	Site           string     `json:"site" gorm:"size:24"`
+	Region         string     `json:"region" gorm:"size:40"`
+	ProjectName    string     `json:"projectName" gorm:"uniqueIndex:idx_ark_portrait_group_project,priority:1;size:160"`
+	GroupID        string     `json:"groupId" gorm:"uniqueIndex:idx_ark_portrait_group_project,priority:2;size:120"`
+	Source         string     `json:"source" gorm:"size:24"`
+	GrantAll       bool       `json:"grantAll" gorm:"not null;default:false"`
+	AuthorizedAt   *time.Time `json:"authorizedAt"`
+	ExpiresAt      *time.Time `json:"expiresAt"`
+	BillingOrderID string     `json:"-" gorm:"size:36;not null;default:''"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+}
+
+// ArkPortraitAsset 是素材组内的一份素材。需要平台审核时先为 pending_review，管理员通过后才提交方舟；
+// 方舟审核通过（active）后，LibraryAssetID 指向素材库中被认证的素材。
+type ArkPortraitAsset struct {
+	ID             string     `json:"id" gorm:"primaryKey;size:36"`
+	UserID         string     `json:"userId" gorm:"index;size:36"`
+	GroupID        string     `json:"groupId" gorm:"index;size:36"`
+	ResourceID     string     `json:"resourceId" gorm:"index;size:36"`
+	ArkAssetID     string     `json:"arkAssetId" gorm:"index;size:120"`
+	AssetType      string     `json:"assetType" gorm:"size:16"`
+	Name           string     `json:"name" gorm:"size:120"`
+	Status         string     `json:"status" gorm:"index;size:24"`
+	Error          string     `json:"error,omitempty" gorm:"size:1000"`
+	LibraryAssetID string     `json:"libraryAssetId,omitempty" gorm:"size:80;not null;default:'';index"`
+	ReviewedBy     string     `json:"reviewedBy,omitempty" gorm:"size:36;not null;default:''"`
+	ReviewedAt     *time.Time `json:"reviewedAt,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+}
+
+// BillingSceneArkAssetGroup 是方舟素材组费用的计费场景：按组一次性收费，不关联生成任务。
+const BillingSceneArkAssetGroup = "ark_asset_group"
+
+// ArkPortraitGroupGrant 记录平台素材组授权给的单个用户；GrantAll 的组不逐个写入。
+type ArkPortraitGroupGrant struct {
+	ID        string    `json:"id" gorm:"primaryKey;size:36"`
+	GroupID   string    `json:"groupId" gorm:"size:36;uniqueIndex:idx_ark_portrait_grant_group_user,priority:1"`
+	UserID    string    `json:"userId" gorm:"size:36;index;uniqueIndex:idx_ark_portrait_grant_group_user,priority:2"`
+	CreatedBy string    `json:"createdBy" gorm:"size:36"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type UserOSSSetting struct {
 	ID        string    `json:"id" gorm:"primaryKey;size:36"`
 	UserID    string    `json:"userId" gorm:"index;size:36;index:idx_user_oss_settings_user_created,priority:1"`
@@ -108,8 +186,12 @@ type Skill struct {
 	ExtraInfo         string     `json:"extraInfo" gorm:"type:text"`
 	InitialLikeCount  int64      `json:"initialLikeCount"`
 	InitialAddedCount int64      `json:"initialAddedCount"`
-	CreatedAt         time.Time  `json:"createdAt" gorm:"index"`
-	UpdatedAt         time.Time  `json:"updatedAt" gorm:"index"`
+	// AdminInfoEditedAt / AdminContentEditedAt 记录管理员最近一次修改基本信息 / 文件内容的时间（Schema 83）。
+	// 内置技能启动同步不再覆盖管理员改过的部分；GitHub 同步在 AdminInfoEditedAt 非空时保留名称和简介。
+	AdminInfoEditedAt    *time.Time `json:"adminInfoEditedAt"`
+	AdminContentEditedAt *time.Time `json:"adminContentEditedAt"`
+	CreatedAt            time.Time  `json:"createdAt" gorm:"index"`
+	UpdatedAt            time.Time  `json:"updatedAt" gorm:"index"`
 }
 
 type SkillVersion struct {

@@ -1,0 +1,675 @@
+/* 设置页「方舟素材库」：类型切换 + 素材组列表 + 原位详情 / 新建流程。颜色只取 --user-* 与语义 token，明暗主题自动切换。 */
+.ark-pane {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding-bottom: var(--space-6);
+}
+.ark-pane-loading {
+    padding: var(--space-6) 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+}
+
+/* 类型切换 */
+.ark-pane-kinds {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+.ark-pane-kind {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-lg);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    text-align: left;
+    transition:
+        background-color var(--motion-dur-fast) var(--motion-ease-out),
+        border-color var(--motion-dur-fast) var(--motion-ease-out);
+}
+.ark-pane-kind:hover {
+    background: var(--user-surface-hover);
+}
+.ark-pane-kind.is-active {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.ark-pane-kind:focus-visible,
+.ark-pane-group:focus-visible,
+.ark-pane-session-item:focus-visible,
+.ark-tile-id:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+.ark-pane-kind-icon {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--user-radius-button);
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+}
+.ark-pane-kind.is-active .ark-pane-kind-icon {
+    background: var(--user-surface);
+    color: var(--control-selected-fg);
+}
+.ark-pane-kind-icon svg {
+    width: 18px;
+    height: 18px;
+}
+.ark-pane-kind-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+}
+.ark-pane-kind-copy strong {
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+.ark-pane-kind-copy span {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-label);
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.ark-pane-kind-count {
+    flex-shrink: 0;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    font-variant-numeric: tabular-nums;
+}
+
+.ark-pane-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+/* 主体：左侧素材组列表，右侧详情或新建流程 */
+.ark-pane-body {
+    display: grid;
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-4);
+}
+.ark-pane-list {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-lg);
+    background: var(--user-surface);
+}
+.ark-pane-list-note,
+.ark-pane-list-empty {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+}
+.ark-pane-list-empty {
+    padding: var(--space-4) var(--space-2);
+    text-align: center;
+}
+.ark-pane-list-heading {
+    padding: 0 var(--space-2);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-label);
+    font-weight: 500;
+}
+.ark-pane-sessions {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--user-border);
+}
+.ark-pane-session-item {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-radius: var(--user-radius-button);
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    text-align: left;
+}
+.ark-pane-session-item > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ark-pane-session-item:hover {
+    background: var(--user-surface-hover);
+}
+.ark-pane-session-item.is-active {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.ark-pane-dot {
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+    border-radius: var(--r-full);
+    background: var(--user-ink-soft);
+}
+.ark-pane-dot.is-pending {
+    background: var(--status-warning);
+    animation: ark-pane-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ark-pane-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+.ark-pane-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--user-border);
+}
+.ark-pane-group {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--user-radius-button);
+    color: var(--user-ink);
+    text-align: left;
+    transition: background-color var(--motion-dur-fast) var(--motion-ease-out);
+}
+.ark-pane-group:hover {
+    background: var(--user-surface-hover);
+}
+.ark-pane-group.is-active {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.ark-pane-group.is-unavailable .ark-pane-group-name {
+    color: var(--user-ink-soft);
+    text-decoration: line-through;
+}
+.ark-pane-group-name {
+    overflow: hidden;
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ark-pane-group-meta {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px var(--space-2);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-label);
+}
+.ark-pane-expiry.is-expiring {
+    color: var(--status-warning);
+}
+.ark-pane-expiry.is-expired {
+    color: var(--status-error);
+}
+.ark-pane-tag {
+    display: inline-flex;
+    height: 20px;
+    align-items: center;
+    padding: 0 var(--space-2);
+    border-radius: var(--r-full);
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-label);
+    line-height: 1;
+    white-space: nowrap;
+}
+.ark-pane-tag.is-accent {
+    box-shadow: inset 0 0 0 1px var(--user-border-strong);
+    background: transparent;
+    color: var(--user-ink);
+}
+.ark-pane-tag.is-warning {
+    background: color-mix(in srgb, var(--status-warning) 14%, transparent);
+    color: var(--status-warning);
+}
+.ark-pane-tag.is-danger {
+    background: color-mix(in srgb, var(--status-error) 14%, transparent);
+    color: var(--status-error);
+}
+.ark-pane-main {
+    display: flex;
+    min-width: 0;
+    min-height: 360px;
+    flex-direction: column;
+    padding: var(--space-5);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-lg);
+    background: var(--user-surface);
+}
+.ark-pane-main > .workspace-state {
+    margin: auto;
+}
+
+/* 新建流程（真人三步 / 虚拟表单） */
+.ark-composer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+.ark-composer-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+.ark-composer-head h3,
+.ark-detail-name h3 {
+    margin: 0;
+    color: var(--user-ink);
+    font-size: var(--fs-body-lg);
+    font-weight: 600;
+}
+.ark-composer-head p {
+    margin: var(--space-1) 0 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+}
+.ark-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.ark-step {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 2px solid var(--user-border);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.ark-step.is-current {
+    border-top-color: var(--user-ink);
+    color: var(--user-ink);
+    font-weight: 500;
+}
+.ark-step.is-done {
+    border-top-color: var(--status-success);
+    color: var(--user-ink-muted);
+}
+.ark-step-index {
+    display: inline-flex;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--user-border-strong);
+    border-radius: var(--r-full);
+    font-size: var(--fs-label);
+    font-variant-numeric: tabular-nums;
+}
+.ark-step.is-current .ark-step-index {
+    border-color: var(--user-ink);
+    background: var(--user-ink);
+    color: var(--user-surface);
+}
+.ark-step.is-done .ark-step-index {
+    border-color: transparent;
+    color: var(--status-success);
+}
+.ark-step-index svg {
+    width: 18px;
+    height: 18px;
+}
+.ark-composer-form {
+    display: flex;
+    max-width: 520px;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+.ark-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+.ark-field > span {
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.ark-fee-note {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+}
+.ark-composer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+.ark-composer-actions.is-start {
+    justify-content: flex-start;
+    margin-top: var(--space-2);
+}
+
+/* 真人认证二维码面板 */
+.ark-session {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    padding: var(--space-5);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+}
+.ark-session-code {
+    flex-shrink: 0;
+}
+.ark-session-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-2);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+}
+.ark-session-copy strong {
+    color: var(--user-ink);
+    font-size: var(--fs-title);
+    font-weight: 600;
+    line-height: 1.4;
+}
+.ark-session-reserved {
+    color: var(--status-warning);
+}
+
+/* 素材组详情 */
+.ark-detail {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+.ark-detail-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+.ark-detail-title {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+.ark-detail-name,
+.ark-detail-rename {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-1);
+}
+.ark-detail-name h3 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ark-detail-rename .ant-input {
+    max-width: 280px;
+}
+.ark-detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+.ark-detail-meta {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--user-radius-button);
+    background: var(--user-surface-muted);
+    font-size: var(--fs-caption);
+}
+.ark-detail-meta > div {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-3);
+}
+.ark-detail-meta dt {
+    color: var(--user-ink-muted);
+}
+.ark-detail-meta dd {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-1);
+    margin: 0;
+    color: var(--user-ink);
+    overflow-wrap: anywhere;
+}
+.ark-detail-meta code {
+    overflow: hidden;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--fs-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ark-detail-upload {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px dashed var(--user-border-strong);
+    border-radius: var(--r-lg);
+}
+.ark-detail-upload-copy {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 260px;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-label);
+    line-height: 1.6;
+}
+.ark-detail-upload-copy strong {
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.ark-detail-upload-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+.ark-detail-empty {
+    margin: 0;
+    padding: var(--space-6) 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    text-align: center;
+}
+
+/* 组内素材 */
+.ark-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.ark-tile {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-lg);
+    background: var(--user-surface);
+}
+.ark-tile.is-rejected,
+.ark-tile.is-failed {
+    border-color: color-mix(in srgb, var(--status-error) 35%, var(--user-border));
+}
+.ark-tile-media {
+    position: relative;
+    display: flex;
+    aspect-ratio: 3 / 4;
+    align-items: center;
+    justify-content: center;
+    background: var(--user-surface-muted);
+}
+.ark-tile-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+.ark-tile-missing {
+    padding: var(--space-3);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-label);
+    text-align: center;
+}
+.ark-tile-status {
+    position: absolute;
+    top: var(--space-2);
+    left: var(--space-2);
+    background: color-mix(in srgb, var(--user-surface) 88%, transparent);
+    backdrop-filter: blur(6px);
+}
+.ark-tile-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3) 0;
+}
+.ark-tile-name {
+    overflow: hidden;
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ark-tile-id {
+    overflow: hidden;
+    padding: 0;
+    color: var(--user-ink-soft);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: var(--fs-nano);
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ark-tile-id:hover {
+    color: var(--user-ink);
+}
+.ark-tile-reason {
+    color: var(--status-error);
+    font-size: var(--fs-label);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.ark-tile-actions {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    margin-top: auto;
+    padding: var(--space-1) var(--space-2) var(--space-2);
+}
+.ark-tile-library {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-right: auto;
+    color: var(--status-success);
+    font-size: var(--fs-label);
+}
+.ark-tile-library svg {
+    width: 14px;
+    height: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ark-pane-kind,
+    .ark-pane-group {
+        transition: none;
+    }
+    .ark-pane-dot.is-pending {
+        animation: none;
+    }
+}
+
+@container (max-width: 760px) {
+    .ark-pane-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .ark-pane-main {
+        min-height: 0;
+        padding: var(--space-4);
+    }
+    .ark-session {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-4);
+    }
+}
+@container (max-width: 560px) {
+    .ark-pane-kinds {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .ark-pane-kind-copy span {
+        -webkit-line-clamp: 1;
+    }
+    .ark-steps {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .ark-detail-head {
+        flex-direction: column;
+    }
+    .ark-detail-meta > div {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 2px;
+    }
+    .ark-tiles {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

@@ -12,9 +12,18 @@ import (
 )
 
 func TestArkPrivateAssetUsesRegionalArkControlPlane(t *testing.T) {
-	value, err := arkPrivateAssetControlPlaneURL("test-region")
+	value, err := arkPrivateAssetControlPlaneURL("", "test-region")
 	if err != nil || value != "https://ark.test-region.volcengineapi.com" {
 		t.Fatalf("arkPrivateAssetControlPlaneURL() = %q, %v", value, err)
+	}
+	value, err = arkPrivateAssetControlPlaneURL(arkSiteBytePlus, "AP-Southeast-1")
+	if err != nil || value != "https://ark.ap-southeast-1.byteplusapi.com" {
+		t.Fatalf("BytePlus control plane = %q, %v", value, err)
+	}
+	for _, input := range [][2]string{{"aws", "cn-beijing"}, {arkSiteBytePlus, "ap.southeast"}, {arkSiteVolcengine, ""}} {
+		if _, err := arkPrivateAssetControlPlaneURL(input[0], input[1]); err == nil {
+			t.Fatalf("%v should be rejected", input)
+		}
 	}
 }
 

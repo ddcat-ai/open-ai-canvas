@@ -4,12 +4,14 @@ import { conversationTimeFormatter, type CreationConversation, type CreationMess
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { App, Dropdown } from "antd";
+import { App, Button, Dropdown, Input } from "antd";
 import { displayCreationPrompt } from "./creation-references";
 import { AppDrawer } from "@/components/ui/product/app-drawer";
 import { Clapperboard, Download, Image as ImageIcon, MessageSquareText, MoreHorizontal, Pencil, Plus, Search, Trash2, X, Orbit } from "lucide-react";
 import { conversationTimestamp } from "./creation-conversations";
 import { formatMessageTime } from "./creation-workspace-messages";
+import { useTranslation } from "react-i18next";
+import { translate } from "@/i18n";
 
 export function creationConversationBucket(updatedAt: string): "today" | "yesterday" | "week" | "earlier" {
     const at = new Date(updatedAt).getTime();
@@ -25,7 +27,20 @@ export function creationConversationBucket(updatedAt: string): "today" | "yester
     return "earlier";
 }
 
-export const creationBucketLabels: Record<"today" | "yesterday" | "week" | "earlier", string> = { today: "今天", yesterday: "昨天", week: "近 7 天", earlier: "更早" };
+export const creationBucketLabels: Record<"today" | "yesterday" | "week" | "earlier", string> = {
+    get today() {
+        return translate("create.history.today");
+    },
+    get yesterday() {
+        return translate("create.history.yesterday");
+    },
+    get week() {
+        return translate("create.history.week");
+    },
+    get earlier() {
+        return translate("create.history.earlier");
+    },
+};
 
 export function CreationHistoryDrawer({
     open,
@@ -46,6 +61,7 @@ export function CreationHistoryDrawer({
     onDelete: (conversation: CreationConversation) => void;
     onRename: (conversation: CreationConversation, title: string) => void;
 }) {
+    const { t } = useTranslation();
     const [keyword, setKeyword] = useState("");
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -70,7 +86,7 @@ export function CreationHistoryDrawer({
         const value = renameInputRef.current?.value.trim() || "";
         setRenamingId(null);
         if (shouldSkip || !value) return;
-        const original = conversation.title.trim() || "新创作";
+        const original = conversation.title.trim() || t("create.conversation.untitled");
         if (value === original) return;
         onRename(conversation, value);
     };
@@ -94,7 +110,7 @@ export function CreationHistoryDrawer({
             const searchable = [
                 conversation.title,
                 ...conversation.messages.flatMap((message) => [message.content, displayCreationPrompt(message.content, message.references || [])]),
-                latest?.mode ? modeLabels[latest.mode] : "创作",
+                latest?.mode ? modeLabels[latest.mode] : t("create.history.creation"),
                 formatConversationTime(conversation.updatedAt),
             ]
                 .filter(Boolean)
@@ -102,7 +118,7 @@ export function CreationHistoryDrawer({
                 .toLowerCase();
             return searchable.includes(query);
         });
-    }, [conversations, keyword]);
+    }, [conversations, keyword, t]);
 
     return (
         <AppDrawer
@@ -111,33 +127,33 @@ export function CreationHistoryDrawer({
             onClose={onClose}
             placement="right"
             size="min(440px, 100vw)"
-            closeIcon={<X className="size-4" />}
+            closable={{ placement: "end", closeIcon: <X className="size-4" /> }}
             className="creation-history-drawer"
             rootClassName="creation-history-drawer-root"
             title={
                 <div className="creation-history-title">
-                    <span>历史对话</span>
-                    <small>{conversations.length} 个对话</small>
+                    <span>{t("create.history.title")}</span>
+                    <small>{t("create.history.count", { count: conversations.length })}</small>
                 </div>
             }
         >
             <div className="creation-history-content">
-                <label className="creation-history-search">
-                    <Search aria-hidden="true" />
-                    <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索对话标题或内容" aria-label="搜索历史对话" />
-                </label>
-
-                <button type="button" className="creation-history-new" onClick={onNew}>
-                    <span className="creation-history-new-icon">
-                        <Plus />
-                    </span>
-                    <span className="creation-history-new-copy">
-                        <strong>新建创作</strong>
-                        <small>开启一个新的创作对话</small>
-                    </span>
-                </button>
+                <div className="creation-history-toolbar">
+                    <Input
+                        className="creation-history-search"
+                        prefix={<Search aria-hidden="true" />}
+                        allowClear
+                        value={keyword}
+                        onChange={(event) => setKeyword(event.target.value)}
+                        placeholder={t("create.history.searchPlaceholder")}
+                        aria-label={t("create.history.searchLabel")}
+                    />
+                    <Button icon={<Plus />} onClick={onNew}>
+                        {t("create.history.new")}
+                    </Button>
+                </div>
                 {visibleConversations.length ? (
-                    <ul className="creation-history-list" aria-label="历史对话，按更新时间倒序排列">
+                    <ul className="creation-history-list" aria-label={t("create.history.listLabel")}>
                         {visibleConversations.flatMap((conversation, index) => {
                             const showGroupHead = !keyword.trim() && (index === 0 || creationConversationBucket(conversation.updatedAt) !== creationConversationBucket(visibleConversations[index - 1].updatedAt));
                             const latest = conversationPreviewMessage(conversation);
@@ -155,8 +171,8 @@ export function CreationHistoryDrawer({
                                             <input
                                                 ref={renameInputRef}
                                                 className="creation-history-rename-input"
-                                                defaultValue={conversation.title.trim() || "新创作"}
-                                                aria-label="重命名对话标题"
+                                                defaultValue={conversation.title.trim() || t("create.conversation.untitled")}
+                                                aria-label={t("create.history.renameLabel")}
                                                 autoFocus
                                                 onFocus={(event) => event.currentTarget.select()}
                                                 onKeyDown={(event) => {
@@ -185,17 +201,17 @@ export function CreationHistoryDrawer({
                                                     <HistoryTypeIcon />
                                                 </span>
                                                 <span className="creation-history-item-text">
-                                                    <strong className="creation-history-item-heading">{conversation.title.trim() || "新创作"}</strong>
+                                                    <strong className="creation-history-item-heading">{conversation.title.trim() || t("create.conversation.untitled")}</strong>
                                                     <span className="creation-history-snippet">
                                                         {latest ? (
                                                             <>
-                                                                <em>{latest.mode ? modeLabels[latest.mode] : "创作"}</em>
-                                                                <span>{displayCreationPrompt(latest.content, latest.references || []).trim() || "还没有开始创作"}</span>
+                                                                <em>{latest.mode ? modeLabels[latest.mode] : t("create.history.creation")}</em>
+                                                                <span>{displayCreationPrompt(latest.content, latest.references || []).trim() || t("create.history.notStarted")}</span>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <em>创作</em>
-                                                                <span>还没有开始创作</span>
+                                                                <em>{t("create.history.creation")}</em>
+                                                                <span>{t("create.history.notStarted")}</span>
                                                             </>
                                                         )}
                                                     </span>
@@ -212,17 +228,17 @@ export function CreationHistoryDrawer({
                                                 overlayClassName="creation-history-menu-overlay"
                                                 menu={{
                                                     items: [
-                                                        { key: "rename", label: "重命名", icon: <Pencil /> },
-                                                        { key: "export", label: "导出对话", icon: <Download /> },
-                                                        { key: "delete", label: "删除对话", danger: true, icon: <Trash2 /> },
+                                                        { key: "rename", label: t("create.history.rename"), icon: <Pencil /> },
+                                                        { key: "export", label: t("create.history.export"), icon: <Download /> },
+                                                        { key: "delete", label: t("create.history.delete"), danger: true, icon: <Trash2 /> },
                                                     ],
                                                     onClick: ({ key }) => {
                                                         setMenuOpenId(null);
                                                         if (key === "rename") {
                                                             beginRename(conversation);
                                                         } else if (key === "export") {
-                                                            downloadCreationConversation(conversation, assistantName, exportUser?.displayName || "你");
-                                                            drawerToast.success("对话已导出为 Markdown");
+                                                            downloadCreationConversation(conversation, assistantName, exportUser?.displayName || t("create.message.you"));
+                                                            drawerToast.success(t("create.history.exported"));
                                                         } else {
                                                             onDelete(conversation);
                                                         }
@@ -232,7 +248,7 @@ export function CreationHistoryDrawer({
                                                 <button
                                                     type="button"
                                                     className={menuOpenId === conversation.id ? "creation-history-more is-open" : "creation-history-more"}
-                                                    aria-label={`更多操作：${conversation.title.trim() || "新创作"}`}
+                                                    aria-label={t("create.history.moreActions", { title: conversation.title.trim() || t("create.conversation.untitled") })}
                                                     onClick={(event) => event.preventDefault()}
                                                 >
                                                     <MoreHorizontal />
@@ -245,7 +261,7 @@ export function CreationHistoryDrawer({
                         })}
                     </ul>
                 ) : (
-                    <div className="creation-history-empty">{keyword.trim() ? "没有找到匹配的对话" : "暂无历史对话"}</div>
+                    <div className="creation-history-empty">{keyword.trim() ? t("create.history.noMatch") : t("create.history.empty")}</div>
                 )}
             </div>
         </AppDrawer>
@@ -253,11 +269,11 @@ export function CreationHistoryDrawer({
 }
 
 export function buildConversationExportMarkdown(conversation: CreationConversation, assistantName: string, userName: string) {
-    const lines: string[] = [`# ${conversation.title.trim() || "新创作"}`, ""];
+    const lines: string[] = [`# ${conversation.title.trim() || translate("create.conversation.untitled")}`, ""];
     for (const message of conversation.messages) {
         const stamp = formatMessageTime(message.createdAt);
-        const modeTag = message.mode && message.mode !== "text" ? (message.mode === "image" ? "[图像生成] " : "[视频生成] ") : "";
-        const speaker = message.role === "user" ? userName || "我" : assistantName;
+        const modeTag = message.mode && message.mode !== "text" ? (message.mode === "image" ? `[${translate("create.message.imageGeneration")}] ` : `[${translate("create.message.videoGeneration")}] `) : "";
+        const speaker = message.role === "user" ? userName || translate("create.history.exportMe") : assistantName;
         if (message.role === "user") {
             const prompt = displayCreationPrompt(message.content, message.references || []).trim();
             if (!prompt) continue;
@@ -265,16 +281,17 @@ export function buildConversationExportMarkdown(conversation: CreationConversati
         } else {
             const body = (message.content || "").trim();
             if (body) lines.push(`## ${speaker} · ${stamp}`, "", `${modeTag}${body}`, "");
-            else if (message.resultUrls?.length) lines.push(`## ${speaker} · ${stamp}`, "", `${modeTag}已生成，素材保留在项目中。`, "");
+            else if (message.resultUrls?.length) lines.push(`## ${speaker} · ${stamp}`, "", `${modeTag}${translate("create.history.exportGenerated")}`, "");
             else continue;
-            if (message.reasoning?.trim()) lines.push("> 思考过程：", message.reasoning.trim(), "");
+            if (message.reasoning?.trim()) lines.push(`> ${translate("create.history.exportReasoning")}`, message.reasoning.trim(), "");
         }
     }
     return lines.join("\n").trim() + "\n";
 }
 
 export function downloadCreationConversation(conversation: CreationConversation, assistantName: string, userName: string) {
-    const safeTitle = (conversation.title.trim() || "新创作").replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) || "新创作";
+    const untitled = translate("create.conversation.untitled");
+    const safeTitle = (conversation.title.trim() || untitled).replace(/[\\/:*?"<>|]/g, "_").slice(0, 60) || untitled;
     const blob = new Blob([buildConversationExportMarkdown(conversation, assistantName, userName)], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -301,18 +318,18 @@ export function formatHistoryRelativeTime(value: string) {
     const timestamp = conversationTimestamp(value);
     if (!timestamp) return "";
     const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
-    if (seconds < 60) return "刚刚";
+    if (seconds < 60) return translate("time.justNow");
     const minutes = Math.round(seconds / 60);
-    if (minutes < 60) return `${minutes} 分钟前`;
+    if (minutes < 60) return translate("time.minutesAgo", { count: minutes });
     const hours = Math.round(minutes / 60);
-    if (hours < 24) return `${hours} 小时前`;
+    if (hours < 24) return translate("time.hoursAgo", { count: hours });
     const days = Math.round(hours / 24);
-    if (days < 7) return `${days} 天前`;
+    if (days < 7) return translate("time.daysAgo", { count: days });
     return historyDayFormatter.format(timestamp);
 }
 
 export function formatConversationTime(value: string) {
     const timestamp = conversationTimestamp(value);
-    if (!timestamp) return "时间未知";
+    if (!timestamp) return translate("time.unknown");
     return conversationTimeFormatter.format(timestamp);
 }

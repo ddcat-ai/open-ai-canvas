@@ -70,8 +70,8 @@ func SegmentWriterPrompt(in SegmentPromptInput, draft string, previousEnding str
 焦段 + 景别，运镜方式（方向、速度与动机）。
 起—止：按 2–3 秒切成时间片，逐片写清动作、面部表情变化（眼神、眉、嘴角、呼吸）、肢体反应与镜头运动。
 角色名（此刻的情绪 + 说话方式，例如压低声音咬着字、声音发颤、冷笑着拖长尾音）：“台词”
-台词前写说话人开口前的表情反应，说完写听者的反应；台词后“留%s秒气口”已计入时长，开口前的情绪停顿也要落在本镜头时长内，台词不能溢出镜头。每个镜头写动作音或环境音。
-`, in.Index+1, secondsText(total), firstNonEmpty(in.AspectRatio, "9:16"), firstNonEmpty(in.Style, "写实电影感"), firstNonEmpty(in.Language, "中文"), len(in.Shots), firstFrameRule(in), in.pauseText())
+台词前写说话人开口前的表情反应，说完写听者的反应；%s台词后“留%s秒气口”已计入时长，开口前的情绪停顿也要落在本镜头时长内，台词不能溢出镜头。每个镜头写动作音或环境音。
+`, in.Index+1, secondsText(total), firstNonEmpty(in.AspectRatio, "9:16"), firstNonEmpty(in.Style, "写实电影感"), firstNonEmpty(in.Language, "中文"), len(in.Shots), firstFrameRule(in), in.speechRateClause(), in.pauseText())
 	// 尾帧续接时末尾只收势不凝固：整段凝固会在成片的每个段落衔接处留下静止画面。并行出片时下一段不取本段尾帧，不需要收势。
 	if in.Index < in.Count-1 && !in.Independent {
 		fmt.Fprintf(&b, "最后一个镜头的末0.5秒动作收住、镜头停稳，写清此刻每个人物的位置、朝向和情绪状态，作为第%d段的接续起点；人物保留呼吸、眨眼等细微动态，不要写“全场凝固”“完全静止”“硬定格”。\n", in.Index+2)
@@ -138,6 +138,22 @@ func NormalizeReferenceTokens(text string) string {
 	return referenceTokenPattern.ReplaceAllString(text, "参考图$1")
 }
 
+// RewriteReferenceTokens 一次替换引用，避免重排时先把 1 换成 2、再把新 2 错换为 1。
+func RewriteReferenceTokens(text string, replacements map[string]string) string {
+	return referenceTokenPattern.ReplaceAllStringFunc(text, func(token string) string {
+		match := referenceTokenPattern.FindStringSubmatch(token)
+		number, err := strconv.Atoi(match[1])
+		if err != nil {
+			return token
+		}
+		label := fmt.Sprintf("参考图%d", number)
+		if replacement, exists := replacements[label]; exists {
+			return replacement
+		}
+		return label
+	})
+}
+
 // UnknownReferenceTokens 返回编号超出本段参考图数量（1..count）的引用，按出现顺序去重。
 func UnknownReferenceTokens(text string, count int) []string {
 	unknown := []string{}
@@ -171,7 +187,7 @@ func CleanWrittenPrompt(text string) string {
 // firstFrameRule 说明本段首帧从哪来：有上一段尾帧时首帧图就是那一帧，没有时由提示词描述首帧。
 func firstFrameRule(in SegmentPromptInput) string {
 	if in.FirstFrame {
-		return fmt.Sprintf("请求会附带第%d段视频的最后一帧作为本段首帧图（不占参考图编号）。先写一句“首帧即第%d段视频最后一帧”，再依据上一段结尾写清这一帧里每个人物的位置、朝向、姿态与道具接触，后续动作从这一帧自然延续；然后写渲染质感与画风、本段前中后段的视觉变化、明确禁止项（无额外滤镜噪点、无游戏 UI、无字幕水印、无全屏闪白等）", in.Index, in.Index)
+		return fmt.Sprintf("请求会附带第%d段视频的最后一帧作为本段首帧图。先写一句“首帧即第%d段视频最后一帧”，再依据上一段结尾写清这一帧里每个人物的位置、朝向、姿态与道具接触，后续动作从这一帧自然延续；然后写渲染质感与画风、本段前中后段的视觉变化、明确禁止项（无额外滤镜噪点、无游戏 UI、无字幕水印、无全屏闪白等）", in.Index, in.Index)
 	}
 	if in.Index > 0 && in.Independent {
 		return "本段独立生成，没有首帧图：依据上一段结尾写清首帧画面里每个人物的位置、朝向、姿态与道具接触，人物外貌以参考图为准；然后写渲染质感与画风、本段前中后段的视觉变化、明确禁止项（无额外滤镜噪点、无游戏 UI、无字幕水印、无全屏闪白等）"

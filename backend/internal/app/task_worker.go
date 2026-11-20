@@ -50,6 +50,7 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s := w.service
 	s.startTextReplayCleanup(ctx)
 	s.startCanvasMutationReceiptCleanup(ctx)
+	s.startSiteTrafficCleanup(ctx)
 	s.startProviderCancellationReconciliation(ctx)
 	s.startBillingReviewAudit(ctx)
 	s.runWorkerLoop(func(ctx context.Context) {
@@ -93,6 +94,7 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 					if err := w.processClaimedTask(task, globalSlot); err != nil {
 						_ = s.log(task.UserID, task.ID, "error", "后台任务处理失败", err.Error())
 					}
+					s.wakeDramaAfterTask(task.ID, task.InputJSON)
 				})
 				if !started {
 					<-slots
@@ -204,6 +206,33 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 	if err := json.Unmarshal([]byte(decryptedInput), &admissionInput); err != nil {
 		return err
 	}
+	if task.ProviderRequestID == "" && task.PollStage != "accepted" && task.PollStage != "poll" {
+		if teamID, ok := model.TeamIDFromContentKey(task.UserID); ok {
+			if err := s.authorizeQueuedTeamTask(task, teamID); err != nil {
+				return terminal.markPreparationFailure(task, "团队授权不可用", err, task.Attempts > 1, "团队授权已失效")
+			}
+		}
+		if featureErr := s.requireTaskGenerationFeatures(task.UserID, task.ProjectID, task.Type, task.Operation, task.WorkbenchKind, admissionInput); featureErr != nil {
+			attempts, readErr := s.repo.RouteAttempts(task.ID, task.RouteRun)
+			if readErr != nil {
+				return readErr
+			}
+			submitted := false
+			for _, attempt := range attempts {
+				if attempt.DispatchState == "accepted" || attempt.DispatchState == "submission_unknown" {
+					submitted = true
+				}
+			}
+			// Submitted work keeps its original polling and result-persistence path.
+			if !submitted {
+				uncertain := s.taskBilling().BillingFailureRequiresReview(task.BillingOrderID, task.ID, featureErr)
+				if len(attempts) == 0 && task.RouteRun <= 1 && task.Attempts > 1 {
+					uncertain = true
+				}
+				return terminal.markPreparationFailure(task, "功能暂未开放", featureErr, uncertain, "功能已关闭，上游请求未发出")
+			}
+		}
+	}
 	if err := s.requireCustomChannelsForTaskInput(admissionInput); err != nil {
 		// A reclaimed task may already have submitted upstream. Keep the existing
 		// review path for that evidence; only an unsent reservation is refundable.
@@ -247,7 +276,11 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		return terminal.markPreparationFailure(task, "路由准备失败", err, isRouteDispatchUncertain(err), "路由准备失败，上游请求未发出")
 	}
 	if err := s.taskBilling().MarkBillingRunning(task.BillingOrderID); err != nil {
-		return terminal.markPreparationFailure(task, "计费准备失败", err, false, "计费准备失败，上游请求未发出")
+		uncertain := task.ProviderRequestID != "" || s.taskBilling().BillingFailureRequiresReview(task.BillingOrderID, task.ID, err)
+		if routeAttempt != nil && (routeAttempt.DispatchState == "accepted" || routeAttempt.DispatchState == "submission_unknown") {
+			uncertain = true
+		}
+		return terminal.markPreparationFailure(task, "计费准备失败", err, uncertain, "计费准备失败，上游请求未发出")
 	}
 	routeResult, stateErr := s.routeExecutor().execute(ctx, task, routeAttempt)
 	if stateErr != nil {
@@ -322,7 +355,11 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		}
 		var detachedErr providerStatePendingError
 		if errors.As(err, &detachedErr) && detachedErr.Detached {
-			err = fmt.Errorf("上游任务等待超过 %d 小时仍未完成，已停止自动查询，请在渠道侧确认任务 %s 的状态。", int(detachedProviderTaskMaxAge.Hours()), detachedErr.TaskID)
+			if providerTaskWaitExpired(*task, time.Now()) {
+				err = fmt.Errorf("上游任务等待超过 %d 小时仍未完成，已停止自动查询，请在渠道侧确认任务 %s 的状态。", int(detachedProviderTaskMaxAge.Hours()), detachedErr.TaskID)
+			} else {
+				err = fmt.Errorf("上游已受理，但宿主无法继续回查，请在原渠道核对任务 %s；请勿重复提交。", detachedErr.TaskID)
+			}
 		} else if isVideoTaskType(task.Type) && newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
 			err = errors.New("上游任务长时间未同步，已停止自动查询，请确认渠道任务状态后重试。")
 		}
@@ -330,7 +367,7 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 			// 画布 Agent 的单步超时是可恢复事件（运行期会关思考重试同一步），
 			// 因此必须与"任务执行超时"区分开，否则只能整轮判死。
 			if cloudAgentModelOperation(task) {
-				err = errors.New(cloudAgentStepTimeoutError + "，已中止这一步")
+				err = agentModelFailure(agentModelFailureStepTimeout, errors.New(cloudAgentStepTimeoutError+"，已中止这一步"))
 			} else {
 				err = errors.New(taskTimeoutMessage(task.Type))
 			}
@@ -394,7 +431,7 @@ func taskLeaseRenewContext(parent context.Context) (context.Context, context.Can
 // taskExecutionTimeout 解析一次任务的执行墙钟：画布 Agent 的单步调用可以配秒级超时
 // （AgentStepTimeoutSeconds），没配时沿用文本任务超时。秒级粒度是必要的——一轮里每一步
 // 都是分钟级的调用，分钟粒度改不动"某一步卡住"的体验。
-// 超时的表现是任务错误里带 cloudAgentStepTimeoutError 标记，运行期据此关思考重试同一步，
+// 超时会记录单步超时原因，运行期据此关思考重试同一步，
 // 而不是把整轮判死（见 cloud_agent_step_timeout.go）。
 func taskExecutionTimeout(task *model.Task, policy RuntimeTaskPolicy) time.Duration {
 	if task != nil && cloudAgentModelOperation(task) && policy.AgentStepTimeoutSeconds > 0 {
@@ -449,29 +486,31 @@ func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string
 	if json.Unmarshal([]byte(decryptedInput), &input) != nil {
 		return false
 	}
-	resolved, resolveErr := s.resolveProviderConfig(input.Config)
+	resolved, resolveErr := s.resolveProviderConfig(input.Config, &task)
 	if resolveErr != nil {
 		return false
 	}
-	if s.protocolDetachedPolling(resolved.InterfaceType) {
+	adapter, installed := resolved.registry.Resolve(resolved.InterfaceType)
+	if installed && adapter.Metadata().DetachedPolling {
 		// 分离式回查只看总等待时长：上游候车/出片中按间隔回查，超过上限才交给失败处理。
-		return task.StartedAt == nil || time.Since(*task.StartedAt) < detachedProviderTaskMaxAge
+		return !providerTaskWaitExpired(task, time.Now())
 	}
 	if detachedPending {
 		return false
 	}
 	if isVideoTaskType(task.Type) || input.Mode == "video" {
-		return resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+		// 总等待时长与分离式回查共用上限，上游丢单时不会无限回查。
+		canResume := installed && adapter.Metadata().Execution == "declarative" && adapter.Metadata().Poll != "" || !resolved.pinned && resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+		return canResume && !providerTaskWaitExpired(task, time.Now())
 	}
 	if input.Mode != "image" && !strings.HasPrefix(task.Type, "canvas_image") {
 		return false
 	}
-	return s.imageProviderSupportsTaskResume(resolved.InterfaceType)
+	return installed && adapter.Metadata().Poll != "" || !resolved.pinned && (isVolcengineJiMengProtocol(resolved.InterfaceType) || isRunningHubInterface(resolved.InterfaceType))
 }
 
-func (s *Service) protocolDetachedPolling(interfaceType string) bool {
-	metadata, ok := s.protocolMetadata(strings.TrimSpace(interfaceType))
-	return ok && metadata.DetachedPolling
+func providerTaskWaitExpired(task model.Task, now time.Time) bool {
+	return task.StartedAt != nil && !now.Before(task.StartedAt.Add(detachedProviderTaskMaxAge))
 }
 
 func isVideoTaskType(taskType string) bool {
@@ -481,15 +520,6 @@ func isVideoTaskType(taskType string) bool {
 // shouldDeferVideoProviderTask 保留给旧测试和内部调用方；新逻辑统一覆盖视频与异步图片。
 func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
 	return s.shouldDeferProviderTask(task, decryptedInput, err)
-}
-
-func (s *Service) imageProviderSupportsTaskResume(interfaceType string) bool {
-	interfaceType = strings.TrimSpace(interfaceType)
-	if isVolcengineJiMengProtocol(interfaceType) || isRunningHubInterface(interfaceType) {
-		return true
-	}
-	metadata, ok := s.protocolMetadata(interfaceType)
-	return ok && strings.TrimSpace(metadata.Poll) != ""
 }
 
 func newAPIChannel2TaskSyncExpired(task model.Task, err error, now time.Time) bool {

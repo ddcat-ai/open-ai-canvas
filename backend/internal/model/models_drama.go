@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // 短剧自动制作域：章节（ProjectUnit kind=chapter）只承载小说原文，
 // 集（DramaEpisode）是剧本、分镜和后续产物的唯一基石。
@@ -32,6 +35,7 @@ const (
 
 	// 媒体槽位状态：空串表示尚未开始。
 	DramaMediaQueued  = "queued"
+	DramaMediaDraft   = "draft"
 	DramaMediaRunning = "running"
 	DramaMediaReady   = "ready"
 	DramaMediaFailed  = "failed"
@@ -47,8 +51,11 @@ const (
 	DramaJobBible     = "bible"
 	DramaJobPlan      = "plan"
 	DramaJobCastImage = "cast_image"
-	DramaJobScript    = "script"
-	DramaJobRender    = "render"
+	// DramaJobCastExtract 从本集原文与分镜补全后出现、尚无外貌的角色/道具/场景，不覆盖已有设定。
+	DramaJobCastExtract = "cast_extract"
+	DramaJobScript      = "script"
+	DramaJobRender      = "render"
+	DramaJobCompose     = "compose"
 	// DramaJobSegmentPrompt 为一个剧情段撰写完整视频提示词；ShotID 存放 drama_segments.id。
 	DramaJobSegmentPrompt = "segment_prompt"
 	// DramaJobSegmentVideo 为一个剧情段生成整段视频；ShotID 存放 drama_segments.id。
@@ -69,35 +76,56 @@ type DramaProduction struct {
 	PlanDone           bool   `json:"planDone"`
 	SampleApproved     bool   `json:"sampleApproved"`
 	// AssetsReleased 为 true 后才自动生成角色/场景参考图；手动生图模式下由用户确认资产后打开。
-	AssetsReleased bool       `json:"assetsReleased"`
-	PauseReason    string     `json:"pauseReason" gorm:"size:500"`
-	Revision       int64      `json:"revision"`
-	LastTickAt     *time.Time `json:"lastTickAt,omitempty"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
+	AssetsReleased bool   `json:"assetsReleased"`
+	PauseReason    string `json:"pauseReason" gorm:"size:500"`
+	// DraftJSON 是草稿的创建页表单（原始正文、画风 ID），只在 status=draft 时有值，开工时清空。
+	DraftJSON  string     `json:"-" gorm:"type:text"`
+	Revision   int64      `json:"revision"`
+	LastTickAt *time.Time `json:"lastTickAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 // DramaCast 是全剧设定（角色 / 场景），镜头引用它的参考图保持一致性。
 type DramaCast struct {
 	Revision    int64  `json:"revision"`
 	ID          string `json:"id" gorm:"primaryKey;size:36"`
-	ProjectID   string `json:"projectId" gorm:"index;size:36;index:idx_drama_casts_project_kind,priority:1"`
+	ProjectID   string `json:"projectId" gorm:"index;size:36;index:idx_drama_casts_project_kind,priority:1;index:idx_drama_cast_source,unique,priority:1,where:source_cast_id <> ''"`
 	Kind        string `json:"kind" gorm:"size:16;index:idx_drama_casts_project_kind,priority:2"`
 	Name        string `json:"name" gorm:"size:120"`
 	AliasesJSON string `json:"aliasesJson" gorm:"type:text"`
 	Role        string `json:"role" gorm:"size:120"`
 	Description string `json:"description" gorm:"type:text"`
 	Appearance  string `json:"appearance" gorm:"type:text"`
+	ImagePrompt string `json:"imagePrompt" gorm:"type:text"`
+	// 三个画风字段全空时继承作品画风；造型与基础设定分别选择。
+	ImageStyleID     string `json:"imageStyleId" gorm:"size:64"`
+	ImageStyleName   string `json:"imageStyleName" gorm:"size:120"`
+	ImageStylePrompt string `json:"imageStylePrompt" gorm:"type:text"`
+	// 导入只保留来源关联，编辑目标记录不会回写来源作品。
+	SourceProjectID string `json:"sourceProjectId,omitempty" gorm:"size:36"`
+	SourceCastID    string `json:"sourceCastId,omitempty" gorm:"size:36;index:idx_drama_cast_source,unique,priority:2,where:source_cast_id <> ''"`
 	// VoiceInstructions 是声线描述（音色、语速、情绪），写进视频提示词，由视频模型同步生成对白。
-	VoiceInstructions string    `json:"voiceInstructions" gorm:"type:text"`
-	Importance        int       `json:"importance"`
-	ImageResourceID   string    `json:"imageResourceId,omitempty" gorm:"size:36"`
-	ImageStatus       string    `json:"imageStatus" gorm:"size:16"`
-	ImageVersion      int       `json:"imageVersion"`
-	Locked            bool      `json:"locked"`
-	Position          int       `json:"position"`
-	CreatedAt         time.Time `json:"createdAt"`
-	UpdatedAt         time.Time `json:"updatedAt"`
+	VoiceInstructions string `json:"voiceInstructions" gorm:"type:text"`
+	// VoiceProfileID 是用户为角色指定的声音（声音库条目）；VoiceSampleResourceID 是它的样本音频，
+	// 视频模型支持参考音频时随该角色说话的剧情段一起发送。空串表示只按声线描述生成。
+	VoiceProfileID        string `json:"voiceProfileId,omitempty" gorm:"size:36"`
+	VoiceSampleResourceID string `json:"voiceSampleResourceId,omitempty" gorm:"size:36"`
+	// ParentID 非空表示这一行是 ParentID 角色的一套造型（妆造）：LookName 是造型名，Appearance 与参考图是这套造型的外观，
+	// 名称、别名与声音沿用所属角色。LookFromChapter / LookToChapter 是默认适用的原著章节号（从 1 起，0 表示不限），
+	// 写剧本时按本集章节选默认造型，镜头可按剧情另选。
+	ParentID        string    `json:"parentId,omitempty" gorm:"index;size:36"`
+	LookName        string    `json:"lookName,omitempty" gorm:"size:60"`
+	LookFromChapter int       `json:"lookFromChapter,omitempty"`
+	LookToChapter   int       `json:"lookToChapter,omitempty"`
+	Importance      int       `json:"importance"`
+	ImageResourceID string    `json:"imageResourceId,omitempty" gorm:"size:36"`
+	ImageStatus     string    `json:"imageStatus" gorm:"size:16"`
+	ImageVersion    int       `json:"imageVersion"`
+	Locked          bool      `json:"locked"`
+	Position        int       `json:"position"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
 type DramaEpisode struct {
@@ -127,6 +155,11 @@ type DramaEpisode struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+// DramaEpisodeDefaultTitle 是没有填写标题时的集标题；插入或删除集导致集号顺延时，仍是默认标题的集随新集号改名。
+func DramaEpisodeDefaultTitle(number int) string {
+	return fmt.Sprintf("第 %d 集", number)
+}
+
 // DramaShot 保存镜头脚本，作为剧情段视频提示词的素材。
 type DramaShot struct {
 	ID        string `json:"id" gorm:"primaryKey;size:36"`
@@ -141,11 +174,14 @@ type DramaShot struct {
 	CastIDsJSON  string `json:"castIdsJson" gorm:"type:text"`
 	// PropIDsJSON 是画面里出现的关键道具设定（DramaCast kind=prop）。
 	PropIDsJSON string `json:"propIdsJson" gorm:"type:text"`
-	Speaker     string `json:"speaker" gorm:"size:120"`
-	Dialogue    string `json:"dialogue" gorm:"type:text"`
-	Action      string `json:"action" gorm:"type:text"`
-	ShotSize    string `json:"shotSize" gorm:"size:40"`
-	Camera      string `json:"camera" gorm:"size:80"`
+	// LookCastIDsJSON 是本镜出镜角色选用的造型行 ID 列表（DramaCast kind=character 且 ParentID 非空）；
+	// 空表示各角色用本集默认造型或本体。取参考图时用这里的造型行外观与参考图替换角色本体。
+	LookCastIDsJSON string `json:"lookCastIdsJson" gorm:"type:text"`
+	Speaker         string `json:"speaker" gorm:"size:120"`
+	Dialogue        string `json:"dialogue" gorm:"type:text"`
+	Action          string `json:"action" gorm:"type:text"`
+	ShotSize        string `json:"shotSize" gorm:"size:40"`
+	Camera          string `json:"camera" gorm:"size:80"`
 	// Transition 是进入本镜头的转场：cut / fadeblack / fadewhite；作品统一指定时以作品设置为准。
 	Transition string `json:"transition" gorm:"size:16"`
 	DurationMs int64  `json:"durationMs"`
@@ -159,6 +195,10 @@ type DramaShot struct {
 
 // DramaSegment 是视频生成单位：一段一次调用视频模型，台词、音效与镜头切换都由视频模型在一个视频里完成。
 // 段由镜头的 SegmentIndex 决定，重新改编剧本时随镜头一起重建。
+// DramaPromptConflict keeps the original prompt until the user resolves script changes.
+const DramaPromptConflict = "conflict"
+const DramaPromptReview = "review"
+
 type DramaSegment struct {
 	PromptSeconds int    `json:"promptSeconds"`
 	Revision      int64  `json:"revision"`
@@ -176,6 +216,10 @@ type DramaSegment struct {
 	VideoModelJSON string `json:"videoModelJson" gorm:"type:text"`
 	// ReferenceCastIDsJSON 为空表示按镜头自动取参考图；非空是用户为本段指定的设定 ID 列表（顺序即参考图编号，可为 []）。
 	ReferenceCastIDsJSON string `json:"referenceCastIdsJson" gorm:"type:text"`
+	// ReferenceImagesJSON 保存用户上传或从素材库选择的附加参考图，排在设定图之后。
+	ReferenceImagesJSON string `json:"referenceImagesJson" gorm:"type:text"`
+	// AudioCastIDsJSON 为空时按对白自动选择；[] 表示手动关闭全部角色音色。
+	AudioCastIDsJSON string `json:"audioCastIdsJson" gorm:"type:text"`
 	// VideoStatus 为空表示待生成；TailFrameResourceID 是本段视频最后一帧，作为下一段的参考图，保证段与段衔接。
 	VideoStatus         string    `json:"videoStatus" gorm:"size:16"`
 	VideoResourceID     string    `json:"videoResourceId,omitempty" gorm:"size:36"`
@@ -184,6 +228,11 @@ type DramaSegment struct {
 	VideoError          string    `json:"videoError" gorm:"type:text"`
 	CreatedAt           time.Time `json:"createdAt"`
 	UpdatedAt           time.Time `json:"updatedAt"`
+}
+
+type DramaReferenceImage struct {
+	ResourceID string `json:"resourceId"`
+	Name       string `json:"name"`
 }
 
 // DramaTake 保存每个产物的全部版本：角色/场景参考图（cast）、剧情段视频（video）与成片（final）。

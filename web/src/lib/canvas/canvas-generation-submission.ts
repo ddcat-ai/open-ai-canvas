@@ -19,6 +19,8 @@ export type CanvasGenerationRequestFingerprintInput = {
         parameters?: Record<string, unknown>;
     };
     operation?: string;
+    videoStartFrameNodeId?: string;
+    videoEndFrameNodeId?: string;
     audioLanguage?: string;
     audioDialect?: string;
     audioInstructions?: string;
@@ -56,6 +58,8 @@ export function canvasGenerationRequestFingerprint(input: CanvasGenerationReques
         options: input.options,
         workflow: input.workflow,
         operation: input.operation,
+        videoStartFrameNodeId: input.videoStartFrameNodeId,
+        videoEndFrameNodeId: input.videoEndFrameNodeId,
         audioLanguage: input.audioLanguage,
         audioDialect: input.audioDialect,
         audioInstructions: input.audioInstructions,

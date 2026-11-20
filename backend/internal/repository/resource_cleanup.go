@@ -52,7 +52,11 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 			if err := tx.Model(&model.CanvasProject{}).Where("user_id = ?", resource.UserID).Pluck("payload_json", &canvasDocuments).Error; err != nil {
 				return err
 			}
-			documentsByUser[resource.UserID] = append(assetDocuments, canvasDocuments...)
+			var feedbackDocuments []string
+			if err := tx.Model(&model.UserFeedback{}).Where("user_id = ?", resource.UserID).Pluck("attachments", &feedbackDocuments).Error; err != nil {
+				return err
+			}
+			documentsByUser[resource.UserID] = append(append(assetDocuments, canvasDocuments...), feedbackDocuments...)
 		}
 		for _, resource := range current {
 			storageKey := "resource:" + resource.ID + `"`
@@ -63,6 +67,13 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 				}
 			}
 		}
+		logReferences, err := New(tx).APICallLogResourceReferences("", resourceIDs)
+		if err != nil {
+			return err
+		}
+		if len(logReferences) > 0 {
+			return ErrResourceCleanupStillReferenced
+		}
 		for _, check := range []struct {
 			model any
 			query string
@@ -70,6 +81,7 @@ func (r *Repository) DeleteDetachedResources(resources []model.Resource, deletio
 			{&model.Announcement{}, "image_resource_id IN ?"},
 			{&model.AnnouncementImageDraft{}, "resource_id IN ?"},
 			{&model.AssetRepresentation{}, "resource_id IN ?"},
+			{&model.CreationConversationResource{}, "resource_id IN ?"},
 			{&model.VoiceProfile{}, "sample_resource_id IN ?"},
 			{&model.ShotArtifact{}, "resource_id IN ?"},
 			// 短剧表直接持有参考图、段视频、尾帧、成片与历史版本，不出现在任何 JSON 文档里。

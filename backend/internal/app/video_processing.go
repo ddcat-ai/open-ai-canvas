@@ -90,12 +90,16 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 	if durationMs <= 0 {
 		return nil, BadAuthRequest("无法读取源视频时长，请重新上传后再试")
 	}
-	maxSeconds := videoProcessingMaxSourceSeconds(processing)
+	maxSeconds := videoProcessingMaxSourceSeconds(profile)
 	if durationMs > int64(maxSeconds)*1000 {
 		return nil, BadAuthRequest(fmt.Sprintf("源视频时长超过 %d 秒上限，请先截取片段后再处理", maxSeconds))
 	}
-	if err := validateVideoProcessingSourceSize(resource.Width, resource.Height); err != nil {
-		return nil, err
+	isDepth := profile.DefaultOperation == VideoProcessingOperationDepth
+	// 深度接口只公布了 2K 上限，未定义像素边界；交由上游校验，不能套用增强的 1080p 限制。
+	if !isDepth {
+		if err := validateVideoProcessingSourceSize(resource.Width, resource.Height); err != nil {
+			return nil, err
+		}
 	}
 	seconds := int((durationMs + 999) / 1000)
 
@@ -111,9 +115,15 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 	if options == nil {
 		options = map[string]any{}
 	}
-	band, err := normalizeVideoProcessingOptions(processing, options)
-	if err != nil {
-		return nil, err
+	band := ""
+	if isDepth {
+		// 深度接口只有固定 standard 档，不接收增强参数或客户端指定的回调/存储位置。
+		options = map[string]any{}
+	} else {
+		band, err = normalizeVideoProcessingOptions(processing, options)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// 只保留本 provider 命名空间，避免其它插件字段漂入上游请求。
 	metadata["providerOptions"] = map[string]any{protocolID: options}
@@ -122,6 +132,10 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 
 	config["videoSeconds"] = strconv.Itoa(seconds)
 	config["fpsBand"] = band
+	if isDepth {
+		delete(config, "vquality")
+		delete(config, "fpsBand")
+	}
 	for _, key := range []string{"size", "videoGenerateAudio", "videoWatermark"} {
 		delete(config, key)
 	}
@@ -131,6 +145,10 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 		}
 		capabilityOptions["videoSeconds"] = seconds
 		capabilityOptions["fpsBand"] = band
+		if isDepth {
+			delete(capabilityOptions, "vquality")
+			delete(capabilityOptions, "fpsBand")
+		}
 	}
 	source["durationMs"] = durationMs
 	source["width"], source["height"] = resource.Width, resource.Height

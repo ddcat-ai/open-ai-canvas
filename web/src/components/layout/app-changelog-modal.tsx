@@ -1,5 +1,6 @@
 import { ScrollText } from "lucide-react";
 import { lazy, Suspense, useState, type CSSProperties, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { updateAnnouncementVersion } from "@/lib/update-announcement";
 import { refreshPublicAppearance } from "@/services/appearance-bootstrap";
@@ -20,9 +21,10 @@ type AppChangelogButtonProps = {
 };
 
 export function AppChangelogButton({ className, style, showVersion = false, showLabel = false, labelClassName, versionClassName, icon, label }: AppChangelogButtonProps) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const updates = useAppearanceStore((state) => state.appearance.updates);
-    const title = updates?.enabled ? "更新公告" : "更新日志";
+    const title = updates?.enabled ? t("account.layout.changelog.announcements") : t("account.layout.changelog.log");
 
     return (
         <>
@@ -34,7 +36,7 @@ export function AppChangelogButton({ className, style, showVersion = false, show
                     void refreshPublicAppearance();
                     setOpen(true);
                 }}
-                aria-label={`查看${title}`}
+                aria-label={t("account.layout.changelog.view", { title })}
                 title={title}
             >
                 {icon ?? <ScrollText className="size-4 shrink-0" />}

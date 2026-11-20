@@ -1,0 +1,98 @@
+[data-admin-root] .ecommerce-stage-models {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding: 18px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+}
+[data-admin-root] .ecommerce-stage-models > header,
+[data-admin-root] .ecommerce-stage-models > footer {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+[data-admin-root] .ecommerce-stage-models > header {
+    justify-content: space-between;
+}
+[data-admin-root] .ecommerce-stage-models > header .ant-typography {
+    margin: 4px 0 0;
+    max-width: 920px;
+}
+[data-admin-root] .ecommerce-stage-models > ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+[data-admin-root] .ecommerce-stage-models > ol > li {
+    display: grid;
+    grid-template-columns: 26px minmax(150px, 1fr) minmax(220px, 3fr) minmax(200px, 2fr) minmax(150px, 1.5fr);
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+}
+/* 第三步只做流程说明，不提供选择。 */
+[data-admin-root] .ecommerce-stage-models > ol > li.is-static {
+    background: transparent;
+    border: 1px dashed var(--admin-border);
+}
+[data-admin-root] .ecommerce-stage-models-picker {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+[data-admin-root] .ecommerce-stage-models-picker > :first-child {
+    flex: 1;
+    min-width: 0;
+}
+[data-admin-root] .ecommerce-stage-models-index {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--admin-accent);
+    color: var(--admin-accent-fg);
+    font-size: 12px;
+    font-weight: 600;
+}
+[data-admin-root] .ecommerce-stage-models-label {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+[data-admin-root] .ecommerce-stage-models-label small {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+@media (max-width: 1200px) {
+    [data-admin-root] .ecommerce-stage-models > ol > li {
+        grid-template-columns: 26px minmax(0, 1fr);
+    }
+    [data-admin-root] .ecommerce-stage-models > ol > li > .ecommerce-stage-models-picker {
+        grid-column: 2;
+    }
+}
+/* 嵌入「电商 Agent 配置」的分区卡片时，外框和标题由卡片提供。 */
+[data-admin-root] .ecommerce-stage-models.is-embedded {
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+[data-admin-root] .ecommerce-stage-models.is-embedded > header .ant-typography {
+    margin: 0;
+}
+/* 与同页其它分区一致：保存状态在左，保存按钮在右。 */
+[data-admin-root] .ecommerce-stage-models.is-embedded > footer {
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: space-between;
+}

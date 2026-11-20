@@ -217,7 +217,7 @@ func TestCloudAgentStepTimeoutRetriesThenFailsWithReadableReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := stepTaskTextOptions(t, s, task)
-	if options["thinking"] != false {
+	if options["thinkingLevel"] != ThinkingLevelOff {
 		t.Fatalf("重试请求没有关思考: %+v", options)
 	}
 	if options["maxOutputTokens"] != float64(platform.DefaultRuntimeAgentStepOutputTokens) {
@@ -244,8 +244,9 @@ func TestCloudAgentStepTimeoutRetriesThenFailsWithReadableReason(t *testing.T) {
 func failStepTask(t *testing.T, db *gorm.DB, taskID string) {
 	t.Helper()
 	if err := db.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]any{
-		"status": model.TaskStatusFailed,
-		"error":  cloudAgentStepTimeoutError + "，已中止这一步",
+		"status":                    model.TaskStatusFailed,
+		"error":                     cloudAgentStepTimeoutError + "，已中止这一步",
+		"execution_diagnostic_json": `{"code":"model_step_timeout"}`,
 	}).Error; err != nil {
 		t.Fatal(err)
 	}

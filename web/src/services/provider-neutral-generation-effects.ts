@@ -50,12 +50,22 @@ function effectStorage(scope: string): EffectStorage {
     };
 }
 
-function effectLock(): AsyncLock {
-    // if (typeof window !== "undefined") {
-    //     const locks = navigator.locks;
-    //     if (!locks) throw new Error("当前浏览器不支持跨页面生成副作用互斥");
-    //     return locks;
-    // }
+let warnedMissingGenerationEffectLock = false;
+
+function warnMissingCrossRealmGenerationEffectLock() {
+    if (warnedMissingGenerationEffectLock) return;
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    warnedMissingGenerationEffectLock = true;
+    console.warn("当前页面非安全上下文，生成副作用已降级为单标签互斥；多标签同时处理同一任务可能重复落库。建议改用 HTTPS 或 localhost。");
+}
+
+function effectLock(requireCrossRealmLock: boolean): AsyncLock {
+    const locks = typeof window !== "undefined" && typeof navigator !== "undefined" ? navigator.locks : undefined;
+    if (locks) return locks;
+    // http://IP:port 等非安全上下文没有 Web Locks；改为进程内互斥，保证单标签可用。
+    if (requireCrossRealmLock && typeof window !== "undefined" && typeof document !== "undefined") {
+        warnMissingCrossRealmGenerationEffectLock();
+    }
     return {
         async request<T>(name: string, callback: () => Promise<T>) {
             const prior = inProcessLockTails.get(name) ?? Promise.resolve();
@@ -134,6 +144,7 @@ export function createProviderNeutralGenerationTaskEffectStore(
     dependencies: {
         now?: () => Date;
         leaseMs?: number;
+        requireCrossRealmLock?: boolean;
     } = {},
 ): GenerationTaskEffectStore {
     const now = dependencies.now ?? (() => new Date());
@@ -160,7 +171,7 @@ export function createProviderNeutralGenerationTaskEffectStore(
     }
 
     async function withRecord<T>(scope: string, taskId: string, effectKey: string, action: (record: EffectRecord | undefined, storage: EffectStorage, key: string) => Promise<T>) {
-        return effectLock().request(lockKey(scope, effectKey), async () => {
+        return effectLock(dependencies.requireCrossRealmLock === true).request(lockKey(scope, effectKey), async () => {
             const storage = effectStorage(scope);
             const key = recordKey(scope, effectKey);
             return action(parseRecord(await storage.getItem(key), taskId, effectKey), storage, key);

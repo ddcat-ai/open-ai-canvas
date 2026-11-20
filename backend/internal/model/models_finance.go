@@ -3,7 +3,11 @@ package model
 import "time"
 
 type CreditAccount struct {
-	UserID                string    `json:"userId" gorm:"primaryKey;size:36"`
+	ID                    string    `json:"id" gorm:"primaryKey;size:80"`
+	Kind                  string    `json:"kind" gorm:"size:24;index"`
+	UserID                string    `json:"userId,omitempty" gorm:"size:36;uniqueIndex:idx_credit_account_personal_user,where:user_id <> ''"`
+	TeamID                string    `json:"teamId,omitempty" gorm:"size:36;index"`
+	MembershipID          string    `json:"membershipId,omitempty" gorm:"size:36;index"`
 	AvailableMicrocredits int64     `json:"availableMicrocredits"`
 	ReservedMicrocredits  int64     `json:"reservedMicrocredits"`
 	Version               int64     `json:"version"`
@@ -13,6 +17,10 @@ type CreditAccount struct {
 
 type CreditLedgerEntry struct {
 	ID                         string           `json:"id" gorm:"primaryKey;size:36"`
+	AccountID                  string           `json:"accountId" gorm:"size:80;index"`
+	TeamID                     string           `json:"teamId,omitempty" gorm:"size:36;index"`
+	MembershipID               string           `json:"membershipId,omitempty" gorm:"size:36;index"`
+	TransferID                 string           `json:"transferId,omitempty" gorm:"size:36;index"`
 	UserID                     string           `json:"userId" gorm:"size:36;index;index:idx_credit_ledger_user_created,priority:1;index:idx_credit_ledger_user_type,priority:1"`
 	Type                       CreditLedgerType `json:"type" gorm:"size:32;index;index:idx_credit_ledger_user_type,priority:2"`
 	AmountMicrocredits         int64            `json:"amountMicrocredits"`
@@ -33,9 +41,16 @@ type CreditLedgerEntry struct {
 }
 
 type BillingOrder struct {
-	BillingCostSnapshot `json:"-" gorm:"embedded"`
-	ID                  string `json:"id" gorm:"primaryKey;size:36"`
-	UserID              string `json:"userId" gorm:"size:36;index;uniqueIndex:idx_billing_user_idempotency,priority:1"`
+	ImagePricing         *ImagePricing      `json:"imagePricing,omitempty" gorm:"serializer:json;type:text"`
+	ImageUsage           *ImageBillingUsage `json:"imageUsage,omitempty" gorm:"serializer:json;type:text"`
+	ImageInputImages     int64              `json:"imageInputImages" gorm:"not null;default:0"`
+	ImageMaxOutputImages int64              `json:"imageMaxOutputImages" gorm:"not null;default:0"`
+	BillingCostSnapshot  `json:"-" gorm:"embedded"`
+	ID                   string `json:"id" gorm:"primaryKey;size:36"`
+	UserID               string `json:"userId" gorm:"size:36;index;uniqueIndex:idx_billing_user_idempotency,priority:1"`
+	BillingAccountID     string `json:"billingAccountId" gorm:"size:80;index"`
+	TeamID               string `json:"teamId,omitempty" gorm:"size:36;index"`
+	MembershipID         string `json:"membershipId,omitempty" gorm:"size:36;index"`
 	// 仅管理端列表填充，不入库。
 	UserDisplayName string `json:"userDisplayName,omitempty" gorm:"-"`
 	UserAccount     string `json:"userAccount,omitempty" gorm:"-"`
@@ -64,30 +79,43 @@ type BillingOrder struct {
 	ReservedAmountMicrocredits int64  `json:"reservedAmountMicrocredits"`
 	// ChargeLimitSet distinguishes an authorized zero price from an uncapped order.
 	// All Agent prices remain capped across route changes and settlement.
-	ChargeLimitSet               bool  `json:"chargeLimitSet,omitempty" gorm:"not null;default:false"`
-	ChargeLimitMicrocredits      int64 `json:"chargeLimitMicrocredits,omitempty"`
-	ActualAmountMicrocredits     int64 `json:"actualAmountMicrocredits"`
-	RefundedAmountMicrocredits   int64 `json:"refundedAmountMicrocredits"`
-	InputTokenPriceMicrocredits  int64 `json:"inputTokenPriceMicrocredits"`
-	OutputTokenPriceMicrocredits int64 `json:"outputTokenPriceMicrocredits"`
-	CachedTokenPriceMicrocredits int64 `json:"cachedTokenPriceMicrocredits"`
-	InputTokens                  int64 `json:"inputTokens"`
-	OutputTokens                 int64 `json:"outputTokens"`
-	CachedTokens                 int64 `json:"cachedTokens"`
+	ChargeLimitSet                   bool  `json:"chargeLimitSet,omitempty" gorm:"not null;default:false"`
+	ChargeLimitMicrocredits          int64 `json:"chargeLimitMicrocredits,omitempty"`
+	UncappedAmountMicrocredits       int64 `json:"uncappedAmountMicrocredits" gorm:"not null;default:0"`
+	ActualAmountMicrocredits         int64 `json:"actualAmountMicrocredits"`
+	RefundedAmountMicrocredits       int64 `json:"refundedAmountMicrocredits"`
+	InputTokenPriceMicrocredits      int64 `json:"inputTokenPriceMicrocredits"`
+	OutputTokenPriceMicrocredits     int64 `json:"outputTokenPriceMicrocredits"`
+	CachedTokenPriceMicrocredits     int64 `json:"cachedTokenPriceMicrocredits"`
+	CacheWriteTokenPriceMicrocredits int64 `json:"cacheWriteTokenPriceMicrocredits" gorm:"not null;default:0"`
+	// TokenPriceRulesJSON 固化下单时所在时段（东八区）启用的分时与上下文规则（[]BillingTokenPriceRule），
+	// 单价已换算为微积分；结算按真实输入 Token 取首条命中的规则，未命中时用上面的基础 Token 单价。
+	TokenPriceRulesJSON string `json:"-" gorm:"type:text;not null;default:''"`
+	// TokenPriceRule 是结算命中的规则序号（从 1 起），0 表示按基础 Token 单价结算。
+	TokenPriceRule int `json:"tokenPriceRule" gorm:"not null;default:0"`
+	// InputTokens 含缓存命中与缓存写入；结算时普通输入 = InputTokens - CachedTokens - CacheWriteTokens。
+	InputTokens      int64 `json:"inputTokens"`
+	OutputTokens     int64 `json:"outputTokens"`
+	CachedTokens     int64 `json:"cachedTokens"`
+	CacheWriteTokens int64 `json:"cacheWriteTokens" gorm:"not null;default:0"`
 	// VideoFormulaTokens 固化提交时的视频公式用量，不含预授权余量；旧订单保持 0，不反推历史用量。
-	VideoFormulaTokens int64         `json:"videoFormulaTokens" gorm:"not null;default:0"`
-	UsageSource        string        `json:"usageSource,omitempty" gorm:"size:32;not null;default:''"`
-	UsageAvailable     bool          `json:"usageAvailable"`
-	Status             BillingStatus `json:"status" gorm:"index;size:24"`
-	ProviderRequestID  string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
-	Error              string        `json:"error,omitempty" gorm:"size:1000"`
-	ResolvedBy         string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
-	ResolutionNote     string        `json:"resolutionNote,omitempty" gorm:"size:500"`
-	StartedAt          *time.Time    `json:"startedAt"`
-	SettledAt          *time.Time    `json:"settledAt"`
-	RefundedAt         *time.Time    `json:"refundedAt"`
-	CreatedAt          time.Time     `json:"createdAt" gorm:"index"`
-	UpdatedAt          time.Time     `json:"updatedAt"`
+	VideoFormulaTokens int64 `json:"videoFormulaTokens" gorm:"not null;default:0"`
+	// ReferenceVideo* 固化提交时挂载的参考视频：数量、计入或记录的总毫秒数，以及是否按带参考视频价格计费。
+	ReferenceVideoCount  int           `json:"referenceVideoCount" gorm:"not null;default:0"`
+	ReferenceVideoMillis int64         `json:"referenceVideoMillis" gorm:"not null;default:0"`
+	ReferenceVideoBilled bool          `json:"referenceVideoBilled" gorm:"not null;default:false"`
+	UsageSource          string        `json:"usageSource,omitempty" gorm:"size:32;not null;default:''"`
+	UsageAvailable       bool          `json:"usageAvailable"`
+	Status               BillingStatus `json:"status" gorm:"index;size:24"`
+	ProviderRequestID    string        `json:"providerRequestId,omitempty" gorm:"index;size:160"`
+	Error                string        `json:"error,omitempty" gorm:"size:1000"`
+	ResolvedBy           string        `json:"resolvedBy,omitempty" gorm:"index;size:36"`
+	ResolutionNote       string        `json:"resolutionNote,omitempty" gorm:"size:500"`
+	StartedAt            *time.Time    `json:"startedAt"`
+	SettledAt            *time.Time    `json:"settledAt"`
+	RefundedAt           *time.Time    `json:"refundedAt"`
+	CreatedAt            time.Time     `json:"createdAt" gorm:"index"`
+	UpdatedAt            time.Time     `json:"updatedAt"`
 }
 
 type RedeemBatch struct {

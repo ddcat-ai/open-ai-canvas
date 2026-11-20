@@ -41,13 +41,17 @@ type Repository struct {
 }
 
 type UserStorageUsage struct {
-	AssetCount   int64 `json:"assetCount"`
-	AssetBytes   int64 `json:"assetBytes"`
-	CanvasCount  int64 `json:"canvasCount"`
-	CanvasBytes  int64 `json:"canvasBytes"`
-	TaskCount    int64 `json:"taskCount"`
-	TaskBytes    int64 `json:"taskBytes"`
-	APICallCount int64 `json:"apiCallCount"`
+	AssetCount      int64 `json:"assetCount"`
+	AssetBytes      int64 `json:"assetBytes"`
+	CanvasCount     int64 `json:"canvasCount"`
+	CanvasBytes     int64 `json:"canvasBytes"`
+	TaskCount       int64 `json:"taskCount"`
+	TaskBytes       int64 `json:"taskBytes"`
+	APICallCount    int64 `json:"apiCallCount"`
+	AgentBytes      int64 `json:"agentBytes"`
+	AgentLimitBytes int64 `json:"agentLimitBytes"`
+	MCPBytes        int64 `json:"mcpBytes"`
+	MCPLimitBytes   int64 `json:"mcpLimitBytes"`
 }
 
 func New(db *gorm.DB) *Repository {
@@ -104,7 +108,7 @@ func (r *Repository) UserStorageUsage(userID string) (UserStorageUsage, error) {
 			+ (SELECT COALESCE(SUM(length(CAST(COALESCE(message, '') AS BLOB)) + length(CAST(COALESCE(payload, '') AS BLOB))), 0) FROM task_logs WHERE user_id = ?)
 			+ (SELECT COALESCE(SUM(length(CAST(COALESCE(url, '') AS BLOB)) + length(CAST(COALESCE(payload, '') AS BLOB))), 0) FROM results WHERE user_id = ?)
 			+ (SELECT COALESCE(SUM(byte_count), 0) FROM task_text_delta WHERE user_id = ?)
-			+ (SELECT COALESCE(SUM(length(CAST(COALESCE(path, '') AS BLOB)) + length(CAST(COALESCE(model, '') AS BLOB)) + length(CAST(COALESCE(provider_request_id, '') AS BLOB)) + length(CAST(COALESCE(error_code, '') AS BLOB)) + length(CAST(COALESCE(error, '') AS BLOB)) + length(CAST(COALESCE(upstream_url, '') AS BLOB)) + length(CAST(COALESCE(request_body, '') AS BLOB)) + length(CAST(COALESCE(response_body, '') AS BLOB))), 0) FROM api_call_logs WHERE user_id = ?) AS task_bytes,
+			+ (SELECT COALESCE(SUM(length(CAST(COALESCE(path, '') AS BLOB)) + length(CAST(COALESCE(model, '') AS BLOB)) + length(CAST(COALESCE(provider_request_id, '') AS BLOB)) + length(CAST(COALESCE(error_code, '') AS BLOB)) + length(CAST(COALESCE(error, '') AS BLOB)) + length(CAST(COALESCE(upstream_url, '') AS BLOB)) + length(CAST(COALESCE(request_body, '') AS BLOB)) + length(CAST(COALESCE(response_body, '') AS BLOB)) + length(CAST(COALESCE(generation_content_json, '') AS BLOB))), 0) FROM api_call_logs WHERE user_id = ?) AS task_bytes,
 			(SELECT COUNT(*) FROM api_call_logs WHERE user_id = ?) AS api_call_count
 	`
 	if r.Dialect() == "postgres" {
@@ -112,6 +116,14 @@ func (r *Repository) UserStorageUsage(userID string) (UserStorageUsage, error) {
 		query = strings.ReplaceAll(query, ", '') AS BLOB))", ", ''))")
 	}
 	err := r.db.Raw(query, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID, userID).Scan(&usage).Error
+	if err != nil {
+		return usage, err
+	}
+	usage.MCPLimitBytes = MCPStorageLimitBytes
+	if usage.AgentBytes, err = r.AgentStoredBytes(userID); err != nil {
+		return usage, err
+	}
+	usage.MCPBytes, err = r.MCPStoredBytes(userID)
 	return usage, err
 }
 

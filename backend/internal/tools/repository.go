@@ -19,6 +19,8 @@ type ToolWithFavorite struct {
 // Repository 定义 tools 域需要的持久化接口，由 repository.Repository 实现。
 type Repository interface {
 	UpsertBuiltinTools(tools []model.Tool) error
+	RetireLegacyBuiltinTools(items []LegacyBuiltinTool) error
+	IsLegacyBuiltinTool(item LegacyBuiltinTool) (bool, error)
 	ListTools(userID string, req ToolListRequest) ([]ToolWithFavorite, int64, error)
 	ToolForUser(userID string, toolID int64) (model.Tool, error)
 	ToolFavorited(userID string, toolID int64) (model.Tool, *time.Time, error)

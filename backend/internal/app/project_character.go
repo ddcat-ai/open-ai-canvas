@@ -45,6 +45,7 @@ type CharacterRepresentationInput struct {
 
 type ReplaceCharacterRepresentationsRequest struct {
 	Representations []CharacterRepresentationInput `json:"representations"`
+	Definition      map[string]any                 `json:"definition,omitempty"`
 }
 
 type BindCharacterVoiceRequest struct {
@@ -248,11 +249,19 @@ func (s *Service) ReplaceCharacterRepresentations(userID string, assetID string,
 	if err != nil {
 		return CharacterAssetSummary{}, err
 	}
+	var definitionJSON string
+	if req.Definition != nil {
+		encoded, defErr := normalizedCharacterDefinition(req.Definition)
+		if defErr != nil {
+			return CharacterAssetSummary{}, defErr
+		}
+		definitionJSON = string(encoded)
+	}
 	representations, err := s.characterRepresentationsForInputs(userID, req.Representations, newID(), time.Now())
 	if err != nil {
 		return CharacterAssetSummary{}, err
 	}
-	if _, err := s.createNextCharacterVersion("", asset, asset.Title, "", representations, nil, false); err != nil {
+	if _, err := s.createNextCharacterVersion("", asset, asset.Title, definitionJSON, representations, nil, false); err != nil {
 		return CharacterAssetSummary{}, err
 	}
 	return s.Character(userID, asset.ID)
@@ -360,8 +369,16 @@ func (s *Service) ReplaceProjectCharacterRepresentations(userID string, projectI
 	if err != nil {
 		return ProjectCharacterDetail{}, err
 	}
-	if len(req.Representations) == 0 || len(req.Representations) > 8 {
-		return ProjectCharacterDetail{}, BadAuthRequest("角色形象数量必须在 1 到 8 之间")
+	var definitionJSON string
+	if req.Definition != nil {
+		encoded, defErr := normalizedCharacterDefinition(req.Definition)
+		if defErr != nil {
+			return ProjectCharacterDetail{}, defErr
+		}
+		definitionJSON = string(encoded)
+	}
+	if len(req.Representations) == 0 || len(req.Representations) > 24 {
+		return ProjectCharacterDetail{}, BadAuthRequest("角色形象数量必须在 1 到 24 之间")
 	}
 	roles := make(map[string]struct{}, len(req.Representations))
 	representations := make([]model.AssetRepresentation, 0, len(req.Representations))
@@ -386,7 +403,7 @@ func (s *Service) ReplaceProjectCharacterRepresentations(userID string, projectI
 		}
 		representations = append(representations, model.AssetRepresentation{ID: newID(), TaskID: operationID, ResourceID: resourceID, MediaType: "image", Role: role, MetadataJSON: string(metadata), CreatedAt: time.Now()})
 	}
-	if _, err := s.createNextCharacterVersion(projectID, asset, asset.Title, "", representations, nil, false); err != nil {
+	if _, err := s.createNextCharacterVersion(projectID, asset, asset.Title, definitionJSON, representations, nil, false); err != nil {
 		return ProjectCharacterDetail{}, err
 	}
 	return s.ProjectCharacter(userID, projectID, asset.ID)
@@ -513,47 +530,58 @@ func (s *Service) BindProjectCharacterVoice(userID string, projectID string, ass
 		}
 		return ProjectCharacterDetail{}, BadAuthRequest("角色资产不可用")
 	}
-	var profile *model.VoiceProfile
-	sampleResourceID := strings.TrimSpace(req.SampleResourceID)
-	if sampleResourceID != "" {
-		resource, resourceErr := s.repo.ResourceForUser(userID, sampleResourceID)
-		if resourceErr != nil || resource == nil || resource.Kind != "audio" || resource.Status != model.ResourceStatusReady || !isSupportedVoiceSampleMimeType(resource.MimeType) {
-			return ProjectCharacterDetail{}, BadAuthRequest("请选择已上传完成的支持格式音频：MP3、WAV、M4A/AAC、FLAC、OGG/Opus 或 WebM")
-		}
-		var profileErr error
-		profile, profileErr = s.repo.VoiceProfileBySampleResource(userID, sampleResourceID)
-		if profileErr == nil {
-			if err := s.renameSampleVoiceProfile(userID, profile, req.VoiceName); err != nil {
-				return ProjectCharacterDetail{}, err
-			}
-		}
-		if profileErr != nil {
-			if !errors.Is(profileErr, gorm.ErrRecordNotFound) {
-				return ProjectCharacterDetail{}, profileErr
-			}
-			voiceName := strings.TrimSpace(req.VoiceName)
-			if voiceName == "" {
-				voiceName = "上传声音 · " + sampleResourceID[:min(8, len(sampleResourceID))]
-			}
-			profile = &model.VoiceProfile{ID: newID(), UserID: userID, Name: voiceName, Provider: "user_upload", VoiceKey: "sample:" + sampleResourceID, Language: "按样本使用", Timbre: "用户上传样本", SampleResourceID: sampleResourceID, CompatibleModelsJSON: "[]", Status: "active", CreatedAt: time.Now(), UpdatedAt: time.Now()}
-			if err := s.repo.CreateVoiceProfile(profile); err != nil {
-				return ProjectCharacterDetail{}, err
-			}
-		}
-	} else {
-		profile, err = s.repo.VoiceProfileForUser(userID, strings.TrimSpace(req.VoiceProfileID))
-		if err != nil || profile == nil || profile.Status != "active" {
-			return ProjectCharacterDetail{}, BadAuthRequest("选择的声音素材不可用")
-		}
-	}
-	if profile == nil || strings.TrimSpace(profile.ID) == "" {
-		return ProjectCharacterDetail{}, BadAuthRequest("声音素材不可用，请重新选择")
+	profile, err := s.resolveVoiceProfile(userID, req.VoiceProfileID, req.SampleResourceID, req.VoiceName)
+	if err != nil {
+		return ProjectCharacterDetail{}, err
 	}
 	binding := &model.CharacterVoiceBinding{ID: newID(), VoiceProfileID: profile.ID, Instructions: strings.TrimSpace(req.Instructions), CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if _, err := s.createNextCharacterVersion(projectID, asset, asset.Title, "", nil, binding, false); err != nil {
 		return ProjectCharacterDetail{}, err
 	}
 	return s.ProjectCharacter(userID, projectID, asset.ID)
+}
+
+// resolveVoiceProfile 取得要绑定的声音：传了样本音频时复用同一样本已有的声音（并按 voiceName 改名），没有就新建一条用户上传声音；
+// 否则按 voiceProfileID 读取当前用户的声音库。角色库与短剧角色共用这一入口。
+func (s *Service) resolveVoiceProfile(userID, voiceProfileID, sampleResourceID, voiceName string) (*model.VoiceProfile, error) {
+	var profile *model.VoiceProfile
+	sampleResourceID = strings.TrimSpace(sampleResourceID)
+	if sampleResourceID != "" {
+		resource, resourceErr := s.repo.ResourceForUser(userID, sampleResourceID)
+		if resourceErr != nil || resource == nil || resource.Kind != "audio" || resource.Status != model.ResourceStatusReady || !isSupportedVoiceSampleMimeType(resource.MimeType) {
+			return nil, BadAuthRequest("请选择已上传完成的支持格式音频：MP3、WAV、M4A/AAC、FLAC、OGG/Opus 或 WebM")
+		}
+		var profileErr error
+		profile, profileErr = s.repo.VoiceProfileBySampleResource(userID, sampleResourceID)
+		if profileErr == nil {
+			if err := s.renameSampleVoiceProfile(userID, profile, voiceName); err != nil {
+				return nil, err
+			}
+		}
+		if profileErr != nil {
+			if !errors.Is(profileErr, gorm.ErrRecordNotFound) {
+				return nil, profileErr
+			}
+			name := strings.TrimSpace(voiceName)
+			if name == "" {
+				name = "上传声音 · " + sampleResourceID[:min(8, len(sampleResourceID))]
+			}
+			profile = &model.VoiceProfile{ID: newID(), UserID: userID, Name: name, Provider: "user_upload", VoiceKey: "sample:" + sampleResourceID, Language: "按样本使用", Timbre: "用户上传样本", SampleResourceID: sampleResourceID, CompatibleModelsJSON: "[]", Status: "active", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+			if err := s.repo.CreateVoiceProfile(profile); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		var err error
+		profile, err = s.repo.VoiceProfileForUser(userID, strings.TrimSpace(voiceProfileID))
+		if err != nil || profile == nil || profile.Status != "active" {
+			return nil, BadAuthRequest("选择的声音素材不可用")
+		}
+	}
+	if profile == nil || strings.TrimSpace(profile.ID) == "" {
+		return nil, BadAuthRequest("声音素材不可用，请重新选择")
+	}
+	return profile, nil
 }
 
 func isSupportedVoiceSampleMimeType(value string) bool {
@@ -759,8 +787,8 @@ func (s *Service) characterRepresentationsForResources(userID, taskID, imageReso
 }
 
 func (s *Service) characterRepresentationsForInputs(userID string, inputs []CharacterRepresentationInput, taskID string, now time.Time) ([]model.AssetRepresentation, error) {
-	if len(inputs) == 0 || len(inputs) > 8 {
-		return nil, BadAuthRequest("角色形象数量必须在 1 到 8 之间")
+	if len(inputs) == 0 || len(inputs) > 24 {
+		return nil, BadAuthRequest("角色形象数量必须在 1 到 24 之间")
 	}
 	roles := make(map[string]struct{}, len(inputs))
 	result := make([]model.AssetRepresentation, 0, len(inputs))
@@ -870,6 +898,9 @@ func voiceProfileSummary(profile model.VoiceProfile) VoiceProfileSummary {
 }
 
 func validCharacterRepresentationRole(role string) bool {
+	if strings.HasPrefix(role, "outfit:") && len(strings.TrimSpace(strings.TrimPrefix(role, "outfit:"))) > 0 && len(role) <= 64 {
+		return true
+	}
 	switch role {
 	case "primary", "front", "side", "back", "turnaround_sheet", "expression_sheet":
 		return true

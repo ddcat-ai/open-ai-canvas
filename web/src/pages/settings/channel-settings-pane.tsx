@@ -1,11 +1,14 @@
 import { App, Button, Form, Input, Popconfirm, Segmented } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { Pencil, Plus, RefreshCw, Trash2, Workflow } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { ModelEditorModal } from "@/components/model-editor-modal";
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { WorkspaceState } from "@/components/layout/workspace-state";
+import { secretKeyProtocolIds, useUserProtocolCatalog } from "@/hooks/use-user-protocol-catalog";
+import { translate } from "@/i18n";
 import { mergeFetchedChannelModelCosts } from "@/lib/channel-model-catalog";
 import { fetchChannelModels } from "@/services/api/image";
 import {
@@ -27,7 +30,11 @@ type ChannelSettingsPaneProps = {
 };
 
 export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelSettingsPaneProps) {
+    const { t } = useTranslation();
     const { message } = App.useApp();
+    const protocolCatalog = useUserProtocolCatalog();
+    const secretKeyProtocols = useMemo(() => secretKeyProtocolIds(protocolCatalog), [protocolCatalog]);
+    const channelConnectionError = (channel: ModelChannel) => channelConnectionErrorFor(channel, secretKeyProtocols);
     const config = useConfigStore((state) => state.config);
     const replaceConfig = useConfigStore((state) => state.replaceConfig);
     const [loadingChannelIds, setLoadingChannelIds] = useState<string[]>([]);
@@ -62,7 +69,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
     };
 
     const addChannel = () => {
-        const channel = createModelChannel({ name: `渠道 ${userChannels.length + 1}` });
+        const channel = createModelChannel({ name: t("account.settings.channels.defaultName", { index: userChannels.length + 1 }) });
         updateChannels([...config.channels, channel]);
         setNewChannelId(channel.id);
         setEditingChannelId(channel.id);
@@ -76,7 +83,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
     const deleteChannel = (id: string) => {
         const channel = config.channels.find((item) => item.id === id);
         if (channel?.scope === "system") {
-            message.warning("系统渠道由管理员维护");
+            message.warning(t("account.settings.channels.systemManaged"));
             return;
         }
         updateChannels(config.channels.filter((item) => item.id !== id));
@@ -89,28 +96,28 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
     const refreshChannelModels = async (channel: ModelChannel) => {
         const connectionError = channelConnectionError(channel);
         if (connectionError) {
-            message.error(`${channel.name || "当前渠道"}：${connectionError}`);
+            message.error(t("account.settings.channelError", { name: channel.name || t("account.settings.channels.current"), error: connectionError }));
             return;
         }
         setChannelLoading(channel.id, true);
         try {
             const result = await fetchChannelModels(channel, true);
             if (!result.models.length) {
-                message.warning(`${channel.name || "当前渠道"}未返回模型，已保留现有手工模型`);
+                message.warning(t("account.settings.channels.noModels", { name: channel.name || t("account.settings.channels.current") }));
                 return;
             }
             const latestConfig = useConfigStore.getState().config;
             const latestChannel = latestConfig.channels.find((item) => item.id === channel.id);
             if (!latestChannel) return;
             if (channelConnectionSignature(latestChannel) !== channelConnectionSignature(channel)) {
-                message.warning(`${latestChannel.name || "当前渠道"}的连接配置已改变，已忽略旧的拉取结果`);
+                message.warning(t("account.settings.channels.changedIgnored", { name: latestChannel.name || t("account.settings.channels.current") }));
                 return;
             }
             updateChannels(
                 latestConfig.channels.map((item) => (item.id === channel.id ? { ...item, models: result.models, modelCosts: mergeFetchedChannelModelCosts(item, result.catalog) } : item)),
                 latestConfig,
             );
-            message.success(`${latestChannel.name || "当前渠道"}模型列表已更新`);
+            message.success(t("account.settings.channels.modelsUpdated", { name: latestChannel.name || t("account.settings.channels.current") }));
         } catch (error) {
             message.error(channelModelFetchErrorMessage(error));
         } finally {
@@ -122,8 +129,8 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
         const runnable = userChannels.filter((channel) => !channelConnectionError(channel));
         const skipped = userChannels.filter((channel) => channelConnectionError(channel));
         if (!runnable.length) {
-            const detail = skipped.map((channel) => `${channel.name || "未命名渠道"}：${channelConnectionError(channel)}`).join("；");
-            message.error(detail || "没有可拉取的个人模型渠道，请先填写有效 Base URL 和 API Key");
+            const detail = skipped.map((channel) => t("account.settings.channelError", { name: channel.name || t("account.settings.channels.unnamed"), error: channelConnectionError(channel) })).join(t("account.settings.channels.separator"));
+            message.error(detail || t("account.settings.channels.nothingToFetch"));
             return;
         }
         setChannelLoading("all", true);
@@ -134,7 +141,7 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                         const result = await fetchChannelModels(channel, true);
                         return { channel, result, error: "" };
                     } catch (error) {
-                        return { channel, result: { models: [], catalog: [] }, error: error instanceof Error ? error.message : "读取失败" };
+                        return { channel, result: { models: [], catalog: [] }, error: error instanceof Error ? error.message : t("account.settings.channels.readFailed") };
                     }
                 }),
             );
@@ -157,16 +164,16 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                     }),
                     latestConfig,
                 );
-                message.success(`已更新 ${successful.length} 个渠道的模型`);
+                message.success(t("account.settings.channels.bulkUpdated", { count: successful.length }));
             }
             const warnings = [
-                ...failed.map((item) => `${item.channel.name || "未命名渠道"}：${item.error || "未返回模型"}`),
-                ...stale.map((item) => `${item.channel.name || "未命名渠道"}：连接配置已改变，已忽略旧结果`),
-                ...skipped.map((channel) => `${channel.name || "未命名渠道"}：${channelConnectionError(channel)}`),
+                ...failed.map((item) => t("account.settings.channelError", { name: item.channel.name || t("account.settings.channels.unnamed"), error: item.error || t("account.settings.channels.noModelsReturned") })),
+                ...stale.map((item) => t("account.settings.channelError", { name: item.channel.name || t("account.settings.channels.unnamed"), error: t("account.settings.channels.staleIgnored") })),
+                ...skipped.map((channel) => t("account.settings.channelError", { name: channel.name || t("account.settings.channels.unnamed"), error: channelConnectionError(channel) })),
             ];
-            if (warnings.length) message.warning(`${warnings.join("；")}。未更新的渠道已保留原有模型列表`);
+            if (warnings.length) message.warning(t("account.settings.channels.bulkWarnings", { warnings: warnings.join(t("account.settings.channels.separator")) }));
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "批量读取模型失败，原有模型列表未改动");
+            message.error(error instanceof Error ? error.message : t("account.settings.channels.bulkFailed"));
         } finally {
             setChannelLoading("all", false);
         }
@@ -176,26 +183,26 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
         <Form layout="vertical" requiredMark={false}>
             <div className="settings-pane-header">
                 <div className="min-w-0">
-                    <h2>个人渠道</h2>
-                    <p>管理个人模型服务和工作流渠道。普通渠道只保存连接类型；模型能力在“模型与能力”中配置。<Button type="link" size="small" className="h-auto p-0 text-xs font-semibold" onClick={onOpenModels}>打开模型选择</Button></p>
+                    <h2>{t("settings.sections.channels.label")}</h2>
+                    <p>{t("account.settings.channels.description")}<Button type="link" size="small" className="h-auto p-0 text-xs font-semibold" onClick={onOpenModels}>{t("account.layout.modelGuide.open")}</Button></p>
                 </div>
                 <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
-                    <Button className="h-10 flex-1 sm:h-8 sm:flex-none" icon={<RefreshCw className="size-4" />} loading={loadingChannelIds.includes("all")} disabled={loadingChannelIds.some((id) => id !== "all")} onClick={() => void refreshAllModels()}>拉取全部</Button>
-                    <Button className="h-10 flex-1 sm:h-8 sm:flex-none" type="primary" icon={<Plus className="size-4" />} onClick={addChannel}>新增渠道</Button>
+                    <Button className="h-10 flex-1 sm:h-8 sm:flex-none" icon={<RefreshCw className="size-4" />} loading={loadingChannelIds.includes("all")} disabled={loadingChannelIds.some((id) => id !== "all")} onClick={() => void refreshAllModels()}>{t("account.settings.channels.fetchAll")}</Button>
+                    <Button className="h-10 flex-1 sm:h-8 sm:flex-none" type="primary" icon={<Plus className="size-4" />} onClick={addChannel}>{t("account.settings.channels.add")}</Button>
                 </div>
             </div>
             {onOpenRunningHub ? <section className="settings-section mb-3">
                 <div className="mb-3">
-                    <h3 className="text-sm font-semibold">个人工作流渠道</h3>
-                    <p className="mt-1 text-xs text-foreground/55">RunningHub 使用独立的云端工作流参数与执行通道。</p>
+                    <h3 className="text-sm font-semibold">{t("account.settings.channels.workflowTitle")}</h3>
+                    <p className="mt-1 text-xs text-foreground/55">{t("account.settings.channels.workflowDescription")}</p>
                 </div>
                 <div className="grid gap-2 lg:grid-cols-2">
                     {onOpenRunningHub ? (
                         <WorkflowChannelEntry
                             icon={<Workflow className="size-4" />}
                             title="RunningHub"
-                            description="云端工作流和 RunningHub App"
-                            status={runningHubReady ? `${config.runningHub.workflows.length} 个工作流已配置` : config.runningHub.enabled ? "待完成连接和工作流配置" : "未启用"}
+                            description={t("account.settings.channels.runningHubDescription")}
+                            status={runningHubReady ? t("account.settings.channels.workflowsConfigured", { count: config.runningHub.workflows.length }) : config.runningHub.enabled ? t("account.settings.channels.workflowPending") : t("account.settings.channels.disabled")}
                             ready={runningHubReady}
                             onOpen={onOpenRunningHub}
                         />
@@ -210,55 +217,55 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                             <section key={channel.id} aria-labelledby={`channel-${channel.id}-title`} className="settings-channel p-2 sm:p-3">
                                 <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1 basis-52">
-                                        <h3 id={`channel-${channel.id}-title`} className="truncate text-sm font-semibold">{channel.name || "未命名渠道"}</h3>
+                                        <h3 id={`channel-${channel.id}-title`} className="truncate text-sm font-semibold">{channel.name || t("account.settings.channels.unnamed")}</h3>
                                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-foreground/55">
-                                            {channelProtocolLabel(channel)} · 已保存 {channel.models.length} 个模型
-                                            <ChannelStatus channel={channel} />
+                                            {t("account.settings.channels.summary", { protocol: channelProtocolLabel(channel), count: channel.models.length })}
+                                            <ChannelStatus channel={channel} secretKeyProtocols={secretKeyProtocols} />
                                         </div>
                                     </div>
                                     <div className="flex w-full justify-end gap-2 sm:w-auto sm:shrink-0">
-                                        <Button className="h-10 sm:h-8" size="small" icon={<RefreshCw className="size-3.5" />} loading={loadingChannelIds.includes(channel.id)} disabled={loadingChannelIds.includes("all")} onClick={() => void refreshChannelModels(channel)}>拉取模型</Button>
-                                        <Button size="small" icon={<Pencil className="size-3.5" />} onClick={() => { setNewChannelId(null); setEditingChannelId(channel.id); }}>编辑</Button>
-                                        <Popconfirm title="删除个人模型渠道？" description="该渠道关联的模型选择会同时移除。" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => deleteChannel(channel.id)}>
-                                            <Tooltip title="删除渠道"><Button className="size-10 p-0 sm:size-8" aria-label={`删除渠道 ${channel.name || "未命名渠道"}`} size="small" type="text" danger disabled={loadingChannelIds.includes(channel.id) || loadingChannelIds.includes("all")} icon={<Trash2 className="size-3.5" />} /></Tooltip>
+                                        <Button className="h-10 sm:h-8" size="small" icon={<RefreshCw className="size-3.5" />} loading={loadingChannelIds.includes(channel.id)} disabled={loadingChannelIds.includes("all")} onClick={() => void refreshChannelModels(channel)}>{t("account.settings.channels.fetch")}</Button>
+                                        <Button size="small" icon={<Pencil className="size-3.5" />} onClick={() => { setNewChannelId(null); setEditingChannelId(channel.id); }}>{t("account.settings.channels.edit")}</Button>
+                                        <Popconfirm title={t("account.settings.channels.deleteTitle")} description={t("account.settings.channels.deleteDescription")} okText={t("common.delete")} cancelText={t("common.cancel")} okButtonProps={{ danger: true }} onConfirm={() => deleteChannel(channel.id)}>
+                                            <Tooltip title={t("account.settings.channels.delete")}><Button className="size-10 p-0 sm:size-8" aria-label={t("account.settings.channels.deleteNamed", { name: channel.name || t("account.settings.channels.unnamed") })} size="small" type="text" danger disabled={loadingChannelIds.includes(channel.id) || loadingChannelIds.includes("all")} icon={<Trash2 className="size-3.5" />} /></Tooltip>
                                         </Popconfirm>
                                     </div>
                                 </div>
                                 {editing && (
                                     <ModelEditorModal
                                         open
-                                        title={channel.id === newChannelId ? "新增自定义渠道" : "编辑自定义渠道"}
+                                        title={channel.id === newChannelId ? t("account.settings.channels.addCustom") : t("account.settings.channels.editCustom")}
                                         subtitle={channel.name}
                                         onClose={closeChannelEditor}
                                         footer={<div className="model-editor-footer">
-                                            <span className="text-xs text-foreground/50">更改实时保存到云端渠道配置</span>
+                                            <span className="text-xs text-foreground/50">{t("account.settings.channels.autoSave")}</span>
                                             <div className="model-editor-footer-actions">
-                                                <Button loading={loadingChannelIds.includes(channel.id)} onClick={() => void refreshChannelModels(channel)}>拉取模型</Button>
-                                                <Button type="primary" onClick={closeChannelEditor}>完成</Button>
+                                                <Button loading={loadingChannelIds.includes(channel.id)} onClick={() => void refreshChannelModels(channel)}>{t("account.settings.channels.fetch")}</Button>
+                                                <Button type="primary" onClick={closeChannelEditor}>{t("account.payment.done")}</Button>
                                             </div>
                                         </div>}
                                     >
                                         <div className="model-editor-panel">
                                             <section className="model-editor-section">
                                                 <div>
-                                                    <h2>连接信息</h2>
-                                                    <p className="mt-1 text-xs text-foreground/50">用于拉取模型目录并向当前渠道发起请求。</p>
+                                                    <h2>{t("account.settings.channels.connectionTitle")}</h2>
+                                                    <p className="mt-1 text-xs text-foreground/50">{t("account.settings.channels.connectionDescription")}</p>
                                                 </div>
                                                 <div className="model-editor-connection-fields grid gap-3 sm:grid-cols-2">
-                                                    <Form.Item label="渠道名称" htmlFor={`channel-${channel.id}-name`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-name`} value={channel.name} placeholder="例如：我的 NewAPI" onChange={(event) => updateChannel(channel.id, { name: event.target.value })} onBlur={(event) => updateChannel(channel.id, { name: event.target.value.trim() || "未命名渠道" })} /></Form.Item>
-                                                    <Form.Item label="目录连接类型" className="mb-0 sm:col-span-1" extra="仅影响模型目录拉取。"><Segmented<UserChannelConnection> block value={channelConnectionMode(channel)} options={[{ label: "OpenAI", value: "openai" }, { label: "Gemini", value: "gemini" }]} onChange={(value) => updateChannelConnection(channel, value)} /></Form.Item>
-                                                    <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-base-url`} inputMode="url" value={channel.baseUrl} placeholder="填写云端渠道 Base URL" onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/u, "") })} /></Form.Item>
-                                                    <Form.Item label="API Key" htmlFor={`channel-${channel.id}-api-key`} className="mb-0 sm:col-span-1"><Input.Password id={`channel-${channel.id}-api-key`} autoComplete="new-password" value={channel.apiKey} placeholder={channel.apiFormat === "gemini" ? "填写 Gemini API Key" : "填写当前渠道 API Key"} onChange={(event) => updateChannel(channel.id, { apiKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { apiKey: event.target.value.trim() })} /></Form.Item>
-                                                    <Form.Item label="Secret Key（可选）" htmlFor={`channel-${channel.id}-secret-key`} className="mb-0 sm:col-span-1" extra="即梦等 AK/SK 协议需要；其他协议留空。"><Input.Password id={`channel-${channel.id}-secret-key`} autoComplete="new-password" value={channel.secretKey || ""} placeholder="填写 Secret Key" onChange={(event) => updateChannel(channel.id, { secretKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { secretKey: event.target.value.trim() })} /></Form.Item>
+                                                    <Form.Item label={t("account.settings.channels.name")} htmlFor={`channel-${channel.id}-name`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-name`} value={channel.name} placeholder={t("account.settings.channels.namePlaceholder")} onChange={(event) => updateChannel(channel.id, { name: event.target.value })} onBlur={(event) => updateChannel(channel.id, { name: event.target.value.trim() || t("account.settings.channels.unnamed") })} /></Form.Item>
+                                                    <Form.Item label={t("account.settings.channels.connectionType")} className="mb-0 sm:col-span-1" extra={t("account.settings.channels.connectionTypeHint")}><Segmented<UserChannelConnection> block value={channelConnectionMode(channel)} options={[{ label: "OpenAI", value: "openai" }, { label: "Gemini", value: "gemini" }]} onChange={(value) => updateChannelConnection(channel, value)} /></Form.Item>
+                                                    <Form.Item label="Base URL" htmlFor={`channel-${channel.id}-base-url`} className="mb-0 sm:col-span-1"><Input id={`channel-${channel.id}-base-url`} inputMode="url" value={channel.baseUrl} placeholder={t("account.settings.channels.baseUrlPlaceholder")} onChange={(event) => updateChannel(channel.id, { baseUrl: event.target.value })} onBlur={(event) => updateChannel(channel.id, { baseUrl: event.target.value.trim().replace(/\/+$/u, "") })} /></Form.Item>
+                                                    <Form.Item label="API Key" htmlFor={`channel-${channel.id}-api-key`} className="mb-0 sm:col-span-1"><Input.Password id={`channel-${channel.id}-api-key`} autoComplete="new-password" value={channel.apiKey} placeholder={channel.apiFormat === "gemini" ? t("account.settings.channels.geminiKeyPlaceholder") : t("account.settings.channels.apiKeyPlaceholder")} onChange={(event) => updateChannel(channel.id, { apiKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { apiKey: event.target.value.trim() })} /></Form.Item>
+                                                    <Form.Item label={t("account.settings.channels.secretKey")} htmlFor={`channel-${channel.id}-secret-key`} className="mb-0 sm:col-span-1" extra={t("account.settings.channels.secretKeyHint")}><Input.Password id={`channel-${channel.id}-secret-key`} autoComplete="new-password" value={channel.secretKey || ""} placeholder={t("account.settings.channels.secretKeyPlaceholder")} onChange={(event) => updateChannel(channel.id, { secretKey: event.target.value })} onBlur={(event) => updateChannel(channel.id, { secretKey: event.target.value.trim() })} /></Form.Item>
                                                     <div className="sm:col-span-2"><ChannelHeadersEditor value={channel.headers} onChange={(headers) => updateChannel(channel.id, { headers })} /></div>
                                                 </div>
                                             </section>
                                             <section className="model-editor-section">
                                                 <div>
-                                                    <h2>模型与能力</h2>
-                                                    <p className="mt-1 text-xs text-foreground/50">维护渠道模型，并在单个模型中配置调用协议、能力和定价。</p>
+                                                    <h2>{t("account.settings.channels.modelsTitle")}</h2>
+                                                    <p className="mt-1 text-xs text-foreground/50">{t("account.settings.channels.modelsDescription")}</p>
                                                 </div>
-                                                <Form.Item label="模型列表" htmlFor={`channel-${channel.id}-models`} className="mb-0"><Select id={`channel-${channel.id}-models`} mode="tags" showSearch allowClear maxTagCount="responsive" tokenSeparators={[",", "\n"]} placeholder="输入模型名，或点击拉取模型" value={channel.models} onChange={(models) => updateChannel(channel.id, { models: uniqueModels(models) })} /></Form.Item>
+                                                <Form.Item label={t("account.settings.channels.modelList")} htmlFor={`channel-${channel.id}-models`} className="mb-0"><Select id={`channel-${channel.id}-models`} mode="tags" showSearch allowClear maxTagCount="responsive" tokenSeparators={[",", "\n"]} placeholder={t("account.settings.channels.modelListPlaceholder")} value={channel.models} onChange={(models) => updateChannel(channel.id, { models: uniqueModels(models) })} /></Form.Item>
                                                 <ChannelModelSettings channel={channel} onChange={(modelCosts) => updateChannel(channel.id, { modelCosts })} />
                                             </section>
                                         </div>
@@ -268,12 +275,13 @@ export function ChannelSettingsPane({ onOpenModels, onOpenRunningHub }: ChannelS
                         );
                     })}
                 </div>
-            ) : <WorkspaceState icon="settings" compact title="当前没有个人模型渠道" description="管理员配置的系统渠道会出现在模型选择中；也可以添加自己的模型服务。" action={<Button icon={<Plus className="size-4" />} onClick={addChannel}>新增个人模型渠道</Button>} />}
+            ) : <WorkspaceState icon="settings" compact title={t("account.settings.channels.emptyTitle")} description={t("account.settings.channels.emptyDescription")} action={<Button icon={<Plus className="size-4" />} onClick={addChannel}>{t("account.settings.channels.addPersonal")}</Button>} />}
         </Form>
     );
 }
 
 function WorkflowChannelEntry({ icon, title, description, status, ready, onOpen }: { icon: ReactNode; title: string; description: string; status: string; ready: boolean; onOpen?: () => void }) {
+    const { t } = useTranslation();
     return (
         <div className="settings-channel flex min-w-0 items-center justify-between gap-3 p-3">
             <div className="flex min-w-0 items-start gap-2">
@@ -284,22 +292,23 @@ function WorkflowChannelEntry({ icon, title, description, status, ready, onOpen 
                     <span className={`settings-channel-status mt-2 ${ready ? "is-ready" : "is-warning"}`}><i aria-hidden="true" />{status}</span>
                 </div>
             </div>
-            <Button size="small" onClick={onOpen} disabled={!onOpen}>配置</Button>
+            <Button size="small" onClick={onOpen} disabled={!onOpen}>{t("account.settings.channels.configure")}</Button>
         </div>
     );
 }
 
-export function channelValidationError(channel: ModelChannel) {
-    return channelConnectionError(channel) || validateChannelHeaders(channel.headers) || (!channel.models.length ? "请添加至少一个模型" : "");
+// secretKeyProtocols 来自插件目录（见 secretKeyProtocolIds）：是否需要 Secret Key 只看插件 auth 声明。
+export function channelValidationError(channel: ModelChannel, secretKeyProtocols: ReadonlySet<string>) {
+    return channelConnectionErrorFor(channel, secretKeyProtocols) || validateChannelHeaders(channel.headers) || (!channel.models.length ? translate("account.settings.channels.needModel") : "");
 }
 
-export function isChannelReady(channel: ModelChannel) {
-    return !channelValidationError(channel);
+export function isChannelReady(channel: ModelChannel, secretKeyProtocols: ReadonlySet<string>) {
+    return !channelValidationError(channel, secretKeyProtocols);
 }
 
-export function focusInvalidChannelField(channel: ModelChannel) {
-    const baseUrlError = channelConnectionError({ ...channel, apiKey: "valid", secretKey: "valid" });
-    const field = baseUrlError ? "base-url" : !channel.apiKey.trim() ? "api-key" : requiresSecretKey(channel) && !channel.secretKey?.trim() ? "secret-key" : "models";
+export function focusInvalidChannelField(channel: ModelChannel, secretKeyProtocols: ReadonlySet<string>) {
+    const baseUrlError = channelConnectionErrorFor({ ...channel, apiKey: "valid", secretKey: "valid" }, secretKeyProtocols);
+    const field = baseUrlError ? "base-url" : !channel.apiKey.trim() ? "api-key" : requiresSecretKey(channel, secretKeyProtocols) && !channel.secretKey?.trim() ? "secret-key" : "models";
     requestAnimationFrame(() => {
         const element = document.getElementById(`channel-${channel.id}-${field}`);
         element?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -307,12 +316,13 @@ export function focusInvalidChannelField(channel: ModelChannel) {
     });
 }
 
-function ChannelStatus({ channel }: { channel: ModelChannel }) {
-    const error = channelValidationError(channel);
+function ChannelStatus({ channel, secretKeyProtocols }: { channel: ModelChannel; secretKeyProtocols: ReadonlySet<string> }) {
+    const { t } = useTranslation();
+    const error = channelValidationError(channel, secretKeyProtocols);
     return (
         <span className={`settings-channel-status ${error ? "is-warning" : "is-ready"}`}>
             <i aria-hidden="true" />
-            {error || "可用"}
+            {error || t("account.settings.channels.ready")}
         </span>
     );
 }
@@ -335,26 +345,27 @@ function uniqueModels(models: string[]) {
 }
 
 function channelModelFetchErrorMessage(error: unknown) {
-    const detail = error instanceof Error ? error.message : "读取模型失败";
-    if (detail.includes("不允许访问本机") || detail.includes("不允许访问保留地址")) return `${detail}；可信私网服务需由部署管理员配置 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS`;
-    return `${detail}；也可以直接在模型列表中手动输入模型名`;
+    const detail = error instanceof Error ? error.message : translate("account.settings.channels.fetchFailed");
+    // 与后端 SSRF 拦截文案匹配，不随界面语言变化。
+    if (detail.includes("不允许访问本机") || detail.includes("不允许访问保留地址")) return translate("account.settings.channels.privateHostHint", { detail });
+    return translate("account.settings.channels.manualModelHint", { detail });
 }
 
 function channelConnectionMode(channel: ModelChannel): UserChannelConnection {
     return channel.apiFormat === "gemini" ? "gemini" : "openai";
 }
 
-function channelConnectionError(channel: ModelChannel) {
+function channelConnectionErrorFor(channel: ModelChannel, secretKeyProtocols: ReadonlySet<string>) {
     const baseUrl = channel.baseUrl.trim();
-    if (!baseUrl) return "请填写 Base URL";
+    if (!baseUrl) return translate("account.settings.channels.baseUrlRequired");
     try {
         const parsed = new URL(baseUrl);
-        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "Base URL 只支持 HTTP 或 HTTPS";
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return translate("account.settings.channels.baseUrlProtocol");
     } catch {
-        return "Base URL 格式不正确";
+        return translate("account.settings.channels.baseUrlInvalid");
     }
-    if (!channel.apiKey.trim()) return "请填写 API Key / Access Key";
-    if (requiresSecretKey(channel) && !channel.secretKey?.trim()) return "当前协议需要填写 Secret Key";
+    if (!channel.apiKey.trim()) return translate("account.settings.channels.apiKeyRequired");
+    if (requiresSecretKey(channel, secretKeyProtocols) && !channel.secretKey?.trim()) return translate("account.settings.channels.secretKeyRequired");
     return "";
 }
 
@@ -363,7 +374,7 @@ function channelConnectionSignature(channel: ModelChannel) {
 }
 
 function channelProtocolLabel(channel: ModelChannel) {
-    return channelConnectionMode(channel) === "gemini" ? "Gemini 原生" : "OpenAI 兼容";
+    return channelConnectionMode(channel) === "gemini" ? translate("account.settings.channels.protocolGemini") : translate("account.settings.channels.protocolOpenAI");
 }
 
 function isKnownDefaultBaseUrl(value: string) {
@@ -372,6 +383,6 @@ function isKnownDefaultBaseUrl(value: string) {
     return [defaultBaseUrlForApiFormat("openai"), defaultBaseUrlForApiFormat("gemini")].some((candidate) => candidate.replace(/\/+$/, "") === normalized);
 }
 
-function requiresSecretKey(channel: ModelChannel) {
-    return channel.modelCosts?.some((item) => item.protocol?.startsWith("volcengine-jimeng-")) === true;
+function requiresSecretKey(channel: ModelChannel, secretKeyProtocols: ReadonlySet<string>) {
+    return channel.modelCosts?.some((item) => Boolean(item.protocol && secretKeyProtocols.has(item.protocol))) === true;
 }

@@ -41,7 +41,8 @@ jobs:
   # 这里把它按用例名轮转分成 4 片，其余包作为第 5 片，5 个 Runner 并行；汇总由 Backend checks 完成。
   backend-tests:
     name: Backend tests (${{ matrix.shard }})
-    runs-on: ubuntu-latest
+    # 固定测试环境，避免 ubuntu-latest 滚动升级改变 Redis 软件源与运行时。
+    runs-on: ubuntu-24.04
     # go test 自身有 20 分钟超时；这里兜底防止依赖服务卡死时占用 Runner 数小时。
     timeout-minutes: 30
     strategy:
@@ -84,12 +85,25 @@ jobs:
       - name: Install Pi Agent runtime dependencies
         working-directory: backend/agent-runtime/pi
         run: npm ci --omit=dev --ignore-scripts
-      - name: Install redis-server for integration tests
-        # 用例自己拉起临时 redis-server（unix socket），所以需要的是可执行文件而不是 redis 服务。
+      - name: Test Pi Agent runtime
+        if: matrix.shard == 'rest'
+        working-directory: backend/agent-runtime/pi
+        run: node --test *.test.mjs
+      - name: Checkout Redis source for integration tests
+        uses: actions/checkout@v4
+        with:
+          repository: redis/redis
+          # Redis 7.4.7；与部署的 7.4 系列一致，固定源码避免系统软件源故障阻塞验证。
+          ref: 4d1a341aaf0b96f9d2c43418efac732e31dc28ad
+          path: .local/cache/ci-redis
+          persist-credentials: false
+      - name: Build redis-server for integration tests
+        # 用例自己拉起临时 Unix socket 实例，不需要安装或启动系统 Redis 服务。
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq redis-server
-          sudo systemctl stop redis-server || true
+          make -C ../.local/cache/ci-redis -j2 MALLOC=libc BUILD_TLS=no REDIS_CFLAGS= REDIS_LDFLAGS= redis-server
+          install -Dm755 ../.local/cache/ci-redis/src/redis-server "$RUNNER_TEMP/redis/bin/redis-server"
+          echo "$RUNNER_TEMP/redis/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/redis/bin/redis-server" --version
       - name: Check formatting
         if: matrix.shard == 'rest'
         shell: bash

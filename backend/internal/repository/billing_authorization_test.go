@@ -21,7 +21,7 @@ func TestAgentRouteReplacementCannotExpandApprovedCharge(t *testing.T) {
 	}
 	replacement := order
 	replacement.AmountMicrocredits = 101
-	if err := repo.SwitchTaskLogicalRoute(task.ID, "original", "expensive", "{}", order.ID, "channel", "model", &replacement, model.BillingCostSnapshot{}); !errors.Is(err, ErrBillingChargeLimit) {
+	if err := repo.SwitchTaskLogicalRoute(task.ID, "original", "expensive", "{}", order.ID, "channel", "model", &replacement, model.BillingCostSnapshot{}, ""); !errors.Is(err, ErrBillingChargeLimit) {
 		t.Fatalf("expensive fallback accepted: %v", err)
 	}
 	stored, err := repo.Task(task.ID)
@@ -36,7 +36,7 @@ func TestAgentRouteReplacementCannotExpandApprovedCharge(t *testing.T) {
 		t.Fatalf("credits changed: %+v", account)
 	}
 	replacement.AmountMicrocredits = 90
-	if err := repo.SwitchTaskLogicalRoute(task.ID, "original", "cheaper", "{}", order.ID, "channel", "model", &replacement, model.BillingCostSnapshot{}); err != nil {
+	if err := repo.SwitchTaskLogicalRoute(task.ID, "original", "cheaper", "{}", order.ID, "channel", "model", &replacement, model.BillingCostSnapshot{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.SettleBillingOrder(order.ID, "provider"); err != nil {

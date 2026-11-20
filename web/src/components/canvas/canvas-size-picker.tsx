@@ -1,10 +1,12 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Select } from "@/components/ui/base/select";
 
 type CanvasSizePickerProps = { value: string; className?: string; onChange: (value: string) => void };
 const presets = ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"];
 
 export function CanvasSizePicker({ value, className, onChange }: CanvasSizePickerProps) {
+    const { t } = useTranslation();
     const [query, setQuery] = useState("");
     const [expanded, setExpanded] = useState(false);
     const draft = useRef("");
@@ -19,9 +21,9 @@ export function CanvasSizePicker({ value, className, onChange }: CanvasSizePicke
     return (
         <div className={className} data-canvas-no-zoom onPointerDown={(event) => event.stopPropagation()}>
             <Select
-                ariaLabel="生成比例"
+                ariaLabel={t("canvasB.sizePicker.ariaLabel")}
                 className="canvas-compact-control canvas-control-select h-full w-full"
-                placeholder="比例"
+                placeholder={t("canvasB.sizePicker.placeholder")}
                 showSearch
                 value={value || undefined}
                 options={options}

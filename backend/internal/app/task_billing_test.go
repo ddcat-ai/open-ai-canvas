@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 type taskBillingRepositoryStub struct {
@@ -165,6 +166,8 @@ func TestTaskBillingCoordinatorFailureReviewPolicy(t *testing.T) {
 		{name: "successful billable call", stub: taskBillingRepositoryStub{order: &model.BillingOrder{Status: model.BillingStatusRunning}, hasSuccessfulCall: true}, err: errors.New("provider rejected"), want: true},
 		{name: "normal failed call", stub: taskBillingRepositoryStub{order: &model.BillingOrder{Status: model.BillingStatusRunning}}, err: errors.New("provider rejected"), want: false},
 		{name: "billable call lookup error", stub: taskBillingRepositoryStub{order: &model.BillingOrder{Status: model.BillingStatusRunning}, callErr: errors.New("database unavailable")}, err: errors.New("provider rejected"), want: true},
+		{name: "explicit upstream failure mentioning timeout", stub: taskBillingRepositoryStub{order: &model.BillingOrder{Status: model.BillingStatusRunning}}, err: providerTaskTerminalError{TaskID: "provider-1", Status: protocol.StatusFailed, Message: "upstream generation timeout"}, want: false},
+		{name: "explicit upstream failure with successful billable call", stub: taskBillingRepositoryStub{order: &model.BillingOrder{Status: model.BillingStatusRunning}, hasSuccessfulCall: true}, err: providerTaskTerminalError{TaskID: "provider-1", Status: protocol.StatusFailed, Message: "upstream generation timeout"}, want: true},
 	}
 
 	for _, tt := range tests {

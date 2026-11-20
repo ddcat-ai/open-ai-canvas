@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
@@ -139,7 +140,7 @@ export async function runCanvasGenerationOps({
             const target = nodes.find((node) => node.id === op.nodeId);
             const prompt = op.prompt?.trim() ? op.prompt : (target?.metadata?.composerContent ?? target?.metadata?.prompt ?? "");
             const retryOf = op.retry ? target?.metadata?.taskId : undefined;
-            if (op.retry && !retryOf) throw new Error("当前节点没有可重试的生成任务");
+            if (op.retry && !retryOf) throw new Error(translate("canvasPage.operationHistory.noRetryTask"));
             const retryContext = retryOf ? await createGenerationRetryContext(retryOf, target?.metadata?.attemptGroupId) : undefined;
             const continuationIdPromise = canvasGenerationContinuationId(op.nodeId, context);
             let observation: Promise<void> | undefined;
@@ -278,7 +279,7 @@ export function useCanvasOperationHistory({
             setViewport(next.viewport);
             setContextMenu(null);
             if (safeOps.length) {
-                const change = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, summary: summarizeCanvasOperations(safeOps) || "画布操作已完成", nodeIds: affectedNodeIds };
+                const change = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, summary: summarizeCanvasOperations(safeOps) || translate("canvasPage.operationHistory.done"), nodeIds: affectedNodeIds };
                 undoStackRef.current = [...undoStackRef.current, { snapshot: before, afterNodes: next.nodes, afterConnections: next.connections, change }].slice(-10);
                 const nextUndoCount = undoStackRef.current.length;
                 setUndoOpsCount(nextUndoCount);

@@ -63,14 +63,14 @@ test("token fields stay inside a single model row and tier upstream overrides st
         ...model,
         capability: "text" as const,
         channelLabel: "",
-        priceTiers: [{ ...model.priceTiers[0]!, billingMode: "token" as const, providerModelKey: "spec-upstream", inputTokenPriceMicrocredits: 10, outputTokenPriceMicrocredits: 20, cachedTokenPriceMicrocredits: 30 }],
+        priceTiers: [{ ...model.priceTiers[0]!, billingMode: "token" as const, providerModelKey: "spec-upstream", inputTokenPriceMicrocredits: 10, outputTokenPriceMicrocredits: 20, cachedTokenPriceMicrocredits: 30, cacheWriteTokenPriceMicrocredits: 40 }],
     };
     const html = render([token]);
     expect(html.match(/data-row-key="image"/g)).toHaveLength(1);
-    expect(html.match(/role="spinbutton"/g)).toHaveLength(3);
+    expect(html.match(/role="spinbutton"/g)).toHaveLength(4);
     expect(html).toContain("所属渠道");
     expect(html).toContain("spec-upstream");
-    for (const label of ["输入", "输出", "缓存"]) expect(html).toContain(`>${label}<`);
+    for (const label of ["输入", "输出", "缓存命中", "缓存写入"]) expect(html).toContain(`>${label}<`);
 });
 
 test("recalculate button reruns the current margin and precision even when they are unchanged", async () => {

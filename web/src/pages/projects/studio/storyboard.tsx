@@ -5,9 +5,12 @@ import { AlertCircle, Film, Play, RotateCcw, TriangleAlert, X, PenLine } from "l
 
 import type { DramaCast, DramaModelChoice, DramaSegment, DramaShot } from "@/services/api/drama";
 
-import { DramaModelPicker } from "../drama-model-picker";
+import { DramaModelPicker, useDramaModelCatalog } from "../drama-model-picker";
+import { dramaVideoResolutionValue } from "@/lib/drama/model-choice";
+import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 import { aspectRatioValue, formatClock, mediaBusy, MediaThumb, useResourceMediaUrl } from "../drama-shared";
 import { promptReady, secondsLabel, SegmentInputs, SegmentStatus, segmentState } from "./segment-parts";
+import { dramaVideoOptionFor } from "./segment-quote";
 import { isTypingTarget } from "./use-studio";
 import { progressFillStyle } from "@/lib/progress-fill";
 
@@ -17,7 +20,7 @@ type Props = {
     aspectRatio: string;
     castById: Map<string, DramaCast>;
     defaultVideoModel: DramaModelChoice;
-    /** 作品指定的视频分辨率；批量换模型时给不出的置灰。 */
+    /** 作品指定的视频分辨率；批量换模型时新模型给不出就按它自己的默认档出片。 */
     videoResolution?: string;
     busy: boolean;
     /** 剧情段弹窗打开时暂停分镜页快捷键，避免和弹窗内的输入冲突。 */
@@ -49,9 +52,25 @@ function hasVideo(segment: DramaSegment) {
 
 /** 还没有尾帧缩略图时，用视频本身的开头画面作封面。 */
 function CoverVideo({ resourceId }: { resourceId: string }) {
-    const url = useResourceMediaUrl(resourceId, "playback");
-    if (!url) return <span className="drama-sg-cover-empty is-busy" aria-hidden />;
-    return <video className="drama-sg-cover-media" src={`${url}#t=0.1`} muted playsInline preload="metadata" aria-hidden tabIndex={-1} />;
+    const target = useRef<HTMLSpanElement>(null);
+    const [visible, setVisible] = useState(false);
+    useEffect(() => {
+        const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { rootMargin: "80px" });
+        observer.observe(target.current!);
+        return () => observer.disconnect();
+    }, []);
+    const url = useResourceMediaUrl(visible ? resourceId : undefined, "playback");
+    return (
+        <span ref={target} className="absolute inset-0" aria-hidden>
+            {visible && url ? (
+                <video className="drama-sg-cover-media" src={`${url}#t=0.1`} muted playsInline preload="metadata" tabIndex={-1} />
+            ) : (
+                <span className="drama-sg-cover-empty">
+                    <Film className="size-4" />
+                </span>
+            )}
+        </span>
+    );
 }
 
 function writable(segment: DramaSegment) {
@@ -136,7 +155,7 @@ const SegmentCard = memo(function SegmentCard({ segment, segmentShots, aspectRat
                     {segment.tailFrameResourceId && segment.videoResourceId ? (
                         <MediaThumb resourceId={segment.tailFrameResourceId} alt="" />
                     ) : segment.videoResourceId && hasVideo(segment) ? (
-                        <CoverVideo resourceId={segment.videoResourceId} />
+                        <CoverVideo key={segment.videoResourceId} resourceId={segment.videoResourceId} />
                     ) : (
                         <span className={`drama-sg-cover-empty ${state.tone === "busy" ? "is-busy" : ""}`}>
                             <Film className="size-4" aria-hidden />
@@ -227,6 +246,9 @@ export function Storyboard({ shots, segments, aspectRatio, castById, defaultVide
     const [focused, setFocused] = useState<number>();
     const [anchor, setAnchor] = useState<number>();
     const [batchModel, setBatchModel] = useState<DramaModelChoice>();
+    const catalog = useDramaModelCatalog().data;
+    const batchOption = dramaVideoOptionFor(catalog?.options.video, batchModel || defaultVideoModel);
+    const batchFallback = Boolean(videoResolution && batchOption && !dramaVideoResolutionValue(batchOption, videoResolution));
     const gridRef = useRef<HTMLDivElement>(null);
     const episodeId = shots[0]?.episodeId;
     useEffect(() => {
@@ -362,8 +384,13 @@ export function Storyboard({ shots, segments, aspectRatio, castById, defaultVide
                     <>
                         <b className="text-[var(--fs-label)]">已选 {selected.size} 段</b>
                         <div className="drama-board-model">
-                            <DramaModelPicker capability="video" size="sm" value={batchModel || defaultVideoModel} onChange={setBatchModel} placeholder="视频模型" aspectRatio={aspectRatio} videoResolution={videoResolution} />
+                            <DramaModelPicker capability="video" size="sm" value={batchModel || defaultVideoModel} onChange={setBatchModel} placeholder="视频模型" aspectRatio={aspectRatio} />
                         </div>
+                        {batchFallback ? (
+                            <span className="drama-sdx-hint w-full">
+                                所选模型不支持 {videoResolution ? formatVideoResolutionLabel(videoResolution) : ""}，将按模型默认{batchOption?.defaultVideoResolution ? ` ${formatVideoResolutionLabel(batchOption.defaultVideoResolution)}` : ""}出片。
+                            </span>
+                        ) : null}
                         <Tooltip title={toGenerate.length < selected.size ? `${selected.size - toGenerate.length} 段提示词未就绪或正在生成，会跳过` : undefined}>
                             <Button
                                 size="small"

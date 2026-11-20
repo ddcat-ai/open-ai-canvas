@@ -1,36 +1,51 @@
 package app
 
-import "testing"
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 
-func TestVideoTestDefaultsFollowCapabilityProfile(t *testing.T) {
-	tests := []struct {
-		name           string
-		profile        *VideoCapabilityConfig
-		wantRatio      string
-		wantResolution string
-	}{
-		{name: "nil profile falls back", profile: nil, wantRatio: "16:9", wantResolution: "720"},
-		{name: "declared defaults win", profile: &VideoCapabilityConfig{Ratios: []string{"9:16", "16:9"}, DefaultRatio: "16:9", Resolutions: []string{"480p", "720p"}, DefaultResolution: "720p"}, wantRatio: "16:9", wantResolution: "720p"},
-		{name: "first enum when no default", profile: &VideoCapabilityConfig{Ratios: []string{"1:1"}, Resolutions: []string{"768p横"}}, wantRatio: "1:1", wantResolution: "768p横"},
-		{name: "empty profile falls back", profile: &VideoCapabilityConfig{}, wantRatio: "16:9", wantResolution: "720"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ratio, resolution := videoTestDefaults(tt.profile)
-			if ratio != tt.wantRatio || resolution != tt.wantResolution {
-				t.Fatalf("videoTestDefaults() = (%q, %q), want (%q, %q)", ratio, resolution, tt.wantRatio, tt.wantResolution)
-			}
-		})
-	}
-}
+	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
+)
 
-func TestVideoTestDefaultsResolveArkSeedanceEnum(t *testing.T) {
-	profile := DefaultModelCapabilityConfigForModel("volcengine-ark-video", "doubao-seedance-2-0-mini-260615").Video
-	_, resolution := videoTestDefaults(profile)
-	if resolution == "" || resolution == "720" {
-		t.Fatalf("Ark Seedance test resolution must come from the declared enum, got %q", resolution)
+func TestAdminChannelModelSendsDeclaredVideoDefaults(t *testing.T) {
+	allowLoopbackProviderTest(t)
+	t.Setenv("REDIS_URL", "")
+	service, db := newMediaRecoveryTestService(t)
+	var err error
+	service.coordinator, err = platform.NewCoordinator("sqlite")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := videoResolutionNameRequest(profile, resolution); got != resolution {
-		t.Fatalf("declared resolution %q must round-trip through the profile, got %q", resolution, got)
+	var requests []map[string]any
+	upstream := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		requests = append(requests, body)
+		response.Header().Set("Content-Type", "application/json")
+		_, _ = response.Write([]byte(`{"status":"succeeded","video_url":"data:video/mp4;base64,dmlkZW8="}`))
+	}))
+	defer upstream.Close()
+	channel := model.ModelChannel{ID: "admin-test", Scope: model.ChannelScopeSystem, Enabled: true, BaseURL: upstream.URL, APIKey: "fixture"}
+	if err := db.Create(&channel).Error; err != nil {
+		t.Fatal(err)
+	}
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	req := ChannelModelRequest{ModelKey: "doubao-seedance-2-0-mini-260615", Capability: "video", Protocol: "volcengine-ark-video"}
+	if _, err := service.TestAdminChannelModel(t.Context(), admin, channel.ID, req); err == nil {
+		t.Fatal("missing video profile accepted")
+	}
+	req.CapabilityConfig = DefaultModelCapabilityConfigForModel(req.Protocol, req.ModelKey)
+	video := req.CapabilityConfig.Video
+	video.DefaultRatio, video.DefaultResolution, video.Duration.Default = "9:16", "480p", 8
+	if _, err := service.TestAdminChannelModel(t.Context(), admin, channel.ID, req); err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 1 || requests[0]["ratio"] != "9:16" || requests[0]["resolution"] != "480p" || requests[0]["duration"] != float64(8) {
+		t.Fatalf("upstream requests: %v", requests)
 	}
 }

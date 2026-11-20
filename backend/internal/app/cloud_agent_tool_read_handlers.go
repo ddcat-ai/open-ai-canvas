@@ -317,6 +317,9 @@ func cloudAgentHandleImageAnnotationRender(repo *repository.Repository, userID s
 }
 
 func cloudAgentHandleSkillSearch(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, "skill_search", services...); err != nil {
+		return nil, err
+	}
 	var args struct {
 		Keyword string `json:"keyword"`
 		Limit   int    `json:"limit"`
@@ -339,6 +342,9 @@ func cloudAgentHandleSkillSearch(repo *repository.Repository, userID string, sta
 }
 
 func cloudAgentHandleSkillReadFile(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, "skill_read_file", services...); err != nil {
+		return nil, err
+	}
 	var service *Service
 	if len(services) > 0 {
 		service = services[0]

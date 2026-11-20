@@ -17,6 +17,12 @@
 | --- | --- | --- | --- |
 | `apiKey` | secret | 是 | API Key |
 
+## 文本与图片边界
+
+当前输入和历史消息统一转换为 Anthropic `text` / `image.source` 内容块。Data URL 拆为 MIME 和 Base64，远程图片使用 HTTP(S) URL；损坏图片、音频和视频在请求前明确拒绝。已有 Anthropic 原生 document、tool_use、tool_result、thinking 和 redacted_thinking 块保持不透明透传，不把它们转换成普通文字；其完整厂商 schema 仍由上游校验。Agent 原生请求保持原样。
+
+模型是否允许图片仍由渠道能力声明决定；协议映射不扩大模型能力。没有显式 instructions / system 时，历史 system 文本进入独立 system 字段。
+
 ## 统一字段映射
 
 | 统一字段 | 类型 | 必填 | 上游映射 | 说明 |
@@ -42,9 +48,9 @@
 | `create.path` | `"/v1/messages"` |
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
-| `create.body.max_tokens` | `{"$coalesce":[{"$ref":"request.extra.max_tokens"},{"$ref":"request.providerOptions.claude-api.max_tokens"},4096]}` |
-| `create.body.system` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.instructions"},{"$ref":"request.providerOptions.claude-api.system"}]}}` |
-| `create.body.messages` | `{"$filter":{"from":{"$ref":"request.messages"},"as":"message","where":{"$ne":[{"$ref":"message.role"},"system"]}}}` |
+| `create.body.max_tokens` | `{"$coalesce":[{"$ref":"request.extra.max_tokens"},{"$ref":"request.providerOptions.claude-api.max_tokens"},{"$ref":"request.providerOptions.claude-api.max_output_tokens"},4096]}` |
+| `create.body.system` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.instructions"},{"$ref":"request.providerOptions.claude-api.system"},{"$map":{"from":{"$filter":{"from":{"$ref":"request.textMessages"},"as":"message","where":{"$eq":[{"$ref":"message.role"},"system"]}}},"as":"message","in":{"type":"text","text":{"$ref":"message.text"}}}}]}}` |
+| `create.body.messages` | `{"$map":{"from":{"$filter":{"from":{"$ref":"request.textMessages"},"as":"message","where":{"$ne":[{"$ref":"message.role"},"system"]}}},"as":"message","in":{"role":{"$ref":"message.role"},"content":{"$map":{"from":{"$ref":"message.parts"},"as":"part","in":{"$switch":{"cases":[{"when":{"$eq":[{"$ref":"part.type"},"text"]},"then":{"$merge":[{"$ref":"part.raw"},{"type":"text","text":{"$ref":"part.text"}}]}},{"when":{"$eq":[{"$ref":"part.type"},"image"]},"then":{"type":"image","cache_control":{"$omitEmpty":{"$ref":"part.raw.cache_control"}},"source":{"$if":{"condition":{"$ref":"part.isInline"},"then":{"type":"base64","media_type":{"$ref":"part.mimeType"},"data":{"$ref":"part.data"}},"else":{"type":"url","url":{"$ref":"part.value"}}}}}}],"default":{"$ref":"part.raw"}}}}}}}}` |
 | `create.body.temperature` | `{"$omitEmpty":{"$ref":"request.providerOptions.claude-api.temperature"}}` |
 | `create.body.top_p` | `{"$omitEmpty":{"$ref":"request.providerOptions.claude-api.top_p"}}` |
 | `create.body.top_k` | `{"$omitEmpty":{"$ref":"request.providerOptions.claude-api.top_k"}}` |
@@ -67,6 +73,7 @@
 
 - `providerOptions.claude-api.anthropic-beta`
 - `providerOptions.claude-api.anthropic-version`
+- `providerOptions.claude-api.max_output_tokens`
 - `providerOptions.claude-api.max_tokens`
 - `providerOptions.claude-api.metadata`
 - `providerOptions.claude-api.service_tier`
@@ -117,7 +124,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "anthropic-messages",
   "name": "Anthropic Messages",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Anthropic / 影策",
   "description": "Anthropic Messages 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -228,6 +235,135 @@
             "description": "流式开关；后台任务当前以最终响应归一。"
           }
         ],
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$and": [
+                          {
+                            "$not": {
+                              "$ref": "part.valid"
+                            }
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$ref": "part.type"
+                                },
+                                [
+                                  "document",
+                                  "tool_use",
+                                  "tool_result",
+                                  "thinking",
+                                  "redacted_thinking"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Invalid Claude text/image input; native document, thinking and tool blocks must use the Anthropic schema."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$in": [
+                          {
+                            "$ref": "part.type"
+                          },
+                          [
+                            "video",
+                            "audio"
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "This Messages profile does not encode audio or video content."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "part.type"
+                              },
+                              "image"
+                            ]
+                          },
+                          {
+                            "$not": {
+                              "$ref": "part.isInline"
+                            }
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$first": {
+                                    "$split": [
+                                      {
+                                        "$ref": "part.value"
+                                      },
+                                      ":"
+                                    ]
+                                  }
+                                },
+                                [
+                                  "http",
+                                  "https"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Claude remote images require an HTTP or HTTPS URL."
+          }
+        ],
         "create": {
           "method": "POST",
           "path": "/v1/messages",
@@ -244,6 +380,9 @@
                 {
                   "$ref": "request.providerOptions.claude-api.max_tokens"
                 },
+                {
+                  "$ref": "request.providerOptions.claude-api.max_output_tokens"
+                },
                 4096
               ]
             },
@@ -255,23 +394,140 @@
                   },
                   {
                     "$ref": "request.providerOptions.claude-api.system"
+                  },
+                  {
+                    "$map": {
+                      "from": {
+                        "$filter": {
+                          "from": {
+                            "$ref": "request.textMessages"
+                          },
+                          "as": "message",
+                          "where": {
+                            "$eq": [
+                              {
+                                "$ref": "message.role"
+                              },
+                              "system"
+                            ]
+                          }
+                        }
+                      },
+                      "as": "message",
+                      "in": {
+                        "type": "text",
+                        "text": {
+                          "$ref": "message.text"
+                        }
+                      }
+                    }
                   }
                 ]
               }
             },
             "messages": {
-              "$filter": {
+              "$map": {
                 "from": {
-                  "$ref": "request.messages"
+                  "$filter": {
+                    "from": {
+                      "$ref": "request.textMessages"
+                    },
+                    "as": "message",
+                    "where": {
+                      "$ne": [
+                        {
+                          "$ref": "message.role"
+                        },
+                        "system"
+                      ]
+                    }
+                  }
                 },
                 "as": "message",
-                "where": {
-                  "$ne": [
-                    {
-                      "$ref": "message.role"
-                    },
-                    "system"
-                  ]
+                "in": {
+                  "role": {
+                    "$ref": "message.role"
+                  },
+                  "content": {
+                    "$map": {
+                      "from": {
+                        "$ref": "message.parts"
+                      },
+                      "as": "part",
+                      "in": {
+                        "$switch": {
+                          "cases": [
+                            {
+                              "when": {
+                                "$eq": [
+                                  {
+                                    "$ref": "part.type"
+                                  },
+                                  "text"
+                                ]
+                              },
+                              "then": {
+                                "$merge": [
+                                  {
+                                    "$ref": "part.raw"
+                                  },
+                                  {
+                                    "type": "text",
+                                    "text": {
+                                      "$ref": "part.text"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "when": {
+                                "$eq": [
+                                  {
+                                    "$ref": "part.type"
+                                  },
+                                  "image"
+                                ]
+                              },
+                              "then": {
+                                "type": "image",
+                                "cache_control": {
+                                  "$omitEmpty": {
+                                    "$ref": "part.raw.cache_control"
+                                  }
+                                },
+                                "source": {
+                                  "$if": {
+                                    "condition": {
+                                      "$ref": "part.isInline"
+                                    },
+                                    "then": {
+                                      "type": "base64",
+                                      "media_type": {
+                                        "$ref": "part.mimeType"
+                                      },
+                                      "data": {
+                                        "$ref": "part.data"
+                                      }
+                                    },
+                                    "else": {
+                                      "type": "url",
+                                      "url": {
+                                        "$ref": "part.value"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "default": {
+                            "$ref": "part.raw"
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             },

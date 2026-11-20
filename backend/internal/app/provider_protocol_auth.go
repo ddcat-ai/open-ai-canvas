@@ -241,12 +241,28 @@ func sha256Hex(value []byte) string {
 }
 
 func protocolCredentialField(config providerConfig, field string) string {
+	if protocolCredentialFieldIsSecret(field) {
+		return strings.TrimSpace(config.SecretKey)
+	}
+	return strings.TrimSpace(config.APIKey)
+}
+
+func protocolCredentialFieldIsSecret(field string) bool {
 	switch strings.ToLower(strings.TrimSpace(field)) {
 	case "secretkey", "secret_key", "secret":
-		return strings.TrimSpace(config.SecretKey)
+		return true
 	default:
-		return strings.TrimSpace(config.APIKey)
+		return false
 	}
+}
+
+// protocolAuthUsesSecretKey 判断插件鉴权是否要读渠道的第二把密钥（Secret Key）：
+// 与 protocolCredentialField 同一映射，auth.secretField 指向密钥位即需要。
+func protocolAuthUsesSecretKey(auth protocol.ManifestAuth) bool {
+	if strings.TrimSpace(auth.Type) == "" || strings.EqualFold(strings.TrimSpace(auth.Type), "none") {
+		return false
+	}
+	return protocolCredentialFieldIsSecret(auth.SecretField)
 }
 
 func protocolRequestURL(baseURL string, spec protocol.RequestSpec) (string, error) {

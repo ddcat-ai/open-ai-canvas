@@ -1,10 +1,14 @@
 import { create } from "zustand";
 import { AGENT_PANEL_DOCK_KEY, restoreAgentPanelDock, type AgentPanelDockPreference } from "@/lib/canvas/agent-panel-dock";
+import type { InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CloudAgentMessagePresentation } from "@/services/cloud-agent-conversations";
 import type { CanvasNodeData } from "@/types/canvas";
+import { agentPageContextKey, type AgentPageContext, type AgentRequestTarget } from "@/lib/agent-page-context";
 
-export type AgentPrefillRequest = CloudAgentMessagePresentation & { id: number; text: string; autoSubmit?: boolean; requiresVision?: boolean };
+export type AgentPrefillRequest = CloudAgentMessagePresentation & { id: number; text: string; autoSubmit?: boolean; requiresVision?: boolean; target?: AgentRequestTarget };
+/** 画布为 Agent 输入框新建的节点，输入框据此显示附件卡片。 */
+export type AgentInsertedNode = { nodeId: string; title: string; kind: "image" | "text" | "video" | "audio"; previewUrl?: string };
 
 /**
  * 当前页面提供给平台级 Agent 的画布上下文。只有画布编辑器会发布它；
@@ -20,17 +24,37 @@ export type AgentCanvasContext = {
     runningNodeId?: string | null;
     prefillRequest?: AgentPrefillRequest | null;
     onFocusNode?: (nodeId: string) => void;
+    /**
+     * Agent 输入框的附件先放到画布上，再以节点引用随消息发出：Agent 能看图，也能拿它当生成参考。
+     * 返回占位节点 ID；上传在后台继续，进度和失败原因写在节点上。占位节点建出来之前就失败时调用 onError。
+     */
+    insertAgentFiles?: (files: File[], onError?: (nodeId: string, details: string) => void) => string[];
+    /** 长文本放成画布文本节点，返回节点 ID。 */
+    insertAgentText?: (text: string, title: string) => string;
+    /** 问卷的「决策确认单」等需要排版的内容放成 Markdown 节点，返回节点 ID。 */
+    insertAgentMarkdown?: (markdown: string, title: string) => string;
+    /** 从素材库选中的内容放到画布，返回新节点（一个素材可能生成多个节点）。 */
+    insertAgentAssets?: (payloads: InsertAssetPayload[]) => Promise<AgentInsertedNode[]>;
+    /** 从素材托盘拖进 Agent 面板的图片放到画布，返回节点 ID。 */
+    insertAgentImageAsset?: (assetId: string) => Promise<string | null>;
+    /** 移除输入框刚放到画布上的节点：已连线的保留；删除进入撤销栈。 */
+    discardAgentNodes?: (nodeIds: string[]) => void;
 };
 
 type GlobalAgentStore = {
     /** 平台唯一 Agent 面板的开合状态，跨路由保持。 */
     open: boolean;
     canvas: AgentCanvasContext | null;
+    page: { context: AgentPageContext; label: string } | null;
+    prefillRequest: AgentPrefillRequest | null;
     /** 本机 UI 偏好：在画布里是否停靠到右侧，以及停靠宽度。账号切换不影响。 */
     dock: AgentPanelDockPreference;
     openAgent: () => void;
     closeAgent: () => void;
     setCanvas: (canvas: AgentCanvasContext | null) => void;
+    setPage: (page: { context: AgentPageContext; label: string } | null) => void;
+    requestPrefill: (request: Omit<AgentPrefillRequest, "id">) => void;
+    clearPrefill: (id: number) => void;
     setDocked: (docked: boolean) => void;
     setDockWidth: (width: number) => void;
     reset: () => void;
@@ -80,6 +104,7 @@ function stabilizeCanvasContext(previous: AgentCanvasContext | null, next: Agent
 }
 
 let persistDockTimer: ReturnType<typeof setTimeout> | undefined;
+let prefillSequence = 0;
 
 // 拖动调宽时每帧都会更新，合并后再写本地存储。
 function persistDockPreference(dock: AgentPanelDockPreference) {
@@ -97,9 +122,22 @@ function persistDockPreference(dock: AgentPanelDockPreference) {
 export const useGlobalAgentStore = create<GlobalAgentStore>()((set, get) => ({
     open: false,
     canvas: null,
+    page: null,
+    prefillRequest: null,
     dock: readDockPreference(),
     openAgent: () => set({ open: true }),
     closeAgent: () => set({ open: false }),
+    setPage: (page) => set((state) => (state.page?.label === page?.label && agentPageContextKey(state.page?.context) === agentPageContextKey(page?.context) ? state : { page })),
+    requestPrefill: (request) =>
+        set((state) => ({
+            open: true,
+            prefillRequest: {
+                ...request,
+                id: ++prefillSequence,
+                target: request.target || (state.canvas ? { canvasId: state.canvas.canvasId } : { canvasId: "", ...(state.page ? { pageContext: { ...state.page.context } } : {}) }),
+            },
+        })),
+    clearPrefill: (id) => set((state) => (state.prefillRequest?.id === id ? { prefillRequest: null } : state)),
     setCanvas: (canvas) =>
         set((state) => {
             const next = stabilizeCanvasContext(state.canvas, canvas);
@@ -117,5 +155,5 @@ export const useGlobalAgentStore = create<GlobalAgentStore>()((set, get) => ({
         set({ dock });
         persistDockPreference(dock);
     },
-    reset: () => set({ open: false, canvas: null }),
+    reset: () => set({ open: false, canvas: null, page: null, prefillRequest: null }),
 }));

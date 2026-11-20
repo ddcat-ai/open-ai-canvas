@@ -1,193 +1,159 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type VoiceRecordingState = "idle" | "recording" | "paused";
-
-type UseVoiceRecordingOptions = {
-    /** 最大录音时长（秒），默认 60 秒 */
-    maxDuration?: number;
+type UseVoiceRecordingOptions = { maxDuration?: number; onComplete?: (blob: Blob) => void };
+type Recording = {
+    recorder: MediaRecorder;
+    stream: MediaStream;
+    chunks: Blob[];
+    done: Promise<Blob | null>;
+    resolve: (blob: Blob | null) => void;
+    clock?: ReturnType<typeof setInterval>;
+    deadline?: ReturnType<typeof setTimeout>;
+    stopDeadline?: ReturnType<typeof setTimeout>;
+    stopping: boolean;
 };
 
-export type UseVoiceRecordingReturn = {
-    state: VoiceRecordingState;
-    waveform: number[];
-    duration: number;
-    error: string | null;
-    start: () => Promise<void>;
-    stop: () => Promise<Blob | null>;
-    cancel: () => void;
-    reset: () => void;
-};
-
-/**
- * 语音录制 Hook
- * 使用 MediaRecorder API 录制音频，AnalyserNode 获取实时波形数据
- */
-export function useVoiceRecording(options: UseVoiceRecordingOptions = {}): UseVoiceRecordingReturn {
-    const { maxDuration = 60 } = options;
+/** 样本录制只保留 MediaRecorder，不为未展示的波形创建 AudioContext 或逐帧采样。 */
+export function useVoiceRecording({ maxDuration = 60, onComplete }: UseVoiceRecordingOptions = {}) {
     const [state, setState] = useState<VoiceRecordingState>("idle");
-    const [waveform, setWaveform] = useState<number[]>([]);
+    const [starting, setStarting] = useState(false);
     const [duration, setDuration] = useState(0);
     const [error, setError] = useState<string | null>(null);
+    const active = useRef<Recording | null>(null);
+    const generation = useRef(0);
+    const pending = useRef(false);
+    const mounted = useRef(true);
+    const completed = useRef(onComplete);
+    completed.current = onComplete;
 
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const analyserRef = useRef<AnalyserNode | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const chunksRef = useRef<Blob[]>([]);
-    const animationFrameRef = useRef<number | null>(null);
-    const timerRef = useRef<number | null>(null);
-    const startTimeRef = useRef<number>(0);
-
-    // 清理资源
-    const cleanup = useCallback(() => {
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-        }
-        if (timerRef.current) {
-            window.clearInterval(timerRef.current);
-            timerRef.current = null;
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-        }
-        if (audioContextRef.current) {
-            void audioContextRef.current.close();
-            audioContextRef.current = null;
-        }
-        analyserRef.current = null;
-        mediaRecorderRef.current = null;
-    }, []);
-
-    // 更新波形数据
-    const updateWaveform = useCallback(() => {
-        const analyser = analyserRef.current;
-        if (!analyser) return;
-
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        analyser.getByteFrequencyData(dataArray);
-
-        // 取 32 个频段的平均值，用于波形显示
-        const step = Math.floor(bufferLength / 32);
-        const values: number[] = [];
-        for (let i = 0; i < 32; i++) {
-            let sum = 0;
-            for (let j = 0; j < step; j++) {
-                sum += dataArray[i * step + j];
+    const finish = useCallback((session: Recording, keep: boolean) => {
+        if (active.current !== session) return;
+        active.current = null;
+        clearInterval(session.clock);
+        clearTimeout(session.deadline);
+        clearTimeout(session.stopDeadline);
+        session.recorder.ondataavailable = null;
+        session.recorder.onstop = null;
+        session.recorder.onerror = null;
+        if (session.recorder.state !== "inactive") {
+            try {
+                session.recorder.stop();
+            } catch {
+                /* 设备可能已断开，仍需释放音轨。 */
             }
-            values.push(sum / step / 255);
         }
-        setWaveform(values);
-
-        animationFrameRef.current = requestAnimationFrame(updateWaveform);
+        session.stream.getTracks().forEach((track) => track.stop());
+        const blob = keep && session.chunks.length ? new Blob(session.chunks, { type: session.recorder.mimeType || session.chunks[0].type || "audio/webm" }) : null;
+        session.chunks = [];
+        session.resolve(blob);
+        if (mounted.current) {
+            setState("idle");
+            if (blob) completed.current?.(blob);
+        }
     }, []);
 
-    // 开始录制
-    const start = useCallback(async () => {
-        setError(null);
-        setWaveform([]);
-        setDuration(0);
-        chunksRef.current = [];
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            streamRef.current = stream;
-
-            const audioContext = new AudioContext();
-            audioContextRef.current = audioContext;
-
-            const source = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-            analyser.fftSize = 256;
-            source.connect(analyser);
-            analyserRef.current = analyser;
-
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    chunksRef.current.push(event.data);
-                }
-            };
-
-            mediaRecorder.start(100);
-            startTimeRef.current = Date.now();
-            setState("recording");
-
-            // 启动波形更新
-            animationFrameRef.current = requestAnimationFrame(updateWaveform);
-
-            // 启动计时器
-            timerRef.current = window.setInterval(() => {
-                const elapsed = (Date.now() - startTimeRef.current) / 1000;
-                setDuration(elapsed);
-                if (elapsed >= maxDuration) {
-                    // 达到最大时长，自动停止
-                    mediaRecorder.stop();
-                }
-            }, 100);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : "无法访问麦克风";
-            setError(message);
-            setState("idle");
-            cleanup();
+    const stop = useCallback(async (): Promise<Blob | null> => {
+        const session = active.current;
+        if (!session) {
+            generation.current++;
+            pending.current = false;
+            if (mounted.current) setStarting(false);
+            return null;
         }
+        if (!session.stopping) {
+            session.stopping = true;
+            clearInterval(session.clock);
+            clearTimeout(session.deadline);
+            // 正常等最后一个 dataavailable/onstop；设备异常时仍要释放音轨并完成等待者。
+            session.stopDeadline = setTimeout(() => finish(session, true), 1500);
+            try {
+                session.recorder.stop();
+            } catch {
+                finish(session, true);
+            }
+        }
+        return session.done;
+    }, [finish]);
 
-    }, [cleanup, maxDuration, updateWaveform]);
+    const cancel = useCallback(() => {
+        generation.current++;
+        pending.current = false;
+        if (active.current) finish(active.current, false);
+        if (mounted.current) {
+            setStarting(false);
+            setState("idle");
+            setDuration(0);
+        }
+    }, [finish]);
 
-    // 停止录制
-    const stop = useCallback((): Promise<Blob | null> => {
-        return new Promise((resolve) => {
-            const mediaRecorder = mediaRecorderRef.current;
-            if (!mediaRecorder || mediaRecorder.state === "inactive") {
-                cleanup();
-                setState("idle");
-                resolve(null);
+    const start = useCallback(async () => {
+        if (pending.current || active.current) return;
+        const token = ++generation.current;
+        pending.current = true;
+        setStarting(true);
+        setError(null);
+        setDuration(0);
+        let stream: MediaStream | undefined;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            if (!mounted.current || token !== generation.current) {
+                stream.getTracks().forEach((track) => track.stop());
                 return;
             }
-
-            mediaRecorder.onstop = () => {
-                const blob = chunksRef.current.length > 0 ? new Blob(chunksRef.current, { type: "audio/webm" }) : null;
-                cleanup();
-                setState("idle");
-                resolve(blob);
+            const recorder = new MediaRecorder(stream);
+            let resolve!: (blob: Blob | null) => void;
+            const done = new Promise<Blob | null>((complete) => {
+                resolve = complete;
+            });
+            const session: Recording = { recorder, stream, chunks: [], done, resolve, stopping: false };
+            active.current = session;
+            recorder.ondataavailable = ({ data }) => {
+                if (active.current === session && data.size) session.chunks.push(data);
             };
+            recorder.onstop = () => finish(session, true);
+            recorder.onerror = () => {
+                if (mounted.current) setError("录音失败，请检查麦克风后重试");
+                finish(session, false);
+            };
+            recorder.start(250);
+            const startedAt = Date.now();
+            const limit = Number.isFinite(maxDuration) && maxDuration > 0 ? maxDuration : 60;
+            session.clock = setInterval(() => {
+                if (mounted.current && active.current === session) setDuration(Math.min(limit, (Date.now() - startedAt) / 1000));
+            }, 1000);
+            session.deadline = setTimeout(() => {
+                if (mounted.current) setDuration(limit);
+                void stop();
+            }, limit * 1000);
+            setState("recording");
+        } catch (cause) {
+            if (token === generation.current) {
+                if (active.current) finish(active.current, false);
+                else stream?.getTracks().forEach((track) => track.stop());
+                if (mounted.current) {
+                    setError(cause instanceof Error ? cause.message : "无法访问麦克风");
+                    setState("idle");
+                }
+            }
+        } finally {
+            if (token === generation.current) {
+                pending.current = false;
+                if (mounted.current) setStarting(false);
+            }
+        }
+    }, [finish, maxDuration, stop]);
 
-            mediaRecorder.stop();
-        });
-    }, [cleanup]);
-
-    // 取消录制
-    const cancel = useCallback(() => {
-        chunksRef.current = [];
-        cleanup();
-        setState("idle");
-        setWaveform([]);
-        setDuration(0);
-    }, [cleanup]);
-
-    // 重置
     const reset = useCallback(() => {
         cancel();
         setError(null);
     }, [cancel]);
-
-    // 组件卸载时清理
     useEffect(() => {
-        return () => cleanup();
-    }, [cleanup]);
-
-    return {
-        state,
-        waveform,
-        duration,
-        error,
-        start,
-        stop,
-        cancel,
-        reset,
-    };
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+            cancel();
+        };
+    }, [cancel]);
+    return { state, starting, duration, error, start, stop, cancel, reset };
 }

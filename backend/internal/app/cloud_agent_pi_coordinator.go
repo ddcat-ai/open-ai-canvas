@@ -191,17 +191,28 @@ func (s *Service) failPiRunner(runID, userID string, cause error) {
 				return nil
 			}
 			current.Status = "failed"
+			current.CleanupPending = true
 			current.FailureMessage = cause.Error()
 			state, decodeErr := cloudAgentDecode(current)
 			if decodeErr == nil {
 				state.LastError = cause.Error()
 				cloudAgentDropInterjections(runID, "本轮已结束："+truncateRunes(cause.Error(), 120), &state)
-				state.event(runID, "run_failed", map[string]any{"error": cause.Error()})
+				payload := map[string]any{"text": cause.Error()}
+				if agentModelErrorReason(cause) == agentModelFailureSubmission {
+					payload["reason"], payload["taskId"] = string(agentModelFailureSubmission), state.ActiveTaskID
+				}
+				state.event(runID, "run_failed", payload)
 				return cloudAgentSave(current, &state)
 			}
 			return nil
 		})
+		if agentStorageCapacityError(err) {
+			err = s.repo.MarkCloudAgentFailed(userID, runID, run.Revision, cause.Error())
+		}
 		if !errors.Is(err, repository.ErrCreationConflict) {
+			if err != nil {
+				log.Printf("[Agent] failure checkpoint unavailable run=%s: %v", runID, err)
+			}
 			return
 		}
 	}
@@ -231,6 +242,14 @@ func (s *Service) recoverCloudAgentPiRunners() {
 
 		for _, run := range runs {
 			cursor = run.ID
+			if cloudAgentRunTerminal(run.Status) {
+				// Cleanup is resumable after HTTP cancellation times out or a worker
+				// exits. The terminal branch never starts a model/session again.
+				if run.CleanupPending {
+					s.startCloudAgentPi(run.UserID, run.ID)
+				}
+				continue
+			}
 			// 跳过等待状态
 			if run.Status == "waiting_approval" || run.Status == "waiting_user" {
 				continue
@@ -240,6 +259,11 @@ func (s *Service) recoverCloudAgentPiRunners() {
 			state, decodeErr := cloudAgentDecode(&run)
 			if decodeErr == nil && state.MediaTaskID != "" {
 				s.startApprovedCloudAgentMediaWaiter(run.UserID, run.ID, state.MediaTaskID)
+				continue
+			}
+			// 批次执行器同理：按持久化的批次状态重新挂上，不另起模型步骤。
+			if decodeErr == nil && cloudAgentMediaBatchActive(&state) {
+				s.startCloudAgentMediaBatchRunner(run.UserID, run.ID)
 				continue
 			}
 			s.startCloudAgentPi(run.UserID, run.ID)
@@ -253,24 +277,34 @@ func (s *Service) recoverCloudAgentPiRunners() {
 
 // runCloudAgentPiSession 核心会话管理
 func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID string) error {
-	// 1. 加载运行状态
+	// Terminal cleanup must also work when the runtime/input cannot be decoded.
+	run, err := s.repo.CloudAgent(userID, runID)
+	if err != nil {
+		return fmt.Errorf("load run: %w", err)
+	}
+	if cloudAgentRunTerminal(run.Status) {
+		return s.finishCloudAgentCleanup(ctx, run)
+	}
 	task, state, err := s.cloudAgentTask(userID, runID)
 	if err != nil {
 		return fmt.Errorf("load task: %w", err)
 	}
 
-	run, err := s.repo.CloudAgent(userID, runID)
-	if err != nil {
-		return fmt.Errorf("load run: %w", err)
-	}
-
-	if cloudAgentRunTerminal(run.Status) {
-		return nil
-	}
-
 	runtimeState, err := cloudAgentDecode(run)
 	if err != nil {
 		return fmt.Errorf("decode state: %w", err)
+	}
+
+	if err := s.RequireSkillAccess(userID); err != nil {
+		return err
+	}
+
+	// 已批准的调用还没执行：只能由审批收尾执行一次，执行后它会带着结果恢复运行。
+	// 这里开一轮模型会用原始提示词重跑用户请求，并和收尾争写检查点（见
+	// cloud_agent_approval_followup.go）。决定请求还在处理时只退出，否则接手收尾。
+	if cloudAgentApprovedCallPending(run, &runtimeState, "") {
+		s.startCloudAgentApprovalFollowUp(userID, runID, runtimeState.Approval.ID)
+		return nil
 	}
 
 	// 2. 解析输入
@@ -299,6 +333,10 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 		ownSession = true
 	} else if sessionErr != nil && !errors.Is(sessionErr, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("load session: %w", sessionErr)
+	}
+
+	if err := s.RequireSkillAccess(userID); err != nil {
+		return err
 	}
 
 	// 崩溃恢复：最后答案已写进会话快照、运行却没来得及标记完成。这一回合已经结束，
@@ -341,7 +379,14 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	var pausedForApproval atomic.Bool
 	err = runCloudAgentPi(ctx, request, cloudAgentPiBridge{
 		Model: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
-			return s.cloudAgentPiModel(callCtx, userID, runID, payload)
+			result, err := s.cloudAgentPiModel(callCtx, userID, runID, payload)
+			// A model request can encounter durable approval state before the runtime
+			// receives a /tool pause. Keep the admission guard and pause this session.
+			if errors.Is(err, errCloudAgentAwaitingApproval) {
+				pausedForApproval.Store(true)
+				return map[string]any{"pause": true, "reason": "awaiting_approval"}, nil
+			}
+			return result, err
 		},
 		Tool: func(callCtx context.Context, payload map[string]json.RawMessage) (any, error) {
 			result, err := s.cloudAgentPiTool(callCtx, userID, runID, payload)
@@ -404,7 +449,7 @@ func cloudAgentPiTurnSettled(sessionJSONL string, state *cloudAgentRuntime) bool
 	if sessionJSONL == "" || state == nil || state.PiAssistantResponses == 0 {
 		return false
 	}
-	if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
+	if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil || cloudAgentMediaBatchActive(state) {
 		return false
 	}
 	lines := strings.Split(strings.TrimRight(sessionJSONL, "\n"), "\n")
@@ -457,7 +502,7 @@ func (s *Service) completeCloudAgentPiRun(userID, runID string) error {
 		}
 
 		// 检查是否有未完成的任务
-		if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil {
+		if state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil || cloudAgentMediaBatchActive(&state) {
 			return nil
 		}
 

@@ -101,6 +101,30 @@ func TestCloudAgentProfileOwnershipAndScopeValidation(t *testing.T) {
 	}
 }
 
+// 新建画布首次保存前只是浏览器草稿：读偏好查不到画布要返回 404（客户端可预期的状态），不能按服务端故障 500 返回。
+func TestCloudAgentProfileMissingTargetsAreNotFound(t *testing.T) {
+	s, projectID, _ := cloudAgentProfileFixture(t)
+	for name, target := range map[string][2]string{
+		"unsaved draft canvas": {"", "draft-canvas"},
+		"foreign canvas":       {"", "foreign-canvas"},
+		"foreign project":      {"project-2", ""},
+	} {
+		_, err := s.CloudAgentProfileForScope("user", target[0], target[1])
+		var appErr *AppError
+		if !errors.As(err, &appErr) || appErr.Status != 404 {
+			t.Fatalf("%s: expected 404 app error, got %#v", name, err)
+		}
+	}
+	_, err := s.CloudAgentProfileForScope("user", "project-2", "agent-canvas")
+	var appErr *AppError
+	if !errors.As(err, &appErr) || appErr.Status != 404 {
+		t.Fatalf("foreign project with own canvas: expected 404, got %#v", err)
+	}
+	if _, err := s.CloudAgentProfileForScope("user", projectID, "agent-canvas"); err != nil {
+		t.Fatalf("own saved canvas must stay readable: %v", err)
+	}
+}
+
 func TestCloudAgentProfileRevisionCASAndNormalization(t *testing.T) {
 	s, _, _ := cloudAgentProfileFixture(t)
 	if _, err := s.UpdateCloudAgentProfile("user", AgentProfileRequest{Scope: model.AgentProfileScopeUser, Content: "first", Revision: 1}); err == nil {

@@ -28,7 +28,7 @@ type PublicCreditPolicy struct {
 }
 
 func defaultCreditPolicy() CreditPolicy {
-	return CreditPolicy{SignupBonusMicrocredits: 100 * CreditScale, CheckinBonusMicrocredits: 10 * CreditScale, DefaultMultiplierBPS: 10_000, ModelMultiplierBPS: map[string]int64{}}
+	return CreditPolicy{SignupBonusMicrocredits: 0, CheckinBonusMicrocredits: 0, DefaultMultiplierBPS: 10_000, ModelMultiplierBPS: map[string]int64{}}
 }
 
 func validateCreditPolicy(policy CreditPolicy) error {
@@ -49,16 +49,8 @@ func validateCreditPolicy(policy CreditPolicy) error {
 	return nil
 }
 
-const creditPolicyCacheTTL = 5 * time.Minute
-
+// 积分策略直接读取数据库，避免关闭赠送后其他实例继续沿用旧额度。
 func (s *Service) creditPolicy() (CreditPolicy, error) {
-	s.creditPolicyMu.RLock()
-	if s.creditPolicyCache != nil && time.Since(s.creditPolicyAt) < creditPolicyCacheTTL {
-		policy := *s.creditPolicyCache
-		s.creditPolicyMu.RUnlock()
-		return policy, nil
-	}
-	s.creditPolicyMu.RUnlock()
 	setting, err := s.repo.SystemSetting(creditPolicySettingKey)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return defaultCreditPolicy(), nil
@@ -76,10 +68,6 @@ func (s *Service) creditPolicy() (CreditPolicy, error) {
 	if err := validateCreditPolicy(policy); err != nil {
 		return CreditPolicy{}, err
 	}
-	s.creditPolicyMu.Lock()
-	s.creditPolicyCache = &policy
-	s.creditPolicyAt = time.Now()
-	s.creditPolicyMu.Unlock()
 	return policy, nil
 }
 
@@ -114,9 +102,6 @@ func (s *Service) UpdateCreditPolicy(actor *model.User, policy CreditPolicy) (Cr
 	if err := s.repo.SaveSystemSetting(&setting); err != nil {
 		return CreditPolicy{}, err
 	}
-	s.creditPolicyMu.Lock()
-	s.creditPolicyCache = nil
-	s.creditPolicyMu.Unlock()
 	if err := s.appendAdminAudit(actor, "credit_policy.update", "system_setting", creditPolicySettingKey, "更新积分策略", policy); err != nil {
 		return CreditPolicy{}, err
 	}

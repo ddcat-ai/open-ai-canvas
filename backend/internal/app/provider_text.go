@@ -28,31 +28,50 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 	return runLegacyTextTask(ctx, input)
 }
 
-// Known text protocols keep the plugin's request mapping and host transport,
-// while sharing the SSE parser used by text generation and Agent requests.
+// Text plugins whose declared create path speaks a host-known wire keep the
+// plugin's request mapping and host transport, while sharing the thinking
+// parameters and SSE parser used by built-in text generation and Agent requests.
 func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, *protocol.Result, error) {
-	wire := input.Config.InterfaceType
-	if wire == string(model.ChannelInterfaceOpenAIResponse) {
-		wire = "responses"
+	wire := ""
+	if input.Mode == "text" {
+		wire = declaredTextWire(ctx, input.Config.InterfaceType)
 	}
-	if input.Mode != "text" || !input.StreamText || (wire != "chat-completion" && wire != "responses" && wire != "claude-api") {
+	thinkingWire := ""
+	if input.Mode == "text" {
+		thinkingWire = textThinkingWire(ctx, input.Config.InterfaceType, false)
+	}
+	if wire == "" {
+		// 插件自定义线格式（如 Gemini generateContent）的请求和响应仍由插件映射，宿主只补思考参数。
+		if thinkingWire != "" {
+			if body := protocolBodyObject(spec.Body); body != nil {
+				applyTextThinking(body, input, thinkingWire)
+				spec.Body = body
+			}
+		}
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
 	}
 	body := protocolBodyObject(spec.Body)
 	if body == nil {
-		return nil, nil, errors.New("声明式流式文本请求体必须是 JSON 对象")
+		return nil, nil, errors.New("声明式文本请求体必须是 JSON 对象")
+	}
+	applyTextThinking(body, input, wire)
+	spec.Body = body
+	if !input.StreamText {
+		data, err := executeProtocolRequest(ctx, input.Config, spec)
+		return data, nil, err
 	}
 	body["stream"] = true
-	if wire == "chat-completion" {
+	if wire == protocol.TextWireChatCompletion {
 		if err := ensureChatCompletionStreamUsage(body); err != nil {
 			return nil, nil, err
 		}
 	}
-	spec.Body = body
-	parser := newStreamingAgentParser(wire, input.OnTextDelta)
-	parser.emitReasoning = input.OnReasoningDelta
-	data, mimeType, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume)
+	data, mimeType, parser, err := executeTextWireStream(ctx, input.Config, spec, body, wire, func() *streamingAgentParser {
+		parser := newStreamingAgentParser(wire, input.OnTextDelta)
+		parser.emitReasoning = input.OnReasoningDelta
+		return parser
+	})
 	if err != nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") {
 		return data, nil, err
 	}
@@ -155,27 +174,19 @@ func runClaudeTextTask(ctx context.Context, input canvasGenerationInput) (map[st
 	return providerTextTaskResult(result), nil
 }
 
-func applyTextThinking(body map[string]interface{}, input canvasGenerationInput, protocol string) {
-	if !input.TextOptions.Thinking {
-		return
-	}
-	switch protocol {
-	case "responses":
-		body["reasoning"] = map[string]interface{}{"effort": "medium", "summary": "auto"}
-	case "chat-completion":
-		body["reasoning_effort"] = "medium"
-	case "claude-api":
-		body["thinking"] = map[string]interface{}{"type": "enabled", "budget_tokens": 1024}
-	}
-}
-
 // Chat Completion defaults to automatic tool selection when tools are present,
 // so an explicit "auto" only reduces compatibility. Reasoning endpoints also
 // disagree on forced choices. Normalize before the first network request while
 // preserving required/named choices for non-reasoning structured tasks.
-func normalizeAgentToolChoice(body map[string]interface{}, input canvasGenerationInput, protocol string) {
-	if protocol == "chat-completion" && (input.TextOptions.Thinking || isAutoAgentToolChoice(body["tool_choice"])) {
+func normalizeAgentToolChoice(body map[string]interface{}, thinking bool, protocol string) {
+	if protocol == "chat-completion" && (thinking || isAutoAgentToolChoice(body["tool_choice"])) {
 		delete(body, "tool_choice")
+	}
+	// Claude 开启思考时只接受 auto/none，强制工具调用会直接 400。
+	if protocol == "claude-api" && thinking {
+		if choice, ok := body["tool_choice"].(map[string]interface{}); ok && stringField(choice, "type") != "auto" && stringField(choice, "type") != "none" {
+			body["tool_choice"] = map[string]interface{}{"type": "auto"}
+		}
 	}
 }
 
@@ -199,6 +210,10 @@ func applyTextOutputLimit(body map[string]interface{}, limit int, field string) 
 }
 
 func claudeTextContent(input canvasGenerationInput) (interface{}, error) {
+	// Claude Messages 没有视频内容块；静默丢弃会让模型在没看到视频时照样作答。
+	if len(input.ReferenceVideos) > 0 {
+		return nil, errors.New("Claude 文本接口不支持参考视频，请换用支持视频识别的文本模型")
+	}
 	if len(input.ReferenceImages) == 0 {
 		return input.Prompt, nil
 	}

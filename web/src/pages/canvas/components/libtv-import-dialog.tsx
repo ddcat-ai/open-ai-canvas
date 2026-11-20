@@ -1,10 +1,11 @@
 import { App, Button, Input, Modal, Tag } from "antd";
 import { CircleAlert, ExternalLink, Import, LoaderCircle } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { buildLibTVImagePreviewUrl, buildLibTVVideoPreviewUrl, buildLibTVVideoSourceUrl, formatLibTVBatchTime, parseLibTVProjectUUID } from "@/lib/canvas/libtv-import";
 import { importLibTVCanvas, type LibTVImportResult } from "@/services/api/libtv";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type ViewportTransform } from "@/types/canvas";
+import type { CanvasImportSaveStatus } from "../canvas-import-save";
 
 type Props = {
     open: boolean;
@@ -12,7 +13,7 @@ type Props = {
     viewport: ViewportTransform;
     viewportSize: { width: number; height: number };
     onClose: () => void;
-    onApply: (nodes: CanvasNodeData[], connections: CanvasConnection[]) => Promise<void>;
+    onApply: (nodes: CanvasNodeData[], connections: CanvasConnection[]) => Promise<CanvasImportSaveStatus>;
 };
 
 function buildCanvasNodes(result: LibTVImportResult, viewport: ViewportTransform, viewportSize: { width: number; height: number }) {
@@ -50,11 +51,14 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
     const [value, setValue] = useState("");
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<LibTVImportResult | null>(null);
+    const [saveStarted, setSaveStarted] = useState(false);
+    const applyingRef = useRef(false);
     const uuid = useMemo(() => parseLibTVProjectUUID(value), [value]);
 
     const reset = () => {
         setValue("");
         setResult(null);
+        setSaveStarted(false);
     };
 
     const close = () => {
@@ -66,6 +70,7 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
     const changeValue = (nextValue: string) => {
         setValue(nextValue);
         setResult(null);
+        setSaveStarted(false);
     };
 
     const load = async () => {
@@ -84,16 +89,21 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
     };
 
     const apply = async () => {
-        if (!result) return;
+        if (!result || applyingRef.current) return;
+        applyingRef.current = true;
+        setSaveStarted(true);
         setLoading(true);
         try {
-            await onApply(buildCanvasNodes(result, viewport, viewportSize), result.connections);
+            const status = await onApply(buildCanvasNodes(result, viewport, viewportSize), result.connections);
             reset();
             onClose();
-            message.success(`已导入 ${result.importedNodeCount} 个节点和 ${result.importedConnectionCount} 条连接`);
+            const summary = `${result.importedNodeCount} 个节点和 ${result.importedConnectionCount} 条连接`;
+            if (status === "pending") message.warning(`已在本机保存 ${summary}，正在后台同步`);
+            else message.success(`已导入 ${summary}并保存到云端`);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存导入结果失败");
         } finally {
+            applyingRef.current = false;
             setLoading(false);
         }
     };
@@ -112,7 +122,7 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
                             关闭
                         </Button>,
                         <Button key="apply" type="primary" icon={<Import className="size-4" />} loading={loading} onClick={() => void apply()}>
-                            确认导入
+                            {saveStarted ? "重试保存" : "确认导入"}
                         </Button>,
                     ]
                 ) : (
@@ -145,7 +155,9 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
                                     <div className="text-sm font-semibold">{result.projectName || "LibTV 画布"}</div>
-                                    <div className="mt-1 text-sm text-foreground/60">可导入 {result.importedNodeCount} 个节点 · {result.importedConnectionCount} 条连线</div>
+                                    <div className="mt-1 text-sm text-foreground/60">
+                                        可导入 {result.importedNodeCount} 个节点 · {result.importedConnectionCount} 条连线
+                                    </div>
                                 </div>
                                 <Tag color="blue">批次：{formatLibTVBatchTime(result.batchCreatedAt)}</Tag>
                             </div>
@@ -166,7 +178,7 @@ export function LibTVImportDialog({ open, projectId, viewport, viewportSize, onC
                             </div>
                         ) : null}
                         <div className="flex flex-wrap gap-2">
-                            <Tag>等待确认导入</Tag>
+                            <Tag>{saveStarted ? "保存未完成，导入内容仍保留" : "等待确认导入"}</Tag>
                         </div>
                     </div>
                 ) : null}

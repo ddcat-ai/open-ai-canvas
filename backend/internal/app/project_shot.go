@@ -321,7 +321,7 @@ func (s *Service) CreateProjectAssetCandidates(userID string, projectID string, 
 		name := strings.TrimSpace(input.Name)
 		nameKey := model.AssetCandidateNameKey(name)
 		category := model.AssetCategory(strings.TrimSpace(input.Category))
-		if name == "" || nameKey == "" || !validAssetCategory(category) {
+		if name == "" || nameKey == "" || !validAssetCategory(category) || category == model.AssetCategoryArk {
 			return nil, BadAuthRequest("资产候选名称或分类无效")
 		}
 		if category == model.AssetCategoryCharacter && source != assetCandidateSourceChapterCharacter {

@@ -68,23 +68,14 @@ func TestCloudAgentToolSchemaStaysCompact(t *testing.T) {
 	// 因此显式上调到 35,000；视频生成支持 Agent 设置首尾帧（#696）后为 35,050 字节，
 	// 再显式上调到 36,000，保留约2.7%的余量。skill_search 补触发时机与零命中行为
 	// 描述后为 36,072 字节；启用视觉工具后为 29 个工具、36,883 字节，预算显式上调到
-	// 37,500，保留约1.7%的余量。预演台加入目录道具、程序化布景与 world_update 后为
-	// 38,340 字节（道具目录 ID 放在 previs_scene_read.catalog 而不是 schema 枚举里，
-	// 只增加字段名与天气/远景/模板枚举），预算显式上调到 39,000；再加入参数化组件 params 与
-	// object_array_add 后为 38,770 字节（参数键与范围同样放在 catalog 里）；再加入 actor_travel
-	// （travelStyle 枚举、fromMarker/toMarker、height）后为 39,077 字节，预算显式上调到 39,700，余量约1.6%。
-	// 主分支同期把长期记忆改用 memory_update（替换 remember_lesson / recall_lessons）并新增
-	// skill_market_search、skill_recommend（单独测量为 30 个工具、37,277 字节）；两者合并后为
-	// 30 个工具、38,984 字节，预算不变，余量约1.8%。世界引擎加入 camera_move / camera_move_remove（technique、
-	// subjectId 两个字段；手法表、参数范围和大师手法配方放在 previs_scene_read.catalog）并把预演台改名为世界引擎后为
-	// 39,236 字节，预算不变，余量约1.2%。路径动画加入 pathId（引用用户画的参考轨迹）并把 easing 扩展为运动规律
-	// （ease_in / ease_out；路径规则放在 catalog.rules）后为 39,299 字节，预算不变，余量约1.0%。previs_scene_read 加入 manual（世界引擎说明书主题；正文按需返回，
-	// 主题目录放在读取结果里）后为 39,394 字节，预算不变，余量约0.8%。camera_move 加入 recipe（大师手法整套写入；
-	// 配方表与逐段构成放在 catalog.cameraRecipes）并压缩 previs_apply_patch 的运镜描述后为 39,416 字节，预算不变。
-	// shot_add / shot_update 加入 aspectRatio（镜头画幅枚举）后为 39,512 字节，预算不变，余量约0.5%。
-	// 新增工具或字段时请重新测量并有意识地调整这个数字，而不是让 schema 悄悄膨胀
-	// （它每一步都要发、还在前缀最前面）。
-	if len(raw) > 39700 {
-		t.Fatalf("平台工具 schema 体积 %d 字节超出预算 39700：请压缩描述或显式调整预算", len(raw))
+	// 37,500，保留约1.7%的余量。技能检索改为按需查询且零命中返回空结果；长期记忆改用 memory_update（替换 remember_lesson /
+	// recall_lessons）并新增 skill_market_search、skill_recommend 后为 30 个工具、37,277 字节，
+	// 预算不变。新增 generate_media_batch、media_batch_control、canvas_build_board、
+	// canvas_preflight（描述已压缩，批量参数复用同一份结构）并把 ask_user 放宽到 16 个字段后为
+	// 34 个工具、44,091 字节，预算显式上调到 45,000，保留约2%的余量。新增工具或字段时请重新测量并有意识地
+	// 调整这个数字，而不是让 schema 悄悄膨胀（它每一步都要发、还在前缀最前面）。本次合并保留
+	// 世界引擎扩展与主分支批量工具后为 37 个工具、47,545 字节，预算显式上调到 49,000，保留约3%的余量。
+	if len(raw) > 49000 {
+		t.Fatalf("平台工具 schema 体积 %d 字节超出预算 49000：请压缩描述或显式调整预算", len(raw))
 	}
 }

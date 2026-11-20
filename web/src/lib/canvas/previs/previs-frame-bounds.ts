@@ -63,6 +63,23 @@ export function resolvePrevisZoomMinDistance(objects: PrevisObject[], target: Ve
     return minDistance;
 }
 
+/** 首次取景的默认留白倍数；只框一个非演员主体时收紧一些，主体不至于显得太小。 */
+export const PREVIS_INITIAL_FRAME_PADDING = 1.18;
+export const PREVIS_INITIAL_SINGLE_SUBJECT_PADDING = 1.05;
+
+/**
+ * 首次取景对准谁：有可见演员时只框演员；没有演员时排除背景板、地面这类平面（它们会撑大包围盒，
+ * 让产品主体显得很小），排除后为空则框全部可见对象（ids 为 undefined）。
+ */
+export function resolvePrevisInitialFrame(objects: PrevisObject[]): { ids?: Set<string>; padding: number } {
+    const visible = objects.filter((object) => object.visible);
+    const actors = visible.filter((object) => object.kind === "actor" || object.primitive === "character");
+    if (actors.length) return { ids: new Set(actors.map((object) => object.id)), padding: PREVIS_INITIAL_FRAME_PADDING };
+    const subjects = visible.filter((object) => object.primitive !== "plane");
+    if (!subjects.length) return { padding: PREVIS_INITIAL_FRAME_PADDING };
+    return { ids: new Set(subjects.map((object) => object.id)), padding: subjects.length === 1 ? PREVIS_INITIAL_SINGLE_SUBJECT_PADDING : PREVIS_INITIAL_FRAME_PADDING };
+}
+
 /** 可见对象（可选限定 ids）的联合包围盒，以及在给定 aspect/fov 下完整入画所需的距离。 */
 export function resolvePrevisFrameBounds(objects: PrevisObject[], ids?: Set<string>, aspect = 1, fov = 50): PrevisFrameBounds | null {
     const visible = objects.filter((object) => object.visible && (!ids || ids.has(object.id)));

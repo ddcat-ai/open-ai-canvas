@@ -3,7 +3,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -60,15 +59,22 @@ func NewS3Client(setting Settings, timeout time.Duration) (*awss3.S3, error) {
 		return nil, err
 	}
 	if setting.Region == "" || setting.Bucket == "" || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
-		return nil, errors.New("S3 Region、Bucket 或访问密钥不完整")
+		return nil, fmt.Errorf("%s Region、Bucket 或访问密钥不完整", s3ServiceName(setting))
+	}
+	forcePathStyle := setting.PathStyle || !StandardAWSS3Endpoint(endpoint.String())
+	sessionToken := setting.SessionToken
+	if setting.Provider == volcengineTOSProvider {
+		// TOS 的 S3 兼容域名按 virtual-hosted 访问 Bucket；平台只保存长期 AK/SK。
+		forcePathStyle = false
+		sessionToken = ""
 	}
 	httpClient := outbound.OutboundHTTPClient(timeout)
 	config := aws.NewConfig().
 		WithRegion(setting.Region).
 		WithEndpoint(endpoint.String()).
-		WithCredentials(credentials.NewStaticCredentials(setting.AccessKeyID, setting.AccessKeySecret, setting.SessionToken)).
+		WithCredentials(credentials.NewStaticCredentials(setting.AccessKeyID, setting.AccessKeySecret, sessionToken)).
 		WithHTTPClient(httpClient).
-		WithS3ForcePathStyle(setting.PathStyle || !StandardAWSS3Endpoint(endpoint.String())).
+		WithS3ForcePathStyle(forcePathStyle).
 		WithDisableSSL(endpoint.Scheme == "http")
 	sess, err := session.NewSession(config)
 	if err != nil {
@@ -100,7 +106,7 @@ func putS3Object(ctx context.Context, setting Settings, objectKey string, mimeTy
 			return "", readErr
 		}
 		if size >= 0 && int64(len(data)) != size {
-			return "", errors.New("S3 上传内容长度与资源记录不一致")
+			return "", fmt.Errorf("%s 上传内容长度与资源记录不一致", s3ServiceName(setting))
 		}
 		seekable = bytes.NewReader(data)
 	}
@@ -113,7 +119,7 @@ func putS3Object(ctx context.Context, setting Settings, objectKey string, mimeTy
 	}
 	output, err := client.PutObjectWithContext(ctx, input)
 	if err != nil {
-		return "", fmt.Errorf("S3 上传失败：%w", err)
+		return "", fmt.Errorf("%s 上传失败：%w", s3ServiceName(setting), err)
 	}
 	return strings.Trim(aws.StringValue(output.ETag), `"`), nil
 }
@@ -133,7 +139,7 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 		if requestFailure, ok := err.(awserr.RequestFailure); ok && requestFailure.StatusCode() == http.StatusRequestedRangeNotSatisfiable {
 			return &ObjectStream{Body: io.NopCloser(bytes.NewReader(nil)), StatusCode: http.StatusRequestedRangeNotSatisfiable, AcceptRanges: "bytes"}, nil
 		}
-		return nil, fmt.Errorf("S3 读取失败：%w", err)
+		return nil, fmt.Errorf("%s 读取失败：%w", s3ServiceName(setting), err)
 	}
 	status := http.StatusOK
 	if rangeHeader != "" && aws.StringValue(output.ContentRange) != "" {
@@ -153,7 +159,7 @@ func signedS3ObjectURL(setting Settings, objectKey string, signing objectURLSign
 		return "", err
 	}
 	if !signing.ExpiresAt.After(time.Now()) {
-		return "", errors.New("S3 签名有效期必须晚于当前时间")
+		return "", fmt.Errorf("%s 签名有效期必须晚于当前时间", s3ServiceName(setting))
 	}
 	input := &awss3.GetObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))}
 	if signing.CacheControl != "" {
@@ -171,7 +177,7 @@ func signedS3ObjectURL(setting Settings, objectKey string, signing objectURLSign
 	}})
 	value, err := req.Presign(signing.ExpiresAt.Sub(signedAt))
 	if err != nil {
-		return "", fmt.Errorf("S3 下载地址签名失败：%w", err)
+		return "", fmt.Errorf("%s 下载地址签名失败：%w", s3ServiceName(setting), err)
 	}
 	return value, nil
 }
@@ -187,7 +193,7 @@ func DeleteS3Object(setting Settings, objectKey string) error {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("删除 S3 对象失败：%w", err)
+		return fmt.Errorf("删除 %s 对象失败：%w", s3ServiceName(setting), err)
 	}
 	return nil
 }

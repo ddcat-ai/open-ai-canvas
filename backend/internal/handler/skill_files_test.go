@@ -31,7 +31,11 @@ func TestSkillPackageFilesEditHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"owner", "other"} {
-		db.Create(&model.User{ID: id, Username: id, Role: model.UserRoleUser, Status: model.UserStatusActive})
+		role := model.UserRoleUser
+		if id == "owner" {
+			role = model.UserRoleAdmin
+		}
+		db.Create(&model.User{ID: id, Username: id, Role: role, Status: model.UserStatusActive})
 		db.Create(&model.AuthSession{ID: id, UserID: id, TokenHash: auth.HashToken("test-token"), ExpiresAt: time.Now().Add(time.Hour)})
 	}
 	svc := service.New(repository.New(db), t.TempDir())

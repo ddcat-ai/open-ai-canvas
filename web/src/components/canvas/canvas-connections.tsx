@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 import { CANVAS_CONNECTION_STROKE_WIDTH, canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -36,6 +37,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     onSelect: () => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
+    const { t } = useTranslation();
     const theme = canvasThemes[useActiveTheme()];
     const from = useCanvasVisualNode(sourceFrom);
     const to = useCanvasVisualNode(sourceTo);
@@ -49,8 +51,8 @@ export const ConnectionPath = React.memo(function ConnectionPath({
 
     return (
         <g>
-            {targetCell ? <title>{targetCell.label}{targetCell.clipped ? "（位于表格滚动区域外）" : ""}</title> : null}
-            {targetCell?.clipped && !hideVisual && emphasized ? <text x={endX + 8} y={endY - 8} fill={theme.node.text} fontSize={12} style={{ pointerEvents: "none" }}>{targetCell.label} · 滚动查看</text> : null}
+            {targetCell ? <title>{targetCell.clipped ? t("canvasA.connections.clippedHint", { label: targetCell.label }) : targetCell.label}</title> : null}
+            {targetCell?.clipped && !hideVisual && emphasized ? <text x={endX + 8} y={endY - 8} fill={theme.node.text} fontSize={12} style={{ pointerEvents: "none" }}>{t("canvasA.connections.scrollToView", { label: targetCell.label })}</text> : null}
             <path
                 data-connection-id={connection.id}
                 d={pathD}
@@ -128,9 +130,14 @@ export function canvasConnectionPath(connection: CanvasConnection, from: CanvasN
     const startY = fromCell?.y ?? connectionHandleY(from, connection.fromHandleId, fromScrollTop);
     const endX = toCell?.x ?? to.position.x;
     const endY = toCell?.y ?? connectionHandleY(to, connection.toHandleId, toScrollTop);
-    const dx = Math.abs(endX - startX);
-    const curvature = Math.max(dx * 0.5, 50);
-    return { pathD: `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
+    const controlOffset = connectionCurveControlOffset(startX, endX);
+    return { pathD: `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
+}
+
+function connectionCurveControlOffset(startX: number, endX: number) {
+    const distance = Math.abs(endX - startX);
+    const direction = endX < startX ? -1 : 1;
+    return direction * Math.max(distance * 0.5, 50);
 }
 
 export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, nodeScrollTop = 0, nodeBatchScroll?: BatchScroll) {
@@ -142,8 +149,8 @@ export function activeConnectionPath(node: CanvasNodeData | undefined, handle: C
     const endX = handle.handleType === "source" ? mouseWorld.x : nodeCell?.x ?? node.position.x;
     const endY = handle.handleType === "source" ? mouseWorld.y : nodeCell?.y ?? connectionHandleY(node, handle.handleId, nodeScrollTop);
     // 悬停目标由卡片反馈；松手前的自由端始终跟随指针。
-    const distance = Math.abs(endX - startX);
-    return `M ${startX} ${startY} C ${startX + distance * 0.5} ${startY}, ${endX - distance * 0.5} ${endY}, ${endX} ${endY}`;
+    const controlOffset = connectionCurveControlOffset(startX, endX);
+    return `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
 }
 
 /**

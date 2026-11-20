@@ -53,6 +53,47 @@ func (r *Repository) UpsertBuiltinTools(tools []model.Tool) error {
 	})
 }
 
+// RetireLegacyBuiltinTools 停用已改号的内置工具旧行，并把收藏复制到新编号；只处理仍是同一内置工具的行，
+// 不删除旧行和旧收藏，重复执行结果不变。
+func (r *Repository) RetireLegacyBuiltinTools(items []tools.LegacyBuiltinTool) error {
+	if len(items) == 0 {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for _, item := range items {
+			legacy, err := isLegacyBuiltinTool(tx, item)
+			if err != nil {
+				return err
+			}
+			if !legacy {
+				continue
+			}
+			if err := tx.Model(&model.Tool{}).Where("id = ? AND source = ? AND enabled = ?", item.ID, tools.ToolSourceBuiltin, true).
+				Updates(map[string]any{"enabled": false, "updated_at": time.Now()}).Error; err != nil {
+				return err
+			}
+			if err := tx.Exec(
+				"INSERT INTO tool_favorites (user_id, tool_id, created_at) SELECT user_id, ?, created_at FROM tool_favorites WHERE tool_id = ? ON CONFLICT (user_id, tool_id) DO NOTHING",
+				item.ReplacementID, item.ID,
+			).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// IsLegacyBuiltinTool 判断旧编号是否仍是那条内置工具（而不是同编号的用户工具）。
+func (r *Repository) IsLegacyBuiltinTool(item tools.LegacyBuiltinTool) (bool, error) {
+	return isLegacyBuiltinTool(r.db, item)
+}
+
+func isLegacyBuiltinTool(db *gorm.DB, item tools.LegacyBuiltinTool) (bool, error) {
+	var count int64
+	err := db.Model(&model.Tool{}).Where("id = ? AND source = ? AND type = ? AND label_en = ?", item.ID, tools.ToolSourceBuiltin, item.Type, item.LabelEn).Count(&count).Error
+	return count > 0, err
+}
+
 // ListTools 按范围查询工具列表并携带当前用户收藏状态。
 func (r *Repository) ListTools(userID string, req tools.ToolListRequest) ([]tools.ToolWithFavorite, int64, error) {
 	base := r.db.Table("tools").Where("enabled = ? AND (tools.visibility = ? OR tools.owner_id = ?)", true, tools.ToolVisibilityPublic, userID)

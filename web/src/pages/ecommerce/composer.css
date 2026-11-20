@@ -1,0 +1,1013 @@
+/* 电商创作页（/ecommerce）：左侧方案与作品，右侧创作面板。
+   与 /toolbox/image 同一套面板规则：面板只有一层表面，区块之间用细分隔线，不套卡片；
+   字号只用 --fs-label / --fs-caption / --fs-ui / --fs-body / --fs-heading 五档。
+   旧 workspace/studio/agent-theme 仍服务历史弹窗、方向卡片与风格库；这里出现的同名类都在 .ecs-* 作用域内覆盖。 */
+.ecs-page {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+.ecs-page > div:first-child {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+.ecs-shell {
+    --ecs-motion: var(--motion-dur-base) var(--motion-ease-out);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 420px);
+    gap: var(--space-4);
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+    background: var(--user-page-bg);
+    color: var(--user-ink);
+}
+.ecs-mobile-tabs {
+    display: none;
+}
+.ecs-shell :is(button, a, summary, [role="tab"]):focus-visible {
+    outline: var(--focus-ring-width, 2px) solid var(--ring);
+    outline-offset: 2px;
+}
+
+/* ---------- 右侧创作面板 ---------- */
+.ecs-composer {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    border-radius: var(--r-2xl);
+    background: var(--user-surface);
+}
+.ecs-composer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-3) 0 var(--space-4);
+}
+.ecs-kind-switch {
+    display: inline-flex;
+    gap: 2px;
+    padding: var(--space-1);
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+}
+.ecs-kind-switch button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+    cursor: pointer;
+}
+.ecs-kind-switch button.is-active {
+    background: var(--user-surface);
+    color: var(--user-ink);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--user-ink) 10%, transparent);
+}
+.ecs-kind-switch button:disabled {
+    color: var(--user-ink-soft);
+    cursor: not-allowed;
+}
+.ecs-head-actions {
+    display: flex;
+    gap: 2px;
+}
+.ecs-icon-button {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    transition:
+        background-color var(--ecs-motion),
+        color var(--ecs-motion);
+}
+.ecs-icon-button:hover:not(:disabled) {
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+}
+.ecs-icon-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+}
+.ecs-project-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+    padding: var(--space-3) var(--space-4) 0;
+}
+.ecs-project-line strong {
+    overflow: hidden;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ecs-project-line span {
+    flex: none;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.ecs-paused {
+    margin: var(--space-3) var(--space-4) 0;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+    color: var(--user-ink);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.ecs-composer-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 var(--space-4) var(--space-2);
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--user-ink) 18%, transparent) transparent;
+}
+.ecs-block {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+    padding: var(--space-4) 0;
+}
+.ecs-block + .ecs-block {
+    border-top: 1px solid color-mix(in srgb, var(--user-border) 70%, transparent);
+}
+.ecs-block > header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    min-width: 0;
+}
+.ecs-block > header h3 {
+    flex: none;
+    margin: 0;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+}
+.ecs-block > header span {
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ecs-note {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.ecs-field {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+}
+.ecs-field > span {
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.ecs-field > span small {
+    margin-left: var(--space-1);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+}
+.ecs-field-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+/* 文本框与选择器统一用 filled 变体：无描边、muted 底，聚焦时才出现描边。 */
+.ecs-composer .ant-input.ant-input-filled {
+    border-color: transparent;
+    background: var(--user-surface-muted);
+}
+.ecs-composer .ant-input.ant-input-filled:focus {
+    border-color: var(--user-border-strong);
+    background: var(--user-surface);
+}
+
+/* 场景 */
+.ecs-scene-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+}
+.ecs-scene {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: var(--space-2) var(--space-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--ecs-motion);
+}
+.ecs-scene:hover {
+    background: var(--user-surface-hover);
+}
+.ecs-scene[aria-pressed="true"] {
+    background: var(--control-selected-bg);
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+    color: var(--control-selected-fg);
+}
+.ecs-scene strong {
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+.ecs-scene small {
+    color: var(--user-ink-soft);
+    font-size: var(--fs-label);
+}
+.ecs-select-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    height: 40px;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--ecs-motion);
+}
+.ecs-select-row:hover {
+    background: var(--user-surface-hover);
+}
+.ecs-select-row > svg {
+    flex: none;
+    color: var(--user-ink-soft);
+}
+.ecs-select-row-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ecs-select-row-logo {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 30px;
+    height: 22px;
+}
+.ecs-select-row-logo .commerce-platform-logo {
+    width: 30px;
+    height: 22px;
+    object-fit: contain;
+}
+
+/* 商品素材：紧凑上传行，覆盖旧上传组件的卡片边框 */
+.ecs-product-slot .commerce-reference-dropzone {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+}
+.ecs-product-slot .commerce-reference-dropzone.is-dragging {
+    background: var(--user-surface-muted);
+}
+.ecs-product-slot .commerce-reference-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+.ecs-product-slot .commerce-reference-add,
+.ecs-product-slot .commerce-reference-item {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: var(--r-md);
+}
+.ecs-product-slot .commerce-reference-add {
+    gap: 4px;
+    border: 1px dashed var(--user-border-strong);
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-label);
+}
+.ecs-product-slot .commerce-reference-add:hover {
+    border-color: var(--user-ink-soft);
+    background: var(--user-surface-muted);
+}
+.ecs-product-slot .commerce-reference-add svg {
+    width: 18px;
+    height: 18px;
+}
+.ecs-product-slot .commerce-reference-item {
+    border: 0;
+    background: var(--user-surface-muted);
+}
+.ecs-product-slot .commerce-reference-thumb,
+.ecs-product-slot .commerce-reference-item img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+    object-fit: cover;
+}
+.ecs-product-slot .commerce-reference-item-actions {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+}
+.ecs-product-slot .commerce-reference-remove {
+    position: static;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    background: rgba(16, 16, 20, 0.62);
+    color: #fff;
+    opacity: 0;
+    transition: opacity var(--ecs-motion);
+}
+.ecs-product-slot .commerce-reference-item:is(:hover, :focus-within) .commerce-reference-remove {
+    opacity: 1;
+}
+.ecs-product-slot :is(.commerce-reference-status, .commerce-reference-error) {
+    margin: var(--space-2) 0 0;
+    font-size: var(--fs-caption);
+}
+
+/* 参考方式：去掉旧的外框与底色，与其它字段同一层 */
+.ecs-composer .ecommerce-reference-mode {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+.ecs-composer .ecommerce-reference-mode .ant-select {
+    width: 100%;
+}
+.ecs-composer :is(.ecommerce-reference-mode-description, .ecommerce-reference-upload-help) {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+    line-height: var(--lh-body);
+}
+.ecs-composer .ecommerce-reference-upload {
+    margin: 0;
+    padding: var(--space-2);
+    border: 1px dashed var(--user-border-strong);
+    border-radius: var(--r-md);
+    background: transparent;
+}
+.ecs-composer .ecommerce-reference-upload.is-dragging {
+    background: var(--user-surface-muted);
+}
+.ecs-composer .ecommerce-reference-upload-button {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--user-ink);
+    text-align: left;
+    cursor: pointer;
+}
+.ecs-composer .ecommerce-reference-upload-button:hover {
+    background: var(--user-surface-muted);
+}
+.ecs-composer .ecommerce-reference-upload-button svg {
+    width: 18px;
+    height: 18px;
+    color: var(--user-ink-muted);
+}
+.ecs-composer .ecommerce-reference-upload-button span {
+    display: grid;
+    gap: 2px;
+}
+.ecs-composer .ecommerce-reference-upload-button strong {
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+.ecs-composer .ecommerce-reference-upload-button small {
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+
+/* 描述 */
+.ecs-prompt {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: var(--space-3) var(--space-3) var(--space-2);
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+    box-shadow: inset 0 0 0 1px transparent;
+    cursor: text;
+    transition:
+        background-color var(--ecs-motion),
+        box-shadow var(--ecs-motion);
+}
+.ecs-prompt:focus-within {
+    background: var(--user-surface);
+    box-shadow: inset 0 0 0 1px var(--user-border-strong);
+}
+.ecs-prompt.is-dropping {
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+.ecs-composer .ecs-prompt textarea.ant-input {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--user-ink);
+    font-size: var(--fs-body);
+    line-height: 1.7;
+    box-shadow: none;
+    resize: none;
+}
+.ecs-prompt textarea::placeholder {
+    color: var(--user-ink-soft);
+}
+.ecs-prompt-drop {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--user-surface) 88%, transparent);
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+    pointer-events: none;
+}
+.ecs-prompt-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-label);
+}
+.ecs-text-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+}
+.ecs-text-button:hover {
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+.ecs-composer .commerce-example-wrap {
+    position: relative;
+}
+.ecs-composer .commerce-example-preview {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    align-items: center;
+    gap: var(--space-3);
+    width: 260px;
+    padding: var(--space-2);
+    border: 1px solid var(--user-border);
+    border-radius: var(--r-lg);
+    background: var(--user-surface);
+    box-shadow: var(--cm-pop-shadow);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--ecs-motion);
+    pointer-events: none;
+}
+.ecs-composer .commerce-example-wrap:is(:hover, :focus-within) .commerce-example-preview {
+    opacity: 1;
+    visibility: visible;
+}
+.ecs-composer .commerce-example-preview img {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--r-md);
+    object-fit: cover;
+}
+.ecs-phrases {
+    display: grid;
+    gap: var(--space-2);
+}
+.ecs-phrase-tabs {
+    display: flex;
+    gap: var(--space-4);
+    border-bottom: 1px solid color-mix(in srgb, var(--user-border) 70%, transparent);
+}
+.ecs-phrase-tabs button {
+    position: relative;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+}
+.ecs-phrase-tabs button:hover,
+.ecs-phrase-tabs button[aria-selected="true"] {
+    color: var(--user-ink);
+}
+.ecs-phrase-tabs button[aria-selected="true"]::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    border-radius: var(--r-full);
+    background: var(--user-ink);
+    content: "";
+}
+.ecs-phrase-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+.ecs-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--r-full);
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color var(--ecs-motion),
+        color var(--ecs-motion);
+}
+.ecs-chip:hover {
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+.ecs-chip[aria-pressed="true"] {
+    border-color: var(--control-selected-border);
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+
+/* 规格 */
+.ecs-composer .creation-model-picker.canvas-composer-model-picker {
+    width: 100%;
+    height: 44px;
+    border: 0;
+    border-radius: var(--r-lg);
+    background: var(--user-surface-muted);
+    box-shadow: none;
+}
+.ecs-composer .creation-model-picker.canvas-composer-model-picker:is(:hover, [aria-expanded="true"]) {
+    background: var(--user-surface-hover);
+}
+.ecs-ratio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: var(--space-2);
+}
+.ecs-choice,
+.ecs-segment button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: 34px;
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background-color var(--ecs-motion),
+        color var(--ecs-motion);
+}
+.ecs-choice:hover,
+.ecs-segment button:hover:not(:disabled) {
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+.ecs-choice[aria-pressed="true"],
+.ecs-segment button[aria-pressed="true"] {
+    background: var(--control-selected-bg);
+    box-shadow: inset 0 0 0 1px var(--control-selected-border);
+    color: var(--control-selected-fg);
+}
+.ecs-segment button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.ecs-ratio-icon {
+    display: block;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+    opacity: 0.7;
+    transform: scale(0.7);
+}
+.ecs-segment {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: var(--space-1);
+}
+.ecs-stepper {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    align-items: center;
+    height: 36px;
+    padding: 1px;
+    border-radius: var(--r-md);
+    background: var(--user-surface-muted);
+}
+.ecs-stepper button {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--r-md) - 1px);
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+}
+.ecs-stepper button:hover:not(:disabled) {
+    background: var(--user-surface-hover);
+    color: var(--user-ink);
+}
+.ecs-stepper button:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+.ecs-stepper output {
+    font-size: var(--fs-ui);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+/* 文案与视觉：六个选择项两列平铺 */
+.ecs-composer .ecommerce-creative-options {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+.ecs-composer .ecommerce-creative-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+.ecs-composer .ecommerce-creative-grid .ecommerce-field {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.ecs-composer .ecommerce-creative-grid .ecommerce-field > span {
+    color: var(--user-ink-muted);
+}
+.ecs-composer .ecommerce-creative-grid .ant-select {
+    width: 100%;
+    font-size: var(--fs-caption);
+}
+.ecs-composer .ecommerce-creative-note {
+    margin: var(--space-3) 0 0;
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+
+/* 底部提交栏 */
+.ecs-footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4) var(--space-4);
+    border-top: 1px solid var(--user-border);
+}
+.ecs-estimate {
+    display: grid;
+    flex: 1 1 auto;
+    gap: 2px;
+    min-width: 0;
+}
+.ecs-estimate strong {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.ecs-estimate strong.is-pending {
+    color: var(--user-ink-soft);
+    font-weight: 500;
+}
+.ecs-estimate strong > span {
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+}
+.ecs-estimate > span {
+    overflow: hidden;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ecs-submit.ant-btn {
+    min-width: 96px;
+}
+
+/* 本轮流程区：已发送需求、方向选择、方案审阅、进度与错误 */
+.ecs-stage {
+    display: grid;
+    gap: var(--space-3);
+    min-width: 0;
+}
+.ecs-stage > .ant-btn {
+    justify-self: start;
+}
+.ecs-notice {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.ecs-notice.is-error {
+    background: color-mix(in srgb, var(--status-error) 8%, var(--user-surface));
+    color: var(--user-ink);
+}
+.ecs-failure {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+}
+.ecs-failure > svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--status-error);
+}
+.ecs-failure > div {
+    flex: 1;
+    min-width: 0;
+}
+.ecs-failure strong {
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+    font-weight: 600;
+}
+.ecs-failure p {
+    margin: 2px 0 0;
+}
+.ecs-stage .commerce-direction-choice {
+    justify-self: stretch;
+    max-width: none;
+    padding: var(--space-2) var(--space-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+}
+.ecs-stage .commerce-direction-choice strong {
+    color: var(--user-ink);
+    font-size: inherit;
+    font-weight: 600;
+}
+.ecs-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+}
+.ecs-followup {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    gap: var(--space-2);
+    height: 34px;
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--r-md);
+    background: var(--user-surface);
+    color: var(--user-ink);
+    font-size: var(--fs-ui);
+    cursor: pointer;
+}
+.ecs-followup:hover:not(:disabled) {
+    background: var(--user-surface-hover);
+}
+.ecs-stage .commerce-request-message {
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--r-2xl);
+    background: var(--user-surface);
+}
+.ecs-stage .commerce-direction-message {
+    margin: 0;
+    padding: var(--space-4);
+    border-radius: var(--r-2xl);
+    background: var(--user-surface);
+}
+.ecs-stage .flylep-directions-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+}
+.ecs-review {
+    border-radius: var(--r-2xl);
+    background: var(--user-surface);
+}
+.ecs-review > summary {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    cursor: pointer;
+}
+.ecs-review > summary strong {
+    font-size: var(--fs-ui);
+    font-weight: 600;
+}
+.ecs-review > summary span {
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.ecs-review-body {
+    display: grid;
+    gap: var(--space-4);
+    padding: 0 var(--space-4) var(--space-4);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.ecs-review-body h4 {
+    margin: 0 0 var(--space-1);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+}
+.ecs-review-body p,
+.ecs-review-body ul {
+    margin: 0;
+    color: var(--user-ink-muted);
+}
+.ecs-review-checks ul {
+    padding-left: 1.2em;
+}
+.ecs-review-checks small {
+    display: block;
+    margin-top: var(--space-1);
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+}
+.ecs-review .ecommerce-plan-list {
+    display: grid;
+    gap: 0;
+    margin: 0;
+}
+.ecs-review .ecommerce-plan-list section {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3) 0;
+    border: 0;
+    border-top: 1px solid color-mix(in srgb, var(--user-border) 70%, transparent);
+    border-radius: 0;
+    background: transparent;
+}
+.ecs-review .ecommerce-plan-list section > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+.ecs-review-index {
+    min-width: 24px;
+    color: var(--user-ink-soft);
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.ecs-review .ecommerce-plan-list section > header .ant-select {
+    min-width: 140px;
+}
+.ecs-review-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-left: auto;
+}
+.ecs-review .ecommerce-plan-list label {
+    display: grid;
+    gap: var(--space-1);
+    margin: 0;
+}
+.ecs-review .ecommerce-plan-list label > span {
+    color: var(--user-ink-muted);
+    font-size: var(--fs-caption);
+}
+.ecs-material-modal .commerce-material-close {
+    display: none;
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 1180px) {
+    .ecs-shell {
+        grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
+        gap: var(--space-3);
+    }
+}
+@media (max-width: 760px) {
+    .ecs-shell {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: var(--space-2);
+        padding: var(--space-2);
+    }
+    .ecs-mobile-tabs {
+        display: block;
+    }
+    .ecs-shell[data-mobile-view="create"] .commerce-output-gallery,
+    .ecs-shell[data-mobile-view="works"] .ecs-composer {
+        display: none;
+    }
+    .ecs-scene-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ecs-shell *,
+    .ecs-shell *::before,
+    .ecs-shell *::after {
+        transition: none !important;
+    }
+}
+
+.ecs-composer .ecs-footer-issue {
+    margin: 0 var(--space-4) var(--space-2);
+}

@@ -1,9 +1,11 @@
 import { agentCanvasActions, agentCanvasActionLabel } from "@/lib/canvas/agent-canvas-actions";
 import { Button } from "antd";
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
+import { Fragment, memo, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, HelpCircle, ListChecks, LoaderCircle, RotateCcw, Undo2, XCircle, Blocks, FoldVertical, Info } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { Check, CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Copy, CornerUpLeft, HelpCircle, ListChecks, LoaderCircle, RotateCcw, Undo2, XCircle, Blocks, FoldVertical, Info } from "lucide-react";
+import { agentCopyText } from "@/lib/canvas/agent-composer-attachments";
+import type { CloudAgentInterjectionState } from "@/services/cloud-agent-conversations";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -15,9 +17,11 @@ import type { Components } from "streamdown";
 import { agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, agentToolName, agentToolRetryLabel, agentToolStatus, friendlyAgentToolSummary, isAgentCanvasReadTool, type AgentToolCategory } from "@/lib/canvas/agent-tool-presentation";
 import { AgentChevronGlyph, AgentThinkGlyph, agentActivityGlyph } from "./agent-activity-icons";
 import { agentOperationCategory, agentOperationFailed, agentOperationSegmentLabel } from "@/lib/canvas/agent-operation-feed";
+import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { agentToolRetry, type AgentToolRetryAttempt } from "@/lib/canvas/agent-tool-retry";
 import { agentErrorContent } from "@/lib/canvas/agent-error-presentation";
 import { agentCanvasUndoKey, agentCanvasUndoTarget, type AgentCanvasUndoState, type AgentCanvasUndoTarget } from "@/lib/canvas/agent-canvas-undo";
+import type { CloudAgentMediaBatchProgress } from "@/lib/canvas/cloud-agent-media-batch";
 import { AgentImagePreview } from "./canvas-cloud-agent-composer";
 
 // 输入区已拆到 canvas-cloud-agent-composer.tsx；附件类型与引用转换在 canvas-cloud-agent-attachments.ts。
@@ -45,6 +49,8 @@ export type CloudAgentFormField = {
     required?: boolean;
     allowCustom?: boolean;
     placeholder?: string;
+    /** 问卷分组名：同组字段放在一个小标题下。 */
+    section?: string;
 };
 export type CloudAgentUserQuestion = {
     question: string;
@@ -55,7 +61,11 @@ export type CloudAgentUserQuestion = {
     allowFreeform?: boolean;
     round?: number;
     maxRounds?: number;
+    /** 提交后在画布上生成「决策确认单」节点（长流程开工前的问卷）。 */
+    recordDecision?: boolean;
 };
+/** 问卷答案整理成的决策确认单：标题与 Markdown 正文。 */
+export type CloudAgentDecisionRecord = { title: string; markdown: string };
 export type CloudAgentFormAnswer = {
     type: "form_answer";
     questionId?: string;
@@ -65,6 +75,8 @@ export type CloudAgentFormAnswer = {
     skippedFields?: string[];
     useRecommendedDefaults?: boolean;
     additionalNotes?: string;
+    /** 已写入画布的决策确认单节点 ID，Agent 后续以它为准。 */
+    decisionNodeId?: string;
 };
 export type CloudAgentChatMessage = {
     id: string;
@@ -83,6 +95,8 @@ export type CloudAgentChatMessage = {
     planItems?: CloudAgentPlanItem[];
     /** 运行已进入终态，但计划项仍未全部完成；用于历史恢复时停止显示 loading。 */
     planTerminal?: boolean;
+    /** 批量生成进度（media_batch_progress 合并结果），由输入区上方的批次进度条渲染。 */
+    mediaBatch?: CloudAgentMediaBatchProgress;
     question?: CloudAgentUserQuestion;
     formAnswer?: CloudAgentFormAnswer;
     /** 上下文压缩状态；数值只展示 Pi SDK 实际提供的估计值。 */
@@ -91,7 +105,7 @@ export type CloudAgentChatMessage = {
     detail?: unknown;
     attachments?: CloudAgentChatAttachment[];
     canvasReferenceNodeId?: string;
-    interjection?: "sent" | "delivered" | "undelivered" | "withdrawn";
+    interjection?: CloudAgentInterjectionState;
     /** Agent 修改了长期记忆：applied 可撤销，pending 等用户在设置里确认。 */
     memoryUpdate?: CloudAgentMemoryUpdate;
     /** Agent 推荐安装的技能市场技能；安装与否由用户决定。 */
@@ -398,6 +412,7 @@ function createAgentMessageMarkdownComponents(references: CanvasResourceReferenc
 // 面板输入、流式输出都会让对话列表重渲染；消息组件 memo 后，只有自己的消息或展示参数变了才重新解析 Markdown。
 export const AgentChatMessage = memo(function AgentChatMessage({
     item,
+    assistantName,
     theme,
     references = EMPTY_REFERENCES,
     isStreaming = false,
@@ -410,11 +425,13 @@ export const AgentChatMessage = memo(function AgentChatMessage({
     undoStates,
     onWithdrawInterjection,
     withdrawing = false,
+    onRequeueInterjection,
     replyOptions,
     onReplyOption,
     replyOptionsDisabled = false,
 }: {
     item: CloudAgentChatMessage;
+    assistantName?: string;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     references?: CanvasResourceReference[];
     isStreaming?: boolean;
@@ -427,14 +444,17 @@ export const AgentChatMessage = memo(function AgentChatMessage({
     undoStates?: Record<string, AgentCanvasUndoState>;
     onWithdrawInterjection?: (messageId: string) => void;
     withdrawing?: boolean;
+    /** 未送达的插话：作为下一轮发送，或放回队列后编辑。 */
+    onRequeueInterjection?: (messageId: string, mode: "send" | "edit") => void;
     /** 只给最后一条、还没被回复的 Agent 消息：末尾编号选项改为可点击卡片。 */
     replyOptions?: AgentReplyOptions | null;
     onReplyOption?: (text: string) => void;
     replyOptionsDisabled?: boolean;
 }) {
     const isUser = item.role === "user";
+    const reducedMotion = useReducedMotion();
     const isSystem = item.role === "system";
-    const displayedText = useTypewriterText(item.text, item.role === "assistant" && isStreaming);
+    const displayedText = useTypewriterText(item.text, item.role === "assistant" && isStreaming && !reducedMotion);
     const formAnswer = item.formAnswer ?? (isUser ? parseCloudAgentFormAnswer(item.text) : undefined);
     const markdownComponents = useMemo(() => createAgentMessageMarkdownComponents(references, onFocusNode), [onFocusNode, references]);
     const showReplyOptions = Boolean(replyOptions && onReplyOption && item.role === "assistant" && !isStreaming);
@@ -444,7 +464,7 @@ export const AgentChatMessage = memo(function AgentChatMessage({
     const errorTone = item.errorSeverity === "warning" ? "warning" : "error";
     const color = theme.node.text;
     if (item.reasoning) {
-        return <AgentReasoningFeed items={[item]} theme={theme} />;
+        return <AgentActivityFeed items={[item]} theme={theme} live={isStreaming} />;
     }
     if (item.compaction) {
         const compactionIcon =
@@ -500,91 +520,194 @@ export const AgentChatMessage = memo(function AgentChatMessage({
         const title = item.title || (errorTone === "warning" ? "Agent 正在重试" : "Agent 暂时无法继续");
         const { description, diagnosticId } = agentErrorContent(item.text, title);
         return (
-            <div className={`agent-status-message agent-status-message--${errorTone} agent-error-message`}>
-                <span className="agent-error-icon" aria-hidden="true">
-                    <CircleAlert className="size-3.5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                    <div role="status">
-                        <div className="agent-error-title">{title}</div>
+            <motion.div className="agent-error-reveal" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}>
+                <div className={`agent-status-message agent-status-message--${errorTone} agent-error-message`}>
+                    <span className="agent-error-icon" aria-hidden="true">
+                        <CircleAlert className="size-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <div className="agent-error-header" role="status">
+                            <span className="agent-error-title">{title}</span>
+                            {onRetry ? (
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    className="agent-error-retry"
+                                    icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+                                    disabled={retrying}
+                                    onClick={onRetry}
+                                    title="用同样的内容重新发起一轮（会重新计费）"
+                                >
+                                    {retrying ? "重试中" : "重试本轮"}
+                                </Button>
+                            ) : null}
+                        </div>
                         {description ? <p className="agent-error-detail">{description}</p> : null}
+                        {item.meta ? <p className="agent-error-meta">{item.meta}</p> : null}
+                        {diagnosticId ? (
+                            <details className="agent-error-diagnostics">
+                                <summary>
+                                    <ChevronDown className="size-3" aria-hidden="true" />
+                                    诊断信息
+                                </summary>
+                                <div className="agent-error-diagnostics-body">
+                                    <p>如反复出现，请将诊断号反馈给管理员。</p>
+                                    <code>{diagnosticId}</code>
+                                </div>
+                            </details>
+                        ) : null}
                     </div>
-                    {item.meta ? <p className="agent-error-meta">{item.meta}</p> : null}
-                    {diagnosticId ? (
-                        <details className="agent-error-diagnostics">
-                            <summary>
-                                <ChevronDown className="size-3" aria-hidden="true" />
-                                诊断信息
-                            </summary>
-                            <div className="agent-error-diagnostics-body">
-                                <p>如反复出现，请将诊断号反馈给管理员。</p>
-                                <code>{diagnosticId}</code>
-                            </div>
-                        </details>
-                    ) : null}
-                    {onRetry ? (
-                        <Button type="text" size="small" className="agent-error-retry" icon={retrying ? <LoaderCircle className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />} disabled={retrying} onClick={onRetry}>
-                            {retrying ? "重试中" : "重试本轮"}
-                        </Button>
-                    ) : null}
                 </div>
-            </div>
+            </motion.div>
         );
     }
+    const copyable = !isStreaming && !formAnswer && Boolean(item.text.trim()) && (isUser || item.role === "assistant");
+    const author = item.role === "assistant" ? assistantName : undefined;
     return (
-        <div className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-            <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user max-w-[82%] px-4 py-3 text-right" : "max-w-full flex-1 text-left"}`} style={{ color }}>
-                {item.interjection ? (
-                    <span className="mb-1 inline-flex items-center gap-2">
-                        <span
-                            className="inline-flex items-center rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4"
-                            style={item.interjection === "undelivered" ? { background: `${theme.accent.danger}22`, color: theme.accent.danger } : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
-                        >
-                            {item.interjection === "undelivered" ? "插话未送达" : item.interjection === "withdrawn" ? "插话已撤回" : item.interjection === "delivered" ? "插话已送达" : "插话 · 等待送达"}
-                        </span>
-                        {item.interjection === "sent" && onWithdrawInterjection ? (
-                            // 只撤回这句插话：不会停止本轮，也不会取消已提交的生成任务。
-                            <button
-                                type="button"
-                                className="inline-flex items-center gap-0.5 rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4 opacity-80 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 disabled:cursor-not-allowed disabled:opacity-40"
-                                style={{ background: "rgba(255,255,255,0.12)", color: "inherit" }}
-                                disabled={withdrawing}
-                                title="撤回这句插话，本轮继续运行，已提交的生成任务不受影响"
-                                aria-label="撤回这句插话"
-                                onClick={() => onWithdrawInterjection(item.id)}
+        <div className={`agent-message-row flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`} data-agent-role={item.role} data-agent-interjection={item.interjection || undefined} role={author ? "group" : undefined} aria-label={author}>
+            <div className={`flex min-w-0 max-w-full flex-col ${isUser ? "items-end" : "flex-1 items-stretch"}`}>
+                <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user px-3 py-2 text-left" : "max-w-full text-left"}`} style={{ color }}>
+                    {item.interjection ? (
+                        <span className="mb-1 inline-flex flex-wrap items-center justify-end gap-2">
+                            <span
+                                className="inline-flex items-center rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4"
+                                style={item.interjection === "undelivered" ? { background: `${theme.accent.danger}22`, color: theme.accent.danger } : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
                             >
-                                {withdrawing ? <LoaderCircle className="size-3 animate-spin" /> : <Undo2 className="size-3" />}
-                                撤回
-                            </button>
+                                {agentInterjectionLabel(item.interjection)}
+                            </span>
+                            {item.interjection === "sent" && onWithdrawInterjection ? (
+                                // 只撤回这句插话：不会停止本轮，也不会取消已提交的生成任务；原话回到排队队首。
+                                <button
+                                    type="button"
+                                    className="agent-interjection-action"
+                                    disabled={withdrawing}
+                                    title="撤回到队列：这句不再送给本轮，回到排队队首；本轮继续运行，已提交的生成任务不受影响"
+                                    aria-label="撤回这句插话"
+                                    onClick={() => onWithdrawInterjection(item.id)}
+                                >
+                                    {withdrawing ? <LoaderCircle className="size-3 animate-spin" aria-hidden="true" /> : <CornerUpLeft className="size-3" aria-hidden="true" />}
+                                    撤回到队列
+                                </button>
+                            ) : null}
+                            {item.interjection === "undelivered" && onRequeueInterjection ? (
+                                <>
+                                    <button type="button" className="agent-interjection-action" title="把这句作为下一轮发送" aria-label="把这句未送达的插话作为下一轮发送" onClick={() => onRequeueInterjection(item.id, "send")}>
+                                        作为下一轮发送
+                                    </button>
+                                    <button type="button" className="agent-interjection-action" title="放回队列并编辑" aria-label="编辑这句未送达的插话" onClick={() => onRequeueInterjection(item.id, "edit")}>
+                                        编辑
+                                    </button>
+                                </>
+                            ) : null}
+                        </span>
+                    ) : null}
+                    {item.role === "assistant" ? (
+                        <>
+                            {agentMarkdownText ? (
+                                <AIMessageMarkdown className="agent-answer-prose" isStreaming={isStreaming} streamingAnimation="none" components={markdownComponents}>
+                                    {agentMarkdownText}
+                                </AIMessageMarkdown>
+                            ) : null}
+                            {showReplyOptions && replyOptions && onReplyOption ? <AgentReplyOptionCards options={replyOptions.options} disabled={replyOptionsDisabled} onSelect={(option) => onReplyOption(option.text)} /> : null}
+                        </>
+                    ) : isUser && canvasReference ? (
+                        <AIMessageMarkdown className="text-left" components={markdownComponents}>
+                            {userCanvasMarkdown}
+                        </AIMessageMarkdown>
+                    ) : formAnswer ? (
+                        <AgentFormAnswerCard answer={formAnswer} theme={theme} />
+                    ) : (
+                        <AgentMessageText text={item.text} references={references} />
+                    )}
+                    {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
+                    {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
+                </div>
+                {copyable ? (
+                    <div className="agent-message-footer">
+                        {author ? (
+                            <span className="agent-answer-signature" aria-hidden="true">
+                                {author}
+                            </span>
                         ) : null}
-                    </span>
+                        <AgentMessageCopyButton text={agentCopyText(item.text, references)} />
+                    </div>
                 ) : null}
-                {item.role === "assistant" ? (
-                    <>
-                        {agentMarkdownText ? (
-                            <AIMessageMarkdown className="text-left" isStreaming={isStreaming} streamingAnimation="none" components={markdownComponents}>
-                                {agentMarkdownText}
-                            </AIMessageMarkdown>
-                        ) : null}
-                        {showReplyOptions && replyOptions && onReplyOption ? <AgentReplyOptionCards options={replyOptions.options} disabled={replyOptionsDisabled} onSelect={(option) => onReplyOption(option.text)} /> : null}
-                    </>
-                ) : isUser && canvasReference ? (
-                    <AIMessageMarkdown className="text-left" components={markdownComponents}>
-                        {userCanvasMarkdown}
-                    </AIMessageMarkdown>
-                ) : formAnswer ? (
-                    <AgentFormAnswerCard answer={formAnswer} theme={theme} />
-                ) : (
-                    <AgentMessageText text={item.text} references={references} />
-                )}
-                {item.attachments?.length ? <AgentMessageAttachments attachments={item.attachments} /> : null}
-                {item.meta ? <div className="mt-1 text-[var(--fs-label)] opacity-45">{item.meta}</div> : null}
             </div>
         </div>
     );
 });
+/** 写入剪贴板：优先用异步剪贴板接口；非 HTTPS 或权限被拒时退回隐藏文本框加 execCommand。 */
+async function writeClipboardText(text: string) {
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch {
+            // 继续尝试旧方法。
+        }
+    }
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none";
+    document.body.append(area);
+    area.select();
+    try {
+        return document.execCommand("copy");
+    } catch {
+        return false;
+    } finally {
+        area.remove();
+    }
+}
+/** 消息下方的「复制」：悬停或键盘聚焦时出现，触屏常显；复制后按钮上显示「已复制」，不弹全局提示。 */
+function AgentMessageCopyButton({ text }: { text: string }) {
+    const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+    useEffect(() => {
+        if (state === "idle") return;
+        const timer = window.setTimeout(() => setState("idle"), 1600);
+        return () => window.clearTimeout(timer);
+    }, [state]);
+    return (
+        <div className="agent-message-actions">
+            <button
+                type="button"
+                className="agent-message-action"
+                aria-label="复制这条消息"
+                onClick={(event) => {
+                    const trigger = event.currentTarget;
+                    void writeClipboardText(text).then((copied) => {
+                        setState(copied ? "copied" : "failed");
+                        // 旧方法会把焦点移到临时文本框，复制完放回按钮，键盘用户不丢位置。
+                        if (document.activeElement !== trigger) trigger.focus({ preventScroll: true });
+                    });
+                }}
+            >
+                {state === "copied" ? <Check className="size-3" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
+                <span aria-live="polite">{state === "copied" ? "已复制" : state === "failed" ? "复制失败" : "复制"}</span>
+            </button>
+        </div>
+    );
+}
 
 const EMPTY_REFERENCES: CanvasResourceReference[] = [];
+
+function agentInterjectionLabel(state: CloudAgentInterjectionState) {
+    switch (state) {
+        case "undelivered":
+            return "插话未送达";
+        case "withdrawn":
+            return "插话已撤回";
+        case "delivered":
+            return "插话已送达";
+        case "requeued":
+            return "已转为下一轮";
+        case "sending":
+            return "插话 · 发送中";
+        default:
+            return "插话 · 等待送达";
+    }
+}
 
 /** 操作段与推理段每次都由消息列表重新切出新数组；元素都没变就视为同一段，不重渲染。 */
 function sameFeedProps<P extends { items: readonly CloudAgentChatMessage[] }>(previous: P, next: P) {
@@ -595,49 +718,6 @@ function sameFeedProps<P extends { items: readonly CloudAgentChatMessage[] }>(pr
         return previous.items === next.items || (previous.items.length === next.items.length && previous.items.every((item, index) => item === next.items[index]));
     });
 }
-
-/** 最新一段推理的首个非空行，去掉 Markdown 标记，供收起态单行预览。 */
-function agentReasoningPreview(items: readonly CloudAgentChatMessage[]) {
-    for (let index = items.length - 1; index >= 0; index -= 1) {
-        const line = items[index].text
-            .split(/\r?\n/u)
-            .map((value) => value.replace(/^[#>*\-\s]+|\*\*|`/gu, "").trim())
-            .find(Boolean);
-        if (line) return line.length > 160 ? `${line.slice(0, 160)}…` : line;
-    }
-    return "";
-}
-
-/**
- * 推理是辅助信息，不应与正文和工具输出争夺主视觉。一个事件流里的连续摘要
- * 合并成一个入口，默认收起；需要排查时再展开查看完整内容。
- */
-export const AgentReasoningFeed = memo(function AgentReasoningFeed({ items, theme }: { items: CloudAgentChatMessage[]; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
-    const streaming = items.some((item) => item.streaming);
-    const text = items
-        .map((item) => item.text.trim())
-        .filter(Boolean)
-        .join("\n\n");
-    // 收起态用最新一段思考的首行做预览：一排"模型思考"空标题看不出每次在想什么。
-    const preview = agentReasoningPreview(items);
-    const countLabel = !streaming && items.length > 1 ? `${items.length} 段` : "";
-    return (
-        <details className={`agent-activity agent-reasoning${streaming ? " is-live" : ""}`} data-agent-tone="think" style={{ "--agent-reasoning-accent": theme.accent.primary } as CSSProperties}>
-            <summary className="agent-activity-row">
-                <span className="agent-activity-glyph" aria-hidden="true">
-                    <AgentThinkGlyph />
-                </span>
-                <span className="agent-activity-title">{streaming ? "正在思考" : "思考过程"}</span>
-                {preview ? <span className="agent-activity-detail agent-reasoning-preview">{preview}</span> : null}
-                {countLabel ? <span className="agent-activity-meta">{countLabel}</span> : null}
-                <AgentChevronGlyph className="agent-activity-chevron" />
-            </summary>
-            <div className="agent-activity-body agent-reasoning-content" data-canvas-wheel-scroll>
-                <div className="agent-reasoning-text">{text || (streaming ? "正在整理思路…" : "暂无可展示的推理摘要")}</div>
-            </div>
-        </details>
-    );
-}, sameFeedProps);
 
 /**
  * Agent SSE events contain text chunks. Keep the full text in the message
@@ -973,20 +1053,11 @@ export function AgentToolCard({
     );
 }
 
-/**
- * Agent 的操作记录（连续的 `role === "tool"` 消息）折成一行：报最新一步，点击展开完整记录。
- *
- * 语义要点：折叠态整段只有这一行可见，所以**类别徽标必须在折叠行上**（清单 / 查看画面 /
- * 修改画布），否则默认状态看不出刚才到底是读了清单还是真看了画面。
- *
- * 展开状态用「用户覆盖 + 失败时默认展开」两段决定 —— 失败的操作不能被折进一行里看不见，
- * 但用户手动收起之后就不再自动弹开（跑动中新步骤只会追加，不会重置状态）。
- * `live` 由面板按"这一段是不是对话末尾且在跑"给出：只有还在推进时才流光。
- */
-export const AgentOperationFeed = memo(function AgentOperationFeed({
+export const AgentActivityFeed = memo(function AgentActivityFeed({
     items,
     theme,
     references = EMPTY_REFERENCES,
+    onInspect,
     onFocusNode,
     onUndo,
     undoStates,
@@ -995,71 +1066,76 @@ export const AgentOperationFeed = memo(function AgentOperationFeed({
     items: CloudAgentChatMessage[];
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     references?: CanvasResourceReference[];
+    onInspect?: () => void;
     onFocusNode?: (nodeId: string) => void;
     onUndo?: (target: AgentCanvasUndoTarget) => void;
     undoStates?: Record<string, AgentCanvasUndoState>;
     live?: boolean;
 }) {
-    const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
+    const [expanded, setExpanded] = useState(false);
     const reducedMotion = useReducedMotion();
     const listId = useId();
     const latest = items[items.length - 1];
     if (!latest) return null;
+    const operations = items.filter((item) => item.role === "tool");
+    const thoughts = items.length - operations.length;
+    const failures = operations.filter(agentOperationFailed).length;
+    const thinking = latest.reasoning === true;
+    const failed = !thinking && agentOperationFailed(latest);
+    const active = live && (thinking ? latest.streaming === true : !failed);
     const category = agentOperationCategory(latest);
-    const latestToolName = agentToolName(latest.title || "工具执行", latest.detail);
-    const latestRetry = agentToolRetry(latest.detail);
-    // 自动纠正不属于任何工具类别；标题直接说"自动纠正"，比"其他操作"更能说明发生了什么。
-    const categoryLabel = latestRetry ? "自动纠正" : agentToolCategoryLabel(latestToolName, category);
-    const categoryIcon = agentToolCategoryIcon(latestToolName, category, Boolean(latestRetry));
-    const label = agentOperationSegmentLabel(items);
-    const visibleLabel = latestRetry ? `${latestRetry.status === "recovered" ? "已恢复" : "未完成"} · ${latestRetry.attempt}/${latestRetry.maxAttempts} 次尝试` : label;
-    // 只看最新一步的状态。前面的参数错误如果已被自动纠正，不应让整段
-    // 操作流继续保持红色并默认展开，否则用户会误以为最终动作仍然失败。
-    const failed = agentOperationFailed(latest);
-    const expanded = userExpanded ?? failed;
-    const shimmering = live && !failed;
+    const toolName = agentToolName(latest.title || "工具执行", latest.detail);
+    const retry = agentToolRetry(latest.detail);
+    const title = thinking ? (active ? "正在思考" : "思考过程") : retry ? "自动纠正" : agentToolCategoryLabel(toolName, category);
+    const preview = thinking ? markdownPlainText(latest.text).slice(0, 160) : agentOperationSegmentLabel(operations);
+    const counts = [operations.length > 0 && `${operations.length} 步操作`, thoughts > 0 && `${thoughts} 段思考`].filter(Boolean).join(" · ");
     return (
-        <div
-            className={`agent-activity agent-operation-feed${expanded ? " is-open" : ""}${failed ? " is-failed" : ""}${shimmering ? " is-live" : ""}`}
-            data-agent-operation-feed
-            data-agent-category={category}
-            data-agent-tone={failed ? "error" : latestRetry ? (latestRetry.status === "recovered" ? "other" : "warning") : category}
-        >
+        <div className={`agent-activity${expanded ? " is-open" : ""}${active ? " is-live" : ""}`} data-agent-category={thinking ? "think" : category} data-agent-tone={failed ? "error" : thinking ? "think" : category}>
             <button
                 type="button"
                 className="agent-activity-row agent-operation-toggle"
                 aria-expanded={expanded}
-                aria-controls={listId}
-                // aria-label 会顶掉可见文字，所以类别与最新一步必须自己报出来。
-                aria-label={`${expanded ? "收起" : "展开"} ${items.length} 步${categoryLabel}记录，最新一步：${label}`}
-                onClick={() => setUserExpanded(!expanded)}
+                aria-controls={expanded ? listId : undefined}
+                onClick={() => {
+                    if (!expanded) onInspect?.();
+                    setExpanded(!expanded);
+                }}
             >
                 <span className="agent-activity-glyph" aria-hidden="true">
-                    {categoryIcon}
+                    {thinking ? <AgentThinkGlyph /> : agentToolCategoryIcon(toolName, category, Boolean(retry))}
                 </span>
-                <span className="agent-activity-title">{categoryLabel}</span>
-                {/* 换步时旧文案高模糊淡出、新文案从下方上浮（先快后慢的非线性曲线）。 */}
-                <AnimatePresence mode="wait" initial={false}>
-                    <motion.span
-                        key={visibleLabel}
-                        className="agent-activity-detail agent-operation-latest"
-                        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6, filter: "blur(4px)" }}
-                        animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
-                        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, filter: "blur(4px)" }}
-                        transition={reducedMotion ? { duration: 0 } : { duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                        {visibleLabel}
-                    </motion.span>
-                </AnimatePresence>
-                {items.length > 1 ? <span className="agent-activity-meta">{items.length} 步</span> : null}
+                <span className={thinking || retry || !preview ? "agent-activity-title" : "sr-only"}>{title}</span>
+                {preview ? (
+                    <span className="agent-activity-detail" title={preview}>
+                        {preview}
+                    </span>
+                ) : null}
+                <span className="agent-activity-meta">{counts}</span>
+                {failures > 0 ? <span className="agent-activity-failures">{failures} 步未完成</span> : null}
                 <AgentChevronGlyph className="agent-activity-chevron" />
             </button>
             {expanded ? (
-                <div id={listId} className="agent-activity-body agent-operation-list">
+                <motion.ol id={listId} className="agent-operation-list" aria-label="按时间排列的工作记录" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reducedMotion ? 0 : 0.15 }}>
                     {items.map((item) => (
-                        <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
+                        <li key={item.id}>
+                            {item.reasoning ? (
+                                <div className="agent-tool-step" data-agent-tone="think">
+                                    <span className="agent-tool-step-glyph" aria-hidden="true">
+                                        <AgentThinkGlyph />
+                                    </span>
+                                    <div className="min-w-0">
+                                        <span className="agent-thought-label">思考摘要</span>
+                                        <div className="agent-reasoning-text" data-canvas-wheel-scroll>
+                                            {item.text.trim() || (active && item === latest ? "正在整理思路…" : "暂无可展示的摘要")}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <AgentChatMessage item={item} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
+                            )}
+                        </li>
                     ))}
-                </div>
+                </motion.ol>
             ) : null}
         </div>
     );
@@ -1072,7 +1148,6 @@ export function AgentWorkingMessage({ theme, label = WORKING_TEXT }: { theme: (t
                 <span />
             </span>
             <span>{label}</span>
-            <span className="agent-working-caption">实时处理中</span>
         </div>
     );
 }
@@ -1134,8 +1209,46 @@ export function AgentPlanBar({
 
 const EMPTY_QUESTION_FIELDS: CloudAgentFormField[] = [];
 
-export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }: { question: CloudAgentUserQuestion; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onAnswer: (answer: string) => void; disabled?: boolean }) {
+/** 把问卷答案整理成画布上的「决策确认单」Markdown：按分组列出每项选择，附补充说明。 */
+export function agentDecisionRecord(question: CloudAgentUserQuestion, displayAnswers: Record<string, string | string[]>, additionalNotes?: string): CloudAgentDecisionRecord {
+    const lines = ["# 决策确认单", "", `> ${question.question}`, ""];
+    let section = "";
+    for (const field of question.fields || []) {
+        if (field.section && field.section !== section) {
+            section = field.section;
+            lines.push(`## ${section}`, "");
+        }
+        const answer = displayAnswers[field.id];
+        const text = Array.isArray(answer) ? answer.join("、") : answer;
+        lines.push(`- **${field.title}**：${text?.trim() ? text : "未填写（由 Agent 按推荐处理）"}`);
+    }
+    if (additionalNotes?.trim()) lines.push("", "## 补充说明", "", additionalNotes.trim());
+    const title = question.question.length > 40 ? `${question.question.slice(0, 40)}…` : question.question;
+    return { title: `决策确认单 · ${title}`, markdown: lines.join("\n") };
+}
+
+export function AgentQuestionBar({
+    question,
+    theme,
+    onAnswer,
+    onRecordDecision,
+    disabled = false,
+}: {
+    question: CloudAgentUserQuestion;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onAnswer: (answer: string) => void;
+    /** 问卷要求留档时，把决策确认单写进画布；返回新节点 ID（写入失败返回空）。 */
+    onRecordDecision?: (record: CloudAgentDecisionRecord) => string | null | undefined;
+    disabled?: boolean;
+}) {
     const fields = question.fields || EMPTY_QUESTION_FIELDS;
+    // 同一分组的字段排在一起，按分组首次出现的顺序；没有分组的字段保持原位。
+    const orderedFields = useMemo(() => {
+        const sections: string[] = [];
+        for (const field of fields) if (field.section && !sections.includes(field.section)) sections.push(field.section);
+        if (!sections.length) return fields;
+        return [...fields.filter((field) => !field.section), ...sections.flatMap((section) => fields.filter((field) => field.section === section))];
+    }, [fields]);
     const isForm = question.kind === "form" || fields.length > 0;
     const fieldDefaultValue = (field: CloudAgentFormField): string | string[] => {
         if (field.defaultValue !== undefined) {
@@ -1150,6 +1263,27 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
     const [customFields, setCustomFields] = useState<Record<string, boolean>>({});
     const [additionalNotes, setAdditionalNotes] = useState("");
     const [validation, setValidation] = useState("");
+    const fieldsScrollRef = useRef<HTMLDivElement>(null);
+    const fieldsContentRef = useRef<HTMLDivElement>(null);
+    const [scrollEdges, setScrollEdges] = useState({ above: false, below: false });
+    const updateScrollEdges = useCallback(() => {
+        const el = fieldsScrollRef.current;
+        if (!el) return;
+        const above = el.scrollTop > 1;
+        const below = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+        setScrollEdges((previous) => (previous.above === above && previous.below === below ? previous : { above, below }));
+    }, []);
+    useEffect(() => {
+        const el = fieldsScrollRef.current;
+        if (!el) return;
+        el.scrollTop = 0;
+        updateScrollEdges();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(updateScrollEdges);
+        observer.observe(el);
+        if (fieldsContentRef.current) observer.observe(fieldsContentRef.current);
+        return () => observer.disconnect();
+    }, [question.questionId, isForm, updateScrollEdges]);
 
     useEffect(() => {
         setValues(Object.fromEntries(fields.map((field) => [field.id, fieldDefaultValue(field)])));
@@ -1167,6 +1301,9 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
         });
         if (missing) {
             setValidation(`请填写“${missing.title}”`);
+            const field = Array.from(fieldsScrollRef.current?.querySelectorAll<HTMLElement>("[data-agent-field-id]") || []).find((element) => element.dataset.agentFieldId === missing.id);
+            field?.scrollIntoView({ block: "nearest" });
+            field?.querySelector<HTMLElement>("input, textarea, button")?.focus({ preventScroll: true });
             return;
         }
         setValidation("");
@@ -1186,6 +1323,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
             displayAnswers[field.id] = option?.label || value;
         }
         const fieldTitles = Object.fromEntries(fields.map((field) => [field.id, field.title]));
+        const decisionNodeId = question.recordDecision && onRecordDecision ? onRecordDecision(agentDecisionRecord({ ...question, fields: orderedFields }, displayAnswers, additionalNotes)) || undefined : undefined;
         onAnswer(
             JSON.stringify({
                 type: "form_answer",
@@ -1196,6 +1334,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                 skippedFields: fields.filter((field) => !String(answers[field.id] || "").trim()).map((field) => field.id),
                 useRecommendedDefaults: useDefaults,
                 additionalNotes: additionalNotes.trim() || undefined,
+                decisionNodeId,
             }),
         );
     };
@@ -1212,179 +1351,203 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
         if (field.allowCustom && value === "other") setCustomFields((current) => ({ ...current, [field.id]: true }));
     };
 
-    if (isForm) {
-        return (
-            <div className="agent-question-bar agent-question-form mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
-                <div className="flex items-start gap-2 px-3 pt-2">
-                    <HelpCircle className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-[var(--fs-label)] opacity-55">{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : "需求确认"}</div>
-                        <div className="text-xs font-semibold leading-5">{question.question}</div>
-                        <div className="mt-0.5 text-[var(--fs-label)] opacity-50">已填入推荐值，可按需修改；不重要的字段可以留空。</div>
-                    </div>
-                </div>
-                <div className="agent-question-fields px-3 py-2">
-                    {fields.map((field) => {
-                        const options = field.options || [];
-                        const custom = customFields[field.id] || values[field.id] === "other";
-                        return (
-                            <div className="agent-question-field" key={field.id}>
-                                <label className="agent-question-field-label" htmlFor={`agent-field-${field.id}`}>
-                                    {field.title}
-                                    {field.required ? <span className="ml-0.5 opacity-70">*</span> : null}
-                                </label>
-                                <div className="min-w-0 flex-1">
-                                    {field.type === "textarea" ? (
-                                        <textarea
-                                            id={`agent-field-${field.id}`}
-                                            rows={2}
-                                            value={values[field.id] || ""}
-                                            placeholder={field.placeholder}
-                                            disabled={disabled}
-                                            className="agent-question-input agent-question-textarea"
-                                            onChange={(event) => updateValue(field, event.target.value)}
-                                            onMouseDown={stop}
-                                            onPointerDown={stop}
-                                        />
-                                    ) : field.type === "text" ? (
-                                        <input
-                                            id={`agent-field-${field.id}`}
-                                            value={values[field.id] || ""}
-                                            placeholder={field.placeholder}
-                                            disabled={disabled}
-                                            className="agent-question-input"
-                                            onChange={(event) => updateValue(field, event.target.value)}
-                                            onMouseDown={stop}
-                                            onPointerDown={stop}
-                                        />
-                                    ) : (
-                                        <div className="agent-question-options" role={field.type === "multi_select" ? "group" : "radiogroup"} aria-label={field.title}>
-                                            {options.map((option) => {
-                                                const optionId = option.id || option.label;
-                                                const selectedValues = values[field.id];
-                                                const selected = field.type === "multi_select" ? Array.isArray(selectedValues) && selectedValues.includes(optionId) : selectedValues === optionId;
-                                                return (
-                                                    <button
-                                                        key={optionId}
-                                                        type="button"
-                                                        disabled={disabled}
-                                                        aria-pressed={selected}
-                                                        className={`agent-question-chip${selected ? " is-selected" : ""}`}
-                                                        style={selected ? { background: theme.accent.primary, color: theme.accent.onPrimary } : { background: theme.toolbar.itemHover }}
-                                                        title={option.detail || option.label}
-                                                        onMouseDown={stop}
-                                                        onPointerDown={stop}
-                                                        onClick={(event) => {
-                                                            stop(event);
-                                                            updateValue(field, optionId);
-                                                        }}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                    {field.allowCustom && (custom || field.type === "text") ? (
-                                        <input
-                                            value={custom && values[field.id] !== "other" ? values[field.id] || "" : ""}
-                                            placeholder={field.placeholder || "输入自定义内容"}
-                                            disabled={disabled}
-                                            className="agent-question-input mt-2"
-                                            onChange={(event) => updateValue(field, event.target.value)}
-                                            onMouseDown={stop}
-                                            onPointerDown={stop}
-                                        />
-                                    ) : null}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="agent-question-field px-3 pb-2">
-                    <label className="agent-question-field-label" htmlFor="agent-question-additional-notes">
-                        补充说明
-                    </label>
-                    <textarea
-                        id="agent-question-additional-notes"
-                        rows={2}
-                        value={additionalNotes}
-                        placeholder="还有需要特别说明的场景、人物、节奏或限制吗？"
-                        disabled={disabled}
-                        className="agent-question-input agent-question-textarea"
-                        onChange={(event) => setAdditionalNotes(event.target.value)}
-                        onMouseDown={stop}
-                        onPointerDown={stop}
-                    />
-                </div>
-                {validation ? <div className="agent-question-validation px-3 pb-1 text-[var(--fs-label)]">{validation}</div> : null}
-                <div className="agent-question-actions px-3 pb-2">
-                    <button
-                        type="button"
-                        disabled={disabled}
-                        className="agent-question-default"
-                        onMouseDown={stop}
-                        onPointerDown={stop}
-                        onClick={(event) => {
-                            stop(event);
-                            submitForm(true);
-                        }}
-                    >
-                        按推荐方案开始
-                    </button>
-                    <button
-                        type="button"
-                        disabled={disabled}
-                        className="agent-question-submit"
-                        style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}
-                        onMouseDown={stop}
-                        onPointerDown={stop}
-                        onClick={(event) => {
-                            stop(event);
-                            submitForm();
-                        }}
-                    >
-                        确认并继续
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
+    const scrollable = scrollEdges.above || scrollEdges.below;
     return (
-        <div className="agent-question-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
+        <div className="agent-question-bar mx-3 mb-2 rounded-xl" style={{ color: theme.node.text }} data-canvas-no-zoom data-canvas-wheel-scroll>
             <div className="flex items-start gap-2 px-3 pt-2">
                 <HelpCircle className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
                 <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-[var(--fs-label)] opacity-55">{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : "需要确认"}</div>
-                    <div className="text-xs font-semibold leading-5">{question.question}</div>
+                    <div className="flex flex-wrap items-center gap-x-2 text-[var(--fs-label)] opacity-55">
+                        <span>{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : isForm ? "需求确认" : "需要确认"}</span>
+                        {scrollable ? <span>{scrollEdges.below ? "下方还有更多选项" : "已到表单底部"}</span> : null}
+                    </div>
+                    <div className="text-xs font-semibold leading-5 wrap-anywhere">{question.question}</div>
+                </div>
+                {scrollable ? (
+                    <div className="agent-question-scroll-controls" role="group" aria-label="表单滚动">
+                        <button type="button" aria-label="向上查看表单" disabled={!scrollEdges.above} onClick={() => fieldsScrollRef.current?.scrollBy({ top: -Math.max(80, fieldsScrollRef.current.clientHeight * 0.8) })}>
+                            <ChevronUp className="size-3.5" />
+                        </button>
+                        <button type="button" aria-label="向下查看更多选项" disabled={!scrollEdges.below} onClick={() => fieldsScrollRef.current?.scrollBy({ top: Math.max(80, fieldsScrollRef.current.clientHeight * 0.8) })}>
+                            <ChevronDown className="size-3.5" />
+                        </button>
+                    </div>
+                ) : null}
+            </div>
+            <div ref={fieldsScrollRef} className="agent-question-scroll" tabIndex={0} role="region" aria-label={isForm ? "需求确认表单内容" : "确认选项"} onScroll={updateScrollEdges} data-canvas-wheel-scroll>
+                <div ref={fieldsContentRef}>
+                    {isForm ? (
+                        <>
+                            <div className="px-3 pt-2 text-[var(--fs-label)] opacity-50">已填入推荐值，可按需修改；不重要的字段可以留空。</div>
+                            <div className="agent-question-fields px-3 py-2">
+                                {orderedFields.map((field, index) => {
+                                    const options = field.options || [];
+                                    const custom = customFields[field.id] || values[field.id] === "other";
+                                    const sectionTitle = field.section && field.section !== orderedFields[index - 1]?.section ? field.section : "";
+                                    return (
+                                        <Fragment key={field.id}>
+                                            {sectionTitle ? <div className="agent-question-section">{sectionTitle}</div> : null}
+                                            <div className="agent-question-field" data-agent-field-id={field.id}>
+                                                <label className="agent-question-field-label" htmlFor={`agent-field-${field.id}`}>
+                                                    {field.title}
+                                                    {field.required ? <span className="ml-0.5 opacity-70">*</span> : null}
+                                                </label>
+                                                <div className="min-w-0 flex-1">
+                                                    {field.type === "textarea" ? (
+                                                        <textarea
+                                                            id={`agent-field-${field.id}`}
+                                                            rows={2}
+                                                            value={values[field.id] || ""}
+                                                            placeholder={field.placeholder}
+                                                            disabled={disabled}
+                                                            className="agent-question-input agent-question-textarea"
+                                                            onChange={(event) => updateValue(field, event.target.value)}
+                                                            onMouseDown={stop}
+                                                            onPointerDown={stop}
+                                                        />
+                                                    ) : field.type === "text" ? (
+                                                        <input
+                                                            id={`agent-field-${field.id}`}
+                                                            value={values[field.id] || ""}
+                                                            placeholder={field.placeholder}
+                                                            disabled={disabled}
+                                                            className="agent-question-input"
+                                                            onChange={(event) => updateValue(field, event.target.value)}
+                                                            onMouseDown={stop}
+                                                            onPointerDown={stop}
+                                                        />
+                                                    ) : (
+                                                        <div className="agent-question-options" role={field.type === "multi_select" ? "group" : "radiogroup"} aria-label={field.title}>
+                                                            {options.map((option) => {
+                                                                const optionId = option.id || option.label;
+                                                                const selectedValues = values[field.id];
+                                                                const selected = field.type === "multi_select" ? Array.isArray(selectedValues) && selectedValues.includes(optionId) : selectedValues === optionId;
+                                                                return (
+                                                                    <button
+                                                                        key={optionId}
+                                                                        type="button"
+                                                                        disabled={disabled}
+                                                                        aria-pressed={selected}
+                                                                        className={`agent-question-chip${selected ? " is-selected" : ""}`}
+                                                                        style={selected ? { background: theme.accent.primary, color: theme.accent.onPrimary } : { background: theme.toolbar.itemHover }}
+                                                                        title={option.detail || option.label}
+                                                                        onMouseDown={stop}
+                                                                        onPointerDown={stop}
+                                                                        onClick={(event) => {
+                                                                            stop(event);
+                                                                            updateValue(field, optionId);
+                                                                        }}
+                                                                    >
+                                                                        {option.label}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    {field.allowCustom && (custom || field.type === "text") ? (
+                                                        <input
+                                                            value={custom && values[field.id] !== "other" ? values[field.id] || "" : ""}
+                                                            placeholder={field.placeholder || "输入自定义内容"}
+                                                            disabled={disabled}
+                                                            className="agent-question-input mt-2"
+                                                            onChange={(event) => updateValue(field, event.target.value)}
+                                                            onMouseDown={stop}
+                                                            onPointerDown={stop}
+                                                        />
+                                                    ) : null}
+                                                </div>
+                                            </div>
+                                        </Fragment>
+                                    );
+                                })}
+                            </div>
+                            <div className="agent-question-field px-3 pb-2">
+                                <label className="agent-question-field-label" htmlFor="agent-question-additional-notes">
+                                    补充说明
+                                </label>
+                                <textarea
+                                    id="agent-question-additional-notes"
+                                    rows={2}
+                                    value={additionalNotes}
+                                    placeholder="还有需要特别说明的场景、人物、节奏或限制吗？"
+                                    disabled={disabled}
+                                    className="agent-question-input agent-question-textarea"
+                                    onChange={(event) => setAdditionalNotes(event.target.value)}
+                                    onMouseDown={stop}
+                                    onPointerDown={stop}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="agent-question-choices px-3 py-2">
+                            <AgentReplyOptionCards
+                                label={question.question}
+                                disabled={disabled}
+                                options={question.options.map((option, index) => ({ marker: String(index + 1), title: option.label, detail: option.detail, text: option.label }))}
+                                onSelect={(option) => onAnswer(option.text)}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
-            <div className="agent-question-choices px-3 pb-2 pt-2">
-                <AgentReplyOptionCards
-                    label={question.question}
-                    disabled={disabled}
-                    options={question.options.map((option, index) => ({ marker: String(index + 1), title: option.label, detail: option.detail, text: option.label }))}
-                    onSelect={(option) => onAnswer(option.text)}
-                />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2">
-                <span className="text-[var(--fs-label)] opacity-50">{question.allowFreeform === false ? "请从上面选一项。" : "也可以在下方输入框里补充说明。"}</span>
-                <button
-                    type="button"
-                    disabled={disabled}
-                    title="使用安全默认方案继续"
-                    className="agent-question-default max-w-full rounded-md border-0 px-3 py-2 text-left text-xs font-medium transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}
-                    onMouseDown={stop}
-                    onPointerDown={stop}
-                    onClick={(event) => {
-                        stop(event);
-                        onAnswer("直接开始");
-                    }}
-                >
-                    按默认方案开始
-                </button>
+            <div>
+                {isForm && validation ? (
+                    <div className="agent-question-validation px-3 pb-1 text-[var(--fs-label)]" role="alert">
+                        {validation}
+                    </div>
+                ) : null}
+                <div className="agent-question-actions px-3 pb-2">
+                    {isForm ? (
+                        <>
+                            <button
+                                type="button"
+                                disabled={disabled}
+                                className="agent-question-default"
+                                onMouseDown={stop}
+                                onPointerDown={stop}
+                                onClick={(event) => {
+                                    stop(event);
+                                    submitForm(true);
+                                }}
+                            >
+                                按推荐方案开始
+                            </button>
+                            <button
+                                type="button"
+                                disabled={disabled}
+                                className="agent-question-submit"
+                                style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}
+                                onMouseDown={stop}
+                                onPointerDown={stop}
+                                onClick={(event) => {
+                                    stop(event);
+                                    submitForm();
+                                }}
+                            >
+                                确认并继续
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <span className="mr-auto text-[var(--fs-label)] opacity-50">{question.allowFreeform === false ? "请从上面选一项。" : "也可以在下方输入框里补充说明。"}</span>
+                            <button
+                                type="button"
+                                disabled={disabled}
+                                title="使用安全默认方案继续"
+                                className="agent-question-default max-w-full rounded-md border-0 px-3 py-2 text-left text-xs font-medium transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}
+                                onMouseDown={stop}
+                                onPointerDown={stop}
+                                onClick={(event) => {
+                                    stop(event);
+                                    onAnswer("直接开始");
+                                }}
+                            >
+                                按默认方案开始
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );

@@ -52,7 +52,6 @@
 | `create.body.audio_urls` | `{"$omitEmpty":{"$map":{"from":{"$sortByOrder":{"$ref":"request.audios"}},"as":"media","in":{"$ref":"media.value"}}}}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/video/generations/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -66,8 +65,8 @@
 | --- | --- |
 | `response.taskId` | `{"$coalesce":[{"$ref":"response.data.task_id"},{"$ref":"response.data.taskId"},{"$ref":"response.task_id"},{"$ref":"response.taskId"},{"$ref":"response.data.id"},{"$ref":"response.id"},{"$ref":"taskId"}]}` |
 | `response.status` | `{"$coalesce":[{"$ref":"response.status"},{"$ref":"response.state"},{"$ref":"response.data.status"},"pending"]}` |
-| `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
-| `response.videos` | `{"$coalesce":[{"$ref":"response.data.result_url"},{"$ref":"response.data.video_url"},{"$ref":"response.data.output_url"},{"$ref":"response.data.url"},{"$ref":"response.data.metadata.url"},{"$ref":"response.data.data.video_url"},{"$ref":"response.data.data.output_url"},{"$ref":"response.data.data.result_url"},{"$ref":"response.data.data.url"},{"$ref":"response.data.data.metadata.url"},{"$ref":"response.video_url"},{"$ref":"response.videoUrl"},{"$ref":"response.result_url"},{"$ref":"response.output_url"},{"$ref":"response.url"},{"$ref":"response.metadata.url"},{"$ref":"response.output.url"}]}` |
+| `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"},{"$ref":"response.data.fail_reason"},{"$ref":"response.data.error.message"}]}` |
+| `response.videos` | `{"$coalesce":[{"$map":{"from":{"$ref":"response.data"},"as":"item","in":{"$coalesce":[{"$ref":"item.url"},{"$ref":"item.video_url"},{"$ref":"item.videoUrl"},{"$ref":"item.output_url"},{"$ref":"item.outputUrl"}]}}},{"$ref":"response.data.result_url"},{"$ref":"response.data.video_url"},{"$ref":"response.data.output_url"},{"$ref":"response.data.url"},{"$ref":"response.data.metadata.url"},{"$ref":"response.data.data.video_url"},{"$ref":"response.data.data.output_url"},{"$ref":"response.data.data.result_url"},{"$ref":"response.data.data.url"},{"$ref":"response.data.data.metadata.url"},{"$ref":"response.video_url"},{"$ref":"response.videoUrl"},{"$ref":"response.result_url"},{"$ref":"response.output_url"},{"$ref":"response.url"},{"$ref":"response.metadata.url"},{"$ref":"response.output.url"}]}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.resultEphemeral` | `true` |
 
@@ -127,6 +126,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "image-urls",
+          "token": "参考图{n}"
         },
         "parameters": [
           {
@@ -340,11 +343,44 @@
               },
               {
                 "$ref": "response.fail_reason"
+              },
+              {
+                "$ref": "response.data.fail_reason"
+              },
+              {
+                "$ref": "response.data.error.message"
               }
             ]
           },
           "videos": {
             "$coalesce": [
+              {
+                "$map": {
+                  "from": {
+                    "$ref": "response.data"
+                  },
+                  "as": "item",
+                  "in": {
+                    "$coalesce": [
+                      {
+                        "$ref": "item.url"
+                      },
+                      {
+                        "$ref": "item.video_url"
+                      },
+                      {
+                        "$ref": "item.videoUrl"
+                      },
+                      {
+                        "$ref": "item.output_url"
+                      },
+                      {
+                        "$ref": "item.outputUrl"
+                      }
+                    ]
+                  }
+                }
+              },
               {
                 "$ref": "response.data.result_url"
               },

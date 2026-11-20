@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { zhCN as canvasBZh } from "../src/i18n/messages/areas/canvasB/zh-CN";
 import { readFileSync } from "node:fs";
 
 import { formatAbsoluteDateTime, formatRelativeTime } from "../src/lib/relative-time";
@@ -40,7 +41,8 @@ describe("canvas library card", () => {
     test("footer shows project ownership (or free canvas) with relative update time", () => {
         expect(card).toContain("formatRelativeTime(project.updatedAt)");
         expect(card).toContain("title={updatedTitle}");
-        expect(card).toContain('{projectName || "自由画布"}');
+        expect(card).toContain('{projectName || t("canvasB.folderCard.freeCanvas")}');
+        expect(canvasBZh.folderCard.freeCanvas).toBe("自由画布");
         expect(card).toContain("canvas-collection-badge");
         expect(page).toContain('projectName={project.projectId ? projectNames.get(project.projectId) || "未同步项目" : undefined}');
         expect(page).not.toContain("已加载全部");

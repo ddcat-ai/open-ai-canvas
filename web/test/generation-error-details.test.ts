@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { CONTENT_MODERATION_MESSAGE, generationErrorMessage, generationFailureMetadata } from "../src/lib/generation-error";
+import { STORAGE_LIMIT_REASONS } from "../src/lib/workspace-storage";
+
+test("Agent history quota explains recovery without offering file storage", () => {
+    const reason = "agent_history_capacity_exceeded";
+    expect(generationErrorMessage({ reason })).toContain("管理员");
+    expect(generationErrorMessage({ reason })).not.toMatch(/充值|购买|素材/);
+    expect(STORAGE_LIMIT_REASONS.has(reason)).toBe(false);
+    expect(STORAGE_LIMIT_REASONS.has("storage_capacity_exceeded")).toBe(true);
+});
 
 describe("safe upstream error details", () => {
     const detail = "非常抱歉，生成的图片可能违反了关于裸露、色情或情色内容的防护限制。请重试或修改提示语。";

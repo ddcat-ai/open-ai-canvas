@@ -15,8 +15,10 @@ import (
 )
 
 func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
-	registerSkillCurationRoutes(r, svc)
-	r.POST("/skills/install", func(c *gin.Context) {
+	admin := r.Group("", requireSkillAdministration(svc))
+	r = r.Group("", requireSkillAccess(svc))
+	registerSkillCurationRoutes(r, admin, svc)
+	admin.POST("/skills/install", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -52,7 +54,7 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"skill": skill})
 	})
 
-	r.POST("/skills/install/github", func(c *gin.Context) {
+	admin.POST("/skills/install/github", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -149,7 +151,7 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 	})
 
 	r.GET("/skills/presets", func(c *gin.Context) {
-		// 场景预设目录：公开只读的市场元数据（与 /openapi.yaml 同模式，无用户数据）。
+		// 场景预设是登录用户可读的市场元数据，不包含用户技能正文。
 		presets, err := svc.SkillPresets()
 		if err != nil {
 			failService(c, err)
@@ -252,7 +254,7 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"files": files})
 	})
 
-	r.PUT("/skills/:id/files", func(c *gin.Context) {
+	admin.PUT("/skills/:id/files", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -333,7 +335,7 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"results": results})
 	})
 
-	r.POST("/skills/:id/sync", func(c *gin.Context) {
+	admin.POST("/skills/:id/sync", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -347,7 +349,7 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"skill": skill})
 	})
 
-	r.POST("/skills", func(c *gin.Context) {
+	admin.POST("/skills", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -366,7 +368,7 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"skill": skill})
 	})
 
-	r.PUT("/skills/:id", func(c *gin.Context) {
+	admin.PUT("/skills/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -385,7 +387,7 @@ func RegisterSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"skill": skill})
 	})
 
-	r.DELETE("/skills/:id", func(c *gin.Context) {
+	admin.DELETE("/skills/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)

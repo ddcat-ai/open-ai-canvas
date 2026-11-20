@@ -2,6 +2,7 @@
 
 export const CHARACTER_VARIABLES = ["{{角色名称}}", "{{角色设定}}", "{{项目画风}}", "{{画面规则}}"] as const;
 export const SCENE_VARIABLES = ["{{场景名称}}", "{{场景设定}}", "{{项目画风}}", "{{画面规则}}"] as const;
+export const PROP_VARIABLES = ["{{道具名称}}", "{{道具设定}}", "{{项目画风}}", "{{画面规则}}"] as const;
 
 export function renderAssetPrompt(template: string, values: Record<string, string>) {
     let rendered = template;

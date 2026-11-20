@@ -9,7 +9,7 @@ import { reuseCanvasReferenceListMap, reuseCanvasReferenceMap } from "@/lib/canv
 import { buildSkillMentionReferences } from "@/lib/canvas/canvas-skill-mentions";
 import { buildCanvasConnectionIndex, type CanvasIndexedConnection } from "@/lib/canvas/canvas-connection-index";
 import { retainCanvasLayoutNodes } from "@/lib/canvas/canvas-layout-snapshot";
-import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialIndex } from "@/lib/canvas/canvas-spatial-index";
+import { buildCanvasSpatialIndex, canvasNodeBounds, type CanvasSpatialBounds, type CanvasSpatialIndex } from "@/lib/canvas/canvas-spatial-index";
 import { canvasOverviewMode, resolveCanvasNodeLOD, type CanvasNodeRenderLOD } from "@/lib/canvas/canvas-node-lod";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { intersectsCanvasBounds, selectCanvasVisibleNodes } from "@/lib/canvas/canvas-node-visibility";
@@ -103,9 +103,7 @@ export function useCanvasRenderModel({
 
             if (rootId && collapsingBatchIds.has(rootId)) renderHiddenNodeIds.delete(node.id);
             if (rootId) batchChildNodes.push(node);
-            const childIndex = root?.metadata?.isBatchRoot
-                ? batchChildIndexByRootId.get(root.id) || new Map((root.metadata.batchChildIds || []).map((childId, index) => [childId, index]))
-                : undefined;
+            const childIndex = root?.metadata?.isBatchRoot ? batchChildIndexByRootId.get(root.id) || new Map((root.metadata.batchChildIds || []).map((childId, index) => [childId, index])) : undefined;
             if (root?.metadata?.isBatchRoot && childIndex && !batchChildIndexByRootId.has(root.id)) batchChildIndexByRootId.set(root.id, childIndex);
             if (root && childIndex?.has(node.id)) batchChildCountById.set(root.id, (batchChildCountById.get(root.id) || 0) + 1);
             const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
@@ -202,7 +200,9 @@ export function useCanvasRenderModel({
     // 这里的派生数据按候选集一次算好，挂载进度不再逐帧重渲染整页并重建引用映射。
     const overviewRef = useRef(false);
     const overview = canvasOverviewMode(viewport.k, overviewRef.current);
-    useEffect(() => { overviewRef.current = overview; }, [overview]);
+    useEffect(() => {
+        overviewRef.current = overview;
+    }, [overview]);
     const nodeRenderLODById = useMemo(() => {
         const result = new Map<string, CanvasNodeRenderLOD>();
         for (const node of candidateNodes) {
@@ -307,6 +307,32 @@ export function useCanvasRenderModel({
         });
     }, [connectionSpatialIndex, dragPreview, nodeById, renderBounds]);
 
+    const queryGesturePreview = useMemo(() => {
+        const mountedEdges = new Set(displayConnections.map(({ connection }) => connection.id));
+        const coveredIds = new Set(renderHiddenNodeIds);
+        for (const [id, lod] of nodeRenderLODById) if (lod !== "shell") coveredIds.add(id);
+        return (view: CanvasSpatialBounds, bounds: CanvasSpatialBounds, scale: number) => {
+            const previewNodes = selectCanvasVisibleNodes({
+                index: nodeSpatialIndex,
+                nodeById,
+                view,
+                enter: bounds,
+                retain: bounds,
+                hiddenIds: coveredIds,
+                retainedIds: forcedRenderNodeIds,
+                forcedIds: forcedRenderNodeIds,
+                budget: Math.max(0, canvasNodeRenderBudget(scale) - nodeRenderLODById.size),
+            });
+            const extraConnections = connectionSpatialIndex.index.query(bounds, CANVAS_MAX_RENDERED_CONNECTIONS).flatMap(({ connection, fromId, toId }) => {
+                if (mountedEdges.has(connection.id)) return [];
+                const from = nodeById.get(fromId);
+                const to = nodeById.get(toId);
+                return from && to ? [{ connection, from, to }] : [];
+            });
+            return { nodes: previewNodes, connections: extraConnections };
+        };
+    }, [displayConnections, connectionSpatialIndex, nodeSpatialIndex, nodeById, nodeRenderLODById, renderHiddenNodeIds, forcedRenderNodeIds]);
+
     const configInputsById = useMemo(() => {
         const map = new Map<string, NodeGenerationInput[]>();
         const configNodeIds = new Set<string>();
@@ -394,6 +420,7 @@ export function useCanvasRenderModel({
         contextMenuNode,
         cropNode,
         displayConnections,
+        queryGesturePreview,
         frameChildrenById,
         imageAssets,
         infoNode,
@@ -418,4 +445,3 @@ export function useCanvasRenderModel({
         renderViewBounds: renderBounds.view,
     };
 }
-

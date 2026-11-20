@@ -3,43 +3,49 @@ import { AGENT_LAUNCHER_POSITION_KEY, clampAgentLauncherPosition, moveAgentLaunc
 
 const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
 
-export function useAgentLauncherPosition(onOpen: () => void, width = 76, height = 76) {
+/**
+ * 入口的拖拽、点击与键盘移动。指针处理器（onPointer*）可以挂在入口按钮上，也可以挂在按钮内的身体热区上
+ * （大形象外框不接收指针）；指针捕获落在挂处理器的元素上，因此该元素必须能被命中。
+ */
+export function useAgentLauncherPosition(onOpen: () => void, width = 76, height = 76, inCanvasEditor = true) {
     const size = { width, height };
+    const preference = useRef<string | null>(null);
     const [position, setPosition] = useState(() => {
         try {
-            return restoreAgentLauncherPosition(localStorage.getItem(AGENT_LAUNCHER_POSITION_KEY), viewport(), size);
+            preference.current = localStorage.getItem(AGENT_LAUNCHER_POSITION_KEY);
         } catch (error) {
             console.warn("Agent 入口位置无法读取", error);
-            return restoreAgentLauncherPosition(null, viewport(), size);
         }
+        return restoreAgentLauncherPosition(preference.current, viewport(), size, inCanvasEditor);
     });
     const [dragging, setDragging] = useState(false);
     const gestureRef = useRef<(AgentLauncherGesture & { pointerId: number }) | null>(null);
     const suppressClick = useRef(false);
 
     const save = (next: AgentLauncherPosition) => {
+        preference.current = JSON.stringify(next);
         try {
-            localStorage.setItem(AGENT_LAUNCHER_POSITION_KEY, JSON.stringify(next));
+            localStorage.setItem(AGENT_LAUNCHER_POSITION_KEY, preference.current);
         } catch (error) {
             console.warn("Agent 入口位置无法保存", error);
         }
     };
 
     useEffect(() => {
-        const resize = () => setPosition((current) => clampAgentLauncherPosition(current, viewport(), size));
+        const resize = () => setPosition((current) => (gestureRef.current ? clampAgentLauncherPosition(current, viewport(), size) : restoreAgentLauncherPosition(preference.current, viewport(), size, inCanvasEditor)));
         resize();
         window.addEventListener("resize", resize);
         return () => window.removeEventListener("resize", resize);
-    }, [width, height]);
+    }, [width, height, inCanvasEditor]);
 
-    const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    const onPointerDown = (event: PointerEvent<HTMLElement>) => {
         event.stopPropagation();
         if (event.button !== 0 || !event.isPrimary || gestureRef.current) return;
         suppressClick.current = false;
         gestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: position, dragged: false };
         event.currentTarget.setPointerCapture(event.pointerId);
     };
-    const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const onPointerMove = (event: PointerEvent<HTMLElement>) => {
         event.stopPropagation();
         const gesture = gestureRef.current;
         if (!gesture || gesture.pointerId !== event.pointerId) return;
@@ -51,7 +57,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         setDragging(true);
         setPosition(next.position);
     };
-    const finish = (event: PointerEvent<HTMLButtonElement>, cancelled: boolean) => {
+    const finish = (event: PointerEvent<HTMLElement>, cancelled: boolean) => {
         event.stopPropagation();
         const gesture = gestureRef.current;
         if (!gesture || gesture.pointerId !== event.pointerId) return;
@@ -63,7 +69,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         if (next.dragged) save(next.position);
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     };
-    const onClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const onClick = (event: MouseEvent<HTMLElement>) => {
         event.stopPropagation();
         // Keyboard/assistive activation remains available after a drag or cancellation.
         if (event.detail !== 0 && suppressClick.current) {
@@ -72,7 +78,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         }
         onOpen();
     };
-    const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
         event.stopPropagation();
         const delta = event.shiftKey ? 40 : 10;
         const offsets: Record<string, [number, number]> = { ArrowLeft: [delta, 0], ArrowRight: [-delta, 0], ArrowUp: [0, delta], ArrowDown: [0, -delta] };
@@ -90,12 +96,12 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         handlers: {
             onPointerDown,
             onPointerMove,
-            onPointerUp: (event: PointerEvent<HTMLButtonElement>) => finish(event, false),
-            onPointerCancel: (event: PointerEvent<HTMLButtonElement>) => finish(event, true),
-            onLostPointerCapture: (event: PointerEvent<HTMLButtonElement>) => finish(event, true),
+            onPointerUp: (event: PointerEvent<HTMLElement>) => finish(event, false),
+            onPointerCancel: (event: PointerEvent<HTMLElement>) => finish(event, true),
+            onLostPointerCapture: (event: PointerEvent<HTMLElement>) => finish(event, true),
             onClick,
             onKeyDown,
-            onDoubleClick: (event: MouseEvent<HTMLButtonElement>) => event.stopPropagation(),
+            onDoubleClick: (event: MouseEvent<HTMLElement>) => event.stopPropagation(),
         },
     };
 }

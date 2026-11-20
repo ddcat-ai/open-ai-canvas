@@ -1,0 +1,12 @@
+{
+  "kling-4.0": {
+    "text_to_video": { "maxImages": 0, "inputRoles": [], "ratios": ["21:9", "16:9", "9:16", "1:1", "4:3", "3:4"] },
+    "image_to_video": { "maxImages": 10, "inputRoles": ["first_frame", "middle_frame", "last_frame"], "ratios": [] },
+    "reference_to_video": { "maxImages": 10, "inputRoles": ["first_frame", "middle_frame", "last_frame", "refer_image", "feature_video", "base_video", "element", "voice"], "ratios": ["21:9", "16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"] }
+  },
+  "kling-4.0-flash": {
+    "text_to_video": { "maxImages": 0, "inputRoles": [], "ratios": ["21:9", "16:9", "9:16", "1:1", "4:3", "3:4"] },
+    "image_to_video": { "maxImages": 1, "inputRoles": ["first_frame"], "ratios": [] },
+    "reference_to_video": { "maxImages": 10, "inputRoles": ["first_frame", "refer_image", "feature_video", "base_video", "element"], "ratios": ["21:9", "16:9", "9:16", "1:1", "4:3", "3:4", "adaptive"] }
+  }
+}

@@ -1,6 +1,6 @@
 import { getActiveUserScope } from "@/lib/user-scope";
 import { captureVideoPoster } from "@/lib/video-poster";
-import { getCachedResourceObjectUrl, peekCachedResourceObjectUrl } from "@/services/resource-blob-cache";
+import { loadCachedResourceObjectUrl } from "@/services/resource-blob-cache";
 import { resolveVideoMediaUrl } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
@@ -85,10 +85,16 @@ async function generateCanvasVideoPreview(node: CanvasNodeData, signal?: AbortSi
     await waitForBrowserIdle(signal);
     throwIfAborted(signal);
     const storageKey = node.metadata?.storageKey;
-    const cachedSource = storageKey ? peekCachedResourceObjectUrl(storageKey) || (await getCachedResourceObjectUrl(storageKey).catch(() => "")) : "";
-    const source = cachedSource || (await resolveVideoMediaUrl(node.metadata?.storageKey, node.metadata?.content || ""));
-    if (!source) return null;
-    const captured = await captureVideoPoster(source, { signal, maxWidth: 400 });
+    const lease = storageKey ? await loadCachedResourceObjectUrl(storageKey).catch(() => null) : null;
+    let captured: Awaited<ReturnType<typeof captureVideoPoster>>;
+    try {
+        throwIfAborted(signal);
+        const source = lease?.url || (await resolveVideoMediaUrl(node.metadata?.storageKey, node.metadata?.content || ""));
+        if (!source) return null;
+        captured = await captureVideoPoster(source, { signal, maxWidth: 400 });
+    } finally {
+        lease?.release();
+    }
     throwIfAborted(signal);
     if (!captured.poster) return null;
     const persisted = uploadImage(captured.poster)

@@ -1,5 +1,7 @@
+import { hasSkillLibraryAccess } from "@/lib/skill-access";
 import { compactApiParams, http } from "@/services/api/request";
 import type { Project } from "@/services/api/projects";
+import type { ThinkingRequest } from "@/lib/text-thinking";
 
 // 短剧自动制作：章节只承载小说原文，集是剧本、分镜与成片的基石。编排全部在服务端完成。
 
@@ -25,11 +27,13 @@ export type DramaMediaMode = "manual" | "auto";
 
 export type DramaAssetMode = "portrait" | "turnaround" | "fourview" | "custom";
 
-/** 角色/场景参考图方案：保存的是全文提示词，用户看到的就是实际发送的内容。道具参考图使用固定模板。 */
+/** 角色/场景/道具参考图方案：保存的是全文提示词，用户看到的就是实际发送的内容。 */
 export type DramaAssetSettings = {
     mode: DramaAssetMode;
     characterPrompt: string;
     scenePrompt: string;
+    /** 老草稿可能没有这个字段，缺省按默认道具模板。 */
+    propPrompt?: string;
     characterRatio: string;
     /** 角色 / 道具 / 场景参考图的分辨率档位（1k / 1.5k / 2k / 4k）；空串或缺省按该类所用图片模型的默认档位。 */
     resolution?: string;
@@ -49,7 +53,7 @@ export type DramaAssetScheme = {
     characterPrompt: string;
 };
 
-export type DramaAssetSchemeCatalog = { schemes: DramaAssetScheme[]; scenePrompt: string; characterVariables: string[]; sceneVariables: string[] };
+export type DramaAssetSchemeCatalog = { schemes: DramaAssetScheme[]; scenePrompt: string; propPrompt: string; characterVariables: string[]; sceneVariables: string[]; propVariables: string[] };
 
 /** 剧情段怎么切：智能按场景与冲突切、单段不超过模型上限；固定每段 segmentSeconds 秒；范围在 segmentMin–MaxSeconds 之间。 */
 export type DramaSegmentMode = "auto" | "fixed" | "range";
@@ -65,7 +69,13 @@ export type DramaStoryboardSettings = {
     segmentMaxSeconds: number;
     /** 镜头节奏五档，从快到慢；缺省为快节奏。 */
     pacing: DramaPacing;
-    dialogue: "dense" | "standard" | "sparse";
+    /** 对白密度三档预设或自定义；自定义时按下面四项计算镜头时长并写进提示词。 */
+    dialogue: DramaDialogue;
+    /** 自定义对白：语速（字/秒）、平均每隔多少秒一句、单句字数上限、台词后的气口（毫秒）。切回预设档也保留。 */
+    speechRate?: number;
+    lineSeconds?: number;
+    lineMaxRunes?: number;
+    linePauseMs?: number;
     transition: "auto" | "cut" | "fadeblack" | "fadewhite";
     transitionMs: number;
     /** 表演强度 1–10（1 内敛、5 自然、10 夸张外放）；只改变剧本与段视频提示词的写法。 */
@@ -75,9 +85,12 @@ export type DramaStoryboardSettings = {
 };
 
 export type DramaPacing = "rapid" | "fast" | "standard" | "relaxed" | "slow";
+export type DramaDialogue = "dense" | "standard" | "sparse" | "custom";
 
 /** 用户技能库里的一个技能文件，作为文字步骤（资产提取、分镜拆分、视频提示词）的写作方法。 */
 export type DramaSkillRef = { skillId: string; skillName: string; path: string };
+
+export type DramaTextThinking = Partial<Record<"bible" | "plan" | "script" | "prompt", ThinkingRequest>>;
 
 export type DramaTransition = "cut" | "fadeblack" | "fadewhite";
 
@@ -100,6 +113,8 @@ export type DramaSettings = {
     mediaMode: DramaMediaMode;
     concurrency: number;
     models: DramaModels;
+    /** 各文字阶段独立的思考意图；缺省按对应模型默认值执行。 */
+    textThinking?: DramaTextThinking;
     /** 自动取参考图时每段最多发送的张数，0 为按视频模型上限；手动指定参考图的段只受模型上限约束。 */
     referenceLimit: number;
     /** 小说分集方式：chapter 每 chaptersPerEpisode 章一集，auto 由模型规划；空表示早期作品没有记录。分集完成后不能修改。 */
@@ -125,7 +140,7 @@ export type DramaEpisodeMode = "auto" | "chapter";
 
 export type DramaEpisodeStage = "queued" | "script" | "prompts" | "review" | "video" | "render" | "done";
 
-export type DramaMediaStatus = "" | "queued" | "running" | "ready" | "failed" | "stale" | "skipped";
+export type DramaMediaStatus = "" | "draft" | "queued" | "running" | "ready" | "failed" | "stale" | "skipped";
 
 export type DramaProductionView = {
     status: DramaStatus;
@@ -133,22 +148,29 @@ export type DramaProductionView = {
     pauseReason: string;
     settings: DramaSettings;
     budgetMicrocredits: number;
-    /** 作品总花费：流水线任务加关联精修画布上的生成任务，预算按它判断。 */
+    /** 作品已实际扣费：流水线任务加关联精修画布上的生成任务，按计费订单的实收汇总。 */
     spentMicrocredits: number;
-    /** 其中精修画布上的花费。 */
+    /** 其中精修画布上的实收。 */
     canvasSpentMicrocredits: number;
+    /** 尚未结算订单的冻结额（冻结中）；预算按 spent + held 判断。 */
+    heldMicrocredits: number;
     planDone: boolean;
+    /** 草稿保存了创建页表单，打开时回到创建页继续编辑。 */
+    hasDraftForm?: boolean;
     planCursor: number;
     sampleApproved: boolean;
     assetsReleased: boolean;
     logline: string;
     tone: string;
+    /** 只统计已加入制作的章节；reserved* 是导入时未选中、尚未加入制作的原著章节。 */
     chapterCount: number;
     wordCount: number;
+    reservedChapterCount: number;
+    reservedWordCount: number;
 };
 
-/** 按剧情段统计的单集进度。 */
-export type DramaEpisodeStats = { segments: number; promptReady: number; videoReady: number; failed: number };
+/** 按剧情段统计的单集进度；videoGenerated 是持有视频的段数（含已过期的旧视频）。 */
+export type DramaEpisodeStats = { segments: number; promptReady: number; videoReady: number; videoGenerated: number; failed: number };
 
 export type DramaEpisodeRow = {
     id: string;
@@ -188,8 +210,14 @@ export type DramaSummary = {
     episodes: DramaEpisodeRow[];
     jobCounts: Partial<Record<"queued" | "running" | "succeeded" | "failed" | "canceled", number>>;
     inbox: DramaInboxItem[];
+    inboxCount: number;
+    inboxFailureCount: number;
     castCount: number;
 };
+
+export function formatDramaInboxCount(n: number): string {
+    return n > 99 ? "99+" : String(n);
+}
 
 export type DramaShot = {
     id: string;
@@ -201,6 +229,7 @@ export type DramaShot = {
     scene: string;
     sceneCastId?: string;
     castIdsJson: string;
+    lookCastIdsJson: string;
     propIdsJson: string;
     speaker: string;
     dialogue: string;
@@ -238,7 +267,7 @@ export type DramaEpisode = {
 
 export type DramaJob = {
     id: string;
-    kind: "bible" | "plan" | "cast_image" | "script" | "segment_prompt" | "segment_video" | "render";
+    kind: "bible" | "plan" | "cast_image" | "cast_extract" | "script" | "segment_prompt" | "segment_video" | "render" | "compose";
     status: "queued" | "running" | "succeeded" | "failed" | "canceled";
     label: string;
     error?: string;
@@ -253,6 +282,8 @@ export type DramaJob = {
     updatedAt: string;
     /** 生成中任务的上游进度文案（如“候车 · 前面 3 条”），上游已接收任务时才有。 */
     providerStage?: string;
+    /** 排队作业还没提交的原因（作品暂停、账号同时任务已满、本类同时生成数已满）；下一轮就会提交时为空。 */
+    wait?: string;
 };
 
 export type DramaJobTask = {
@@ -278,7 +309,8 @@ export type DramaJobAttempt = { taskId?: string; status: string; error?: string;
 
 export type DramaJobDetail = { job: DramaJob; target: string; attempts: DramaJobAttempt[] };
 
-export type DramaChapterRef = { id: string; title: string; position: number; wordCount: number };
+/** reserved / episodeNumber 只在原著目录（listDramaChapters）里给出：尚未加入制作、以及使用这一章的第一集。 */
+export type DramaChapterRef = { id: string; title: string; position: number; wordCount: number; reserved?: boolean; episodeNumber?: number };
 
 export type DramaEpisodeDetail = {
     episode: DramaEpisode;
@@ -288,6 +320,7 @@ export type DramaEpisodeDetail = {
     chapters: DramaChapterRef[];
     jobs: DramaJob[];
     scriptJob?: DramaJob;
+    composeJob?: DramaJob;
     /** 原文台词与镜头台词的逐句核对；章节被多集共用或还没有镜头时不提供。 */
     dialogueCheck?: DramaDialogueCheck;
 };
@@ -296,7 +329,7 @@ export type DramaEpisodeDetail = {
 export type DramaDialogueCheck = { sourceLines: number; missingCount: number; missing: string[] };
 
 /** 剧情段视频提示词的撰写状态：none 无记录、stale 镜头或设定改过后过期。 */
-export type DramaSegmentPromptStatus = "none" | "queued" | "running" | "ready" | "stale" | "failed";
+export type DramaSegmentPromptStatus = "none" | "queued" | "running" | "ready" | "stale" | "failed" | "conflict" | "review";
 
 /** 一个剧情段；videoPrompt 为生效内容（手动改写优先），generated 为模型撰写的版本。 */
 export type DramaSegment = {
@@ -323,6 +356,7 @@ export type DramaSegment = {
     videoModel: DramaModelChoice;
     /** auto 按本段镜头自动取参考图；custom 为手动指定（顺序即参考图编号）。 */
     referenceMode: "auto" | "custom";
+    audioReferenceMode: "auto" | "custom";
     request: DramaSegmentRequest;
     promptJob?: DramaJob;
     videoJob?: DramaJob;
@@ -331,7 +365,10 @@ export type DramaSegment = {
 };
 
 /** 参考图编号与提交顺序一致；sent=false 表示未就绪或超过模型上限，不随请求发送。 */
-export type DramaSegmentReference = { castId: string; label: string; kind: DramaCastKind; name: string; resourceId?: string; sent: boolean };
+export type DramaSegmentReference = { castId: string; label: string; kind: DramaCastKind | "image"; name: string; resourceId?: string; sent: boolean };
+
+export type DramaReferenceImage = { resourceId: string; name: string };
+export type DramaSegmentReferencePatch = { referenceCastIds?: string[]; autoReferences?: boolean; referenceImages?: DramaReferenceImage[]; audioCastIds?: string[]; autoAudioReferences?: boolean };
 
 /**
  * 生成本段视频时实际发送的内容，与提交同一函数计算。
@@ -362,7 +399,12 @@ export type DramaSegmentRequest = {
     warning?: string;
     /** 提示词正文里不属于本段的“参考图N”；存在时服务端拒绝生成视频。 */
     unknownReferences?: string[];
+    /** 自动或手动选择的角色音色；sent 的作为“参考音频N”随请求发送，否则 note 说明原因。 */
+    audioReferences?: DramaSegmentAudioReference[];
+    /** 视频模型声明的参考音频上限，0 或缺省表示不支持参考音频。 */
+    modelMaxAudios?: number;
 };
+export type DramaSegmentAudioReference = { castId: string; name: string; label?: string; resourceId: string; sent: boolean; note?: string };
 
 export type DramaCastKind = "character" | "prop" | "scene";
 
@@ -375,6 +417,12 @@ export type DramaCast = {
     role: string;
     description: string;
     appearance: string;
+    imagePrompt?: string;
+    imageStyleId?: string;
+    imageStyleName?: string;
+    imageStylePrompt?: string;
+    sourceProjectId?: string;
+    sourceCastId?: string;
     voiceInstructions: string;
     importance: number;
     imageResourceId?: string;
@@ -382,6 +430,14 @@ export type DramaCast = {
     imageVersion: number;
     locked: boolean;
     position: number;
+    /** 角色指定的声音（声音库条目）与样本音频；支持参考音频的视频模型在该角色开口的剧情段带上样本。 */
+    voiceProfileId?: string;
+    voiceSampleResourceId?: string;
+    /** 非空表示这是 parentId 角色的一套造型：lookName 造型名，lookFromChapter / lookToChapter 默认适用的原著章节（从 1 起，0 不限）。 */
+    parentId?: string;
+    lookName?: string;
+    lookFromChapter?: number;
+    lookToChapter?: number;
 };
 
 export type DramaListItem = {
@@ -396,7 +452,11 @@ export type DramaListItem = {
     aspectRatio: string;
     styleName?: string;
     spentMicrocredits: number;
+    /** 尚未结算订单的冻结额，口径同 DramaProductionView.heldMicrocredits。 */
+    heldMicrocredits: number;
     updatedAt: string;
+    /** 同 DramaProductionView.hasDraftForm。 */
+    hasDraftForm?: boolean;
 };
 
 export type DramaListPage = { items: DramaListItem[]; page: number; pageSize: number; total: number; hasMore: boolean; statusCounts: Partial<Record<DramaStatus | "all", number>> };
@@ -411,6 +471,7 @@ export type DramaModelOption = {
     label: string;
     priceLabel: string;
     maxVideoSeconds?: number;
+    maxAudios?: number;
     /** 仅视频模型：支持图生视频，可用于尾帧续接；为 false 时只能并行出片。 */
     tailFrameChain?: boolean;
     /** 仅视频模型：能准确给出的作品画幅；不含作品画幅的模型不能用于该作品。 */
@@ -453,7 +514,32 @@ export type CreateDramaInput = {
     sourceFormat: DramaSourceFormat;
     /** 剧本与分镜总是每章一集，服务端忽略 auto。 */
     episodeMode: DramaEpisodeMode;
+    /** 先加入制作的章节下标（从 0 起）；不传表示全部。其余章节保存为预留章节，之后可在制作台加入。 */
+    selectedChapters?: number[];
+    /** start=false 时随草稿保存的创建页表单，回到创建页时原样回填。 */
+    draft?: DramaDraftForm;
 };
+
+/** 草稿回填所需的原始正文与画风 ID；章节按当前分集方式从原始正文重新拆分。 */
+export type DramaDraftForm = { sourceText: string; styleId?: string };
+
+export type DramaDraft = {
+    projectId: string;
+    name: string;
+    sourceFormat: DramaSourceFormat;
+    settings: DramaSettings;
+    budgetMicrocredits: number;
+    /** 加入制作的章节下标（从 0 起）。 */
+    selectedChapters: number[];
+    chapterCount: number;
+    form: DramaDraftForm;
+};
+
+function withoutRestrictedSkillRefs<T extends { settings?: Partial<DramaSettings> }>(input: T): T {
+    if (hasSkillLibraryAccess() || !input.settings) return input;
+    const { bibleSkill, scriptSkill, promptSkill, ...settings } = input.settings;
+    return { ...input, settings };
+}
 
 const base = (projectId: string) => `/dramas/${encodeURIComponent(projectId)}`;
 
@@ -470,11 +556,20 @@ export function getDramaModels() {
 }
 
 export function estimateDrama(input: { chapterCount: number; wordCount: number; settings: Partial<DramaSettings>; episodeMode?: DramaEpisodeMode }, signal?: AbortSignal) {
-    return http.post<DramaEstimate>("/dramas/estimate", input, { signal });
+    return http.post<DramaEstimate>("/dramas/estimate", withoutRestrictedSkillRefs(input), { signal });
 }
 
 export function createDrama(input: CreateDramaInput) {
-    return http.post<DramaSummary>("/dramas", input, { timeout: 120_000 });
+    return http.post<DramaSummary>("/dramas", withoutRestrictedSkillRefs(input), { timeout: 120_000 });
+}
+
+export function getDramaDraft(projectId: string, signal?: AbortSignal) {
+    return http.get<DramaDraft>(`${base(projectId)}/draft`, { signal });
+}
+
+/** 整体替换从未开工的草稿；start=true 时替换后直接开工。 */
+export function saveDramaDraft(projectId: string, input: CreateDramaInput) {
+    return http.put<DramaSummary>(`${base(projectId)}/draft`, withoutRestrictedSkillRefs(input), { timeout: 120_000 });
 }
 
 export function deleteDrama(projectId: string) {
@@ -486,7 +581,7 @@ export function getDrama(projectId: string, signal?: AbortSignal) {
 }
 
 export function updateDramaSettings(projectId: string, input: { settings?: DramaSettings; budgetMicrocredits?: number }) {
-    return http.patch<DramaSummary>(`${base(projectId)}/settings`, input);
+    return http.patch<DramaSummary>(`${base(projectId)}/settings`, withoutRestrictedSkillRefs(input));
 }
 
 export function startDrama(projectId: string) {
@@ -525,12 +620,30 @@ export function renameDramaEpisode(projectId: string, episodeId: string, title: 
     return updateDramaEpisode(projectId, episodeId, { title });
 }
 
-/** 在作品末尾追加一集：原文直接成为新的一集，单集最多 1.2 万字。 */
-export function addDramaEpisode(projectId: string, input: { title: string; text: string; sourceFormat: DramaSourceFormat }) {
+/** 新增一集：原文直接成为新的一集，单集最多 1.2 万字。不传 anchorEpisodeId 时追加到末尾，传了插到那一集之前或之后，后续集号顺延。 */
+export function addDramaEpisode(projectId: string, input: { title: string; text: string; sourceFormat: DramaSourceFormat; anchorEpisodeId?: string; position?: "before" | "after" }) {
     return http.post<DramaEpisodeDetail>(`${base(projectId)}/episodes`, input, { timeout: 60_000 });
 }
 
+/**
+ * 删除一集，后续集号前移一位，只属于这一集的原文退回原著目录。生成过视频时 confirm 必须是“第 N 集”，
+ * 否则返回 reason=drama_episode_confirm_required，details.confirmText 是当前应输入的文字。
+ */
+export function deleteDramaEpisode(projectId: string, episodeId: string, confirm?: string) {
+    return http.delete<{ deleted: boolean }>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}`, { params: compactApiParams({ confirm }) });
+}
+
 /** 修改原文；已写好的剧本不会自动重写，需要再点重新改编。 */
+/** 原著目录：全部章节（含导入时未选中的预留章节），不含原文。 */
+export function listDramaChapters(projectId: string, signal?: AbortSignal) {
+    return http.get<{ chapters: DramaChapterRef[] }>(`${base(projectId)}/chapters`, { signal });
+}
+
+/** 把预留章节加入制作：按章节顺序建成新的集追加在末尾；chaptersPerEpisode 不传沿用作品设置。 */
+export function produceDramaChapters(projectId: string, input: { chapterIds: string[]; chaptersPerEpisode?: number }) {
+    return http.post<{ episodeIds: string[] }>(`${base(projectId)}/chapters/produce`, input);
+}
+
 export function updateDramaChapter(projectId: string, chapterId: string, patch: { title?: string; text?: string }) {
     return http.patch<{ chapter: { id: string; title: string; sourceText: string; wordCount: number; position: number } }>(`${base(projectId)}/chapters/${encodeURIComponent(chapterId)}`, patch);
 }
@@ -552,6 +665,11 @@ export function rescriptDramaEpisode(projectId: string, episodeId: string) {
     return http.post<DramaEpisodeDetail>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/rescript`);
 }
 
+/** 手动重新合成本集成片：各段视频就绪后按实测时长拼接；合成中可重复点，幂等。 */
+export function composeDramaEpisode(projectId: string, episodeId: string) {
+    return http.post<DramaEpisodeDetail>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/compose`);
+}
+
 export type DramaShotPatch = Partial<Pick<DramaShot, "speaker" | "dialogue" | "action" | "shotSize" | "camera" | "imagePrompt" | "videoPrompt">> & { transition?: DramaTransition; durationSeconds?: number };
 
 /** 让文本模型（重新）撰写指定剧情段的完整视频提示词。 */
@@ -565,8 +683,8 @@ export function updateDramaSegment(projectId: string, episodeId: string, index: 
 }
 
 /** 指定本段参考图（顺序即编号，空数组表示不发参考图）；传 null 恢复按镜头自动取。模型撰写的提示词会标记过期。 */
-export function updateDramaSegmentReferences(projectId: string, episodeId: string, index: number, castIds: string[] | null) {
-    return http.patch<{ saved: boolean }>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/segments/${index}`, castIds ? { referenceCastIds: castIds } : { autoReferences: true });
+export function updateDramaSegmentReferences(projectId: string, episodeId: string, index: number, patch: DramaSegmentReferencePatch) {
+    return http.patch<{ saved: boolean }>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/segments/${index}`, patch);
 }
 
 export function updateDramaShot(projectId: string, shotId: string, patch: DramaShotPatch) {
@@ -577,7 +695,23 @@ export function listDramaCast(projectId: string, signal?: AbortSignal) {
     return http.get<{ cast: DramaCast[] }>(`${base(projectId)}/cast`, { signal });
 }
 
-export type DramaCastPatch = Partial<Pick<DramaCast, "name" | "appearance" | "description" | "voiceInstructions" | "locked">> & { aliases?: string[] };
+export type DramaCastImageStyle = Pick<DramaCast, "imageStyleId" | "imageStyleName" | "imageStylePrompt">;
+export type CreateDramaCastInput = DramaCastImageStyle & { kind: DramaCastKind; name: string; appearance: string; description?: string; imagePrompt?: string };
+
+export function createDramaCast(projectId: string, input: CreateDramaCastInput) {
+    return http.post<{ cast: DramaCast }>(`${base(projectId)}/cast`, input);
+}
+
+export function importDramaCast(projectId: string, input: { sourceProjectId: string; castIds: string[]; matchByName: boolean; replaceExisting: boolean }) {
+    return http.post<{ imported: number; skipped: number; cast: DramaCast[] }>(`${base(projectId)}/cast/import`, input);
+}
+
+/** 按外观、独立风格和参考图方案编排提示词；不保存，也不调用模型。 */
+export function rebuildDramaCastImagePrompt(projectId: string, castId: string, input: DramaCastImageStyle & { appearance?: string }) {
+    return http.post<{ imagePrompt: string }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/image-prompt`, input);
+}
+
+export type DramaCastPatch = Partial<Pick<DramaCast, "name" | "appearance" | "description" | "voiceInstructions" | "locked" | "imagePrompt">> & DramaCastImageStyle & { aliases?: string[] };
 
 export function updateDramaCast(projectId: string, castId: string, patch: DramaCastPatch) {
     return http.patch<{ cast: DramaCast }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}`, patch);
@@ -593,6 +727,28 @@ export function setDramaCastImage(projectId: string, castId: string, resourceId:
         restyleSegments,
         ...(origin ? { source: origin.source, taskId: origin.taskId || "" } : {}),
     });
+}
+
+/** 为角色指定声音：voiceProfileId 从声音库选，sampleResourceId 是刚上传或录制的样本（自动登记到声音库）。 */
+export function setDramaCastVoice(projectId: string, castId: string, input: { voiceProfileId?: string; sampleResourceId?: string; voiceName?: string; restyleSegments: boolean }) {
+    return http.put<{ cast: DramaCast; affectedSegments: number }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/voice`, input);
+}
+
+export function clearDramaCastVoice(projectId: string, castId: string, restyleSegments: boolean) {
+    return http.delete<{ cast: DramaCast; affectedSegments: number }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/voice`, { params: compactApiParams({ restyleSegments: restyleSegments ? "true" : undefined }) });
+}
+
+/** 保存造型草稿，不自动生图；imagePrompt 留空按外观描述生成，章节从 1 起，0 不限。 */
+export function addDramaCastLook(projectId: string, castId: string, input: DramaCastImageStyle & { lookName: string; appearance: string; imagePrompt?: string; fromChapter?: number; toChapter?: number }) {
+    return http.post<{ look: DramaCast }>(`${base(projectId)}/cast/${encodeURIComponent(castId)}/looks`, input);
+}
+
+export function updateDramaCastLook(projectId: string, lookId: string, input: DramaCastImageStyle & { lookName?: string; appearance?: string; imagePrompt?: string; fromChapter?: number; toChapter?: number; restyleSegments?: boolean }) {
+    return http.patch<{ look: DramaCast; affectedSegments: number }>(`${base(projectId)}/looks/${encodeURIComponent(lookId)}`, input);
+}
+
+export function deleteDramaCastLook(projectId: string, lookId: string, restyleSegments: boolean) {
+    return http.delete<{ affectedSegments: number }>(`${base(projectId)}/looks/${encodeURIComponent(lookId)}`, { params: compactApiParams({ restyleSegments: restyleSegments ? "true" : undefined }) });
 }
 
 export function getDramaCastImpact(projectId: string, castId: string, signal?: AbortSignal) {
@@ -625,8 +781,8 @@ export function releaseDramaMedia(projectId: string, target: "assets" | "episode
 
 // ===== 精修画布 =====
 
-/** 服务端稳定原因：预算已用完（含画布精修），以及采用时剧情段刚被修改。 */
-export const DRAMA_ERROR_REASON = { budgetExhausted: "drama_budget_exhausted", segmentChanged: "drama_segment_changed" } as const;
+/** 服务端稳定原因：预算已用完（含画布精修）、采用时剧情段刚被修改，以及删除生成过视频的集需要输入确认。 */
+export const DRAMA_ERROR_REASON = { budgetExhausted: "drama_budget_exhausted", segmentChanged: "drama_segment_changed", episodeConfirmRequired: "drama_episode_confirm_required" } as const;
 
 export type DramaTakeKind = "cast" | "video" | "final";
 /** pipeline 流水线生成；upload 制作台上传；canvas 从精修画布采用。 */
@@ -644,10 +800,14 @@ export type DramaTake = {
     source: DramaTakeSource;
     current: boolean;
     createdAt: string;
+    /** 产出该版本的任务模型标识（若能关联到任务）。 */
+    model?: string;
 };
 
 export type DramaSegmentAdoptResult = {
     adopted: boolean;
+    /** 把历史版本设为当前时为 true；采用画布视频时仍用 adopted。 */
+    restored?: boolean;
     unchanged?: boolean;
     /** cascade 时重新排队的后续段数量。 */
     requeued: number;
@@ -678,4 +838,9 @@ export function listDramaTakes(projectId: string, ownerId: string, kind: DramaTa
 /** 把画布视频采用为剧情段当前视频；默认只换本段，cascade 时后续已生成的段重新排队生成。 */
 export function adoptDramaSegmentVideo(projectId: string, episodeId: string, segmentIndex: number, input: { resourceId: string; taskId?: string; cascade: boolean; expectedRevision?: number }) {
     return http.put<DramaSegmentAdoptResult>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/segments/${segmentIndex}/video`, input, { timeout: 300_000 });
+}
+
+/** 把本段已有的视频版本设为当前播放版本；不新建版本、不级联后续段、不重新生成。 */
+export function restoreDramaSegmentTake(projectId: string, episodeId: string, segmentIndex: number, input: { takeId: string; expectedRevision?: number }) {
+    return http.put<DramaSegmentAdoptResult>(`${base(projectId)}/episodes/${encodeURIComponent(episodeId)}/segments/${segmentIndex}/current-take`, input, { timeout: 300_000 });
 }

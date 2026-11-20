@@ -185,7 +185,7 @@ func TestCloudAgentMediaCompletionKeepsGenerationAndWritebackFailures(t *testing
 
 func TestCloudAgentCapabilityGuidePublishesConnectionContracts(t *testing.T) {
 	guide := cloudAgentCapabilityGuide()
-	for _, nodeType := range []string{"script", "markdown", "text", "image", "video"} {
+	for _, nodeType := range []string{"script", "text", "image", "video"} {
 		descriptor, ok := cloudAgentNodeCapabilityForType(nodeType)
 		if !ok {
 			t.Fatalf("missing capability %s", nodeType)

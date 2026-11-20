@@ -12,6 +12,21 @@
     --skill-wb-motion: var(--motion-state, 160ms);
 }
 
+/* 后台复用同一工作台。后台没有用户工作区 token，这里映射到后台 token，组件规则保持唯一一份。 */
+[data-admin-root] .skill-wb-page {
+    --user-surface: var(--admin-surface);
+    --user-surface-muted: var(--admin-canvas);
+    --user-surface-raised: var(--admin-surface);
+    --user-border: var(--admin-border);
+    --user-border-strong: var(--admin-border-strong);
+    --user-ink: var(--admin-text);
+    --user-ink-muted: var(--admin-text-secondary);
+    --user-ink-soft: var(--admin-text-muted);
+    --user-accent: var(--admin-status-info);
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
 .skill-wb {
     display: flex;
     height: 100%;

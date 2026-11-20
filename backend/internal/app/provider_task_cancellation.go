@@ -79,7 +79,7 @@ func (s *Service) requestProviderCancellation(ctx context.Context, task *model.T
 	if err != nil {
 		return s.markProviderCancellationUncertain(task, "读取上游取消配置失败，费用待核对："+err.Error())
 	}
-	if !s.supportsProviderCancellation(input.Config.InterfaceType) {
+	if !canCancelProviderConfig(input.Config) {
 		return s.markProviderCancellationUncertain(task, "当前上游协议不支持取消，费用待核对")
 	}
 
@@ -186,7 +186,7 @@ func (s *Service) providerCancellationInput(task *model.Task) (canvasGenerationI
 	if err := json.Unmarshal([]byte(decrypted), &input); err != nil {
 		return canvasGenerationInput{}, err
 	}
-	config, err := s.resolveProviderConfig(input.Config)
+	config, err := s.resolveProviderConfig(input.Config, task)
 	if err != nil {
 		return canvasGenerationInput{}, err
 	}
@@ -201,29 +201,29 @@ func supportsProviderCancellation(interfaceType string) bool {
 // supportsProviderCancellation 在手写协议之外，也接受分离式回查且声明了 cancel 的声明式插件：
 // cancel 发出取消，poll 的状态映射确认上游是否真的取消（确认后才退积分）。
 // 其他声明了 cancel 的插件（如 OpenAI Videos 的 DELETE 实为删除）语义未逐一核实，暂不启用。
-func (s *Service) supportsProviderCancellation(interfaceType string) bool {
-	if supportsProviderCancellation(interfaceType) {
+func canCancelProviderConfig(config providerConfig) bool {
+	if !config.pinned && supportsProviderCancellation(config.InterfaceType) {
 		return true
 	}
-	_, _, ok := s.declarativeCancellationAdapter(context.Background(), interfaceType)
+	_, _, ok := declarativeCancellationAdapter(context.Background(), config)
 	return ok
 }
 
-func (s *Service) declarativeCancellationAdapter(ctx context.Context, interfaceType string) (context.Context, protocol.Adapter, bool) {
-	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
-	adapter, ok := declarativeProtocolAdapterForContext(ctx, strings.TrimSpace(interfaceType))
+func declarativeCancellationAdapter(ctx context.Context, config providerConfig) (context.Context, protocol.Adapter, bool) {
+	ctx = withProtocolRegistry(ctx, config.registry)
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, strings.TrimSpace(config.InterfaceType))
 	if !ok {
 		return ctx, nil, false
 	}
 	metadata := adapter.Metadata()
-	return ctx, adapter, metadata.DetachedPolling && metadata.Cancel != "" && metadata.Poll != ""
+	return ctx, adapter, (metadata.DetachedPolling || supportsProviderCancellation(config.InterfaceType)) && metadata.Cancel != "" && metadata.Poll != ""
 }
 
 func (s *Service) cancelProviderTask(ctx context.Context, input canvasGenerationInput, providerRequestID string) error {
-	if supportsProviderCancellation(input.Config.InterfaceType) {
+	if !input.Config.pinned && supportsProviderCancellation(input.Config.InterfaceType) {
 		return cancelProviderTask(ctx, input.Config, providerRequestID)
 	}
-	ctx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
+	ctx, adapter, ok := declarativeCancellationAdapter(ctx, input.Config)
 	if !ok {
 		return errors.New("当前上游协议不支持取消")
 	}
@@ -237,25 +237,15 @@ func (s *Service) cancelProviderTask(ctx context.Context, input canvasGeneration
 }
 
 func (s *Service) queryProviderCancellation(ctx context.Context, input canvasGenerationInput, providerRequestID string) (providerCancellationOutcome, string, error) {
-	if supportsProviderCancellation(input.Config.InterfaceType) {
+	if !input.Config.pinned && supportsProviderCancellation(input.Config.InterfaceType) {
 		return queryProviderCancellation(ctx, input.Config, providerRequestID)
 	}
-	ctx, adapter, ok := s.declarativeCancellationAdapter(ctx, input.Config.InterfaceType)
+	ctx, adapter, ok := declarativeCancellationAdapter(ctx, input.Config)
 	if !ok {
 		return "", "", errors.New("当前上游协议不支持取消状态查询")
 	}
 	// 只读状态，不下载结果：取消确认前上游已完成的视频按“已完成”结算，不再入库。
-	request := protocolRequestFromInput(input)
-	pollContext := protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: providerRequestID}
-	spec, err := adapter.BuildPoll(ctx, pollContext)
-	if err != nil {
-		return "", "", err
-	}
-	body, err := executeProtocolRequest(ctx, input.Config, spec)
-	if err != nil {
-		return "", "", err
-	}
-	state, err := adapter.ParsePoll(ctx, pollContext, body)
+	state, err := pollProtocolTask(ctx, input.Config, adapter, protocolRequestFromInput(input), providerRequestID)
 	if err != nil {
 		return "", "", err
 	}

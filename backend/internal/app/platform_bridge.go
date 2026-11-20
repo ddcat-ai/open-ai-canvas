@@ -26,6 +26,7 @@ const (
 	FeatureShortDrama            = platform.FeatureShortDrama
 	FeatureTaskCenter            = platform.FeatureTaskCenter
 	FeatureCredits               = platform.FeatureCredits
+	FeatureTeams                 = platform.FeatureTeams
 	FeatureCustomChannels        = platform.FeatureCustomChannels
 	FeatureFrontendModels        = platform.FeatureFrontendModels
 	FeaturePluginCenter          = platform.FeaturePluginCenter
@@ -34,6 +35,8 @@ const (
 	FeatureTimelineTranscription = platform.FeatureTimelineTranscription
 	FeatureImageWorkbench        = platform.FeatureImageWorkbench
 	FeatureVideoWorkbench        = platform.FeatureVideoWorkbench
+	FeatureEcommerce             = platform.FeatureEcommerce
+	FeatureEcommerceVideo        = platform.FeatureEcommerceVideo
 )
 
 type platformHost struct {
@@ -155,6 +158,8 @@ func (s *Service) Close() error {
 	if s == nil {
 		return nil
 	}
+	// 收尾可能拉起 Pi 会话或媒体等待，先等它结束，再统一取消会话和等待。
+	s.closeCloudAgentApprovalFollowUps()
 	s.closeCloudAgentPiRunners()
 	s.closeApprovedCloudAgentMediaWaiters()
 	if s.coordinator == nil {
@@ -205,7 +210,7 @@ func (s *Service) ValidateRuntime() error {
 
 const (
 	featureAvailabilitySettingKey = "feature_availability"
-	runtimePolicySettingKey       = "runtime_policy"
+	runtimePolicySettingKey       = model.RuntimePolicySettingKey
 )
 
 func defaultFeatureAvailability() FeatureAvailability {

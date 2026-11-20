@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import type { PrevisRenderMode } from "@/types/previs";
 
 /**
@@ -11,22 +12,32 @@ import type { PrevisRenderMode } from "@/types/previs";
  *   不会创建第二套场景、模型或 GPU 资源。
  */
 export type PrevisMonitorFrame = { canvas: HTMLCanvasElement; shotName: string; timecode: string; mode: PrevisRenderMode };
-export type PrevisMonitorHandle = { close: () => void; closed: () => boolean };
+export type PrevisMonitorHandle = { close: () => void; closed: () => boolean; setBrandName: (brandName: string) => void };
 
-const MODE_LABELS: Record<PrevisRenderMode, string> = { beauty: "预览", clay: "白膜", depth: "深度", normal: "法线", pose: "骨骼" };
+const MODE_LABEL_KEYS: Record<PrevisRenderMode, string> = {
+    beauty: "canvasC.previsMonitor.mode.beauty",
+    clay: "canvasC.previsMonitor.mode.clay",
+    depth: "canvasC.previsMonitor.mode.depth",
+    normal: "canvasC.previsMonitor.mode.normal",
+    pose: "canvasC.previsMonitor.mode.pose",
+};
 
 type ScreenDetailsLike = { screens: Array<{ isPrimary?: boolean; availLeft: number; availTop: number; availWidth: number; availHeight: number }> };
 const monitorSessions = new WeakMap<Window, () => void>();
 
-export function openPrevisMonitorWindow(input: { renderFrame: () => PrevisMonitorFrame | null; onClosed: () => void; fps?: number }): PrevisMonitorHandle {
+export function openPrevisMonitorWindow(input: { brandName: string; renderFrame: () => PrevisMonitorFrame | null; onClosed: () => void; fps?: number }): PrevisMonitorHandle {
     // 同步打开：保住用户激活，避免被弹窗拦截。
     const popup = window.open("", "yingce-previs-monitor", "popup=yes,width=960,height=600");
-    if (!popup) throw new Error("浏览器拦截了监看窗口，请允许本站弹出窗口后重试");
+    if (!popup) throw new Error(translate("canvasC.previsMonitor.popupBlocked"));
     const monitor: Window = popup;
     monitorSessions.get(monitor)?.();
     const doc = monitor.document;
     doc.body.replaceChildren();
-    doc.title = "影策世界引擎 · 镜头监看";
+    let stopped = false;
+    const setBrandName = (brandName: string) => {
+        if (!stopped && !monitor.closed) doc.title = translate("canvasC.previsMonitor.windowTitle", { brandName });
+    };
+    setBrandName(input.brandName);
     // 独立文档拿不到主站 token，这里只用纯黑监看底色与白色文字。
     doc.body.style.cssText = "margin:0;background:#000;color:#fff;font:12px/1.4 system-ui,sans-serif;overflow:hidden;display:grid;place-items:center;height:100vh;";
     const canvas = doc.createElement("canvas");
@@ -35,7 +46,7 @@ export function openPrevisMonitorWindow(input: { renderFrame: () => PrevisMonito
     hud.style.cssText = "position:fixed;left:12px;top:10px;opacity:.72;pointer-events:none;letter-spacing:.04em;";
     const tip = doc.createElement("div");
     tip.style.cssText = "position:fixed;right:12px;bottom:10px;opacity:.45;pointer-events:none;";
-    tip.textContent = "F 全屏 · Esc 退出全屏";
+    tip.textContent = translate("canvasC.previsMonitor.tip");
     doc.body.append(canvas, hud, tip);
     const ctx = canvas.getContext("2d");
     const onKeyDown = (event: KeyboardEvent) => {
@@ -45,7 +56,6 @@ export function openPrevisMonitorWindow(input: { renderFrame: () => PrevisMonito
     };
     popup.addEventListener("keydown", onKeyDown);
 
-    let stopped = false;
     let last = 0;
     let animationFrame = 0;
     const interval = 1000 / Math.max(1, Math.min(60, input.fps ?? 24));
@@ -61,10 +71,10 @@ export function openPrevisMonitorWindow(input: { renderFrame: () => PrevisMonito
                         canvas.height = frame.canvas.height;
                     }
                     ctx.drawImage(frame.canvas, 0, 0);
-                    hud.textContent = `${frame.shotName} · ${MODE_LABELS[frame.mode]} · ${frame.timecode}`;
+                    hud.textContent = `${frame.shotName} · ${translate(MODE_LABEL_KEYS[frame.mode])} · ${frame.timecode}`;
                 }
             } catch (error) {
-                hud.textContent = error instanceof Error ? error.message : "监看画面暂不可用";
+                hud.textContent = error instanceof Error ? error.message : translate("canvasC.previsMonitor.unavailable");
             }
         }
         animationFrame = monitor.requestAnimationFrame(loop);
@@ -92,6 +102,7 @@ export function openPrevisMonitorWindow(input: { renderFrame: () => PrevisMonito
             if (!monitor.closed) monitor.close();
         },
         closed: () => stopped || monitor.closed,
+        setBrandName,
     };
 }
 

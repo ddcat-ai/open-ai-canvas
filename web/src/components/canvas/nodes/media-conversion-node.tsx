@@ -34,6 +34,8 @@ type MediaConversionNodeContentProps = {
 };
 
 const OPERATIONS = Object.keys(MEDIA_CONVERSION_OPERATION_LABELS) as MediaConversionOperation[];
+// 本机模型服务不随发行版提供，提示里不能指向不存在的启动脚本。
+const LOCAL_RUNTIME_UNAVAILABLE_NOTICE = "未检测到本机模型服务。AI 线稿、深度图和姿态骨架需要另行部署本机模型服务，当前发行版未附带；可先改用灰度图或 Canny 边缘";
 
 export function MediaConversionNodeContent({ node, theme }: MediaConversionNodeContentProps) {
     const { updateMetadata, updateNode } = useCanvasNodeActions();
@@ -273,7 +275,7 @@ export function MediaConversionNodeContent({ node, theme }: MediaConversionNodeC
         if (next.connection === "connected") {
             setNotice("本地模型服务已连接，可以重新开始转换");
         } else {
-            setNotice(next.error || "本地模型服务仍未连接，请先运行 start-yingce-local.cmd");
+            setNotice(next.connection === "unreachable" ? LOCAL_RUNTIME_UNAVAILABLE_NOTICE : next.error || LOCAL_RUNTIME_UNAVAILABLE_NOTICE);
         }
     };
 
@@ -565,7 +567,7 @@ function mediaConversionStatusLabel(status: MediaConversionNodeState["status"] |
 }
 
 function localRuntimeNotice(error: LocalRuntimeClientError, connection: ReturnType<typeof useLocalRuntimeStore.getState>["connection"]) {
-    if (connection === "unreachable") return "本地模型服务未启动，请双击 start-yingce-local.cmd 后重试";
+    if (connection === "unreachable") return LOCAL_RUNTIME_UNAVAILABLE_NOTICE;
     if (error.code === "depth_model_missing") return "深度模型尚未安装，请先完成本地模型安装";
     if (error.code === "lineart_model_missing") return "AI 线稿依赖或模型尚未安装，请先完成本地线稿模型安装";
     if (error.code === "pose_model_missing") return "姿态模型或依赖尚未安装，请先完成本地姿态模型安装";

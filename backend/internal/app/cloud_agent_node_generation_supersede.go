@@ -92,7 +92,7 @@ func (s *Service) supersedeCloudAgentApproval(userID, runID string, nodeIDs []st
 		if run.Status != "waiting_approval" {
 			return "", nil
 		}
-		state, err := cloudAgentDecodeForExecution(run)
+		state, err := s.cloudAgentDecodeForExecution(run)
 		if err != nil {
 			return "", err
 		}

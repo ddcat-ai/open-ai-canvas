@@ -1,11 +1,21 @@
 // 素材库的批量操作条、空态、筛选组、详情抽屉与图片放大。
 
 import { Button, Drawer, Tag } from "antd";
-import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Mic, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from "lucide-react";
+import { Box, CheckCheck, Clapperboard, Copy, Download, FileText, FileUp, Link2, Maximize2, Mic, Plus, RotateCcw, ShieldCheck, Trash2, ZoomIn, ZoomOut, type LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AudioPlayButton, CharacterAssetCover } from "@/components/assets/asset-rich-cover";
+import { CachedResourceImage } from "@/components/cached-resource-image";
+import { StatusBadge } from "@/components/ui/base/badges";
+import { useCopyText } from "@/hooks/use-copy-text";
+import { currentLocale } from "@/i18n";
+import { arkAssetStatusTone, arkCertificationBadgeKey, arkCertificationExpired, formatArkDate, type ArkLibraryProgress } from "@/lib/ark-assets";
+import { cn } from "@/lib/utils";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useThemePack } from "@/themes/use-theme-pack";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { formatBytes } from "@/lib/image-utils";
+import { audioAverageBitrateKbps, formatAudioSampleRate, imageResolutionTierLabel, isLosslessAudioMimeType, mediaAspectRatioLabel, mediaFormatLabel, RECOMMENDED_MIN_AUDIO_SAMPLE_RATE, videoResolutionTierLabel } from "@/lib/media-spec";
+import { useAudioSampleRate } from "@/hooks/use-audio-sample-rate";
 import { useRef, useState } from "react";
 import { resourceStorageLabel, resourceStorageLocation, resourceStorageTitle } from "@/lib/canvas/resource-storage-status";
 import { type LibraryAsset, assetKindIcons } from "./asset-library-format";
@@ -23,6 +33,7 @@ export function AssetsBatchBar({
     onExport,
     onRestore,
     onArchive,
+    onShareTeam,
     onDelete,
 }: {
     count: number;
@@ -35,6 +46,7 @@ export function AssetsBatchBar({
     onExport: () => void;
     onRestore?: () => void;
     onArchive?: () => void;
+    onShareTeam?: () => void;
     onDelete: () => void;
 }) {
     return (
@@ -60,6 +72,11 @@ export function AssetsBatchBar({
                     </>
                 ) : (
                     <>
+                        {onShareTeam ? (
+                            <Button size="small" disabled={!count || busy} onClick={onShareTeam}>
+                                共享到团队
+                            </Button>
+                        ) : null}
                         <Button size="small" disabled={!count || busy} icon={<Download className="size-3.5" />} onClick={onExport}>
                             导出
                         </Button>
@@ -84,10 +101,12 @@ export const assetsEmptyBannerFrames = [
 
 export function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; onImport: () => void; onGoCanvas: () => void }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    // 当前皮肤的主题包带了示意图时用主题包的。
+    const frames = useThemePack()?.copy?.assetsEmptyFrames ?? assetsEmptyBannerFrames;
     return (
         <div className="assets-empty">
             <div className="assets-empty-banner" aria-hidden="true">
-                {assetsEmptyBannerFrames.map((frame, index) => (
+                {frames.map((frame, index) => (
                     <figure key={frame.caption} className={`assets-empty-banner-frame ${index === 1 ? "is-main" : index === 0 ? "is-back" : "is-front"}`}>
                         <img src={frame.src} alt="" loading="lazy" decoding="async" />
                         <span>{frame.caption}</span>
@@ -129,6 +148,7 @@ export function AssetFilterGroup({
     options,
     value,
     counts,
+    icons,
     onChange,
     className = "",
 }: {
@@ -136,6 +156,8 @@ export function AssetFilterGroup({
     options: Array<{ label: string; value: string }>;
     value: string;
     counts: Map<string, number>;
+    /** 选项图标，按 option.value 取；缺省的选项只显示文字。 */
+    icons?: Partial<Record<string, LucideIcon>>;
     onChange: (value: string) => void;
     className?: string;
 }) {
@@ -145,9 +167,17 @@ export function AssetFilterGroup({
             <div className="collection-filter-options">
                 {options.map((option) => {
                     const active = value === option.value;
+                    const Icon = icons?.[option.value];
                     return (
                         <button key={option.value} type="button" aria-pressed={active} className={`assets-filter-item ${active ? "is-active" : ""}`} onClick={() => onChange(option.value)}>
-                            <span className="assets-filter-item-label">{option.label}</span>
+                            {Icon ? (
+                                <span className="assets-filter-item-label flex items-center gap-2">
+                                    <Icon aria-hidden className="size-3.5 shrink-0" />
+                                    <span className="truncate">{option.label}</span>
+                                </span>
+                            ) : (
+                                <span className="assets-filter-item-label">{option.label}</span>
+                            )}
                             <span className="assets-filter-count">{counts.get(option.value) || 0}</span>
                         </button>
                     );
@@ -226,8 +256,23 @@ function CharacterArchive({ asset }: { asset: Extract<LibraryAsset, { kind: "ent
     );
 }
 
-export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: LibraryAsset | null; onClose: () => void; onCopy: (asset: LibraryAsset) => void; onDownload: (asset: LibraryAsset) => void }) {
-    const facts = asset ? assetArchiveFacts(asset) : [];
+export function AssetDrawer({
+    asset,
+    onClose,
+    onCopy,
+    onDownload,
+    ark,
+}: {
+    asset: LibraryAsset | null;
+    onClose: () => void;
+    onCopy: (asset: LibraryAsset) => void;
+    onDownload: (asset: LibraryAsset) => void;
+    /** 方舟素材库已开放时传入：认证进度与提交、管理入口。 */
+    ark?: { progress?: ArkLibraryProgress; onCertify: (asset: Extract<LibraryAsset, { kind: "image" }>) => void; onManage: () => void };
+}) {
+    const audio = asset?.kind === "audio" ? asset : null;
+    const sampleRate = useAudioSampleRate(audio?.data.storageKey, audio?.data.url || "");
+    const facts = asset ? assetArchiveFacts(asset, sampleRate) : [];
     const kind = asset && isKnownAssetKind(asset.kind) ? asset.kind : undefined;
     const KindIcon = asset ? (kind ? assetKindIcons[kind] : FileText) : Clapperboard;
     return (
@@ -280,13 +325,14 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
                                 {tag}
                             </Tag>
                         ))}
-                        {asset.arkAssetId ? (
+                        {asset.arkAssetId && !ark ? (
                             <Tag className="m-0" color="geekblue" title="火山方舟素材 ID，生成视频时可直接 asset:// 引用">
                                 方舟 {asset.arkAssetId}
                             </Tag>
                         ) : null}
                         <StorageTag asset={asset} />
                     </div>
+                    {ark && (asset.kind === "image" || asset.arkAssetId) ? <ArkArchiveSection asset={asset} progress={ark.progress} onCertify={ark.onCertify} onManage={ark.onManage} /> : null}
                     <div className="asset-archive-facts">
                         {facts.map((fact) => (
                             <div key={fact.label} className="asset-archive-fact">
@@ -326,6 +372,89 @@ export function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: Lib
     );
 }
 
+/** 素材档案里的方舟认证：已认证时列出认证类型、素材组、方舟素材 ID 与授权期限；未认证的图片可以直接提交认证。 */
+function ArkArchiveSection({ asset, progress, onCertify, onManage }: { asset: LibraryAsset; progress?: ArkLibraryProgress; onCertify: (asset: Extract<LibraryAsset, { kind: "image" }>) => void; onManage: () => void }) {
+    const { t } = useTranslation();
+    const copyText = useCopyText();
+    const certification = asset.arkCertification;
+    const pending = !certification && (progress?.status === "pending_review" || progress?.status === "processing");
+    const failed = !certification && (progress?.status === "rejected" || progress?.status === "failed");
+    const expired = arkCertificationExpired(certification);
+    return (
+        <section className="asset-archive-section" aria-label={t("library.ark.detail.title")}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+                <span className="asset-archive-section-title !mb-0 flex items-center gap-1.5">
+                    <ShieldCheck aria-hidden className="size-3.5" />
+                    {t("library.ark.detail.title")}
+                </span>
+                {certification ? (
+                    <StatusBadge size="sm" tone={expired ? "warning" : "success"} label={t(arkCertificationBadgeKey(certification))} />
+                ) : progress && (pending || failed) ? (
+                    <StatusBadge size="sm" tone={arkAssetStatusTone(progress.status)} label={t(`library.ark.badge.${progress.status}`)} />
+                ) : (
+                    <StatusBadge size="sm" tone="neutral" label={t("library.ark.detail.uncertified")} />
+                )}
+            </div>
+            {certification ? (
+                <>
+                    <div className="asset-archive-facts">
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.kind")}</span>
+                            <span className="asset-archive-fact-value">{t(`library.ark.kinds.${certification.kind}`)}</span>
+                        </div>
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.group")}</span>
+                            <span className="asset-archive-fact-value" title={certification.groupName}>
+                                {certification.groupName || "-"}
+                            </span>
+                        </div>
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.arkAssetId")}</span>
+                            {asset.arkAssetId ? (
+                                <button type="button" className="asset-archive-fact-value w-full text-left font-mono hover:text-foreground" title={asset.arkAssetId} onClick={() => copyText(asset.arkAssetId || "")}>
+                                    {asset.arkAssetId}
+                                </button>
+                            ) : (
+                                <span className="asset-archive-fact-value">-</span>
+                            )}
+                        </div>
+                        <div className="asset-archive-fact">
+                            <span className="asset-archive-fact-label">{t("library.ark.detail.expiresAt")}</span>
+                            <span className={cn("asset-archive-fact-value", expired && "!text-status-warning")}>{certification.expiresAt ? formatArkDate(certification.expiresAt, currentLocale()) : t("library.ark.detail.noExpiry")}</span>
+                        </div>
+                    </div>
+                    <p className="asset-archive-section-body mt-3">{t("library.ark.detail.hint")}</p>
+                </>
+            ) : (
+                <div className="space-y-1">
+                    {progress && (pending || failed) ? (
+                        <p className="asset-archive-section-body">
+                            {t("library.ark.detail.group")}：{progress.groupName}
+                        </p>
+                    ) : null}
+                    {failed && progress?.error ? <p className="asset-archive-section-body text-status-error">{t("library.ark.detail.reason", { reason: progress.error })}</p> : null}
+                    {asset.arkAssetId ? (
+                        <p className="asset-archive-section-body">
+                            {t("library.ark.detail.manualId")} <span className="font-mono">{asset.arkAssetId}</span>
+                        </p>
+                    ) : null}
+                    {!progress || (!pending && !failed) ? <p className="asset-archive-section-body">{t("library.ark.detail.hint")}</p> : null}
+                </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+                {!certification && !pending && asset.kind === "image" ? (
+                    <Button size="small" icon={<ShieldCheck className="size-3.5" />} onClick={() => onCertify(asset)}>
+                        {t("library.ark.detail.certify")}
+                    </Button>
+                ) : null}
+                <Button size="small" type="text" onClick={onManage}>
+                    {t("library.ark.detail.manage")}
+                </Button>
+            </div>
+        </section>
+    );
+}
+
 export function AssetImageZoom({ asset }: { asset: LibraryAsset & { kind: "image" } }) {
     const [scale, setScale] = useState(1);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -358,7 +487,15 @@ export function AssetImageZoom({ asset }: { asset: LibraryAsset & { kind: "image
                 dragRef.current = null;
             }}
         >
-            <img src={asset.coverUrl || asset.data.dataUrl} alt={asset.title} loading="lazy" decoding="async" className="asset-archive-preview-media asset-zoom-image" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }} />
+            <CachedResourceImage
+                storageKey={asset.data.storageKey}
+                src={asset.data.dataUrl || asset.coverUrl}
+                alt={asset.title}
+                eager
+                decoding="async"
+                className="asset-archive-preview-media asset-zoom-image"
+                style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
+            />
             <div className="asset-zoom-controls" data-canvas-no-zoom>
                 <button type="button" title="缩小" aria-label="缩小" onClick={() => setScale((value) => Math.max(0.25, value / 1.25))}>
                     <ZoomOut className="size-4" />
@@ -377,20 +514,31 @@ export function AssetImageZoom({ asset }: { asset: LibraryAsset & { kind: "image
     );
 }
 
-export function assetArchiveFacts(asset: LibraryAsset) {
+export function assetArchiveFacts(asset: LibraryAsset, audioSampleRate?: number) {
     const facts: Array<{ label: string; value: string }> = [
         { label: "类型", value: assetKindLabel(asset.kind, asset.category) },
         { label: "分类", value: assetCategoryLabel(asset.category) },
     ];
     if (asset.kind === "image" || asset.kind === "video") {
+        const tier = asset.kind === "video" ? videoResolutionTierLabel(asset.data.width, asset.data.height) : imageResolutionTierLabel(asset.data.width, asset.data.height);
+        facts.push({ label: "清晰度", value: tier || "未知" });
+        facts.push({ label: "画幅", value: mediaAspectRatioLabel(asset.data.width, asset.data.height) || "未知" });
         facts.push({ label: "尺寸", value: assetSizeLabel(asset.data.width, asset.data.height) });
     }
     if (asset.kind === "video" || asset.kind === "audio") {
         facts.push({ label: "时长", value: formatAssetClock(asset.data.durationMs) || "未知" });
     }
+    if (asset.kind === "audio") {
+        const sampleRate = formatAudioSampleRate(audioSampleRate);
+        // Apple 播客音频规范把 44.1 kHz 作为最低采样率；低于它的素材做配乐或成片时音质会受限。
+        const belowRecommended = audioSampleRate && audioSampleRate < RECOMMENDED_MIN_AUDIO_SAMPLE_RATE;
+        facts.push({ label: "采样率", value: sampleRate ? `${sampleRate}${belowRecommended ? "（低于 44.1 kHz）" : ""}` : "未知" });
+        const bitrate = audioAverageBitrateKbps(asset.data.bytes, asset.data.durationMs);
+        if (bitrate) facts.push({ label: isLosslessAudioMimeType(asset.data.mimeType) ? "码率（无损）" : "平均码率", value: `${bitrate} kbps` });
+    }
     if (asset.kind !== "text" && asset.kind !== "entity") {
         facts.push({ label: "大小", value: formatBytes(asset.data.bytes) });
-        facts.push({ label: "格式", value: asset.data.mimeType });
+        facts.push({ label: "格式", value: mediaFormatLabel(asset.data.mimeType) || "未知" });
         facts.push({ label: "存储", value: resourceStorageLabel(asset.data.storageKey) });
     }
     if (asset.kind !== "entity" || asset.source) facts.push({ label: "来源", value: asset.source || "未标注" });

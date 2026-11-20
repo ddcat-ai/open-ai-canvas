@@ -146,6 +146,54 @@ func TestEnrichAPICallLogReadsResponsesStreamUsage(t *testing.T) {
 	}
 }
 
+func TestEnrichAPICallLogNormalizesCacheWriteUsage(t *testing.T) {
+	// 归一口径：InputTokens 含缓存命中与缓存写入。
+	for _, test := range []struct {
+		name                              string
+		body                              string
+		input, output, cached, cacheWrite int64
+	}{
+		{
+			// Anthropic 原生 input_tokens 不含缓存命中和缓存写入。
+			name:  "anthropic message",
+			body:  `{"id":"msg-1","type":"message","usage":{"input_tokens":20,"cache_creation_input_tokens":1000,"cache_read_input_tokens":300,"output_tokens":40}}`,
+			input: 1320, output: 40, cached: 300, cacheWrite: 1000,
+		},
+		{
+			name: "anthropic stream",
+			body: "event: message_start\n" +
+				"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg-2\",\"usage\":{\"input_tokens\":12,\"cache_creation_input_tokens\":500,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\n" +
+				"event: message_delta\n" +
+				"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":30}}\n\n",
+			input: 512, output: 30, cached: 0, cacheWrite: 500,
+		},
+		{
+			// 百炼显式缓存：prompt_tokens 已含创建和命中的缓存。
+			name:  "dashscope explicit cache",
+			body:  `{"usage":{"prompt_tokens":2174,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":0,"cache_creation_input_tokens":2156,"cache_type":"ephemeral"}}}`,
+			input: 2174, output: 20, cached: 0, cacheWrite: 2156,
+		},
+		{
+			name:  "openrouter cache write",
+			body:  `{"usage":{"prompt_tokens":900,"completion_tokens":10,"prompt_tokens_details":{"cached_tokens":100,"cache_write_tokens":700}}}`,
+			input: 900, output: 10, cached: 100, cacheWrite: 700,
+		},
+		{
+			name:  "openai cached only",
+			body:  `{"usage":{"prompt_tokens":64,"completion_tokens":8,"prompt_tokens_details":{"cached_tokens":32}}}`,
+			input: 64, output: 8, cached: 32,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			log := &model.ApiCallLog{Capability: "text"}
+			(&Service{}).EnrichAPICallLog(log, []byte(test.body))
+			if !log.UsageAvailable || log.InputTokens != test.input || log.OutputTokens != test.output || log.CachedTokens != test.cached || log.CacheWriteTokens != test.cacheWrite {
+				t.Fatalf("usage = input %d output %d cached %d write %d, want %d %d %d %d", log.InputTokens, log.OutputTokens, log.CachedTokens, log.CacheWriteTokens, test.input, test.output, test.cached, test.cacheWrite)
+			}
+		})
+	}
+}
+
 func TestEnrichAPICallLogRejectsEmptyTextUsage(t *testing.T) {
 	log := &model.ApiCallLog{Capability: "text", Path: "/v1/chat/completions"}
 	(&Service{}).EnrichAPICallLog(log, []byte(`{"usage":{}}`))

@@ -13,6 +13,12 @@ var (
 	ErrTradeBillNotFound = errors.New("payment provider trade bill not found")
 )
 
+const (
+	RPCCodeOrderNotFound     = "order_not_found"
+	RPCCodeOrderNotPaid      = "order_not_paid"
+	RPCCodeTradeBillNotFound = "trade_bill_not_found"
+)
+
 type Config map[string]string
 
 type Descriptor struct {
@@ -33,11 +39,15 @@ type NotificationResponse struct {
 	Body        string
 }
 
+// CreateRequest 的 AmountFen / Currency 是渠道实收金额与结算货币：商品货币不同时宿主已按汇率换算。
+// Method 是用户在渠道内选中的支付方式（如易支付的 alipay / wxpay），渠道没有声明支付方式时为空；
+// 旧插件忽略该字段即可保持原行为。
 type CreateRequest struct {
 	MerchantOrderNo string
 	Description     string
 	AmountFen       int64
 	Currency        string
+	Method          string `json:",omitempty"`
 	ExpiresAt       time.Time
 	NotifyURL       string
 	ReturnURL       string

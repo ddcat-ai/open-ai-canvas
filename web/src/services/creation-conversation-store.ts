@@ -40,9 +40,7 @@ function isRecoverableCreationMessage(message: PendingCreationMessage) {
 }
 
 export function pendingCreationTaskKey(conversations: StoredCreationConversation[]) {
-    return conversations
-        .flatMap((conversation) => conversation.messages.flatMap((message) => (isRecoverableCreationMessage(message) ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : [])))
-        .join("|");
+    return conversations.flatMap((conversation) => conversation.messages.flatMap((message) => (isRecoverableCreationMessage(message) ? [`${conversation.id}:${message.id}:${(message.taskIds || []).join(",")}`] : []))).join("|");
 }
 
 export function pendingCreationTaskIds(conversations: StoredCreationConversation[]) {
@@ -55,8 +53,14 @@ export function pendingCreationTaskIds(conversations: StoredCreationConversation
     return Array.from(new Set(taskIds));
 }
 
-export async function loadCreationConversations<T extends StoredCreationConversation>() {
-    const storage = localForageStorageForScope(getActiveUserScope());
+export async function loadCreationConversations<T extends StoredCreationConversation>(scope = getActiveUserScope()) {
+    const storage = localForageStorageForScope(scope);
+    const synced = await storage.getItem("creation-history-sync-v1");
+    if (synced) {
+        const envelope = JSON.parse(synced);
+        if (envelope.version !== 1 || !Array.isArray(envelope.conversations)) throw new Error("创作对话同步缓存无效");
+        return envelope.conversations as T[];
+    }
     const value = await storage.getItem(CREATION_CONVERSATIONS_KEY);
     if (!value) return null;
     let parsed: unknown;
@@ -69,7 +73,7 @@ export async function loadCreationConversations<T extends StoredCreationConversa
     return parsed as T[];
 }
 
-function persistableCreationConversations<T extends StoredCreationConversation>(conversations: T[]) {
+export function persistableCreationConversations<T extends StoredCreationConversation>(conversations: T[]) {
     return conversations.map((conversation) => ({
         ...conversation,
         messages: conversation.messages.map((message) => {

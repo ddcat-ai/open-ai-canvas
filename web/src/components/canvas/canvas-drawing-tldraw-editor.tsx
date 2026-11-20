@@ -4,12 +4,15 @@ import type { Editor } from "tldraw";
 import "tldraw/tldraw.css";
 
 import type { CanvasDrawingEditorHandle, CanvasDrawingEditorProps } from "@/components/canvas/canvas-drawing-editor-types";
+import { currentLocale, translate } from "@/i18n";
+import type { AppLocale } from "@/i18n/locales";
 import { resolveTldrawLicenseKey } from "@/lib/canvas/canvas-drawing-engine";
 import { useUserStore } from "@/stores/use-user-store";
 
 const SINGLE_PAGE_OPTIONS = { maxPages: 1 } as const;
 const DRAWING_RENDER_MAX_DIMENSION = 2048;
 const DRAWING_RENDER_PADDING = 24;
+const TLDRAW_LOCALES: Record<AppLocale, string> = { "zh-CN": "zh-cn", "en-US": "en", "fr-FR": "fr", "de-DE": "de", "ja-JP": "ja", "ko-KR": "ko-kr" };
 
 export const CanvasDrawingTldrawEditor = forwardRef<CanvasDrawingEditorHandle, CanvasDrawingEditorProps>(function CanvasDrawingTldrawEditor({ snapshot, colorScheme, onReady }, ref) {
     const tldrawLicenseKey = useUserStore((state) => state.drawingEngine.tldrawLicenseKey);
@@ -23,11 +26,11 @@ export const CanvasDrawingTldrawEditor = forwardRef<CanvasDrawingEditorHandle, C
     useImperativeHandle(ref, () => ({
         createSave: async () => {
             const editor = editorRef.current;
-            if (!editor) throw new Error("tldraw 编辑器尚未准备完成");
+            if (!editor) throw new Error(translate("canvasA.drawing.tldrawNotReady"));
             const shapeIds = [...editor.getCurrentPageShapeIds()];
             if (!shapeIds.length) return { snapshot: getSnapshot(store), preview: null, render: null };
             const bounds = editor.getShapesPageBounds(shapeIds);
-            if (!bounds) throw new Error("无法读取 tldraw 绘图边界");
+            if (!bounds) throw new Error(translate("canvasA.drawing.tldrawBoundsFailed"));
             const sourceDimension = Math.max(bounds.width, bounds.height) + DRAWING_RENDER_PADDING * 2;
             const scale = Math.min(4, DRAWING_RENDER_MAX_DIMENSION / Math.max(1, sourceDimension));
             const image = await editor.toImage(shapeIds, { format: "png", background: true, padding: DRAWING_RENDER_PADDING, scale, pixelRatio: 1, darkMode: false });
@@ -46,7 +49,7 @@ export const CanvasDrawingTldrawEditor = forwardRef<CanvasDrawingEditorHandle, C
     return (
         <Tldraw
             store={store}
-            locale="zh-cn"
+            locale={TLDRAW_LOCALES[currentLocale()]}
             colorScheme={colorScheme}
             options={SINGLE_PAGE_OPTIONS}
             licenseKey={resolveTldrawLicenseKey(tldrawLicenseKey)}

@@ -1,0 +1,65 @@
+[data-asset-kind] {
+    --drama-asset-color: var(--text-secondary);
+    --drama-asset-tint: color-mix(in srgb, var(--drama-asset-color) 10%, var(--library-surface));
+}
+
+[data-asset-kind="character"] {
+    --drama-asset-color: color-mix(in srgb, var(--status-loading) 78%, var(--text-primary));
+}
+
+[data-asset-kind="scene"] {
+    --drama-asset-color: color-mix(in srgb, var(--status-success) 78%, var(--text-primary));
+}
+
+[data-asset-kind="prop"] {
+    --drama-asset-color: color-mix(in srgb, var(--status-warning) 75%, var(--text-primary));
+}
+
+.drama-asset-kind,
+.canvas-resource-mention-kind,
+.drama-asset-reference,
+.canvas-resource-inline-mention[data-asset-kind] {
+    color: var(--drama-asset-color);
+    background: var(--drama-asset-tint);
+}
+
+.drama-asset-kind,
+.canvas-resource-mention-kind {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: var(--space-1);
+    padding: var(--space-half) var(--space-1);
+    border-radius: var(--r-xs);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    line-height: var(--lh-heading);
+}
+
+.canvas-resource-inline-kind {
+    flex: 0 0 auto;
+    font-size: var(--fs-label);
+    opacity: 0.8;
+}
+
+.canvas-resource-mention-item[data-asset-kind] .canvas-resource-mention-title-row > strong,
+.canvas-resource-mention-card[data-asset-kind] .canvas-resource-mention-card-label {
+    color: var(--drama-asset-color);
+}
+
+.canvas-resource-mention-card-kind {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding-inline: var(--space-2);
+    padding-bottom: var(--space-2);
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+}
+
+.drama-asset-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}

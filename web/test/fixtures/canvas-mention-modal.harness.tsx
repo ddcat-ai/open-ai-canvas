@@ -1,18 +1,190 @@
 import { afterAll, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { CanvasResourceReference } from "../../src/lib/canvas/canvas-resource-references";
+import type { CanvasResourceMentionTextareaActions } from "../../src/components/canvas/canvas-resource-mention-textarea";
 
 const dom = new Window({ url: "http://localhost/" });
-for (const key of ["window", "document", "navigator", "Element", "Node", "HTMLElement", "HTMLTextAreaElement", "MutationObserver", "ResizeObserver"] as const) {
+for (const key of ["window", "document", "navigator", "Element", "Node", "HTMLElement", "HTMLTextAreaElement", "SVGElement", "ShadowRoot", "MutationObserver", "ResizeObserver"] as const) {
     Object.defineProperty(globalThis, key, { configurable: true, value: key === "window" ? dom : dom[key] });
 }
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom) });
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom) });
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { MentionMenu } = await import("../../src/components/canvas/canvas-mention-menu");
+const { CanvasResourceMentionTextarea } = await import("../../src/components/canvas/canvas-resource-mention-textarea");
+const { buildToolMentionReference, canvasResourceMentionToken } = await import("../../src/lib/canvas/canvas-resource-references");
+const { renderEditableContent, serializeEditableValue, setEditableSelection, getEditableSelection } = await import("../../src/components/canvas/canvas-mention-editable");
+const { getNineGridMenuItems } = await import("../../src/components/canvas/canvas-image-toolbar-tools");
+const { CanvasNineGridPicker } = await import("../../src/components/canvas/canvas-nine-grid-picker");
+const { ConfigProvider } = await import("antd");
 afterAll(() => dom.happyDOM.abort());
 
+test("提示词预设回显当前选项，改选四视图只提交一次并收起菜单", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const selections: Array<[number, string, string]> = [];
+    const render = (selectedToolId: number) =>
+        root.render(
+            <ConfigProvider theme={{ token: { motion: false } }}>
+                <CanvasNineGridPicker
+                    selectedToolId={selectedToolId}
+                    onSelect={(id, label, icon) => {
+                        selections.push([id, label, icon]);
+                        render(id);
+                    }}
+                />
+            </ConfigProvider>,
+        );
+    try {
+        await act(async () => render(85));
+        const trigger = host.querySelector("button")!;
+        await act(async () => trigger.click());
+        const option = (id: number) => document.querySelector<HTMLElement>(`[role="menuitemradio"][data-preset-id="${id}"]`)!;
+        expect(option(85).getAttribute("aria-checked")).toBe("true");
+        expect(option(1000089).getAttribute("aria-checked")).toBe("false");
+        await act(async () => option(1000089).click());
+        expect(selections).toEqual([[1000089, "角色四视图", "ContactRound"]]);
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+        await act(async () => trigger.click());
+        expect(option(1000089).getAttribute("aria-checked")).toBe("true");
+        expect(option(85).getAttribute("aria-checked")).toBe("false");
+        await act(async () => option(85).focus());
+        expect(document.querySelector(".canvas-tool-menu-detail")!.textContent).toContain(option(85).getAttribute("aria-description")!);
+        await act(async () => option(85).dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+        expect(document.activeElement).toBe(trigger);
+        await act(async () => trigger.click());
+        await act(async () => trigger.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+        expect(selections).toHaveLength(1);
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
+test("参考栏加号复用引用菜单，取消不写入，选择时插入到光标", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const actions = { current: null as CanvasResourceMentionTextareaActions | null };
+    const reference: CanvasResourceReference = { id: "connected", nodeId: "connected", kind: "image", label: "图片1", title: "林间回望", active: true };
+    const writes: string[] = [];
+    const prompt = "前景远景";
+    try {
+        await act(async () =>
+            root.render(
+                <CanvasResourceMentionTextarea
+                    value={prompt}
+                    references={[reference]}
+                    actionsRef={actions}
+                    onChange={(next) => {
+                        writes.push(next);
+                    }}
+                />,
+            ),
+        );
+        const editor = host.querySelector<HTMLElement>('[role="textbox"]')!;
+        editor.focus();
+        setEditableSelection(editor, 2);
+        await act(async () => actions.current!.openReferencePicker());
+        expect(document.querySelector("[data-canvas-resource-mention-menu]")).not.toBeNull();
+        await act(async () => editor.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+        expect(document.querySelector("[data-canvas-resource-mention-menu]")).toBeNull();
+        expect(writes).toEqual([]);
+        await act(async () => actions.current!.openReferencePicker());
+        await act(async () => editor.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+        expect(writes).toEqual([`前景 ${canvasResourceMentionToken(reference)} 远景`]);
+        expect(document.querySelector("[data-canvas-resource-mention-menu]")).toBeNull();
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
+test("行首参考图前后都能放置光标，零宽锚点不进入提示词", () => {
+    const editor = document.createElement("div");
+    const image: CanvasResourceReference = { id: "image", nodeId: "image", kind: "image", label: "图片1", active: true };
+    const token = canvasResourceMentionToken(image);
+    renderEditableContent(editor, `前缀${token}后缀`, [image]);
+
+    const leadingAnchor = editor.firstChild;
+    expect(leadingAnchor?.textContent).toBe("前缀");
+    setEditableSelection(editor, 0);
+    expect(getEditableSelection(editor)).toEqual({ start: 0, end: 0 });
+
+    renderEditableContent(editor, token, [image]);
+    expect(editor.firstChild?.textContent).toBe("\u200B");
+    expect(serializeEditableValue(editor)).toBe(token);
+    setEditableSelection(editor, 0);
+    expect(getEditableSelection(editor)).toEqual({ start: 0, end: 0 });
+    setEditableSelection(editor, token.length);
+    expect(getEditableSelection(editor)).toEqual({ start: token.length, end: token.length });
+});
+
 for (const inModal of [true, false]) {
+    test(`${inModal ? "放大" : "普通"}编辑器在故事板标签后显示占位提示，输入正文后隐藏且不写入内容`, async () => {
+        const host = document.createElement("div");
+        if (inModal) host.className = "ant-modal";
+        document.body.append(host);
+        const root = createRoot(host);
+        const image: CanvasResourceReference = { id: "image", nodeId: "image", kind: "image", label: "图片1", active: true };
+        const writes: string[] = [];
+        const presets = getNineGridMenuItems().filter((item) => item.id === "short_storyboard" || item.id === "blocking_storyboard");
+        let references: CanvasResourceReference[] = [];
+        let placeholder = "描述要生成的图片内容";
+        const render = (value: string) =>
+            root.render(
+                <CanvasResourceMentionTextarea
+                    value={value}
+                    references={references}
+                    placeholder={placeholder}
+                    onChange={(next) => {
+                        writes.push(next);
+                        render(next);
+                    }}
+                    aria-label="图片提示词"
+                />,
+            );
+        try {
+            expect(presets).toHaveLength(2);
+            for (const preset of presets) {
+                const tool = buildToolMentionReference(preset.toolId, preset.label, "nine_grid", preset.toolIconName);
+                references = [image, tool];
+                placeholder = preset.placeholder!;
+                expect(placeholder).toContain(preset.id === "short_storyboard" ? "4–8" : "4–6");
+                const tokens = `${canvasResourceMentionToken(image)} ${canvasResourceMentionToken(tool)} `;
+                await act(async () => render(tokens));
+                const editor = host.querySelector<HTMLElement>('[role="textbox"]')!;
+                expect(editor.dataset.placeholder).toBe(placeholder);
+                expect(editor.getAttribute("aria-placeholder")).toBe(placeholder);
+                expect(editor.querySelectorAll("[data-mention-token]")).toHaveLength(2);
+                expect(serializeEditableValue(editor)).toBe(tokens);
+                expect(editor.textContent).not.toContain(placeholder);
+                await act(async () => {
+                    editor.append(document.createTextNode("女孩推开门"));
+                    editor.dispatchEvent(new dom.InputEvent("input", { bubbles: true }));
+                });
+                expect(editor.hasAttribute("data-placeholder")).toBe(false);
+                expect(writes.at(-1)).toBe(`${tokens}女孩推开门`);
+                await act(async () => render(tokens));
+                expect(editor.dataset.placeholder).toBe(placeholder);
+                await act(async () => editor.dispatchEvent(new dom.CompositionEvent("compositionstart", { bubbles: true })));
+                expect(editor.hasAttribute("data-placeholder")).toBe(false);
+                await act(async () => editor.dispatchEvent(new dom.CompositionEvent("compositionend", { bubbles: true })));
+                expect(editor.dataset.placeholder).toBe(placeholder);
+            }
+            references = [];
+            placeholder = "描述要生成的图片内容";
+            await act(async () => render(""));
+            expect(host.querySelector("textarea")?.placeholder).toBe(placeholder);
+            expect(writes.some((value) => value.includes("描述一个 10–15 秒"))).toBe(false);
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    });
+
     test(inModal ? "放大弹窗保留焦点边界、搜索和资产点击" : "普通编辑仍使用 body Portal", async () => {
         const host = document.createElement("div");
         const container = document.createElement("div");
@@ -26,7 +198,24 @@ for (const inModal of [true, false]) {
         const selected: string[] = [];
         let query = "";
         try {
-            await act(async () => root.render(<MentionMenu anchor={anchor} connectedReferences={[reference]} assetReferences={[]} filteredReferences={[reference]} query="" cursorOffset={0} preferredWidth={320} onQueryChange={(value) => { query = value; }} onClose={() => {}} onSelect={(item) => selected.push(item.id)} />));
+            await act(async () =>
+                root.render(
+                    <MentionMenu
+                        anchor={anchor}
+                        connectedReferences={[reference]}
+                        assetReferences={[]}
+                        filteredReferences={[reference]}
+                        query=""
+                        cursorOffset={0}
+                        preferredWidth={320}
+                        onQueryChange={(value) => {
+                            query = value;
+                        }}
+                        onClose={() => {}}
+                        onSelect={(item) => selected.push(item.id)}
+                    />,
+                ),
+            );
             const menu = document.querySelector<HTMLElement>("[data-canvas-resource-mention-menu]")!;
             expect(menu.parentElement).toBe(inModal ? container : document.body);
             expect(menu.classList.contains("pointer-events-auto")).toBe(true);

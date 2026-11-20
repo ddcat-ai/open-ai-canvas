@@ -258,7 +258,7 @@ func appendUniqueAdminResourceReference(references []AdminResourceReferenceView,
 
 func supportedResourceDeleteProvider(provider string) bool {
 	provider = normalizedResourceProvider(provider)
-	return oneOf(provider, "local", aliyunOSSProvider, tencentCOSProvider, qiniuKodoProvider, s3Provider)
+	return provider == "local" || supportedOSSProvider(provider)
 }
 
 func resourceDeletionJobsForResources(physicalObjects map[string]*model.Resource) []model.ResourceDeletionJob {

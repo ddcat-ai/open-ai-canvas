@@ -64,11 +64,7 @@ export function BannerAnnouncementsPage() {
             title="常驻通知"
             description="配置首页顶部常驻展示的通知，支持标题、状态与有效期"
             actions={
-                <Button
-                    type="primary"
-                    icon={<Plus className="size-4" />}
-                    onClick={() => setCreateOpen(true)}
-                >
+                <Button type="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
                     新增常驻通知
                 </Button>
             }
@@ -84,12 +80,12 @@ export function CreditOperationsPage() {
     return (
         <AdminPageFrame
             title="积分运营"
-            description="异常计费核对、积分策略与人工调账"
+            description="异常计费核对、注册与签到赠送管理及人工调账"
             actions={
                 <>
                     <BillingAutoRefundToggle />
                     <Button icon={<Settings2 className="size-4" />} onClick={() => setActiveOperation("policy")}>
-                        积分策略
+                        注册与签到赠送
                     </Button>
                     <Button type="primary" icon={<UserRoundCog className="size-4" />} onClick={() => setActiveOperation("adjustment")}>
                         人工调账
@@ -104,7 +100,7 @@ export function CreditOperationsPage() {
 
 export function AccessSettingsPage() {
     return (
-        <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口与服务协议" scroll>
+        <AdminPageFrame title="登录与注册" description="先控制账号创建，再配置第三方登录入口、服务协议与登录打开方式" scroll>
             <AccessSettingsPanel />
         </AdminPageFrame>
     );
@@ -120,7 +116,7 @@ export function EmailSettingsPage() {
 
 export function FeatureAvailabilityPage() {
     return (
-        <AdminPageFrame title="功能开放" description="按用户使用路径控制工作台、插件与模型能力" scroll>
+        <AdminPageFrame title="功能开放" description="决定前台用户能看到和使用哪些功能" scroll>
             <FeatureAvailabilityPanel />
         </AdminPageFrame>
     );

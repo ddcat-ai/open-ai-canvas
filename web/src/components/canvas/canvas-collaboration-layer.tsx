@@ -1,5 +1,7 @@
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { Monitor, ChevronDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { translate } from "@/i18n";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { subscribeCanvasRealtime, updateCanvasPresence } from "@/services/canvas-realtime";
 import type { CanvasRealtimeSnapshot, PresenceNode, PresencePoint } from "@/services/canvas-realtime-client";
@@ -22,6 +24,7 @@ export const CanvasCollaborationLayer = memo(function CanvasCollaborationLayer({
     nodesRef: RefObject<CanvasNodeData[]>;
     viewportRef: RefObject<ViewportTransform>;
 }) {
+    const { t } = useTranslation();
     const [members, setMembers] = useState<CanvasPeerIdentity[]>([]);
     const graphicsRef = useRef<HTMLDivElement>(null);
     const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -144,7 +147,9 @@ export const CanvasCollaborationLayer = memo(function CanvasCollaborationLayer({
             const nextMembership = snapshot.connected && remote.length ? JSON.stringify([snapshot.selfId, ...snapshot.peers.map((peer) => `${peer.id}:${peer.number}`).sort()]) : "";
             if (membership !== nextMembership) {
                 membership = nextMembership;
-                identities = nextMembership ? snapshot.peers.map((peer) => ({ id: peer.id, number: peer.number, label: `设备${peer.number}`, self: peer.id === snapshot.selfId })).sort((a, b) => a.number - b.number) : [];
+                identities = nextMembership
+                    ? snapshot.peers.map((peer) => ({ id: peer.id, number: peer.number, label: translate("canvasA.collaboration.deviceLabel", { number: peer.number }), self: peer.id === snapshot.selfId })).sort((a, b) => a.number - b.number)
+                    : [];
                 setMembers(identities);
             }
             if (nextMembership && !stopTracking) {
@@ -195,7 +200,7 @@ export const CanvasCollaborationLayer = memo(function CanvasCollaborationLayer({
                         }
                     }}
                 >
-                    <summary aria-label={`${members.length} 个设备在线，查看设备`}>
+                    <summary aria-label={t("canvasA.collaboration.summaryLabel", { count: members.length })}>
                         <Monitor size={14} aria-hidden="true" />
                         <span className="canvas-collaboration-member-dots" aria-hidden="true">
                             {members
@@ -205,17 +210,17 @@ export const CanvasCollaborationLayer = memo(function CanvasCollaborationLayer({
                                     <i key={member.id} className={`canvas-collaboration-device--${((member.number - 1) % 6) + 1}`} />
                                 ))}
                         </span>
-                        <span>{members.length} 设备在线</span>
+                        <span>{t("canvasA.collaboration.online", { count: members.length })}</span>
                         <ChevronDown size={12} aria-hidden="true" />
                     </summary>
                     <div className="canvas-collaboration-member-panel">
-                        <div className="canvas-collaboration-member-heading">正在此画布协作</div>
-                        <ul aria-label="在线设备">
+                        <div className="canvas-collaboration-member-heading">{t("canvasA.collaboration.heading")}</div>
+                        <ul aria-label={t("canvasA.collaboration.devicesList")}>
                             {members.map((member) => (
                                 <li key={member.id} data-device-number={member.number} className={`canvas-collaboration-device--${((member.number - 1) % 6) + 1}`}>
                                     <span className="canvas-collaboration-member-avatar">{member.number}</span>
                                     <span>{member.label}</span>
-                                    <small>{member.self ? "此窗口" : "在线"}</small>
+                                    <small>{member.self ? t("canvasA.collaboration.thisWindow") : t("canvasA.collaboration.onlineBadge")}</small>
                                 </li>
                             ))}
                         </ul>

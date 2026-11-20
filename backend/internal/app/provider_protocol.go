@@ -24,6 +24,9 @@ func runDeclarativeProtocolTask(ctx context.Context, input canvasGenerationInput
 	if !ok {
 		return nil, fmt.Errorf("接口类型 %s 未安装声明式适配器", input.Config.InterfaceType)
 	}
+	if input.Mode == "audio" && (input.Config.AudioMode == "unified_edit" || input.Config.AudioMode != "tts" && len(input.ReferenceAudios) > 0) && len(input.ReferenceAudios) == 0 {
+		return nil, errors.New("全能配音需要连接参考音频；请检查音频是否已连接，或切换为文本朗读")
+	}
 	return runProtocolAdapterTask(ctx, input, adapter)
 }
 
@@ -64,6 +67,10 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 	detached := protocolDetachedPolling(adapter, input.Mode)
 	var created protocol.CreateResult
 	if taskID == "" {
+		plan, err := prepareDramaReferencePlan(input, request, adapter.Metadata())
+		if err != nil {
+			return nil, err
+		}
 		// 幂等键只存在于宿主请求元数据中，声明式插件可以把它映射到 Header，
 		// 但不能把宿主控制字段泄漏到供应商 JSON body。恢复已有 taskID 时不会进入 create 分支。
 		key, _ := ctx.Value(providerSubmissionKeyContext{}).(string)
@@ -78,35 +85,37 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		if err != nil {
 			return nil, err
 		}
-		body, streamedResult, err := executeIdempotentProtocolCreate(ctx, input, spec, adapter.Metadata().IdempotentCreate)
-		if err != nil {
+		if err := plan.compile(request, &spec, input.VideoCapability); err != nil {
 			return nil, err
 		}
-		if streamedResult != nil {
-			created = protocol.CreateResult{Status: protocol.StatusSucceeded, Result: streamedResult}
-		} else {
-			if parser, ok := adapter.(protocol.RequestAwareCreateParser); ok {
-				created, err = parser.ParseCreateWithRequest(ctx, request, body)
-			} else {
-				created, err = adapter.ParseCreate(ctx, body)
-			}
+		if err := validateMediaTransportRequest(spec, input); err != nil {
+			return nil, err
 		}
+		// 文本任务的创建与结果在同一次请求完成。宿主已知线格式（Chat Completions /
+		// Responses / Messages）交给 executeProtocolCreateRequest：它负责流式 SSE 解析与
+		// 增量推送，非流式走普通请求；否则下游 ParseCreate 会把 SSE 原始字节当 JSON 解析。
+		if input.Mode == "text" {
+			return finishDeclarativeTextCreate(ctx, input, adapter, request, spec, policy)
+		}
+		created, err = submitProtocolMediaTask(ctx, input, adapter, request, spec)
 		if err != nil {
 			return nil, err
 		}
 		taskID = created.TaskID
-		if taskID == "" {
-			extracted, extractErr := extractProviderTaskID(body)
-			if extractErr != nil {
-				return nil, extractErr
-			}
-			taskID = extracted
-		}
 		if created.Status == protocol.StatusFailed || created.Status == protocol.StatusCancelled {
-			return nil, protocolResultError(created.Message, taskID)
+			return nil, protocolTaskFailure(ctx, created.Status, created.Message, taskID)
 		}
+		stage := created.Stage
 		if created.Status == protocol.StatusSucceeded {
-			return finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result, policy)
+			// 已完成但还没有媒体：能按任务 ID 回查时转入轮询，在宽限期内等媒体地址。
+			canPoll := taskID != "" && strings.TrimSpace(adapter.Metadata().Poll) != ""
+			if protocolResultReady(input.Mode, created.Result, adapter) || !canPoll {
+				result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, created.Result, policy)
+				if !canPoll || !errors.Is(err, errProtocolResultNotReady) {
+					return result, err
+				}
+			}
+			stage = firstNonEmpty(stage, protocolLateResultStage)
 		}
 		if taskID == "" {
 			return nil, errors.New("声明式协议创建请求没有返回任务 ID")
@@ -116,35 +125,32 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 				// 上游已收单但本地没记住任务 ID：不能退回调度，否则恢复时无法找到原任务。
 				return nil, fmt.Errorf("上游已接收任务，但保存任务 ID 失败：%w", err)
 			}
-			return nil, detachedProtocolPending(taskID, created.Stage, created.QueueAhead)
+			return nil, detachedProtocolPending(taskID, stage, created.QueueAhead)
 		}
 	} else if detached {
 		// 恢复分离式任务：立即回查一次，未完成就再次退回调度，不在 worker 内等待。
 		policy.InitialDelay = 0
 	}
 
+	var lateResult protocolLateResultWait
 	return runVideoPollLoop(ctx, taskID, policy, func(ctx context.Context) (videoPollOutcome, error) {
-		spec, err := adapter.BuildPoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID})
+		state, err := pollProtocolTask(ctx, input.Config, adapter, request, taskID)
 		if err != nil {
 			return videoPollOutcome{}, err
-		}
-		body, err := executeProtocolRequest(withProviderRequestKind(ctx, "poll"), input.Config, spec)
-		if err != nil {
-			return videoPollOutcome{}, err
-		}
-		state, err := adapter.ParsePoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}, body)
-		if err != nil {
-			return videoPollOutcome{}, err
-		}
-		if state.TaskID != "" {
-			taskID = state.TaskID
 		}
 		switch state.Status {
 		case protocol.StatusSucceeded:
+			// 分离式任务也留在本 worker 内等：退回调度后每次回查都会重新计时，宽限期永远用不完。
+			if !protocolResultReady(input.Mode, state.Result, adapter) && lateResult.keepWaiting(time.Now()) {
+				return videoPollOutcome{}, nil
+			}
 			result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, policy)
+			if errors.Is(err, errProtocolResultNotReady) && lateResult.keepWaiting(time.Now()) {
+				return videoPollOutcome{}, nil
+			}
 			return videoPollOutcome{Done: err == nil, Result: result}, err
 		case protocol.StatusFailed, protocol.StatusCancelled:
-			return videoPollOutcome{}, protocolResultError(state.Message, taskID)
+			return videoPollOutcome{}, protocolTaskFailure(ctx, state.Status, state.Message, taskID)
 		}
 		if detached {
 			return videoPollOutcome{}, detachedProtocolPending(taskID, state.Stage, state.QueueAhead)
@@ -178,16 +184,7 @@ func extractProviderTaskID(body []byte) (string, error) {
 // 人工恢复走此路径，因此检查本地失败任务时绝不会创建第二个计费任务。
 func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, taskID string) (map[string]interface{}, string, error) {
 	request := protocolRequestFromInput(input)
-	pollContext := protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}
-	spec, err := adapter.BuildPoll(ctx, pollContext)
-	if err != nil {
-		return nil, "", err
-	}
-	body, err := executeProtocolRequest(withProviderRequestKind(ctx, "poll"), input.Config, spec)
-	if err != nil {
-		return nil, "", err
-	}
-	state, err := adapter.ParsePoll(ctx, pollContext, body)
+	state, err := pollProtocolTask(ctx, input.Config, adapter, request, taskID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -197,12 +194,33 @@ func queryProtocolAdapterVideoTask(ctx context.Context, input canvasGenerationIn
 		result, err := finishProtocolAdapterResult(ctx, input, adapter, request, taskID, state.Result, defaultVideoPollPolicy())
 		return result, providerStatus, err
 	case protocol.StatusFailed, protocol.StatusCancelled:
-		return nil, providerStatus, protocolResultError(state.Message, taskID)
+		return nil, providerStatus, protocolTaskFailure(ctx, state.Status, state.Message, taskID)
 	case protocol.StatusPending, protocol.StatusProcessing:
 		return nil, providerStatus, nil
 	default:
 		return nil, providerStatus, fmt.Errorf("声明式协议任务 %s 返回未知状态：%s", taskID, providerStatus)
 	}
+}
+
+func pollProtocolTask(ctx context.Context, config providerConfig, adapter protocol.Adapter, request protocol.GenerationRequest, taskID string) (protocol.PollResult, error) {
+	poll := protocol.PollContext{BaseURL: config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}
+	spec, err := adapter.BuildPoll(ctx, poll)
+	if err != nil {
+		return protocol.PollResult{}, err
+	}
+	receipt := protocolHTTPReceipt{parse: func(body []byte) (protocol.CreateResult, error) {
+		state, err := adapter.ParsePoll(ctx, poll, body)
+		if err == nil && state.TaskID != "" && state.TaskID != taskID {
+			return protocol.CreateResult{}, errors.New("上游回查返回了不匹配的任务 ID，请核对原任务")
+		}
+		return protocol.CreateResult(state), err
+	}}
+	body, err := executeProtocolRequest(withProtocolHTTPReceipt(withProviderRequestKind(ctx, "poll"), &receipt), config, spec)
+	if err != nil {
+		return protocol.PollResult{}, err
+	}
+	state, err := receipt.decode(body)
+	return protocol.PollResult(state), err
 }
 
 func validateGenerationInterface(mode string, interfaceType string) error {
@@ -253,4 +271,49 @@ func protocolCapabilityMatches(metadata protocol.Metadata, capability protocol.C
 		}
 	}
 	return false
+}
+
+// finishDeclarativeTextCreate 执行声明式文本协议的创建请求并归一结果。
+// 文本任务的创建与最终结果在同一次请求完成：流式走 SSE 解析（executeProtocolCreateRequest
+// 内部处理），非流式走普通请求后按插件 response 映射解析。SSE 原始字节不能交给
+// ParseCreate 当 JSON 解析（上游如 DeepSeek /anthropic 的 thinking 流只在宿主解析器里
+// 才能还原出正文）。
+func finishDeclarativeTextCreate(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, request protocol.GenerationRequest, spec protocol.RequestSpec, policy videoPollPolicy) (map[string]interface{}, error) {
+	data, streamedResult, err := executeProtocolCreateRequest(ctx, input, spec)
+	if err != nil {
+		return nil, err
+	}
+	// 流式由宿主解析器直接给出文本结果；创建即完成，立即归一。
+	if streamedResult != nil {
+		return finishProtocolResult(ctx, input.Config, input.Mode, "", streamedResult, policy)
+	}
+	var created protocol.CreateResult
+	if parser, ok := adapter.(protocol.RequestAwareCreateParser); ok {
+		created, err = parser.ParseCreateWithRequest(ctx, request, data)
+	} else {
+		created, err = adapter.ParseCreate(ctx, data)
+	}
+	if err != nil {
+		return nil, err
+	}
+	taskID := created.TaskID
+	if taskID == "" {
+		extracted, extractErr := extractProviderTaskID(data)
+		if extractErr != nil {
+			return nil, extractErr
+		}
+		taskID = extracted
+	}
+	if created.Status == protocol.StatusFailed || created.Status == protocol.StatusCancelled {
+		return nil, protocolTaskFailure(ctx, created.Status, created.Message, taskID)
+	}
+	// 文本任务创建即完成：Succeeded、或状态未识别但已解析出正文，直接归一结果。
+	if created.Status == protocol.StatusSucceeded || (created.Result != nil && strings.TrimSpace(created.Result.Text) != "") {
+		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, created.Result, policy)
+	}
+	if taskID == "" {
+		return nil, errors.New("声明式协议创建请求没有返回任务 ID")
+	}
+	// 创建已接受但正文未就绪：转入轮询等待结果。
+	return nil, detachedProtocolPending(taskID, created.Stage, created.QueueAhead)
 }

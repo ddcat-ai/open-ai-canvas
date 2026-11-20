@@ -1,6 +1,7 @@
 import { Dropdown, type MenuProps } from "antd";
 import { BookOpen, ChevronRight, ChevronsDownUp, File, FileArchive, FileAudio, FileBraces, FileCode2, FileImage, FilePlus, FileText, FileVideo, Folder, FolderOpen, FolderPlus, MoreHorizontal, PencilLine, Search, Trash2, Undo2, X } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { SKILL_ENTRY_PATH, fileExtension, type TreeRow } from "@/lib/skills/skill-workbench-model";
 
@@ -44,6 +45,7 @@ const ROW_INDENT = 12;
 
 export function SkillWorkbenchExplorer(props: ExplorerProps) {
     const { rows, filter, activePath, focusedPath, dirtyPaths, readOnly, input, fileCount, onFilterChange, onFocusPath, onToggleFolder, onOpenFile, onCollapseAll, onStartInput, onCancelInput, onSubmitInput, onDelete, onRevert } = props;
+    const { t } = useTranslation();
     const treeRef = useRef<HTMLDivElement | null>(null);
     const filterRef = useRef<HTMLInputElement | null>(null);
 
@@ -131,11 +133,16 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
         const parent = row.type === "folder" ? row.path : row.parent;
         const entry = row.path === SKILL_ENTRY_PATH;
         const items: NonNullable<MenuProps["items"]> = [];
-        if (row.type === "file") items.push({ key: "open", label: "打开" });
+        if (row.type === "file") items.push({ key: "open", label: t("library.workbench.explorer.open") });
         if (!readOnly) {
-            items.push({ key: "new-file", label: "新建文件", icon: <FilePlus className="size-3.5" /> }, { key: "new-folder", label: "新建文件夹", icon: <FolderPlus className="size-3.5" /> });
-            if (row.type === "file" && dirtyPaths.has(row.path)) items.push({ key: "revert", label: "撤销修改", icon: <Undo2 className="size-3.5" /> });
-            if (!entry) items.push({ type: "divider" }, { key: "rename", label: "重命名", icon: <PencilLine className="size-3.5" />, extra: "F2" }, { key: "delete", label: "删除", danger: true, icon: <Trash2 className="size-3.5" />, extra: "Del" });
+            items.push({ key: "new-file", label: t("library.workbench.explorer.newFile"), icon: <FilePlus className="size-3.5" /> }, { key: "new-folder", label: t("library.workbench.explorer.newFolder"), icon: <FolderPlus className="size-3.5" /> });
+            if (row.type === "file" && dirtyPaths.has(row.path)) items.push({ key: "revert", label: t("library.workbench.explorer.revert"), icon: <Undo2 className="size-3.5" /> });
+            if (!entry)
+                items.push(
+                    { type: "divider" },
+                    { key: "rename", label: t("library.workbench.explorer.rename"), icon: <PencilLine className="size-3.5" />, extra: "F2" },
+                    { key: "delete", label: t("common.delete"), danger: true, icon: <Trash2 className="size-3.5" />, extra: "Del" },
+                );
         }
         return {
             items,
@@ -174,25 +181,25 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                 depth={newInputDepth}
                 icon={input.mode === "new-folder" ? <Folder aria-hidden="true" className="size-4" /> : <File aria-hidden="true" className="size-4" />}
                 initial=""
-                ariaLabel={input.mode === "new-folder" ? "新文件夹名称" : "新文件名称"}
+                ariaLabel={input.mode === "new-folder" ? t("library.workbench.explorer.newFolderName") : t("library.workbench.explorer.newFileName")}
                 onCancel={onCancelInput}
                 onSubmit={onSubmitInput}
             />
         ) : null;
 
     return (
-        <div className="skill-wb-explorer" aria-label="资源管理器">
+        <div className="skill-wb-explorer" aria-label={t("library.workbench.explorer.title")}>
             <div className="skill-wb-explorer-head">
-                <span className="skill-wb-explorer-title">资源管理器</span>
-                <span className="skill-wb-explorer-count">{fileCount} 个文件</span>
+                <span className="skill-wb-explorer-title">{t("library.workbench.explorer.title")}</span>
+                <span className="skill-wb-explorer-count">{t("library.workbench.explorer.fileCount", { count: fileCount })}</span>
                 <div className="skill-wb-explorer-tools">
                     {!readOnly ? (
                         <>
                             <button
                                 type="button"
                                 className="skill-wb-icon-button"
-                                aria-label="新建文件"
-                                title="新建文件"
+                                aria-label={t("library.workbench.explorer.newFile")}
+                                title={t("library.workbench.explorer.newFile")}
                                 onClick={() => onStartInput({ mode: "new-file", parent: focusedRow ? (focusedRow.type === "folder" ? focusedRow.path : focusedRow.parent) : "" })}
                             >
                                 <FilePlus className="size-4" />
@@ -200,15 +207,15 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                             <button
                                 type="button"
                                 className="skill-wb-icon-button"
-                                aria-label="新建文件夹"
-                                title="新建文件夹"
+                                aria-label={t("library.workbench.explorer.newFolder")}
+                                title={t("library.workbench.explorer.newFolder")}
                                 onClick={() => onStartInput({ mode: "new-folder", parent: focusedRow ? (focusedRow.type === "folder" ? focusedRow.path : focusedRow.parent) : "" })}
                             >
                                 <FolderPlus className="size-4" />
                             </button>
                         </>
                     ) : null}
-                    <button type="button" className="skill-wb-icon-button" aria-label="全部折叠" title="全部折叠" onClick={onCollapseAll}>
+                    <button type="button" className="skill-wb-icon-button" aria-label={t("library.workbench.explorer.collapseAll")} title={t("library.workbench.explorer.collapseAll")} onClick={onCollapseAll}>
                         <ChevronsDownUp className="size-4" />
                     </button>
                 </div>
@@ -218,8 +225,8 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                 <input
                     ref={filterRef}
                     value={filter}
-                    placeholder="筛选文件"
-                    aria-label="筛选文件"
+                    placeholder={t("library.workbench.explorer.filter")}
+                    aria-label={t("library.workbench.explorer.filter")}
                     spellCheck={false}
                     onChange={(event) => onFilterChange(event.target.value)}
                     onKeyDown={(event) => {
@@ -238,12 +245,12 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                     }}
                 />
                 {filter ? (
-                    <button type="button" className="skill-wb-filter-clear" aria-label="清除筛选" onClick={() => onFilterChange("")}>
+                    <button type="button" className="skill-wb-filter-clear" aria-label={t("library.workbench.explorer.clearFilter")} onClick={() => onFilterChange("")}>
                         <X className="size-3" />
                     </button>
                 ) : null}
             </label>
-            <div ref={treeRef} className="skill-wb-tree thin-scrollbar" role="tree" aria-label="技能文件" onKeyDown={handleTreeKeyDown}>
+            <div ref={treeRef} className="skill-wb-tree thin-scrollbar" role="tree" aria-label={t("library.workbench.explorer.tree")} onKeyDown={handleTreeKeyDown}>
                 {newInputParent === "" ? newInputRow : null}
                 {rows.map((row, index) => {
                     const renaming = input?.mode === "rename" && input.path === row.path;
@@ -251,7 +258,7 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                     const dirty = row.type === "file" ? dirtyPaths.has(row.path) : [...dirtyPaths].some((path) => path.startsWith(`${row.path}/`));
                     const icon = row.type === "folder" ? row.expanded ? <FolderOpen aria-hidden="true" className="size-4 skill-wb-icon-folder" /> : <Folder aria-hidden="true" className="size-4 skill-wb-icon-folder" /> : fileIconFor(row.path);
                     const content = renaming ? (
-                        <InlineNameInput key={`rename-${row.path}`} depth={row.depth} icon={icon} initial={row.name} ariaLabel={`重命名 ${row.name}`} onCancel={onCancelInput} onSubmit={onSubmitInput} />
+                        <InlineNameInput key={`rename-${row.path}`} depth={row.depth} icon={icon} initial={row.name} ariaLabel={t("library.workbench.explorer.renameItem", { name: row.name })} onCancel={onCancelInput} onSubmit={onSubmitInput} />
                     ) : (
                         <Dropdown trigger={["contextMenu"]} menu={menuFor(row)}>
                             <div
@@ -280,7 +287,7 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                                 </span>
                                 <span className="skill-wb-row-icon">{icon}</span>
                                 <span className={`skill-wb-row-name${dirty ? " is-dirty" : ""}`}>{row.name}</span>
-                                {dirty && row.type === "file" ? <span className="skill-wb-dirty-dot" aria-label="未保存" /> : null}
+                                {dirty && row.type === "file" ? <span className="skill-wb-dirty-dot" aria-label={t("library.workbench.explorer.unsaved")} /> : null}
                                 {!readOnly ? (
                                     <span className="skill-wb-row-actions">
                                         {row.path !== SKILL_ENTRY_PATH ? (
@@ -288,8 +295,8 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                                                 type="button"
                                                 tabIndex={-1}
                                                 className="skill-wb-row-action"
-                                                aria-label={`重命名 ${row.name}`}
-                                                title="重命名 (F2)"
+                                                aria-label={t("library.workbench.explorer.renameItem", { name: row.name })}
+                                                title={t("library.workbench.explorer.renameShortcut")}
                                                 onClick={(event: MouseEvent) => {
                                                     event.stopPropagation();
                                                     onStartInput({ mode: "rename", path: row.path, type: row.type });
@@ -299,7 +306,14 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                                             </button>
                                         ) : null}
                                         <Dropdown trigger={["click"]} menu={menuFor(row)}>
-                                            <button type="button" tabIndex={-1} className="skill-wb-row-action" aria-label={`${row.name} 更多操作`} title="更多操作" onClick={(event: MouseEvent) => event.stopPropagation()}>
+                                            <button
+                                                type="button"
+                                                tabIndex={-1}
+                                                className="skill-wb-row-action"
+                                                aria-label={t("library.workbench.explorer.moreActionsFor", { name: row.name })}
+                                                title={t("library.workbench.explorer.moreActions")}
+                                                onClick={(event: MouseEvent) => event.stopPropagation()}
+                                            >
                                                 <MoreHorizontal className="size-3.5" />
                                             </button>
                                         </Dropdown>
@@ -315,7 +329,7 @@ export function SkillWorkbenchExplorer(props: ExplorerProps) {
                         </div>
                     );
                 })}
-                {!rows.length && !newInputRow ? <div className="skill-wb-tree-empty">{filter ? "没有匹配的文件" : "技能包为空"}</div> : null}
+                {!rows.length && !newInputRow ? <div className="skill-wb-tree-empty">{filter ? t("library.workbench.quickOpen.empty") : t("library.workbench.explorer.emptyPackage")}</div> : null}
             </div>
         </div>
     );

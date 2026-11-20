@@ -58,6 +58,8 @@ type Policy struct {
 	RequiresMemory bool
 	// RequiresDrama 只在画布关联了当前用户的短剧作品时暴露。
 	RequiresDrama bool
+	// RequiresDramaPageContext 只在当前 Agent 请求冻结了短剧页面对象身份时暴露。
+	RequiresDramaPageContext bool
 	// AlwaysApprove 让写入在 auto 模式下也先审批：写入会改变画布以外的业务对象（如短剧版本）。
 	AlwaysApprove bool
 	// OutsideTransaction performs storage IO before the checkpoint transaction.
@@ -73,6 +75,8 @@ type Scope struct {
 	IncludeProfile bool
 	// Drama 表示本轮画布关联了当前用户的短剧作品，由服务端建 run 时推导。
 	Drama bool
+	// DramaPageContext 表示本轮请求带有服务端校验所需的短剧页面身份。
+	DramaPageContext bool
 	// Memory 表示本轮长期记忆处于开启状态（自动生效或需确认），由服务端建 run 时冻结。
 	Memory bool
 }
@@ -83,6 +87,7 @@ func (p Policy) Allowed(scope Scope) bool {
 		(!p.RequiresSkills || scope.Skills) &&
 		(!p.RequiresMemory || scope.Memory) &&
 		(!p.RequiresDrama || scope.Drama) &&
+		(!p.RequiresDramaPageContext || scope.DramaPageContext) &&
 		(!p.Vision || scope.Vision) &&
 		(!p.Write() && !p.RequiresWriteMode || !scope.ReadOnly) &&
 		(p.Name != AgentProfileRead || scope.IncludeProfile)
@@ -124,6 +129,9 @@ const (
 	TaskGet                = "task_get"
 	CanvasInspectImage     = "canvas_inspect_image"
 	MemoryUpdate           = "memory_update"
+	MemorySearch           = "memory_search"
+	MCPListTools           = "mcp_list_tools"
+	MCPCallTool            = "mcp_call_tool"
 	ImageLayerSplit        = "image_layer_split"
 	ModelList              = "model_list"
 	CanvasCreateStoryboard = "canvas_create_storyboard"
@@ -133,8 +141,14 @@ const (
 	CanvasApplyOps         = "canvas_apply_ops"
 	CanvasArrangeNodes     = "canvas_arrange_nodes"
 	GenerateMedia          = "generate_media"
+	GenerateMediaBatch     = "generate_media_batch"
+	MediaBatchControl      = "media_batch_control"
+	CanvasBuildBoard       = "canvas_build_board"
+	CanvasPreflight        = "canvas_preflight"
 	DramaGetContext        = "drama_get_context"
 	DramaAdoptCanvasMedia  = "drama_adopt_canvas_media"
+	DramaShotRead          = "drama_shot_read"
+	DramaShotUpdate        = "drama_shot_update"
 )
 
 var offsets = []string{"offset", "connectionOffset", "storyboardOffset"}
@@ -157,6 +171,9 @@ func init() {
 func policies() []Policy {
 	return []Policy{
 		{Name: AgentProfileRead, Kind: KindRead, Cacheable: true},
+		{Name: MemorySearch, Kind: KindRead, RequiresMemory: true, OutsideTransaction: true},
+		{Name: MCPListTools, Kind: KindRead, OutsideTransaction: true},
+		{Name: MCPCallTool, Kind: KindWrite, AlwaysApprove: true, OutsideTransaction: true},
 		{Name: PlanUpdate, Kind: KindControl},
 		{Name: AskUser, Kind: KindControl},
 		{Name: PrevisSceneRead, Kind: KindRead, Cacheable: true, CacheScope: CacheCanvasRevision, RequiresCanvas: true},
@@ -186,8 +203,16 @@ func policies() []Policy {
 		{Name: CanvasApplyOps, Kind: KindWrite, RequiresCanvas: true},
 		{Name: CanvasArrangeNodes, Kind: KindWrite, RequiresCanvas: true},
 		{Name: GenerateMedia, Kind: KindMedia, RequiresCanvas: true},
+		// 批量生成一次审批覆盖多条收费任务；批准后的放行、重试与取消由 media_batch_control
+		// 在已批准的明细和额度内执行，本身不再产生新的收费授权，因此归为会话控制类。
+		{Name: GenerateMediaBatch, Kind: KindMedia, RequiresCanvas: true},
+		{Name: MediaBatchControl, Kind: KindControl, RequiresCanvas: true, RequiresWriteMode: true},
+		{Name: CanvasBuildBoard, Kind: KindWrite, RequiresCanvas: true},
+		{Name: CanvasPreflight, Kind: KindRead, RequiresCanvas: true, RequiresWriteMode: true, OutsideTransaction: true},
 		{Name: DramaGetContext, Kind: KindRead, RequiresCanvas: true, RequiresDrama: true, OutsideTransaction: true},
 		{Name: DramaAdoptCanvasMedia, Kind: KindWrite, RequiresCanvas: true, RequiresDrama: true, AlwaysApprove: true},
+		{Name: DramaShotRead, Kind: KindRead, RequiresDramaPageContext: true},
+		{Name: DramaShotUpdate, Kind: KindWrite, RequiresDramaPageContext: true, AlwaysApprove: true},
 	}
 }
 

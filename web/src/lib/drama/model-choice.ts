@@ -60,7 +60,51 @@ export function dramaVideoResolutionIssue(option: DramaModelOption | undefined, 
     return values.length ? `不支持 ${formatVideoResolutionLabel(resolution)} 分辨率（可选 ${values.map(formatVideoResolutionLabel).join("、")}）` : "不提供可选分辨率";
 }
 
-/** 视频模型能否用于作品：给得出作品画幅与分辨率，尾帧续接时还要支持图生视频（tailFrameChain 为 false 时服务端不下发该字段）。 */
-export function dramaVideoOptionFits(option: DramaModelOption, aspectRatio: string, continuity: DramaVideoContinuity, resolution?: string) {
-    return !dramaVideoRatioIssue(option, aspectRatio) && !dramaVideoResolutionIssue(option, resolution) && (continuity === "parallel" || Boolean(option.tailFrameChain));
+/** 当前模型同档位实际声明的取值；模型不支持这一档时返回空串。用于把并集档位换回模型自己的写法。 */
+export function dramaVideoResolutionValue(option: DramaModelOption | undefined, resolution?: string) {
+    if (!option || !resolution) return "";
+    const key = videoResolutionComparisonKey(resolution);
+    return (option.videoResolutions || []).find((value) => videoResolutionComparisonKey(value) === key) || "";
+}
+
+function videoResolutionTierNumber(value: string) {
+    const match = videoResolutionComparisonKey(value).match(/^(\d+)p$/);
+    return match ? Number(match[1]) : 0;
+}
+
+/**
+ * 分辨率候选是当前作用域所有视频模型声明档位的并集，再加上已保存的值，按清晰度排序。
+ * 换模型时只置灰当前模型给不出的档位，不靠旧分辨率提前挡掉模型。
+ */
+export function dramaVideoResolutionTiers(options: DramaModelOption[] | undefined, saved?: string) {
+    const tiers: string[] = [];
+    const seen = new Set<string>();
+    const add = (value?: string) => {
+        const raw = String(value || "").trim();
+        const key = videoResolutionComparisonKey(raw);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        tiers.push(raw);
+    };
+    (options || []).forEach((option) => (option.videoResolutions || []).forEach(add));
+    add(saved);
+    return tiers.sort((left, right) => {
+        const a = videoResolutionTierNumber(left);
+        const b = videoResolutionTierNumber(right);
+        if (a && b) return a - b;
+        if (a) return -1;
+        if (b) return 1;
+        return left.localeCompare(right, "zh-CN");
+    });
+}
+
+/** 换模型后的作品分辨率：新模型支持就保留它的写法，不支持就清空，按新模型默认档出片。 */
+export function dramaResolutionAfterModelChange(option: DramaModelOption | undefined, current?: string) {
+    if (!current) return undefined;
+    return dramaVideoResolutionValue(option, current) || undefined;
+}
+
+/** 视频模型能否用于作品：给得出作品画幅，尾帧续接时还要支持图生视频（tailFrameChain 为 false 时服务端不下发该字段）。 */
+export function dramaVideoOptionFits(option: DramaModelOption, aspectRatio: string, continuity: DramaVideoContinuity) {
+    return !dramaVideoRatioIssue(option, aspectRatio) && (continuity === "parallel" || Boolean(option.tailFrameChain));
 }

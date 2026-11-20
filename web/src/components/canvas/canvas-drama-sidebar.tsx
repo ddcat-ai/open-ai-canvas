@@ -1,11 +1,11 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Film, Image as ImageIcon, LayoutGrid, LoaderCircle, LocateFixed, Scissors, Send } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Film, Image as ImageIcon, LayoutGrid, LoaderCircle, LocateFixed, Send } from "lucide-react";
 import { Link } from "react-router";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import type { DramaCanvasPresence } from "@/lib/canvas/drama-canvas-projection";
-import { DRAMA_CAST_KIND_LABEL, DRAMA_STATUS_LABEL, formatDramaCredits } from "@/lib/drama/drama-format";
+import { DRAMA_CAST_KIND_LABEL, DRAMA_STATUS_LABEL, dramaCastDisplayName, formatDramaCredits } from "@/lib/drama/drama-format";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { getDramaEpisode, type DramaCast, type DramaEpisodeRow, type DramaSegment, type DramaSummary } from "@/services/api/drama";
 
@@ -21,12 +21,11 @@ type CanvasDramaSidebarProps = {
     onProjectSegment: (episodeId: string, segmentIndex: number) => void;
     onProjectEpisode: (episodeId: string) => void;
     onProjectFinal: (episodeId: string) => void;
-    onOpenCut: (episodeId: string) => void;
 };
 
 const CAST_ORDER: Record<DramaCast["kind"], number> = { character: 0, scene: 1, prop: 2 };
 
-export const CanvasDramaSidebar = memo(function CanvasDramaSidebar({ summary, cast, presence, busyKey, onProjectCast, onProjectSegment, onProjectEpisode, onProjectFinal, onOpenCut }: CanvasDramaSidebarProps) {
+export const CanvasDramaSidebar = memo(function CanvasDramaSidebar({ summary, cast, presence, busyKey, onProjectCast, onProjectSegment, onProjectEpisode, onProjectFinal }: CanvasDramaSidebarProps) {
     const [collapsed, setCollapsed] = useState(false);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const dramaId = summary.project.id;
@@ -81,7 +80,7 @@ export const CanvasDramaSidebar = memo(function CanvasDramaSidebar({ summary, ca
                                     className="canvas-project-sidebar-chapter-row group flex h-11 items-center gap-2 px-1 text-left text-xs"
                                     disabled={Boolean(busyKey)}
                                     onClick={() => onProjectCast(item.id)}
-                                    title={placed ? `在画布上定位「${item.name}」` : `把「${item.name}」的参考图投送到画布`}
+                                    title={placed ? `在画布上定位「${dramaCastDisplayName(item)}」` : `把「${dramaCastDisplayName(item)}」的参考图投送到画布`}
                                 >
                                     <span className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-[var(--r-sm)] bg-foreground/[.05] text-foreground/30">
                                         {item.imageResourceId ? (
@@ -91,7 +90,7 @@ export const CanvasDramaSidebar = memo(function CanvasDramaSidebar({ summary, ca
                                         )}
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-foreground/78">{item.name}</span>
+                                        <span className="block truncate text-foreground/78">{dramaCastDisplayName(item)}</span>
                                         <span className="block truncate text-[var(--fs-micro)] text-foreground/38">
                                             {DRAMA_CAST_KIND_LABEL[item.kind]}
                                             {item.imageResourceId ? "" : " · 尚无参考图"}
@@ -124,7 +123,6 @@ export const CanvasDramaSidebar = memo(function CanvasDramaSidebar({ summary, ca
                                 onProjectSegment={onProjectSegment}
                                 onProjectEpisode={onProjectEpisode}
                                 onProjectFinal={onProjectFinal}
-                                onOpenCut={onOpenCut}
                             />
                         ))}
                     </div>
@@ -168,7 +166,6 @@ function EpisodeItem({
     onProjectSegment,
     onProjectEpisode,
     onProjectFinal,
-    onOpenCut,
 }: {
     dramaId: string;
     episode: DramaEpisodeRow;
@@ -180,7 +177,6 @@ function EpisodeItem({
     onProjectSegment: (episodeId: string, segmentIndex: number) => void;
     onProjectEpisode: (episodeId: string) => void;
     onProjectFinal: (episodeId: string) => void;
-    onOpenCut: (episodeId: string) => void;
 }) {
     const detailQuery = useQuery({
         queryKey: dramaKeys.episode(dramaId, episode.id),
@@ -210,7 +206,7 @@ function EpisodeItem({
             </button>
             {expanded ? (
                 <div id={panelId} className="min-w-0 pb-2 pl-5">
-                    <div className="mb-1 grid grid-cols-3 gap-1">
+                    <div className="mb-1 grid grid-cols-2 gap-1">
                         <SidebarAction
                             icon={<LayoutGrid className="size-3" />}
                             label="整集投送"
@@ -226,14 +222,6 @@ function EpisodeItem({
                             disabled={busy || (!finalPlaced && !episode.finalResourceId)}
                             title={episode.finalResourceId || finalPlaced ? "把这一集的成片投送到画布" : "这一集还没有成片"}
                             onClick={() => onProjectFinal(episode.id)}
-                        />
-                        <SidebarAction
-                            icon={<Scissors className="size-3" />}
-                            label="剪辑"
-                            busy={busyKey === `cut:${episode.id}`}
-                            disabled={busy || !episode.stats.videoReady}
-                            title={episode.stats.videoReady ? "把各剧情段视频按顺序载入画布时间线精剪" : "还没有可剪辑的剧情段视频"}
-                            onClick={() => onOpenCut(episode.id)}
                         />
                     </div>
                     {detailQuery.isLoading ? <SidebarNote>正在读取剧情段…</SidebarNote> : null}

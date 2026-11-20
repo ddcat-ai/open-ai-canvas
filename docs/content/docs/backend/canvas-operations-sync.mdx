@@ -93,7 +93,7 @@ operations 可携带 `editProofs: [{nodeId, sessionId, token}]`，服务端校�
 
 ## 操作类型
 
-- `create_canvas`：只在画布不存在时创建，第一项必须是该操作。
+- `create_canvas`：只在画布不存在时创建，第一项必须是该操作；初始画布字段放在 `patch` 中，节点和连接通过后续 `create_node`、`create_connection` 操作添加。
 - `create_node`：显式新增节点，已有 ID 不会被覆盖。
 - `patch_node`：对已有节点按字段路径更新，节点缺失或字段基线不匹配都会失败。
 - `remove_node`：按完整对象基线删除节点，并删除关联连接。
@@ -103,6 +103,29 @@ operations 可携带 `editProofs: [{nodeId, sessionId, token}]`，服务端校�
 - `set_field`：更新白名单中的画布字段，并校验 `beforeValue`；字段不存在时用 JSON `null` 表示删除或缺失基线。
 
 只有 create 操作可以创建实体。删除后的迟到编辑、媒体回写或 Agent 更新得到 `canvas_object_missing`，不会隐式重建节点、连接或画布。画布删除后的迟到请求同样不会重建画布；只有新的 `create_canvas` 才能显式重新创建。
+
+### 空白画布创建与拒绝诊断
+
+空白画布可以只携带标题；未关联项目时，`projectId` 缺省、空字符串和 JSON `null` 均可接受。完整请求示例：
+
+```json
+{
+  "mutationId": "create-blank-canvas",
+  "operations": [
+    {
+      "type": "create_canvas",
+      "id": "blank-canvas",
+      "patch": { "title": "新画布", "projectId": null }
+    }
+  ]
+}
+```
+
+请求路径使用 `/api/canvas-projects/blank-canvas/operations`。`patch` 允许的字段为 `title`、`projectId`、`chatSessions`、`activeChatId`、`starterMode`、`appearance`、`backgroundMode`、`showImageInfo`、`previsScenes` 和 `timeline`。不要用操作对象中的 `nodes` 或 `edges` 代替 `patch`：这些属性不负责初始化画布字段。
+
+operations 的解析或业务写入失败会额外记录结构化日志 `canvas operations rejected`。`stage=decode_request` 表示请求 JSON 解析失败，`stage=apply_operations` 表示业务校验或提交失败；日志包含画布 ID、HTTP 状态、业务 `code`、`reason` 和安全错误说明，已解析请求还包含 mutation ID 和操作数量，可通过 `request_id` 关联访问日志。JSON 类型错误记录 `field`、`expected_type`、`offset`；语法错误记录位置，超限请求记录大小上限。未知创建字段会在错误说明中点名。
+
+日志不输出请求正文、字段值、编辑凭据、Cookie 或底层错误原文。排查时保留失败响应的 `code`、`reason`、`msg` 和同一请求的拒绝日志；400 拒绝不会保存画布或 mutation receipt，不能把后续接口的 404 当作创建成功。
 
 ## 事务与 receipt
 

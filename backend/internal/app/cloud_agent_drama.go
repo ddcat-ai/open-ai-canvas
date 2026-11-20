@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -17,6 +18,8 @@ import (
 const (
 	cloudAgentDramaListLimit  = 200
 	cloudAgentDramaBoundLimit = 100
+	// cloudAgentDramaContextNote 随 drama_get_context 结果返回，提醒模型画布上的短剧节点会落后于调度结果。
+	cloudAgentDramaContextNote = "状态以本次读取为准；画布上的短剧节点是投影快照，可能落后"
 )
 
 type cloudAgentDramaContextArgs struct {
@@ -85,6 +88,8 @@ func cloudAgentHandleDramaGetContext(repo *repository.Repository, userID string,
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
 		return nil, cloudAgentJSONArgumentError(err)
 	}
+	// readAt 取在读库之前：返回的状态不早于这个时间。
+	readAt := time.Now()
 	canvas, nodes, err := cloudAgentDramaCanvas(repo, userID, state.Request.CanvasID)
 	if err != nil {
 		return nil, err
@@ -99,10 +104,12 @@ func cloudAgentHandleDramaGetContext(repo *repository.Repository, userID string,
 	}
 	production := summary.Production
 	result := map[string]any{
+		"source": "drama_db", "readAt": readAt.Format(time.RFC3339), "note": cloudAgentDramaContextNote,
 		"drama": map[string]any{
 			"id": summary.Project.ID, "name": summary.Project.Name, "status": production.Status, "pauseReason": production.PauseReason,
 			"aspectRatio": production.Settings.AspectRatio, "budgetCredits": float64(production.BudgetMicrocredits) / 1e6,
 			"spentCredits": float64(production.SpentMicrocredits) / 1e6, "canvasSpentCredits": float64(production.CanvasSpentMicrocredits) / 1e6,
+			"heldCredits": float64(production.HeldMicrocredits) / 1e6,
 		},
 	}
 	episodes := make([]map[string]any, 0, min(len(summary.Episodes), cloudAgentDramaListLimit))
@@ -113,6 +120,7 @@ func cloudAgentHandleDramaGetContext(repo *repository.Repository, userID string,
 		episodes = append(episodes, map[string]any{
 			"id": episode.ID, "number": episode.Number, "title": episode.Title, "stage": episode.Stage, "hasFinal": episode.FinalResourceID != "",
 			"finalStale": episode.FinalStale, "segments": episode.Stats.Segments, "videoReady": episode.Stats.VideoReady, "failed": episode.Stats.Failed,
+			"revision": episode.Revision, "updatedAt": episode.UpdatedAt,
 		})
 	}
 	result["episodes"] = episodes
@@ -167,9 +175,13 @@ func cloudAgentHandleDramaGetContext(repo *repository.Repository, userID string,
 				"index": segment.Index, "id": segment.ID, "title": segment.Title, "durationSeconds": float64(segment.DurationMs) / 1000,
 				"videoStatus": segment.VideoStatus, "hasVideo": segment.VideoResourceID != "", "promptStatus": segment.PromptStatus,
 				"references": references, "prompt": truncateRunes(segment.VideoPrompt, 300),
+				"revision": segment.Revision, "updatedAt": segment.UpdatedAt,
 			})
 		}
-		result["episode"] = map[string]any{"id": detail.Episode.ID, "number": detail.Episode.Number, "title": detail.Episode.Title, "stage": detail.Episode.Stage, "segments": segments}
+		result["episode"] = map[string]any{
+			"id": detail.Episode.ID, "number": detail.Episode.Number, "title": detail.Episode.Title, "stage": detail.Episode.Stage,
+			"revision": detail.Episode.Revision, "updatedAt": detail.Episode.UpdatedAt.Format(time.RFC3339), "segments": segments,
+		}
 	}
 	return result, nil
 }

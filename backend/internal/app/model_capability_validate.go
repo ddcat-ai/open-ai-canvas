@@ -193,12 +193,15 @@ func validateVideoCapabilityConfig(value *VideoCapabilityConfig) error {
 	if len(value.Operations) == 0 || strings.TrimSpace(value.DefaultOperation) == "" || !containsCapabilityString(value.Operations, value.DefaultOperation) {
 		return BadAuthRequest("请至少配置一个生成模式，并选择默认模式")
 	}
-	return validateVideoProcessingConfig(value.Processing)
+	return validateVideoProcessingConfig(value.Processing, value.DefaultOperation)
 }
 
-func validateVideoProcessingConfig(value *VideoProcessingConfig) error {
+func validateVideoProcessingConfig(value *VideoProcessingConfig, operation string) error {
 	if value == nil {
 		return nil
+	}
+	if operation == VideoProcessingOperationDepth && value.FPSPolicy != VideoProcessingFPSKeepSource {
+		return BadAuthRequest("相对深度视频不支持选择输出帧率")
 	}
 	switch value.FPSPolicy {
 	case VideoProcessingFPSKeepSource:
@@ -219,18 +222,25 @@ func validateVideoProcessingConfig(value *VideoProcessingConfig) error {
 	default:
 		return BadAuthRequest("视频处理帧率策略仅支持保持原帧率或用户选择")
 	}
-	if value.MaxSourceSeconds < 0 || value.MaxSourceSeconds > DefaultVideoProcessingMaxSourceSeconds {
-		return BadAuthRequest(fmt.Sprintf("源视频时长上限必须在 1-%d 秒之间（任务轮询上限为 1 小时）", DefaultVideoProcessingMaxSourceSeconds))
+	maxSeconds := DefaultVideoProcessingMaxSourceSeconds
+	if operation == VideoProcessingOperationDepth {
+		maxSeconds = MediaKitDepthMaxSourceSeconds
+	}
+	if value.MaxSourceSeconds < 0 || value.MaxSourceSeconds > maxSeconds {
+		return BadAuthRequest(fmt.Sprintf("源视频时长上限不能超过 %d 秒", maxSeconds))
 	}
 	return nil
 }
 
 // videoProcessingMaxSourceSeconds 返回生效的源视频时长上限。
-func videoProcessingMaxSourceSeconds(value *VideoProcessingConfig) int {
-	if value == nil || value.MaxSourceSeconds <= 0 {
-		return DefaultVideoProcessingMaxSourceSeconds
+func videoProcessingMaxSourceSeconds(profile *VideoCapabilityConfig) int {
+	if profile.Processing != nil && profile.Processing.MaxSourceSeconds > 0 {
+		return profile.Processing.MaxSourceSeconds
 	}
-	return value.MaxSourceSeconds
+	if profile.DefaultOperation == VideoProcessingOperationDepth {
+		return MediaKitDepthMaxSourceSeconds
+	}
+	return DefaultVideoProcessingMaxSourceSeconds
 }
 
 // videoFPSBand 把帧率映射到火山 MediaKit 的计费档位：≤30、≤60、≤120。
@@ -274,13 +284,24 @@ func validateVideoDuration(value VideoDurationConfig) error {
 }
 
 func (s *Service) ValidateTaskCapability(input map[string]any) error {
+	switch input["mode"] {
+	case "text", "image", "video", "audio":
+	default:
+		return nil
+	}
 	encoded, err := json.Marshal(input)
 	if err != nil {
 		return BadAuthRequest("任务输入格式无效")
 	}
 	var taskInput canvasGenerationInput
-	if err := json.Unmarshal(encoded, &taskInput); err != nil || (taskInput.Mode != "image" && taskInput.Mode != "video" && taskInput.Mode != "audio") {
-		return nil
+	if err := json.Unmarshal(encoded, &taskInput); err != nil {
+		return BadAuthRequest("任务输入格式无效")
+	}
+	if taskInput.Mode == "text" {
+		if err := ValidateThinkingLevelRequest(taskInput.TextOptions.ThinkingLevel); err != nil {
+			return newModelCapabilityArgumentError("thinkingLevel", "unsupported_value", err)
+		}
+		return s.validateTextTaskReferences(taskInput)
 	}
 	if isWorkflowProviderInterface(taskInput.Config.InterfaceType) {
 		if err := validateWorkflowProviderPromptLength(taskInput); err != nil {
@@ -296,88 +317,97 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	if channelID == "" {
 		channelID = systemChannelIDFromBaseURL(taskInput.Config.BaseURL)
 	}
+	var profile *ModelCapabilityConfig
 	if channelID == "" {
-		if taskInput.Mode == "image" {
-			profile := DefaultImageCapabilityConfig(taskInput.Config.InterfaceType, taskInput.Config.Model)
-			if taskInput.Config.CapabilityConfig != nil && taskInput.Config.CapabilityConfig.Image != nil {
-				profile = taskInput.Config.CapabilityConfig.Image
-			}
-			normalized, err := NormalizeModelCapabilityConfigForModel("image", taskInput.Config.InterfaceType, taskInput.Config.Model, &ModelCapabilityConfig{Version: 1, Image: profile}, s.protocolRegistry())
-			if err != nil {
-				return err
-			}
-			profile = normalized.Image
-			if profile.Parameters == nil {
-				fillMissingImageSizePresets(profile, taskInput.Config.InterfaceType)
-			}
-			if presetErr := imageSizePresetReadyError(profile, taskInput.Config.InterfaceType); presetErr != nil {
-				return presetErr
-			}
-			return validateImageTaskWithResolvedSize(input, &taskInput, profile)
+		profile, err = customMediaCapability(taskInput.Mode, taskInput.Config, s.protocolRegistry())
+		if err != nil || profile == nil {
+			return err
 		}
-		profile := taskInput.Config.CapabilityConfig
-		if profile == nil || profile.Video == nil {
-			if taskInput.Config.InterfaceType != string(model.ChannelInterfaceAgnesVideo) {
-				return nil
-			}
-			profile = DefaultModelCapabilityConfigForModel(taskInput.Config.InterfaceType, taskInput.Config.Model)
+	} else {
+		item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(taskInput.Config))
+		if err != nil {
+			return BadAuthRequest("当前系统渠道模型未配置或已停用")
 		}
-		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", taskInput.Config.InterfaceType, taskInput.Config.Model, profile)
-		if normalizeErr != nil || normalized == nil || normalized.Video == nil {
-			return BadAuthRequest("当前视频模型能力参数无效")
+		if item.Capability != taskInput.Mode {
+			return BadAuthRequest("系统渠道模型能力与任务类型不符")
 		}
-		applyAutoDLVideoScreenSpec(&taskInput, normalized.Video)
-		if config, ok := input["config"].(map[string]any); ok {
-			config["size"], config["vquality"] = taskInput.Config.Size, taskInput.Config.VQuality
-		}
-		return validateVideoTask(normalized.Video, taskInput)
-	}
-	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(taskInput.Config))
-	if err != nil {
-		return BadAuthRequest("当前系统渠道模型未配置或已停用")
-	}
-	profile, err := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
-	if taskInput.Mode == "image" {
 		profile, err = normalizedChannelModelCapability(item, s.protocolRegistry())
 		if err != nil {
-			return BadAuthRequest("当前图片模型能力参数无效")
+			return err
 		}
-		imageProfile := DefaultImageCapabilityConfig(string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey))
-		if profile != nil && profile.Image != nil {
-			imageProfile = profile.Image
-		}
-		imageProfile = applyModelSpecificImageCapability(imageProfile, string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), taskInput.Config.APIFormat)
-		// 旧线路没有换算表时按声明的档位补齐；补不齐就失败关闭，不能静默按 1K 出图。
-		if imageProfile.Parameters == nil {
-			fillMissingImageSizePresets(imageProfile, string(item.Protocol))
-		}
-		if presetErr := imageSizePresetReadyError(imageProfile, string(item.Protocol)); presetErr != nil {
+		taskInput.Config.InterfaceType = string(item.Protocol)
+	}
+	if taskInput.Mode == "image" {
+		if presetErr := imageSizePresetReadyError(profile.Image, taskInput.Config.InterfaceType); presetErr != nil {
 			return presetErr
 		}
-		return validateImageTaskWithResolvedSize(input, &taskInput, imageProfile)
+		return validateImageTaskWithResolvedSize(input, &taskInput, profile.Image)
 	}
-	if err != nil || profile == nil || profile.Video == nil {
-		return BadAuthRequest("当前视频模型尚未配置能力参数")
+	applyAutoDLVideoScreenSpec(&taskInput, profile.Video)
+	if channelID != "" {
+		applyFixedVideoResolution(&taskInput, profile.Video)
 	}
-	normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), profile)
-	if normalizeErr != nil || normalized == nil || normalized.Video == nil {
-		return BadAuthRequest("当前视频模型能力参数无效")
-	}
-	applyAutoDLVideoScreenSpec(&taskInput, normalized.Video)
-	applyFixedVideoResolution(&taskInput, normalized.Video)
 	if config, ok := input["config"].(map[string]any); ok {
 		config["size"] = taskInput.Config.Size
 		config["vquality"] = taskInput.Config.VQuality
 	}
-	return validateVideoTask(normalized.Video, taskInput)
+	return validateVideoTask(profile.Video, taskInput)
 }
 
-// applyModelSpecificImageCapability is retained as a narrow normalization hook
-// for provider-specific image validation. The stored capability profile is
-// already normalized when the channel model is saved, so no second override is
-// needed here.
-func applyModelSpecificImageCapability(profile *ImageCapabilityConfig, _ string, _ string, _ string) *ImageCapabilityConfig {
-	return profile
+// validateTextTaskReferences 在预授权扣费前拦下发给不支持看图 / 视频识别的文字模型的参考素材；放行后上游只会返回 400。
+// 系统渠道按渠道模型的能力合同判断，未声明文字能力视为不支持图片和视频（与看图工具同一口径）；
+// 自定义渠道只在请求附带了文字能力配置时判断，未附带时不推断。
+// 视频识别默认关闭：管理员在模型能力里勾选「支持视频识别」（maxVideos > 0）后才放行参考视频。
+func (s *Service) validateTextTaskReferences(input canvasGenerationInput) error {
+	if (len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0) || isWorkflowProviderInterface(input.Config.InterfaceType) {
+		return nil
+	}
+	channelID := strings.TrimSpace(input.Config.ChannelID)
+	if channelID == "" {
+		channelID = systemChannelIDFromBaseURL(input.Config.BaseURL)
+	}
+	if channelID == "" {
+		if profile := input.Config.CapabilityConfig; profile != nil && profile.Text != nil {
+			return validateTextReferenceLimits(profile.Text.References, input)
+		}
+		return nil
+	}
+	if s == nil || s.repo == nil {
+		return BadAuthRequest("当前系统渠道模型未配置或已停用")
+	}
+	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(input.Config))
+	if err != nil || item == nil {
+		return BadAuthRequest("当前系统渠道模型未配置或已停用")
+	}
+	profile, err := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
+	if err != nil {
+		return BadAuthRequest("当前文字模型能力参数无效")
+	}
+	if profile == nil || profile.Text == nil {
+		return validateTextReferenceLimits(TextReferenceConfig{}, input)
+	}
+	return validateTextReferenceLimits(profile.Text.References, input)
+}
+
+func validateTextReferenceLimits(references TextReferenceConfig, input canvasGenerationInput) error {
+	if len(input.ReferenceImages) > 0 && references.MaxImages <= 0 {
+		return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("当前文字模型不支持图片输入，请选择支持看图的文字模型"))
+	}
+	if len(input.ReferenceVideos) == 0 {
+		return nil
+	}
+	if references.MaxVideos <= 0 {
+		return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("当前文字模型未开启视频识别，请选择支持视频识别的文字模型"))
+	}
+	if len(input.ReferenceVideos) > references.MaxVideos {
+		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest(fmt.Sprintf("当前文字模型最多识别 %d 个参考视频", references.MaxVideos)))
+	}
+	for _, media := range input.ReferenceVideos {
+		if references.MaxVideoBytes > 0 && media.Bytes > references.MaxVideoBytes {
+			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("参考视频文件超过当前文字模型大小限制"))
+		}
+	}
+	return nil
 }
 
 // applyFixedVideoResolution 让单档位 SKU 的预扣、恢复和上游请求保持同一分辨率。
@@ -397,7 +427,18 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if err := validateModelPromptLength("视频", input.Prompt, profile.References.PromptMaxChars); err != nil {
 		return err
 	}
-	if len(input.ReferenceImages) > profile.References.MaxImages || len(input.ReferenceVideos) > profile.References.MaxVideos || len(input.ReferenceAudios) > profile.References.MaxAudios {
+	operation := input.videoOperation()
+	if operation == "" {
+		if len(input.ReferenceImages) > 0 {
+			operation = "image_to_video"
+		} else {
+			operation = profile.DefaultOperation
+		}
+	}
+	if capacity := profile.maxImagesFor(operation); len(input.ReferenceImages) > capacity {
+		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest(fmt.Sprintf("当前视频模型在 %s 模式最多发送 %d 张图片，当前有 %d 张", operation, capacity, len(input.ReferenceImages))))
+	}
+	if len(input.ReferenceVideos) > profile.References.MaxVideos || len(input.ReferenceAudios) > profile.References.MaxAudios {
 		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest("参考素材数量超过当前模型限制"))
 	}
 	if model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) && len(input.ReferenceAudios) > 0 && len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
@@ -428,22 +469,18 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 		}
 	}
 	seconds, err := strconv.Atoi(strings.TrimSpace(input.Config.VideoSeconds))
-	if err != nil || !videoDurationAllowed(profile.Duration, seconds) {
-		return newModelCapabilityArgumentError("durationSeconds", "unsupported_value", BadAuthRequest("视频时长不在当前模型支持范围内"))
+	if err != nil {
+		return newModelCapabilityArgumentError("durationSeconds", "unsupported_value", BadAuthRequest(fmt.Sprintf("视频时长不在当前模型支持范围内（%s）", videoDurationAllowedLabel(profile.Duration))))
 	}
-	if input.Config.Size != "" && !videoRatioAllowed(profile.Ratios, input.Config.Size) {
+	if !videoDurationAllowed(profile.Duration, seconds) {
+		return newModelCapabilityArgumentError("durationSeconds", "unsupported_value", BadAuthRequest(fmt.Sprintf("视频时长 %d 秒不在当前模型支持范围内（%s）", seconds, videoDurationAllowedLabel(profile.Duration))))
+	}
+	limit, hasLimit := profile.ModeLimits[operation]
+	if input.Config.Size != "" && (!hasLimit || len(limit.Ratios) > 0) && (!videoRatioAllowed(profile.Ratios, input.Config.Size) || hasLimit && !containsCapabilityString(limit.Ratios, input.Config.Size)) {
 		return newModelCapabilityArgumentError("size", "unsupported_value", BadAuthRequest("画面比例不在当前模型支持范围内"))
 	}
 	if len(profile.Resolutions) > 0 && !isAutomaticVideoResolution(input.Config.VQuality) && videoResolutionNameRequest(profile, input.Config.VQuality) == "" {
 		return newModelCapabilityArgumentError("quality", "unsupported_value", BadAuthRequest("输出分辨率不在当前模型支持范围内"))
-	}
-	operation := metadataString(input.Metadata, "videoEditOperation")
-	if operation == "" {
-		if len(input.ReferenceImages) > 0 {
-			operation = "image_to_video"
-		} else {
-			operation = profile.DefaultOperation
-		}
 	}
 	if !containsCapabilityString(profile.Operations, operation) {
 		return newModelCapabilityArgumentError("logicalModelId", "unsupported_value", BadAuthRequest("当前视频模型不支持该生成模式"))
@@ -1014,6 +1051,57 @@ func videoDurationAllowed(value VideoDurationConfig, seconds int) bool {
 		return containsInt(value.Values, seconds)
 	}
 	return seconds >= value.Min && seconds <= value.Max && value.Step > 0 && (seconds-value.Min)%value.Step == 0
+}
+
+// videoDurationSpan 把可选时长归成等差区间：范围声明直接取上下限与步长；多于 3 档的等差枚举也按区间描述，
+// 避免在提示里列出几十个档位。归不成区间时 ok 为 false，list 是从小到大的档位文本。
+func videoDurationSpan(value VideoDurationConfig) (low, high, step int, list string, ok bool) {
+	if value.Selection != "enum" {
+		return value.Min, value.Max, value.Step, "", true
+	}
+	values := append([]int(nil), value.Values...)
+	sort.Ints(values)
+	labels := make([]string, 0, len(values))
+	for _, item := range values {
+		labels = append(labels, strconv.Itoa(item))
+	}
+	list = strings.Join(labels, "、")
+	if len(values) <= 3 {
+		return 0, 0, 0, list, false
+	}
+	step = values[1] - values[0]
+	for index := 2; index < len(values); index++ {
+		if values[index]-values[index-1] != step {
+			return 0, 0, 0, list, false
+		}
+	}
+	return values[0], values[len(values)-1], step, list, step > 0
+}
+
+// videoDurationAllowedLabel 用与 videoDurationAllowed 相同的口径描述可选时长，例如“5–30 秒，步长 1”“可选 5、10 秒”。
+func videoDurationAllowedLabel(value VideoDurationConfig) string {
+	low, high, step, list, ok := videoDurationSpan(value)
+	switch {
+	case !ok:
+		return "可选 " + list + " 秒"
+	case value.Selection != "enum":
+		return fmt.Sprintf("%d–%d 秒，步长 %d", low, high, step)
+	case step == 1:
+		return fmt.Sprintf("可选 %d–%d 秒", low, high)
+	}
+	return fmt.Sprintf("可选 %d–%d 秒，步长 %d", low, high, step)
+}
+
+// videoDurationSupportLabel 是写进业务提示的简短版本，例如“5–30 秒”“5、10 秒”。
+func videoDurationSupportLabel(value VideoDurationConfig) string {
+	low, high, step, list, ok := videoDurationSpan(value)
+	switch {
+	case !ok:
+		return list + " 秒"
+	case step > 1:
+		return fmt.Sprintf("%d–%d 秒（步长 %d）", low, high, step)
+	}
+	return fmt.Sprintf("%d–%d 秒", low, high)
 }
 
 func videoRatioAllowed(options []string, value string) bool {

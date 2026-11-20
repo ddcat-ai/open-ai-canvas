@@ -1,4 +1,4 @@
-import { ChartColumn, Clapperboard, Code, Columns2, FileText, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Shapes, Table2, Type, Video, ArrowRightLeft, Blocks } from "lucide-react";
+import { Clapperboard, Globe, Image as ImageIcon, Music2, PanelTop, Palette, Pencil, Settings2, Table2, Type, Video, ArrowRightLeft, Blocks } from "lucide-react";
 
 import { NODE_SPECS } from "@/constant/canvas";
 import { MEDIA_NODE_MIN_SIZE } from "@/lib/canvas/canvas-node-size";
@@ -104,33 +104,6 @@ const BUILTIN_NODE_TRAITS = {
         showInCreateMenu: true,
         // 背板只是视觉容器，既不是素材也不参与计数。
     },
-    [CanvasNodeType.Markdown]: {
-        label: "Markdown",
-        icon: <FileText />,
-        minSize: DEFAULT_MIN_SIZE,
-        showInCreateMenu: true,
-        // 渲染的是 Markdown 源码，作为素材与输入都按文本计。
-        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "text" : null),
-        inputKind: "text",
-        // 不设 generationMode：它是展示节点，自身不发起生成。
-    },
-    [CanvasNodeType.Svg]: {
-        label: "SVG",
-        icon: <Shapes />,
-        minSize: DEFAULT_MIN_SIZE,
-        showInCreateMenu: true,
-        // 内容是 SVG 源码，按文本素材计；渲染成图但不产出图片资源。
-        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "text" : null),
-        inputKind: "text",
-    },
-    [CanvasNodeType.Html]: {
-        label: "HTML",
-        icon: <Code />,
-        minSize: DEFAULT_MIN_SIZE,
-        showInCreateMenu: true,
-        resourceKind: (node: CanvasNodeData) => (node.metadata?.content ? "text" : null),
-        inputKind: "text",
-    },
     [CanvasNodeType.Panorama]: {
         label: "全景",
         icon: <Globe />,
@@ -139,23 +112,20 @@ const BUILTIN_NODE_TRAITS = {
         // 查看器：消费上游图片，自身不作为素材被引用，故不设 resourceKind。
         inputKind: "image",
     },
-    [CanvasNodeType.Compare]: {
-        label: "对比",
-        icon: <Columns2 />,
-        minSize: MEDIA_NODE_MIN_SIZE,
+    [CanvasNodeType.BatchTable]: { label: "批量创作表", icon: <Table2 />, minSize: { width: 1080, height: 420 }, showInCreateMenu: true, acceptsInputKind: "image", inputKind: "text", resourceKind: () => null },
+    [CanvasNodeType.MediaConversion]: {
+        label: "转换",
+        icon: <ArrowRightLeft />,
+        minSize: { width: 400, height: 360 },
         showInCreateMenu: true,
-        // 只看不产出：消费两张上游图片，自身不作为素材。
+        resourceKind: (node: CanvasNodeData) => {
+            const c = node.metadata?.mediaConversion;
+            return c?.status === "completed" && c.resultStorageKey ? (c.outputKind === "video" ? "video" : "image") : null;
+        },
+        acceptsInputKind: ["image", "video"],
+        maxInputCount: 1,
         inputKind: "image",
     },
-    [CanvasNodeType.Chart]: {
-        label: "图表",
-        icon: <ChartColumn />,
-        minSize: DEFAULT_MIN_SIZE,
-        showInCreateMenu: true,
-        inputKind: "text",
-    },
-    [CanvasNodeType.BatchTable]: { label: "批量创作表", icon: <Table2 />, minSize: { width: 1080, height: 420 }, showInCreateMenu: true, acceptsInputKind: "image", inputKind: "text", resourceKind: () => null },
-    [CanvasNodeType.MediaConversion]: { label: "转换", icon: <ArrowRightLeft />, minSize: { width: 400, height: 360 }, showInCreateMenu: true, resourceKind: (node: CanvasNodeData) => { const c = node.metadata?.mediaConversion; return c?.status === "completed" && c.resultStorageKey ? (c.outputKind === "video" ? "video" : "image") : null; }, acceptsInputKind: ["image", "video"], maxInputCount: 1, inputKind: "image" },
     [CanvasNodeType.ColorGrade]: {
         label: "调色",
         icon: <Palette />,

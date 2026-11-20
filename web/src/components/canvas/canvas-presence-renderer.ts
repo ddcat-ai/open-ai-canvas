@@ -1,5 +1,6 @@
 import type { CanvasPresence, CanvasRealtimeSnapshot } from "@/services/canvas-realtime-client";
 import type { ViewportTransform } from "@/types/canvas";
+import { translate } from "@/i18n";
 
 export type CanvasPeerIdentity = { id: string; number: number; label: string; self: boolean };
 type PeerElements = { root: HTMLDivElement; cursor: HTMLDivElement; label: HTMLSpanElement; outlines: Map<string, HTMLDivElement> };
@@ -50,7 +51,7 @@ export function createCanvasPresenceRenderer(host: HTMLDivElement) {
         const hidden = !point || Boolean(bounds && (x < 0 || y < 0 || x > bounds.width || y > bounds.height));
         if (elements.cursor.hidden !== hidden) elements.cursor.hidden = hidden;
         if (point && !elements.cursor.hidden) transform(elements.cursor, x, y);
-        const label = peer.drag?.length ? `${identity.label} · 拖动中` : identity.label;
+        const label = peer.drag?.length ? translate("canvasB.presence.dragging", { name: identity.label }) : identity.label;
         if (elements.label.textContent !== label) elements.label.textContent = label;
         const active = new Set<string>();
         for (const node of peer.drag ?? []) {

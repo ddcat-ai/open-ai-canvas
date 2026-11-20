@@ -43,7 +43,7 @@ import { createPrevisTransaction, installPrevisTerminalListeners } from "@/lib/c
 import { emptyPrevisPlacementIntent, finitePrevisGroundPoint, type PrevisGroundPoint, type PrevisPlacementIntent } from "@/lib/canvas/previs/previs-placement";
 import { previsDiagnosticObjectKind } from "@/lib/canvas/previs/previs-diagnostics";
 import { recordPrevisDiagnostic } from "@/lib/canvas/previs/previs-diagnostics-recorder";
-import { PREVIS_MIN_ORBIT_DISTANCE, resolvePrevisFrameBounds, resolvePrevisObjectBox, resolvePrevisZoomMinDistance } from "@/lib/canvas/previs/previs-frame-bounds";
+import { PREVIS_INITIAL_FRAME_PADDING, PREVIS_MIN_ORBIT_DISTANCE, resolvePrevisFrameBounds, resolvePrevisInitialFrame, resolvePrevisObjectBox, resolvePrevisZoomMinDistance } from "@/lib/canvas/previs/previs-frame-bounds";
 import {
     previsCaptureInitial,
     previsCaptureUsable,
@@ -82,7 +82,7 @@ import { captureFrame, createPrevisShotSurface, recordCanvas, type PrevisCapture
 import { previsAspectValue, resolvePrevisSafeFrame } from "@/lib/canvas/previs/previs-optics";
 import { resolvePrevisActiveShot } from "@/lib/canvas/previs/previs-view-modes";
 import { buildPrevisMannequin, isPrevisStandardActor, loadPrevisMannequinTemplate, previsMannequinProfileKey, resolvePrevisMannequinProfile } from "@/lib/canvas/previs/previs-mannequin";
-import { isPrevisGroundLockedObject } from "@/lib/canvas/previs/previs-grounding";
+import { isPrevisUprightObject } from "@/lib/canvas/previs/previs-grounding";
 import { evaluatePrevisActorPose, PREVIS_MANNEQUIN_BONES } from "@/lib/canvas/previs/previs-motion";
 import { PREVIS_WORLD_CAMERA_FAR, resolvePrevisWorldLighting } from "@/lib/canvas/previs/previs-world";
 import { evaluatePrevisTravel } from "@/lib/canvas/previs/previs-travel";
@@ -821,7 +821,7 @@ function PrevisSceneContent({
             orbitRef.current?.update();
             invalidate();
         };
-        const frame = (ids?: Set<string>, fixedDirection = false) => {
+        const frame = (ids?: Set<string>, fixedDirection = false, padding = PREVIS_INITIAL_FRAME_PADDING) => {
             const aspect = size.width / Math.max(size.height, 1);
             const bounds = resolvePrevisFrameBounds(scene.objects, ids, aspect, freeCamera.fov);
             if (!bounds) return resetCamera();
@@ -831,7 +831,7 @@ function PrevisSceneContent({
             if (direction.lengthSq() < 0.01) direction.set(...PREVIS_DEFAULT_VIEW_DIRECTION);
             direction.normalize();
             orbitRef.current?.target.copy(bounds.target);
-            freeCamera.position.copy(bounds.target).add(direction.multiplyScalar(Math.max(1.8, bounds.fitDistance * 1.18)));
+            freeCamera.position.copy(bounds.target).add(direction.multiplyScalar(Math.max(1.8, bounds.fitDistance * padding)));
             freeCamera.lookAt(bounds.target);
             orbitRef.current?.update();
             invalidate();
@@ -855,11 +855,11 @@ function PrevisSceneContent({
         };
         onNavigationReady?.(navigation);
         // 首次取景：等容器有真实尺寸再做；优先对准演员（道具可能是 8m 山体或地面板，会把人挤成小点），
-        // 用固定的 3/4 略俯视角，地平线落在画面上部三分之一附近。
+        // 没有演员时不算背景板与地面。用固定的 3/4 略俯视角，地平线落在画面上部三分之一附近。
         if (initialFrameSceneRef.current !== scene.id && size.width > 0 && size.height > 0) {
             initialFrameSceneRef.current = scene.id;
-            const actorIds = new Set(scene.objects.filter((item) => item.visible && (item.kind === "actor" || item.primitive === "character")).map((item) => item.id));
-            frame(actorIds.size ? actorIds : undefined, true);
+            const initial = resolvePrevisInitialFrame(scene.objects);
+            frame(initial.ids, true, initial.padding);
         }
         return () => onNavigationReady?.({ focusSelected: () => undefined, frameScene: () => undefined, resetCamera: () => undefined, zoom: () => undefined });
     }, [freeCamera, invalidate, onNavigationReady, scene.id, scene.objects, selectedObjectId, size.height, size.width]);
@@ -1707,7 +1707,7 @@ function PrevisObjectView({
                 />
             </group>
             {selected && target && transformMode !== "select" ? (
-                <PrevisObjectGizmo target={target} transformMode={transformMode} groundLocked={isPrevisGroundLockedObject(object)} onFreeze={setFrozen} onTransforming={onTransforming} onTransform={onTransform} />
+                <PrevisObjectGizmo target={target} transformMode={transformMode} uprightOnly={isPrevisUprightObject(object)} onFreeze={setFrozen} onTransforming={onTransforming} onTransform={onTransform} />
             ) : null}
         </>
     );
@@ -1997,15 +1997,15 @@ function PrevisCameraView({
 function PrevisObjectGizmo({
     target,
     transformMode,
-    groundLocked = false,
+    uprightOnly = false,
     onFreeze,
     onTransforming,
     onTransform,
 }: {
     target: Group;
     transformMode: Exclude<PrevisToolMode, "select">;
-    /** 演员落地锁定：平移时隐藏 Y 轴，旋转时只允许绕 Y 转身。 */
-    groundLocked?: boolean;
+    /** 演员保持直立：旋转时只允许绕 Y 转身；平移保留 Y 轴，可抬到台面上，低于地面在提交时拉回。 */
+    uprightOnly?: boolean;
     onFreeze: (transform: PrevisTransform | null) => void;
     onTransforming: (value: boolean) => void;
     onTransform: (from: PrevisTransform, to: PrevisTransform) => void;
@@ -2019,8 +2019,7 @@ function PrevisObjectGizmo({
             onTransforming(active);
         },
     });
-    const lockY = groundLocked && transformMode === "translate";
-    const yawOnly = groundLocked && transformMode === "rotate";
+    const yawOnly = uprightOnly && transformMode === "rotate";
     const controlsRef = useRef<ComponentRef<typeof TransformControls>>(null);
     useEffect(() => {
         // 平移手柄只留三根轴和贴地平面（XZ）：竖直平面与中心方块挤在对象上像一堆彩色积木，
@@ -2037,7 +2036,7 @@ function PrevisObjectGizmo({
             mode={transformMode}
             size={0.62}
             showX={!yawOnly}
-            showY={!lockY}
+            showY
             showZ={!yawOnly}
             onMouseDown={() => transaction.begin()}
             onMouseUp={() => transaction.end("commit")}

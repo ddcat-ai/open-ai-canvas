@@ -4,9 +4,11 @@ package app
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 	protocolcontract "yingce/backend/internal/protocol"
 )
@@ -101,6 +103,10 @@ func supportsTokenBilling(capability string, _ model.ChannelInterfaceType) bool 
 }
 
 func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string) ([]model.ChannelModelPriceTier, error) {
+	return normalizeChannelModelPriceTiersWithIDs(req, capability, protocol, fallbackProviderModelKey, s.repo.NextPrefixedID)
+}
+
+func normalizeChannelModelPriceTiersWithIDs(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string, nextID func(string) (string, error)) ([]model.ChannelModelPriceTier, error) {
 	inputs := req.PriceTiers
 	// 兼容旧管理 API：没有 priceTiers 的请求等价于一个默认价格档。
 	if len(inputs) == 0 {
@@ -109,7 +115,8 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 			Resolution: "*", VideoSeconds: 0, ProviderModelKey: fallbackProviderModelKey,
 			BillingMode: req.BillingMode, UnitPriceMicrocredits: req.UnitPriceMicrocredits,
 			InputTokenPriceMicrocredits: req.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: req.OutputTokenPriceMicrocredits,
-			CachedTokenPriceMicrocredits: req.CachedTokenPriceMicrocredits, PriceConfigured: req.PriceConfigured, Enabled: &enabled,
+			CachedTokenPriceMicrocredits: req.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: req.CacheWriteTokenPriceMicrocredits,
+			PriceConfigured: req.PriceConfigured, Enabled: &enabled,
 		}}
 	}
 	result := make([]model.ChannelModelPriceTier, 0, len(inputs))
@@ -138,28 +145,104 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		if err := validateChannelModelTierPricing(capability, protocol, billingMode, input); err != nil {
 			return nil, err
 		}
-		id, idErr := s.repo.NextPrefixedID("PTIER")
+		rules, rulesErr := normalizeTokenPriceRules(capability, billingMode, input.TokenPriceRulesEnabled, input.TokenPriceRules)
+		if rulesErr != nil {
+			return nil, rulesErr
+		}
+		id, idErr := nextID("PTIER")
 		if idErr != nil {
 			return nil, idErr
 		}
 		enabled := input.Enabled == nil || *input.Enabled
 		result = append(result, model.ChannelModelPriceTier{
-			CostPricing:                  input.CostPricing,
-			ID:                           id,
-			SelectorKey:                  key,
-			SelectorJSON:                 key,
-			Selector:                     selector,
-			Resolution:                   resolution,
-			VideoSeconds:                 videoSeconds,
-			ProviderModelKey:             strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(input.ProviderModelKey, fallbackProviderModelKey)), "models/"),
-			BillingMode:                  billingMode,
-			UnitPriceMicrocredits:        input.UnitPriceMicrocredits,
-			InputTokenPriceMicrocredits:  input.InputTokenPriceMicrocredits,
-			OutputTokenPriceMicrocredits: input.OutputTokenPriceMicrocredits,
-			CachedTokenPriceMicrocredits: input.CachedTokenPriceMicrocredits,
-			PriceConfigured:              input.PriceConfigured,
-			Enabled:                      enabled,
-			PriceVersion:                 1,
+			ImagePricing:                        input.ImagePricing,
+			CostPricing:                         input.CostPricing,
+			ID:                                  id,
+			SelectorKey:                         key,
+			SelectorJSON:                        key,
+			Selector:                            selector,
+			Resolution:                          resolution,
+			VideoSeconds:                        videoSeconds,
+			ProviderModelKey:                    strings.TrimPrefix(strings.TrimSpace(firstNonEmpty(input.ProviderModelKey, fallbackProviderModelKey)), "models/"),
+			BillingMode:                         billingMode,
+			UnitPriceMicrocredits:               input.UnitPriceMicrocredits,
+			InputTokenPriceMicrocredits:         input.InputTokenPriceMicrocredits,
+			OutputTokenPriceMicrocredits:        input.OutputTokenPriceMicrocredits,
+			CachedTokenPriceMicrocredits:        input.CachedTokenPriceMicrocredits,
+			CacheWriteTokenPriceMicrocredits:    input.CacheWriteTokenPriceMicrocredits,
+			TokenPriceRulesEnabled:              input.TokenPriceRulesEnabled && len(rules) > 0,
+			TokenPriceRules:                     rules,
+			ReferenceVideoUnitPriceMicrocredits: input.ReferenceVideoUnitPriceMicrocredits,
+			ReferenceVideoOutputTokenPriceMicrocredits: input.ReferenceVideoOutputTokenPriceMicrocredits,
+			PriceConfigured: input.PriceConfigured,
+			Enabled:         enabled,
+			PriceVersion:    1,
+		})
+	}
+	return result, nil
+}
+
+// normalizeTokenPriceRules 校验并规范化分时与上下文规则。规则只对文本 Token 档有意义；
+// 其他计费方式提交非空规则时直接拒绝，避免管理员误以为规则已生效。
+func normalizeTokenPriceRules(capability string, billingMode string, enabled bool, inputs []model.TokenPriceRule) ([]model.TokenPriceRule, error) {
+	if len(inputs) == 0 {
+		if enabled {
+			return nil, BadAuthRequest("启用分时与上下文价格时至少需要一条规则")
+		}
+		return []model.TokenPriceRule{}, nil
+	}
+	if capability != "text" || billingMode != "token" {
+		return nil, BadAuthRequest("分时与上下文价格仅支持文本模型的 Token 计费")
+	}
+	if len(inputs) > model.MaxTokenPriceRules {
+		return nil, BadAuthRequest(fmt.Sprintf("每个价格档最多配置 %d 条分时与上下文规则", model.MaxTokenPriceRules))
+	}
+	result := make([]model.TokenPriceRule, 0, len(inputs))
+	for index, input := range inputs {
+		fail := func(text string) error {
+			return BadAuthRequest(fmt.Sprintf("分时规则 %d：%s", index+1, text))
+		}
+		days := make([]int, 0, 7)
+		seen := map[int]bool{}
+		for _, day := range input.Weekdays {
+			if day < 1 || day > 7 {
+				return nil, fail("星期只能是周一到周日")
+			}
+			if !seen[day] {
+				seen[day] = true
+				days = append(days, day)
+			}
+		}
+		if len(days) == 0 {
+			return nil, fail("请至少选择一天")
+		}
+		sort.Ints(days)
+		start, err := model.ParseTokenPriceClock(input.Start, false)
+		if err != nil {
+			return nil, fail("开始时间必须是 00:00 到 23:59")
+		}
+		end, err := model.ParseTokenPriceClock(input.End, true)
+		if err != nil {
+			return nil, fail("结束时间必须是 00:01 到 24:00")
+		}
+		if start >= end {
+			return nil, fail("结束时间必须晚于开始时间；跨零点请拆成两条规则")
+		}
+		if input.MinInputTokens < 0 || input.MaxInputTokens < 0 {
+			return nil, fail("输入上下文 Token 不能小于 0")
+		}
+		if input.MaxInputTokens > 0 && input.MaxInputTokens <= input.MinInputTokens {
+			return nil, fail("输入上下文上限必须大于下限")
+		}
+		if err := validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits, input.CacheWriteTokenPriceMicrocredits); err != nil {
+			return nil, fail(err.Error())
+		}
+		result = append(result, model.TokenPriceRule{
+			Enabled: input.Enabled, Weekdays: days,
+			Start: fmt.Sprintf("%02d:%02d", start/60, start%60), End: fmt.Sprintf("%02d:%02d", end/60, end%60),
+			MinInputTokens: input.MinInputTokens, MaxInputTokens: input.MaxInputTokens,
+			InputTokenPriceMicrocredits: input.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: input.OutputTokenPriceMicrocredits,
+			CachedTokenPriceMicrocredits: input.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: input.CacheWriteTokenPriceMicrocredits,
 		})
 	}
 	return result, nil
@@ -310,8 +393,18 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if err := validateCreditCostPricing(capability, billingMode, input.CostPricing); err != nil {
 		return err
 	}
-	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
-		return BadAuthRequest("模型计费方式仅支持按次、按秒或 Token")
+	if billingMode == imagebilling.Mode {
+		if capability != "image" {
+			return BadAuthRequest("图片用量计费仅适用于图片模型")
+		}
+		if err := imagebilling.Validate(input.ImagePricing); err != nil {
+			return BadAuthRequest(err.Error())
+		}
+	} else if input.ImagePricing != nil {
+		return BadAuthRequest("图片用量价格仅用于图片用量计费模式")
+	}
+	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" && billingMode != imagebilling.Mode {
+		return BadAuthRequest("模型计费方式仅支持按次、按秒、Token 或图片用量")
 	}
 	if billingMode == "per_second" && capability != "video" && capability != "audio" {
 		return BadAuthRequest("只有视频或音频模型可以按秒计费")
@@ -319,13 +412,18 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
 		return BadAuthRequest("Token 计费仅支持文本和视频模型")
 	}
-	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 {
+	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 || input.CacheWriteTokenPriceMicrocredits < 0 ||
+		input.ReferenceVideoUnitPriceMicrocredits < 0 || input.ReferenceVideoOutputTokenPriceMicrocredits < 0 {
 		return BadAuthRequest("模型积分价格不能小于 0")
 	}
-	if billingMode == "token" {
-		return validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits)
+	if capability != "video" && (input.ReferenceVideoUnitPriceMicrocredits != 0 || input.ReferenceVideoOutputTokenPriceMicrocredits != 0 ||
+		input.CostPricing.ReferenceVideoUnitPriceMicrocredits != 0 || input.CostPricing.ReferenceVideoOutputTokenPriceMicrocredits != 0) {
+		return BadAuthRequest("只有视频模型可以配置带参考视频的价格")
 	}
-	return validateTokenPrices("", input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits)
+	if billingMode == "token" {
+		return validateTokenPrices(capability, input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits, input.CacheWriteTokenPriceMicrocredits)
+	}
+	return validateTokenPrices("", input.InputTokenPriceMicrocredits, input.OutputTokenPriceMicrocredits, input.CachedTokenPriceMicrocredits, input.CacheWriteTokenPriceMicrocredits)
 }
 
 func normalizeChannelModelTierResolution(raw string) string {
@@ -344,6 +442,7 @@ func (s *Service) applyChannelModelPriceTierSummary(item *model.ChannelModel, ti
 	item.InputTokenPriceMicrocredits = 0
 	item.OutputTokenPriceMicrocredits = 0
 	item.CachedTokenPriceMicrocredits = 0
+	item.CacheWriteTokenPriceMicrocredits = 0
 	var summary *model.ChannelModelPriceTier
 	for index := range tiers {
 		tier := &tiers[index]
@@ -362,4 +461,36 @@ func (s *Service) applyChannelModelPriceTierSummary(item *model.ChannelModel, ti
 	item.InputTokenPriceMicrocredits = summary.InputTokenPriceMicrocredits
 	item.OutputTokenPriceMicrocredits = summary.OutputTokenPriceMicrocredits
 	item.CachedTokenPriceMicrocredits = summary.CachedTokenPriceMicrocredits
+	item.CacheWriteTokenPriceMicrocredits = summary.CacheWriteTokenPriceMicrocredits
+}
+
+// validateReferenceVideoTierPrices 要求开启参考视频计费的模型为每个已启用的收费按秒 / Token 档
+// 配置带参考视频的价格，避免挂参考视频的请求按 0 价格结算。
+func validateReferenceVideoTierPrices(enabled bool, tiers []model.ChannelModelPriceTier) error {
+	if !enabled {
+		return nil
+	}
+	for _, tier := range tiers {
+		if !tier.Enabled || !tier.PriceConfigured {
+			continue
+		}
+		if tier.BillingMode == "per_second" && tier.UnitPriceMicrocredits > 0 && tier.ReferenceVideoUnitPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为按秒价格档配置带参考视频的每秒价格")
+		}
+		if tier.BillingMode == "token" && tier.OutputTokenPriceMicrocredits > 0 && tier.ReferenceVideoOutputTokenPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为 Token 价格档配置带参考视频的 Token 价格")
+		}
+		// 成本价同样分两套：配置了成本的档必须填写带参考视频成本价，否则挂参考视频的订单会记成 0 成本。
+		cost := tier.CostPricing
+		if !cost.Configured {
+			continue
+		}
+		if tier.BillingMode == "per_second" && cost.UnitPriceMicrocredits > 0 && cost.ReferenceVideoUnitPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为按秒价格档配置带参考视频的每秒成本价")
+		}
+		if tier.BillingMode == "token" && cost.OutputTokenPriceMicrocredits > 0 && cost.ReferenceVideoOutputTokenPriceMicrocredits == 0 {
+			return BadAuthRequest("已开启参考视频计费，请为 Token 价格档配置带参考视频的 Token 成本价")
+		}
+	}
+	return nil
 }

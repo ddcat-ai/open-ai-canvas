@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -38,11 +39,17 @@ func catalogTestBody(baseURL string) string {
 
 func newProviderCatalogTestService(t *testing.T) (*Service, func()) {
 	t.Helper()
+	return newProviderCatalogTestServiceWithBody(t, catalogTestBody)
+}
+
+func newProviderCatalogTestServiceWithBody(t *testing.T, catalogBody func(string) string) (*Service, func()) {
+	t.Helper()
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	upstream := httptest.NewTLSServer(http.NotFoundHandler())
+	body := catalogBody(upstream.URL + "/v1")
 	catalogServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(catalogTestBody(upstream.URL + "/v1")))
+		_, _ = w.Write([]byte(body))
 	}))
 	svc, _ := newChannelModelTestService(t)
 	svc.dataDir = t.TempDir()
@@ -118,6 +125,80 @@ func TestInstallProviderCatalogCreatesPricedChannel(t *testing.T) {
 	video := byKey["video-a"]
 	if len(video.PriceTiers) != 1 || video.PriceTiers[0].CostPricing.UnitPriceMicrocredits != 1_200_000 || video.PriceTiers[0].UnitPriceMicrocredits != 1_560_000 {
 		t.Fatalf("video tiers = %#v", video.PriceTiers)
+	}
+}
+
+func TestInstallProviderCatalogSupportsOneHundredModels(t *testing.T) {
+	svc, cleanup := newProviderCatalogTestServiceWithBody(t, func(baseURL string) string {
+		var catalog providercatalog.Catalog
+		if err := json.Unmarshal([]byte(catalogTestBody(baseURL)), &catalog); err != nil {
+			t.Fatal(err)
+		}
+		catalog.Providers = catalog.Providers[:1]
+		provider := &catalog.Providers[0]
+		template := provider.Models[0]
+		provider.Models = make([]providercatalog.Model, 101)
+		for index := range provider.Models {
+			item := template
+			item.ModelKey = fmt.Sprintf("chat-%03d", index+1)
+			provider.Models[index] = item
+		}
+		body, err := json.Marshal(catalog)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(body)
+	})
+	defer cleanup()
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	ctx := context.Background()
+	view, err := svc.AdminProviderCatalog(ctx, admin, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Providers) != 1 || len(view.Providers[0].Models) != 100 {
+		t.Fatalf("catalog must expose all 100 recommended models: %#v", view)
+	}
+	choices := make([]ProviderCatalogInstallModel, 100)
+	for index, item := range view.Providers[0].Models {
+		if want := fmt.Sprintf("chat-%03d", index+1); item.ModelKey != want || !item.Supported {
+			t.Fatalf("catalog model %d = %#v, want supported %s", index, item, want)
+		}
+		choices[index] = ProviderCatalogInstallModel{ModelKey: item.ModelKey}
+	}
+	channel, err := svc.InstallProviderCatalog(ctx, admin, "acme", ProviderCatalogInstallRequest{
+		APIKey: "sk-test", MarkupPercent: 30, Models: choices,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(channel.Models) != 100 {
+		t.Fatalf("channel models = %d, want 100", len(channel.Models))
+	}
+	items, err := svc.repo.ChannelModels(channel.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 100 {
+		t.Fatalf("stored models = %d, want 100", len(items))
+	}
+	for index, item := range items {
+		if item.ModelKey != choices[index].ModelKey || !item.Enabled || !item.PriceConfigured || len(item.PriceTiers) != 1 {
+			t.Fatalf("stored model %d = %#v", index, item)
+		}
+		if tier := item.PriceTiers[0]; tier.CostPricing.InputTokenPriceMicrocredits != 2_000_000 || tier.InputTokenPriceMicrocredits != 2_600_000 {
+			t.Fatalf("stored model %d pricing = %#v", index, tier)
+		}
+	}
+	_, err = svc.InstallProviderCatalog(ctx, admin, "acme", ProviderCatalogInstallRequest{
+		APIKey: "sk-test", Models: []ProviderCatalogInstallModel{{ModelKey: "chat-101"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "推荐列表") {
+		t.Fatalf("model beyond catalog limit must be rejected: %v", err)
+	}
+	channels, err := svc.repo.SystemChannels(true)
+	if err != nil || len(channels) != 1 {
+		t.Fatalf("rejected overflow model must not create a channel: %d, %v", len(channels), err)
 	}
 }
 

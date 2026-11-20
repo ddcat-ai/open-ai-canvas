@@ -42,8 +42,15 @@ func TestCreateAdminUserCreatesActiveUserWithPasswordAndAudit(t *testing.T) {
 	if err := db.First(&account, "user_id = ?", created.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if account.AvailableMicrocredits <= 0 {
-		t.Fatalf("available credits = %d, want positive signup bonus", account.AvailableMicrocredits)
+	if account.AvailableMicrocredits != 0 {
+		t.Fatalf("available credits = %d, want no default signup bonus", account.AvailableMicrocredits)
+	}
+	var bonusCount int64
+	if err := db.Model(&model.CreditLedgerEntry{}).Where("user_id = ? AND type = ?", created.ID, model.CreditLedgerSignupBonus).Count(&bonusCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if bonusCount != 0 {
+		t.Fatalf("signup bonus entries = %d, want 0", bonusCount)
 	}
 	var audit model.AdminAuditEvent
 	if err := db.Where("action = ? AND target_id = ?", "user.create", created.ID).First(&audit).Error; err != nil {

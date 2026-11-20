@@ -1,14 +1,17 @@
-import { App, Button, Form, Input, InputNumber, Skeleton } from "antd";
+import { App, Button, Form, Input, InputNumber, Popover, Skeleton } from "antd";
 import { Select } from "@/pages/admin/ui/controls";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, AtSign, BadgeCheck, KeyRound, MailCheck, RefreshCw, RotateCcw, Save, Send, Server } from "lucide-react";
+import { AlertTriangle, AtSign, BadgeCheck, KeyRound, MailCheck, RefreshCw, RotateCcw, Save, ScrollText, Send, Server } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { useBlocker } from "react-router";
+import { Link, useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
+import { sendAdminTestEmail } from "@/services/api/email";
 import { getAdminEmailSetting, updateAdminEmailSetting, type EmailSetting } from "@/services/api/wallet";
+import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
+import "./email-test-popover.css";
 
 type EmailFormValues = Pick<EmailSetting, "enabled" | "host" | "port" | "username" | "password" | "encryption" | "fromEmail" | "fromName"> & {
     registrationAllowedDomains: string;
@@ -239,6 +242,10 @@ export default function EmailSettingsPanel() {
                             撤销调整
                         </Button>
                     ) : null}
+                    <Link to="/admin/email-logs">
+                        <Button icon={<ScrollText className="size-4" />}>发送记录</Button>
+                    </Link>
+                    <TestEmailButton disabled={dirty || saving || !smtpReady} disabledReason={dirty ? "请先保存当前调整" : !smtpReady ? "请先保存 SMTP 主机、端口和发件邮箱" : ""} />
                     <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={saving} onClick={requestRefresh}>
                         刷新状态
                     </Button>
@@ -316,31 +323,31 @@ export default function EmailSettingsPanel() {
 
                 {draftEnabled ? (
                     <div id="admin-email-smtp" className="admin-settings-anchor">
-                    <SettingsSectionCard
-                        className="admin-email-section admin-email-configuration-section"
-                        icon={<Server className="size-4" aria-hidden="true" />}
-                        title="2. 配置 SMTP 连接与发件身份"
-                        description="填写邮件服务器、身份验证和发件人信息。保存不会主动探测或发送测试邮件。"
-                        status={<AdminStatusBadge label={dirty ? "待保存" : smtpReady ? "已配置" : "待配置"} tone={dirty ? "warning" : smtpReady ? "success" : "neutral"} />}
-                        footer={
-                            <>
-                                <div className="admin-email-footer-note">
-                                    <BadgeCheck className="size-4" aria-hidden="true" />
-                                    <span>SMTP 密码由服务端加密保存且不回显明文</span>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {dirty ? (
-                                        <Button icon={<RotateCcw className="size-4" />} disabled={saving} onClick={resetDraft}>
-                                            撤销
+                        <SettingsSectionCard
+                            className="admin-email-section admin-email-configuration-section"
+                            icon={<Server className="size-4" aria-hidden="true" />}
+                            title="2. 配置 SMTP 连接与发件身份"
+                            description="填写邮件服务器、身份验证和发件人信息。保存后可用页面顶部的“发送测试邮件”确认能否投递。"
+                            status={<AdminStatusBadge label={dirty ? "待保存" : smtpReady ? "已配置" : "待配置"} tone={dirty ? "warning" : smtpReady ? "success" : "neutral"} />}
+                            footer={
+                                <>
+                                    <div className="admin-email-footer-note">
+                                        <BadgeCheck className="size-4" aria-hidden="true" />
+                                        <span>SMTP 密码由服务端加密保存且不回显明文</span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {dirty ? (
+                                            <Button icon={<RotateCcw className="size-4" />} disabled={saving} onClick={resetDraft}>
+                                                撤销
+                                            </Button>
+                                        ) : null}
+                                        <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || loading || refreshing} onClick={() => void submitSave()}>
+                                            {draftEnabled ? "保存并启用" : "保存设置"}
                                         </Button>
-                                    ) : null}
-                                    <Button type="primary" icon={<Save className="size-4" />} loading={saving} disabled={!dirty || loading || refreshing} onClick={() => void submitSave()}>
-                                        {draftEnabled ? "保存并启用" : "保存设置"}
-                                    </Button>
-                                </div>
-                            </>
-                        }
-                    >
+                                    </div>
+                                </>
+                            }
+                        >
                             <div className="admin-email-form-section">
                                 <FormSectionTitle icon={<Server className="size-4" />} title="服务器连接" description="填写 SMTP 主机、端口和传输加密；STARTTLS 通常使用 587，直接 TLS 通常使用 465。" />
                                 <div className="admin-email-form-grid is-connection">
@@ -411,7 +418,7 @@ export default function EmailSettingsPanel() {
                                     </Form.Item>
                                 </div>
                             </div>
-                    </SettingsSectionCard>
+                        </SettingsSectionCard>
                     </div>
                 ) : null}
 
@@ -441,24 +448,81 @@ export default function EmailSettingsPanel() {
                             </>
                         }
                     >
-                            <div className="admin-email-form-section">
-                                <Form.Item
-                                    name="registrationAllowedDomains"
-                                    label="电子邮件域名白名单"
-                                    extra="每行一个域名。留空保存表示不限制邮箱域名。"
-                                    rules={[{ validator: (_, value: string | undefined) => validateDomainList(value) }]}
-                                >
-                                    <Input.TextArea
-                                        autoSize={{ minRows: 9, maxRows: 16 }}
-                                        placeholder="gmail.com&#10;163.com&#10;126.com&#10;qq.com"
-                                        spellCheck={false}
-                                    />
-                                </Form.Item>
-                            </div>
+                        <div className="admin-email-form-section">
+                            <Form.Item name="registrationAllowedDomains" label="电子邮件域名白名单" extra="每行一个域名。留空保存表示不限制邮箱域名。" rules={[{ validator: (_, value: string | undefined) => validateDomainList(value) }]}>
+                                <Input.TextArea
+                                    autoSize={{ minRows: 9, maxRows: 16 }}
+                                    placeholder="gmail.com&#10;163.com&#10;126.com&#10;qq.com"
+                                    spellCheck={false}
+                                />
+                            </Form.Item>
+                        </div>
                     </SettingsSectionCard>
                 </div>
             </Form>
         </div>
+    );
+}
+
+function TestEmailButton({ disabled, disabledReason }: { disabled: boolean; disabledReason: string }) {
+    const { message } = App.useApp();
+    const userEmail = useUserStore((state) => state.user?.email ?? "");
+    const [open, setOpen] = useState(false);
+    const [recipient, setRecipient] = useState(userEmail);
+    const [sending, setSending] = useState(false);
+    const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+    const send = async () => {
+        const value = recipient.trim();
+        if (!isValidEmail(value)) {
+            setResult({ ok: false, text: "请输入有效的收件邮箱" });
+            return;
+        }
+        setSending(true);
+        setResult(null);
+        try {
+            await sendAdminTestEmail(value);
+            setResult({ ok: true, text: `已投递到 ${value}，请检查收件箱和垃圾邮件。` });
+            message.success("测试邮件已发送");
+        } catch (error) {
+            setResult({ ok: false, text: error instanceof Error ? error.message : "测试邮件发送失败" });
+        } finally {
+            setSending(false);
+        }
+    };
+
+    return (
+        <Popover
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                if (next) {
+                    setResult(null);
+                    setRecipient((current) => current || userEmail);
+                }
+            }}
+            trigger="click"
+            placement="bottomRight"
+            content={
+                <div className="admin-email-test-popover" role="dialog" aria-label="发送测试邮件">
+                    <strong>发送测试邮件</strong>
+                    <p>用已保存的 SMTP 配置发送一封验证码样式的测试邮件，结果会写入发送记录。</p>
+                    <Input value={recipient} onChange={(event) => setRecipient(event.target.value)} onPressEnter={() => void send()} placeholder="收件邮箱" inputMode="email" autoComplete="email" aria-label="测试收件邮箱" />
+                    {result ? (
+                        <div className={cn("admin-email-test-result", result.ok ? "is-ok" : "is-error")} role="status">
+                            {result.text}
+                        </div>
+                    ) : null}
+                    <Button type="primary" block icon={<Send className="size-4" />} loading={sending} onClick={() => void send()}>
+                        发送
+                    </Button>
+                </div>
+            }
+        >
+            <Button icon={<Send className="size-4" />} disabled={disabled} title={disabledReason || undefined}>
+                发送测试邮件
+            </Button>
+        </Popover>
     );
 }
 

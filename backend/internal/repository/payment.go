@@ -229,6 +229,17 @@ func (r *Repository) ActivePaymentOrderCount(userID string) (int64, error) {
 	return count, err
 }
 
+func (r *Repository) PaymentOrdersForUser(userID string, limit, offset int) ([]model.PaymentOrder, int64, error) {
+	items := make([]model.PaymentOrder, 0)
+	var total int64
+	query := r.db.Model(&model.PaymentOrder{}).Where("user_id = ?", userID)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order("created_at desc, id desc").Limit(limit).Offset(offset).Find(&items).Error
+	return items, total, err
+}
+
 func (r *Repository) PaymentOrderCountForProvider(providerID string) (int64, error) {
 	var count int64
 	err := r.db.Model(&model.PaymentOrder{}).Where("provider_id = ?", strings.TrimSpace(providerID)).Count(&count).Error
@@ -295,7 +306,8 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, "provider_id = ? AND merchant_order_no = ?", providerID, merchantOrderNo).Error; err != nil {
 			return err
 		}
-		if order.AmountFen != evidence.AmountFen || order.Currency != evidence.Currency || strings.TrimSpace(evidence.ProviderTradeNo) == "" {
+		// 渠道凭据只证明实收金额；商品金额可能经过汇率换算，不能拿来比对。
+		if order.ChargeAmountFen != evidence.AmountFen || order.ChargeCurrency != evidence.Currency || strings.TrimSpace(evidence.ProviderTradeNo) == "" {
 			return ErrPaymentEvidenceMismatch
 		}
 		storageOrder := order.ProductKind == model.TopupProductKindStorage

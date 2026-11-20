@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -72,5 +73,58 @@ func TestDashscopeWan3VideoCreateAndLifecycle(t *testing.T) {
 	unknown, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: created.TaskID}, []byte(`{"output":{"task_id":"wan3-task-1","task_status":"UNKNOWN"}}`))
 	if err != nil || unknown.Status != StatusFailed {
 		t.Fatalf("unknown = %#v err=%v", unknown, err)
+	}
+}
+
+func TestDashscopeWan3OfficialInputModes(t *testing.T) {
+	const provider = "dashscope-wan3-video"
+	adapter := officialPackageAdapter(t, provider+".yingce-plugin", provider)
+	image := MediaReference{Kind: "image", Role: "subject_reference", URL: "https://media.example/item.jpg"}
+	first, last := image, image
+	first.Role, last.Role = "first_frame", "last_frame"
+	audio := MediaReference{Kind: "audio", Role: "reference_audio", URL: "https://media.example/sound.mp3", Metadata: map[string]any{"durationMs": 8000}}
+	video := MediaReference{Kind: "video", Role: "reference_video", URL: "https://media.example/clip.mp4", Metadata: map[string]any{"durationMs": 10000}}
+	file := map[string]any{"type": "file", "url": "https://media.example/story.pdf"}
+	link := map[string]any{"type": "link", "url": "https://media.example/story"}
+	for _, tc := range []struct {
+		name      string
+		inputs    []MediaReference
+		extra     map[string]any
+		duration  int
+		wantError string
+	}{
+		{"tail alone", []MediaReference{last}, nil, 5, "尾帧"},
+		{"wrong kind", []MediaReference{{Kind: "audio", Role: "first_frame", URL: audio.URL}}, nil, 5, "角色不匹配"},
+		{"frame with audio", []MediaReference{first, audio}, nil, 5, "不能"},
+		{"too many images", []MediaReference{image, image, image, image, image, image, image, image, image, image, image}, nil, 5, "上限"},
+		{"audio too long", []MediaReference{audio, audio}, nil, 5, "总时长"},
+		{"video plus output", []MediaReference{video}, nil, 21, "之和"},
+		{"raw media", []MediaReference{image}, map[string]any{"media": []any{map[string]any{"type": "reference_image", "url": file["url"]}}}, 5, "媒体扩展"},
+		{"file and link", nil, map[string]any{"media": []any{file, link}}, 5, "媒体扩展"},
+		{"file without prompt extension", nil, map[string]any{"media": []any{file}, "prompt_extend": false}, 5, "prompt_extend"},
+		{"only audio", []MediaReference{audio}, nil, 5, ""},
+		{"file plus image", []MediaReference{image}, map[string]any{"media": []any{file}}, 5, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			create, err := adapter.BuildCreate(t.Context(), RequestContext{Request: GenerationRequest{Model: "wan3.0-video", Inputs: tc.inputs, Duration: tc.duration, ProviderOptions: map[string]map[string]any{provider: tc.extra}}})
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("got %v; want %s", err, tc.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := manifestTestBody(t, create)
+			media := body["input"].(map[string]any)["media"].([]any)
+			if tc.extra == nil {
+				if len(media) != 1 || media[0].(map[string]any)["type"] != "reference_audio" || body["parameters"].(map[string]any)["audio"] != false {
+					t.Fatalf("input audio unexpectedly changed output: %v", body)
+				}
+			} else if len(media) != 2 || media[0].(map[string]any)["type"] != "reference_image" || media[0].(map[string]any)["url"] != image.URL || media[1].(map[string]any)["type"] != "file" {
+				t.Fatalf("file replaced host media: %v", media)
+			}
+		})
 	}
 }

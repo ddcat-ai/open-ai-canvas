@@ -28,6 +28,16 @@ func (r *Repository) CreateOAuthState(state *model.OAuthState) error {
 	return r.db.Create(state).Error
 }
 
+func (r *Repository) PendingOAuthState(provider, stateHash string) (*model.OAuthState, error) {
+	var state model.OAuthState
+	err := r.db.First(&state, "provider = ? AND state_hash = ? AND used_at IS NULL AND expires_at > ?", provider, stateHash, time.Now()).Error
+	return &state, err
+}
+
+func (r *Repository) CreateUserIdentity(identity *model.UserIdentity) error {
+	return r.db.Create(identity).Error
+}
+
 func (r *Repository) ConsumeOAuthState(provider string, stateHash string) (*model.OAuthState, error) {
 	var state model.OAuthState
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -35,7 +45,11 @@ func (r *Repository) ConsumeOAuthState(provider string, stateHash string) (*mode
 			return err
 		}
 		now := time.Now()
-		updated := tx.Model(&model.OAuthState{}).Where("id = ? AND used_at IS NULL", state.ID).Update("used_at", &now)
+		updates := map[string]any{"used_at": &now}
+		if state.ProfileJSON != "" {
+			updates["profile_json"] = ""
+		}
+		updated := tx.Model(&model.OAuthState{}).Where("id = ? AND used_at IS NULL", state.ID).Updates(updates)
 		if updated.Error != nil {
 			return updated.Error
 		}

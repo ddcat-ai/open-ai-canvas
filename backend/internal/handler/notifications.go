@@ -50,6 +50,7 @@ func registerNotificationRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		req.LoginContext = loginRequestContext(c)
+		req.Context = c.Request.Context()
 		c.Set("login_audit_handled", true)
 		result, err := svc.LoginVerification(req)
 		if err != nil {

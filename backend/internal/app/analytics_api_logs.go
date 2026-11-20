@@ -209,6 +209,9 @@ func (s *Service) AdminAPICallLog(actor *model.User, id string) (*model.ApiCallL
 	if err := s.decorateAPICallLogs(logs); err != nil {
 		return nil, err
 	}
+	if err := s.decorateAPILogGeneration(&logs[0]); err != nil {
+		return nil, err
+	}
 	return &logs[0], nil
 }
 

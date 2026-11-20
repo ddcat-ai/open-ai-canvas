@@ -7,7 +7,6 @@ import { mediaVersionAdoptBlock, recordReplacedMediaVersion } from "@/lib/canvas
 import { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 import {
     buildDramaCastNode,
-    buildDramaEpisodeTimeline,
     buildDramaFinalNode,
     buildDramaSegmentGroup,
     dramaCastAssetCategory,
@@ -25,14 +24,24 @@ import {
     type DramaCurrentMedia,
     type DramaProjectionMedia,
 } from "@/lib/canvas/drama-canvas-projection";
-import { DRAMA_CAST_KIND_LABEL } from "@/lib/drama/drama-format";
+import { DRAMA_CAST_KIND_LABEL, dramaCastDisplayName } from "@/lib/drama/drama-format";
 import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { getDrama, getDramaEpisode, listDramaCast, listDramaTakes, type DramaCast, type DramaEpisode, type DramaEpisodeDetail, type DramaSegment, type DramaSettings, type DramaSummary, type DramaTake, type DramaTakeKind } from "@/services/api/drama";
 import { ApiError } from "@/services/api/request";
 import { resourceFileUrl } from "@/services/api/resources";
-import { DRAMA_CANVAS_FOCUS_PARAM, DRAMA_CANVAS_PARAM, ensureDramaCanvasAssets, parseDramaCanvasFocus, type DramaCanvasAssetItem, type DramaCanvasFocus } from "@/services/drama-canvas";
+import {
+    DRAMA_CANVAS_EDITOR_PARAM,
+    DRAMA_CANVAS_FOCUS_PARAM,
+    DRAMA_CANVAS_PARAM,
+    ensureDramaCanvasAssets,
+    parseDramaCanvasEditor,
+    parseDramaCanvasFocus,
+    type DramaCanvasAssetItem,
+    type DramaCanvasEditor,
+    type DramaCanvasFocus,
+} from "@/services/drama-canvas";
+import type { DramaPrevisRequest } from "@/lib/canvas/drama-previs";
 import { CanvasNodeType, type CanvasConnection, type CanvasDramaRef, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
-import type { TimelineProject } from "@/types/timeline";
 
 // 精修画布的短剧模式：画布关联短剧作品时，按需把设定、剧情段、成片投送到画布，
 // 标出短剧侧已更新的节点，并维护“采用到短剧”弹窗。短剧是事实源，这里不做双向自动同步。
@@ -48,11 +57,9 @@ export type UseCanvasDramaInput = {
     nodesRef: { current: CanvasNodeData[] };
     setNodes: StateSetter<CanvasNodeData[]>;
     setConnections: StateSetter<CanvasConnection[]>;
-    timeline: TimelineProject | undefined;
-    saveTimeline: (timeline: TimelineProject) => void;
-    openTimeline: (anchorNodeId: string) => void;
     /** 选中并把视口移到这些节点；在资产视图时切回画布。 */
     focusNodes: (nodeIds: string[]) => void;
+    openPrevis: (request: DramaPrevisRequest, editor: "previs" | "timeline") => Promise<void>;
     searchParams: URLSearchParams;
     setSearchParams: SetURLSearchParams;
 };
@@ -70,8 +77,8 @@ function combineEpisodeDetails(results: Array<UseQueryResult<DramaEpisodeDetail,
     return results.map((result) => result.data);
 }
 
-function castTitle(cast: Pick<DramaCast, "kind" | "name">) {
-    return `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${cast.name}`;
+function castTitle(cast: Pick<DramaCast, "kind" | "name" | "lookName">) {
+    return `${DRAMA_CAST_KIND_LABEL[cast.kind]} · ${dramaCastDisplayName(cast)}`;
 }
 
 /** 设定参考图的初始画幅，与制作台一致：角色按参考图方案，场景与道具统一 16:9；图片加载后节点按真实比例校正。 */
@@ -87,7 +94,11 @@ function segmentAssetItems(episode: Pick<DramaEpisode, "number">, segment: Drama
     const label = segmentLabel(episode, segment);
     const items: DramaCanvasAssetItem[] = segment.request.references
         .filter((reference) => reference.sent && reference.resourceId)
-        .map((reference) => ({ resourceId: reference.resourceId!, title: castTitle(reference), category: dramaCastAssetCategory(reference.kind) }));
+        .map((reference) => ({
+            resourceId: reference.resourceId!,
+            title: reference.kind === "image" ? reference.name : castTitle({ kind: reference.kind, name: reference.name }),
+            category: reference.kind === "image" ? "material" : dramaCastAssetCategory(reference.kind),
+        }));
     if (segment.request.firstFrameResourceId) items.push({ resourceId: segment.request.firstFrameResourceId, title: `${label} · 首帧`, category: "material" });
     for (const resourceId of dramaSegmentResourceIds(segment, takes)) {
         if (!items.some((item) => item.resourceId === resourceId)) items.push({ resourceId, title: `${label} · 视频`, category: "material" });
@@ -110,7 +121,7 @@ function withDramaMedia(node: CanvasNodeData, resourceId: string, assetId: strin
 
 export function useCanvasDrama(input: UseCanvasDramaInput) {
     const { canvasId, dramaId, projectLoaded, nodes, nodesRef, setNodes, setConnections, searchParams, setSearchParams } = input;
-    const { message, modal } = App.useApp();
+    const { message } = App.useApp();
     const queryClient = useQueryClient();
 
     const summaryQuery = useQuery({
@@ -299,20 +310,32 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
     );
 
     const projectSegment = useCallback(
-        (episodeId: string, segmentIndex: number) =>
-            run(`segment:${episodeId}:${segmentIndex}`, "剧情段投送失败", async () => {
+        (episodeId: string, segmentIndex: number, editor: DramaCanvasEditor = "canvas") =>
+            run(`${editor === "canvas" ? "segment" : editor}:${episodeId}:${segmentIndex}`, "剧情段投送失败", async () => {
+                const ensureCurrentCanvas = () => {
+                    if (latest.current.input.canvasId !== canvasId || latest.current.input.dramaId !== dramaId) throw new Error("画布已切换，请重新打开剧情段");
+                };
                 const detail = await fetchEpisode(episodeId);
+                ensureCurrentCanvas();
                 const segment = detail.segments.find((item) => item.index === segmentIndex);
                 if (!segment) throw new Error("这个剧情段不存在，可能已重新改编");
-                const existing = findDramaSegmentFrame(nodesRef.current, segment.id);
-                if (existing) return focus([existing.id]);
-                const [allCast, takes] = await Promise.all([fetchCast(), fetchTakes(segment.id, "video")]);
-                const media = await registerMedia(segmentAssetItems(detail.episode, segment, takes), dramaSegmentRequiredResourceIds(segment));
-                const raced = findDramaSegmentFrame(nodesRef.current, segment.id);
-                if (raced) return focus([raced.id]);
-                focus(placeSegments(detail, [segment], [takes], allCast, media));
+                let frameId = findDramaSegmentFrame(nodesRef.current, segment.id)?.id;
+                if (!frameId) {
+                    const [allCast, takes] = await Promise.all([fetchCast(), fetchTakes(segment.id, "video")]);
+                    const media = await registerMedia(segmentAssetItems(detail.episode, segment, takes), dramaSegmentRequiredResourceIds(segment));
+                    ensureCurrentCanvas();
+                    frameId = findDramaSegmentFrame(nodesRef.current, segment.id)?.id || placeSegments(detail, [segment], [takes], allCast, media)[0];
+                }
+                focus([frameId]);
+                if (editor !== "canvas") {
+                    const source = nodesRef.current.find((node) => node.type === CanvasNodeType.Video && node.metadata?.workflowKind !== "shot" && node.metadata?.dramaRef?.kind === "segment" && node.metadata.dramaRef.id === segment.id);
+                    if (!source) throw new Error("本段的画布视频节点已被删除，请先重新投送本段");
+                    const aspectRatio = latest.current.summary?.production.settings.aspectRatio;
+                    if (!aspectRatio) throw new Error("作品画幅未就绪，请刷新制作台后重试");
+                    await latest.current.input.openPrevis({ episode: detail.episode, segment, shots: detail.shots, aspectRatio, sourceNodeId: source.id }, editor);
+                }
             }),
-        [fetchCast, fetchEpisode, fetchTakes, focus, nodesRef, placeSegments, registerMedia, run],
+        [canvasId, dramaId, fetchCast, fetchEpisode, fetchTakes, focus, nodesRef, placeSegments, registerMedia, run],
     );
 
     const projectEpisode = useCallback(
@@ -343,11 +366,11 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
         [fetchCast, fetchEpisode, fetchTakes, focus, message, nodesRef, placeSegments, registerMedia, run],
     );
 
-    /** 成片节点；requireMedia=false 时允许没有成片的占位节点（剪辑时间线需要一个承载节点）。 */
+    /** 成片投送只接收已生成的视频。 */
     const buildFinal = useCallback(
-        async (episodeId: string, requireMedia: boolean) => {
+        async (episodeId: string) => {
             const { episode } = await fetchEpisode(episodeId);
-            if (requireMedia && !episode.finalResourceId) throw new Error("这一集还没有成片");
+            if (!episode.finalResourceId) throw new Error("这一集还没有成片");
             const takes = episode.finalResourceId ? await fetchTakes(episode.id, "final") : [];
             const title = `第 ${episode.number} 集成片 · ${episode.title}`;
             const media = await registerMedia(
@@ -365,7 +388,7 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
             const placed = findDramaFinalNode(nodesRef.current, episodeId);
             if (placed) return focus([placed.id]);
             await run(`final:${episodeId}`, "成片投送失败", async () => {
-                const node = await buildFinal(episodeId, true);
+                const node = await buildFinal(episodeId);
                 const existing = findDramaFinalNode(nodesRef.current, episodeId);
                 if (existing) return focus([existing.id]);
                 setNodes((items) => [...items, node]);
@@ -373,42 +396,6 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
             });
         },
         [buildFinal, focus, nodesRef, run, setNodes],
-    );
-
-    /** 把一集的剧情段视频按成片顺序载入画布时间线，在画布里精剪；时间线只有一条，已有内容需确认后替换。 */
-    const openEpisodeCut = useCallback(
-        (episodeId: string) =>
-            run(`cut:${episodeId}`, "载入剪辑失败", async () => {
-                const detail = await fetchEpisode(episodeId);
-                const usable = detail.segments.filter((segment) => segment.videoResourceId && (segment.videoStatus === "ready" || segment.videoStatus === "stale"));
-                if (!usable.length) throw new Error("这一集还没有可剪辑的剧情段视频");
-                const media = await registerMedia(
-                    usable.map((segment) => ({ resourceId: segment.videoResourceId!, title: `${segmentLabel(detail.episode, segment)} · 视频`, category: "material" })),
-                    [],
-                );
-                const { timeline, skipped } = buildDramaEpisodeTimeline({ episode: detail.episode, segments: [...detail.segments].sort((left, right) => left.index - right.index), media });
-                if (!timeline.clips.length) throw new Error("这一集的剧情段视频暂时不可用");
-                const existingClips = latest.current.input.timeline?.clips.length || 0;
-                if (existingClips) {
-                    const confirmed = await modal.confirm({
-                        title: `用第 ${detail.episode.number} 集替换画布时间线？`,
-                        content: `画布时间线里已有 ${existingClips} 个片段，载入后整条时间线会被替换。已导出的视频不受影响。`,
-                        okText: "替换并载入",
-                        cancelText: "保留现有时间线",
-                    });
-                    if (!confirmed) return;
-                }
-                let anchor = findDramaFinalNode(nodesRef.current, episodeId);
-                if (!anchor) {
-                    const created = await buildFinal(episodeId, false);
-                    anchor = findDramaFinalNode(nodesRef.current, episodeId) || created;
-                    if (anchor === created) setNodes((items) => [...items, created]);
-                }
-                latest.current.input.saveTimeline(timeline);
-                latest.current.input.openTimeline(anchor.id);
-                if (skipped.length) message.warning(`第 ${skipped.join("、")} 段还没有可用视频，未放进时间线`);
-            }),
-        [buildFinal, fetchEpisode, message, modal, nodesRef, registerMedia, run, setNodes],
     );
 
     /** 短剧侧已更新：把节点换成短剧当前的媒体，画布上原来的版本留在版本历史里。 */
@@ -450,29 +437,28 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
         [dramaId, invalidate, setNodes],
     );
 
-    const dispatchFocus = (target: DramaCanvasFocus) => {
+    const dispatchFocus = (target: DramaCanvasFocus, editor: DramaCanvasEditor) => {
         switch (target.kind) {
             case "cast":
                 return projectCast(target.castId);
             case "segment":
-                return projectSegment(target.episodeId, target.segmentIndex);
+                return projectSegment(target.episodeId, target.segmentIndex, editor);
             case "episode":
                 return projectEpisode(target.episodeId);
             case "final":
                 return projectFinal(target.episodeId);
-            case "cut":
-                return openEpisodeCut(target.episodeId);
         }
     };
 
     // 从制作台跳来时 URL 带着短剧与要投送的对象：短剧数据就绪后执行一次，随后清掉参数，刷新页面不重复投送。
     const dramaParam = searchParams.get(DRAMA_CANVAS_PARAM);
     const focusParam = searchParams.get(DRAMA_CANVAS_FOCUS_PARAM);
+    const editorParam = searchParams.get(DRAMA_CANVAS_EDITOR_PARAM);
     const handledFocusRef = useRef("");
     const summaryFailed = summaryQuery.isError;
     useEffect(() => {
         if (!projectLoaded || (!dramaParam && !focusParam)) return;
-        const key = `${canvasId}|${dramaParam || ""}|${focusParam || ""}`;
+        const key = `${canvasId}|${dramaParam || ""}|${focusParam || ""}|${editorParam || ""}`;
         if (handledFocusRef.current === key) return;
         const mismatch = Boolean(dramaParam && dramaParam !== dramaId);
         if (!mismatch && !summaryFailed && !summary) return;
@@ -482,6 +468,7 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
                 const next = new URLSearchParams(currentParams);
                 next.delete(DRAMA_CANVAS_PARAM);
                 next.delete(DRAMA_CANVAS_FOCUS_PARAM);
+                next.delete(DRAMA_CANVAS_EDITOR_PARAM);
                 next.delete("view");
                 return next;
             },
@@ -496,10 +483,15 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
             return;
         }
         const focusTarget = parseDramaCanvasFocus(focusParam);
-        if (focusTarget) void dispatchFocus(focusTarget);
+        const editor = parseDramaCanvasEditor(editorParam);
+        if (!editor || (editor !== "canvas" && focusTarget?.kind !== "segment")) {
+            message.warning("精修入口无效，请从制作台选择剧情段后重试");
+            return;
+        }
+        if (focusTarget) void dispatchFocus(focusTarget, editor);
         // 投送函数只在这一次执行时读取；handledFocusRef 保证同一组参数只处理一次。
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [canvasId, dramaId, dramaParam, focusParam, message, projectLoaded, setSearchParams, summary, summaryFailed]);
+    }, [canvasId, dramaId, dramaParam, editorParam, focusParam, message, projectLoaded, setSearchParams, summary, summaryFailed]);
 
     return {
         dramaId,
@@ -514,7 +506,6 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
         projectSegment,
         projectEpisode,
         projectFinal,
-        openEpisodeCut,
         refreshNode,
         adoptNodeId,
         openAdopt,

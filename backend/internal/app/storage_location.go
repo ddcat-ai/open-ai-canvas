@@ -15,6 +15,7 @@ import (
 
 	"yingce/backend/internal/model"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/tencentyun/cos-go-sdk-v5"
 	"gorm.io/gorm"
 )
@@ -161,6 +162,8 @@ func storageConnectionTestError(provider string, operation string, cause error) 
 		providerName = "腾讯云 COS"
 	case qiniuKodoProvider:
 		providerName = "七牛云 Kodo"
+	case volcengineTOSProvider:
+		providerName = "火山引擎 TOS"
 	case s3Provider:
 		providerName = "S3 兼容存储"
 	}
@@ -191,6 +194,20 @@ func storageConnectionTestError(provider string, operation string, cause error) 
 			}
 			if responseErr.Response.StatusCode >= http.StatusInternalServerError {
 				return WrapAppError(http.StatusBadGateway, fmt.Sprintf("腾讯云 COS %s服务暂时不可用，请稍后重试", operation), cause)
+			}
+		}
+	}
+
+	if provider == volcengineTOSProvider {
+		var requestFailure awserr.RequestFailure
+		if errors.As(cause, &requestFailure) {
+			switch requestFailure.StatusCode() {
+			case http.StatusBadRequest:
+				return WrapAppError(http.StatusBadGateway, fmt.Sprintf("火山引擎 TOS %s请求被拒绝，请检查 Bucket、Region 和 Endpoint", operation), cause)
+			case http.StatusUnauthorized, http.StatusForbidden:
+				return WrapAppError(http.StatusBadGateway, fmt.Sprintf("火山引擎 TOS %s鉴权失败，请检查 Access Key ID、Secret Access Key、Region 和 Bucket 权限", operation), cause)
+			case http.StatusNotFound:
+				return WrapAppError(http.StatusBadGateway, fmt.Sprintf("火山引擎 TOS %s未找到 Bucket，请检查 Bucket、Region 和 Endpoint", operation), cause)
 			}
 		}
 	}
@@ -276,7 +293,7 @@ func (s *Service) populateStorageLocationPublic(result *PublicOSSSetting, scope 
 
 func deleteOSSObject(setting ossSettingValue, objectKey string) error {
 	switch normalizeOSSSetting(setting).Provider {
-	case s3Provider:
+	case s3Provider, volcengineTOSProvider:
 		return deleteS3Object(setting, objectKey)
 	case tencentCOSProvider:
 		return deleteTencentCOSObject(setting, objectKey)

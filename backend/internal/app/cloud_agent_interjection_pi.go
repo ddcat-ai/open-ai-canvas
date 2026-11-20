@@ -126,7 +126,7 @@ func cloudAgentPiResumePromptDeliversInterjection(state *cloudAgentRuntime) bool
 // cloudAgentPiRunAtFinalAnswer 运行是否停在「模型已给出最终回答」的边界：
 // 没有挂起的工具批次、任务或审批，canonical 最后一条是不带工具调用的助手回复。
 func cloudAgentPiRunAtFinalAnswer(state *cloudAgentRuntime) bool {
-	if state == nil || state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil || state.ContextCompaction != nil {
+	if state == nil || state.ActiveTaskID != "" || state.MediaTaskID != "" || state.Approval != nil || state.ContextCompaction != nil || cloudAgentMediaBatchActive(state) {
 		return false
 	}
 	if state.CallIndex < len(state.Calls) {

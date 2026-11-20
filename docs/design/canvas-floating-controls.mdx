@@ -38,7 +38,7 @@
 
 - `web/src/pages/canvas/canvas-project-top-bar.tsx`：顶部左右浮动面板，以及工作模式切换组件和下拉菜单。
 - `web/src/pages/canvas/project.tsx`：将工作模式切换定位到画布右下角，并与底部控制使用同一安全区。
-- `web/src/components/canvas/canvas-zoom-controls.tsx`：底部视图控制 Dock 的既有实现，作为浮动控件视觉基准。
+- `web/src/components/canvas/canvas-zoom-controls.tsx`：左下视图控制条。紧凑尺寸、无底板（样式见同目录 `canvas-zoom-controls.css`），不再作为浮动面板表面的基准。它测量底部一行后决定与主工具条同排（主工具条在其右侧剩余空间居中）还是抬到上一行，规则见 `canvas-overlay-layout.ts` 的 `canvasBottomRowLayout`。
 - `web/src/components/canvas/canvas-mini-map.tsx`：小地图节点缩略图、标题标注和视口拖动预览。
 - `web/src/components/canvas/canvas-overlay-layer.tsx`：画布浮层的激活层级管理，按点击和焦点提升当前浮层。
 - `web/src/lib/canvas/canvas-aceternity-style.ts`：提供 `canvasDockStyle` 样式合同。

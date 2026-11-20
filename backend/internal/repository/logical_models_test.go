@@ -30,7 +30,7 @@ func TestSwitchTaskLogicalRouteUpdatesCostWithoutChangingUnifiedSales(t *testing
 	}
 	repo := New(db)
 	cost := model.BillingCostSnapshot{CostPricing: model.CreditCostPricing{Configured: true, UnitPriceMicrocredits: 123_456}, CostBillingMode: "per_second", CostQuantity: 15}
-	if err := repo.SwitchTaskLogicalRoute(task.ID, "old-route", "new-route", "{}", order.ID, "new-channel", "new-model", nil, cost); err != nil {
+	if err := repo.SwitchTaskLogicalRoute(task.ID, "old-route", "new-route", "{}", order.ID, "new-channel", "new-model", nil, cost, ""); err != nil {
 		t.Fatal(err)
 	}
 	var saved model.BillingOrder
@@ -41,7 +41,7 @@ func TestSwitchTaskLogicalRouteUpdatesCostWithoutChangingUnifiedSales(t *testing
 		t.Fatalf("wrong route snapshot: %#v", saved)
 	}
 	// A route without configured costs must clear the previous route's snapshot.
-	if err := repo.SwitchTaskLogicalRoute(task.ID, "new-route", "unknown-cost-route", "{}", order.ID, "third-channel", "third-model", nil, model.BillingCostSnapshot{}); err != nil {
+	if err := repo.SwitchTaskLogicalRoute(task.ID, "new-route", "unknown-cost-route", "{}", order.ID, "third-channel", "third-model", nil, model.BillingCostSnapshot{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.First(&saved, "id = ?", order.ID).Error; err != nil {
@@ -186,5 +186,34 @@ func TestCreateTaskRejectsArchivedLogicalModel(t *testing.T) {
 	task := &model.Task{ID: "TASK_ARCHIVED_MODEL", UserID: "USER_1", LogicalModelID: item.ID, LogicalModelRevisionID: item.ActiveRevisionID, Status: model.TaskStatusQueued, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := repo.CreateTaskWithActiveLimit(task, 5); !errors.Is(err, ErrLogicalModelUnavailable) {
 		t.Fatalf("CreateTaskWithActiveLimit() error = %v, want ErrLogicalModelUnavailable", err)
+	}
+}
+
+// 换线路后结算按新订单快照判断参考视频：数量、毫秒数、是否计费与公式用量必须随新单价一起写入。
+func TestSwitchTaskLogicalRouteCarriesReferenceVideoSnapshot(t *testing.T) {
+	repo, db := newRefundedBillingRecoveryRepository(t)
+	if err := db.AutoMigrate(&model.Task{}); err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "reference-task", UserID: "user", Status: model.TaskStatusRunning, RouteID: "off-route", BillingOrderID: "reference-order"}
+	order := model.BillingOrder{ID: "reference-order", TaskID: task.ID, UserID: task.UserID, Capability: "video", Status: model.BillingStatusRunning, BillingMode: "per_second",
+		UnitPriceMicrocredits: 1_000_000, Quantity: 5, AmountMicrocredits: 5_000_000, ReservedAmountMicrocredits: 5_000_000, ReferenceVideoCount: 1, ReferenceVideoMillis: 7_200}
+	for _, item := range []any{&task, &order, &model.CreditAccount{UserID: "user", AvailableMicrocredits: 100_000_000, ReservedMicrocredits: 5_000_000}} {
+		if err := db.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	replacement := order
+	replacement.UnitPriceMicrocredits, replacement.Quantity, replacement.AmountMicrocredits = 2_000_000, 13, 26_000_000
+	replacement.ReferenceVideoBilled, replacement.VideoFormulaTokens = true, 432_000
+	if err := repo.SwitchTaskLogicalRoute(task.ID, "off-route", "on-route", "{}", order.ID, "channel", "model", &replacement, model.BillingCostSnapshot{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	var saved model.BillingOrder
+	if err := db.First(&saved, "id = ?", order.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !saved.ReferenceVideoBilled || saved.ReferenceVideoCount != 1 || saved.ReferenceVideoMillis != 7_200 || saved.VideoFormulaTokens != 432_000 || saved.Quantity != 13 || saved.UnitPriceMicrocredits != 2_000_000 {
+		t.Fatalf("route switch dropped the reference video snapshot: %#v", saved)
 	}
 }

@@ -1,3 +1,4 @@
+import { translate } from "@/i18n";
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
@@ -44,7 +45,9 @@ export function useCanvasImageLayerMaterials({
                 .filter((node): node is CanvasNodeData => Boolean(node?.metadata?.content && node.metadata.status === "success" && node.metadata.imageLayer?.kind !== "base"));
             if (!children.length) {
                 setNodes((current) =>
-                    current.map((node) => (node.id === root.id ? { ...node, metadata: { ...node.metadata, imageLayerMaterials: { ...node.metadata?.imageLayerMaterials, status: "error", error: "没有已验收的前景图层可制作独立素材" } } } : node)),
+                    current.map((node) =>
+                        node.id === root.id ? { ...node, metadata: { ...node.metadata, imageLayerMaterials: { ...node.metadata?.imageLayerMaterials, status: "error", error: translate("canvasPage.layerMaterials.noAcceptedLayers") } } } : node,
+                    ),
                 );
                 return;
             }
@@ -62,13 +65,13 @@ export function useCanvasImageLayerMaterials({
                     try {
                         const cropped = await cropImageLayerMaterial({ dataUrl: child.metadata!.content!, storageKey: child.metadata?.storageKey });
                         const image = await uploadImage(cropped.dataUrl);
-                        if (image.pendingRemoteUpload) throw new Error("素材尚未保存到服务端");
+                        if (image.pendingRemoteUpload) throw new Error(translate("canvasPage.layerMaterials.notSavedToServer"));
                         if (!active()) return;
                         const size = fitImageMaterialNodeSize(image.width, image.height);
                         const material: CanvasNodeData = {
                             id: nanoid(),
                             type: CanvasNodeType.Image,
-                            title: `${child.title || "图层"} · 独立素材`,
+                            title: translate("canvasPage.layerMaterials.titleMaterial", { title: child.title || translate("canvasPage.common.layer") }),
                             position: { x: 0, y: 0 },
                             ...size,
                             metadata: { ...imageMetadata(image), batchRootId: groupId, imageLayerMaterial: { sourceLayerId: child.id, sourceGroupId: root.id, bounds: cropped.bounds } },
@@ -77,22 +80,22 @@ export function useCanvasImageLayerMaterials({
                             const asset = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: material, source: "canvas-manual" });
                             material.metadata!.assetId = asset.assetId;
                         } catch (error) {
-                            errors.push(`素材库写入失败：${error instanceof Error ? error.message : "未知错误"}`);
+                            errors.push(translate("canvasPage.common.assetWriteFailed", { error: error instanceof Error ? error.message : translate("canvasPage.common.unknownError") }));
                         }
                         materials.push(material);
                     } catch (error) {
-                        errors.push(`${child.title || "图层"}：${error instanceof Error ? error.message : "提取失败"}`);
+                        errors.push(translate("canvasPage.layerMaterials.layerError", { title: child.title || translate("canvasPage.common.layer"), error: error instanceof Error ? error.message : translate("canvasPage.layerMaterials.extractFailed") }));
                     }
                 }
                 if (!active()) return;
-                if (!materials.length) throw new Error(errors.join("；") || "没有可用的独立素材");
+                if (!materials.length) throw new Error(errors.join("；") || translate("canvasPage.layerMaterials.noMaterials"));
                 // 编辑或删除后的旧异步结果不能作为当前图层的素材显示。
                 const live = nodesRef.current.find((node) => node.id === root.id);
                 if (
                     children.some((child) => !nodesRef.current.some((node) => node.id === child.id && node.metadata?.content === child.metadata?.content && node.metadata?.storageKey === child.metadata?.storageKey)) ||
                     live?.metadata?.imageLayerGroup?.layers.map((layer) => layer.nodeId).join() !== group.layers.map((layer) => layer.nodeId).join()
                 )
-                    throw new Error("图层已变化，请重新提取独立素材");
+                    throw new Error(translate("canvasPage.layerMaterials.layersChanged"));
                 const cell = { width: Math.max(...materials.map((node) => node.width)), height: Math.max(...materials.map((node) => node.height)) };
                 const position = findAvailableGenerationGroupPosition(nodesRef.current, { x: root.position.x + root.width + 96, y: root.position.y }, imageGenerationGroupSize(cell, cell, materials.length));
                 materials.forEach((node, index) => {
@@ -101,7 +104,7 @@ export function useCanvasImageLayerMaterials({
                 const materialRoot: CanvasNodeData = {
                     id: groupId,
                     type: CanvasNodeType.Image,
-                    title: `独立素材 · ${materials.length} 张`,
+                    title: translate("canvasPage.layerMaterials.titleGroup", { count: materials.length }),
                     position,
                     width: materials[0].width,
                     height: materials[0].height,
@@ -132,7 +135,12 @@ export function useCanvasImageLayerMaterials({
                 if (active())
                     setNodes((current) =>
                         current.map((node) =>
-                            node.id === root.id ? { ...node, metadata: { ...node.metadata, imageLayerMaterials: { ...node.metadata?.imageLayerMaterials, status: "error", error: error instanceof Error ? error.message : "独立素材提取失败" } } } : node,
+                            node.id === root.id
+                                ? {
+                                      ...node,
+                                      metadata: { ...node.metadata, imageLayerMaterials: { ...node.metadata?.imageLayerMaterials, status: "error", error: error instanceof Error ? error.message : translate("canvasPage.layerMaterials.materialsFailed") } },
+                                  }
+                                : node,
                         ),
                     );
             } finally {

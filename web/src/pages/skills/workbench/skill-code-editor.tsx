@@ -3,6 +3,7 @@ import { Annotation, Compartment, EditorState, EditorView, Prec, defaultLightThe
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 import { fileExtension, isMarkdownPath } from "@/lib/skills/skill-workbench-model";
+import { translate } from "@/i18n";
 
 export type SkillCodeEditorHandle = {
     focus: () => void;
@@ -87,7 +88,7 @@ export const SkillCodeEditor = forwardRef<SkillCodeEditorHandle, SkillCodeEditor
                 editableCompartment.of(editableExtension(configRef.current.readOnly)),
                 languageExtension(filePath),
                 tokenTheme,
-                EditorView.contentAttributes.of({ "aria-label": `编辑 ${filePath}`, spellcheck: "false" }),
+                EditorView.contentAttributes.of({ "aria-label": translate("library.workbench.editor.editFile", { path: filePath }), spellcheck: "false" }),
                 EditorView.updateListener.of((update) => {
                     if (update.docChanged && !update.transactions.some((transaction) => transaction.annotation(externalChange))) {
                         const text = update.state.doc.toString();

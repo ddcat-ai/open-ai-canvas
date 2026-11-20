@@ -38,10 +38,16 @@ func (r *Repository) RequeueTaskMediaRecovery(task *model.Task, encrypted string
 
 // TasksWithPendingMediaCheckpoint 返回作品尚未保存完成、仍可能需要暂存文件的任务。
 // 只读取解析检查点需要的列。
-func (r *Repository) TasksWithPendingMediaCheckpoint(updatedSince time.Time) ([]model.Task, error) {
+func (r *Repository) TasksWithPendingMediaCheckpoint(updatedSince time.Time, afterID string, limit int) ([]model.Task, error) {
 	var tasks []model.Task
-	err := r.db.Select("id", "user_id", "media_recovery_json").
-		Where("COALESCE(media_recovery_json, '') <> '' AND status IN ? AND updated_at >= ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusFailed}, updatedSince).
-		Limit(1000).Find(&tasks).Error
+	if limit <= 0 || limit > 1000 {
+		limit = 500
+	}
+	query := r.db.Select("id", "user_id", "media_recovery_json").
+		Where("COALESCE(media_recovery_json, '') <> '' AND status IN ? AND updated_at >= ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning, model.TaskStatusFailed}, updatedSince)
+	if afterID != "" {
+		query = query.Where("id > ?", afterID)
+	}
+	err := query.Order("id ASC").Limit(limit).Find(&tasks).Error
 	return tasks, err
 }

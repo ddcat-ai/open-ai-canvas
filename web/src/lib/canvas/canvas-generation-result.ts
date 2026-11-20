@@ -47,7 +47,7 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
     }
     const metadata: CanvasNodeMetadata = { ...live.metadata };
     for (const key of new Set([...Object.keys(before.metadata || {}), ...Object.keys(result.metadata || {})]) as Set<keyof CanvasNodeMetadata>) {
-        if (JSON.stringify(before.metadata?.[key]) === JSON.stringify(result.metadata?.[key])) continue;
+        if (key === "manualTitle" || JSON.stringify(before.metadata?.[key]) === JSON.stringify(result.metadata?.[key])) continue;
         Object.assign(metadata, { [key]: result.metadata?.[key] });
     }
     const geometryChanged = live.width !== before.width || live.height !== before.height || live.metadata?.manualSize || live.metadata?.locked || live.metadata?.freeResize;
@@ -55,7 +55,7 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
     const merged: CanvasNodeData = {
         ...live,
         type: result.type === before.type ? live.type : result.type,
-        title: result.title === before.title || live.title !== before.title ? live.title : result.title,
+        title: live.metadata?.manualTitle || live.title !== before.title ? live.title : result.title,
         width: geometryChanged ? live.width : result.width,
         height: geometryChanged ? live.height : result.height,
         position: moved || geometryChanged ? live.position : result.position,
@@ -77,6 +77,7 @@ export function commitCanvasGenerationResult(current: CanvasNodeData[], before: 
         return {
             ...refreshed,
             title: node.title,
+            metadata: { ...refreshed.metadata, manualTitle: node.metadata?.manualTitle },
             position: node.position,
             width: manualSize ? node.width : refreshed.width,
             height: manualSize ? node.height : refreshed.height,

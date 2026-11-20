@@ -60,21 +60,128 @@ func PaymentNotificationResponseForWithRegistry(registry *payment.Registry, prov
 }
 
 // PaymentProviders 不再要求积分功能：关闭积分后存储空间商品仍可在线购买。
+// 每个渠道附带结算货币和已启用的支付方式，用户端据此展示按钮并预估跨币种实付金额。
 func (s *Service) PaymentProviders(actor *model.User) ([]PaymentProviderView, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
 	items := make([]PaymentProviderView, 0)
 	for _, descriptor := range s.paymentRegistry.Descriptors() {
-		view, _, err := s.paymentProviderView(descriptor)
+		view, config, err := s.paymentProviderView(descriptor)
 		if err != nil {
 			return nil, err
 		}
-		if view.Enabled && view.Configured {
-			items = append(items, view)
+		if !view.Enabled || !view.Configured || config == nil {
+			continue
 		}
+		values, err := s.decryptPaymentConfig(config)
+		if err != nil {
+			return nil, err
+		}
+		options, err := s.paymentProviderOptions(descriptor.ID, values)
+		if err != nil {
+			// 保存时已严格校验；读到无效配置（如手工改库）时只隐藏该渠道，不影响其他渠道充值。
+			continue
+		}
+		view.SettlementCurrency, view.Methods = options.SettlementCurrency, options.Methods
+		items = append(items, view)
 	}
 	return items, nil
+}
+
+type paymentProviderOptions struct {
+	SettlementCurrency string
+	Methods            []PaymentMethodView
+}
+
+// paymentProviderOptions 解析渠道配置中宿主约定的两个字段：settlementCurrency（结算货币，缺省 CNY）
+// 和清单 methodsField 指向的已启用支付方式列表。
+func (s *Service) paymentProviderOptions(providerID string, values payment.Config) (paymentProviderOptions, error) {
+	currency, err := paymentSettlementCurrency(values)
+	if err != nil {
+		return paymentProviderOptions{}, err
+	}
+	options := paymentProviderOptions{SettlementCurrency: currency}
+	manifest, ok := s.paymentManifestForProvider(providerID)
+	if !ok {
+		return options, nil
+	}
+	contribution, ok := paymentProviderContribution(manifest, providerID)
+	if !ok {
+		return options, nil
+	}
+	options.Methods, err = paymentProviderMethods(contribution, values)
+	return options, err
+}
+
+func paymentProviderContribution(manifest protocol.Manifest, providerID string) (protocol.ManifestPaymentProvider, bool) {
+	for _, contribution := range manifest.Contributes.PaymentProviders {
+		if contribution.ID == providerID {
+			return contribution, true
+		}
+	}
+	return protocol.ManifestPaymentProvider{}, false
+}
+
+func paymentSettlementCurrency(values payment.Config) (string, error) {
+	switch strings.ToUpper(strings.TrimSpace(values["settlementCurrency"])) {
+	case "", model.PriceCurrencyCNY:
+		return model.PriceCurrencyCNY, nil
+	case model.PriceCurrencyUSD:
+		return model.PriceCurrencyUSD, nil
+	default:
+		return "", BadAuthRequest("渠道结算货币只支持 CNY 或 USD")
+	}
+}
+
+// paymentProviderMethods 按清单目录和配置得到已启用的支付方式。配置值为逗号或换行分隔的
+// id 或 id:名称；目录内的方式沿用目录名称与图标，目录外的方式使用配置中的名称。
+// 配置值为空时返回空列表，由插件使用自己的默认方式，保持旧配置可用。
+func paymentProviderMethods(contribution protocol.ManifestPaymentProvider, values payment.Config) ([]PaymentMethodView, error) {
+	catalog := make(map[string]protocol.ManifestPaymentMethod, len(contribution.Methods))
+	for _, method := range contribution.Methods {
+		catalog[method.ID] = method
+	}
+	field := strings.TrimSpace(contribution.MethodsField)
+	if field == "" {
+		methods := make([]PaymentMethodView, 0, len(contribution.Methods))
+		for _, method := range contribution.Methods {
+			methods = append(methods, PaymentMethodView{ID: method.ID, Name: method.Label, Icon: method.Icon})
+		}
+		return methods, nil
+	}
+	raw := strings.NewReplacer("\n", ",", "\r", ",", "，", ",").Replace(values[field])
+	methods := make([]PaymentMethodView, 0)
+	seen := make(map[string]struct{})
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		id, label, _ := strings.Cut(entry, ":")
+		id, label = strings.ToLower(strings.TrimSpace(id)), strings.TrimSpace(label)
+		if !protocol.ValidPaymentMethodID(id) {
+			return nil, BadAuthRequest("支付方式 " + entry + " 无效：ID 只能包含小写字母、数字、- 或 _，最长 32 位")
+		}
+		if len([]rune(label)) > 40 {
+			return nil, BadAuthRequest("支付方式 " + id + " 的名称不能超过 40 个字符")
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		method := PaymentMethodView{ID: id, Name: label}
+		if known, ok := catalog[id]; ok {
+			method.Name = firstNonEmpty(label, known.Label)
+			method.Icon = known.Icon
+		}
+		method.Name = firstNonEmpty(method.Name, id)
+		methods = append(methods, method)
+	}
+	if len(methods) > 20 {
+		return nil, BadAuthRequest("同一渠道最多启用 20 种支付方式")
+	}
+	return methods, nil
 }
 
 func (s *Service) AdminPaymentProviders(actor *model.User) ([]AdminPaymentProviderView, error) {
@@ -176,6 +283,9 @@ func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID stri
 		if err := validatePaymentPublicBaseURL(base); err != nil {
 			return nil, BadAuthRequest(err.Error())
 		}
+	}
+	if _, err := s.paymentProviderOptions(descriptor.ID, values); err != nil {
+		return nil, err
 	}
 	if request.Enabled {
 		if strings.TrimSpace(values["publicBaseUrl"]) == "" {

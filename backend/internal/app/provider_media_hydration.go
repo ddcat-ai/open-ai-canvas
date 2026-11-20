@@ -1,6 +1,7 @@
 // 生成输入媒体的准备：把画布上的资源引用转换成供应商可读取的形式（签名 URL 或 data URL）。
 //
 // 供应商能读取公网地址时优先给签名 URL；不能时才内联为 data URL，避免请求体过大。
+// 看图（imageOnly）必然内联，超过模型的单张图片上限时先压缩，见 text_model_image_compression.go。
 
 package app
 
@@ -32,6 +33,15 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 				mediaPolicy.maxBytes = limits.MaxImageBytes
 			}
 		}
+		// Agent vision uses its own inline-pixel contract; ordinary generation follows admin policy.
+		if !inlineVision && len(group) > 0 {
+			mode := []string{input.Config.mediaTransport.Image, input.Config.mediaTransport.Video, input.Config.mediaTransport.Audio}[groupIndex]
+			var err error
+			mediaPolicy, err = referenceMediaPolicy(mediaPolicy, mode, input.Mask != nil && groupIndex == 0)
+			if err != nil {
+				return err
+			}
+		}
 		for index := range group {
 			if err := s.hydrateProviderMedia(userID, &group[index], mediaPolicy); err != nil {
 				return err
@@ -46,13 +56,32 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 
 func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
 	if !strings.HasPrefix(media.StorageKey, "resource:") {
+		if policy.explicitTransport == "url" {
+			value := strings.TrimSpace(media.URL)
+			if value == "" || strings.HasPrefix(value, "data:") {
+				return errors.New("URL 模式需要已上传素材或公网地址，请先把素材上传到画布")
+			}
+			if _, err := ValidateOutboundURL(value); err != nil {
+				return err
+			}
+			media.URL = value
+			media.DataURL = ""
+			return nil
+		}
+		if policy.forceBase64 {
+			if !strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
+				return errors.New("Base64 模式需要已上传素材或内嵌数据，请先把外部链接素材上传到画布")
+			}
+			media.URL = ""
+			return nil
+		}
 		if policy.requireURL && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 			return errors.New("当前 JSON 视频协议的参考素材不能使用内嵌数据，请先上传到对象存储或提供公网素材地址")
 		}
 		return nil
 	}
 	resourceID := strings.TrimPrefix(media.StorageKey, "resource:")
-	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	resource, err := s.resourceForUserOrOfficial(userID, resourceID)
 	if err != nil {
 		return fmt.Errorf("读取任务参考资源失败：%w", err)
 	}
@@ -62,8 +91,21 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	if policy.imageOnly && !strings.HasPrefix(strings.ToLower(resource.MimeType), "image/") {
 		return errors.New("看图资源不是图片")
 	}
-	if policy.maxBytes > 0 && resource.Size > policy.maxBytes {
+	if policy.imageOnly {
+		// 模型声明的单张图片上限不再是准入理由：超限图会在下面被压回上限以内；
+		// 只有"上限本身就把硬顶当目标"的模型才在读取前拒绝（见 textModelImageRejectable）。
+		if textModelImageRejectable(policy.maxBytes) && resource.Size > textModelImageCompressionMaxInput {
+			return errors.New(textModelImageOversizedMessage())
+		}
+	} else if policy.maxBytes > 0 && resource.Size > policy.maxBytes {
 		return errors.New("参考图片文件超过当前模型大小限制")
+	}
+	// 看图必然内联真实像素，不走签名 URL：URL 交付会让上游自己取回原始字节，
+	// 压缩与缓存全部失效，模型声明的单图上限也随之形同虚设。
+	// 正常调用方（hydrateGenerationMedia）已经用 imageOnly 覆盖了 preferURL，
+	// 这条守卫是给直接传组合策略的调用方兜底，并把"必须读字节"变成显式契约。
+	if policy.imageOnly && policy.preferURL && resourceUsesObjectStorage(resource) {
+		return errTextModelImageLimitNeedsPixels
 	}
 	useObjectURL := policy.requireURL || (policy.preferURL && resourceUsesObjectStorage(resource))
 	if useObjectURL {
@@ -81,21 +123,27 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		return nil
 	}
 	// Agent 看图以归属校验后的资源文件为准，不能让附带的内嵌内容替换真实图片。
-	if !policy.imageOnly && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
+	if !policy.imageOnly && !policy.forceBase64 && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 		return nil
 	}
-	resource, body, err := s.OpenResource(userID, resourceID)
+	stream, err := s.openResourceRange(resource.UserID, resource, "")
 	if err != nil {
 		return fmt.Errorf("读取任务参考资源失败：%w", err)
 	}
+	body := stream.Body
 	defer body.Close()
 	runtimePolicy, err := s.RuntimePolicy()
 	if err != nil {
 		return err
 	}
 	resourceLimit := megabytes(runtimePolicy.Resource.ResourceUploadMB)
-	if policy.maxBytes > 0 {
+	if !policy.imageOnly && policy.maxBytes > 0 {
 		resourceLimit = min(resourceLimit, policy.maxBytes)
+	}
+	if policy.imageOnly {
+		// 看图的模型上限在压缩之后才核：读取口径只受解码内存硬顶约束，
+		// 否则超过模型上限的原图会在读完之前就被截断，压缩根本没机会执行。
+		resourceLimit = min(resourceLimit, textModelImageCompressionMaxInput)
 	}
 	data, err := io.ReadAll(io.LimitReader(body, resourceLimit+1))
 	if err != nil {
@@ -108,14 +156,27 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 		return errors.New("看图资源内容为空")
 	}
 	mimeType := normalizedMediaMimeType(firstNonEmpty(media.MimeType, resource.MimeType), data)
-	media.DataURL = dataURL(mimeType, data)
+	width, height := resource.Width, resource.Height
 	if policy.imageOnly {
+		// 按渠道模型声明的单张图片上限决定：没超就不压缩，超了才压回上限以内。
+		compressed := compressImageForTextModel(data, mimeType, policy.maxBytes)
+		if compressed.Compressed {
+			data, mimeType = compressed.Data, compressed.MIME
+			width, height = compressed.Width, compressed.Height
+		}
+		// 压缩够不到模型上限（认不出的编码、或上限小到无法达到）时仍按原有口径拒绝。
+		if policy.maxBytes > 0 && int64(len(data)) > policy.maxBytes {
+			return errors.New("参考图片文件超过当前模型大小限制")
+		}
+	}
+	media.DataURL = dataURL(mimeType, data)
+	if policy.imageOnly || policy.forceBase64 {
 		media.URL = ""
 	}
 	media.MimeType = mimeType
 	media.Bytes = int64(len(data))
-	media.Width = resource.Width
-	media.Height = resource.Height
+	media.Width = width
+	media.Height = height
 	media.DurationMs = resource.DurationMs
 	return nil
 }

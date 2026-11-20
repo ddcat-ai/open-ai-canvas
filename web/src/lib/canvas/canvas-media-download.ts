@@ -1,3 +1,7 @@
+import { parseImageParameters } from "@/lib/image-parameters";
+import { loadRasterImage } from "@/lib/image-raster";
+import { getResourceBlob } from "@/services/api/resources";
+import { startBrowserDownload } from "@/services/browser-download";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId } from "@/types/canvas";
 
 const FILE_NAME_PART_LIMIT = 80;
@@ -97,4 +101,64 @@ function defaultExtension(type: CanvasNodeTypeId) {
     if (type === CanvasNodeType.Video) return "mp4";
     if (type === CanvasNodeType.Audio) return "mp3";
     return "png";
+}
+
+const CONVERTED_MIME = { jpeg: "image/jpeg", webp: "image/webp" } as const;
+const CONVERTED_EXTENSION = { jpeg: "jpg", webp: "webp" } as const;
+
+export type ImageDownloadFormat = keyof typeof CONVERTED_MIME;
+
+/** 用户在图像设置里选定的输出格式。png 是生成原生格式无需转换；jpeg/webp 需要在下载时转码兑现。 */
+export function preferredImageDownloadFormat(node: CanvasNodeData): ImageDownloadFormat | undefined {
+    if (node.type !== CanvasNodeType.Image) return undefined;
+    const parameters = parseImageParameters(node.metadata?.imageParameters);
+    // 画布设置面板写驼峰 outputFormat；插件参数声明与直连协议用下划线 output_format，两者都认。
+    const format = parameters.outputFormat ?? parameters.output_format;
+    return format === "jpeg" || format === "webp" ? format : undefined;
+}
+
+export function withFileExtension(fileName: string, extension: string) {
+    return `${fileName.replace(/\.[a-z0-9]+$/i, "")}.${extension}`;
+}
+
+/**
+ * 按用户选定的输出格式转码后下载。部分模型/渠道会忽略 output_format 仍返回 PNG，
+ * 这里在下载侧兑现用户的选择；任何一步失败都抛错，由调用方回退到原图直下。
+ */
+export async function downloadImageConvertedToFormat({ storageKey, url, fileName, format }: { storageKey?: string; url?: string; fileName: string; format: ImageDownloadFormat }) {
+    // 转码需要真实字节：data:/blob: 直接用；远端资源走 browser-process 交付（平台代理、带
+    // CORS）换取 Blob。download 变体会 302 到无 CORS 头的 CDN，canvas 读取必然失败。
+    let source = url?.trim() || "";
+    let releaseSource: (() => void) | undefined;
+    if (!source || (!source.startsWith("data:") && !source.startsWith("blob:"))) {
+        if (!storageKey?.trim()) throw new Error("媒体资源不存在");
+        const blob = await getResourceBlob(storageKey, "browser-process");
+        if (!blob) throw new Error("媒体资源不存在");
+        source = URL.createObjectURL(blob);
+        releaseSource = () => URL.revokeObjectURL(source);
+    }
+    try {
+        const picture = await loadRasterImage(source);
+        const canvas = document.createElement("canvas");
+        canvas.width = picture.naturalWidth;
+        canvas.height = picture.naturalHeight;
+        const painter = canvas.getContext("2d");
+        if (painter === null) throw new Error("浏览器无法创建图片处理画布");
+        // jpeg 没有透明通道，先铺白底，避免透明像素转码后变成黑底。
+        if (format === "jpeg") {
+            painter.fillStyle = "#ffffff";
+            painter.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        painter.drawImage(picture, 0, 0);
+        const converted = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, CONVERTED_MIME[format], 0.92));
+        if (!converted) throw new Error("图片格式转换失败");
+        const objectUrl = URL.createObjectURL(converted);
+        try {
+            startBrowserDownload(objectUrl, withFileExtension(fileName, CONVERTED_EXTENSION[format]));
+        } finally {
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+        }
+    } finally {
+        releaseSource?.();
+    }
 }

@@ -1,0 +1,38 @@
+---
+title: 电商 Agent 与知识库
+description: 电商创作工作流、阶段模型和知识来源管理
+---
+
+电商 Agent 位于 `/ecommerce`，使用宿主现有登录、模型报价、任务系统和资源存储。用户上传商品图后，可配置平台、语言、图片类型、张数与视觉偏好，完成商品理解、方向选择和逐页策划，再确认报价并生成图片。详情图由 Agent 主动规划叙事与文案；未证实的参数、功效和认证不能作为商品事实。
+
+`/ecommerce` 按五步走完一轮：准备素材 → 选视觉方向 → 确认方案 → 生成图片 → 导出交付。作品区顶部的流程条标出当前步和这一步在做什么；底部主按钮「开始创作」先识别商品并推荐 4 套视觉方向，选定后自动策划并出图，「跳过选方向」直接写出整套方案、审阅后再出图。一轮全部完成后，交付区集中提供导出全部、拼成长图、做成商品视频（商品视频与视频生成都开放时，带一张作品去 `/toolbox/video` 做首帧）、推荐下一组视觉方向和打开资产库；每张作品也有「做成视频」。后台阶段模型不可用时，原因常驻在按钮上方并置灰按钮，不再反复弹出报错；页面提示统一走 `App.useApp()` 的 message，跟随明暗主题并去重。
+
+商品图与借鉴图分别保存。参考方式支持商品自主策划、风格排版参考和详情长图逐屏参考。项目及其版本、任务回执与生成结果按用户隔离；删除项目保留资源及运行任务。作品区按批次展示本轮与之前的作品，可筛选、预览、修改单张、重试、下载与导出。
+
+同商品连续创作从当前用户拥有的项目中读取最近 20 页已提交历史，继承商品资料与文案语气，以本轮要求覆盖旧要求。只有商品参考图有交集才关联历史，共享品牌 Logo、模特和借鉴图不能建立商品关联。历史文案不成为新规格的证据。普通商品策划逐屏分配机位、景别和购买问题，以 `displayAssignment` 随方案保存；输入新需求时保持已有结果与按钮稳定。
+
+生成与策划统一使用安全边距、留白和商品避让约束；结果图按完整画幅显示。人物设定按目标地区与语言选择，每轮主动变化，同一套图保持身份一致；用户参考人物优先。肤质、景别和手部接触要求属于生成指导，不能替代成片检查。
+
+平台选择与提示词共享随程序交付的平台资料，包含 SHEIN 在内的 36 个平台。已核实规则与待核实建议分别标记，待核实资料不能作为平台审核通过的保证。资料来源与使用边界见 [电商平台风格与图片规则](../overview/ecommerce-platform-rules)。
+
+后台「电商 Agent」分组有两个页面。`/admin/ecommerce/agent`（电商 Agent 配置）先给出「上线检查」：电商 Agent 开放、图片生成开放、阶段模型可用（必需）和商品视频（可选），未完成项带去处；开关仍在「功能开放」修改。「阶段模型」只列实际执行的两个文本阶段：商品识别与视觉方向、整套策划（卖点文案、逐张分镜与生图提示词），各有主模型和备用模型，用与创作端相同的模型下拉，未开启识图的模型置灰并写明去「渠道管理 → 能力与参数 → 引用与限制」把「最多识别图片数」设为 1 以上；第三步出图使用用户在电商页选择的生图模型。配置仍保存在 `ecommerce_agent_orchestration_v1`：`director` 是整套策划；旧配置里 `director.reuse="marketing"` 时沿用 `marketing` 的模型，新页面保存时写入 `director` 并清空 `marketing`。未执行过的「视觉质检」阶段已移除。`/admin/ecommerce/library`（知识与技能）查看 KB01–KB19 知识域覆盖，管理固定来源同步、来源启停与条目审核。来源、版本和许可证随知识记录保留；覆盖数量不能作为各行业规则全部齐备的证明。检索使用数据库、关键词与规则，没有向量数据库依赖。
+
+「知识与技能」页分视觉知识库、创作 Skills（`/admin/ecommerce/library/skills`）、行业品类（`/admin/ecommerce/library/categories`）三个标签；旧地址 `/admin/ecommerce-knowledge`、`/admin/ecommerce-skills`、`/admin/ecommerce-categories`均重定向到新页面。Skills 内置 61 个可执行创作方法包、许可证与版本信息，按商品和场景自动选择；管理员可启停、安装大包、改名并设置上游自动更新。行业字典包含 26 个根行业、64292 个中英文分类节点、搜索与祖先创作方法路由，覆盖分类不代表每个叶级品类均已逐项生成验收。
+
+服务启动在离线包之后自动初始化 KB11–KB19、技能方法知识和行业类目。内置技能正文随二进制嵌入，类目字典随程序交付；新安装和升级不需要手工导入。管理员只需配置自己的文本、图片模型和两个阶段模型；实际模型调用仍使用宿主报价、权限与计费流程。
+
+## 随程序交付的知识数据
+
+`backend/internal/ecommerceknowledge/bundle/knowledge.json.gz` 随 Go 二进制嵌入 23 个知识源和 14740 条知识，包括 14739 条已通过、1 条已拒绝；KB01 有 11 条，KB02–KB10 各 10 条。`manifest.json` 记录来源、固定 commit、许可、分来源数量和 SHA-256，完整许可证与版权声明保存在数据包的来源记录中。
+
+服务首次启动自动在一个事务内初始化离线数据，无需先访问 GitHub。安装摘要保存在 `system_settings` 的 `ecommerce_knowledge_bundle_receipt`；相同包再次启动直接跳过。版本变化时只合并缺失行，已有管理员修改、审核状态和停用设置保留。数据与安装记录一起提交或回滚，避免导入一半却被标记为完成。
+
+维护命令在显式配置数据库位置后执行：`go run ./cmd/ecommerce-knowledge -bootstrap-bundled -admin <已有管理员ID>`。内置 KB01–KB10 的升级使用 `-bootstrap-builtin`，第三方固定来源在线同步使用 `-sync`。这些写操作需要已有管理员。数据包不包含具体部署的模型渠道绑定或凭据；部署后在四阶段配置中选择自己的模型。
+
+HTTP 路由由 `backend/internal/handler/ecommerce.go` 和 `ecommerce_agent.go` 注册，业务在 `internal/app/ecommerce*`，持久化在 `internal/repository/ecommerce*`，领域契约与提示方法在 `internal/ecommerceagent` 和 `internal/ecommerceskills`。
+
+`/api/ecommerce` 下提供项目、创意方向与技能提示接口；`/api/ecommerce/knowledge` 下提供知识与阶段模型管理接口，由服务端执行管理员权限校验。`/api/agent/quote`、`/api/agent/analyze`、`/api/agent/generate` 等接口提供独立 Agent 协议；`/api/canvas`、`/api/task` 下提供对应画布版本及任务查询接口。具体请求与响应以 handler 和前端 API 类型为准。管理员权限与用户资源归属均在服务端校验。
+
+迁移 79 新增 `ecommerce_projects`、`ecommerce_knowledge_sources`、`ecommerce_knowledge_entries`、`ecommerce_creative_recommendations`、`ecommerce_agent_analyses`、`ecommerce_agent_runs`、`ecommerce_agent_pages`、`ecommerce_agent_canvas_versions`，包括知识域索引。保留上游 1–78 的迁移身份。电商图片读取使用 `ecommerce-export`，仅允许当前用户拥有的、32 MB 以内的 PNG、JPEG、WebP 原图，经受限同源流读取。
+
+本次功能未包含旧版通用画布的一键详情／复刻节点，也不引入品牌、登录注册、支付充值或部署定制。真实浏览器、付费生成及已有部署的完整升级流程仍需人工验收；自动化数据库迁移和初始化检查不能代替这些验收。

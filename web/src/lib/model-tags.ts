@@ -7,9 +7,10 @@ export const modelTagColors = [
     { value: "pink", label: "粉色" },
 ] as const;
 
-export type ModelTag = { text: string; color: typeof modelTagColors[number]["value"] };
+export type ModelTag = { text: string; color: (typeof modelTagColors)[number]["value"] };
 
-export function videoReferenceCapabilityTag(references?: { maxImages?: number; maxVideos?: number; maxAudios?: number }): ModelTag | undefined {
+/** 参考输入上限标签（图×N · 视×N · 音×N）：视频模型的参考素材与文本模型的识图 / 视频识别共用一种写法。 */
+export function referenceCapabilityTag(references?: { maxImages?: number; maxVideos?: number; maxAudios?: number }): ModelTag | undefined {
     if (!references) return undefined;
     const counts = [
         ["图", references.maxImages],

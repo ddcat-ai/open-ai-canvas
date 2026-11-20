@@ -5,7 +5,7 @@ type Row = { id: string; role: string; title?: string; text: string; detail?: un
 
 const step = (id: string, title: string, text: string, detail: unknown = { eventType: "tool_completed" }): Row => ({ id, role: "tool", title, text, detail });
 const kinds = (rows: Row[]) => buildAgentFeedSegments(rows).map((segment) => segment.kind);
-const idsOf = (segment: ReturnType<typeof buildAgentFeedSegments<Row>>[number]) => (segment.kind === "operations" ? segment.items.map((item) => item.id) : [segment.item.id]);
+const idsOf = (segment: ReturnType<typeof buildAgentFeedSegments<Row>>[number]) => (segment.kind === "activity" ? segment.items.map((item) => item.id) : [segment.item.id]);
 
 describe("Agent operation feed", () => {
     it("folds consecutive tool records into one segment keyed by the first step", () => {
@@ -17,8 +17,8 @@ describe("Agent operation feed", () => {
             step("t3", "canvas_apply_ops", "画布内容已保存至服务端", { eventType: "canvas_updated" }),
         ];
         const segments = buildAgentFeedSegments(rows);
-        expect(kinds(rows)).toEqual(["message", "operations", "message", "operations"]);
-        expect(segments[1]).toMatchObject({ kind: "operations", key: "t1" });
+        expect(kinds(rows)).toEqual(["message", "activity", "message", "activity"]);
+        expect(segments[1]).toMatchObject({ kind: "activity", key: "t1" });
         expect(idsOf(segments[1])).toEqual(["t1", "t2"]);
     });
 
@@ -26,14 +26,14 @@ describe("Agent operation feed", () => {
         const before: Row[] = [step("t1", "canvas_get_state", "已读取当前画布"), step("t2", "model_list", "已获取可用模型")];
         const after = buildAgentFeedSegments([...before, step("t3", "task_get", "已查询任务状态")]);
         expect(after).toHaveLength(1);
-        expect(after[0]).toMatchObject({ kind: "operations", key: "t1" });
+        expect(after[0]).toMatchObject({ kind: "activity", key: "t1" });
         expect(idsOf(after[0])).toEqual(["t1", "t2", "t3"]);
     });
 
     it("keeps the approval card and unrelated roles out of the folded group", () => {
         const pending: Row = { id: "p1", role: "tool", title: "canvas_apply_ops", text: "准备更新画布内容", detail: { status: "pending" } };
         const rows: Row[] = [step("t1", "canvas_get_state", "已读取当前画布"), pending, step("t2", "model_list", "已获取可用模型")];
-        expect(kinds(rows)).toEqual(["operations", "message", "operations"]);
+        expect(kinds(rows)).toEqual(["activity", "message", "activity"]);
         expect(isAgentOperationRecord(pending)).toBe(false);
         expect(isAgentOperationRecord(rows[0])).toBe(true);
     });
@@ -90,6 +90,12 @@ describe("Agent operation segment label", () => {
             }),
         ];
         expect(agentOperationSegmentLabel(items)).toBe("查看了 3 张画面 · 最新《剧照3.png》");
+    });
+
+    it("keeps the latest vision failure visible after successful images", () => {
+        const failure = step("failed", "canvas_inspect_image", "未声明图片输入能力", { eventType: "tool_failed", result: { nodeId: "failed" } });
+        expect(agentOperationSegmentLabel([viewed("n1", "车站"), failure])).toBe(agentOperationLabel(failure));
+        expect(agentOperationSegmentLabel([failure, viewed("n2", "天台")])).toBe("查看了 1 张画面 · 最新《天台》");
     });
 
     it("does not count a reused observation or a read-loop receipt as a delivered picture", () => {

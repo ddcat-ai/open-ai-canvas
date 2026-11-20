@@ -1,11 +1,13 @@
 import { Popover } from "antd";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Layers3, RefreshCw } from "lucide-react";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
 import type { CanvasNodeData } from "@/types/canvas";
 
 export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
+    const { t } = useTranslation();
     const { updateNode, extractLayerMaterials } = useCanvasNodeActions();
     const [open, setOpen] = useState(false);
     const popoverRef = usePopoverAnchorAlign(open);
@@ -28,10 +30,14 @@ export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
         });
     const panel = (
         <div className="w-64 space-y-2" data-canvas-no-zoom data-canvas-wheel-scroll onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
-            <div className="text-sm font-medium">图层顺序（上方在前）</div>
+            <div className="text-sm font-medium">{t("canvasB.imageLayers.orderTitle")}</div>
             {group.incomplete ? (
                 <p role="status" className="text-xs text-amber-600 dark:text-amber-400">
-                    已收纳 {group.incomplete.completed}/{group.incomplete.total} 层，{group.incomplete.failed} 层尚未通过。{group.incomplete.missingBackground ? "当前预览缺少完整背景。" : "当前显示部分合成。"}展开查看失败层并单独重试。
+                    {t(group.incomplete.missingBackground ? "canvasB.imageLayers.incompleteMissingBackground" : "canvasB.imageLayers.incompletePartial", {
+                        completed: group.incomplete.completed,
+                        total: group.incomplete.total,
+                        failed: group.incomplete.failed,
+                    })}
                 </p>
             ) : null}
             <div className="max-h-64 space-y-1 overflow-y-auto">
@@ -39,27 +45,27 @@ export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
                     const index = group.layers.length - 1 - reverseIndex;
                     return (
                         <div key={layer.nodeId} className="flex items-center gap-1 rounded px-1 py-1">
-                            <button type="button" aria-label={`切换第 ${index + 1} 层可见性`} aria-pressed={layer.visible} className="p-1" onClick={() => change(layer.nodeId)}>
+                            <button type="button" aria-label={t("canvasB.imageLayers.toggleVisibility", { index: index + 1 })} aria-pressed={layer.visible} className="p-1" onClick={() => change(layer.nodeId)}>
                                 {layer.visible ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
                             </button>
-                            <span className="flex-1 text-xs">第 {index + 1} 层</span>
-                            <button type="button" aria-label={`第 ${index + 1} 层上移`} disabled={index === group.layers.length - 1} className="p-1 disabled:opacity-30" onClick={() => change(layer.nodeId, 1)}>
+                            <span className="flex-1 text-xs">{t("canvasB.imageLayers.layerName", { index: index + 1 })}</span>
+                            <button type="button" aria-label={t("canvasB.imageLayers.moveUp", { index: index + 1 })} disabled={index === group.layers.length - 1} className="p-1 disabled:opacity-30" onClick={() => change(layer.nodeId, 1)}>
                                 <ArrowUp className="size-4" />
                             </button>
-                            <button type="button" aria-label={`第 ${index + 1} 层下移`} disabled={index === 0} className="p-1 disabled:opacity-30" onClick={() => change(layer.nodeId, -1)}>
+                            <button type="button" aria-label={t("canvasB.imageLayers.moveDown", { index: index + 1 })} disabled={index === 0} className="p-1 disabled:opacity-30" onClick={() => change(layer.nodeId, -1)}>
                                 <ArrowDown className="size-4" />
                             </button>
                         </div>
                     );
                 })}
             </div>
-            <p className="text-xs opacity-60">隐藏和排序只更新合成图，不调用模型。拖动画布节点不会改变合成坐标。</p>
+            <p className="text-xs opacity-60">{t("canvasB.imageLayers.sortHint")}</p>
             {extractLayerMaterials ? (
                 <button type="button" disabled={node.metadata?.imageLayerMaterials?.status === "loading"} className="text-xs underline disabled:opacity-50" onClick={() => void extractLayerMaterials(node)}>
-                    {node.metadata?.imageLayerMaterials?.status === "loading" ? "正在另存独立素材…" : node.metadata?.imageLayerMaterials?.groupId ? "重新另存独立素材（免费）" : "另存独立素材（免费）"}
+                    {node.metadata?.imageLayerMaterials?.status === "loading" ? t("canvasB.imageLayers.savingMaterials") : node.metadata?.imageLayerMaterials?.groupId ? t("canvasB.imageLayers.resaveMaterials") : t("canvasB.imageLayers.saveMaterials")}
                 </button>
             ) : null}
-            <p className="text-xs opacity-60">独立素材只裁去外部透明留白，保留场景内部背景；原位图层保持不变。</p>
+            <p className="text-xs opacity-60">{t("canvasB.imageLayers.materialsHint")}</p>
             {node.metadata?.imageLayerMaterials?.error ? (
                 <p role="alert" className="text-xs text-amber-600 dark:text-amber-400">
                     {node.metadata.imageLayerMaterials.error}
@@ -67,7 +73,7 @@ export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
             ) : null}
             {group.compositeStatus === "updating" ? (
                 <p role="status" className="text-xs">
-                    正在更新合成图…
+                    {t("canvasB.imageLayers.updatingComposite")}
                 </p>
             ) : null}
             {group.compositeStatus === "error" ? (
@@ -83,7 +89,7 @@ export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
                         }
                     >
                         <RefreshCw className="size-3" />
-                        重试合成
+                        {t("canvasB.imageLayers.retryComposite")}
                     </button>
                 </div>
             ) : null}
@@ -93,8 +99,8 @@ export function CanvasImageLayerControls({ node }: { node: CanvasNodeData }) {
         <Popover ref={popoverRef} open={open} onOpenChange={setOpen} trigger="click" content={panel} placement="leftTop">
             <button
                 type="button"
-                title="管理图层"
-                aria-label="管理图层"
+                title={t("canvasB.imageLayers.manageLayers")}
+                aria-label={t("canvasB.imageLayers.manageLayers")}
                 className="grid size-6 place-items-center rounded bg-black/60 text-white"
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}

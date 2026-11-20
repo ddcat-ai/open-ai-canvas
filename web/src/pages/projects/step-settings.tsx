@@ -1,9 +1,13 @@
-import { Button } from "antd";
+import { useEffect, useMemo } from "react";
+import { useSkillLibraryAccess } from "@/lib/skill-access";
+import { useUserStore } from "@/stores/use-user-store";
+import { Button, Select } from "antd";
 import { TriangleAlert } from "lucide-react";
 
-import { dramaChoiceKey, dramaVideoResolutionIssue } from "@/lib/drama/model-choice";
+import { dramaChoiceKey, dramaVideoResolutionTiers, dramaVideoResolutionValue } from "@/lib/drama/model-choice";
 import { formatVideoResolutionLabel, videoResolutionComparisonKey } from "@/lib/video-generation-options";
-import type { DramaAssetSettings, DramaCastKind, DramaModelChoice, DramaModelOption, DramaModelOverride, DramaModels, DramaSkillRef } from "@/services/api/drama";
+import type { DramaAssetSettings, DramaCastKind, DramaModelChoice, DramaModelOption, DramaModelOverride, DramaModels, DramaSkillRef, DramaTextThinking } from "@/services/api/drama";
+import { THINKING_REQUEST_OPTIONS, type ThinkingRequest } from "@/lib/text-thinking";
 
 import { DramaModelPicker, useDramaModelCatalog } from "./drama-model-picker";
 import { PromptSkillField, type DramaSkillStep } from "./prompt-skill";
@@ -24,6 +28,7 @@ const IMAGE_KINDS: Array<{ kind: DramaCastKind; override: DramaModelOverride; re
 ];
 
 export type DramaStepSkills = { bible?: DramaSkillRef; script?: DramaSkillRef; prompt?: DramaSkillRef };
+type DramaTextStep = keyof NonNullable<DramaTextThinking>;
 
 const SKILL_FIELD: Record<DramaSkillStep, keyof DramaStepSkills> = { bible: "bible", script: "script", prompt: "prompt" };
 
@@ -56,14 +61,45 @@ export function DramaTextSteps({
     onModelsChange,
     skills,
     onSkillChange,
+    textThinking,
+    onThinkingChange,
 }: {
     models?: Partial<DramaModels>;
     onModelsChange: (patch: Partial<DramaModels>) => void;
     skills: DramaStepSkills;
     onSkillChange: (step: DramaSkillStep, value?: DramaSkillRef) => void;
+    textThinking: DramaTextThinking;
+    onThinkingChange: (step: DramaTextStep, value: ThinkingRequest) => void;
 }) {
+    const canUseSkills = useSkillLibraryAccess();
+    const hydrated = useUserStore((state) => state.hydrated);
+    useEffect(() => {
+        if (!hydrated || canUseSkills) return;
+        const selected = TEXT_STEPS.find((item) => skills[SKILL_FIELD[item.step]]);
+        if (selected) onSkillChange(selected.step, undefined);
+    }, [canUseSkills, hydrated, skills, onSkillChange]);
     return (
         <div className="drama-steps" role="list" aria-label="文字步骤">
+            <div className="drama-step-row" role="listitem">
+                <div className="drama-step-label">
+                    <strong>分集规划</strong>
+                    <small>小说自动分集时把章节组织为连续剧集</small>
+                </div>
+                <div className="drama-step-field">
+                    <span className="drama-step-caption">文本模型</span>
+                    <small className="drama-step-note">跟随制作模型{models?.text?.label ? ` · ${models.text.label}` : ""}</small>
+                </div>
+                {canUseSkills && (
+                    <div className="drama-step-field">
+                        <span className="drama-step-caption">技能</span>
+                        <small className="drama-step-note">系统内置分集规则</small>
+                    </div>
+                )}
+                <div className="drama-step-field">
+                    <span className="drama-step-caption">思考等级</span>
+                    <Select aria-label="分集规划思考等级" value={textThinking.plan || "auto"} options={THINKING_REQUEST_OPTIONS} onChange={(value) => onThinkingChange("plan", value)} />
+                </div>
+            </div>
             {TEXT_STEPS.map((item) => (
                 <div key={item.step} className="drama-step-row" role="listitem">
                     <div className="drama-step-label">
@@ -74,9 +110,15 @@ export function DramaTextSteps({
                         <span className="drama-step-caption">文本模型</span>
                         <OverridePicker capability="text" value={overrideOf(models, item.override)} fallback={models?.text} onChange={(choice) => onModelsChange({ [item.override]: choice || {} })} />
                     </div>
+                    {canUseSkills && (
+                        <div className="drama-step-field">
+                            <span className="drama-step-caption">技能</span>
+                            <PromptSkillField compact step={item.step} value={skills[SKILL_FIELD[item.step]]} onChange={(value) => onSkillChange(item.step, value)} />
+                        </div>
+                    )}
                     <div className="drama-step-field">
-                        <span className="drama-step-caption">技能</span>
-                        <PromptSkillField compact step={item.step} value={skills[SKILL_FIELD[item.step]]} onChange={(value) => onSkillChange(item.step, value)} />
+                        <span className="drama-step-caption">思考等级</span>
+                        <Select aria-label={`${item.label}思考等级`} value={textThinking[item.step] || "auto"} options={THINKING_REQUEST_OPTIONS} onChange={(value) => onThinkingChange(item.step, value)} />
                     </div>
                 </div>
             ))}
@@ -147,40 +189,53 @@ export function DramaAssetImageModels({
     );
 }
 
-/** 剧情段视频分辨率：取自视频模型声明的档位；“模型默认”不发分辨率，由模型按默认档位出片。 */
-export function VideoResolutionField({ option, value, onChange }: { option?: DramaModelOption; value?: string; onChange: (value?: string) => void }) {
-    if (!option) {
-        return value ? (
-            <div className="drama-step-model">
-                <small className="drama-step-note">已指定 {formatVideoResolutionLabel(value)}</small>
-                <Button size="small" type="text" onClick={() => onChange(undefined)}>
-                    改回默认
-                </Button>
-            </div>
-        ) : (
-            <small className="drama-step-note">选好视频模型后可选</small>
-        );
-    }
-    const values = option.videoResolutions || [];
-    const issue = dramaVideoResolutionIssue(option, value);
-    if (!values.length && !value) return <small className="drama-step-note">该模型不提供可选分辨率，按默认出片</small>;
+/**
+ * 剧情段视频分辨率：候选档位取当前作用域所有视频模型声明档位的并集，当前模型给不出的置灰。
+ * 换模型不需要先改分辨率；“模型默认”不发分辨率，由模型按默认档位出片。
+ */
+export function VideoResolutionField({ option, value, onChange, options }: { option?: DramaModelOption; value?: string; onChange: (value?: string) => void; options?: DramaModelOption[] }) {
+    const catalog = useDramaModelCatalog().data;
+    const scope = options || catalog?.options.video || [];
+    const tiers = useMemo(() => dramaVideoResolutionTiers(scope, value), [scope, value]);
+    const fallback = option?.defaultVideoResolution || "";
+    const supported = dramaVideoResolutionValue(option, value);
+    const ignored = Boolean(value) && Boolean(option) && !supported;
     return (
         <div className="drama-step-field">
             <div className="drama-tabs drama-res-tabs" role="radiogroup" aria-label="视频分辨率">
-                <button type="button" role="radio" className="drama-tab" aria-checked={!value} onClick={() => onChange(undefined)}>
-                    默认{option.defaultVideoResolution ? ` · ${formatVideoResolutionLabel(option.defaultVideoResolution)}` : ""}
+                <button type="button" role="radio" className="drama-tab" aria-checked={!value || ignored} onClick={() => onChange(undefined)}>
+                    默认{fallback ? ` · ${formatVideoResolutionLabel(fallback)}` : ""}
                 </button>
-                {values.map((item) => (
-                    <button key={item} type="button" role="radio" className="drama-tab" aria-checked={Boolean(value) && videoResolutionComparisonKey(value) === videoResolutionComparisonKey(item)} onClick={() => onChange(item)}>
-                        {formatVideoResolutionLabel(item)}
-                    </button>
-                ))}
+                {tiers.map((tier) => {
+                    const actual = dramaVideoResolutionValue(option, tier);
+                    const active = Boolean(value) && Boolean(supported) && videoResolutionComparisonKey(value) === videoResolutionComparisonKey(tier);
+                    return (
+                        <button
+                            key={tier}
+                            type="button"
+                            role="radio"
+                            className="drama-tab"
+                            aria-checked={active}
+                            disabled={!option || !actual}
+                            title={!option ? "选好视频模型后可选" : !actual ? "当前模型不支持这个档位" : undefined}
+                            onClick={() => actual && onChange(actual)}
+                        >
+                            {formatVideoResolutionLabel(tier)}
+                        </button>
+                    );
+                })}
             </div>
-            {issue ? (
+            {!option ? (
+                <small className="drama-step-note">选好视频模型后可选；档位来自当前已加载的视频模型</small>
+            ) : ignored ? (
                 <p className="drama-step-warn" role="alert">
                     <TriangleAlert className="size-3.5" />
-                    当前视频模型{issue}，保存时会被拒绝，请改选
+                    当前视频模型不支持 {formatVideoResolutionLabel(value)}，实际按模型默认{fallback ? ` ${formatVideoResolutionLabel(fallback)}` : ""}出片
                 </p>
+            ) : !(option.videoResolutions || []).length ? (
+                <small className="drama-step-note">该模型未声明可选分辨率，按模型默认出片；档位以实际出片为准</small>
+            ) : !fallback ? (
+                <small className="drama-step-note">该模型未声明默认分辨率；不选档位时按上游默认出片</small>
             ) : (
                 <small className="drama-step-note">分辨率越高越清晰，单段越贵；横竖由作品画幅决定</small>
             )}

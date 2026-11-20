@@ -38,6 +38,7 @@ const (
 	ErrCodeModelRouteUnavailable       = app.ErrCodeModelRouteUnavailable
 	ErrCodeProviderRequestFailed       = app.ErrCodeProviderRequestFailed
 	FeatureCredits                     = app.FeatureCredits
+	FeatureTeams                       = app.FeatureTeams
 	FeatureCustomChannels              = app.FeatureCustomChannels
 	FeatureFrontendModels              = app.FeatureFrontendModels
 	FeatureImageWorkbench              = app.FeatureImageWorkbench
@@ -48,6 +49,8 @@ const (
 	FeatureTaskCenter                  = app.FeatureTaskCenter
 	FeatureTimelineTranscription       = app.FeatureTimelineTranscription
 	FeatureVideoWorkbench              = app.FeatureVideoWorkbench
+	FeatureEcommerce                   = app.FeatureEcommerce
+	FeatureEcommerceVideo              = app.FeatureEcommerceVideo
 	ModelCatalogSourceSystem           = app.ModelCatalogSourceSystem
 	PaymentPluginAlipayPage            = app.PaymentPluginAlipayPage
 	PaymentPluginWeChatNative          = app.PaymentPluginWeChatNative

@@ -96,7 +96,16 @@ type GenerationRequest struct {
 	Output          OutputOptions             `json:"output,omitempty"`
 	ProviderOptions map[string]map[string]any `json:"providerOptions,omitempty"`
 	ImageParameters map[string]any            `json:"imageParameters,omitempty"`
-	Extra           map[string]any            `json:"extra,omitempty"`
+	// InterfaceType 是宿主解析后的协议接口（如 claude-api、chat-completion），
+	// 不是供应商字段。宿主用它对参考素材做协议适配（如 Anthropic 线用 image 块），
+	// 插件模板不应读取它。
+	InterfaceType string `json:"-"`
+	// BaseURL 是宿主解析后的上游基础地址，仅供宿主判断线格式（如识别 Anthropic 兼容网关），
+	// 不序列化、不进供应商 body。
+	BaseURL string `json:"-"`
+	// LinePath 是宿主/插件解析后的创建端点路径（如 /v1/messages），仅供宿主判断线格式。
+	LinePath string         `json:"-"`
+	Extra    map[string]any `json:"extra,omitempty"`
 }
 
 type RequestContext struct {
@@ -170,25 +179,29 @@ type Parameter struct {
 }
 
 type Metadata struct {
-	ID                      string           `json:"id"`
-	Version                 string           `json:"version"`
-	Name                    string           `json:"name"`
-	Vendor                  string           `json:"vendor"`
-	Description             string           `json:"description,omitempty"`
-	Categories              []Capability     `json:"categories"`
-	Scopes                  []Surface        `json:"scopes"`
-	Parameters              []Parameter      `json:"parameters,omitempty"`
-	ImageParameters         []ImageParameter `json:"imageParameters,omitempty"`
-	Create                  string           `json:"-"`
-	Poll                    string           `json:"-"`
-	Cancel                  string           `json:"-"`
-	ContentType             string           `json:"-"`
-	Documentation           string           `json:"documentation,omitempty"`
-	LegacyAliases           []string         `json:"-"`
-	Enabled                 bool             `json:"enabled"`
-	Installable             bool             `json:"installable"`
-	Execution               string           `json:"-"`
-	RequiresPublicMediaURLs bool             `json:"-"`
+	ID                      string                      `json:"id"`
+	Version                 string                      `json:"version"`
+	Name                    string                      `json:"name"`
+	Vendor                  string                      `json:"vendor"`
+	Description             string                      `json:"description,omitempty"`
+	Categories              []Capability                `json:"categories"`
+	Scopes                  []Surface                   `json:"scopes"`
+	Parameters              []Parameter                 `json:"parameters,omitempty"`
+	ImageParameters         []ImageParameter            `json:"imageParameters,omitempty"`
+	VideoReferences         *VideoReferenceContract     `json:"videoReferences,omitempty"`
+	VideoModes              VideoModelModes             `json:"videoModes,omitempty"`
+	VideoOutputs            map[string]VideoOutputLimit `json:"videoOutputs,omitempty"`
+	Create                  string                      `json:"-"`
+	Agent                   string                      `json:"-"`
+	Poll                    string                      `json:"-"`
+	Cancel                  string                      `json:"-"`
+	ContentType             string                      `json:"-"`
+	Documentation           string                      `json:"documentation,omitempty"`
+	LegacyAliases           []string                    `json:"-"`
+	Enabled                 bool                        `json:"enabled"`
+	Installable             bool                        `json:"installable"`
+	Execution               string                      `json:"-"`
+	RequiresPublicMediaURLs bool                        `json:"-"`
 	// DetachedPolling 表示上游可能排队数小时：提交后释放 worker，由任务调度按间隔回查原任务。
 	DetachedPolling bool `json:"-"`
 	// IdempotentCreate 表示 create 以宿主幂等键作为上游任务 ID，同一键重复提交不会重复扣费，可安全重试。
@@ -196,6 +209,12 @@ type Metadata struct {
 	UnavailableReason string `json:"-"`
 	// Kind 区分生成类与处理类 provider；处理类以输入媒体为主体，不要求 prompt。
 	Kind ProviderKind `json:"kind,omitempty"`
+	// TextWire / AgentWire 是 create / agent 声明路径对应的宿主已知文本线格式（见 textwire.go），
+	// 只对文本 provider 计算；为空表示请求和响应完全按插件自己的映射处理。
+	TextWire  string `json:"-"`
+	AgentWire string `json:"-"`
+	// Auth 是插件声明的鉴权方式，只包含字段名和请求头写法，不含任何密钥值。
+	Auth ManifestAuth `json:"-"`
 }
 
 // ProviderKind 描述 provider 的业务形态。空值等同 generation。
@@ -235,6 +254,7 @@ type Manifest struct {
 	AgentResponse   *ManifestAgentResponse `json:"-"`
 	Auth            ManifestAuth           `json:"-"`
 	Validations     []ManifestValidation   `json:"-"`
+	RequestBindings []ManifestBinding      `json:"-"`
 }
 
 // Manifest JSON is the public plugin contract. Metadata is an internal
@@ -341,6 +361,16 @@ type ManifestPaymentProvider struct {
 	IdentityFields      []string                    `json:"identityFields,omitempty"`
 	NotificationSuccess ManifestPaymentResponse     `json:"notificationSuccess,omitempty"`
 	NotificationFailure ManifestPaymentResponse     `json:"notificationFailure,omitempty"`
+	// Methods 是渠道内可选支付方式的目录（名称和图标）。MethodsField 指向保存已启用方式的配置字段，
+	// 值为逗号分隔的方式 ID，可写成 id:名称 增加目录外的方式；为空时目录中的方式全部启用。
+	Methods      []ManifestPaymentMethod `json:"methods,omitempty"`
+	MethodsField string                  `json:"methodsField,omitempty"`
+}
+
+type ManifestPaymentMethod struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Icon  string `json:"icon,omitempty"`
 }
 
 type ManifestPaymentExpiryPolicy struct {
@@ -356,27 +386,31 @@ type ManifestPaymentResponse struct {
 }
 
 type ManifestProvider struct {
-	ID                      string                 `json:"id"`
-	Label                   string                 `json:"label"`
-	Kind                    ProviderKind           `json:"kind,omitempty"`
-	Capabilities            []Capability           `json:"capabilities"`
-	Scopes                  []Surface              `json:"scopes"`
-	BaseURL                 string                 `json:"baseUrl,omitempty"`
-	RequiresPublicMediaURLs bool                   `json:"requiresPublicMediaUrls,omitempty"`
-	DetachedPolling         bool                   `json:"detachedPolling,omitempty"`
-	IdempotentCreate        bool                   `json:"idempotentCreate,omitempty"`
-	Auth                    ManifestAuth           `json:"auth,omitempty"`
-	Parameters              []Parameter            `json:"parameters,omitempty"`
-	ImageParameters         []ImageParameter       `json:"imageParameters,omitempty"`
-	Validations             []ManifestValidation   `json:"validations,omitempty"`
-	Create                  ManifestOperation      `json:"create"`
-	Upload                  *ManifestUpload        `json:"upload,omitempty"`
-	Agent                   *ManifestOperation     `json:"agent,omitempty"`
-	Poll                    *ManifestOperation     `json:"poll,omitempty"`
-	Cancel                  *ManifestOperation     `json:"cancel,omitempty"`
-	Result                  *ManifestOperation     `json:"result,omitempty"`
-	Response                ManifestResponse       `json:"response"`
-	AgentResponse           *ManifestAgentResponse `json:"agentResponse,omitempty"`
+	ID                      string                      `json:"id"`
+	Label                   string                      `json:"label"`
+	Kind                    ProviderKind                `json:"kind,omitempty"`
+	Capabilities            []Capability                `json:"capabilities"`
+	Scopes                  []Surface                   `json:"scopes"`
+	BaseURL                 string                      `json:"baseUrl,omitempty"`
+	RequiresPublicMediaURLs bool                        `json:"requiresPublicMediaUrls,omitempty"`
+	DetachedPolling         bool                        `json:"detachedPolling,omitempty"`
+	IdempotentCreate        bool                        `json:"idempotentCreate,omitempty"`
+	Auth                    ManifestAuth                `json:"auth,omitempty"`
+	Parameters              []Parameter                 `json:"parameters,omitempty"`
+	ImageParameters         []ImageParameter            `json:"imageParameters,omitempty"`
+	VideoReferences         *VideoReferenceContract     `json:"videoReferences,omitempty"`
+	VideoModes              VideoModelModes             `json:"videoModes,omitempty"`
+	VideoOutputs            map[string]VideoOutputLimit `json:"videoOutputs,omitempty"`
+	Validations             []ManifestValidation        `json:"validations,omitempty"`
+	RequestBindings         []ManifestBinding           `json:"requestBindings,omitempty"`
+	Create                  ManifestOperation           `json:"create"`
+	Upload                  *ManifestUpload             `json:"upload,omitempty"`
+	Agent                   *ManifestOperation          `json:"agent,omitempty"`
+	Poll                    *ManifestOperation          `json:"poll,omitempty"`
+	Cancel                  *ManifestOperation          `json:"cancel,omitempty"`
+	Result                  *ManifestOperation          `json:"result,omitempty"`
+	Response                ManifestResponse            `json:"response"`
+	AgentResponse           *ManifestAgentResponse      `json:"agentResponse,omitempty"`
 }
 
 type ManifestAuth struct {
@@ -394,6 +428,26 @@ type ManifestAuth struct {
 type ManifestValidation struct {
 	Assert  any    `json:"assert"`
 	Message string `json:"message"`
+}
+
+type ManifestBinding struct {
+	Name  string `json:"name"`
+	Value any    `json:"value"`
+}
+
+type VideoModelModes map[string]map[string]VideoModeLimit
+
+type VideoOutputLimit struct {
+	Resolutions   []string `json:"resolutions"`
+	MinSeconds    int      `json:"minSeconds"`
+	MaxSeconds    int      `json:"maxSeconds"`
+	GenerateAudio *bool    `json:"generateAudio,omitempty"`
+}
+
+type VideoModeLimit struct {
+	MaxImages  int      `json:"maxImages"`
+	InputRoles []string `json:"inputRoles"`
+	Ratios     []string `json:"ratios"`
 }
 
 type ManifestWorkflow struct {

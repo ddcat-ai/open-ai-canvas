@@ -389,8 +389,23 @@
     font-size: 12px;
 }
 
+/* 跨币种实付预估：售价下方的小字，与售价右对齐。 */
+.wallet-topup-checkout-summary b.wallet-topup-checkout-price {
+    display: grid;
+    justify-items: end;
+}
+
+.wallet-topup-checkout-summary b.wallet-topup-checkout-price small {
+    font-weight: 400;
+}
+
 .wallet-topup-checkout .workspace-wallet-providers {
     flex: 0 1 auto;
+}
+
+.wallet-topup-checkout .workspace-wallet-providers button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 /* 头部：积分余额与存储容量两张摘要卡。 */
@@ -432,13 +447,12 @@
 .assets-storage-usage-action {
     flex-shrink: 0;
     border: 0;
-    border-radius: 8px;
-    background: var(--user-accent-soft, color-mix(in srgb, var(--foreground) 7%, transparent));
-    padding: 2px 8px;
-    color: var(--user-accent, var(--foreground));
+    background: transparent;
+    padding: var(--space-1) 0;
+    color: var(--user-ink-muted);
     font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: var(--space-half);
     cursor: pointer;
 }
 

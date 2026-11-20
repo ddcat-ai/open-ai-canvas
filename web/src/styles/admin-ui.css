@@ -6299,6 +6299,7 @@
 .admin-email-delivery-section,
 .admin-access-registration-section,
 .admin-access-linuxdo-section,
+.admin-access-wechat-section,
 .admin-access-agreement-section,
 .admin-intercept-policy-section,
 .admin-third-party-credential-section {
@@ -6309,18 +6310,41 @@
 .admin-email-delivery-section > .admin-settings-section-summary,
 .admin-access-registration-section > .admin-settings-section-summary,
 .admin-access-linuxdo-section > .admin-settings-section-summary,
+.admin-access-wechat-section > .admin-settings-section-summary,
 .admin-access-agreement-section > .admin-settings-section-summary,
 .admin-intercept-policy-section > .admin-settings-section-summary,
 .admin-third-party-credential-section > .admin-settings-section-summary {
     background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary h2 {
+:is(
+        .admin-storage-mode-section,
+        .admin-email-delivery-section,
+        .admin-access-registration-section,
+        .admin-access-linuxdo-section,
+        .admin-access-wechat-section,
+        .admin-access-agreement-section,
+        .admin-intercept-policy-section,
+        .admin-third-party-credential-section
+    )
+    > .admin-settings-section-summary
+    h2 {
     font-size: 16px;
     letter-spacing: -0.01em;
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section) > .admin-settings-section-summary p {
+:is(
+        .admin-storage-mode-section,
+        .admin-email-delivery-section,
+        .admin-access-registration-section,
+        .admin-access-linuxdo-section,
+        .admin-access-wechat-section,
+        .admin-access-agreement-section,
+        .admin-intercept-policy-section,
+        .admin-third-party-credential-section
+    )
+    > .admin-settings-section-summary
+    p {
     max-width: 760px;
     margin-top: 4px;
     font-size: 12px;
@@ -8767,7 +8791,9 @@
     border: 1px solid var(--admin-card-border) !important;
     border-radius: 8px;
     background: var(--admin-layer-2) !important;
-    box-shadow: 0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 18%, transparent) 50%, transparent), 0 8px 22px color-mix(in srgb, #000 18%, transparent);
+    box-shadow:
+        0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 18%, transparent) 50%, transparent),
+        0 8px 22px color-mix(in srgb, #000 18%, transparent);
 }
 
 .admin-shell .admin-analytics-chart .recharts-tooltip-label {
@@ -9554,7 +9580,7 @@
 .admin-price-tier-token-grid {
     display: grid;
     grid-column: 1 / -1;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
 }
 
@@ -9599,7 +9625,7 @@
 }
 
 .admin-price-tier-cost-token-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .admin-price-tier-cost-switch {
@@ -9696,42 +9722,37 @@
     box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 
-.admin-model-editor-footer-actions {
+.admin-model-editor-modal .admin-model-editor-footer {
     display: flex;
+    flex: none;
     align-items: center;
-    justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--space-2) var(--space-4);
 }
 
 .admin-model-editor-footer-primary {
     display: flex;
     min-width: 0;
+    margin-inline-start: auto;
+    align-items: center;
+    justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-1);
 }
 
 .admin-model-editor-footer-status {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    text-align: left;
-}
-
-.admin-model-editor-footer-status > div {
-    display: grid;
-    gap: 2px;
-}
-
-.admin-model-editor-footer-status strong {
+    gap: var(--space-2);
     color: var(--admin-text-primary);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--fs-body);
+    font-weight: 500;
 }
 
 .admin-model-editor-footer-status small {
     color: var(--admin-text-muted);
-    font-size: 12px;
+    font-size: var(--fs-caption);
+    font-weight: 400;
 }
 
 :root:not(.dark) .admin-model-editor-drawer .ant-drawer-header,
@@ -9810,12 +9831,6 @@
     font-weight: 500;
 }
 
-:root:not(.dark) .admin-model-editor-footer-actions {
-    border-color: rgba(17, 17, 17, 0.15);
-    background: #ffffff;
-    box-shadow: 0 1px 2px color-mix(in srgb, rgb(17 17 17 / 0.08) 50%, transparent), 0 6px 20px rgb(17 17 17 / 0.08);
-}
-
 :root:not(.dark) .admin-price-tier-mode-control .ant-segmented-item-selected,
 :root:not(.dark) .admin-price-tier-billing-mode .ant-segmented-item-selected {
     background: #ececec;
@@ -9828,10 +9843,6 @@
     }
     .admin-model-editor-tab-content {
         padding: 12px 16px;
-    }
-    .admin-model-editor-footer-primary {
-        width: 100%;
-        justify-content: flex-end;
     }
     .admin-model-editor-modal .admin-capability-reference-grid {
         grid-template-columns: minmax(0, 1fr);
@@ -9955,7 +9966,8 @@
 }
 
 .admin-channel-modal .ant-modal-body {
-    max-height: min(70vh, 620px);
+    /* 视口高度减去上下 24px 留白与约 124px 的标题栏、底栏，只让正文滚动。 */
+    max-height: min(620px, calc(100dvh - 172px));
     overflow-y: auto;
 }
 
@@ -9969,7 +9981,9 @@
     border-radius: 12px !important;
     background: var(--admin-layer-1) !important;
     padding: 0 !important;
-    box-shadow: 0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 28%, transparent) 50%, transparent), 0 20px 54px color-mix(in srgb, #000 28%, transparent) !important;
+    box-shadow:
+        0 1px 2px color-mix(in srgb, color-mix(in srgb, #000 28%, transparent) 50%, transparent),
+        0 20px 54px color-mix(in srgb, #000 28%, transparent) !important;
 }
 
 .admin-channel-modal-root .admin-channel-modal.workspace-modal .ant-modal-container {
@@ -11319,4 +11333,261 @@ html[data-magicui-theme-vt="active"] .admin-shell * {
 .admin-model-editor-modal .admin-model-editor-form > .ant-tabs > .ant-tabs-body-holder > .ant-tabs-content,
 .admin-model-editor-modal .admin-model-editor-form > .ant-tabs > .ant-tabs-body-holder > .ant-tabs-content > .ant-tabs-tabpane {
     min-height: 100%;
+}
+
+/* Plugin detail: fixed-size dialog, identity header, grouped facts on the left, documentation on the right. */
+.admin-plugin-detail-modal .ant-modal-container {
+    display: flex;
+    height: min(860px, calc(100dvh - 48px));
+    flex-direction: column;
+}
+
+.admin-plugin-detail-modal .ant-modal-body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+}
+
+.admin-plugin-detail {
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    flex-direction: column;
+}
+
+.admin-plugin-detail-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-start;
+    gap: 16px;
+    border-bottom: 1px solid var(--admin-divider);
+    background: var(--admin-layer-1);
+    padding: 24px 64px 20px 28px;
+}
+
+.admin-plugin-detail-icon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+}
+
+.admin-plugin-detail-icon > * {
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 12px !important;
+}
+
+.admin-plugin-detail-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.admin-plugin-detail-heading {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.admin-plugin-detail-heading h2 {
+    overflow: hidden;
+    margin: 0;
+    color: var(--admin-text-primary);
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-plugin-detail-version {
+    flex-shrink: 0;
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-mono);
+    font-size: 13px;
+}
+
+.admin-plugin-detail-description {
+    margin: 6px 0 0;
+    max-width: 88ch;
+    color: var(--admin-text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.admin-plugin-detail-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.admin-plugin-detail-id {
+    max-width: 100%;
+    overflow: hidden;
+    border-radius: var(--admin-radius);
+    background: var(--admin-layer-2);
+    padding: 2px 8px;
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-mono);
+    font-size: 12px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-plugin-detail-body {
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+}
+
+.admin-plugin-detail-aside {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-right: 1px solid var(--admin-divider);
+    background: var(--admin-layer-2);
+    padding: 20px;
+}
+
+.admin-plugin-detail-group {
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-layer-1);
+    padding: 14px 16px;
+}
+
+.admin-plugin-detail-group h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: var(--admin-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.admin-plugin-detail-group h3 svg {
+    width: 15px;
+    height: 15px;
+    color: var(--admin-text-muted);
+}
+
+.admin-plugin-detail-group dl {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+}
+
+.admin-plugin-detail-fact {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 12px;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.admin-plugin-detail-fact dt {
+    color: var(--admin-text-muted);
+}
+
+.admin-plugin-detail-fact dd {
+    margin: 0;
+    color: var(--admin-text-primary);
+    overflow-wrap: anywhere;
+}
+
+.admin-plugin-detail-mono {
+    font-family: var(--admin-font-mono);
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.admin-plugin-detail-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.admin-plugin-detail-chips span {
+    border: 1px solid var(--admin-card-border);
+    border-radius: var(--admin-radius);
+    background: var(--admin-layer-2);
+    padding: 2px 8px;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    line-height: 20px;
+}
+
+.admin-plugin-detail-empty {
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 13px;
+}
+
+.admin-plugin-detail-doc {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--admin-layer-1);
+}
+
+.admin-plugin-detail-doc-inner {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 28px 40px 48px;
+}
+
+/* 用户端文档样式是 caption 字号，后台大弹窗按正文阅读。 */
+.admin-plugin-detail-doc .plugin-markdown {
+    color: var(--admin-text-secondary);
+    font-size: 14px;
+    line-height: 1.75;
+}
+
+.admin-plugin-detail-doc .plugin-markdown :is(h1, h2, h3, strong) {
+    color: var(--admin-text-primary);
+}
+
+.admin-plugin-detail-doc .plugin-markdown h1 {
+    font-size: 22px;
+}
+
+.admin-plugin-detail-doc .plugin-markdown h2 {
+    border-top-color: var(--admin-divider);
+    font-size: 17px;
+}
+
+@media (max-width: 900px) {
+    .admin-plugin-detail-body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow-y: auto;
+    }
+
+    .admin-plugin-detail-aside,
+    .admin-plugin-detail-doc {
+        overflow: visible;
+    }
+
+    .admin-plugin-detail-aside {
+        border-right: 0;
+        border-bottom: 1px solid var(--admin-divider);
+    }
+
+    .admin-plugin-detail-header {
+        padding: 20px 56px 16px 20px;
+    }
+
+    .admin-plugin-detail-doc-inner {
+        padding: 24px 20px 40px;
+    }
 }

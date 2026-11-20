@@ -1,0 +1,714 @@
+/* 方向卡：右上角改写按钮与风格库入口 */
+.commerce-direction-item {
+    position: relative;
+    display: grid;
+}
+.commerce-direction-item > .flylep-direction-card {
+    width: 100%;
+}
+.commerce-direction-message .commerce-direction-item .commerce-direction-title {
+    padding-right: 32px;
+}
+.commerce-direction-edit {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--user-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--user-surface) 88%, transparent);
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    opacity: 0.75;
+    transition:
+        opacity 0.16s ease,
+        color 0.16s ease,
+        border-color 0.16s ease;
+}
+.commerce-direction-item:hover .commerce-direction-edit,
+.commerce-direction-edit:focus-visible {
+    opacity: 1;
+    border-color: color-mix(in srgb, var(--user-accent) 45%, var(--user-border));
+    color: var(--user-accent);
+}
+.commerce-direction-edit:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+}
+.commerce-direction-header .commerce-direction-library {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--user-accent) 40%, var(--user-border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--user-accent) 12%, transparent);
+    color: var(--user-accent);
+    font-size: 12px;
+    font-weight: 600;
+    transition:
+        background 0.16s ease,
+        box-shadow 0.16s ease;
+}
+.commerce-direction-header .commerce-direction-library:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--user-accent) 20%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--user-accent) 14%, transparent);
+}
+.commerce-direction-header .commerce-direction-library:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.commerce-direction-message .flylep-directions-grid .flylep-direction-card.is-editing {
+    display: grid;
+    gap: 4px;
+    padding: 8px;
+    cursor: default;
+}
+.flylep-direction-card.is-editing input {
+    display: block;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--user-border);
+    background: transparent;
+    color: var(--user-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 650;
+    outline: none;
+}
+
+/* 风格库弹窗 */
+.commerce-style-picker-root .ant-modal-mask {
+    background: rgb(8 7 14 / 58%);
+    backdrop-filter: blur(10px) saturate(1.1);
+}
+.commerce-style-picker-modal {
+    max-width: calc(100vw - 32px);
+}
+.commerce-style-picker-modal .ant-modal-container {
+    position: relative;
+    overflow: hidden;
+    padding: 0 !important;
+    border: 1px solid color-mix(in srgb, var(--user-accent) 24%, var(--user-border));
+    border-radius: 26px !important;
+    background: color-mix(in srgb, var(--user-surface) 97%, transparent) !important;
+    box-shadow: 0 40px 120px -30px rgb(0 0 0 / 60%) !important;
+}
+.commerce-style-picker-modal .ant-modal-header {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+.commerce-style-picker-modal .ant-modal-body {
+    padding: 0 !important;
+}
+.commerce-style-picker-modal .ant-modal-close {
+    top: 18px;
+    right: 18px;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--user-surface-muted) 85%, transparent);
+}
+.commerce-style-picker {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    flex-direction: column;
+    max-height: min(860px, calc(100dvh - 48px));
+    color: var(--user-ink);
+}
+
+.commerce-style-picker-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 28px 72px 18px 30px;
+    animation: commerce-style-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.commerce-style-picker-avatar {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: 50%;
+}
+.commerce-style-picker-avatar img {
+    width: 52px;
+    height: 52px;
+    object-fit: cover;
+    object-position: top;
+}
+.commerce-style-picker-head small {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--user-accent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+}
+.commerce-style-picker-head h2 {
+    margin: 6px 0;
+    color: var(--user-ink);
+    font-size: 22px;
+    font-weight: 750;
+}
+.commerce-style-picker-head p {
+    max-width: 720px;
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.commerce-style-picker-tabs {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    padding: 0 30px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    animation: commerce-style-rise 0.5s 0.06s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.commerce-style-picker-tabs::-webkit-scrollbar {
+    display: none;
+}
+.commerce-style-picker-tabs button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--user-border);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--user-surface-muted) 70%, transparent);
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition:
+        color 0.2s ease,
+        background 0.25s ease,
+        border-color 0.25s ease,
+        box-shadow 0.25s ease;
+}
+.commerce-style-picker-tabs button small {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--user-ink) 8%, transparent);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+}
+.commerce-style-picker-tabs button:hover {
+    border-color: color-mix(in srgb, var(--user-accent) 40%, var(--user-border));
+    color: var(--user-ink);
+}
+
+.commerce-style-grid {
+    display: grid;
+    flex: 1;
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+    align-content: start;
+    gap: 14px;
+    min-height: 0;
+    padding: 4px 30px 22px;
+    overflow-y: auto;
+}
+.commerce-style-card {
+    position: relative;
+    display: grid;
+    border-radius: 18px;
+    animation: commerce-style-card-in 0.46s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: calc(var(--i, 0) * 45ms);
+}
+.commerce-style-card-select {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--user-border);
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--user-surface) 86%, transparent);
+    color: var(--user-ink);
+    cursor: pointer;
+    text-align: left;
+    transition:
+        border-color 0.22s ease,
+        box-shadow 0.3s ease,
+        transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.commerce-style-card-select:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--user-accent) 55%, var(--user-border));
+    box-shadow: 0 18px 40px -22px rgb(0 0 0 / 70%);
+    transform: translateY(-3px);
+}
+.commerce-style-card-select:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+.commerce-style-card-art {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    height: 112px;
+    padding: 12px 14px;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--c1, var(--user-accent)), var(--c2, #6d61ca) 55%, var(--c3, #22d3ee));
+}
+.commerce-style-card-art::before {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgb(0 0 0 / 46%), rgb(0 0 0 / 0%) 68%);
+    content: "";
+}
+.commerce-style-card-art b {
+    font-family: var(--style-font);
+    position: relative;
+    z-index: 1;
+    color: #fff;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-shadow: 0 2px 14px rgb(0 0 0 / 40%);
+}
+.commerce-style-card-swatches {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    z-index: 1;
+    display: flex;
+    gap: 5px;
+}
+.commerce-style-card-swatches i {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgb(255 255 255 / 85%);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 25%);
+}
+.commerce-style-card-body {
+    display: grid;
+    gap: 8px;
+    padding: 13px 14px 15px;
+}
+.commerce-style-card-desc {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--user-ink-muted);
+    font-size: 12.5px;
+    line-height: 1.65;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+.commerce-style-card-meta {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    color: var(--user-ink-muted);
+    font-size: 11px;
+}
+.commerce-style-card-meta em {
+    flex: none;
+    color: var(--user-accent);
+    font-style: normal;
+    font-weight: 650;
+}
+.commerce-style-card-meta span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.commerce-style-card-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+.commerce-style-card-palette small {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: 10.5px;
+}
+.commerce-style-card-palette small i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+}
+.commerce-style-card-check {
+    position: absolute;
+    top: 12px;
+    right: 48px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--user-accent);
+    color: var(--user-accent-ink, #fff);
+    box-shadow: 0 6px 16px -4px color-mix(in srgb, var(--user-accent) 80%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.4);
+    transition:
+        opacity 0.2s ease,
+        transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.commerce-style-card.is-chosen .commerce-style-card-check {
+    opacity: 1;
+    transform: scale(1);
+}
+.commerce-style-card.is-chosen .commerce-style-card-select {
+    border-color: var(--user-accent);
+    box-shadow:
+        0 0 0 2px var(--user-accent),
+        0 22px 46px -24px color-mix(in srgb, var(--user-accent) 90%, transparent);
+}
+.commerce-style-card-edit {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgb(255 255 255 / 45%);
+    border-radius: 10px;
+    background: rgb(0 0 0 / 28%);
+    color: #fff;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition:
+        background 0.18s ease,
+        transform 0.18s ease;
+}
+.commerce-style-card-edit:hover:not(:disabled),
+.commerce-style-card-edit:focus-visible {
+    background: rgb(0 0 0 / 48%);
+    transform: rotate(-8deg) scale(1.06);
+}
+.commerce-style-card-edit:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+.commerce-style-card.is-editing {
+    gap: 6px;
+    padding: 12px;
+    border: 1px solid var(--user-accent);
+    background: color-mix(in srgb, var(--user-accent) 7%, var(--user-surface));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--user-accent) 14%, transparent);
+}
+.commerce-style-card.is-editing input,
+.commerce-style-card.is-editing textarea {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--user-border);
+    border-radius: 10px;
+    background: var(--user-surface);
+    color: var(--user-ink);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.55;
+    outline: none;
+}
+.commerce-style-card.is-editing input {
+    font-weight: 650;
+}
+.commerce-style-card.is-editing textarea {
+    min-height: 112px;
+    resize: vertical;
+}
+.commerce-style-card.is-editing input:focus,
+.commerce-style-card.is-editing textarea:focus {
+    border-color: var(--user-accent);
+}
+
+.commerce-style-custom {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: 18px;
+    min-height: 0;
+    padding: 4px 30px 22px;
+    overflow-y: auto;
+    animation: commerce-style-rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.commerce-style-custom-form {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid color-mix(in srgb, var(--user-accent) 30%, var(--user-border));
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--user-accent) 6%, var(--user-surface));
+}
+.commerce-style-custom-form label {
+    display: grid;
+    gap: 7px;
+    color: var(--user-ink);
+    font-size: 12px;
+    font-weight: 650;
+}
+.commerce-style-custom-form input,
+.commerce-style-custom-form textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--user-border);
+    border-radius: 12px;
+    background: var(--user-surface);
+    color: var(--user-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.6;
+    outline: none;
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+}
+.commerce-style-custom-form textarea {
+    min-height: 128px;
+    resize: vertical;
+}
+.commerce-style-custom-form input:focus,
+.commerce-style-custom-form textarea:focus {
+    border-color: var(--user-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--user-accent) 18%, transparent);
+}
+.commerce-style-custom-form p {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+.commerce-style-inspirations {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+}
+.commerce-style-inspirations > span {
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+}
+.commerce-style-inspirations button {
+    display: grid;
+    gap: 3px;
+    padding: 11px 13px;
+    border: 1px solid var(--user-border);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--user-surface-muted) 70%, transparent);
+    color: var(--user-ink);
+    cursor: pointer;
+    text-align: left;
+    animation: commerce-style-card-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    animation-delay: calc(var(--i, 0) * 50ms);
+    transition:
+        border-color 0.18s ease,
+        background 0.18s ease;
+}
+.commerce-style-inspirations button:hover {
+    border-color: color-mix(in srgb, var(--user-accent) 50%, var(--user-border));
+    background: color-mix(in srgb, var(--user-accent) 8%, var(--user-surface));
+}
+.commerce-style-inspirations b {
+    font-size: 13px;
+}
+.commerce-style-inspirations small {
+    color: var(--user-ink-muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.commerce-style-picker-footer {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 30px 22px;
+    border-top: 1px solid var(--user-border);
+    background: color-mix(in srgb, var(--user-surface) 92%, transparent);
+}
+.commerce-style-picker-footer > span {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--user-ink-muted);
+    font-size: 13px;
+}
+.commerce-style-picker-footer > span b {
+    color: var(--user-ink);
+    font-size: 15px;
+}
+.commerce-style-picker-footer > span em {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--user-accent) 14%, transparent);
+    color: var(--user-accent);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 650;
+}
+.commerce-style-picker-footer > div {
+    display: flex;
+    flex: none;
+    gap: 10px;
+}
+.commerce-style-picker-later {
+    height: 42px;
+    padding: 0 18px;
+    border: 1px solid var(--user-border);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--user-ink-muted);
+    cursor: pointer;
+    font-size: 13px;
+}
+.commerce-style-picker-later:hover {
+    color: var(--user-ink);
+}
+.commerce-style-picker-confirm {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 42px;
+    padding: 0 20px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    transition:
+        transform 0.2s ease,
+        background 0.2s ease,
+        opacity 0.2s ease;
+}
+.commerce-style-picker-confirm:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+.commerce-style-picker-confirm:disabled {
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.commerce-style-picker-confirm .is-spinning {
+    animation: commerce-style-spin 0.9s linear infinite;
+}
+
+@keyframes commerce-style-rise {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes commerce-style-card-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes commerce-style-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 720px) {
+    .commerce-style-picker-head {
+        padding: 22px 56px 14px 18px;
+    }
+    .commerce-style-picker-head h2 {
+        font-size: 18px;
+    }
+    .commerce-style-picker-avatar {
+        display: none;
+    }
+    .commerce-style-picker-tabs {
+        padding: 0 18px 12px;
+    }
+    .commerce-style-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 10px;
+        padding: 4px 18px 18px;
+    }
+    .commerce-style-card-art {
+        height: 88px;
+    }
+    .commerce-style-card-art b {
+        font-size: 17px;
+    }
+    .commerce-style-custom {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 4px 18px 18px;
+    }
+    .commerce-style-picker-footer {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 14px 18px 18px;
+    }
+    .commerce-style-picker-footer > div {
+        justify-content: flex-end;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .commerce-style-picker-head,
+    .commerce-style-picker-tabs,
+    .commerce-style-card,
+    .commerce-style-custom,
+    .commerce-style-inspirations button,
+    .commerce-style-picker-confirm .is-spinning {
+        animation: none;
+    }
+    .commerce-style-card-select,
+    .commerce-style-card-check,
+    .commerce-style-card-edit,
+    .commerce-style-picker-confirm,
+    .commerce-direction-edit {
+        transition: none;
+    }
+    .commerce-style-card-select:hover:not(:disabled),
+    .commerce-style-card-edit:hover:not(:disabled),
+    .commerce-style-picker-confirm:hover:not(:disabled) {
+        transform: none;
+    }
+}

@@ -142,6 +142,35 @@
           "path": "/api/v3/tts/create",
           "contentType": "application/json",
           "body": {
+            "audio_mode": {
+              "$if": {
+                "condition": {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$ref": "request.audios"
+                      }
+                    },
+                    0
+                  ]
+                },
+                "then": "unified_edit",
+                "else": {
+                  "$if": {
+                    "condition": {
+                      "$eq": [
+                        {
+                          "$ref": "request.extra.audioMode"
+                        },
+                        "unified_edit"
+                      ]
+                    },
+                    "then": "unified_edit",
+                    "else": "tts"
+                  }
+                }
+              }
+            },
             "model": {
               "$ref": "request.model"
             },

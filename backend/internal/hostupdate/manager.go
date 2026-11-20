@@ -53,10 +53,12 @@ func (r execRunner) Run(ctx context.Context, name string, args, environment []st
 }
 
 type persistedState struct {
-	LatestRelease   *Release  `json:"latestRelease,omitempty"`
-	LastBackup      *Backup   `json:"lastBackup,omitempty"`
-	RollbackVersion string    `json:"rollbackVersion,omitempty"`
-	Operation       Operation `json:"operation"`
+	Sources         Sources      `json:"sources"`
+	SourceProbe     *SourceProbe `json:"sourceProbe,omitempty"`
+	LatestRelease   *Release     `json:"latestRelease,omitempty"`
+	LastBackup      *Backup      `json:"lastBackup,omitempty"`
+	RollbackVersion string       `json:"rollbackVersion,omitempty"`
+	Operation       Operation    `json:"operation"`
 }
 
 type Manager struct {
@@ -108,7 +110,30 @@ func NewManager(config Config) (*Manager, error) {
 	if err := manager.loadState(); err != nil {
 		return nil, err
 	}
-	if manager.state.Operation.Phase.Active() {
+	if manager.state.Sources == (Sources{}) {
+		manager.state.Sources = Sources{GitHubSource: "direct", ImageSource: "ghcr"}
+	}
+	if err := manager.state.Sources.Validate(); err != nil {
+		return nil, fmt.Errorf("读取更新来源配置：%w", err)
+	}
+	if probe := manager.state.SourceProbe; probe != nil && probe.Status == "running" {
+		now := time.Now().UTC()
+		probe.Status, probe.FinishedAt = "failed", &now
+		for i := range probe.Checks {
+			if probe.Checks[i].Status == "pending" {
+				probe.Checks[i].Status, probe.Checks[i].Detail = "failed", "更新器已重启，请重新检测"
+			}
+		}
+		if err := manager.saveStateLocked(); err != nil {
+			return nil, err
+		}
+	}
+	if manager.state.Operation.Phase == PhaseChecking {
+		manager.state.Operation.Phase = PhaseIdle
+		manager.state.LatestRelease = nil
+		manager.appendLogLocked(PhaseIdle, "更新器已重启，请重新检查版本")
+		_ = manager.saveStateLocked()
+	} else if manager.state.Operation.Phase.Active() {
 		manager.state.Operation.Phase = PhaseManualIntervention
 		manager.state.Operation.Error = "更新器进程在操作期间退出，请检查容器与数据库状态后手动处理"
 		manager.appendLogLocked(PhaseManualIntervention, manager.state.Operation.Error)
@@ -125,18 +150,26 @@ func (m *Manager) Snapshot() Status {
 
 func (m *Manager) Check(ctx context.Context) (Status, error) {
 	m.mu.Lock()
-	if m.state.Operation.Phase.Active() {
+	if m.busyLocked() {
 		status := m.snapshotLocked()
 		m.mu.Unlock()
-		return status, errors.New("更新操作正在进行，暂时不能检查新版本")
+		return status, ErrBusy
 	}
+	sources := m.state.Sources
+	previous := m.state
 	m.state.Operation.Phase = PhaseChecking
 	m.state.Operation.Error = ""
-	m.appendLogLocked(PhaseChecking, "正在读取 GitHub Release")
-	_ = m.saveStateLocked()
+	m.state.LatestRelease = nil
+	m.appendLogLocked(PhaseChecking, "正在读取 GitHub Release："+sources.description())
+	if err := m.saveStateLocked(); err != nil {
+		m.state = previous
+		status := m.snapshotLocked()
+		m.mu.Unlock()
+		return status, fmt.Errorf("保存版本检查任务：%w", err)
+	}
 	m.mu.Unlock()
 
-	release, err := m.latestRelease(ctx)
+	release, err := m.latestRelease(ctx, sources)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err != nil {
@@ -173,8 +206,8 @@ func (m *Manager) StartUpdate(targetVersion string) (Status, error) {
 	targetVersion = strings.TrimSpace(targetVersion)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.state.Operation.Phase.Active() {
-		return m.snapshotLocked(), errors.New("已有更新操作正在进行")
+	if m.busyLocked() {
+		return m.snapshotLocked(), ErrBusy
 	}
 	if m.state.LatestRelease == nil || m.state.LatestRelease.Version != targetVersion {
 		return m.snapshotLocked(), errors.New("目标版本与最近一次检查结果不一致，请重新检查更新")
@@ -187,24 +220,30 @@ func (m *Manager) StartUpdate(targetVersion string) (Status, error) {
 		return m.snapshotLocked(), errors.New("目标版本必须高于当前版本")
 	}
 	now := time.Now().UTC()
+	sources := m.state.Sources
+	previous := m.state.Operation
 	m.state.Operation = Operation{
+		Sources:       &sources,
 		ID:            randomID(),
 		Phase:         PhasePreflight,
 		FromVersion:   current,
 		TargetVersion: targetVersion,
 		StartedAt:     &now,
-		Logs:          []LogEntry{{At: now, Phase: PhasePreflight, Message: "开始更新前检查"}},
+		Logs:          []LogEntry{{At: now, Phase: PhasePreflight, Message: "开始更新前检查，来源：" + sources.description()}},
 	}
-	_ = m.saveStateLocked()
-	go m.runUpdate(current, targetVersion)
+	if err := m.saveStateLocked(); err != nil {
+		m.state.Operation = previous
+		return m.snapshotLocked(), fmt.Errorf("保存更新任务：%w", err)
+	}
+	go m.runUpdate(current, targetVersion, sources)
 	return m.snapshotLocked(), nil
 }
 
 func (m *Manager) StartRollback(reason string) (Status, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.state.Operation.Phase.Active() {
-		return m.snapshotLocked(), errors.New("已有更新操作正在进行")
+	if m.busyLocked() {
+		return m.snapshotLocked(), ErrBusy
 	}
 	if m.state.RollbackVersion == "" || m.state.LastBackup == nil {
 		return m.snapshotLocked(), errors.New("没有可用的回退版本或已校验备份")
@@ -229,18 +268,18 @@ func (m *Manager) StartRollback(reason string) (Status, error) {
 	return m.snapshotLocked(), nil
 }
 
-func (m *Manager) runUpdate(fromVersion, targetVersion string) {
-	nextCompose, err := m.prepareTargetCompose(targetVersion)
+func (m *Manager) runUpdate(fromVersion, targetVersion string, sources Sources) {
+	nextCompose, err := m.prepareTargetCompose(targetVersion, sources)
 	if err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
 		return
 	}
 	defer os.Remove(nextCompose)
-	if err := m.preflight(nextCompose, targetVersion); err != nil {
+	if err := m.preflight(nextCompose, targetVersion, sources); err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
 		return
 	}
-	updaterBinary, err := m.prepareUpdaterBinary(targetVersion)
+	updaterBinary, err := m.prepareUpdaterBinary(targetVersion, sources)
 	if err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
 		return
@@ -249,10 +288,37 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 		defer os.Remove(updaterBinary)
 	}
 
-	m.setPhase(PhaseBackingUp, "创建 PostgreSQL 与数据目录 ZIP 备份")
-	backup, err := m.createBackup(fromVersion)
+	m.setPhase(PhasePulling, "拉取目标版本镜像："+sources.description())
+	targetImages := sources.images(m.config.Repository, targetVersion)
+	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "pull", "backend", "web", "yingce-agent"); err != nil {
+		m.failWithoutRollback(PhaseFailed, err)
+		return
+	}
+	targetImages, err = m.verifyImages(targetImages)
 	if err != nil {
 		m.failWithoutRollback(PhaseFailed, err)
+		return
+	}
+
+	m.setPhase(PhaseDraining, "停止 Web、Backend 与 Agent，等待后台任务优雅退出")
+	if err := m.compose(m.composePath(), fromVersion, m.config.StepTimeout, nil, "stop", "web", "backend", "yingce-agent"); err != nil {
+		m.failBeforeMigration(err, fromVersion)
+		return
+	}
+
+	// 最终备份必须包含旧服务退出前的全部写入；镜像下载不占用停服窗口。
+	m.setPhase(PhaseBackingUp, "创建停服后的 PostgreSQL 与数据目录 ZIP 备份")
+	backup, err := m.createBackup(fromVersion)
+	if err != nil {
+		m.failBeforeMigration(err, fromVersion)
+		return
+	}
+	if err := replaceFile(m.composePath(), m.previousComposePath(), 0o600); err != nil {
+		m.failBeforeMigration(fmt.Errorf("保存旧 Compose 配置：%w", err), fromVersion)
+		return
+	}
+	if err := replaceFile(m.envPath(), m.previousEnvPath(), 0o600); err != nil {
+		m.failBeforeMigration(fmt.Errorf("保存旧部署环境：%w", err), fromVersion)
 		return
 	}
 	m.mu.Lock()
@@ -260,32 +326,6 @@ func (m *Manager) runUpdate(fromVersion, targetVersion string) {
 	m.state.RollbackVersion = fromVersion
 	_ = m.saveStateLocked()
 	m.mu.Unlock()
-	if err := replaceFile(m.composePath(), m.previousComposePath(), 0o600); err != nil {
-		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧 Compose 配置：%w", err))
-		return
-	}
-	if err := replaceFile(m.envPath(), m.previousEnvPath(), 0o600); err != nil {
-		m.failWithoutRollback(PhaseFailed, fmt.Errorf("保存旧部署环境：%w", err))
-		return
-	}
-
-	m.setPhase(PhasePulling, "拉取目标版本镜像")
-	targetImages := immutableImageRefs(m.config.Repository, targetVersion)
-	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "pull", "backend", "web", "yingce-agent"); err != nil {
-		m.failWithoutRollback(PhaseFailed, err)
-		return
-	}
-	targetImages, err = m.verifyImages(targetVersion)
-	if err != nil {
-		m.failWithoutRollback(PhaseFailed, err)
-		return
-	}
-
-	m.setPhase(PhaseDraining, "停止 Web 与 Backend，等待后台任务优雅退出")
-	if err := m.compose(m.composePath(), fromVersion, m.config.StepTimeout, nil, "stop", "web", "backend"); err != nil {
-		m.failWithRollback(err, fromVersion, backup)
-		return
-	}
 
 	m.setPhase(PhaseMigrating, "执行目标版本数据库迁移")
 	if err := m.composeWithImages(nextCompose, targetVersion, targetImages, m.config.StepTimeout, nil, "run", "--rm", "migrate"); err != nil {
@@ -353,6 +393,19 @@ func (m *Manager) failWithoutRollback(phase Phase, err error) {
 	_ = m.saveStateLocked()
 }
 
+// 迁移前只有容器被停止，恢复旧容器即可，不能恢复更早的数据库快照。
+func (m *Manager) failBeforeMigration(cause error, version string) {
+	err := m.compose(m.composePath(), version, m.config.StepTimeout, nil, "start", "backend", "yingce-agent", "web")
+	if err == nil {
+		err = m.verifyHealthy(version)
+	}
+	if err != nil {
+		m.failWithoutRollback(PhaseManualIntervention, errors.Join(cause, fmt.Errorf("恢复旧服务：%w", err)))
+		return
+	}
+	m.failWithoutRollback(PhaseFailed, cause)
+}
+
 func (m *Manager) failWithRollback(cause error, targetVersion string, backup Backup) {
 	m.mu.Lock()
 	m.state.Operation.Error = safeOperationError(cause)
@@ -383,7 +436,7 @@ func (m *Manager) runRollback(targetVersion string, backup Backup, automatic boo
 		failures = append(failures, err)
 	}
 	started := true
-	if err := m.compose(m.composePath(), targetVersion, m.config.StepTimeout, nil, "up", "-d", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
+	if err := m.compose(m.composePath(), targetVersion, m.config.StepTimeout, nil, "up", "-d", "--pull", "never", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
 		started = false
 		failures = append(failures, err)
 	}
@@ -414,6 +467,8 @@ func (m *Manager) snapshotLocked() Status {
 	current, err := m.currentVersion()
 	checks := m.checks(current, err)
 	status := Status{
+		Sources:         cloneSources(&m.state.Sources),
+		SourceProbe:     cloneSourceProbe(m.state.SourceProbe),
 		Supported:       true,
 		Connected:       true,
 		Repository:      m.config.Repository,
@@ -562,6 +617,24 @@ func cloneBackup(value *Backup) *Backup {
 }
 
 func cloneOperation(value Operation) Operation {
+	value.Sources = cloneSources(value.Sources)
 	value.Logs = append([]LogEntry(nil), value.Logs...)
 	return value
+}
+
+func cloneSources(value *Sources) *Sources {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneSourceProbe(value *SourceProbe) *SourceProbe {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	cloned.Checks = append([]Check(nil), value.Checks...)
+	return &cloned
 }

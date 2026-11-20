@@ -43,12 +43,19 @@ func (s *Service) ossSettingForResource(userID string, resource *model.Resource)
 	var setting ossSettingValue
 	var err error
 	if resource.StorageSettingID != "" {
-		_, setting, err = s.storageLocationValue(resource.StorageSettingID)
+		var location *model.StorageLocation
+		location, setting, err = s.storageLocationValue(resource.StorageSettingID)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			_, setting, err = s.readUserOSSSettingByID(userID, resource.StorageSettingID)
 		}
 		if err == nil {
-			_, current, currentErr := s.readUserOSSSetting(userID)
+			var current ossSettingValue
+			var currentErr error
+			if location != nil && location.Scope == "platform" {
+				_, current, currentErr = s.readOSSSetting()
+			} else {
+				_, current, currentErr = s.readUserOSSSetting(userID)
+			}
 			if currentErr != nil {
 				return ossSettingValue{}, currentErr
 			}
@@ -80,6 +87,12 @@ func (s *Service) ossSettingForResource(userID string, resource *model.Resource)
 	}
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
+	if setting.Provider == volcengineTOSProvider {
+		// 资源不记录地域；平台换地域后旧资源仍按自身域名里的地域签名。
+		if region, ok := tosRegionFromEndpoint(setting.Endpoint); ok {
+			setting.Region = region
+		}
+	}
 	// CDN 是具体存储位置的出口，不得在 provider/endpoint/bucket 不匹配时继续沿用，
 	// 否则切换到七牛后会把历史阿里云 objectKey 拼成七牛域名。
 	if !resourceMatchesSetting || (resourceProvider != "" && resourceProvider != setting.Provider) {
@@ -139,8 +152,8 @@ func validateActiveOSSSetting(setting ossSettingValue, disabledMessage string, i
 	if !setting.Enabled {
 		return ossSettingValue{}, BadAuthRequest(disabledMessage)
 	}
-	if setting.Provider != aliyunOSSProvider && setting.Provider != tencentCOSProvider && setting.Provider != qiniuKodoProvider && setting.Provider != s3Provider {
-		return ossSettingValue{}, BadAuthRequest("仅支持阿里云 OSS、腾讯云 COS、七牛云 Kodo 和通用 S3")
+	if !supportedOSSProvider(setting.Provider) {
+		return ossSettingValue{}, BadAuthRequest(unsupportedOSSProviderMessage)
 	}
 	if setting.Bucket == "" || setting.Endpoint == "" || setting.AccessKeyID == "" || setting.AccessKeySecret == "" {
 		return ossSettingValue{}, BadAuthRequest(incompleteMessage)

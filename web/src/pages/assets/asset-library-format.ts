@@ -1,12 +1,13 @@
 // 素材库的展示格式化：摘要、尺寸、时长、时间、下载名与搜索文本。纯函数。
 
 import { formatBytes } from "@/lib/image-utils";
+import { audioAverageBitrateKbps, formatAudioSampleRate, imageResolutionTierLabel, isLosslessAudioMimeType, mediaAspectRatioLabel, mediaFormatLabel, videoResolutionTierLabel } from "@/lib/media-spec";
 import { characterAssetSummary } from "@/components/assets/asset-rich-cover";
-import { assetCategoryLabel } from "@/lib/asset-category";
+import { assetCategoryLabel, type AssetCategory } from "@/lib/asset-category";
 import { type AssetKind } from "@/stores/use-asset-store";
 import { type AssetGridDensity, parseAssetGridDensity } from "./asset-grid-density";
 import { type Asset } from "@/stores/use-asset-store";
-import { type LucideIcon, FileText, Image as ImageIcon, Clapperboard, AudioLines, Box, UserRound } from "lucide-react";
+import { type LucideIcon, FileText, Image as ImageIcon, Clapperboard, AudioLines, Box, UserRound, Mountain, Package, Layers, Shapes, ShieldCheck } from "lucide-react";
 
 export type LibraryAsset = Asset;
 
@@ -21,16 +22,43 @@ export const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
     entity: UserRound,
 };
 
-export function assetSummary(asset: LibraryAsset) {
+/** 业务分类图标；方舟认证用盾牌，与素材卡片、画布节点上的认证标识一致。 */
+export const assetCategoryIcons: Record<AssetCategory, LucideIcon> = {
+    character: UserRound,
+    environment: Mountain,
+    prop: Package,
+    material: Layers,
+    other: Shapes,
+    ark: ShieldCheck,
+};
+
+/**
+ * 卡片摘要只放挑素材时真正比较的规格：图片/视频是清晰度与画幅，音频是时长与采样率。
+ * 像素尺寸、大小和格式留在素材档案里（见 assetSummaryDetail 与 assetArchiveFacts）。
+ */
+export function assetSummary(asset: LibraryAsset, audioSampleRate?: number) {
     if (asset.kind === "entity") return asset.category === "environment" || asset.category === "prop" ? String(asset.data.definition.description || "待生成图片") : characterAssetSummary(asset);
     if (asset.kind === "text") return asset.data.content;
-    if (asset.kind === "audio") return `${formatAssetDuration(asset.data.durationMs)} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
+    if (asset.kind === "audio") return [formatAssetClock(asset.data.durationMs) || formatAssetDuration(asset.data.durationMs), formatAudioSampleRate(audioSampleRate)].filter(Boolean).join(" · ");
     if (asset.kind === "model") return `${asset.data.fileName} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
-    return `${assetSizeLabel(asset.data.width, asset.data.height)} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
+    const tier = asset.kind === "video" ? videoResolutionTierLabel(asset.data.width, asset.data.height) : imageResolutionTierLabel(asset.data.width, asset.data.height);
+    const spec = [tier, mediaAspectRatioLabel(asset.data.width, asset.data.height)].filter(Boolean).join(" · ");
+    return spec || `尺寸未知 · ${formatBytes(asset.data.bytes)}`;
+}
+
+/** 卡片摘要悬停提示：补上像素尺寸、文件大小和格式，不必打开档案也能核对。 */
+export function assetSummaryDetail(asset: LibraryAsset, audioSampleRate?: number) {
+    if (asset.kind === "image" || asset.kind === "video") return [assetSizeLabel(asset.data.width, asset.data.height), formatBytes(asset.data.bytes), mediaFormatLabel(asset.data.mimeType)].join(" · ");
+    if (asset.kind === "audio") {
+        const bitrate = isLosslessAudioMimeType(asset.data.mimeType) ? 0 : audioAverageBitrateKbps(asset.data.bytes, asset.data.durationMs);
+        return [assetSummary(asset, audioSampleRate), bitrate ? `${bitrate} kbps` : "", formatBytes(asset.data.bytes), mediaFormatLabel(asset.data.mimeType)].filter(Boolean).join(" · ");
+    }
+    return assetSummary(asset);
 }
 
 export function assetSizeLabel(width: number, height: number) {
-    return width > 0 && height > 0 ? `${width}x${height}` : "未知";
+    // 旧版本后端把未知尺寸写成 1×1 占位；1 像素的边长不是真实媒体尺寸，同样按未知显示。
+    return width > 1 && height > 1 ? `${width}x${height}` : "未知";
 }
 
 export function assetSearchText(asset: LibraryAsset) {

@@ -51,10 +51,8 @@
 | `create.body.reference_audios` | `{"$omitEmpty":{"$map":{"from":{"$sortByOrder":{"$ref":"request.audios"}},"as":"media","in":{"url":{"$ref":"media.value"}}}}}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/videos/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 | `result.method` | `"GET"` |
 | `result.path` | `"/v1/videos/{{taskId}}/content"` |
-| `result.contentType` | `"application/json"` |
 | `result.headers.Accept` | `"video/mp4"` |
 
 ## Provider 扩展键
@@ -134,6 +132,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "role-reference-images",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

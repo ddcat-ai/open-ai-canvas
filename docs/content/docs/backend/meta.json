@@ -5,15 +5,23 @@
   "pages": [
     "local-development",
     "canvas-agent-appearance",
+    "agent-mcp",
     "http-api",
+    "wechat-login",
     "code-map",
     "backend-database",
+    "channel-configuration",
+    "ecommerce-agent",
     "video-token-billing",
+    "image-usage-billing",
+    "credit-rewards",
     "task-runtime-stability",
     "newapi-channel-2",
     "bailian-minimax-video",
+    "minimax-h3-image",
     "system-update",
     "protocol-plugins",
+    "official-video-protocols",
     "canvas-data-structure",
     "canvas-operations-sync"
   ]

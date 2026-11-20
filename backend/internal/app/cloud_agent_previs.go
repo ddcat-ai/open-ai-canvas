@@ -123,7 +123,7 @@ func cloudAgentPrevisSceneRead(repo *repository.Repository, userID, canvasID str
 	if args.IncludeTransforms {
 		// Augment with full spatial data for layout planning: object positions, camera transforms, FOV
 		projection["spatialLayout"] = cloudAgentPrevisSpatialLayout(scene)
-		projection["coordinateGuide"] = "坐标系: Y轴向上，单位为米，地面 Y=0。人物高约1.8m。position=[X,Y,Z]，rotation=[绕X,绕Y,绕Z弧度]。target是摄影机焦点坐标。路径点与参考轨迹的 Y 是离地高度。"
+		projection["coordinateGuide"] = "坐标系: Y轴向上，单位为米，地面 Y=0。人物高约1.8m。演员原点在脚底，Y=脚底离地高度；box/sphere/cylinder原点在中心，底面低于地面时会被拉回。position=[X,Y,Z]，rotation=[绕X,绕Y,绕Z弧度]。target是摄影机焦点坐标。路径点与参考轨迹的 Y 是离地高度。"
 	}
 	result := map[string]any{
 		"canvasId":           canvasID,

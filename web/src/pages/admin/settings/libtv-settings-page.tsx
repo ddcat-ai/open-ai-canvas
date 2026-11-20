@@ -1,14 +1,14 @@
 import { App, Button, Input, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, BadgeCheck, CircleCheck, CloudDownload, KeyRound, RefreshCw, RotateCcw, Save, Server, ShieldCheck, Trash2, Wifi } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CircleCheck, CloudDownload, Link2, RefreshCw, RotateCcw, Save, Server, ShieldCheck, Trash2, Wifi } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
 import { cn } from "@/lib/utils";
-import { getAdminLibTVSetting, testAdminLibTV, updateAdminLibTVSetting, type AdminLibTVSetting } from "@/services/api/libtv";
+import { completeAdminLibTVOAuth, disconnectAdminLibTV, getAdminLibTVSetting, startAdminLibTVOAuth, testAdminLibTV, updateAdminLibTVSetting, type AdminLibTVSetting, type LibTVConnectStartResult } from "@/services/api/libtv";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { AdminPageFrame } from "../components/admin-shell";
-import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "../components/admin-ui";
+import { AdminStatusBadge, SettingsSectionCard } from "../components/admin-ui";
 
 type ConnectionTestStatus = "idle" | "testing" | "success" | "error";
 
@@ -17,24 +17,32 @@ export default function LibTVSettingsPage() {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
     const [setting, setSetting] = useState<AdminLibTVSetting | null>(null);
     const [enabled, setEnabled] = useState(false);
-    const [token, setToken] = useState("");
-    const [clearTokenDraft, setClearTokenDraft] = useState(false);
     const [testUuid, setTestUuid] = useState("");
     const [testStatus, setTestStatus] = useState<ConnectionTestStatus>("idle");
     const [testError, setTestError] = useState("");
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [connecting, setConnecting] = useState(false);
+    const [disconnecting, setDisconnecting] = useState(false);
+    const [connectFlow, setConnectFlow] = useState<LibTVConnectStartResult | null>(null);
+    const [callbackUrl, setCallbackUrl] = useState("");
     const [loadError, setLoadError] = useState("");
     const [saveError, setSaveError] = useState("");
     const requestVersionRef = useRef(0);
     const navigationConfirmOpenRef = useRef(false);
     const navigationTriggerRef = useRef<HTMLElement | null>(null);
+    const pollTimerRef = useRef<number>(0);
 
-    const draftHasToken = Boolean(token.trim()) || Boolean(setting?.hasToken && !clearTokenDraft);
-    const dirty = Boolean(setting && (enabled !== setting.enabled || Boolean(token.trim()) || clearTokenDraft));
-    const enabledDirty = Boolean(setting && enabled !== setting.enabled);
-    const credentialDraftLabel = token.trim() ? (setting?.hasToken ? "待替换" : "待新增") : clearTokenDraft ? "待清除" : setting?.hasToken ? "已配置" : "未配置";
+    const dirty = Boolean(setting && enabled !== setting.enabled);
+    const enabledDirty = dirty;
+    const connected = Boolean(setting?.connected || setting?.hasToken);
+    const connectionLabel = connected ? (setting?.accountName ? `已连接：${setting.accountName}` : "已连接") : "未连接";
+
+    const applySetting = (next: AdminLibTVSetting) => {
+        setSetting(next);
+        setEnabled(next.enabled);
+    };
 
     const load = useCallback(
         async (initial = false, announce = false) => {
@@ -46,19 +54,22 @@ export default function LibTVSettingsPage() {
                 const result = await getAdminLibTVSetting();
                 if (requestVersion !== requestVersionRef.current) return;
                 if (!isAdminLibTVSetting(result.setting)) throw new Error("服务端返回的 LibTV 配置格式无效");
-                setSetting(result.setting);
-                setEnabled(result.setting.enabled);
-                setToken("");
-                setClearTokenDraft(false);
+                applySetting(result.setting);
                 setSaveError("");
                 setTestStatus("idle");
                 setTestError("");
+                if (result.setting.connected) {
+                    setConnectFlow(null);
+                    setCallbackUrl("");
+                }
                 if (announce) message.success("已重新读取第三方参数配置");
+                return result.setting;
             } catch (error) {
                 if (requestVersion !== requestVersionRef.current) return;
                 const errorMessage = error instanceof Error ? error.message : "读取第三方参数配置失败";
                 setLoadError(errorMessage);
                 if (!initial) message.error(errorMessage);
+                return null;
             } finally {
                 if (requestVersion === requestVersionRef.current) {
                     setLoading(false);
@@ -73,6 +84,7 @@ export default function LibTVSettingsPage() {
         void load(true);
         return () => {
             requestVersionRef.current += 1;
+            window.clearInterval(pollTimerRef.current);
         };
     }, [load]);
 
@@ -88,12 +100,26 @@ export default function LibTVSettingsPage() {
     }, [dirty, saving]);
 
     useEffect(() => {
+        const onMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return;
+            const data = event.data as { source?: string; status?: string } | null;
+            if (!data || data.source !== "yingce-libtv-oauth") return;
+            if (data.status === "success") {
+                void load(false);
+                message.success("已连接 LibTV 账号");
+            }
+        };
+        window.addEventListener("message", onMessage);
+        return () => window.removeEventListener("message", onMessage);
+    }, [load, message]);
+
+    useEffect(() => {
         if (blocker.state !== "blocked" || navigationConfirmOpenRef.current) return;
         navigationConfirmOpenRef.current = true;
         navigationTriggerRef.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
         modal.confirm({
             title: "放弃第三方参数调整？",
-            content: "当前页面有尚未保存的 LibTV 凭据或导入策略草稿，离开后这些内容会丢失。服务端正在使用的配置不会改变。",
+            content: "当前页面有尚未保存的 LibTV 导入策略草稿，离开后这些内容会丢失。服务端正在使用的配置不会改变。",
             okText: "放弃并离开",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -118,8 +144,6 @@ export default function LibTVSettingsPage() {
     const resetDraft = () => {
         if (!setting || saving) return;
         setEnabled(setting.enabled);
-        setToken("");
-        setClearTokenDraft(false);
         setSaveError("");
         message.info("已撤销第三方参数的未保存调整");
     };
@@ -131,7 +155,7 @@ export default function LibTVSettingsPage() {
         }
         modal.confirm({
             title: "放弃调整并重新读取？",
-            content: "重新读取会丢弃当前 LibTV 凭据和导入开关草稿，并以服务端配置为准。",
+            content: "重新读取会丢弃当前导入开关草稿，并以服务端配置为准。",
             okText: "放弃并刷新",
             cancelText: "继续编辑",
             okButtonProps: { danger: true },
@@ -139,15 +163,9 @@ export default function LibTVSettingsPage() {
         });
     };
 
-    const changeToken = (nextToken: string) => {
-        setToken(nextToken);
-        if (nextToken.trim()) setClearTokenDraft(false);
-        setSaveError("");
-    };
-
     const changeEnabled = (nextEnabled: boolean) => {
-        if (nextEnabled && !draftHasToken) {
-            message.warning("请先填写 LibTV Token，再启用画布导入");
+        if (nextEnabled && !connected) {
+            message.warning("请先连接 LibTV 账号，再启用画布导入");
             return;
         }
         if (!setting || saving || nextEnabled === enabled) return;
@@ -155,40 +173,113 @@ export default function LibTVSettingsPage() {
         setSaveError("");
     };
 
-    const markTokenForRemoval = () => {
-        setToken("");
-        setClearTokenDraft(true);
-        setEnabled(false);
-        setSaveError("");
-        message.info("Token 已标记为待清除，点击保存修改前不会影响服务端配置");
+    const startPoll = () => {
+        window.clearInterval(pollTimerRef.current);
+        pollTimerRef.current = window.setInterval(() => {
+            void (async () => {
+                const next = await load(false);
+                if (next?.connected) {
+                    window.clearInterval(pollTimerRef.current);
+                    message.success("已连接 LibTV 账号");
+                }
+            })();
+        }, 2000);
+        window.setTimeout(() => window.clearInterval(pollTimerRef.current), 10 * 60 * 1000);
     };
 
-    const restoreTokenDraft = () => {
-        setClearTokenDraft(false);
+    const startConnect = async () => {
+        setConnecting(true);
         setSaveError("");
+        try {
+            const result = await startAdminLibTVOAuth(window.location.origin);
+            if (!result?.authorizeUrl) throw new Error("未能创建 LibTV 授权请求");
+            setConnectFlow(result);
+            window.open(result.authorizeUrl, "yingce-libtv-oauth", "popup=yes,width=480,height=720");
+            if (result.callbackMode === "redirect") startPoll();
+            message.info(result.hint || "请在打开的窗口中用微信扫码授权");
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "无法开始连接 LibTV";
+            setSaveError(errorMessage);
+            message.error(errorMessage);
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    const completeConnect = async () => {
+        const raw = callbackUrl.trim();
+        if (!raw) {
+            message.error("请粘贴授权完成后的完整回调地址");
+            return;
+        }
+        setConnecting(true);
+        setSaveError("");
+        try {
+            const result = await completeAdminLibTVOAuth({ callbackUrl: raw });
+            if (!isAdminLibTVSetting(result.setting) || !(result.setting.connected || result.setting.hasToken)) {
+                throw new Error("服务端未确认 LibTV 账号已连接，请重新读取后核对");
+            }
+            applySetting(result.setting);
+            setConnectFlow(null);
+            setCallbackUrl("");
+            setTestStatus("idle");
+            setTestError("");
+            message.success("已连接 LibTV 账号");
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "完成 LibTV 授权失败";
+            setSaveError(errorMessage);
+            message.error(errorMessage);
+        } finally {
+            setConnecting(false);
+        }
+    };
+
+    const disconnect = () => {
+        modal.confirm({
+            title: "断开 LibTV 账号？",
+            content: "断开后将同时关闭用户导入入口。已导入到画布中的节点和连线不会被删除。",
+            okText: "断开连接",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                setDisconnecting(true);
+                try {
+                    const result = await disconnectAdminLibTV();
+                    if (!isAdminLibTVSetting(result.setting) || result.setting.connected) {
+                        throw new Error("服务端未确认已断开 LibTV 账号");
+                    }
+                    applySetting(result.setting);
+                    setConnectFlow(null);
+                    setCallbackUrl("");
+                    setTestStatus("idle");
+                    setTestError("");
+                    message.success("已断开 LibTV 账号");
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : "断开 LibTV 账号失败";
+                    message.error(errorMessage);
+                    throw error;
+                } finally {
+                    setDisconnecting(false);
+                }
+            },
+        });
     };
 
     async function save() {
         if (!setting) return;
         const nextEnabled = enabled;
-        const nextToken = token.trim();
-        const clearToken = clearTokenDraft;
-        const expectedHasToken = nextToken ? true : clearToken ? false : setting.hasToken;
-        if (nextEnabled && !expectedHasToken) {
-            message.error("启用 LibTV 画布导入前必须配置 Token");
+        if (nextEnabled && !connected) {
+            message.error("启用 LibTV 画布导入前必须先连接账号");
             return;
         }
         setSaving(true);
         setSaveError("");
         try {
-            const result = await updateAdminLibTVSetting({ enabled: nextEnabled, token: nextToken || undefined, clearToken: clearToken || undefined });
-            if (!isAdminLibTVSetting(result.setting) || result.setting.enabled !== nextEnabled || result.setting.hasToken !== expectedHasToken) {
+            const result = await updateAdminLibTVSetting({ enabled: nextEnabled });
+            if (!isAdminLibTVSetting(result.setting) || result.setting.enabled !== nextEnabled) {
                 throw new Error("服务端返回的 LibTV 配置与本次保存内容不一致，请重新读取后核对");
             }
-            setSetting(result.setting);
-            setEnabled(result.setting.enabled);
-            setToken("");
-            setClearTokenDraft(false);
+            applySetting(result.setting);
             setTestStatus("idle");
             setTestError("");
             message.success("第三方参数配置已保存");
@@ -204,10 +295,8 @@ export default function LibTVSettingsPage() {
 
     const submitSave = async () => {
         if (!setting || !dirty) return;
-        const nextToken = token.trim();
-        const expectedHasToken = nextToken ? true : clearTokenDraft ? false : setting.hasToken;
-        if (enabled && !expectedHasToken) {
-            message.error("启用 LibTV 画布导入前必须配置 Token");
+        if (enabled && !connected) {
+            message.error("启用 LibTV 画布导入前必须先连接账号");
             return;
         }
         try {
@@ -219,8 +308,8 @@ export default function LibTVSettingsPage() {
 
     const test = async () => {
         const uuid = testUuid.trim();
-        if (!setting?.hasToken) {
-            message.error("请先保存 LibTV Token，再验证连接");
+        if (!connected) {
+            message.error("请先连接 LibTV 账号，再验证连接");
             return;
         }
         if (!uuid) {
@@ -232,7 +321,7 @@ export default function LibTVSettingsPage() {
         try {
             await testAdminLibTV(uuid);
             setTestStatus("success");
-            message.success("已保存的 LibTV Token 可以读取该画布");
+            message.success("已连接的 LibTV 账号可以读取该画布");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "LibTV 连接验证失败";
             setTestStatus("error");
@@ -243,7 +332,7 @@ export default function LibTVSettingsPage() {
 
     if (loading && !setting) {
         return (
-            <AdminPageFrame title="第三方参数配置" description="先配置平台凭据，再决定是否开放用户导入" scroll>
+            <AdminPageFrame title="第三方参数配置" description="先连接平台账号，再决定是否开放用户导入" scroll>
                 <div className="admin-settings-stack admin-third-party-settings" aria-label="正在读取第三方参数配置" role="status">
                     <div className="admin-third-party-command-bar">
                         <Skeleton active title={{ width: 190 }} paragraph={false} />
@@ -258,7 +347,7 @@ export default function LibTVSettingsPage() {
 
     if (!setting) {
         return (
-            <AdminPageFrame title="第三方参数配置" description="先配置平台凭据，再决定是否开放用户导入" scroll>
+            <AdminPageFrame title="第三方参数配置" description="先连接平台账号，再决定是否开放用户导入" scroll>
                 <div className="admin-settings-stack admin-third-party-settings">
                     <div className="admin-third-party-load-error" role="alert">
                         <span className="admin-third-party-load-error-icon">
@@ -278,7 +367,7 @@ export default function LibTVSettingsPage() {
     }
 
     return (
-        <AdminPageFrame title="第三方参数配置" description="先配置平台凭据，再决定是否开放用户导入" scroll>
+        <AdminPageFrame title="第三方参数配置" description="先连接平台账号，再决定是否开放用户导入" scroll>
             <div className="admin-settings-stack admin-third-party-settings">
                 <div className={cn("admin-third-party-command-bar", dirty && "is-dirty")}>
                     <div className="admin-third-party-command-copy" aria-live="polite">
@@ -287,7 +376,7 @@ export default function LibTVSettingsPage() {
                                 <strong>{dirty ? "第三方参数有调整待保存" : "第三方参数已与服务端同步"}</strong>
                                 <AdminStatusBadge label={dirty ? "尚未生效" : "服务端当前值"} tone={dirty ? "warning" : "neutral"} />
                             </div>
-                            <p>{dirty ? "凭据和导入开关只在本页暂存；保存前可撤销或重新读取。" : "当前仅接入 LibTV；凭据明文只提交到服务端，不会从接口回传。"}</p>
+                            <p>{dirty ? "导入开关只在本页暂存；保存前可撤销或重新读取。" : "当前仅接入 LibTV；授权令牌只保存在服务端，不会从接口回传。"}</p>
                         </div>
                     </div>
                     <div className="admin-third-party-command-actions">
@@ -302,21 +391,20 @@ export default function LibTVSettingsPage() {
                     </div>
                 </div>
 
-                {loadError || saveError ? (
+                {loadError || saveError || setting.warning ? (
                     <div className="admin-third-party-inline-alert" role="alert">
                         <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-                        <span>{saveError || `${loadError}。页面仍显示上一次成功读取的配置。`}</span>
+                        <span>{saveError || setting.warning || `${loadError}。页面仍显示上一次成功读取的配置。`}</span>
                     </div>
                 ) : null}
 
                 <div id="admin-third-party-libtv" className="admin-settings-anchor">
                     <SettingsSectionCard
                         className="admin-third-party-section admin-third-party-credential-section"
-                        icon={<KeyRound className="size-4" aria-hidden="true" />}
-                        title="1. 配置 LibTV 服务端访问凭据"
-                        description={`Token 只提交到${brandName}服务端，保存后浏览器不会再收到或显示明文。`}
-                        status={<AdminStatusBadge label={credentialDraftLabel} tone={clearTokenDraft ? "warning" : draftHasToken ? "success" : "neutral"} />}
-                        footer={!draftHasToken ? <ThirdPartySaveFooter setting={setting} dirty={dirty} saving={saving} refreshing={refreshing} onReset={resetDraft} onSave={submitSave} /> : undefined}
+                        icon={<Link2 className="size-4" aria-hidden="true" />}
+                        title="1. 连接 LibTV 账号"
+                        description={`使用官方微信扫码授权，让${brandName}服务端读取可复制的 LibTV 画布。授权令牌不会回传到浏览器。`}
+                        status={<AdminStatusBadge label={connectionLabel} tone={connected ? "success" : "neutral"} />}
                     >
                         <div className="admin-third-party-provider">
                             <div className="admin-third-party-provider-heading">
@@ -329,55 +417,57 @@ export default function LibTVSettingsPage() {
                             <div className="admin-third-party-provider-tags">
                                 <AdminStatusBadge label="服务端代理" tone="info" />
                                 <AdminStatusBadge label="只读外部画布" tone="neutral" />
-                                <AdminStatusBadge label={draftHasToken ? "凭据就绪" : "缺少凭据"} tone={draftHasToken ? "success" : "warning"} />
+                                <AdminStatusBadge label={connected ? "账号已连接" : "尚未连接"} tone={connected ? "success" : "warning"} />
                             </div>
                         </div>
                         <div className="admin-third-party-credential-panel">
-                            <label className="admin-third-party-field-label" htmlFor="admin-libtv-token">
-                                LibTV Token
-                            </label>
-                            <Input.Password
-                                id="admin-libtv-token"
-                                value={token}
-                                onChange={(event) => changeToken(event.target.value)}
-                                placeholder={setting.hasToken && !clearTokenDraft ? configuredSecretText : clearTokenDraft ? "已标记为清除，可输入新 Token 改为替换" : "输入 LibTV Token"}
-                                disabled={saving || refreshing}
-                                autoComplete="new-password"
-                                aria-describedby="admin-libtv-token-help"
-                            />
-                            <div id="admin-libtv-token-help" className="admin-third-party-credential-state">
-                                <span className={cn("admin-third-party-credential-indicator", draftHasToken && "is-ready", clearTokenDraft && "is-warning")}>
-                                    {draftHasToken ? <CircleCheck className="size-4" aria-hidden="true" /> : <AlertTriangle className="size-4" aria-hidden="true" />}
-                                    {credentialDraftLabel}
+                            <div className="admin-third-party-credential-state">
+                                <span className={cn("admin-third-party-credential-indicator", connected && "is-ready")}>
+                                    {connected ? <CircleCheck className="size-4" aria-hidden="true" /> : <AlertTriangle className="size-4" aria-hidden="true" />}
+                                    {connectionLabel}
                                 </span>
-                                <p>
-                                    {token.trim()
-                                        ? setting.hasToken
-                                            ? "保存后替换服务端凭据；当前内容尚未提交。"
-                                            : "保存后新增服务端凭据；当前内容尚未提交。"
-                                        : clearTokenDraft
-                                          ? "保存后清除 Token，并同时停用导入入口。"
-                                          : setting.hasToken
-                                            ? "留空保存会保留服务端已有 Token。"
-                                            : "尚未配置 Token，无法启用或验证 LibTV 接入。"}
-                                </p>
+                                <p>{connected ? "已使用站点级管理员授权。用户导入画布时会复用这个连接，无需各自粘贴密钥。" : "官方已不再提供可粘贴的接口密钥。请连接一个管理员 LibTV 账号，用于按 UUID 导入可复制画布。"}</p>
                             </div>
                             <div className="admin-third-party-credential-actions">
-                                {clearTokenDraft ? (
-                                    <Button icon={<RotateCcw className="size-4" />} disabled={saving || refreshing} onClick={restoreTokenDraft}>
-                                        撤销清除
-                                    </Button>
-                                ) : setting.hasToken ? (
-                                    <Button danger icon={<Trash2 className="size-4" />} disabled={saving || refreshing} onClick={markTokenForRemoval}>
-                                        标记为清除
+                                <Button type={connected ? "default" : "primary"} icon={<Link2 className="size-4" />} loading={connecting} disabled={saving || refreshing || disconnecting} onClick={() => void startConnect()}>
+                                    {connected ? "重新连接" : "连接 LibTV 账号"}
+                                </Button>
+                                {connected ? (
+                                    <Button danger icon={<Trash2 className="size-4" />} loading={disconnecting} disabled={saving || refreshing || connecting} onClick={disconnect}>
+                                        断开连接
                                     </Button>
                                 ) : null}
                             </div>
+                            {connectFlow ? (
+                                <div className="mt-4 space-y-3">
+                                    <p className="text-sm text-foreground/70">{connectFlow.hint}</p>
+                                    {connectFlow.callbackMode === "paste" ? (
+                                        <div className="admin-third-party-test-input">
+                                            <label htmlFor="admin-libtv-callback-url">授权完成后的回调地址</label>
+                                            <Input.TextArea
+                                                id="admin-libtv-callback-url"
+                                                value={callbackUrl}
+                                                onChange={(event) => setCallbackUrl(event.target.value)}
+                                                placeholder="粘贴以 http://127.0.0.1:8765/callback?code= 开头的完整地址"
+                                                disabled={connecting}
+                                                autoSize={{ minRows: 2, maxRows: 4 }}
+                                            />
+                                            <div className="mt-2">
+                                                <Button type="primary" loading={connecting} onClick={() => void completeConnect()}>
+                                                    完成授权
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-foreground/55">扫码完成后会自动返回本页。如果没有自动更新，请点击“刷新状态”。</p>
+                                    )}
+                                </div>
+                            ) : null}
                         </div>
                     </SettingsSectionCard>
                 </div>
 
-                {draftHasToken ? (
+                {connected ? (
                     <div id="admin-third-party-access" className="admin-settings-anchor">
                         <SettingsSectionCard
                             className="admin-third-party-section admin-third-party-access-section"
@@ -390,7 +480,7 @@ export default function LibTVSettingsPage() {
                             <div className="admin-third-party-policy-control">
                                 <div>
                                     <strong>{enabled ? "允许发起新的 LibTV 导入" : "不开放新的 LibTV 导入"}</strong>
-                                    <p>{enabled ? "保存后，服务端会使用已保存的 Token 读取用户指定的画布。" : "已有导入节点与连线继续保留，不会被删除或转换。"}</p>
+                                    <p>{enabled ? "保存后，服务端会使用已连接的 LibTV 账号读取用户指定的画布。" : "已有导入节点与连线继续保留，不会被删除或转换。"}</p>
                                 </div>
                                 <div className="admin-third-party-policy-switch">
                                     <span>{enabled ? "开启" : "关闭"}</span>
@@ -398,7 +488,7 @@ export default function LibTVSettingsPage() {
                                 </div>
                             </div>
                             <div className="admin-third-party-flow" aria-label="LibTV 画布导入链路">
-                                <FlowStep icon={<KeyRound className="size-4" />} label="服务端凭据" detail="Token 不回传" />
+                                <FlowStep icon={<Link2 className="size-4" />} label="站点级授权" detail="令牌不回传" />
                                 <span aria-hidden="true">→</span>
                                 <FlowStep icon={<Wifi className="size-4" />} label="读取画布" detail="按 UUID 请求" />
                                 <span aria-hidden="true">→</span>
@@ -408,13 +498,13 @@ export default function LibTVSettingsPage() {
                     </div>
                 ) : null}
 
-                {setting.hasToken && !clearTokenDraft ? (
+                {connected ? (
                     <div id="admin-third-party-test" className="admin-settings-anchor">
                         <SettingsSectionCard
                             className="admin-third-party-section admin-third-party-test-card"
                             icon={<Wifi className="size-4" aria-hidden="true" />}
-                            title="3. 验证已保存的 LibTV 凭据"
-                            description={`使用服务端当前保存的 Token 发起一次只读请求，不会向 LibTV 或当前${brandName}画布写入内容。`}
+                            title="3. 验证已连接的 LibTV 账号"
+                            description={`使用服务端当前保存的授权发起一次只读请求，不会向 LibTV 或当前${brandName}画布写入内容。`}
                             status={<TestStatus status={testStatus} />}
                         >
                             <div className="admin-third-party-test-controls">
@@ -432,23 +522,13 @@ export default function LibTVSettingsPage() {
                                         disabled={testStatus === "testing"}
                                     />
                                 </div>
-                                <Button icon={<Wifi className="size-4" />} loading={testStatus === "testing"} disabled={!setting.hasToken || saving || refreshing} onClick={() => void test()}>
+                                <Button icon={<Wifi className="size-4" />} loading={testStatus === "testing"} disabled={!connected || saving || refreshing} onClick={() => void test()}>
                                     验证连接
                                 </Button>
                             </div>
                             <div className={cn("admin-third-party-test-note", testStatus === "error" && "is-error", testStatus === "success" && "is-success")} role={testStatus === "error" ? "alert" : "status"}>
                                 {testStatus === "success" ? <BadgeCheck className="size-4" aria-hidden="true" /> : testStatus === "error" ? <AlertTriangle className="size-4" aria-hidden="true" /> : <Server className="size-4" aria-hidden="true" />}
-                                <span>
-                                    {testStatus === "success"
-                                        ? "验证成功：服务端已保存的 Token 可以读取该画布。"
-                                        : testStatus === "error"
-                                          ? `验证失败：${testError}`
-                                          : token.trim()
-                                            ? setting.hasToken
-                                                ? "当前输入的新 Token 尚未保存，本次验证仍会使用服务端原有 Token。"
-                                                : "当前输入的 Token 尚未保存，请先保存修改后再验证连接。"
-                                            : "验证会产生一次真实的外部只读请求，但不会保存画布内容。"}
-                                </span>
+                                <span>{testStatus === "success" ? "验证成功：已连接的 LibTV 账号可以读取该画布。" : testStatus === "error" ? `验证失败：${testError}` : "验证会产生一次真实的外部只读请求，但不会保存画布内容。"}</span>
                             </div>
                         </SettingsSectionCard>
                     </div>
@@ -501,7 +581,7 @@ function TestStatus({ status }: { status: ConnectionTestStatus }) {
 function isAdminLibTVSetting(value: unknown): value is AdminLibTVSetting {
     if (!value || typeof value !== "object") return false;
     const candidate = value as Partial<AdminLibTVSetting>;
-    return typeof candidate.enabled === "boolean" && typeof candidate.hasToken === "boolean" && (candidate.updatedAt === undefined || typeof candidate.updatedAt === "string");
+    return typeof candidate.enabled === "boolean" && (typeof candidate.connected === "boolean" || typeof candidate.hasToken === "boolean") && (candidate.updatedAt === undefined || typeof candidate.updatedAt === "string");
 }
 
 function hasValidSettingTime(value?: string) {
