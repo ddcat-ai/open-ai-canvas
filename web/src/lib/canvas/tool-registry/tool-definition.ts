@@ -92,6 +92,7 @@ export type ToolbarHandlers = {
     onNodeViewImage: (node: CanvasNodeData) => void;
     onNodeExtractVideoFrames: (node: CanvasNodeData) => void;
     onNodeExtractAudioFromVideo: (node: CanvasNodeData) => void;
+    onNodeRemakeVideo?: (node: CanvasNodeData) => void;
     onNodeTrimVideoSegments: (node: CanvasNodeData) => void;
     /** 视频画质增强；只在存在 processing 视频模型时由项目页提供。 */
     onNodeEnhanceVideo?: (node: CanvasNodeData) => void;

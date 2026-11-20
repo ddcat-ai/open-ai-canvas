@@ -64,13 +64,6 @@
     opacity: 0.6;
 }
 
-.canvas-node-toolbar-menu-split .canvas-node-toolbar-menu-stack {
-    overflow: hidden;
-    border: 1px solid var(--workspace-overlay-border, var(--dock-border));
-    border-radius: var(--r-md);
-    background: var(--workspace-overlay-bg-strong, var(--dock-surface));
-}
-
 /* 子面板脱离父菜单的布局流，避免打开二/三级菜单时 rc-trigger 重新测量
    整个 popup，导致一级菜单向左跳动。 */
 .canvas-node-toolbar-menu-split > .canvas-grid-split-picker {
@@ -115,13 +108,6 @@
     }
 }
 
-.canvas-node-toolbar-menu-split .ant-dropdown-menu {
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-}
-
 .canvas-node-toolbar-menu .ant-dropdown-menu-item,
 .canvas-node-toolbar-menu .ant-dropdown-menu-submenu-title {
     align-items: center;
@@ -143,17 +129,6 @@
     height: 14px;
 }
 
-/* 九宫格菜单按 section 分两列，缩短纵向长度 */
-.canvas-node-toolbar-menu-nine-grid .ant-dropdown-menu {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--space-2);
-}
-
-.canvas-node-toolbar-menu-nine-grid .ant-dropdown-menu-item-group-title {
-    white-space: nowrap;
-}
-
 /* 风格工具弹层外壳：cover 卡片网格自定义渲染，视觉与 split 弹层一致；
    固定宽度避免 truncate 标签的 max-content 把弹层撑宽；
    背景对齐九宫格菜单：spatial 页用 --workspace-overlay-bg-strong（antd 菜单
@@ -165,22 +140,6 @@
     border: 1px solid var(--workspace-overlay-border, var(--dock-border));
     border-radius: var(--r-md);
     background: var(--workspace-overlay-bg-strong, var(--popover));
-}
-
-.canvas-grid-split-menu-item.is-open {
-    background: var(--workspace-overlay-hover, color-mix(in srgb, var(--popover-foreground) 6%, var(--popover)));
-}
-
-.canvas-grid-split-menu-label {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    gap: 8px;
-}
-
-.canvas-grid-split-menu-label > div:first-child {
-    min-width: 0;
-    flex: 1;
 }
 
 .canvas-grid-split-item .canvas-grid-split-icon {

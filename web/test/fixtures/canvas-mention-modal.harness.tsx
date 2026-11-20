@@ -4,10 +4,10 @@ import type { CanvasResourceReference } from "../../src/lib/canvas/canvas-resour
 import type { CanvasResourceMentionTextareaActions } from "../../src/components/canvas/canvas-resource-mention-textarea";
 
 const dom = new Window({ url: "http://localhost/" });
-for (const key of ["window", "document", "navigator", "Element", "Node", "HTMLElement", "HTMLTextAreaElement", "MutationObserver", "ResizeObserver"] as const) {
+for (const key of ["window", "document", "navigator", "Element", "Node", "HTMLElement", "HTMLTextAreaElement", "SVGElement", "ShadowRoot", "MutationObserver", "ResizeObserver"] as const) {
     Object.defineProperty(globalThis, key, { configurable: true, value: key === "window" ? dom : dom[key] });
 }
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom) });
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, getComputedStyle: dom.getComputedStyle.bind(dom), requestAnimationFrame: dom.requestAnimationFrame.bind(dom), cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom) });
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { MentionMenu } = await import("../../src/components/canvas/canvas-mention-menu");
@@ -15,7 +15,53 @@ const { CanvasResourceMentionTextarea } = await import("../../src/components/can
 const { buildToolMentionReference, canvasResourceMentionToken } = await import("../../src/lib/canvas/canvas-resource-references");
 const { renderEditableContent, serializeEditableValue, setEditableSelection, getEditableSelection } = await import("../../src/components/canvas/canvas-mention-editable");
 const { getNineGridMenuItems } = await import("../../src/components/canvas/canvas-image-toolbar-tools");
+const { CanvasNineGridPicker } = await import("../../src/components/canvas/canvas-nine-grid-picker");
+const { ConfigProvider } = await import("antd");
 afterAll(() => dom.happyDOM.abort());
+
+test("提示词预设回显当前选项，改选四视图只提交一次并收起菜单", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const selections: Array<[number, string, string]> = [];
+    const render = (selectedToolId: number) =>
+        root.render(
+            <ConfigProvider theme={{ token: { motion: false } }}>
+                <CanvasNineGridPicker
+                    selectedToolId={selectedToolId}
+                    onSelect={(id, label, icon) => {
+                        selections.push([id, label, icon]);
+                        render(id);
+                    }}
+                />
+            </ConfigProvider>,
+        );
+    try {
+        await act(async () => render(85));
+        const trigger = host.querySelector("button")!;
+        await act(async () => trigger.click());
+        const option = (id: number) => document.querySelector<HTMLElement>(`[role="menuitemradio"][data-preset-id="${id}"]`)!;
+        expect(option(85).getAttribute("aria-checked")).toBe("true");
+        expect(option(1000089).getAttribute("aria-checked")).toBe("false");
+        await act(async () => option(1000089).click());
+        expect(selections).toEqual([[1000089, "角色四视图", "ContactRound"]]);
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+        await act(async () => trigger.click());
+        expect(option(1000089).getAttribute("aria-checked")).toBe("true");
+        expect(option(85).getAttribute("aria-checked")).toBe("false");
+        await act(async () => option(85).focus());
+        expect(document.querySelector(".canvas-tool-menu-detail")!.textContent).toContain(option(85).getAttribute("aria-description")!);
+        await act(async () => option(85).dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+        expect(document.activeElement).toBe(trigger);
+        await act(async () => trigger.click());
+        await act(async () => trigger.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+        expect(trigger.getAttribute("aria-expanded")).toBe("false");
+        expect(selections).toHaveLength(1);
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
 
 test("参考栏加号复用引用菜单，取消不写入，选择时插入到光标", async () => {
     const host = document.createElement("div");

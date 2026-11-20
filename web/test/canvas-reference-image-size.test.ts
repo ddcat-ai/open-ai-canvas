@@ -155,6 +155,24 @@ describe("图生图默认跟随参考图比例", () => {
         expect(generated.quality).toBe("2k");
     });
 
+    test("四视图使用横向画幅；切回原图预设还原竖图，手选尺寸始终优先", () => {
+        const config = aspectRatioConfig();
+        const portrait = { width: 1080, height: 1920 };
+        const sheet = "@[tool:nine_grid:1000089:角色四视图:ContactRound]";
+        const camera = "@[tool:nine_grid:79:多机位九宫格:Grid3x3]";
+        for (const [prompt, manual, expected] of [
+            [sheet, false, "16:9"],
+            [camera, false, "9:16"],
+            ["", false, "9:16"],
+            [sheet, true, "1:1"],
+        ] as const) {
+            const draft = imageNode("draft", { composerContent: prompt, ...(manual ? { size: "1:1", imageSizeSource: "user" } : {}) });
+            expect(buildNodeConfig(config, draft, "image", { capability: "image" }, portrait).size).toBe(expected);
+            expect(buildGenerationConfig(config, draft, "image", undefined, false, portrait).size).toBe(expected);
+        }
+        expect(buildGenerationConfig(config, imageNode("text-only", { composerContent: sheet }), "image").size).toBe("16:9");
+    });
+
     test("切换模型保留兼容的用户比例，不重新跟随参考图", () => {
         const node = imageNode("node", { model: "relay::old-image", size: "1:1", imageSizeSource: "user" });
         const config = aspectRatioConfig();

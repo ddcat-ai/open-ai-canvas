@@ -24,6 +24,7 @@ type CompactMenuItem = {
 type CanvasVideoPromptToolsProps = {
     metadata?: CanvasNodeMetadata;
     frameOptions: VideoFrameOption[];
+    singleFrame?: boolean;
     onMetadataChange: (patch: Partial<CanvasNodeMetadata>) => void;
     referenceMode?: "frames" | "all";
     referenceSummary?: { imageCount: number; videoCount: number; audioCount: number };
@@ -36,7 +37,7 @@ const MENU_MARGIN = 8;
 const MENU_ITEM_HEIGHT = 28;
 const CONTROL_TEXT_STYLE: CSSProperties = { fontFamily: "inherit", fontSize: 11, fontWeight: 400, letterSpacing: 0, lineHeight: 1 };
 
-export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChange, referenceMode = "frames", referenceSummary, disabled }: CanvasVideoPromptToolsProps) {
+export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChange, referenceMode = "frames", referenceSummary, singleFrame, disabled }: CanvasVideoPromptToolsProps) {
     const { t } = useTranslation();
     const theme = canvasThemes[useActiveTheme()];
     const startFrame = metadata?.videoStartFrameNodeId || EMPTY_FRAME_VALUE;
@@ -85,17 +86,28 @@ export function CanvasVideoPromptTools({ metadata, frameOptions, onMetadataChang
                 disabled={disabled}
                 onChange={(value) => setFrame("videoStartFrameNodeId", value)}
             />
-            <button
-                type="button"
-                className="canvas-video-frame-swap"
-                title={t("canvasC.videoPromptTools.swap")}
-                aria-label={t("canvasC.videoPromptTools.swap")}
-                disabled={disabled || !frameOptions.some((item) => item.nodeId === startFrame) || !frameOptions.some((item) => item.nodeId === endFrame)}
-                onClick={() => onMetadataChange({ videoStartFrameNodeId: endFrame, videoEndFrameNodeId: startFrame })}
-            >
-                <ArrowLeftRight aria-hidden />
-            </button>
-            <FrameMenu label={t("canvasC.videoPromptTools.endFrame")} value={endFrame} options={frameOptions.filter((item) => item.nodeId !== startFrame)} theme={theme} disabled={disabled} onChange={(value) => setFrame("videoEndFrameNodeId", value)} />
+            {!singleFrame && (
+                <button
+                    type="button"
+                    className="canvas-video-frame-swap"
+                    title={t("canvasC.videoPromptTools.swap")}
+                    aria-label={t("canvasC.videoPromptTools.swap")}
+                    disabled={disabled || !frameOptions.some((item) => item.nodeId === startFrame) || !frameOptions.some((item) => item.nodeId === endFrame)}
+                    onClick={() => onMetadataChange({ videoStartFrameNodeId: endFrame, videoEndFrameNodeId: startFrame })}
+                >
+                    <ArrowLeftRight aria-hidden />
+                </button>
+            )}
+            {(!singleFrame || endFrame !== EMPTY_FRAME_VALUE) && (
+                <FrameMenu
+                    label={t("canvasC.videoPromptTools.endFrame")}
+                    value={endFrame}
+                    options={singleFrame ? [] : frameOptions.filter((item) => item.nodeId !== startFrame)}
+                    theme={theme}
+                    disabled={disabled}
+                    onChange={(value) => setFrame("videoEndFrameNodeId", value)}
+                />
+            )}
         </div>
     );
 }

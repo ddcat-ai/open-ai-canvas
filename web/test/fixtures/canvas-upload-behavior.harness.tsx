@@ -84,8 +84,12 @@ mock.module("@/services/project-asset-sync", () => ({
 const { useCanvasUpload } = await import("@/pages/canvas/use-canvas-upload");
 const { VideoPreviewPlayButton } = await import("@/components/canvas/canvas-node-media-content");
 const { assetPickerItemsToInsertPayloads } = await import("@/components/canvas/asset-picker-modal");
+const { buildVideoRemakeDraft } = await import("@/lib/canvas/canvas-video-remake");
+const { defaultConfig } = await import("@/stores/use-config-store");
 let api: ReturnType<typeof useCanvasUpload>;
 const nodesRef = { current: [] as CanvasNodeData[] };
+const selectedNodeIdsRef = { current: new Set<string>() };
+let dialogNodeId: string | null = null;
 const setNodes = (action: React.SetStateAction<CanvasNodeData[]>) => {
     nodesRef.current = typeof action === "function" ? action(nodesRef.current) : action;
 };
@@ -93,14 +97,18 @@ function Harness() {
     api = useCanvasUpload({
         canvasId: "canvas",
         nodesRef,
-        selectedNodeIdsRef: { current: new Set() },
+        selectedNodeIdsRef,
         getCanvasCenter: () => ({ x: 0, y: 0 }),
         screenToCanvas: () => ({ x: 0, y: 0 }),
         setNodes,
-        setSelectedNodeIds: silent,
+        setSelectedNodeIds: (value) => {
+            selectedNodeIdsRef.current = typeof value === "function" ? value(selectedNodeIdsRef.current) : value;
+        },
         setSelectedConnectionId: silent,
         setContextMenu: silent,
-        setDialogNodeId: silent,
+        setDialogNodeId: (value) => {
+            dialogNodeId = typeof value === "function" ? value(dialogNodeId) : value;
+        },
     });
     return null;
 }
@@ -109,6 +117,8 @@ let root: ReturnType<typeof createRoot> | undefined;
 beforeEach(async () => {
     setActiveUserScope("upload-behavior-test");
     nodesRef.current = [];
+    selectedNodeIdsRef.current = new Set();
+    dialogNodeId = null;
     persisted.length = 0;
     pending.clear();
     deferUploads = false;
@@ -134,6 +144,28 @@ afterAll(() => {
     dom.happyDOM.abort();
 });
 const options = { quiet: { nodeId: "upload" } };
+
+test("复刻面板选择文件填入原槽位，拖入替换素材会得到独立节点，两次上传均保持草稿选中", async () => {
+    const video: CanvasNodeData = { id: "video", title: "样片", type: CanvasNodeType.Video, position: { x: 0, y: 0 }, width: 320, height: 180, metadata: { content: "clip.mp4" } };
+    const draft = buildVideoRemakeDraft(video.id, [video], [], defaultConfig);
+    const slot = draft.nodes.find((node) => node.type === CanvasNodeType.Image)!;
+    nodesRef.current = draft.nodes;
+    selectedNodeIdsRef.current = new Set([draft.target.id]);
+    dialogNodeId = draft.target.id;
+    await act(async () => {
+        api.handleUploadRequest(slot.id, undefined, { preserveSelection: true });
+        await api.handleImageInputChange({ target: { files: [new File(["image"], "first.png", { type: "image/png" })], value: "" } } as unknown as React.ChangeEvent<HTMLInputElement>);
+    });
+    expect(nodesRef.current.find((node) => node.id === slot.id)?.metadata?.storageKey).toBe("resource:first.png");
+    let replacementId: string | null = null;
+    await act(async () => {
+        replacementId = await api.createFileNode(new File(["image"], "second.png", { type: "image/png" }), slot.position, undefined, { preserveSelection: true });
+    });
+    expect(nodesRef.current.find((node) => node.id === replacementId)?.metadata?.storageKey).toBe("resource:second.png");
+    expect(nodesRef.current.find((node) => node.id === slot.id)?.metadata?.storageKey).toBe("resource:first.png");
+    expect(selectedNodeIdsRef.current).toEqual(new Set([draft.target.id]));
+    expect(dialogNodeId).toBe(draft.target.id);
+});
 
 test("audio upload display names omit the extension while all media retain the entire filename in metadata", async () => {
     for (const [name, type, title] of [

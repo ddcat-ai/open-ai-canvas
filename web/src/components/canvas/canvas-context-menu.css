@@ -1,0 +1,10 @@
+.canvas-context-panel {
+    --canvas-context-top-inset: calc(var(--space-16) + var(--space-1));
+    top: 0;
+    max-height: calc(100dvh - var(--canvas-context-top-inset) - var(--space-3));
+    translate: 0 clamp(var(--canvas-context-top-inset), var(--canvas-context-anchor-y), calc(100dvh - 100% - var(--space-3)));
+}
+
+.canvas-context-panel .canvas-menu-item {
+    transition-property: color, opacity;
+}

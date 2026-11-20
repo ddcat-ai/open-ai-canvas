@@ -43,6 +43,7 @@ import { resolveAddNodeMenuCommands, type AddNodeMenuContext } from "@/lib/canva
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { CanvasNodeType, type CanvasFrameColor, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import "./canvas-context-menu.css";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
@@ -204,7 +205,7 @@ export function CanvasNodeContextMenu({
     const versionMenuButton = onOpenVersions ? (
         <MenuButton icon={<History />} label="版本历史" badge={versionCount > 1 ? String(versionCount) : undefined} detail={versionDetail} disabled={!canOpenVersions} onClick={() => runAction(onOpenVersions)} />
     ) : null;
-    const position = getContextMenuPosition(menu, hasMultiSelection);
+    const position = getContextMenuPosition(menu);
     const skippedDownloadCount = Math.max(0, selectedCount - downloadableSelectionCount);
     const downloadSelectionButton = hasMultiSelection ? (
         <MenuButton
@@ -224,14 +225,22 @@ export function CanvasNodeContextMenu({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-                className="aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[224px] max-h-[calc(100vh-56px)] origin-top-left flex-col overflow-hidden rounded-[var(--r-lg)] border p-1.5 backdrop-blur-2xl backdrop-saturate-150"
+                className="canvas-context-panel aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[224px] origin-top-left flex-col overflow-hidden rounded-[var(--r-lg)] border p-2 backdrop-blur-2xl backdrop-saturate-150"
                 style={
-                    { left: position.left, top: position.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, "--menu-hover": theme.toolbar.itemHover, "--tw-ring-color": theme.node.muted } as CSSProperties
+                    {
+                        left: position.left,
+                        "--canvas-context-anchor-y": `${position.top}px`,
+                        background: theme.spatial.elevated,
+                        borderColor: theme.toolbar.border,
+                        color: theme.node.text,
+                        "--menu-hover": theme.toolbar.itemHover,
+                        "--tw-ring-color": theme.node.muted,
+                    } as CSSProperties
                 }
                 onContextMenu={(event) => event.preventDefault()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <div className="thin-scrollbar min-h-0 space-y-1 overflow-y-auto">
+                <div className="thin-scrollbar flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain [&>*]:shrink-0">
                     {menu.type === "node" && isFrame && frameColorOpen ? (
                         <>
                             <MenuHeader title="设置背板颜色" description={node?.title} onBack={() => setFrameColorOpen(false)} />
@@ -270,7 +279,7 @@ export function CanvasNodeContextMenu({
                                     <MenuDivider />
                                 </>
                             ) : null}
-                            <MenuButton icon={<Plus className="size-4" />} label="添加节点" chevron active={addOpen} onClick={() => setAddOpen((value) => !value)} />
+                            <MenuButton icon={<Plus className="size-4" />} label="添加节点" expanded={addOpen} onClick={() => setAddOpen((value) => !value)} />
                             <MenuButton icon={<Upload className="size-4" />} label="上传到这里" onClick={() => runAction(onUpload)} />
                             {!isProjectLinked ? <MenuButton icon={<FolderOpen className="size-4" />} label="从素材库插入" onClick={() => runAction(onOpenAssets)} /> : null}
                             <MenuDivider />
@@ -452,8 +461,9 @@ function AddNodeContextMenu({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-            className="aceternity-floating-panel fixed z-[var(--z-popover)] w-[360px] origin-top overflow-hidden rounded-[var(--r-lg)] border p-1.5 backdrop-blur-2xl backdrop-saturate-150"
-            style={{ left, top: parentPosition.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
+            className="canvas-context-panel aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[360px] max-w-[calc(100vw-24px)] origin-top flex-col overflow-hidden rounded-[var(--r-lg)] border p-2 backdrop-blur-2xl backdrop-saturate-150"
+            contentClassName="thin-scrollbar relative z-[1] min-h-0 overflow-y-auto overscroll-contain"
+            style={{ left, "--canvas-context-anchor-y": `${parentPosition.top}px`, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text } as CSSProperties}
             onContextMenu={(event) => event.preventDefault()}
             onPointerDown={(event) => event.stopPropagation()}
         >
@@ -511,6 +521,7 @@ function MenuButton({
     shortcut,
     badge,
     chevron = false,
+    expanded,
     active = false,
     disabled = false,
     danger = false,
@@ -522,6 +533,7 @@ function MenuButton({
     shortcut?: string;
     badge?: string;
     chevron?: boolean;
+    expanded?: boolean;
     active?: boolean;
     disabled?: boolean;
     danger?: boolean;
@@ -533,9 +545,10 @@ function MenuButton({
     return (
         <button
             type="button"
-            className={`canvas-menu-item group flex w-full items-center gap-2.5 rounded-[var(--r-md)] px-2 text-left outline-none enabled:hover:bg-[var(--menu-item-hover)] focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40 ${detail ? "min-h-11 py-1.5" : "h-8"}`}
+            className={`canvas-menu-item group flex w-full items-center gap-2.5 rounded-[var(--r-md)] px-2.5 text-left outline-none enabled:hover:bg-[var(--menu-item-hover)] focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40 ${detail ? "min-h-11 py-1.5" : "h-9"}`}
             style={{ color, background: active ? theme.toolbar.activeBg : undefined, "--menu-item-hover": danger ? `${theme.accent.danger}1a` : "var(--menu-hover)" } as CSSProperties}
             disabled={disabled}
+            aria-expanded={expanded}
             onClick={onClick}
         >
             <span className={`canvas-menu-item-icon grid size-4 shrink-0 place-items-center [&_svg]:size-4 [&_svg]:stroke-[1.75] ${detail ? "self-start mt-0.5" : ""} ${danger || active ? "" : "opacity-60 group-hover:opacity-100"}`}>{icon}</span>
@@ -559,23 +572,26 @@ function MenuButton({
                     {shortcut}
                 </kbd>
             ) : null}
-            {chevron ? <ChevronRight className="size-3.5 shrink-0" style={{ color: theme.node.faint }} /> : null}
+            {chevron || expanded !== undefined ? (
+                <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-[var(--r-sm)]" style={{ color: expanded ? theme.node.text : theme.node.faint, background: expanded ? theme.toolbar.activeBg : undefined }}>
+                    <ChevronRight className="size-3.5" />
+                </span>
+            ) : null}
         </button>
     );
 }
 
 function MenuDivider() {
     const theme = canvasThemes[useActiveTheme()];
-    return <div role="separator" className="mx-2 my-1.5 h-px" style={{ background: theme.toolbar.border, opacity: 0.7 }} />;
+    return <div role="separator" className="mx-2 my-1 h-px" style={{ background: theme.toolbar.border, opacity: 0.7 }} />;
 }
 
-function getContextMenuPosition(menu: ContextMenuState, hasMultiSelection = false) {
+function getContextMenuPosition(menu: ContextMenuState) {
     if (typeof window === "undefined") return { left: menu.x, top: menu.y };
     const width = 224;
-    const estimatedHeight = menu.type === "node" ? Math.min(hasMultiSelection ? 290 : 360, window.innerHeight - 72) : menu.type === "canvas" ? (hasMultiSelection ? 350 : 250) : 84;
     return {
         left: clamp(menu.x, 12, Math.max(12, window.innerWidth - width - 12)),
-        top: clamp(menu.y, 68, Math.max(68, window.innerHeight - estimatedHeight - 12)),
+        top: menu.y,
     };
 }
 

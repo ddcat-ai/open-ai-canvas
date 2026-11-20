@@ -1,4 +1,5 @@
 import { mediaSettingIssues } from "@/lib/media-settings";
+import { modelCapabilityConfigFor, videoProfileForOperation } from "@/lib/model-capabilities";
 import { InputNumber } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Tooltip } from "@/components/ui/base/tooltip";
@@ -18,6 +19,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { modelQuoteDescription, modelQuoteRequest } from "@/lib/model-pricing";
 import { modelCompatibilityError, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
 import { canvasVideoFrameIssue, canvasVideoOperation, canvasVideoReferenceMode, usesProjectedVideoReferences, videoMediaMentionIssue, videoReferenceOperation } from "@/lib/canvas/canvas-video-reference-mode";
+import { videoRemakeInputIssue } from "@/lib/canvas/canvas-video-regeneration";
 import { useGenerationBatchLimit, batchQuoteTotal } from "@/lib/generation-batch-limit";
 import { getGenerationCount } from "@/lib/canvas/canvas-project-generation";
 import type { ImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
@@ -79,6 +81,7 @@ type CanvasNodePromptPanelProps = {
     onReorderReferences?: (nodeId: string, orderedNodeIds: string[]) => void;
     onReplaceReference?: (nodeId: string, oldReference: CanvasResourceReference, sourceNodeId: string) => void;
     onReplaceReferenceFiles?: (nodeId: string, oldReference: CanvasResourceReference, files: File[]) => void;
+    onUploadRemakeImage?: () => void;
     onClose?: () => void;
     onNodeMouseDown?: (event: ReactPointerEvent, nodeId: string) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
@@ -118,6 +121,7 @@ export function CanvasNodePromptPanel({
     onReorderReferences,
     onReplaceReference,
     onReplaceReferenceFiles,
+    onUploadRemakeImage,
     onClose,
     onNodeMouseDown,
     onImageSettingsOpenChange,
@@ -230,6 +234,8 @@ export function CanvasNodePromptPanel({
         options: modelRequestOptions(config, mode),
         videoSeconds: mode === "video" ? config.videoSeconds : undefined,
     };
+    const videoProfile = mode === "video" ? modelCapabilityConfigFor(config, config.model).video : undefined;
+    const singleFrame = videoProfile?.modeLimits?.image_to_video?.maxImages === 1;
     const promptOptimizerProvider = useMemo(() => {
         if (!promptOptimizerEnabled || !promptOptimizerInstallation || !promptOptimizerPlugin.createPromptOptimizer) return null;
         return promptOptimizerPlugin.createPromptOptimizer(createPluginHostContext(promptOptimizerPlugin, promptOptimizerInstallation, globalConfig));
@@ -286,7 +292,8 @@ export function CanvasNodePromptPanel({
               )
             : "";
     const mentionIssue = (videoMode === "text" || videoMode === "frames") && mediaMentions.some((item) => videoMode === "text" || !frameIds.includes(item.nodeId)) ? videoMediaMentionIssue(videoMode) : "";
-    const videoIssue = frameIssue || mentionIssue || (videoMode && config.model ? modelCompatibilityError(config, config.model, resolvedRequirements) : "");
+    const remakeIssue = videoRemakeInputIssue(node.metadata, inputSummary.imageCount + inputSummary.characterCount, inputSummary.videoDurationsMs || [], config);
+    const videoIssue = remakeIssue || frameIssue || mentionIssue || (videoMode && config.model ? modelCompatibilityError(config, config.model, resolvedRequirements) : "");
     const isSubmitDisabled = Boolean(settingsError || videoIssue || !prompt.trim() || isRunning);
     const canExpandPrompt = mode === "image" || mode === "video";
     const canOptimizePrompt = Boolean(promptOptimizerProvider) && canExpandPrompt;
@@ -382,14 +389,18 @@ export function CanvasNodePromptPanel({
 
     const changeVideoMode = (next: CanvasVideoReferenceMode) => {
         if (next === videoMode && !usesProjectedVideoReferences(node)) return;
+        const operation = videoReferenceOperation(
+            next,
+            inputReferences.some((item) => item.kind === "image" || item.kind === "video" || item.kind === "character"),
+        );
+        const nextProfile = videoProfile?.modeLimits?.[operation] && videoProfileForOperation(videoProfile, operation);
         onConfigChange(node.id, {
             videoReferenceMode: next,
-            videoEditOperation: videoReferenceOperation(
-                next,
-                inputReferences.some((item) => item.kind === "image" || item.kind === "video" || item.kind === "character"),
-            ),
+            ...(node.metadata?.videoRemake ? { videoRemake: undefined } : {}),
+            videoEditOperation: operation,
+            ...(nextProfile?.ratios.length && !nextProfile.ratios.includes(config.size) ? { size: nextProfile.defaultRatio } : {}),
             videoStartFrameNodeId: next === "frames" ? videoFrameOptions[0]?.nodeId : undefined,
-            videoEndFrameNodeId: next === "frames" ? videoFrameOptions[1]?.nodeId : undefined,
+            videoEndFrameNodeId: next === "frames" && !singleFrame ? videoFrameOptions[1]?.nodeId : undefined,
         });
     };
 
@@ -441,7 +452,7 @@ export function CanvasNodePromptPanel({
                             options={[
                                 { value: "text", label: t("canvasC.videoPromptTools.textMode") },
                                 { value: "all", label: t("canvasC.videoPromptTools.allMode"), disabled: !hasMedia },
-                                { value: "frames", label: t("canvasC.videoPromptTools.frameMode"), disabled: !videoFrameOptions.length && videoMode !== "frames" },
+                                { value: "frames", label: t(singleFrame ? "canvasC.videoPromptTools.startFrame" : "canvasC.videoPromptTools.frameMode"), disabled: !videoFrameOptions.length && videoMode !== "frames" },
                             ]}
                             onChange={changeVideoMode}
                         />
@@ -465,6 +476,7 @@ export function CanvasNodePromptPanel({
                                     open={expanded ? expandedNineGridOpen : nineGridOpen}
                                     onOpenChange={expanded ? setExpandedNineGridOpen : setNineGridOpen}
                                     icon={activeNineGridIcon}
+                                    selectedToolId={activeNineGridTool?.toolId}
                                     onSelect={(id, label, icon) => updatePromptFromCurrent((currentPrompt) => applyToolMention(currentPrompt, { id, label, type: "nine_grid" }, icon))}
                                 />
                             </>
@@ -639,7 +651,12 @@ export function CanvasNodePromptPanel({
                             />
                         </>
                     ) : mode === "video" ? (
-                        <CanvasVideoSettingsPopover config={config} buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
+                        <CanvasVideoSettingsPopover
+                            config={config}
+                            operation={resolvedRequirements.videoOperation}
+                            buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3"
+                            onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
+                        />
                     ) : mode === "audio" ? (
                         <CanvasAudioSettingsPopover
                             config={{ ...config, audioVoiceBindings: canvasAudioVoiceBindings(node.metadata) }}
@@ -702,12 +719,18 @@ export function CanvasNodePromptPanel({
                 {!expanded && <PromptResizeHandle height={height} min={bounds.min} max={bounds.max} onResize={setManualPromptHeight} />}
                 {videoMode === "frames" && (
                     <div className="canvas-node-composer-parameters shrink-0">
-                        <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} disabled={Boolean(node.metadata?.locked) || isRunning} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
+                        <CanvasVideoPromptTools metadata={node.metadata} frameOptions={videoFrameOptions} singleFrame={singleFrame} disabled={Boolean(node.metadata?.locked) || isRunning} onMetadataChange={(patch) => onConfigChange(node.id, patch)} />
                     </div>
                 )}
                 {videoIssue ? (
                     <span role="status" className="canvas-video-reference-issue">
                         {videoIssue}
+                        {onUploadRemakeImage && !inputSummary.imageCount && !inputSummary.characterCount ? (
+                            <button type="button" className="ms-2 inline-flex items-center gap-1 underline" onClick={onUploadRemakeImage}>
+                                <ImagePlus className="size-3.5" aria-hidden="true" />
+                                上传参考图
+                            </button>
+                        ) : null}
                     </span>
                 ) : null}
             </>

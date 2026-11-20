@@ -16,6 +16,7 @@ import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import { interruptFileUpload } from "@/lib/canvas/canvas-file-upload";
 import { isCanvasWorkflowProvider, resolveCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
 import { canvasVideoOperation, canvasVideoReferenceMode, usesProjectedVideoReferences } from "./canvas-video-reference-mode";
+import { videoRemakeInputIssue } from "./canvas-video-regeneration";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasImageGenerationType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasVideoEditOperation } from "@/types/canvas";
 import type { ReferenceImage } from "@/types/image";
@@ -332,6 +333,13 @@ export function buildVideoGenerationMetadata(
 ): CanvasNodeMetadata {
     const metadata = node?.metadata;
     const referenceImageIds = new Set((context?.referenceImages || []).map((image) => image.id));
+    const remakeIssue = videoRemakeInputIssue(
+        metadata,
+        context?.referenceImages.length || 0,
+        (context?.referenceVideos || []).map((video) => video.durationMs ?? 0),
+        config,
+    );
+    if (remakeIssue) throw new Error(remakeIssue);
     const workflowVideo = node?.type === CanvasNodeType.Config && (config?.taskWorkflowProvider === "runninghub" || isCanvasWorkflowProvider(metadata));
     const videoMode = canvasVideoReferenceMode(node, referenceImageIds.size > 0);
     const useFrames = !workflowVideo && (videoMode === undefined || videoMode === "frames" || usesProjectedVideoReferences(node));

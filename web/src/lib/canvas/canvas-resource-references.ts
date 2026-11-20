@@ -601,7 +601,7 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
                 drawingId: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingId : undefined,
                 drawingRevision: node.type === CanvasNodeType.Drawing ? node.metadata?.drawingRevision : undefined,
                 mediaUrl: kind === "audio" ? node.metadata?.content : undefined,
-                durationMs: kind === "audio" ? node.metadata?.durationMs : undefined,
+                durationMs: kind === "audio" || kind === "video" ? node.metadata?.durationMs : undefined,
                 text:
                     node.metadata?.workflowKind === "character"
                         ? node.metadata.characterPrompt
