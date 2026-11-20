@@ -492,7 +492,7 @@ cd docs && bun run types:check
 <td align="center" width="20%"><strong>vv</strong><br><sub>2838033228@qq.com</sub></td>
 <td align="center" width="20%"><strong>克里斯</strong><br><sub><a href="https://artbox.top">artbox.top</a></sub></td>
 <td align="center" width="20%"><strong>宇熙</strong><br><sub>53121904@qq.com</sub></td>
-<td align="center" width="20%"><strong>落羽</strong><br><sub>luoyyv66@gmail.com</sub></td>
+<td align="center" width="20%"><strong>落羽</strong><br><sub>luoyv66@gmail.com</sub></td>
 <td align="center" width="20%"><strong>今夕何在</strong><br><sub>809321478@qq.com</sub></td>
 </tr>
 <tr>
