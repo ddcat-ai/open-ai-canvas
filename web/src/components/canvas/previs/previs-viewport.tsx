@@ -575,9 +575,7 @@ function PrevisSceneContent({
     const containerAspect = size.width / Math.max(size.height, 1);
     const rawCamFraming = resolvePrevisViewFraming({ scene, mode: viewMode, playhead, cameraId: selectedCameraId, viewportAspect: containerAspect });
     const shotAspect = previsAspectValue(resolvePrevisActiveShot(scene)?.aspectRatio, containerAspect);
-    const camFraming = rawCamFraming
-        ? { ...rawCamFraming, fov: resolvePrevisContainerFov(rawCamFraming.fov, shotAspect, containerAspect), far: scene.world ? Math.max(rawCamFraming.far, PREVIS_WORLD_CAMERA_FAR) : rawCamFraming.far }
-        : null;
+    const camFraming = rawCamFraming ? { ...rawCamFraming, fov: resolvePrevisContainerFov(rawCamFraming.fov, shotAspect, containerAspect), far: scene.world ? Math.max(rawCamFraming.far, PREVIS_WORLD_CAMERA_FAR) : rawCamFraming.far } : null;
     const orthoFraming = resolvePrevisOrthographicFraming({ scene, mode: viewMode });
     const effectiveViewport = resolvePrevisEffectiveViewport({ mode: viewMode, framing: camFraming });
     const setTransformingState = useCallback(
@@ -2029,19 +2027,7 @@ function PrevisObjectGizmo({
             group?.children.filter((child) => child.name === "XY" || child.name === "YZ" || child.name === "XYZ").forEach((child) => group.remove(child));
         }
     }, [target, transformMode]);
-    return (
-        <TransformControls
-            ref={controlsRef}
-            object={target}
-            mode={transformMode}
-            size={0.62}
-            showX={!yawOnly}
-            showY
-            showZ={!yawOnly}
-            onMouseDown={() => transaction.begin()}
-            onMouseUp={() => transaction.end("commit")}
-        />
-    );
+    return <TransformControls ref={controlsRef} object={target} mode={transformMode} size={0.62} showX={!yawOnly} showY showZ={!yawOnly} onMouseDown={() => transaction.begin()} onMouseUp={() => transaction.end("commit")} />;
 }
 
 /**

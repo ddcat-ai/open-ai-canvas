@@ -70,7 +70,16 @@ export function resolvePrevisCameraFollowShotSize(value: string | undefined) {
     return value ? PREVIS_CAMERA_FOLLOW_SHOT_SIZES.find((item) => item.value === value) : undefined;
 }
 
-const number = (key: PrevisCameraNumberParamKey, label: string, unit: string, min: number, max: number, step: number, extra: { defaultValue?: number; autoHint?: string } = {}): PrevisCameraParamSpec => ({ kind: "number", key, label, unit, min, max, step, ...extra });
+const number = (key: PrevisCameraNumberParamKey, label: string, unit: string, min: number, max: number, step: number, extra: { defaultValue?: number; autoHint?: string } = {}): PrevisCameraParamSpec => ({
+    kind: "number",
+    key,
+    label,
+    unit,
+    min,
+    max,
+    step,
+    ...extra,
+});
 const AIM = number("aim", "注视高度", "米", 0, 20, 0.1, { autoHint: "胸口" });
 const INTENSITY = number("intensity", "强度", "", 0.1, 3, 0.1, { defaultValue: 1 });
 const SIDE: PrevisCameraParamSpec = { kind: "side", key: "side", label: "方位" };

@@ -173,7 +173,12 @@ describe("previs actor travel and markers", () => {
     test("marker labels advance A, B … and skip used ones", async () => {
         const { nextPrevisMarkerLabel } = await import("@/components/canvas/previs/previs-point-menu");
         expect(nextPrevisMarkerLabel([])).toBe("A");
-        expect(nextPrevisMarkerLabel([{ id: "1", label: "A", position: [0, 0, 0] }, { id: "2", label: "C", position: [0, 0, 0] }])).toBe("B");
+        expect(
+            nextPrevisMarkerLabel([
+                { id: "1", label: "A", position: [0, 0, 0] },
+                { id: "2", label: "C", position: [0, 0, 0] },
+            ]),
+        ).toBe("B");
     });
 
     test("fog thins when the camera rises so a zoomed-out city does not wash out", async () => {

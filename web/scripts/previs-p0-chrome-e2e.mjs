@@ -397,9 +397,11 @@ async function openUnifiedWorkbench(cdp, label) {
 
 /** 使用当前产品流程从预设库加入一个真实道具，不依赖旧版快捷菜单。 */
 async function addProp(cdp, name, label) {
+    if (!(await cdp.click('[aria-label="场景对象列表"]'))) throw new Error(`${label}: 场景对象列表 button not clickable`);
     if (!(await cdp.click('[aria-label="添加到场景"]'))) throw new Error(`${label}: 添加到场景 button not clickable`);
     if (!(await cdp.poll(`!!document.querySelector('.previs-add-dialog [role="tab"]')`, `${label} add dialog`, 10000))) throw new Error(`${label}: add dialog did not open`);
     if (!(await cdp.clickText("道具", '[role="tab"]'))) throw new Error(`${label}: 道具 tab not clickable`);
+    if (!(await cdp.clickText("室内家具"))) throw new Error(`${label}: 室内家具 category not clickable`);
 
     const card = `[...document.querySelectorAll('.previs-add-dialog__card')].find((button) => (button.textContent || '').includes(${JSON.stringify(name)}) && button.getClientRects().length > 0)`;
     if (!(await cdp.poll(`!!(${card})`, `${label} prop card`, 10000))) throw new Error(`${label}: ${name} prop card not visible`);
@@ -493,13 +495,13 @@ async function smokeWorkbench(cdp, baseUrl) {
     if (!(await cdp.click('button[data-mode="layout"]'))) throw new Error("A: 摆场模式按钮不可点击");
     assert(await cdp.poll(`document.querySelectorAll('.previs-sequencer').length === 0`, "layout hides sequencer", 10000), "A7b 回到摆场模式隐藏时间轴");
 
-    await addProp(cdp, "单人沙发", "A");
-    const propAppeared = await cdp.poll(`!!document.querySelector('[aria-label="删除 单人沙发"]')`, "prop row", 20000);
+    await addProp(cdp, "沙发", "A");
+    const propAppeared = await cdp.poll(`!!document.querySelector('[aria-label="删除 沙发"]')`, "prop row", 20000);
     assert(propAppeared, "A10 added prop appears in object list");
 
     const undone = await cdp.click('[aria-label="撤销"]');
     if (!undone) throw new Error("A: 撤销 button not clickable");
-    const propGone = await cdp.poll(`!document.querySelector('[aria-label="删除 单人沙发"]')`, "prop removed by undo", 20000);
+    const propGone = await cdp.poll(`!document.querySelector('[aria-label="删除 沙发"]')`, "prop removed by undo", 20000);
     assert(propGone, "A11 Undo removes the added prop");
 
     // 场景结束前必须真实关闭：下一个场景要重新导航，不能靠忽略 beforeunload 绕过未保存态。
@@ -626,6 +628,7 @@ async function deleteWhileLoading(cdp, baseUrl) {
         const opened = await cdp.click('[data-testid="toggle-workbench"]');
         if (!opened) throw new Error("D: toggle-workbench not clickable");
         await openUnifiedWorkbench(cdp, "D");
+        if (!(await cdp.click('[aria-label="场景对象列表"]'))) throw new Error("D: 场景对象列表 button not clickable");
 
         const rowReady = await cdp.poll(`!!document.querySelector('[aria-label="删除 本地模型 repro triangle"]')`, "model row", 30000);
         assert(rowReady, "D1 model row present while load still in flight");
@@ -754,7 +757,7 @@ async function saveFailureCloseGuard(cdp, baseUrl) {
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.previs-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "F2 workbench open with real canvas");
 
-    await addProp(cdp, "单人沙发", "F");
+    await addProp(cdp, "沙发", "F");
 
     const errorState = await cdp.poll(`(document.body.innerText || "").includes('保存失败')`, "save failure header", 40000);
     assert(errorState, "F3 header surfaces 保存失败 after forced flush failure");

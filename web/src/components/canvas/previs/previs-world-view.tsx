@@ -70,7 +70,13 @@ export function PrevisWorldView({ world, renderMode }: { world: PrevisWorld; ren
                     ref={(sky: Object3D | null) => {
                         if (sky) Object.assign(sky.userData, DATA_PASS_EXCLUDE);
                     }}
-                    distance={SKY_DISTANCE} sunPosition={lighting.sunDirection.toArray()} turbidity={lighting.turbidity} rayleigh={lighting.rayleigh} mieCoefficient={0.004} mieDirectionalG={0.82} />
+                    distance={SKY_DISTANCE}
+                    sunPosition={lighting.sunDirection.toArray()}
+                    turbidity={lighting.turbidity}
+                    rayleigh={lighting.rayleigh}
+                    mieCoefficient={0.004}
+                    mieDirectionalG={0.82}
+                />
             ) : null}
             <hemisphereLight args={[lighting.skyColor, lighting.groundColor, lighting.hemisphereIntensity]} />
             <directionalLight

@@ -36,7 +36,7 @@ function renderThumbnails(): Map<string, string> {
             const center = bounds.getCenter(new Vector3());
             const radius = Math.max(0.3, bounds.getSize(new Vector3()).length() / 2);
             const direction = new Vector3(1, 0.75, 1.25).normalize();
-            camera.position.copy(center).add(direction.multiplyScalar(radius / Math.sin((camera.fov * Math.PI) / 360) * 0.92));
+            camera.position.copy(center).add(direction.multiplyScalar((radius / Math.sin((camera.fov * Math.PI) / 360)) * 0.92));
             camera.lookAt(center);
             renderer.render(scene, camera);
             result.set(prop.id, canvas.toDataURL("image/png"));

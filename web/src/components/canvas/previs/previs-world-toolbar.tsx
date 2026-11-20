@@ -60,7 +60,7 @@ export function PrevisWorldToolbar({ active, busy, onAction }: { active: Partial
                 </div>
             ))}
             <div className="pv-world-toolbar__group pv-world-toolbar__group--footer" role="group" aria-label="视图">
-                <button type="button" className={`pv-world-toolbar__item is-compact ${active.list ? "is-active" : ""}`} aria-pressed={Boolean(active.list)} title="场景对象列表" onClick={() => onAction("list")}>
+                <button type="button" className={`pv-world-toolbar__item is-compact ${active.list ? "is-active" : ""}`} aria-label="场景对象列表" aria-pressed={Boolean(active.list)} title="场景对象列表" onClick={() => onAction("list")}>
                     <ListTree className="size-4" aria-hidden />
                 </button>
                 <button type="button" className={`pv-world-toolbar__item is-compact ${active.shortcuts ? "is-active" : ""}`} aria-pressed={Boolean(active.shortcuts)} title="快捷键" onClick={() => onAction("shortcuts")}>

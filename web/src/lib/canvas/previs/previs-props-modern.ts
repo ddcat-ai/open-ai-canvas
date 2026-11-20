@@ -19,7 +19,7 @@ function modernHouse(kit: PrevisPropKit) {
     kit.box("accent", w, 3.3, d);
     kit.box("concrete_dark", w + 0.5, 0.25, d + 0.5, 0, 3.3, 0);
     const upperW = w * kit.range(0.55, 0.75);
-    const shift = (w - upperW) / 2 * (kit.rand() > 0.5 ? 1 : -1);
+    const shift = ((w - upperW) / 2) * (kit.rand() > 0.5 ? 1 : -1);
     kit.box("accent", upperW, 3, d * 0.85, shift, 3.55, -d * 0.05);
     kit.box("concrete_dark", upperW + 0.6, 0.25, d * 0.85 + 0.6, shift, 6.55, -d * 0.05);
     kit.box("glass", w * 0.55, 2.4, 0.08, -shift * 0.4, 0.4, d / 2 + 0.02);

@@ -427,7 +427,10 @@ function applyMove(state: State, move: PrevisCameraMoveSegment, time: number, co
             const frequencies = handheld ? [0.6, 1.3, 2.7] : [11, 17, 23];
             const frame = basis(state);
             const shift = handheld ? 0.012 : 0.05;
-            const offset = add(add(scale(frame.right, seededNoise(seed, 0, local, frequencies) * shift * k), scale(frame.up, seededNoise(seed, 1, local, frequencies) * shift * 0.8 * k)), scale(frame.forward, seededNoise(seed, 2, local, frequencies) * shift * 0.6 * k));
+            const offset = add(
+                add(scale(frame.right, seededNoise(seed, 0, local, frequencies) * shift * k), scale(frame.up, seededNoise(seed, 1, local, frequencies) * shift * 0.8 * k)),
+                scale(frame.forward, seededNoise(seed, 2, local, frequencies) * shift * 0.6 * k),
+            );
             const turn = (handheld ? 0.35 : 1.2) * DEG * k;
             const look = Math.max(frame.distance, 1);
             const aim = add(scale(frame.right, Math.tan(seededNoise(seed, 3, local, frequencies) * turn) * look), scale(frame.up, Math.tan(seededNoise(seed, 4, local, frequencies) * turn * 0.8) * look));

@@ -3,7 +3,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { buildPrevisCameraRecipeMoves, createPrevisCameraMove, evaluatePrevisCamera, resolvePrevisSubjectState, samplePrevisCameraPath } from "@/lib/canvas/previs/previs-camera-moves";
-import { describePrevisCameraMove, PREVIS_CAMERA_FOLLOW_SHOT_SIZES, PREVIS_CAMERA_FOLLOW_SIDES, PREVIS_CAMERA_RECIPES, PREVIS_CAMERA_TECHNIQUES, resolvePrevisCameraTechnique, resolvePrevisShotCameraMove } from "@/lib/canvas/previs/previs-camera-techniques";
+import {
+    describePrevisCameraMove,
+    PREVIS_CAMERA_FOLLOW_SHOT_SIZES,
+    PREVIS_CAMERA_FOLLOW_SIDES,
+    PREVIS_CAMERA_RECIPES,
+    PREVIS_CAMERA_TECHNIQUES,
+    resolvePrevisCameraTechnique,
+    resolvePrevisShotCameraMove,
+} from "@/lib/canvas/previs/previs-camera-techniques";
 import { previsAspectValue, previsFramingDistance, previsVerticalFov } from "@/lib/canvas/previs/previs-optics";
 import { compilePrevisPrompt } from "@/lib/canvas/previs/previs-prompt-compiler";
 import { createPrevisActor, createPrevisCamera, createPrevisScene, previsIdentityTransform } from "@/lib/canvas/previs/previs-scene";
@@ -168,10 +176,7 @@ describe("跟拍", () => {
     const horizontalOffset = (camera: PrevisVec3, root: PrevisVec3) => Math.hypot(camera[0] - root[0], camera[2] - root[2]);
 
     test("过肩跟随换到正面：用 blend 秒绕着人物右侧过渡，不穿过身体、不跳变", () => {
-        const { scene, camera } = walkScene((id) => [
-            move("follow", 0, 3.3, { subjectId: id, params: { side: "shoulder" } }),
-            move("follow", 2.4, 3.6, { subjectId: id, params: { side: "front", shotSize: "close_up", lag: 0, blend: 2.1 } }),
-        ]);
+        const { scene, camera } = walkScene((id) => [move("follow", 0, 3.3, { subjectId: id, params: { side: "shoulder" } }), move("follow", 2.4, 3.6, { subjectId: id, params: { side: "front", shotSize: "close_up", lag: 0, blend: 2.1 } })]);
         const hero = scene.objects[0];
         let previous = evaluatePrevisCamera(scene, camera, 2.3).position;
         for (let time = 2.35; time <= 4.6; time += 0.05) {
@@ -252,7 +257,10 @@ describe("运镜段编辑", () => {
             }
             if (recipe.subject === "required") expect(buildPrevisCameraRecipeMoves(recipe, { start: 0, duration: 6, shotDuration: 6 })).toEqual([]);
         }
-        const sword = buildPrevisCameraRecipeMoves(PREVIS_CAMERA_RECIPES.find((item) => item.id === "sword_chase")!, { start: 0, duration: 6, subjectId: "hero", shotDuration: 6 });
+        const sword = buildPrevisCameraRecipeMoves(
+            PREVIS_CAMERA_RECIPES.find((item) => item.id === "sword_chase")!,
+            { start: 0, duration: 6, subjectId: "hero", shotDuration: 6 },
+        );
         expect(sword.map((item) => [item.technique, item.subjectId, item.start])).toEqual([
             ["follow", "hero", 0],
             ["orbit_left", "hero", 3],
@@ -278,7 +286,11 @@ describe("与后端白名单一致", () => {
             subject: /Subject: "([a-z]+)"/.exec(line)?.[1],
             layer: /Layer: true/.test(line),
             duration: Number(/Duration: ([\d.]+)/.exec(line)?.[1] ?? 0),
-            params: [...line.matchAll(/\{Key: "([a-zA-Z]+)"(?:, Min: (-?[\d.]+), Max: (-?[\d.]+))?/g)].map((match) => ({ key: match[1], min: match[2] === undefined ? undefined : Number(match[2]), max: match[3] === undefined ? undefined : Number(match[3]) })),
+            params: [...line.matchAll(/\{Key: "([a-zA-Z]+)"(?:, Min: (-?[\d.]+), Max: (-?[\d.]+))?/g)].map((match) => ({
+                key: match[1],
+                min: match[2] === undefined ? undefined : Number(match[2]),
+                max: match[3] === undefined ? undefined : Number(match[3]),
+            })),
         }));
 
     test("手法 ID、主体要求、叠加层、默认时长、参数键与范围逐项相同", () => {
@@ -293,12 +305,18 @@ describe("与后端白名单一致", () => {
     });
 
     test("跟拍方位一致", () => {
-        const sides = /var cloudAgentPrevisCameraFollowSides = \[\]string\{([^}]*)\}/.exec(goSource)?.[1].match(/"([a-z]+)"/g)?.map((item) => item.slice(1, -1));
+        const sides = /var cloudAgentPrevisCameraFollowSides = \[\]string\{([^}]*)\}/
+            .exec(goSource)?.[1]
+            .match(/"([a-z]+)"/g)
+            ?.map((item) => item.slice(1, -1));
         expect(sides).toEqual(PREVIS_CAMERA_FOLLOW_SIDES.map((item) => item.value));
     });
 
     test("跟拍景别一致", () => {
-        const sizes = /var cloudAgentPrevisCameraFollowShotSizes = \[\]string\{([^}]*)\}/.exec(goSource)?.[1].match(/"([a-z_]+)"/g)?.map((item) => item.slice(1, -1));
+        const sizes = /var cloudAgentPrevisCameraFollowShotSizes = \[\]string\{([^}]*)\}/
+            .exec(goSource)?.[1]
+            .match(/"([a-z_]+)"/g)
+            ?.map((item) => item.slice(1, -1));
         expect(sizes).toEqual(PREVIS_CAMERA_FOLLOW_SHOT_SIZES.map((item) => item.value));
     });
 
@@ -339,7 +357,10 @@ describe("与后端白名单一致", () => {
 describe("过肩跟随转正面特写配方", () => {
     test("起幅在人物肩后，落幅在人物正前方的面部大特写", () => {
         const hero = applyPrevisActorTravel(createPrevisActor("主角", [0, 0, 0]), { from: [0, 0, 0], to: [0, 0, 8], start: 0, duration: 6, style: "walk" });
-        const moves = buildPrevisCameraRecipeMoves(PREVIS_CAMERA_RECIPES.find((item) => item.id === "ots_to_closeup")!, { start: 0, duration: 6, subjectId: hero.id, shotDuration: 6 });
+        const moves = buildPrevisCameraRecipeMoves(
+            PREVIS_CAMERA_RECIPES.find((item) => item.id === "ots_to_closeup")!,
+            { start: 0, duration: 6, subjectId: hero.id, shotDuration: 6 },
+        );
         const { scene, camera } = setup(moves, [hero]);
         const start = evaluatePrevisCamera(scene, camera, 0.5);
         const startRoot = resolvePrevisSubjectState(hero, 0.5).root;

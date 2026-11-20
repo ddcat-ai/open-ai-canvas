@@ -205,11 +205,20 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
             </AnimatePresence>
 
             <div className="pv-dock" role="toolbar" aria-label="世界引擎视口工具">
-                <div className="pv-dock__group" role="radiogroup" aria-label="编辑工具">
+                <div className="pv-dock__group" role="radiogroup" aria-label="变换模式">
                     {TOOLS.map((tool) => {
                         const active = props.transformMode === tool.mode;
                         return (
-                            <button key={tool.mode} type="button" role="radio" aria-checked={active} title={PREVIS_TOOL_LABELS[tool.mode]} className={`pv-dock__tool ${active ? "is-active" : ""}`} onClick={() => props.onTransformModeChange(tool.mode)}>
+                            <button
+                                key={tool.mode}
+                                type="button"
+                                role="radio"
+                                aria-checked={active}
+                                aria-label={PREVIS_TOOL_LABELS[tool.mode]}
+                                title={PREVIS_TOOL_LABELS[tool.mode]}
+                                className={`pv-dock__tool ${active ? "is-active" : ""}`}
+                                onClick={() => props.onTransformModeChange(tool.mode)}
+                            >
                                 <tool.icon aria-hidden />
                                 <span>{tool.label}</span>
                             </button>
@@ -217,13 +226,7 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                     })}
                 </div>
                 <span className="pv-dock__divider" />
-                <button
-                    type="button"
-                    aria-pressed={props.trajectoryDrawing}
-                    title={trajectoryTitle}
-                    className={`pv-dock__tool ${props.trajectoryDrawing ? "is-active is-accent" : ""}`}
-                    onClick={props.onToggleTrajectory}
-                >
+                <button type="button" aria-pressed={props.trajectoryDrawing} title={trajectoryTitle} className={`pv-dock__tool ${props.trajectoryDrawing ? "is-active is-accent" : ""}`} onClick={props.onToggleTrajectory}>
                     <Route aria-hidden />
                     <span>{trajectoryLabel}</span>
                 </button>
@@ -265,7 +268,7 @@ export function PrevisCanvasDock(props: PrevisCanvasDockProps) {
                     <Focus aria-hidden />
                     <span>聚焦</span>
                 </button>
-                <button type="button" title="适配全部对象 (A)" className="pv-dock__tool" onClick={props.onFrameScene}>
+                <button type="button" aria-label="适配全部对象 (A)" title="适配全部对象 (A)" className="pv-dock__tool" onClick={props.onFrameScene}>
                     <Scan aria-hidden />
                     <span>全景</span>
                 </button>

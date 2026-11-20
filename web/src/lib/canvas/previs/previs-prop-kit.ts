@@ -180,10 +180,30 @@ export class PrevisPropKit {
         const rx = Math.max(0, (w - d) / 2);
         const rz = Math.max(0, (d - w) / 2);
         const faces: Array<[Vec2, Vec2, Vec2, Vec2]> = [
-            [[-W, D], [W, D], [-rx, rz], [rx, rz]],
-            [[W, D], [W, -D], [rx, rz], [rx, -rz]],
-            [[W, -D], [-W, -D], [rx, -rz], [-rx, -rz]],
-            [[-W, -D], [-W, D], [-rx, -rz], [-rx, rz]],
+            [
+                [-W, D],
+                [W, D],
+                [-rx, rz],
+                [rx, rz],
+            ],
+            [
+                [W, D],
+                [W, -D],
+                [rx, rz],
+                [rx, -rz],
+            ],
+            [
+                [W, -D],
+                [-W, -D],
+                [rx, -rz],
+                [-rx, -rz],
+            ],
+            [
+                [-W, -D],
+                [-W, D],
+                [-rx, -rz],
+                [-rx, rz],
+            ],
         ];
         const lift = options.lift ?? Math.min(0.6, h * 0.22);
         this.add(key, curvedRoofGeometry(faces, h, lift, options.curve ?? 1.75, options.thickness ?? 0.16), [options.x ?? 0, y, options.z ?? 0]);

@@ -38,7 +38,8 @@ import { poseOptions } from "./previs-inspectors";
 export type PrevisAddKind = "actor" | "prop" | "layout" | "light" | "camera";
 
 /** arranged=true 表示对象已按批量排布算好相对位置，工作台整体平移落位，不逐个避让。 */
-export type PrevisAddResult = { kind: "actor"; objects: PrevisObject[] } | { kind: "prop"; objects: PrevisObject[]; arranged?: boolean } | { kind: "layout"; objects: PrevisObject[] } | { kind: "light"; light: PrevisLight } | { kind: "camera"; camera: PrevisCamera };
+export type PrevisAddResult =
+    { kind: "actor"; objects: PrevisObject[] } | { kind: "prop"; objects: PrevisObject[]; arranged?: boolean } | { kind: "layout"; objects: PrevisObject[] } | { kind: "light"; light: PrevisLight } | { kind: "camera"; camera: PrevisCamera };
 
 const TABS: Array<{ kind: PrevisAddKind; label: string; icon: typeof UserRound }> = [
     { kind: "actor", label: "角色", icon: UserRound },
@@ -114,7 +115,10 @@ export function PrevisAddDialog({
     const previewActor = useMemo(() => ({ ...buildPrevisActorFromTemplate(actorTemplate, { index: counts.actors, color: actorColor }), pose: actorPose }), [actorColor, actorPose, actorTemplate, counts.actors]);
     const previewProp = useMemo(() => createPrevisCatalogProp({ propId: prop.id, name: prop.name, color: propColor, params: propParams }), [prop, propColor, propParams]);
     const defaultSpacing = useMemo(() => Math.round(previsArrayDefaultSpacing(previewProp) * 2) / 2, [previewProp]);
-    const arraySpec = useMemo<PrevisArraySpec>(() => ({ pattern: arrayPattern, count: arrayCount, spacing: arraySpacing ?? defaultSpacing, facing: arrayPattern === "ring" ? "center" : "same", vary: arrayVary, seed: arraySeed }), [arrayCount, arrayPattern, arraySeed, arraySpacing, arrayVary, defaultSpacing]);
+    const arraySpec = useMemo<PrevisArraySpec>(
+        () => ({ pattern: arrayPattern, count: arrayCount, spacing: arraySpacing ?? defaultSpacing, facing: arrayPattern === "ring" ? "center" : "same", vary: arrayVary, seed: arraySeed }),
+        [arrayCount, arrayPattern, arraySeed, arraySpacing, arrayVary, defaultSpacing],
+    );
     const previewProps = useMemo(() => (arrayCount > 1 ? expandPrevisArray(previewProp, arraySpec, [0, 0, 0]) : [previewProp]), [arrayCount, arraySpec, previewProp]);
     const previewLayout = useMemo(
         () => createPrevisLayoutObject({ name: layoutTemplate.name, layout: { template: layoutTemplate.id, seed: layoutSeed, size: layoutSize, density: layoutDensity, crowd: layoutCrowd } }),
@@ -141,7 +145,19 @@ export function PrevisAddDialog({
     };
 
     const confirmLabel =
-        kind === "actor" ? (crowd ? "加入 9 个角色" : `加入「${actorTemplate.label}」`) : kind === "prop" ? (previewProps.length > 1 ? `加入 ${previewProps.length} 个「${prop.name}」` : `加入「${prop.name}」`) : kind === "layout" ? `搭建「${layoutTemplate.name}」` : kind === "light" ? `加入「${lightPreset.label}」` : `加入「${cameraPreset.label}」机位`;
+        kind === "actor"
+            ? crowd
+                ? "加入 9 个角色"
+                : `加入「${actorTemplate.label}」`
+            : kind === "prop"
+              ? previewProps.length > 1
+                  ? `加入 ${previewProps.length} 个「${prop.name}」`
+                  : `加入「${prop.name}」`
+              : kind === "layout"
+                ? `搭建「${layoutTemplate.name}」`
+                : kind === "light"
+                  ? `加入「${lightPreset.label}」`
+                  : `加入「${cameraPreset.label}」机位`;
     const categoryItems = PREVIS_PROP_CATALOG.filter((item) => item.category === propCategory);
 
     return (
@@ -231,7 +247,13 @@ export function PrevisAddDialog({
                                             <>
                                                 <div className="pv-world__presets" role="group" aria-label="排布方式">
                                                     {PREVIS_ARRAY_PATTERNS.map((item) => (
-                                                        <button key={item.value} type="button" aria-pressed={arrayPattern === item.value} className={`pv-world__chip ${arrayPattern === item.value ? "is-active" : ""}`} onClick={() => setArrayPattern(item.value)}>
+                                                        <button
+                                                            key={item.value}
+                                                            type="button"
+                                                            aria-pressed={arrayPattern === item.value}
+                                                            className={`pv-world__chip ${arrayPattern === item.value ? "is-active" : ""}`}
+                                                            onClick={() => setArrayPattern(item.value)}
+                                                        >
                                                             {item.label}
                                                         </button>
                                                     ))}
@@ -317,7 +339,13 @@ export function PrevisAddDialog({
                             <color attach="background" args={["#d8dde3"]} />
                             <Suspense fallback={null}>
                                 {kind === "actor" ? <ActorPreview actor={previewActor} /> : null}
-                                {kind === "prop" ? <PropPreview objects={previewProps} size={resolvePrevisPropSize(prop.id, propParams) ?? prop.size} spread={arrayCount > 1 ? (arraySpacing ?? defaultSpacing) * Math.sqrt(arrayCount) * (arrayPattern === "line" ? Math.sqrt(arrayCount) : 1) : 0} /> : null}
+                                {kind === "prop" ? (
+                                    <PropPreview
+                                        objects={previewProps}
+                                        size={resolvePrevisPropSize(prop.id, propParams) ?? prop.size}
+                                        spread={arrayCount > 1 ? (arraySpacing ?? defaultSpacing) * Math.sqrt(arrayCount) * (arrayPattern === "line" ? Math.sqrt(arrayCount) : 1) : 0}
+                                    />
+                                ) : null}
                                 {kind === "layout" ? <LayoutPreview object={previewLayout} /> : null}
                                 {kind === "light" ? <LightPreview light={previewLight} /> : null}
                                 {kind === "camera" ? <CameraPreview camera={previewCamera} /> : null}
@@ -480,7 +508,17 @@ function LayoutPreview({ object }: { object: PrevisObject }) {
     return (
         <>
             <hemisphereLight args={["#ffffff", "#8a939c", 1.1]} />
-            <directionalLight position={[size * 0.4, size * 0.8, size * 0.3]} intensity={2} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-size / 2} shadow-camera-right={size / 2} shadow-camera-top={size / 2} shadow-camera-bottom={-size / 2} shadow-camera-far={size * 3} />
+            <directionalLight
+                position={[size * 0.4, size * 0.8, size * 0.3]}
+                intensity={2}
+                castShadow
+                shadow-mapSize={[2048, 2048]}
+                shadow-camera-left={-size / 2}
+                shadow-camera-right={size / 2}
+                shadow-camera-top={size / 2}
+                shadow-camera-bottom={-size / 2}
+                shadow-camera-far={size * 3}
+            />
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
                 <planeGeometry args={[size * 1.6, size * 1.6]} />
                 <meshStandardMaterial color="#c9ccc4" roughness={0.95} />
@@ -507,7 +545,17 @@ function PropPreview({ objects, size, spread }: { objects: PrevisObject[]; size:
     return (
         <Stage target={[span * 0.2, Math.min(size[1] * 0.45, 30), 0]} maxDistance={Math.max(14, span * 4)}>
             <FitCamera distance={Math.max(4, span * 1.6, size[1] * 1.4)} />
-            <directionalLight position={[span * 1.5 + 3, span * 2 + 5, span + 4]} intensity={1.8} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-span} shadow-camera-right={span} shadow-camera-top={span} shadow-camera-bottom={-span} shadow-camera-far={span * 8 + 20} />
+            <directionalLight
+                position={[span * 1.5 + 3, span * 2 + 5, span + 4]}
+                intensity={1.8}
+                castShadow
+                shadow-mapSize={[2048, 2048]}
+                shadow-camera-left={-span}
+                shadow-camera-right={span}
+                shadow-camera-top={span}
+                shadow-camera-bottom={-span}
+                shadow-camera-far={span * 8 + 20}
+            />
             {objects.map((object) => (
                 <group key={object.id} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale}>
                     <PrevisPropVisual object={object} selected={false} />

@@ -188,7 +188,15 @@ export function useCanvasPrevis({
                 title: translate("canvasPage.previs.compositionTitle", { title: sourceNode.title }),
                 position: existingPreview?.position || { x: sourceNode.position.x - previewSize.width - 36, y: sourceNode.position.y },
                 ...preserveImageNodeSize(existingPreview, previewSize),
-                metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["世界引擎构图", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
+                metadata: {
+                    ...existingPreview?.metadata,
+                    ...imageMetadata(image),
+                    prompt: output.prompt,
+                    workflowKind: "reference_set",
+                    assetTags: ["世界引擎构图", `镜头:${sourceNode.title}`],
+                    producedModel: undefined,
+                    producedModelCandidate: undefined,
+                },
             };
             if (previewIndex >= 0) nextNodes[previewIndex] = previewNode;
             else nextNodes.push(previewNode);

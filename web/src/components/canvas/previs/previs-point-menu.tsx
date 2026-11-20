@@ -83,7 +83,8 @@ export function PrevisPointMenu({
             </button>
             {actorName || cameraName ? (
                 <button type="button" role="menuitem" className="pv-point-menu__item" onClick={onPlaceSelected}>
-                    <MoveRight className="size-3.5" aria-hidden />把「{actorName || cameraName}」放到这里
+                    <MoveRight className="size-3.5" aria-hidden />
+                    把「{actorName || cameraName}」放到这里
                 </button>
             ) : null}
             {actorName ? (

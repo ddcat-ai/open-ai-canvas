@@ -154,45 +154,43 @@ export function transcodeVideoToMp4(input: Blob, optionsOrProgress: TranscodeVid
 
 export async function mergeVideos(inputs: MergeVideoInput[], onProgress?: (progress: MergeVideoProgress) => void) {
     if (inputs.length < 2) throw new Error("至少选择 2 个视频才能合并");
-    return runFFmpegTask(
-        async (ffmpeg) => {
-            const serial = (ffmpegJobSerial += 1);
-            const files: string[] = [];
-            try {
-                for (let index = 0; index < inputs.length; index += 1) {
-                    const input = inputs[index];
-                    const storedBlob = input.storageKey ? await getMediaBlob(input.storageKey) : null;
-                    const remoteBlob = !storedBlob && input.url
+    return runFFmpegTask(async (ffmpeg) => {
+        const serial = (ffmpegJobSerial += 1);
+        const files: string[] = [];
+        try {
+            for (let index = 0; index < inputs.length; index += 1) {
+                const input = inputs[index];
+                const storedBlob = input.storageKey ? await getMediaBlob(input.storageKey) : null;
+                const remoteBlob =
+                    !storedBlob && input.url
                         ? await fetch(input.url).then((response) => {
                               if (!response.ok) throw new Error(`视频资源请求失败（${response.status}）`);
                               return response.blob();
                           })
                         : null;
-                    const blob = storedBlob || remoteBlob;
-                    if (!blob) throw new Error(`无法读取第 ${index + 1} 个视频`);
-                    const name = `merge-${serial}-${index}.mp4`;
-                    await ffmpeg.writeFile(name, await fetchFile(blob));
-                    files.push(name);
-                    onProgress?.({ phase: "reading", progress: Math.round(((index + 1) / inputs.length) * 45) });
-                }
-                const concatList = files.map((file) => `file '${file}'`).join("\n");
-                const concatName = `merge-${serial}.txt`;
-                const outputName = `merge-${serial}.mp4`;
-                files.push(concatName, outputName);
-                await ffmpeg.writeFile(concatName, concatList);
-                onProgress?.({ phase: "encoding", progress: 55 });
-                let exitCode = await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", concatName, "-c", "copy", outputName]);
-                if (exitCode !== 0) {
-                    exitCode = await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", concatName, "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", outputName]);
-                }
-                if (exitCode !== 0) throw new Error("视频编码失败，请确认视频编码格式兼容");
-                const output = await ffmpeg.readFile(outputName);
-                onProgress?.({ phase: "encoding", progress: 100 });
-                return new Blob([output as BlobPart], { type: "video/mp4" });
-            } finally {
-                await Promise.all(files.map((file) => ffmpeg.deleteFile(file).catch(() => undefined)));
+                const blob = storedBlob || remoteBlob;
+                if (!blob) throw new Error(`无法读取第 ${index + 1} 个视频`);
+                const name = `merge-${serial}-${index}.mp4`;
+                await ffmpeg.writeFile(name, await fetchFile(blob));
+                files.push(name);
+                onProgress?.({ phase: "reading", progress: Math.round(((index + 1) / inputs.length) * 45) });
             }
-        },
-        onProgress,
-    );
+            const concatList = files.map((file) => `file '${file}'`).join("\n");
+            const concatName = `merge-${serial}.txt`;
+            const outputName = `merge-${serial}.mp4`;
+            files.push(concatName, outputName);
+            await ffmpeg.writeFile(concatName, concatList);
+            onProgress?.({ phase: "encoding", progress: 55 });
+            let exitCode = await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", concatName, "-c", "copy", outputName]);
+            if (exitCode !== 0) {
+                exitCode = await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", concatName, "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", outputName]);
+            }
+            if (exitCode !== 0) throw new Error("视频编码失败，请确认视频编码格式兼容");
+            const output = await ffmpeg.readFile(outputName);
+            onProgress?.({ phase: "encoding", progress: 100 });
+            return new Blob([output as BlobPart], { type: "video/mp4" });
+        } finally {
+            await Promise.all(files.map((file) => ffmpeg.deleteFile(file).catch(() => undefined)));
+        }
+    }, onProgress);
 }

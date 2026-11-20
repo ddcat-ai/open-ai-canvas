@@ -3058,7 +3058,6 @@ function CanvasViewportPage() {
 
                             <CanvasStylePickerModal open={stylePickerOpen} value={activeStylePresetId} applying={styleApplying} onClose={() => setStylePickerOpen(false)} onSelect={selectCanvasStyle} />
 
-
                             <div className="relative flex min-h-0 min-w-0 flex-1">
                                 <div className="relative min-w-0 flex-1 overflow-clip">
                                     <CanvasGestureRenderWindow containerRef={containerRef} viewport={viewport} size={size} query={queryGesturePreview} connections={displayConnections} filterConnections={filterSceneConnections}>

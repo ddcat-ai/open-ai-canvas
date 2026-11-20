@@ -291,7 +291,17 @@ export function ObjectInspector({
                                         </Button>
                                     ) : null}
                                 </div>
-                                <PrevisPathSection owner={object} locked origin={[rendered.position[0], 0, rendered.position[2]]} shotDuration={shotDuration} playhead={playhead} markers={markers} sketchPaths={sketchPaths} onDeleteSketchPath={onDeleteSketchPath} onUpdate={onUpdate} />
+                                <PrevisPathSection
+                                    owner={object}
+                                    locked
+                                    origin={[rendered.position[0], 0, rendered.position[2]]}
+                                    shotDuration={shotDuration}
+                                    playhead={playhead}
+                                    markers={markers}
+                                    sketchPaths={sketchPaths}
+                                    onDeleteSketchPath={onDeleteSketchPath}
+                                    onUpdate={onUpdate}
+                                />
                             </GuideStep>
                             <GuideStep index={2} title="A 点 → B 点" done={Boolean(object.travels?.length)} hint="走、跑、冲刺、跳跃、飞行、御剑、悬浮、闪现：选起点终点和用时，从播放头开始。">
                                 <PrevisTravelSection object={object} markers={markers} playhead={playhead} shotDuration={shotDuration} onUpdate={onUpdate} />
@@ -315,7 +325,17 @@ export function ObjectInspector({
                                         {pathDrawing ? "取消绘制" : object.motionPath ? "重新画路径" : "画路径"}
                                     </Button>
                                 </div>
-                                <PrevisPathSection owner={object} locked={false} origin={rendered.position} shotDuration={shotDuration} playhead={playhead} markers={markers} sketchPaths={sketchPaths} onDeleteSketchPath={onDeleteSketchPath} onUpdate={onUpdate} />
+                                <PrevisPathSection
+                                    owner={object}
+                                    locked={false}
+                                    origin={rendered.position}
+                                    shotDuration={shotDuration}
+                                    playhead={playhead}
+                                    markers={markers}
+                                    sketchPaths={sketchPaths}
+                                    onDeleteSketchPath={onDeleteSketchPath}
+                                    onUpdate={onUpdate}
+                                />
                             </InspectorGroup>
                             <div className="previs-inspector-note">也可以用关键帧：把播放头拖到某个时间，移动道具后点「记录关键帧」；在另一个时间再摆一次，中间会自动补间。</div>
                         </>
@@ -685,9 +705,7 @@ export function ShotInspector({
                 {/* 已有运镜放在最上面：删除不必翻过下方整块添加区。 */}
                 {camera && !capabilities.timeline && (camera.moves?.length || camera.motionPath) ? <div className="previs-inspector-note">切到「动画」可添加或调整运镜，这里也能直接删除。</div> : null}
                 {camera ? <PrevisCameraMotionList camera={camera} scene={scene} onChange={onUpdateCamera} onSeek={onSeek} /> : null}
-                {(capabilities.timeline && camera) || camera?.moves?.length ? null : (
-                    <Select className="w-full" size="small" value={shot.cameraMove} options={cameraMoveOptions} onChange={(cameraMove: PrevisCameraMove) => onUpdateShot({ cameraMove })} />
-                )}
+                {(capabilities.timeline && camera) || camera?.moves?.length ? null : <Select className="w-full" size="small" value={shot.cameraMove} options={cameraMoveOptions} onChange={(cameraMove: PrevisCameraMove) => onUpdateShot({ cameraMove })} />}
                 {/* 动画模式的路径编辑区自带参考轨迹列表；摆场模式只在这里列出并删除。 */}
                 {capabilities.timeline && camera ? null : <PrevisSketchPathList paths={scene.paths ?? []} onDelete={onDeleteSketchPath} />}
                 {capabilities.timeline && camera ? (
@@ -950,8 +968,8 @@ export function SceneRow({ active, icon, label, onClick, onDelete }: { active?: 
             {onDelete ? (
                 <button
                     type="button"
-                    aria-label={`删除${label}`}
-                    title={`删除${label}`}
+                    aria-label={`删除 ${label}`}
+                    title={`删除 ${label}`}
                     className="grid size-6 shrink-0 place-items-center rounded opacity-60 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
                     onClick={(event) => {
                         event.stopPropagation();

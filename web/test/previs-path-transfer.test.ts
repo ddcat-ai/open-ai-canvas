@@ -10,14 +10,35 @@ const SHOT = 8;
 function setup(): PrevisScene {
     const base = createPrevisScene();
     const actor = { ...createPrevisActor("主角", [0, 0, 0]), id: "hero" };
-    const cameraPath: PrevisMotionPath = { points: [[0, 1.6, 6], [4, 2.4, 2], [8, 3, -2]], speed: "walk", duration: 3, easing: "ease_out", startDelay: 0, orientToPath: false };
+    const cameraPath: PrevisMotionPath = {
+        points: [
+            [0, 1.6, 6],
+            [4, 2.4, 2],
+            [8, 3, -2],
+        ],
+        speed: "walk",
+        duration: 3,
+        easing: "ease_out",
+        startDelay: 0,
+        orientToPath: false,
+    };
     const camera = applyPrevisMotionPath({ ...createPrevisCamera(), id: "cam", transform: previsIdentityTransform([0, 1.6, 6]), target: [0, 1.5, 0] }, cameraPath, SHOT, false);
     return {
         ...base,
         objects: [actor],
         cameras: [camera],
         shots: [{ ...base.shots[0], cameraId: "cam", duration: SHOT }],
-        paths: [{ id: "sketch-1", label: "路径1", points: [[0, 0, 0], [6, 2, 0], [12, 2, 6]] }],
+        paths: [
+            {
+                id: "sketch-1",
+                label: "路径1",
+                points: [
+                    [0, 0, 0],
+                    [6, 2, 0],
+                    [12, 2, 6],
+                ],
+            },
+        ],
     };
 }
 

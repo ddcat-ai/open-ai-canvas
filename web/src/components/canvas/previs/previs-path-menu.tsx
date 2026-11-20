@@ -61,7 +61,8 @@ export function PrevisPathMenu({
             </div>
             {onInsertPoint ? (
                 <button type="button" role="menuitem" className="pv-point-menu__item" onClick={run(onInsertPoint)}>
-                    <Plus className="size-3.5" aria-hidden />在这个点后面插入途经点
+                    <Plus className="size-3.5" aria-hidden />
+                    在这个点后面插入途经点
                 </button>
             ) : null}
             {onRemovePoint ? (

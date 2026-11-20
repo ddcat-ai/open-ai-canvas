@@ -113,7 +113,8 @@ export function PrevisLayoutInspectorGroup({ object, onUpdate }: { object: Previ
             <div className="pv-world__row">
                 <span>随机性</span>
                 <button type="button" className="pv-btn" onClick={() => patch({ seed: Math.floor(Math.random() * 1_000_000) })}>
-                    <Shuffle className="size-3.5" aria-hidden />换一版
+                    <Shuffle className="size-3.5" aria-hidden />
+                    换一版
                 </button>
                 <span className="pv-world__seed">#{layout.seed}</span>
             </div>
@@ -166,7 +167,13 @@ export function PrevisPropParamFields({ propId, params, onChange }: { propId?: s
                         <span>{def.label}</span>
                         <div className="pv-world__presets" role="group" aria-label={def.label}>
                             {def.options.map((option) => (
-                                <button key={option.value} type="button" aria-pressed={values[def.key] === option.value} className={`pv-world__chip ${values[def.key] === option.value ? "is-active" : ""}`} onClick={() => onChange({ ...values, [def.key]: option.value })}>
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    aria-pressed={values[def.key] === option.value}
+                                    className={`pv-world__chip ${values[def.key] === option.value ? "is-active" : ""}`}
+                                    onClick={() => onChange({ ...values, [def.key]: option.value })}
+                                >
                                     {option.label}
                                 </button>
                             ))}
@@ -190,7 +197,8 @@ export function PrevisPropVariantGroup({ object, onUpdate }: { object: PrevisObj
                 <div className="pv-world__row">
                     <span>造型</span>
                     <button type="button" className="pv-btn" onClick={() => onUpdate({ variant: ((object.variant ?? 0) + 1) % 8 })}>
-                        <Shuffle className="size-3.5" aria-hidden />换个造型
+                        <Shuffle className="size-3.5" aria-hidden />
+                        换个造型
                     </button>
                     <span className="pv-world__seed">{(object.variant ?? 0) + 1} / 8</span>
                 </div>

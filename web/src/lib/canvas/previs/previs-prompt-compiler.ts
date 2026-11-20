@@ -43,7 +43,12 @@ export function compilePrevisPrompt(scene: PrevisScene, shot: PrevisShot) {
         travelPrompt(actors),
         pathPrompt(shot, visibleObjects, camera),
         actors.length ? `角色原型与颜色映射：${actors.map((actor) => `${previsActorArchetypeLabel(actor.archetype)}${actor.name}（${actor.color}）`).join("；")}。生成视频时保持每个角色的体型、轮廓和身份稳定。` : "",
-        visibleObjects.some((item) => item.kind !== "layout") ? `空间调度：${visibleObjects.filter((item) => item.kind !== "layout").map(objectPrompt).join("；")}。` : "",
+        visibleObjects.some((item) => item.kind !== "layout")
+            ? `空间调度：${visibleObjects
+                  .filter((item) => item.kind !== "layout")
+                  .map(objectPrompt)
+                  .join("；")}。`
+            : "",
         assetReferencePrompt(scene),
         scene.world ? "" : `灯光：${scene.lights.map((light) => `${light.name}${formatNumber(light.intensity)}强度${light.color}`).join("，")}。`,
         "保持角色、道具、空间方向、光线方向和镜头轴线连续，遵循真实摄影机透视与物理遮挡。",

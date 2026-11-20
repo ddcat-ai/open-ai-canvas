@@ -70,7 +70,8 @@ function courtyard(kit: PrevisPropKit) {
         [10.75, 0, 0.9, 22.4],
         [-6.75, 10.75, 8.9, 0.9],
         [6.75, 10.75, 8.9, 0.9],
-    ]) kit.box("roof", w, 0.25, d, x, 2.6, z);
+    ])
+        kit.box("roof", w, 0.25, d, x, 2.6, z);
     // 门楼。
     kit.push([0, 0, 10.75]);
     kit.box("wood", 2, 2.4, 0.2, 0, 0, 0.1);

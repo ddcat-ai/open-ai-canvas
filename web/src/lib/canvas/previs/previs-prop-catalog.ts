@@ -9,8 +9,7 @@ export type PrevisPropCategoryId = "building" | "base" | "plant" | "ancient" | "
 
 /** 参数定义：驱动检查器控件、Agent 校验（后端镜像）与默认值。 */
 export type PrevisPropParamDef =
-    | { key: string; label: string; type: "number"; min: number; max: number; step: number; default: number; unit?: string }
-    | { key: string; label: string; type: "enum"; default: string; options: Array<{ value: string; label: string }> };
+    { key: string; label: string; type: "number"; min: number; max: number; step: number; default: number; unit?: string } | { key: string; label: string; type: "enum"; default: string; options: Array<{ value: string; label: string }> };
 
 export type PrevisCatalogProp = {
     id: string;
@@ -40,7 +39,13 @@ export const PREVIS_PROP_CATEGORIES: Array<{ id: PrevisPropCategoryId; label: st
 const prop = (id: string, name: string, category: PrevisPropCategoryId, size: PrevisVec3, extra: Partial<PrevisCatalogProp> = {}): PrevisCatalogProp => ({ id, name, category, size, ...extra });
 
 const num = (key: string, label: string, min: number, max: number, step: number, value: number, unit?: string): PrevisPropParamDef => ({ key, label, type: "number", min, max, step, default: value, unit });
-const pick = (key: string, label: string, value: string, options: Array<[string, string]>): PrevisPropParamDef => ({ key, label, type: "enum", default: value, options: options.map(([optionValue, optionLabel]) => ({ value: optionValue, label: optionLabel })) });
+const pick = (key: string, label: string, value: string, options: Array<[string, string]>): PrevisPropParamDef => ({
+    key,
+    label,
+    type: "enum",
+    default: value,
+    options: options.map(([optionValue, optionLabel]) => ({ value: optionValue, label: optionLabel })),
+});
 
 const MATERIAL_OPTIONS: Array<[string, string]> = [
     ["plaster", "白墙"],
@@ -177,7 +182,17 @@ export const PREVIS_PROP_CATALOG: PrevisCatalogProp[] = [
         ],
     }),
     prop("platform", "平台", "base", [8, 0.6, 8], {
-        params: [num("width", "宽度", 0.5, 200, 0.5, 8, "m"), num("depth", "深度", 0.5, 200, 0.5, 8, "m"), num("height", "高度", 0.05, 10, 0.05, 0.6, "m"), pick("material", "材质", "stone", MATERIAL_OPTIONS.filter(([value]) => value !== "brick"))],
+        params: [
+            num("width", "宽度", 0.5, 200, 0.5, 8, "m"),
+            num("depth", "深度", 0.5, 200, 0.5, 8, "m"),
+            num("height", "高度", 0.05, 10, 0.05, 0.6, "m"),
+            pick(
+                "material",
+                "材质",
+                "stone",
+                MATERIAL_OPTIONS.filter(([value]) => value !== "brick"),
+            ),
+        ],
     }),
     prop("column", "柱子", "base", [0.7, 3, 0.7], {
         params: [
@@ -283,7 +298,9 @@ export function resolvePrevisPropSize(propId: string | undefined, params?: Previ
     const n = (key: string) => Number(p[key]);
     switch (prop.id) {
         case "building":
-            return p.style === "ancient" ? [n("width") + 1.6, n("floors") * (Math.max(3, n("floorHeight")) + 1) + 3, n("depth") + 1.6] : [n("width"), n("floors") * n("floorHeight") + (p.roof === "flat" ? 2.6 : 3), n("depth") + (p.balcony === "front" ? 1.2 : 0)];
+            return p.style === "ancient"
+                ? [n("width") + 1.6, n("floors") * (Math.max(3, n("floorHeight")) + 1) + 3, n("depth") + 1.6]
+                : [n("width"), n("floors") * n("floorHeight") + (p.roof === "flat" ? 2.6 : 3), n("depth") + (p.balcony === "front" ? 1.2 : 0)];
         case "tower":
             return [n("width"), n("floors") * 3.6 * 1.1, n("width")];
         case "chinese_hall":

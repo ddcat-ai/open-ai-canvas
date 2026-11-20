@@ -125,7 +125,7 @@ export function previsPropMaterial(key: PrevisPropMaterialKey, accentColor?: str
         roughness: spec.roughness ?? 0.85,
         metalness: spec.metalness ?? 0,
         emissive: new Color(selected ? "#ffaa00" : spec.emissive || "#000000"),
-        emissiveIntensity: selected ? 0.32 : spec.emissiveIntensity ?? 0,
+        emissiveIntensity: selected ? 0.32 : (spec.emissiveIntensity ?? 0),
         transparent: spec.opacity !== undefined,
         opacity: spec.opacity ?? 1,
         side: spec.doubleSide ? DoubleSide : undefined,

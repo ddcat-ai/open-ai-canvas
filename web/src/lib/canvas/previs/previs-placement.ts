@@ -61,7 +61,11 @@ function candidateOffsets() {
  * 隐藏对象同样占位；ring 采样耗尽时回退到「所有占位最右边界之外」的确定性位置，
  * 该位置在有限 existing 集合下必然不与任何 AABB 相交。
  */
-export function resolvePrevisPlacement(input: { object: Pick<PrevisObject, "kind" | "primitive" | "transform"> & Partial<Pick<PrevisObject, "propId" | "params">>; existing: Array<Pick<PrevisObject, "kind" | "primitive" | "transform"> & Partial<Pick<PrevisObject, "propId" | "params">>>; margin?: number }): PrevisVec3 {
+export function resolvePrevisPlacement(input: {
+    object: Pick<PrevisObject, "kind" | "primitive" | "transform"> & Partial<Pick<PrevisObject, "propId" | "params">>;
+    existing: Array<Pick<PrevisObject, "kind" | "primitive" | "transform"> & Partial<Pick<PrevisObject, "propId" | "params">>>;
+    margin?: number;
+}): PrevisVec3 {
     const { object } = input;
     // 整片布景铺满地面，不作为避让障碍；否则在城里加任何东西都会被推到城外。
     const existing = input.existing.filter((item) => item.kind !== "layout");

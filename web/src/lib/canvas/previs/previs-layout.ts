@@ -89,10 +89,11 @@ function ancientCity(b: PrevisLayoutBuilder) {
     b.crowdAlong(0, 12, 0, edge, 13, 70);
     b.crowdAlong(-edge, 0, -12, 0, 11, 60);
     b.crowdAlong(12, 0, edge, 0, 11, 60);
-    for (const s of streets) if (s !== 0) {
-        b.crowdAlong(s, -edge, s, edge, 5, 14);
-        b.crowdAlong(-edge, s, edge, s, 5, 14);
-    }
+    for (const s of streets)
+        if (s !== 0) {
+            b.crowdAlong(s, -edge, s, edge, 5, 14);
+            b.crowdAlong(-edge, s, edge, s, 5, 14);
+        }
     // 广场人群：楼阁前方。
     b.crowdAlong(-18, 14, 18, 14, 10, 160);
 }
@@ -242,8 +243,8 @@ function village(b: PrevisLayoutBuilder) {
             if (b.chance(0.4)) b.place("tree_broadleaf", x + b.range(-6, 6), z - 7, 0);
         }
     }
-    b.scatter(["tree_broadleaf", "tree_broadleaf", "bamboo", "tree_willow", "bush"], { x0: -H, z0: -H, x1: H, z1: H }, Math.round((H * H) / 500 * b.density), { footprint: 3 });
-    b.scatter(["grass", "flowers", "rock"], { x0: -H, z0: -H, x1: H, z1: H }, Math.round((H * H) / 300 * b.density), { footprint: 0.8 });
+    b.scatter(["tree_broadleaf", "tree_broadleaf", "bamboo", "tree_willow", "bush"], { x0: -H, z0: -H, x1: H, z1: H }, Math.round(((H * H) / 500) * b.density), { footprint: 3 });
+    b.scatter(["grass", "flowers", "rock"], { x0: -H, z0: -H, x1: H, z1: H }, Math.round(((H * H) / 300) * b.density), { footprint: 0.8 });
     if (b.chance(0.8)) b.place("ox_cart", 1.2, b.range(-H / 2, H / 2), 0);
     b.crowdAlong(0, -H + 6, 0, H - 6, 4, 10);
 }
