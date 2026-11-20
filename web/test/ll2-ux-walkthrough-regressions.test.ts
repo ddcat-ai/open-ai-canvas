@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { ll2CleanVideoPrompt } from "../src/lib/ll2-video-prompt";
+
 /**
  * 2026-11-19 真实浏览器走查抓到的 4 个回归点。
  * 这些行为必须在源码里留痕，避免后续改版又悄悄退化：
@@ -38,6 +40,21 @@ test("资产页 ?quote= 只落地一次，灵感 ?prompt= 落地后也清参数"
     const quoteNavigate = source.indexOf('navigate("/", { replace: true })');
     expect(quoteNavigate).toBeGreaterThan(-1);
     expect(source.lastIndexOf('navigate("/", { replace: true })')).toBeGreaterThan(quoteNavigate);
+});
+
+test("去出片只取画面提示词，不带「想清楚了就点交给 Agent 出片」这类操作说明", () => {
+    const reply =
+        "黄昏的海面上云层缓缓流动，远处一艘小船随浪轻轻起伏。夕阳把海水染成金橙色，一道金色反光从画面右下角斜斜扫过水面。镜头贴近海面缓缓向前推进。\n" +
+        "想清楚了就点「交给 Agent 出片」，片子会直接放进当前这张画布。";
+    const cleaned = ll2CleanVideoPrompt(reply);
+    expect(cleaned).toContain("黄昏的海面上云层缓缓流动");
+    expect(cleaned).not.toContain("想清楚了");
+    expect(cleaned).not.toContain("交给 Agent");
+    expect(cleaned).not.toContain("这张画布");
+
+    const labelled = ll2CleanVideoPrompt("这里是改好的版本：\n提示词：雨夜街头，外卖员蹲下抱起一只猫，霓虹倒映在积水里。\n需要我继续调整吗？");
+    expect(labelled).toBe("雨夜街头，外卖员蹲下抱起一只猫，霓虹倒映在积水里。");
+    expect(labelled).not.toContain("需要我");
 });
 
 test("首页也常驻 Agent 悬浮入口，不再只有聊天改稿页签", async () => {

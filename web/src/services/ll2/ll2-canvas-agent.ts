@@ -32,27 +32,7 @@ export type LL2CanvasAgentRequest = {
     maxPolls?: number;
 };
 
-/**
- * 助手的回答可能是分镜清单、几点建议或带标题的稿子，直接投给视频模型会带入废话。
- * 这里去掉 Markdown 修饰与标题，只留画面描述正文；识别出「提示词：」时优先取那一行。
- */
-export function ll2CleanVideoPrompt(text: string): string {
-    const withoutFences = text.replace(/```[\s\S]*?```/g, (block) => block.replace(/```[a-z]*\s*/gi, "").replace(/```/g, ""));
-    const lines = withoutFences
-        .split(/\r?\n/)
-        .map((line) =>
-            line
-                .replace(/^\s*#{1,6}\s*/, "")
-                .replace(/^\s*[-*>\d]+[.、)]\s*/, "")
-                .replace(/\*\*/g, "")
-                .replace(/^\s*[「"'']+|[」"'']+\s*$/g, "")
-                .trim(),
-        )
-        .filter(Boolean);
-    const labelled = lines.find((line) => /^(提示词|画面提示词|最终提示词|出片提示词)\s*[:：]/.test(line));
-    const content = labelled ? labelled.replace(/^[^:：]+[:：]\s*/, "") : lines.join("，");
-    return content.replace(/\s+/g, " ").replace(/^["'「『]+|["'」』]+$/g, "").trim().slice(0, 700);
-}
+export { ll2CleanVideoPrompt } from "@/lib/ll2-video-prompt";
 
 /** 提交前给 C 端看的一行白话价格：几秒、什么清晰度、一共多少钱。 */
 export function ll2CanvasAgentEstimate(settings: LL2WorkspaceSettings = ll2ReadSettings()) {
