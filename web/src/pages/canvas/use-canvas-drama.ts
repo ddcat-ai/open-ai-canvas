@@ -13,11 +13,14 @@ import {
     dramaCastResourceIds,
     dramaFinalResourceIds,
     dramaPlacement,
+    dramaSegmentReferences,
     dramaSegmentRequiredResourceIds,
     dramaSegmentResourceIds,
+    dramaSettingNodes,
     findDramaFinalNode,
     findDramaSegmentFrame,
     isDramaNodeStale,
+    placeDramaCastGroups,
     placeDramaGroup,
     type DramaAdoptTarget,
     type DramaCanvasPresence,
@@ -29,6 +32,7 @@ import { dramaKeys } from "@/lib/drama/drama-query-keys";
 import { getDrama, getDramaEpisode, listDramaCast, listDramaTakes, type DramaCast, type DramaEpisode, type DramaEpisodeDetail, type DramaSegment, type DramaSettings, type DramaSummary, type DramaTake, type DramaTakeKind } from "@/services/api/drama";
 import { ApiError } from "@/services/api/request";
 import { resourceFileUrl } from "@/services/api/resources";
+import { useAssetStore } from "@/stores/use-asset-store";
 import {
     DRAMA_CANVAS_EDITOR_PARAM,
     DRAMA_CANVAS_FOCUS_PARAM,
@@ -90,25 +94,18 @@ function segmentLabel(episode: Pick<DramaEpisode, "number">, segment: Pick<Drama
     return `第 ${episode.number} 集 · 第 ${segment.index + 1} 段`;
 }
 
-function segmentAssetItems(episode: Pick<DramaEpisode, "number">, segment: DramaSegment, takes: DramaTake[]): DramaCanvasAssetItem[] {
+function segmentAssetItems(episode: Pick<DramaEpisode, "number">, segment: DramaSegment, takes: DramaTake[], castById: Map<string, DramaCast>): DramaCanvasAssetItem[] {
     const label = segmentLabel(episode, segment);
-    const items: DramaCanvasAssetItem[] = segment.request.references
-        .filter((reference) => reference.sent && reference.resourceId)
-        .map((reference) => ({
-            resourceId: reference.resourceId!,
-            title: reference.kind === "image" ? reference.name : castTitle({ kind: reference.kind, name: reference.name }),
-            category: reference.kind === "image" ? "material" : dramaCastAssetCategory(reference.kind),
-        }));
+    const items: DramaCanvasAssetItem[] = dramaSegmentReferences(segment, castById).map((reference) => ({
+        resourceId: reference.resourceId,
+        title: reference.kind === "image" ? reference.name : castTitle({ kind: reference.kind, name: reference.name }),
+        category: reference.kind === "image" ? "material" : dramaCastAssetCategory(reference.kind),
+    }));
     if (segment.request.firstFrameResourceId) items.push({ resourceId: segment.request.firstFrameResourceId, title: `${label} · 首帧`, category: "material" });
     for (const resourceId of dramaSegmentResourceIds(segment, takes)) {
         if (!items.some((item) => item.resourceId === resourceId)) items.push({ resourceId, title: `${label} · 视频`, category: "material" });
     }
     return items;
-}
-
-/** 独立放置的设定节点；剧情段框里的参考图副本不算投送过的设定。 */
-function standaloneCastNode(nodes: CanvasNodeData[], castId: string) {
-    return nodes.find((node) => !node.parentId && node.metadata?.dramaRef?.kind === "cast" && node.metadata.dramaRef.id === castId);
 }
 
 /** 把节点媒体换成短剧的资源：原媒体先进入版本历史，任务绑定解除，避免任务同步把节点改回去。 */
@@ -192,11 +189,12 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
 
     const presenceKey = useMemo(() => {
         if (!active) return "";
+        const settings = dramaSettingNodes(nodes, dramaId);
         const lines: string[] = [];
         for (const node of nodes) {
             const ref = node.metadata?.dramaRef;
             if (!ref || ref.projectId !== dramaId) continue;
-            if (ref.kind === "cast" && node.parentId) continue;
+            if (ref.kind === "cast" && settings.get(ref.id) !== node) continue;
             if (ref.kind === "segment" && node.type !== CanvasNodeType.Frame && node.type !== CanvasNodeType.Video) continue;
             lines.push(`${ref.kind}:${ref.id}:${staleNodeIds.has(node.id) ? 1 : 0}`);
         }
@@ -215,6 +213,13 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
     // 异步投送完成时读取最新的页面回调与短剧设置，避免沿用发起时的旧闭包。
     const latest = useRef({ input, summary, current });
     latest.current = { input, summary, current };
+    const activeCanvas = useRef("");
+    useEffect(() => {
+        activeCanvas.current = canvasId;
+        return () => {
+            activeCanvas.current = "";
+        };
+    }, [canvasId]);
 
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const busyRef = useRef<string | null>(null);
@@ -250,7 +255,8 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
         async (items: DramaCanvasAssetItem[], required: string[]): Promise<DramaProjectionMedia> => {
             const assetIds = await ensureDramaCanvasAssets(dramaId, items);
             if (required.some((resourceId) => !assetIds.has(resourceId))) throw new Error("部分参考图或视频已不可用（可能已删除），请在制作台检查后再投送");
-            return { assetIdOf: (resourceId) => assetIds.get(resourceId), urlOf: resourceFileUrl };
+            const sizes = new Map(useAssetStore.getState().assets.flatMap((asset) => (asset.kind === "image" && asset.data.width > 0 && asset.data.height > 0 ? [[asset.id, { width: asset.data.width, height: asset.data.height }] as const] : [])));
+            return { assetIdOf: (resourceId) => assetIds.get(resourceId), urlOf: resourceFileUrl, imageSizeOf: (resourceId) => sizes.get(assetIds.get(resourceId) || "") };
         },
         [dramaId],
     );
@@ -265,24 +271,51 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
     );
 
     const projectCast = useCallback(
-        async (castId: string) => {
-            const placed = standaloneCastNode(nodesRef.current, castId);
+        async (castId?: string) => {
+            const placed = castId && dramaSettingNodes(nodesRef.current, dramaId).get(castId);
             if (placed) return focus([placed.id]);
-            await run(`cast:${castId}`, "设定投送失败", async () => {
-                const [allCast, takes] = await Promise.all([fetchCast(), fetchTakes(castId, "cast")]);
-                const cast = allCast.find((item) => item.id === castId);
-                if (!cast) throw new Error("这个设定已被删除");
-                const items = dramaCastResourceIds(cast, takes).map((resourceId) => ({ resourceId, title: castTitle(cast), category: dramaCastAssetCategory(cast.kind) }));
-                const media = await registerMedia(items, cast.imageResourceId ? [cast.imageResourceId] : []);
-                const existing = standaloneCastNode(nodesRef.current, castId);
-                if (existing) return focus([existing.id]);
-                const draft = buildDramaCastNode({ projectId: dramaId, cast, ratio: castRatio(cast.kind, latest.current.summary?.production.settings), takes, media, topLeft: { x: 0, y: 0 } });
-                const node = { ...draft, position: dramaPlacement(nodesRef.current, draft, { kind: "cast" }) };
-                setNodes((items) => [...items, node]);
-                focus([node.id]);
+            await run(castId ? `cast:${castId}` : "settings", "设定投送失败", async () => {
+                const allCast = await fetchCast();
+                const stillOpen = () => activeCanvas.current === canvasId && latest.current.input.dramaId === dramaId;
+                if (!stillOpen()) return;
+                const settings = dramaSettingNodes(nodesRef.current, dramaId);
+                const selected = allCast.filter((cast) => (castId ? cast.id === castId : Boolean(cast.imageResourceId)));
+                if (castId && !selected.length) throw new Error("这个设定已被删除");
+                const missing = selected.filter((cast) => !settings.has(cast.id));
+                if (!missing.length) {
+                    const existing = castId && settings.get(castId);
+                    if (existing) focus([existing.id]);
+                    return;
+                }
+                const takes = new Map<string, DramaTake[]>();
+                // 批量打开时只读取有历史版本的设定，限制同时发起的版本查询。
+                const versioned = missing.filter((cast) => castId || cast.imageVersion > 1);
+                for (let offset = 0; offset < versioned.length; offset += 8) {
+                    await Promise.all(versioned.slice(offset, offset + 8).map(async (cast) => takes.set(cast.id, await fetchTakes(cast.id, "cast"))));
+                    if (!stillOpen()) return;
+                }
+                const items = missing.flatMap((cast) => dramaCastResourceIds(cast, takes.get(cast.id)).map((resourceId) => ({ resourceId, title: castTitle(cast), category: dramaCastAssetCategory(cast.kind) })));
+                const media = await registerMedia(items, castId && missing[0]?.imageResourceId ? [missing[0].imageResourceId] : []);
+                if (!stillOpen()) return;
+                const available = missing.filter((cast) => !cast.imageResourceId || media.assetIdOf(cast.imageResourceId));
+                const drafts = available.map((cast) => ({
+                    cast,
+                    node: buildDramaCastNode({ projectId: dramaId, cast, ratio: castRatio(cast.kind, latest.current.summary?.production.settings), takes: takes.get(cast.id), media, topLeft: { x: 0, y: 0 } }),
+                }));
+                const before = nodesRef.current;
+                const next = placeDramaCastGroups(before, dramaId, drafts);
+                if (next !== before) setNodes(next);
+                const onCanvas = dramaSettingNodes(next, dramaId);
+                if (castId) {
+                    const target = onCanvas.get(castId);
+                    if (target) focus([target.id]);
+                } else if (next !== before) {
+                    focus([...new Set(available.map((cast) => onCanvas.get(cast.id)?.parentId).filter((id): id is string => Boolean(id)))]);
+                }
+                if (available.length < missing.length) message.warning(`${missing.length - available.length} 张设定参考图不可用，请在制作台检查后重试`);
             });
         },
-        [dramaId, fetchCast, fetchTakes, focus, nodesRef, registerMedia, run, setNodes],
+        [canvasId, dramaId, fetchCast, fetchTakes, focus, message, nodesRef, registerMedia, run, setNodes],
     );
 
     /** 把若干剧情段排成段框：同一集接在已有段框下方，参考图连线按短剧的参考图编号。 */
@@ -322,7 +355,7 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
                 let frameId = findDramaSegmentFrame(nodesRef.current, segment.id)?.id;
                 if (!frameId) {
                     const [allCast, takes] = await Promise.all([fetchCast(), fetchTakes(segment.id, "video")]);
-                    const media = await registerMedia(segmentAssetItems(detail.episode, segment, takes), dramaSegmentRequiredResourceIds(segment));
+                    const media = await registerMedia(segmentAssetItems(detail.episode, segment, takes, new Map(allCast.map((cast) => [cast.id, cast]))), dramaSegmentRequiredResourceIds(segment));
                     ensureCurrentCanvas();
                     frameId = findDramaSegmentFrame(nodesRef.current, segment.id)?.id || placeSegments(detail, [segment], [takes], allCast, media)[0];
                 }
@@ -347,10 +380,12 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
                 const missing = ordered.filter((segment) => !findDramaSegmentFrame(nodesRef.current, segment.id));
                 if (missing.length) {
                     const [allCast, takesList] = await Promise.all([fetchCast(), Promise.all(missing.map((segment) => fetchTakes(segment.id, "video")))]);
+                    const castById = new Map(allCast.map((cast) => [cast.id, cast]));
                     const media = await registerMedia(
-                        missing.flatMap((segment, index) => segmentAssetItems(detail.episode, segment, takesList[index])),
+                        missing.flatMap((segment, index) => segmentAssetItems(detail.episode, segment, takesList[index], castById)),
                         missing.flatMap((segment) => dramaSegmentRequiredResourceIds(segment)),
                     );
+                    if (activeCanvas.current !== canvasId || latest.current.input.dramaId !== dramaId) return;
                     const pending = missing.map((segment, index) => ({ segment, takes: takesList[index] })).filter(({ segment }) => !findDramaSegmentFrame(nodesRef.current, segment.id));
                     placeSegments(
                         detail,
@@ -363,7 +398,7 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
                 }
                 focus(ordered.map((segment) => findDramaSegmentFrame(nodesRef.current, segment.id)?.id).filter((id): id is string => Boolean(id)));
             }),
-        [fetchCast, fetchEpisode, fetchTakes, focus, message, nodesRef, placeSegments, registerMedia, run],
+        [canvasId, dramaId, fetchCast, fetchEpisode, fetchTakes, focus, message, nodesRef, placeSegments, registerMedia, run],
     );
 
     /** 成片投送只接收已生成的视频。 */
@@ -431,7 +466,7 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
                 target.kind === "cast"
                     ? { projectId: dramaId, kind: "cast", id: target.castId, baseResourceId: resourceId }
                     : { projectId: dramaId, kind: "segment", id: target.segmentId, episodeId: target.episodeId, segmentIndex: target.segmentIndex, baseResourceId: resourceId };
-            setNodes((items) => items.map((item) => (item.id === nodeId ? { ...item, metadata: { ...item.metadata, dramaRef: ref } } : item)));
+            setNodes((items) => items.map((item) => (item.id === nodeId ? { ...item, metadata: { ...item.metadata, dramaRef: ref.kind === "cast" ? { ...ref, castRole: item.metadata?.dramaRef?.castRole } : ref } } : item)));
             invalidate(target.kind === "segment" ? target.episodeId : undefined);
         },
         [dramaId, invalidate, setNodes],
@@ -457,7 +492,11 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
     const handledFocusRef = useRef("");
     const summaryFailed = summaryQuery.isError;
     useEffect(() => {
-        if (!projectLoaded || (!dramaParam && !focusParam)) return;
+        if (!dramaParam && !focusParam) {
+            handledFocusRef.current = "";
+            return;
+        }
+        if (!projectLoaded) return;
         const key = `${canvasId}|${dramaParam || ""}|${focusParam || ""}|${editorParam || ""}`;
         if (handledFocusRef.current === key) return;
         const mismatch = Boolean(dramaParam && dramaParam !== dramaId);
@@ -484,11 +523,12 @@ export function useCanvasDrama(input: UseCanvasDramaInput) {
         }
         const focusTarget = parseDramaCanvasFocus(focusParam);
         const editor = parseDramaCanvasEditor(editorParam);
-        if (!editor || (editor !== "canvas" && focusTarget?.kind !== "segment")) {
+        if (!editor || (focusParam !== null && !focusTarget) || (editor !== "canvas" && focusTarget?.kind !== "segment")) {
             message.warning("精修入口无效，请从制作台选择剧情段后重试");
             return;
         }
         if (focusTarget) void dispatchFocus(focusTarget, editor);
+        else void projectCast();
         // 投送函数只在这一次执行时读取；handledFocusRef 保证同一组参数只处理一次。
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canvasId, dramaId, dramaParam, editorParam, focusParam, message, projectLoaded, setSearchParams, summary, summaryFailed]);

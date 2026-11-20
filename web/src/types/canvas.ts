@@ -276,6 +276,8 @@ export type CanvasDramaRef = {
     projectId: string;
     kind: "cast" | "segment" | "final";
     id: string;
+    /** 区分作品设定和段内参考图，使拖动到其他分组后仍能定位原设定。 */
+    castRole?: "setting" | "reference";
     episodeId?: string;
     segmentIndex?: number;
     /** 投送或最近一次同步时短剧侧的当前资源；短剧现状与它不同且与节点媒体也不同，说明短剧侧已更新。 */

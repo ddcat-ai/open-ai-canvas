@@ -466,7 +466,13 @@ export default function DramaStudioPage() {
                                 <span className="drama-topbar-action-label">资产包</span>
                             </Button>
                         </Dropdown>
-                        <Button icon={<Brush className="size-4" />} loading={canvas.opening === "canvas"} onClick={() => void canvas.open()} aria-label="精修画布" title="打开这部短剧的精修画布：投送设定、剧情段或成片，精修后采用回短剧">
+                        <Button
+                            icon={<Brush className="size-4" />}
+                            loading={canvas.opening !== null}
+                            onClick={() => void canvas.open(episodeRow?.stats.segments ? { kind: "episode", episodeId: episodeRow.id } : undefined)}
+                            aria-label="精修画布"
+                            title="打开当前集的精修画布，按剧情段放入参考图和镜头表"
+                        >
                             <span className="drama-topbar-action-label">精修画布</span>
                         </Button>
                         {awaitingCount ? (
