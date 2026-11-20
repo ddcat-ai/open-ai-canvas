@@ -91,11 +91,14 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     const kind = canvasNodeGenerationKind(node.type);
     const Icon = generationKindIcon[kind];
     const uncertain = phase === "uncertain";
+    const ll2Upscaling = Boolean(ll2Direct && /超分/.test(metadata?.ll2Stage || ""));
     const title = ll2Stale
         ? "生成状态未确认"
-        : ll2Direct
-          ? "正在生成"
-          : workflow
+        : ll2Upscaling
+          ? "正在超分"
+          : ll2Direct
+            ? "正在生成"
+            : workflow
           ? (workflow.stage === "planning" ? "正在规划拆层" : `正在拆层 · 共 ${workflow.total} 张`)
           : metadata?.experimentalLayerPlan?.progress || generationPhaseLabel(phase, kind, metadata?.taskStage);
     const progress = taskId && generationTaskShowsProgress(displayTask) && typeof metadata?.taskProgress === "number" ? Math.max(0, Math.min(100, Math.round(metadata.taskProgress))) : null;

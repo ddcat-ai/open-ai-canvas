@@ -2246,7 +2246,14 @@ function CanvasViewportPage() {
 
     const handleUpscaleVideo = useCallback(
         async (node: CanvasNodeData, target: LL2UpscaleTarget) => {
-            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: "loading", ll2Stage: `正在超分 ${ll2UpscaleTargetLabel(target)}`, errorDetails: undefined } } : item)));
+            // 超分是一段新的等待：重置计时起点，不要把生成阶段的 18 分钟累积进来。
+            setNodes((current) =>
+                current.map((item) =>
+                    item.id === node.id
+                        ? { ...item, metadata: { ...item.metadata, status: "loading", ll2Stage: `正在超分 ${ll2UpscaleTargetLabel(target)}`, taskCreatedAt: new Date().toISOString(), taskCompletedAt: undefined, errorDetails: undefined } }
+                        : item,
+                ),
+            );
             try {
                 const result = await upscaleCanvasVideo({
                     node,
@@ -2274,6 +2281,7 @@ function CanvasViewportPage() {
                                       requiresAuth: false,
                                       ll2Stage: undefined,
                                       ll2HdTaskId: undefined,
+                                      taskCompletedAt: new Date().toISOString(),
                                       errorDetails: undefined,
                                       ...(result.posterUrl ? { videoPreview: { content: result.posterUrl, width: result.width || 1280, height: result.height || 720 } } : {}),
                                   },

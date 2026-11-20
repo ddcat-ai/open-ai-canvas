@@ -224,6 +224,15 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("超分会重置计时起点，标题显示正在超分", async () => {
+    const project = await read("../src/pages/canvas/project.tsx");
+    expect(project).toContain("超分是一段新的等待");
+    expect(project).toContain("taskCreatedAt: new Date().toISOString()");
+    const status = await read("../src/components/canvas/canvas-node-status-content.tsx");
+    expect(status).toContain("ll2Upscaling");
+    expect(status).toContain('"正在超分"');
+});
+
 test("已生成视频可从右键菜单直接超分，并按当前清晰度给目标档", async () => {
     const helper = await read("../src/lib/canvas/canvas-video-upscale.ts");
     expect(helper).toContain("canvasVideoUpscaleOptions");
