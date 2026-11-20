@@ -11,12 +11,31 @@ import (
 	"yingce/backend/internal/protocol"
 )
 
-// SystemProxyDeclaredPostPaths 返回已安装声明式插件的 POST create / agent 路径，
-// 已去掉 /v1 等版本前缀，与浏览器发往系统代理的路径同一形态。协议未安装或不是声明式插件时返回 nil，
-// 调用方据此拒绝内置合同以外的路径。
-func (s *Service) SystemProxyDeclaredPostPaths(protocolID model.ChannelInterfaceType) []string {
-	metadata, ok := s.protocolMetadata(string(protocolID))
-	if !ok || metadata.Execution != "declarative" {
+type SystemProxyContract struct {
+	protocolID model.ChannelInterfaceType
+	metadata   protocol.Metadata
+}
+
+func (s *Service) ResolveSystemProxyContract(protocolID model.ChannelInterfaceType, digest string) (SystemProxyContract, error) {
+	contract := SystemProxyContract{protocolID: protocolID}
+	if protocolID == "" {
+		return contract, nil
+	}
+	release, err := selectModelRelease(s.protocolRegistry(), string(protocolID), digest, false)
+	if err != nil {
+		return contract, err
+	}
+	adapter, ok := release.Registry.Resolve(string(protocolID))
+	if !ok {
+		return contract, BadAuthRequest("系统模型的请求协议不可用")
+	}
+	contract.metadata = adapter.Metadata()
+	return contract, nil
+}
+
+func (contract SystemProxyContract) DeclaredPostPaths() []string {
+	metadata := contract.metadata
+	if metadata.Execution != "declarative" {
 		return nil
 	}
 	paths := make([]string, 0, 2)
@@ -53,10 +72,9 @@ func systemProxyComparablePath(path string) string {
 	return path
 }
 
-// ApplySystemProxyAuth 按插件声明的 auth 写出站鉴权（与声明式任务共用 applyProtocolAuth）；
-// 协议没有安装声明式插件或插件未声明鉴权方式时，保留系统代理原有的内置写法。
-func (s *Service) ApplySystemProxyAuth(req *http.Request, channel *model.ModelChannel, protocolID model.ChannelInterfaceType) error {
-	if metadata, ok := s.protocolMetadata(string(protocolID)); ok && metadata.Execution == "declarative" && strings.TrimSpace(metadata.Auth.Type) != "" {
+func (contract SystemProxyContract) ApplyAuth(req *http.Request, channel *model.ModelChannel) error {
+	protocolID, metadata := contract.protocolID, contract.metadata
+	if metadata.Execution == "declarative" && strings.TrimSpace(metadata.Auth.Type) != "" {
 		config := providerConfig{APIKey: channel.APIKey, SecretKey: channel.SecretKey, APIFormat: channelAPIFormatForProtocol(channel.APIFormat, protocolID)}
 		return applyProtocolAuth(req, config, metadata.Auth)
 	}

@@ -402,11 +402,16 @@ func (s *Service) logicalModelBundle(actor *model.User, id string, req LogicalMo
 			return nil, nil, nil, false, BadAuthRequest("前台模型只能同步系统渠道模型")
 		}
 		capability = normalizeCapability(source.Capability)
-		derivedSpec, specErr := channelModelCapabilitySpec(*source, s.protocolRegistry())
+		profile, err := normalizedChannelModelCapability(source, s.protocolRegistry())
+		if err != nil {
+			return nil, nil, nil, false, err
+		}
+		derivedSpec, specErr := CapabilitySpecFromModelCapabilityConfig(profile, capability)
 		if specErr != nil {
 			return nil, nil, nil, false, specErr
 		}
-		derivedDefaults, defaultsErr := channelModelDefaultOptions(*source, derivedSpec, s.protocolRegistry())
+		derivedSpec = capabilitySpecWithPriceTiers(derivedSpec, *source)
+		derivedDefaults, defaultsErr := channelModelDefaultOptions(*source, derivedSpec, profile)
 		if defaultsErr != nil {
 			return nil, nil, nil, false, defaultsErr
 		}
@@ -651,12 +656,10 @@ func defaultMap(value map[string]any) map[string]any {
 }
 
 func channelModelCapabilitySpec(channelModel model.ChannelModel, registries ...*protocol.Registry) (CapabilitySpec, error) {
-	config, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
-	if err != nil {
-		return CapabilitySpec{}, BadAuthRequest("渠道模型能力配置无效，请先修复渠道模型")
-	}
-	if config != nil {
-		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config, registries...)
+	var config *ModelCapabilityConfig
+	if strings.TrimSpace(channelModel.CapabilityConfigJSON) != "" {
+		var err error
+		config, err = normalizedChannelModelCapability(&channelModel, registries...)
 		if err != nil {
 			return CapabilitySpec{}, err
 		}
@@ -729,51 +732,37 @@ func capabilitySpecWithPriceTiers(spec CapabilitySpec, channelModel model.Channe
 	return result
 }
 
-func channelModelDefaultOptions(channelModel model.ChannelModel, spec CapabilitySpec, registries ...*protocol.Registry) (map[string]any, error) {
-	config, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
-	if err != nil {
-		return nil, BadAuthRequest("渠道模型能力配置无效，请先修复渠道模型")
-	}
-	if config != nil {
-		config, err = NormalizeModelCapabilityConfigForModel(normalizeCapability(channelModel.Capability), string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), config, registries...)
-		if err != nil {
-			return nil, err
-		}
-	}
+func channelModelDefaultOptions(channelModel model.ChannelModel, spec CapabilitySpec, config *ModelCapabilityConfig) (map[string]any, error) {
 	defaults := make(map[string]any)
 	if spec.Capability == "image" && spec.ImageParameters != nil {
 		return normalizeLogicalDefaults(spec, imageParameterDefaults(spec.ImageParameters))
 	}
-	if config != nil {
-		switch normalizeCapability(channelModel.Capability) {
-		case "image":
-			if config.Image != nil {
-				defaults["size"] = config.Image.Size.Default
-				if config.Image.Quality.Supported {
-					defaults["quality"] = config.Image.Quality.Default
-				}
-				if config.Image.TransparentBackground.Supported {
-					defaults["transparentBackground"] = config.Image.TransparentBackground.Default
-				}
-			}
-		case "video":
-			if config.Video != nil {
-				defaults["videoSeconds"] = config.Video.Duration.Default
-				defaults["vquality"] = normalizeChannelModelTierResolution(config.Video.DefaultResolution)
-				if len(config.Video.Ratios) > 0 {
-					defaults["size"] = config.Video.DefaultRatio
-				}
-				if config.Video.GenerateAudio.Supported {
-					defaults["videoGenerateAudio"] = config.Video.GenerateAudio.Default
-				}
-				if config.Video.Watermark.Supported {
-					defaults["videoWatermark"] = config.Video.Watermark.Default
-				}
-			}
+	switch spec.Capability {
+	case "image":
+		image := config.Image
+		defaults["size"] = image.Size.Default
+		if image.Quality.Supported {
+			defaults["quality"] = image.Quality.Default
+		}
+		if image.TransparentBackground.Supported {
+			defaults["transparentBackground"] = image.TransparentBackground.Default
+		}
+	case "video":
+		video := config.Video
+		defaults["videoSeconds"] = video.Duration.Default
+		defaults["vquality"] = normalizeChannelModelTierResolution(video.DefaultResolution)
+		if len(video.Ratios) > 0 {
+			defaults["size"] = video.DefaultRatio
+		}
+		if video.GenerateAudio.Supported {
+			defaults["videoGenerateAudio"] = video.GenerateAudio.Default
+		}
+		if video.Watermark.Supported {
+			defaults["videoWatermark"] = video.Watermark.Default
 		}
 	}
 	// 当渠道默认规格没有价格档时，优先选择第一个可结算档，确保初始选择可直接生成。
-	if normalizeCapability(channelModel.Capability) == "video" && channelModelPriceTierForIntent(channelModel, ModelRequestIntent{Capability: "video", Options: defaults}) == nil {
+	if spec.Capability == "video" && channelModelPriceTierForIntent(channelModel, ModelRequestIntent{Capability: "video", Options: defaults}) == nil {
 		for _, tier := range channelModel.PriceTiers {
 			if !tier.Enabled || !tier.PriceConfigured {
 				continue

@@ -3,11 +3,47 @@
 package app
 
 import (
+	_ "embed"
+	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 
 	"yingce/backend/internal/model"
 )
+
+//go:embed video_model_presets.json
+var videoModelPresetsJSON []byte
+
+var videoModelPresets = func() map[[2]string]VideoCapabilityConfig {
+	var presets []struct {
+		Provider string
+		Models   []string
+		Video    VideoCapabilityConfig
+	}
+	if err := json.Unmarshal(videoModelPresetsJSON, &presets); err != nil {
+		panic(err)
+	}
+	profiles := make(map[[2]string]VideoCapabilityConfig)
+	for _, preset := range presets {
+		for _, name := range preset.Models {
+			profiles[[2]string{preset.Provider, name}] = preset.Video
+		}
+	}
+	return profiles
+}()
+
+func officialVideoPreset(provider, modelName string) *VideoCapabilityConfig {
+	profile, ok := videoModelPresets[[2]string{provider, strings.TrimSpace(modelName)}]
+	if !ok {
+		return nil
+	}
+	profile.Ratios = slices.Clone(profile.Ratios)
+	profile.Resolutions = slices.Clone(profile.Resolutions)
+	profile.Operations = slices.Clone(profile.Operations)
+	profile.Duration.Values = slices.Clone(profile.Duration.Values)
+	return &profile
+}
 
 func DefaultModelCapabilityConfig(protocol string) *ModelCapabilityConfig {
 	return DefaultModelCapabilityConfigForModel(protocol, "")
@@ -167,6 +203,9 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 	// 文本模型是否支持视觉输入不能从协议或模型名可靠推断，默认关闭，由管理员按真实上游能力开启。
 	streaming := true
 	text := &TextCapabilityConfig{Streaming: &streaming, ContextWindowTokens: 128000, MaxOutputTokens: 16384, References: TextReferenceConfig{PromptMaxChars: 32000}}
+	if profile := officialVideoPreset(protocol, modelName); profile != nil {
+		return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: profile}
+	}
 	video := &VideoCapabilityConfig{
 		References:        VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MinImages: 0, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
@@ -209,18 +248,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
 		video.Resolutions = []string{"480p", "720p", "1080p"}
 	case model.ChannelInterfaceType("volcengine-ark-seedance-25"):
-		video.Operations = append(video.Operations, "reference_to_video", "audio_to_video")
-		video.References.MaxImages = 30
-		video.References.MaxVideos, video.References.MaxAudios = 10, 10
-		video.References.MaxImageBytes = 30 * 1024 * 1024
-		video.References.MaxVideoBytes, video.References.MaxAudioBytes = 200*1024*1024, 15*1024*1024
-		video.References.MaxVideoDuration, video.References.MaxAudioDuration = 30, 30
-		video.Duration = VideoDurationConfig{Selection: "range", Min: 4, Max: 30, Step: 1, Default: 5}
-		video.Ratios = []string{"adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}
-		video.DefaultRatio = "adaptive"
-		video.GenerateAudio = VideoBooleanConfig{Supported: true, Default: true}
-		video.Watermark = VideoBooleanConfig{Supported: true, Default: false}
-		video.Resolutions = []string{"480p", "720p", "1080p"}
+		video = officialVideoPreset(protocol, "")
 	case model.ChannelInterfaceNewAPIChannel1, model.ChannelInterfaceNewAPIChannel2:
 		video.References.MaxVideos, video.References.MaxAudios = 3, 3
 		video.References.MaxVideoBytes, video.References.MaxAudioBytes = 200*1024*1024, 15*1024*1024

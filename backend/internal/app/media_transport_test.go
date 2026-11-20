@@ -102,7 +102,7 @@ func TestReferenceTransportResolutionDoesNotTrustTaskConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := providerConfig{ChannelID: channelID, Model: "gpt-test", CapabilityConfig: &ModelCapabilityConfig{MediaTransport: &ReferenceMediaTransport{Image: "base64"}}}
-	resolved, err := s.resolveProviderConfig(config)
+	resolved, err := s.resolveProviderConfig(config, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

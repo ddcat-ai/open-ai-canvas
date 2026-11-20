@@ -238,7 +238,7 @@ func (r *Repository) APICallLogTasks(ids []string) ([]model.Task, error) {
 func (r *Repository) LatestProviderRequestIDForTask(taskID string) (string, error) {
 	var log model.ApiCallLog
 	err := r.db.Select("provider_request_id").
-		Where("task_id = ? AND provider_request_id <> ''", taskID).
+		Where("task_id = ? AND request_kind = 'create' AND provider_request_id <> ''", taskID).
 		Order("created_at desc").
 		First(&log).Error
 	return strings.TrimSpace(log.ProviderRequestID), err
@@ -255,7 +255,7 @@ func (r *Repository) LatestProviderRequestIDsForTasks(taskIDs []string) (map[str
 	}
 	var logs []model.ApiCallLog
 	err := r.db.Select("task_id", "provider_request_id", "created_at").
-		Where("task_id IN ? AND provider_request_id <> ''", taskIDs).
+		Where("task_id IN ? AND request_kind = 'create' AND provider_request_id <> ''", taskIDs).
 		Order("created_at desc").
 		Find(&logs).Error
 	if err != nil {

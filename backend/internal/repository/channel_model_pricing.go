@@ -68,6 +68,7 @@ func (r *Repository) UpdateChannelModelProtocols(items []model.ChannelModel) err
 				Where("id = ? AND channel_id = ? AND updated_at = ?", item.ID, item.ChannelID, item.UpdatedAt).
 				Updates(map[string]any{
 					"protocol":               item.Protocol,
+					"protocol_release":       item.ProtocolRelease,
 					"capability_config_json": item.CapabilityConfigJSON,
 					"capability_version":     item.CapabilityVersion,
 				})

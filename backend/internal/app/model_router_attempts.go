@@ -29,6 +29,7 @@ func (s *Service) createRouteAttempt(task *model.Task, routed *RoutedModel, atte
 		return nil, err
 	}
 	attempt := &model.RouteAttempt{ID: id, TaskID: task.ID, RouteRun: task.RouteRun, AttemptNumber: attemptNumber, LogicalModelID: routed.LogicalModel.ID, LogicalModelRevisionID: routed.Revision.ID, RouteID: routed.Route.ID, ChannelModelID: channelModel.ID, ChannelID: channelModel.ChannelID, Status: "selected", DispatchState: "not_sent", StartedAt: time.Now()}
+	attempt.ProtocolBindingJSON = task.ProtocolBindingJSON
 	if err := s.repo.CreateRouteAttempt(attempt); err != nil {
 		return nil, err
 	}
@@ -86,6 +87,9 @@ func (s *Service) beginTaskRouteAttempt(task *model.Task) (*model.RouteAttempt, 
 	}
 	routed, routeErr := s.routedModelForTaskSelection(task)
 	if routeErr != nil {
+		if task.ProtocolBindingJSON != "" {
+			return nil, routeErr
+		}
 		return s.switchTaskToNextRoute(task, attempts)
 	}
 	return s.createRouteAttempt(task, routed, len(attempts)+1)
@@ -143,6 +147,9 @@ func (s *Service) routedModelForTaskSelection(task *model.Task) (*RoutedModel, e
 	}
 	if revision.LogicalModelID != logicalModel.ID {
 		return nil, errors.New("任务前台模型版本不一致")
+	}
+	if task.ProtocolBindingJSON != "" {
+		return &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: *route, ChannelModel: *channelModel}, nil
 	}
 	productSpec, err := DecodeCapabilitySpec(revision.CapabilitySpecJSON)
 	if err != nil {
@@ -265,6 +272,10 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 	}
 	routed := &RoutedModel{LogicalModel: *logicalModel, Revision: *revision, Route: selected.Route, ChannelModel: selected.ChannelModel, CapabilitySpec: selected.CapabilitySpec, PriceTier: priceTier, Defaults: defaults, Intent: intent}
 	nextInput := applyRoutedProviderSelection(input, routed)
+	binding, err := s.captureTaskProtocolBinding(nextInput, &selected.ChannelModel)
+	if err != nil {
+		return nil, err
+	}
 	if err := s.ValidateTaskCapability(nextInput); err != nil {
 		return nil, err
 	}
@@ -303,7 +314,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 		capability := selected.ChannelModel.Capability
 		snapshotCreditCost(&costOrder, channelModelPriceTierForIntent(selected.ChannelModel, intent, selected.CapabilitySpec), requestedBillingQuantity(capability, config), estimateTaskBillingTokens(nextInput, capability))
 	}
-	if err := s.repo.SwitchTaskLogicalRoute(task.ID, previousRouteID, selected.Route.ID, string(encoded), task.BillingOrderID, selected.ChannelModel.ChannelID, selected.ChannelModel.ID, replacement, costOrder.BillingCostSnapshot); err != nil {
+	if err := s.repo.SwitchTaskLogicalRoute(task.ID, previousRouteID, selected.Route.ID, string(encoded), task.BillingOrderID, selected.ChannelModel.ChannelID, selected.ChannelModel.ID, replacement, costOrder.BillingCostSnapshot, binding); err != nil {
 		if errors.Is(err, repository.ErrInsufficientCredits) {
 			return nil, BadAuthRequest("模型服务价格发生变化，当前积分余额不足")
 		}
@@ -313,6 +324,7 @@ func (s *Service) switchTaskToNextRoute(task *model.Task, attempts []model.Route
 		return nil, err
 	}
 	task.RouteID = selected.Route.ID
+	task.ProtocolBindingJSON = binding
 	task.ChannelModelID = selected.ChannelModel.ID
 	task.InputJSON = string(encoded)
 	task.ProviderRequestID = ""
@@ -392,6 +404,10 @@ func (s *Service) prepareLogicalTaskRetry(task *model.Task, input map[string]any
 		return err
 	}
 	input = applyRoutedProviderSelection(input, routed)
+	task.ProtocolBindingJSON, err = s.captureTaskProtocolBinding(input, &routed.ChannelModel)
+	if err != nil {
+		return err
+	}
 	if err := s.ValidateTaskCapability(input); err != nil {
 		return err
 	}

@@ -108,6 +108,9 @@ func TestImageParametersResolutionOnlyAndLogicalReconciliation(t *testing.T) {
 	if resolved.Image.Quality.Supported || !resolved.Image.Resolution.Supported || resolved.Image.Resolution.Default != "2k" {
 		t.Fatalf("resolution contract = %#v", resolved.Image)
 	}
+	if config.Image.Parameters != nil || !config.Image.Quality.Supported {
+		t.Fatal("resolving a channel model changed the shared image template")
+	}
 	route, err := CapabilitySpecFromModelCapabilityConfig(resolved, "image")
 	if err != nil {
 		t.Fatal(err)
@@ -136,9 +139,7 @@ func TestImageParametersAdmissionPricingAndProviderUseSameValues(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("example", "model")
 	profile.Image.Parameters = parameters
 	profile.Image.Size = ImageSizeConfig{Parameter: "none", Default: "auto"}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	spec, err := CapabilitySpecFromModelCapabilityConfig(profile, "image")
 	if err != nil {
 		t.Fatal(err)
@@ -266,9 +267,7 @@ func TestImageParametersDeclaredResolutionNamesAndPixelsAreNotFixedTiers(t *test
 		{Name: "imageResolution", Label: "Resolution", Type: "string", Values: []any{"panorama"}, Default: "panorama", Binding: "resolution"},
 	}
 	profile.Image.Size.Presets = []ImageSizePreset{{Tier: "panorama", Ratio: "2:1", Width: 8192, Height: 4096, Size: "8192x4096"}}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	if err := validateImageCapabilityConfig(profile.Image); err != nil {
 		t.Fatal(err)
 	}
@@ -291,9 +290,7 @@ func TestImageParametersSaveDifferentRatiosPerResolution(t *testing.T) {
 		{Tier: "1k", Ratio: "1:1", Width: 1024, Height: 1024, Size: "1024x1024"},
 		{Tier: "2k", Ratio: "16:9", Width: 2560, Height: 1440, Size: "2560x1440"},
 	}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	if err := validateImageSizePresetRequirement("image", "opaque-provider", profile); err != nil {
 		t.Fatal(err)
 	}
@@ -313,9 +310,7 @@ func TestImageParametersFreePixelEncodingReachesAdapterParameters(t *testing.T) 
 	profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model")
 	profile.Image.Parameters = []protocol.ImageParameter{{Name: "size", Label: "Size", Type: "string", Default: "1024x1024", Binding: "aspectRatio", Encoding: "pixels"}}
 	profile.Image.Size.Presets = []ImageSizePreset{{Tier: "1k", Ratio: "16:9", Width: 1824, Height: 1024, Size: "1824x1024"}}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	config := providerConfig{InterfaceType: "opaque-provider", Size: "1824x1024", ImageParameters: map[string]any{"size": "16:9"}}
 	if err := applyImageParameterValues(&config, profile.Image); err != nil {
 		t.Fatal(err)
@@ -328,9 +323,7 @@ func TestImageParametersFreePixelEncodingReachesAdapterParameters(t *testing.T) 
 func TestImageParametersUnboundedQualityUsesDeclaredContract(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model")
 	profile.Image.Parameters = []protocol.ImageParameter{{Name: "quality", Label: "Quality", Type: "string", Default: "custom", Binding: "quality"}}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	input := canvasGenerationInput{Config: providerConfig{Quality: "custom", ImageParameters: map[string]any{"quality": "custom"}}}
 	if err := validateImageTask(profile.Image, input); err != nil {
 		t.Fatalf("unbounded quality rejected: %v", err)
@@ -345,9 +338,7 @@ func TestImageParametersPixelSelectionKeepsExactSizeWithoutResolution(t *testing
 	profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model")
 	profile.Image.Parameters = []protocol.ImageParameter{{Name: "size", Label: "Size", Type: "string", Values: []any{"1024x1024", "2048x2048"}, Default: "1024x1024", Binding: "aspectRatio", Encoding: "pixels"}}
 	profile.Image.Size.Presets = []ImageSizePreset{{Tier: "1k", Ratio: "1:1", Width: 1024, Height: 1024, Size: "1024x1024"}, {Tier: "2k", Ratio: "1:1", Width: 2048, Height: 2048, Size: "2048x2048"}}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	spec, err := CapabilitySpecFromModelCapabilityConfig(profile, "image")
 	if err != nil || spec.ImageSize == nil || len(spec.ImageSize.Presets) != 2 {
 		t.Fatalf("pixel-only public projection lost configured groups: %#v %v", spec.ImageSize, err)
@@ -378,9 +369,7 @@ func TestImageParametersDisabledResolutionUsesDefaultAndPreservesGroups(t *testi
 	if err := json.Unmarshal(encoded, &reopened); err != nil {
 		t.Fatal(err)
 	}
-	if err := projectImageParameters(reopened.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(reopened.Image)
 	if err := validateImageSizePresetRequirement("image", "opaque-provider", &reopened); err != nil {
 		t.Fatal(err)
 	}
@@ -395,9 +384,7 @@ func TestImageParametersDisabledResolutionUsesDefaultAndPreservesGroups(t *testi
 		t.Fatal("stored and active presets not separated")
 	}
 	reopened.Image.Parameters[1].Enabled = nil
-	if err := projectImageParameters(reopened.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(reopened.Image)
 	if len(activeImageSizePresets(reopened.Image)) != 2 {
 		t.Fatal("enabling lost presets")
 	}
@@ -407,9 +394,7 @@ func TestImageParametersDisabledResolutionRejectsAmbiguousPixels(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("opaque-provider", "opaque-model")
 	profile.Image.Parameters = []protocol.ImageParameter{{Name: "size", Label: "Frame", Type: "string", Values: []any{"1:1"}, Default: "1:1", Binding: "aspectRatio", Encoding: "pixels"}}
 	profile.Image.Size.Presets = []ImageSizePreset{{Tier: "1k", Ratio: "1:1", Width: 1024, Height: 1024, Size: "1024x1024"}, {Tier: "2k", Ratio: "1:1", Width: 2048, Height: 2048, Size: "2048x2048"}}
-	if err := projectImageParameters(profile.Image); err != nil {
-		t.Fatal(err)
-	}
+	projectImageParameters(profile.Image)
 	if err := validateImageSizePresetRequirement("image", "opaque-provider", profile); err == nil {
 		t.Fatal("ambiguous pixels accepted")
 	}

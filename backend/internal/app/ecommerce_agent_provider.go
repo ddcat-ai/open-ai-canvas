@@ -143,18 +143,6 @@ func (s *Service) ecommerceConfiguredTextFor(userID string, cfg ecommerceProvide
 		if lookupErr != nil || !selected.Enabled || selected.DeletedAt.Valid || !selected.PriceConfigured || selected.Capability != "text" || selected.ChannelID != channelID || selected.ModelKey != modelKey {
 			return cfg, ecommerceErr("UNAVAILABLE", "已配置的电商 Agent "+stage+"模型已停用或变更，请管理员重新选择")
 		}
-		channels, channelErr := s.repo.SystemChannelsByIDs([]string{selected.ChannelID}, false)
-		if channelErr != nil || len(channels) != 1 || !channels[0].Enabled {
-			return cfg, ecommerceErr("UNAVAILABLE", "已配置的电商 Agent "+stage+"渠道不可用，请管理员重新选择")
-		}
-		// Legacy selections can predate stored capability profiles. Keep their
-		// existing behavior; newly configured profiles must remain compatible.
-		if strings.TrimSpace(selected.CapabilityConfigJSON) != "" {
-			profile, profileErr := normalizedChannelModelCapability(selected, s.protocolRegistry())
-			if profileErr != nil || profile == nil || profile.Text == nil || profile.Text.References.MaxImages < 1 {
-				return cfg, ecommerceErr("UNAVAILABLE", "已配置的电商 Agent "+stage+"模型不再支持图片输入，请管理员重新选择")
-			}
-		}
 	}
 	if ref.LogicalModelID != "" {
 		routed, routeErr := s.ResolveLogicalModel(access, ref.LogicalModelID, ModelRequestIntent{Capability: "text", Inputs: map[string]int{"image": 1}})
@@ -169,9 +157,15 @@ func (s *Service) ecommerceConfiguredTextFor(userID string, cfg ecommerceProvide
 	if err := access.requireChannel(channelID); err != nil {
 		return cfg, err
 	}
-	resolved, err := s.resolveProviderConfig(providerConfig{ChannelID: channelID, ChannelModelKey: modelKey, Model: modelKey})
+	resolved, err := s.resolveProviderConfig(providerConfig{ChannelID: channelID, Model: modelKey}, nil)
 	if err != nil {
 		return cfg, ecommerceErr("UNAVAILABLE", "电商 Agent "+stage+"渠道不可用")
+	}
+	if ref.ChannelModelID != "" {
+		profile := resolved.CapabilityConfig
+		if profile == nil || profile.Text == nil || profile.Text.References.MaxImages < 1 {
+			return cfg, ecommerceErr("UNAVAILABLE", "已配置的电商 Agent "+stage+"模型不再支持图片输入，请管理员重新选择")
+		}
 	}
 	cfg.TextProvider = &resolved
 	cfg.TextModel = resolved.Model
@@ -258,7 +252,7 @@ func (s *Service) ecommerceChatJSON(ctx context.Context, cfg ecommerceProviderCo
 			input.ReferenceImages = append(input.ReferenceImages, providerMedia{DataURL: imageURL})
 		}
 		started := time.Now()
-		result, err := runTextTask(withProtocolRegistry(callCtx, s.protocolRegistry()), input)
+		result, err := runTextTask(withProtocolRegistry(callCtx, input.Config.registry), input)
 		if err != nil {
 			slog.Warn("ecommerce agent text failed", "taskId", taskID, "model", provider.Model, "latencyMs", time.Since(started).Milliseconds(), "error", err)
 			return err

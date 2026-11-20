@@ -5,6 +5,14 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 模型请求插件发行版（Schema 109）
+
+`model_protocol_releases` 增加 `channel_models.protocol_release` 及索引，保存模型绑定的请求包 SHA-256。`tasks.protocol_binding_json` 和 `route_attempts.protocol_binding_json` 在新任务入队、路由尝试时记录版本、上游型号、能力与报价修订，以及渠道连接的 HMAC。快照仅在服务端使用。历史记录的新增列保持空值。
+
+升级历史库时，迁移只为库中已有的这三张表补列，并在渠道模型表存在时补索引。
+
+升级前备份数据库和后端数据目录中的 `plugin_registry.json`、`plugin-packages/` 与 `.settings-key`，运行新版 `migrate-schema up` 和 `migrate-schema verify`。回滚需一并恢复同一时间点的数据库、归档与密钥。
+
 ## 团队空间与积分账户
 
 版本 106 `team_workspaces` 在 SQLite 和 PostgreSQL 使用同一组业务表。个人项目、画布、素材和历史任务不搬入团队，各团队从空库和零余额开始。

@@ -138,7 +138,7 @@ func sortedKeys(values map[string]bool) []string {
 // applyChannelModelsProtocol 保留能力配置与价格档，只按新协议重新规范化并校验；
 // channels 只含允许修改的系统渠道，不在其中的模型视为越权，整批拒绝。
 func (s *Service) applyChannelModelsProtocol(actor *model.User, items []model.ChannelModel, selected map[string]bool, channels map[string]*model.ModelChannel, targets map[string]string) (int, error) {
-	registry := s.protocolRegistry()
+	installed := s.protocolRegistry()
 	updates := make([]model.ChannelModel, 0, len(selected))
 	changed := map[string]bool{}
 	for _, item := range items {
@@ -147,7 +147,11 @@ func (s *Service) applyChannelModelsProtocol(actor *model.User, items []model.Ch
 			continue
 		}
 		name := firstNonEmpty(item.DisplayName, item.ModelKey)
-		_, providerModelKey, capability, protocol, contractErr := s.normalizeChannelModelContract(channel, ChannelModelRequest{
+		release, err := selectEditedModelRelease(installed, &item, targets[item.ID], "")
+		if err != nil {
+			return 0, err
+		}
+		_, providerModelKey, capability, protocol, contractErr := normalizeChannelModelContractWithRegistry(release.Registry, channel, ChannelModelRequest{
 			ModelKey: item.ModelKey, ProviderModelKey: item.ProviderModelKey, Capability: item.Capability, Protocol: targets[item.ID],
 		})
 		if contractErr != nil {
@@ -158,7 +162,7 @@ func (s *Service) applyChannelModelsProtocol(actor *model.User, items []model.Ch
 			if decodeErr != nil {
 				return 0, BadAuthRequest("模型 " + name + " 的能力配置无效，请先单独编辑保存")
 			}
-			normalized, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, config, registry)
+			normalized, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, config, release.Registry)
 			if normalizeErr != nil {
 				return 0, BadAuthRequest("模型 " + name + " 的能力配置不适用于新协议：" + normalizeErr.Error() + "；请单独编辑该模型")
 			}
@@ -166,7 +170,7 @@ func (s *Service) applyChannelModelsProtocol(actor *model.User, items []model.Ch
 			if encodeErr != nil {
 				return 0, encodeErr
 			}
-			if item.CapabilityConfigJSON != string(encoded) {
+			if item.CapabilityConfigJSON != string(encoded) || item.ProtocolRelease != release.SHA256 {
 				item.CapabilityVersion++
 			}
 			item.CapabilityConfigJSON = string(encoded)
@@ -176,6 +180,7 @@ func (s *Service) applyChannelModelsProtocol(actor *model.User, items []model.Ch
 		}
 		changed[item.ID] = item.Protocol != protocol
 		item.Protocol = protocol
+		item.ProtocolRelease = release.SHA256
 		updates = append(updates, item)
 	}
 	if len(updates) != len(selected) {

@@ -392,11 +392,16 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 			capability = channelModel.Capability
 		}
 	}
-	var declaredPaths []string
-	if protocol != "" {
-		declaredPaths = svc.SystemProxyDeclaredPostPaths(protocol)
+	var digest string
+	if channelModel != nil {
+		digest = channelModel.ProtocolRelease
 	}
-	if err := authorizeSystemProxy(channel, protocol, declaredPaths, c.Request.Method, path, c.GetHeader("Content-Type"), body); err != nil {
+	contract, err := svc.ResolveSystemProxyContract(protocol, digest)
+	if err != nil {
+		fail(c, http.StatusForbidden, err)
+		return
+	}
+	if err := authorizeSystemProxy(channel, protocol, contract.DeclaredPostPaths(), c.Request.Method, path, c.GetHeader("Content-Type"), body); err != nil {
 		fail(c, http.StatusForbidden, err)
 		return
 	}
@@ -471,7 +476,7 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		service.ApplyOutboundHeaders(upstreamReq, channelHeaders)
 		service.ApplyDefaultOutboundHeaders(upstreamReq)
 		// 鉴权按插件声明写（bearer / header / anthropic / google-api-key / 签名等），未声明时沿用内置写法。
-		if err := svc.ApplySystemProxyAuth(upstreamReq, channel, protocol); err != nil {
+		if err := contract.ApplyAuth(upstreamReq, channel); err != nil {
 			return nil, err
 		}
 		return upstreamReq, nil

@@ -31,6 +31,17 @@ type PluginProviderCatalogItem struct {
 	Workflows         []protocol.ManifestWorkflow `json:"workflows,omitempty"`
 	TextWire          string                      `json:"textWire,omitempty"`
 	RequiresSecretKey bool                        `json:"requiresSecretKey,omitempty"`
+	Releases          []providerReleaseOption     `json:"releases,omitempty"`
+}
+
+type providerReleaseOption struct {
+	protocol.ProviderRelease
+	Create          string                               `json:"create"`
+	Poll            string                               `json:"poll,omitempty"`
+	ImageParameters []protocol.ImageParameter            `json:"imageParameters"`
+	Workflows       []protocol.ManifestWorkflow          `json:"workflows,omitempty"`
+	VideoModes      protocol.VideoModelModes             `json:"videoModes,omitempty"`
+	VideoOutputs    map[string]protocol.VideoOutputLimit `json:"videoOutputs,omitempty"`
 }
 
 // PluginProviderCatalog projects provider and workflow contributions from the
@@ -39,6 +50,7 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 	wantScope := protocol.Surface(strings.TrimSpace(scope))
 	wantCapability := protocol.Capability(strings.TrimSpace(capability))
 	items := make([]PluginProviderCatalogItem, 0)
+	registry := s.protocolRegistry()
 	for _, plugin := range s.Plugins() {
 		for _, provider := range plugin.Manifest.Contributes.Providers {
 			if !containsPluginSurface(provider.Scopes, wantScope) || (wantCapability != "" && !containsPluginCapability(provider.Capabilities, wantCapability)) {
@@ -50,7 +62,7 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 			item.Kind = provider.Kind
 			// The registry metadata is the canonical provider projection. This keeps
 			// host-backed dispatch paths out of every user-facing catalog consumer.
-			if adapter, ok := canonicalProviderAdapter(s.protocolRegistry(), provider.ID); ok {
+			if adapter, ok := canonicalProviderAdapter(registry, provider.ID); ok {
 				metadata := adapter.Metadata()
 				item.Create, item.Poll, item.ContentType = metadata.Create, metadata.Poll, metadata.ContentType
 				item.TextWire = metadata.TextWire
@@ -59,6 +71,29 @@ func (s *Service) PluginProviderCatalog(scope, capability string, includeUnavail
 			item.RequiresSecretKey = protocolAuthUsesSecretKey(provider.Auth)
 			if includeUnavailable || item.Enabled {
 				items = append(items, item)
+			}
+		}
+	}
+	if wantScope == protocol.SurfaceAdminSystemChannel {
+		byID := make(map[string]int, len(items))
+		for index, item := range items {
+			byID[item.ID] = index
+		}
+		for _, id := range registry.ReleaseProviderIDs() {
+			for _, release := range registry.Releases(id) {
+				adapter, _ := release.Registry.Get(id)
+				info := adapter.Metadata()
+				if !release.Selectable || !containsPluginSurface(info.Scopes, wantScope) || wantCapability != "" && !containsPluginCapability(info.Categories, wantCapability) {
+					continue
+				}
+				index, exists := byID[id]
+				if !exists {
+					index = len(items)
+					byID[id] = index
+					items = append(items, PluginProviderCatalogItem{ID: id, Version: release.Version, Name: info.Name, Vendor: info.Vendor, Categories: info.Categories, Scopes: info.Scopes, Create: info.Create, Poll: info.Poll, ContentType: info.ContentType, Enabled: true})
+				}
+				option := providerReleaseOption{ProviderRelease: release, Create: info.Create, Poll: info.Poll, ImageParameters: info.ImageParameters, Workflows: workflowsForProvider(release.Workflows, id), VideoModes: info.VideoModes, VideoOutputs: info.VideoOutputs}
+				items[index].Releases = append(items[index].Releases, option)
 			}
 		}
 	}
@@ -108,12 +143,46 @@ func operationSummaryPtr(operation *protocol.ManifestOperation) string {
 }
 
 func (s *Service) protocolRegistry() *protocol.Registry {
+	if s.pluginRuntimeErr != nil {
+		return emptyProtocolRegistry
+	}
 	if s.pluginRuntime != nil {
 		if registry := s.pluginRuntime.registrySnapshot(); registry != nil {
 			return registry
 		}
 	}
 	return loadOfficialFallbackRegistry()
+}
+
+func selectModelRelease(registry *protocol.Registry, id, digest string, chooseCurrent bool) (protocol.ProviderRelease, error) {
+	if registry == emptyProtocolRegistry {
+		return protocol.ProviderRelease{}, BadAuthRequest("请求插件运行时不可用")
+	}
+	adapter, installed := registry.Resolve(id)
+	if installed {
+		id = adapter.Metadata().ID
+	}
+	releases := registry.Releases(id)
+	if len(releases) == 0 && digest == "" {
+		return protocol.ProviderRelease{Registry: registry}, nil
+	}
+	for _, release := range releases {
+		if !release.Selectable {
+			continue
+		}
+		if release.SHA256 == digest || digest == "" && release.Current && (chooseCurrent || len(releases) == 1) {
+			return release, nil
+		}
+	}
+	return protocol.ProviderRelease{}, BadAuthRequest("请为协议 " + id + " 选择可用的插件发行版本")
+}
+
+func selectEditedModelRelease(registry *protocol.Registry, current *model.ChannelModel, id, digest string) (protocol.ProviderRelease, error) {
+	changedProtocol := string(current.Protocol) != id
+	if digest == "" && !changedProtocol {
+		digest = current.ProtocolRelease
+	}
+	return selectModelRelease(registry, id, digest, changedProtocol)
 }
 
 func (s *Service) protocolMetadata(id string) (protocol.Metadata, bool) {

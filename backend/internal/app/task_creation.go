@@ -181,6 +181,14 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		workbenchKind = workbenchKindFromTaskInput(normalizedInput, taskType)
 	}
 	task := model.Task{ID: newID(), UserID: userID, TraceID: req.TraceID, RequestID: req.RequestID, ProjectID: req.ProjectID, Type: taskType, WorkbenchKind: workbenchKind, Status: model.TaskStatusQueued, Stage: "等待队列调度", Progress: 5, Prompt: prompt, Operation: req.Operation, Provider: req.Provider, Model: req.Model}
+	var selected *model.ChannelModel
+	if routed != nil {
+		selected = &routed.ChannelModel
+	}
+	task.ProtocolBindingJSON, err = s.captureTaskProtocolBinding(normalizedInput, selected)
+	if err != nil {
+		return nil, err
+	}
 	if req.admission != nil {
 		task.ID = req.admission.ID
 		task.AgentRunID = req.admission.AgentRunID
@@ -407,6 +415,7 @@ func applyRoutedProviderSelection(input map[string]any, routed *RoutedModel) map
 	// interfaceType；缺失会让依赖协议的尺寸换算（比例 → 像素）静默跳过，把 16:9 这类比例
 	// 原样发给只认 WIDTHxHEIGHT 的上游（OpenAI Images 直接拒绝）。
 	nextConfig["interfaceType"] = string(routed.ChannelModel.Protocol)
+	nextConfig["protocolRelease"], nextConfig["priceRevision"], nextConfig["profileRevision"] = routed.ChannelModel.ProtocolRelease, routed.ChannelModel.PriceVersion, routed.ChannelModel.CapabilityVersion
 	providerModelKey := routed.ChannelModel.ProviderModelKey
 	if routed.PriceTier != nil {
 		nextConfig["priceTierId"] = routed.PriceTier.ID
@@ -733,6 +742,7 @@ func (s *Service) resolveSystemChannelModelSelection(access *userGroupAccess, in
 	nextConfig["priceTierId"] = priceTier.ID
 	nextConfig["providerModelKey"] = firstNonEmpty(priceTier.ProviderModelKey, channelModel.ProviderModelKey, channelModel.ModelKey)
 	nextConfig["interfaceType"] = string(channelModel.Protocol)
+	nextConfig["protocolRelease"], nextConfig["priceRevision"], nextConfig["profileRevision"] = channelModel.ProtocolRelease, channelModel.PriceVersion, channelModel.CapabilityVersion
 	nextConfig["apiFormat"] = channelAPIFormatForProtocol(channel.APIFormat, channelModel.Protocol)
 	return input, nil
 }

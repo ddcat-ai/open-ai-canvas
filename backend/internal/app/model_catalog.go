@@ -267,7 +267,7 @@ func (s *Service) sanitizeChannelModel(cm *model.ChannelModel) (PublicChannelMod
 		if specErr != nil {
 			return PublicChannelModel{}, fmt.Errorf("投影渠道模型默认参数失败：%w", specErr)
 		}
-		defaultOptions, err = channelModelDefaultOptions(*cm, spec, s.protocolRegistry())
+		defaultOptions, err = channelModelDefaultOptions(*cm, spec, normalized)
 		if err != nil {
 			return PublicChannelModel{}, err
 		}

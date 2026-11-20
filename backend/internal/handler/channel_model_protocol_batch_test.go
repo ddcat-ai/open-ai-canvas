@@ -205,6 +205,14 @@ func TestGroupedProtocolHTTPContract(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			currentPackages := map[string]string{}
+			for _, provider := range svc.PluginProviderCatalog("admin.system-channel", "", false) {
+				for _, release := range provider.Releases {
+					if release.Current {
+						currentPackages[provider.ID] = release.SHA256
+					}
+				}
+			}
 			for i := range before {
 				want := "openai-response"
 				if after[i].Capability == "image" {
@@ -213,6 +221,10 @@ func TestGroupedProtocolHTTPContract(t *testing.T) {
 				if string(after[i].Protocol) != want {
 					t.Fatalf("incorrect protocol=%s", after[i].Protocol)
 				}
+				if after[i].ProtocolRelease == "" || after[i].ProtocolRelease != currentPackages[want] {
+					t.Fatalf("model %s did not bind the selected protocol package", after[i].ID)
+				}
+				after[i].ProtocolRelease = before[i].ProtocolRelease
 				after[i].Protocol = before[i].Protocol
 				after[i].CapabilityConfigJSON = before[i].CapabilityConfigJSON
 				after[i].CapabilityVersion = before[i].CapabilityVersion

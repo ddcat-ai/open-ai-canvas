@@ -201,41 +201,12 @@ func styleAssetSupportsModel(baseModels []string, generationModel string) bool {
 	return false
 }
 
-func (s *Service) validateResolvedImageCapability(input *canvasGenerationInput) error {
-	fallback := DefaultImageCapabilityConfig(input.Config.InterfaceType, input.Config.Model)
-	channelID := strings.TrimSpace(input.Config.ChannelID)
-	if channelID == "" {
-		profile := input.Config.CapabilityConfig
-		if profile == nil || profile.Image == nil {
-			profile = &ModelCapabilityConfig{Version: 1, Image: fallback}
-		}
-		normalized, err := NormalizeModelCapabilityConfigForModel("image", input.Config.InterfaceType, input.Config.Model, profile, s.protocolRegistry())
-		if err != nil {
-			return err
-		}
-		input.ImageCapability = normalized.Image
-		if err := applyImageParameterValues(&input.Config, input.ImageCapability); err != nil {
-			return err
-		}
-		return validateImageTask(input.ImageCapability, *input)
+func validateResolvedImageCapability(input *canvasGenerationInput) error {
+	profile := input.Config.CapabilityConfig
+	if profile == nil || profile.Image == nil {
+		return errors.New("当前图片模型尚未配置能力参数")
 	}
-	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(input.Config))
-	if err != nil {
-		return errors.New("当前系统渠道模型未配置或已停用")
-	}
-	profile, err := normalizedChannelModelCapability(item, s.protocolRegistry())
-	if err != nil {
-		return errors.New("当前图片模型能力参数无效")
-	}
-	if profile != nil && profile.Image != nil {
-		input.ImageCapability = profile.Image
-	} else {
-		input.ImageCapability = fallback
-	}
-	// 与任务输入边界同一套补齐/失败关闭规则：旧线路没有换算表时先按声明补齐，补不齐再报错。
-	if input.ImageCapability.Parameters == nil {
-		fillMissingImageSizePresets(input.ImageCapability, input.Config.InterfaceType)
-	}
+	input.ImageCapability = profile.Image
 	if presetErr := imageSizePresetReadyError(input.ImageCapability, input.Config.InterfaceType); presetErr != nil {
 		return presetErr
 	}

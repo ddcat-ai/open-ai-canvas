@@ -48,7 +48,7 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 		Quality:         input.Config.Quality,
 		GenerateAudio:   parseBool(input.Config.VideoGenerateAudio, false),
 		Watermark:       parseBool(input.Config.VideoWatermark, false),
-		Operation:       firstNonEmpty(metadataString(input.Metadata, "videoEditOperation"), metadataString(input.Metadata, "videoOperation")),
+		Operation:       input.videoOperation(),
 		// InterfaceType 让声明式插件宿主按协议线格式适配参考素材内容块
 		// （如 Anthropic Messages 用 type=image + source，不用 OpenAI image_url）。
 		InterfaceType: strings.TrimSpace(input.Config.InterfaceType),
@@ -183,10 +183,12 @@ func protocolVideoImageReferences(input canvasGenerationInput) []protocol.MediaR
 	fallbackRole := ""
 	if metadataString(input.Metadata, "videoStartFrameNodeId") != "" || metadataString(input.Metadata, "videoEndFrameNodeId") != "" {
 		fallbackRole = "reference_image"
+	} else if len(input.ReferenceImages) == 1 && input.videoOperation() == "image_to_video" {
+		fallbackRole = "first_frame"
 	}
 	for index, value := range input.ReferenceImages {
 		item := protocolMediaReference(value, "image", index)
-		item.Role = videoImageRoleOrDefault(input, value, fallbackRole)
+		item.Role = protocolReferenceRole(value.Role, "image", videoImageRoleOrDefault(input, value, fallbackRole))
 		if item.URL != "" || item.DataURL != "" {
 			result = append(result, item)
 		}
@@ -198,16 +200,19 @@ func protocolMediaReferences(values []providerMedia, kind string) []protocol.Med
 	result := make([]protocol.MediaReference, 0, len(values))
 	for index, value := range values {
 		item := protocolMediaReference(value, kind, index)
-		if kind == "video" {
-			item.Role = "reference_video"
-		} else if kind == "audio" {
-			item.Role = "reference_audio"
-		}
+		item.Role = protocolReferenceRole(value.Role, kind, "reference_"+kind)
 		if item.URL != "" || item.DataURL != "" {
 			result = append(result, item)
 		}
 	}
 	return result
+}
+
+func protocolReferenceRole(role, kind, inferred string) string {
+	if role == "reference" {
+		return firstNonEmpty(inferred, "reference_"+kind)
+	}
+	return firstNonEmpty(role, inferred)
 }
 
 func protocolMediaReference(value providerMedia, kind string, order int) protocol.MediaReference {

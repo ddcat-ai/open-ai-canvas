@@ -588,7 +588,10 @@ func TestResolveProviderConfigMapsSKUToProviderModel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	config, err := svc.resolveProviderConfig(providerConfig{ChannelID: channel.ID, Model: item.ModelKey})
+	if _, err := svc.resolveProviderConfig(providerConfig{ChannelID: channel.ID}, nil); err == nil {
+		t.Fatal("selected a model without an explicit SKU")
+	}
+	config, err := svc.resolveProviderConfig(providerConfig{ChannelID: channel.ID, Model: item.ModelKey}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

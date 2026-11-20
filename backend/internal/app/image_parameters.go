@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -84,7 +85,7 @@ func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions 
 		}
 		definitions = append(definitions, field)
 	}
-	configured := image.Parameters
+	configured := slices.Clip(image.Parameters)
 	if configured != nil && len(image.Resolution.Values) > 0 {
 		declared := false
 		for _, field := range configured {
@@ -166,14 +167,11 @@ func resolveImageCapabilityParameters(image *ImageCapabilityConfig, definitions 
 		return BadAuthRequest("图片参数配置无效：" + err.Error())
 	}
 	image.Parameters = parameters
-	return projectImageParameters(image)
+	return nil
 }
 
 // Legacy structs are an execution projection, never a second editable source.
-func projectImageParameters(image *ImageCapabilityConfig) error {
-	if err := protocol.ValidateImageParameters(image.Parameters); err != nil {
-		return BadAuthRequest(err.Error())
-	}
+func projectImageParameters(image *ImageCapabilityConfig) {
 	image.Quality = ImageQualityConfig{Default: "auto", Values: []string{}}
 	image.Resolution = ImageResolutionConfig{Default: "auto", Values: []string{}}
 	image.TransparentBackground = VideoBooleanConfig{}
@@ -244,7 +242,6 @@ func projectImageParameters(image *ImageCapabilityConfig) error {
 		}
 		image.Size.Presets = presets
 	}
-	return nil
 }
 
 func publicImageParameters(parameters []protocol.ImageParameter) []protocol.ImageParameter {

@@ -19,12 +19,16 @@ func TestSystemProxyDeclaredPostPathsFollowInstalledPlugin(t *testing.T) {
 		"azure-openai": {"/openai/deployments/{model}/chat/completions"},
 	}
 	for protocolID, want := range tests {
-		if got := s.SystemProxyDeclaredPostPaths(protocolID); !reflect.DeepEqual(got, want) {
+		contract, err := s.ResolveSystemProxyContract(protocolID, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := contract.DeclaredPostPaths(); !reflect.DeepEqual(got, want) {
 			t.Errorf("SystemProxyDeclaredPostPaths(%s) = %#v, want %#v", protocolID, got, want)
 		}
 	}
-	if got := s.SystemProxyDeclaredPostPaths("not-installed-protocol"); got != nil {
-		t.Fatalf("uninstalled protocol paths = %#v, want nil", got)
+	if _, err := s.ResolveSystemProxyContract("not-installed-protocol", ""); err == nil {
+		t.Fatal("uninstalled protocol was accepted")
 	}
 }
 
@@ -50,7 +54,11 @@ func TestApplySystemProxyAuthFollowsDeclaredAuth(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := s.ApplySystemProxyAuth(req, channel, test.protocol); err != nil {
+		contract, err := s.ResolveSystemProxyContract(test.protocol, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := contract.ApplyAuth(req, channel); err != nil {
 			t.Fatalf("ApplySystemProxyAuth(%q) error = %v", test.protocol, err)
 		}
 		if test.header != "" && req.Header.Get(test.header) != test.value {
@@ -61,7 +69,11 @@ func TestApplySystemProxyAuthFollowsDeclaredAuth(t *testing.T) {
 		}
 	}
 	claude, _ := http.NewRequest(http.MethodPost, "https://api.anthropic.com/v1/messages", nil)
-	if err := s.ApplySystemProxyAuth(claude, channel, "claude-api"); err != nil || claude.Header.Get("anthropic-version") == "" {
+	contract, err := s.ResolveSystemProxyContract("claude-api", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contract.ApplyAuth(claude, channel); err != nil || claude.Header.Get("anthropic-version") == "" {
 		t.Fatalf("claude auth must keep anthropic-version, err = %v, headers = %#v", err, claude.Header)
 	}
 }

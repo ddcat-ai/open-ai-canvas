@@ -7,6 +7,36 @@ import (
 	"testing"
 )
 
+func TestKlingFlashReleaseRejectsExpandedCapabilityAtSave(t *testing.T) {
+	const provider, modelName = "kling-v4-official", "kling-4.0-flash"
+	registry := loadOfficialFallbackRegistry()
+	for _, test := range []struct {
+		name   string
+		mutate func(*VideoCapabilityConfig)
+	}{
+		{"mode", func(video *VideoCapabilityConfig) { video.Operations = append(video.Operations, "extend") }},
+		{"resolution", func(video *VideoCapabilityConfig) { video.Resolutions = append(video.Resolutions, "1080p") }},
+		{"duration", func(video *VideoCapabilityConfig) { video.Duration.Max = 21 }},
+		{"fixed duration", func(video *VideoCapabilityConfig) {
+			video.Duration = VideoDurationConfig{Selection: "enum", Values: []int{2}, Default: 2}
+		}},
+		{"ratio", func(video *VideoCapabilityConfig) { video.Ratios = append(video.Ratios, "2:1") }},
+		{"audio reference", func(video *VideoCapabilityConfig) { video.References.MaxAudios = 1 }},
+		{"audio toggle", func(video *VideoCapabilityConfig) { video.GenerateAudio.Supported = true }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel(provider, modelName)
+			if _, err := NormalizeModelCapabilityConfigForModel("video", provider, modelName, profile, registry); err != nil {
+				t.Fatal(err)
+			}
+			test.mutate(profile.Video)
+			if _, err := NormalizeModelCapabilityConfigForModel("video", provider, modelName, profile, registry); err == nil {
+				t.Fatal("accepted out-of-contract configuration")
+			}
+		})
+	}
+}
+
 func TestValidateImageTaskRejectsOversizedGrokPromptByUTF8Bytes(t *testing.T) {
 	prompt := strings.Repeat("中", 4001)
 	input := canvasGenerationInput{
@@ -96,6 +126,13 @@ func TestValidateTaskCapabilityRejectsWorkflowPromptAboveConfiguredLimit(t *test
 	err := (&Service{}).ValidateTaskCapability(input)
 	if err == nil || !strings.Contains(err.Error(), "完整提示词为 10001 个字符") {
 		t.Fatalf("ValidateTaskCapability() error = %v", err)
+	}
+}
+
+func TestValidateTaskCapabilityRejectsMalformedMediaInput(t *testing.T) {
+	input := map[string]any{"mode": "image", "referenceImages": "invalid"}
+	if err := (&Service{}).ValidateTaskCapability(input); err == nil {
+		t.Fatal("accepted an image task with malformed references")
 	}
 }
 
@@ -229,10 +266,8 @@ func TestDefaultVolcengineArkVideoCapabilitySupportsFullModalReference(t *testin
 	if profile == nil || profile.Video == nil {
 		t.Fatal("Volcengine Ark video profile = nil")
 	}
-	for _, operation := range []string{"reference_to_video", "audio_to_video"} {
-		if !containsCapabilityString(profile.Video.Operations, operation) {
-			t.Fatalf("operations = %v, want %s", profile.Video.Operations, operation)
-		}
+	if !containsCapabilityString(profile.Video.Operations, "reference_to_video") || containsCapabilityString(profile.Video.Operations, "audio_to_video") {
+		t.Fatalf("2.0 supports mixed references but not audio alone: %v", profile.Video.Operations)
 	}
 	if profile.Video.References.MaxImages != 9 || profile.Video.References.MaxVideos != 3 || profile.Video.References.MaxAudios != 3 {
 		t.Fatalf("reference limits = %#v", profile.Video.References)
@@ -254,6 +289,29 @@ func TestDefaultVolcengineArkSeedance25CapabilityUsesOfficialLimits(t *testing.T
 		t.Fatalf("audio/watermark support = %#v %#v", profile.Video.GenerateAudio, profile.Video.Watermark)
 	}
 }
+
+func TestOfficialVideoModelPresetsAreModelSpecific(t *testing.T) {
+	for _, tc := range []struct {
+		provider, name                   string
+		images, videos, audios, duration int
+		audioSwitch                      bool
+	}{
+		{"volcengine-ark-seedance-25", "doubao-seedance-2-5-flash-261115", 10, 5, 5, 30, true},
+		{"dashscope-wan3-video", "wan3.0-video-prime", 10, 5, 5, 30, true},
+		{"kling-v4-official", "kling-4.0", 10, 5, 0, 30, false},
+		{"kling-v4-official", "kling-4.0-flash", 10, 5, 0, 20, false},
+	} {
+		profile := DefaultModelCapabilityConfigForModel(tc.provider, tc.name)
+		video := profile.Video
+		if video.References.MaxImages != tc.images || video.References.MaxVideos != tc.videos || video.References.MaxAudios != tc.audios || video.Duration.Max != tc.duration || video.GenerateAudio.Supported != tc.audioSwitch {
+			t.Fatalf("%s: %+v", tc.name, video)
+		}
+		if _, err := NormalizeModelCapabilityConfigForModel("video", tc.provider, tc.name, profile); err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
+}
+
 func TestDefaultWeNewH3VideoCapabilityUsesDocumentedLimits(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("wenew-h3-video", "MiniMax-H3")
 	if profile == nil || profile.Video == nil {
@@ -275,7 +333,7 @@ func TestValidateVolcengineArkFullModalReferenceRejectsTextAndAudioOnly(t *testi
 		Prompt:          "follow the soundtrack",
 		Config:          providerConfig{InterfaceType: "volcengine-ark-video", VideoSeconds: "6", Size: "16:9", VQuality: "720p"},
 		ReferenceAudios: []providerMedia{{URL: "https://example.com/music.mp3"}},
-		Metadata:        map[string]interface{}{"videoEditOperation": "audio_to_video"},
+		Metadata:        map[string]interface{}{"videoEditOperation": "reference_to_video"},
 	}
 	err := validateVideoTask(profile, input)
 	if err == nil || !strings.Contains(err.Error(), "文本+音频") {
@@ -285,6 +343,10 @@ func TestValidateVolcengineArkFullModalReferenceRejectsTextAndAudioOnly(t *testi
 	input.ReferenceImages = []providerMedia{{URL: "https://example.com/subject.png"}}
 	if err := validateVideoTask(profile, input); err != nil {
 		t.Fatalf("validateVideoTask(full modal) error = %v", err)
+	}
+	input.Metadata["videoEditOperation"] = "audio_to_video"
+	if err := validateVideoTask(profile, input); err == nil {
+		t.Fatal("accepted an undeclared audio-to-video operation")
 	}
 }
 

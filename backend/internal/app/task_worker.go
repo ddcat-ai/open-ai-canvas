@@ -355,7 +355,11 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 		}
 		var detachedErr providerStatePendingError
 		if errors.As(err, &detachedErr) && detachedErr.Detached {
-			err = fmt.Errorf("上游任务等待超过 %d 小时仍未完成，已停止自动查询，请在渠道侧确认任务 %s 的状态。", int(detachedProviderTaskMaxAge.Hours()), detachedErr.TaskID)
+			if providerTaskWaitExpired(*task, time.Now()) {
+				err = fmt.Errorf("上游任务等待超过 %d 小时仍未完成，已停止自动查询，请在渠道侧确认任务 %s 的状态。", int(detachedProviderTaskMaxAge.Hours()), detachedErr.TaskID)
+			} else {
+				err = fmt.Errorf("上游已受理，但宿主无法继续回查，请在原渠道核对任务 %s；请勿重复提交。", detachedErr.TaskID)
+			}
 		} else if isVideoTaskType(task.Type) && newAPIChannel2TaskSyncExpired(*task, err, time.Now()) {
 			err = errors.New("上游任务长时间未同步，已停止自动查询，请确认渠道任务状态后重试。")
 		}
@@ -482,30 +486,31 @@ func (s *Service) shouldDeferProviderTask(task model.Task, decryptedInput string
 	if json.Unmarshal([]byte(decryptedInput), &input) != nil {
 		return false
 	}
-	resolved, resolveErr := s.resolveProviderConfig(input.Config)
+	resolved, resolveErr := s.resolveProviderConfig(input.Config, &task)
 	if resolveErr != nil {
 		return false
 	}
-	if s.protocolDetachedPolling(resolved.InterfaceType) {
+	adapter, installed := resolved.registry.Resolve(resolved.InterfaceType)
+	if installed && adapter.Metadata().DetachedPolling {
 		// 分离式回查只看总等待时长：上游候车/出片中按间隔回查，超过上限才交给失败处理。
-		return task.StartedAt == nil || time.Since(*task.StartedAt) < detachedProviderTaskMaxAge
+		return !providerTaskWaitExpired(task, time.Now())
 	}
 	if detachedPending {
 		return false
 	}
 	if isVideoTaskType(task.Type) || input.Mode == "video" {
 		// 总等待时长与分离式回查共用上限，上游丢单时不会无限回查。
-		return s.videoProviderSupportsTaskResume(resolved.InterfaceType) && (task.StartedAt == nil || time.Since(*task.StartedAt) < detachedProviderTaskMaxAge)
+		canResume := installed && adapter.Metadata().Execution == "declarative" && adapter.Metadata().Poll != "" || !resolved.pinned && resolved.InterfaceType == string(model.ChannelInterfaceNewAPIChannel2)
+		return canResume && !providerTaskWaitExpired(task, time.Now())
 	}
 	if input.Mode != "image" && !strings.HasPrefix(task.Type, "canvas_image") {
 		return false
 	}
-	return s.imageProviderSupportsTaskResume(resolved.InterfaceType)
+	return installed && adapter.Metadata().Poll != "" || !resolved.pinned && (isVolcengineJiMengProtocol(resolved.InterfaceType) || isRunningHubInterface(resolved.InterfaceType))
 }
 
-func (s *Service) protocolDetachedPolling(interfaceType string) bool {
-	metadata, ok := s.protocolMetadata(strings.TrimSpace(interfaceType))
-	return ok && metadata.DetachedPolling
+func providerTaskWaitExpired(task model.Task, now time.Time) bool {
+	return task.StartedAt != nil && !now.Before(task.StartedAt.Add(detachedProviderTaskMaxAge))
 }
 
 func isVideoTaskType(taskType string) bool {
@@ -515,32 +520,6 @@ func isVideoTaskType(taskType string) bool {
 // shouldDeferVideoProviderTask 保留给旧测试和内部调用方；新逻辑统一覆盖视频与异步图片。
 func (s *Service) shouldDeferVideoProviderTask(task model.Task, decryptedInput string, err error) bool {
 	return s.shouldDeferProviderTask(task, decryptedInput, err)
-}
-
-func (s *Service) imageProviderSupportsTaskResume(interfaceType string) bool {
-	interfaceType = strings.TrimSpace(interfaceType)
-	if isVolcengineJiMengProtocol(interfaceType) || isRunningHubInterface(interfaceType) {
-		return true
-	}
-	return s.protocolSupportsTaskResume(interfaceType)
-}
-
-// protocolSupportsTaskResume 判断协议是否声明了按上游任务 ID 回查的 poll 操作。
-func (s *Service) protocolSupportsTaskResume(interfaceType string) bool {
-	metadata, ok := s.protocolMetadata(strings.TrimSpace(interfaceType))
-	return ok && strings.TrimSpace(metadata.Poll) != ""
-}
-
-// videoProviderSupportsTaskResume 决定视频任务超过单次执行时限后能否继续回查原任务。
-// 声明式插件带着上游任务 ID 恢复时只走 poll、不会再次 create（见 runProtocolAdapterTaskWithPolicy），
-// 所以声明了 poll 即可续查；手写协议只保留已核实只读回查的 NewAPI Channel 2。
-func (s *Service) videoProviderSupportsTaskResume(interfaceType string) bool {
-	interfaceType = strings.TrimSpace(interfaceType)
-	metadata, ok := s.protocolMetadata(interfaceType)
-	if ok && metadata.Execution == "declarative" && strings.TrimSpace(metadata.Poll) != "" {
-		return true
-	}
-	return interfaceType == string(model.ChannelInterfaceNewAPIChannel2)
 }
 
 func newAPIChannel2TaskSyncExpired(task model.Task, err error, now time.Time) bool {

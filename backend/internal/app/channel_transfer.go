@@ -141,7 +141,7 @@ func exportChannelModel(item model.ChannelModel) (SystemChannelExportModel, erro
 		SortOrder: item.SortOrder,
 		ChannelModelRequest: ChannelModelRequest{
 			ModelKey: item.ModelKey, ProviderModelKey: item.ProviderModelKey, DisplayName: item.DisplayName, ChannelLabel: item.ChannelLabel,
-			Tags: item.Tags, Description: item.Description, Icon: item.Icon, Capability: item.Capability, Protocol: string(item.Protocol),
+			Tags: item.Tags, Description: item.Description, Icon: item.Icon, Capability: item.Capability, Protocol: string(item.Protocol), ProtocolRelease: item.ProtocolRelease,
 			BillingMode: item.BillingMode, UnitPriceMicrocredits: item.UnitPriceMicrocredits, InputTokenPriceMicrocredits: item.InputTokenPriceMicrocredits,
 			OutputTokenPriceMicrocredits: item.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: item.CachedTokenPriceMicrocredits,
 			CacheWriteTokenPriceMicrocredits: item.CacheWriteTokenPriceMicrocredits,

@@ -284,22 +284,24 @@ func validateVideoDuration(value VideoDurationConfig) error {
 }
 
 func (s *Service) ValidateTaskCapability(input map[string]any) error {
+	switch input["mode"] {
+	case "text", "image", "video", "audio":
+	default:
+		return nil
+	}
 	encoded, err := json.Marshal(input)
 	if err != nil {
 		return BadAuthRequest("任务输入格式无效")
 	}
 	var taskInput canvasGenerationInput
 	if err := json.Unmarshal(encoded, &taskInput); err != nil {
-		return nil
+		return BadAuthRequest("任务输入格式无效")
 	}
 	if taskInput.Mode == "text" {
 		if err := ValidateThinkingLevelRequest(taskInput.TextOptions.ThinkingLevel); err != nil {
 			return newModelCapabilityArgumentError("thinkingLevel", "unsupported_value", err)
 		}
 		return s.validateTextTaskReferences(taskInput)
-	}
-	if taskInput.Mode != "image" && taskInput.Mode != "video" && taskInput.Mode != "audio" {
-		return nil
 	}
 	if isWorkflowProviderInterface(taskInput.Config.InterfaceType) {
 		if err := validateWorkflowProviderPromptLength(taskInput); err != nil {
@@ -315,80 +317,41 @@ func (s *Service) ValidateTaskCapability(input map[string]any) error {
 	if channelID == "" {
 		channelID = systemChannelIDFromBaseURL(taskInput.Config.BaseURL)
 	}
+	var profile *ModelCapabilityConfig
 	if channelID == "" {
-		if taskInput.Mode == "image" {
-			profile := DefaultImageCapabilityConfig(taskInput.Config.InterfaceType, taskInput.Config.Model)
-			if taskInput.Config.CapabilityConfig != nil && taskInput.Config.CapabilityConfig.Image != nil {
-				profile = taskInput.Config.CapabilityConfig.Image
-			}
-			normalized, err := NormalizeModelCapabilityConfigForModel("image", taskInput.Config.InterfaceType, taskInput.Config.Model, &ModelCapabilityConfig{Version: 1, Image: profile}, s.protocolRegistry())
-			if err != nil {
-				return err
-			}
-			profile = normalized.Image
-			if profile.Parameters == nil {
-				fillMissingImageSizePresets(profile, taskInput.Config.InterfaceType)
-			}
-			if presetErr := imageSizePresetReadyError(profile, taskInput.Config.InterfaceType); presetErr != nil {
-				return presetErr
-			}
-			return validateImageTaskWithResolvedSize(input, &taskInput, profile)
+		profile, err = customMediaCapability(taskInput.Mode, taskInput.Config, s.protocolRegistry())
+		if err != nil || profile == nil {
+			return err
 		}
-		profile := taskInput.Config.CapabilityConfig
-		if profile == nil || profile.Video == nil {
-			if taskInput.Config.InterfaceType != string(model.ChannelInterfaceAgnesVideo) {
-				return nil
-			}
-			profile = DefaultModelCapabilityConfigForModel(taskInput.Config.InterfaceType, taskInput.Config.Model)
+	} else {
+		item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(taskInput.Config))
+		if err != nil {
+			return BadAuthRequest("当前系统渠道模型未配置或已停用")
 		}
-		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", taskInput.Config.InterfaceType, taskInput.Config.Model, profile, s.protocolRegistry())
-		if normalizeErr != nil || normalized == nil || normalized.Video == nil {
-			return BadAuthRequest("当前视频模型能力参数无效")
+		if item.Capability != taskInput.Mode {
+			return BadAuthRequest("系统渠道模型能力与任务类型不符")
 		}
-		applyAutoDLVideoScreenSpec(&taskInput, normalized.Video)
-		if config, ok := input["config"].(map[string]any); ok {
-			config["size"], config["vquality"] = taskInput.Config.Size, taskInput.Config.VQuality
-		}
-		return validateVideoTask(normalized.Video, taskInput)
-	}
-	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(taskInput.Config))
-	if err != nil {
-		return BadAuthRequest("当前系统渠道模型未配置或已停用")
-	}
-	profile, err := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
-	if taskInput.Mode == "image" {
 		profile, err = normalizedChannelModelCapability(item, s.protocolRegistry())
 		if err != nil {
-			return BadAuthRequest("当前图片模型能力参数无效")
+			return err
 		}
-		imageProfile := DefaultImageCapabilityConfig(string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey))
-		if profile != nil && profile.Image != nil {
-			imageProfile = profile.Image
-		}
-		imageProfile = applyModelSpecificImageCapability(imageProfile, string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), taskInput.Config.APIFormat)
-		// 旧线路没有换算表时按声明的档位补齐；补不齐就失败关闭，不能静默按 1K 出图。
-		if imageProfile.Parameters == nil {
-			fillMissingImageSizePresets(imageProfile, string(item.Protocol))
-		}
-		if presetErr := imageSizePresetReadyError(imageProfile, string(item.Protocol)); presetErr != nil {
+		taskInput.Config.InterfaceType = string(item.Protocol)
+	}
+	if taskInput.Mode == "image" {
+		if presetErr := imageSizePresetReadyError(profile.Image, taskInput.Config.InterfaceType); presetErr != nil {
 			return presetErr
 		}
-		return validateImageTaskWithResolvedSize(input, &taskInput, imageProfile)
+		return validateImageTaskWithResolvedSize(input, &taskInput, profile.Image)
 	}
-	if err != nil || profile == nil || profile.Video == nil {
-		return BadAuthRequest("当前视频模型尚未配置能力参数")
+	applyAutoDLVideoScreenSpec(&taskInput, profile.Video)
+	if channelID != "" {
+		applyFixedVideoResolution(&taskInput, profile.Video)
 	}
-	normalized, normalizeErr := NormalizeModelCapabilityConfigForModel("video", string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), profile, s.protocolRegistry())
-	if normalizeErr != nil || normalized == nil || normalized.Video == nil {
-		return BadAuthRequest("当前视频模型能力参数无效")
-	}
-	applyAutoDLVideoScreenSpec(&taskInput, normalized.Video)
-	applyFixedVideoResolution(&taskInput, normalized.Video)
 	if config, ok := input["config"].(map[string]any); ok {
 		config["size"] = taskInput.Config.Size
 		config["vquality"] = taskInput.Config.VQuality
 	}
-	return validateVideoTask(normalized.Video, taskInput)
+	return validateVideoTask(profile.Video, taskInput)
 }
 
 // validateTextTaskReferences 在预授权扣费前拦下发给不支持看图 / 视频识别的文字模型的参考素材；放行后上游只会返回 400。
@@ -447,14 +410,6 @@ func validateTextReferenceLimits(references TextReferenceConfig, input canvasGen
 	return nil
 }
 
-// applyModelSpecificImageCapability is retained as a narrow normalization hook
-// for provider-specific image validation. The stored capability profile is
-// already normalized when the channel model is saved, so no second override is
-// needed here.
-func applyModelSpecificImageCapability(profile *ImageCapabilityConfig, _ string, _ string, _ string) *ImageCapabilityConfig {
-	return profile
-}
-
 // applyFixedVideoResolution 让单档位 SKU 的预扣、恢复和上游请求保持同一分辨率。
 func applyFixedVideoResolution(input *canvasGenerationInput, profile *VideoCapabilityConfig) {
 	if input == nil || profile == nil || len(profile.Resolutions) != 1 {
@@ -472,7 +427,7 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if err := validateModelPromptLength("视频", input.Prompt, profile.References.PromptMaxChars); err != nil {
 		return err
 	}
-	operation := metadataString(input.Metadata, "videoEditOperation")
+	operation := input.videoOperation()
 	if operation == "" {
 		if len(input.ReferenceImages) > 0 {
 			operation = "image_to_video"
@@ -520,7 +475,8 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if !videoDurationAllowed(profile.Duration, seconds) {
 		return newModelCapabilityArgumentError("durationSeconds", "unsupported_value", BadAuthRequest(fmt.Sprintf("视频时长 %d 秒不在当前模型支持范围内（%s）", seconds, videoDurationAllowedLabel(profile.Duration))))
 	}
-	if input.Config.Size != "" && !videoRatioAllowed(profile.Ratios, input.Config.Size) {
+	limit, hasLimit := profile.ModeLimits[operation]
+	if input.Config.Size != "" && (!hasLimit || len(limit.Ratios) > 0) && (!videoRatioAllowed(profile.Ratios, input.Config.Size) || hasLimit && !containsCapabilityString(limit.Ratios, input.Config.Size)) {
 		return newModelCapabilityArgumentError("size", "unsupported_value", BadAuthRequest("画面比例不在当前模型支持范围内"))
 	}
 	if len(profile.Resolutions) > 0 && !isAutomaticVideoResolution(input.Config.VQuality) && videoResolutionNameRequest(profile, input.Config.VQuality) == "" {

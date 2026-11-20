@@ -315,7 +315,6 @@ func recoveryURLForAudit(value *url.URL) string {
 
 func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, claimUserID string) (*ProviderTaskQueryResult, error) {
 	billing := s.taskBilling()
-	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
 	if task == nil || task.ID == "" {
 		return nil, BadAuthRequest("任务不存在")
 	}
@@ -352,11 +351,11 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 	if err := json.Unmarshal([]byte(decryptedInput), &input); err != nil {
 		return nil, fmt.Errorf("任务输入解析失败：%w", err)
 	}
-	config, err := s.resolveProviderConfig(input.Config)
+	config, err := s.resolveProviderConfig(input.Config, task)
 	if err != nil {
 		return nil, err
 	}
-	ctx = ensureOfficialProtocolAdapter(ctx, config.InterfaceType)
+	ctx = withProtocolRegistry(ctx, config.registry)
 	adapter, declarative := declarativeProtocolAdapterForContext(ctx, config.InterfaceType)
 	if !declarative {
 		return nil, BadAuthRequest("该任务的请求协议不支持安全查询上游状态")

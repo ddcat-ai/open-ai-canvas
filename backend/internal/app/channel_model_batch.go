@@ -315,7 +315,11 @@ func (s *Service) prepareBatchModelContract(channel *model.ModelChannel, before 
 			return nil, "", BadAuthRequest("能力模板不能为空")
 		}
 	}
-	_, upstream, capability, protocol, err := s.normalizeChannelModelContract(channel, ChannelModelRequest{ModelKey: after.ModelKey, ProviderModelKey: after.ProviderModelKey, Capability: after.Capability, Protocol: protocolID})
+	release, err := selectEditedModelRelease(s.protocolRegistry(), &before, protocolID, "")
+	if err != nil {
+		return nil, "", err
+	}
+	_, upstream, capability, protocol, err := normalizeChannelModelContractWithRegistry(release.Registry, channel, ChannelModelRequest{ModelKey: after.ModelKey, ProviderModelKey: after.ProviderModelKey, Capability: after.Capability, Protocol: protocolID})
 	if err != nil {
 		return nil, "", err
 	}
@@ -331,7 +335,7 @@ func (s *Service) prepareBatchModelContract(channel *model.ModelChannel, before 
 		}
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		config, err = NormalizeModelCapabilityConfigForModel(capability, string(protocol), upstream, config, s.protocolRegistry())
+		config, err = NormalizeModelCapabilityConfigForModel(capability, string(protocol), upstream, config, release.Registry)
 		if err != nil {
 			return nil, "", err
 		}
@@ -343,10 +347,11 @@ func (s *Service) prepareBatchModelContract(channel *model.ModelChannel, before 
 			return nil, "", err
 		}
 		after.CapabilityConfigJSON = string(encoded)
-		if after.Capability != before.Capability || after.Protocol != before.Protocol || after.CapabilityConfigJSON != before.CapabilityConfigJSON {
+		if after.Capability != before.Capability || after.Protocol != before.Protocol || after.CapabilityConfigJSON != before.CapabilityConfigJSON || before.ProtocolRelease != release.SHA256 {
 			after.CapabilityVersion++
 		}
 		columns["capability"], columns["protocol"] = after.Capability, after.Protocol
+		after.ProtocolRelease, columns["protocol_release"] = release.SHA256, release.SHA256
 		columns["capability_config_json"], columns["capability_version"] = after.CapabilityConfigJSON, after.CapabilityVersion
 	}
 	return config, upstream, nil

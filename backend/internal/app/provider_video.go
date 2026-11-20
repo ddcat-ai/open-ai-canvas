@@ -15,42 +15,18 @@ import (
 	"yingce/backend/internal/protocol"
 )
 
-func (s *Service) validateResolvedVideoCapability(input *canvasGenerationInput) error {
-	channelID := strings.TrimSpace(input.Config.ChannelID)
-	if channelID == "" {
-		profile := input.Config.CapabilityConfig
-		if profile == nil || profile.Video == nil {
-			if input.Config.InterfaceType != string(model.ChannelInterfaceAgnesVideo) {
-				return nil
-			}
-			profile = DefaultModelCapabilityConfigForModel(input.Config.InterfaceType, input.Config.Model)
-		}
-		normalized, err := NormalizeModelCapabilityConfigForModel("video", input.Config.InterfaceType, input.Config.Model, profile, s.protocolRegistry())
-		if err != nil || normalized == nil || normalized.Video == nil {
-			return errors.New("当前视频模型能力参数无效")
-		}
-		input.Config.CapabilityConfig = normalized
-		input.VideoCapability = normalized.Video
-		applyAutoDLVideoScreenSpec(input, normalized.Video)
-		applyFixedVideoResolution(input, normalized.Video)
-		return validateVideoTask(normalized.Video, *input)
+func validateResolvedVideoCapability(input *canvasGenerationInput) error {
+	profile := input.Config.CapabilityConfig
+	if profile == nil && input.Config.ChannelID == "" {
+		return nil
 	}
-	item, err := s.repo.ChannelModelByKey(channelID, providerChannelModelKey(input.Config))
-	if err != nil {
-		return errors.New("当前系统渠道模型未配置或已停用")
-	}
-	profile, err := DecodeModelCapabilityConfig(item.CapabilityConfigJSON)
-	if err != nil || profile == nil || profile.Video == nil {
+	if profile == nil || profile.Video == nil {
 		return errors.New("当前视频模型尚未配置能力参数")
 	}
-	normalized, err := NormalizeModelCapabilityConfigForModel("video", string(item.Protocol), firstNonEmpty(item.ProviderModelKey, item.ModelKey), profile, s.protocolRegistry())
-	if err != nil || normalized == nil || normalized.Video == nil {
-		return errors.New("当前视频模型能力参数无效")
-	}
-	input.VideoCapability = normalized.Video
-	applyAutoDLVideoScreenSpec(input, normalized.Video)
-	applyFixedVideoResolution(input, normalized.Video)
-	return validateVideoTask(normalized.Video, *input)
+	input.VideoCapability = profile.Video
+	applyAutoDLVideoScreenSpec(input, profile.Video)
+	applyFixedVideoResolution(input, profile.Video)
+	return validateVideoTask(profile.Video, *input)
 }
 
 func runVideoTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
@@ -458,7 +434,7 @@ func seedanceVideosRequestBody(input canvasGenerationInput) (seedanceVideosReque
 	if err != nil {
 		return seedanceVideosRequest{}, err
 	}
-	if metadataString(input.Metadata, "videoEditOperation") == "reference_to_video" {
+	if input.videoOperation() == "reference_to_video" {
 		body.ReferenceImageURLs = imageURLs
 	} else if len(frameImageURLs) > 0 {
 		body.ImageURLs = frameImageURLs
@@ -521,6 +497,10 @@ func seedanceVideosPromptText(input canvasGenerationInput) string {
 	return strings.TrimSpace(input.Prompt)
 }
 
+func (input *canvasGenerationInput) videoOperation() string {
+	return firstNonEmpty(metadataString(input.Metadata, "videoEditOperation"), metadataString(input.Metadata, "videoOperation"))
+}
+
 func videoImageRole(input canvasGenerationInput, image providerMedia) string {
 	return videoImageRoleOrDefault(input, image, "reference_image")
 }
@@ -529,7 +509,7 @@ func videoImageRoleOrDefault(input canvasGenerationInput, image providerMedia, f
 	if image.Role == "first_frame" || image.Role == "last_frame" {
 		return image.Role
 	}
-	if metadataString(input.Metadata, "videoEditOperation") == "reference_to_video" {
+	if input.videoOperation() == "reference_to_video" {
 		return "reference_image"
 	}
 	if id := metadataString(input.Metadata, "videoStartFrameNodeId"); id != "" && image.ID == id {
@@ -542,7 +522,7 @@ func videoImageRoleOrDefault(input canvasGenerationInput, image providerMedia, f
 }
 
 func videoFrameImageURLs(input canvasGenerationInput, imageURLs []string) ([]string, error) {
-	if metadataString(input.Metadata, "videoEditOperation") == "reference_to_video" {
+	if input.videoOperation() == "reference_to_video" {
 		return nil, nil
 	}
 	startFrameID := metadataString(input.Metadata, "videoStartFrameNodeId")

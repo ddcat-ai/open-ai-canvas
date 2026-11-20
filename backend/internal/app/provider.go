@@ -14,6 +14,7 @@ import (
 
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 )
 
 var sseFrameBoundaryPattern = regexp.MustCompile(`\r?\n\r?\n`)
@@ -64,6 +65,9 @@ type providerTextMessage struct {
 }
 
 type providerConfig struct {
+	registry              *protocol.Registry
+	pinned                bool
+	releaseWithdrawn      bool
 	mediaTransport        ReferenceMediaTransport // resolved from administrator settings; never deserialized from task input
 	ChannelID             string                  `json:"channelId"`
 	ChannelModelKey       string                  `json:"channelModelKey,omitempty"`
@@ -136,7 +140,6 @@ type imageResponse struct {
 }
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
-	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
 	var input canvasGenerationInput
 	if err := json.Unmarshal([]byte(rawInput), &input); err != nil {
 		return nil, fmt.Errorf("任务输入解析失败：%w", err)
@@ -166,11 +169,16 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		return nil, err
 	}
 	input.Prompt = resolved
-	config, err := s.resolveProviderConfig(input.Config)
+	task, _ := ctx.Value(mediaExecutionTaskKey{}).(model.Task)
+	config, err := s.resolveProviderConfig(input.Config, &task)
 	if err != nil {
 		return nil, err
 	}
 	input.Config = config
+	if config.releaseWithdrawn && resumedProviderRequestID(ctx) == "" {
+		return nil, errors.New("原任务的插件已撤下，无法创建新的上游任务")
+	}
+	ctx = withProtocolRegistry(ctx, config.registry)
 	ctx = s.withGenerationSnapshot(ctx, userID, input)
 	if input.Mode == "text" && input.Config.CapabilityConfig != nil && input.Config.CapabilityConfig.Text != nil {
 		// The same capability contract drives provider output limits, billing
@@ -227,19 +235,25 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 	if strings.TrimSpace(input.Config.BaseURL) == "" || strings.TrimSpace(input.Config.APIKey) == "" || strings.TrimSpace(input.Config.Model) == "" {
 		return nil, errors.New("后端生成任务缺少 Base URL、API Key 或模型名")
 	}
-	if err := s.validateGenerationInterface(input.Mode, input.Config.InterfaceType); err != nil {
+	if err := validateGenerationInterfaceWithRegistry(config.registry, input.Mode, input.Config.InterfaceType); err != nil {
 		return nil, err
 	}
 	if adapter, ok := protocolAdapterForContext(ctx, input.Config.InterfaceType); ok && protocolAuthUsesSecretKey(adapter.Metadata().Auth) && strings.TrimSpace(input.Config.SecretKey) == "" {
 		return nil, fmt.Errorf("%s 协议缺少 Secret Key，请在渠道中配置后重试", adapter.Metadata().Name)
 	}
-	if input.Mode == "image" {
-		if err := s.validateResolvedImageCapability(&input); err != nil {
+	if input.Config.ChannelID == "" && (input.Mode == "image" || input.Mode == "video") {
+		input.Config.CapabilityConfig, err = customMediaCapability(input.Mode, input.Config, config.registry)
+		if err != nil {
 			return nil, err
 		}
 	}
-	if input.Mode == "video" {
-		if err := s.validateResolvedVideoCapability(&input); err != nil {
+	switch input.Mode {
+	case "image":
+		if err := validateResolvedImageCapability(&input); err != nil {
+			return nil, err
+		}
+	case "video":
+		if err := validateResolvedVideoCapability(&input); err != nil {
 			return nil, err
 		}
 	}
@@ -347,12 +361,8 @@ func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput)
 	return false
 }
 
-func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, error) {
-	headers, err := NormalizeOutboundHeaders(config.Headers)
-	if err != nil {
-		return providerConfig{}, err
-	}
-	config.Headers = headers
+func (s *Service) resolveProviderConfig(config providerConfig, task *model.Task) (providerConfig, error) {
+	config.registry = s.protocolRegistry()
 	if isRunningHubInterface(config.InterfaceType) && strings.TrimSpace(config.BaseURL) == "" {
 		config.BaseURL = "https://www.runninghub.cn"
 	}
@@ -364,7 +374,9 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		if _, err := ValidateOutboundURL(config.BaseURL); err != nil {
 			return providerConfig{}, err
 		}
-		return config, nil
+		headers, err := NormalizeOutboundHeaders(config.Headers)
+		config.Headers = headers
+		return config, err
 	}
 	channel, err := s.SystemChannel(channelID)
 	if err != nil {
@@ -375,45 +387,60 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	if modelKey == "" {
 		modelKey = requestedModel
 	}
-	if modelKey == "" {
-		channelModels, listErr := s.repo.ChannelModels(channel.ID, false)
-		if listErr != nil {
-			return providerConfig{}, listErr
-		}
-		if len(channelModels) > 0 {
-			modelKey = channelModels[0].ModelKey
-		} else {
-			models := channelModelNames(*channel)
-			if len(models) == 0 {
-				return providerConfig{}, errors.New("系统渠道未配置可用模型")
-			}
-			modelKey = models[0]
-		}
-	}
 	if _, err := ValidateOutboundURL(channel.BaseURL); err != nil {
 		return providerConfig{}, err
 	}
 	config.ChannelID = channel.ID
 	config.APIFormat = channel.APIFormat
-	channelModel, modelErr := s.repo.ChannelModelByKey(channel.ID, modelKey)
-	if modelErr != nil {
+	var channelModel *model.ChannelModel
+	var binding taskProtocolBinding
+	if task != nil && task.ProtocolBindingJSON != "" {
+		binding, err = decodeTaskProtocolBinding(task.ProtocolBindingJSON)
+		if err != nil {
+			return providerConfig{}, err
+		}
+		channelModel, err = s.repo.ChannelModelByID(channel.ID, binding.ChannelModelID)
+	} else {
+		if modelKey == "" {
+			return providerConfig{}, InvalidModelSelection("请选择系统渠道模型")
+		}
+		channelModel, err = s.repo.ChannelModelByKey(channel.ID, modelKey)
+	}
+	if err != nil || !channelModel.Enabled {
 		// ModelsJSON 只是旧渠道表上的目录缓存。SKU 合并后它不能代表可执行模型，
 		// 唯一授权来源必须是已启用的 channel_models 记录。
 		return providerConfig{}, errors.New("当前系统渠道未授权该模型")
 	}
-	if channelModel.Protocol == "" {
+	if channelModel.Protocol == "" && binding.Digest == "" {
 		return providerConfig{}, errors.New("当前模型尚未配置请求协议")
 	}
-	if normalizeCapability(channelModel.Capability) == "text" {
-		// Admission strips client capabilities; restore the authoritative text
-		// contract for both queued tasks and Agent steps before resolving thinking.
-		config.CapabilityConfig, err = normalizedChannelModelCapability(channelModel, s.protocolRegistry())
+	if binding.Digest != "" {
+		config.registry, err = s.boundChannelModel(binding, channel, channelModel, &config)
+	} else {
+		if task != nil && (len(config.registry.Releases(string(channelModel.Protocol))) > 1 || config.InterfaceType != "" && config.InterfaceType != string(channelModel.Protocol)) {
+			return providerConfig{}, errors.New("历史任务缺少可核验的插件版本，请核对原始请求")
+		}
+		var release protocol.ProviderRelease
+		release, err = selectModelRelease(config.registry, string(channelModel.Protocol), channelModel.ProtocolRelease, false)
+		config.registry = release.Registry
+	}
+	if err != nil {
+		return providerConfig{}, err
+	}
+	profile, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
+	if err != nil {
+		return providerConfig{}, err
+	}
+	capability := normalizeCapability(channelModel.Capability)
+	if profile != nil || capability == "text" || config.pinned {
+		profile, err = NormalizeModelCapabilityConfigForModel(capability, string(channelModel.Protocol), firstNonEmpty(channelModel.ProviderModelKey, channelModel.ModelKey), profile, config.registry)
 		if err != nil {
 			return providerConfig{}, InvalidModelSelection("指定的模型能力配置无效，请联系管理员")
 		}
 	}
+	config.CapabilityConfig = profile
 	providerModelKey := strings.TrimPrefix(strings.TrimSpace(config.ProviderModelKey), "models/")
-	if config.PriceTierID != "" {
+	if !config.pinned && config.PriceTierID != "" {
 		matched := false
 		for _, tier := range channelModel.PriceTiers {
 			if tier.ID == config.PriceTierID && tier.Enabled && tier.PriceConfigured {
@@ -425,7 +452,7 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 		if !matched {
 			return providerConfig{}, errors.New("当前模型规格价格档已更新，请重新创建任务")
 		}
-	} else if modelKey != "" && requestedModel != "" && modelKey != requestedModel {
+	} else if !config.pinned && modelKey != "" && requestedModel != "" && modelKey != requestedModel {
 		return providerConfig{}, errors.New("系统渠道模型标识不一致")
 	}
 	config.InterfaceType = string(channelModel.Protocol)
@@ -441,17 +468,9 @@ func (s *Service) resolveProviderConfig(config providerConfig) (providerConfig, 
 	if err != nil {
 		return providerConfig{}, err
 	}
-	modelCapability, err := DecodeModelCapabilityConfig(channelModel.CapabilityConfigJSON)
-	if err != nil {
-		return providerConfig{}, err
-	}
 	var modelTransport *ReferenceMediaTransport
-	if modelCapability != nil {
-		modelTransport = modelCapability.MediaTransport
-	}
-	modelTransport, err = normalizeReferenceMediaTransport(modelTransport)
-	if err != nil {
-		return providerConfig{}, err
+	if profile != nil {
+		modelTransport = profile.MediaTransport
 	}
 	config.mediaTransport = resolveReferenceMediaTransport(channelTransport, modelTransport)
 	config.ChannelModelKey = modelKey
