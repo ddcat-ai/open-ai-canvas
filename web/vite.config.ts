@@ -6,6 +6,7 @@ import { defineConfig } from "vite";
 
 import { startupChunks } from "./build/startup-chunks";
 import { resilientPreload } from "./build/resilient-preload";
+import type { Plugin } from "vite";
 
 const webDir = dirname(fileURLToPath(import.meta.url));
 const appVersion = process.env.CANVAS_BUILD_VERSION?.trim() || readFileSync(resolve(webDir, "../VERSION"), "utf8").trim();
@@ -14,8 +15,29 @@ const buildTime = process.env.CANVAS_BUILD_TIME?.trim() || process.env.VITE_BUIL
 const appChangelog = readFileSync(resolve(webDir, "../CHANGELOG.md"), "utf8");
 const apiProxyTarget = process.env.VITE_API_PROXY_TARGET?.trim() || "http://127.0.0.1:8080";
 
+/**
+ * 浏览器把 localhost 和 127.0.0.1 当成两个站点，localStorage/IndexedDB 各存一份。
+ * 开发时统一跳到 localhost，避免用户在两个地址之间切换后“记录停留在旧日期”。
+ */
+function canonicalDevHost(): Plugin {
+    return {
+        name: "canonical-dev-host",
+        apply: "serve",
+        configureServer(server) {
+            server.middlewares.use((request, response, next) => {
+                const host = String(request.headers.host || "");
+                if (!/^127\.0\.0\.1(:\d+)?$/.test(host)) return next();
+                const port = host.split(":")[1] || "3000";
+                response.statusCode = 302;
+                response.setHeader("Location", `http://localhost:${port}${request.url || "/"}`);
+                response.end();
+            });
+        },
+    };
+}
+
 export default defineConfig({
-    plugins: [react(), resilientPreload(), startupChunks()],
+    plugins: [react(), canonicalDevHost(), resilientPreload(), startupChunks()],
     define: {
         __APP_VERSION__: JSON.stringify(appVersion),
         __APP_CHANGELOG__: JSON.stringify(appChangelog),
