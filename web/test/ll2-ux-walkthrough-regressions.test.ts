@@ -224,6 +224,13 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("本机上传的图片刷新后从 IndexedDB 重新解析，不再只认 blob URL", async () => {
+    const media = await read("../src/components/canvas/canvas-node-media-content.tsx");
+    expect(media).toContain("isLocalMediaKey");
+    expect(media).toContain("resolveImageUrl(storageKey, fallback)");
+    expect(media).toContain("isRemoteResource || isLocalMediaKey");
+});
+
 test("LL2 模型按模型路由，不因 Key 未就绪退回后端", async () => {
     const exec = await read("../src/pages/canvas/canvas-ll2-video-execution.ts");
     expect(exec).toContain("只按模型判断");

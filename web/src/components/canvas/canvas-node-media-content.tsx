@@ -17,7 +17,8 @@ import { type CanvasNodeData, CanvasNodeType } from "@/types/canvas";
 import { CanvasAudioPlayer } from "./canvas-audio-player";
 import { buildLibTVImagePreviewUrl, buildLibTVVideoSourceUrl } from "@/lib/canvas/libtv-import";
 import { bindCanvasVideoHoverPreview } from "@/lib/canvas/canvas-video-hover-preview";
-import { resolveVideoMediaUrl } from "@/services/file-storage";
+import { resolveMediaUrl, resolveVideoMediaUrl } from "@/services/file-storage";
+import { resolveImageUrl } from "@/services/image-storage";
 import { hydrateCanvasVideoPreview } from "@/services/canvas-video-preview";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { fitImageMaterialNodeSize, fitImageNodeSize, fitVideoNodeToSource } from "@/lib/canvas/canvas-node-size";
@@ -785,6 +786,9 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
             ? content
             : node.metadata?.previewContent || (node.type === CanvasNodeType.Image && node.metadata?.importSource?.provider === "libtv" ? buildLibTVImagePreviewUrl(content) : content);
     const isRemoteResource = storageKey.startsWith("resource:");
+    // 历史上只把 resource: 当“需要解析”；本机上传退回 IndexedDB 的 image:/file: 等 key
+    // 刷新后 content 里的 blob: URL 已失效，必须重新从本地存储取，否则图片永远显示加载失败。
+    const isLocalMediaKey = Boolean(storageKey) && !isRemoteResource;
     // Inline data URLs are already local, but decoding thousands of them is
     // still expensive. Images must wait for the same viewport gate as remote
     // resources; otherwise DOM virtualization does not reduce image work.
@@ -793,13 +797,33 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
     // 上传后的有界缓存可直接借用；节点卸载再释放租约，不会被磁盘/LRU 淘汰撤销正在显示的地址。
     // 只用于图片：音视频播放仍走播放副本合同。
     const sessionBlobUrl = useCachedResourceUrl(isRemoteResource && isLazyVisual ? storageKey : undefined, eager);
-    const initialUrl = sessionBlobUrl || (eager && !isRemoteResource && isLazyVisual && isHttpUrl ? fallback : isRemoteResource || isLazyVisual ? "" : fallback);
+    const initialUrl = sessionBlobUrl || (eager && !isRemoteResource && !isLocalMediaKey && isLazyVisual && isHttpUrl ? fallback : isRemoteResource || isLocalMediaKey || isLazyVisual ? "" : fallback);
     const scope = getActiveUserScope();
     const identity = `${scope}:${node.id}:${storageKey || fallback}`;
-    const [resolved, setResolved] = useState<{ identity: string; url: string; loading: boolean; failed?: boolean; originalWidth?: number; originalHeight?: number }>(() => ({ identity, url: initialUrl, loading: !initialUrl && isRemoteResource && eager }));
-    const current = resolved.identity === identity ? resolved : { identity, url: initialUrl, loading: !initialUrl && isRemoteResource && eager };
+    const [resolved, setResolved] = useState<{ identity: string; url: string; loading: boolean; failed?: boolean; originalWidth?: number; originalHeight?: number }>(() => ({ identity, url: initialUrl, loading: !initialUrl && (isRemoteResource || isLocalMediaKey) && eager }));
+    const current = resolved.identity === identity ? resolved : { identity, url: initialUrl, loading: !initialUrl && (isRemoteResource || isLocalMediaKey) && eager };
 
     useEffect(() => {
+        if (isLocalMediaKey) {
+            // 本机上传：刷新后 blob: 已失效，按 storageKey 从 IndexedDB 重新取。
+            if (!eager) {
+                setResolved({ identity, url: "", loading: false });
+                return;
+            }
+            let cancelled = false;
+            setResolved({ identity, url: "", loading: true });
+            const resolver = node.type === CanvasNodeType.Image ? resolveImageUrl(storageKey, fallback) : resolveMediaUrl(storageKey, fallback);
+            void resolver
+                .then((url) => {
+                    if (!cancelled) setResolved({ identity, url: url || fallback, loading: false, failed: !url && !fallback });
+                })
+                .catch(() => {
+                    if (!cancelled) setResolved({ identity, url: fallback, loading: false, failed: !fallback });
+                });
+            return () => {
+                cancelled = true;
+            };
+        }
         if (!isRemoteResource) {
             setResolved({ identity, url: isLazyVisual && !eager ? "" : fallback, loading: false });
             return;
