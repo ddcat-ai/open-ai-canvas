@@ -1,7 +1,18 @@
 import { useId } from "react";
 import { Input, InputNumber, Radio, Select } from "antd";
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
-import { audioFormatOptionsForConfig, audioSpeedLabel, audioVoiceOptionsForConfig, isDoubaoAudioConfig, normalizeAudioFormatForConfig, normalizeAudioSpeedValue, normalizeAudioVoiceForConfig } from "@/lib/audio-generation";
+import {
+    audioFormatOptionsForConfig,
+    audioSpeedLabel,
+    audioVoiceOptionsForConfig,
+    isDoubaoAudioConfig,
+    isEvoLinkSeedAudioConfig,
+    isEvoLinkQwenAudioConfig,
+    isMiniMaxSpeechConfig,
+    normalizeAudioFormatForConfig,
+    normalizeAudioSpeedValue,
+    normalizeAudioVoiceForConfig,
+} from "@/lib/audio-generation";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import type { AiConfig } from "@/stores/use-config-store";
 import type { CanvasAudioSettingKey } from "@/components/canvas/canvas-audio-settings-popover";
@@ -23,6 +34,9 @@ type AudioSettingsPanelProps = {
 export function AudioSettingsPanel({ config, referenceAudioLabels, references = [], onBindingsChange, onConfigChange, theme, showTitle = true, className = "w-[var(--panel-width-compact)] space-y-4" }: AudioSettingsPanelProps) {
     const listId = useId();
     const doubao = isDoubaoAudioConfig(config);
+    const evoLinkSeed = isEvoLinkSeedAudioConfig(config);
+    const qwenAudio = isEvoLinkQwenAudioConfig(config);
+    const miniMax = isMiniMaxSpeechConfig(config);
     const voice = normalizeAudioVoiceForConfig(config, config.audioVoice);
     const voices = audioVoiceOptionsForConfig(config);
     const currentVoice = voices.some((item) => item.value === voice) ? voices : [{ value: voice, label: voice || "不指定音色" }, ...voices];
@@ -87,6 +101,10 @@ export function AudioSettingsPanel({ config, referenceAudioLabels, references = 
                         <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
                             当前使用参考音色：{referenceAudioLabels!.join("、")}。可用 @音频编号或上方角色对应指定音色；本次不使用音色 ID。
                         </p>
+                    ) : evoLinkSeed ? (
+                        <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
+                            可连接最多 3 段参考音频；不连接时按提示词生成。参考音频将随本次任务发送给 EvoLink，不创建永久音色 ID。
+                        </p>
                     ) : doubao ? (
                         <>
                             <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
@@ -104,7 +122,7 @@ export function AudioSettingsPanel({ config, referenceAudioLabels, references = 
                         </>
                     ) : (
                         <>
-                            <Input aria-label="渠道音色 ID" value={config.audioVoice || ""} list={listId} placeholder="输入渠道音色 ID" onChange={(event) => selectVoice(event.target.value)} />
+                            <Input aria-label="渠道音色 ID" value={qwenAudio ? voice : config.audioVoice || ""} list={listId} placeholder="输入渠道音色 ID" onChange={(event) => selectVoice(event.target.value)} />
                             <datalist id={listId}>
                                 {currentVoice.map((item) => (
                                     <option value={item.value} key={item.value}>
@@ -135,8 +153,8 @@ export function AudioSettingsPanel({ config, referenceAudioLabels, references = 
                             <Radio.Group aria-label="常用语速" value={speed} options={["0.75", "1", "1.25", "1.5"].map((value) => ({ value, label: audioSpeedLabel(value) }))} onChange={(event) => onConfigChange("audioSpeed", event.target.value)} />
                             <InputNumber
                                 aria-label="自定义语速"
-                                min={0.25}
-                                max={4}
+                                min={miniMax || evoLinkSeed || qwenAudio ? 0.5 : 0.25}
+                                max={miniMax || evoLinkSeed || qwenAudio ? 2 : 4}
                                 step={0.05}
                                 value={Number(speed)}
                                 className="w-full"
@@ -152,7 +170,17 @@ export function AudioSettingsPanel({ config, referenceAudioLabels, references = 
                         </>
                     )}
                 </fieldset>
-                {doubao ? (
+                {evoLinkSeed ? (
+                    <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
+                        在画布连接参考音频，提示词写清要说的台词与语气。第 1 段参考音频在提示词中写作 @audio1；未写时影策会自动补上。当前插件仅支持参考音频，不支持参考图片。
+                    </p>
+                ) : qwenAudio ? (
+                    <label className="flex flex-col gap-2 text-xs" style={{ color: theme.node.muted }}>
+                        声音指令（可选）
+                        <Input.TextArea aria-label="声音指令" rows={3} value={config.audioInstructions || ""} placeholder="例如：用自然、平静的语气说" onChange={(event) => onConfigChange("audioInstructions", event.target.value)} />
+                        <span>提示词只写要朗读的文本。可填写系统音色或已有的自定义音色 ID；自定义音色由独立的 Voice Enrollment 接口创建，有效期由 EvoLink 控制。</span>
+                    </label>
+                ) : doubao ? (
                     <details className="space-y-2 text-xs" style={{ color: theme.node.muted }}>
                         <summary className="cursor-pointer">豆包提示词写法</summary>
                         <p className="leading-5">在节点的提示词输入框中写声音要求和台词，不是在这里填写。以下为写法建议，效果需试听确认。</p>
@@ -162,6 +190,10 @@ export function AudioSettingsPanel({ config, referenceAudioLabels, references = 
                         <p className="leading-5">参考图片：最多连接 1 张图片，写清要说的台词；不要与参考音频混用。</p>
                         <p className="leading-5">当前豆包协议没有独立发送声音指令、语言和方言参数；这些要求写入节点提示词，不保证每项都能精确执行。</p>
                     </details>
+                ) : miniMax ? (
+                    <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
+                        MiniMax 按输入文本与音色 ID 合成语音；如需复刻音色，可在音色栏填写账号已有的复刻音色 ID。
+                    </p>
                 ) : (
                     <label className="flex flex-col gap-2 text-xs" style={{ color: theme.node.muted }}>
                         声音指令

@@ -98,8 +98,8 @@ func (s *Service) syncLogicalModelsFromChannelModel(actor *model.User, channelMo
 	return nil
 }
 
-func supportsTokenBilling(capability string, _ model.ChannelInterfaceType) bool {
-	return capability == "text" || capability == "video"
+func supportsTokenBilling(capability string, protocol model.ChannelInterfaceType) bool {
+	return capability == "text" || capability == "video" || (capability == "audio" && protocol == model.ChannelInterfaceEvoLinkQwenAudioTTS)
 }
 
 func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string) ([]model.ChannelModelPriceTier, error) {
@@ -410,7 +410,7 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 		return BadAuthRequest("只有视频或音频模型可以按秒计费")
 	}
 	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
-		return BadAuthRequest("Token 计费仅支持文本和视频模型")
+		return BadAuthRequest("Token 计费仅支持文本、视频和 EvoLink Qwen TTS 音频模型")
 	}
 	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 || input.CacheWriteTokenPriceMicrocredits < 0 ||
 		input.ReferenceVideoUnitPriceMicrocredits < 0 || input.ReferenceVideoOutputTokenPriceMicrocredits < 0 {

@@ -1,0 +1,153 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "minimax-speech",
+  "name": "MiniMax 语音合成",
+  "version": "1.0.0",
+  "author": "MiniMax / 影策",
+  "description": "MiniMax 同步文字转语音协议。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "minimax-speech",
+        "label": "MiniMax 语音合成",
+        "capabilities": [
+          "audio"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "https://api.minimax.cn",
+        "requiresPublicMediaUrls": false,
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "values": [
+              "speech-2.8-hd",
+              "speech-2.8-turbo",
+              "speech-2.6-hd",
+              "speech-2.6-turbo",
+              "speech-02-hd",
+              "speech-02-turbo"
+            ],
+            "description": "MiniMax 语音模型 ID。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "text",
+            "description": "待合成文本。"
+          },
+          {
+            "name": "providerOptions",
+            "type": "object",
+            "mapping": "provider-specific fields",
+            "description": "可通过 minimax-speech.voice 指定音色 ID。"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/t2a_v2",
+          "contentType": "application/json",
+          "body": {
+            "model": {
+              "$ref": "request.model"
+            },
+            "text": {
+              "$ref": "request.prompt"
+            },
+            "stream": false,
+            "output_format": "url",
+            "voice_setting": {
+              "voice_id": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.extra.audioVoice"
+                  },
+                  {
+                    "$ref": "request.providerOptions.minimax-speech.voice"
+                  },
+                  "male-qn-qingse"
+                ]
+              },
+              "speed": {
+                "$coalesce": [
+                  {
+                    "$if": {
+                      "condition": {
+                        "$ne": [
+                          {
+                            "$toFloat": {
+                              "$ref": "request.extra.audioSpeed"
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      "then": {
+                        "$toFloat": {
+                          "$ref": "request.extra.audioSpeed"
+                        }
+                      },
+                      "else": null
+                    }
+                  },
+                  1
+                ]
+              }
+            },
+            "audio_setting": {
+              "format": {
+                "$coalesce": [
+                  {
+                    "$ref": "request.extra.audioFormat"
+                  },
+                  "mp3"
+                ]
+              }
+            }
+          }
+        },
+        "response": {
+          "status": "succeeded",
+          "errorPaths": [
+            "base_resp.status_code"
+          ],
+          "messagePaths": [
+            "base_resp.status_msg"
+          ],
+          "audios": {
+            "$ref": "response.data.audio"
+          },
+          "resultEphemeral": true
+        }
+      }
+    ]
+  },
+  "documentation": "# MiniMax 语音合成\n\n该插件通过 MiniMax 同步语音合成 HTTP 接口生成配音，支持 `speech-2.8-hd`、`speech-2.8-turbo`、`speech-2.6-hd`、`speech-2.6-turbo`、`speech-02-hd` 和 `speech-02-turbo`。\n\n完整接口见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# MiniMax 语音合成接口\n\n## 协议\n\n- Provider ID：`minimax-speech`，能力：`audio`。\n- 默认地址：`https://api.minimax.cn`。\n- 鉴权：`Authorization: Bearer <API Key>`。\n- 配置字段：`apiKey`，必填，保存于渠道密钥配置。\n- 创建：`POST /v1/t2a_v2`，同步、非流式。\n- 请求使用 `model`、`text`、`voice_setting.voice_id`、`voice_setting.speed` 和 `audio_setting.format`；`output_format=url` 返回临时音频 URL，由宿主立即下载持久化。\n- `base_resp.status_code` 非零时视为失败。没有音频 URL 时也不会交付空结果。\n\n## 响应\n\n`data.audio` 是临时音频 URL，`base_resp.status_code` 和 `base_resp.status_msg` 是业务状态与错误信息。\n\n支持的模型 ID：`speech-2.8-hd`、`speech-2.8-turbo`、`speech-2.6-hd`、`speech-2.6-turbo`、`speech-02-hd`、`speech-02-turbo`。\n\n音色 ID 可使用 MiniMax 系统音色或账户已有的复刻音色。未指定时使用 `male-qn-qingse`；格式默认 MP3，语速默认 1。官方接口单次文本须小于 10000 字符。\n\n依据：[MiniMax 同步语音合成 API](https://platform.minimax.cn/docs/api-reference/speech-t2a-http)。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"minimax-speech\",\n  \"name\": \"MiniMax 语音合成\",\n  \"version\": \"1.0.0\",\n  \"author\": \"MiniMax / 影策\",\n  \"description\": \"MiniMax 同步文字转语音协议。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"minimax-speech\",\n        \"label\": \"MiniMax 语音合成\",\n        \"capabilities\": [\n          \"audio\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"https://api.minimax.cn\",\n        \"requiresPublicMediaUrls\": false,\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"values\": [\n              \"speech-2.8-hd\",\n              \"speech-2.8-turbo\",\n              \"speech-2.6-hd\",\n              \"speech-2.6-turbo\",\n              \"speech-02-hd\",\n              \"speech-02-turbo\"\n            ],\n            \"description\": \"MiniMax 语音模型 ID。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"text\",\n            \"description\": \"待合成文本。\"\n          },\n          {\n            \"name\": \"providerOptions\",\n            \"type\": \"object\",\n            \"mapping\": \"provider-specific fields\",\n            \"description\": \"可通过 minimax-speech.voice 指定音色 ID。\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/t2a_v2\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"model\": {\n              \"$ref\": \"request.model\"\n            },\n            \"text\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"stream\": false,\n            \"output_format\": \"url\",\n            \"voice_setting\": {\n              \"voice_id\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.extra.audioVoice\"\n                  },\n                  {\n                    \"$ref\": \"request.providerOptions.minimax-speech.voice\"\n                  },\n                  \"male-qn-qingse\"\n                ]\n              },\n              \"speed\": {\n                \"$coalesce\": [\n                  {\n                    \"$if\": {\n                      \"condition\": {\n                        \"$ne\": [\n                          {\n                            \"$toFloat\": {\n                              \"$ref\": \"request.extra.audioSpeed\"\n                            }\n                          },\n                          0\n                        ]\n                      },\n                      \"then\": {\n                        \"$toFloat\": {\n                          \"$ref\": \"request.extra.audioSpeed\"\n                        }\n                      },\n                      \"else\": null\n                    }\n                  },\n                  1\n                ]\n              }\n            },\n            \"audio_setting\": {\n              \"format\": {\n                \"$coalesce\": [\n                  {\n                    \"$ref\": \"request.extra.audioFormat\"\n                  },\n                  \"mp3\"\n                ]\n              }\n            }\n          }\n        },\n        \"response\": {\n          \"status\": \"succeeded\",\n          \"errorPaths\": [\n            \"base_resp.status_code\"\n          ],\n          \"messagePaths\": [\n            \"base_resp.status_msg\"\n          ],\n          \"audios\": {\n            \"$ref\": \"response.data.audio\"\n          },\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

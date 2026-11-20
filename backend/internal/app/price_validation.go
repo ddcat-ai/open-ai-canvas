@@ -37,7 +37,7 @@ func ValidateChannelModelPrice(billingMode string, capability string, protocol m
 		if capability == "video" {
 			return true
 		}
-		if capability != "" && capability != "text" {
+		if capability != "" && capability != "text" && !(capability == "audio" && protocol == model.ChannelInterfaceEvoLinkQwenAudioTTS) {
 			return false
 		}
 		// 文本模型：所有 Token 价格为 0 时表示免费。

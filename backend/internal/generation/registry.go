@@ -106,6 +106,12 @@ func OfficialDeclarativeAudioInterface(interfaceType string) (string, bool) {
 	switch strings.TrimSpace(interfaceType) {
 	case string(model.ChannelInterfaceOpenAIAudio):
 		return "OpenAI Audio", true
+	case string(model.ChannelInterfaceMiniMaxSpeech):
+		return "MiniMax Speech", true
+	case string(model.ChannelInterfaceEvoLinkSeedAudio):
+		return "EvoLink 豆包 Seed Audio", true
+	case string(model.ChannelInterfaceEvoLinkQwenAudioTTS):
+		return "EvoLink Qwen Audio 3.1 TTS Flash", true
 	case string(model.ChannelInterfaceDoubaoStreamingTTS):
 		return "豆包流式语音", true
 	case string(model.ChannelInterfaceAsyncAudio):

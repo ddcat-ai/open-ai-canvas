@@ -1,0 +1,31 @@
+---
+title: EvoLink 音频模型
+description: 影策中的 Seed Audio 1.0 与 Qwen Audio 3.1 TTS Flash 配置方式
+---
+
+# EvoLink 音频模型
+
+影策通过一个 `evolink-seed-audio` 声明式插件提供两个音频协议：`evolink-seed-audio` 对应 `doubao-seed-audio-1-0`，`evolink-qwen-audio-tts` 对应 `qwen-audio-3.1-tts-flash`。两个协议共用 EvoLink 的创建、轮询和结果下载流程，并各自映射模型参数。
+
+## 配置
+
+管理员在「渠道与模型」选择 EvoLink 网站的 Key 分组，Base URL 为 `https://api.evolink.ai`，API Key 填入该分组密钥。新增模型时填写：
+
+| 项目 | 值 |
+| --- | --- |
+| 产品模型标识、上游模型 ID | `doubao-seed-audio-1-0` 或 `qwen-audio-3.1-tts-flash` |
+| 模型能力 | 音频 |
+| 调用协议 | 豆包选 `evolink-seed-audio`；Qwen 选 `evolink-qwen-audio-tts` |
+| 价格档 | 根据实际运营价格设置并启用；没有可用价格档时画布不会显示模型 |
+
+选择「豆包 Seed Audio 1.0 → EvoLink」时，输入台词或声音描述；连接参考音频节点后，最多可传 3 段音频，按顺序对应提示词中的 `@audio1` 到 `@audio3`。画布会补齐缺失的引用标记。每段参考音频最长 30 秒，格式可选 MP3、WAV、OGG Opus、PCM，语速范围 0.5–2。
+
+本地资源由影策后端完成归属校验，随后上传到 EvoLink 文件服务获取 `file_url`。创建任务使用 `POST /v1/audios/generations`，再通过 `GET /v1/tasks/{task_id}` 轮询。生成结果地址由影策下载并持久化。参考图片尚未接入该插件。EvoLink 按输出音频时长计费；影策价格档是本系统独立的用户售价。
+
+若要按上游实际用量定价，Seed Audio 使用「按秒」价格档，填写每秒价格；生成结束后影策按成品音频的实测时长结算。EvoLink 的公开售价为每秒 0.003 美元；可把影策价格币种设为 USD，再由用户分组的美元积分汇率换算为影策积分。
+
+选择「Qwen Audio 3.1 TTS Flash → EvoLink」时，提示词只写要朗读的文本，最多 5000 字符。可选系统音色或当前 EvoLink 账号已有的自定义音色 ID，并可设置声音指令、0.5–2 倍语速和 MP3、WAV、Opus。默认音色为 `longanhuan_v3.1`。Qwen 不直接接收画布参考音频；声音复刻需要单独调用 `voice-enrollment` 创建自定义音色。
+
+Qwen TTS 可使用「按 Token」价格档，分别填写每百万输入 Token 0.221 美元、每百万输出 Token 1.765 美元；影策先按朗读文本估算预授权，任务成功后按 EvoLink 返回的实际用量结算。若上游没有返回用量，Token 订单不会用预估用量直接结算，需检查该任务的用量日志。声音复刻是独立接口，不包含在这个生成价格档中。
+
+接口依据：[EvoLink Seed Audio 1.0](https://evolink.ai/zh/seed-audio-1-0)、[Qwen Audio 3.1 TTS Flash](https://evolink.ai/docs/cn/api-manual/audio-series/qwen-audio-tts/qwen-audio-3.1-tts-flash)。插件的完整字段映射见 `plugin-packages/evolink-seed-audio/docs/interface.md`。

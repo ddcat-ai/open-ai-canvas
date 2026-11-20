@@ -43,7 +43,8 @@ export type ModelReferenceLimits = {
  * 或 1 张参考图片，两者不能同时使用。
  */
 export function audioReferenceCapacity(config: AiConfig, model: string) {
-    return audioProtocol(config, model) === "doubao-streaming-tts" ? 3 : 0;
+    const protocol = audioProtocol(config, model);
+    return protocol === "doubao-streaming-tts" || protocol === "evolink-seed-audio" ? 3 : 0;
 }
 
 export function isDoubaoAudioModel(config: AiConfig, model: string) {
@@ -57,7 +58,7 @@ export function audioModelForConnection(config: AiConfig, explicit = "") {
     const selected = String(explicit || "").trim();
     if (selected) return selected;
     if (String(config.audioModel || "").trim()) return config.audioModel;
-    return (config.audioModels || []).find((item) => isDoubaoAudioModel(config, item)) || "";
+    return (config.audioModels || []).find((item) => audioReferenceCapacity(config, item) > 0 || isDoubaoAudioModel(config, item)) || "";
 }
 
 /**

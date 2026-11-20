@@ -546,6 +546,82 @@ add({
   })
 });
 
+const evolinkSeedAudio = {
+  id: "evolink-seed-audio", providerId: "evolink-seed-audio", name: "EvoLink 豆包 Seed Audio 1.0", vendor: "EvoLink", capability: "audio",
+  baseUrl: "https://api.evolink.ai", auth: bearer,
+  params: [
+    ["model", "string", true, "model", "模型 ID，使用 doubao-seed-audio-1-0。"],
+    ["prompt", "string", true, "prompt", "待生成的台词与声音指令。"],
+    ["audios", "media[]", false, "audio_references", "最多三段参考音频，按顺序对应 @audio1 至 @audio3。"]
+  ],
+  notes: "EvoLink Seed Audio 1.0：参考音频先经 EvoLink 文件服务上传，再以 file_url 提交异步任务；输出 URL 由宿主下载保存。图片参考暂不接入该插件。",
+  validations: [
+    { assert: lte(len(ref("request.audios")), 3), message: "EvoLink Seed Audio 最多支持三段参考音频" },
+    { assert: eq(len(ref("request.images")), 0), message: "当前 EvoLink Seed Audio 插件暂不支持参考图片" },
+    { assert: eq(len(ref("request.videos")), 0), message: "EvoLink Seed Audio 不支持参考视频" }
+  ],
+  upload: {
+    kinds: ["audio"], method: "POST", path: "/api/v1/files/upload/stream", contentType: "multipart/form-data",
+    files: [{ name: "file", source: ref("media.value"), filename: coalesce(ref("media.name"), "reference.wav"), mimeType: ref("media.mimeType") }],
+    id: ref("response.data.file_url")
+  },
+  create: jsonCreate("/v1/audios/generations", {
+    model: ref("request.model"),
+    prompt: ref("request.prompt"),
+    audio_references: omit(conditional(gt(len(ref("request.audios")), 0), map(sorted(ref("request.audios")), "media", ref("media.uploadId")))),
+    format: coalesce(ref("request.extra.audioFormat"), "mp3"),
+    speech_rate: coalesce(nonZeroFloat(ref("request.extra.audioSpeed")), 1),
+    sample_rate: 24000
+  }),
+  poll: { method: "GET", path: "/v1/tasks/{{taskId}}" },
+  response: asyncResponse("audio", {
+    taskId: coalesce(ref("response.id"), ref("taskId")),
+    status: coalesce(ref("response.status"), "pending"),
+    audios: coalesce(ref("response.result_data.0.audio_url"), ref("response.results.0")),
+    errorPaths: ["error.code"], messagePaths: ["error.message"]
+  })
+};
+
+const evolinkQwenAudio = {
+  id: "evolink-qwen-audio-tts", providerId: "evolink-qwen-audio-tts", name: "EvoLink Qwen Audio 3.1 TTS Flash", vendor: "EvoLink", capability: "audio",
+  baseUrl: "https://api.evolink.ai", auth: bearer,
+  params: [
+    ["model", "string", true, "model", "固定为 qwen-audio-3.1-tts-flash。"],
+    ["prompt", "string", true, "prompt", "待合成文本，最多 5000 字符。"],
+    ["providerOptions", "object", false, "voice/instruction/response_format/speech_rate", "音色、声音指令、格式与语速由画布音频设置提供。"]
+  ],
+  notes: "EvoLink Qwen Audio 3.1 TTS Flash 只接受文本合成；参考音频需要先通过独立的 voice-enrollment 模型创建临时音色，本插件不隐式上传或复刻。输出 URL 由宿主及时下载保存。",
+  validations: [
+    { assert: lte(len(ref("request.prompt")), 5000), message: "Qwen Audio TTS 文本最多 5000 字符" },
+    { assert: eq(len(ref("request.audios")), 0), message: "Qwen Audio TTS 不直接接受参考音频，请使用已有音色 ID" },
+    { assert: eq(len(ref("request.images")), 0), message: "Qwen Audio TTS 不接受参考图片" },
+    { assert: eq(len(ref("request.videos")), 0), message: "Qwen Audio TTS 不接受参考视频" }
+  ],
+  create: jsonCreate("/v1/audios/generations", {
+    model: ref("request.model"),
+    prompt: ref("request.prompt"),
+    voice: coalesce(ref("request.extra.audioVoice"), "longanhuan_v3.1"),
+    instruction: omit(ref("request.extra.audioInstructions")),
+    response_format: coalesce(ref("request.extra.audioFormat"), "mp3"),
+    speech_rate: coalesce(nonZeroFloat(ref("request.extra.audioSpeed")), 1),
+    sample_rate: 24000
+  }),
+  poll: { method: "GET", path: "/v1/tasks/{{taskId}}" },
+  response: asyncResponse("audio", {
+    taskId: coalesce(ref("response.id"), ref("taskId")),
+    status: coalesce(ref("response.status"), "pending"),
+    audios: coalesce(ref("response.result_data.0.audio_url"), ref("response.results.0")),
+    usage: ref("response.usage"),
+    errorPaths: ["error.code"], messagePaths: ["error.message"]
+  })
+};
+
+add({
+  ...evolinkSeedAudio,
+  name: "EvoLink 音频模型",
+  providers: [evolinkSeedAudio, evolinkQwenAudio]
+});
+
 const openAIVideoImages = filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask"));
 const openAIVideoImageCount = len(openAIVideoImages);
 add({
@@ -1373,30 +1449,31 @@ function manifestFor(spec) {
     permissions: ["generation.run", "media.read"],
     configuration: spec.configuration || config(),
     contributes: {
-      providers: [{
-        id: spec.providerId,
-        label: spec.name,
-        capabilities: [spec.capability],
+      providers: (spec.providers || [spec]).map((provider) => ({
+        id: provider.providerId,
+        label: provider.name,
+        capabilities: [provider.capability],
         scopes,
-        baseUrl: spec.baseUrl,
-        requiresPublicMediaUrls: spec.requiresPublicMediaUrls === true,
-        ...(spec.detachedPolling ? { detachedPolling: true } : {}),
-        auth: spec.auth,
-        ...(spec.imageParameters ? { imageParameters: spec.imageParameters } : {}),
-        ...(spec.videoReferences ? { videoReferences: spec.videoReferences } : {}),
-        ...(spec.videoModes ? { videoModes: spec.videoModes } : {}),
-        ...(spec.videoOutputs ? { videoOutputs: spec.videoOutputs } : {}),
-        parameters: parameters(spec.params),
-        ...(spec.requestBindings ? { requestBindings: spec.requestBindings } : {}),
-        ...(spec.validations ? { validations: spec.validations } : {}),
-        create: spec.create,
-        ...(spec.agent ? { agent: spec.agent } : {}),
-        ...(spec.poll ? { poll: spec.poll } : {}),
-        ...(spec.cancel ? { cancel: spec.cancel } : {}),
-        ...(spec.result ? { result: spec.result } : {}),
-        response: spec.response,
-        ...(spec.agentResponse ? { agentResponse: spec.agentResponse } : {})
-      }]
+        baseUrl: provider.baseUrl,
+        requiresPublicMediaUrls: provider.requiresPublicMediaUrls === true,
+        ...(provider.detachedPolling ? { detachedPolling: true } : {}),
+        auth: provider.auth,
+        ...(provider.imageParameters ? { imageParameters: provider.imageParameters } : {}),
+        ...(provider.videoReferences ? { videoReferences: provider.videoReferences } : {}),
+        ...(provider.videoModes ? { videoModes: provider.videoModes } : {}),
+        ...(provider.videoOutputs ? { videoOutputs: provider.videoOutputs } : {}),
+        parameters: parameters(provider.params),
+        ...(provider.requestBindings ? { requestBindings: provider.requestBindings } : {}),
+        ...(provider.validations ? { validations: provider.validations } : {}),
+        create: provider.create,
+        ...(provider.agent ? { agent: provider.agent } : {}),
+        ...(provider.upload ? { upload: provider.upload } : {}),
+        ...(provider.poll ? { poll: provider.poll } : {}),
+        ...(provider.cancel ? { cancel: provider.cancel } : {}),
+        ...(provider.result ? { result: provider.result } : {}),
+        response: provider.response,
+        ...(provider.agentResponse ? { agentResponse: provider.agentResponse } : {})
+      }))
     }
   };
 }
@@ -1429,6 +1506,7 @@ function operationFieldRows(operation, label) {
 }
 
 function docsFor(spec) {
+  if (spec.providers) return spec.providers.map((provider) => docsFor({ ...provider, id: spec.id })).join("\n---\n\n");
   const rows = spec.params.map(([name, type, required, mapping, description]) => `| \`${name}\` | ${type} | ${required ? "是" : "否"} | \`${mapping}\` | ${description} |`).join("\n");
   const operationRows = [
     ...operationFieldRows(spec.create, "create"),

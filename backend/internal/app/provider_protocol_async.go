@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/model"
 	"yingce/backend/internal/protocol"
 )
 
@@ -56,7 +57,11 @@ func uploadProtocolMedia(ctx context.Context, input canvasGenerationInput, adapt
 				if err != nil {
 					return err
 				}
-				body, err := executeProtocolRequest(withProviderRequestKind(ctx, "upload"), input.Config, spec)
+				uploadConfig := input.Config
+				if input.Config.InterfaceType == string(model.ChannelInterfaceEvoLinkSeedAudio) {
+					uploadConfig.BaseURL = "https://files-api.evolink.ai"
+				}
+				body, err := executeProtocolRequest(withProviderRequestKind(ctx, "upload"), uploadConfig, spec)
 				if err != nil {
 					return fmt.Errorf("上传参考素材失败：%w", err)
 				}

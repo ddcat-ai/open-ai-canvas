@@ -1,0 +1,20 @@
+---
+title: MiniMax 语音合成
+description: MiniMax 六个语音模型在影策中的渠道与画布配置
+---
+
+# MiniMax 语音合成
+
+影策通过 `minimax-speech` 声明式插件接入 MiniMax 同步语音合成 HTTP 接口。支持以下模型 ID：
+
+| 系列 | 模型 ID |
+| --- | --- |
+| Speech 2.8 | `speech-2.8-hd`、`speech-2.8-turbo` |
+| Speech 2.6 | `speech-2.6-hd`、`speech-2.6-turbo` |
+| Speech 02 | `speech-02-hd`、`speech-02-turbo` |
+
+管理员在「渠道与模型」新增 MiniMax 网站和 Key 分组，Base URL 可使用 MiniMax 国内同步语音接口的 `https://api.minimax.cn`；华北地区也可使用 `https://api-bj.minimaxi.com`。插件会在请求时追加 `/v1/t2a_v2`。将上述模型按「音频」能力逐个加入，协议选择 `minimax-speech`。API Key 保存在渠道密钥配置中，不写入模型 ID 或前端 URL。价格须按实际使用的 MiniMax 账号报价单单独填写；模型 ID 本身不能推断计费价格。
+
+画布音频节点可输入系统音色或账户已有的复刻音色 ID；默认使用 `male-qn-qingse`。格式支持 MP3、WAV、FLAC 和 PCM，语速范围为 0.5–2。此协议把节点提示词当作要说出的文本，不解释额外的声音指令。HTTP 接口单次文本须小于 10000 字符，非流式响应返回临时音频 URL，由影策后端立即下载并保存。
+
+接口依据：[MiniMax 同步语音合成 API](https://platform.minimax.cn/docs/api-reference/speech-t2a-http)。插件字段与响应映射见 `plugin-packages/minimax-speech/docs/interface.md`。
