@@ -224,6 +224,12 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("LL2 模型按模型路由，不因 Key 未就绪退回后端", async () => {
+    const exec = await read("../src/pages/canvas/canvas-ll2-video-execution.ts");
+    expect(exec).toContain("只按模型判断");
+    expect(exec).not.toContain("if (!useLL2Store.getState().apiKey.trim()) return false;");
+});
+
 test("画布记录本次提交参数，长视频轮询按秒数放宽", async () => {
     const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
     expect(executor).toContain("ll2Submitted");

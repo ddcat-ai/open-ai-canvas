@@ -20,7 +20,8 @@ export function ll2BaseVideoModel(model: string): string {
 }
 
 export function isLL2CanvasVideoModel(config: AiConfig): boolean {
-    if (!useLL2Store.getState().apiKey.trim()) return false;
+    // 只按模型判断，不把「Key 是否已连接」混进路由：
+    // 否则刷新后 Key 还没就绪时，LL2 模型会被当成普通模型走后端，报一个和 LL2 无关的 502。
     return (LL2_CONNECTED_VIDEO_MODELS as readonly string[]).includes(ll2BaseVideoModel(config.model));
 }
 
