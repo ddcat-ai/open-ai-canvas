@@ -1,21 +1,18 @@
-import { ChevronsUpDown, Film } from "lucide-react";
+import { Film } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
-import { LL2GeneratePanel } from "@/components/ll2/ll2-generate";
 import { ll2FormatCNY } from "@/lib/ll2-models";
 import { ll2FetchHdBlob } from "@/services/ll2/ll2-hd";
 import { ll2DownloadFilm, ll2FilmAgeLabel, ll2ListFilms, ll2RemoveFilm, type LL2Film } from "@/services/ll2/ll2-films";
 import { useLL2Store } from "@/stores/use-ll2-store";
 
 /**
- * 我的片子：本机作品库（胶片带）+ 完整生成面板。
- * 首页保持一个输入框的简洁形态，需要调模型/清晰度/比例/胶片带的人来这里。
+ * 我的片子：本机作品库（胶片带）。生成统一回首页的「一句话成片」，这里只管看和下载。
  */
 export default function LL2Films() {
     const [films, setFilms] = useState<LL2Film[]>(() => ll2ListFilms());
     const [active, setActive] = useState<LL2Film | null>(null);
-    const [advanced, setAdvanced] = useState(false);
     const [message, setMessage] = useState("");
     const apiKey = useLL2Store((state) => state.apiKey);
     /** 超分版地址要带 Key 下载成 blob 才能播，普通片子直接播直链。 */
@@ -141,14 +138,6 @@ export default function LL2Films() {
                     )}
                 </section>
 
-                <section className="ll2-wb-section" aria-label="临时手动生成">
-                    <button type="button" className="ll2-wb-advanced-toggle" onClick={() => setAdvanced((value) => !value)} aria-expanded={advanced}>
-                        <ChevronsUpDown className="size-4" />
-                        <span>临时手动生成：想自己调模型、清晰度、时长、比例，就在这直接出一支</span>
-                        <strong>{advanced ? "收起" : "展开"}</strong>
-                    </button>
-                    {advanced ? <LL2GeneratePanel /> : <p className="ll2-wb-empty">首页那个输入框够用就不用展开这里。</p>}
-                </section>
             </main>
         </div>
     );
