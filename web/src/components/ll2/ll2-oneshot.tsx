@@ -1,4 +1,4 @@
-import { ArrowRight, AtSign, Check, Download, Film, LoaderCircle, Plus, Sparkles, Square, UploadCloud, Wand2, X } from "lucide-react";
+import { ArrowRight, AtSign, Check, Download, Film, LoaderCircle, Lock, Plus, Shuffle, Sparkles, Square, UploadCloud, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -14,7 +14,7 @@ import {
     ll2TiersFor,
     type LL2ConnectedVideoModel,
 } from "@/lib/ll2-models";
-import { ll2ReadSettings, ll2WriteSettings } from "@/lib/ll2-workspace";
+import { ll2PromptWithLocks, ll2ReadSettings, ll2WriteSettings } from "@/lib/ll2-workspace";
 import { ll2AddFilm, ll2DownloadFilm, type LL2Film } from "@/services/ll2/ll2-films";
 import { ll2AssetIdByTitle, ll2AssetToMediaInput } from "@/services/ll2/ll2-assets";
 import {
@@ -30,7 +30,7 @@ import {
 } from "@/services/ll2/ll2-media";
 import { ll2FetchHdBlob, ll2RunHd, type LL2HdProgress } from "@/services/ll2/ll2-hd";
 import { ll2GenerateVideo, type LL2VideoProgress } from "@/services/ll2/ll2-video";
-import { LL2_PROMPT_SYSTEM, ll2ChatText } from "@/services/ll2/ll2-text";
+import { LL2_PROMPT_SYSTEM, LL2_VARIANTS_SYSTEM, ll2ChatText } from "@/services/ll2/ll2-text";
 import { ll2UpscaleEstimate, ll2UpscaleTargetLabel, ll2UpscaleTargetsFor, type LL2UpscaleTarget } from "@/lib/ll2-upscale";
 import { useLL2AgentStore } from "@/stores/use-ll2-agent-store";
 import { ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
@@ -84,6 +84,13 @@ export function LL2OneShot() {
     const [polishing, setPolishing] = useState(false);
     const [polishNote, setPolishNote] = useState("");
     const polishAbortRef = useRef<AbortController | null>(null);
+    const [lockOpen, setLockOpen] = useState(false);
+    const [lockedCharacter, setLockedCharacter] = useState(settings.lockedCharacter || "");
+    const [lockedStyle, setLockedStyle] = useState(settings.lockedStyle || "");
+    const [variants, setVariants] = useState<string[]>([]);
+    const [variantsBusy, setVariantsBusy] = useState(false);
+    const [autoStartRequested, setAutoStartRequested] = useState(false);
+    const autoStartRef = useRef(false);
     const [progress, setProgress] = useState<LL2VideoProgress | null>(null);
     const [error, setError] = useState("");
     const [hint, setHint] = useState("");
@@ -135,6 +142,7 @@ export function LL2OneShot() {
         }
         const incoming = searchParams.get("prompt");
         if (!incoming) return;
+        setAutoStartRequested(searchParams.get("autostart") === "1");
         setPrompt(incoming);
         setTab(searchParams.get("mode") === "text" ? "text" : "video");
         const modelParam = searchParams.get("model");
@@ -295,6 +303,60 @@ export function LL2OneShot() {
             polishAbortRef.current = null;
         }
     };
+    const saveLocks = () => {
+        const next = ll2WriteSettings({
+            ...ll2ReadSettings(),
+            lockedCharacter: lockedCharacter.trim(),
+            lockedStyle: lockedStyle.trim(),
+        });
+        setLockedCharacter(next.lockedCharacter || "");
+        setLockedStyle(next.lockedStyle || "");
+        setLockOpen(false);
+        setHint(next.lockedCharacter || next.lockedStyle ? "角色/风格锁定已开启，后面每条生成都会自动带上。" : "已清除角色/风格锁定。");
+    };
+
+    const clearLocks = () => {
+        setLockedCharacter("");
+        setLockedStyle("");
+        const next = ll2WriteSettings({ ...ll2ReadSettings(), lockedCharacter: "", lockedStyle: "" });
+        setLockedCharacter(next.lockedCharacter || "");
+        setLockedStyle(next.lockedStyle || "");
+        setLockOpen(false);
+        setHint("已清除角色/风格锁定。");
+    };
+
+    /** 同一句话给 3 个不同侧重点的版本，挑一个再出片。 */
+    const generateVariants = async () => {
+        const text = prompt.trim();
+        if (!text || variantsBusy || !connected) return;
+        setVariantsBusy(true);
+        setVariants([]);
+        setHint("");
+        try {
+            const result = await ll2ChatText({
+                apiKey,
+                model: "deepseek-v4.1-flash",
+                temperature: 0.9,
+                messages: [
+                    { role: "system", content: LL2_VARIANTS_SYSTEM },
+                    { role: "user", content: text },
+                ],
+            });
+            const parsed = result.text
+                .split(/\r?\n/)
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line) => line.replace(/^\s*(?:\d+[.、)]|[-*])\s*/, "").trim())
+                .filter((line) => line && !/^(方案|版本)\s*\d*/.test(line));
+            const unique = Array.from(new Set(parsed)).slice(0, 3);
+            if (!unique.length) throw new Error("没有拿到多版本结果，再试一次");
+            setVariants(unique);
+        } catch (error) {
+            setHint(error instanceof Error ? error.message : "多版本生成失败，稍后再试");
+        } finally {
+            setVariantsBusy(false);
+        }
+    };
     const removeMedia = (id: string) => {
         if (running) return;
         setMedia((previous) => {
@@ -355,6 +417,18 @@ export function LL2OneShot() {
         }
     };
 
+    // Agent「直接出片」确认后跳回首页：参数已确认，落地后自动提交一次。
+    useEffect(() => {
+        if (!autoStartRequested || autoStartRef.current) return;
+        if (!connected || running || !prompt.trim()) return;
+        autoStartRef.current = true;
+        setAutoStartRequested(false);
+        navigate("/", { replace: true });
+        void start();
+        // start 是每次渲染重建的，这里只关心确认参数是否就绪。
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoStartRequested, connected, prompt, running]);
+
     const start = async () => {
         if (!connected) {
             ll2OpenKeyDialog();
@@ -394,10 +468,12 @@ export function LL2OneShot() {
             const build = ll2BuildMediaContent(allMedia);
             const finalPrompt = ll2ApplyMentionTags(prompt, build, media.length);
             if (!finalPrompt.trim()) throw new Error("先写一句话，说清你想要的画面");
+            // 角色/风格锁定写进每一条提示词，换镜头也能保持一致。
+            const lockedPrompt = ll2PromptWithLocks(finalPrompt, ll2ReadSettings());
 
             phase = "generate";
             const outcome = await ll2GenerateVideo(
-                { apiKey, model, prompt: finalPrompt, seconds, resolution, ratio, signal: controller.signal, media: build.items, promptOptimizer },
+                { apiKey, model, prompt: lockedPrompt, seconds, resolution, ratio, signal: controller.signal, media: build.items, promptOptimizer },
                 setProgress,
             );
             const film = ll2AddFilm({
@@ -545,19 +621,84 @@ export function LL2OneShot() {
                         />
 
                         {tab === "video" ? (
-                            <div className="ll2-oneshot-polish">
-                                <button
-                                    type="button"
-                                    className="ll2-oneshot-polish-btn"
-                                    onClick={() => void polishPrompt()}
-                                    disabled={!connected || !prompt.trim() || running || polishing}
-                                    title={connected ? "让文本模型把这句话润色成更容易出片的画面提示词" : "先连接 LL2 才能润色"}
-                                >
-                                    {polishing ? <LoaderCircle className="size-3.5 is-spinning" aria-hidden /> : <Wand2 className="size-3.5" aria-hidden />}
-                                    {polishing ? "正在润色…" : "AI 润色提示词"}
-                                </button>
-                                {polishNote ? <span className="ll2-oneshot-polish-note">{polishNote}</span> : null}
-                            </div>
+                            <>
+                                <div className="ll2-oneshot-polish">
+                                    <button
+                                        type="button"
+                                        className={`ll2-oneshot-lock${lockedCharacter.trim() || lockedStyle.trim() ? " is-on" : ""}`}
+                                        onClick={() => setLockOpen((value) => !value)}
+                                        aria-expanded={lockOpen}
+                                        title="锁定角色设定和风格，每条生成自动带上"
+                                    >
+                                        <Lock className="size-3.5" aria-hidden />
+                                        角色/风格{lockedCharacter.trim() || lockedStyle.trim() ? " · 已锁" : ""}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ll2-oneshot-polish-btn"
+                                        onClick={() => void generateVariants()}
+                                        disabled={!connected || !prompt.trim() || running || variantsBusy}
+                                        title="同一句话给 3 个不同版本，挑一个再出片"
+                                    >
+                                        {variantsBusy ? <LoaderCircle className="size-3.5 is-spinning" aria-hidden /> : <Shuffle className="size-3.5" aria-hidden />}
+                                        {variantsBusy ? "正在生成…" : "多版本"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ll2-oneshot-polish-btn"
+                                        onClick={() => void polishPrompt()}
+                                        disabled={!connected || !prompt.trim() || running || polishing}
+                                        title={connected ? "让文本模型把这句话润色成更容易出片的画面提示词" : "先连接 LL2 才能润色"}
+                                    >
+                                        {polishing ? <LoaderCircle className="size-3.5 is-spinning" aria-hidden /> : <Wand2 className="size-3.5" aria-hidden />}
+                                        {polishing ? "正在润色…" : "AI 润色提示词"}
+                                    </button>
+                                    {polishNote ? <span className="ll2-oneshot-polish-note">{polishNote}</span> : null}
+                                </div>
+
+                                {lockOpen ? (
+                                    <div className="ll2-lock-panel">
+                                        <label>
+                                            <span>角色设定（每条生成自动带上）</span>
+                                            <textarea value={lockedCharacter} onChange={(event) => setLockedCharacter(event.target.value)} rows={2} placeholder="例：黑发少女，白蓝渐变长发，黑色哥特裙" />
+                                        </label>
+                                        <label>
+                                            <span>风格（每条生成自动带上）</span>
+                                            <textarea value={lockedStyle} onChange={(event) => setLockedStyle(event.target.value)} rows={2} placeholder="例：二维动画，冷蓝色调，电影感" />
+                                        </label>
+                                        <small>开启后，后面每一句生成都会自动追加；留空表示不锁。</small>
+                                        <div className="ll2-lock-actions">
+                                            <button type="button" className="is-primary" onClick={saveLocks}>保存锁定</button>
+                                            <button type="button" onClick={clearLocks}>清除</button>
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                {variants.length ? (
+                                    <div className="ll2-variants">
+                                        <div className="ll2-variants-head">
+                                            <strong>选一个版本</strong>
+                                            <button type="button" onClick={() => setVariants([])} aria-label="关闭多版本">×</button>
+                                        </div>
+                                        {variants.map((variant, index) => (
+                                            <button
+                                                key={`${index}-${variant.slice(0, 8)}`}
+                                                type="button"
+                                                className="ll2-variant-card"
+                                                onClick={() => {
+                                                    setPrompt(variant);
+                                                    setVariants([]);
+                                                    promptRef.current?.focus();
+                                                    setHint(`已换成第 ${index + 1} 版。`);
+                                                }}
+                                            >
+                                                <span>{index + 1}</span>
+                                                <p>{variant}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </>
                         ) : null}
 
                         {/* 没填 Key 之前不露任何模型 / 分辨率 / 价格；填了之后按

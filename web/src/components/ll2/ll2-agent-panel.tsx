@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { nanoid } from "nanoid";
 
-import { LL2_MODELS } from "@/lib/ll2-models";
+import { LL2_MODELS, ll2PreciseCNY } from "@/lib/ll2-models";
 import { LL2Select } from "@/components/ll2/ll2-select";
 import {
     ll2CurrentCanvasId,
@@ -100,6 +100,7 @@ export function LL2AgentPanel() {
     const [running, setRunning] = useState(false);
     const [error, setError] = useState("");
     const [copied, setCopied] = useState("");
+    const [orderPrompt, setOrderPrompt] = useState("");
     const [inserted, setInserted] = useState("");
     const listRef = useRef<HTMLDivElement>(null);
     const abortRef = useRef<AbortController | null>(null);
@@ -201,6 +202,23 @@ export function LL2AgentPanel() {
             setRunning(false);
             abortRef.current = null;
         }
+    };
+
+    const openOrder = (text: string) => {
+        if (!apiKey.trim()) {
+            ll2OpenKeyDialog();
+            return;
+        }
+        setOrderPrompt(ll2CleanVideoPrompt(text));
+        setError("");
+    };
+
+    const confirmOrder = () => {
+        const text = orderPrompt.trim();
+        if (!text) return;
+        setOrderPrompt("");
+        setOpen(false);
+        navigate(ll2PromptUrl(text, { autostart: "1" }));
     };
 
     const copy = async (text: string, id: string) => {
@@ -333,6 +351,7 @@ export function LL2AgentPanel() {
 
     const starters = inCanvas ? CANVAS_STARTERS : AGENT_STARTERS;
     const isAgent = !inCanvas;
+    const orderEstimate = orderPrompt ? ll2PreciseCNY(settings.videoModel, settings.seconds, settings.resolution) : null;
 
     if (!open) {
         // 首页已经有「聊天改稿」页签和「打开聊天改稿」按钮，再挂一个悬浮按钮
@@ -421,9 +440,14 @@ export function LL2AgentPanel() {
                                                     <Sparkles className="size-3" /> 交给 Agent 出片
                                                 </button>
                                             ) : (
-                                                <button type="button" onClick={() => navigate(ll2PromptUrl(ll2CleanVideoPrompt(message.text)))} title="送去一句话成片">
-                                                    <Sparkles className="size-3" /> 去出片
-                                                </button>
+                                                <>
+                                                    <button type="button" className="is-primary" onClick={() => openOrder(message.text)} title="确认价格后直接提交生成">
+                                                        <Sparkles className="size-3" /> 直接出片
+                                                    </button>
+                                                    <button type="button" onClick={() => navigate(ll2PromptUrl(ll2CleanVideoPrompt(message.text)))} title="只填入首页输入框，不立刻生成">
+                                                        去出片
+                                                    </button>
+                                                </>
                                             )}
                                             <button type="button" onClick={() => insertIntoCanvas(message.text, message.id)} title="把这段文字记到画布上">
                                                 {inserted === message.id ? <Check className="size-3" /> : <FileText className="size-3" />}
@@ -512,6 +536,27 @@ export function LL2AgentPanel() {
             ) : null}
 
             {error ? <div className="ll2-agent-error" role="alert">{error}</div> : null}
+
+            {orderPrompt && !inCanvas ? (
+                <div className="ll2-agent-order" aria-label="确认直接出片">
+                    <div className="ll2-agent-order-head">
+                        <Film className="size-3.5" aria-hidden />
+                        <strong>确认直接出片</strong>
+                        <button type="button" onClick={() => setOrderPrompt("")} aria-label="关闭确认">
+                            <X className="size-3.5" />
+                        </button>
+                    </div>
+                    <p className="ll2-agent-order-prompt">{orderPrompt}</p>
+                    <div className="ll2-agent-order-meta">
+                        {settings.videoModel} · {settings.seconds} 秒 · {settings.resolution} · {orderEstimate?.label}
+                    </div>
+                    <small>确认后立即提交并扣费；会自动带上已锁定的角色/风格。</small>
+                    <div className="ll2-agent-order-actions">
+                        <button type="button" className="is-primary" onClick={confirmOrder}>确认出片 · {orderEstimate?.label}</button>
+                        <button type="button" onClick={() => setOrderPrompt("")}>先不出</button>
+                    </div>
+                </div>
+            ) : null}
 
             <div className="ll2-agent-compose">
                 <div className="ll2-agent-context">

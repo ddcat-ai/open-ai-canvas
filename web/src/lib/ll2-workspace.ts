@@ -149,6 +149,10 @@ export type LL2WorkspaceSettings = {
     textModel: string;
     /** 仅 H3 支持：让网关先把提示词整理成官方格式再生成。默认关。 */
     promptOptimizer: boolean;
+    /** 角色锁定：每次生成都追加同一段人物设定，保证换镜头不换人。 */
+    lockedCharacter?: string;
+    /** 风格锁定：每次生成都追加同一段画风/色调。 */
+    lockedStyle?: string;
 };
 
 export const LL2_SETTINGS_KEY = "ll2:workspace_settings:v1";
@@ -160,6 +164,8 @@ export const LL2_DEFAULT_SETTINGS: LL2WorkspaceSettings = {
     ratio: "16:9",
     textModel: LL2_DEFAULT_TEXT_MODEL,
     promptOptimizer: false,
+    lockedCharacter: "",
+    lockedStyle: "",
 };
 
 export function ll2ReadSettings(): LL2WorkspaceSettings {
@@ -180,10 +186,21 @@ export function ll2ReadSettings(): LL2WorkspaceSettings {
             ratio: typeof value.ratio === "string" && value.ratio ? value.ratio : LL2_DEFAULT_SETTINGS.ratio,
             textModel,
             promptOptimizer: value.promptOptimizer === true,
+            lockedCharacter: typeof value.lockedCharacter === "string" ? value.lockedCharacter.trim() : "",
+            lockedStyle: typeof value.lockedStyle === "string" ? value.lockedStyle.trim() : "",
         };
     } catch {
         return { ...LL2_DEFAULT_SETTINGS };
     }
+}
+
+/** 把角色/风格锁定追加到提示词尾部；没有锁定就原样返回。 */
+export function ll2PromptWithLocks(prompt: string, settings: LL2WorkspaceSettings = ll2ReadSettings()): string {
+    const text = String(prompt || "").trim();
+    const parts: string[] = [];
+    if (settings.lockedCharacter?.trim()) parts.push(`角色设定：${settings.lockedCharacter.trim()}`);
+    if (settings.lockedStyle?.trim()) parts.push(`风格：${settings.lockedStyle.trim()}`);
+    return parts.length ? `${text}。${parts.join("。")}` : text;
 }
 
 export function ll2WriteSettings(settings: LL2WorkspaceSettings): LL2WorkspaceSettings {

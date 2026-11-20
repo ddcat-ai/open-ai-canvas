@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { ll2CleanVideoPrompt } from "../src/lib/ll2-video-prompt";
+import { ll2PromptWithLocks, type LL2WorkspaceSettings } from "../src/lib/ll2-workspace";
 
 /**
  * 2026-11-19 真实浏览器走查抓到的 4 个回归点。
@@ -40,6 +41,36 @@ test("资产页 ?quote= 只落地一次，灵感 ?prompt= 落地后也清参数"
     const quoteNavigate = source.indexOf('navigate("/", { replace: true })');
     expect(quoteNavigate).toBeGreaterThan(-1);
     expect(source.lastIndexOf('navigate("/", { replace: true })')).toBeGreaterThan(quoteNavigate);
+});
+
+test("角色/风格锁定会追加到每一条生成提示词", () => {
+    const settings: LL2WorkspaceSettings = {
+        videoModel: "MiniMax-H3",
+        resolution: "768P",
+        seconds: 5,
+        ratio: "16:9",
+        textModel: "deepseek-v4.1-flash",
+        promptOptimizer: false,
+        lockedCharacter: "黑发少女，蓝色眼睛",
+        lockedStyle: "冷蓝色调，电影感",
+    };
+    const locked = ll2PromptWithLocks("雨夜街头", settings);
+    expect(locked).toContain("雨夜街头");
+    expect(locked).toContain("角色设定：黑发少女，蓝色眼睛");
+    expect(locked).toContain("风格：冷蓝色调，电影感");
+    expect(ll2PromptWithLocks("雨夜街头", { ...settings, lockedCharacter: "", lockedStyle: "" })).toBe("雨夜街头");
+});
+
+test("首页提供多版本提示词与 Agent 直接下单入口", async () => {
+    const oneShot = await read("../src/components/ll2/ll2-oneshot.tsx");
+    expect(oneShot).toContain("generateVariants");
+    expect(oneShot).toContain("LL2_VARIANTS_SYSTEM");
+    expect(oneShot).toContain("ll2-variant-card");
+    expect(oneShot).toContain('searchParams.get("autostart") === "1"');
+    const agent = await read("../src/components/ll2/ll2-agent-panel.tsx");
+    expect(agent).toContain("直接出片");
+    expect(agent).toContain("confirmOrder");
+    expect(agent).toContain("ll2-agent-order");
 });
 
 test("去出片只取画面提示词，不带「想清楚了就点交给 Agent 出片」这类操作说明", () => {
