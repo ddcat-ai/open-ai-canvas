@@ -136,7 +136,7 @@ export default function LL2Inspiration() {
                                     {item.type === "video" && item.model ? (
                                         <span>{item.model} · {item.resolution} · {item.seconds} 秒</span>
                                     ) : (
-                                        <span>聊天改稿 · 写一次大约几分钱</span>
+                                        <span>Agent · 写一次大约几分钱</span>
                                     )}
                                     {cost ? <strong>{cost.label}</strong> : null}
                                 </div>
@@ -153,7 +153,7 @@ export default function LL2Inspiration() {
 
                 <div className="ll2-wb-inline-tip">
                     <Sparkles className="size-4" />
-                    <span>价格按 LL2 官网价格预估，账单以控制台为准；想要更贴自己题材的提示词，点右下角 <strong>聊天改稿</strong> 帮你想词。</span>
+                    <span>价格按 LL2 官网价格预估，账单以控制台为准；想要更贴自己题材的提示词，点右下角 <strong>Agent</strong> 帮你想词。</span>
                 </div>
             </main>
 
@@ -169,7 +169,7 @@ export default function LL2Inspiration() {
                         {detail.type === "video" && detail.model ? (
                             <p className="ll2-insp-modal-spec">推荐 {detail.model} · {detail.resolution} · {detail.seconds} 秒 · {ll2InspirationCost(detail)?.label}</p>
                         ) : (
-                            <p className="ll2-insp-modal-spec">聊天改稿 · 写一次大约几分钱</p>
+                            <p className="ll2-insp-modal-spec">Agent · 写一次大约几分钱</p>
                         )}
                         <Link to={ll2InspirationUseUrl(detail)} className="ll2-oneshot-submit" onClick={() => setDetail(null)}>
                             用这个想法 <ArrowRight className="size-3.5" />

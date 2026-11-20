@@ -44,7 +44,6 @@ type Tab = "video" | "text" | "chat";
 const TABS: { id: Tab; label: string; action?: boolean }[] = [
     { id: "video", label: "视频" },
     { id: "text", label: "文本" },
-    { id: "chat", label: "聊天改稿" },
 ];
 
 type QuickIdea = { title: string; hint: string; prompt: string; mode: "video" | "text" };
@@ -716,7 +715,7 @@ export function LL2OneShot() {
                                     <>
                         <span className="ll2-oneshot-text-note">用我们自己的文本模型：写漫剧 / 短剧、改提示词、问创作问题 · 写一次大约不到 1 分钱，不生成视频</span>
                         <button type="button" className="ll2-oneshot-submit" onClick={() => openAgentWith(prompt)}>
-                            <Sparkles className="size-3.5" /> 让聊天改稿写
+                            <Sparkles className="size-3.5" /> 让 Agent 写
                         </button>
                                     </>
                                 ) : null}
@@ -725,15 +724,6 @@ export function LL2OneShot() {
 
 
                     </>
-                ) : null}
-
-                {tab === "chat" ? (
-                    <div className="ll2-oneshot-empty">
-                        <strong>不会写？先聊两句</strong>
-                        <p>「聊天改稿」用的是我们自己的文本模型，陪你写漫剧、短剧、改提示词，也能回答创作里卡住的问题。点下面的按钮才打开，不会自己弹出来挡住这一页。</p>
-                        <p>聊好的句子可以一键送回这里出片；在无限画布里，还能直接交给 Agent 生成视频并放进那张画布。</p>
-                        <button type="button" className="ll2-oneshot-submit" onClick={() => openAgentWith(prompt)}><Sparkles className="size-3.5" /> 打开聊天改稿</button>
-                    </div>
                 ) : null}
 
                 {waiting ? (

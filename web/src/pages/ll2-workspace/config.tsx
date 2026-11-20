@@ -100,7 +100,7 @@ export default function LL2Config() {
                             <small>发短视频常用 9:16</small>
                         </label>
                         <label>
-                            <span>聊天改稿用哪个</span>
+                            <span>Agent 用哪个</span>
                             <select value={settings.textModel} onChange={(event) => update({ textModel: event.target.value })}>
                                 {LL2_TEXT_MODELS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                             </select>

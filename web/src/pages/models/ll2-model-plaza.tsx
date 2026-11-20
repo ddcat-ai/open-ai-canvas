@@ -23,7 +23,7 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
     { id: "all", label: `全部 ${LL2_MODEL_COUNT}` },
     { id: "video", label: "视频生成" },
     { id: "upscale", label: "让片子更清楚" },
-    { id: "text", label: "聊天改稿" },
+    { id: "text", label: "Agent" },
 ];
 
 // 2026-11-18：四条优势全部改成白话，不摆「兼容协议 / 自建机房」这类工程说法。
@@ -241,7 +241,7 @@ export default function LL2ModelPlaza() {
                     MiniMax-H3 固定 768P、4–15 秒，没有 2K 和质量档位；更清楚的版本是另一个超分模型做出来的。
                 </p>
                 <p>
-                    聊天改稿按写了多少字算，没有固定单次价；有的模型白天晚上价格不同，以官网为准。
+                    Agent 按写了多少字算，没有固定单次价；有的模型白天晚上价格不同，以官网为准。
                 </p>
                 <p>
                     生成的片子在云端保留 24 小时，请及时下载到这台电脑。

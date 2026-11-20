@@ -40,9 +40,11 @@ test("资产页 ?quote= 只落地一次，灵感 ?prompt= 落地后也清参数"
     expect(source.lastIndexOf('navigate("/", { replace: true })')).toBeGreaterThan(quoteNavigate);
 });
 
-test("首页不再挂重复的聊天改稿悬浮按钮", async () => {
+test("首页也常驻 Agent 悬浮入口，不再只有聊天改稿页签", async () => {
     const source = await read("../src/components/ll2/ll2-agent-panel.tsx");
-    expect(source).toContain('pathname === "/" || pathname === "/create"');
+    expect(source).toContain('pathname === "/models"');
+    expect(source).not.toContain('pathname === "/" || pathname === "/create"');
+    expect(source).toContain("DMC Agent");
 });
 
 test("带素材：H3 / wan3 已接协议，其它模型明确拦截", async () => {
@@ -224,6 +226,19 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("全站 Agent 小组件：首页常驻、能写代码、代码块单独渲染", async () => {
+    const panel = await read("../src/components/ll2/ll2-agent-panel.tsx");
+    expect(panel).toContain("AGENT_STARTERS");
+    expect(panel).toContain("DMC Agent");
+    expect(panel).toContain("AgentMessageText");
+    expect(panel).toContain("ll2-agent-code");
+    expect(panel).toContain('is-canvas\" : \" is-agent');
+    const text = await read("../src/services/ll2/ll2-text.ts");
+    expect(text).toContain("LL2_AGENT_SYSTEM");
+    const oneShot = await read("../src/components/ll2/ll2-oneshot.tsx");
+    expect(oneShot).not.toContain('{ id: "chat", label: "聊天改稿" }');
+});
+
 test("游客工作区不请求登录态后端，避免误报登录恢复失败", async () => {
     const hydrator = await read("../src/components/auth/auth-session-hydrator.tsx");
     expect(hydrator).toContain("isGuestWorkspacePath");
@@ -361,11 +376,12 @@ test("画布 LL2 节点会显示排队/生成/超分阶段，并对中断给出�
     expect(executor).toContain("ll2TaskId");
 });
 
-test("画布文本助手使用 DMC 深色玻璃样式", async () => {
+test("画布与全站 Agent 共用 DMC 深色玻璃样式", async () => {
     const css = await read("../src/styles/ll2-c-polish.css");
     expect(css).toContain(".ll2-agent.is-canvas");
+    expect(css).toContain(".ll2-agent.is-agent");
     expect(css).toContain("rgba(22, 22, 26, 0.92)");
-    expect(css).toContain(".ll2-agent.is-canvas .ll2-agent-compose textarea");
+    expect(css).toContain(".ll2-agent.is-canvas .ll2-agent-compose textarea, .ll2-agent.is-agent .ll2-agent-compose textarea");
 });
 
 test("旧配置里的 auto-hd 也会从所有模型下拉里清掉", async () => {

@@ -16,7 +16,7 @@ import {
 import { ll2BuildCanvasNodes, ll2CanvasAgentEstimate, ll2CleanVideoPrompt, ll2RunCanvasAgent } from "@/services/ll2/ll2-canvas-agent";
 import { ll2DownloadFilm, type LL2Film } from "@/services/ll2/ll2-films";
 import {
-    LL2_DEFAULT_TEXT_MODEL,
+    LL2_AGENT_SYSTEM,
     LL2_PROMPT_SYSTEM,
     LL2_TEXT_MODELS,
     LL2_THINK_SYSTEM,
@@ -32,9 +32,36 @@ import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 type Starter = { title: string; hint: string; prompt: string; shape?: boolean };
 
-const HOME_STARTERS: Starter[] = [
-    { title: "从一个想法开始", hint: "聊聊主题、角色，或一个难忘的画面", prompt: "帮我把「雨后老城的傍晚」写成一个可以生成视频的画面提示词，要有主体、光线和镜头运动" },
-    { title: "换个说法再写一版", hint: "把已经写好的句子改得更有画面感", prompt: "帮我把下面这句话改得更有画面感，补上光线和镜头运动，不要分段：" },
+/** Agent 的回答里可能带代码块：把三反引号包起来的部分渲染成等宽代码块，别压成一段文字。 */
+function AgentMessageText({ text }: { text: string }) {
+    const parts = text.split("```");
+    return (
+        <div className="ll2-agent-msg-text">
+            {parts.map((part, index) => {
+                if (index % 2 === 1) {
+                    const lines = part.replace(/^\n/, "").split("\n");
+                    const first = lines[0]?.trim() || "";
+                    const hasLang = /^[a-zA-Z0-9+#.-]{1,16}$/.test(first);
+                    const code = (hasLang ? lines.slice(1).join("\n") : part).trim();
+                    return (
+                        <pre key={index} className="ll2-agent-code">
+                            <code>{code}</code>
+                        </pre>
+                    );
+                }
+                const body = part.trim();
+                return body ? <p key={index}>{body}</p> : null;
+            })}
+        </div>
+    );
+}
+
+/** 全站 Agent 的四个入口：提示词、运镜、代码、随便问，一眼看出它不只改稿。 */
+const AGENT_STARTERS: Starter[] = [
+    { title: "写一段出片提示词", hint: "给一句话，补成主体、光线、运镜都清楚的画面", prompt: "帮我把「雨夜老城的街角」写成一段可以直接生成视频的画面提示词，要有主体、光线和镜头运动" },
+    { title: "帮我设计运镜", hint: "按剧情给几个镜头和镜头运动", prompt: "我有一段 15 秒的独白，人物从窗边走到桌前。帮我设计 3 个镜头，写清机位、景别和运镜" },
+    { title: "写一段代码", hint: "小工具、脚本、页面都可以", prompt: "用 HTML + JavaScript 写一个单文件的小工具：输入一句话，统计字数和预计视频秒数，界面简洁一点" },
+    { title: "随便问", hint: "剧本、分镜、提示词、工具问题都能聊", prompt: "我想做一支 30 秒的悬疑漫剧，帮我想一个开场钩子和前三镜" },
 ];
 
 /** 画布里的文本助手：先陪用户把漫剧 / 短剧 / 提示词想清楚、写清楚，再交给 Agent 出片。 */
@@ -66,7 +93,8 @@ export function LL2AgentPanel() {
     // 画布里仍按旧参数报价和出片。
     const settings = useMemo(() => ll2ReadSettings(), [inCanvas]);
     const estimate = useMemo(() => (inCanvas ? ll2CanvasAgentEstimate(settings) : null), [inCanvas, settings]);
-    const [model, setModel] = useState(settings.textModel || LL2_DEFAULT_TEXT_MODEL);
+    // 默认用更快的文本模型；用户在下拉里手动换过的会沿用。
+    const [model, setModel] = useState(settings.textModel && settings.textModel !== "glm-5.3-flash" ? settings.textModel : "deepseek-v4.1-flash");
     const [draft, setDraft] = useState("");
     const [messages, setMessages] = useState<LL2AgentMessage[]>(() => ll2ReadAgentMessages());
     const [running, setRunning] = useState(false);
@@ -133,7 +161,7 @@ export function LL2AgentPanel() {
     };
 
     /** 默认用「想清楚、写清楚」的系统指令；点「整理成出片提示词」时换成只出正文的指令。 */
-    const send = async (text: string, system: string = LL2_THINK_SYSTEM) => {
+    const send = async (text: string, system: string = inCanvas ? LL2_THINK_SYSTEM : LL2_AGENT_SYSTEM) => {
         const prompt = text.trim();
         if (!prompt || running) return;
         if (!apiKey.trim()) {
@@ -193,7 +221,7 @@ export function LL2AgentPanel() {
         }
         const context = useGlobalAgentStore.getState().canvas;
         if (context?.canvasId === canvasId && context.insertAgentText) {
-            context.insertAgentText(text, "聊天改稿写的一句话");
+            context.insertAgentText(text, "Agent 写的一句话");
         } else {
             const store = useCanvasStore.getState();
             const project = store.projects.find((item) => item.id === canvasId);
@@ -205,7 +233,7 @@ export function LL2AgentPanel() {
             const node: CanvasNodeData = {
                 id: `text-${nanoid()}`,
                 type: CanvasNodeType.Text,
-                title: "聊天改稿写的一句话",
+                title: "Agent 写的一句话",
                 position: { x: rightmost + 80, y: 80 },
                 width: 360,
                 height: 220,
@@ -303,28 +331,48 @@ export function LL2AgentPanel() {
         }
     };
 
-    const starters = inCanvas ? CANVAS_STARTERS : HOME_STARTERS;
+    const starters = inCanvas ? CANVAS_STARTERS : AGENT_STARTERS;
+    const isAgent = !inCanvas;
 
     if (!open) {
         // 首页已经有「聊天改稿」页签和「打开聊天改稿」按钮，再挂一个悬浮按钮
         // 只是重复入口，还会压住底部示例卡片和「开始创作」。其它页面保留悬浮入口。
         // /models 是满宽价格表，右下角悬浮按钮会压住「一次大概多少」那一列；价格页不是创作页。
-        if (pathname === "/" || pathname === "/create" || pathname === "/models") return null;
+        if (pathname === "/models") return null;
         return (
-            <button type="button" className={`ll2-agent-fab${inCanvas ? " is-canvas" : ""}`} onClick={() => setOpen(true)} aria-label={inCanvas ? "打开画布里的文本助手" : "打开聊天改稿"}>
-                <Sparkles className="size-4.5" aria-hidden />
-                <span>{inCanvas ? "画布里的文本助手" : "聊天改稿"}</span>
+            <button type="button" className={`ll2-agent-fab${inCanvas ? " is-canvas" : " is-agent"}`} onClick={() => setOpen(true)} aria-label={inCanvas ? "打开画布里的 Agent" : "打开 DMC Agent"}>
+                <span className="ll2-agent-fab-orb" aria-hidden>
+                    <Sparkles className="size-3.5" />
+                </span>
+                <span>{inCanvas ? "画布 Agent" : "Agent"}</span>
             </button>
         );
     }
 
     return (
-        <aside className={`ll2-agent${inCanvas ? " is-canvas" : ""}`} aria-label={inCanvas ? "画布里的文本助手" : "聊天改稿"}>
+        <aside className={`ll2-agent${inCanvas ? " is-canvas" : " is-agent"}`} aria-label={inCanvas ? "画布里的 Agent" : "DMC Agent"}>
             <header className="ll2-agent-head">
-                <button type="button" className="ll2-agent-new" onClick={clear}>
-                    <Plus className="size-3.5" /> 新对话
-                </button>
-                <span className="ll2-agent-head-meta">{inCanvas ? "画布助手 · 我们的文本模型" : friendlyName}</span>
+                {isAgent ? (
+                    <>
+                        <span className="ll2-agent-avatar" aria-hidden>
+                            <Sparkles className="size-4" />
+                        </span>
+                        <span className="ll2-agent-identity">
+                            <strong>DMC Agent</strong>
+                            <small>写提示词 · 运镜 · 代码 · 随便问</small>
+                        </span>
+                        <button type="button" className="ll2-agent-icon" onClick={clear} aria-label="新对话" title="新对话">
+                            <Plus className="size-4" />
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        <button type="button" className="ll2-agent-new" onClick={clear}>
+                            <Plus className="size-3.5" /> 新对话
+                        </button>
+                        <span className="ll2-agent-head-meta">画布助手 · 我们的文本模型</span>
+                    </>
+                )}
                 <button type="button" className="ll2-agent-icon" onClick={() => setOpen(false)} aria-label="收起助手">
                     <X className="size-4" />
                 </button>
@@ -333,12 +381,12 @@ export function LL2AgentPanel() {
             <div className="ll2-agent-scroll" ref={listRef}>
                 {messages.length === 0 ? (
                     <div className="ll2-agent-welcome">
-                        <span className="ll2-agent-orb" aria-hidden />
-                        <h2>{inCanvas ? "先把想法写清楚，再交给 Agent 出片" : "先聊想法，再决定下一步"}</h2>
+                        {inCanvas ? <span className="ll2-agent-orb" aria-hidden /> : null}
+                        <h2>{inCanvas ? "先把想法写清楚，再交给 Agent 出片" : "我是 DMC Agent，想让我帮你做什么？"}</h2>
                         <p>
                             {inCanvas
                                 ? "写漫剧、短剧，或问问提示词该怎么写。想清楚了，点「交给 Agent 出片」，片子会直接放进这张画布。"
-                                : "不知道怎么下笔？说一句大概的意思，我帮你写成能出片的句子。"}
+                                : "写提示词、设计运镜、写代码、改脚本，或者随便聊两句。"}
                         </p>
                         <div className="ll2-agent-starters">
                             {starters.map((starter) => (
@@ -352,14 +400,14 @@ export function LL2AgentPanel() {
                             ))}
                         </div>
                         <p className="ll2-agent-tip">
-                            {inCanvas ? "先点「整理成出片提示词」，再点「交给 Agent 出片」，片子会放进这张画布。" : "聊好的句子，可以一键送去出片。"}
+                            {inCanvas ? "先点「整理成出片提示词」，再点「交给 Agent 出片」，片子会放进这张画布。" : "写好的画面描述，可以一键「去出片」送进一句话成片。"}
                         </p>
                     </div>
                 ) : (
                     <div className="ll2-agent-messages">
                         {messages.map((message) => (
                             <div key={message.id} className={`ll2-agent-msg is-${message.role}`}>
-                                <p>{message.text}</p>
+                                <AgentMessageText text={message.text} />
                                 {message.role === "assistant" ? (
                                     <div className="ll2-agent-msg-foot">
                                         <span>{ll2TextModelName(message.model || model)} · 本次 {message.costLabel || "几乎不花钱"}</span>
@@ -467,7 +515,7 @@ export function LL2AgentPanel() {
 
             <div className="ll2-agent-compose">
                 <div className="ll2-agent-context">
-                    {inCanvas ? `正在这张画布里 · ${canvasProject?.title || "本机画布"}` : "还没打开画布"}
+                    {inCanvas ? `正在这张画布里 · ${canvasProject?.title || "本机画布"}` : isAgent ? "DMC Agent · 写提示词 / 运镜 / 代码" : "还没打开画布"}
                 </div>
                 <textarea
                     value={draft}
@@ -478,7 +526,7 @@ export function LL2AgentPanel() {
                             void send(draft);
                         }
                     }}
-                    placeholder={inCanvas ? "想写漫剧、短剧，或不知道提示词怎么写？先说一句…" : "说说要做什么：写提示词、改文案、换个说法……"}
+                    placeholder={inCanvas ? "想写漫剧、短剧，或不知道提示词怎么写？先说一句…" : "写提示词、设计运镜、写代码，或直接说你要做什么…"}
                     rows={3}
                     disabled={running}
                 />
