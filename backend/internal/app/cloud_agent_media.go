@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -181,23 +183,102 @@ type cloudAgentMediaPlan struct {
 	Prepared *cloudAgentPreparedMedia `json:"-"`
 }
 
-// A resumed draft's incoming edges must describe the new approved inputs,
-// rather than retaining references removed from the generation request.
-func cloudAgentMediaConnections(edges []map[string]any, a cloudAgentMediaArgs) []map[string]any {
-	incoming := map[string]map[string]any{}
-	result := make([]map[string]any, 0, len(edges))
-	for _, edge := range edges {
-		if stringValue(edge["toNodeId"]) != a.NodeID {
-			result = append(result, edge)
-		} else {
-			incoming[stringValue(edge["fromNodeId"])] = edge
+type cloudAgentStoryboardOutput struct {
+	scriptID string
+	rowID    string
+}
+
+func cloudAgentBoundStoryboardOutputs(doc map[string]any, a cloudAgentMediaArgs) []cloudAgentStoryboardOutput {
+	if a.Mode != "image" && a.Mode != "video" {
+		return nil
+	}
+	var outputs []cloudAgentStoryboardOutput
+	for _, node := range creationMaps(doc["nodes"]) {
+		if node["type"] != "script" {
+			continue
+		}
+		metadata, _ := node["metadata"].(map[string]any)
+		storyboard, _ := metadata["storyboard"].(map[string]any)
+		for _, row := range creationMaps(storyboard["rows"]) {
+			if rowID := stringValue(row["id"]); rowID != "" && row[a.Mode+"NodeId"] == a.NodeID {
+				outputs = append(outputs, cloudAgentStoryboardOutput{stringValue(node["id"]), rowID})
+			}
 		}
 	}
-	for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
-		if edge := incoming[id]; edge != nil {
+	return outputs
+}
+
+func cloudAgentMediaConnections(doc map[string]any, a cloudAgentMediaArgs) []map[string]any {
+	type inputEdge struct {
+		edge     map[string]any
+		position int
+	}
+	edges := creationMaps(doc["connections"])
+	incoming := map[string]inputEdge{}
+	outputs := map[cloudAgentStoryboardOutput]bool{}
+	linked := map[string]bool{}
+	result := make([]map[string]any, 0, len(edges))
+	for position, edge := range edges {
+		if stringValue(edge["toNodeId"]) != a.NodeID {
 			result = append(result, edge)
-			delete(incoming, id)
+			continue
 		}
+		from := stringValue(edge["fromNodeId"])
+		handle := stringValue(edge["fromHandleId"])
+		rowID, rowHandle := strings.CutPrefix(handle, "row:")
+		switch {
+		case rowHandle || edge["relation"] == "storyboard-output":
+			if rowHandle && rowID != "" {
+				edge = maps.Clone(edge)
+				edge["relation"], edge["storyboardRowId"] = "storyboard-output", rowID
+			} else {
+				rowID = stringValue(edge["storyboardRowId"])
+			}
+			outputs[cloudAgentStoryboardOutput{from, rowID}] = true
+		case handle == "storyboard:context" || edge["relation"] == "batch-output":
+		default:
+			incoming[from] = inputEdge{edge, position}
+			continue
+		}
+		linked[from] = true
+		result = append(result, edge)
+	}
+	for _, output := range cloudAgentBoundStoryboardOutputs(doc, a) {
+		if !outputs[output] {
+			result = append(result, map[string]any{"fromNodeId": output.scriptID, "toNodeId": a.NodeID, "fromHandleId": "row:" + output.rowID, "relation": "storyboard-output", "storyboardRowId": output.rowID})
+			outputs[output], linked[output.scriptID] = true, true
+		}
+	}
+	var rowID string
+	if len(outputs) == 1 {
+		for key := range outputs {
+			rowID = key.rowID
+		}
+	}
+	lastPosition := -1
+	for index, from := range append(slices.Clone(a.ReferenceNodeIDs), a.SourceNodeID) {
+		if from == "" || linked[from] {
+			continue
+		}
+		linked[from] = true
+		input := incoming[from]
+		edge := maps.Clone(input.edge)
+		isReference := index < len(a.ReferenceNodeIDs)
+		if edge == nil || (!isReference && edge["relation"] == "storyboard-asset-reference") {
+			edge = map[string]any{"fromNodeId": from, "toNodeId": a.NodeID}
+		}
+		if isReference && rowID != "" && edge["relation"] == nil {
+			edge["relation"], edge["storyboardRowId"] = "storyboard-asset-reference", rowID
+		}
+		if edge["id"] == nil {
+			lastPosition = len(edges)
+		} else if input.position < lastPosition {
+			edge["id"] = "agent-" + newID()
+			lastPosition = len(edges)
+		} else {
+			lastPosition = input.position
+		}
+		result = append(result, edge)
 	}
 	return result
 }
@@ -446,50 +527,32 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 	// canvas_apply_ops. The old implementation only checked that references
 	// existed, which allowed invalid edges (for example frame -> image) to be
 	// smuggled in through generate_media.
-	prospectiveConnections := cloudAgentMediaConnections(creationMaps(doc["connections"]), args)
-	target := existing
-	if target == nil {
-		target = map[string]any{"id": args.NodeID, "type": targetDescriptor.Type}
-	}
-	prospectiveNodes := make([]map[string]any, 0, len(nodes)+1)
-	for _, node := range nodes {
-		prospectiveNodes = append(prospectiveNodes, node)
-	}
+	plannedConnections := cloudAgentMediaConnections(doc, args)
+	prospectiveNodes := creationMaps(doc["nodes"])
 	if existing == nil {
-		prospectiveNodes = append(prospectiveNodes, target)
+		prospectiveNodes = append(prospectiveNodes, map[string]any{"id": args.NodeID, "type": targetDescriptor.Type})
 	}
-	type prospectiveSource struct {
-		id    string
-		field string
+	prospectiveConnections := make([]map[string]any, 0, len(plannedConnections))
+	for _, edge := range plannedConnections {
+		if edge["id"] != nil {
+			prospectiveConnections = append(prospectiveConnections, edge)
+		}
 	}
-	prospectiveSources := make([]prospectiveSource, 0, len(args.ReferenceNodeIDs)+1)
-	for i, id := range args.ReferenceNodeIDs {
-		prospectiveSources = append(prospectiveSources, prospectiveSource{id: id, field: fmt.Sprintf("referenceNodeIds[%d]", i)})
-	}
-	if args.SourceNodeID != "" {
-		prospectiveSources = append(prospectiveSources, prospectiveSource{id: args.SourceNodeID, field: "sourceNodeId"})
-	}
-	prospectiveSeen := map[string]bool{}
-	for _, source := range prospectiveSources {
-		sourceID := source.id
-		if sourceID == "" || prospectiveSeen[sourceID] {
+	for _, edge := range plannedConnections {
+		if edge["id"] != nil {
 			continue
 		}
-		prospectiveSeen[sourceID] = true
-		alreadyConnected := false
-		for _, edge := range prospectiveConnections {
-			if stringValue(edge["fromNodeId"]) == sourceID && stringValue(edge["toNodeId"]) == args.NodeID {
-				alreadyConnected = true
-				break
+		sourceID := stringValue(edge["fromNodeId"])
+		if err := validateCloudAgentConnectionWithHandles(prospectiveNodes, sourceID, args.NodeID, stringValue(edge["fromHandleId"]), stringValue(edge["toHandleId"]), prospectiveConnections); err != nil {
+			field := "nodeId"
+			if index := slices.Index(args.ReferenceNodeIDs, sourceID); index >= 0 {
+				field = fmt.Sprintf("referenceNodeIds[%d]", index)
+			} else if sourceID == args.SourceNodeID {
+				field = "sourceNodeId"
 			}
+			return nil, nil, nil, cloudAgentFieldError(field, "invalid_connection", cloudAgentSafeToolError(err))
 		}
-		if alreadyConnected {
-			continue
-		}
-		if err := validateCloudAgentConnection(prospectiveNodes, sourceID, args.NodeID, prospectiveConnections); err != nil {
-			return nil, nil, nil, cloudAgentFieldError(source.field, "invalid_connection", cloudAgentSafeToolError(err))
-		}
-		prospectiveConnections = append(prospectiveConnections, map[string]any{"fromNodeId": sourceID, "toNodeId": args.NodeID})
+		prospectiveConnections = append(prospectiveConnections, edge)
 	}
 	if args.Prepared != nil {
 		refs, err := cloudAgentPreparedReferences(repo, userID, args.Prepared)
@@ -1160,23 +1223,13 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 		nodes = append(nodes, node)
 	}
 	doc["nodes"] = nodes
-	edges := cloudAgentMediaConnections(creationMaps(doc["connections"]), a)
-	seen := map[string]bool{}
+	edges := cloudAgentMediaConnections(doc, a)
 	for _, edge := range edges {
-		if stringValue(edge["toNodeId"]) == a.NodeID {
-			seen[stringValue(edge["fromNodeId"])] = true
+		if edge["id"] == nil {
+			edge["id"] = "agent-" + newID()
 		}
 	}
-	for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
-		if id == "" || seen[id] {
-			continue
-		}
-		seen[id] = true
-		edges = append(edges, map[string]any{"id": "agent-" + newID(), "fromNodeId": id, "toNodeId": a.NodeID})
-	}
-	// Reused drafts may already contain only a subset of the new references.
-	// Reorder after adding missing edges so chip numbers match submitted arrays.
-	doc["connections"] = cloudAgentMediaConnections(edges, a)
+	doc["connections"] = edges
 	if err := saveCloudAgentDocument(repo, canvas, doc, policy); err != nil {
 		return err
 	}

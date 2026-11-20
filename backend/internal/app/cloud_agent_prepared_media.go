@@ -116,10 +116,14 @@ func cloudAgentMediaDependencyHash(doc map[string]any, args cloudAgentMediaArgs)
 	edges := []any{}
 	for _, edge := range creationMaps(doc["connections"]) {
 		if stringValue(edge["toNodeId"]) == args.NodeID {
-			edges = append(edges, map[string]any{"fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"], "fromPort": edge["fromPort"], "toPort": edge["toPort"], "role": edge["role"]})
+			edges = append(edges, map[string]any{"fromNodeId": edge["fromNodeId"], "toNodeId": edge["toNodeId"], "fromHandleId": edge["fromHandleId"], "toHandleId": edge["toHandleId"], "relation": edge["relation"], "storyboardRowId": edge["storyboardRowId"]})
 		}
 	}
-	return creationHash(map[string]any{"version": 2, "target": targetInput, "bindings": bindings, "source": source, "edges": edges}), nil
+	var rows [][2]string
+	for _, output := range cloudAgentBoundStoryboardOutputs(doc, args) {
+		rows = append(rows, [2]string{output.scriptID, output.rowID})
+	}
+	return creationHash(map[string]any{"version": 3, "target": targetInput, "bindings": bindings, "source": source, "edges": edges, "storyboardOutputs": rows}), nil
 }
 
 func cloudAgentResourceSignature(resource *model.Resource) string {
