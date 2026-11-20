@@ -81,8 +81,8 @@ export type PricingTemplateId = "fixed" | "specification" | "seconds" | "tokens"
 export const pricingTemplates = [
     { id: "fixed", name: "统一按次", billingMode: "fixed_request", unit: "每次" },
     { id: "specification", name: "按规格按次", billingMode: "fixed_request", unit: "每次" },
-    { id: "seconds", name: "视频按秒", billingMode: "per_second", unit: "每秒" },
-    { id: "tokens", name: "文本 / 视频 Token", billingMode: "token", unit: "每百万 Token" },
+    { id: "seconds", name: "视频 / 音频按秒", billingMode: "per_second", unit: "每秒" },
+    { id: "tokens", name: "按 Token", billingMode: "token", unit: "每百万 Token" },
 ] as const;
 export const MAX_TEMPLATE_PRICE_TIERS = 48;
 export type PricingDimension = { id: string; label: string; values: string[]; field: string; imageParameter?: boolean };
@@ -133,7 +133,7 @@ export function pricingDimensions(values: PricingContext): PricingDimension[] {
 
 export function pricingTemplateReason(id: string, values: PricingContext) {
     if (!pricingTemplates.some((item) => item.id === id)) return "请选择定价模板";
-    if (id === "seconds" && values.capability !== "video") return "视频按秒模板只适用于视频能力";
+    if (id === "seconds" && values.capability !== "video" && values.capability !== "audio") return "按秒模板只适用于视频或音频能力";
     if (id === "tokens" && !modelProtocolSupportsTokenBilling(values.capability, values.protocol)) return "当前能力不支持 Token 计费";
     if (id === "specification" && !pricingDimensions(values).length) return "当前能力没有已开启的可枚举计价维度";
     return "";

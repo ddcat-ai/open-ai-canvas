@@ -31,6 +31,18 @@ func TestHasValidPriceUsesChannelProtocolForTokenTiers(t *testing.T) {
 	}
 }
 
+func TestHasValidPriceAcceptsQwenAudioTokenTierOnly(t *testing.T) {
+	tier := model.ChannelModelPriceTier{Enabled: true, PriceConfigured: true, BillingMode: "token", InputTokenPriceMicrocredits: 221_000, OutputTokenPriceMicrocredits: 1_765_000}
+	qwen := &model.ChannelModel{Capability: "audio", Protocol: model.ChannelInterfaceEvoLinkQwenAudioTTS, PriceTiers: []model.ChannelModelPriceTier{tier}}
+	if !HasValidPrice(qwen) {
+		t.Fatal("Qwen TTS Token tier should be valid")
+	}
+	seed := &model.ChannelModel{Capability: "audio", Protocol: model.ChannelInterfaceEvoLinkSeedAudio, PriceTiers: []model.ChannelModelPriceTier{tier}}
+	if HasValidPrice(seed) {
+		t.Fatal("Seed Audio cannot be priced by Token usage")
+	}
+}
+
 func TestTokenPricesValidateCacheWritePrice(t *testing.T) {
 	if err := validateTokenPrices("text", 1_000_000, 2_000_000, 100_000, 1_250_000); err != nil {
 		t.Fatalf("text cache write price rejected: %v", err)

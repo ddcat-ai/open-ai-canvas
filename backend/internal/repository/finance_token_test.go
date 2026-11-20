@@ -25,6 +25,16 @@ func TestTokenUsageAmountSettlesArkVideoCompletionTokens(t *testing.T) {
 	}
 }
 
+func TestTokenUsageAmountSettlesQwenAudioInputAndOutput(t *testing.T) {
+	amount, _, err := tokenUsageAmount(model.BillingOrder{
+		Capability: "audio", InputTokenPriceMicrocredits: 15_000_000,
+		OutputTokenPriceMicrocredits: 120_000_000, MultiplierBasisPoints: 10_000,
+	}, &BillingUsage{InputTokens: 47, OutputTokens: 122})
+	if err != nil || amount != 15_345 {
+		t.Fatalf("Qwen audio token charge = %d, %v", amount, err)
+	}
+}
+
 func TestBillingUsageReadsAsyncVideoPollUsage(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:finance-token-poll?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {

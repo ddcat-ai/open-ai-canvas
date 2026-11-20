@@ -18,6 +18,16 @@ func TestSupportsTokenBillingForVolcengineArkVideo(t *testing.T) {
 	if !supportsTokenBilling("video", model.ChannelInterfaceNewAPIVideo) {
 		t.Fatal("all video protocols must support formula-based Token billing")
 	}
+	if !supportsTokenBilling("audio", model.ChannelInterfaceEvoLinkQwenAudioTTS) || supportsTokenBilling("audio", model.ChannelInterfaceEvoLinkSeedAudio) {
+		t.Fatal("only Qwen TTS audio may use provider token usage")
+	}
+}
+
+func TestEstimateQwenAudioTokensFromSpokenText(t *testing.T) {
+	estimate := estimateTaskBillingTokens(map[string]any{"prompt": "你好，今天的天气很好。"}, "audio")
+	if estimate.InputTokens <= 0 || estimate.OutputTokens < estimate.InputTokens || estimate.OutputTokens == 4096 {
+		t.Fatalf("audio token estimate = %#v", estimate)
+	}
 }
 
 func TestEstimateArkVideoTokensUsesPixelFrameEstimate(t *testing.T) {

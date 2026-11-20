@@ -1,4 +1,4 @@
-// 上游调用日志写入（LogAPICall）与视频任务多次轮询日志的合并。
+// 上游调用日志写入（LogAPICall）与异步媒体任务多次轮询日志的合并。
 
 package app
 
@@ -84,7 +84,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) {
 	// Delivery is a separate outcome: a failed download must not rewrite a
 	// successful generation request as failed.
-	if (log.Capability != "video" && log.Capability != "image") || log.RequestKind != "poll" {
+	if (log.Capability != "video" && log.Capability != "image" && log.Capability != "audio") || log.RequestKind != "poll" {
 		return false, nil
 	}
 	if log.TaskID == "" && log.ProviderRequestID == "" {
@@ -129,7 +129,7 @@ func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) 
 }
 
 // recordProviderTaskTerminalFailure 把适配器解析出的失败/取消终态写到本次上游任务的 create 根日志。
-// 视频、图片的轮询日志会合并进根日志，音频不合并；两种情况下计费都只看根日志，所以统一改根日志。
+// 异步媒体的轮询日志会合并进根日志；计费只看根日志，所以统一改根日志。
 // 写回失败只记进程日志：根日志保持 succeeded 时账单会进入待核对，不会误退款。
 func recordProviderTaskTerminalFailure(ctx context.Context, failure providerTaskTerminalError) {
 	metadata, ok := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)
