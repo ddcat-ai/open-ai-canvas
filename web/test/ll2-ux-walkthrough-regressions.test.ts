@@ -224,6 +224,15 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("一句话成片输入框有 AI 润色提示词按钮", async () => {
+    const page = await read("../src/components/ll2/ll2-oneshot.tsx");
+    expect(page).toContain("AI 润色提示词");
+    expect(page).toContain("polishPrompt");
+    expect(page).toContain("ll2ChatText");
+    const css = await read("../src/styles/ll2-c-polish.css");
+    expect(css).toContain(".ll2-oneshot-polish-btn");
+});
+
 test("视频节点右键提供下载到本机和存到资产库两个出口", async () => {
     const menu = await read("../src/components/canvas/canvas-context-menu.tsx");
     expect(menu).toContain("保存与导出");

@@ -2153,6 +2153,46 @@ button.ll2-sidebar-guide {
     .ll2-save-asset-preview img { aspect-ratio: 16 / 9; }
 }
 
+/* 一句话成片：AI 润色提示词的小按钮，贴着输入框右下，不抢「开始创作」。 */
+.ll2-oneshot-polish {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: -4px;
+}
+
+.ll2-oneshot-polish-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border: 1px solid rgba(141, 84, 255, 0.35);
+    border-radius: 999px;
+    background: rgba(141, 84, 255, 0.08);
+    color: #b99bff;
+    font-size: 11.5px;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.ll2-oneshot-polish-btn:hover:not(:disabled) {
+    border-color: rgba(141, 84, 255, 0.6);
+    background: rgba(141, 84, 255, 0.16);
+    color: #d3c2ff;
+}
+
+.ll2-oneshot-polish-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.ll2-oneshot-polish-note {
+    min-width: 0;
+    color: rgba(242, 242, 245, 0.42);
+    font-size: 10.5px;
+}
+
 /* 画布里的文本助手：跟 DMC 的深色玻璃卡片同一套观感，不再用大圆球 + 大白卡。 */
 .ll2-agent.is-canvas {
     width: min(360px, calc(100vw - 24px));

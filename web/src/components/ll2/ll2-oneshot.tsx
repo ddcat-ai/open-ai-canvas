@@ -30,6 +30,7 @@ import {
 } from "@/services/ll2/ll2-media";
 import { ll2FetchHdBlob, ll2RunHd, type LL2HdProgress } from "@/services/ll2/ll2-hd";
 import { ll2GenerateVideo, type LL2VideoProgress } from "@/services/ll2/ll2-video";
+import { LL2_DEFAULT_TEXT_MODEL, ll2ChatText } from "@/services/ll2/ll2-text";
 import { ll2UpscaleEstimate, ll2UpscaleTargetLabel, ll2UpscaleTargetsFor, type LL2UpscaleTarget } from "@/lib/ll2-upscale";
 import { useLL2AgentStore } from "@/stores/use-ll2-agent-store";
 import { ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
@@ -81,6 +82,9 @@ export function LL2OneShot() {
     const [ratio, setRatio] = useState(settings.ratio);
     const [prompt, setPrompt] = useState("");
     const [running, setRunning] = useState(false);
+    const [polishing, setPolishing] = useState(false);
+    const [polishNote, setPolishNote] = useState("");
+    const polishAbortRef = useRef<AbortController | null>(null);
     const [progress, setProgress] = useState<LL2VideoProgress | null>(null);
     const [error, setError] = useState("");
     const [hint, setHint] = useState("");
@@ -257,6 +261,44 @@ export function LL2OneShot() {
         setPrompt(next);
     };
 
+    /** 一句话成片里的 AI 润色：直接把用户这句话改写成可出片的画面提示词。 */
+    const polishPrompt = async () => {
+        const text = prompt.trim();
+        if (!text || polishing || !connected) return;
+        const controller = new AbortController();
+        polishAbortRef.current = controller;
+        setPolishing(true);
+        setPolishNote("");
+        try {
+            const result = await ll2ChatText({
+                apiKey,
+                model: LL2_DEFAULT_TEXT_MODEL,
+                temperature: 0.6,
+                signal: controller.signal,
+                messages: [
+                    {
+                        role: "system",
+                        content:
+                            "你是短视频与漫剧的画面提示词编辑。把用户这句话改写成可以直接交给视频模型的中文提示词：保留原意和人物/场景设定，补足主体、动作、场景、光线、镜头运动与风格；不要添加与原意冲突的内容，不要解释、不要分点、不要加引号，只输出润色后的提示词，控制在 300 字以内。",
+                    },
+                    { role: "user", content: text },
+                ],
+            });
+            const cleaned = result.text
+                .trim()
+                .replace(/^[“”"']+|[“”"']+$/g, "")
+                .trim();
+            if (!cleaned) throw new Error("没有拿到润色结果，再试一次");
+            setPrompt(cleaned);
+            promptRef.current?.focus();
+            setPolishNote("已润色 · " + result.costLabel);
+        } catch (error) {
+            if (!controller.signal.aborted) setPolishNote(error instanceof Error ? error.message : "润色失败，稍后再试");
+        } finally {
+            setPolishing(false);
+            polishAbortRef.current = null;
+        }
+    };
     const removeMedia = (id: string) => {
         if (running) return;
         setMedia((previous) => {
@@ -505,6 +547,22 @@ export function LL2OneShot() {
                             maxLength={7000}
                             disabled={running}
                         />
+
+                        {tab === "video" ? (
+                            <div className="ll2-oneshot-polish">
+                                <button
+                                    type="button"
+                                    className="ll2-oneshot-polish-btn"
+                                    onClick={() => void polishPrompt()}
+                                    disabled={!connected || !prompt.trim() || running || polishing}
+                                    title={connected ? "让文本模型把这句话润色成更容易出片的画面提示词" : "先连接 LL2 才能润色"}
+                                >
+                                    {polishing ? <LoaderCircle className="size-3.5 is-spinning" aria-hidden /> : <Wand2 className="size-3.5" aria-hidden />}
+                                    {polishing ? "正在润色…" : "AI 润色提示词"}
+                                </button>
+                                {polishNote ? <span className="ll2-oneshot-polish-note">{polishNote}</span> : null}
+                            </div>
+                        ) : null}
 
                         {/* 没填 Key 之前不露任何模型 / 分辨率 / 价格；填了之后按
                             「模型 → 分辨率 → 单价 → 时长 → 本次一共」逐项排清楚。 */}
