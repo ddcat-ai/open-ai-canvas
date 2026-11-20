@@ -73,3 +73,19 @@ func TestCloudAgentMediaAdmissionErrorStaysTerminalForOtherFailures(t *testing.T
 		t.Fatal("budget failure became a correctable argument error")
 	}
 }
+
+func TestCloudAgentMediaReferenceCountMismatchIsCorrectable(t *testing.T) {
+	match := CapabilityMatch{Issues: []CapabilityIssue{{Kind: "input", Name: "image", Reason: "图片数量需在 0-1 之间"}}}
+	wrapped := cloudAgentWrapMediaAdmissionError(modelCapabilityMismatchError(match))
+	var fieldErr *cloudAgentFieldArgumentError
+	if !errors.As(wrapped, &fieldErr) || fieldErr.Field != "referenceNodeIds" || fieldErr.Issue != "unsupported_value" {
+		t.Fatalf("reference input mismatch must be a referenceNodeIds field error, got %#v", wrapped)
+	}
+	if text := cloudAgentSafeToolError(wrapped); !strings.Contains(text, "图片数量需在 0-1 之间") {
+		t.Fatalf("model does not see the reason: %q", text)
+	}
+	var modelErr *ModelError
+	if !errors.As(modelCapabilityMismatchError(match), &modelErr) || modelErr.ErrorCode != ErrCodeModelCapabilityNotSupported {
+		t.Fatalf("non-Agent callers must keep the capability error code: %#v", modelErr)
+	}
+}

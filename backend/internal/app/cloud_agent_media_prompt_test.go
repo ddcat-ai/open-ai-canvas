@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -139,5 +140,22 @@ func TestCloudAgentMediaReferenceEdgesFollowApprovedOrder(t *testing.T) {
 	}
 	if strings.Join(ids, ",") != "other-edge,hero-edge,cat-edge,text-edge" {
 		t.Fatalf("wrong reference order or unrelated edge changed: %v", ids)
+	}
+}
+
+func TestCloudAgentMediaUnboundMentionIsCorrectableArgumentError(t *testing.T) {
+	refs := map[string]any{"referenceImages": []any{map[string]any{"name": "人物", "storageKey": "resource:test"}}}
+	_, err := cloudAgentMediaReferencePrompt("参考 @图片2", refs)
+	wrapped := cloudAgentWrapMediaAdmissionError(err)
+	var fieldErr *cloudAgentFieldArgumentError
+	if !errors.As(wrapped, &fieldErr) || fieldErr.Field != "prompt" || fieldErr.Issue != "unsupported_value" {
+		t.Fatalf("unbound mention must be a prompt field error, got %#v", wrapped)
+	}
+	class, retryable, action := cloudAgentToolErrorClass(CloudAgentRequest{}, cloudAgentCall{}, wrapped, true)
+	if class != cloudAgentToolErrorSchemaError || !retryable || action != "fix_arguments" {
+		t.Fatalf("class=%s retryable=%v action=%s", class, retryable, action)
+	}
+	if text := cloudAgentSafeToolError(wrapped); !strings.Contains(text, "@图片2") {
+		t.Fatalf("model does not see the unbound mention: %q", text)
 	}
 }
