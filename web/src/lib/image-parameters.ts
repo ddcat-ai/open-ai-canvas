@@ -185,7 +185,11 @@ export function updateImageParameterSchema(profile: ImageCapabilityConfig, param
             ...(profile.size.presets || []).filter((preset) => !values.length || values.includes(preset.ratio) || values.includes(preset.size)).map((preset) => preset.ratio),
         ]),
     ];
-    return initializeImageRatioDefaults(next, definitions, added, ratios.length ? ratios : DEFAULT_IMAGE_RATIOS, protocol);
+    const initialized = initializeImageRatioDefaults(next, definitions, added, ratios.length ? ratios : DEFAULT_IMAGE_RATIOS, protocol);
+    if (initialized.size.parameter !== "size" || !initialized.resolution.supported || initialized.resolution.default === profile.resolution.default || !sizeField?.default) return initialized;
+    const previous = profile.size.presets?.find((preset) => preset.size === sizeField.default);
+    const equivalent = previous && initialized.size.presets?.find((preset) => preset.tier === initialized.resolution.default && preset.ratio === previous.ratio);
+    return equivalent?.size && equivalent.size !== initialized.size.default ? updateImageParameterSize(initialized, { ...initialized.size, default: equivalent.size }) : initialized;
 }
 
 export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, definitions: ImageParameter[], tiers?: string[], preferredRatios = DEFAULT_IMAGE_RATIOS, protocol?: string): ImageCapabilityConfig {

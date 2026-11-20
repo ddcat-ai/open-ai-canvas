@@ -120,7 +120,7 @@ export type PluginPermission =
     | "external.open";
 
 export type PluginManifest = {
-    apiVersion: typeof PLUGIN_API_VERSION;
+    apiVersion: typeof PLUGIN_API_VERSION | "yingce.plugin/v2";
     id: string;
     name: string;
     version: string;

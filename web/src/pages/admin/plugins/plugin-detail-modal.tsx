@@ -20,6 +20,7 @@ export type AdminPluginDetail = {
     /** 以下只有后端登记过的插件（上传或后端内置）才有。 */
     fileName?: string;
     sha256?: string;
+    releases?: Array<{ version: string; sha256: string }>;
     installedAt?: string;
     updatedAt?: string;
 };
@@ -116,6 +117,15 @@ function PluginDetail({ plugin, state, typeLabel, icon }: { plugin: AdminPluginD
                                 <Fact label="SHA-256">
                                     <span className="admin-plugin-detail-mono">{plugin.sha256 || "未记录"}</span>
                                 </Fact>
+                                {plugin.releases && plugin.releases.length > 1 && (
+                                    <Fact label="已安装发行版本">
+                                        {plugin.releases.map((release) => (
+                                            <div key={release.sha256} title={release.sha256}>
+                                                v{release.version} · <code>{release.sha256.slice(0, 12)}</code>
+                                            </div>
+                                        ))}
+                                    </Fact>
+                                )}
                             </>
                         ) : (
                             <Fact label="安装包">随平台内置</Fact>

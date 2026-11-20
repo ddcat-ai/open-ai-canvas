@@ -89,6 +89,21 @@ describe("图片尺寸与分辨率配置顺序", () => {
         expectRatios(profile, "2k");
     });
 
+    test("切换默认分辨率沿用同一画幅的精确像素，跟随模型时继续省略尺寸", () => {
+        const portrait = { tier: "1k", ratio: "9:16", width: 720, height: 1280, size: "720x1280" };
+        const larger = { tier: "2k", ratio: "9:16", width: 1440, height: 2560, size: "1440x2560" };
+        const size = { ...definitions[0], encoding: "pixels" as const, values: [portrait.size, larger.size] };
+        const resolution = { ...definitions[1], values: ["1k", "2k"], default: "1k" };
+        for (const initial of [undefined, portrait.size]) {
+            const base = defaultImageCapabilityConfig();
+            base.size.presets = [portrait, larger];
+            const profile = projectImageParameters(base, [{ ...size, default: initial }, resolution]);
+            const updated = change(profile, "imageResolution", { default: "2k" });
+            expect(updated.parameters!.find((field) => field.name === "size")!.default).toBe(initial && larger.size);
+            expect(updated.size.presets).toEqual(base.size.presets);
+        }
+    });
+
     test("像素支持值也能通过已有预设继承比例，保留原始像素", () => {
         const presets = IMAGE_RATIOS.map((ratio) => imagePresetForRatio("1k", ratio));
         let profile = projectImageParameters(defaultImageCapabilityConfig(), [

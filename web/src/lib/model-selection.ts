@@ -1,4 +1,4 @@
-import { defaultImageCapabilityConfig, modelCapabilityConfigFor, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultImageCapabilityConfig, modelCapabilityConfigFor, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, videoProfileForOperation, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { preserveImageSettings, preserveVideoSettings, preserveVideoBoolean, resolvedMediaConfig } from "@/lib/media-settings";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { imageParameterRequest, imageParameterDefaults, imageParameterAccepts } from "./image-parameters";
@@ -120,6 +120,16 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
     const visualInputCount = input ? input.imageCount + input.characterCount : 0;
     const channel = resolveModelChannel(config, model);
     const logicalCost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    if (capability === "video" && requirements.videoOperation) {
+        const video = modelCapabilityConfigFor(config, model).video;
+        const limit = video?.modeLimits?.[requirements.videoOperation];
+        if (video && limit) {
+            const profile = videoProfileForOperation(video, requirements.videoOperation);
+            if (visualInputCount > profile.references.maxImages) return `${videoOperationLabel(requirements.videoOperation)}最多支持 ${profile.references.maxImages} 张图片`;
+            const ratio = requirements.options?.size;
+            if (typeof ratio === "string" && ratio && limit.ratios.length && !profile.ratios.includes(ratio)) return `${videoOperationLabel(requirements.videoOperation)}不支持 ${ratio} 画幅`;
+        }
+    }
     const logicalSpecs = logicalCost?.logicalCapabilityProfiles?.length ? logicalCost.logicalCapabilityProfiles : logicalCost?.logicalCapabilitySpec ? [logicalCost.logicalCapabilitySpec] : [];
     if (logicalSpecs.length) {
         const publicOptionNames = logicalCost?.logicalCapabilitySpec?.options || {};

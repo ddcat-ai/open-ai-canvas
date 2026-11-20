@@ -1,8 +1,8 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import type { FormInstance } from "antd";
-import { defaultModelCapabilityConfig, normalizeLegacyImageResolutionConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
+import { defaultModelCapabilityConfig, normalizeLegacyImageResolutionConfig, normalizeModelCapabilityConfig, officialVideoCapabilityPreset, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets";
-import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
+import { definitionForRelease, modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
 import { imageParameterAppliesTo, initializeImageRatioDefaults, resolveImageParameters, standardImageSizeEncoding } from "@/lib/image-parameters";
@@ -22,6 +22,7 @@ export type ChannelModelFormValues = {
     icon?: string;
     capability: ModelCapabilityChoice;
     protocol?: string;
+    protocolRelease?: string;
     priceTiers: PriceTierFormValues[];
     /** 售价单位；成本价始终以积分计。 */
     priceCurrency: PriceCurrency;
@@ -32,6 +33,10 @@ export type ChannelModelFormValues = {
 };
 
 export type EditorSection = "identity" | "capabilities" | "pricing";
+
+export function opensModelParameters(model: Pick<ChannelModel, "capability" | "protocol"> | null) {
+    return Boolean(model?.protocol && (model.capability === "image" || model.capability === "video"));
+}
 
 export function replaceChannelModelFormValues(form: Pick<FormInstance<ChannelModelFormValues>, "setFieldsValue" | "setFieldValue">, values: ChannelModelFormValues) {
     const { capabilityConfig, ...fields } = values;
@@ -56,10 +61,22 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
                   const normalized = normalizeModelCapabilityConfig(rawCapabilityConfig);
                   return normalized.image ? { ...normalized, image: normalizeLegacyImageResolutionConfig(protocol, normalized.image) } : normalized;
               })();
-    const target = protocols.find((p) => p.value === protocol);
+    const family = protocols.find((p) => p.value === protocol);
+    const protocolRelease = item?.protocolRelease || (!item || family?.releases?.length === 1 ? family?.releases?.find((release) => release.current)?.sha256 : undefined);
+    const target = definitionForRelease(family, protocolRelease);
+    if (capability === "video" && capabilityConfig?.video && target) {
+        const preset = !item?.capabilityConfig && officialVideoCapabilityPreset(protocol, upstreamModel, target);
+        capabilityConfig = { ...capabilityConfig, video: { ...(preset || capabilityConfig.video), modeLimits: target.videoModes?.[upstreamModel] } };
+    }
     const definitions = target?.imageParameters;
-    if (capabilityConfig?.image && capability === "image" && (definitions || capabilityConfig.image.parameters || standardImageSizeEncoding(target?.create)))
-        capabilityConfig = { ...capabilityConfig, image: resolveImageParameters(capabilityConfig.image, definitions || [], upstreamModel, protocol, target?.create) };
+    if (capabilityConfig?.image && capability === "image" && (definitions || capabilityConfig.image.parameters || standardImageSizeEncoding(target?.create))) {
+        const image = capabilityConfig.image;
+        if (!item?.capabilityConfig?.image && protocol === "openai-image" && image.size.presets?.length) {
+            image.size.defaultTier = "1k";
+            image.size.values = ["auto", ...new Set(image.size.presets.map((preset) => preset.ratio))];
+        }
+        capabilityConfig = { ...capabilityConfig, image: resolveImageParameters(image, definitions || [], upstreamModel, protocol, target?.create) };
+    }
     return {
         modelKey: item?.modelKey || "",
         providerModelKey: upstreamModel,
@@ -70,6 +87,7 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
         icon: item?.icon || "",
         capability,
         protocol,
+        protocolRelease,
         priceTiers: item ? (item.priceTiers?.length ? item.priceTiers.map((tier) => priceTierToForm(tier, capabilityConfig?.image, protocol)) : [legacyPriceTierToForm(item)]) : [defaultPriceTier()],
         priceCurrency: item?.priceCurrency || "credits",
         referenceVideoBilling: capability === "video" && item?.referenceVideoBilling === true,
@@ -104,6 +122,7 @@ export function changeChannelModelCapability(values: ChannelModelFormValues, pro
         {
             ...values,
             protocol,
+            protocolRelease: values.protocol === protocol ? values.protocolRelease : protocols.find((p) => p.value === protocol)?.releases?.find((release) => release.current)?.sha256,
             capabilityConfig,
             priceTiers: values.priceTiers.map((tier) => ({
                 ...tier,
@@ -126,6 +145,7 @@ export function changeChannelModelProtocol(values: ChannelModelFormValues, proto
     const next: ChannelModelFormValues = {
         ...values,
         protocol,
+        protocolRelease: protocols.find((p) => p.value === protocol)?.releases?.find((release) => release.current)?.sha256,
         capabilityConfig: values.capabilityConfig || (values.capability === "audio" ? undefined : defaultModelCapabilityConfig(protocol, values.providerModelKey?.trim() || values.modelKey.trim())),
     };
     const resolved = updateChannelModelUpstreamCapabilities(next, protocols);
@@ -142,7 +162,11 @@ export function changeChannelModelProtocol(values: ChannelModelFormValues, proto
 }
 
 export function updateChannelModelUpstreamCapabilities(values: ChannelModelFormValues, protocols: ModelProtocolDefinition[] = []): ChannelModelFormValues {
-    const workflows = protocols.find((p) => p.value === values.protocol)?.workflows;
+    const target = definitionForRelease(
+        protocols.find((p) => p.value === values.protocol),
+        values.protocolRelease,
+    );
+    const workflows = target?.workflows;
     if (values.capability === "video" && workflows?.length) {
         // 工作流协议的画面规格必须写回表单；只在界面上投影会让保存提交旧协议的分辨率。
         const profile = values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, values.providerModelKey || values.modelKey);
@@ -152,7 +176,11 @@ export function updateChannelModelUpstreamCapabilities(values: ChannelModelFormV
         if (JSON.stringify(video) === JSON.stringify(profile.video)) return values;
         return { ...values, capabilityConfig: { ...profile, video } };
     }
-    const target = protocols.find((p) => p.value === values.protocol);
+    if (values.capability === "video" && values.capabilityConfig?.video && target) {
+        const video = values.capabilityConfig.video;
+        const modeLimits = target.videoModes?.[values.providerModelKey?.trim() || values.modelKey.trim()];
+        if (modeLimits !== video.modeLimits) return { ...values, capabilityConfig: { ...values.capabilityConfig, video: { ...video, modeLimits } } };
+    }
     const definitions = target?.imageParameters;
     if (values.capability === "image" && (definitions || values.capabilityConfig?.image?.parameters || standardImageSizeEncoding(target?.create))) {
         const profile = values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, values.providerModelKey || values.modelKey);

@@ -25,33 +25,21 @@ import {
     defaultImageCapabilityConfig,
     defaultModelCapabilityConfig,
     normalizeModelCapabilityConfig,
+    officialVideoCapabilityPreset,
     type ImageCapabilityConfig,
     type ImageResponseFormat,
     type ModelCapabilityConfig,
     type TextCapabilityConfig,
     type VideoCapabilityConfig,
 } from "@/lib/model-capabilities";
-import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
-import { ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
+import type { ModelProtocol, ModelProtocolDefinition, ModelProtocolWorkflow } from "@/lib/model-protocols";
+import { ImageParameterChoices, ImageParameterSchemaEditor, ImageParameterSizeEditor } from "@/components/image-parameter-fields";
 import { updateImageParameterSchema, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
 import { cleanVideoScreenSpecValues, findProtocolWorkflow, resolveWorkflowVideoScreenSpec, updateWorkflowVideoScreenSpec } from "@/lib/video-screen-specs";
-import { VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
+import { VideoCapabilityOptions, VideoCapabilityPreview, VideoDurationOptions, VideoOperationOptions } from "./video-capability-options";
+import { ModelCapabilityPreview } from "./model-capability-preview";
+import { ImageProfileControls } from "./image-settings-panel";
 import { Select } from "@/components/ui/base/select";
-
-const ratioOptions = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
-const operationOptions = [
-    { label: "文生视频", value: "text_to_video" },
-    { label: "图生视频", value: "image_to_video" },
-    { label: "全模态参考", value: "reference_to_video" },
-    { label: "视频续写", value: "extend" },
-    { label: "局部修改", value: "inpaint" },
-    { label: "元素替换", value: "replace_element" },
-    { label: "运镜调整", value: "camera_motion" },
-    { label: "风格迁移", value: "style_transfer" },
-    { label: "音频生视频", value: "audio_to_video" },
-    { label: "画质增强", value: "enhance" },
-    { label: "相对深度", value: "depth" },
-];
 
 function ImageSizeHelp() {
     return <p className="text-[var(--fs-label)] leading-relaxed text-foreground/60">按分辨率配置支持的比例，尺寸自动换算。size 发送像素，aspect_ratio 发送比例；独立分辨率由模型协议适配。实际输出尺寸以上游为准。</p>;
@@ -61,6 +49,7 @@ type Props = {
     value?: ModelCapabilityConfig;
     onChange?: (value: ModelCapabilityConfig) => void;
     protocol?: ModelProtocol;
+    definition?: ModelProtocolDefinition;
     capability?: "text" | "image" | "video";
     model?: string;
     workflows?: ModelProtocolWorkflow[];
@@ -70,7 +59,7 @@ type Props = {
     section?: "all" | "protocol" | "references";
 };
 
-export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", workflows = [], imageParameters, disabled = false, templateEditing = false, section = "all" }: Props) {
+export function ModelCapabilityEditor({ value, onChange, protocol, definition, capability = "video", model = "", workflows = [], imageParameters, disabled = false, templateEditing = false, section = "all" }: Props) {
     if (capability === "text") {
         return <TextCapabilityEditor value={value} onChange={onChange} protocol={protocol} disabled={disabled} section={section} />;
     }
@@ -80,13 +69,36 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
     const workflow = findProtocolWorkflow(workflows, protocol, model);
     const storedProfile = normalizeModelCapabilityConfig(value || defaultModelCapabilityConfig(protocol, model)).video!;
     const autoDL = protocol === "autodl-comfyui";
-    const profile = autoDL ? resolveWorkflowVideoScreenSpec(storedProfile, workflow) : storedProfile;
+    const profile = autoDL ? resolveWorkflowVideoScreenSpec(storedProfile, workflow) : definition ? { ...storedProfile, modeLimits: definition.videoModes?.[model.trim()] } : storedProfile;
+    const output = definition?.videoOutputs?.[model.trim()];
+    const modes = Object.values(profile.modeLimits ?? {});
+    const supportsAudioInput = !modes.length || modes.some((mode) => !mode.inputRoles || mode.inputRoles.includes("reference_audio"));
+    const minSeconds = output?.minSeconds ?? 1;
+    const maxSeconds = output?.maxSeconds;
     const update = (patch: Partial<VideoCapabilityConfig>) => onChange?.({ version: 1, video: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<VideoCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateDuration = (patch: Partial<VideoCapabilityConfig["duration"]>) => update({ duration: { ...profile.duration, ...patch } });
-    const durationValues = (profile.duration.values || []).join(",");
-    const resolutionOptions = Array.from(new Set([...VIDEO_RESOLUTION_CAPABILITY_OPTIONS, ...profile.resolutions]));
+    const fixedDurationFields = <VideoDurationOptions duration={profile.duration} output={output} disabled={disabled} update={updateDuration} />;
+    const preset = model.trim() ? officialVideoCapabilityPreset(protocol, model, definition) : undefined;
+    const operationFields = <VideoOperationOptions profile={profile} suggested={preset?.operations} disabled={disabled} update={update} />;
+    const applyPreset =
+        preset && !disabled ? (
+            <button type="button" className="text-xs font-medium underline underline-offset-2 focus-visible:ring-2" onClick={() => onChange?.({ ...value, version: 1, video: preset })}>
+                应用 {model} 视频预设
+            </button>
+        ) : null;
     const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
+    const screenFields = autoDL ? autoDLSpecFields : <VideoCapabilityOptions profile={profile} preset={preset} output={output} disabled={disabled} update={update} />;
+    const outputFields = (
+        <div className="grid gap-3 sm:grid-cols-2">
+            {output?.generateAudio !== false || profile.generateAudio.supported ? (
+                <BooleanField label={output?.generateAudio === false ? "生成声音（当前版本不支持）" : "生成声音"} value={profile.generateAudio} disabled={disabled} onChange={(generateAudio) => update({ generateAudio })} />
+            ) : (
+                <p className="self-center text-sm text-muted-foreground">输出声音由上游处理</p>
+            )}
+            <BooleanField label="水印" value={profile.watermark} disabled={disabled} onChange={(watermark) => update({ watermark })} />
+        </div>
+    );
     // 视频处理模型（画质增强等）：帧率策略与源视频时长上限；生成模型不显示。
     const processing = profile.processing;
     const depthProcessing = profile.defaultOperation === "depth";
@@ -145,11 +157,14 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         />
                         <NumberField label="单张图片上限 MB" value={bytesToMB(profile.references.maxImageBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxImageBytes: mbToBytes(value) })} />
                     </ReferenceCard>
-                    <ReferenceCard title="音频引用" description="音频输入与同步输出限制">
-                        <NumberField label="最大音频引用" value={profile.references.maxAudios} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudios: value || 0 })} />
-                        <NumberField label="单个音频上限 MB" value={bytesToMB(profile.references.maxAudioBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioBytes: mbToBytes(value) })} />
-                        <NumberField label="单个音频最长秒数" value={profile.references.maxAudioDurationSeconds} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioDurationSeconds: value || 0 })} />
-                        <BooleanField label="同步音频" value={profile.generateAudio} disabled={disabled} onChange={(generateAudio) => update({ generateAudio })} />
+                    <ReferenceCard title="音频引用" description={supportsAudioInput ? "输入音频的数量、大小与时长限制" : modes.some((mode) => mode.inputRoles?.includes("voice")) ? "全能参考接受音色 ID，音频文件不可用" : "当前型号不接受音频文件"}>
+                        {supportsAudioInput || profile.references.maxAudios > 0 ? (
+                            <>
+                                <NumberField label="最大音频引用" value={profile.references.maxAudios} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudios: value || 0 })} />
+                                <NumberField label="单个音频上限 MB" value={bytesToMB(profile.references.maxAudioBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioBytes: mbToBytes(value) })} />
+                                <NumberField label="单个音频最长秒数" value={profile.references.maxAudioDurationSeconds} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioDurationSeconds: value || 0 })} />
+                            </>
+                        ) : null}
                     </ReferenceCard>
                     <ReferenceCard title="视频引用" description="视频数量、大小与时长限制">
                         <NumberField label="最大视频引用" value={profile.references.maxVideos} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideos: value || 0 })} />
@@ -158,7 +173,6 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     </ReferenceCard>
                     <ReferenceCard title="通用限制" description="所有视频请求共用的基础约束">
                         <NumberField label="提示词最大字符数" value={profile.references.promptMaxChars} min={1} disabled={disabled} onChange={(value) => updateReferences({ promptMaxChars: value || 1 })} />
-                        <BooleanField label="水印" value={profile.watermark} disabled={disabled} onChange={(watermark) => update({ watermark })} />
                     </ReferenceCard>
                 </div>
             </div>
@@ -167,112 +181,67 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
 
     if (section === "protocol") {
         return (
-            <div className="admin-capability-protocol-editor">
-                <div className="admin-capability-protocol-grid">
-                    <ProtocolParameterCard step="01" title="生成方式" description="允许的任务类型与默认任务">
-                        <Field label="支持模式">
-                            <Select
-                                mode="multiple"
-                                className="w-full"
+            <div className={!autoDL && !processing ? "grid min-w-0 items-start gap-5 md:grid-cols-[minmax(0,3fr)_minmax(260px,2fr)]" : "min-w-0"}>
+                <div className="grid min-w-0 gap-4">
+                    {operationFields}
+                    <section aria-label="画面规格" className="min-w-0 space-y-3 border-t border-border pt-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-sm font-semibold">画面规格</h3>
+                            {applyPreset}
+                        </div>
+                        {screenFields}
+                    </section>
+                    <section className="grid min-w-0 gap-3 border-t border-border pt-4" aria-label="视频时长">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-sm font-semibold">
+                                视频时长 <code className="ml-1 font-normal text-foreground/55">duration</code>
+                            </h3>
+                            <SegmentedControl
                                 disabled={disabled}
-                                value={profile.operations}
-                                options={operationOptions}
-                                onChange={(operations) => update({ operations, defaultOperation: operations.includes(profile.defaultOperation) ? profile.defaultOperation : operations[0] || "text_to_video" })}
+                                value={profile.duration.selection}
+                                options={[
+                                    { label: "范围", value: "range" },
+                                    { label: "固定值", value: "enum" },
+                                ]}
+                                onChange={(value) =>
+                                    updateDuration(
+                                        value === "enum"
+                                            ? { selection: "enum", values: profile.duration.values?.length ? profile.duration.values : [profile.duration.default] }
+                                            : { selection: "range", min: profile.duration.min || 1, max: profile.duration.max || 15, step: profile.duration.step || 1 },
+                                    )
+                                }
                             />
-                        </Field>
-                        <Field label="默认模式">
-                            <Select
-                                className="w-full"
-                                disabled={disabled}
-                                value={profile.defaultOperation}
-                                options={operationOptions.filter((item) => profile.operations.includes(item.value))}
-                                onChange={(defaultOperation) => update({ defaultOperation })}
-                            />
-                        </Field>
-                    </ProtocolParameterCard>
-                    <ProtocolParameterCard step="02" title="输出时长" description="定义可用秒数及默认时长">
-                        <SegmentedControl
-                            block
-                            disabled={disabled}
-                            value={profile.duration.selection}
-                            options={[
-                                { label: "范围", value: "range" },
-                                { label: "固定值", value: "enum" },
-                            ]}
-                            onChange={(value) =>
-                                updateDuration(
-                                    value === "enum"
-                                        ? { selection: "enum", values: profile.duration.values?.length ? profile.duration.values : [profile.duration.default] }
-                                        : { selection: "range", min: profile.duration.min || 1, max: profile.duration.max || 15, step: profile.duration.step || 1 },
-                                )
-                            }
-                        />
+                        </div>
                         {profile.duration.selection === "enum" ? (
-                            <Field label="固定时长（秒）">
-                                <Input
+                            fixedDurationFields
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                <NumberField label="最短（秒）" value={profile.duration.min} min={minSeconds} max={maxSeconds} disabled={disabled} onChange={(value) => updateDuration({ min: value ?? minSeconds })} />
+                                <NumberField label="最长（秒）" value={profile.duration.max} min={minSeconds} max={maxSeconds} disabled={disabled} onChange={(value) => updateDuration({ max: value ?? maxSeconds ?? minSeconds })} />
+                                <NumberField label="步长（秒）" value={profile.duration.step} min={1} disabled={disabled} onChange={(value) => updateDuration({ step: value || 1 })} />
+                                <NumberField
+                                    label="默认（秒）"
+                                    value={profile.duration.default}
+                                    min={profile.duration.min ?? minSeconds}
+                                    max={profile.duration.max ?? maxSeconds}
                                     disabled={disabled}
-                                    value={durationValues}
-                                    placeholder="例如：5,10"
-                                    onChange={(event) => updateDuration({ values: parseIntegerList(event.target.value), default: parseIntegerList(event.target.value)[0] || profile.duration.default })}
+                                    onChange={(value) => updateDuration({ default: value ?? minSeconds })}
                                 />
-                            </Field>
-                        ) : (
-                            <div className="admin-capability-duration-grid">
-                                <NumberField label="最短" value={profile.duration.min} min={1} disabled={disabled} onChange={(value) => updateDuration({ min: value || 1 })} />
-                                <NumberField label="最长" value={profile.duration.max} min={1} disabled={disabled} onChange={(value) => updateDuration({ max: value || 1 })} />
-                                <NumberField label="步长" value={profile.duration.step} min={1} disabled={disabled} onChange={(value) => updateDuration({ step: value || 1 })} />
-                                <NumberField label="默认" value={profile.duration.default} min={1} disabled={disabled} onChange={(value) => updateDuration({ default: value || 1 })} />
                             </div>
                         )}
-                    </ProtocolParameterCard>
-                    <ProtocolParameterCard step="03" title="画面规格" description="控制比例、分辨率及默认输出">
-                        {autoDL ? (
-                            autoDLSpecFields
-                        ) : (
-                            <div className="admin-capability-spec-grid">
-                                <Field label="支持比例">
-                                    <Select
-                                        mode="multiple"
-                                        className="w-full"
-                                        disabled={disabled}
-                                        value={profile.ratios}
-                                        options={ratioOptions.map((item) => ({ label: item, value: item }))}
-                                        onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })}
-                                    />
-                                </Field>
-                                <Field label="默认比例">
-                                    <Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} />
-                                </Field>
-                                <Field label="输出分辨率">
-                                    <Select
-                                        mode="tags"
-                                        className="admin-capability-tags w-full"
-                                        disabled={disabled}
-                                        value={profile.resolutions}
-                                        tokenSeparators={[","]}
-                                        placeholder="选择或输入模型档位"
-                                        options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                        onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
-                                    />
-                                </Field>
-                                <Field label="默认分辨率">
-                                    <Select
-                                        className="w-full"
-                                        disabled={disabled}
-                                        value={profile.defaultResolution}
-                                        options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                        onChange={(defaultResolution) => update({ defaultResolution })}
-                                    />
-                                </Field>
-                            </div>
-                        )}
-                    </ProtocolParameterCard>
+                    </section>
+                    <section className="space-y-3 border-t border-border pt-4" aria-label="输出选项">
+                        <h3 className="text-sm font-semibold">输出选项</h3>
+                        {outputFields}
+                    </section>
                     {processingFields ? (
-                        <ProtocolParameterCard step="04" title="视频处理" description="帧率策略与源视频时长上限；任务轮询上限 1 小时">
+                        <section className="space-y-3 border-t border-border pt-4" aria-label="视频处理">
+                            <h3 className="text-sm font-semibold">视频处理</h3>
                             {processingFields}
-                        </ProtocolParameterCard>
+                        </section>
                     ) : null}
                 </div>
+                {!autoDL && !processing && <VideoCapabilityPreview profile={profile} model={model} protocol={protocol} />}
             </div>
         );
     }
@@ -284,33 +253,11 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     <div className="text-sm font-medium">视频能力参数</div>
                     <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/48">这些参数会同步到创造页、画布和生成校验</div>
                 </div>
-                <span className="text-[var(--fs-tiny)] text-foreground/40">协议模板可继续调整</span>
+                {applyPreset}
             </div>
 
             <CapabilityGroup title="视频" description="生成方式、输出规格与视频引用约束">
-                <CapabilityBlock title="生成方式">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="支持模式">
-                            <Select
-                                mode="multiple"
-                                className="w-full"
-                                disabled={disabled}
-                                value={profile.operations}
-                                options={operationOptions}
-                                onChange={(operations) => update({ operations, defaultOperation: operations.includes(profile.defaultOperation) ? profile.defaultOperation : operations[0] || "text_to_video" })}
-                            />
-                        </Field>
-                        <Field label="默认模式">
-                            <Select
-                                className="w-full"
-                                disabled={disabled}
-                                value={profile.defaultOperation}
-                                options={operationOptions.filter((item) => profile.operations.includes(item.value))}
-                                onChange={(defaultOperation) => update({ defaultOperation })}
-                            />
-                        </Field>
-                    </div>
-                </CapabilityBlock>
+                <CapabilityBlock title="生成方式">{operationFields}</CapabilityBlock>
                 <CapabilityBlock title="输出时长">
                     <SegmentedControl
                         block
@@ -329,14 +276,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         }
                     />
                     {profile.duration.selection === "enum" ? (
-                        <Field label="固定时长（秒）">
-                            <Input
-                                disabled={disabled}
-                                value={durationValues}
-                                placeholder="例如：5,10"
-                                onChange={(event) => updateDuration({ values: parseIntegerList(event.target.value), default: parseIntegerList(event.target.value)[0] || profile.duration.default })}
-                            />
-                        </Field>
+                        fixedDurationFields
                     ) : (
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <NumberField label="最短" value={profile.duration.min} min={1} disabled={disabled} onChange={(value) => updateDuration({ min: value || 1 })} />
@@ -347,46 +287,8 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                     )}
                 </CapabilityBlock>
                 <CapabilityBlock title="画面规格">
-                    {autoDL ? (
-                        autoDLSpecFields
-                    ) : (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <Field label="画面比例">
-                                <Select
-                                    mode="multiple"
-                                    className="w-full"
-                                    disabled={disabled}
-                                    value={profile.ratios}
-                                    options={ratioOptions.map((item) => ({ label: item, value: item }))}
-                                    onChange={(ratios) => update({ ratios, defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : ratios[0] || "16:9" })}
-                                />
-                            </Field>
-                            <Field label="默认比例">
-                                <Select className="w-full" disabled={disabled} value={profile.defaultRatio} options={profile.ratios.map((item) => ({ label: item, value: item }))} onChange={(defaultRatio) => update({ defaultRatio })} />
-                            </Field>
-                            <Field label="输出分辨率">
-                                <Select
-                                    mode="tags"
-                                    className="admin-capability-tags w-full"
-                                    disabled={disabled}
-                                    value={profile.resolutions}
-                                    tokenSeparators={[","]}
-                                    placeholder="选择标准档位或输入 768p 等模型专属值"
-                                    options={resolutionOptions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                    onChange={(resolutions) => update({ resolutions, defaultResolution: resolutions.includes(profile.defaultResolution) ? profile.defaultResolution : resolutions[0] || "" })}
-                                />
-                            </Field>
-                            <Field label="默认分辨率">
-                                <Select
-                                    className="w-full"
-                                    disabled={disabled}
-                                    value={profile.defaultResolution}
-                                    options={profile.resolutions.map((item) => ({ label: item.toUpperCase(), value: item }))}
-                                    onChange={(defaultResolution) => update({ defaultResolution })}
-                                />
-                            </Field>
-                        </div>
-                    )}
+                    {screenFields}
+                    {outputFields}
                 </CapabilityBlock>
                 {processingFields ? <CapabilityBlock title="视频处理">{processingFields}</CapabilityBlock> : null}
                 {section === "all" ? (
@@ -419,19 +321,17 @@ export function ModelCapabilityEditor({ value, onChange, protocol, capability = 
                         </div>
                     </CapabilityGroup>
 
-                    <CapabilityGroup title="音频" description="音频引用与视频同步音频输出">
+                    <CapabilityGroup title="音频" description="输入音频的数量、大小与时长限制">
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             <NumberField label="最大音频引用" value={profile.references.maxAudios} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudios: value || 0 })} />
                             <NumberField label="单个音频上限 MB" value={bytesToMB(profile.references.maxAudioBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioBytes: mbToBytes(value) })} />
                             <NumberField label="单个音频最长秒数" value={profile.references.maxAudioDurationSeconds} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioDurationSeconds: value || 0 })} />
                         </div>
-                        <BooleanField label="同步音频" value={profile.generateAudio} disabled={disabled} onChange={(generateAudio) => update({ generateAudio })} />
                     </CapabilityGroup>
 
                     <CapabilityGroup title="通用限制" description="不属于单一媒体类型的请求与输出约束">
                         <div className="grid gap-3 sm:grid-cols-2">
                             <NumberField label="提示词最大字符数" value={profile.references.promptMaxChars} min={1} disabled={disabled} onChange={(value) => updateReferences({ promptMaxChars: value || 1 })} />
-                            <BooleanField label="水印" value={profile.watermark} disabled={disabled} onChange={(watermark) => update({ watermark })} />
                         </div>
                     </CapabilityGroup>
                 </>
@@ -561,47 +461,58 @@ function ImageCapabilityEditor({
     const updateReferences = (patch: Partial<ImageCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateSize = (patch: Partial<ImageCapabilityConfig["size"]>) => update({ size: { ...profile.size, ...patch } });
     const updateQuality = (patch: Partial<ImageCapabilityConfig["quality"]>) => update({ quality: { ...profile.quality, ...patch } });
+    const qualityDefinition: ImageParameter = { name: "quality", label: "图片质量", type: "string", required: true };
+    const qualityChoices = profile.quality.supported && (
+        <ImageParameterChoices
+            field={{ ...qualityDefinition, values: profile.quality.values, default: profile.quality.default }}
+            definition={qualityDefinition}
+            suggestions={[]}
+            disabled={disabled}
+            update={({ values, default: selected }) => updateQuality({ values: values?.map(String) ?? profile.quality.values, default: String(selected ?? "auto") })}
+        />
+    );
+
+    const withPreview = (fields: ReactNode) =>
+        section === "protocol" && !templateEditing ? (
+            <div className="grid min-w-0 items-start gap-5 md:grid-cols-[minmax(0,3fr)_minmax(260px,2fr)]">
+                <div className="min-w-0">{fields}</div>
+                <ModelCapabilityPreview capability="image" model={model}>
+                    {(theme) => <ImageProfileControls profile={profile} protocol={protocol} config={{}} theme={theme} showTitle={false} className="min-w-0 space-y-3" onConfigChange={() => {}} />}
+                </ModelCapabilityPreview>
+            </div>
+        ) : (
+            fields
+        );
 
     if (section !== "references" && profile.parameters) {
         // 模板声明的是可编辑范围，不能反过来成为编辑器的固定上限。
         // 只使用参数身份和类型；实际协议的约束留到目标模型应用/保存时检查。
         const definitions = templateEditing ? profile.parameters.map(({ name, label, type, binding, encoding, pricing, description }) => ({ name, label, type, binding, encoding, pricing, description })) : imageParameters || profile.parameters;
         const size = profile.parameters.find((p) => p.name === "size");
-        return (
-            <div className="space-y-4">
-                <ImageParameterSchemaEditor
-                    definitions={definitions}
-                    parameters={profile.parameters.filter((p) => p.name === "imageResolution")}
-                    disabled={disabled}
-                    onChange={(parameters) =>
-                        onChange?.({
-                            version: 1,
-                            image: updateImageParameterSchema(
-                                profile,
-                                profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p),
-                                definitions,
-                                protocol,
-                            ),
-                        })
-                    }
-                />
-                {size ? <ImageParameterSizeEditor profile={profile} protocol={protocol} definition={definitions.find((p) => p.name === "size") || size} disabled={disabled} onChange={(image) => onChange?.({ version: 1, image })} /> : null}
-                <ImageParameterSchemaEditor
-                    definitions={definitions}
-                    parameters={profile.parameters.filter((p) => p.name !== "size" && p.name !== "imageResolution")}
-                    disabled={disabled}
-                    onChange={(parameters) =>
-                        onChange?.({
-                            version: 1,
-                            image: updateImageParameterSchema(
-                                profile,
-                                profile.parameters!.map((p) => parameters.find((next) => next.name === p.name) || p),
-                            ),
-                        })
-                    }
-                />
+        const specs = profile.parameters.filter((field) => field.name === "imageResolution" || field.name === "quality");
+        const outputs = profile.parameters.filter((field) => field !== size && !specs.includes(field));
+        const changeParameters = (changed: ImageParameter[]) => {
+            const parameters = profile.parameters!.map((field) => changed.find((next) => next.name === field.name) || field);
+            onChange?.({ version: 1, image: updateImageParameterSchema(profile, parameters, definitions, protocol) });
+        };
+        return withPreview(
+            <div className="grid min-w-0 gap-4">
+                {(specs.length > 0 || size) && (
+                    <section aria-label="画面规格" className="min-w-0 space-y-3">
+                        <h3 className="text-sm font-semibold">画面规格</h3>
+                        <p className="text-xs text-muted-foreground">点选支持值，星标设为默认。</p>
+                        <ImageParameterSchemaEditor definitions={definitions} parameters={specs} disabled={disabled} onChange={changeParameters} />
+                        {size && <ImageParameterSizeEditor profile={profile} protocol={protocol} definition={definitions.find((field) => field.name === "size") || size} disabled={disabled} onChange={(image) => onChange?.({ version: 1, image })} />}
+                    </section>
+                )}
+                {outputs.length > 0 && (
+                    <section aria-label="输出与扩展" className="space-y-3">
+                        <h3 className="text-sm font-semibold">输出与扩展</h3>
+                        <ImageParameterSchemaEditor definitions={definitions} parameters={outputs} disabled={disabled} onChange={changeParameters} />
+                    </section>
+                )}
                 <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
-            </div>
+            </div>,
         );
     }
 
@@ -623,7 +534,7 @@ function ImageCapabilityEditor({
     }
 
     if (section === "protocol") {
-        return (
+        return withPreview(
             <div className="admin-capability-protocol-editor admin-image-protocol-editor">
                 <div className="admin-capability-protocol-grid admin-image-protocol-grid">
                     <ProtocolParameterCard step="01" title="尺寸参数" description="按分辨率配置可用画幅，直接点选或输入比例" className="admin-image-size-card">
@@ -660,36 +571,13 @@ function ImageCapabilityEditor({
                     </ProtocolParameterCard>
                     <ProtocolParameterCard step="03" title="可选参数" description="控制质量、背景与响应格式">
                         <ParameterField label="图片质量" description="发送 quality 参数" supported={profile.quality.supported} disabled={disabled} onChange={(supported) => updateQuality({ supported })} />
-                        {profile.quality.supported ? (
-                            <div className="admin-capability-spec-grid">
-                                <Field label="质量支持值">
-                                    <Select
-                                        mode="tags"
-                                        className="admin-capability-tags w-full"
-                                        disabled={disabled}
-                                        value={profile.quality.values}
-                                        tokenSeparators={[","]}
-                                        placeholder="例如 auto, low, medium, high, 1k, 2k, 4k"
-                                        onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })}
-                                    />
-                                </Field>
-                                <Field label="默认质量">
-                                    <Select
-                                        className="w-full"
-                                        disabled={disabled}
-                                        value={profile.quality.default}
-                                        options={profile.quality.values.map((item) => ({ label: item, value: item }))}
-                                        onChange={(defaultValue) => updateQuality({ default: defaultValue })}
-                                    />
-                                </Field>
-                            </div>
-                        ) : null}
+                        {qualityChoices}
                         <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
                         <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />
                         <ParameterField label="output_format" description="发送 PNG 输出格式" supported={profile.outputFormat.supported} disabled={disabled} onChange={(supported) => update({ outputFormat: { supported } })} />
                     </ProtocolParameterCard>
                 </div>
-            </div>
+            </div>,
         );
     }
 
@@ -744,30 +632,7 @@ function ImageCapabilityEditor({
 
             <CapabilityGroup title="可选参数" description="质量、背景与响应格式等非必填能力">
                 <ParameterField label="图片质量" description="发送 quality 参数" supported={profile.quality.supported} disabled={disabled} onChange={(supported) => updateQuality({ supported })} />
-                {profile.quality.supported ? (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="质量支持值">
-                            <Select
-                                mode="tags"
-                                className="admin-capability-tags w-full"
-                                disabled={disabled}
-                                value={profile.quality.values}
-                                tokenSeparators={[","]}
-                                placeholder="例如 auto, low, medium, high, 1k, 2k, 4k"
-                                onChange={(values) => updateQuality({ values, default: values.includes(profile.quality.default) ? profile.quality.default : values[0] || "auto" })}
-                            />
-                        </Field>
-                        <Field label="默认质量">
-                            <Select
-                                className="w-full"
-                                disabled={disabled}
-                                value={profile.quality.default}
-                                options={profile.quality.values.map((item) => ({ label: item, value: item }))}
-                                onChange={(defaultValue) => updateQuality({ default: defaultValue })}
-                            />
-                        </Field>
-                    </div>
-                ) : null}
+                {qualityChoices}
                 <BooleanField label="透明背景" value={profile.transparentBackground} disabled={disabled} onChange={(transparentBackground) => update({ transparentBackground })} />
                 <div className="grid gap-3 sm:grid-cols-2">
                     <ImageResponseFormatEditor value={profile.responseFormat} disabled={disabled} onChange={(responseFormat) => update({ responseFormat })} />

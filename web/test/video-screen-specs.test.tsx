@@ -56,7 +56,7 @@ test("switching workflows refreshes the available presets without carrying forei
     expect(next.defaultResolution).toBe("768p竖(768*1344)");
 });
 
-test("real editor keeps enabled fields and original card copy without switch or explanation", () => {
+test("real editor exposes the workflow resolution fields without a separate ratio switch", () => {
     for (const section of ["all", "protocol"] as const) {
         const html = renderToStaticMarkup(<ModelCapabilityEditor capability="video" protocol="autodl-comfyui" model={workflow.id} workflows={[workflow]} section={section} value={{ version: 1, video: initial() }} />);
         expect(html).not.toContain("自定义比例分辨率");
@@ -70,7 +70,6 @@ test("real editor keeps enabled fields and original card copy without switch or 
         expect(html).not.toContain("默认比例");
         if (section === "protocol") {
             expect(html).toContain("画面规格");
-            expect(html).toContain("控制比例、分辨率及默认输出");
         }
     }
 });

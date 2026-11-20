@@ -4,7 +4,7 @@ import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-st
 import type { ModelProtocol } from "@/lib/model-protocols";
 import { currentGenerationBatchLimit } from "@/lib/generation-batch-limit";
 
-type ImageSettings = Pick<Partial<AiConfig>, "size" | "quality" | "imageResolution" | "imageParameters" | "count" | "transparentBackground">;
+export type ImageSettings = Pick<Partial<AiConfig>, "size" | "quality" | "imageResolution" | "imageParameters" | "count" | "transparentBackground">;
 type VideoSettings = { seconds?: string; ratio?: string; resolution?: string };
 export type MediaSettingIssue = { field: string; label: string; value: string; message: string; suggested?: string; extension?: boolean };
 

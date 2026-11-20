@@ -1,11 +1,12 @@
 import type { TextThinkingConfig } from "./text-thinking";
-import type { ModelProtocol, ModelProtocolWorkflow } from "@/lib/model-protocols";
+import type { ModelProtocol, ModelProtocolDefinition, ModelProtocolWorkflow, VideoModelModes } from "@/lib/model-protocols";
 import { projectImageParameters, normalizeImageParameters, imageParameterRequest } from "./image-parameters";
 import type { ImageResolutionOption, ImageResolutionTier } from "@/lib/image-resolution-tiers";
 import { IMAGE_RATIOS, IMAGE_RESOLUTIONS, imagePresetForRatio } from "@/lib/image-size-presets";
 import { kemeiSeedreamPresets } from "./kemei-image-presets";
 import { seedream55ImagePresets } from "./seedream-image-presets";
 import { type WorkflowVideoFieldLike, workflowImageCapabilityConfig, workflowVideoCapabilityConfig } from "./model-capabilities-workflow";
+import videoModelPresets from "../../../backend/internal/app/video_model_presets.json";
 import { resolveWorkflowVideoScreenSpec } from "./video-screen-specs";
 
 export {
@@ -104,6 +105,7 @@ export type ImageCapabilityConfig = {
 };
 
 export type VideoCapabilityConfig = {
+    modeLimits?: VideoModelModes[string];
     references: {
         promptMaxChars: number;
         minImages: number;
@@ -454,6 +456,40 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
     return image;
 }
 
+export function officialVideoCapabilityPreset(protocol?: ModelProtocol, model = "", release?: ModelProtocolDefinition): VideoCapabilityConfig | undefined {
+    const preset = videoModelPresets.find((entry) => entry.provider === protocol && entry.models.includes(model.trim()));
+    if (!preset) return undefined;
+    const video = structuredClone(preset.video) as VideoCapabilityConfig;
+    const modes = release?.videoModes?.[model.trim()];
+    if (release?.videoModes && !modes) return undefined;
+    if (modes) {
+        video.modeLimits = modes;
+        video.operations = Object.keys(modes);
+        video.ratios = [...new Set(Object.values(modes).flatMap((mode) => mode.ratios))];
+        if (!video.operations.includes(video.defaultOperation)) video.defaultOperation = video.operations[0];
+        if (!video.ratios.includes(video.defaultRatio)) video.defaultRatio = video.ratios[0] || "";
+    }
+    const output = release?.videoOutputs?.[model.trim()];
+    if (output) {
+        video.resolutions = [...output.resolutions];
+        if (!video.resolutions.includes(video.defaultResolution)) video.defaultResolution = video.resolutions[0];
+        video.duration = { selection: "range", min: output.minSeconds, max: output.maxSeconds, step: 1, default: Math.min(output.maxSeconds, Math.max(output.minSeconds, video.duration.default)) };
+    }
+    return video;
+}
+
+export function videoProfileForOperation(profile: VideoCapabilityConfig, operation = profile.defaultOperation): VideoCapabilityConfig {
+    const limits = profile.modeLimits?.[operation];
+    if (!limits) return profile;
+    const ratios = profile.ratios.filter((ratio) => limits.ratios.includes(ratio));
+    return {
+        ...profile,
+        references: { ...profile.references, maxImages: Math.min(profile.references.maxImages, limits.maxImages) },
+        ratios,
+        defaultRatio: ratios.includes(profile.defaultRatio) ? profile.defaultRatio : (ratios[0] ?? ""),
+    };
+}
+
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const text: TextCapabilityConfig = {
         streaming: true,
@@ -462,6 +498,8 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         // 文本模型的视觉能力必须由管理员明确开启，不能根据模型名猜测。
         references: { promptMaxChars: 32000, maxImages: 0, maxImageBytes: 0, maxVideos: 0, maxVideoBytes: 0 },
     };
+    const preset = officialVideoCapabilityPreset(protocol, model) ?? (protocol === "volcengine-ark-seedance-25" ? officialVideoCapabilityPreset(protocol) : undefined);
+    if (preset) return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video: preset };
     const video: VideoCapabilityConfig = {
         references: {
             promptMaxChars: DEFAULT_VIDEO_PROMPT_MAX_CHARS,

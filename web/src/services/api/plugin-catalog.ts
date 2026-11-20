@@ -5,6 +5,7 @@ type PluginProviderCatalogItem = {
     imageParameters?: import("@/lib/image-parameters").ImageParameter[];
     id: string;
     version: string;
+    releases?: ModelProtocolDefinition["releases"];
     name: string;
     vendor: string;
     categories: string[];
@@ -61,6 +62,8 @@ function toProviderDefinition(item: PluginProviderCatalogItem): ModelProtocolDef
         value: item.id,
         label: item.name,
         vendor: item.vendor,
+        version: item.version,
+        releases: item.releases,
         capability: (item.categories[0] || "text") as ProtocolCapability,
         create: item.create || "",
         poll: item.poll,

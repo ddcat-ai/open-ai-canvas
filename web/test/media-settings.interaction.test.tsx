@@ -29,6 +29,7 @@ const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { ImageSettingsPanel } = await import("../src/components/image-settings-panel");
 const { VideoSettingsPanel, videoResolutionLabel } = await import("../src/components/video-settings-panel");
+const { VideoCapabilityOptions, VideoCapabilityPreview, VideoDurationOptions } = await import("../src/components/video-capability-options");
 const { defaultConfig, createModelChannel, encodeChannelModel, useConfigStore } = await import("../src/stores/use-config-store");
 const { useUserStore } = await import("../src/stores/use-user-store");
 const { CanvasConfigNodePanel } = await import("../src/components/canvas/canvas-config-node-panel");
@@ -42,6 +43,54 @@ const { backendProviderConfig } = await import("../src/services/api/generation-t
 afterAll(() => {
     dom.happyDOM.abort();
     for (const [key, value] of originals) value ? Object.defineProperty(globalThis, key, value) : Reflect.deleteProperty(globalThis, key);
+});
+
+test("视频能力草稿的星标、移除和添加同步到画布预览", async () => {
+    let profile = defaultModelCapabilityConfig("dashscope-wan3-video", "wan3.0-video").video!;
+    profile.duration = { selection: "enum", values: [5, 10, 15], default: 10 };
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const update = (patch: Partial<typeof profile>) => {
+        profile = { ...profile, ...patch };
+        render();
+    };
+    const render = () =>
+        root.render(
+            <>
+                <VideoCapabilityOptions profile={profile} disabled={false} update={update} />
+                <VideoDurationOptions duration={profile.duration} disabled={false} update={(patch) => update({ duration: { ...profile.duration, ...patch } })} />
+                <VideoCapabilityPreview profile={profile} model="wan3.0-video" />
+            </>,
+        );
+    const click = (label: string) =>
+        act(async () => {
+            const button = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+            expect(button).not.toBeNull();
+            button!.click();
+        });
+    const selectedPreview = () => Array.from(host.querySelectorAll('aside button[aria-pressed="true"]'), (button) => button.textContent);
+    try {
+        await act(async () => render());
+        await click("设 支持比例 9:16 为默认");
+        expect(selectedPreview()).toContain("9:16");
+        await click("移除 支持比例 9:16");
+        expect(profile.defaultRatio).toBe("adaptive");
+        expect(selectedPreview()).toContain("自适应");
+        await click("移除 固定时长（秒） 5");
+        expect(profile.duration.default).toBe(10);
+        await click("设 固定时长（秒） 15 为默认");
+        expect(profile.duration.default).toBe(15);
+        for (const value of [...profile.resolutions]) await click(`移除 输出分辨率 ${value}`);
+        expect(profile.defaultResolution).toBe("");
+        expect(host.querySelector("aside")?.textContent).not.toContain("分辨率");
+        await click("添加 输出分辨率 720p");
+        expect(profile.defaultResolution).toBe("720p");
+        expect(selectedPreview()).toContain("720P");
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
 });
 
 test("独立配置节点重开 high 旧值时显示可用生成入口，提交仍使用目标能力", async () => {

@@ -7,6 +7,7 @@ export type BackendPlugin = {
     fileName: string;
     package: string;
     sha256: string;
+    releases?: Array<{ version: string; sha256: string }>;
     installedAt: string;
     updatedAt: string;
     status: "enabled" | "disabled" | "invalid" | string;

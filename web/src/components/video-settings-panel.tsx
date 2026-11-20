@@ -8,7 +8,7 @@ import { boolConfig, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedan
 import { isVolcengineArkVideoProtocol } from "@/lib/model-protocols";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { formatVideoResolutionLabel, isVideoResolutionMatch, normalizeVideoDuration, videoDimensionsForRatioAndResolution, videoResolutionComparisonKey, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
-import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationOptions, videoProfileForOperation, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 
 const sizeOptions = [
@@ -21,6 +21,7 @@ const sizeOptions = [
 ];
 
 type VideoSettingsPanelProps = {
+    operation?: string;
     config: AiConfig;
     onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", value: string) => void;
     theme: CanvasTheme;
@@ -37,8 +38,9 @@ export function VideoSettingsPanel(props: VideoSettingsPanelProps) {
     );
 }
 
-function VideoSettingsControls({ config, onConfigChange, theme, showTitle = true, className = "w-[292px] space-y-3" }: VideoSettingsPanelProps) {
-    const profile = modelCapabilityConfigFor(config, config.model).video!;
+function VideoSettingsControls({ config, operation, onConfigChange, theme, showTitle = true, className = "w-[292px] space-y-3" }: VideoSettingsPanelProps) {
+    const modelProfile = modelCapabilityConfigFor(config, config.model).video!;
+    const profile = operation ? videoProfileForOperation(modelProfile, operation) : modelProfile;
     const priceTiers = modelPriceTiers(config);
     if (resolveModelRequestConfig(config, config.model).interfaceType === "volcengine-jimeng-video") {
         return <JiMengVideoSettingsPanel config={config} profile={profile} priceTiers={priceTiers} onConfigChange={onConfigChange} theme={theme} showTitle={showTitle} className={className} />;
@@ -47,7 +49,27 @@ function VideoSettingsControls({ config, onConfigChange, theme, showTitle = true
         return <SeedanceVideoSettingsPanel config={config} profile={profile} priceTiers={priceTiers} onConfigChange={onConfigChange} theme={theme} showTitle={showTitle} className={className} />;
     }
 
-    const { seconds, resolution, ratio } = preserveVideoSettings(profile, { seconds: config.videoSeconds, resolution: config.vquality, ratio: config.size }, resolveModelRequestConfig(config, config.model).interfaceType);
+    return (
+        <VideoProfileControls profile={profile} config={config} protocol={resolveModelRequestConfig(config, config.model).interfaceType} priceTiers={priceTiers} theme={theme} onConfigChange={onConfigChange} showTitle={showTitle} className={className} />
+    );
+}
+
+export function VideoProfileControls({
+    profile,
+    config,
+    protocol,
+    priceTiers = [],
+    theme,
+    onConfigChange,
+    showTitle,
+    className,
+}: Omit<VideoSettingsPanelProps, "config"> & {
+    profile: VideoCapabilityConfig;
+    config: Partial<Pick<AiConfig, "size" | "vquality" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark">>;
+    protocol?: string;
+    priceTiers?: ReturnType<typeof modelPriceTiers>;
+}) {
+    const { seconds, resolution, ratio } = preserveVideoSettings(profile, { seconds: config.videoSeconds, resolution: config.vquality, ratio: config.size }, protocol);
     const dimensions = resolution === "auto" ? undefined : videoDimensionsForRatioAndResolution(ratio, resolution);
     const sizeSupported = profile.ratios.length > 0;
     const configuredResolutions = profile.resolutions.map((value) => ({ value, label: formatVideoResolutionLabel(value) }));
@@ -89,13 +111,14 @@ function VideoSettingsControls({ config, onConfigChange, theme, showTitle = true
                                 <button
                                     key={value}
                                     type="button"
+                                    aria-pressed={ratio === value}
                                     className="flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                                     style={{ background: ratio === value ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
                                     onMouseDown={(event) => event.stopPropagation()}
                                     onClick={() => onConfigChange("size", value)}
                                 >
                                     <SizePreview width={ratioPreview(value).width} height={ratioPreview(value).height} color={theme.node.text} />
-                                    <span>{value}</span>
+                                    <span>{value === "adaptive" ? "自适应" : value}</span>
                                 </button>
                             ))}
                         </div>

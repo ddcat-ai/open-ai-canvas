@@ -12,6 +12,7 @@ export function ImageSizePresetsEditor({
     profile,
     disabled,
     onChange,
+    onClearDefault,
     tiers,
     ratios: allowedRatios,
     allowCustomRatio = true,
@@ -21,6 +22,7 @@ export function ImageSizePresetsEditor({
     profile: ImageCapabilityConfig;
     disabled?: boolean;
     onChange: (size: ImageCapabilityConfig["size"]) => void;
+    onClearDefault?: () => void;
     tiers?: string[];
     ratios?: string[];
     allowCustomRatio?: boolean;
@@ -29,7 +31,14 @@ export function ImageSizePresetsEditor({
 }) {
     const IMAGE_RESOLUTIONS = tiers ?? imageResolutionTiers(profile);
     const presets = imageSizePresets(profile);
-    const defaultOptions = profile.size.values.length ? profile.size.values : [...new Set(presets.map((preset) => (profile.size.parameter === "aspect_ratio" ? preset.ratio : preset.size)).filter(Boolean))];
+    const presetValue = (preset: ImageResolutionOption) => (profile.size.parameter === "aspect_ratio" ? preset.ratio : preset.size);
+    const defaultOptions = profile.size.values.length ? profile.size.values : [...new Set(presets.map(presetValue).filter(Boolean))];
+    const defaultTier = grouped && profile.resolution.supported && IMAGE_RESOLUTIONS.includes(profile.resolution.default) ? profile.resolution.default : undefined;
+    const tierPresets = defaultTier ? presets.filter((preset) => preset.tier === defaultTier) : [];
+    const allMapped = new Set(presets.map(presetValue));
+    const tierValues = new Set(tierPresets.map(presetValue));
+    const options = tierValues.size ? defaultOptions.filter((value) => value === profile.size.default || !allMapped.has(value) || tierValues.has(value)) : defaultOptions;
+    const defaultSize = profile.parameters ? profile.parameters.find((field) => field.name === "size")?.default : profile.size.default;
     const id = useId();
     const [drafts, setDrafts] = useState<Partial<Record<ImageResolutionTier, string>>>({});
     const [errors, setErrors] = useState<Partial<Record<ImageResolutionTier, string>>>({});
@@ -95,8 +104,11 @@ export function ImageSizePresetsEditor({
             setDrafts((current) => ({ ...current, [tier]: "" }));
         }
     };
-    return (
-        <div className="image-size-presets-editor">
+    const mappings = (
+        <details className="image-size-mappings" open={presets.some((preset) => !preset.width || !preset.height || !preset.size) || undefined}>
+            <summary>
+                配置画幅与精确像素 <span>{presets.length} 项映射</span>
+            </summary>
             <p className="image-size-editor-intro">点选支持的比例，再次点击可移除。已有精确尺寸保持不变，有换算规则时自动填入。</p>
             {IMAGE_RESOLUTIONS.map((tier) => {
                 const items = presets.filter((preset) => preset.tier === tier);
@@ -220,23 +232,33 @@ export function ImageSizePresetsEditor({
                     </section>
                 );
             })}
+        </details>
+    );
+    return (
+        <div className="image-size-presets-editor">
             <div className="image-size-defaults">
                 <div className="image-size-defaults-heading">
                     <strong>默认输出</strong>
-                    <span>用户选择模型时的初始尺寸</span>
+                    <span>{tierPresets.length ? `${defaultTier?.toUpperCase()} 档位的初始画幅` : "用户选择模型时的初始尺寸"}</span>
                 </div>
                 <div className="image-size-default-options" role="group" aria-label="默认输出">
-                    {defaultOptions.map((value) => {
-                        const preset = presets.find((item) => (profile.size.parameter === "aspect_ratio" ? item.ratio === value : item.size === value));
+                    {onClearDefault && (
+                        <button type="button" disabled={disabled} aria-pressed={defaultSize === undefined} onClick={onClearDefault}>
+                            跟随模型默认
+                        </button>
+                    )}
+                    {options.map((value) => {
+                        const preset = presets.find((item) => presetValue(item) === value);
                         const label = value === "auto" ? "自动" : preset && profile.size.parameter === "size" ? `${grouped ? preset.tier.toUpperCase() + " · " : ""}${preset.ratio}` : value;
                         return (
-                            <button key={value} type="button" disabled={disabled} aria-pressed={profile.size.default === value} title={value} aria-label={`默认输出 ${label} ${value}`} onClick={() => onChange({ ...profile.size, default: value })}>
+                            <button key={value} type="button" disabled={disabled} aria-pressed={defaultSize === value} title={value} aria-label={`默认输出 ${label} ${value}`} onClick={() => onChange({ ...profile.size, default: value })}>
                                 {label}
                             </button>
                         );
                     })}
                 </div>
             </div>
+            {mappings}
         </div>
     );
 }

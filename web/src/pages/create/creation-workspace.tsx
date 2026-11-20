@@ -831,7 +831,7 @@ function GenerationSettingsMenu(props: ComposerProps) {
                 <ImageParameterFields
                     profile={props.imageProfile}
                     countLimit={imageBatchLimit}
-                    config={{ ...props.config, model: props.model, size: props.ratio, quality: props.quality, imageResolution: props.imageResolution, imageParameters: props.imageParameters, count: props.count }}
+                    config={{ size: props.ratio, quality: props.quality, imageResolution: props.imageResolution, imageParameters: props.imageParameters, count: props.count, transparentBackground: props.config.transparentBackground }}
                     onChange={(key, value) => {
                         const setters = {
                             size: props.setRatio,

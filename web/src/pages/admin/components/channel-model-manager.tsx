@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { App, Button, Checkbox, Input, Popconfirm, Space } from "antd";
+import { App, Button, Checkbox, Grid, Input, Popconfirm, Space } from "antd";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import type { ColumnsType } from "antd/es/table";
@@ -32,7 +32,7 @@ import { ChannelModelDetailsCell } from "./channel-model-details-cell";
 import { ChannelModelRepriceDialog } from "./channel-model-reprice-dialog";
 import { ChannelModelBatchEditDialog } from "./channel-model-batch-edit-dialog";
 import { deselectVisibleModels, filterImportModels, normalizeFetchModelKey, selectExistingImportModels, selectVisibleModels } from "./channel-model-import-selection";
-import { duplicateChannelModelValues, type ChannelModelFormValues } from "./channel-model-editor-form";
+import { duplicateChannelModelValues, opensModelParameters, type ChannelModelFormValues } from "./channel-model-editor-form";
 import { Select } from "@/components/ui/base/select";
 
 export type ChannelModelFilters = {
@@ -65,6 +65,7 @@ export function ChannelModelManager({
     filters?: ChannelModelFilters;
 }) {
     const { message, modal } = App.useApp();
+    const screens = Grid.useBreakpoint();
     const [togglingId, setTogglingId] = useState<string | null>(null);
     const [items, setItems] = useState<ChannelModel[]>([]);
     const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
@@ -359,16 +360,16 @@ export function ChannelModelManager({
                 ),
         },
         { title: "规格成本价 / 销售价 / 加价", width: 310, render: (_, item) => <ChannelModelCostSummary item={item} /> },
-        { title: "版本", dataIndex: "priceVersion", width: 75, render: (value) => `v${value}` },
+        { title: "价格版本", dataIndex: "priceVersion", width: 84, render: (value) => `v${value}` },
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => <AdminStatusBadge label={enabled ? "启用" : "停用"} tone={enabled ? "success" : "neutral"} /> },
         {
             title: "操作",
-            width: 206,
+            width: screens.md ? 248 : 148,
             fixed: "right",
             render: (_, item) => (
-                <Space size={4}>
+                <Space size={4} wrap>
                     <Button size="small" icon={<Pencil className="size-3.5" />} disabled={deletingSelected} onClick={() => startEdit(item)}>
-                        编辑
+                        {opensModelParameters(item) ? "编辑参数" : "编辑"}
                     </Button>
                     <Button size="small" danger={item.enabled} icon={<Power className="size-3.5" />} loading={togglingId === item.id} disabled={deletingSelected || (togglingId !== null && togglingId !== item.id)} onClick={() => toggleEnabled(item)}>
                         {item.enabled ? "停用" : "启用"}
@@ -586,7 +587,7 @@ export function ChannelModelManager({
                     columns,
                     dataSource: pagedItems,
                     pagination: false,
-                    scroll: { x: 1520 },
+                    scroll: { x: 1650 },
                 }}
                 footer={
                     filteredItems.length > pageSize ? (

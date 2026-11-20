@@ -36,6 +36,10 @@
     opacity: 0.3;
     cursor: not-allowed;
 }
+.admin-model-editor-modal aside .image-size-tiers button:disabled:not([disabled]) {
+    opacity: 1;
+    cursor: default;
+}
 .image-size-picker button:focus-visible {
     outline: 2px solid currentColor;
     outline-offset: 2px;
@@ -115,6 +119,22 @@
 }
 .image-size-presets-editor {
     container: image-presets / inline-size;
+}
+.image-size-mappings > summary {
+    cursor: pointer;
+    padding-block: var(--space-2);
+    font-size: var(--fs-body);
+    font-weight: 500;
+}
+.image-size-mappings > summary span {
+    margin-inline-start: var(--space-2);
+    color: var(--muted-foreground);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+}
+.image-size-mappings > summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }
 .image-size-preset-group.is-ungrouped {
     grid-template-columns: minmax(0, 1fr);

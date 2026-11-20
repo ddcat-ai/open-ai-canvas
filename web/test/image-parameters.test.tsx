@@ -174,7 +174,8 @@ describe("plugin image parameters across model configuration and generation", ()
         expect(html).toContain("2K");
         expect(html).toContain("4K");
         expect(html).toContain("分辨率快捷选择");
-        expect(html).toContain("输入后按回车，或点击下方档位");
+        expect(html).toContain('aria-label="新增分辨率支持值"');
+        expect(html).not.toContain('role="combobox"');
     });
     test("resolution-only contract renders no invented quality or pixel-tier controls", () => {
         const { image, config } = fixture([parameters[0]]);
