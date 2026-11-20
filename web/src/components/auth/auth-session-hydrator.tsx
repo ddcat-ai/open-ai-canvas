@@ -9,13 +9,21 @@ import { assertCurrentUserSession, captureUserSession, isUserSessionInvalidated,
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore } from "@/stores/use-user-store";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 
 export function AuthSessionHydrator({ children }: { children: ReactNode }) {
     const hydrated = useUserStore((state) => state.hydrated);
     const [recoveryFailed, setRecoveryFailed] = useState(false);
     const [retry, setRetry] = useState(0);
+    // DMC C 端是纯游客工作区：凭据只有本机 LL2/API Key，不依赖登录态后端。
+    // 这里不能去请求 /api/auth/session，否则本地没起后端时会误报「登录状态恢复失败」。
+    const guestWorkspace = typeof window !== "undefined" && isGuestWorkspacePath(window.location.pathname);
 
     useEffect(() => {
+        if (guestWorkspace) {
+            useUserStore.getState().setHydrated(true);
+            return;
+        }
         let cancelled = false;
         let recovery = 0;
         const restore = async (externalChange: boolean) => {
@@ -79,8 +87,9 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
             cancelled = true;
             unsubscribe();
         };
-    }, [retry]);
+    }, [guestWorkspace, retry]);
 
+    if (guestWorkspace) return children;
     if (recoveryFailed) return <WorkspaceErrorState title="登录状态恢复失败" description="工作区已暂停，请检查网络后重试。" onRetry={() => setRetry((value) => value + 1)} />;
     return hydrated ? children : <FullScreenLoader />;
 }

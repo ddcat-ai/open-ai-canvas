@@ -224,6 +224,13 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("游客工作区不请求登录态后端，避免误报登录恢复失败", async () => {
+    const hydrator = await read("../src/components/auth/auth-session-hydrator.tsx");
+    expect(hydrator).toContain("isGuestWorkspacePath");
+    expect(hydrator).toContain("useUserStore.getState().setHydrated(true)");
+    expect(hydrator).toContain("if (guestWorkspace) return children;");
+});
+
 test("我的片子改成带视频封面的自适应网格，不再横向拖动", async () => {
     const films = await read("../src/pages/ll2-workspace/films.tsx");
     expect(films).toContain("ll2-films-grid");
