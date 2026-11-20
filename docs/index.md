@@ -12,6 +12,8 @@
 
 ## 设计沉淀
 
+- [短剧拆镜与段间连续性调研](design/short-drama-shot-continuity-research.md)：对照制作台、同类产品和公开 Skill，区分同镜续拍、同场换镜与换场，附真实样片回查方法（调研建议，未实施）。
+
 - [团队空间、积分划拨与素材共享](design/team-workspace-design.md)：自由画布、创作页和素材库在个人与团队之间复用，按空间隔离作品与费用。使用入口见[功能清单](content/docs/overview/features.mdx)。
 
 - [资源访问与 OSS/CDN 分发架构重构](design/resource-delivery-architecture.md)：资源身份、场景授权与分发策略分离，统一访问合同、全入口迁移、旧实现退场及流量/安全验收门槛（核心代码已实施，待真实 OSS/CDN 链路验收）。
