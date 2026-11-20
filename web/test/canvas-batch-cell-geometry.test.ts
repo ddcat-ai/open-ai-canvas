@@ -80,6 +80,15 @@ describe("batch cell connection geometry", () => {
         expect({ x: normal.endX, y: normal.endY }).toEqual({ x: 500, y: 150 });
     });
 
+    test("ordinary paths bend toward the target when the target is on the left", () => {
+        const leftTarget = { ...source, id: "left-target", position: { x: -500, y: 50 } };
+        const saved = canvasConnectionPath({ id: "left", fromNodeId: source.id, toNodeId: leftTarget.id }, source, leftTarget);
+        expect(saved.pathD).toBe("M 300 100 C -100 100, -100 150, -500 150");
+
+        const draft = activeConnectionPath(source, { nodeId: source.id, handleType: "source" }, { x: -400, y: 180 });
+        expect(draft).toBe("M 300 100 C -50 100, -50 180, -400 180");
+    });
+
     test("ordinary drafts follow pointer movement inside a node in both directions", () => {
         for (const pointer of [
             { x: 600, y: 210 },
