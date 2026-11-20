@@ -2193,6 +2193,159 @@ button.ll2-sidebar-guide {
     font-size: 10.5px;
 }
 
+/* 我的片子：自适应网格 + 视频封面，替代横向拖动的胶片带。 */
+.ll2-films-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+}
+
+.ll2-film-tile {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(242, 242, 245, 0.12);
+    border-radius: 14px;
+    background: #16161a;
+}
+
+.ll2-film-tile.is-active {
+    border-color: rgba(141, 84, 255, 0.55);
+    box-shadow: 0 0 0 1px rgba(141, 84, 255, 0.25);
+}
+
+.ll2-film-tile-thumb {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 0;
+    padding: 0;
+    background: #0f0f13;
+    cursor: pointer;
+}
+
+.ll2-film-tile-thumb video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ll2-film-tile-fallback {
+    display: grid;
+    height: 100%;
+    place-items: center;
+    color: rgba(242, 242, 245, 0.45);
+    font-size: 11px;
+}
+
+.ll2-film-tile-play {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 9px;
+}
+
+.ll2-film-tile-badge {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    font-size: 10px;
+}
+
+.ll2-film-tile-remove {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    z-index: 2;
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ll2-film-tile-remove:hover {
+    background: rgba(220, 60, 60, 0.8);
+    color: #fff;
+}
+
+.ll2-film-tile-body {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 11px 11px;
+}
+
+.ll2-film-tile-model {
+    overflow: hidden;
+    color: #f2f2f5;
+    font-size: 12px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ll2-film-tile-prompt {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 0;
+    color: rgba(242, 242, 245, 0.56);
+    font-size: 11.5px;
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.ll2-film-tile-meta {
+    color: rgba(242, 242, 245, 0.4);
+    font-size: 10.5px;
+}
+
+.ll2-film-tile-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.ll2-film-tile-actions button {
+    padding: 3px 9px;
+    border: 1px solid rgba(242, 242, 245, 0.14);
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(242, 242, 245, 0.72);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ll2-film-tile-actions button:hover {
+    border-color: rgba(141, 84, 255, 0.55);
+    color: #d3c2ff;
+}
+
 /* 画布里的文本助手：跟 DMC 的深色玻璃卡片同一套观感，不再用大圆球 + 大白卡。 */
 .ll2-agent.is-canvas {
     width: min(360px, calc(100vw - 24px));

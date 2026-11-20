@@ -224,6 +224,16 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("我的片子改成带视频封面的自适应网格，不再横向拖动", async () => {
+    const films = await read("../src/pages/ll2-workspace/films.tsx");
+    expect(films).toContain("ll2-films-grid");
+    expect(films).toContain("<video src={film.url}");
+    expect(films).not.toContain("ll2-filmstrip-track");
+    const css = await read("../src/styles/ll2-c-polish.css");
+    expect(css).toContain(".ll2-film-tile-thumb video");
+    expect(css).toContain("grid-template-columns: repeat(auto-fill, minmax(238px, 1fr))");
+});
+
 test("一句话成片输入框有 AI 润色提示词按钮", async () => {
     const page = await read("../src/components/ll2/ll2-oneshot.tsx");
     expect(page).toContain("AI 润色提示词");

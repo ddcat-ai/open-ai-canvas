@@ -48,10 +48,9 @@ export default function LL2Films() {
         };
     }, [active, apiKey]);
 
-    const downloadActive = async () => {
-        if (!active) return;
-        if (!active.requiresAuth) {
-            setMessage((await ll2DownloadFilm(active)).message);
+    const downloadFilm = async (film: LL2Film) => {
+        if (!film.requiresAuth) {
+            setMessage((await ll2DownloadFilm(film)).message);
             return;
         }
         if (!apiKey.trim()) {
@@ -59,11 +58,11 @@ export default function LL2Films() {
             return;
         }
         try {
-            const blob = await ll2FetchHdBlob(active.url, apiKey);
+            const blob = await ll2FetchHdBlob(film.url, apiKey);
             const url = URL.createObjectURL(blob);
             const anchor = document.createElement("a");
             anchor.href = url;
-            anchor.download = `LL2_${active.resolution.replace(/[^\w.-]+/g, "_")}_${active.seconds}s.mp4`;
+            anchor.download = `LL2_${film.resolution.replace(/[^\w.-]+/g, "_")}_${film.seconds}s.mp4`;
             document.body.appendChild(anchor);
             anchor.click();
             anchor.remove();
@@ -93,19 +92,21 @@ export default function LL2Films() {
                         <p className="ll2-wb-empty">还没有片子。回「一句话成片」写一句话，生成的第一支会出现在这里。</p>
                     ) : (
                         <>
-                            <div className="ll2-filmstrip-track">
+                            <div className="ll2-films-grid">
                                 {films.map((film) => (
-                                    <div key={film.id} className={`ll2-film-card ${active?.id === film.id ? "is-active" : ""}`}>
-                                        <button type="button" className="ll2-film-card-main" onClick={() => setActive(film)} title={film.prompt}>
-                                            <span className="ll2-film-card-perf" aria-hidden />
-                                            <span className="ll2-film-card-model">{film.model}</span>
-                                            <span className="ll2-film-card-cost">¥{ll2FormatCNY(film.actualCNY)}</span>
-                                            <span className="ll2-film-card-prompt">{film.prompt}</span>
-                                            <span className="ll2-film-card-time">{film.seconds}s · {film.resolution}{film.requiresAuth ? " · 超分版" : ""} · {ll2FilmAgeLabel(film.createdAt)}</span>
+                                    <article key={film.id} className={`ll2-film-tile ${active?.id === film.id ? "is-active" : ""}`}>
+                                        <button type="button" className="ll2-film-tile-thumb" onClick={() => setActive(film)} aria-label={`播放 ${film.prompt}`}>
+                                            {film.requiresAuth ? (
+                                                <span className="ll2-film-tile-fallback">超分版 · 点击播放</span>
+                                            ) : (
+                                                <video src={film.url} muted playsInline preload="metadata" />
+                                            )}
+                                            <span className="ll2-film-tile-play" aria-hidden>▶</span>
+                                            <span className="ll2-film-tile-badge">{film.seconds}s · {film.resolution}</span>
                                         </button>
                                         <button
                                             type="button"
-                                            className="ll2-film-card-remove"
+                                            className="ll2-film-tile-remove"
                                             aria-label="从本机移除这支片子"
                                             onClick={() => {
                                                 setFilms(ll2RemoveFilm(film.id));
@@ -114,7 +115,16 @@ export default function LL2Films() {
                                         >
                                             ×
                                         </button>
-                                    </div>
+                                        <div className="ll2-film-tile-body">
+                                            <strong className="ll2-film-tile-model">{film.model}</strong>
+                                            <p className="ll2-film-tile-prompt">{film.prompt}</p>
+                                            <small className="ll2-film-tile-meta">¥{ll2FormatCNY(film.actualCNY)} · {ll2FilmAgeLabel(film.createdAt)}{film.requiresAuth ? " · 超分版" : ""}</small>
+                                            <div className="ll2-film-tile-actions">
+                                                <button type="button" onClick={() => setActive(film)}>播放</button>
+                                                <button type="button" onClick={() => void downloadFilm(film)}>下载</button>
+                                            </div>
+                                        </div>
+                                    </article>
                                 ))}
                             </div>
 
@@ -129,7 +139,7 @@ export default function LL2Films() {
                                         <strong>{active.model} · {active.seconds}s · {active.resolution}</strong>
                                         <p>{active.prompt}</p>
                                         <small>预估 ¥{ll2FormatCNY(active.estimateCNY)} · 实际扣费 ¥{ll2FormatCNY(active.actualCNY)} · {ll2FilmAgeLabel(active.createdAt)}</small>
-                                        <button type="button" onClick={() => void downloadActive()}>下载到本机</button>
+                                        <button type="button" onClick={() => void downloadFilm(active)}>下载到本机</button>
                                         {message ? <p className="ll2-wb-player-message">{message}</p> : null}
                                     </div>
                                 </div>
