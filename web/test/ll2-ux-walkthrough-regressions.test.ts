@@ -224,6 +224,19 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("wan3 按官方 media[] 适配参考图/参考视频，不再只塞 img_url", async () => {
+    const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
+    expect(adapters).toContain("reference_video");
+    expect(adapters).toContain("referenceMode");
+    expect(adapters).toContain("input: {");
+    const caps = await read("../src/lib/model-capabilities.ts");
+    expect(caps).toContain("isWan ? 5");
+    expect(caps).toContain("isWan ? 10");
+    const video = await read("../src/services/ll2/ll2-video.ts");
+    expect(video).toContain("万相 3.0 最多 5 段参考视频");
+    expect(video).toContain("首帧/尾帧不能和参考视频");
+});
+
 test("超分阶段刷新会按 hdTaskId 续查，不重复提交超分", async () => {
     const hd = await read("../src/services/ll2/ll2-hd.ts");
     expect(hd).toContain("export async function ll2WaitHdTask");
@@ -296,10 +309,10 @@ test("画布入口输入框打 @ 会弹出本机素材库，且素材菜单可�
     expect(css).toContain("z-index: 400");
 });
 
-test("wan3 连两张图会明确提示换模型，不静默丢尾帧", async () => {
+test("wan3 按官方素材规则校验参考视频/首尾帧混用", async () => {
     const video = await read("../src/services/ll2/ll2-video.ts");
-    expect(video).toContain("万相 3.0 只支持 1 张首帧图");
-    expect(video).toContain('req.model.startsWith("wan3.0-") && media.filter');
+    expect(video).toContain("万相 3.0 最多 5 段参考视频");
+    expect(video).toContain("首帧/尾帧不能和参考视频");
 });
 
 test("画布 LL2 直连节点不显示「排队」三段进度", async () => {

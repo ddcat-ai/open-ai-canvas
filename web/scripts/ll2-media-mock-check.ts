@@ -92,6 +92,13 @@ const wan3TextPayload = LL2_VIDEO_ADAPTERS["wan3.0-video"].buildCreatePayload(
 check("万相 3.0 纯文本走 DashScope input.prompt", wan3TextPayload.input.prompt, "一只猫");
 check("纯文本不带 img_url", "img_url" in wan3TextPayload.input, false);
 
+const wan3 = LL2_VIDEO_ADAPTERS["wan3.0-video"];
+const wan3FramePayload = wan3.buildCreatePayload(wan3.normalize({ model: "wan3.0-video", prompt: "从这张变到那张", seconds: 5, resolution: "480P", ratio: "16:9", media: twoImages.items }));
+check("万相 3.0 首尾帧走 input.media[]", wan3FramePayload.input.media.map((x: { type: string }) => x.type), ["first_frame", "last_frame"]);
+check("万相 3.0 不再用 img_url", "img_url" in wan3FramePayload.input, false);
+const wan3MixedPayload = wan3.buildCreatePayload(wan3.normalize({ model: "wan3.0-video", prompt: "图 1 和视频 1", seconds: 5, resolution: "480P", ratio: "16:9", media: mixed.items }));
+check("万相 3.0 参考视频 + 参考图一起进 media[]", wan3MixedPayload.input.media.map((x: { type: string }) => x.type), ["reference_image", "reference_video", "reference_audio"]);
+
 console.log("\n③ @ 引用：从资产库选多个，提示词就地换成网关标签");
 
 check("生成引用标记", ll2MentionToken("海边照片"), "@[海边照片]");

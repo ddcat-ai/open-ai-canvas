@@ -126,7 +126,10 @@ const h3Adapter: LL2VideoAdapter = {
  * wan3 / wan3-prime：网关透传阿里百炼 DashScope 异步协议。
  *   POST /ali/api/v1/services/aigc/video-generation/video-synthesis
  *   GET  /ali/api/v1/tasks/{task_id}
- * 有参考图时进 input.img_url（首帧），没有走纯文字。
+ *
+ * 2026-11-20 按官方 API 参考改：万相 3.0 是全能参考模型，素材统一走 input.media[]，
+ * type 支持 first_frame / last_frame / reference_image / reference_video / reference_audio。
+ * 不能再只取一张图塞 input.img_url——那样参考视频、首尾帧和多参考都用不上。
  */
 function makeWan3Adapter(model: "wan3.0-video" | "wan3.0-video-prime"): LL2VideoAdapter {
     return {
@@ -141,12 +144,25 @@ function makeWan3Adapter(model: "wan3.0-video" | "wan3.0-video-prime"): LL2Video
             return { ...base, resolution: tier?.resolution || base.resolution };
         },
         buildCreatePayload: (args) => {
-            const image = args.media?.find((item) => item.image_url?.url)?.image_url?.url || "";
+            const media = args.media || [];
+            // 有参考视频/音频时，图片全部按 reference_image 走（全能参考模式）；
+            // 只有图片时保留首帧/尾帧语义，让「两张图=首尾帧」继续可用。
+            const referenceMode = media.some((item) => item.video_url?.url || item.audio_url?.url);
+            const inputs = media
+                .map((item) => {
+                    if (item.video_url?.url) return { type: "reference_video", url: item.video_url.url };
+                    if (item.audio_url?.url) return { type: "reference_audio", url: item.audio_url.url };
+                    const url = item.image_url?.url;
+                    if (!url) return null;
+                    const type = !referenceMode && (item.role === "first_frame" || item.role === "last_frame") ? item.role : "reference_image";
+                    return { type, url };
+                })
+                .filter((item): item is { type: string; url: string } => Boolean(item));
             return {
                 model,
                 input: {
                     prompt: args.prompt,
-                    ...(image ? { img_url: image } : {}),
+                    ...(inputs.length ? { media: inputs } : {}),
                 },
                 parameters: {
                     resolution: String(args.resolution).toUpperCase(),

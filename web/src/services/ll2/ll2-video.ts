@@ -202,9 +202,19 @@ export async function ll2GenerateVideo(req: LL2VideoRequest, onProgress?: (progr
     if (media.length > 0 && !mediaProtocolReady) {
         throw new Error("这个模型带图/视频出片的协议还没验证通过：现在 H3 / wan3 / seedance / vidu 会真的按参考图出片，Super Vega 还在验证。先换一个，或把参考素材去掉再生成。");
     }
-    // wan3 只有一张首帧图；连两张图来做首尾帧的，要换支持首尾帧的模型，别静默丢掉尾帧。
-    if (req.model.startsWith("wan3.0-") && media.filter((item) => item.image_url?.url).length > 1) {
-        throw new Error("万相 3.0 只支持 1 张首帧图；首尾帧请换 MiniMax-H3 / Seedance / Vidu");
+    // 万相 3.0 是全能参考模型：支持首帧/尾帧、最多 10 张参考图、5 段参考视频、5 段参考音频，
+    // 但「首尾帧」和「参考素材」不能混用（官方素材组合规则）。
+    if (req.model.startsWith("wan3.0-")) {
+        const images = media.filter((item) => item.image_url?.url);
+        const videos = media.filter((item) => item.video_url?.url);
+        const audios = media.filter((item) => item.audio_url?.url);
+        const frames = images.filter((item) => item.role === "first_frame" || item.role === "last_frame");
+        if (images.length > 10) throw new Error("万相 3.0 最多 10 张参考图（首帧/尾帧各 1 张）");
+        if (videos.length > 5) throw new Error("万相 3.0 最多 5 段参考视频，且总时长不超过 15 秒");
+        if (audios.length > 5) throw new Error("万相 3.0 最多 5 段参考音频，且总时长不超过 15 秒");
+        if (frames.length && (videos.length > 0 || audios.length > 0 || images.length > frames.length)) {
+            throw new Error("首帧/尾帧不能和参考视频、参考音频或多张参考图混用：要么首尾帧，要么全能参考");
+        }
     }
     // Vidu Q3 只支持图片参考：0 张文生、1 张首帧、2 张首尾帧；视频/音频和 3 张以上图都没开通。
     if (req.model.startsWith("viduq3-") && media.length > 0) {

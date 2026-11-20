@@ -462,9 +462,10 @@ function ll2VideoCapabilityConfig(model: string): VideoCapabilityConfig {
     const isSeedance = model.startsWith("doubao-seedance");
     const isVidu = model.startsWith("viduq3");
     const isVega = model.startsWith("Super Vega");
-    const maxVideos = isH3 ? 3 : isSeedance ? (model.includes("2-5") ? 10 : 3) : isVega ? (model.includes("1.5") ? 10 : 3) : 0;
+    // 万相 3.0 官方：参考图 ≤10、参考视频 ≤5（总时长 ≤15 秒）、参考音频 ≤5（总时长 ≤15 秒）。
+    const maxVideos = isH3 ? 3 : isWan ? 5 : isSeedance ? (model.includes("2-5") ? 10 : 3) : isVega ? (model.includes("1.5") ? 10 : 3) : 0;
     const maxAudios = maxVideos;
-    const maxImages = isH3 ? 9 : isWan ? 1 : isVidu ? 2 : isVega ? (model.includes("1.5") ? 30 : 9) : 9;
+    const maxImages = isH3 ? 9 : isWan ? 10 : isVidu ? 2 : isVega ? (model.includes("1.5") ? 30 : 9) : 9;
     const ratios = isH3
         ? ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"]
         : isWan
