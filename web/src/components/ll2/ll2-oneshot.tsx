@@ -4,30 +4,12 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { LL2AssetLibrary } from "./ll2-asset-library";
 
-import {
-    LL2_CONNECTED_VIDEO_MODELS,
-    LL2_VIDEO_DURATION,
-    ll2FormatCNY,
-    ll2FriendlyCNY,
-    ll2PreciseCNY,
-    ll2SpecFor,
-    ll2TiersFor,
-    type LL2ConnectedVideoModel,
-} from "@/lib/ll2-models";
+import { LL2_CONNECTED_VIDEO_MODELS, LL2_VIDEO_DURATION, ll2FormatCNY, ll2FriendlyCNY, ll2PreciseCNY, ll2SpecFor, ll2TiersFor, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
 import { ll2PromptWithLocks, ll2ReadSettings, ll2WriteSettings } from "@/lib/ll2-workspace";
+import { LL2_SIGNUP_URL } from "@/lib/ll2-referral";
 import { ll2AddFilm, ll2DownloadFilm, type LL2Film } from "@/services/ll2/ll2-films";
 import { ll2AssetIdByTitle, ll2AssetToMediaInput } from "@/services/ll2/ll2-assets";
-import {
-    ll2ApplyMentionTags,
-    ll2BuildMediaContent,
-    ll2MediaModeLabel,
-    ll2MediaSummary,
-    ll2MentionToken,
-    ll2ParseMentionTitles,
-    ll2ReadDroppedImage,
-    ll2ValidateMedia,
-    type LL2MediaInput,
-} from "@/services/ll2/ll2-media";
+import { ll2ApplyMentionTags, ll2BuildMediaContent, ll2MediaModeLabel, ll2MediaSummary, ll2MentionToken, ll2ParseMentionTitles, ll2ReadDroppedImage, ll2ValidateMedia, type LL2MediaInput } from "@/services/ll2/ll2-media";
 import { ll2FetchHdBlob, ll2RunHd, type LL2HdProgress } from "@/services/ll2/ll2-hd";
 import { ll2GenerateVideo, type LL2VideoProgress } from "@/services/ll2/ll2-video";
 import { LL2_PROMPT_SYSTEM, LL2_VARIANTS_SYSTEM, ll2ChatText } from "@/services/ll2/ll2-text";
@@ -191,18 +173,12 @@ export function LL2OneShot() {
     const totalLabel = hdEstimate ? `约 ${ll2FriendlyCNY(estimate.amount + hdEstimate.amount)}` : estimate.label;
     const totalBasis = hdEstimate ? `生成 ${estimate.label} + 超分 ${hdEstimate.label} · 按 LL2 官网单价估算` : estimate.basis;
     // 等待态只留一句「正在生成」，不写解释文字。
-    const waiting = !running
-        ? null
-        : hdProgress
-            ? { title: hdProgress.stage === "downloading" ? "正在取回高清版" : "正在超分" }
-            : { title: "正在生成" };
+    const waiting = !running ? null : hdProgress ? { title: hdProgress.stage === "downloading" ? "正在取回高清版" : "正在超分" } : { title: "正在生成" };
     const spec = ll2SpecFor(model);
     const mentionTitles = useMemo(() => ll2ParseMentionTitles(prompt), [prompt]);
     const hasMedia = media.length > 0;
     const hasAnyReference = hasMedia || mentionTitles.length > 0;
-    const modeLabel = mentionTitles.length
-        ? `已 @ 引用 ${mentionTitles.length} 个素材`
-        : ll2MediaModeLabel(ll2BuildMediaContent(media).mode);
+    const modeLabel = mentionTitles.length ? `已 @ 引用 ${mentionTitles.length} 个素材` : ll2MediaModeLabel(ll2BuildMediaContent(media).mode);
 
     const syncSettings = (patch: Partial<typeof settings>) => ll2WriteSettings({ ...settings, ...patch });
 
@@ -472,10 +448,7 @@ export function LL2OneShot() {
             const lockedPrompt = ll2PromptWithLocks(finalPrompt, ll2ReadSettings());
 
             phase = "generate";
-            const outcome = await ll2GenerateVideo(
-                { apiKey, model, prompt: lockedPrompt, seconds, resolution, ratio, signal: controller.signal, media: build.items, promptOptimizer },
-                setProgress,
-            );
+            const outcome = await ll2GenerateVideo({ apiKey, model, prompt: lockedPrompt, seconds, resolution, ratio, signal: controller.signal, media: build.items, promptOptimizer }, setProgress);
             const film = ll2AddFilm({
                 id: outcome.taskId,
                 taskId: outcome.taskId,
@@ -503,10 +476,7 @@ export function LL2OneShot() {
                 waitStartRef.current = Date.now();
                 setWaitSeconds(0);
                 setHint(`片子生成好了，正在超分到 ${ll2UpscaleTargetLabel(upscale)}…`);
-                const hd = await ll2RunHd(
-                    { apiKey, videoUrl: outcome.url, resolution: upscale, duration: outcome.seconds, signal: controller.signal },
-                    setHdProgress,
-                );
+                const hd = await ll2RunHd({ apiKey, videoUrl: outcome.url, resolution: upscale, duration: outcome.seconds, signal: controller.signal }, setHdProgress);
                 setHdProgress((current) => (current ? { ...current, stage: "downloading" } : current));
                 const blob = await ll2FetchHdBlob(hd.url, apiKey, controller.signal);
                 const previewUrl = URL.createObjectURL(blob);
@@ -573,23 +543,10 @@ export function LL2OneShot() {
 
     return (
         <>
-            <section
-                className={`ll2-oneshot${dragOver ? " is-drag-over" : ""}`}
-                aria-label="一句话想法"
-                onDragOver={onSectionDragOver}
-                onDragLeave={onSectionDragLeave}
-                onDrop={onSectionDrop}
-            >
+            <section className={`ll2-oneshot${dragOver ? " is-drag-over" : ""}`} aria-label="一句话想法" onDragOver={onSectionDragOver} onDragLeave={onSectionDragLeave} onDrop={onSectionDrop}>
                 <div className="ll2-oneshot-tabs" role="tablist" aria-label="创作类型">
                     {TABS.map((item) => (
-                        <button
-                            key={item.id}
-                            type="button"
-                            role={item.action ? undefined : "tab"}
-                            aria-selected={item.action ? undefined : tab === item.id}
-                            className={!item.action && tab === item.id ? "is-active" : ""}
-                            onClick={() => switchTab(item.id)}
-                        >
+                        <button key={item.id} type="button" role={item.action ? undefined : "tab"} aria-selected={item.action ? undefined : tab === item.id} className={!item.action && tab === item.id ? "is-active" : ""} onClick={() => switchTab(item.id)}>
                             {item.label}
                         </button>
                     ))}
@@ -633,13 +590,7 @@ export function LL2OneShot() {
                                         <Lock className="size-3.5" aria-hidden />
                                         角色/风格{lockedCharacter.trim() || lockedStyle.trim() ? " · 已锁" : ""}
                                     </button>
-                                    <button
-                                        type="button"
-                                        className="ll2-oneshot-polish-btn"
-                                        onClick={() => void generateVariants()}
-                                        disabled={!connected || !prompt.trim() || running || variantsBusy}
-                                        title="同一句话给 3 个不同版本，挑一个再出片"
-                                    >
+                                    <button type="button" className="ll2-oneshot-polish-btn" onClick={() => void generateVariants()} disabled={!connected || !prompt.trim() || running || variantsBusy} title="同一句话给 3 个不同版本，挑一个再出片">
                                         {variantsBusy ? <LoaderCircle className="size-3.5 is-spinning" aria-hidden /> : <Shuffle className="size-3.5" aria-hidden />}
                                         {variantsBusy ? "正在生成…" : "多版本"}
                                     </button>
@@ -668,8 +619,12 @@ export function LL2OneShot() {
                                         </label>
                                         <small>开启后，后面每一句生成都会自动追加；留空表示不锁。</small>
                                         <div className="ll2-lock-actions">
-                                            <button type="button" className="is-primary" onClick={saveLocks}>保存锁定</button>
-                                            <button type="button" onClick={clearLocks}>清除</button>
+                                            <button type="button" className="is-primary" onClick={saveLocks}>
+                                                保存锁定
+                                            </button>
+                                            <button type="button" onClick={clearLocks}>
+                                                清除
+                                            </button>
                                         </div>
                                     </div>
                                 ) : null}
@@ -678,7 +633,9 @@ export function LL2OneShot() {
                                     <div className="ll2-variants">
                                         <div className="ll2-variants-head">
                                             <strong>选一个版本</strong>
-                                            <button type="button" onClick={() => setVariants([])} aria-label="关闭多版本">×</button>
+                                            <button type="button" onClick={() => setVariants([])} aria-label="关闭多版本">
+                                                ×
+                                            </button>
                                         </div>
                                         {variants.map((variant, index) => (
                                             <button
@@ -706,15 +663,7 @@ export function LL2OneShot() {
                         {connected && tab === "video" ? (
                             <div className="ll2-oneshot-pricing" aria-label="本次生成的价格明细">
                                 <div className="ll2-price-grid">
-                                    <button
-                                        ref={plusRef}
-                                        type="button"
-                                        className="ll2-chip ll2-chip-add"
-                                        onClick={() => openLibrary()}
-                                        disabled={running || mediaBusy}
-                                        title="添加素材：上传后在句子里打 @ 引用"
-                                        aria-label="添加素材"
-                                    >
+                                    <button ref={plusRef} type="button" className="ll2-chip ll2-chip-add" onClick={() => openLibrary()} disabled={running || mediaBusy} title="添加素材：上传后在句子里打 @ 引用" aria-label="添加素材">
                                         <Plus className="size-4" aria-hidden />
                                     </button>
                                     <div className="ll2-price-cell">
@@ -772,18 +721,17 @@ export function LL2OneShot() {
                                 </div>
                                 <div className="ll2-options">
                                     <label className="ll2-option-card">
-                                        <input
-                                            type="checkbox"
-                                            checked={Boolean(upscale)}
-                                            disabled={running || !upscaleTargets.length}
-                                            onChange={(event) => setUpscale(event.target.checked ? (upscaleTargets[0]?.id || "") : "")}
-                                        />
-                                        <span className="ll2-option-icon"><Sparkles className="size-4" aria-hidden /></span>
+                                        <input type="checkbox" checked={Boolean(upscale)} disabled={running || !upscaleTargets.length} onChange={(event) => setUpscale(event.target.checked ? upscaleTargets[0]?.id || "" : "")} />
+                                        <span className="ll2-option-icon">
+                                            <Sparkles className="size-4" aria-hidden />
+                                        </span>
                                         <span className="ll2-option-text">
                                             <strong>生成后顺便超分</strong>
                                             <small>{upscaleTargets.length ? "不勾不多花钱" : "已是最高档"}</small>
                                         </span>
-                                        <span className="ll2-option-box"><Check className="size-3" aria-hidden /></span>
+                                        <span className="ll2-option-box">
+                                            <Check className="size-3" aria-hidden />
+                                        </span>
                                     </label>
                                     {model === "MiniMax-H3" ? (
                                         <label className="ll2-option-card">
@@ -796,12 +744,16 @@ export function LL2OneShot() {
                                                     syncSettings({ promptOptimizer: event.target.checked });
                                                 }}
                                             />
-                                            <span className="ll2-option-icon"><Wand2 className="size-4" aria-hidden /></span>
+                                            <span className="ll2-option-icon">
+                                                <Wand2 className="size-4" aria-hidden />
+                                            </span>
                                             <span className="ll2-option-text">
                                                 <strong>提示词优化</strong>
                                                 <small>H3 先按官方格式整理一遍</small>
                                             </span>
-                                            <span className="ll2-option-box"><Check className="size-3" aria-hidden /></span>
+                                            <span className="ll2-option-box">
+                                                <Check className="size-3" aria-hidden />
+                                            </span>
                                         </label>
                                     ) : null}
                                 </div>
@@ -844,7 +796,12 @@ export function LL2OneShot() {
                                         <span className="ll2-oneshot-locked-note">
                                             <span className="ll2-oneshot-preview-line">
                                                 写一句话 → 这次大概 <strong className="ll2-oneshot-preview-price">{estimate.label}</strong> → 填一次 Key → 出一支片子
-                                                <button type="button" className="ll2-inline-link" onClick={ll2OpenKeyDialog}>连接 LL2</button>
+                                                <button type="button" className="ll2-inline-link" onClick={ll2OpenKeyDialog}>
+                                                    连接 LL2
+                                                </button>
+                                                <a className="ll2-inline-link" href={LL2_SIGNUP_URL} target="_blank" rel="noopener noreferrer">
+                                                    去 LL2 注册
+                                                </a>
                                             </span>
                                             <small className="ll2-oneshot-preview-basis">{estimate.basis}</small>
                                         </span>
@@ -854,16 +811,14 @@ export function LL2OneShot() {
                                     </>
                                 ) : tab === "text" ? (
                                     <>
-                        <span className="ll2-oneshot-text-note">用我们自己的文本模型：写漫剧 / 短剧、改提示词、问创作问题 · 写一次大约不到 1 分钱，不生成视频</span>
-                        <button type="button" className="ll2-oneshot-submit" onClick={() => openAgentWith(prompt)}>
-                            <Sparkles className="size-3.5" /> 让 Agent 写
-                        </button>
+                                        <span className="ll2-oneshot-text-note">用我们自己的文本模型：写漫剧 / 短剧、改提示词、问创作问题 · 写一次大约不到 1 分钱，不生成视频</span>
+                                        <button type="button" className="ll2-oneshot-submit" onClick={() => openAgentWith(prompt)}>
+                                            <Sparkles className="size-3.5" /> 让 Agent 写
+                                        </button>
                                     </>
                                 ) : null}
                             </div>
                         )}
-
-
                     </>
                 ) : null}
 
@@ -877,22 +832,38 @@ export function LL2OneShot() {
                                 取消
                             </button>
                         </div>
-                        <div className="ll2-oneshot-waiting-bar" aria-hidden="true"><span /></div>
+                        <div className="ll2-oneshot-waiting-bar" aria-hidden="true">
+                            <span />
+                        </div>
                     </div>
                 ) : null}
-                {hint ? <div className="ll2-oneshot-status is-hint" role="note">{hint}</div> : null}
-                {error ? <div className="ll2-oneshot-status is-error" role="alert">{error}</div> : null}
+                {hint ? (
+                    <div className="ll2-oneshot-status is-hint" role="note">
+                        {hint}
+                    </div>
+                ) : null}
+                {error ? (
+                    <div className="ll2-oneshot-status is-error" role="alert">
+                        {error}
+                    </div>
+                ) : null}
                 {result ? (
                     <div className="ll2-oneshot-result">
                         <video src={result.previewUrl || result.film.url} controls playsInline preload="metadata" />
                         <div>
-                            <span className="ll2-oneshot-result-cost">实际扣费 <strong>{result.label}</strong></span>
+                            <span className="ll2-oneshot-result-cost">
+                                实际扣费 <strong>{result.label}</strong>
+                            </span>
                             <small>{result.basis}</small>
                             <small>生成的片子在云端保留 24 小时，请及时下载到这台电脑。</small>
                             <small>再做一版会新建任务、重新计费；取消或失败前的费用以 LL2 控制台账单为准。</small>
                             <div className="ll2-oneshot-result-actions">
-                                <button type="button" onClick={() => void downloadResult()}><Download className="size-3.5" /> 下载到本机</button>
-                                <Link to="/films"><Film className="size-3.5" /> 我的片子</Link>
+                                <button type="button" onClick={() => void downloadResult()}>
+                                    <Download className="size-3.5" /> 下载到本机
+                                </button>
+                                <Link to="/films">
+                                    <Film className="size-3.5" /> 我的片子
+                                </Link>
                             </div>
                             {downloadMessage ? <p>{downloadMessage}</p> : null}
                         </div>
@@ -900,9 +871,7 @@ export function LL2OneShot() {
                 ) : null}
 
                 <div className="ll2-oneshot-foot">
-                    <Check className="size-3.5" /> {connected
-                        ? "价格按 LL2 官网单价预估，账单以控制台为准"
-                        : "不用注册账号 · 只要填一次 Key · 写好的内容不会被清掉"}
+                    <Check className="size-3.5" /> {connected ? "价格按 LL2 官网单价预估，账单以控制台为准" : "不用注册账号 · 只要填一次 Key · 写好的内容不会被清掉"}
                 </div>
             </section>
 
@@ -911,7 +880,10 @@ export function LL2OneShot() {
             <LL2AssetLibrary
                 open={libraryOpen}
                 anchor={libraryAnchor}
-                onClose={() => { setLibraryOpen(false); setMentionAnchor(null); }}
+                onClose={() => {
+                    setLibraryOpen(false);
+                    setMentionAnchor(null);
+                }}
                 onQuote={insertMention}
             />
 

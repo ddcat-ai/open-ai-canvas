@@ -274,7 +274,10 @@
     color: var(--ll2-t-9a9a9a, #9a9aa2);
     cursor: pointer;
     opacity: 0;
-    transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
+    transition:
+        opacity 0.16s ease,
+        background 0.16s ease,
+        color 0.16s ease;
 }
 
 .ll2-wb-project-cell:hover .ll2-wb-project-delete,
@@ -699,8 +702,14 @@
 }
 
 @keyframes ll2-select-in {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ── 首页一句话成片：收成一张卡片 + 一排参数 chip（对齐 RHTV 那种整洁感） ── */
@@ -912,7 +921,10 @@
     border-radius: 12px;
     background: var(--ll2-a-0_03, rgba(10, 10, 10, 0.03));
     cursor: pointer;
-    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+    transition:
+        border-color 0.18s ease,
+        background 0.18s ease,
+        transform 0.18s ease;
 }
 
 .ll2-option-card:hover {
@@ -937,7 +949,9 @@
     border-radius: 9px;
     background: var(--ll2-ap-0_10, rgba(103, 32, 255, 0.1));
     color: var(--ll2-t-6720ff-fg, #6720ff);
-    transition: background 0.18s ease, color 0.18s ease;
+    transition:
+        background 0.18s ease,
+        color 0.18s ease;
 }
 
 .ll2-option-text {
@@ -967,13 +981,17 @@
     border: 1.5px solid var(--ll2-a-0_28, rgba(10, 10, 10, 0.28));
     border-radius: 6px;
     color: #ffffff;
-    transition: background 0.18s ease, border-color 0.18s ease;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease;
 }
 
 .ll2-option-box svg {
     opacity: 0;
     transform: scale(0.5);
-    transition: opacity 0.16s ease, transform 0.16s ease;
+    transition:
+        opacity 0.16s ease,
+        transform 0.16s ease;
 }
 
 .ll2-option-card:has(input:checked) {
@@ -1127,8 +1145,12 @@
 }
 
 @keyframes ll2-waiting-sweep {
-    0% { transform: translateX(-120%); }
-    100% { transform: translateX(380%); }
+    0% {
+        transform: translateX(-120%);
+    }
+    100% {
+        transform: translateX(380%);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1318,7 +1340,8 @@ button.ll2-sidebar-guide {
 
 /* ── 画布里唯一的内嵌文本助手 + 「交给 Agent 出片」 ──────────────────── */
 /* 画布编辑器顶栏是浮层，助手从顶栏下方开始停靠，不遮住标题与工具按钮。 */
-.ll2-agent.is-canvas, .ll2-agent.is-agent {
+.ll2-agent.is-canvas,
+.ll2-agent.is-agent {
     top: var(--canvas-topbar-offset, 72px);
     right: 12px;
     bottom: 12px;
@@ -1331,14 +1354,14 @@ button.ll2-sidebar-guide {
 }
 
 .ll2-agent-msg-actions button.is-primary {
-    border-color: var(--ll2-t-e5442a, #E5442A);
+    border-color: var(--ll2-t-e5442a, #e5442a);
     background: var(--ll2-t-fff5f2, #fff5f2);
     color: var(--ll2-t-c53a22-fg, #c53a22);
     font-weight: 600;
 }
 
 .ll2-agent-msg-actions button.is-primary:hover {
-    background: var(--ll2-t-e5442a, #E5442A);
+    background: var(--ll2-t-e5442a, #e5442a);
     color: #fff;
 }
 
@@ -1407,7 +1430,7 @@ button.ll2-sidebar-guide {
 
 .ll2-agent-video textarea:focus {
     outline: none;
-    border-color: var(--ll2-t-e5442a, #E5442A);
+    border-color: var(--ll2-t-e5442a, #e5442a);
 }
 
 .ll2-agent-video-price {
@@ -1458,8 +1481,8 @@ button.ll2-sidebar-guide {
 }
 
 .ll2-agent-video-actions button.is-primary {
-    border-color: var(--ll2-t-e5442a, #E5442A);
-    background: var(--ll2-t-e5442a, #E5442A);
+    border-color: var(--ll2-t-e5442a, #e5442a);
+    background: var(--ll2-t-e5442a, #e5442a);
     color: #fff;
 }
 
@@ -1469,7 +1492,7 @@ button.ll2-sidebar-guide {
 
 .ll2-agent-video-actions button:hover,
 .ll2-agent-video-actions a:hover {
-    border-color: var(--ll2-t-e5442a, #E5442A);
+    border-color: var(--ll2-t-e5442a, #e5442a);
 }
 
 /* ── 首页素材拖放区：文生 / 图生 / 视频生共用一条链路 ─────────────────────
@@ -1486,7 +1509,9 @@ button.ll2-sidebar-guide {
     border: 1px dashed var(--ll2-wb-line);
     border-radius: 12px;
     background: var(--ll2-wb-surface);
-    transition: border-color 0.15s, background 0.15s;
+    transition:
+        border-color 0.15s,
+        background 0.15s;
 }
 
 .ll2-media-drop.is-drag-over {
@@ -1613,7 +1638,7 @@ button.ll2-sidebar-guide {
 }
 
 .ll2-media-thumb-remove:hover {
-    background: var(--ll2-t-e5442a, #E5442A);
+    background: var(--ll2-t-e5442a, #e5442a);
 }
 
 .ll2-media-add {
@@ -1936,8 +1961,12 @@ button.ll2-sidebar-guide {
 }
 
 @media (max-width: 760px) {
-    .ll2-library { padding: 14px; }
-    .ll2-library-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+    .ll2-library {
+        padding: 14px;
+    }
+    .ll2-library-grid {
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    }
 }
 
 /* ===== 保存到资产库弹窗（首页拖图后出现） =====
@@ -2148,9 +2177,15 @@ button.ll2-sidebar-guide {
 }
 
 @media (max-width: 720px) {
-    .ll2-save-asset-body { grid-template-columns: minmax(0, 1fr); }
-    .ll2-save-asset-preview { order: -1; }
-    .ll2-save-asset-preview img { aspect-ratio: 16 / 9; }
+    .ll2-save-asset-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .ll2-save-asset-preview {
+        order: -1;
+    }
+    .ll2-save-asset-preview img {
+        aspect-ratio: 16 / 9;
+    }
 }
 
 /* 一句话成片：AI 润色提示词的小按钮，贴着输入框右下，不抢「开始创作」。 */
@@ -2408,6 +2443,41 @@ button.ll2-sidebar-guide {
     color: #fff;
 }
 
+/* LL2 官网注册入口：侧栏与 Key 面板都直接新标签页打开，不打断创作。 */
+.app-workspace-sidebar-ll2-link {
+    display: block;
+    margin-top: 6px;
+    padding: 0 4px;
+    color: rgba(242, 242, 245, 0.42);
+    font-size: 10.5px;
+    line-height: 1.4;
+    text-decoration: none;
+}
+
+.app-workspace-sidebar-ll2-link:hover {
+    color: #d3c2ff;
+    text-decoration: underline;
+}
+
+.ll2-key-panel-foot .ll2-key-console {
+    text-decoration: none;
+}
+
+.ll2-key-title-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.ll2-key-title-link:hover {
+    color: #d3c2ff;
+    text-decoration: underline;
+}
+
+.ll2-key-notice-actions .ll2-key-console {
+    text-decoration: none;
+    white-space: nowrap;
+}
+
 /* 全站 Agent 小组件：右下角浮层，不再占整列高度；一眼是 Agent。 */
 .ll2-agent.is-agent {
     top: auto;
@@ -2417,7 +2487,9 @@ button.ll2-sidebar-guide {
     height: auto;
     max-height: min(660px, calc(100vh - 130px));
     border-radius: 20px;
-    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(141, 84, 255, 0.12);
+    box-shadow:
+        0 28px 80px rgba(0, 0, 0, 0.62),
+        0 0 0 1px rgba(141, 84, 255, 0.12);
 }
 
 .ll2-agent.is-agent .ll2-agent-head {
@@ -2433,7 +2505,9 @@ button.ll2-sidebar-guide {
     border-radius: 10px;
     background: linear-gradient(135deg, #8d54ff, #6720ff);
     color: #fff;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 6px 16px rgba(103, 32, 255, 0.35);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 6px 16px rgba(103, 32, 255, 0.35);
 }
 
 .ll2-agent-identity {
@@ -2470,7 +2544,9 @@ button.ll2-sidebar-guide {
     border-color: rgba(141, 84, 255, 0.35);
     background: rgba(20, 20, 25, 0.92);
     color: #f2f2f5;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(141, 84, 255, 0.16);
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(141, 84, 255, 0.16);
     backdrop-filter: blur(18px);
 }
 
@@ -2680,7 +2756,8 @@ button.ll2-sidebar-guide {
 }
 
 /* 画布里的文本助手：跟 DMC 的深色玻璃卡片同一套观感，不再用大圆球 + 大白卡。 */
-.ll2-agent.is-canvas, .ll2-agent.is-agent {
+.ll2-agent.is-canvas,
+.ll2-agent.is-agent {
     width: min(360px, calc(100vw - 24px));
     border: 1px solid rgba(242, 242, 245, 0.12);
     border-radius: 16px;
@@ -2690,65 +2767,78 @@ button.ll2-sidebar-guide {
     backdrop-filter: blur(24px) saturate(1.1);
 }
 
-.ll2-agent.is-canvas .ll2-agent-head, .ll2-agent.is-agent .ll2-agent-head {
+.ll2-agent.is-canvas .ll2-agent-head,
+.ll2-agent.is-agent .ll2-agent-head {
     padding: 10px 12px;
     border-bottom-color: rgba(242, 242, 245, 0.08);
 }
 
-.ll2-agent.is-canvas .ll2-agent-new, .ll2-agent.is-agent .ll2-agent-new {
+.ll2-agent.is-canvas .ll2-agent-new,
+.ll2-agent.is-agent .ll2-agent-new {
     gap: 4px;
     color: rgba(242, 242, 245, 0.86);
     font-size: 12.5px;
     font-weight: 600;
 }
 
-.ll2-agent.is-canvas .ll2-agent-head-meta, .ll2-agent.is-agent .ll2-agent-head-meta {
+.ll2-agent.is-canvas .ll2-agent-head-meta,
+.ll2-agent.is-agent .ll2-agent-head-meta {
     color: rgba(242, 242, 245, 0.42);
     font-size: 10px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-icon, .ll2-agent.is-agent .ll2-agent-icon {
+.ll2-agent.is-canvas .ll2-agent-icon,
+.ll2-agent.is-agent .ll2-agent-icon {
     color: rgba(242, 242, 245, 0.45);
 }
 
-.ll2-agent.is-canvas .ll2-agent-scroll, .ll2-agent.is-agent .ll2-agent-scroll {
+.ll2-agent.is-canvas .ll2-agent-scroll,
+.ll2-agent.is-agent .ll2-agent-scroll {
     padding: 14px 12px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-welcome, .ll2-agent.is-agent .ll2-agent-welcome {
+.ll2-agent.is-canvas .ll2-agent-welcome,
+.ll2-agent.is-agent .ll2-agent-welcome {
     align-items: flex-start;
     padding-top: 8px;
     text-align: left;
 }
 
-.ll2-agent.is-canvas .ll2-agent-orb, .ll2-agent.is-agent .ll2-agent-orb {
+.ll2-agent.is-canvas .ll2-agent-orb,
+.ll2-agent.is-agent .ll2-agent-orb {
     width: 34px;
     height: 34px;
     margin-bottom: 14px;
     border-radius: 10px;
     background: linear-gradient(135deg, #8d54ff, #6720ff);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 20px rgba(103, 32, 255, 0.28);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 8px 20px rgba(103, 32, 255, 0.28);
 }
 
-.ll2-agent.is-canvas .ll2-agent-welcome h2, .ll2-agent.is-agent .ll2-agent-welcome h2 {
+.ll2-agent.is-canvas .ll2-agent-welcome h2,
+.ll2-agent.is-agent .ll2-agent-welcome h2 {
     margin-bottom: 6px;
     font-size: 14.5px;
     font-weight: 650;
     letter-spacing: -0.01em;
 }
 
-.ll2-agent.is-canvas .ll2-agent-welcome > p, .ll2-agent.is-agent .ll2-agent-welcome > p {
+.ll2-agent.is-canvas .ll2-agent-welcome > p,
+.ll2-agent.is-agent .ll2-agent-welcome > p {
     color: rgba(242, 242, 245, 0.5);
     font-size: 11.5px;
     line-height: 1.6;
 }
 
-.ll2-agent.is-canvas .ll2-agent-starters, .ll2-agent.is-agent .ll2-agent-starters {
+.ll2-agent.is-canvas .ll2-agent-starters,
+.ll2-agent.is-agent .ll2-agent-starters {
     gap: 6px;
     margin-top: 16px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-starters button, .ll2-agent.is-agent .ll2-agent-starters button {
+.ll2-agent.is-canvas .ll2-agent-starters button,
+.ll2-agent.is-agent .ll2-agent-starters button {
     padding: 9px 10px;
     border-color: rgba(242, 242, 245, 0.09);
     border-radius: 10px;
@@ -2756,40 +2846,47 @@ button.ll2-sidebar-guide {
     color: rgba(242, 242, 245, 0.9);
 }
 
-.ll2-agent.is-canvas .ll2-agent-starters button:hover, .ll2-agent.is-agent .ll2-agent-starters button:hover {
+.ll2-agent.is-canvas .ll2-agent-starters button:hover,
+.ll2-agent.is-agent .ll2-agent-starters button:hover {
     border-color: rgba(141, 84, 255, 0.5);
     background: rgba(255, 255, 255, 0.06);
 }
 
-.ll2-agent.is-canvas .ll2-agent-starters strong, .ll2-agent.is-agent .ll2-agent-starters strong {
+.ll2-agent.is-canvas .ll2-agent-starters strong,
+.ll2-agent.is-agent .ll2-agent-starters strong {
     font-size: 12px;
     font-weight: 600;
 }
 
-.ll2-agent.is-canvas .ll2-agent-starters small, .ll2-agent.is-agent .ll2-agent-starters small {
+.ll2-agent.is-canvas .ll2-agent-starters small,
+.ll2-agent.is-agent .ll2-agent-starters small {
     color: rgba(242, 242, 245, 0.42);
     font-size: 10.5px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-tip, .ll2-agent.is-agent .ll2-agent-tip {
+.ll2-agent.is-canvas .ll2-agent-tip,
+.ll2-agent.is-agent .ll2-agent-tip {
     margin-top: 14px !important;
     color: rgba(242, 242, 245, 0.34) !important;
     font-size: 10.5px !important;
 }
 
-.ll2-agent.is-canvas .ll2-agent-compose, .ll2-agent.is-agent .ll2-agent-compose {
+.ll2-agent.is-canvas .ll2-agent-compose,
+.ll2-agent.is-agent .ll2-agent-compose {
     padding: 10px 12px 12px;
     border-top: 1px solid rgba(242, 242, 245, 0.08);
     background: rgba(18, 18, 21, 0.55);
 }
 
-.ll2-agent.is-canvas .ll2-agent-context, .ll2-agent.is-agent .ll2-agent-context {
+.ll2-agent.is-canvas .ll2-agent-context,
+.ll2-agent.is-agent .ll2-agent-context {
     margin-bottom: 6px;
     color: rgba(242, 242, 245, 0.38);
     font-size: 10px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-compose textarea, .ll2-agent.is-agent .ll2-agent-compose textarea {
+.ll2-agent.is-canvas .ll2-agent-compose textarea,
+.ll2-agent.is-agent .ll2-agent-compose textarea {
     min-height: 74px;
     padding: 10px 12px;
     border: 1px solid rgba(242, 242, 245, 0.1);
@@ -2801,21 +2898,25 @@ button.ll2-sidebar-guide {
     resize: none;
 }
 
-.ll2-agent.is-canvas .ll2-agent-compose textarea::placeholder, .ll2-agent.is-agent .ll2-agent-compose textarea::placeholder {
+.ll2-agent.is-canvas .ll2-agent-compose textarea::placeholder,
+.ll2-agent.is-agent .ll2-agent-compose textarea::placeholder {
     color: rgba(242, 242, 245, 0.3);
 }
 
-.ll2-agent.is-canvas .ll2-agent-compose textarea:focus, .ll2-agent.is-agent .ll2-agent-compose textarea:focus {
+.ll2-agent.is-canvas .ll2-agent-compose textarea:focus,
+.ll2-agent.is-agent .ll2-agent-compose textarea:focus {
     border-color: rgba(141, 84, 255, 0.65);
     box-shadow: 0 0 0 3px rgba(141, 84, 255, 0.14);
 }
 
-.ll2-agent.is-canvas .ll2-agent-compose-bar, .ll2-agent.is-agent .ll2-agent-compose-bar {
+.ll2-agent.is-canvas .ll2-agent-compose-bar,
+.ll2-agent.is-agent .ll2-agent-compose-bar {
     gap: 8px;
     margin-top: 8px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-send, .ll2-agent.is-agent .ll2-agent-send {
+.ll2-agent.is-canvas .ll2-agent-send,
+.ll2-agent.is-agent .ll2-agent-send {
     height: 30px;
     padding: 0 12px;
     border-radius: 9px;
@@ -2826,24 +2927,29 @@ button.ll2-sidebar-guide {
     box-shadow: 0 4px 14px rgba(141, 84, 255, 0.3);
 }
 
-.ll2-agent.is-canvas .ll2-agent-send:disabled, .ll2-agent.is-agent .ll2-agent-send:disabled {
+.ll2-agent.is-canvas .ll2-agent-send:disabled,
+.ll2-agent.is-agent .ll2-agent-send:disabled {
     opacity: 0.45;
     box-shadow: none;
 }
 
-.ll2-agent.is-canvas .ll2-agent-compose-foot, .ll2-agent.is-agent .ll2-agent-compose-foot {
+.ll2-agent.is-canvas .ll2-agent-compose-foot,
+.ll2-agent.is-agent .ll2-agent-compose-foot {
     margin-top: 8px;
     color: rgba(242, 242, 245, 0.4);
     font-size: 10.5px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-compose-foot a, .ll2-agent.is-agent .ll2-agent-compose-foot a,
-.ll2-agent.is-canvas .ll2-agent-foot-link, .ll2-agent.is-agent .ll2-agent-foot-link {
+.ll2-agent.is-canvas .ll2-agent-compose-foot a,
+.ll2-agent.is-agent .ll2-agent-compose-foot a,
+.ll2-agent.is-canvas .ll2-agent-foot-link,
+.ll2-agent.is-agent .ll2-agent-foot-link {
     color: rgba(180, 150, 255, 0.92);
     font-size: 10.5px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-msg, .ll2-agent.is-agent .ll2-agent-msg {
+.ll2-agent.is-canvas .ll2-agent-msg,
+.ll2-agent.is-agent .ll2-agent-msg {
     border: 1px solid rgba(242, 242, 245, 0.07);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.04);
@@ -2851,16 +2957,19 @@ button.ll2-sidebar-guide {
     font-size: 12px;
 }
 
-.ll2-agent.is-canvas .ll2-agent-msg.is-user, .ll2-agent.is-agent .ll2-agent-msg.is-user {
+.ll2-agent.is-canvas .ll2-agent-msg.is-user,
+.ll2-agent.is-agent .ll2-agent-msg.is-user {
     border-color: rgba(141, 84, 255, 0.25);
     background: rgba(141, 84, 255, 0.14);
 }
 
-.ll2-agent.is-canvas .ll2-agent-msg-foot, .ll2-agent.is-agent .ll2-agent-msg-foot {
+.ll2-agent.is-canvas .ll2-agent-msg-foot,
+.ll2-agent.is-agent .ll2-agent-msg-foot {
     color: rgba(242, 242, 245, 0.38);
 }
 
-.ll2-agent.is-canvas .ll2-agent-msg-actions button, .ll2-agent.is-agent .ll2-agent-msg-actions button {
+.ll2-agent.is-canvas .ll2-agent-msg-actions button,
+.ll2-agent.is-agent .ll2-agent-msg-actions button {
     border-color: rgba(242, 242, 245, 0.1);
     background: transparent;
     color: rgba(242, 242, 245, 0.6);

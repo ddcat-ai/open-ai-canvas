@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { ll2CleanVideoPrompt } from "../src/lib/ll2-video-prompt";
 import { ll2PromptWithLocks, type LL2WorkspaceSettings } from "../src/lib/ll2-workspace";
+import { LL2_SIGNUP_URL } from "../src/lib/ll2-referral";
 
 /**
  * 2026-11-19 真实浏览器走查抓到的 4 个回归点。
@@ -59,6 +60,20 @@ test("角色/风格锁定会追加到每一条生成提示词", () => {
     expect(locked).toContain("角色设定：黑发少女，蓝色眼睛");
     expect(locked).toContain("风格：冷蓝色调，电影感");
     expect(ll2PromptWithLocks("雨夜街头", { ...settings, lockedCharacter: "", lockedStyle: "" })).toBe("雨夜街头");
+});
+
+test("LL2 品牌与注册入口都指向推广链接", async () => {
+    expect(LL2_SIGNUP_URL).toBe("https://hub.ll2.cn?p=s93d");
+    for (const file of [
+        "../src/components/ll2/ll2-connect.tsx",
+        "../src/components/ll2/ll2-agent-panel.tsx",
+        "../src/components/ll2/ll2-oneshot.tsx",
+        "../src/components/layout/workspace-sidebar-nav.tsx",
+        "../src/pages/ll2-workspace/config.tsx",
+    ]) {
+        const source = await read(file);
+        expect(source).toContain("LL2_SIGNUP_URL");
+    }
 });
 
 test("首页提供多版本提示词与 Agent 直接下单入口", async () => {
@@ -223,7 +238,8 @@ test("文本模型下拉显示真实模型名与 Token 单价，填 Key 弹窗�
     expect(text).not.toContain("写得快 · 便宜");
     const config = await read("../src/pages/ll2-workspace/config.tsx");
     expect(config).toContain("ll2TextModelPriceHint");
-    expect(config).toContain("{item.name}</option>");
+    expect(config).toContain("{item.name}");
+    expect(config).toContain("</option>");
     // 填 Key 弹窗：不要红色大按钮、不要两段解释。
     const connect = await read("../src/components/ll2/ll2-connect.tsx");
     expect(connect).not.toContain("ll2-key-console-button");
@@ -429,7 +445,8 @@ test("画布与全站 Agent 共用 DMC 深色玻璃样式", async () => {
     expect(css).toContain(".ll2-agent.is-canvas");
     expect(css).toContain(".ll2-agent.is-agent");
     expect(css).toContain("rgba(22, 22, 26, 0.92)");
-    expect(css).toContain(".ll2-agent.is-canvas .ll2-agent-compose textarea, .ll2-agent.is-agent .ll2-agent-compose textarea");
+    expect(css).toContain(".ll2-agent.is-canvas .ll2-agent-compose textarea");
+    expect(css).toContain(".ll2-agent.is-agent .ll2-agent-compose textarea");
 });
 
 test("旧配置里的 auto-hd 也会从所有模型下拉里清掉", async () => {

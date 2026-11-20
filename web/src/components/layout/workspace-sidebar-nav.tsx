@@ -8,6 +8,7 @@ import type { TFunction } from "i18next";
 
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { LL2ConnectBadge } from "@/components/ll2/ll2-connect";
+import { LL2_SIGNUP_URL } from "@/lib/ll2-referral";
 import { UserAvatar } from "@/components/layout/user-avatar";
 import { UserGroupAvatarRing, UserGroupBadge } from "@/components/layout/user-group-badge";
 import { Kbd } from "@/components/ui/base/kbd";
@@ -91,6 +92,11 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
         return (
             <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
                 <LL2ConnectBadge compact={collapsed} />
+                {!collapsed ? (
+                    <a className="app-workspace-sidebar-ll2-link" href={LL2_SIGNUP_URL} target="_blank" rel="noopener noreferrer">
+                        LL2 官网注册 ↗
+                    </a>
+                ) : null}
             </div>
         );
     }
@@ -359,7 +365,9 @@ function FirstFilmGuide() {
                         <li>第一次用，填一次 LL2 Key</li>
                         <li>点「开始创作」，片子进「我的片子」</li>
                     </ol>
-                    <button type="button" onClick={ll2OpenKeyDialog}>去填 Key</button>
+                    <button type="button" onClick={ll2OpenKeyDialog}>
+                        去填 Key
+                    </button>
                 </div>
             ) : null}
             <div className="ll2-sidebar-sublinks">
@@ -385,14 +393,7 @@ function ThemePicker({ collapsed }: { collapsed: boolean }) {
             {!collapsed ? <span className="ll2-theme-picker-label">界面</span> : null}
             <div className="ll2-theme-picker-options">
                 {THEME_CHOICES.map(({ value, label, icon: Icon }) => (
-                    <button
-                        key={value}
-                        type="button"
-                        className={cn("ll2-theme-picker-option", preference === value && "is-active")}
-                        aria-pressed={preference === value}
-                        title={label}
-                        onClick={() => setPreference(value)}
-                    >
+                    <button key={value} type="button" className={cn("ll2-theme-picker-option", preference === value && "is-active")} aria-pressed={preference === value} title={label} onClick={() => setPreference(value)}>
                         <Icon className="size-3.5 shrink-0" aria-hidden />
                         {!collapsed ? <span>{label}</span> : null}
                     </button>

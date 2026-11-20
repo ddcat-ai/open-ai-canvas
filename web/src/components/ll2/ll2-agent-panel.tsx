@@ -5,29 +5,16 @@ import { nanoid } from "nanoid";
 
 import { LL2_MODELS, ll2PreciseCNY } from "@/lib/ll2-models";
 import { LL2Select } from "@/components/ll2/ll2-select";
-import {
-    ll2CurrentCanvasId,
-    ll2PromptUrl,
-    ll2ReadAgentMessages,
-    ll2ReadSettings,
-    ll2WriteAgentMessages,
-    type LL2AgentMessage,
-} from "@/lib/ll2-workspace";
+import { ll2CurrentCanvasId, ll2PromptUrl, ll2ReadAgentMessages, ll2ReadSettings, ll2WriteAgentMessages, type LL2AgentMessage } from "@/lib/ll2-workspace";
 import { ll2BuildCanvasNodes, ll2CanvasAgentEstimate, ll2CleanVideoPrompt, ll2RunCanvasAgent } from "@/services/ll2/ll2-canvas-agent";
 import { ll2DownloadFilm, type LL2Film } from "@/services/ll2/ll2-films";
-import {
-    LL2_AGENT_SYSTEM,
-    LL2_PROMPT_SYSTEM,
-    LL2_TEXT_MODELS,
-    LL2_THINK_SYSTEM,
-    ll2ChatText,
-    ll2TextModelName,
-} from "@/services/ll2/ll2-text";
+import { LL2_AGENT_SYSTEM, LL2_PROMPT_SYSTEM, LL2_TEXT_MODELS, LL2_THINK_SYSTEM, ll2ChatText, ll2TextModelName } from "@/services/ll2/ll2-text";
 import type { LL2VideoProgress } from "@/services/ll2/ll2-video";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useGlobalAgentStore, type CanvasVideoInsert } from "@/stores/use-global-agent-store";
 import { useLL2AgentStore } from "@/stores/use-ll2-agent-store";
 import { ll2OpenKeyDialog, useLL2Store } from "@/stores/use-ll2-store";
+import { LL2_SIGNUP_URL } from "@/lib/ll2-referral";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 type Starter = { title: string; hint: string; prompt: string; shape?: boolean };
@@ -176,9 +163,7 @@ export function LL2AgentPanel() {
         const controller = new AbortController();
         abortRef.current = controller;
         try {
-            const history = [...messages, { role: "user" as const, text: prompt, id: "", createdAt: 0 }]
-                .slice(-8)
-                .map((item) => ({ role: item.role, content: item.text }));
+            const history = [...messages, { role: "user" as const, text: prompt, id: "", createdAt: 0 }].slice(-8).map((item) => ({ role: item.role, content: item.text }));
             const result = await ll2ChatText({
                 apiKey,
                 model,
@@ -402,11 +387,7 @@ export function LL2AgentPanel() {
                     <div className="ll2-agent-welcome">
                         {inCanvas ? <span className="ll2-agent-orb" aria-hidden /> : null}
                         <h2>{inCanvas ? "先把想法写清楚，再交给 Agent 出片" : "我是 DMC Agent，想让我帮你做什么？"}</h2>
-                        <p>
-                            {inCanvas
-                                ? "写漫剧、短剧，或问问提示词该怎么写。想清楚了，点「交给 Agent 出片」，片子会直接放进这张画布。"
-                                : "写提示词、设计运镜、写代码、改脚本，或者随便聊两句。"}
-                        </p>
+                        <p>{inCanvas ? "写漫剧、短剧，或问问提示词该怎么写。想清楚了，点「交给 Agent 出片」，片子会直接放进这张画布。" : "写提示词、设计运镜、写代码、改脚本，或者随便聊两句。"}</p>
                         <div className="ll2-agent-starters">
                             {starters.map((starter) => (
                                 <button key={starter.title} type="button" onClick={() => void send(starter.prompt, starter.shape ? LL2_PROMPT_SYSTEM : undefined)} disabled={running}>
@@ -418,9 +399,7 @@ export function LL2AgentPanel() {
                                 </button>
                             ))}
                         </div>
-                        <p className="ll2-agent-tip">
-                            {inCanvas ? "先点「整理成出片提示词」，再点「交给 Agent 出片」，片子会放进这张画布。" : "写好的画面描述，可以一键「去出片」送进一句话成片。"}
-                        </p>
+                        <p className="ll2-agent-tip">{inCanvas ? "先点「整理成出片提示词」，再点「交给 Agent 出片」，片子会放进这张画布。" : "写好的画面描述，可以一键「去出片」送进一句话成片。"}</p>
                     </div>
                 ) : (
                     <div className="ll2-agent-messages">
@@ -429,7 +408,9 @@ export function LL2AgentPanel() {
                                 <AgentMessageText text={message.text} />
                                 {message.role === "assistant" ? (
                                     <div className="ll2-agent-msg-foot">
-                                        <span>{ll2TextModelName(message.model || model)} · 本次 {message.costLabel || "几乎不花钱"}</span>
+                                        <span>
+                                            {ll2TextModelName(message.model || model)} · 本次 {message.costLabel || "几乎不花钱"}
+                                        </span>
                                         <div className="ll2-agent-msg-actions">
                                             <button type="button" onClick={() => void copy(message.text, message.id)} title="复制">
                                                 {copied === message.id ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -473,7 +454,9 @@ export function LL2AgentPanel() {
                     <div className="ll2-agent-video-head">
                         <Film className="size-3.5" aria-hidden />
                         <strong>Agent 出片</strong>
-                        <button type="button" onClick={closeVideo} aria-label="收起出片步骤"><X className="size-3.5" /></button>
+                        <button type="button" onClick={closeVideo} aria-label="收起出片步骤">
+                            <X className="size-3.5" />
+                        </button>
                     </div>
 
                     {videoStage === "confirm" ? (
@@ -486,8 +469,12 @@ export function LL2AgentPanel() {
                             </div>
                             <small>{estimate.basis}</small>
                             <div className="ll2-agent-video-actions">
-                                <button type="button" className="is-primary" onClick={() => void runVideo()}>确认出片 · {estimate.label}</button>
-                                <button type="button" onClick={closeVideo}>先不出</button>
+                                <button type="button" className="is-primary" onClick={() => void runVideo()}>
+                                    确认出片 · {estimate.label}
+                                </button>
+                                <button type="button" onClick={closeVideo}>
+                                    先不出
+                                </button>
                             </div>
                             <small>点确认才提交任务。取消只是停止等待，费用以 LL2 控制台账单为准。</small>
                         </>
@@ -499,7 +486,9 @@ export function LL2AgentPanel() {
                                 <LoaderCircle className="size-3.5 is-spinning" /> 任务已受理 · {videoProgress?.status || "排队中"} · 已等待 {Math.round((videoProgress?.elapsedMs || 0) / 1000)} 秒
                             </p>
                             <div className="ll2-agent-video-actions">
-                                <button type="button" onClick={() => videoAbortRef.current?.abort()}><Square className="size-3" /> 停止等待</button>
+                                <button type="button" onClick={() => videoAbortRef.current?.abort()}>
+                                    <Square className="size-3" /> 停止等待
+                                </button>
                             </div>
                             <small>生成通常要一两分钟，关掉这个小窗口也不会让任务白跑。</small>
                         </>
@@ -515,8 +504,12 @@ export function LL2AgentPanel() {
                             <small>{videoCost.basis}</small>
                             <small>生成的片子在云端保留 24 小时，请及时下载到这台电脑。</small>
                             <div className="ll2-agent-video-actions">
-                                <button type="button" onClick={async () => setDownloadMessage((await ll2DownloadFilm(videoResult)).message)}><Download className="size-3" /> 下载到本机</button>
-                                <Link to="/films"><Film className="size-3" /> 我的片子</Link>
+                                <button type="button" onClick={async () => setDownloadMessage((await ll2DownloadFilm(videoResult)).message)}>
+                                    <Download className="size-3" /> 下载到本机
+                                </button>
+                                <Link to="/films">
+                                    <Film className="size-3" /> 我的片子
+                                </Link>
                             </div>
                             {downloadMessage ? <small>{downloadMessage}</small> : null}
                             <small>再做一版会新建任务、重新计费。</small>
@@ -525,17 +518,27 @@ export function LL2AgentPanel() {
 
                     {videoStage === "error" ? (
                         <>
-                            <p className="ll2-agent-video-note is-error" role="alert">{videoError}</p>
+                            <p className="ll2-agent-video-note is-error" role="alert">
+                                {videoError}
+                            </p>
                             <div className="ll2-agent-video-actions">
-                                <button type="button" className="is-primary" onClick={() => void runVideo()}>再试一次（会新建任务）</button>
-                                <button type="button" onClick={closeVideo}>关闭</button>
+                                <button type="button" className="is-primary" onClick={() => void runVideo()}>
+                                    再试一次（会新建任务）
+                                </button>
+                                <button type="button" onClick={closeVideo}>
+                                    关闭
+                                </button>
                             </div>
                         </>
                     ) : null}
                 </div>
             ) : null}
 
-            {error ? <div className="ll2-agent-error" role="alert">{error}</div> : null}
+            {error ? (
+                <div className="ll2-agent-error" role="alert">
+                    {error}
+                </div>
+            ) : null}
 
             {orderPrompt && !inCanvas ? (
                 <div className="ll2-agent-order" aria-label="确认直接出片">
@@ -552,16 +555,18 @@ export function LL2AgentPanel() {
                     </div>
                     <small>确认后立即提交并扣费；会自动带上已锁定的角色/风格。</small>
                     <div className="ll2-agent-order-actions">
-                        <button type="button" className="is-primary" onClick={confirmOrder}>确认出片 · {orderEstimate?.label}</button>
-                        <button type="button" onClick={() => setOrderPrompt("")}>先不出</button>
+                        <button type="button" className="is-primary" onClick={confirmOrder}>
+                            确认出片 · {orderEstimate?.label}
+                        </button>
+                        <button type="button" onClick={() => setOrderPrompt("")}>
+                            先不出
+                        </button>
                     </div>
                 </div>
             ) : null}
 
             <div className="ll2-agent-compose">
-                <div className="ll2-agent-context">
-                    {inCanvas ? `正在这张画布里 · ${canvasProject?.title || "本机画布"}` : isAgent ? "DMC Agent · 写提示词 / 运镜 / 代码" : "还没打开画布"}
-                </div>
+                <div className="ll2-agent-context">{inCanvas ? `正在这张画布里 · ${canvasProject?.title || "本机画布"}` : isAgent ? "DMC Agent · 写提示词 / 运镜 / 代码" : "还没打开画布"}</div>
                 <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
@@ -576,19 +581,18 @@ export function LL2AgentPanel() {
                     disabled={running}
                 />
                 <div className="ll2-agent-compose-bar">
-                    <LL2Select
-                        value={model}
-                        onChange={(nextValue) => setModel(nextValue)}
-                        ariaLabel="选一个写得顺手的"
-                        title="换一个写法"
-                        options={LL2_TEXT_MODELS.map((item) => ({ value: item.id, label: item.name }))}
-                    />
+                    <LL2Select value={model} onChange={(nextValue) => setModel(nextValue)} ariaLabel="选一个写得顺手的" title="换一个写法" options={LL2_TEXT_MODELS.map((item) => ({ value: item.id, label: item.name }))} />
                     <button type="button" className="ll2-agent-send" onClick={() => void send(draft)} disabled={running || !draft.trim()}>
                         {running ? <LoaderCircle className="size-3.5 is-spinning" /> : <ArrowUp className="size-3.5" />} 发送
                     </button>
                 </div>
                 <div className="ll2-agent-compose-foot">
-                    <button type="button" className="ll2-agent-foot-link" onClick={ll2OpenKeyDialog}>{apiKey.trim() ? "已连接 LL2" : "连接 LL2"}</button>
+                    <button type="button" className="ll2-agent-foot-link" onClick={ll2OpenKeyDialog}>
+                        {apiKey.trim() ? "已连接 LL2" : "连接 LL2"}
+                    </button>
+                    <a className="ll2-agent-foot-link" href={LL2_SIGNUP_URL} target="_blank" rel="noopener noreferrer">
+                        LL2 官网注册
+                    </a>
                     <Link to="/models">模型广场 · {LL2_MODELS.length} 个模型 →</Link>
                 </div>
             </div>

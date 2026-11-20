@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { ll2MaskedKey, useLL2Store } from "@/stores/use-ll2-store";
+import { LL2_CONSOLE_URL, LL2_SIGNUP_URL } from "@/lib/ll2-referral";
 
 /** LL2 控制台：只在新标签页打开，创作页不跳走、不丢内容。 */
-const CONSOLE_URL = "https://ll2.cn/console/token";
+const CONSOLE_URL = LL2_CONSOLE_URL;
 
 function openConsoleInNewTab() {
     window.open(CONSOLE_URL, "_blank", "noopener,noreferrer");
@@ -57,7 +58,12 @@ function LL2KeyPanel() {
     return (
         <div className="ll2-key-panel">
             <div className="ll2-key-panel-head">
-                <span className="ll2-key-panel-title">{showStatus ? "LL2 已连接" : "连接 LL2"}</span>
+                <span className="ll2-key-panel-title">
+                    {showStatus ? "已连接 " : "连接 "}
+                    <a className="ll2-key-title-link" href={LL2_SIGNUP_URL} target="_blank" rel="noopener noreferrer">
+                        LL2
+                    </a>
+                </span>
                 <button type="button" className="ll2-key-dialog-close" onClick={close} aria-label="关闭填 Key 窗口">
                     <X className="size-4" aria-hidden />
                 </button>
@@ -114,7 +120,11 @@ function LL2KeyPanel() {
                             {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                         </button>
                     </div>
-                    {error ? <p className="ll2-key-error" role="alert">{error}</p> : null}
+                    {error ? (
+                        <p className="ll2-key-error" role="alert">
+                            {error}
+                        </p>
+                    ) : null}
                     <div className="ll2-key-actions is-pair">
                         <button type="button" className="ll2-key-primary" onClick={save}>
                             {apiKey ? "保存新 Key" : "保存并使用"}
@@ -129,11 +139,16 @@ function LL2KeyPanel() {
             )}
 
             <div className="ll2-key-panel-foot">
-                <button type="button" className="ll2-key-console" onClick={openConsoleInNewTab}>
-                    去 LL2 控制台 <ExternalLink className="size-3" aria-hidden />
-                </button>
+                <a className="ll2-key-console" href={LL2_SIGNUP_URL} target="_blank" rel="noopener noreferrer">
+                    去 LL2 官网注册 <ExternalLink className="size-3" aria-hidden />
+                </a>
                 <div className="ll2-key-foot-right">
-                    <Link to="/models" onClick={close}>价格</Link>
+                    <button type="button" className="ll2-key-console" onClick={openConsoleInNewTab}>
+                        控制台
+                    </button>
+                    <Link to="/models" onClick={close}>
+                        价格
+                    </Link>
                 </div>
             </div>
         </div>
@@ -180,18 +195,9 @@ export function LL2ConnectBadge({ compact = false }: { compact?: boolean }) {
     const connected = Boolean(apiKey.trim());
 
     return (
-        <button
-            type="button"
-            className={`ll2-connect-badge ${compact ? "is-compact" : ""} ${connected ? "is-connected" : ""}`}
-            onClick={openKeyDialog}
-            aria-label={connected ? "已连接 LL2，点击管理 Key" : "连接 LL2，填入 Key"}
-        >
+        <button type="button" className={`ll2-connect-badge ${compact ? "is-compact" : ""} ${connected ? "is-connected" : ""}`} onClick={openKeyDialog} aria-label={connected ? "已连接 LL2，点击管理 Key" : "连接 LL2，填入 Key"}>
             <KeyRound className="size-4" aria-hidden />
-            {!compact ? (
-                <span>{connected ? "已连接 LL2" : "连接 LL2"}</span>
-            ) : (
-                <span className="hidden sm:inline">{connected ? "已连接" : "连接 LL2"}</span>
-            )}
+            {!compact ? <span>{connected ? "已连接 LL2" : "连接 LL2"}</span> : <span className="hidden sm:inline">{connected ? "已连接" : "连接 LL2"}</span>}
         </button>
     );
 }
@@ -212,6 +218,9 @@ export function LL2KeyNotice() {
                 <span>不用注册账号，只要填一次 LL2 Key 就能出片</span>
             </div>
             <div className="ll2-key-notice-actions">
+                <a className="ll2-key-console" href={LL2_SIGNUP_URL} target="_blank" rel="noopener noreferrer">
+                    去注册
+                </a>
                 <button type="button" className="ll2-key-primary is-small" onClick={openKeyDialog}>
                     填入 Key
                 </button>
