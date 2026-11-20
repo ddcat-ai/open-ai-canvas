@@ -578,6 +578,12 @@ func (s *Service) DramaEpisodeDetail(userID string, projectID string, episodeID 
 		view := dramaJobView(*job)
 		detail.ScriptJob = &view
 	}
+	if job, jobErr := s.repo.LatestDramaJob(project.ID, model.DramaJobCompose, episode.ID); jobErr == nil {
+		view := dramaJobView(*job)
+		detail.ComposeJob = &view
+	} else if !errors.Is(jobErr, gorm.ErrRecordNotFound) {
+		return DramaEpisodeDetail{}, jobErr
+	}
 	if err := s.fillDramaSegmentViews(project.ID, productionRow, &detail); err != nil {
 		return DramaEpisodeDetail{}, err
 	}

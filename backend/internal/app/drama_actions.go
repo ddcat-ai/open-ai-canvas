@@ -273,8 +273,17 @@ func (s *Service) RescriptDramaEpisode(userID string, projectID string, episodeI
 	return s.DramaEpisodeDetail(userID, projectID, episodeID)
 }
 
-// ComposeDramaEpisode 手动重新合成本集成片：各段视频就绪后按实测时长拼接。
-// 已在合成中（stage=render 且无错误）则只唤醒调度，幂等不重复改版本；已有成片会标过期，新成片就绪前仍可预览旧片。
+type dramaRenderRevision struct {
+	Revision   int64 `json:"revision"`
+	Incomplete bool  `json:"incomplete,omitempty"`
+}
+
+type dramaComposePayload struct {
+	dramaRenderRevision
+	Timeline renderProject `json:"timeline"`
+}
+
+// ComposeDramaEpisode 只提交现有段视频的时间线快照，不放行或恢复模型生成。
 func (s *Service) ComposeDramaEpisode(userID, projectID, episodeID string) (DramaEpisodeDetail, error) {
 	project, productionRow, err := s.dramaForUser(userID, projectID)
 	if err != nil {
@@ -288,31 +297,27 @@ func (s *Service) ComposeDramaEpisode(userID, projectID, episodeID string) (Dram
 	if err != nil {
 		return DramaEpisodeDetail{}, err
 	}
-	if len(segments) == 0 {
-		return DramaEpisodeDetail{}, BadAuthRequest("尚无剧情段，无法合成成片")
-	}
-	for _, seg := range segments {
-		if seg.VideoStatus != model.DramaMediaReady || seg.VideoResourceID == "" {
-			return DramaEpisodeDetail{}, BadAuthRequest("所有剧情段视频就绪后才能合成成片")
-		}
-	}
-	// 正在合成：只唤醒调度，避免 bump revision 让在途渲染结果失效。
-	if episode.Stage == model.DramaEpisodeRender && episode.Error == "" {
-		if err := s.requestDramaWork(productionRow); err != nil {
-			return DramaEpisodeDetail{}, err
-		}
-		return s.DramaEpisodeDetail(userID, projectID, episodeID)
-	}
-	fields := map[string]any{"stage": model.DramaEpisodeRender, "error": ""}
-	if episode.FinalResourceID != "" {
-		fields["final_stale"] = true
-	}
-	if err := s.repo.UpdateDramaEpisodeUser(episode.ID, fields); err != nil {
+	durations, err := dramaSegmentSourceDurations(s.repo, segments)
+	if err != nil {
 		return DramaEpisodeDetail{}, err
 	}
-	if err := s.requestDramaWork(productionRow); err != nil {
+	timeline, incomplete, err := buildDramaTimeline(segments, parseDramaSettings(productionRow.SettingsJSON).AspectRatio, durations, true)
+	if err != nil {
+		return DramaEpisodeDetail{}, BadAuthRequest(err.Error())
+	}
+	payload, err := json.Marshal(dramaComposePayload{dramaRenderRevision{Revision: episode.Revision, Incomplete: incomplete}, timeline})
+	if err != nil {
 		return DramaEpisodeDetail{}, err
 	}
+	job := model.DramaJob{ID: newID(), ProjectID: project.ID, EpisodeID: episode.ID, Kind: model.DramaJobCompose, Status: model.DramaJobQueued,
+		Label: fmt.Sprintf("第 %d 集 合成成片（%d/%d 段）", episode.Number, len(timeline.Clips), len(segments)), Priority: episodePriority(dramaRankRender, episode.Number), PayloadJSON: string(payload)}
+	if err := s.repo.QueueDramaComposition(&job, episode.Revision, !incomplete); err != nil {
+		if errors.Is(err, repository.ErrDramaJobChanged) {
+			return DramaEpisodeDetail{}, NewAppError(409, "本集内容已修改，请刷新后重新合成")
+		}
+		return DramaEpisodeDetail{}, err
+	}
+	s.wakeDramaScheduler()
 	return s.DramaEpisodeDetail(userID, projectID, episodeID)
 }
 

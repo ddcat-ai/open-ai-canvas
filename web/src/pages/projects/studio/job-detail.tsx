@@ -17,6 +17,7 @@ export const JOB_KIND_LABEL: Record<DramaJob["kind"], string> = {
     segment_prompt: "段视频提示词",
     segment_video: "段视频",
     render: "合成成片",
+    compose: "手动合成成片",
 };
 
 export const JOB_STATUS_LABEL: Record<string, string> = {

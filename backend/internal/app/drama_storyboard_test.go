@@ -11,18 +11,36 @@ import (
 
 func TestDramaTimelineUsesWholeSegmentAudioAndRejectsMissingMedia(t *testing.T) {
 	segments := []model.DramaSegment{{ID: "a", VideoStatus: "ready", VideoResourceID: "video-a", VideoSeconds: 5}, {ID: "b", VideoStatus: "ready", VideoResourceID: "video-b", VideoSeconds: 10}}
-	timeline, err := buildDramaTimeline(segments, "9:16", nil)
+	timeline, incomplete, err := buildDramaTimeline(segments, "9:16", nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(timeline.Clips) != 2 || timeline.DurationMs != 15000 || timeline.Clips[1].StartMs != 5000 || timeline.Tracks[0].Muted || timeline.Clips[0].Volume != 1 {
+	if incomplete || len(timeline.Clips) != 2 || timeline.DurationMs != 15000 || timeline.Clips[1].StartMs != 5000 || timeline.Tracks[0].Muted || timeline.Clips[0].Volume != 1 {
 		t.Fatalf("timeline: %+v", timeline)
 	}
 	for _, status := range []string{"", "failed", "running", "stale"} {
 		segments[1].VideoStatus = status
-		if _, err := buildDramaTimeline(segments, "9:16", nil); err == nil {
+		if _, _, err := buildDramaTimeline(segments, "9:16", nil, false); err == nil {
 			t.Fatalf("must reject %q", status)
 		}
+	}
+}
+
+func TestDramaManualTimelineSkipsMissingAndKeepsOldVideosInOrder(t *testing.T) {
+	segments := []model.DramaSegment{
+		{ID: "first", VideoStatus: "ready", VideoResourceID: "new", VideoSeconds: 5},
+		{ID: "middle", VideoStatus: "running"},
+		{ID: "last", VideoStatus: "stale", VideoResourceID: "old", VideoSeconds: 7},
+	}
+	timeline, incomplete, err := buildDramaTimeline(segments, "9:16", map[string]int64{"new": 4820}, true)
+	if err != nil || !incomplete || len(timeline.Clips) != 2 || timeline.DurationMs != 11820 {
+		t.Fatalf("partial timeline: %+v, incomplete=%v err=%v", timeline, incomplete, err)
+	}
+	if timeline.Clips[0].DirectMedia.ID != "new" || timeline.Clips[1].DirectMedia.ID != "old" || timeline.Clips[1].StartMs != 4820 {
+		t.Fatalf("unexpected clips: %+v", timeline.Clips)
+	}
+	if _, _, err := buildDramaTimeline(segments[1:2], "9:16", nil, true); err == nil {
+		t.Fatal("cannot render an empty timeline")
 	}
 }
 
@@ -33,7 +51,7 @@ func TestDramaTimelinePrefersActualSourceDurationOverPlannedSeconds(t *testing.T
 	}
 	// 实测略长于/短于设定秒：成片应按文件时长拼接，而不是裁到 10s。
 	actual := map[string]int64{"video-a": 10420, "video-b": 9580}
-	timeline, err := buildDramaTimeline(segments, "9:16", actual)
+	timeline, _, err := buildDramaTimeline(segments, "9:16", actual, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +63,7 @@ func TestDramaTimelinePrefersActualSourceDurationOverPlannedSeconds(t *testing.T
 	}
 	// 缺探测时长时回退 video_seconds。
 	partial := map[string]int64{"video-a": 10420}
-	timeline, err = buildDramaTimeline(segments, "9:16", partial)
+	timeline, _, err = buildDramaTimeline(segments, "9:16", partial, false)
 	if err != nil {
 		t.Fatal(err)
 	}

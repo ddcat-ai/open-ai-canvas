@@ -124,6 +124,9 @@ type dramaRun struct {
 }
 
 func dramaJobKey(kind, episodeID, shotID, castID string) string {
+	if kind == model.DramaJobCompose {
+		kind = model.DramaJobRender
+	}
 	return kind + "|" + episodeID + "|" + shotID + "|" + castID
 }
 
@@ -138,35 +141,28 @@ func (s *Service) tickDrama(productionRow *model.DramaProduction) error {
 		return err
 	}
 	run := &dramaRun{s: s, production: productionRow, project: project, settings: parseDramaSettings(productionRow.SettingsJSON), meta: parseDramaBibleMeta(productionRow.BibleJSON)}
-	if productionRow.Status != model.DramaStatusRunning {
-		// 暂停后已派发的任务仍会完成：照常回写结果（视频入库、抽尾帧），否则段会一直停在“生成中”，下一段也拿不到首帧。
-		status := productionRow.Status
-		if err := run.syncJobs(); err != nil {
-			return err
-		}
-		return s.repo.SaveDramaProductionProgress(run.production, status, run.production.Status != status)
-	}
+	status := productionRow.Status
 	if err := run.syncJobs(); err != nil {
 		return err
 	}
-	if run.production.Status != model.DramaStatusRunning {
-		return s.repo.SaveDramaProductionProgress(run.production, model.DramaStatusRunning, true)
+	allowGeneration := run.production.Status == model.DramaStatusRunning
+	if allowGeneration {
+		if err := run.loadCasts(); err != nil {
+			return err
+		}
+		if err := run.plan(); err != nil {
+			return err
+		}
+		if err := s.repo.CreateDramaJobs(run.newJobs); err != nil {
+			return err
+		}
+		now := time.Now()
+		run.production.LastTickAt = &now
 	}
-	if err := run.loadCasts(); err != nil {
+	if err := run.dispatch(allowGeneration); err != nil {
 		return err
 	}
-	if err := run.plan(); err != nil {
-		return err
-	}
-	if err := s.repo.CreateDramaJobs(run.newJobs); err != nil {
-		return err
-	}
-	if err := run.dispatch(); err != nil {
-		return err
-	}
-	now := time.Now()
-	run.production.LastTickAt = &now
-	return s.repo.SaveDramaProductionProgress(run.production, model.DramaStatusRunning, run.production.Status != model.DramaStatusRunning)
+	return s.repo.SaveDramaProductionProgress(run.production, status, run.production.Status != status)
 }
 
 func (r *dramaRun) loadCasts() error {
@@ -415,10 +411,15 @@ func (r *dramaRun) failJob(job *model.DramaJob, reason string) error {
 		_ = json.Unmarshal([]byte(job.PayloadJSON), &payload)
 		_, err := r.s.repo.UpdateDramaSegmentRevision(job.ShotID, payload.Revision, map[string]any{"prompt_status": model.DramaMediaFailed, "prompt_error": truncateRunes(reason, 300)})
 		return err
-	case model.DramaJobScript, model.DramaJobRender:
+	case model.DramaJobScript, model.DramaJobRender, model.DramaJobCompose:
 		if episode, err := r.s.repo.DramaEpisode(r.project.ID, job.EpisodeID); err == nil {
-			var payload dramaRevisionPayload
-			_ = json.Unmarshal([]byte(job.PayloadJSON), &payload)
+			var payload dramaRenderRevision
+			if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
+				return err
+			}
+			if job.Kind == model.DramaJobCompose && (payload.Incomplete || episode.Stage != model.DramaEpisodeRender) {
+				return nil
+			}
 			_, err = r.s.repo.UpdateDramaEpisodeIfRevision(episode.ID, payload.Revision, map[string]any{"error": truncateRunes(reason, 300)})
 			return err
 		}
@@ -799,7 +800,7 @@ func (r *dramaRun) castLookup(id string) (model.DramaCast, bool) {
 
 // dispatch 按优先级把排队工作提交为生成任务，受各并发池的同时生成数、账号并发与预算约束。
 // 挡住提交的条件与 dramaDispatchWaits 同源，详情页和队列显示的等待原因就是这里的判断。
-func (r *dramaRun) dispatch() error {
+func (r *dramaRun) dispatch(allowGeneration bool) error {
 	queued, err := r.s.repo.DramaJobsByStatus(r.project.ID, model.DramaJobQueued)
 	if err != nil {
 		return err
@@ -808,7 +809,7 @@ func (r *dramaRun) dispatch() error {
 	// 预算按订单口径保守判断：流水线与画布精修的实收加上所有未结算订单的冻结额。每轮只汇总一次，
 	// 本轮新提交任务的冻结额逐项累加；同时把流水线实收回写到 spent_microcredits 缓存。
 	var committed int64
-	budgeted := r.production.BudgetMicrocredits > 0 && len(queued) > 0
+	budgeted := allowGeneration && r.production.BudgetMicrocredits > 0 && len(queued) > 0
 	if budgeted {
 		totals, err := r.s.dramaBillingTotals(r.production)
 		if err != nil {
@@ -819,11 +820,14 @@ func (r *dramaRun) dispatch() error {
 	}
 	for i := range queued {
 		job := &queued[i]
+		if !allowGeneration && job.Kind != model.DramaJobCompose {
+			continue
+		}
 		pool := dramaDispatchPool(job.Kind)
 		if r.running[pool] >= r.settings.Concurrency {
 			continue
 		}
-		if budgeted && committed >= r.production.BudgetMicrocredits {
+		if budgeted && job.Kind != model.DramaJobCompose && committed >= r.production.BudgetMicrocredits {
 			r.production.Status, r.production.PauseReason = model.DramaStatusPaused, dramaBudgetPauseReason
 			return nil
 		}
@@ -913,7 +917,7 @@ func (r *dramaRun) applyJob(job *model.DramaJob, task *model.Task) error {
 		return r.applyCastExtract(job, task)
 	case model.DramaJobSegmentVideo:
 		return r.applySegmentVideo(job, task)
-	case model.DramaJobRender:
+	case model.DramaJobRender, model.DramaJobCompose:
 		return r.applyRender(job, task)
 	case model.DramaJobSegmentPrompt:
 		return r.applySegmentPrompt(job, task)
@@ -1400,12 +1404,18 @@ func (r *dramaRun) applyRender(job *model.DramaJob, task *model.Task) error {
 	if err := r.s.repo.CreateDramaTake(&model.DramaTake{ID: newID(), ProjectID: r.project.ID, OwnerID: episode.ID, Kind: "final", ResourceID: result.ResourceID, TaskID: task.ID, DurationMs: result.DurationMs, CreatedAt: time.Now()}); err != nil {
 		return err
 	}
-	var payload dramaRevisionPayload
-	_ = json.Unmarshal([]byte(job.PayloadJSON), &payload)
-	if episode.Stage != model.DramaEpisodeRender || episode.Revision != payload.Revision {
+	var payload dramaRenderRevision
+	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
+		return err
+	}
+	if episode.Revision != payload.Revision || (job.Kind == model.DramaJobRender && episode.Stage != model.DramaEpisodeRender) {
 		return nil
 	}
-	_, err = r.s.repo.UpdateDramaEpisodeIfRevision(episode.ID, episode.Revision, map[string]any{"final_resource_id": result.ResourceID, "subtitle_srt": result.SubtitleSRT, "final_stale": false, "duration_ms": result.DurationMs, "stage": model.DramaEpisodeDone, "error": ""})
+	fields := map[string]any{"final_resource_id": result.ResourceID, "subtitle_srt": result.SubtitleSRT, "final_stale": payload.Incomplete}
+	if !payload.Incomplete && (episode.Stage == model.DramaEpisodeRender || episode.Stage == model.DramaEpisodeDone || (episode.Stage == model.DramaEpisodeVideo && !r.needsReview(episode) && !r.mediaHeld(episode) && !r.sampleBlocked(episode))) {
+		fields["duration_ms"], fields["stage"], fields["error"] = result.DurationMs, model.DramaEpisodeDone, ""
+	}
+	_, err = r.s.repo.UpdateDramaEpisodeIfRevision(episode.ID, episode.Revision, fields)
 	return err
 }
 
@@ -1436,7 +1446,7 @@ func (r *dramaRun) submit(job *model.DramaJob) (*model.Task, bool, error) {
 		return r.submitCastExtract(job)
 	case model.DramaJobSegmentVideo:
 		return r.submitSegmentVideo(job)
-	case model.DramaJobRender:
+	case model.DramaJobRender, model.DramaJobCompose:
 		return r.submitRender(job)
 	case model.DramaJobSegmentPrompt:
 		return r.submitSegmentPrompt(job)
@@ -1894,26 +1904,27 @@ func dramaRenderSize(aspect string) (int, int) {
 // buildDramaTimeline 把一集镜头装配为时间线：按各段视频文件实测时长首尾相接。
 // sourceDurationMs 优先（resource.DurationMs）；没有探测时长时回退到入库的 video_seconds。
 // 故意裁切留给画布「到画布精剪」多轨时间线，自动成片不再按设定秒 trim/tpad。
-func buildDramaTimeline(segments []model.DramaSegment, aspect string, sourceDurationMs map[string]int64) (renderProject, error) {
+func buildDramaTimeline(segments []model.DramaSegment, aspect string, sourceDurationMs map[string]int64, allowIncomplete bool) (renderProject, bool, error) {
 	width, height := dramaRenderSize(aspect)
 	visible := true
 	timeline := renderProject{Version: 2, Width: width, Height: height, Tracks: []renderTrack{{ID: "video", Kind: "video", Visible: &visible}}}
-	if len(segments) == 0 {
-		return timeline, errors.New("没有可合成的剧情段")
-	}
+	incomplete := false
 	for _, seg := range segments {
 		if seg.VideoStatus != model.DramaMediaReady || seg.VideoResourceID == "" {
-			return timeline, errors.New("所有剧情段视频就绪后才能合成")
+			if !allowIncomplete {
+				return timeline, false, errors.New("自动合成需要所有剧情段视频就绪")
+			}
+			incomplete = true
+			if seg.VideoStatus != model.DramaMediaStale || seg.VideoResourceID == "" {
+				continue
+			}
 		}
-		duration := int64(0)
-		if sourceDurationMs != nil {
-			duration = sourceDurationMs[seg.VideoResourceID]
-		}
+		duration := sourceDurationMs[seg.VideoResourceID]
 		if duration <= 0 {
 			duration = int64(seg.VideoSeconds) * 1000
 		}
 		if duration <= 0 {
-			return timeline, errors.New("所有剧情段视频就绪后才能合成")
+			return timeline, incomplete, fmt.Errorf("第 %d 段视频缺少时长，无法合成", seg.SegmentIndex+1)
 		}
 		clip := renderClip{ID: "v-" + seg.ID, Kind: "video", TrackID: "video", StartMs: timeline.DurationMs, DurationMs: duration, SourceDurationMs: duration, Volume: 1}
 		clip.DirectMedia = &struct {
@@ -1924,11 +1935,14 @@ func buildDramaTimeline(segments []model.DramaSegment, aspect string, sourceDura
 		timeline.Clips = append(timeline.Clips, clip)
 		timeline.DurationMs += duration
 	}
-	return timeline, nil
+	if len(timeline.Clips) == 0 {
+		return timeline, incomplete, errors.New("还没有可合成的段视频")
+	}
+	return timeline, incomplete, nil
 }
 
 // dramaSegmentSourceDurations 读取段视频资源的实测时长（毫秒），供自动成片按文件长度拼接。
-func dramaSegmentSourceDurations(repo *repository.Repository, segments []model.DramaSegment) map[string]int64 {
+func dramaSegmentSourceDurations(repo *repository.Repository, segments []model.DramaSegment) (map[string]int64, error) {
 	ids := make([]string, 0, len(segments))
 	seen := map[string]struct{}{}
 	for _, seg := range segments {
@@ -1944,23 +1958,39 @@ func dramaSegmentSourceDurations(repo *repository.Repository, segments []model.D
 	}
 	out := map[string]int64{}
 	if len(ids) == 0 {
-		return out
+		return out, nil
 	}
 	resources, err := repo.ResourcesByIDs(ids)
 	if err != nil {
-		return out
+		return nil, err
 	}
 	for _, res := range resources {
 		if res.DurationMs > 0 {
 			out[res.ID] = res.DurationMs
 		}
 	}
-	return out
+	return out, nil
 }
 
 func (r *dramaRun) submitRender(job *model.DramaJob) (*model.Task, bool, error) {
 	episode, err := r.s.repo.DramaEpisode(r.project.ID, job.EpisodeID)
-	if err != nil || (episode.Stage != model.DramaEpisodeRender) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, true, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if job.Kind == model.DramaJobCompose {
+		var payload dramaComposePayload
+		if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
+			return nil, false, err
+		}
+		if episode.Revision != payload.Revision {
+			return nil, true, nil
+		}
+		return r.s.createDramaRenderTask(r.project, payload.Timeline, job)
+	}
+	if episode.Stage != model.DramaEpisodeRender {
 		return nil, true, nil
 	}
 	// 先记下版本：时间线装配失败时 failJob 要按这个版本把原因写到本集上，否则本集没有错误、每轮重新排队合成。
@@ -1969,7 +1999,11 @@ func (r *dramaRun) submitRender(job *model.DramaJob) (*model.Task, bool, error) 
 	if err != nil {
 		return nil, false, err
 	}
-	timeline, err := buildDramaTimeline(segments, r.settings.AspectRatio, dramaSegmentSourceDurations(r.s.repo, segments))
+	durations, err := dramaSegmentSourceDurations(r.s.repo, segments)
+	if err != nil {
+		return nil, false, err
+	}
+	timeline, _, err := buildDramaTimeline(segments, r.settings.AspectRatio, durations, false)
 	if err != nil {
 		return nil, false, err
 	}

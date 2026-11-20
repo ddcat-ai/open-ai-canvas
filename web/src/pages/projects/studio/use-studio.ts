@@ -32,6 +32,7 @@ export function useDramaEpisode(projectId: string, episodeId: string, active: bo
         placeholderData: (previous) => (previous?.episode.id === episodeId ? previous : undefined),
         refetchInterval: (query) => {
             const detail = query.state.data;
+            if (detail?.composeJob?.status === "queued" || detail?.composeJob?.status === "running") return 2_500;
             if (!active || !detail) return false;
             const writing = detail.segments?.some((segment) => segment.promptStatus === "queued" || segment.promptStatus === "running");
             return detail.jobs.length || writing || detail.episode.stage !== "done" ? 2_500 : false;

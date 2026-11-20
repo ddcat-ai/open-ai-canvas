@@ -414,7 +414,7 @@ SQLite 写事务与 PostgreSQL 行锁串行化同一对话的修订检查；读�
 | `drama_shots` | 镜头脚本：剧情段 `segment_index` / `segment_title`、场景与场景设定 `scene_cast_id`、出场角色 `cast_ids_json`、关键道具 `prop_ids_json`、说话人、台词、动作、景别、运镜、转场 `transition`、时长、起幅画面 `image_prompt`、运动描述 `video_prompt`、原文出处 | 镜头只是撰写段提示词的素材，不产出媒体；修改后所在段的提示词与视频标记过期 |
 | `drama_segments` | 剧情段：模型撰写的完整视频提示词 `video_prompt`、撰写状态 `prompt_status`（空串待撰写、`running`、`ready`、`stale`、`conflict`、`review`、`failed`）与 `prompt_error`、撰写时的秒数 `prompt_seconds`、用户改写 `video_prompt_override`、按段视频模型 `video_model_json`、用户指定的参考图 `reference_cast_ids_json`（Schema 74）、视频状态 `video_status`、`video_resource_id`、`video_seconds`、`video_error`、本段视频最后一帧 `tail_frame_resource_id`、`revision` | `(episode_id, segment_index)` 唯一；剧本写入时建行，重新改编时重建；结果按 `revision` 条件写入，过期结果作废；某段视频变化会让后续已生成的段过期（它们承接的是旧最后一帧） |
 | `drama_takes` | 历史版本：设定参考图（`cast`）、剧情段视频（`video`，`owner_id` 为段 ID）与单集成片（`final`） | `(owner_id, kind)` 内递增 `version`；版本始终入库 |
-| `drama_jobs` | 调度队列：类型（bible/plan/cast_image/script/segment_prompt/segment_video/render）、目标、优先级、关联任务、重试次数、历次提交 `attempts_json`、错误、实际花费 | 任务在派发时才创建；`segment_prompt` / `segment_video` 的 `shot_id` 存放 `drama_segments.id` |
+| `drama_jobs` | 调度队列：类型（bible/plan/cast_image/script/segment_prompt/segment_video/render/compose）、目标、优先级、关联任务、重试次数、历次提交 `attempts_json`、错误、实际花费 | 任务在派发时才创建；`segment_prompt` / `segment_video` 的 `shot_id` 存放 `drama_segments.id`；手动合成 `compose` 的 `payload_json` 固定提交时的时间线与剧集版本，不同于全段就绪后自动排队的 `render` |
 
 参考图方案 `settings_json.assets` 新增可选的 `resolution`（`1k` / `1.5k` / `2k` / `4k`，空串按图片模型默认档位），不改表结构；旧作品没有该字段，按模型默认档位处理。
 

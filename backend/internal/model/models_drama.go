@@ -55,6 +55,7 @@ const (
 	DramaJobCastExtract = "cast_extract"
 	DramaJobScript      = "script"
 	DramaJobRender      = "render"
+	DramaJobCompose     = "compose"
 	// DramaJobSegmentPrompt 为一个剧情段撰写完整视频提示词；ShotID 存放 drama_segments.id。
 	DramaJobSegmentPrompt = "segment_prompt"
 	// DramaJobSegmentVideo 为一个剧情段生成整段视频；ShotID 存放 drama_segments.id。

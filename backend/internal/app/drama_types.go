@@ -589,7 +589,8 @@ type DramaEpisodeDetail struct {
 	Chapters []DramaChapterRef  `json:"chapters"`
 	Jobs     []DramaJobView     `json:"jobs"`
 	// ScriptJob 是本集最近一次改编剧本的调度工作，可查看改编提示词与模型返回。
-	ScriptJob *DramaJobView `json:"scriptJob,omitempty"`
+	ScriptJob  *DramaJobView `json:"scriptJob,omitempty"`
+	ComposeJob *DramaJobView `json:"composeJob,omitempty"`
 	// DialogueCheck 只在本集有镜头、且原文章节不与其他集共用时给出（共用时无法判断哪些台词属于本集）。
 	DialogueCheck *DramaDialogueCheck `json:"dialogueCheck,omitempty"`
 }

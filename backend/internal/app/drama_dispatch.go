@@ -26,7 +26,7 @@ func dramaDispatchPool(kind string) string {
 		return dramaPoolImage
 	case model.DramaJobSegmentVideo:
 		return dramaPoolVideo
-	case model.DramaJobRender:
+	case model.DramaJobRender, model.DramaJobCompose:
 		return dramaPoolRender
 	}
 	return dramaPoolText
@@ -110,7 +110,9 @@ func (s *Service) dramaDispatchWaits(p *model.DramaProduction) (func(job DramaJo
 	for _, job := range queued {
 		pool := dramaDispatchPool(job.Kind)
 		ahead[job.ID] = seen[pool]
-		seen[pool]++
+		if p.Status == model.DramaStatusRunning || job.Kind == model.DramaJobCompose {
+			seen[pool]++
+		}
 	}
 	policy, err := s.RuntimePolicy()
 	if err != nil {
@@ -127,7 +129,7 @@ func (s *Service) dramaDispatchWaits(p *model.DramaProduction) (func(job DramaJo
 		if job.Status != model.DramaJobQueued || !ok {
 			return ""
 		}
-		if productionWait != "" {
+		if productionWait != "" && job.Kind != model.DramaJobCompose {
 			return productionWait
 		}
 		if limit > 0 && active >= int64(limit) {

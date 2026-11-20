@@ -37,6 +37,7 @@ const { App, ConfigProvider } = await import("antd");
 const api = await import("../../src/services/api/drama");
 const resources = await import("../../src/services/api/resources");
 const { SegmentDialog } = await import("../../src/pages/projects/studio/segment-dialog");
+const { FinalView } = await import("../../src/pages/projects/studio/final-view");
 
 const generation = await import("../../src/services/api/generation-task");
 const { createModelChannel, useConfigStore } = await import("../../src/stores/use-config-store");
@@ -181,6 +182,32 @@ afterAll(() => {
 function toolbars() {
     return [...document.querySelectorAll('[aria-label="生成设置"]')];
 }
+
+test("成片页提示缺段与旧版，单击直接提交，仅没有可用段时禁用", async () => {
+    const onCompose = mock(() => {});
+    const show = (segments: DramaSegment[]) =>
+        act(async () => {
+            root.render(
+                <App>
+                    <FinalView projectId="p1" title="短剧" detail={{ ...detail, segments }} aspectRatio="9:16" onOpenSegment={() => {}} onCompose={onCompose} composing={false} />
+                </App>,
+            );
+        });
+    const button = () => [...host.querySelectorAll("button")].find((element) => element.textContent === "合成成品")!;
+    const stale = { ...detail.segments[0], videoStatus: "stale" as const };
+    const missing = { ...detail.segments[1], videoStatus: "running" as const, videoResourceId: undefined };
+    await show([stale, missing]);
+    expect(host.textContent).toContain("跳过 1 段未就绪视频");
+    expect(host.textContent).toContain("1 段沿用旧版视频");
+    expect(button().disabled).toBe(false);
+    await act(async () => button().click());
+    expect(onCompose).toHaveBeenCalledTimes(1);
+    await show([stale]);
+    expect(button().disabled).toBe(false);
+    await show([missing]);
+    expect(button().disabled).toBe(true);
+    expect(host.textContent).toContain("还没有可合成的段视频");
+});
 
 test("冲突保留正文并可人工确认，AI 新稿不会自动替换手写稿", async () => {
     const saved: string[] = [];

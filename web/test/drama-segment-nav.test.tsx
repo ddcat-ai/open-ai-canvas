@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 
 // 隔离 React 首次导入时的 DOM 能力，避免影响其他页面测试。
-test("剧情段弹窗切换与提示词采用保存通过真实组件回归", () => {
+test("剧情段弹窗与手动合成通过真实组件回归", () => {
     const result = Bun.spawnSync([process.execPath, "test", "./test/fixtures/drama-segment-nav.harness.tsx"], { cwd: resolve(import.meta.dir, ".."), timeout: 60000 });
     const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
     expect(result.exitCode, output).toBe(0);
-    expect(output).toContain("3 pass");
+    expect(output).toContain("4 pass");
     expect(output).toContain("0 fail");
 }, 60000);
 

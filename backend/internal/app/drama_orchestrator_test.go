@@ -627,6 +627,13 @@ func TestComposeDramaEpisodeRequeuesFinalRender(t *testing.T) {
 	if detail.Episode.Stage != model.DramaEpisodeRender || !detail.Episode.FinalStale || detail.Episode.FinalResourceID == "" {
 		t.Fatalf("compose must mark final stale and enter render: %+v", detail.Episode)
 	}
+	if err := svc.repo.CreateDramaJobs([]model.DramaJob{{ID: newID(), ProjectID: project, EpisodeID: episodeID, Kind: model.DramaJobRender, Status: model.DramaJobQueued}}); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := svc.repo.DramaJobsByStatus(project, model.DramaJobQueued)
+	if err != nil || len(jobs) != 1 || jobs[0].Kind != model.DramaJobCompose {
+		t.Fatalf("a concurrent automatic plan must reuse the queued composition: %+v, %v", jobs, err)
+	}
 
 	// 合成中再次点击：幂等，不报错。
 	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err != nil {
@@ -641,17 +648,96 @@ func TestComposeDramaEpisodeRequeuesFinalRender(t *testing.T) {
 	if detail.Episode.Stage != model.DramaEpisodeDone || detail.Episode.FinalStale || detail.Episode.FinalResourceID == "" {
 		t.Fatalf("compose must finish a new final: %+v", detail.Episode)
 	}
-	if fake.byKind["render"] <= rendersBefore {
+	if fake.byKind["render"] != rendersBefore+1 {
 		t.Fatalf("expected a new render job, before=%d after=%d", rendersBefore, fake.byKind["render"])
 	}
 
-	// 段视频未就绪时拒绝。
-	rows, _ := svc.repo.DramaSegments(episodeID)
-	if _, err := svc.repo.UpdateDramaSegmentRevision(rows[0].ID, rows[0].Revision, map[string]any{"video_status": model.DramaMediaStale}); err != nil {
+	if err := fake.db.Model(&model.DramaSegment{}).Where("episode_id = ?", episodeID).Update("video_resource_id", "").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err == nil || !strings.Contains(err.Error(), "就绪") {
-		t.Fatalf("must reject incomplete segments: %v", err)
+	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err == nil || !strings.Contains(err.Error(), "没有可合成") {
+		t.Fatalf("must reject empty composition: %v", err)
+	}
+}
+
+func TestComposeDramaEpisodeWhilePausedDoesNotRegenerateOrCompleteEpisode(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	project := createTestDrama(t, svc, DramaReviewSample).Project.ID
+	runDramaTicks(t, svc, project, 40)
+	episodes, err := svc.repo.DramaEpisodes(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	episode := episodes[0]
+	prompt := "修改第一段后保留后续段的视频"
+	if err := svc.UpdateDramaSegment("usr-drama", project, episode.ID, 0, UpdateDramaSegmentRequest{VideoPromptOverride: &prompt}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetDramaRunning("usr-drama", project, false); err != nil {
+		t.Fatal(err)
+	}
+	segments, err := svc.repo.DramaSegments(episode.ID)
+	if err != nil || len(segments) != 2 || segments[1].VideoStatus != model.DramaMediaStale {
+		t.Fatalf("stale segments: %+v, %v", segments, err)
+	}
+	if _, err := svc.repo.UpdateDramaSegmentRevision(segments[0].ID, segments[0].Revision, map[string]any{"video_status": model.DramaMediaQueued, "video_resource_id": ""}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(fake.requests)
+	queued, err := svc.ComposeDramaEpisode("usr-drama", project, episode.ID)
+	if err != nil || queued.ComposeJob == nil || queued.ComposeJob.Status != model.DramaJobQueued || queued.Episode.FinalResourceID != episode.FinalResourceID {
+		t.Fatalf("queued with previous final: %+v, %v", queued.Episode, err)
+	}
+	work, err := svc.repo.RunningDramaProductions(10)
+	if err != nil || !slices.ContainsFunc(work, func(row model.DramaProduction) bool {
+		return row.ProjectID == project && row.Status == model.DramaStatusPaused
+	}) {
+		t.Fatalf("paused composition must be scheduled: %+v, %v", work, err)
+	}
+	runDramaTicks(t, svc, project, 1)
+	if again, err := svc.ComposeDramaEpisode("usr-drama", project, episode.ID); err != nil || again.ComposeJob == nil || again.ComposeJob.ID != queued.ComposeJob.ID {
+		t.Fatalf("in-flight request must be idempotent: %+v, %v", again.ComposeJob, err)
+	}
+	runDramaTicks(t, svc, project, 4)
+	detail, err := svc.DramaEpisodeDetail("usr-drama", project, episode.ID)
+	if err != nil || detail.ComposeJob == nil || detail.ComposeJob.Status != model.DramaJobSucceeded || !detail.Episode.FinalStale || detail.Episode.FinalResourceID == "" || detail.Episode.FinalResourceID == episode.FinalResourceID || detail.Episode.Stage != queued.Episode.Stage || detail.Episode.DurationMs != queued.Episode.DurationMs {
+		t.Fatalf("partial result must preserve episode progress: %+v, %v", detail.Episode, err)
+	}
+	production, err := svc.repo.DramaProduction(project)
+	if err != nil || production.Status != model.DramaStatusPaused || len(fake.requests) != before+1 || fake.requests[before].Type != model.TaskTypeTimelineRender {
+		t.Fatalf("manual composition must only render: %+v, %v", fake.requests[before:], err)
+	}
+	clips := fake.renders[len(fake.renders)-1].Clips
+	if len(clips) != 1 || clips[0].DirectMedia.ID != segments[1].VideoResourceID || clips[0].StartMs != 0 || detail.Segments[1].VideoStatus != model.DramaMediaStale {
+		t.Fatalf("old video must be used without relabeling the segment: %+v", clips)
+	}
+}
+
+func TestComposeDramaEpisodeSnapshotDoesNotInterruptAutomaticFinal(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	project := createTestDrama(t, svc, DramaReviewSample).Project.ID
+	for tick := 0; tick < 40 && fake.byKind["video"] < 2; tick++ {
+		runDramaTicks(t, svc, project, 1)
+	}
+	episodes, err := svc.repo.DramaEpisodes(project)
+	if err != nil || len(episodes) == 0 {
+		t.Fatalf("load sample: %v", err)
+	}
+	episodeID := episodes[0].ID
+	segments, err := svc.repo.DramaSegments(episodeID)
+	if err != nil || len(segments) != 2 || segments[0].VideoStatus != model.DramaMediaReady || segments[1].VideoStatus != model.DramaMediaRunning {
+		t.Fatalf("expected the second video in flight: %+v, %v", segments, err)
+	}
+	if _, err := svc.ComposeDramaEpisode("usr-drama", project, episodeID); err != nil {
+		t.Fatal(err)
+	}
+	runDramaTicks(t, svc, project, 10)
+	if len(fake.renders) != 2 || len(fake.renders[0].Clips) != 1 || len(fake.renders[1].Clips) != 2 || fake.byKind["video"] != 2 {
+		t.Fatalf("expected the requested snapshot then the automatic full cut without regeneration: renders=%+v videos=%d", fake.renders, fake.byKind["video"])
+	}
+	episode, err := svc.repo.DramaEpisode(project, episodeID)
+	if err != nil || episode.FinalStale || episode.Stage != model.DramaEpisodeDone || episode.DurationMs != fake.renders[1].DurationMs {
+		t.Fatalf("automatic full cut did not replace the partial cut: %+v, %v", episode, err)
 	}
 }
 

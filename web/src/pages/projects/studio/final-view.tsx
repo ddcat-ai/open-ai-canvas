@@ -33,10 +33,10 @@ export function FinalView({
     const [exportingDraft, setExportingDraft] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const url = useResourceMediaUrl(episode.finalResourceId, "playback");
-    const readySegments = segments.filter((segment) => segment.videoResourceId && (segment.videoStatus === "ready" || segment.videoStatus === "stale")).length;
-    // 合成要求各段为 ready（过期段需先重新生成）；与后端 timeline 校验一致。
-    const composeReady = segments.length > 0 && segments.every((segment) => segment.videoStatus === "ready" && segment.videoResourceId);
-    const rendering = episode.stage === "render";
+    const available = segments.filter((segment) => segment.videoResourceId && (segment.videoStatus === "ready" || segment.videoStatus === "stale"));
+    const missing = segments.length - available.length;
+    const stale = available.filter((segment) => segment.videoStatus === "stale").length;
+    const rendering = detail.composeJob?.status === "queued" || detail.composeJob?.status === "running" || detail.jobs.some((job) => job.kind === "render" && job.status === "running");
     const composeBusy = composing || rendering;
     const starts: number[] = [];
     segments.reduce((cursor, segment) => {
@@ -57,7 +57,7 @@ export function FinalView({
                         <div className="drama-finalv-empty">
                             <Film className="size-6" aria-hidden />
                             <span>
-                                {STAGE_LABEL[episode.stage]} · {rendering ? "正在合成成片…" : "全部段视频生成后自动合成，也可点右侧「合成成品」"}
+                                {STAGE_LABEL[episode.stage]} · {rendering ? "正在合成成片…" : "暂无成片"}
                             </span>
                         </div>
                     )}
@@ -70,7 +70,7 @@ export function FinalView({
                             className="drama-filmstrip-item"
                             title={segment.title}
                             onClick={() => {
-                                if (videoRef.current) videoRef.current.currentTime = starts[position];
+                                if (videoRef.current && !episode.finalStale) videoRef.current.currentTime = starts[position];
                                 onOpenSegment(segment.index);
                             }}
                         >
@@ -89,18 +89,27 @@ export function FinalView({
                 <p>
                     {formatDuration(episode.durationMs)} · {segments.length} 个剧情段 · 对白与音效来自视频模型
                 </p>
-                {episode.finalStale ? (
+                {episode.finalResourceId && episode.finalStale ? (
                     <p className="drama-finalv-stale" role="status">
-                        {rendering ? "正在重新合成成片…" : "内容已修改，当前成片是修改前的版本，相关段重新生成后会自动重新合成，也可点下方「合成成品」。"}
+                        当前成片未包含本集全部最新段视频。
                     </p>
                 ) : null}
+                {available.length === 0 ? (
+                    <p className="drama-editor-note">还没有可合成的段视频。</p>
+                ) : missing || stale ? (
+                    <p className="drama-finalv-stale" role="status">
+                        本次按顺序合成 {available.length}/{segments.length} 段。{missing > 0 && `跳过 ${missing} 段未就绪视频。`}
+                        {stale > 0 && `${stale} 段沿用旧版视频，不会重新生成。`}
+                    </p>
+                ) : null}
+                {detail.composeJob?.status === "failed" && !rendering ? <p role="alert">上次手动合成失败：{detail.composeJob.error}</p> : null}
                 <Button
                     type="primary"
                     icon={<Film className="size-4" />}
-                    disabled={!composeReady}
+                    disabled={!available.length || composeBusy}
                     loading={composeBusy}
                     onClick={onCompose}
-                    title={composeReady ? (rendering ? "正在合成成片" : "按各段视频实测时长重新拼接成片") : "所有剧情段视频就绪后才能合成"}
+                    title={available.length ? "按现有段视频的实际时长拼接，不重新生成视频" : "还没有可合成的段视频"}
                 >
                     合成成品
                 </Button>
@@ -110,9 +119,9 @@ export function FinalView({
                 <Button icon={<Clapperboard className="size-4" />} disabled={!segments.length} onClick={() => setExportingDraft(true)} title="检查可用剧情段、缺段与旧版本后，导出剪映草稿">
                     导出剪映草稿
                 </Button>
-                {readySegments ? (
+                {available.length ? (
                     <p className="drama-editor-note">
-                        当前 {readySegments}/{segments.length} 段视频可供检查；导出前会核对缺段、旧版本与文件读取状态。
+                        当前 {available.length}/{segments.length} 段视频可供检查；导出前会核对缺段、旧版本与文件读取状态。
                     </p>
                 ) : null}
             </aside>

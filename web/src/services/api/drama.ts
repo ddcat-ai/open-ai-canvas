@@ -267,7 +267,7 @@ export type DramaEpisode = {
 
 export type DramaJob = {
     id: string;
-    kind: "bible" | "plan" | "cast_image" | "cast_extract" | "script" | "segment_prompt" | "segment_video" | "render";
+    kind: "bible" | "plan" | "cast_image" | "cast_extract" | "script" | "segment_prompt" | "segment_video" | "render" | "compose";
     status: "queued" | "running" | "succeeded" | "failed" | "canceled";
     label: string;
     error?: string;
@@ -320,6 +320,7 @@ export type DramaEpisodeDetail = {
     chapters: DramaChapterRef[];
     jobs: DramaJob[];
     scriptJob?: DramaJob;
+    composeJob?: DramaJob;
     /** 原文台词与镜头台词的逐句核对；章节被多集共用或还没有镜头时不提供。 */
     dialogueCheck?: DramaDialogueCheck;
 };

@@ -281,7 +281,7 @@ export default function DramaStudioPage() {
         mutationFn: () => composeDramaEpisode(projectId, episodeId),
         onSuccess: () => {
             invalidate(episodeId);
-            message.success(running ? "已开始合成成品" : "已继续制作，正在合成成品");
+            message.success("已提交成片合成任务");
         },
         onError: (error) => {
             invalidate(episodeId);
