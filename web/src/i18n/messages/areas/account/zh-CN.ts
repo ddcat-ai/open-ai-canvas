@@ -81,6 +81,7 @@ export const zhCN = {
             filterActive: "有已应用筛选",
             reset: "重置",
             searchAndFilter: "搜索与筛选",
+            clearSearch: "清除搜索词",
         },
         pagination: {
             item: "条",

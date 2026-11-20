@@ -1,0 +1,32 @@
+.list-search-field .ant-input-prefix {
+    color: var(--admin-text-muted, var(--muted-foreground));
+    transition: color var(--motion-instant) ease-out;
+}
+
+.list-search-field .ant-input-prefix svg {
+    color: inherit;
+}
+
+.list-search-field:focus-within .ant-input-prefix {
+    color: var(--admin-text, var(--foreground));
+}
+
+.list-search-field .ant-input-clear-icon {
+    display: inline-grid;
+    width: var(--space-6);
+    height: var(--space-6);
+    place-items: center;
+    border-radius: var(--r-sm);
+    color: var(--admin-text-secondary, var(--muted-foreground));
+}
+
+.list-search-field .ant-input-clear-icon:is(:hover, :focus-visible) {
+    background: var(--admin-row-hover, var(--surface-hover));
+    color: var(--admin-text, var(--foreground));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .list-search-field .ant-input-prefix {
+        transition: none;
+    }
+}

@@ -1,5 +1,5 @@
 import { Popover } from "antd";
-import { ChevronRight, CircleUserRound, History as HistoryIcon, Image as ImageIcon, PanelLeftClose, PanelLeftOpen, ShoppingBag, Users, Video, Wallet, FileText } from "lucide-react";
+import { ChevronRight, ChevronsUpDown, CircleUserRound, History as HistoryIcon, Image as ImageIcon, PanelLeftClose, PanelLeftOpen, ShoppingBag, Users, Video, Wallet, FileText } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
@@ -9,7 +9,7 @@ import type { TFunction } from "i18next";
 import { AuthLoginLink } from "@/components/auth/auth-login-link";
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { UserAvatar } from "@/components/layout/user-avatar";
-import { UserGroupAvatarRing, UserGroupBadge } from "@/components/layout/user-group-badge";
+import { UserGroupAvatarRing } from "@/components/layout/user-group-badge";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
@@ -93,8 +93,8 @@ function buildNav(features: FeatureAvailability, t: TFunction, canUseSkills: boo
 function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user: NonNullable<ReturnType<typeof useUserStore.getState>["user"]> | null }) {
     const [menuOpen, setMenuOpen] = useState(false);
     const { t } = useTranslation();
-    const userGroup = useUserStore((state) => state.userGroup);
     const profileName = user?.displayName || user?.username || t("shell.guest");
+    const profileMeta = user?.email || (user ? `@${user.username}` : "");
     const teamId = teamIdFromPath(useLocation().pathname);
 
     if (!user) {
@@ -131,9 +131,10 @@ function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user
                         {!collapsed ? (
                             <span className="app-workspace-sidebar-profile-copy">
                                 <strong>{profileName}</strong>
-                                {userGroup?.badgeStyle === "vip" || userGroup?.badgeStyle === "svip" ? <UserGroupBadge className="self-start" /> : <span>{t("shell.workbench")}</span>}
+                                <span>{profileMeta}</span>
                             </span>
                         ) : null}
+                        {!collapsed ? <ChevronsUpDown className="app-workspace-sidebar-profile-toggle" aria-hidden /> : null}
                     </button>
                 </Popover>
             </div>

@@ -83,6 +83,7 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
             filterActive: "필터 적용됨",
             reset: "초기화",
             searchAndFilter: "검색 및 필터",
+            clearSearch: "검색어 지우기",
         },
         pagination: {
             item: "개",

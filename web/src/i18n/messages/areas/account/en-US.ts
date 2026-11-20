@@ -83,6 +83,7 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
             filterActive: "Filters applied",
             reset: "Reset",
             searchAndFilter: "Search and filter",
+            clearSearch: "Clear search",
         },
         pagination: {
             item: "items",

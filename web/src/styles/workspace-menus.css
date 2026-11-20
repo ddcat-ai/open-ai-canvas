@@ -3,8 +3,44 @@
 @layer utilities {
     .workspace-quiet-popup.ant-select-dropdown,
     .workspace-quiet-popup .ant-dropdown-menu,
-    .workspace-quiet-popup .ant-popover-container,
+    .workspace-quiet-popup .ant-popover-container {
+        border: 0 !important;
+        border-radius: var(--user-radius-card) !important;
+        background: var(--user-surface-raised) !important;
+        background-image: none !important;
+        box-shadow: none !important;
+    }
+
+    .workspace-account-popover,
+    body.app-spatial-overlays .workspace-account-popover {
+        border: 0 !important;
+        border-radius: var(--user-radius-card) !important;
+        background: var(--user-surface-raised) !important;
+        background-image: none !important;
+        box-shadow: 0 2px 4px rgb(0 0 0 / 0.1) !important;
+        filter: none !important;
+        backdrop-filter: none !important;
+    }
+
+    .workspace-account-popover .ant-popover,
+    body.app-spatial-overlays .workspace-account-popover .ant-popover,
+    .workspace-account-popover .ant-popover-content,
+    body.app-spatial-overlays .workspace-account-popover .ant-popover-content,
+    .workspace-account-popover .ant-popover-inner,
+    body.app-spatial-overlays .workspace-account-popover .ant-popover-inner,
     .workspace-account-popover .ant-popover-container {
+        box-shadow: none !important;
+        filter: none !important;
+        backdrop-filter: none !important;
+    }
+
+    .workspace-account-popover .ant-popover-content,
+    body.app-spatial-overlays .workspace-account-popover .ant-popover-content,
+    .workspace-account-popover .ant-popover-inner,
+    body.app-spatial-overlays .workspace-account-popover .ant-popover-inner,
+    .workspace-account-popover .ant-popover-container,
+    body.app-spatial-overlays .workspace-account-popover .ant-popover-container {
+        overflow: hidden;
         border: 0 !important;
         border-radius: var(--user-radius-card) !important;
         background: var(--user-surface-raised) !important;

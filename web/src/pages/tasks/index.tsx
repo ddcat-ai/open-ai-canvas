@@ -3,7 +3,8 @@ import { App, Button, Form, Input } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { AppModal } from "@/components/ui/product/app-modal";
-import { LayoutGrid, List, Plus, Search } from "lucide-react";
+import { LayoutGrid, List, Plus } from "lucide-react";
+import { ListSearchInput } from "@/components/ui/base/list-search-input";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
@@ -471,16 +472,15 @@ export default function TasksPage() {
                         </div>
                     </div>
                     <CollectionToolbar active={filtersActive} onReset={resetFilters}>
-                        <Input
+                        <ListSearchInput
                             id="task-search"
                             name="taskSearch"
-                            allowClear
                             className="app-list-search task-center-search"
-                            prefix={<Search className="size-4 text-foreground/40" />}
+                            aria-label={t("library.tasks.page.searchPlaceholder")}
                             value={keyword}
                             placeholder={t("library.tasks.page.searchPlaceholder")}
-                            onChange={(event) => {
-                                setKeyword(event.target.value);
+                            onValueChange={(value) => {
+                                setKeyword(value);
                                 setPage(1);
                             }}
                         />

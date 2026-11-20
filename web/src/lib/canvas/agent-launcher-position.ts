@@ -5,6 +5,7 @@ export type AgentLauncherGesture = { x: number; y: number; start: AgentLauncherP
 export const AGENT_LAUNCHER_POSITION_KEY = "canvas:agent-launcher-position:v1";
 export const AGENT_LAUNCHER_SIZE = 76;
 const MARGIN = 20; // Includes the label below the orb.
+const LAUNCHER_LABEL_CLEARANCE = 40;
 /** 画布编辑器以外的页面和窄屏上，大形象会压住页面右下角的按钮，高度封顶到这个值。 */
 export const AGENT_LAUNCHER_COMPACT_AVATAR_HEIGHT = 120;
 export const AGENT_LAUNCHER_COMPACT_VIEWPORT_WIDTH = 768;
@@ -24,7 +25,7 @@ export function clampAgentLauncherPosition(position: AgentLauncherPosition, view
     return { right: clamp(position.right, viewport.width, size.width), bottom: clamp(position.bottom, viewport.height, size.height) };
 }
 
-export function restoreAgentLauncherPosition(raw: string | null, viewport: AgentLauncherViewport, size?: AgentLauncherViewport): AgentLauncherPosition {
+export function restoreAgentLauncherPosition(raw: string | null, viewport: AgentLauncherViewport, size?: AgentLauncherViewport, inCanvasEditor = true): AgentLauncherPosition {
     if (raw) {
         try {
             const value = JSON.parse(raw);
@@ -33,7 +34,8 @@ export function restoreAgentLauncherPosition(raw: string | null, viewport: Agent
             // Damaged UI preferences must not hide the launcher.
         }
     }
-    return clampAgentLauncherPosition({ right: MARGIN, bottom: MARGIN }, viewport, size);
+    const footerClearance = viewport.width < AGENT_LAUNCHER_COMPACT_VIEWPORT_WIDTH ? 144 : 80;
+    return clampAgentLauncherPosition({ right: MARGIN, bottom: inCanvasEditor ? MARGIN : footerClearance + LAUNCHER_LABEL_CLEARANCE }, viewport, size);
 }
 
 export function moveAgentLauncher(gesture: AgentLauncherGesture, x: number, y: number, viewport: AgentLauncherViewport, size?: AgentLauncherViewport) {

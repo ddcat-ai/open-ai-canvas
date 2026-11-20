@@ -83,6 +83,7 @@ export const deDE: DeepStringRecord<typeof zhCN> = {
             filterActive: "Filter aktiv",
             reset: "Zurücksetzen",
             searchAndFilter: "Suchen und filtern",
+            clearSearch: "Suchbegriff löschen",
         },
         pagination: {
             item: "Einträge",

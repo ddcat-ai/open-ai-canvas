@@ -3,9 +3,10 @@ import { migrateCanvasNodeModel } from "@/lib/canvas/migrate-canvas-node-model";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { App, Button, Dropdown, Input, Modal } from "antd";
+import { App, Button, Dropdown, Modal } from "antd";
 import { Select } from "@/components/ui/base/select";
-import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, LoaderCircle, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowDownAZ, Clock3, Download, FileUp, History, ListFilter, LoaderCircle, Plus, SlidersHorizontal } from "lucide-react";
+import { ListSearchInput } from "@/components/ui/base/list-search-input";
 
 import { CollectionGrid, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
@@ -479,7 +480,7 @@ export default function CanvasPage() {
                         </Button>
                     }
                 >
-                    <Input prefix={<Search />} value={keyword} allowClear placeholder="搜索画布" aria-label="搜索画布" onChange={(event) => setKeyword(event.target.value)} />
+                    <ListSearchInput value={keyword} placeholder="搜索画布" aria-label="搜索画布" onValueChange={setKeyword} />
                     {!workspaceTeamId && (
                         <Dropdown trigger={["click"]} placement="bottomLeft" menu={{ items: projectFilterItems, selectedKeys: [projectFilter], onClick: ({ key }) => setProjectFilter(String(key)) }}>
                             <Button icon={<SlidersHorizontal />} aria-label="按所属项目筛选">

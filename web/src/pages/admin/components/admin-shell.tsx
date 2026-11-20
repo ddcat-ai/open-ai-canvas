@@ -58,6 +58,7 @@ import { publishWorkspaceSidebarCollapsed, readWorkspaceSidebarCollapsed, subscr
 import { AppFeedbackProvider } from "@/components/layout/app-feedback";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/use-theme-store";
+import { useGlobalAgentStore } from "@/stores/use-global-agent-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { getIsolatedAdminAntTheme } from "../theme/admin-ant-theme";
@@ -407,6 +408,9 @@ function MobileAdminNavigation() {
                 </button>
             </Dropdown>
             <div className="flex shrink-0 items-center gap-1">
+                <button type="button" className="admin-mobile-navigation-action admin-mobile-agent-entry" aria-label="打开 Agent 助手" title="打开 Agent 助手" onClick={() => useGlobalAgentStore.getState().openAgent()}>
+                    <Bot className="size-4" />
+                </button>
                 <AdminTooltip title="返回创作台">
                     <Link to="/" className="admin-mobile-navigation-action" aria-label="返回创作台">
                         <Home className="size-4" aria-hidden="true" />

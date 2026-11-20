@@ -1,7 +1,8 @@
 import { useDeferredValue, useEffect, useRef, useState, type DragEvent } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { App, Button, Dropdown, Input } from "antd";
-import { BookOpenText, ClipboardPaste, Clapperboard, ExternalLink, FileUp, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { App, Button, Dropdown } from "antd";
+import { BookOpenText, ClipboardPaste, Clapperboard, ExternalLink, FileUp, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { ListSearchInput } from "@/components/ui/base/list-search-input";
 import { Link, useNavigate } from "react-router";
 
 import { CollectionToolbar } from "@/components/layout/collection-toolbar";
@@ -127,7 +128,7 @@ export default function DramaListPage() {
                                 setStatus("all");
                             }}
                         >
-                            <Input prefix={<Search />} value={keyword} allowClear placeholder="搜索作品名" aria-label="搜索作品名" onChange={(event) => setKeyword(event.target.value)} />
+                            <ListSearchInput value={keyword} placeholder="搜索作品名" aria-label="搜索作品名" onValueChange={setKeyword} />
                             <div className="drama-library-status" role="radiogroup" aria-label="按状态筛选">
                                 {STATUS_FILTERS.map((item) => {
                                     const count = item.value === "all" ? total : counts[item.value] || 0;

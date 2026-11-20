@@ -432,6 +432,21 @@
     line-height: 18px;
 }
 
+[data-admin-root] .admin-mobile-agent-entry {
+    display: none;
+}
+
+@media (max-width: 767px) {
+    [data-admin-root] .admin-mobile-agent-entry {
+        display: inline-flex;
+    }
+
+    .admin-overlays .canvas-agent-launcher,
+    .admin-overlays .canvas-agent-launcher-toggle {
+        display: none;
+    }
+}
+
 [data-admin-root] .admin-page-actions {
     gap: 8px !important;
 }
@@ -613,53 +628,41 @@
     background: var(--admin-surface);
 }
 
-[data-admin-root] .admin-pagination-bar {
+[data-admin-root] .app-pagination-bar {
+    --pagination-control: var(--space-7);
     display: flex;
     min-height: 36px;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 8px;
     margin: 0;
     padding: 0;
 }
 
-[data-admin-root] .admin-pagination-total {
+[data-admin-root] .app-pagination-total {
     color: var(--admin-text-muted);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
 }
 
-[data-admin-root] .admin-pagination-pages {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-}
-
-[data-admin-root] .admin-pagination-btn {
-    display: grid;
-    min-width: 28px;
-    height: 28px;
-    place-items: center;
-    padding: 0 8px;
-    border: 0;
+[data-admin-root] .app-pagination-btn {
     border-radius: var(--admin-radius-sm);
-    background: transparent;
     color: var(--admin-text-secondary);
     font-size: 12px;
 }
 
-[data-admin-root] .admin-pagination-btn:hover:not(:disabled) {
+[data-admin-root] .app-pagination-btn:hover:not(:disabled, .is-active) {
     background: var(--admin-nav-hover);
     color: var(--admin-text);
 }
 
-[data-admin-root] .admin-pagination-btn.is-active {
-    background: var(--admin-accent);
-    color: var(--admin-accent-fg);
-    font-weight: 400;
+[data-admin-root] .app-pagination-btn.is-active {
+    background: var(--admin-surface-2);
+    color: var(--admin-text);
+    box-shadow: inset 0 0 0 var(--stroke-1) var(--admin-border);
 }
 
-[data-admin-root] .admin-pagination-btn:disabled {
+[data-admin-root] .app-pagination-btn:disabled {
     opacity: 0.38;
 }
 
@@ -726,6 +729,45 @@
     padding: 24px;
     color: var(--admin-text-muted);
     text-align: center;
+}
+
+.admin-empty-icon {
+    display: grid;
+    width: var(--space-10);
+    height: var(--space-10);
+    place-items: center;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface-2);
+    color: var(--admin-text-secondary);
+}
+
+.admin-table-skeleton > div {
+    display: grid;
+    grid-template-columns: repeat(var(--skeleton-columns), minmax(0, 1fr));
+    align-items: center;
+    gap: var(--space-4);
+    height: var(--admin-row-h);
+    padding-inline: var(--space-3);
+    border-bottom: var(--stroke-1) solid var(--admin-row-border);
+}
+
+.admin-table-skeleton span {
+    width: 64%;
+    height: var(--space-2);
+    border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--admin-text) 8%, transparent);
+}
+
+.admin-table-skeleton span:first-child {
+    width: 80%;
+}
+
+.admin-table-skeleton span:last-child {
+    max-width: var(--space-10);
+}
+
+.admin-table-skeleton .admin-table-skeleton-heading {
+    background: var(--admin-surface-2);
 }
 
 [data-admin-root] .admin-empty h3 {
@@ -1063,6 +1105,17 @@
 .admin-drawer .ant-switch.ant-switch-checked,
 .admin-modal-root .ant-switch.ant-switch-checked {
     background: var(--admin-switch-on) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-switch.ant-switch,
+    .admin-switch .ant-switch-handle,
+    .admin-switch .ant-switch-inner > span {
+        transition: none;
+    }
+    .admin-switch .ant-switch-loading-icon svg {
+        animation: none;
+    }
 }
 
 [data-admin-root] .ant-form-item {

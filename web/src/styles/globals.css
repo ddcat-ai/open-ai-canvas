@@ -9719,9 +9719,10 @@
         white-space: nowrap;
     }
 
-    /* 分页：左侧总数，右侧胶囊页码组 + 跳页 + 每页条数。选中页用“普通选中”角色（浮起的表面），不占用主操作色。
-       用户端读 --user-* token，后台没有这些 token 时退回通用前景/背景混色。 */
     .app-pagination-bar {
+        --pagination-control: var(--space-8);
+        container: pagination / inline-size;
+        width: 100%;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -9748,27 +9749,25 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 8px;
+        min-width: 0;
+        gap: var(--space-2);
         margin-left: auto;
     }
     .app-pagination-pages {
         display: inline-flex;
         align-items: center;
-        gap: 2px;
-        padding: 4px;
-        border-radius: 999px;
-        background: var(--user-surface-muted, color-mix(in srgb, var(--foreground) 5%, transparent));
+        gap: var(--space-half);
     }
     .app-pagination-btn {
         display: inline-flex;
-        height: 30px;
-        min-width: 30px;
+        height: var(--pagination-control);
+        min-width: max(var(--pagination-control), calc(var(--pagination-digits) + var(--space-3)));
         align-items: center;
         justify-content: center;
         border: 0;
-        border-radius: 999px;
+        border-radius: var(--r-md);
         background: transparent;
-        padding-inline: 8px;
+        padding-inline: var(--space-1);
         color: var(--user-ink-muted, color-mix(in srgb, var(--foreground) 62%, transparent));
         font-size: 13px;
         font-weight: 500;
@@ -9785,17 +9784,11 @@
         color: var(--user-ink, var(--foreground));
     }
     .app-pagination-btn.is-active {
-        background: var(--user-surface, var(--background));
+        background: var(--user-surface-muted, var(--muted));
         color: var(--user-ink, var(--foreground));
-        font-weight: 500;
-        box-shadow:
-            0 1px 2px color-mix(in srgb, black 10%, transparent),
-            0 0 0 1px var(--user-border, color-mix(in srgb, var(--foreground) 8%, transparent));
+        font-weight: 600;
+        box-shadow: inset 0 0 0 var(--stroke-1) var(--user-border, var(--border));
         cursor: default;
-    }
-    .dark .app-pagination-btn.is-active {
-        background: var(--user-surface-hover, color-mix(in srgb, white 12%, var(--background)));
-        box-shadow: 0 0 0 1px var(--user-border-strong, color-mix(in srgb, white 14%, transparent));
     }
     .app-pagination-btn:disabled {
         color: var(--user-ink-soft, color-mix(in srgb, var(--foreground) 30%, transparent));
@@ -9810,15 +9803,25 @@
         width: 15px;
         height: 15px;
     }
-    .app-pagination-ellipsis {
-        display: inline-flex;
-        height: 30px;
-        min-width: 18px;
-        align-items: center;
-        justify-content: center;
-        color: var(--user-ink-soft, color-mix(in srgb, var(--foreground) 34%, transparent));
-        font-size: 13px;
-        letter-spacing: 0.1em;
+    .app-pagination-skip svg:last-child,
+    .app-pagination-skip:is(:hover, :focus-visible) svg:first-child {
+        display: none;
+    }
+    .app-pagination-skip:is(:hover, :focus-visible) svg:last-child {
+        display: block;
+    }
+    @container pagination (max-width: 21rem) {
+        .app-pagination-controls {
+            justify-content: center;
+        }
+        .app-pagination-pages:has(.app-pagination-skip) .app-pagination-btn:not([aria-current], .app-pagination-prev, .app-pagination-next, .app-pagination-skip) {
+            display: none;
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .app-pagination-bar :is(.app-pagination-btn, .app-pagination-jump input) {
+            transition: none;
+        }
     }
     .app-pagination-jump {
         display: inline-flex;
@@ -9830,7 +9833,7 @@
         width: 46px;
         height: 30px;
         border: 0;
-        border-radius: 999px;
+        border-radius: var(--r-md);
         background: var(--user-surface-muted, color-mix(in srgb, var(--foreground) 5%, transparent));
         padding: 0 8px;
         color: var(--user-ink, var(--foreground));
@@ -9849,9 +9852,9 @@
         box-shadow: 0 0 0 2px var(--control-focus-ring);
     }
     .app-pagination-size.ant-select {
-        height: 36px !important;
+        height: var(--pagination-control) !important;
         min-width: 0 !important;
-        border-radius: 999px !important;
+        border-radius: var(--r-md) !important;
         font-size: 12px;
     }
 

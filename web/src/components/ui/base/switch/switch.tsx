@@ -80,14 +80,16 @@ export function Switch({ size = "md", checked: checkedProp, defaultChecked = fal
             aria-checked={checked}
             aria-label={ariaLabel}
             aria-busy={loading || undefined}
+            aria-disabled={loading || disabled || undefined}
             disabled={disabled}
             onClick={handleClick}
             className={cn(
-                "relative inline-flex shrink-0 select-none items-center align-middle transition-colors motion-reduce:transition-none",
+                "group/switch relative inline-flex shrink-0 select-none items-center align-middle transition-colors motion-reduce:transition-none",
                 "data-[state=on]:bg-foreground",
                 "data-[state=off]:bg-surface-tertiary data-[state=off]:ring-1 data-[state=off]:ring-inset data-[state=off]:ring-foreground/15",
                 "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
                 "disabled:cursor-not-allowed disabled:opacity-45",
+                loading && "cursor-wait",
                 geometry.root,
                 hasText && size === "md" && geometry.hasTextRoot,
                 className,
@@ -109,16 +111,18 @@ export function Switch({ size = "md", checked: checkedProp, defaultChecked = fal
                     {checkedChildren}
                 </span>
             ) : null}
-            {/* thumb / loading 转圈 */}
-            {loading ? (
-                <span aria-hidden="true" className={cn("absolute inset-0 m-auto size-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent", checked ? "text-background" : "text-foreground/60")} />
-            ) : (
-                <span
-                    aria-hidden="true"
-                    data-state={checked ? "on" : "off"}
-                    className={cn("sc-switch-thumb absolute left-0.5 top-1/2 -translate-y-1/2 rounded-full border border-border/80 bg-surface-strong transition-transform duration-200 ease-out motion-reduce:transition-none", thumbClass)}
-                />
-            )}
+            <span
+                aria-hidden="true"
+                data-state={checked ? "on" : "off"}
+                className={cn(
+                    "sc-switch-thumb absolute left-0.5 top-1/2 grid -translate-y-1/2 place-items-center rounded-full border border-border/80 bg-surface-strong transition-transform duration-150 ease-out motion-reduce:transition-none",
+                    thumbClass,
+                    checked ? "origin-right" : "origin-left",
+                    !disabled && !loading && "motion-safe:group-active/switch:scale-x-110",
+                )}
+            >
+                {loading ? <span className="size-2.5 rounded-full border-[1.5px] border-foreground border-t-transparent motion-safe:animate-spin" /> : null}
+            </span>
         </button>
     );
 }

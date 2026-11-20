@@ -58,6 +58,19 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const skin = useEffectiveSkin();
     const locale = useLocaleStore((state) => state.locale);
 
+    useEffect(() => {
+        const root = document.documentElement;
+        const pointer = () => root.toggleAttribute("data-pointer-focus", true);
+        const keyboard = () => root.removeAttribute("data-pointer-focus");
+        document.addEventListener("pointerdown", pointer, { capture: true, passive: true });
+        document.addEventListener("keydown", keyboard, true);
+        return () => {
+            document.removeEventListener("pointerdown", pointer, true);
+            document.removeEventListener("keydown", keyboard, true);
+            root.removeAttribute("data-pointer-focus");
+        };
+    }, []);
+
     useLayoutEffect(() => {
         document.documentElement.lang = locale;
         dayjs.locale(DAYJS_LOCALES[locale]);

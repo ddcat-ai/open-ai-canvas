@@ -83,6 +83,7 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
             filterActive: "絞り込み適用中",
             reset: "リセット",
             searchAndFilter: "検索と絞り込み",
+            clearSearch: "検索語をクリア",
         },
         pagination: {
             item: "件",

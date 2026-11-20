@@ -66,7 +66,7 @@ test("model reference limits use compact rows only inside the admin editor", asy
 
 test("model editor presents protocols in a searchable inline radio browser instead of a dropdown", async () => {
     const [source, css] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/channel-model-editor.tsx", import.meta.url)).text(), Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text()]);
-    const protocolSection = sourceSection(compactSource(source), '<Form.Item className="admin-model-protocol-field"', "{protocolError && (");
+    const protocolSection = sourceSection(compactSource(source), '<Form.Item className="admin-model-protocol-field"', "</Form.Item>");
 
     expect(protocolSection).toContain("<ModelProtocolBrowser");
     expect(protocolSection).not.toContain("<Select");

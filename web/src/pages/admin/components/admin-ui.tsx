@@ -1,11 +1,11 @@
 import { App, Button, Dropdown, Table } from "antd";
 import type { ButtonProps, MenuProps, TableProps } from "antd";
 import { saveAs } from "file-saver";
-import { CheckSquare2, ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter, RotateCcw, SearchX, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { CheckSquare2, ChevronDown, Download, Inbox, ListFilter, RotateCcw, SearchX, X } from "lucide-react";
+import { createContext, useContext, useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
-import { Select } from "@/components/ui/base/select";
+export { PaginationBar } from "@/components/layout/workspace-page";
 
 export const configuredSecretText = "已配置 · 留空不改";
 
@@ -55,6 +55,7 @@ export function ListToolbar({
     className?: string;
 }) {
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const filtersId = useId();
 
     useEffect(() => {
         if (active) setFiltersOpen(true);
@@ -67,11 +68,13 @@ export function ListToolbar({
                 {filters ? (
                     <>
                         {!filtersAlwaysVisible ? (
-                            <Button type="default" className="admin-filter-toggle" aria-expanded={filtersOpen} icon={<ListFilter className="size-3.5" />} onClick={() => setFiltersOpen((open) => !open)}>
+                            <Button type="default" className="admin-filter-toggle" aria-expanded={filtersOpen} aria-controls={filtersId} icon={<ListFilter className="size-3.5" />} onClick={() => setFiltersOpen((open) => !open)}>
                                 筛选{active ? <span className="admin-filter-active-dot" aria-label="有已应用筛选" /> : null}
                             </Button>
                         ) : null}
-                        <div className={cn("admin-list-toolbar-filters", (filtersAlwaysVisible || filtersOpen) && "is-open")}>{filters}</div>
+                        <div id={filtersId} className={cn("admin-list-toolbar-filters", (filtersAlwaysVisible || filtersOpen) && "is-open")}>
+                            {filters}
+                        </div>
                     </>
                 ) : null}
                 {activeFilters ? <div className="admin-list-toolbar-chips">{activeFilters}</div> : null}
@@ -88,61 +91,7 @@ export function ListToolbar({
     );
 }
 
-function pageItems(current: number, pages: number): Array<number | "…"> {
-    if (pages <= 7) return Array.from({ length: pages }, (_, index) => index + 1);
-    if (current <= 4) return [1, 2, 3, 4, 5, "…", pages];
-    if (current >= pages - 3) return [1, "…", pages - 4, pages - 3, pages - 2, pages - 1, pages];
-    return [1, "…", current - 1, current, current + 1, "…", pages];
-}
-
-export function PaginationBar({
-    current,
-    pageSize,
-    total,
-    onChange,
-    pageSizeOptions = [20, 50, 100],
-    alwaysShow = false,
-    itemLabel = "条",
-}: {
-    current: number;
-    pageSize: number;
-    total: number;
-    onChange: (page: number, pageSize: number) => void;
-    pageSizeOptions?: number[];
-    alwaysShow?: boolean;
-    itemLabel?: string;
-}) {
-    if (!alwaysShow && total <= pageSize && current === 1) return null;
-    const pages = Math.max(1, Math.ceil(total / pageSize));
-    const start = total === 0 ? 0 : (current - 1) * pageSize + 1;
-    const end = total === 0 ? 0 : Math.min(total, current * pageSize);
-    const items = pageItems(current, pages);
-    return (
-        <div className="admin-pagination-bar">
-            <span className="admin-pagination-total">{total === 0 ? `共 0 ${itemLabel}` : `${start}-${end} / 共 ${total} ${itemLabel}`}</span>
-            <Select size="small" value={pageSize} className="admin-pagination-size" options={pageSizeOptions.map((size) => ({ value: size, label: `${size} ${itemLabel}/页` }))} onChange={(value) => onChange(1, Number(value))} aria-label="每页条数" />
-            <div className="admin-pagination-pages" role="navigation" aria-label="分页">
-                <button type="button" className="admin-pagination-btn" disabled={current <= 1} aria-label="上一页" onClick={() => onChange(current - 1, pageSize)}>
-                    <ChevronLeft className="size-4" />
-                </button>
-                {items.map((item, index) =>
-                    item === "…" ? (
-                        <span key={`ellipsis-${index}`} className="admin-pagination-ellipsis">
-                            …
-                        </span>
-                    ) : (
-                        <button key={item} type="button" className={cn("admin-pagination-btn", item === current && "is-active")} aria-current={item === current ? "page" : undefined} onClick={() => onChange(item, pageSize)}>
-                            {item}
-                        </button>
-                    ),
-                )}
-                <button type="button" className="admin-pagination-btn" disabled={current >= pages} aria-label="下一页" onClick={() => onChange(current + 1, pageSize)}>
-                    <ChevronRight className="size-4" />
-                </button>
-            </div>
-        </div>
-    );
-}
+const TableResetFilters = createContext<(() => void) | undefined>(undefined);
 
 export function AdminDataTable<RecordType extends object>({
     toolbar,
@@ -176,7 +125,8 @@ export function AdminDataTable<RecordType extends object>({
     className?: string;
 }) {
     const dataSource = table.dataSource as readonly RecordType[] | undefined;
-    const showSkeleton = Boolean(table.loading) && !dataSource?.length;
+    const loading = typeof table.loading === "object" ? table.loading.spinning !== false : Boolean(table.loading);
+    const showSkeleton = loading && !dataSource?.length;
 
     return (
         <div className="admin-data-table">
@@ -187,8 +137,16 @@ export function AdminDataTable<RecordType extends object>({
             ) : null}
             {batchActions}
             <div className={cn("admin-table-frame", footer && "has-pagination")}>
-                <div className={cn("admin-table-surface", className)}>
-                    <div className="admin-table-scroll">{showSkeleton ? <AdminTableSkeleton rows={skeletonRows} columns={skeletonColumns} /> : <Table {...table} locale={{ ...table.locale, emptyText: empty ?? table.locale?.emptyText }} />}</div>
+                <div className={cn("admin-table-surface", className)} aria-busy={loading}>
+                    <div className="admin-table-scroll">
+                        {showSkeleton ? (
+                            <AdminTableSkeleton rows={skeletonRows} columns={skeletonColumns} />
+                        ) : (
+                            <TableResetFilters.Provider value={onReset}>
+                                <Table {...table} locale={{ ...table.locale, emptyText: empty ?? table.locale?.emptyText }} />
+                            </TableResetFilters.Provider>
+                        )}
+                    </div>
                 </div>
                 {footer ? <div className="admin-table-pagination">{footer}</div> : null}
             </div>
@@ -240,12 +198,21 @@ export function AdminExportButton({
 }
 
 export function AdminTableEmpty({ filtered = false, title, description, action }: { filtered?: boolean; title?: string; description?: string; action?: ReactNode }) {
+    const resetFilters = useContext(TableResetFilters);
+    const Icon = filtered ? SearchX : Inbox;
     return (
         <div className="admin-empty">
-            <SearchX className="size-5" aria-hidden="true" />
+            <span className="admin-empty-icon" aria-hidden>
+                <Icon className="size-5" />
+            </span>
             <h3>{title || (filtered ? "没有符合筛选条件的数据" : "暂无数据")}</h3>
             {description ? <p>{description}</p> : null}
-            {action}
+            {action ??
+                (filtered && resetFilters ? (
+                    <Button size="small" icon={<RotateCcw className="size-3.5" />} onClick={resetFilters}>
+                        清除筛选
+                    </Button>
+                ) : null)}
         </div>
     );
 }
@@ -266,16 +233,16 @@ export function AdminFilterChip({ label, onRemove }: { label: ReactNode; onRemov
 
 export function AdminTableSkeleton({ rows = 8, columns = 6 }: { rows?: number; columns?: number }) {
     return (
-        <div aria-label="正在加载表格" role="status">
-            <div className="grid h-9 items-center gap-4 border-b px-3" style={{ borderColor: "var(--admin-border)", gridTemplateColumns: `repeat(${columns}, minmax(72px, 1fr))` }}>
+        <div className="admin-table-skeleton" style={{ "--skeleton-columns": columns } as CSSProperties} aria-label="正在加载表格" role="status">
+            <div className="admin-table-skeleton-heading" aria-hidden>
                 {Array.from({ length: columns }).map((_, index) => (
-                    <span key={index} className="h-2.5 w-16 max-w-full rounded" style={{ background: "color-mix(in srgb, var(--admin-text) 10%, transparent)" }} />
+                    <span key={index} />
                 ))}
             </div>
-            {Array.from({ length: Math.max(8, rows) }).map((_, rowIndex) => (
-                <div key={rowIndex} className="grid h-10 items-center gap-4 border-b px-3 last:border-b-0" style={{ borderColor: "var(--admin-row-border)", gridTemplateColumns: `repeat(${columns}, minmax(72px, 1fr))` }}>
+            {Array.from({ length: rows }).map((_, rowIndex) => (
+                <div key={rowIndex} aria-hidden>
                     {Array.from({ length: columns }).map((_, columnIndex) => (
-                        <span key={columnIndex} className="h-2.5 rounded" style={{ width: columnIndex === 0 ? "80%" : columnIndex === columns - 1 ? "40px" : "66%", background: "color-mix(in srgb, var(--admin-text) 7%, transparent)" }} />
+                        <span key={columnIndex} />
                     ))}
                 </div>
             ))}
