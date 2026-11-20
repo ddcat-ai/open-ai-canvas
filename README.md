@@ -1,10 +1,16 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="88" alt="DMC logo">
+  <a href="https://hub.ll2.cn?p=s93d" target="_blank" rel="noopener noreferrer">
+    <img src="web/public/logo.svg" width="88" alt="DMC logo">
+  </a>
 </p>
 
 <h1 align="center">DMC · 影策二开</h1>
 
 <p align="center">本地优先的 AI 漫剧 / 短剧创作台 · 填一次 LL2 Key 就能出片</p>
+
+<p align="center">
+  <a href="https://hub.ll2.cn?p=s93d" target="_blank" rel="noopener noreferrer"><strong>👉 点这里注册 LL2，填 Key 就能出片</strong></a>
+</p>
 
 <p align="center">
   一句话成片 · 无限画布 · 全站 DMC Agent · 我的片子
@@ -98,7 +104,7 @@ DMC 把「写一句话 → 出片」和「无限画布」放在同一个本地�
 ## 鸣谢
 
 - **[影策 open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)**：本项目的画布、任务系统和大部分基础能力来自这个开源项目。感谢上游原作者、贡献者和赞助商。
-- **[LL2 / DMC](https://api.ll2.cn)**：提供统一的 BYOK 视频/文本模型网关，H3、wan3、Seedance、Vidu、auto-hd 超分都走它。
+- **[LL2 / DMC](https://hub.ll2.cn?p=s93d)**：提供统一的 BYOK 视频/文本模型网关，H3、wan3、Seedance、Vidu、auto-hd 超分都走它；点这里可以直接注册。
 - **BeefTV**：桌面端本地化、插件、更新和用户数据落盘的产品形态参考。
 - **DeepSeek Harness（DSH）**：本项目开发过程中使用的 Agent 工作台。
 - 也感谢 MiniMax、阿里云百炼、火山引擎、Vidu、Super Vega 等模型提供方的官方文档。
