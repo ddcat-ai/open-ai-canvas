@@ -85,7 +85,8 @@ export function LoadingContent({ node, theme, onOpenTaskDetails }: Pick<CanvasNo
     const phase: GenerationPhase = ll2Direct ? "generating" : taskId ? generationTaskPhase(displayTask) : "submitting";
     // LL2 是浏览器直连轮询；页面刷新/热更新会打断它，但 LL2 服务端仍会把任务跑完。
     // 超时后别一直转圈，明确告诉用户去控制台取片或重新生成。
-    const ll2Stale = Boolean(ll2Direct && metadata?.taskCreatedAt && Date.now() - new Date(metadata.taskCreatedAt).getTime() > 10 * 60 * 1000);
+    // H3 本身就可能要十几分钟；给到 40 分钟再提示中断，避免正常慢任务被误判。
+    const ll2Stale = Boolean(ll2Direct && metadata?.taskCreatedAt && Date.now() - new Date(metadata.taskCreatedAt).getTime() > 40 * 60 * 1000);
     const ll2StageHint = ll2Stale ? "页面刷新或重载可能中断了这次生成；LL2 已出片可到控制台下载，或重新生成" : metadata?.ll2Stage || "";
     const kind = canvasNodeGenerationKind(node.type);
     const Icon = generationKindIcon[kind];

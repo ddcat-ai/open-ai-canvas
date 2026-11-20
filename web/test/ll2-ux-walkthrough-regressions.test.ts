@@ -231,6 +231,7 @@ test("画布 LL2 节点会显示排队/生成/超分阶段，并对中断给出�
     expect(exec).toContain("fetchBlobWithTimeout");
     const status = await read("../src/components/canvas/canvas-node-status-content.tsx");
     expect(status).toContain("ll2Stale");
+    expect(status).toContain("40 * 60 * 1000");
     expect(status).toContain("生成状态未确认");
     expect(status).toContain("metadata?.ll2Stage");
     const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
