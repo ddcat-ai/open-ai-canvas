@@ -169,6 +169,32 @@ export function dramaSegmentReferences(segment: DramaSegment, castById: Map<stri
     });
 }
 
+export function dramaReferenceSlot(reference: { castId: string; resourceId: string }) {
+    return reference.castId ? `cast:${reference.castId}` : `image:${reference.resourceId}`;
+}
+
+/** 已有段框只补缺失的图片；没有槽标记的旧画布按短剧绑定、资源和原首帧连线识别。 */
+export function missingSegmentImages(nodes: CanvasNodeData[], frame: CanvasNodeData, segment: DramaSegment, castById: Map<string, DramaCast>) {
+    const slots = new Set<string>();
+    const video = findDramaSegmentVideoNode(nodes, segment.id);
+    for (const node of nodes) {
+        const source = node.metadata?.dramaSegmentImage;
+        if (source?.segmentId === segment.id) slots.add(source.slot);
+        if (source || node.parentId !== frame.id || node.type !== CanvasNodeType.Image) continue;
+        const ref = node.metadata?.dramaRef;
+        if (node.id === video?.metadata?.videoStartFrameNodeId || node.title.startsWith("首帧 ·")) slots.add("first");
+        else if (ref?.kind === "cast") slots.add(`cast:${ref.id}`);
+        else if (node.metadata?.storageKey?.startsWith("resource:")) slots.add(`image:${node.metadata.storageKey.slice(9)}`);
+    }
+    const missing = new Set(
+        dramaSegmentReferences(segment, castById)
+            .map(dramaReferenceSlot)
+            .filter((slot) => !slots.has(slot)),
+    );
+    if (segment.request.firstFrameResourceId && !slots.has("first")) missing.add("first");
+    return missing;
+}
+
 /** 投送一个剧情段需要登记素材的资源：参考图、首帧、当前视频与最近的历史版本。 */
 export function dramaSegmentResourceIds(segment: DramaSegment, takes?: DramaTake[]) {
     return unique([...dramaSegmentRequiredResourceIds(segment), ...(takes || []).slice(0, DRAMA_TAKE_PROJECTION_LIMIT).map((take) => take.resourceId)]);
@@ -338,6 +364,7 @@ export function buildDramaSegmentGroup(input: {
         }
         const node = mediaNode(CanvasNodeType.Image, `${reference.label} · ${reference.name}${reference.sent ? "" : "（未随请求发送）"}`, reference.resourceId, media, {
             manualSize: true,
+            dramaSegmentImage: { segmentId: segment.id, slot: dramaReferenceSlot(reference) },
             assetCategory: reference.kind === "image" ? "material" : DRAMA_CAST_ASSET_CATEGORY[reference.kind],
             ...(reference.castId ? { dramaRef: { projectId: input.projectId, kind: "cast" as const, id: reference.castId, castRole: "reference" as const, baseResourceId: cast?.imageResourceId || reference.resourceId } } : {}),
         });
@@ -351,10 +378,10 @@ export function buildDramaSegmentGroup(input: {
     if (referencesWidth) x += referencesWidth + GROUP_GAP;
 
     let firstFrameNode: CanvasNodeData | undefined;
-    if (segment.request.firstFrameResourceId) {
+    if (segment.request.firstFrameResourceId && media.assetIdOf(segment.request.firstFrameResourceId)) {
         const original = media.imageSizeOf?.(segment.request.firstFrameResourceId);
         const size = dramaMediaSize(original ? `${original.width}:${original.height}` : input.aspectRatio, 288);
-        const node = mediaNode(CanvasNodeType.Image, `首帧 · 第 ${segment.index} 段尾帧`, segment.request.firstFrameResourceId, media, { assetCategory: "material", manualSize: true });
+        const node = mediaNode(CanvasNodeType.Image, `首帧 · 第 ${segment.index} 段尾帧`, segment.request.firstFrameResourceId, media, { assetCategory: "material", manualSize: true, dramaSegmentImage: { segmentId: segment.id, slot: "first" } });
         firstFrameNode = { ...node, position: { x, y: contentTop }, width: size.width, height: size.height };
         children.push(firstFrameNode);
         x += size.width + GROUP_GAP;
@@ -423,6 +450,91 @@ export function buildDramaSegmentGroup(input: {
 export function placeDramaGroup(nodes: CanvasNodeData[], topLeft: Position) {
     const area = bounds(nodes);
     return area ? translate(nodes, topLeft.x - area.left, topLeft.y - area.top) : nodes;
+}
+
+export function appendSegmentImages(nodes: CanvasNodeData[], connections: CanvasConnection[], frame: CanvasNodeData, segment: DramaSegment, group: ReturnType<typeof buildDramaSegmentGroup>, slots: Set<string>) {
+    const images = group.nodes.filter((node) => node.metadata?.dramaSegmentImage && slots.has(node.metadata.dramaSegmentImage.slot));
+    if (!images.length) return { nodes, connections };
+    const video = findDramaSegmentVideoNode(nodes, segment.id);
+    const state = frame.metadata?.frame;
+    const width = state?.expandedWidth || frame.width;
+    let x = FRAME_PADDING;
+    let y = Math.max(FRAME_HEADER_HEIGHT + FRAME_PADDING, ...nodes.filter((node) => node.parentId === frame.id).map((node) => node.position.y + node.height - frame.position.y + REF_GAP));
+    let rowHeight = 0;
+    const added = images.map((image) => {
+        if (x > FRAME_PADDING && x + image.width + FRAME_PADDING > width) {
+            x = FRAME_PADDING;
+            y += rowHeight + REF_GAP;
+            rowHeight = 0;
+        }
+        const position = { x: frame.position.x + x, y: frame.position.y + y };
+        x += image.width + REF_GAP;
+        rowHeight = Math.max(rowHeight, image.height);
+        return { ...image, parentId: frame.id, position };
+    });
+    const oldHeight = state?.expandedHeight || frame.height;
+    let height = Math.max(oldHeight, y + rowHeight + FRAME_PADDING);
+    let expandedWidth = Math.max(width, ...images.map((image) => image.width + FRAME_PADDING * 2));
+    // 下一段已在下方时，在框的右侧续列，保留已排好的段框位置。
+    const belowOccupied = nodes.some(
+        (node) =>
+            !node.parentId &&
+            node.id !== frame.id &&
+            node.position.y >= frame.position.y + oldHeight &&
+            node.position.y < frame.position.y + height + GROUP_GAP &&
+            node.position.x < frame.position.x + expandedWidth &&
+            node.position.x + node.width > frame.position.x,
+    );
+    if (belowOccupied) {
+        x = width + REF_GAP;
+        y = FRAME_HEADER_HEIGHT + FRAME_PADDING;
+        let columnWidth = 0;
+        height = oldHeight;
+        for (const image of added) {
+            if (columnWidth && y + image.height + FRAME_PADDING > oldHeight) {
+                x += columnWidth + REF_GAP;
+                y = FRAME_HEADER_HEIGHT + FRAME_PADDING;
+                columnWidth = 0;
+            }
+            image.position = { x: frame.position.x + x, y: frame.position.y + y };
+            expandedWidth = Math.max(expandedWidth, x + image.width + FRAME_PADDING);
+            height = Math.max(height, y + image.height + FRAME_PADDING);
+            columnWidth = Math.max(columnWidth, image.width);
+            y += image.height + REF_GAP;
+        }
+    }
+    const first = added.find((node) => node.metadata?.dramaSegmentImage?.slot === "first");
+    const result = nodes.map((node) => {
+        if (node.id === frame.id)
+            return {
+                ...node,
+                width: state?.collapsed ? node.width : expandedWidth,
+                height: state?.collapsed ? node.height : height,
+                metadata: { ...node.metadata, frame: { ...state, collapsed: Boolean(state?.collapsed), expandedWidth, expandedHeight: height } },
+            };
+        if (first && node.id === video?.id && !node.metadata?.videoStartFrameNodeId) return { ...node, metadata: { ...node.metadata, videoStartFrameNodeId: first.id } };
+        return node;
+    });
+    if (!video) return { nodes: [...result, ...added], connections };
+    const addedIds = new Set(added.filter((node) => node !== first || !video.metadata?.videoStartFrameNodeId).map((node) => node.id));
+    const newEdges = group.connections.filter((connection) => addedIds.has(connection.fromNodeId)).map((connection) => ({ ...connection, toNodeId: video.id }));
+    // 仅在已有输入之间插入缺失的编号，已有连线的相对顺序和 ID 保留。
+    const ranks = new Map(segment.request.references.map((ref, index) => [dramaReferenceSlot({ castId: ref.castId, resourceId: ref.resourceId || "" }), index]));
+    const order = new Map(
+        [...nodes, ...added].map((node) => {
+            const source = node.metadata?.dramaSegmentImage;
+            const ref = node.metadata?.dramaRef;
+            const slot = source?.slot || (ref?.kind === "cast" ? `cast:${ref.id}` : `image:${node.metadata?.storageKey?.slice(9)}`);
+            return [node.id, ranks.get(slot) ?? Infinity];
+        }),
+    );
+    const edges = [...connections];
+    for (const connection of newEdges) {
+        const rank = order.get(connection.fromNodeId) ?? Infinity;
+        const after = edges.findIndex((item) => item.toNodeId === video.id && (order.get(item.fromNodeId) ?? Infinity) > rank);
+        edges.splice(after < 0 ? edges.length : after, 0, connection);
+    }
+    return { nodes: [...result, ...added], connections: edges };
 }
 
 /** 成片节点：成片视频与历史成片版本；剪辑在画布时间线里进行。 */

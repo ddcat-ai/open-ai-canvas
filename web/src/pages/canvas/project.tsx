@@ -748,6 +748,7 @@ function CanvasViewportPage() {
         projectLoaded,
         nodes,
         nodesRef,
+        connectionsRef,
         setNodes,
         setConnections,
         focusNodes: focusDramaNodes,

@@ -288,6 +288,8 @@ export type CanvasNodeMetadata = {
     /** Credential-free editable generation contract; submitted recipes live with tasks. */
     generationSpec?: GenerationSpec;
     dramaRef?: CanvasDramaRef;
+    /** 段内图片的原始引用槽，精修换图或移出组后仍用于避免重复投送。 */
+    dramaSegmentImage?: { segmentId: string; slot: string };
     /** Namespaced extension ownership for nodes contributed by a unified plugin. */
     pluginId?: string;
     pluginNodeId?: string;

@@ -4,8 +4,8 @@ import { App, Button, Checkbox, Select } from "antd";
 import { Link2 } from "lucide-react";
 
 import { AppModal } from "@/components/ui/product/app-modal";
-import { dramaKeys } from "@/lib/drama/drama-query-keys";
-import { importDramaCast, listDramaCast, listDramas, type DramaCast } from "@/services/api/drama";
+import { importDramaCast, listDramas, type DramaCast } from "@/services/api/drama";
+import { useDramaCast, useDramaSummary } from "./use-studio";
 import { CAST_KIND_LABEL, MediaThumb } from "../drama-shared";
 
 // 与服务端 production.NormalizeName 对齐，预览不能把空格或标点差异误报为新增。
@@ -20,7 +20,8 @@ export function CastProjectImport({ projectId, currentCast, onClose, onImported 
     const [matchByName, setMatchByName] = useState(true);
     const [replaceExisting, setReplaceExisting] = useState(false);
     const projects = useQuery({ queryKey: ["dramas", "cast-import", query], queryFn: ({ signal }) => listDramas({ page: 1, pageSize: 100, q: query || undefined }, signal) });
-    const source = useQuery({ queryKey: dramaKeys.cast(sourceProjectId), queryFn: ({ signal }) => listDramaCast(sourceProjectId, signal), enabled: Boolean(sourceProjectId) });
+    const sourceSummary = useDramaSummary(sourceProjectId);
+    const source = useDramaCast(sourceProjectId, sourceSummary.data);
     const bases = useMemo(() => source.data?.cast.filter((item) => !item.parentId) || [], [source.data]);
     const picked = bases.filter((item) => selected.has(item.id));
     const importAssets = useMutation({

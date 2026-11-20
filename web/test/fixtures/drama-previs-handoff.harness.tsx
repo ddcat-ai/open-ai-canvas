@@ -91,6 +91,7 @@ function Harness() {
         projectLoaded: true,
         nodes,
         nodesRef,
+        connectionsRef,
         setNodes,
         setConnections,
         focusNodes,
@@ -221,6 +222,42 @@ function putCast(cast: DramaCast[]) {
     spyOn(api, "listDramaCast").mockResolvedValue({ cast });
     client.setQueryData(dramaKeys.cast("project-a"), { cast });
 }
+
+test("停留在画布只更新侧栏；重开本集才在原框补图，保留移动、精修和旧连线", async () => {
+    const hero = setting("character-a", "character", { imageResourceId: "image-old" });
+    const prop = setting("prop", "prop", { imageResourceId: undefined });
+    detail.segments[0].request.references.push({ castId: "prop", kind: "prop", name: "怀表", label: "参考图2", sent: false });
+    await act(async () => {
+        putCast([hero, prop]);
+        current.enter({ kind: "episode", episodeId: "episode-a" });
+    });
+    const frame = current.nodes.current.find((node) => node.type === CanvasNodeType.Frame)!;
+    const original = current.nodes.current.find((node) => node.metadata?.storageKey === "resource:image-old")!;
+    const originalEdge = current.connections.current.find((edge) => edge.fromNodeId === original.id)!;
+    const version = { id: "keep", number: 1, createdAt: "2026-01-01", source: "upload" as const, media: { storageKey: "resource:image-old" } };
+    const moved = current.nodes.current.map((node) => ({
+        ...node,
+        position: { x: node.position.x + 125, y: node.position.y + 180 },
+        ...(node.id === original.id ? { metadata: { ...node.metadata, storageKey: "resource:refined", mediaVersions: [version] } } : {}),
+    }));
+    await act(async () => current.setNodes(moved));
+    detail.segments[0].request.references[1] = { ...detail.segments[0].request.references[1], sent: true, resourceId: "prop-new" };
+    await act(async () => {
+        putCast([hero, { ...prop, imageResourceId: "prop-new" }]);
+    });
+    expect(current.nodes.current).toEqual(moved);
+    await act(async () => current.enter({ kind: "episode", episodeId: "episode-a" }));
+    const added = current.nodes.current.find((node) => node.metadata?.storageKey === "resource:prop-new");
+    expect(added?.parentId).toBe(frame.id);
+    expect(current.nodes.current.find((node) => node.id === frame.id)?.position).toEqual(moved.find((node) => node.id === frame.id)!.position);
+    expect(current.nodes.current.find((node) => node.id === original.id)).toEqual(moved.find((node) => node.id === original.id));
+    expect(current.connections.current[0]).toEqual(originalEdge);
+    expect(current.connections.current[1]?.fromNodeId).toBe(added!.id);
+    const ids = current.nodes.current.map((node) => node.id);
+    await act(async () => current.enter({ kind: "episode", episodeId: "episode-a" }));
+    expect(current.nodes.current.map((node) => node.id)).toEqual(ids);
+    expect(current.connections.current).toHaveLength(2);
+});
 
 test("制作台顶栏把已有设定图放入各自的框，重开只补缺图，保留精修和手动分组", async () => {
     const casts = [setting("hero", "character"), setting("look", "character", { parentId: "hero", lookName: "冬装" }), setting("lamp", "prop"), setting("street", "scene"), setting("draft", "prop", { imageResourceId: undefined })];
