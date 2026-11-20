@@ -16,6 +16,9 @@ const PLAIN_RESOLUTION = /^\d+p$/;
  */
 export function dramaSegmentVideoRequirements(request: DramaSegmentRequest, option: DramaModelOption | undefined, changed: boolean, videoResolution?: string): ModelRequirements | undefined {
     if (!request.operation || request.seconds <= 0) return undefined;
+    const hasTail = Boolean(request.firstFrameResourceId || request.firstFramePending);
+    // 换模型后，尾帧角色和请求模式由新协议决定。旧预演的模式不能拦截新模型。
+    if (changed && hasTail) return undefined;
     // 换了模型时服务端会按新模型重新换算分辨率；用横竖标签（如 768p竖）表达画幅的模型前端算不准，不判定。
     const resolutions = option?.videoResolutions || [];
     if (changed && !(resolutions.length && resolutions.every((value) => PLAIN_RESOLUTION.test(videoResolutionComparisonKey(value))))) return undefined;
@@ -25,7 +28,7 @@ export function dramaSegmentVideoRequirements(request: DramaSegmentRequest, opti
     const generateAudio = changed ? option?.generateAudio : request.generateAudio;
     if (!resolution || generateAudio === undefined) return undefined;
     // 首帧与随请求发送的参考图都按图片输入计价，口径与服务端一致。
-    const imageCount = request.references.filter((reference) => reference.sent).length + (request.firstFrameResourceId || request.firstFramePending ? 1 : 0);
+    const imageCount = request.references.filter((reference) => reference.sent).length + (hasTail ? 1 : 0);
     return {
         capability: "video",
         input: { textCount: 1, imageCount, videoCount: 0, audioCount: 0, characterCount: 0 },

@@ -182,7 +182,7 @@ export function missingSegmentImages(nodes: CanvasNodeData[], frame: CanvasNodeD
         if (source?.segmentId === segment.id) slots.add(source.slot);
         if (source || node.parentId !== frame.id || node.type !== CanvasNodeType.Image) continue;
         const ref = node.metadata?.dramaRef;
-        if (node.id === video?.metadata?.videoStartFrameNodeId || node.title.startsWith("首帧 ·")) slots.add("first");
+        if (node.id === video?.metadata?.videoStartFrameNodeId || node.title.startsWith("首帧 ·") || node.title.startsWith("开场参考 ·")) slots.add("first");
         else if (ref?.kind === "cast") slots.add(`cast:${ref.id}`);
         else if (node.metadata?.storageKey?.startsWith("resource:")) slots.add(`image:${node.metadata.storageKey.slice(9)}`);
     }
@@ -381,7 +381,8 @@ export function buildDramaSegmentGroup(input: {
     if (segment.request.firstFrameResourceId && media.assetIdOf(segment.request.firstFrameResourceId)) {
         const original = media.imageSizeOf?.(segment.request.firstFrameResourceId);
         const size = dramaMediaSize(original ? `${original.width}:${original.height}` : input.aspectRatio, 288);
-        const node = mediaNode(CanvasNodeType.Image, `首帧 · 第 ${segment.index} 段尾帧`, segment.request.firstFrameResourceId, media, { assetCategory: "material", manualSize: true, dramaSegmentImage: { segmentId: segment.id, slot: "first" } });
+        const role = segment.request.tailFrameAsReference ? "开场参考" : "首帧";
+        const node = mediaNode(CanvasNodeType.Image, `${role} · 第 ${segment.index} 段尾帧`, segment.request.firstFrameResourceId, media, { assetCategory: "material", manualSize: true, dramaSegmentImage: { segmentId: segment.id, slot: "first" } });
         firstFrameNode = { ...node, position: { x, y: contentTop }, width: size.width, height: size.height };
         children.push(firstFrameNode);
         x += size.width + GROUP_GAP;
@@ -395,7 +396,7 @@ export function buildDramaSegmentGroup(input: {
         composerContent: prompt,
         generationMode: "video",
         videoEditOperation: SEGMENT_OPERATION[segment.request.operation] || "text_to_video",
-        videoStartFrameNodeId: firstFrameNode?.id,
+        videoStartFrameNodeId: segment.request.tailFrameAsReference ? undefined : firstFrameNode?.id,
         seconds: seconds ? String(seconds) : undefined,
         ...(segment.videoResourceId && segment.videoSeconds ? { durationMs: segment.videoSeconds * 1000 } : {}),
         assetCategory: "material",
@@ -503,7 +504,7 @@ export function appendSegmentImages(nodes: CanvasNodeData[], connections: Canvas
             y += image.height + REF_GAP;
         }
     }
-    const first = added.find((node) => node.metadata?.dramaSegmentImage?.slot === "first");
+    const first = segment.request.tailFrameAsReference ? undefined : added.find((node) => node.metadata?.dramaSegmentImage?.slot === "first");
     const result = nodes.map((node) => {
         if (node.id === frame.id)
             return {

@@ -124,7 +124,8 @@ export function klingV4Spec({ ref, omit, coalesce, addNumbers, multiply, map, fi
   const status = ref("task.status"), codeOk = eq(ref("response.code"), 0);
   const validTask = and(codeOk, stringId(ref("task.id")), oneOf(status, ["submitted", "processing", "succeeded", "failed"]), or(ne(status, "succeeded"), gt(len(outputs), 0)));
   return {
-    id, providerId: id, name: "Kling 4.0 Official API", vendor: "Open AI Canvas contributors", capability: "video", version: "1.2.0", baseUrl: "",
+    id, providerId: id, name: "Kling 4.0 Official API", vendor: "Open AI Canvas contributors", capability: "video", version: "1.2.1", baseUrl: "",
+    videoReferences: { layout: "omni-contents", dramaTailFrame: "omni-first-frame" },
     requiresPublicMediaUrls: true, detachedPolling: true, auth: { type: "bearer", field: "apiKey" }, requestBindings, validations, videoModes, videoOutputs,
     params: [
       ["model", "string", true, "URL path", "kling-4.0 或 kling-4.0-flash。"], ["operation", "string", false, "endpoint", "文生、图生、全能参考可显式选择。"],
@@ -145,7 +146,7 @@ export function klingV4Spec({ ref, omit, coalesce, addNumbers, multiply, map, fi
       videos: onTask(conditional(and(validTask, eq(status, "succeeded")), map(outputs, "output", { url: resultUrl, id: ref("output.id") }))),
       usage: onTask(ref("task.usage")), errorPaths: ["code"], resultEphemeral: true,
     },
-    notes: "按上游模型与生成方式解析端点。单次创建后按 data.id 在原渠道回查 /tasks。标准版和 Flash 的关键帧、音色、清晰度与总时长限制不同。具体 API 与渠道定价见影策的《官方视频模型与插件版本》。",
+    notes: "按上游模型与生成方式解析端点。短剧全能参考按出站 contents 中图片的实际 ID 改写引用，可同时携带上一段尾帧作为首帧。单次创建后按 data.id 在原渠道回查 /tasks。标准版和 Flash 的关键帧、音色、清晰度与总时长限制不同。具体 API 与渠道定价见影策的《官方视频模型与插件版本》。",
     readmeIntro: "使用对应区域的新版 Bearer API Key。中国区地址为 https://api-beijing.klingai.com，国际区为 https://api-singapore.klingai.com。两种型号都可在 Omni 中引用视频。单独提供的北京渠道示例只对无输入视频的组合报价。模型设置从绑定版本读取模式、分辨率和时长范围。",
   };
 }

@@ -41,7 +41,8 @@ type SegmentPromptInput struct {
 	Shots       []SegmentShot
 	References  []SegmentReference
 	// FirstFrame 表示请求会附带上一段视频的最后一帧作为本段首帧。
-	FirstFrame bool
+	FirstFrame           bool
+	TailFrameAsReference bool
 	// Independent 表示各段并行独立生成：不带上一段画面，段尾也不需要为下一段做硬定格。
 	Independent bool
 	// PauseMs 是台词后的气口，已计入镜头时长；为 0 时按默认值。
@@ -178,6 +179,8 @@ func SegmentVideoPrompt(in SegmentPromptInput) string {
 	if len(in.Shots) > 0 {
 		first := in.Shots[0]
 		switch {
+		case in.TailFrameAsReference:
+			fmt.Fprintf(&b, "以第%d段视频最后一帧作为本段开场参考。本段起幅：", in.Index)
 		case in.FirstFrame:
 			fmt.Fprintf(&b, "首帧即第%d段视频最后一帧（随请求附带）。本段起幅：", in.Index)
 		case in.Index > 0 && in.Independent:

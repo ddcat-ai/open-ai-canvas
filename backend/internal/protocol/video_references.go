@@ -13,7 +13,14 @@ type VideoReferenceContract struct {
 	Token                string          `json:"token,omitempty"`
 	Models               map[string]int  `json:"models,omitempty"`
 	MaxImagesByOperation map[string]*int `json:"maxImagesByOperation,omitempty"`
+	DramaTailFrame       string          `json:"dramaTailFrame,omitempty"`
 }
+
+const (
+	DramaTailFrameOmni      = "omni-first-frame"
+	DramaTailFrameReference = "reference-image"
+	DramaTailFrameParallel  = "parallel-only"
+)
 
 type videoImageSlot struct {
 	value, mediaID, role, token string
@@ -29,8 +36,10 @@ type videoReferenceReader func(map[string]any, []RequestFilePart) (videoWireProm
 
 var videoReferenceReaders = map[string]videoReferenceReader{
 	"content":                     contentReferences,
-	"input-media":                 inputMediaReferences("reference_image"),
-	"input-image-media":           inputMediaReferences("image_url"),
+	"input-media":                 inputMediaReferences("reference_image", false),
+	"input-image-media":           inputMediaReferences("image_url", false),
+	"input-media-top-prompt":      inputMediaReferences("reference_image", true),
+	"omni-contents":               omniContentReferences,
 	"image-urls":                  arrayReferences("", "image_urls", "", false),
 	"legacy-reference-image-urls": arrayReferences("", "reference_image_urls", "reference_image", false),
 	"reference-images":            arrayReferences("", "reference_images", "", false),
@@ -48,6 +57,11 @@ var videoReferenceReaders = map[string]videoReferenceReader{
 }
 
 func (rule VideoReferenceContract) valid() bool {
+	switch rule.DramaTailFrame {
+	case "", DramaTailFrameOmni, DramaTailFrameReference, DramaTailFrameParallel:
+	default:
+		return false
+	}
 	for operation, limit := range rule.MaxImagesByOperation {
 		if operation == "" || limit != nil && *limit < 0 {
 			return false
@@ -58,10 +72,17 @@ func (rule VideoReferenceContract) valid() bool {
 			return false
 		}
 	}
-	if rule.Layout == "media-tokens" {
+	if rule.Layout == "media-tokens" || rule.Layout == "omni-contents" {
 		return rule.Token == ""
 	}
 	return videoReferenceReaders[rule.Layout] != nil && strings.Count(rule.Token, "{n}") == 1
+}
+
+func (rule *VideoReferenceContract) DramaTailFrameMode(model string) string {
+	if rule == nil || len(rule.Models) > 0 && rule.Models[model] == 0 && rule.DramaTailFrame != DramaTailFrameParallel {
+		return ""
+	}
+	return rule.DramaTailFrame
 }
 
 func (rule *VideoReferenceContract) CheckNumbering(provider, model string) error {
@@ -198,10 +219,36 @@ func contentReferences(body map[string]any, _ []RequestFilePart) (videoWirePromp
 	return wire, nil
 }
 
-func inputMediaReferences(kind string) videoReferenceReader {
+func omniContentReferences(body map[string]any, _ []RequestFilePart) (videoWirePrompt, error) {
+	wire := videoWirePrompt{key: "text"}
+	items, _ := body["contents"].([]any)
+	for _, raw := range items {
+		item, _ := raw.(map[string]any)
+		switch item["type"] {
+		case "prompt":
+			if wire.body != nil {
+				return wire, errors.New("视频协议提示词内容块不唯一，无法核对参考图编号")
+			}
+			wire.body = item
+		case "refer_image":
+			id, _ := item["id"].(string)
+			if strings.TrimSpace(id) == "" {
+				return wire, errors.New("视频协议的参考图片缺少引用 ID，无法对应提示词引用")
+			}
+			value, _ := item["url"].(string)
+			wire.slots = append(wire.slots, videoImageSlot{value: value, role: "reference_image", token: "@" + id})
+		}
+	}
+	return wire, nil
+}
+
+func inputMediaReferences(kind string, rootPrompt bool) videoReferenceReader {
 	return func(body map[string]any, _ []RequestFilePart) (videoWirePrompt, error) {
 		input, _ := body["input"].(map[string]any)
 		wire := videoWirePrompt{body: input, key: "prompt"}
+		if rootPrompt {
+			wire.body = body
+		}
 		items, _ := input["media"].([]any)
 		for _, raw := range items {
 			item, _ := raw.(map[string]any)

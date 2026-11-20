@@ -420,7 +420,11 @@ function SegmentReceipt({ segment }: { segment: DramaSegment }) {
         : [];
     const rows: ReceiptRow[] = [
         { tone: sent === references ? "ok" : "warn", label: "参考图实发", value: `${sent}/${references} 张${references > sent ? "（未附图的按文字设定生成）" : ""}` },
-        { tone: first || request.firstFrameResourceId ? "ok" : "warn", label: "首帧", value: first ? "开场段，无首帧" : request.firstFrameResourceId ? `第 ${segment.index} 段视频最后一帧` : `等第 ${segment.index} 段视频生成` },
+        {
+            tone: first || request.firstFrameResourceId ? "ok" : "warn",
+            label: request.tailFrameAsReference ? "开场参考" : "首帧",
+            value: first ? "开场段，无首帧" : request.firstFrameResourceId ? `第 ${segment.index} 段视频最后一帧` : `等第 ${segment.index} 段视频生成`,
+        },
         { tone: "info", label: "生成方式", value: OPERATION_LABEL[request.operation] },
         { tone: "info", label: "时长", value: `${request.seconds || Math.round(segment.durationMs / 1000)} 秒${request.maxVideoSeconds ? `（模型单次最长 ${request.maxVideoSeconds} 秒）` : ""}` },
         ...outputRows,

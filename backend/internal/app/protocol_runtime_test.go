@@ -29,7 +29,7 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	for _, plugin := range plugins {
 		pluginsByID[plugin.Manifest.ID] = plugin
 	}
-	if manifest := pluginsByID["kling-v4-official"].Manifest; manifest.APIVersion != "yingce.plugin/v2" || manifest.Version != "1.2.0" {
+	if manifest := pluginsByID["kling-v4-official"].Manifest; manifest.APIVersion != "yingce.plugin/v2" || manifest.Version != "1.2.1" {
 		t.Fatalf("Kling manifest schema=%q release=%q", manifest.APIVersion, manifest.Version)
 	}
 	packages, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))

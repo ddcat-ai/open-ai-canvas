@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"yingce/backend/internal/production"
+	"yingce/backend/internal/protocol"
 )
 
 var dramaCapabilities = []string{"text", "image", "video"}
@@ -52,7 +53,7 @@ func (s *Service) resolveDramaLogicalModel(access *userGroupAccess, id, capabili
 // dramaSegmentOperation 是剧情段视频在该衔接方式下的主要生成方式，用于报价与能力校验。
 func dramaSegmentOperation(settings DramaSettings, profile dramaVideoProfile) (string, map[string]int) {
 	if !settings.parallelVideo() {
-		return "image_to_video", map[string]int{"image": 1}
+		return profile.tailFrameOperation(false), map[string]int{"image": 1}
 	}
 	if profile.supports("reference_to_video") {
 		return "reference_to_video", map[string]int{"image": 1}
@@ -402,10 +403,32 @@ func (p dramaVideoProfile) maxSeconds() int {
 
 // continuityIssue 返回模型不支持作品段落衔接方式的原因；空串表示可用。
 func (p dramaVideoProfile) continuityIssue(settings DramaSettings) string {
-	if !settings.parallelVideo() && !p.supports("image_to_video") {
-		return "所选视频模型不支持图生视频，无法用上一段尾帧续接；请在制作设置里改用“并行出片”或换用支持图生视频的模型"
+	if !settings.parallelVideo() && !p.supportsTailFrame() {
+		return "所选视频模型不支持短剧尾帧续接，请在制作设置里改用“并行出片”或换用支持续接的模型"
 	}
 	return ""
+}
+
+func (p dramaVideoProfile) tailFrameMode() string {
+	if p.video == nil {
+		return ""
+	}
+	return p.video.referenceContract.DramaTailFrameMode(p.video.providerModel)
+}
+
+func (p dramaVideoProfile) tailFrameOperation(withReferenceImages bool) string {
+	mode := p.tailFrameMode()
+	if p.supports("reference_to_video") && (mode == protocol.DramaTailFrameOmni ||
+		mode == protocol.DramaTailFrameReference && (withReferenceImages || !p.supports("image_to_video"))) {
+		return "reference_to_video"
+	}
+	return "image_to_video"
+}
+
+func (p dramaVideoProfile) supportsTailFrame() bool {
+	operation := p.tailFrameOperation(false)
+	return p.tailFrameMode() != protocol.DramaTailFrameParallel && p.supports(operation) &&
+		(p.video == nil || p.video.maxImagesFor(operation) > 0)
 }
 
 // dramaModelUnavailable 说明作品保存的模型为什么不能用、去哪里改。渠道模型被删除或停用后，
@@ -981,7 +1004,7 @@ func (s *Service) dramaModelOption(choice DramaModelChoice, capability, label, p
 			option.MaxVideoSeconds = profile.maxSeconds()
 			option.MaxAudios = profile.MaxAudios
 			option.MinReferenceImages = profile.MinImages
-			option.TailFrameChain = profile.supports("image_to_video")
+			option.TailFrameChain = profile.supportsTailFrame()
 			option.VideoRatios = profile.ratios()
 			audio := profile.GenerateAudio
 			option.GenerateAudio = &audio

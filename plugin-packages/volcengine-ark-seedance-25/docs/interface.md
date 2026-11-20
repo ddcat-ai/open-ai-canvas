@@ -20,6 +20,8 @@
 
 ## 统一字段映射
 
+短剧只带上一段尾帧时使用首帧模式和 `adaptive` 画幅。同时带人物或场景图时使用全模态参考，上一段尾帧是第一张普通参考图。
+
 | 统一字段 | 类型 | 必填 | 官方字段 | 说明 |
 | --- | --- | --- | --- | --- |
 | `model` | string | 是 | `model` | Seedance 2.5 模型 ID 或 Endpoint ID。 |
@@ -108,7 +110,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-seedance-25",
   "name": "火山方舟 Seedance 2.5 官方视频生成",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Volcengine / 影策",
   "description": "火山方舟官方 /api/v3 视频生成接口，支持 Seedance 2.5 的文本、图片、视频和音频全模态输入。",
   "permissions": [
@@ -131,7 +133,8 @@
         "id": "volcengine-ark-seedance-25",
         "videoReferences": {
           "layout": "content",
-          "token": "参考图{n}"
+          "token": "参考图{n}",
+          "dramaTailFrame": "reference-image"
         },
         "label": "火山方舟 Seedance 2.5 官方视频生成",
         "capabilities": [
@@ -270,6 +273,62 @@
             "required": false,
             "mapping": "providerOptions.volcengine-ark-seedance-25.safety_identifier",
             "description": "终端用户标识哈希。"
+          }
+        ],
+        "requestBindings": [
+          {
+            "name": "ratio",
+            "value": {
+              "$if": {
+                "condition": {
+                  "$and": [
+                    {
+                      "$eq": [
+                        {
+                          "$ref": "request.operation"
+                        },
+                        "image_to_video"
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$len": {
+                            "$ref": "request.images"
+                          }
+                        },
+                        1
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$ref": "request.images.0.id"
+                        },
+                        "first-frame"
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$ref": "request.images.0.role"
+                        },
+                        "first_frame"
+                      ]
+                    }
+                  ]
+                },
+                "then": "adaptive",
+                "else": {
+                  "$coalesce": [
+                    {
+                      "$ref": "request.aspectRatio"
+                    },
+                    "adaptive"
+                  ]
+                }
+              }
+            }
           }
         ],
         "validations": [
@@ -756,12 +815,7 @@
                 {
                   "$eq": [
                     {
-                      "$coalesce": [
-                        {
-                          "$ref": "request.aspectRatio"
-                        },
-                        "adaptive"
-                      ]
+                      "$ref": "bindings.ratio"
                     },
                     "adaptive"
                   ]
@@ -1020,12 +1074,7 @@
                 },
                 "then": "adaptive",
                 "else": {
-                  "$coalesce": [
-                    {
-                      "$ref": "request.aspectRatio"
-                    },
-                    "adaptive"
-                  ]
+                  "$ref": "bindings.ratio"
                 }
               }
             },

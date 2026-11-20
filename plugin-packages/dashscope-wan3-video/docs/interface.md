@@ -99,7 +99,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "dashscope-wan3-video",
   "name": "DashScope Wan 3.0 Video",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "author": "Alibaba Cloud / 影策",
   "description": "DashScope Wan 3.0 Video 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -140,7 +140,8 @@
         },
         "videoReferences": {
           "layout": "input-media",
-          "token": "参考图{n}"
+          "token": "参考图{n}",
+          "dramaTailFrame": "reference-image"
         },
         "parameters": [
           {

@@ -370,6 +370,19 @@ test("一张已删除的图片不妨碍可用设定分组，重新进入可补�
     expect(registration).toHaveBeenCalledTimes(2);
 });
 
+test("重开剧情段补入开场参考时，尾帧保持普通参考图角色", async () => {
+    await act(async () => current.drama.projectSegment("episode-a", 0, "canvas"));
+    const request = detail.segments[0].request;
+    request.firstFrameResourceId = "opening-reference";
+    request.tailFrameAsReference = true;
+    await act(async () => current.drama.projectSegment("episode-a", 0, "canvas"));
+    const tail = current.nodes.current.find((node) => node.metadata?.storageKey === "resource:opening-reference");
+    const video = current.nodes.current.find((node) => node.type === CanvasNodeType.Video);
+    expect(tail?.title).toStartWith("开场参考");
+    expect(video?.metadata?.videoStartFrameNodeId).toBeUndefined();
+    expect(current.connections.current.some((edge) => edge.fromNodeId === tail?.id && edge.toNodeId === video?.id)).toBe(true);
+});
+
 test("空画布第一次进入导演台会先投送段视频与参考，再打开可保存的预演场景", async () => {
     expect(current.nodes.current).toHaveLength(0);
     await act(async () => current.drama.projectSegment("episode-a", 0, "previs"));

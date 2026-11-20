@@ -186,6 +186,9 @@ func CleanWrittenPrompt(text string) string {
 
 // firstFrameRule 说明本段首帧从哪来：有上一段尾帧时首帧图就是那一帧，没有时由提示词描述首帧。
 func firstFrameRule(in SegmentPromptInput) string {
+	if in.TailFrameAsReference {
+		return fmt.Sprintf("随请求附带第%d段视频的最后一帧作为开场参考。根据该帧写清人物位置、朝向、姿态与道具接触，后续动作从上一段结尾自然延续。其他参考图用于人物与场景一致性。", in.Index)
+	}
 	if in.FirstFrame {
 		return fmt.Sprintf("请求会附带第%d段视频的最后一帧作为本段首帧图。先写一句“首帧即第%d段视频最后一帧”，再依据上一段结尾写清这一帧里每个人物的位置、朝向、姿态与道具接触，后续动作从这一帧自然延续；然后写渲染质感与画风、本段前中后段的视觉变化、明确禁止项（无额外滤镜噪点、无游戏 UI、无字幕水印、无全屏闪白等）", in.Index, in.Index)
 	}

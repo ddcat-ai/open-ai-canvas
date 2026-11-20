@@ -102,7 +102,7 @@ function segmentAssetItems(episode: Pick<DramaEpisode, "number">, segment: Drama
         title: reference.kind === "image" ? reference.name : castTitle({ kind: reference.kind, name: reference.name }),
         category: reference.kind === "image" ? "material" : dramaCastAssetCategory(reference.kind),
     }));
-    if (segment.request.firstFrameResourceId) items.push({ resourceId: segment.request.firstFrameResourceId, title: `${label} · 首帧`, category: "material" });
+    if (segment.request.firstFrameResourceId) items.push({ resourceId: segment.request.firstFrameResourceId, title: `${label} · ${segment.request.tailFrameAsReference ? "开场参考" : "首帧"}`, category: "material" });
     for (const resourceId of dramaSegmentResourceIds(segment, takes)) {
         if (!items.some((item) => item.resourceId === resourceId)) items.push({ resourceId, title: `${label} · 视频`, category: "material" });
     }

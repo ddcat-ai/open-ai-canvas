@@ -29,6 +29,8 @@
 
 ## 工作流分支
 
+此插件用于短剧并行出片。编号工作流把 `ref_image_N` 用作普通参考图。专用首尾帧工作流要求同时提供 `first_frame` 和 `last_frame`，适用于手动配置两张关键帧的任务。
+
 | 工作流 | 图片字段 | 音频字段 | 其他差异 |
 | --- | --- | --- | --- |
 | `minimax_h3_b99_001` | 无 | 无 | 文生视频。 |
@@ -64,7 +66,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "autodl-comfyui",
   "name": "AutoDL ComfyUI 视频与音频",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "author": "影策社区",
   "description": "通过 AutoDL.Art ComfyUI 工作流 API 接入异步视频生成。",
   "permissions": [
@@ -89,6 +91,7 @@
         "videoReferences": {
           "layout": "indexed-images",
           "token": "@图片{n}",
+          "dramaTailFrame": "parallel-only",
           "models": {
             "minimax_h3_zm_u30": 9,
             "minimax_h3_zm_u24": 9,

@@ -75,7 +75,7 @@
 
 ## 兼容边界
 
-按上游模型与生成方式解析端点。单次创建后按 data.id 在原渠道回查 /tasks。标准版和 Flash 的关键帧、音色、清晰度与总时长限制不同。具体 API 与渠道定价见影策的《官方视频模型与插件版本》。
+按上游模型与生成方式解析端点。短剧全能参考按出站 contents 中图片的实际 ID 改写引用，可同时携带上一段尾帧作为首帧。单次创建后按 data.id 在原渠道回查 /tasks。标准版和 Flash 的关键帧、音色、清晰度与总时长限制不同。具体 API 与渠道定价见影策的《官方视频模型与插件版本》。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -87,7 +87,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "kling-v4-official",
   "name": "Kling 4.0 Official API",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "Open AI Canvas contributors / 影策",
   "description": "Kling 4.0 Official API 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -126,6 +126,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "omni-contents",
+          "dramaTailFrame": "omni-first-frame"
         },
         "videoModes": {
           "kling-4.0": {

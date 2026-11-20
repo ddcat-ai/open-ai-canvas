@@ -635,7 +635,7 @@ type DramaSegmentView struct {
 
 // DramaSegmentRequest 是一段视频请求的预演，与提交时同一函数计算。
 type DramaSegmentRequest struct {
-	// Operation：image_to_video（上一段最后一帧作首帧）、reference_to_video（参考图）、text_to_video。
+	// Operation 是实际使用的生成模式。续接使用图生视频或协议声明的参考图模式。
 	Operation       string `json:"operation"`
 	Seconds         int    `json:"seconds"`
 	MaxVideoSeconds int    `json:"maxVideoSeconds"`
@@ -651,6 +651,7 @@ type DramaSegmentRequest struct {
 	// FirstFrame 是上一段视频的最后一帧；第一段为空。FirstFramePending 表示上一段还没生成，生成后才能提交本段。
 	FirstFrameResourceID string                  `json:"firstFrameResourceId,omitempty"`
 	FirstFramePending    bool                    `json:"firstFramePending"`
+	TailFrameAsReference bool                    `json:"tailFrameAsReference,omitempty"`
 	References           []DramaSegmentReference `json:"references"`
 	// ReferenceCapacity 扣除首帧并受每段上限约束，ModelMaxImages 是所选模型、工作流和生成方式共同允许的图片上限。
 	ReferenceCapacity int `json:"referenceCapacity"`
@@ -812,7 +813,7 @@ type DramaModelOption struct {
 	MaxAudios       int `json:"maxAudios"`
 	// MinReferenceImages 仅视频模型：模型要求的最少参考图数（含首帧），0 表示不强制参考图。
 	MinReferenceImages int `json:"minReferenceImages,omitempty"`
-	// TailFrameChain 仅视频模型：是否支持图生视频，可用于“尾帧续接”；不支持的模型只能并行出片。
+	// TailFrameChain 是模型是否可使用上一段尾帧续接。
 	TailFrameChain bool `json:"tailFrameChain,omitempty"`
 	// VideoRatios 仅视频模型：能准确给出的作品画幅；不含作品画幅的模型不能用于该作品。
 	VideoRatios []string `json:"videoRatios,omitempty"`
