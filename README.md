@@ -1,40 +1,178 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="88" alt="影策 logo">
+  <img src="web/public/logo.svg" width="88" alt="DMC logo">
 </p>
 
-<h1 align="center">影策</h1>
+<h1 align="center">DMC · 影策二开</h1>
 
-<p align="center">让一个故事，从文字走向银幕</p>
+<p align="center">本地优先的 AI 漫剧 / 短剧创作台 · 填一次 LL2 Key 就能出片</p>
 
 <p align="center">
-  <a href="https://github.com/ddcat-ai/open-ai-canvas">GitHub</a> ·
-  <a href="docs/content/docs/overview/features.mdx">功能</a> ·
-  <a href="docs/content/docs/overview/quick-start.mdx">文档</a> ·
-  <a href="SECURITY.md">安全策略</a>
+  一句话成片 · 无限画布 · 全站 DMC Agent · 我的片子
 </p>
 
-影策是一个开源的 AI 影视与短剧创作工作台。上传一本小说，流水线会完成改编、拆集、建角色、出分镜，再逐段生成视频并合成成片；需要自由发挥时，可以在无限画布上用节点组织图片、视频、文本和 3D 预演，也可以让 Agent 直接在画布上动手。模型渠道、技能、插件、素材和计费都可以自部署、自管理。
+> 本项目是 [影策 open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas) 的 C 端二开版本。
+> 免登录、只使用本机保存的 LL2 Key，不依赖影策账号后端；所有画布、素材和作品默认存在这台电脑。
+
+---
+
+## 这是什么
+
+DMC 把「写一句话 → 出片」和「无限画布」做在同一个本地工作台里：
+
+- **一句话成片**：写一句画面描述，选模型、清晰度、时长和比例，直接生成；支持 AI 润色、多版本候选和角色/风格锁定。
+- **全站 DMC Agent**：右下角常驻，能写提示词、设计运镜、写代码，确认价格后可以直接下单出片。
+- **无限画布**：用节点组织角色、分镜、参考图和视频；支持首尾帧、参考视频、生成后超分，以及按任务号恢复生成。
+- **我的片子**：生成的成片按视频封面陈列，可播放、下载、移除，也可以存到资产库。
 
 <p align="center">
-  <img src="assets/screenshots/storyboard.jpg" alt="短剧制作：分镜视图，每段显示镜头、台词、参考图和视频生成状态" width="100%">
+  <img src="assets/screenshots/dmc-variants.png" alt="一句话成片：多版本提示词与 AI 润色" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://yingce.tv"><strong>在线演示 yingce.tv</strong></a>（账号/密码：test/test123456） ·
-  <a href="#快速开始">本地启动</a>
+  <img src="assets/screenshots/dmc-agent.png" alt="DMC Agent：全站常驻的创作助手" width="100%">
 </p>
 
-> 项目仍在快速开发，数据结构和外部接口可能调整。默认适合个人、本地或可信环境部署；未经安全配置，不要直接作为公网多人服务使用。
+## 核心能力
 
-## 下个版本：影策世界引擎（内测中）
+### 一句话成片
 
-在 3D 世界里搭场景、排机位、做动画：天气、布景、建筑、花木和角色直接摆进场景，在地面标记 A、B 点后，用一句话告诉 Agent「将角色从 B 点跑步移动到 A 点」，它会补问细节并生成关键帧。镜头可在时间轴上编排，并导出白模和深度画面作为视频生成的参考。
+- 一个视频输入框直接出片；只想写提示词或改稿，交给右下角的 DMC Agent
+- **AI 润色提示词**：把一句话补成主体、光线、运镜清楚的画面描述
+- **多版本**：同一句话生成 3 个不同侧重点的版本，挑一个再生成
+- **角色/风格锁定**：保存人物设定和画风，之后每条生成自动带上
+- **生成后顺便超分**：先出片，再按 1080P / 2K / 4K 串行超分（单独计费，提交前展示）
+- 提交前按官方价估算本次花费，账单以 LL2 控制台为准
+
+### 全站 DMC Agent
+
+- 首页、资产、灵感广场、我的片子等页面右下角常驻，点开即用
+- 能写提示词、设计运镜、写代码、改文案和回答创作问题
+- 回答里的代码块会单独渲染，可直接复制
+- 支持「直接出片」：先确认模型、秒数、清晰度和价格，确认后自动回到首页提交
+
+### 无限画布
+
+- 节点、连线、框选、小地图、撤销重做、本地保存
+- LL2 视频模型直连生成：MiniMax H3、wan3.0、Seedance、Vidu
+- 视频节点连两张图就是首尾帧；可带参考视频/音频（按模型限制）
+- 已生成的视频可在右键菜单直接超分、下载到本机或存到资产库
+- 生成阶段和超分阶段刷新后可按 LL2 taskId 续查，尽量不重复扣费
+- 「漫剧五步」入口：画风 → 故事 → 分镜 → 视频 → 成片
 
 <p align="center">
-  <img src="assets/screenshots/3d.png" alt="影策世界引擎：古代集市 3D 场景、A/B 标记点、主摄影机、时间轴与 Agent 对话面板" width="100%">
+  <img src="assets/screenshots/dmc-lock.png" alt="角色/风格锁定" width="100%">
 </p>
 
-## 赞助商
+### 我的片子
+
+<p align="center">
+  <img src="assets/screenshots/dmc-films.png" alt="我的片子：按视频封面陈列" width="100%">
+</p>
+
+- 本机作品库，按视频首帧封面陈列
+- 每支片子可直接播放、下载、移除
+- 需要 Bearer 的超分版点击时才取回，不在列表里预加载
+
+## 模型与协议
+
+当前 C 端直连 LL2（api.ll2.cn），不需要影策后端。已适配的视频模型：
+
+| 模型 | 清晰度 | 时长 | 参考素材 |
+| --- | --- | --- | --- |
+| MiniMax H3 | 768P | 4–15 秒 | 首帧/尾帧、参考视频、参考音频 |
+| wan3.0-video / prime | 480P / 720P / 1080P | 4–30 秒 | 图 ≤10、视频 ≤5、音频 ≤5（首尾帧与参考素材二选一） |
+| Seedance 2.0 / 2.5 | 480P / 720P / 1080P / 4K | 按模型 | 首尾帧、参考图、参考视频 |
+| Vidu Q3 pro / turbo | 540P / 720P / 1080P | 按模型 | 最多 2 张图（首帧 + 尾帧） |
+| auto-hd | 1080P / 2K / 4K | 后处理 | 只接在已生成的公网视频后，不单独生成 |
+
+> Super Vega 协议已接入但真机仍失败，素材带图暂不放开。
+
+## 快速开始
+
+### 环境要求
+
+- [Bun](https://bun.sh/)（前端）
+- 一个可用的 LL2 API Key（在设置或右上角「连接 LL2」里填一次）
+
+### 本地启动（C 端）
+
+```bash
+cd web
+bun install --frozen-lockfile
+bun run dev
+```
+
+打开 <http://localhost:3000>，点「连接 LL2」填 Key 即可。
+
+**不需要启动影策后端。** 登录、账号、积分和后台管理属于上游影策的能力，C 端二开不使用。
+
+### 本地数据
+
+- 画布、作品和素材存在浏览器本地（localStorage / IndexedDB）
+- 退出浏览器、重启电脑都会保留；但不同浏览器或不同站点（localhost / 127.0.0.1）数据不互通
+- 开发时统一使用 `http://localhost:3000`；访问 `127.0.0.1:3000` 会自动跳转
+- LL2 生成的视频直链只在云端保留约 24 小时；长期保存请点「下载到本机」或「存到资产库」
+
+### 构建
+
+```bash
+cd web
+bun run build
+```
+
+Windows 桌面安装包正在规划中（Electron + NSIS）：退出工具后数据保存在用户目录，卸载默认保留；后续会补导出/导入工作区和自动更新方案。
+
+## 开发与验证
+
+```bash
+cd web
+bun run typecheck
+bun test test/ll2-ux-walkthrough-regressions.test.ts
+bun run build
+```
+
+## 数据与隐私
+
+- LL2 Key 只保存在本机浏览器，不提交到任何业务后端
+- 画布、素材、作品默认只存在这台电脑
+- 生成的视频会上传到 LL2 网关处理，24 小时后直链可能失效
+- 不要把本机开发环境直接暴露到公网
+
+## 目录结构
+
+```text
+web/        Vite + React 前端（C 端主要代码）
+backend/    上游影策后端（C 端不需要启动）
+docs/       上游文档站
+desktop/    EXE 桌面壳（规划中）
+```
+
+## 许可证
+
+沿用上游 [MIT](LICENSE)。本项目改动部分同样按 MIT 发布；第三方组件和素材遵循各自附带许可证。
+
+---
+
+## 鸣谢
+
+这一版能跑起来，离不开下面这些项目和伙伴：
+
+### 开源上游
+
+- **[影策 open-ai-canvas](https://github.com/ddcat-ai/open-ai-canvas)**：本项目的画布、任务系统和大部分基础能力都来自这个开源项目；没有上游就没有 DMC 二开。
+- 上游贡献者、赞助商和社区技能作者：详见下方保留的原始名单。
+
+### 模型与算力
+
+- **[LL2 / DMC](https://api.ll2.cn)**：提供统一的 BYOK 视频/文本模型网关，H3、wan3、Seedance、Vidu、auto-hd 超分都走它。
+- **MiniMax、阿里云百炼、火山引擎、Vidu、Super Vega** 等模型提供方：本项目的协议适配基于各家官方文档。
+
+### 产品与桌面参考
+
+- **BeefTV**：桌面端本地化、插件、更新和用户数据落盘的产品形态参考；感谢其验证过的桌面工作流。
+- **DeepSeek Harness（DSH）**：本项目开发过程中使用的 Agent 工作台。
+
+### 原项目赞助商
 
 感谢以下赞助商对影策项目的支持：
 
@@ -51,230 +189,7 @@
 | <img src="assets/panda.jpg" alt="panda AI" width="160"> | 团队 | panda AI | API接口平台，面向个人开发者、技术团队与企业，稳定提供GPT、Gemini、grok等图片视频模型 | [api.pandatk.com](https://api.pandatk.com) |
 | <img src="assets/tack2ai.svg" alt="源点动力" width="160"> | 商业 | 源点动力 | 专注 Seedance、Wan 等视频模型 API，以更优惠的价格降低成本。部分模型个人三折，企业二折，做人民用得起的供应商。 | [ai.tack2ai.cn](https://ai.tack2ai.cn) |
 
-## 产品一览
-
-### 从小说到成片：短剧制作流水线
-
-上传小说或粘贴正文，影策按集拆分剧本，提取角色、道具和场景，生成结构化分镜，再按剧情段逐段生成视频。第 2 段起自动以上一段最后一帧作为首帧，镜头之间保持连贯。每一步都可以人工接管：改写台词、锁定角色形象、单段重新生成。
-
-<table>
-<tr>
-<td width="50%"><img src="assets/screenshots/script.jpg" alt="剧本视图：本集梗概、开场钩子、结尾悬念，镜头逐条对照小说原文"></td>
-<td width="50%"><img src="assets/screenshots/cast.jpg" alt="设定视图：角色三视图、别名、外貌描述和声线，可锁定形象"></td>
-</tr>
-<tr>
-<td><b>剧本</b>：本集梗概、开场钩子和结尾悬念一目了然；每个镜头标注景别、运镜和时长，右侧对照小说原文。</td>
-<td><b>设定</b>：角色、道具、场景统一管理。角色有三视图、别名、外貌和声线，锁定后整部剧沿用同一形象。</td>
-</tr>
-</table>
-
-### 一句话开始创作
-
-创作首页把视频、图片、文本和 Agent 放在同一个输入框里。选模型、调比例和清晰度、加参考图，然后直接生成；灵感大厅收录可复用的提示词案例，点开即可继续创作。
-
-<table>
-<tr>
-<td width="50%"><img src="assets/screenshots/create.jpg" alt="创作首页：视频、图片、文本、Agent 四种模式与灵感大厅"></td>
-<td width="50%"><img src="assets/screenshots/agent.jpg" alt="Agent 模式：新建画布并与 Agent 协作"></td>
-</tr>
-<tr>
-<td><b>创作首页</b>：最近画布、快捷入口和灵感大厅集中在一页。</td>
-<td><b>画布 Agent</b>：Agent 结合素材、技能和画布上下文直接在画布上生成和修改，生成操作仍需经过审批和额度检查。</td>
-</tr>
-</table>
-
-### 无限画布
-
-节点、连线、框选、小地图、撤销重做和只读分享都已就绪。图片、视频、文本、音频和 3D 预演节点可以互相引用，适合做角色设定、场景概念和镜头实验。
-
-<p align="center">
-  <img src="assets/screenshots/canvas.jpg" alt="无限画布：角色三视图节点与连线" width="100%">
-</p>
-
-### 图片与视频工作台
-
-按出品目标选模板（如商品白底图、广告英雄出场），上传参考素材，描述画面，确认参数后生成。进行中的任务和历史结果都在右侧。
-
-<p align="center">
-  <img src="assets/screenshots/image-studio.jpg" alt="图片生成工作台：出品目标模板、参考素材、生成结果与历史" width="100%">
-</p>
-
-### 技能、插件与素材
-
-<table>
-<tr>
-<td width="50%"><img src="assets/screenshots/skills.jpg" alt="技能库：短剧影视、电商营销、创意设计等分类技能"></td>
-<td width="50%"><img src="assets/screenshots/plugins.jpg" alt="插件中心：文本、图片、视频、音频、支付协议和应用插件"></td>
-</tr>
-<tr>
-<td><b>技能库</b>：把分镜方法、角色设计、广告导演思路等沉淀成技能，在对话里用 <code>@技能</code> 调用，也可以从 GitHub 安装社区技能。</td>
-<td><b>插件中心</b>：模型协议以插件形式接入，覆盖主流文本、图片、视频、音频供应商，另有支付协议和应用插件。</td>
-</tr>
-<tr>
-<td><img src="assets/screenshots/assets.jpg" alt="素材库：按类型和业务分类管理生成结果与上传素材"></td>
-<td><img src="assets/screenshots/tasks.jpg" alt="创作历史：任务状态、模型、所属项目和积分消耗"></td>
-</tr>
-<tr>
-<td><b>素材库</b>：文本、图片、视频、音频和 3D 模型统一归档，按角色、场景、道具分类，删除前检查引用。</td>
-<td><b>创作历史</b>：所有生成任务的状态、模型、所属项目和积分消耗，可按画布、类型和模型筛选。</td>
-</tr>
-</table>
-
-### 自部署管理后台
-
-<table>
-<tr>
-<td width="50%"><img src="assets/screenshots/admin-overview.jpg" alt="运行总览：活跃用户、生成任务、服务质量、P95 耗时与费用统计"></td>
-<td width="50%"><img src="assets/screenshots/admin-channels.jpg" alt="系统渠道：渠道列表、模型管理、请求协议和规格售价"></td>
-</tr>
-<tr>
-<td><b>运行总览</b>：任务量、服务质量、P95 耗时、成本与收入，异常请求单独列出。</td>
-<td><b>渠道与模型</b>：接入多个上游渠道，为每个模型配置请求协议、规格成本和售价。</td>
-</tr>
-</table>
-
-后台还包括用户管理、登录日志、系统公告、提示词模板、存储资源、积分运营、兑换码和支付充值。
-
-### 更多能力
-
-- **时间线剪辑**：片段编排、拆分、修剪、字幕转写和服务端成片导出，支持插件化编辑面板。
-- **3D 预演台**：从画布镜头节点打开，提供摆场、姿态、动画、摄影机与时间轴，可输出构图截图、白模视频和深度图。
-- **任务系统**：异步队列、进度与日志、取消和重试，登录后跨设备同步。
-- **存储**：媒体可存放在后端数据目录、阿里云 OSS 或腾讯云 COS。
-- **明暗主题**：工作台支持明暗主题切换。
-- **社区技能**：[judian-skills](https://github.com/itsWyatt-K/judian-skills) 提供 34 个场景域包索引。安装方式：技能页 → 安装技能 → GitHub 标签 → 仓库地址填 `https://github.com/itsWyatt-K/judian-skills`，子目录填 `skills/drama/story-structure-engine` 这类域包路径。
-
-<p align="center">
-  <img src="assets/screenshots/storyboard-dark.jpg" alt="暗色主题下的短剧分镜视图" width="100%">
-</p>
-
-完整功能以[功能清单](docs/content/docs/overview/features.mdx)为准。
-
-## 快速开始
-
-### 环境要求
-
-- [Bun](https://bun.sh/)：前端和文档站
-- [Go 1.25](https://go.dev/)：后端
-- Docker Compose：仅在使用容器开发时需要
-
-### 宿主机启动
-
-```bash
-git clone https://github.com/ddcat-ai/open-ai-canvas.git
-cd open-ai-canvas
-
-# 使用 Git 忽略的目录保存本地开发数据和缓存
-mkdir -p .local/project-workbench-debug .local/cache/go-build .local/cache/go-mod
-
-# 终端一：后端
-cd backend
-CANVAS_BACKEND_ADDR=127.0.0.1:8080 \
-CANVAS_BACKEND_DATA_DIR=../.local/project-workbench-debug \
-GOCACHE=../.local/cache/go-build \
-GOMODCACHE=../.local/cache/go-mod \
-go run ./cmd/server
-
-# 终端二：前端
-cd ../web
-bun install --frozen-lockfile
-bun run dev
-```
-
-打开 <http://localhost:3000>。首次使用时注册管理员账号，并在设置中配置模型渠道。前端默认将 `/api` 代理到 `http://127.0.0.1:8080`；如需修改代理目标，可设置 `VITE_API_PROXY_TARGET`。
-
-Windows PowerShell 用户可在仓库根目录执行：
-
-```powershell
-.\scripts\start-local.ps1
-```
-
-### Docker 开发与本地构建
-
-以下命令用于本地开发或试运行。
-
-源码热更新：
-
-```bash
-LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) \
-  docker compose -f docker-compose.dev.yml up --build
-```
-
-本地构建并运行 release 镜像：
-
-```bash
-docker compose -f docker-compose.local.yml up -d --build
-```
-
-热更新开发默认前端端口为 `3000`、后端端口为 `8080`；端口冲突时可通过 `CANVAS_WEB_HOST_PORT` 和 `CANVAS_BACKEND_HOST_PORT` 覆盖。本地构建编排只暴露 web 的 `3000`，后端留在容器网络内。
-
-更多本地开发说明（包括时间线字幕转写）见[本地开发文档](docs/content/docs/backend/local-development.mdx)。
-
-## 架构概览
-
-```text
-浏览器（web/）
-  ├─ React 工作区、画布、任务中心和素材库
-  ├─ Zustand / localForage 本地状态与降级缓存
-  └─ 登录态 API、资源请求和 SSE
-          │
-          ▼
-后端（backend/）
-  ├─ Gin handler -> service -> repository/model
-  ├─ SQLite（本地）或 PostgreSQL + Redis（部署）
-  ├─ 异步任务 worker、权限、资源存储和模型中转
-  └─ provider / outbound -> 外部模型渠道
-```
-
-前端业务 API 统一经 `web/src/services/api/request.ts` 调用。生产环境由 Nginx 托管前端并代理后端，公网只需暴露 web 入口；SSE 仅在明确的流式路径关闭代理缓冲。
-
-## 安全边界
-
-- 首次管理员注册应在受控网络完成，公网部署保持 `CANVAS_REGISTRATION_ENABLED=false`。
-- 设置准确的 `CANVAS_CORS_ORIGINS`，不要在公网使用 `*`；使用 HTTPS 并正确转发代理头。
-- 后端默认拒绝本机、私网和链路本地模型地址。开发时只通过 `CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS` 精确放行可信主机，不要使用全量放行开关。
-- 用户 API Key 不应出现在 URL、日志、错误上报或服务端长期明文存储中；只在可信部署和 HTTPS 链路中使用真实密钥。
-- 后端 `8080` 应留在 Compose 网络内，不要直接暴露到公网；限制 `.env`、数据库、上传目录、备份和 `.settings-key` 的权限。
-- 媒体资源可使用后端数据目录、阿里云 OSS 或腾讯云 COS；删除素材前会检查业务引用。
-
-安全问题请按 [`SECURITY.md`](SECURITY.md) 报告，不要在公开 Issue 中粘贴密钥、Cookie、数据库或生产日志。
-
-## 文档与验证
-
-### 文档导航
-
-- [快速开始](docs/content/docs/overview/quick-start.mdx)
-- [功能清单](docs/content/docs/overview/features.mdx)
-- [代码功能地图](docs/content/docs/backend/code-map.mdx)
-- [本地开发](docs/content/docs/backend/local-development.mdx)
-- [数据库结构](docs/content/docs/backend/backend-database.mdx)
-- [画布操作手册](docs/content/docs/canvas/canvas-node-manual.mdx)
-- [插件系统](docs/content/docs/plugins/plugin-system.mdx)
-- [待办与待测试](docs/content/docs/progress/todo.mdx) · [待测试清单](docs/content/docs/progress/pending-test.mdx)
-- [更新日志](CHANGELOG.md) · [贡献指南](CONTRIBUTING.md)
-
-### 验证命令
-
-按改动范围运行最小验证：
-
-```bash
-# 前端
-cd web && bun run lint && bun run build
-
-# 后端
-cd backend && go test ./...
-
-# 文档站
-cd docs && bun run types:check
-```
-
-## 许可证
-
-本项目采用 [MIT](LICENSE) 协议。项目特定代码的版权归 Open AI Canvas 贡献者所有；第三方组件按各自附带的许可证和版权声明使用。
-
----
-
-## 贡献者与团队
+### 贡献者与团队
 
 感谢参与产品设计、开发、测试、内容和社区建设的成员。
 
@@ -468,7 +383,7 @@ cd docs && bun run types:check
 </tr>
 </table>
 
-## 3D 预演台赞助用户
+### 3D 预演台赞助用户
 
 感谢以下用户赞助 3D 预演台的开发。
 
@@ -498,3 +413,7 @@ cd docs && bun run types:check
 <td align="center" width="20%"><strong>fochaobaby</strong><br><sub>leoxie.design@gmail.com</sub></td>
 </tr>
 </table>
+
+---
+
+感谢所有让这个项目变得更好的人。
