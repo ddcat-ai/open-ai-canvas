@@ -1,6 +1,6 @@
 import { LL2_CONNECTED_VIDEO_MODELS, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
 import { ll2UpscaleTargetsFor } from "@/lib/ll2-upscale";
-import { ll2FetchHdBlob, ll2RunHd } from "@/services/ll2/ll2-hd";
+import { ll2FetchHdBlob, ll2RunHd, ll2WaitHdTask } from "@/services/ll2/ll2-hd";
 import { ll2BuildMediaContent, type LL2MediaInput } from "@/services/ll2/ll2-media";
 import { ll2GenerateVideo, ll2ResumeVideo } from "@/services/ll2/ll2-video";
 import { uploadMediaFile } from "@/services/file-storage";
@@ -49,6 +49,8 @@ export async function runLL2CanvasVideo(input: {
     onStage?: (detail: string) => void;
     /** 持久化 LL2 任务号，页面刷新后可用于排查/恢复。 */
     onTaskId?: (taskId: string) => void;
+    /** 持久化超分任务号；超分阶段刷新后按它续查，避免重复提交/重复扣费。 */
+    onHdTaskId?: (taskId: string) => void;
 }): Promise<LL2CanvasVideoResult> {
     const apiKey = useLL2Store.getState().apiKey.trim();
     if (!apiKey) throw new Error("先连接 LL2 Key 才能在画布里生成");
@@ -111,6 +113,7 @@ export async function runLL2CanvasVideo(input: {
         upscaleTarget: String(input.config.ll2Upscale || ""),
         signal: input.signal,
         onStage: input.onStage,
+        onHdTaskId: input.onHdTaskId,
     });
 }
 
@@ -123,8 +126,11 @@ export async function resumeLL2CanvasVideo(input: {
     resolution?: string;
     ratio?: string;
     upscaleTarget?: string;
+    /** 已提交过的超分任务号；有就续查，没有才新建超分任务。 */
+    hdTaskId?: string;
     signal?: AbortSignal;
     onStage?: (detail: string) => void;
+    onHdTaskId?: (taskId: string) => void;
 }): Promise<LL2CanvasVideoResult> {
     const apiKey = useLL2Store.getState().apiKey.trim();
     if (!apiKey) throw new Error("先连接 LL2 Key 才能恢复生成");
@@ -146,14 +152,14 @@ export async function resumeLL2CanvasVideo(input: {
             input.onStage?.(status.includes("queued") || status.includes("pending") ? "恢复中 · 排队" : `恢复中 · 已查询 ${progress.pollCount || 0} 次`);
         },
     );
-    return finalizeLL2CanvasVideo(generated, { apiKey, upscaleTarget: input.upscaleTarget, signal: input.signal, onStage: input.onStage });
+    return finalizeLL2CanvasVideo(generated, { apiKey, upscaleTarget: input.upscaleTarget, hdTaskId: input.hdTaskId, signal: input.signal, onStage: input.onStage, onHdTaskId: input.onHdTaskId });
 }
 
 async function finalizeLL2CanvasVideo(
     generated: Awaited<ReturnType<typeof ll2GenerateVideo>>,
-    options: { apiKey: string; upscaleTarget?: string; signal?: AbortSignal; onStage?: (detail: string) => void },
+    options: { apiKey: string; upscaleTarget?: string; hdTaskId?: string; signal?: AbortSignal; onStage?: (detail: string) => void; onHdTaskId?: (taskId: string) => void },
 ): Promise<LL2CanvasVideoResult> {
-    const { apiKey, upscaleTarget = "", signal, onStage } = options;
+    const { apiKey, upscaleTarget = "", hdTaskId = "", signal, onStage, onHdTaskId } = options;
     let blob: Blob | null = null;
     let finalUrl = generated.url;
     let finalResolution = generated.resolution;
@@ -163,8 +169,14 @@ async function finalizeLL2CanvasVideo(
     const canUpscale = Boolean(upscaleTarget) && !generated.requiresAuth && ll2UpscaleTargetsFor(generated.resolution).some((item) => item.id === upscaleTarget);
     if (canUpscale) {
         // 超分比生成更慢；这一步必须让用户看到，别让节点一直只显示「正在生成」。
-        onStage?.(`视频已生成，正在超分 ${upscaleTarget.toUpperCase()}（会更久一点）`);
-        const hd = await ll2RunHd({ apiKey, videoUrl: generated.url, resolution: upscaleTarget as "1080p" | "2k" | "4k", duration: generated.seconds, signal });
+        const hdRequest = { apiKey, videoUrl: generated.url, resolution: upscaleTarget as "1080p" | "2k" | "4k", duration: generated.seconds, signal };
+        const reportHd = (progress: { taskId?: string; pollCount?: number }) => {
+            if (progress.taskId && progress.taskId !== hdTaskId) onHdTaskId?.(progress.taskId);
+            onStage?.(`正在超分 ${upscaleTarget.toUpperCase()} · 已查询 ${progress.pollCount || 0} 次`);
+        };
+        // 超分阶段刷新过：接着查原来的任务，别再新建一次（会重复扣费）。
+        onStage?.(hdTaskId ? `正在恢复超分 ${upscaleTarget.toUpperCase()}` : `视频已生成，正在超分 ${upscaleTarget.toUpperCase()}（会更久一点）`);
+        const hd = hdTaskId ? await ll2WaitHdTask(hdTaskId, hdRequest, reportHd) : await ll2RunHd(hdRequest, reportHd);
         onStage?.("超分完成，正在取回成片");
         blob = await ll2FetchHdBlob(hd.url, apiKey, signal);
         finalResolution = hd.resolution;

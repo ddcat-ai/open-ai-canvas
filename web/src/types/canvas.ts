@@ -381,6 +381,8 @@ export type CanvasNodeMetadata = {
     ll2Stage?: string;
     /** LL2 任务号，便于刷新后排查或恢复。 */
     ll2TaskId?: string;
+    /** LL2 超分任务号；超分阶段刷新后按它续查，避免重复提交。 */
+    ll2HdTaskId?: string;
     generateAudio?: string;
     watermark?: string;
     audioVoice?: string;

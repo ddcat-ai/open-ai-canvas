@@ -131,18 +131,31 @@ export async function ll2RunHd(req: LL2HdRequest, onProgress?: (progress: LL2HdP
     const startedAt = Date.now();
     const { taskId } = await ll2CreateHdTask(req);
     onProgress?.({ stage: "created", status: "queued", elapsedMs: Date.now() - startedAt, pollCount: 0, taskId });
+    return ll2WaitHdTask(taskId, req, onProgress);
+}
 
+/**
+ * 刷新恢复：不创建新的超分任务，只按已有 hdTaskId 继续轮询。
+ * 超分阶段刷新时用它接上，避免重复提交、重复扣费。
+ */
+export async function ll2WaitHdTask(taskId: string, req: LL2HdRequest, onProgress?: (progress: LL2HdProgress) => void): Promise<LL2HdResult> {
+    const key = String(req.apiKey || "").trim();
+    if (!key) throw new Error("还没填 LL2 Key，填一次就能用，不用注册账号");
+    const id = String(taskId || "").trim();
+    if (!id) throw new Error("缺少超分任务号，无法恢复");
+
+    const startedAt = Date.now();
     const interval = Math.max(1000, req.pollIntervalMs ?? 5000);
     const maxPolls = Math.max(1, req.maxPolls ?? 360);
     for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
         await sleep(interval, req.signal);
-        const queried = await ll2QueryHdTask(taskId, req);
+        const queried = await ll2QueryHdTask(id, req);
         const status = queried.status.toLowerCase();
-        onProgress?.({ stage: "polling", status, elapsedMs: Date.now() - startedAt, pollCount: attempt, taskId });
+        onProgress?.({ stage: "polling", status, elapsedMs: Date.now() - startedAt, pollCount: attempt, taskId: id });
         if (FAILED.has(status)) throw new Error(`超分没成功（${ll2UpscaleTargetLabel(req.resolution)}），再试一次就行`);
         if (DONE.has(status)) {
             if (!queried.url) throw new Error("超分完成了，但 LL2 没有返回成片地址");
-            return { taskId, resolution: req.resolution, url: queried.url, finishedAt: Date.now() };
+            return { taskId: id, resolution: req.resolution, url: queried.url, finishedAt: Date.now() };
         }
     }
     throw new Error("超分超时了，请到 LL2 控制台查看任务状态，或稍后重试");

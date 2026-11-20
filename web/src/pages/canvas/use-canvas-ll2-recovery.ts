@@ -48,6 +48,9 @@ export function useCanvasLL2Recovery({
                         resolution: metadata.vquality,
                         ratio: metadata.size,
                         upscaleTarget: metadata.ll2UpscaleTarget,
+                        // 超分阶段刷新过：按已有 hdTaskId 续查，不再新建超分任务。
+                        hdTaskId: metadata.ll2HdTaskId,
+                        onHdTaskId: (hdTaskId) => setNodes((current) => current.map((item) => (item.id === nodeId ? { ...item, metadata: { ...item.metadata, ll2HdTaskId: hdTaskId } } : item))),
                         onStage: (stage) => setNodes((current) => current.map((item) => (item.id === nodeId ? { ...item, metadata: { ...item.metadata, ll2Stage: stage } } : item))),
                     });
                     setNodes((current) =>
@@ -72,6 +75,7 @@ export function useCanvasLL2Recovery({
                                           vquality: result.resolution,
                                           requiresAuth: result.requiresAuth,
                                           ll2Stage: undefined,
+                                          ll2HdTaskId: undefined,
                                           errorDetails: undefined,
                                       },
                                   }

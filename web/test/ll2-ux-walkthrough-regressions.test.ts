@@ -224,6 +224,20 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("超分阶段刷新会按 hdTaskId 续查，不重复提交超分", async () => {
+    const hd = await read("../src/services/ll2/ll2-hd.ts");
+    expect(hd).toContain("export async function ll2WaitHdTask");
+    const exec = await read("../src/pages/canvas/canvas-ll2-video-execution.ts");
+    expect(exec).toContain("ll2WaitHdTask(hdTaskId");
+    expect(exec).toContain("onHdTaskId");
+    const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
+    expect(executor).toContain("ll2HdTaskId");
+    const hook = await read("../src/pages/canvas/use-canvas-ll2-recovery.ts");
+    expect(hook).toContain("metadata.ll2HdTaskId");
+    const types = await read("../src/types/canvas.ts");
+    expect(types).toContain("ll2HdTaskId?: string");
+});
+
 test("刷新后按 ll2TaskId 自动查回已生成的 LL2 片子", async () => {
     const service = await read("../src/services/ll2/ll2-video.ts");
     expect(service).toContain("export async function ll2ResumeVideo");

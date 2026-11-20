@@ -127,6 +127,7 @@ export async function executeVideoGeneration({
                 // 把「排队 / 生成 / 超分 / 取回」写回节点，避免 LL2 已出片而画布只显示转圈。
                 onStage: (detail) => setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ll2Stage: detail } } : node))),
                 onTaskId: (taskId) => setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ll2TaskId: taskId } } : node))),
+                onHdTaskId: (taskId) => setNodes((current) => current.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, ll2HdTaskId: taskId } } : node))),
             });
             setNodes((current) =>
                 current.map((node) =>
@@ -150,6 +151,7 @@ export async function executeVideoGeneration({
                                   vquality: done.resolution,
                                   requiresAuth: done.requiresAuth,
                                   ll2Stage: undefined,
+                                  ll2HdTaskId: undefined,
                                   errorDetails: undefined,
                               },
                           }
