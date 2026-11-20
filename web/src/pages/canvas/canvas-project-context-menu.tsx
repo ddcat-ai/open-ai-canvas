@@ -1,4 +1,5 @@
 import { CanvasNodeContextMenu } from "@/components/canvas/canvas-context-menu";
+import type { LL2UpscaleTarget } from "@/lib/ll2-upscale";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
@@ -51,6 +52,8 @@ type CanvasProjectContextMenuProps = {
     onAdoptToDrama?: (node: CanvasNodeData) => void;
     /** 开放短剧时提供：分镜脚本节点可交给短剧自动制作。 */
     onCreateDramaFromStoryboard?: (node: CanvasNodeData) => void;
+    /** 已生成的视频：按当前清晰度直接超分到更高档。 */
+    onUpscaleVideo?: (node: CanvasNodeData, target: LL2UpscaleTarget) => void;
 };
 
 export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props }: CanvasProjectContextMenuProps) {
@@ -105,6 +108,7 @@ export function CanvasProjectContextMenu({ menu, node, screenToCanvas, ...props 
             onOpenVersions={() => {
                 if (node) props.onOpenVersions(node);
             }}
+            onUpscaleVideo={props.onUpscaleVideo && node ? (target) => props.onUpscaleVideo?.(node, target) : undefined}
             onEditText={() => {
                 if (node) props.onEditText(node);
             }}

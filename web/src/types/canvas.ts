@@ -381,6 +381,8 @@ export type CanvasNodeMetadata = {
     ll2Stage?: string;
     /** 本次真正提交给 LL2 的分辨率/秒数快照，用于排查“面板选的和账单不一致”。 */
     ll2Submitted?: string;
+    /** LL2 结果需要带 Bearer 才能下载（seedance/vidu artifact），不能当公网地址做超分。 */
+    requiresAuth?: boolean;
     /** LL2 任务号，便于刷新后排查或恢复。 */
     ll2TaskId?: string;
     /** LL2 超分任务号；超分阶段刷新后按它续查，避免重复提交。 */

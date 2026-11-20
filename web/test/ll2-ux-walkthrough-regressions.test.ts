@@ -224,6 +224,19 @@ test("无限画布：视频节点能用 LL2 auto-hd 超分，生成新节点", a
     expect(project).toContain("onLlmUpscale={openLl2Upscale}");
 });
 
+test("已生成视频可从右键菜单直接超分，并按当前清晰度给目标档", async () => {
+    const helper = await read("../src/lib/canvas/canvas-video-upscale.ts");
+    expect(helper).toContain("canvasVideoUpscaleOptions");
+    expect(helper).toContain("ll2ResolutionRank");
+    expect(helper).toContain("ll2RunHd");
+    expect(helper).toContain("requiresAuth");
+    const menu = await read("../src/components/canvas/canvas-context-menu.tsx");
+    expect(menu).toContain("视频超分");
+    expect(menu).toContain("canvasVideoUpscaleOptions");
+    const project = await read("../src/pages/canvas/project.tsx");
+    expect(project).toContain("handleUpscaleVideo");
+});
+
 test("本机上传的图片刷新后从 IndexedDB 重新解析，不再只认 blob URL", async () => {
     const media = await read("../src/components/canvas/canvas-node-media-content.tsx");
     expect(media).toContain("isLocalMediaKey");

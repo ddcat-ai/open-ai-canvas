@@ -1,8 +1,10 @@
 import { AnimatePresence } from "motion/react";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, AtSign, Check, ChevronRight, CircleCheckBig, Clapperboard, Clipboard, CloudUpload, Copy, Download, FolderOpen, FolderPlus, History, Image as ImageIcon, Layers3, LayoutTemplate, Link2, Maximize2, PanelTop, Pencil, Plus, Redo2, Tags, Trash2, Undo2, Upload, UserRound } from "lucide-react";
+import { ArrowLeft, AtSign, Check, ChevronRight, CircleCheckBig, Clapperboard, Clipboard, CloudUpload, Copy, Download, FolderOpen, FolderPlus, History, Image as ImageIcon, Layers3, LayoutTemplate, Link2, Maximize2, PanelTop, Pencil, Plus, Redo2, Sparkles, Tags, Trash2, Undo2, Upload, UserRound } from "lucide-react";
 
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
+import { canvasVideoUpscaleOptions } from "@/lib/canvas/canvas-video-upscale";
+import type { LL2UpscaleTarget } from "@/lib/ll2-upscale";
 import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
@@ -67,6 +69,8 @@ type CanvasNodeContextMenuProps = {
     onAdoptToDrama?: () => void;
     /** 分镜脚本节点：交给短剧自动制作。 */
     onCreateDramaFromStoryboard?: () => void;
+    /** 已生成的视频：按当前清晰度直接超分到更高档。 */
+    onUpscaleVideo?: (target: LL2UpscaleTarget) => void;
 };
 
 export function CanvasNodeContextMenu({
@@ -113,6 +117,7 @@ export function CanvasNodeContextMenu({
     onDownloadSelection,
     onAdoptToDrama,
     onCreateDramaFromStoryboard,
+    onUpscaleVideo,
 }: CanvasNodeContextMenuProps) {
     const theme = canvasThemes[useActiveTheme()];
     const [addOpen, setAddOpen] = useState(false);
@@ -161,6 +166,7 @@ export function CanvasNodeContextMenu({
     const canOpenPreview = Boolean(isMedia && hasNodeContent);
     const canGenerateFromText = Boolean(isText && !isCharacterReference && hasNodeContent);
     const canCopyMediaUrl = Boolean(isMedia && hasNodeContent);
+    const videoUpscaleOptions = isVideo && hasNodeContent && node ? canvasVideoUpscaleOptions(node) : [];
     const assetCategory = node ? canvasNodeAssetCategory(node) : "other";
     const hasMultiSelection = selectedCount >= 2;
     const versionCount = listMediaVersions(node).length;
@@ -261,6 +267,22 @@ export function CanvasNodeContextMenu({
                                     <MenuButton icon={<Maximize2 />} label="进入全景预览" disabled={!canOpenPreview} onClick={() => runAction(onViewMedia)} />
                                     {onAdoptToDrama ? <MenuButton icon={<CircleCheckBig />} label="采用到短剧" detail={isImage ? "设为设定参考图" : "设为剧情段视频"} disabled={!hasNodeContent} onClick={() => runAction(onAdoptToDrama)} /> : null}
                                     {versionMenuButton}
+                                    {videoUpscaleOptions.length ? (
+                                        <>
+                                            <MenuDivider />
+                                            <MenuSection label="视频超分" />
+                                            {videoUpscaleOptions.map((option) => (
+                                                <MenuButton
+                                                    key={option.id}
+                                                    icon={<Sparkles />}
+                                                    label={`超到 ${option.label}`}
+                                                    detail={option.detail}
+                                                    disabled={!onUpscaleVideo}
+                                                    onClick={() => runAction(() => onUpscaleVideo?.(option.id))}
+                                                />
+                                            ))}
+                                        </>
+                                    ) : null}
                                     <MenuButton icon={<Tags />} label="设置资产分类" chevron onClick={() => setCategoryOpen(true)} />
                                     {isImage ? <MenuButton icon={<CloudUpload />} label="上传到方舟素材库" onClick={() => runAction(onUploadToArkPrivateAsset)} /> : null}
                                     <MenuDivider />

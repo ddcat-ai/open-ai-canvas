@@ -74,6 +74,8 @@ import { CanvasCollaborationLayer } from "@/components/canvas/canvas-collaborati
 import { Minimap } from "@/components/canvas/canvas-mini-map";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { useCanvasLL2Recovery } from "./use-canvas-ll2-recovery";
+import { upscaleCanvasVideo } from "@/lib/canvas/canvas-video-upscale";
+import { ll2UpscaleTargetLabel, type LL2UpscaleTarget } from "@/lib/ll2-upscale";
 import { handleListGenerate } from "./list-mode-generator";
 import { CanvasToolbar } from "@/components/canvas/canvas-toolbar";
 import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-commands";
@@ -2242,6 +2244,51 @@ function CanvasViewportPage() {
         [effectiveConfig, message],
     );
 
+    const handleUpscaleVideo = useCallback(
+        async (node: CanvasNodeData, target: LL2UpscaleTarget) => {
+            setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: "loading", ll2Stage: `正在超分 ${ll2UpscaleTargetLabel(target)}`, errorDetails: undefined } } : item)));
+            try {
+                const result = await upscaleCanvasVideo({
+                    node,
+                    target,
+                    onStage: (stage) => setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ll2Stage: stage } } : item))),
+                    onHdTaskId: (taskId) => setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ll2HdTaskId: taskId } } : item))),
+                });
+                setNodes((current) =>
+                    current.map((item) =>
+                        item.id === node.id
+                            ? {
+                                  ...item,
+                                  metadata: {
+                                      ...item.metadata,
+                                      status: "success",
+                                      content: result.content,
+                                      storageKey: result.storageKey,
+                                      vquality: result.resolution,
+                                      seconds: String(Math.max(1, Math.round(result.seconds))),
+                                      durationMs: result.durationMs,
+                                      naturalWidth: result.width,
+                                      naturalHeight: result.height,
+                                      bytes: result.bytes,
+                                      mimeType: result.mimeType,
+                                      requiresAuth: false,
+                                      ll2Stage: undefined,
+                                      ll2HdTaskId: undefined,
+                                      errorDetails: undefined,
+                                      ...(result.posterUrl ? { videoPreview: { content: result.posterUrl, width: result.width || 1280, height: result.height || 720 } } : {}),
+                                  },
+                              }
+                            : item,
+                    ),
+                );
+            } catch (error) {
+                setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: "success", ll2Stage: undefined, ll2HdTaskId: undefined } } : item)));
+                message.error(error instanceof Error ? error.message : "超分失败");
+            }
+        },
+        [message, setNodes],
+    );
+
     const renderCanvasNodePanel = useCallback(
         (panelNode: CanvasNodeData) => {
             if (panelNode.type === CanvasNodeType.Script || panelNode.type === CanvasNodeType.Drawing) return null;
@@ -3471,6 +3518,9 @@ function CanvasViewportPage() {
                                 onDownloadSelection={() => void downloadNodesMedia(nodesRef.current.filter((node) => selectedNodeIds.has(node.id)))}
                                 onAdoptToDrama={drama.active ? drama.openAdopt : undefined}
                                 onCreateDramaFromStoryboard={shortDramaEnabled ? createDramaFromStoryboard : undefined}
+                                onUpscaleVideo={(targetNode, target) => {
+                                    void handleUpscaleVideo(targetNode, target);
+                                }}
                             />
 
                             <CanvasUploadModal open={uploadModalOpen} onClose={closeUploadModal} onUpload={handleUploadFiles} />
