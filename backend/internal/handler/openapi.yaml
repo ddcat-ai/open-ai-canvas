@@ -2328,7 +2328,7 @@ paths:
       tags: [channels]
       summary: 读取本人个人方案状态，关闭功能时仍可用
       responses:
-        '200': { description: data 为 enabled、connected 及可选 email、channelId，不含令牌 }
+        '200': { description: data 为 enabled、connected、selectedModelSlugs 及可选 email、channelId，不含令牌 }
         '401': { $ref: '#/components/responses/Error' }
   /chatgpt-plan/start:
     post:
@@ -2343,22 +2343,22 @@ paths:
       tags: [channels]
       summary: 读取本人 ChatGPT 账号可用模型，需功能开启
       responses:
-        '200': { description: data.models 为 slug、displayName 数组 }
+        '200': { description: data.models 包含 slug、displayName、selected、available；已选但上游不再可用的模型仍返回以供取消 }
         '403': { $ref: '#/components/responses/Error' }
-    post:
+    put:
       tags: [channels]
-      summary: 将本人可用目录中的文本模型加入个人渠道
+      summary: 原子保存本人的完整模型勾选列表，取消勾选保留历史模型记录
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [slug]
+              required: [slugs]
               properties:
-                slug: { type: string }
+                slugs: { type: array, maxItems: 100, uniqueItems: true, items: { type: string }, description: 空数组表示全部取消，不能省略或传 null }
       responses:
-        '200': { description: data.model 为已保存的个人模型 }
+        '200': { description: data.saved 为 true }
         '403': { $ref: '#/components/responses/Error' }
   /chatgpt-plan/disconnect:
     post:

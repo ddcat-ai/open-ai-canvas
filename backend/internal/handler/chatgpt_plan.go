@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -65,25 +64,24 @@ func registerChatGPTPlanRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"models": models})
 	})
-	r.POST("/chatgpt-plan/models", func(c *gin.Context) {
+	r.PUT("/chatgpt-plan/models", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 4<<10)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32<<10)
 		var request struct {
-			Slug string `json:"slug"`
+			Slugs []string `json:"slugs"`
 		}
 		if err := c.ShouldBindJSON(&request); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		item, err := svc.AddChatGPTPlanModel(c.Request.Context(), actor, strings.TrimSpace(request.Slug))
-		if err != nil {
+		if err := svc.SaveChatGPTPlanModels(c.Request.Context(), actor, request.Slugs); err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"model": item})
+		ok(c, gin.H{"saved": true})
 	})
 }

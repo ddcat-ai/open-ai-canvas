@@ -11,6 +11,8 @@ description: 影策后端核心持久化表与状态边界
 
 个人渠道复用 `model_channels` 与 `channel_models`，`api_format=chatgpt-plan`、`user_id` 为授权者，密钥字段保持空；不绑定共享网站。模型仅本人可见和调用，个人方案模型价格明确为 0。旧的单份 `chatgpt_plan_connection` 不被新实现读取或迁移。旧部署应先断开旧连接再升级，避免残留旧远端授权。
 
+完整模型勾选列表在渠道配置事务中保存。取消勾选将对应 `channel_models.enabled` 设为 false，保留模型 ID 和价格档供历史任务引用；再次勾选复用原记录。`GET /chatgpt-plan` 的已选模型列表和模型目录的 `personal` 标记均为读模型，不增加数据库字段。
+
 ## 模型请求插件发行版（Schema 109）
 
 `model_protocol_releases` 增加 `channel_models.protocol_release` 及索引，保存模型绑定的请求包 SHA-256。`tasks.protocol_binding_json` 和 `route_attempts.protocol_binding_json` 在新任务入队、路由尝试时记录版本、上游型号、能力与报价修订，以及渠道连接的 HMAC。快照仅在服务端使用。历史记录的新增列保持空值。
