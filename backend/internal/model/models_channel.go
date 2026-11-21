@@ -6,6 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const ChatGPTPlanAPIFormat = "chatgpt-plan"
+
 type ModelChannel struct {
 	WebsiteID string       `json:"websiteId,omitempty" gorm:"size:36;index;not null;default:''"`
 	ID        string       `json:"id" gorm:"primaryKey;size:36"`

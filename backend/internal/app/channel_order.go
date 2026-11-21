@@ -28,6 +28,9 @@ func (s *Service) AdminChannelOrder(actor *model.User, channelID string) ([]Chan
 			return nil, err
 		}
 		for _, row := range rows {
+			if row.APIFormat == chatGPTPlanFormat {
+				continue
+			}
 			result = append(result, ChannelOrderItem{row.ID, row.Name, row.Enabled})
 		}
 	} else {

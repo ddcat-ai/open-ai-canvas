@@ -35,6 +35,9 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	wire := ""
 	if input.Mode == "text" {
 		wire = declaredTextWire(ctx, input.Config.InterfaceType)
+		if input.Config.APIFormat == chatGPTPlanFormat {
+			wire = protocol.TextWireResponses
+		}
 	}
 	thinkingWire := ""
 	if input.Mode == "text" {
@@ -57,7 +60,15 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	}
 	applyTextThinking(body, input, wire)
 	spec.Body = body
-	if !input.StreamText {
+	if input.Config.APIFormat == chatGPTPlanFormat {
+		if wire != protocol.TextWireResponses {
+			return nil, nil, errors.New("ChatGPT 方案只支持 Responses 文本协议")
+		}
+		if err := prepareChatGPTPlanRequest(body); err != nil {
+			return nil, nil, err
+		}
+	}
+	if !input.StreamText && input.Config.APIFormat != chatGPTPlanFormat {
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
 	}
@@ -115,8 +126,10 @@ func runResponsesTextTask(ctx context.Context, input canvasGenerationInput) (map
 		return nil, err
 	}
 	body := map[string]interface{}{"model": input.Config.Model, "input": responseInput}
-	applyTextThinking(body, input, "responses")
-	applyTextOutputLimit(body, input.MaxOutputTokens, "max_output_tokens")
+	if input.Config.APIFormat != chatGPTPlanFormat {
+		applyTextThinking(body, input, "responses")
+		applyTextOutputLimit(body, input.MaxOutputTokens, "max_output_tokens")
+	}
 	result, err := requestTextProvider(ctx, input.Config, "/responses", body, "responses", input.StreamText, input.OnTextDelta)
 	if err != nil {
 		return nil, err

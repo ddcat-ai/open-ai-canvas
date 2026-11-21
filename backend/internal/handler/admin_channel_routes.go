@@ -12,6 +12,7 @@ import (
 
 func registerAdminChannelRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerChannelWebsiteRoutes(r, svc)
+	registerChatGPTPlanRoutes(r, svc)
 	r.GET("/admin/channels", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

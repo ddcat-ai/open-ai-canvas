@@ -12,6 +12,7 @@ import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { ChannelSettingsPane, channelValidationError, focusInvalidChannelField, isChannelReady } from "./channel-settings-pane";
 import { ModelDefaultGrid } from "./model-default-grid";
+import { ChatGPTPlanConnection } from "./chatgpt-plan-connection";
 import { PromptPreferencesPane } from "./prompt-preferences-pane";
 import DiagnosticsPanel from "./diagnostics-panel";
 import AgentMemoryPane from "./agent-memory-pane";
@@ -152,6 +153,7 @@ export default function SettingsPage() {
                 <div className="settings-section">
                     <ModelDefaultGrid config={effectiveConfig} onChange={(key, model) => updateConfig(key, model)} />
                 </div>
+                {userId && <ChatGPTPlanConnection key={userId} userId={userId} />}
             </SettingsPane>
         ),
         runninghub: runningHubPluginEnabled ? (
