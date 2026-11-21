@@ -24,6 +24,7 @@ import { FeedbackInboxPane } from "./feedback-inbox-pane";
 import { ArkAssetsPane } from "./ark-assets-pane";
 import { PreferencesPane } from "./preferences-pane";
 import { arkPortraitOverviewQueryKey, getArkPortraitOverview } from "@/services/api/ark-portraits";
+import { getChatGPTPlanStatus } from "@/services/api/chatgpt-plan";
 import "./settings-page.css";
 
 type ConfigSectionKey = "profile" | "channels" | "models" | "runninghub" | "preferences" | "prompts" | "agent-memory" | "storage" | "ark-assets" | "diagnostics" | "feedbacks";
@@ -60,16 +61,19 @@ export default function SettingsPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedSection = searchParams.get("section");
     const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
+    const chatGPTPlanEnabled = useUserStore((state) => state.features.chatGPTPlanEnabled);
     const runtimeStatuses = usePluginStore((state) => state.runtimeStatuses);
     const runningHubPluginEnabled = runtimeStatuses[RUNNINGHUB_PLUGIN_ID] === "enabled";
     const requestedSectionEnabled = requestedSection !== "runninghub" || runningHubPluginEnabled;
     const initialSection = isConfigSection(requestedSection) && requestedSectionEnabled ? requestedSection : "profile";
-    const [activeTab, setActiveTab] = useState<ConfigSectionKey>(initialSection === "channels" && !customChannelsEnabled ? "models" : initialSection);
+    const [activeTab, setActiveTab] = useState<ConfigSectionKey>(initialSection);
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
+    const planStatus = useQuery({ queryKey: ["chatgpt-plan", userId], queryFn: ({ signal }) => getChatGPTPlanStatus(signal), enabled: Boolean(userId) });
+    const channelsVisible = customChannelsEnabled || chatGPTPlanEnabled || Boolean(planStatus.data?.connected) || (requestedSection === "channels" && (planStatus.isPending || planStatus.isError));
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
     const protocolCatalog = useUserProtocolCatalog(customChannelsEnabled);
     const secretKeyProtocols = useMemo(() => secretKeyProtocolIds(protocolCatalog), [protocolCatalog]);
@@ -78,10 +82,10 @@ export default function SettingsPage() {
     const arkAssetsVisible = arkOverviewQuery.data ? arkOverviewQuery.data.enabled : requestedSection === "ark-assets";
     const visibleConfigSections = useMemo(
         () =>
-            (customChannelsEnabled ? configSections : configSections.filter((section) => section.key !== "channels"))
+            (channelsVisible ? configSections : configSections.filter((section) => section.key !== "channels"))
                 .filter((section) => section.key !== "runninghub" || runningHubPluginEnabled)
                 .filter((section) => section.key !== "ark-assets" || arkAssetsVisible),
-        [arkAssetsVisible, customChannelsEnabled, runningHubPluginEnabled],
+        [arkAssetsVisible, channelsVisible, runningHubPluginEnabled],
     );
 
     const isVisibleConfigSection = (value: string | null): value is ConfigSectionKey => isConfigSection(value) && visibleConfigSections.some((section) => section.key === value);
@@ -91,8 +95,8 @@ export default function SettingsPage() {
             setActiveTab(requestedSection);
             return;
         }
-        setActiveTab(requestedSection === "channels" && !customChannelsEnabled ? "models" : "profile");
-    }, [customChannelsEnabled, requestedSection, visibleConfigSections]);
+        setActiveTab(requestedSection === "channels" && !channelsVisible ? "models" : "profile");
+    }, [channelsVisible, requestedSection, visibleConfigSections]);
 
     useEffect(() => {
         if (!userId) return;
@@ -123,7 +127,7 @@ export default function SettingsPage() {
         }
         const workflowReady = Boolean(runningHubPluginEnabled && config.runningHub.enabled && config.runningHub.workflowId.trim() && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim());
         if (!effectiveConfig.channels.some((channel) => isChannelReady(channel, secretKeyProtocols)) && !workflowReady) {
-            selectSection(customChannelsEnabled ? "channels" : "models");
+            selectSection(channelsVisible ? "channels" : "models");
             message.error(customChannelsEnabled ? (shouldPromptContinue ? t("account.settings.needChannel") : t("account.settings.noChannel")) : t("account.settings.noSystemModel"));
             return;
         }
@@ -139,7 +143,14 @@ export default function SettingsPage() {
         ),
         channels: (
             <SettingsPane>
-                <ChannelSettingsPane onOpenModels={() => selectSection("models")} onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined} />
+                <ChannelSettingsPane
+                    customChannelsEnabled={customChannelsEnabled}
+                    hasPersonalAuthorization={Boolean(planStatus.data?.connected)}
+                    onOpenModels={() => selectSection("models")}
+                    onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined}
+                >
+                    {userId && <ChatGPTPlanConnection key={userId} userId={userId} />}
+                </ChannelSettingsPane>
             </SettingsPane>
         ),
         models: (
@@ -153,7 +164,6 @@ export default function SettingsPage() {
                 <div className="settings-section">
                     <ModelDefaultGrid config={effectiveConfig} onChange={(key, model) => updateConfig(key, model)} />
                 </div>
-                {userId && <ChatGPTPlanConnection key={userId} userId={userId} />}
             </SettingsPane>
         ),
         runninghub: runningHubPluginEnabled ? (

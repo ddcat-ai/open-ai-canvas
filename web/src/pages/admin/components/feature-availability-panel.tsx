@@ -173,7 +173,7 @@ const featureGroups: FeatureGroup[] = [
             {
                 key: "chatGPTPlanEnabled",
                 title: "ChatGPT 个人方案授权",
-                location: "设置 · 模型",
+                location: "设置 · 个人渠道",
                 description: "允许每位用户连接自己的 ChatGPT 方案，仅本人可用。默认关闭；当前授权要求浏览器与后端运行在同一台电脑。",
                 icon: <ShieldCheck className="size-4" aria-hidden="true" />,
             },
