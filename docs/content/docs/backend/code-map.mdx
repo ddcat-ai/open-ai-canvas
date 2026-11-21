@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## ChatGPT 个人方案授权
+
+- 用户入口：`pages/settings/chatgpt-plan-connection.tsx`、`services/api/chatgpt-plan.ts`；管理员开关位于 `feature-availability-panel.tsx`，由 `internal/platform/feature_availability.go` 持久化，默认关闭。
+- 授权与执行：`handler/chatgpt_plan.go` → `app/chatgpt_plan.go`；按用户加密保存、租约协调及旧密文条件写入。`user_groups.go` 在每次请求读取个人渠道归属，`provider.go` 在执行时核对任务用户与开关，`provider_text*.go` 处理方案请求约束。
+- 边界：当前仅本机浏览器回环授权；专项用例为 `chatgpt_plan_isolation_test.go`。真实上游登录与撤销仍见待测试清单。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

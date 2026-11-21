@@ -31,7 +31,7 @@ export { CHANNEL_MODEL_SEPARATOR, normalizeRawModelName, uniqueModelOptions } fr
 export { mergeWorkflowFieldMappings, normalizeRunningHubCapability, normalizeRunningHubWorkflowKind, normalizeWorkflowFieldMappings, type WorkflowFieldMapping } from "./config-workflow-fields";
 export { decodeChannelModel, encodeChannelModel, hasSystemModelPrice, isChannelModelValue, modelDisplayName, modelIcon, modelOptionLabel, modelOptionName, modelOptionsFromChannels, normalizeModelOptionValue } from "./config-model-options";
 
-export type ApiCallFormat = "openai" | "gemini" | "claude";
+export type ApiCallFormat = "openai" | "gemini" | "claude" | "chatgpt-plan";
 export type ChannelInterfaceType = ModelProtocol;
 export type ChannelHeader = { name: string; value: string };
 export type RunningHubCapability = "image" | "video" | "audio";
@@ -72,6 +72,7 @@ export type WorkflowGraphPreview = {
 export const PUBLIC_MODEL_CATALOG_ID = "managed";
 
 export type ModelChannel = {
+    personal?: boolean;
     websiteId?: string;
     updatedAt?: string;
     mediaTransport?: import("@/lib/media-transport").ReferenceMediaTransport;
@@ -385,7 +386,7 @@ export const useConfigStore = create<ConfigStore>()(
                         createModelChannel({
                             ...channel,
                             id: channel.id || `system-${index + 1}`,
-                            name: "系统模型",
+                            name: channel.personal ? channel.name || "ChatGPT 个人方案" : "系统模型",
                             scope: "system",
                             apiKey: channel.apiKey || "system",
                         }),
@@ -540,6 +541,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
         interfaceType,
         models: uniqueRawModels(channel?.models || []),
         scope: channel?.scope === "system" ? "system" : "user",
+        personal: channel?.scope === "system" && channel.personal === true,
         enabled: channel?.enabled !== false,
         hasApiKey: channel?.hasApiKey,
         hasSecretKey: channel?.hasSecretKey,
@@ -643,7 +645,7 @@ function capabilityForChannelInterface(interfaceType?: ChannelInterfaceType): Mo
 }
 
 function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
-    return apiFormat === "gemini" || apiFormat === "claude" ? apiFormat : "openai";
+    return apiFormat === "gemini" || apiFormat === "claude" || apiFormat === "chatgpt-plan" ? apiFormat : "openai";
 }
 
 function normalizeChannelInterfaceType(value: unknown): ChannelInterfaceType | undefined {

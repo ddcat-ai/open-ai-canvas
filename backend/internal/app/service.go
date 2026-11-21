@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ import (
 )
 
 type Service struct {
+	chatGPTPlanHTTPClient    *http.Client
 	repo                     *repository.Repository
 	dataDir                  string
 	cancelMu                 sync.Mutex

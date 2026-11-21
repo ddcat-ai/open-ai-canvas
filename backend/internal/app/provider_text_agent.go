@@ -100,7 +100,7 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 }
 
 func postAgentRequest(ctx context.Context, input canvasGenerationInput, path string, body map[string]interface{}, protocol string) (map[string]interface{}, error) {
-	if input.StreamText {
+	if input.StreamText || input.Config.APIFormat == chatGPTPlanFormat {
 		return postStreamingAgent(ctx, input.Config, path, body, protocol, input.OnTextDelta, input.OnReasoningDelta)
 	}
 	delete(body, "stream")
@@ -157,6 +157,9 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 	// 线格式取自插件声明的 agent 路径：Chat Completions / Responses / Messages 以外的
 	// 接口（如 Gemini generateContent）由插件自己映射，宿主不往里补思考参数。
 	wire := declaredAgentWire(ctx, input.Config.InterfaceType)
+	if input.Config.APIFormat == chatGPTPlanFormat {
+		wire = protocol.TextWireResponses
+	}
 	knownWire := wire != ""
 	if input.AgentRequests == nil {
 		return nil, errors.New("画布 Agent 工具请求缺少协议参数")
@@ -179,8 +182,16 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
 		thinking := applyAgentThinking(body, input, wire)
 		normalizeAgentToolChoice(body, thinking, wire)
+		if input.Config.APIFormat == chatGPTPlanFormat {
+			if wire != protocol.TextWireResponses {
+				return nil, errors.New("ChatGPT 方案只支持 Responses 文本协议")
+			}
+			if err := prepareChatGPTPlanRequest(body); err != nil {
+				return nil, err
+			}
+		}
 		spec.Body = body
-		if input.StreamText {
+		if input.StreamText || input.Config.APIFormat == chatGPTPlanFormat {
 			body["stream"] = true
 			if wire == protocol.TextWireChatCompletion {
 				if err := ensureChatCompletionStreamUsage(body); err != nil {
