@@ -386,7 +386,7 @@ export const useConfigStore = create<ConfigStore>()(
                         createModelChannel({
                             ...channel,
                             id: channel.id || `system-${index + 1}`,
-                            name: "系统模型",
+                            name: channel.personal ? channel.name || "ChatGPT 个人方案" : "系统模型",
                             scope: "system",
                             apiKey: channel.apiKey || "system",
                         }),
