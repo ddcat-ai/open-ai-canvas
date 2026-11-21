@@ -3,6 +3,7 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 import { readImageMeta } from "@/lib/image-utils";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 import { getResourceAccess, importResourceFromUrl, isResourceUrl, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
 import { getCachedResourceBlob, primeResourceBlobCache } from "@/services/resource-blob-cache";
 import { assertLocalMediaSession, localMediaSession, peekLocalMediaObjectUrl, releaseLocalMediaObjectUrls, storeLocalMediaObjectUrl } from "@/services/local-media-object-urls";
@@ -54,6 +55,14 @@ export async function uploadImage(input: string | Blob, onProgress?: (uploadedBy
     try {
         // 调用方已解码过真实尺寸时直接复用，避免同一张大图在上传前再完整解码一次。
         const meta = knownSize?.width && knownSize.height ? { ...knownSize, mimeType: blob.type || "image/png" } : await readImageMeta(previewUrl);
+        // C 端本地工作区没有资源后端：图片只写本机 IndexedDB，不能去请求 /api/resources。
+        const localOnly = typeof window !== "undefined" && isGuestWorkspacePath(window.location.pathname);
+        if (localOnly) {
+            await store.setItem(storageKey, blob);
+            const url = storeLocalMediaObjectUrl("image", storageKey, blob, session, { replace: true, url: previewUrl });
+            retained = true;
+            return { url, storageKey, width: meta.width, height: meta.height, bytes: blob.size, mimeType: blob.type || meta.mimeType };
+        }
         let remoteUploadError = "";
         try {
             const resource = await uploadResourceFile(blob, "image", { width: meta.width, height: meta.height, fileName: input instanceof File ? input.name : undefined, idempotencyKey: storageKey }, onProgress);

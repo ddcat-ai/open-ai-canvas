@@ -11,6 +11,7 @@
  */
 
 import { LL2_GATEWAY_ORIGIN } from "@/services/ll2/ll2-video";
+import { ll2ForbiddenMessage } from "@/lib/ll2-account-error";
 import { ll2UpscaleTargetLabel, type LL2UpscaleTarget } from "@/lib/ll2-upscale";
 
 export type LL2HdProgress = {
@@ -52,7 +53,7 @@ function hdErrorMessage(status: number, payload: Record<string, any>) {
     const message = String(payload?.message || payload?.msg || "").trim();
     if (status === 400) return message ? `超分参数不被接受：${message}` : "超分参数不被接受，请换一档清晰度再试";
     if (status === 401) return "LL2 Key 无效或已过期，请在「连接 LL2」里重新填入";
-    if (status === 403) return "这个 Key 没有调用超分的权限，请到 LL2 控制台确认";
+    if (status === 403) return ll2ForbiddenMessage(payload, "这个 Key 没有调用超分的权限，请到 LL2 控制台确认");
     if (status === 404) return "超分任务不存在或已被清理";
     if (status === 429) return "LL2 账户触发限流，请稍后再试";
     if (status >= 500) return `LL2 超分服务暂时不可用（HTTP ${status}），请稍后重试`;
@@ -84,10 +85,14 @@ function sleep(ms: number, signal?: AbortSignal) {
             return;
         }
         const timer = setTimeout(resolve, ms);
-        signal?.addEventListener("abort", () => {
-            clearTimeout(timer);
-            reject(new DOMException("Aborted", "AbortError"));
-        }, { once: true });
+        signal?.addEventListener(
+            "abort",
+            () => {
+                clearTimeout(timer);
+                reject(new DOMException("Aborted", "AbortError"));
+            },
+            { once: true },
+        );
     });
 }
 
@@ -112,11 +117,7 @@ export async function ll2CreateHdTask(req: LL2HdRequest) {
 }
 
 export async function ll2QueryHdTask(taskId: string, req: LL2HdRequest) {
-    const payload = await hdFetch(
-        `${originOf(req.baseUrl)}/hd/tasks/${encodeURIComponent(taskId)}`,
-        { method: "GET", headers: { Authorization: `Bearer ${req.apiKey.trim()}` } },
-        req.signal,
-    );
+    const payload = await hdFetch(`${originOf(req.baseUrl)}/hd/tasks/${encodeURIComponent(taskId)}`, { method: "GET", headers: { Authorization: `Bearer ${req.apiKey.trim()}` } }, req.signal);
     const status = String(payload?.status || "").toUpperCase();
     const url = String(payload?.url || "").trim();
     return { status, url: url ? (url.startsWith("http") ? url : `${originOf(req.baseUrl)}${url.startsWith("/") ? "" : "/"}${url}`) : "" };

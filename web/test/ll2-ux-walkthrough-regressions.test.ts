@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { ll2CleanVideoPrompt } from "../src/lib/ll2-video-prompt";
 import { ll2PromptWithLocks, type LL2WorkspaceSettings } from "../src/lib/ll2-workspace";
 import { LL2_SIGNUP_URL } from "../src/lib/ll2-referral";
+import { ll2ForbiddenMessage } from "../src/lib/ll2-account-error";
 
 /**
  * 2026-11-19 真实浏览器走查抓到的 4 个回归点。
@@ -62,15 +63,17 @@ test("角色/风格锁定会追加到每一条生成提示词", () => {
     expect(ll2PromptWithLocks("雨夜街头", { ...settings, lockedCharacter: "", lockedStyle: "" })).toBe("雨夜街头");
 });
 
+test("LL2 403 余额不足不能被误报成 Key 没权限", () => {
+    const message = ll2ForbiddenMessage({ error: { http_code: "403", message: "预扣费额度失败, 用户剩余额度: ¥0.222251, 需要预扣费额度: ¥0.250009", type: "authorized_error" } }, "没有调用该模型的权限");
+    expect(message).toContain("余额不足");
+    expect(message).toContain("当前剩余 ¥0.222251");
+    expect(message).toContain("本次需要预扣 ¥0.250009");
+    expect(message).not.toContain("没有调用该模型的权限");
+});
+
 test("LL2 品牌与注册入口都指向推广链接", async () => {
     expect(LL2_SIGNUP_URL).toBe("https://hub.ll2.cn?p=s93d");
-    for (const file of [
-        "../src/components/ll2/ll2-connect.tsx",
-        "../src/components/ll2/ll2-agent-panel.tsx",
-        "../src/components/ll2/ll2-oneshot.tsx",
-        "../src/components/layout/workspace-sidebar-nav.tsx",
-        "../src/pages/ll2-workspace/config.tsx",
-    ]) {
+    for (const file of ["../src/components/ll2/ll2-connect.tsx", "../src/components/ll2/ll2-agent-panel.tsx", "../src/components/ll2/ll2-oneshot.tsx", "../src/components/layout/workspace-sidebar-nav.tsx", "../src/pages/ll2-workspace/config.tsx"]) {
         const source = await read(file);
         expect(source).toContain("LL2_SIGNUP_URL");
     }
@@ -89,9 +92,7 @@ test("首页提供多版本提示词与 Agent 直接下单入口", async () => {
 });
 
 test("去出片只取画面提示词，不带「想清楚了就点交给 Agent 出片」这类操作说明", () => {
-    const reply =
-        "黄昏的海面上云层缓缓流动，远处一艘小船随浪轻轻起伏。夕阳把海水染成金橙色，一道金色反光从画面右下角斜斜扫过水面。镜头贴近海面缓缓向前推进。\n" +
-        "想清楚了就点「交给 Agent 出片」，片子会直接放进当前这张画布。";
+    const reply = "黄昏的海面上云层缓缓流动，远处一艘小船随浪轻轻起伏。夕阳把海水染成金橙色，一道金色反光从画面右下角斜斜扫过水面。镜头贴近海面缓缓向前推进。\n" + "想清楚了就点「交给 Agent 出片」，片子会直接放进当前这张画布。";
     const cleaned = ll2CleanVideoPrompt(reply);
     expect(cleaned).toContain("黄昏的海面上云层缓缓流动");
     expect(cleaned).not.toContain("想清楚了");
@@ -268,7 +269,7 @@ test("生成后超分：默认不勾、只能往上超、1080P 就是 1K", async
 test("视频模型一律 4 秒起", async () => {
     const models = await read("../src/lib/ll2-models.ts");
     expect(models).toContain("Math.max(4, spec?.secondsMin ?? 4)");
-    expect(models).toContain("duration: \"4–15 秒\"");
+    expect(models).toContain('duration: "4–15 秒"');
     const workspace = await read("../src/lib/ll2-workspace.ts");
     expect(workspace).toContain("Math.max(4, Number(value.seconds))");
 });
@@ -502,7 +503,7 @@ test("画布生成配置会带上 LL2 提示词优化/超分开关，并不归�
     const gen = await read("../src/lib/canvas/canvas-project-generation.ts");
     expect(gen).toContain("ll2PromptOptimizer: node?.metadata?.ll2PromptOptimizer");
     expect(gen).toContain("ll2Upscale: node?.metadata?.ll2UpscaleTarget");
-    expect(gen).toContain("workflowProvider === \"model\" && !isLL2Model");
+    expect(gen).toContain('workflowProvider === "model" && !isLL2Model');
 });
 
 test("LL2 的 4K 档不会被上游归一化打回 720p；改分辨率会清掉不合法超分", async () => {
@@ -531,7 +532,19 @@ test("auto-hd 不再出现在模型下拉里，只作为超分选项", async () 
     expect(models).toContain('"auto-hd"');
 });
 
+test("H3 勾选提示词优化时向 LL2 发送 prompt_optimizer", async () => {
+    const adapter = await read("../src/services/ll2/ll2-video-adapters.ts");
+    expect(adapter).toContain("prompt_optimizer: true");
+    const video = await read("../src/services/ll2/ll2-video.ts");
+    expect(video).toContain("promptOptimizer: req.promptOptimizer === true");
+    const text = await read("../src/services/ll2/ll2-text.ts");
+    expect(text).toContain("LL2_H3_PROMPT_SYSTEM");
+});
+
 test("画布视频节点走 LL2 直连（和一句话想法同一条客户端链路）", async () => {
+    const retry = await read("../src/pages/canvas/use-canvas-generation-retry.ts");
+    expect(retry).toContain("isLL2CanvasVideoModel(generationConfig)");
+    expect(retry).toContain("runLL2CanvasVideo");
     const executor = await read("../src/pages/canvas/canvas-media-generation-executors.ts");
     expect(executor).toContain("isLL2CanvasVideoModel");
     expect(executor).toContain("runLL2CanvasVideo");
@@ -547,7 +560,7 @@ test("画布视频节点走 LL2 直连（和一句话想法同一条客户端链
 
 test("H3 提示词优化：勾选才传 prompt_optimizer", async () => {
     const adapters = await read("../src/services/ll2/ll2-video-adapters.ts");
-    expect(adapters).toContain("prompt_optimizer");
+    expect(adapters).toContain("prompt_optimizer: true");
     const oneshot = await read("../src/components/ll2/ll2-oneshot.tsx");
     expect(oneshot).toContain("提示词优化");
     expect(oneshot).toContain("promptOptimizer");
@@ -569,5 +582,3 @@ test("14 个视频模型全部适配，秒数按字符串发，渠道缺失要�
     // 503 也可能是「分组没挂这个模型的渠道」，不能笼统说成服务故障。
     expect(video).toContain("model_not_found");
 });
-
-

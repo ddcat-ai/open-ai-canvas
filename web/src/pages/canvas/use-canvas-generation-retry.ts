@@ -42,6 +42,7 @@ import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/gener
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { videoEnhanceSourceReference, videoEnhanceTaskInput, type VideoEnhanceParams } from "@/lib/canvas/canvas-video-enhance";
 import { navigateToSettings } from "@/lib/settings-navigation";
+import { isLL2CanvasVideoModel, runLL2CanvasVideo } from "./canvas-ll2-video-execution";
 import type { Skill } from "@/services/api/skills";
 import { skillRuntime, type SkillRuntimeMetadata } from "@/services/skill-runtime";
 import { queryGenerationTask, recoverGenerationTaskMedia, waitForGenerationTask, type GenerationTask } from "@/services/api/task-center";
@@ -551,6 +552,47 @@ export function useCanvasGenerationRetry({
                                 : item,
                         ),
                     );
+                    // 重新生成也必须走 LL2 直连；走回后端会再次触发参考图上传对象存储。
+                    if (isLL2CanvasVideoModel(generationConfig)) {
+                        const done = await runLL2CanvasVideo({
+                            config: generationConfig,
+                            prompt: mediaPrompt,
+                            referenceImages: videoContext?.referenceImages || [],
+                            referenceVideos: videoContext?.referenceVideos || [],
+                            signal: controller.signal,
+                            onStage: (detail) => setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ll2Stage: detail } } : item))),
+                            onTaskId: (taskId) => setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ll2TaskId: taskId } } : item))),
+                            onHdTaskId: (taskId) => setNodes((current) => current.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ll2HdTaskId: taskId } } : item))),
+                        });
+                        setNodes((current) =>
+                            current.map((item) =>
+                                item.id === node.id
+                                    ? {
+                                          ...item,
+                                          metadata: {
+                                              ...item.metadata,
+                                              status: NODE_STATUS_SUCCESS,
+                                              content: done.content,
+                                              storageKey: done.storageKey,
+                                              ...(done.posterUrl ? { videoPreview: { content: done.posterUrl, width: done.width || 1280, height: done.height || 720 } } : {}),
+                                              durationMs: done.durationMs,
+                                              naturalWidth: done.width,
+                                              naturalHeight: done.height,
+                                              bytes: done.bytes,
+                                              mimeType: done.mimeType,
+                                              seconds: String(Math.max(1, Math.round(done.seconds))),
+                                              vquality: done.resolution,
+                                              requiresAuth: done.requiresAuth,
+                                              ll2Stage: undefined,
+                                              ll2HdTaskId: undefined,
+                                              errorDetails: undefined,
+                                          },
+                                      }
+                                    : item,
+                            ),
+                        );
+                        return;
+                    }
                     await runAndConsumeRetry({
                         projectId,
                         nodeId: node.id,

@@ -15,6 +15,7 @@ import { generationArtifactStorageKey, loadOrStoreGenerationArtifact } from "@/s
 import { createProviderNeutralGenerationTaskEffectStore } from "@/services/provider-neutral-generation-effects";
 import { getCachedResourceBlob } from "@/services/resource-blob-cache";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 import { CanvasSyncPendingError } from "@/lib/canvas/sync-recovery";
 import { createCanvasProjectAssetLinkQueue, type PendingCanvasProjectAssetLink } from "@/lib/canvas/project-asset-link-queue";
 import { appQueryClient } from "@/lib/query-client";
@@ -141,6 +142,10 @@ async function persistCanvasNodeAsset(options: EnsureCanvasNodeAssetOptions): Pr
     if (declaredCategory && asset.category !== declaredCategory) {
         store.updateAsset(asset.id, { category: declaredCategory });
         asset = useAssetStore.getState().assets.find((item) => item.id === asset?.id) || asset;
+    }
+    // C 端本地工作区没有账号与资源后端：素材只入本机资产库，不发起任何同步请求。
+    if (typeof window !== "undefined" && isGuestWorkspacePath(window.location.pathname)) {
+        return { assetId: asset.id, created, linkedToProject: false, syncPending: false };
     }
     // 生成结果先以本地资产完成闭环；未建立云端同步会话时，后续登录同步会
     // 继续上传素材和画布，不能把一个可恢复的本地成功报告成失败。

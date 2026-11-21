@@ -266,10 +266,7 @@ export default function AssetsPage() {
     const selectionMode = selecting || selectedIds.length > 0;
     const totalAssets = useRemotePage ? remoteTotal : filteredAssets.length;
     // 免登录没有方舟认证能力，分类页签里不要留一个恒为 0 的「方舟认证」死入口。
-    const visibleCategoryOptions = useMemo(
-        () => (userId ? categoryOptions : categoryOptions.filter((option) => option.value !== ARK_ASSET_CATEGORY)),
-        [userId],
-    );
+    const visibleCategoryOptions = useMemo(() => (userId ? categoryOptions : categoryOptions.filter((option) => option.value !== ARK_ASSET_CATEGORY)), [userId]);
     const kindCounts = useMemo(
         () => assetCountMap(kindOptions, useRemotePage ? assetPageQuery.data?.kindCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.kind),
         [activeAssets, assetPageQuery.data?.kindCounts, trashAssets, useRemotePage, viewMode],
@@ -316,9 +313,10 @@ export default function AssetsPage() {
         try {
             if (!userId) {
                 const now = new Date().toISOString();
-                const next = folderEditor === "new"
-                    ? [...localFolders, { id: `local-${Date.now().toString(36)}`, name, position: localFolders.length, createdAt: now, updatedAt: now }]
-                    : localFolders.map((folder) => (folder.id === folderEditor.id ? { ...folder, name, updatedAt: now } : folder));
+                const next =
+                    folderEditor === "new"
+                        ? [...localFolders, { id: `local-${Date.now().toString(36)}`, name, position: localFolders.length, createdAt: now, updatedAt: now }]
+                        : localFolders.map((folder) => (folder.id === folderEditor.id ? { ...folder, name, updatedAt: now } : folder));
                 writeLocalFolders(next);
                 setLocalFolders(next);
             } else if (folderEditor === "new") {
@@ -518,9 +516,10 @@ export default function AssetsPage() {
         if (!file || !file.type.startsWith("image/") || imageUploading) return;
         try {
             const dataUrl = await readFileAsDataUrl(file);
-            const meta = await readImageMeta(dataUrl);
+            // 免登录：同时写一份本机 IndexedDB，拿到 storageKey，素材才能插进画布。
+            const local = await uploadImage(file);
             setImageFile(file);
-            const draft = { dataUrl, storageKey: "", width: meta.width, height: meta.height, bytes: file.size, mimeType: file.type || meta.mimeType };
+            const draft = { dataUrl, storageKey: local.storageKey, width: local.width, height: local.height, bytes: local.bytes, mimeType: local.mimeType || file.type || "image/png" };
             setImageDraft(draft);
             if (!form.getFieldValue("coverUrl")) form.setFieldValue("coverUrl", dataUrl);
             if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
@@ -1084,11 +1083,15 @@ export default function AssetsPage() {
                                                         }
                                                         navigate(`/?quote=${encodeURIComponent(item.title)}`);
                                                     }}
-                                                    onRecommend={userId ? (candidate) => {
-                                                        setRecommendAsset(candidate);
-                                                        setRecommendNote("");
-                                                        setRecommendConsent(false);
-                                                    } : undefined}
+                                                    onRecommend={
+                                                        userId
+                                                            ? (candidate) => {
+                                                                  setRecommendAsset(candidate);
+                                                                  setRecommendNote("");
+                                                                  setRecommendConsent(false);
+                                                              }
+                                                            : undefined
+                                                    }
                                                     arkProgress={arkEnabled ? arkProgress.get(asset.id) : undefined}
                                                 />
                                             ))}

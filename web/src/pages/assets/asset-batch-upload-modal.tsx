@@ -51,11 +51,13 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
         const worker = async () => {
             while (cursor < pending.length) {
                 const item = pending[cursor++];
-                setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "uploading", percent: 10, error: undefined } : entry));
+                setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, status: "uploading", percent: 10, error: undefined } : entry)));
                 try {
                     if (!userId) {
                         const dataUrl = await readFileAsDataUrl(item.file);
-                        const meta = await readImageMeta(dataUrl);
+                        // 免登录也走本机 IndexedDB 上传，拿到可被画布引用的本地 storageKey；
+                        // 只存 dataUrl 会让素材永远显示「未同步」，也无法插进画布。
+                        const local = await uploadImage(item.file);
                         addAsset({
                             kind: "image",
                             title: item.file.name.replace(/\.[^.]+$/, ""),
@@ -65,23 +67,33 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
                             tags,
                             source: "批量上传",
                             metadata: { source: "manual-batch" },
-                            data: { dataUrl, storageKey: "", width: meta.width, height: meta.height, bytes: item.file.size, mimeType: item.file.type || meta.mimeType },
+                            data: { dataUrl, storageKey: local.storageKey, width: local.width, height: local.height, bytes: local.bytes, mimeType: local.mimeType },
                         });
-                        setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "done", percent: 100 } : entry));
+                        setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, status: "done", percent: 100 } : entry)));
                         succeeded++;
                         continue;
                     }
                     // uploadImage 已从本地文件读取尺寸，不再回读远端地址。
                     const uploaded = await uploadImage(item.file, (loaded, total) => {
                         const percent = total > 0 ? Math.min(95, Math.max(10, Math.round((loaded / total) * 95))) : 10;
-                        setItems((current) => current.map((entry) => entry.id === item.id && entry.status === "uploading" ? { ...entry, percent } : entry));
+                        setItems((current) => current.map((entry) => (entry.id === item.id && entry.status === "uploading" ? { ...entry, percent } : entry)));
                     });
-                    addAsset({ kind: "image", title: item.file.name.replace(/\.[^.]+$/, ""), category, folderId: folderId || undefined, coverUrl: uploaded.url, tags, source: "批量上传", metadata: { source: "manual-batch" }, data: { dataUrl: uploaded.url, storageKey: uploaded.storageKey, width: uploaded.width, height: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType } });
-                    setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "done", percent: 100 } : entry));
+                    addAsset({
+                        kind: "image",
+                        title: item.file.name.replace(/\.[^.]+$/, ""),
+                        category,
+                        folderId: folderId || undefined,
+                        coverUrl: uploaded.url,
+                        tags,
+                        source: "批量上传",
+                        metadata: { source: "manual-batch" },
+                        data: { dataUrl: uploaded.url, storageKey: uploaded.storageKey, width: uploaded.width, height: uploaded.height, bytes: uploaded.bytes, mimeType: uploaded.mimeType },
+                    });
+                    setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, status: "done", percent: 100 } : entry)));
                     succeeded++;
                 } catch (error) {
                     failed++;
-                    setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "error", error: error instanceof Error ? error.message : t("library.assets.batch.uploadFailed") } : entry));
+                    setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, status: "error", error: error instanceof Error ? error.message : t("library.assets.batch.uploadFailed") } : entry)));
                 }
             }
         };
@@ -92,8 +104,12 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
             await Promise.all(Array.from({ length: Math.min(4, pending.length) }, () => worker()));
             if (succeeded) {
                 // flush 可能抛出此前其他生成任务遗留的写入失败，不能让它卡住本次上传的收尾。
-                await flushAssetStorePersistence().catch((error) => { syncError = error; });
-                await saveRemoteUserDataNow([]).catch((error) => { syncError ??= error; });
+                await flushAssetStorePersistence().catch((error) => {
+                    syncError = error;
+                });
+                await saveRemoteUserDataNow([]).catch((error) => {
+                    syncError ??= error;
+                });
             }
         } finally {
             setUploading(false);
@@ -113,30 +129,116 @@ export function AssetBatchUploadModal({ open, defaultFolderId, folders, onClose,
         else onClose();
     };
 
-    return <Modal className="library-modal library-batch-upload-modal" title={t("library.assets.batch.title")} open={open} onCancel={close} footer={null} destroyOnHidden>
-        <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-                <label className="text-xs font-medium text-foreground/65">{t("library.assets.batch.category")}<Select className="mt-1 w-full" value={category} options={ASSET_ASSIGNABLE_CATEGORY_OPTIONS} onChange={(value) => setCategory(value)} /></label>
-                <label className="text-xs font-medium text-foreground/65">{t("library.assets.batch.folder")}<Select className="mt-1 w-full" value={folderId} options={folderOptions} onChange={setFolderId} /></label>
-                <label className="text-xs font-medium text-foreground/65">{t("library.assets.batch.tags")}<Select mode="tags" className="mt-1 w-full" value={tags} tokenSeparators={[",", "，"]} onChange={setTags} placeholder={t("library.assets.batch.tagsPlaceholder")} /></label>
+    return (
+        <Modal className="library-modal library-batch-upload-modal" title={t("library.assets.batch.title")} open={open} onCancel={close} footer={null} destroyOnHidden>
+            <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="text-xs font-medium text-foreground/65">
+                        {t("library.assets.batch.category")}
+                        <Select className="mt-1 w-full" value={category} options={ASSET_ASSIGNABLE_CATEGORY_OPTIONS} onChange={(value) => setCategory(value)} />
+                    </label>
+                    <label className="text-xs font-medium text-foreground/65">
+                        {t("library.assets.batch.folder")}
+                        <Select className="mt-1 w-full" value={folderId} options={folderOptions} onChange={setFolderId} />
+                    </label>
+                    <label className="text-xs font-medium text-foreground/65">
+                        {t("library.assets.batch.tags")}
+                        <Select mode="tags" className="mt-1 w-full" value={tags} tokenSeparators={[",", "，"]} onChange={setTags} placeholder={t("library.assets.batch.tagsPlaceholder")} />
+                    </label>
+                </div>
+                <button
+                    type="button"
+                    className={dragging ? "batch-upload-dropzone is-dragging" : "batch-upload-dropzone"}
+                    onClick={() => inputRef.current?.click()}
+                    onDragEnter={(event) => {
+                        event.preventDefault();
+                        setDragging(true);
+                    }}
+                    onDragOver={(event) => {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "copy";
+                    }}
+                    onDragLeave={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+                    }}
+                    onDrop={(event) => {
+                        event.preventDefault();
+                        setDragging(false);
+                        if (!uploading) chooseFiles(Array.from(event.dataTransfer.files));
+                    }}
+                >
+                    <UploadCloud className="size-7" />
+                    <strong>{t("library.assets.batch.chooseTitle")}</strong>
+                    <span>{t("library.assets.batch.chooseHint")}</span>
+                </button>
+                <input
+                    ref={inputRef}
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    multiple
+                    onChange={(event) => {
+                        chooseFiles(Array.from(event.target.files || []));
+                        event.currentTarget.value = "";
+                    }}
+                />
+                {hasFiles ? (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs text-foreground/55">
+                            <span>{t("library.assets.batch.summary", { total: items.length, done: doneCount })}</span>
+                            <button type="button" className="text-foreground/45 hover:text-foreground" onClick={() => setItems([])} disabled={uploading}>
+                                {t("library.assets.batch.clear")}
+                            </button>
+                        </div>
+                        <div className="batch-upload-list">
+                            {items.map((item) => (
+                                <div key={item.id} className="batch-upload-item">
+                                    <FileImage className="size-4 shrink-0 text-foreground/45" />
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate" title={item.file.name}>
+                                            {item.file.name}
+                                        </span>
+                                        {item.status === "error" && item.error ? (
+                                            <span className="block truncate text-[var(--fs-label)] text-red-500" title={item.error}>
+                                                {item.error}
+                                            </span>
+                                        ) : null}
+                                    </span>
+                                    {item.status === "uploading" ? (
+                                        <div className="w-20 shrink-0">
+                                            <Progress percent={item.percent || 10} size="small" showInfo={false} />
+                                        </div>
+                                    ) : item.status === "done" ? (
+                                        <StatusBadge tone="success" size="sm" label={t("library.assets.batch.done")} />
+                                    ) : item.status === "error" ? (
+                                        <StatusBadge tone="error" size="sm" label={t("library.assets.batch.failed")} title={item.error} />
+                                    ) : (
+                                        <StatusBadge tone="neutral" size="sm" label={t("library.assets.batch.queued")} />
+                                    )}
+                                    <button
+                                        type="button"
+                                        aria-label={t("library.assets.batch.removeItem", { name: item.file.name })}
+                                        title={t("library.assets.batch.remove")}
+                                        className="batch-upload-remove"
+                                        onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}
+                                        disabled={uploading}
+                                    >
+                                        <X className="size-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                    <Button onClick={close} disabled={uploading}>
+                        {t("common.cancel")}
+                    </Button>
+                    <Button type="primary" icon={<UploadCloud className="size-4" />} onClick={() => void uploadBatch()} disabled={!items.some((item) => item.status === "queued" || item.status === "error")} loading={uploading}>
+                        {failedItems.length ? t("library.assets.batch.retryFailed", { count: failedItems.length }) : t("library.assets.batch.start")}
+                    </Button>
+                </div>
             </div>
-            <button
-                type="button"
-                className={dragging ? "batch-upload-dropzone is-dragging" : "batch-upload-dropzone"}
-                onClick={() => inputRef.current?.click()}
-                onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
-                onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
-                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
-                onDrop={(event) => { event.preventDefault(); setDragging(false); if (!uploading) chooseFiles(Array.from(event.dataTransfer.files)); }}
-            >
-                <UploadCloud className="size-7" /><strong>{t("library.assets.batch.chooseTitle")}</strong><span>{t("library.assets.batch.chooseHint")}</span>
-            </button>
-            <input ref={inputRef} type="file" hidden accept="image/*" multiple onChange={(event) => { chooseFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
-            {hasFiles ? <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-foreground/55"><span>{t("library.assets.batch.summary", { total: items.length, done: doneCount })}</span><button type="button" className="text-foreground/45 hover:text-foreground" onClick={() => setItems([])} disabled={uploading}>{t("library.assets.batch.clear")}</button></div>
-                <div className="batch-upload-list">{items.map((item) => <div key={item.id} className="batch-upload-item"><FileImage className="size-4 shrink-0 text-foreground/45" /><span className="min-w-0 flex-1"><span className="block truncate" title={item.file.name}>{item.file.name}</span>{item.status === "error" && item.error ? <span className="block truncate text-[var(--fs-label)] text-red-500" title={item.error}>{item.error}</span> : null}</span>{item.status === "uploading" ? <div className="w-20 shrink-0"><Progress percent={item.percent || 10} size="small" showInfo={false} /></div> : item.status === "done" ? <StatusBadge tone="success" size="sm" label={t("library.assets.batch.done")} /> : item.status === "error" ? <StatusBadge tone="error" size="sm" label={t("library.assets.batch.failed")} title={item.error} /> : <StatusBadge tone="neutral" size="sm" label={t("library.assets.batch.queued")} />}<button type="button" aria-label={t("library.assets.batch.removeItem", { name: item.file.name })} title={t("library.assets.batch.remove")} className="batch-upload-remove" onClick={() => setItems((current) => current.filter((entry) => entry.id !== item.id))} disabled={uploading}><X className="size-3.5" /></button></div>)}</div>
-            </div> : null}
-            <div className="flex justify-end gap-2"><Button onClick={close} disabled={uploading}>{t("common.cancel")}</Button><Button type="primary" icon={<UploadCloud className="size-4" />} onClick={() => void uploadBatch()} disabled={!items.some((item) => item.status === "queued" || item.status === "error")} loading={uploading}>{failedItems.length ? t("library.assets.batch.retryFailed", { count: failedItems.length }) : t("library.assets.batch.start")}</Button></div>
-        </div>
-    </Modal>;
+        </Modal>
+    );
 }

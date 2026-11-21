@@ -23,10 +23,7 @@ type Tab = "video" | "text" | "chat";
 
 // 默认停在「视频」。拖一张图常驻在这一页给小白；「素材库 @」打开资产库，
 // 上传后在句子里 @ 引用，可以引用很多张图和视频 —— 两者不是同一个入口。
-const TABS: { id: Tab; label: string; action?: boolean }[] = [
-    { id: "video", label: "视频" },
-    { id: "text", label: "文本" },
-];
+const TABS: { id: Tab; label: string; action?: boolean }[] = [{ id: "video", label: "视频" }];
 
 type QuickIdea = { title: string; hint: string; prompt: string; mode: "video" | "text" };
 
@@ -126,7 +123,7 @@ export function LL2OneShot() {
         if (!incoming) return;
         setAutoStartRequested(searchParams.get("autostart") === "1");
         setPrompt(incoming);
-        setTab(searchParams.get("mode") === "text" ? "text" : "video");
+        setTab("video");
         const modelParam = searchParams.get("model");
         const nextModel = modelParam === "wan3.0-video" || modelParam === "MiniMax-H3" ? modelParam : null;
         if (nextModel) {
@@ -535,8 +532,15 @@ export function LL2OneShot() {
 
     /** 起步卡片只「填入示例」：已有内容就接在后面，绝不覆盖。 */
     const fillExample = (idea: QuickIdea) => {
+        // 文本模式已收进全站 Agent，不再单开一个「文本」页签。
+        if (idea.mode === "text") {
+            openAgentWith(idea.prompt);
+            setError("");
+            setHint(`「${idea.title}」已交给右下角 Agent 继续写。`);
+            return;
+        }
         setPrompt((previous) => (previous.trim() ? `${previous.trim()}\n${idea.prompt}` : idea.prompt));
-        setTab(idea.mode);
+        setTab("video");
         setError("");
         setHint(`已把「${idea.title}」的示例填进去，你原来写的内容还在。`);
     };

@@ -27,7 +27,7 @@ export type LL2AdapterArgs = {
     ratio: string;
     /** H3 content[] 里的参考素材项；由 ll2-media.ts 按官方契约构造，本层不改写。 */
     media?: LL2MediaContent[];
-    /** 仅 H3：让网关先把提示词按 MiniMax 官方格式整理一遍（prompt_optimizer）。 */
+    /** 仅 H3：让网关先把提示词按官方格式整理一遍（prompt_optimizer）。 */
     promptOptimizer?: boolean;
 };
 
@@ -101,13 +101,10 @@ const h3Adapter: LL2VideoAdapter = {
         resolution: "768P",
         duration: args.seconds,
         ratio: args.ratio,
-        // 网关缺省 false；只在用户勾选时显式传 true。
+        // LL2 网关需要这个字段来触发 H3 提示词整理。
         ...(args.promptOptimizer ? { prompt_optimizer: true } : {}),
     }),
-    taskIdOf: (payload) =>
-        ll2TextOf(payload, "task_id", "id", "request_id") ||
-        ll2TextOf(payload.task, "id", "task_id") ||
-        ll2TextOf(payload.data, "task_id", "id"),
+    taskIdOf: (payload) => ll2TextOf(payload, "task_id", "id", "request_id") || ll2TextOf(payload.task, "id", "task_id") || ll2TextOf(payload.data, "task_id", "id"),
     queryPath: (taskId) => `/v2/query/video_generation/${encodeURIComponent(taskId)}`,
     parseQuery: (payload) => {
         const task = (payload.task || payload.data?.task || payload) as Json;
@@ -423,9 +420,7 @@ function makeOpenAIVideoAdapter(model: OpenAIVideoModel): LL2VideoAdapter {
             const usage = (data.usage || {}) as Json;
             return {
                 status: String(data.status || "").toLowerCase(),
-                url: ll2TextOf(data, "result_url", "video_url", "url") ||
-                    ll2TextOf(data.output, "video_url", "url") ||
-                    ll2TextOf(data.result, "url"),
+                url: ll2TextOf(data, "result_url", "video_url", "url") || ll2TextOf(data.output, "video_url", "url") || ll2TextOf(data.result, "url"),
                 chargedSeconds: Number(usage.output_seconds ?? usage.total_seconds ?? data.seconds ?? 0) || 0,
                 errorCode: ll2TextOf(data, "error_code", "code"),
                 errorMessage: ll2TextOf(data, "fail_reason", "message", "error") || ll2TextOf(data.error, "message"),

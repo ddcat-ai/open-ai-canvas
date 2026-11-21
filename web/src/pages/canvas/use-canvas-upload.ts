@@ -8,6 +8,7 @@ import type { InsertAssetPayload } from "@/components/canvas/asset-picker-modal"
 import { CANVAS_PROJECT_CHAPTER_DND_TYPE, type CanvasProjectChapterPayload } from "@/lib/canvas/canvas-project-chapter-dnd";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { getActiveUserScope } from "@/lib/user-scope";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 import { audioUploadTitleFromFileName } from "@/lib/audio-upload-title";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { audioMetadata, imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-task-sync";
@@ -282,10 +283,13 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 if (domainProjectId) progress.update(translate("canvasPage.upload.writingProjectAssets"), 4);
                 const persisted = await persistMediaNode(node, { refreshProject: !batch });
                 const localOnly = metadata.storageKey && !resourceIdFromStorageKey(metadata.storageKey);
+                const localFirst = typeof window !== "undefined" && isGuestWorkspacePath(window.location.pathname);
                 const pendingLabel = domainProjectId ? translate("canvasPage.upload.projectAssetsSyncing") : translate("canvasPage.upload.cloudAssetsSyncing");
                 progress.done(
                     localOnly
-                        ? translate("canvasPage.upload.savedLocalOnly")
+                        ? localFirst
+                            ? "已保存到这台电脑"
+                            : translate("canvasPage.upload.savedLocalOnly")
                         : persisted.syncPending
                           ? translate("canvasPage.upload.addedSyncing", { status: pendingLabel })
                           : persisted.persisted
@@ -294,7 +298,10 @@ export function useCanvasUpload({ canvasId, domainProjectId, nodesRef, selectedN
                 );
                 if (localOnly) {
                     if (batch) batch.onLocalOnly();
-                    else if (!options.quiet) message.warning(translate("canvasPage.upload.fileSavedLocalOnly"));
+                    else if (!options.quiet) {
+                        if (localFirst) message.success("已保存到本机");
+                        else message.warning(translate("canvasPage.upload.fileSavedLocalOnly"));
+                    }
                 }
                 return id;
             } catch (error) {

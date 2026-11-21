@@ -435,7 +435,11 @@ function SwitchRow({ label, checked, theme, onChange }: { label: string; checked
 
 /** 画布里的模型是「渠道::模型名」；取最后一段去和 LL2 模型表比对。 */
 function ll2BaseModel(model: string): string {
-    return String(model || "").split("::").pop() || "";
+    return (
+        String(model || "")
+            .split("::")
+            .pop() || ""
+    );
 }
 
 function isLL2VideoModel(model: string): model is LL2ConnectedVideoModel {
@@ -467,7 +471,7 @@ function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true
     const range = LL2_VIDEO_DURATION[model] || { min: 4, max: 15, default: 5 };
     const resolutions = tiers.map((tier) => tier.label);
     const ratios = ll2RatioOptions(model);
-    const resolution = resolutions.includes(config.vquality) ? config.vquality : (resolutions[0] || "768P");
+    const resolution = resolutions.includes(config.vquality) ? config.vquality : resolutions[0] || "768P";
     const ratio = ratios.includes(config.size) ? config.size : "16:9";
     const rawSeconds = Number(config.videoSeconds) || range.default;
     const seconds = Math.min(range.max, Math.max(range.min, Math.round(rawSeconds)));
@@ -477,7 +481,9 @@ function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true
         <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
             {showTitle ? <div className="text-sm font-semibold">视频设置</div> : null}
             <div className="space-y-2">
-                <div className="text-xs" style={{ color: theme.node.muted }}>分辨率</div>
+                <div className="text-xs" style={{ color: theme.node.muted }}>
+                    分辨率
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                     {resolutions.map((value) => (
                         <LL2Pill key={value} selected={resolution === value} theme={theme} onClick={() => onConfigChange("vquality", value)}>
@@ -487,7 +493,9 @@ function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true
                 </div>
             </div>
             <div className="space-y-2">
-                <div className="text-xs" style={{ color: theme.node.muted }}>尺寸</div>
+                <div className="text-xs" style={{ color: theme.node.muted }}>
+                    尺寸
+                </div>
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                     <LL2Dimension label="W" value={dimensions ? String(dimensions.width) : "跟随参考"} theme={theme} />
                     <span className="text-xs opacity-45">×</span>
@@ -506,41 +514,26 @@ function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true
                     <span>秒数</span>
                     <span>{seconds} 秒</span>
                 </div>
-                <input
-                    type="range"
-                    aria-label="视频秒数"
-                    min={range.min}
-                    max={range.max}
-                    step={1}
-                    value={seconds}
-                    className="w-full accent-[var(--ll2-t-6720ff,#6720ff)]"
-                    onChange={(event) => onConfigChange("videoSeconds", event.target.value)}
-                />
+                <input type="range" aria-label="视频秒数" min={range.min} max={range.max} step={1} value={seconds} className="w-full accent-[var(--ll2-t-6720ff,#6720ff)]" onChange={(event) => onConfigChange("videoSeconds", event.target.value)} />
                 <div className="flex justify-between text-[10px]" style={{ color: theme.node.muted }}>
                     <span>{range.min}s 起（LL2 最少 4 秒）</span>
                     <span>{range.max}s</span>
                 </div>
             </div>
             <div className="space-y-2">
-                <div className="text-xs" style={{ color: theme.node.muted }}>附加</div>
+                <div className="text-xs" style={{ color: theme.node.muted }}>
+                    附加
+                </div>
                 {model === "MiniMax-H3" ? (
                     <label className="flex items-center gap-2 rounded-md px-2 py-2 text-xs" style={{ background: theme.toolbar.itemHover }}>
-                        <input
-                            type="checkbox"
-                            checked={config.ll2PromptOptimizer === "1"}
-                            onChange={(event) => onConfigChange("ll2PromptOptimizer", event.target.checked ? "1" : "")}
-                        />
+                        <input type="checkbox" checked={config.ll2PromptOptimizer === "1"} onChange={(event) => onConfigChange("ll2PromptOptimizer", event.target.checked ? "1" : "")} />
                         <span>提示词优化（H3 先按官方格式整理）</span>
                     </label>
                 ) : null}
                 {ll2UpscaleTargetsFor(resolution).length ? (
                     <div className="space-y-1 rounded-md px-2 py-2" style={{ background: theme.toolbar.itemHover }}>
                         <label className="flex items-center gap-2 text-xs">
-                            <input
-                                type="checkbox"
-                                checked={Boolean(config.ll2Upscale)}
-                                onChange={(event) => onConfigChange("ll2Upscale", event.target.checked ? (ll2UpscaleTargetsFor(resolution)[0]?.id || "") : "")}
-                            />
+                            <input type="checkbox" checked={Boolean(config.ll2Upscale)} onChange={(event) => onConfigChange("ll2Upscale", event.target.checked ? ll2UpscaleTargetsFor(resolution)[0]?.id || "" : "")} />
                             <span>生成后顺便超分</span>
                         </label>
                         {config.ll2Upscale ? (

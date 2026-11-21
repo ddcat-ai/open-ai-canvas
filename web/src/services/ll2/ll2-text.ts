@@ -14,6 +14,7 @@
  */
 
 import { LL2_API_BASE, LL2_MODELS, ll2FormatCNY, ll2ModelById, type LL2Model } from "@/lib/ll2-models";
+import { ll2ForbiddenMessage } from "@/lib/ll2-account-error";
 
 export const LL2_TEXT_MODELS = LL2_MODELS.filter((model) => model.category === "text");
 export const LL2_DEFAULT_TEXT_MODEL = "glm-5.3-flash";
@@ -90,7 +91,7 @@ function textOf(payload: unknown, ...keys: string[]): string {
 function httpErrorMessage(status: number, payload: unknown): string {
     const detail = textOf(payload, "message", "msg") || textOf((payload as Json)?.error, "message", "msg");
     if (status === 401) return "LL2 Key 无效或已过期，请在「连接 LL2」里重新填入";
-    if (status === 403) return "这个 Key 没有调用该文本模型的权限，请到 LL2 控制台确认";
+    if (status === 403) return ll2ForbiddenMessage(payload, "这个 Key 没有调用该文本模型的权限，请到 LL2 控制台确认");
     if (status === 429) return "LL2 账户触发限流，请稍后再试";
     if (status === 400) return detail ? `请求参数不被接受：${detail}` : "请求参数不被接受，请检查模型名与消息内容";
     if (status >= 500) return `LL2 服务暂时不可用（HTTP ${status}），请稍后重试`;
@@ -161,10 +162,27 @@ export async function ll2ChatText(req: LL2TextRequest): Promise<LL2TextResult> {
         costCNY: cost.costCNY,
         // C 端只给白话档位，不展示 ¥0.0008 这类小数和 Token 术语。
         costLabel: ll2TextFriendlyCostLabel(cost.costCNY),
-        costBasis: promptTokens || completionTokens
-            ? "按写了多少字算，详细账单以 LL2 控制台为准"
-            : "这次没读到字数，花了多少钱以 LL2 控制台账单为准",
+        costBasis: promptTokens || completionTokens ? "按写了多少字算，详细账单以 LL2 控制台为准" : "这次没读到字数，花了多少钱以 LL2 控制台账单为准",
     };
+}
+
+/** 勾选「提示词优化」时，先用文本模型整理一遍，再把结果交给 H3 生成。 */
+export async function ll2OptimizeH3Prompt(req: { apiKey: string; prompt: string; signal?: AbortSignal }): Promise<string> {
+    const result = await ll2ChatText({
+        apiKey: req.apiKey,
+        model: "deepseek-v4.1-flash",
+        signal: req.signal,
+        messages: [
+            { role: "system", content: LL2_H3_PROMPT_SYSTEM },
+            { role: "user", content: req.prompt },
+        ],
+    });
+    const text = result.text
+        .trim()
+        .replace(/^["'「『]+|["'」』]+$/g, "")
+        .trim();
+    if (!text) throw new Error("提示词整理没有返回内容，取消勾选提示词优化或稍后再试");
+    return text;
 }
 
 /**
@@ -190,6 +208,12 @@ export const LL2_AGENT_SYSTEM = [
     "用户要写代码时，用 Markdown 代码块给完整可运行片段，并说明怎么用。",
     "用户只要出片提示词时，只给一段完整中文画面描述（主体 → 环境 → 光线 → 运镜 → 氛围），120 字以内，不加标题、引号或解释。",
     "不推荐其它平台，不提外部站点，不露内部模型代号和单价。",
+].join("\n");
+
+/** H3 提示词整理：官方 v2 接口没有 prompt_optimizer，先用文本模型把原句整理成 H3 更好理解的描述。 */
+export const LL2_H3_PROMPT_SYSTEM = [
+    "你是 MiniMax H3 视频提示词整理器。把用户这句话整理成一段 H3 易理解的画面描述：主体与动作、场景、光线、镜头运动、氛围。",
+    "保留原意，补全必要细节，不添加用户没提的新角色或字幕；只输出一段中文，不要标题、解释、引号或 Markdown。",
 ].join("\n");
 
 /** 多版本提示词：同一句话给 3 个不同侧重点的方案，让用户挑一个再出片。 */

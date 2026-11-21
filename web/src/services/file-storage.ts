@@ -2,6 +2,7 @@ import localforage from "localforage";
 import { nanoid } from "nanoid";
 
 import { getActiveUserScope } from "@/lib/user-scope";
+import { isGuestWorkspacePath } from "@/lib/guest-workspace";
 import { captureVideoPoster, detectVideoAudioTrackFromBlob } from "@/lib/video-poster";
 import { getResourceAccess, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile, type ResourceAccessVariant } from "@/services/api/resources";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
@@ -84,6 +85,14 @@ export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?:
             }
         }
 
+        // 与图片同一套边界：C 端本地工作区不请求资源后端，视频/音频直接存本机。
+        const localOnly = typeof window !== "undefined" && isGuestWorkspacePath(window.location.pathname);
+        if (localOnly) {
+            await store.setItem(storageKey, blob);
+            storeLocalMediaObjectUrl("media", storageKey, blob, session, { replace: true, url: previewUrl });
+            retainPreviewUrl = true;
+            return { url: previewUrl, storageKey, bytes: blob.size, mimeType: blob.type || "application/octet-stream", ...meta, preview: poster };
+        }
         let remoteUploadError = "";
         try {
             const kind = blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";

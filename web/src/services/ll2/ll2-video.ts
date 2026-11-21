@@ -11,18 +11,10 @@
  * 端点取证见 ll2-video-adapters.ts 头部注释。
  */
 
-import {
-    ll2ActualCNY,
-    ll2PreciseCNY,
-    type LL2ConnectedVideoModel,
-} from "@/lib/ll2-models";
-import {
-    ll2TextOf,
-    ll2VideoAdapter,
-    type LL2QueriedTask,
-    type LL2VideoProtocol,
-} from "@/services/ll2/ll2-video-adapters";
+import { ll2ActualCNY, ll2PreciseCNY, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
+import { ll2TextOf, ll2VideoAdapter, type LL2QueriedTask, type LL2VideoProtocol } from "@/services/ll2/ll2-video-adapters";
 import type { LL2MediaContent } from "@/services/ll2/ll2-media";
+import { ll2ForbiddenMessage } from "@/lib/ll2-account-error";
 
 export type { LL2VideoProtocol } from "@/services/ll2/ll2-video-adapters";
 
@@ -35,7 +27,7 @@ export type LL2VideoRequest = {
     seconds: number;
     resolution: string;
     ratio?: string;
-    /** 仅 H3：提示词优化（prompt_optimizer）。 */
+    /** 仅 H3：让网关先按官方格式整理提示词（prompt_optimizer）。 */
     promptOptimizer?: boolean;
     signal?: AbortSignal;
     /** 参考素材媒体项（图片 / 视频）。只有 MiniMax-H3 的 content[] 契约已核准。 */
@@ -85,7 +77,7 @@ function originOf(req: LL2VideoRequest) {
 function httpErrorMessage(status: number, payload: unknown, label: string) {
     const detail = ll2TextOf(payload, "message", "msg") || ll2TextOf((payload as Json)?.error, "message", "msg") || "";
     if (status === 401) return "LL2 Key 无效或已过期，请在「连接 LL2」里重新填入";
-    if (status === 403) return "这个 Key 没有调用该模型的权限，请到 LL2 控制台确认";
+    if (status === 403) return ll2ForbiddenMessage(payload, "这个 Key 没有调用该模型的权限，请到 LL2 控制台确认");
     if (status === 429) return "LL2 账户触发限流，请稍后再试";
     // new-api 网关刚创建完任务时，查询可能短暂返回 task_not_exist，属于同步延迟而非失败。
     if (/task_not_exist/i.test(detail)) return "任务还在同步中";
@@ -176,10 +168,14 @@ function sleep(ms: number, signal?: AbortSignal) {
             reject(new DOMException("Aborted", "AbortError"));
             return;
         }
-        signal.addEventListener("abort", () => {
-            clearTimeout(timer);
-            reject(new DOMException("Aborted", "AbortError"));
-        }, { once: true });
+        signal.addEventListener(
+            "abort",
+            () => {
+                clearTimeout(timer);
+                reject(new DOMException("Aborted", "AbortError"));
+            },
+            { once: true },
+        );
     });
 }
 
@@ -327,12 +323,7 @@ async function waitForLL2Video(input: {
         await sleep(interval, req.signal);
         let queried: LL2QueriedTask;
         try {
-            const payload = await ll2Fetch(
-                `${originOf(req)}${adapter.queryPath(taskId)}`,
-                { method: "GET", headers: authHeaders(req) },
-                req,
-                `查询${adapter.label}任务`,
-            );
+            const payload = await ll2Fetch(`${originOf(req)}${adapter.queryPath(taskId)}`, { method: "GET", headers: authHeaders(req) }, req, `查询${adapter.label}任务`);
             queried = adapter.parseQuery(payload);
         } catch (error) {
             // 网关刚创建完偶尔会短暂返回 task_not_exist；这不算失败，继续轮询。
