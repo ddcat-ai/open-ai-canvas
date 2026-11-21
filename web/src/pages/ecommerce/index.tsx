@@ -594,6 +594,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             setDraft(mergeCanvasModels(mergeReferences(nextDraft)));
             setPlan(nextPlan);
             setTasks({});
+            setMobileView(owner.submitting || nextDraft.planningTaskId || nextDraft.directionsTaskId || nextDraft.creativeDirectionId || nextPlan?.images.length || nextPlan?.previousImages?.length ? "works" : "create");
             setSubmittedDraft(restoreSubmittedCommerceRequest(saved, nextPlan, useCache ? compatibleCache.submittedDraft : undefined));
             const submittedFingerprint = saved && sessionStorage.getItem(`ecommerce-composer-submitted:${scope}:${saved.id}`);
             if (submittedFingerprint && submittedFingerprint === composerFingerprint(nextDraft)) clearSubmittedComposer(nextDraft, true);
@@ -1143,6 +1144,8 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         submissionLock.current = true;
         setBusy(true);
         setDirectionsStatus("loading");
+        // 手机端的进度与错误位于「作品」，有效提交后就显示，不等待任务回执。
+        setMobileView("works");
         setStage("正在提交商品分析与风格推荐任务");
         try {
             const snapshot = { ...draft, agentModel: planningModel, directionsTaskId: undefined, creativeDirectionId: undefined, creativeRecommendationId: undefined, creativeOptions: normalizeCreativeOptions(draft) };
@@ -1176,7 +1179,8 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             if (!followup) sessionStorage.setItem(`ecommerce-composer-submitted:${scope}:${destination.id}`, composerFingerprint(snapshot));
             const cached = peekEcommerceWorkspace(scope);
             if (cached?.project?.id === destination.id || cached?.sessionId === owner.id || isCurrent(owner)) {
-                await writeEcommerceWorkspace(scope, {
+                // 本机缓存不能阻塞服务端任务回执保存，移动端存储挂起时仍要继续业务流程。
+                void writeEcommerceWorkspace(scope, {
                     sessionId: cached?.project?.id === destination.id ? cached.sessionId : owner.id,
                     project: destination,
                     draft: nextDraft,
@@ -1336,6 +1340,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         autoStartRef.current = Boolean(planningDraft.creativeDirectionId) || (planningDraft.referenceMode !== "detail" && autoGenerate);
         submissionLock.current = true;
         setBusy(true);
+        setMobileView("works");
         setStage("正在保存商品资料");
         if (owner !== session) {
             activateSession(owner);
@@ -1804,6 +1809,7 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         navigate(`/ecommerce?project=${encodeURIComponent(item.id)}${focusId ? `&focus=${encodeURIComponent(focusId)}` : ""}`);
     };
     const newProject = () => {
+        setMobileView("create");
         setCompactHistoryOpen(false);
         setDirectionsStatus("idle");
         setDirectionsTask(undefined);
@@ -1926,17 +1932,18 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
     const stage = submitted > 0 && completed === total ? `全部完成 · ${completed} 张图片已保存到资产库` : stageMessage;
     // Failed analysis used to render as plain grey text under the greeting; show
     // it as an error with a retry so the user knows what to do next.
-    const failure = /^(商品分析未完成|分析结果读取失败|方向推荐提交或保存未完成|策划提交或保存未完成|暂时无法查询分析进度)[：:]\s*(.*)$/s.exec(stageMessage);
+    const failure = /^(商品分析未完成|分析结果读取失败|方向推荐提交或保存未完成|策划提交或保存未完成|图片任务准备未完成|暂时无法查询分析进度)[：:]\s*(.*)$/s.exec(stageMessage);
     const failedStage = failure
         ? {
-              title: failure[1].startsWith("策划") ? "策划未完成" : "商品分析未完成",
+              title: failure[1].startsWith("图片") ? "图片任务未提交" : failure[1].startsWith("策划") ? "策划未完成" : "商品分析未完成",
               detail: failure[2].replace(/；已提交的任务可在返回项目后恢复$/, ""),
-              retry: failure[1].startsWith("策划")
-                  ? undefined
-                  : () => {
-                        setStage("");
-                        void requestCreativeDirections();
-                    },
+              retry:
+                  failure[1].startsWith("策划") || failure[1].startsWith("图片")
+                      ? undefined
+                      : () => {
+                            setStage("");
+                            void requestCreativeDirections();
+                        },
           }
         : null;
     const pendingScreenCount = draft.referenceMode === "detail" && (!plan || plan.inputSignature !== commerceInputSignature(draft));
@@ -1964,6 +1971,8 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
         if (!owner.beginSubmission()) return;
         submissionLock.current = true;
         setBusy(true);
+        setMobileView("works");
+        setStage("正在保存商品资料并准备图片任务");
         if (owner !== session) {
             activateSession(owner);
             projectRef.current = null;
@@ -1982,7 +1991,10 @@ function EcommerceWorkspace({ scope }: { scope: string }) {
             }
             await startGeneration(next, source, owner, true);
         } catch (cause) {
-            if (isCurrent(owner)) message.error(errorText(cause));
+            if (isCurrent(owner)) {
+                setStage(`图片任务准备未完成：${errorText(cause)}`);
+                message.error(errorText(cause));
+            }
         } finally {
             owner.endSubmission();
             if (isCurrent(owner)) {
