@@ -38,6 +38,9 @@ export default function StorageSettingsPage() {
     const [draftMode, setDraftMode] = useState<StorageMode>("local");
     const [loadError, setLoadError] = useState("");
     const [saveError, setSaveError] = useState("");
+    // antd v6 的 setFieldsValue 只触发关联 Field 的局部更新；页面顶层的状态徽标与
+    // 初始渲染的输入框可能停留在回填前的空状态。回填后递增该计数强制整页重渲染。
+    const [backfillTick, setBackfillTick] = useState(0);
     const [form] = Form.useForm<OSSFormValues>();
     const requestVersionRef = useRef(0);
     const navigationConfirmOpenRef = useRef(false);
@@ -86,6 +89,7 @@ export default function StorageSettingsPage() {
         const values = formValues(setting);
         form.setFieldsValue(values);
         setDraftMode(values.mode);
+        setBackfillTick((tick) => tick + 1);
     }, [form, loading, setting]);
 
     const blocker = useBlocker(dirty && !saving);
@@ -297,9 +301,10 @@ export default function StorageSettingsPage() {
     const currentValues = form.getFieldsValue(true);
     const normalizedDraft = normalizeStoragePayload(currentValues, setting);
     const hasCurrentProviderSecret = draftMode !== "local" && setting.provider === draftMode && setting.hasAccessKeySecret;
+    void backfillTick;
 
     return (
-        <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置" scroll>
+        <AdminPageFrame title="存储服务" description="配置新增资源的默认存储位置" scroll data-backfill-tick={backfillTick}>
             <div className="admin-settings-stack admin-storage-settings">
                 <div className={cn("admin-storage-command-bar", dirty && "is-dirty")}>
                     <div className="admin-storage-command-copy" aria-live="polite">
@@ -405,6 +410,7 @@ export default function StorageSettingsPage() {
                         }
                     >
                         <Form
+                            key={setting?.updatedAt ?? "loading"}
                             form={form}
                             layout="vertical"
                             requiredMark={false}
@@ -422,26 +428,28 @@ export default function StorageSettingsPage() {
                             </Form.Item>
 
                             {draftMode === "local" ? (
-                                <div className="admin-storage-form-section">
-                                    <FormSectionTitle icon={<Globe2 className="size-4" />} title="公开访问根地址" description="用于生成本地资源的短时签名链接；填写站点根地址，不要附带 /api、查询参数或片段。" />
-                                    <div className="admin-storage-local-field">
-                                        <Form.Item name="publicBaseUrl" label="服务器访问地址" extra="支持本机、局域网或公网地址，例如 http://192.168.1.10:8080。">
-                                            <div className="admin-storage-address-control">
-                                                <Input aria-label="服务器访问地址" autoComplete="off" inputMode="url" placeholder="https://canvas.example.com" prefix={<Globe2 className="size-4 text-foreground/35" />} />
-                                                <Button
-                                                    icon={<LocateFixed className="size-4" />}
-                                                    onClick={() => {
-                                                        const value = window.location.origin;
-                                                        form.setFieldValue("publicBaseUrl", value);
-                                                        setDirty(hasStorageChanges({ ...form.getFieldsValue(true), publicBaseUrl: value }, setting));
-                                                        setSaveError("");
-                                                    }}
-                                                >
-                                                    使用当前地址
-                                                </Button>
-                                            </div>
-                                        </Form.Item>
-                                    </div>
+                                    <div className="admin-storage-form-section">
+                                        <FormSectionTitle icon={<Globe2 className="size-4" />} title="公开访问根地址" description="用于生成本地资源的短时签名链接；填写站点根地址，不要附带 /api、查询参数或片段。" />
+                                        <div className="admin-storage-local-field">
+                                            <Form.Item label="服务器访问地址" extra="支持本机、局域网或公网地址，例如 http://192.168.1.10:8080。">
+                                                <div className="admin-storage-address-control">
+                                                    <Form.Item name="publicBaseUrl" noStyle>
+                                                        <Input aria-label="服务器访问地址" autoComplete="off" inputMode="url" placeholder="https://canvas.example.com" prefix={<Globe2 className="size-4 text-foreground/35" />} />
+                                                    </Form.Item>
+                                                    <Button
+                                                        icon={<LocateFixed className="size-4" />}
+                                                        onClick={() => {
+                                                            const value = window.location.origin;
+                                                            form.setFieldValue("publicBaseUrl", value);
+                                                            setDirty(hasStorageChanges({ ...form.getFieldsValue(true), publicBaseUrl: value }, setting));
+                                                            setSaveError("");
+                                                        }}
+                                                    >
+                                                        使用当前地址
+                                                    </Button>
+                                                </div>
+                                            </Form.Item>
+                                        </div>
                                     <div className="admin-storage-context-note">
                                         <HardDrive className="size-4" aria-hidden="true" />
                                         <span>本地模式适合单机或共享数据卷部署。该地址只决定资源访问链接，不会移动现有文件或改变数据目录。</span>
