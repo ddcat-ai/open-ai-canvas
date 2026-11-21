@@ -88,7 +88,7 @@ DMC 把「写一句话 → 出片」和「无限画布」放在同一个本地�
 
 ## Windows 桌面版
 
-正在准备 **EXE 安装包**，安装后双击即用，不需要浏览器和本地后端。
+Windows EXE 安装包已发布：[下载 DMC-Setup-1.8.5.exe](https://github.com/DAV-SAM/LL2TV/releases/download/v1.8.5-exe/DMC-Setup-1.8.5.exe)，安装后双击即用，不需要浏览器和本地后端。
 
 - 免登录，只填一次 LL2 Key
 - 画布、素材和作品保存在本机用户目录，退出工具后仍然保留
