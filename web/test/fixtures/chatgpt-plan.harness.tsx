@@ -39,6 +39,7 @@ const { createRoot } = await import("react-dom/client");
 const { App, ConfigProvider } = await import("antd");
 const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
 const { ChatGPTPlanConnection } = await import("../../src/pages/settings/chatgpt-plan-connection");
+const { ChannelSettingsPane } = await import("../../src/pages/settings/channel-settings-pane");
 const { http } = await import("../../src/services/api/request");
 const session = await import("../../src/lib/user-session");
 let root: ReturnType<typeof createRoot>;
@@ -94,13 +95,20 @@ async function settle() {
         await new Promise((resolve) => setTimeout(resolve, 30));
     });
 }
-async function render(userId = account) {
+async function render(userId = account, personalChannelsOnly = false) {
+    const authorization = <ChatGPTPlanConnection key={userId} userId={userId} />;
     await act(async () =>
         root.render(
             <ConfigProvider theme={{ token: { motion: false } }}>
                 <App>
                     <QueryClientProvider client={client}>
-                        <ChatGPTPlanConnection key={userId} userId={userId} />
+                        {personalChannelsOnly ? (
+                            <ChannelSettingsPane customChannelsEnabled={false} hasPersonalAuthorization={connected} onOpenModels={() => {}}>
+                                {authorization}
+                            </ChannelSettingsPane>
+                        ) : (
+                            authorization
+                        )}
                     </QueryClientProvider>
                 </App>
             </ConfigProvider>,
@@ -142,4 +150,22 @@ test("switching users never reuses the previous user's connection", async () => 
     expect(host.textContent).not.toContain("alice@example.test");
     expect(host.textContent).toContain("使用 ChatGPT 登录");
     expect(client.getQueryData(["chatgpt-plan", "bob"])).toMatchObject({ connected: false });
+});
+
+test("personal channels retains authorization when API key channels are disabled", async () => {
+    await render("alice", true);
+    expect(host.textContent).toContain("使用 ChatGPT 登录");
+    expect(host.textContent).not.toContain("拉取全部");
+    expect(host.textContent).not.toContain("新增渠道");
+});
+
+test("personal channels retains disconnect when both feature switches are disabled", async () => {
+    enabled = false;
+    connected = true;
+    await render("alice", true);
+    expect(host.textContent).toContain("alice@example.test");
+    expect(host.textContent).toContain("断开连接");
+    expect(calls).not.toContain("/chatgpt-plan/models");
+    await click("断开连接");
+    expect(host.textContent).not.toContain("alice@example.test");
 });
