@@ -3,7 +3,20 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { resilientPreload } from "../build/resilient-preload";
-import { warmPreloadResources } from "../src/lib/module-preload";
+import { PageResourceError, prioritizeModuleLoad, warmPreloadResources, withModuleLoadPriority } from "../src/lib/module-preload";
+
+test("有效的资源下载不受前端总时限中止", async () => {
+    const original = globalThis.fetch;
+    try {
+        globalThis.fetch = (async (_input, init) => {
+            expect(init?.signal).toBeUndefined();
+            return new Response("export default 1", { headers: { "Content-Type": "application/javascript" } });
+        }) as typeof fetch;
+        await warmPreloadResources(["https://assets.example/slow.js"]);
+    } finally {
+        globalThis.fetch = original;
+    }
+});
 
 test("预热合并并发请求，最多四路下载，503 重试后完成正文读取", async () => {
     const original = globalThis.fetch;
@@ -42,8 +55,38 @@ test("404 与 HTML 响应立即失败，失败请求不会永久缓存", async (
     try {
         const urls = ["https://assets.example/missing.js"];
         await expect(warmPreloadResources(urls)).rejects.toThrow("404");
-        await expect(warmPreloadResources(urls)).rejects.toThrow("非脚本或样式");
+        await expect(warmPreloadResources(urls)).rejects.toThrow("错误的脚本或样式类型");
         expect(calls).toBe(2);
+    } finally {
+        globalThis.fetch = original;
+    }
+});
+
+test("后台最多三路，打开预取中的页面时提升排队资源优先级且复用请求", async () => {
+    const original = globalThis.fetch;
+    const downloads = new Map<string, () => void>();
+    globalThis.fetch = ((input) =>
+        new Promise<Response>((resolve) => {
+            downloads.set(String(input), () => resolve(new Response("export default 1", { headers: { "Content-Type": "application/javascript" } })));
+        })) as typeof fetch;
+    const files = Array.from({ length: 6 }, (_, index) => `https://assets.example/priority-${index}.js`);
+    try {
+        const first = withModuleLoadPriority({ foreground: false }, () => warmPreloadResources(files.slice(0, 4)));
+        const priority = { foreground: false };
+        const second = withModuleLoadPriority(priority, () => warmPreloadResources([files[0], files[4]]));
+        expect([...downloads.keys()]).toEqual(files.slice(0, 3));
+        prioritizeModuleLoad(priority);
+        expect([...downloads.keys()]).toEqual([files[0], files[1], files[2], files[4]]);
+        const foreground = warmPreloadResources([files[5]]);
+        expect(downloads.size).toBe(4);
+        downloads.get(files[4])!();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(downloads.has(files[5])).toBe(true);
+        expect(downloads.has(files[3])).toBe(false);
+        for (const finish of downloads.values()) finish();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        downloads.get(files[3])!();
+        await Promise.all([first, second, foreground]);
     } finally {
         globalThis.fetch = original;
     }
@@ -56,13 +99,14 @@ test("真实 Vite helper 的预热失败沿用可取消的恢复事件，不执�
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
     const transform = resilientPreload().transform as Function;
-    const transformed = transform(vite.slice(start, end), "\0vite/preload-helper.js").code.replace('import { warmPreloadResources } from "@/lib/module-preload";', "").replaceAll("import.meta", "importMeta");
+    const transformed = transform(vite.slice(start, end), "\0vite/preload-helper.js").code.replace('import { PageResourceError, warmPreloadResources } from "@/lib/module-preload";', "").replaceAll("import.meta", "importMeta");
     const events: Event[] = [];
     const failure = new Error("asset 404");
     let cancel = true;
     let imported = false;
     const preload = runInNewContext(`${transformed}; preload`, {
         Event,
+        PageResourceError,
         URL,
         importMeta: { url: "https://assets.example/entry.js" },
         assetsURL: (dep: string) => dep,
