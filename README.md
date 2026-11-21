@@ -1,10 +1,16 @@
 <p align="center">
-  <img src="web/public/logo.svg" width="88" alt="DMC logo">
+  <a href="https://hub.ll2.cn?p=s93d" target="_blank" rel="noopener noreferrer">
+    <img src="web/public/logo.svg" width="88" alt="DMC logo">
+  </a>
 </p>
 
 <h1 align="center">DMC · 影策二开</h1>
 
 <p align="center">本地优先的 AI 漫剧 / 短剧创作台 · 填一次 LL2 Key 就能出片</p>
+
+<p align="center">
+  <a href="https://hub.ll2.cn?p=s93d" target="_blank" rel="noopener noreferrer"><strong>👉 点这里注册 LL2，填 Key 就能出片</strong></a>
+</p>
 
 <p align="center">
   一句话成片 · 无限画布 · 全站 DMC Agent · 我的片子
