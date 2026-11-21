@@ -18,6 +18,7 @@ type FeatureKey =
     | "creditsEnabled"
     | "teamsEnabled"
     | "customChannelsEnabled"
+    | "chatGPTPlanEnabled"
     | "inspirationSourcesVisible"
     | "frontendModelsEnabled"
     | "pluginCenterEnabled"
@@ -57,6 +58,7 @@ const editableFeatureKeys: FeatureKey[] = [
     "creditsEnabled",
     "teamsEnabled",
     "customChannelsEnabled",
+    "chatGPTPlanEnabled",
     "inspirationSourcesVisible",
     "imageWorkbenchEnabled",
     "videoWorkbenchEnabled",
@@ -167,6 +169,13 @@ const featureGroups: FeatureGroup[] = [
                 location: "设置 · 渠道",
                 description: "允许用户添加自己的模型渠道和 API Key。",
                 icon: <RadioTower className="size-4" aria-hidden="true" />,
+            },
+            {
+                key: "chatGPTPlanEnabled",
+                title: "ChatGPT 个人方案授权",
+                location: "设置 · 模型",
+                description: "允许每位用户连接自己的 ChatGPT 方案，仅本人可用。默认关闭；当前授权要求浏览器与后端运行在同一台电脑。",
+                icon: <ShieldCheck className="size-4" aria-hidden="true" />,
             },
             {
                 key: "creditsEnabled",
@@ -538,6 +547,7 @@ function toEditablePayload(features: FeatureAvailability) {
         creditsEnabled: features.creditsEnabled,
         teamsEnabled: features.teamsEnabled,
         customChannelsEnabled: features.customChannelsEnabled,
+        chatGPTPlanEnabled: features.chatGPTPlanEnabled,
         inspirationSourcesVisible: features.inspirationSourcesVisible,
         imageWorkbenchEnabled: features.imageWorkbenchEnabled,
         videoWorkbenchEnabled: features.videoWorkbenchEnabled,
@@ -566,6 +576,7 @@ function parseFeatureAvailability(value: unknown): FeatureAvailability {
         creditsEnabled: record.creditsEnabled as boolean,
         teamsEnabled: record.teamsEnabled as boolean,
         customChannelsEnabled: record.customChannelsEnabled as boolean,
+        chatGPTPlanEnabled: record.chatGPTPlanEnabled as boolean,
         inspirationSourcesVisible: record.inspirationSourcesVisible as boolean,
         imageWorkbenchEnabled: record.imageWorkbenchEnabled as boolean,
         videoWorkbenchEnabled: record.videoWorkbenchEnabled as boolean,

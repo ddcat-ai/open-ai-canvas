@@ -152,6 +152,15 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
+	channel, err := s.repo.AdminSystemChannel(channelID)
+	if err != nil {
+		return nil, err
+	}
+	return s.saveChannelModel(actor, channel, id, req)
+}
+
+func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChannel, id string, req ChannelModelRequest) (*model.ChannelModel, error) {
+	channelID := channel.ID
 	channelLabel := strings.TrimSpace(req.ChannelLabel)
 	tags, err := normalizeChannelModelTags(req.Tags)
 	if err != nil {
@@ -161,9 +170,8 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if len([]rune(description)) > 500 {
 		return nil, BadAuthRequest("模型描述不能超过 500 字")
 	}
-	channel, err := s.repo.AdminSystemChannel(channelID)
-	if err != nil {
-		return nil, err
+	if channel.APIFormat == chatGPTPlanFormat && channel.UserID != actor.ID {
+		return nil, Forbidden("只有授权者本人可以编辑 ChatGPT 方案模型")
 	}
 	item := &model.ChannelModel{ChannelID: channelID, Enabled: true, PriceVersion: 1, PriceCurrency: model.PriceCurrencyCredits}
 	if id != "" {
@@ -293,7 +301,13 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		if err := repo.LockSystemChannelConfiguration([]string{channel.ID}); err != nil {
 			return err
 		}
-		currentChannel, err := repo.AdminSystemChannel(channel.ID)
+		var currentChannel *model.ModelChannel
+		var err error
+		if channel.APIFormat == chatGPTPlanFormat {
+			currentChannel, err = repo.SystemChannel(channel.ID)
+		} else {
+			currentChannel, err = repo.AdminSystemChannel(channel.ID)
+		}
 		if err != nil {
 			return err
 		}
@@ -307,7 +321,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		if err := repo.SyncChannelModelNames(channel.ID, time.Now()); err != nil {
 			return err
 		}
-		if previousProtocol != item.Protocol && (req.ProtocolSelectionExplicit == nil || *req.ProtocolSelectionExplicit) {
+		if channel.APIFormat != chatGPTPlanFormat && previousProtocol != item.Protocol && (req.ProtocolSelectionExplicit == nil || *req.ProtocolSelectionExplicit) {
 			return repo.RecordChannelProtocolSelection(channel.WebsiteID, actor.ID, item)
 		}
 		return nil
@@ -347,6 +361,9 @@ func normalizeChannelModelContractWithRegistry(registry *protocol.Registry, chan
 		return "", "", "", "", BadAuthRequest("请选择有效的模型请求协议")
 	}
 	protocol := model.ChannelInterfaceType(adapter.Metadata().ID)
+	if channel.APIFormat == chatGPTPlanFormat && (protocol != model.ChannelInterfaceOpenAIResponse || capability != "text") {
+		return "", "", "", "", BadAuthRequest("ChatGPT 方案只支持 Responses 文本模型")
+	}
 	if expected := protocolCapabilityFromMetadata(adapter.Metadata()); expected != "" && expected != capability {
 		return "", "", "", "", BadAuthRequest("模型能力与请求协议不匹配")
 	}

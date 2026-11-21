@@ -5,6 +5,20 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## ChatGPT 个人授权
+
+以下接口均要求有效登录，归属从当前用户取得，不接收客户端传入的用户 ID。`chatGPTPlanEnabled` 位于功能开放配置，默认关闭，仅管理员通过 `PATCH /admin/settings/features` 修改。关闭时仍可读取本人状态和断开连接，其余操作返回 403。
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /chatgpt-plan` | 本人状态 `{ enabled, connected, email?, channelId? }`，不返回令牌 |
+| `POST /chatgpt-plan/start` | 启动本机回环授权，返回 `{ authorizationUrl }`；按用户限流 |
+| `GET /chatgpt-plan/models` | 读取本人上游目录，返回 `{ models: [{ slug, displayName }] }` |
+| `POST /chatgpt-plan/models` | 提交 `{ slug }`，只允许加入本人可用目录中的 Responses 文本模型 |
+| `POST /chatgpt-plan/disconnect` | 清除本站凭据与个人渠道、作废待完成授权，返回 `{ revocationConfirmed }` |
+
+路径前缀为 `/api`。授权回调只监听后端动态分配的 `127.0.0.1` 端口，要求浏览器与后端同机。当前不提供远程 SaaS 网站授权；启用开关不会改变此边界。个人渠道不参与公共中转，调用时在任务准入及实际执行阶段核对归属和功能开关。
+
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。

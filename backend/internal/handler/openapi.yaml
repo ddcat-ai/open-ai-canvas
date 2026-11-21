@@ -2312,7 +2312,7 @@ paths:
     get:
       tags: [meta]
       summary: 登录用户读取功能开放状态
-      responses: { '200': { description: data.features 包括布尔值 teamsEnabled（默认 false）和 creditsEnabled } }
+      responses: { '200': { description: data.features 包括布尔值 teamsEnabled、chatGPTPlanEnabled（均默认 false）和 creditsEnabled } }
   /admin/settings/features:
     get:
       tags: [admin]
@@ -2321,8 +2321,52 @@ paths:
     patch:
       tags: [admin]
       summary: 管理员修改功能开关并记录审计，未提交的字段保持原值
-      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { teamsEnabled: { type: boolean, default: false }, creditsEnabled: { type: boolean }, welcomeEnabled: { type: boolean } } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { teamsEnabled: { type: boolean, default: false }, chatGPTPlanEnabled: { type: boolean, default: false }, creditsEnabled: { type: boolean }, welcomeEnabled: { type: boolean } } } } } }
       responses: { '200': { description: data.features 为保存后的完整设置 }, '403': { $ref: '#/components/responses/Error' } }
+  /chatgpt-plan:
+    get:
+      tags: [channels]
+      summary: 读取本人个人方案状态，关闭功能时仍可用
+      responses:
+        '200': { description: data 为 enabled、connected 及可选 email、channelId，不含令牌 }
+        '401': { $ref: '#/components/responses/Error' }
+  /chatgpt-plan/start:
+    post:
+      tags: [channels]
+      summary: 发起本机 ChatGPT 个人授权，需浏览器与后端同机
+      responses:
+        '200': { description: data.authorizationUrl 为本次 OAuth 地址 }
+        '403': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /chatgpt-plan/models:
+    get:
+      tags: [channels]
+      summary: 读取本人 ChatGPT 账号可用模型，需功能开启
+      responses:
+        '200': { description: data.models 为 slug、displayName 数组 }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [channels]
+      summary: 将本人可用目录中的文本模型加入个人渠道
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug: { type: string }
+      responses:
+        '200': { description: data.model 为已保存的个人模型 }
+        '403': { $ref: '#/components/responses/Error' }
+  /chatgpt-plan/disconnect:
+    post:
+      tags: [channels]
+      summary: 清除本人凭据及渠道，作废待完成授权，关闭功能时仍可用
+      responses:
+        '200': { description: data.revocationConfirmed 表示远端撤销是否确认 }
+        '401': { $ref: '#/components/responses/Error' }
   /public/welcome:
     get:
       tags: [meta]

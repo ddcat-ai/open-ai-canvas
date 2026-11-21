@@ -73,6 +73,9 @@ func (s *Service) ExportSystemChannels(actor *model.User, ids []string) (*System
 	}
 	result := &SystemChannelExport{Format: SystemChannelExportFormat, Version: SystemChannelExportVersion, ExportedAt: time.Now().UTC(), Channels: []SystemChannelExportChannel{}}
 	for _, channel := range channels {
+		if channel.APIFormat == chatGPTPlanFormat {
+			continue
+		}
 		if len(wanted) > 0 && !wanted[channel.ID] {
 			continue
 		}
@@ -188,6 +191,9 @@ func (s *Service) ImportSystemChannels(actor *model.User, payload SystemChannelE
 	}
 	byName := make(map[string]model.ModelChannel, len(existing))
 	for _, channel := range existing {
+		if channel.APIFormat == chatGPTPlanFormat {
+			continue
+		}
 		if _, duplicate := byName[channel.Name]; !duplicate {
 			byName[channel.Name] = channel
 		}

@@ -28,6 +28,7 @@ const (
 	FeatureCredits               = platform.FeatureCredits
 	FeatureTeams                 = platform.FeatureTeams
 	FeatureCustomChannels        = platform.FeatureCustomChannels
+	FeatureChatGPTPlan           = platform.FeatureChatGPTPlan
 	FeatureFrontendModels        = platform.FeatureFrontendModels
 	FeaturePluginCenter          = platform.FeaturePluginCenter
 	FeatureSystemPlugins         = platform.FeatureSystemPlugins

@@ -31,7 +31,7 @@ export { CHANNEL_MODEL_SEPARATOR, normalizeRawModelName, uniqueModelOptions } fr
 export { mergeWorkflowFieldMappings, normalizeRunningHubCapability, normalizeRunningHubWorkflowKind, normalizeWorkflowFieldMappings, type WorkflowFieldMapping } from "./config-workflow-fields";
 export { decodeChannelModel, encodeChannelModel, hasSystemModelPrice, isChannelModelValue, modelDisplayName, modelIcon, modelOptionLabel, modelOptionName, modelOptionsFromChannels, normalizeModelOptionValue } from "./config-model-options";
 
-export type ApiCallFormat = "openai" | "gemini" | "claude";
+export type ApiCallFormat = "openai" | "gemini" | "claude" | "chatgpt-plan";
 export type ChannelInterfaceType = ModelProtocol;
 export type ChannelHeader = { name: string; value: string };
 export type RunningHubCapability = "image" | "video" | "audio";
@@ -643,7 +643,7 @@ function capabilityForChannelInterface(interfaceType?: ChannelInterfaceType): Mo
 }
 
 function normalizeApiFormat(apiFormat: unknown): ApiCallFormat {
-    return apiFormat === "gemini" || apiFormat === "claude" ? apiFormat : "openai";
+    return apiFormat === "gemini" || apiFormat === "claude" || apiFormat === "chatgpt-plan" ? apiFormat : "openai";
 }
 
 function normalizeChannelInterfaceType(value: unknown): ChannelInterfaceType | undefined {

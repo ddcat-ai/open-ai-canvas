@@ -342,6 +342,10 @@ func proxySystemRequest(c *gin.Context, svc *service.Service, user *model.User, 
 
 func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.User, channel *model.ModelChannel, providerPath string) {
 	startedAt := time.Now()
+	if channel.APIFormat == "chatgpt-plan" {
+		fail(c, http.StatusForbidden, errors.New("ChatGPT 方案渠道只能通过影策任务调用"))
+		return
+	}
 	// 分组只能使用绑定的系统渠道；中转入口与任务准入同样失败关闭。
 	if err := svc.RequireUserChannelAccess(user, channel.ID); err != nil {
 		failService(c, err)
