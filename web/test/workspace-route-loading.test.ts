@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement, Suspense } from "react";
+import { renderToString } from "react-dom/server";
+import { preloadableLazy } from "../src/lib/preloadable-lazy";
 
 function source(path: string) {
     return readFileSync(resolve(import.meta.dir, path), "utf8");
@@ -45,14 +48,17 @@ describe("workspace route loading", () => {
         expect(html).not.toContain('style="background:#ffffff"');
         expect(html).toContain("html.dark body");
 
-        const { preloadableLazy } = await import("../src/lib/preloadable-lazy");
         function Loaded() {
-            return null;
+            return createElement("div", null, "route ready");
         }
-        const Page = preloadableLazy(async () => ({ default: Loaded }));
-        expect((Page({}) as { type: unknown }).type).not.toBe(Loaded);
+        let calls = 0;
+        const Page = preloadableLazy(async () => {
+            calls += 1;
+            return { default: Loaded };
+        });
         await Page.preload();
-        expect((Page({}) as { type: unknown }).type).toBe(Loaded);
+        expect(renderToString(createElement(Suspense, { fallback: "loading" }, createElement(Page)))).toContain("route ready");
+        expect(calls).toBe(1);
     });
 
     test("keeps the creation page at root and preserves the create compatibility route", () => {

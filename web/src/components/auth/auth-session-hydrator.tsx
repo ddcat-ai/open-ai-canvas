@@ -5,6 +5,8 @@ import { getAuthSession, invalidateAuthSessionCache } from "@/services/api/auth"
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { WorkspaceErrorState } from "@/components/layout/workspace-state";
 import { appQueryClient } from "@/lib/query-client";
+import { PageResourceError } from "@/lib/module-preload";
+import { PageResourceErrorState } from "@/components/layout/page-resource-error-state";
 import { assertCurrentUserSession, captureUserSession, isUserSessionInvalidated, subscribeUserSessionInvalidation } from "@/lib/user-scope";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore } from "@/stores/use-user-store";
@@ -12,7 +14,7 @@ import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics
 
 export function AuthSessionHydrator({ children }: { children: ReactNode }) {
     const hydrated = useUserStore((state) => state.hydrated);
-    const [recoveryFailed, setRecoveryFailed] = useState(false);
+    const [recoveryFailed, setRecoveryFailed] = useState<"session" | "workspace" | PageResourceError | null>(null);
     const [retry, setRetry] = useState(0);
 
     useEffect(() => {
@@ -22,7 +24,7 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
             const current = ++recovery;
             const isCurrent = () => !cancelled && current === recovery;
             const startedAt = performance.now();
-            setRecoveryFailed(false);
+            setRecoveryFailed(null);
             useUserStore.getState().setHydrated(false);
             if (externalChange) {
                 appQueryClient.clear();
@@ -30,13 +32,16 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
             }
             recordDiagnosticEvent({ category: "navigation", level: "info", code: "startup.auth_session_started", message: "开始恢复认证会话" });
             const session = captureUserSession(true);
+            let phase: "session" | "workspace" = "workspace";
             try {
                 if (externalChange) {
                     const { suspendUserSession } = await import("@/lib/user-session");
                     if (!isCurrent()) return;
                     suspendUserSession();
                 }
+                phase = "session";
                 const payload = await getAuthSession();
+                phase = "workspace";
                 if (!isCurrent()) return;
                 assertCurrentUserSession(session, true);
                 recordDiagnosticEvent({
@@ -62,12 +67,13 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
                 if (payload.user) preloadWorkspaceRoute(window.location.pathname);
             } catch (error) {
                 if (isCurrent() && !(error instanceof DOMException && error.name === "AbortError")) {
-                    setRecoveryFailed(true);
+                    const failure = error instanceof PageResourceError ? error : phase;
+                    setRecoveryFailed(failure);
                     recordDiagnosticEvent({
                         category: "navigation",
                         level: "warning",
-                        code: "startup.auth_session_failed",
-                        message: "认证会话恢复失败，工作区已暂停，等待重试",
+                        code: failure === "session" ? "startup.auth_session_failed" : "startup.workspace_init_failed",
+                        message: failure === "session" ? "认证会话恢复失败，等待重试" : "工作区初始化失败，等待重试",
                         durationMs: performance.now() - startedAt,
                     });
                 }
@@ -81,6 +87,10 @@ export function AuthSessionHydrator({ children }: { children: ReactNode }) {
         };
     }, [retry]);
 
-    if (recoveryFailed) return <WorkspaceErrorState title="登录状态恢复失败" description="工作区已暂停，请检查网络后重试。" onRetry={() => setRetry((value) => value + 1)} />;
+    if (recoveryFailed) {
+        const retryRestore = () => setRetry((value) => value + 1);
+        if (recoveryFailed instanceof PageResourceError) return <PageResourceErrorState error={recoveryFailed} onRetry={retryRestore} />;
+        return <WorkspaceErrorState title={recoveryFailed === "session" ? "登录状态恢复失败" : "工作区初始化失败"} description="工作区已暂停，请重试。" onRetry={retryRestore} />;
+    }
     return hydrated ? children : <FullScreenLoader />;
 }

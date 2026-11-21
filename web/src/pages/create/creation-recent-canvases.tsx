@@ -44,7 +44,7 @@ export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () 
     );
     const loading = !sessionHydrated || !canvasHydrated || Boolean(userId && recentQuery.isPending);
     const preload = () => {
-        void loadCanvasProjectPage();
+        void loadCanvasProjectPage().catch(() => undefined);
     };
     const createCanvas = async () => {
         if (!userId) {
