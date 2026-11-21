@@ -38,16 +38,14 @@ describe("audio voice protocol handling", () => {
         expect(normalizeAudioVoiceForConfig(doubao, "alloy")).toBe("");
     });
 
-    test("lists every official Doubao 1.0 voice in Chinese", () => {
+    test("offers synthesis 2.0 voices for audio generation 1.0", () => {
         const values = doubaoAudioVoiceOptions.map((item) => item.value);
-        expect(doubaoAudioVoiceOptions).toHaveLength(103);
         expect(new Set(values).size).toBe(values.length);
-        expect(values).toContain("zh_female_shuangkuaisisi_moon_bigtts");
-        expect(values).toContain("zh_female_yueyunv_mars_bigtts");
-        expect(values).toContain("zh_male_qingcang_mars_bigtts");
-        expect(values).not.toContain("zh_female_vv_uranus_bigtts");
-        expect(values).not.toContain("zh_female_xiaohe_uranus_bigtts");
-        expect(doubaoAudioVoiceOptions.every((item) => /[\u4e00-\u9fff]/.test(item.label) && /[\u4e00-\u9fff]/.test(item.scene))).toBe(true);
+        expect(values).toContain("zh_female_vv_uranus_bigtts");
+        expect(values).toContain("zh_female_xiaohe_uranus_bigtts");
+        expect(values).toContain("zh_male_m191_uranus_bigtts");
+        expect(values).toContain("zh_male_taocheng_uranus_bigtts");
+        expect(values.every((value) => value.endsWith("_uranus_bigtts"))).toBe(true);
     });
 
     test("preserves manually entered official Doubao speaker IDs", () => {
