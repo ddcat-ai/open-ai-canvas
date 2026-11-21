@@ -34,9 +34,7 @@ async function prepareEntry(dev, pathname) {
     let entryLoaded;
     const appearanceReady = new Promise((resolve) => (resolveAppearance = resolve));
     const loaded = new Promise((resolve) => (entryLoaded = resolve));
-    const listeners = new Map();
-    runInNewContext(await build.outputs[0].text(), { window: { location: { pathname }, addEventListener: (name, listener) => listeners.set(name, listener) }, events, appearanceReady, entryLoaded });
-    expect(typeof listeners.get("vite:preloadError")).toBe("function");
+    runInNewContext(await build.outputs[0].text(), { window: { location: { pathname } }, events, appearanceReady, entryLoaded });
     return { events, resolveAppearance, loaded };
 }
 

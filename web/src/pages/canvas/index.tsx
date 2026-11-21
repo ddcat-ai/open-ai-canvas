@@ -102,7 +102,7 @@ export default function CanvasPage() {
     const handoffMode = mode === "handoff";
     const forwardedQuery = agentMode || handoffMode || searchParams.get("agent") === "1" ? `?${searchParams.toString()}` : "";
     const preloadProject = useCallback(() => {
-        void loadCanvasProjectPage();
+        void loadCanvasProjectPage().catch(() => undefined);
     }, []);
     const enterProject = useCallback(
         (id: string) => {
