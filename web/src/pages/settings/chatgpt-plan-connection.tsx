@@ -5,11 +5,12 @@ import { AppModal } from "@/components/ui/product/app-modal";
 import { refreshSystemChannels } from "@/lib/user-session";
 import { saveChatGPTPlanModels, disconnectChatGPTPlan, getChatGPTPlanStatus, listChatGPTPlanModels, startChatGPTPlanConnection } from "@/services/api/chatgpt-plan";
 
-export function ChatGPTPlanConnection({ userId }: { userId: string }) {
+export function ChatGPTPlanConnection({ userId, authorizationOpen = false, onAuthorizationClose }: { userId: string; authorizationOpen?: boolean; onAuthorizationClose?: () => void }) {
     const { message } = App.useApp();
     const client = useQueryClient();
     const [authorizing, setAuthorizing] = useState(false);
-    const [busy, setBusy] = useState(false);
+    const [pendingAction, setPendingAction] = useState<"connect" | "save" | "disconnect" | null>(null);
+    const busy = pendingAction !== null;
     const [selectionOpen, setSelectionOpen] = useState(false);
     const [selection, setSelection] = useState<string[]>([]);
     const status = useQuery({ queryKey: ["chatgpt-plan", userId], queryFn: ({ signal }) => getChatGPTPlanStatus(signal), refetchInterval: authorizing ? 2000 : false });
@@ -30,9 +31,10 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
     useEffect(() => {
         if (!authorizing || !status.data?.connected) return;
         setAuthorizing(false);
+        onAuthorizationClose?.();
         void refreshSystemChannels().catch((error) => message.error(error instanceof Error ? error.message : "刷新模型失败"));
         message.success("ChatGPT 已连接，请选择要加入的模型");
-    }, [authorizing, status.data?.connected, message]);
+    }, [authorizing, status.data?.connected, message, onAuthorizationClose]);
 
     useEffect(() => {
         if (selectionOpen && models.data) setSelection(models.data.models.filter((item) => item.selected).map((item) => item.slug));
@@ -46,7 +48,7 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
             message.error("请允许弹出窗口后重试");
             return;
         }
-        setBusy(true);
+        setPendingAction("connect");
         try {
             const result = await startChatGPTPlanConnection();
             popup.location.href = result.authorizationUrl;
@@ -55,14 +57,14 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
             popup.close();
             message.error(error instanceof Error ? error.message : "启动授权失败");
         } finally {
-            setBusy(false);
+            setPendingAction(null);
         }
     };
 
-    const change = async (disconnect: boolean) => {
-        setBusy(true);
+    const change = async (action: "save" | "disconnect") => {
+        setPendingAction(action);
         try {
-            if (disconnect) {
+            if (action === "disconnect") {
                 const result = await disconnectChatGPTPlan();
                 client.removeQueries({ queryKey: ["chatgpt-plan-models", userId] });
                 setSelection([]);
@@ -80,7 +82,7 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
         } catch (error) {
             message.error(error instanceof Error ? error.message : "更新连接失败");
         } finally {
-            setBusy(false);
+            setPendingAction(null);
         }
     };
 
@@ -95,14 +97,13 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
 
     if (!status.data.connected)
         return (
-            <section className="settings-section" aria-label="ChatGPT 个人方案授权">
-                <h3>ChatGPT 个人方案</h3>
+            <AppModal open={authorizationOpen} title="连接 ChatGPT 个人方案" footer={null} onCancel={onAuthorizationClose}>
                 <p className="text-sm text-foreground/60">连接自己的 ChatGPT 账号，凭据加密保存在此部署的服务器，授权和额度调用仅供你本人使用。</p>
                 <p className="mb-3 text-sm text-foreground/60">当前授权要求浏览器与后端运行在同一台电脑。调用消耗你的 ChatGPT 方案额度，影策收取 0 积分。</p>
-                <Button loading={busy || authorizing} onClick={() => void connect()}>
+                <Button type="primary" loading={pendingAction === "connect" || authorizing} onClick={() => void connect()}>
                     {authorizing ? "等待浏览器授权" : "使用 ChatGPT 登录"}
                 </Button>
-            </section>
+            </AppModal>
         );
     return (
         <>
@@ -128,7 +129,7 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
                         >
                             选择模型
                         </Button>
-                        <Button danger loading={busy} onClick={() => void change(true)}>
+                        <Button danger loading={pendingAction === "disconnect"} disabled={busy && pendingAction !== "disconnect"} onClick={() => void change("disconnect")}>
                             断开连接
                         </Button>
                     </div>
@@ -139,9 +140,9 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
                 title="选择 ChatGPT 模型"
                 okText="保存选择"
                 cancelText="取消"
-                confirmLoading={busy}
+                confirmLoading={pendingAction === "save"}
                 okButtonProps={{ disabled: models.isPending || models.isError || models.isFetching }}
-                onOk={() => void change(false)}
+                onOk={() => void change("save")}
                 onCancel={() => {
                     if (!busy) setSelectionOpen(false);
                 }}

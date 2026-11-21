@@ -72,6 +72,8 @@ export default function SettingsPage() {
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const shouldPromptContinue = searchParams.get("continue") === "1";
     const userId = useUserStore((state) => state.user?.id);
+    const [chatGPTAuthorizationOpen, setChatGPTAuthorizationOpen] = useState(false);
+    useEffect(() => setChatGPTAuthorizationOpen(false), [userId]);
     const planStatus = useQuery({ queryKey: ["chatgpt-plan", userId], queryFn: ({ signal }) => getChatGPTPlanStatus(signal), enabled: Boolean(userId) });
     const channelsVisible = customChannelsEnabled || chatGPTPlanEnabled || Boolean(planStatus.data?.connected) || (requestedSection === "channels" && (planStatus.isPending || planStatus.isError));
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
@@ -146,10 +148,11 @@ export default function SettingsPage() {
                 <ChannelSettingsPane
                     customChannelsEnabled={customChannelsEnabled}
                     hasPersonalAuthorization={Boolean(planStatus.data?.connected)}
+                    onAddChatGPT={planStatus.data?.enabled ? () => setChatGPTAuthorizationOpen(true) : undefined}
                     onOpenModels={() => selectSection("models")}
                     onOpenRunningHub={runningHubPluginEnabled ? () => selectSection("runninghub") : undefined}
                 >
-                    {userId && <ChatGPTPlanConnection key={userId} userId={userId} />}
+                    {userId && <ChatGPTPlanConnection key={userId} userId={userId} authorizationOpen={chatGPTAuthorizationOpen} onAuthorizationClose={() => setChatGPTAuthorizationOpen(false)} />}
                 </ChannelSettingsPane>
             </SettingsPane>
         ),

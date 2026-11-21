@@ -5,6 +5,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ModelEditorModal } from "@/components/model-editor-modal";
+import { AppModal } from "@/components/ui/product/app-modal";
 import { ChannelHeadersEditor, validateChannelHeaders } from "@/components/channel-headers-editor";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { secretKeyProtocolIds, useUserProtocolCatalog } from "@/hooks/use-user-protocol-catalog";
@@ -20,11 +21,12 @@ type ChannelSettingsPaneProps = {
     children?: ReactNode;
     customChannelsEnabled?: boolean;
     hasPersonalAuthorization?: boolean;
+    onAddChatGPT?: () => void;
     onOpenModels: () => void;
     onOpenRunningHub?: () => void;
 };
 
-export function ChannelSettingsPane({ children, customChannelsEnabled = true, hasPersonalAuthorization = false, onOpenModels, onOpenRunningHub }: ChannelSettingsPaneProps) {
+export function ChannelSettingsPane({ children, customChannelsEnabled = true, hasPersonalAuthorization = false, onAddChatGPT, onOpenModels, onOpenRunningHub }: ChannelSettingsPaneProps) {
     const { t } = useTranslation();
     const { message } = App.useApp();
     const protocolCatalog = useUserProtocolCatalog(customChannelsEnabled);
@@ -35,6 +37,7 @@ export function ChannelSettingsPane({ children, customChannelsEnabled = true, ha
     const [loadingChannelIds, setLoadingChannelIds] = useState<string[]>([]);
     const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
     const [newChannelId, setNewChannelId] = useState<string | null>(null);
+    const [addOpen, setAddOpen] = useState(false);
     const userChannels = config.channels.filter((channel) => channel.scope !== "system");
     const runningHubReady = Boolean(config.runningHub.enabled && config.runningHub.baseUrl.trim() && config.runningHub.apiKey.trim() && config.runningHub.workflowId.trim());
 
@@ -65,8 +68,9 @@ export function ChannelSettingsPane({ children, customChannelsEnabled = true, ha
         updateChannel(channel.id, { apiFormat, interfaceType: undefined, baseUrl });
     };
 
-    const addChannel = () => {
-        const channel = createModelChannel({ name: t("account.settings.channels.defaultName", { index: userChannels.length + 1 }) });
+    const addChannel = (connection: UserChannelConnection) => {
+        setAddOpen(false);
+        const channel = createModelChannel({ name: t("account.settings.channels.defaultName", { index: userChannels.length + 1 }), apiFormat: connection, baseUrl: defaultBaseUrlForApiFormat(connection) });
         updateChannels([...config.channels, channel]);
         setNewChannelId(channel.id);
         setEditingChannelId(channel.id);
@@ -188,18 +192,20 @@ export function ChannelSettingsPane({ children, customChannelsEnabled = true, ha
                         </Button>
                     </p>
                 </div>
-                {customChannelsEnabled && (
+                {(customChannelsEnabled || onAddChatGPT) && (
                     <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
-                        <Button
-                            className="h-10 flex-1 sm:h-8 sm:flex-none"
-                            icon={<RefreshCw className="size-4" />}
-                            loading={loadingChannelIds.includes("all")}
-                            disabled={loadingChannelIds.some((id) => id !== "all")}
-                            onClick={() => void refreshAllModels()}
-                        >
-                            {t("account.settings.channels.fetchAll")}
-                        </Button>
-                        <Button className="h-10 flex-1 sm:h-8 sm:flex-none" type="primary" icon={<Plus className="size-4" />} onClick={addChannel}>
+                        {customChannelsEnabled && (
+                            <Button
+                                className="h-10 flex-1 sm:h-8 sm:flex-none"
+                                icon={<RefreshCw className="size-4" />}
+                                loading={loadingChannelIds.includes("all")}
+                                disabled={loadingChannelIds.some((id) => id !== "all")}
+                                onClick={() => void refreshAllModels()}
+                            >
+                                {t("account.settings.channels.fetchAll")}
+                            </Button>
+                        )}
+                        <Button className="h-10 flex-1 sm:h-8 sm:flex-none" type="primary" icon={<Plus className="size-4" />} onClick={() => setAddOpen(true)}>
                             {t("account.settings.channels.add")}
                         </Button>
                     </div>
@@ -402,21 +408,51 @@ export function ChannelSettingsPane({ children, customChannelsEnabled = true, ha
                                 );
                             })}
                         </div>
-                    ) : !hasPersonalAuthorization ? (
-                        <WorkspaceState
-                            icon="settings"
-                            compact
-                            title={t("account.settings.channels.emptyTitle")}
-                            description={t("account.settings.channels.emptyDescription")}
-                            action={
-                                <Button icon={<Plus className="size-4" />} onClick={addChannel}>
-                                    {t("account.settings.channels.addPersonal")}
-                                </Button>
-                            }
-                        />
                     ) : null}
                 </>
             )}
+            {!hasPersonalAuthorization && (!customChannelsEnabled || userChannels.length === 0) && (
+                <WorkspaceState
+                    icon="settings"
+                    compact
+                    title={t("account.settings.channels.emptyTitle")}
+                    description={t("account.settings.channels.emptyDescription")}
+                    action={
+                        customChannelsEnabled || onAddChatGPT ? (
+                            <Button icon={<Plus className="size-4" />} onClick={() => setAddOpen(true)}>
+                                {t("account.settings.channels.addPersonal")}
+                            </Button>
+                        ) : undefined
+                    }
+                />
+            )}
+            <AppModal open={addOpen} title="新增个人渠道" footer={null} onCancel={() => setAddOpen(false)}>
+                <p className="mb-3 text-sm text-foreground/60">选择渠道连接方式。</p>
+                <div className="flex flex-col gap-3">
+                    {customChannelsEnabled && (
+                        <>
+                            <Button block onClick={() => addChannel("openai")}>
+                                OpenAI 兼容 · API Key
+                            </Button>
+                            <Button block onClick={() => addChannel("gemini")}>
+                                Gemini · API Key
+                            </Button>
+                        </>
+                    )}
+                    {onAddChatGPT && (
+                        <Button
+                            block
+                            disabled={hasPersonalAuthorization}
+                            onClick={() => {
+                                setAddOpen(false);
+                                onAddChatGPT();
+                            }}
+                        >
+                            ChatGPT 个人方案{hasPersonalAuthorization ? " · 已连接" : " · 账号授权"}
+                        </Button>
+                    )}
+                </div>
+            </AppModal>
         </Form>
     );
 }
