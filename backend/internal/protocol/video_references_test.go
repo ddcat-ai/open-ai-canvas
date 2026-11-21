@@ -6,6 +6,24 @@ import (
 	"testing"
 )
 
+func TestVideoReferencesWithTopLevelPrompt(t *testing.T) {
+	rule := VideoReferenceContract{Layout: "input-media-top-prompt", Token: "@参考图{n}"}
+	request := GenerationRequest{Prompt: "参考图1起身", Images: []MediaReference{{ID: "actor", URL: "actor.png", Role: "reference_image"}}}
+	input := map[string]any{"prompt": "独立的嵌套字段", "media": []any{
+		map[string]any{"type": "reference_audio", "url": "voice.mp3"},
+		map[string]any{"type": "reference_image", "url": "actor.png"},
+	}}
+	body := map[string]any{"prompt": request.Prompt, "input": input}
+	bound, err := rule.Bind(request, &RequestSpec{Body: body})
+	if err != nil || bound.Tokens["actor"] != "@参考图1" {
+		t.Fatalf("reference binding=%v err=%v", bound.Tokens, err)
+	}
+	bound.Set("@参考图1起身")
+	if body["prompt"] != "@参考图1起身" || input["prompt"] != "独立的嵌套字段" {
+		t.Fatalf("wrong prompt slot: %v", body)
+	}
+}
+
 func TestIndexedVideoReferenceSlots(t *testing.T) {
 	rule := VideoReferenceContract{Layout: "indexed-images", Token: "@图片{n}"}
 	request := GenerationRequest{Prompt: "参考图1和参考图2", Images: []MediaReference{{ID: "one", URL: "one.png"}, {ID: "two", URL: "two.png"}}}

@@ -1075,7 +1075,7 @@ const minimaxRatio = ref("request.output.aspectRatio");
 
 add({
   id: "dashscope-minimax-video", providerId: "dashscope-minimax-video", name: "百炼 MiniMax H3 Video", vendor: "Alibaba Cloud", capability: "video",
-  videoReferences: numberedImages("input-image-media"),
+  version: "2.0.1", videoReferences: { ...numberedImages("input-image-media"), dramaTailFrame: "reference-image" },
   baseUrl: "", auth: bearer, requiresPublicMediaUrls: true,
   params: [
     ["model", "string", true, "model", "固定为 MiniMax/MiniMax-H3。"],
@@ -1160,7 +1160,7 @@ const wan3DurationMs = (kind) => {
 
 add({
   id: "dashscope-wan3-video", providerId: "dashscope-wan3-video", name: "DashScope Wan 3.0 Video", vendor: "Alibaba Cloud", capability: "video",
-  version: "2.1.0", videoReferences: numberedImages("input-media"),
+  version: "2.1.1", videoReferences: { ...numberedImages("input-media"), dramaTailFrame: "reference-image" },
   baseUrl: "", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
     { assert: { $in: [lower(ref("request.model")), ["wan3.0-video-prime", "wan3.0-video"]] }, message: "Wan 3.0 Video 仅支持 wan3.0-video-prime 或 wan3.0-video" },

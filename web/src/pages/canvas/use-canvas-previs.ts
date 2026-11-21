@@ -417,8 +417,10 @@ export function useCanvasPrevis({
             const scene = buildDramaPrevisScene(request);
             const prompt = dramaSegmentPrompt(request.segment);
             const referenceInputs = request.segment.request.references.flatMap((reference) => (reference.sent && reference.resourceId ? [{ ...reference, resourceId: reference.resourceId, firstFrame: false }] : []));
-            if (request.segment.request.firstFrameResourceId)
-                referenceInputs.push({ resourceId: request.segment.request.firstFrameResourceId, castId: "", kind: "image", label: "首帧", name: `第 ${request.segment.index} 段尾帧`, sent: true, firstFrame: true });
+            if (request.segment.request.firstFrameResourceId) {
+                const firstFrame = !request.segment.request.tailFrameAsReference;
+                referenceInputs.push({ resourceId: request.segment.request.firstFrameResourceId, castId: "", kind: "image", label: firstFrame ? "首帧" : "开场参考", name: `第 ${request.segment.index} 段尾帧`, sent: true, firstFrame });
+            }
             const imageFor = (resourceId: string) => nodesRef.current.find((item) => item.type === CanvasNodeType.Image && item.metadata?.storageKey === `resource:${resourceId}`);
             const missing = referenceInputs.filter((reference) => !imageFor(reference.resourceId));
             const assetIds = missing.length

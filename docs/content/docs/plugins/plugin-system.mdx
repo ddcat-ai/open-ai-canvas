@@ -133,6 +133,16 @@ eagle-asset-connector.yingce-plugin
 
 文本协议以目录内 manifest 为事实源；`generate-catalog.mjs <插件ID...>` 从实际清单刷新字段表和完整嵌入文档，不再从重复模板覆盖修复。修改后必须同步重建实际 `.yingce-plugin`；启动刷新应保留管理员停用状态。
 
+### 短剧视频续接
+
+宿主使用渠道所绑定插件版本的 `videoReferences`。当协议声明 `dramaTailFrame` 时，短剧预演与出站请求使用相同的素材角色。
+
+- `omni-first-frame` 使用全能参考模式发送上一段尾帧和本段参考图，尾帧保留首帧角色。可灵的 `omni-contents` 布局根据 `contents` 中随请求发送的素材 ID 改写提示词。
+- `reference-image` 在同时带其他参考图时，把上一段尾帧放在第一张开场参考图。单尾帧仍按渠道声明的图生模式处理。
+- `parallel-only` 用于短剧并行出片。AutoDL 的专用首尾帧工作流可在画布手动提供两张关键帧。
+
+`input-media-top-prompt` 布局从 `input.media` 读取素材顺序，改写请求顶层的 `prompt`。参考图编号规则由插件声明，宿主按实际出站顺序校验。
+
 ## 6. 宿主 API 边界
 
 插件不得直接导入页面组件、store 或内部 API 文件。宿主通过版本化 SDK 提供能力。

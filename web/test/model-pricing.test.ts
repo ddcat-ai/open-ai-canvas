@@ -96,6 +96,9 @@ describe("model request pricing", () => {
             header: "",
         };
         const requirements = dramaSegmentVideoRequirements(request, undefined, false);
+        expect(
+            dramaSegmentVideoRequirements(request, { choice: { channelId: "system-channel", modelKey: "video" }, capability: "video", label: "视频", priceLabel: "", videoResolutions: ["720p"], defaultVideoResolution: "720p", generateAudio: true }, true),
+        ).toBeUndefined();
         const cost = resolveModelChannel(config, config.model).modelCosts![0];
         const capabilityConfig = defaultModelCapabilityConfig("agnes-video", "agnes-video-2.5");
         Object.assign(capabilityConfig.video!, { resolutions: ["720p", "768p"], defaultResolution: "720p", duration: { selection: "range", min: 5, max: 15, step: 1, default: 5 }, generateAudio: { supported: true, default: false } });

@@ -375,7 +375,7 @@ export function ReferenceBoard({
                         <MediaThumb resourceId={request.firstFrameResourceId} alt="上一段尾帧" />
                     </button>
                 ) : null}
-                <span>{first ? "开场段：无首帧，按提示词与参考图生成" : request.firstFrameResourceId ? `首帧：第 ${segment.index} 段尾帧` : `首帧：等待第 ${segment.index} 段视频生成`}</span>
+                <span>{first ? "开场段：无首帧，按提示词与参考图生成" : `${request.tailFrameAsReference ? "开场参考" : "首帧"}：${request.firstFrameResourceId ? `第 ${segment.index} 段尾帧` : `等待第 ${segment.index} 段视频生成`}`}</span>
             </div>
             <details className="drama-reference-settings">
                 <summary>参考顺序与角色音色{voiceDraft !== null ? " · 音色调整未保存" : ""}</summary>
