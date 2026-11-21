@@ -72,6 +72,7 @@ export type WorkflowGraphPreview = {
 export const PUBLIC_MODEL_CATALOG_ID = "managed";
 
 export type ModelChannel = {
+    personal?: boolean;
     websiteId?: string;
     updatedAt?: string;
     mediaTransport?: import("@/lib/media-transport").ReferenceMediaTransport;
@@ -540,6 +541,7 @@ export function createModelChannel(channel?: Partial<ModelChannel>): ModelChanne
         interfaceType,
         models: uniqueRawModels(channel?.models || []),
         scope: channel?.scope === "system" ? "system" : "user",
+        personal: channel?.scope === "system" && channel.personal === true,
         enabled: channel?.enabled !== false,
         hasApiKey: channel?.hasApiKey,
         hasSecretKey: channel?.hasSecretKey,

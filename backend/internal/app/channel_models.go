@@ -156,10 +156,14 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err != nil {
 		return nil, err
 	}
-	return s.saveChannelModel(actor, channel, id, req)
+	item, err := s.saveChannelModel(s.repo, actor, channel, id, req)
+	if err == nil {
+		s.invalidateRouteCatalog()
+	}
+	return item, err
 }
 
-func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChannel, id string, req ChannelModelRequest) (*model.ChannelModel, error) {
+func (s *Service) saveChannelModel(repo *repository.Repository, actor *model.User, channel *model.ModelChannel, id string, req ChannelModelRequest) (*model.ChannelModel, error) {
 	channelID := channel.ID
 	channelLabel := strings.TrimSpace(req.ChannelLabel)
 	tags, err := normalizeChannelModelTags(req.Tags)
@@ -175,7 +179,7 @@ func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChanne
 	}
 	item := &model.ChannelModel{ChannelID: channelID, Enabled: true, PriceVersion: 1, PriceCurrency: model.PriceCurrencyCredits}
 	if id != "" {
-		item, err = s.repo.ChannelModelByID(channelID, id)
+		item, err = repo.ChannelModelByID(channelID, id)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +200,7 @@ func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChanne
 		return nil, BadAuthRequest("渠道展示名不能超过 80 字")
 	}
 	// 先检查同渠道重复模型，避免无关能力校验或生成无用序列号掩盖真正的冲突。
-	conflict, conflictErr := s.repo.ChannelModelByKeyIncludingDisabled(channelID, modelKey)
+	conflict, conflictErr := repo.ChannelModelByKeyIncludingDisabled(channelID, modelKey)
 	if conflictErr != nil && !errors.Is(conflictErr, gorm.ErrRecordNotFound) {
 		return nil, conflictErr
 	}
@@ -213,7 +217,7 @@ func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChanne
 		}
 		req.CapabilityConfig = validated
 	}
-	tiers, err := s.normalizeChannelModelPriceTiers(req, capability, protocol, providerModelKey)
+	tiers, err := normalizeChannelModelPriceTiersWithIDs(req, capability, protocol, providerModelKey, repo.NextPrefixedID)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +234,7 @@ func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChanne
 		previousProtocol = item.Protocol
 		item.PriceVersion++
 	} else {
-		item.ID, err = s.repo.NextPrefixedID("MODEL")
+		item.ID, err = repo.NextPrefixedID("MODEL")
 		if err != nil {
 			return nil, err
 		}
@@ -292,7 +296,7 @@ func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChanne
 		return nil, err
 	}
 	// 渠道模型及所有价格档必须同时落库，不能出现“能力已开放但规格价格尚未更新”的窗口。
-	if err := s.repo.Transaction(func(repo *repository.Repository) error {
+	if err := repo.Transaction(func(repo *repository.Repository) error {
 		if channel.WebsiteID != "" {
 			if _, err := repo.LockChannelWebsite(channel.WebsiteID); err != nil {
 				return err
@@ -331,7 +335,6 @@ func (s *Service) saveChannelModel(actor *model.User, channel *model.ModelChanne
 		}
 		return nil, err
 	}
-	s.invalidateRouteCatalog()
 	return item, nil
 }
 

@@ -177,6 +177,7 @@ export type ModelQuoteRequest = {
 export type ModelCatalogSource = "system";
 
 export type PublicChannelCatalog = {
+    personal?: boolean;
     id: string;
     name: string;
     displayName: string;

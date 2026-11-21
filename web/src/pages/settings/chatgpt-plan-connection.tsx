@@ -1,19 +1,19 @@
-import { App, Button } from "antd";
+import { App, Button, Checkbox, Spin } from "antd";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Select } from "@/components/ui/base/select";
+import { AppModal } from "@/components/ui/product/app-modal";
 import { refreshSystemChannels } from "@/lib/user-session";
-import { addChatGPTPlanModel, disconnectChatGPTPlan, getChatGPTPlanStatus, listChatGPTPlanModels, startChatGPTPlanConnection } from "@/services/api/chatgpt-plan";
+import { saveChatGPTPlanModels, disconnectChatGPTPlan, getChatGPTPlanStatus, listChatGPTPlanModels, startChatGPTPlanConnection } from "@/services/api/chatgpt-plan";
 
 export function ChatGPTPlanConnection({ userId }: { userId: string }) {
     const { message } = App.useApp();
     const client = useQueryClient();
     const [authorizing, setAuthorizing] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [slug, setSlug] = useState("");
+    const [selectionOpen, setSelectionOpen] = useState(false);
+    const [selection, setSelection] = useState<string[]>([]);
     const status = useQuery({ queryKey: ["chatgpt-plan", userId], queryFn: ({ signal }) => getChatGPTPlanStatus(signal), refetchInterval: authorizing ? 2000 : false });
-    const models = useQuery({ queryKey: ["chatgpt-plan-models", userId], queryFn: ({ signal }) => listChatGPTPlanModels(signal), enabled: Boolean(status.data?.enabled && status.data.connected) });
-    const selected = models.data?.models.some((item) => item.slug === slug) ? slug : models.data?.models[0]?.slug || "";
+    const models = useQuery({ queryKey: ["chatgpt-plan-models", userId], queryFn: ({ signal }) => listChatGPTPlanModels(signal), enabled: Boolean(selectionOpen && status.data?.enabled && status.data.connected) });
 
     useEffect(() => {
         if (!authorizing) return;
@@ -34,6 +34,12 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
         message.success("ChatGPT 已连接，请选择要加入的模型");
     }, [authorizing, status.data?.connected, message]);
 
+    useEffect(() => {
+        if (selectionOpen && models.data) setSelection(models.data.models.filter((item) => item.selected).map((item) => item.slug));
+    }, [selectionOpen, models.data]);
+    useEffect(() => {
+        if (status.data && (!status.data.enabled || !status.data.connected)) setSelectionOpen(false);
+    }, [status.data?.enabled, status.data?.connected]);
     const connect = async () => {
         const popup = window.open("about:blank", "yingce-chatgpt-plan", "width=720,height=760");
         if (!popup) {
@@ -59,12 +65,15 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
             if (disconnect) {
                 const result = await disconnectChatGPTPlan();
                 client.removeQueries({ queryKey: ["chatgpt-plan-models", userId] });
-                setSlug("");
+                setSelection([]);
+                setSelectionOpen(false);
                 if (result.revocationConfirmed) message.success("ChatGPT 已断开");
                 else message.warning("本站凭据已清除；远端撤销未确认，可在 ChatGPT 设置检查连接");
             } else {
-                await addChatGPTPlanModel(selected);
-                message.success(`已加入 ${selected}`);
+                await saveChatGPTPlanModels(selection);
+                setSelectionOpen(false);
+                await client.invalidateQueries({ queryKey: ["chatgpt-plan-models", userId] });
+                message.success("已保存个人渠道模型");
             }
             await status.refetch();
             await refreshSystemChannels();
@@ -84,39 +93,85 @@ export function ChatGPTPlanConnection({ userId }: { userId: string }) {
         );
     if (!status.data.enabled && !status.data.connected) return null;
 
+    if (!status.data.connected)
+        return (
+            <section className="settings-section" aria-label="ChatGPT 个人方案授权">
+                <h3>ChatGPT 个人方案</h3>
+                <p className="text-sm text-foreground/60">连接自己的 ChatGPT 账号，凭据加密保存在此部署的服务器，授权和额度调用仅供你本人使用。</p>
+                <p className="mb-3 text-sm text-foreground/60">当前授权要求浏览器与后端运行在同一台电脑。调用消耗你的 ChatGPT 方案额度，影策收取 0 积分。</p>
+                <Button loading={busy || authorizing} onClick={() => void connect()}>
+                    {authorizing ? "等待浏览器授权" : "使用 ChatGPT 登录"}
+                </Button>
+            </section>
+        );
     return (
-        <section className="settings-section" aria-label="ChatGPT 个人方案授权">
-            <h3>ChatGPT 个人方案</h3>
-            <p className="text-sm text-foreground/60">连接自己的 ChatGPT 账号，授权和额度调用仅供你本人使用。凭据加密保存在此部署的服务器，由服务器代为调用。</p>
-            <p className="text-sm text-foreground/60">当前授权要求浏览器与影策后端运行在同一台电脑。模型调用消耗你的 ChatGPT 方案额度，影策收取 0 积分。</p>
-            {!status.data.enabled && <p role="status">管理员已关闭此功能，现有授权暂停使用，你仍可断开连接。</p>}
-            <div className="flex flex-wrap items-center gap-2">
-                {status.data.connected ? (
-                    <>
-                        <span>已连接 {status.data.email || "ChatGPT 账号"}</span>
-                        {status.data.enabled && (
-                            <>
-                                <Select aria-label="选择 ChatGPT 模型" value={selected} onChange={setSlug} options={(models.data?.models || []).map((item) => ({ label: item.displayName || item.slug, value: item.slug }))} />
-                                <Button type="primary" loading={busy} disabled={!selected || models.isError} onClick={() => void change(false)}>
-                                    加入这个模型
-                                </Button>
-                            </>
-                        )}
+        <>
+            <section className="settings-channel mb-3 p-2 sm:p-3" aria-label="ChatGPT 个人方案渠道">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 basis-52">
+                        <h3 className="text-sm font-semibold">ChatGPT 个人方案</h3>
+                        <p className="mt-1 text-xs text-foreground/55">
+                            {status.data.email || "ChatGPT 账号"} · 已选择 {status.data.selectedModelSlugs?.length || 0} 个模型 · 仅本人可用
+                        </p>
+                        <span className={`settings-channel-status mt-2 ${status.data.enabled ? "is-ready" : "is-warning"}`}>
+                            <i aria-hidden="true" />
+                            {status.data.enabled ? "已授权" : "管理员已关闭此功能，授权暂停使用"}
+                        </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            disabled={!status.data.enabled || busy}
+                            onClick={() => {
+                                setSelection(status.data.selectedModelSlugs || []);
+                                setSelectionOpen(true);
+                            }}
+                        >
+                            选择模型
+                        </Button>
                         <Button danger loading={busy} onClick={() => void change(true)}>
                             断开连接
                         </Button>
-                    </>
+                    </div>
+                </div>
+            </section>
+            <AppModal
+                open={selectionOpen}
+                title="选择 ChatGPT 模型"
+                okText="保存选择"
+                cancelText="取消"
+                confirmLoading={busy}
+                okButtonProps={{ disabled: models.isPending || models.isError || models.isFetching }}
+                onOk={() => void change(false)}
+                onCancel={() => {
+                    if (!busy) setSelectionOpen(false);
+                }}
+            >
+                <p className="mb-3 text-sm text-foreground/60">勾选要在「模型选择」中使用的模型，取消勾选后停止提供该模型，历史任务保留。当前已选 {selection.length} 个。</p>
+                {models.isPending ? (
+                    <Spin size="small" />
+                ) : models.isError ? (
+                    <div role="alert">
+                        无法读取模型目录。<Button onClick={() => void models.refetch()}>重试</Button>
+                    </div>
                 ) : (
-                    <Button loading={busy || authorizing} onClick={() => void connect()}>
-                        {authorizing ? "等待浏览器授权" : "使用 ChatGPT 登录"}
-                    </Button>
+                    <div className="max-h-80 space-y-2 overflow-y-auto" role="group" aria-label="ChatGPT 可用模型">
+                        {models.data.models.length === 0 && <p>当前账号暂无可用模型。</p>}
+                        {models.data.models.map((item) => (
+                            <div key={item.slug} className="rounded-md border border-border p-2">
+                                <Checkbox
+                                    disabled={busy || models.isFetching || (!item.available && !selection.includes(item.slug))}
+                                    checked={selection.includes(item.slug)}
+                                    onChange={({ target }) => setSelection((current) => (target.checked ? [...current, item.slug] : current.filter((slug) => slug !== item.slug)))}
+                                >
+                                    <span>{item.displayName || item.slug}</span>
+                                    <span className="ml-2 text-xs text-foreground/55">{item.slug}</span>
+                                    {!item.available && <span className="ml-2 text-xs text-foreground/55">当前不可用，请取消勾选</span>}
+                                </Checkbox>
+                            </div>
+                        ))}
+                    </div>
                 )}
-            </div>
-            {models.isError && status.data.enabled && (
-                <p role="alert">
-                    无法读取 ChatGPT 模型目录。<Button onClick={() => void models.refetch()}>重试</Button>
-                </p>
-            )}
-        </section>
+            </AppModal>
+        </>
     );
 }

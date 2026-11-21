@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"gorm.io/gorm"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/platform"
 )
@@ -24,7 +25,7 @@ type chatGPTPlanTestTransport func(*http.Request) (*http.Response, error)
 
 func (f chatGPTPlanTestTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-func newChatGPTPlanTestService(t *testing.T) (*Service, []*model.User) {
+func newChatGPTPlanTestService(t *testing.T) (*Service, []*model.User, *gorm.DB) {
 	t.Helper()
 	s, db := newChannelModelTestService(t)
 	if err := db.AutoMigrate(&model.AdminAuditEvent{}); err != nil {
@@ -45,7 +46,7 @@ func newChatGPTPlanTestService(t *testing.T) (*Service, []*model.User) {
 			t.Fatal(err)
 		}
 	}
-	return s, users
+	return s, users, db
 }
 
 func setChatGPTPlanTestEnabled(t *testing.T, s *Service, admin *model.User, enabled bool) {
@@ -61,7 +62,7 @@ func setChatGPTPlanTestEnabled(t *testing.T, s *Service, admin *model.User, enab
 }
 
 func TestChatGPTPlanEncryptedUserStorageAndStaleWrite(t *testing.T) {
-	s, users := newChatGPTPlanTestService(t)
+	s, users, _ := newChatGPTPlanTestService(t)
 	for _, user := range users[:2] {
 		credentials := &chatGPTPlanCredentials{OwnerID: user.ID, AccessToken: "access-" + user.ID, RefreshToken: "refresh-" + user.ID, ExpiresAt: time.Now().Add(time.Hour)}
 		if err := s.saveChatGPTPlanCredentials(credentials); err != nil {
@@ -110,7 +111,7 @@ func TestChatGPTPlanEncryptedUserStorageAndStaleWrite(t *testing.T) {
 }
 
 func TestChatGPTPlanFeatureGateAndAdminControl(t *testing.T) {
-	s, users := newChatGPTPlanTestService(t)
+	s, users, _ := newChatGPTPlanTestService(t)
 	features, err := s.FeatureAvailability()
 	if err != nil || features.ChatGPTPlanEnabled {
 		t.Fatal("personal plan must default off")
@@ -125,7 +126,7 @@ func TestChatGPTPlanFeatureGateAndAdminControl(t *testing.T) {
 	if _, err := s.ListChatGPTPlanModels(context.Background(), users[0]); err == nil {
 		t.Fatal("disabled model discovery allowed")
 	}
-	if _, err := s.AddChatGPTPlanModel(context.Background(), users[0], "test-model"); err == nil {
+	if err := s.SaveChatGPTPlanModels(context.Background(), users[0], []string{"test-model"}); err == nil {
 		t.Fatal("disabled model import allowed")
 	}
 	if _, err := s.chatGPTPlanAccessToken(users[0].ID); err == nil {
@@ -146,7 +147,7 @@ func TestChatGPTPlanFeatureGateAndAdminControl(t *testing.T) {
 // Exercise the actual loopback callback and OIDC signature/nonce verification
 // with a local transport; no real credentials or external service are used.
 func TestChatGPTPlanTwoUserOAuthModelsAndExecution(t *testing.T) {
-	s, users := newChatGPTPlanTestService(t)
+	s, users, db := newChatGPTPlanTestService(t)
 	setChatGPTPlanTestEnabled(t, s, users[2], true)
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -186,7 +187,7 @@ func TestChatGPTPlanTwoUserOAuthModelsAndExecution(t *testing.T) {
 			if id != "alice" && id != "bob" {
 				t.Fatal("wrong model-directory credential")
 			}
-			payload = map[string]any{"models": []any{map[string]string{"slug": "model-" + id, "display_name": "Personal model", "visibility": "list"}}}
+			payload = map[string]any{"models": []any{map[string]string{"slug": "model-" + id, "display_name": "Personal model", "visibility": "list"}, map[string]string{"slug": "extra-" + id, "display_name": "Extra model", "visibility": "list"}}}
 		default:
 			t.Fatalf("unexpected upstream path %q", r.URL.Path)
 		}
@@ -219,12 +220,48 @@ func TestChatGPTPlanTwoUserOAuthModelsAndExecution(t *testing.T) {
 			t.Fatalf("own status: %+v %v", status, err)
 		}
 		channels = append(channels, status.ChannelID)
-		if _, err := s.AddChatGPTPlanModel(context.Background(), user, "model-"+user.ID); err != nil {
+		if err := s.SaveChatGPTPlanModels(context.Background(), user, []string{"model-" + user.ID}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.AddChatGPTPlanModel(context.Background(), user, "model-other"); err == nil {
+		if err := s.SaveChatGPTPlanModels(context.Background(), user, []string{"model-other"}); err == nil {
 			t.Fatal("model outside own upstream catalog accepted")
 		}
+	}
+	if err := db.Exec("CREATE TRIGGER fail_plan_insert BEFORE INSERT ON channel_models WHEN NEW.model_key LIKE 'extra-%' BEGIN SELECT RAISE(ABORT, 'fixture insert failure'); END").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveChatGPTPlanModels(context.Background(), users[0], []string{"extra-alice"}); err == nil {
+		t.Fatal("injected save failure was ignored")
+	}
+	if status, err := s.ChatGPTPlanConnectionStatus(users[0]); err != nil || len(status.SelectedModelSlugs) != 1 || status.SelectedModelSlugs[0] != "model-alice" {
+		t.Fatalf("selection was partly saved: %+v %v", status, err)
+	}
+	if err := db.Exec("DROP TRIGGER fail_plan_insert").Error; err != nil {
+		t.Fatal(err)
+	}
+	original, err := s.repo.ChannelModelByKey(channels[0], "model-alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveChatGPTPlanModels(context.Background(), users[0], []string{}); err != nil {
+		t.Fatal(err)
+	}
+	disabled, err := s.repo.ChannelModelByKeyIncludingDisabled(channels[0], "model-alice")
+	if err != nil || disabled.Enabled || disabled.ID != original.ID {
+		t.Fatal("deselection lost historical model identity")
+	}
+	if err := s.SaveChatGPTPlanModels(context.Background(), users[0], []string{"model-alice", "extra-alice"}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := s.ChatGPTPlanConnectionStatus(users[0])
+	if err != nil || len(status.SelectedModelSlugs) != 2 {
+		t.Fatal("multiple selection was not persisted")
+	}
+	if err := s.SaveChatGPTPlanModels(context.Background(), users[0], []string{"model-alice"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveChatGPTPlanModels(context.Background(), users[0], nil); err == nil {
+		t.Fatal("missing selection treated as clear-all")
 	}
 	if channels[0] == channels[1] {
 		t.Fatal("users shared a channel")
@@ -233,6 +270,17 @@ func TestChatGPTPlanTwoUserOAuthModelsAndExecution(t *testing.T) {
 		access, err := s.userGroupAccessForUser(user)
 		if err != nil {
 			t.Fatal(err)
+		}
+		catalog, err := s.publicSystemChannelCatalog(access, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if user.ID == "admin" {
+			if len(catalog) != 0 {
+				t.Fatal("administrator received private catalog")
+			}
+		} else if len(catalog) != 1 || !catalog[0].Personal {
+			t.Fatal("private model source was not marked personal")
 		}
 		for i, channelID := range channels {
 			own := user.ID == users[i].ID
@@ -271,7 +319,7 @@ func TestChatGPTPlanTwoUserOAuthModelsAndExecution(t *testing.T) {
 }
 
 func TestChatGPTPlanDisconnectInvalidatesPendingCallbackAndRefresh(t *testing.T) {
-	s, users := newChatGPTPlanTestService(t)
+	s, users, _ := newChatGPTPlanTestService(t)
 	setChatGPTPlanTestEnabled(t, s, users[2], true)
 	creds := &chatGPTPlanCredentials{OwnerID: "alice", AttemptID: "old-state", AccessToken: "old-access", RefreshToken: "old-refresh", ClientID: "client-alice", ExpiresAt: time.Now()}
 	if err := s.saveChatGPTPlanCredentials(creds); err != nil {

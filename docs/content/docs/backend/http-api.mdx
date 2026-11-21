@@ -11,13 +11,15 @@ description: 信封、错误码与 OpenAPI
 
 | 接口 | 说明 |
 | --- | --- |
-| `GET /chatgpt-plan` | 本人状态 `{ enabled, connected, email?, channelId? }`，不返回令牌 |
+| `GET /chatgpt-plan` | 本人状态 `{ enabled, connected, selectedModelSlugs, email?, channelId? }`，不返回令牌 |
 | `POST /chatgpt-plan/start` | 启动本机回环授权，返回 `{ authorizationUrl }`；按用户限流 |
-| `GET /chatgpt-plan/models` | 读取本人上游目录，返回 `{ models: [{ slug, displayName }] }` |
-| `POST /chatgpt-plan/models` | 提交 `{ slug }`，只允许加入本人可用目录中的 Responses 文本模型 |
+| `GET /chatgpt-plan/models` | 返回 `{ models: [{ slug, displayName, selected, available }] }`；已选但上游失效的模型仍显示，供用户取消勾选 |
+| `PUT /chatgpt-plan/models` | 提交完整 `{ slugs: string[] }`，最多 100 个；空数组为全部取消，缺失/null 拒绝。仅本人可用目录中的 Responses 文本模型可以选入，整批事务保存，取消勾选保留历史模型记录 |
 | `POST /chatgpt-plan/disconnect` | 清除本站凭据与个人渠道、作废待完成授权，返回 `{ revocationConfirmed }` |
 
 路径前缀为 `/api`。授权回调只监听后端动态分配的 `127.0.0.1` 端口，要求浏览器与后端同机。当前不提供远程 SaaS 网站授权；启用开关不会改变此边界。个人渠道不参与公共中转，调用时在任务准入及实际执行阶段核对归属和功能开关。
+
+模型目录的个人授权渠道返回 `channels[].personal=true`，仅表示展示来源。「模型选择」显示为自定义；服务端渠道身份、用户权限、凭据保管及任务路由不变。
 
 ## 团队空间
 

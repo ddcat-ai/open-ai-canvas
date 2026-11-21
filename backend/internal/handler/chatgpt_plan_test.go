@@ -27,7 +27,7 @@ func TestChatGPTPlanHTTPAuthenticationAndFeatureControl(t *testing.T) {
 	}
 	adminCookie := "plan-admin-session.plan-admin-token"
 	for _, route := range []struct{ method, path string }{
-		{"GET", "/api/chatgpt-plan"}, {"POST", "/api/chatgpt-plan/start"}, {"GET", "/api/chatgpt-plan/models"}, {"POST", "/api/chatgpt-plan/models"}, {"POST", "/api/chatgpt-plan/disconnect"},
+		{"GET", "/api/chatgpt-plan"}, {"POST", "/api/chatgpt-plan/start"}, {"GET", "/api/chatgpt-plan/models"}, {"PUT", "/api/chatgpt-plan/models"}, {"POST", "/api/chatgpt-plan/disconnect"},
 	} {
 		if response := profileRequest(router, route.method, route.path, "{}", ""); response.Code != http.StatusUnauthorized {
 			t.Fatalf("anonymous %s returned %d", route.path, response.Code)
@@ -44,8 +44,8 @@ func TestChatGPTPlanHTTPAuthenticationAndFeatureControl(t *testing.T) {
 	if err := json.Unmarshal(status.Body.Bytes(), &body); err != nil || status.Code != 200 || body.Code != 0 || body.Data.Enabled || body.Data.Connected {
 		t.Fatalf("default status = %s", status.Body.String())
 	}
-	for _, route := range []struct{ method, path string }{{"POST", "/api/chatgpt-plan/start"}, {"GET", "/api/chatgpt-plan/models"}, {"POST", "/api/chatgpt-plan/models"}} {
-		response := profileRequest(router, route.method, route.path, `{"slug":"test"}`, userCookie)
+	for _, route := range []struct{ method, path string }{{"POST", "/api/chatgpt-plan/start"}, {"GET", "/api/chatgpt-plan/models"}, {"PUT", "/api/chatgpt-plan/models"}} {
+		response := profileRequest(router, route.method, route.path, `{"slugs":["test"]}`, userCookie)
 		if response.Code != http.StatusForbidden {
 			t.Fatalf("disabled %s returned %d: %s", route.path, response.Code, response.Body.String())
 		}

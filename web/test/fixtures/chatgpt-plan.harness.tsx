@@ -48,12 +48,13 @@ let client: InstanceType<typeof QueryClient>;
 let enabled = true;
 let connected = false;
 let account = "alice";
+let selectedSlugs: string[] = [];
 const calls: string[] = [];
 const refresh = spyOn(session, "refreshSystemChannels").mockResolvedValue(undefined);
 const get = spyOn(http, "get").mockImplementation(async (path: string) => {
     calls.push(path);
-    if (path === "/chatgpt-plan") return { enabled, connected, email: connected ? `${account}@example.test` : undefined };
-    if (path === "/chatgpt-plan/models") return { models: [{ slug: `model-${account}`, displayName: "Personal model" }] };
+    if (path === "/chatgpt-plan") return { enabled, connected, selectedModelSlugs: selectedSlugs, email: connected ? `${account}@example.test` : undefined };
+    if (path === "/chatgpt-plan/models") return { models: [`model-${account}`, `extra-${account}`].map((slug) => ({ slug, displayName: slug, selected: selectedSlugs.includes(slug), available: true })) };
     throw new Error(`Unexpected GET ${path}`);
 });
 const post = spyOn(http, "post").mockImplementation(async (path: string) => {
@@ -65,10 +66,17 @@ const post = spyOn(http, "post").mockImplementation(async (path: string) => {
     if (path === "/chatgpt-plan/start") return { authorizationUrl: "https://auth.openai.com/api/accounts/authorize?state=test" };
     throw new Error(`Unexpected POST ${path}`);
 });
+const put = spyOn(http, "put").mockImplementation(async (path: string, body: { slugs: string[] }) => {
+    calls.push(path);
+    if (path !== "/chatgpt-plan/models") throw new Error(`Unexpected PUT ${path}`);
+    selectedSlugs = [...body.slugs];
+    return { saved: true };
+});
 beforeEach(() => {
     enabled = true;
     connected = false;
     account = "alice";
+    selectedSlugs = [];
     calls.length = 0;
     client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     host = document.createElement("div");
@@ -83,6 +91,7 @@ afterEach(async () => {
 afterAll(() => {
     get.mockRestore();
     post.mockRestore();
+    put.mockRestore();
     refresh.mockRestore();
     dom.happyDOM.abort();
     for (const [key, value] of originals) {
@@ -117,7 +126,7 @@ async function render(userId = account, personalChannelsOnly = false) {
     await settle();
 }
 async function click(label: string) {
-    const button = [...host.querySelectorAll("button")].find((item) => item.textContent?.includes(label));
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.includes(label));
     expect(button).toBeTruthy();
     await act(async () => button!.click());
     await settle();
@@ -168,4 +177,28 @@ test("personal channels retains disconnect when both feature switches are disabl
     expect(calls).not.toContain("/chatgpt-plan/models");
     await click("断开连接");
     expect(host.textContent).not.toContain("alice@example.test");
+});
+
+test("authorized account becomes a channel row with persisted multi-model selection", async () => {
+    connected = true;
+    selectedSlugs = ["model-alice"];
+    await render("alice", true);
+    expect(host.querySelector('[aria-label="ChatGPT 个人方案渠道"]')).toBeTruthy();
+    expect(host.textContent).toContain("已选择 1 个模型");
+    expect(host.textContent).not.toContain("当前没有个人模型渠道");
+    expect(host.textContent).not.toContain("API Key / Access Key");
+    await click("选择模型");
+    const inputs = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    expect(inputs.length).toBe(2);
+    expect(inputs[0]!.checked).toBe(true);
+    await act(async () => inputs[1]!.click());
+    await click("保存选择");
+    expect(selectedSlugs).toEqual(["model-alice", "extra-alice"]);
+    expect(host.textContent).toContain("已选择 2 个模型");
+    await click("选择模型");
+    expect([...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every((input) => input.checked)).toBe(true);
+    await act(async () => document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    await click("保存选择");
+    expect(selectedSlugs).toEqual(["extra-alice"]);
+    expect(host.textContent).toContain("已选择 1 个模型");
 });

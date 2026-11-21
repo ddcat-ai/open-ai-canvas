@@ -57,6 +57,7 @@ type PublicModelAvailabilityDay struct {
 
 // PublicChannelCatalog 公开的渠道目录信息（脱敏）
 type PublicChannelCatalog struct {
+	Personal    bool                 `json:"personal,omitempty"`
 	ID          string               `json:"id"`
 	Name        string               `json:"name"`
 	DisplayName string               `json:"displayName"`
@@ -195,6 +196,7 @@ func (s *Service) publicSystemChannelCatalog(access *userGroupAccess, intent *Mo
 			// 系统渠道的真实名称属于内部部署信息（供应商、中转站、内部命名等），
 			// 不得通过普通用户可访问的创作目录泄漏。前端只依赖 ID 做分组，名称留空后由客户端统一展示为“系统模型”。
 			result = append(result, PublicChannelCatalog{
+				Personal:    channel.APIFormat == chatGPTPlanFormat,
 				ID:          channel.ID,
 				Name:        "",
 				DisplayName: "",
