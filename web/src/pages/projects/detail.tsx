@@ -98,7 +98,7 @@ export default function DramaStudioPage() {
     const running = summary?.production.status === "running";
     const episodeQuery = useDramaEpisode(projectId, episodeId, Boolean(running || (summary?.jobCounts.running || 0) > 0));
     const detail = episodeQuery.data?.episode.id === episodeId ? episodeQuery.data : undefined;
-    const castQuery = useDramaCast(projectId, summary);
+    const castQuery = useDramaCast(projectId, summary, view === "cast");
     const { cast, byId: castById } = castQuery;
     const shots = useMemo(() => detail?.shots || [], [detail]);
     const currentShot = shots.find((shot) => shot.id === shotParam);

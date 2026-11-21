@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { ReactNode } from "react";
-import type { DramaCast, DramaListPage } from "../../src/services/api/drama";
+import type { DramaCast, DramaListPage, DramaSummary } from "../../src/services/api/drama";
 import type { CastImageFieldsValue } from "../../src/pages/projects/studio/cast-image-fields";
 
 const dom = new Window({ url: "http://localhost/projects/current" });
@@ -34,6 +34,7 @@ const { CastPanel } = await import("../../src/pages/projects/studio/panels");
 const { CastCreateDialog } = await import("../../src/pages/projects/studio/cast-create-dialog");
 const { CastProjectImport } = await import("../../src/pages/projects/studio/cast-project-import");
 const { CastImageFields } = await import("../../src/pages/projects/studio/cast-image-fields");
+const { dramaKeys, useDramaCast } = await import("../../src/pages/projects/studio/use-studio");
 const { composeDramaStyleId, findDramaStyle } = await import("../../src/lib/drama/drama-styles");
 const api = await import("../../src/services/api/drama");
 const resources = await import("../../src/services/api/resources");
@@ -96,6 +97,37 @@ async function render(children: ReactNode) {
         ),
     );
 }
+
+test("project assets refresh on entry and again when generation finishes", async () => {
+    const stale = { cast: [hero] };
+    const latest = { cast: [{ ...hero, imageResourceId: "new-hero-image" }] };
+    const list = spyOn(api, "listDramaCast").mockResolvedValueOnce(stale).mockResolvedValueOnce(stale).mockResolvedValueOnce(latest);
+    const queryKey = dramaKeys.cast("current");
+    client.setQueryDefaults(queryKey, { staleTime: 30_000 });
+    client.setQueryData(queryKey, stale);
+    const running = { castCount: 1, jobCounts: { running: 1 }, production: { status: "running" } } as DramaSummary;
+    const completed = { ...running, jobCounts: { succeeded: 1 }, production: { ...running.production, status: "done" as const } };
+
+    function Assets({ summary, visible }: { summary: DramaSummary; visible: boolean }) {
+        useDramaCast("current", summary, visible);
+        return null;
+    }
+
+    await render(<Assets summary={running} visible={false} />);
+    expect(list).not.toHaveBeenCalled();
+    await render(<Assets summary={running} visible />);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(client.getQueryData(queryKey)).toEqual(stale);
+    const stillRunning = { ...running, jobCounts: { running: 1, succeeded: 1 } };
+    await render(<Assets summary={stillRunning} visible />);
+    expect(list).toHaveBeenCalledTimes(2);
+    await render(<Assets summary={completed} visible />);
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(client.getQueryData(queryKey)).toEqual(latest);
+    await render(<Assets summary={{ ...completed }} visible />);
+    expect(list).toHaveBeenCalledTimes(3);
+});
+
 function button(label: string, scope: ParentNode = document) {
     const result = [...scope.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.getAttribute("aria-label") === label || item.textContent?.replace(/\s/g, "") === label.replace(/\s/g, ""));
     expect(result, `button ${label}`).toBeDefined();
