@@ -6,7 +6,7 @@ import { systemChannelModelChannels } from "../src/lib/user-session";
 import { ChannelOrderDialog, moveOrderItem } from "../src/pages/admin/components/channel-order-dialog";
 import { ModelDefaultGrid } from "../src/pages/settings/model-default-grid";
 import type { PublicChannelCatalog, PublicChannelModel } from "../src/services/api/logical-models";
-import { defaultConfig, normalizeConfigSnapshot, selectableModelsByCapability } from "../src/stores/use-config-store";
+import { defaultConfig, normalizeConfigSnapshot, selectableModelsByCapability, useConfigStore } from "../src/stores/use-config-store";
 
 test("public channel order, alias and model order survive session normalization and capability filtering", () => {
     const model = (key: string, available = true): PublicChannelModel => ({
@@ -71,11 +71,18 @@ test("personal authorization models display as custom while preserving server-ma
         priceLabel: "0",
         priceTiers: [{ id: "free", selector: {}, resolution: "*", videoSeconds: 0, billingMode: "fixed_request", unitPriceMicrocredits: 0, inputTokenPriceMicrocredits: 0, outputTokenPriceMicrocredits: 0, cachedTokenPriceMicrocredits: 0 }],
     };
-    const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels: systemChannelModelChannels([{ id: "personal", name: "", displayName: "", personal: true, models: [model] }]) } }).config;
-    expect(config.channels[0]!.scope).toBe("system");
-    expect(config.channels[0]!.personal).toBe(true);
-    const html = renderToStaticMarkup(<ModelDefaultGrid config={config} onChange={() => {}} />);
-    expect(html).toContain("ChatGPT 个人方案");
-    expect(html).toContain("自定义");
-    expect(html).not.toContain("系统模型");
+    const previous = useConfigStore.getState().config;
+    try {
+        useConfigStore.setState({ config: { ...defaultConfig, channels: [] } });
+        useConfigStore.getState().mergeSystemChannels(systemChannelModelChannels([{ id: "personal", name: "", displayName: "", personal: true, models: [model] }]));
+        const config = useConfigStore.getState().config;
+        expect(config.channels[0]!.scope).toBe("system");
+        expect(config.channels[0]!.personal).toBe(true);
+        const html = renderToStaticMarkup(<ModelDefaultGrid config={config} onChange={() => {}} />);
+        expect(html).toContain("ChatGPT 个人方案");
+        expect(html).toContain("自定义");
+        expect(html).not.toContain("系统模型");
+    } finally {
+        useConfigStore.setState({ config: previous });
+    }
 });
