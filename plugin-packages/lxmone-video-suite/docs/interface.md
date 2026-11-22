@@ -107,7 +107,7 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
   "apiVersion": "yingce.plugin/v2",
   "id": "lxmone-video-suite",
   "name": "万有引力视频套件",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Yingce / 万有引力",
   "description": "万有引力（lxmone.xyz）视频协议套件：Wan 3.0（现有渠道与 S 渠道）、Seedance 2 / 2.5、SD 2.0 / 2.5 / Mini、Grok Imagine、MiniMax H3（Max 与 A-E 独立工作流）。",
   "permissions": [

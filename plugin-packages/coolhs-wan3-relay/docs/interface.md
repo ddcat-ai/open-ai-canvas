@@ -81,7 +81,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "coolhs-wan3-relay",
   "name": "WAN 3.0 拼车中转（班次发车）",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "影策",
   "description": "WAN 3.0 拼车中转站 /api/portal 协议：素材先上传、交单进站候车、发车后出片，提交后释放执行位并按 15 秒间隔回查。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",

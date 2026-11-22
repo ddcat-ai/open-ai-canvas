@@ -94,7 +94,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-seedance",
   "name": "火山方舟 Seedance 官方视频生成",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Volcengine / 影策",
   "description": "火山方舟官方 Seedance 视频生成接口，使用普通 /api/v3 Contents Generations Tasks 和方舟推理 API Key；不是 Agent Plan 专用线路。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",

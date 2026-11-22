@@ -86,7 +86,7 @@ Agent Plan 专属接入：请求路径为 /api/plan/v3/images/generations，必�
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-ark-agent-plan-seedream",
   "name": "火山方舟 Seedream Agent Plan 图片接口",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Volcengine / 影策",
   "description": "火山方舟 Agent Plan 专用 Seedream /api/plan/v3 图片生成接口，需要专用 API Key 和 AFP 额度；与普通 /api/v3 分开配置。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",

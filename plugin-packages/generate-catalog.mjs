@@ -265,7 +265,7 @@ add({
 });
 
 add({
-  id: "volcengine-ark-agent-plan-seedream", providerId: "volcengine-ark-agent-plan-image", name: "火山方舟 Seedream Agent Plan 图片接口", vendor: "Volcengine", capability: "image",
+  id: "volcengine-ark-agent-plan-seedream", version: "2.0.1", providerId: "volcengine-ark-agent-plan-image", name: "火山方舟 Seedream Agent Plan 图片接口", vendor: "Volcengine", capability: "image",
   description: "火山方舟 Agent Plan 专用 Seedream /api/plan/v3 图片生成接口，需要专用 API Key 和 AFP 额度；与普通 /api/v3 分开配置。",
   readmeIntro: "火山方舟 Agent Plan 专用声明式图片协议插件，使用 `/api/plan/v3` 图片生成接口。需要 Agent Plan 专用 API Key 和 AFP 额度，不能与普通 `/api/v3` 方舟接口混用。",
 
@@ -339,7 +339,7 @@ const arkSeedanceResponse = {
 };
 
 add({
-  id: "volcengine-ark-seedance", providerId: "volcengine-ark-video", name: "火山方舟 Seedance 官方视频生成", vendor: "Volcengine", capability: "video",
+  id: "volcengine-ark-seedance", version: "2.0.1", providerId: "volcengine-ark-video", name: "火山方舟 Seedance 官方视频生成", vendor: "Volcengine", capability: "video",
   videoReferences: numberedImages("content"),
   description: "火山方舟官方 Seedance 视频生成接口，使用普通 /api/v3 Contents Generations Tasks 和方舟推理 API Key；不是 Agent Plan 专用线路。",
   readmeIntro: "火山方舟官方声明式协议插件，面向普通 `/api/v3` Contents Generations Tasks 视频生成接口。使用普通方舟 API Key 和 Endpoint，可接入 Seedance 视频模型。",
@@ -354,7 +354,7 @@ add({
 });
 
 add({
-  id: "volcengine-ark-agent-plan-seedance", providerId: "volcengine-ark-agent-plan-video", name: "火山方舟 Seedance Agent Plan 视频接口", vendor: "Volcengine", capability: "video",
+  id: "volcengine-ark-agent-plan-seedance", version: "2.0.1", providerId: "volcengine-ark-agent-plan-video", name: "火山方舟 Seedance Agent Plan 视频接口", vendor: "Volcengine", capability: "video",
   videoReferences: numberedImages("content"),
   description: "火山方舟 Agent Plan 专用 Seedance /api/plan/v3 视频生成接口，需要专用 API Key 和 AFP 额度；与普通 /api/v3 分开配置。",
   readmeIntro: "火山方舟 Agent Plan 专用声明式协议插件，使用 `/api/plan/v3` 视频生成接口。需要 Agent Plan 专用 API Key 和 AFP 额度，不能与普通 `/api/v3` 方舟接口混用。",
@@ -437,7 +437,7 @@ const jimengResponse = (kind, results) => asyncResponse(kind, {
 });
 
 add({
-  id: "volcengine-jimeng-image", providerId: "volcengine-jimeng-image", name: "火山即梦 官方图片生成", vendor: "Volcengine", capability: "image",
+  id: "volcengine-jimeng-image", version: "2.0.1", providerId: "volcengine-jimeng-image", name: "火山即梦 官方图片生成", vendor: "Volcengine", capability: "image",
   description: "火山即梦 Visual API 图片生成接口，使用 API Key 与 Secret Key；协议和凭证不同于火山方舟 Seedream。",
   readmeIntro: "火山即梦 Visual API 官方声明式图片协议插件，使用 API Key 与 Secret Key。它与火山方舟 Seedream 使用不同的接口协议和凭证。",
 
@@ -458,7 +458,7 @@ add({
 });
 
 add({
-  id: "doubao-streaming-tts", providerId: "doubao-streaming-tts", name: "豆包音频生成", vendor: "Volcengine", capability: "audio",
+  id: "doubao-streaming-tts", version: "2.0.1", providerId: "doubao-streaming-tts", name: "豆包音频生成", vendor: "Volcengine", capability: "audio",
   baseUrl: "https://openspeech.bytedance.com", auth: { type: "header", field: "apiKey", header: "X-Api-Key" }, params: audioParams,
   notes: "火山引擎 seed-audio-1.0 非流式音频生成。POST /api/v3/tts/create。不传 references 为纯文本生成；连接音频时写入 references 的 audio_url 或 audio_data，最多 3 段，参考音频少于 3 段且指定了音色时再追加一个 speaker；连接图片时写入 image_url 或 image_data，最多 1 张。图片和音频不能同时使用。没有参考素材时，speaker 只在用户明确指定音色时发送，且官方仅接受语音合成 2.0 音色或复刻音色。text_prompt 引用参考音频时使用 @Audio1、@Audio2。响应是单个 JSON，audio 为 Base64，url 两小时过期。",
   create: jsonCreate("/api/v3/tts/create", {
@@ -654,7 +654,7 @@ const newAPITaskMessage = coalesce(
 );
 
 add({
-  id: "newapi-media-task-v1", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
+  id: "newapi-media-task-v1", version: "2.0.1", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
   videoReferences: numberedImages("input-media"),
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   create: jsonCreate("/v1/videos", {
@@ -677,7 +677,7 @@ add({
 });
 
 add({
-  id: "newapi-video-generations-v1", providerId: "newapi-channel-2", name: "NewAPI Video Generations Channel 2", vendor: "NewAPI", capability: "video",
+  id: "newapi-video-generations-v1", version: "2.0.1", providerId: "newapi-channel-2", name: "NewAPI Video Generations Channel 2", vendor: "NewAPI", capability: "video",
   videoReferences: numberedImages("image-urls"),
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   create: jsonCreate("/v1/video/generations", {
@@ -701,7 +701,7 @@ add({
 });
 
 add({
-  id: "rolldek-wan-video", providerId: "rolldek-wan-video", name: "RollDek WAN 3.0 Video", vendor: "RollDek", capability: "video",
+  id: "rolldek-wan-video", version: "2.0.1", providerId: "rolldek-wan-video", name: "RollDek WAN 3.0 Video", vendor: "RollDek", capability: "video",
   videoReferences: numberedImages("role-reference-images"),
   baseUrl: "https://rolldek.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   notes: "该协议严格对应 RollDek WAN 3.0 的 JSON /v1/videos 合同。RollDek 同时暴露的其他兼容创建入口不共享任务查询路径，不能与 NewAPI Video Generations Channel 2 混用。",
@@ -783,7 +783,7 @@ add({
 });
 
 add({
-  id: "volcengine-jimeng-video", providerId: "volcengine-jimeng-video", name: "火山即梦 官方视频生成", vendor: "Volcengine", capability: "video",
+  id: "volcengine-jimeng-video", version: "2.0.1", providerId: "volcengine-jimeng-video", name: "火山即梦 官方视频生成", vendor: "Volcengine", capability: "video",
   videoReferences: numberedImages("image-urls"),
   description: "火山即梦 Visual API 视频生成接口，使用 API Key 与 Secret Key；协议和凭证不同于火山方舟 Seedance。",
   readmeIntro: "火山即梦 Visual API 官方声明式视频协议插件，使用 API Key 与 Secret Key。它与火山方舟 Seedance 使用不同的接口协议和凭证。",
@@ -804,7 +804,7 @@ const agnesReferenceImages = mediaWithRoles("request.images", ["reference_image"
 const agnesReferenceMode = { $or: [gt(len(agnesReferenceImages), 0), gt(len(ref("request.videos")), 0), gt(len(ref("request.audios")), 0)] };
 
 add({
-  id: "agnes-video-25", providerId: "agnes-video", name: "Agnes Video 2.5 / 2.5 Flash", vendor: "Agnes AI", capability: "video",
+  id: "agnes-video-25", version: "2.0.1", providerId: "agnes-video", name: "Agnes Video 2.5 / 2.5 Flash", vendor: "Agnes AI", capability: "video",
   videoReferences: numberedImages("images"),
   baseUrl: "https://apihub.agnes-ai.com/v1", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
@@ -1206,7 +1206,7 @@ add({
 });
 
 add({
-  id: "dashscope-wan-video", providerId: "dashscope-wan-video", name: "DashScope Wan Video", vendor: "Alibaba Cloud", capability: "video",
+  id: "dashscope-wan-video", version: "2.0.1", providerId: "dashscope-wan-video", name: "DashScope Wan Video", vendor: "Alibaba Cloud", capability: "video",
   videoReferences: numberedImages("input-reference-images"),
   baseUrl: "https://dashscope.aliyuncs.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   validations: [
@@ -1365,7 +1365,7 @@ add({
   })
 });
 
-for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, requestShape] of [
+for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, requestShape, version] of [
   ["vertex-imagen", "Vertex Imagen", "Google Cloud", "image", "https://{location}-aiplatform.googleapis.com", "/v1/projects/{{request.providerOptions.vertex-imagen.project}}/locations/{{request.providerOptions.vertex-imagen.location}}/publishers/google/models/{{model}}:predict", null, "instances+parameters"],
   ["minimax-image", "MiniMax Image", "MiniMax", "image", "https://api.minimax.io", "/v1/image_generation", null, "model-specific image body"],
   ["kling-image", "Kling Image", "Kuaishou", "image", "https://api.klingai.com", "/v1/images/generations", "/v1/images/generations/{{taskId}}", "task JSON"],
@@ -1375,7 +1375,7 @@ for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, request
   ["adobe-firefly", "Adobe Firefly", "Adobe", "image", "https://firefly-api.adobe.io", "/v3/images/generate", null, "versioned Firefly request"],
   ["runway-image", "Runway Image", "Runway", "image", "https://api.dev.runwayml.com", "/v1/text_to_image", "/v1/tasks/{{taskId}}", "async Runway image schema"],
   ["vertex-veo", "Vertex AI Veo", "Google Cloud", "video", "https://{location}-aiplatform.googleapis.com", "/v1/projects/{{request.providerOptions.vertex-veo.project}}/locations/{{request.providerOptions.vertex-veo.location}}/publishers/google/models/{{model}}:predictLongRunning", "/v1/{{taskId}}", "Vertex long-running operation"],
-  ["seedance-videos-compatible", "Seedance Compatible /videos", "Gateway profile", "video", "http://127.0.0.1:3000", "/v1/videos", "/v1/videos/{{taskId}}", "gateway-specific videos JSON"],
+  ["seedance-videos-compatible", "Seedance Compatible /videos", "Gateway profile", "video", "http://127.0.0.1:3000", "/v1/videos", "/v1/videos/{{taskId}}", "gateway-specific videos JSON", "2.0.1"],
   ["kling-video", "Kling Video", "Kuaishou", "video", "https://api.klingai.com", "/v1/videos/generations", "/v1/videos/generations/{{taskId}}", "text/image/multi-image task"],
   ["runway-video", "Runway Video", "Runway", "video", "https://api.dev.runwayml.com", "/v1/image_to_video", "/v1/tasks/{{taskId}}", "promptImage+promptText+ratio+duration"],
   ["luma-dream-machine", "Luma Dream Machine", "Luma AI", "video", "https://api.lumalabs.ai", "/dream-machine/v1/generations", "/dream-machine/v1/generations/{{taskId}}", "prompt+keyframes"],
@@ -1402,7 +1402,7 @@ for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, request
     operationExtra = { headers: { "X-TC-Action": ref(`${optionPath}.action`), "X-TC-Version": ref(`${optionPath}.version`) } };
   }
   add({
-    id, providerId: id, name, vendor, capability, baseUrl, auth, params, configuration,
+    id, version, providerId: id, name, vendor, capability, baseUrl, auth, params, configuration,
     videoReferences: id === "seedance-videos-compatible" ? numberedImages("images") : undefined,
     notes: `该协议的模型级字段变化快或依赖云资源配置。插件固定线协议入口和统一字段，完整厂商对象通过 providerOptions.${id} 的 parameters/input/extra_body 传入；${requestShape}。云签名型入口在未配置对应鉴权驱动时会明确失败，不会伪装成 Bearer 成功。`,
     create: jsonCreate(createPath, standard, operationExtra),
