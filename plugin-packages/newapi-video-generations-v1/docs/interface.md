@@ -88,7 +88,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "newapi-video-generations-v1",
   "name": "NewAPI Video Generations Channel 2",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "NewAPI / 影策",
   "description": "NewAPI Video Generations Channel 2 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",

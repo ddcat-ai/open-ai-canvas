@@ -165,7 +165,7 @@ func TestRunVideoTaskUsesDeclarativeAgnesJSONProtocol(t *testing.T) {
 	if !ok {
 		t.Fatal("declarative Agnes adapter is missing")
 	}
-	if metadata := adapter.Metadata(); metadata.Version != "2.0.0" || metadata.Execution != "declarative" || !metadata.RequiresPublicMediaURLs {
+	if metadata := adapter.Metadata(); metadata.Version != "2.0.1" || metadata.Execution != "declarative" || !metadata.RequiresPublicMediaURLs {
 		t.Fatalf("Agnes runtime metadata = %#v", metadata)
 	}
 

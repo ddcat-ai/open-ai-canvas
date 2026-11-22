@@ -40,7 +40,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-mediakit",
   "name": "火山 MediaKit 视频画质增强工具",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Volcengine / 影策",
   "description": "火山 MediaKit 视频处理工具，用于画质增强，不是视频生成模型；支持 720p、1080p、2K、4K 目标分辨率。",
   "permissions": [
