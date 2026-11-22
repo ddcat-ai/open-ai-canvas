@@ -1,0 +1,419 @@
+.drama-board-toolbar.drama-sg-toolbar {
+    flex-wrap: wrap;
+}
+
+.drama-sg-layout-toggle {
+    display: inline-flex;
+    gap: var(--space-1);
+    margin-inline-start: auto;
+}
+
+.drama-sg-layout-toggle button[aria-pressed="true"] {
+    border-color: var(--workspace-accent);
+    background: var(--drama-sunken);
+    color: var(--workspace-accent);
+}
+
+.drama-sg-list-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+}
+
+.drama-sg-list-layout > .drama-sg-toolbar {
+    flex: none;
+}
+
+.drama-sg-shot-table-wrap {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    scroll-padding-block-start: calc(var(--space-3) * 4);
+    padding-inline: var(--space-4);
+}
+
+.drama-sg-shot-table {
+    --storyboard-row-height: 218px;
+    --storyboard-rail: var(--space-4);
+    --storyboard-reference-height: 54px;
+    --storyboard-reference-gap: var(--space-2);
+    --storyboard-row-outline: color-mix(in oklab, var(--drama-line) 72%, transparent);
+    --storyboard-column-divider: color-mix(in oklab, var(--drama-line) 48%, transparent);
+    --storyboard-shot-columns: minmax(0, 18fr) minmax(0, 49fr) minmax(0, 33fr);
+    width: 100%;
+    min-width: 1160px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0 var(--space-4);
+    font-size: var(--fs-caption);
+    text-align: start;
+}
+
+/* The shot group takes the remaining 30% of the table. */
+.drama-sg-table-number-col {
+    width: 4%;
+}
+.drama-sg-table-segment-col {
+    width: 16%;
+}
+.drama-sg-table-reference-col {
+    width: 18%;
+}
+.drama-sg-table-prompt-col {
+    width: 18%;
+}
+.drama-sg-table-video-col {
+    width: 14%;
+}
+
+.drama-sg-table-prompt {
+    margin: 0;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.drama-sg-shot-table :is(th, td) {
+    padding: 0;
+    vertical-align: top;
+    border-block: var(--stroke-1) solid var(--storyboard-row-border, var(--storyboard-row-outline));
+    background: var(--storyboard-row-surface, var(--surface));
+}
+
+/* Round the outer cells so each segment reads as one card without breaking column alignment. */
+.drama-sg-shot-table tr > :first-child {
+    border-inline-start: var(--stroke-1) solid var(--storyboard-row-border, var(--storyboard-row-outline));
+    border-start-start-radius: var(--radius-lg);
+    border-end-start-radius: var(--radius-lg);
+}
+
+.drama-sg-shot-table tr > :last-child {
+    border-inline-end: var(--stroke-1) solid var(--storyboard-row-border, var(--storyboard-row-outline));
+    border-start-end-radius: var(--radius-lg);
+    border-end-end-radius: var(--radius-lg);
+}
+
+.drama-sg-shot-table tr > * + * {
+    border-inline-start: var(--stroke-1) solid var(--storyboard-column-divider);
+}
+
+.drama-sg-shot-table thead {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+}
+
+.drama-sg-shot-table th {
+    padding: var(--space-3) var(--storyboard-rail);
+    background: var(--drama-sunken);
+    font-weight: 600;
+    color: var(--drama-muted);
+    text-align: center;
+}
+
+.drama-sg-shot-table th > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+}
+
+.drama-sg-shot-table th svg,
+.drama-sg-table-empty svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+}
+
+.drama-sg-shot-table tbody tr:hover {
+    --storyboard-row-border: var(--drama-line-strong);
+}
+
+.drama-sg-shot-table tbody tr[aria-current="true"] {
+    --storyboard-row-border: color-mix(in oklab, var(--workspace-accent) 55%, var(--drama-line));
+}
+
+.drama-sg-shot-table tbody tr.is-selected {
+    --storyboard-row-border: var(--workspace-accent);
+    --storyboard-row-surface: color-mix(in oklab, var(--workspace-accent-soft) 60%, var(--surface));
+}
+
+.drama-sg-table-cell,
+.drama-sg-table-video-cell,
+.drama-sg-table-reference-cell {
+    box-sizing: border-box;
+    height: var(--storyboard-row-height);
+}
+
+.drama-sg-table-cell {
+    padding: var(--storyboard-rail);
+    overflow: clip;
+    overflow-wrap: anywhere;
+    scrollbar-width: thin;
+}
+
+/* Only focused cells accept user scrolling; scrolling can chain to the page at either edge. */
+.drama-sg-table-cell:focus-within {
+    overflow: hidden auto;
+}
+
+.drama-sg-shot-table td.drama-sg-table-shot-group {
+    background: color-mix(in oklab, var(--drama-sunken) 70%, var(--storyboard-row-surface, var(--surface)));
+}
+
+.drama-sg-shot-table th.drama-sg-table-number-heading {
+    padding-inline: var(--space-1);
+}
+
+.drama-sg-shot-table td.drama-sg-table-number-cell {
+    padding: var(--storyboard-rail) var(--space-1);
+    text-align: center;
+    vertical-align: middle;
+}
+
+.drama-sg-table-number-cell .drama-seg-num {
+    display: inline-grid;
+    padding-inline: var(--space-1);
+    font-size: var(--fs-caption);
+}
+
+.drama-sg-table-segment-cell > .drama-sg-table-cell {
+    padding-inline: var(--space-3);
+}
+
+.drama-sg-shot-table-wrap:focus-visible,
+.drama-sg-table-cell:focus-visible,
+.drama-sg-table-video-empty:focus-visible {
+    outline: var(--stroke-1) solid var(--workspace-accent);
+    outline-offset: -2px;
+}
+
+.drama-sg-table-segment {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-height: 100%;
+}
+
+.drama-sg-table-segment .drama-sg-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.drama-sg-table-segment .drama-sg-title {
+    font-size: var(--fs-ui);
+    line-height: 1.35;
+    text-align: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.drama-sg-table-segment-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.drama-sg-table-segment-meta,
+.drama-sg-table-reference-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+    color: var(--drama-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.drama-sg-table-segment-meta {
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.drama-sg-table-frame {
+    flex: none;
+}
+
+.drama-sg-table-frame .drama-sg-inputs.is-compact .drama-sg-input.is-frame {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.drama-sg-table-frame .drama-sg-inputs.is-compact .drama-sg-thumb.is-frame {
+    width: 64px;
+    height: 40px;
+}
+
+.drama-sg-table-segment .drama-sg-foot {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: auto;
+}
+
+.drama-sg-table-segment .drama-sg-model {
+    flex: none;
+    max-width: 100%;
+    white-space: nowrap;
+}
+
+.drama-sg-table-segment .drama-sg-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.drama-sg-table-shots {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.drama-sg-table-shot-columns {
+    display: grid;
+    grid-template-columns: var(--storyboard-shot-columns);
+    align-items: start;
+    gap: var(--space-3);
+}
+
+/* Match the header and body gutters, including on platforms with classic scrollbars. */
+.drama-sg-table-shot-head > div,
+.drama-sg-table-shot-cell {
+    overflow: hidden;
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+}
+
+.drama-sg-table-shot-cell:focus-within {
+    overflow-y: auto;
+}
+
+.drama-sg-table-shot-head .drama-sg-table-shot-columns > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+}
+
+.drama-sg-table-shots li {
+    padding-block: var(--space-2);
+}
+
+.drama-sg-table-shots li + li {
+    border-top: var(--stroke-1) solid var(--drama-line);
+}
+
+.drama-sg-table-shot-header {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-1);
+}
+
+.drama-sg-shot-table .drama-sg-table-shot-number {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    color: var(--workspace-accent);
+}
+
+.drama-sg-table-shot-number:hover span {
+    text-decoration: underline;
+}
+
+.drama-sg-table-shot-duration {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: var(--drama-muted);
+}
+
+.drama-sg-table-shots p {
+    margin: 0;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.drama-sg-table-reference-head {
+    margin: var(--storyboard-rail) var(--storyboard-rail) var(--space-2);
+}
+.drama-sg-table-reference-head small {
+    font-size: var(--fs-micro);
+}
+
+.drama-sg-table-reference-cell .drama-sg-table-cell {
+    height: calc(2 * var(--storyboard-reference-height) + var(--storyboard-reference-gap));
+    padding-block: 0;
+}
+
+.drama-sg-table-reference-cell .drama-sg-inputs.is-compact {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: var(--storyboard-reference-height);
+    gap: var(--storyboard-reference-gap);
+}
+
+.drama-sg-table-reference-cell .drama-sg-input.is-frame {
+    display: none;
+}
+.drama-sg-table-reference-cell .drama-sg-input {
+    min-width: 0;
+}
+
+.drama-sg-table-reference-cell .drama-sg-inputs.is-compact .drama-sg-thumb.is-wide {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+}
+
+.drama-sg-table-video {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    height: calc(var(--storyboard-row-height) - 2 * var(--storyboard-rail));
+    margin: var(--storyboard-rail);
+}
+
+.drama-sg-table-video video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-md);
+    object-fit: contain;
+    background: var(--drama-sunken);
+}
+
+.drama-sg-table-video-empty,
+.drama-sg-table-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: 0;
+    padding: var(--space-2);
+    border: var(--stroke-1) dashed var(--drama-line);
+    border-radius: var(--radius-md);
+    background: var(--drama-sunken);
+    color: var(--drama-muted);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.drama-sg-table-video-empty {
+    flex-direction: column;
+}
+
+.drama-sg-table-video-label {
+    color: var(--drama-muted);
+    text-align: center;
+}

@@ -1450,14 +1450,6 @@
     font-weight: 600;
     line-height: 1.25;
 }
-.drama-ep-heading p {
-    margin-top: 8px;
-    font-size: var(--fs-tiny);
-    color: var(--drama-muted);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-}
 .drama-title-edit {
     display: grid;
     place-items: center;
@@ -5987,19 +5979,27 @@
 .drama-body.is-covered .drama-scroll *::after {
     animation-play-state: paused !important;
 }
-/* 集头部压成一行：集号、标题、镜数与进度在左，视图切换在右，把高度留给分镜。 */
+/* 集信息、视图切换与进度从左到右排列，画布操作留在右侧。 */
 .drama-ep-header {
     flex-wrap: nowrap;
+    justify-content: flex-start;
     align-items: center;
     gap: 12px;
     padding: 8px 20px;
 }
 .drama-ep-heading {
     display: flex;
-    flex: 1;
     align-items: center;
     gap: 12px;
     overflow: hidden;
+}
+.drama-ep-tabs {
+    flex: none;
+    white-space: nowrap;
+}
+.drama-ep-canvas-action {
+    flex: none;
+    margin-inline-start: auto;
 }
 .drama-ep-heading .drama-eyebrow {
     flex: none;
@@ -6012,11 +6012,14 @@
     white-space: nowrap;
     text-overflow: ellipsis;
 }
-.drama-ep-heading p {
+.drama-ep-progress {
+    display: flex;
     flex: none;
     align-items: center;
-    margin-top: 0;
-    flex-wrap: nowrap;
+    gap: var(--space-3);
+    margin: 0;
+    font-size: var(--fs-tiny);
+    color: var(--drama-muted);
     white-space: nowrap;
 }
 .drama-ep-heading .drama-title-editor {
@@ -6024,8 +6027,20 @@
     min-width: 0;
 }
 @media (max-width: 960px) {
-    .drama-ep-heading p {
+    .drama-ep-progress {
         display: none;
+    }
+    .drama-ep-tabs .drama-tab {
+        gap: var(--space-1);
+        padding-inline: var(--space-2);
+    }
+}
+@media (max-width: 720px) {
+    .drama-ep-header {
+        flex-wrap: wrap;
+    }
+    .drama-ep-heading {
+        flex-basis: 100%;
     }
 }
 /* 提示条压成单行：标题与说明同排，说明过长时截断，悬停看全文。

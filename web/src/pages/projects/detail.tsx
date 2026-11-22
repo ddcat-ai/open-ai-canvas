@@ -607,13 +607,8 @@ export default function DramaStudioPage() {
                                                 <Pencil className="size-3.5" />
                                             </button>
                                         </h2>
-                                        <p>
-                                            <span>{episodeRow.shotCount} 镜</span>
-                                            {episodeRow.durationMs ? <span>{formatDuration(episodeRow.durationMs)}</span> : null}
-                                            <StagePips episode={episodeRow} size="md" />
-                                        </p>
                                     </div>
-                                    <div className="drama-tabs" role="tablist" aria-label="视图">
+                                    <div className="drama-tabs drama-ep-tabs" role="tablist" aria-label="视图">
                                         <button type="button" role="tab" className="drama-tab" aria-selected={tab === "script"} onClick={() => setParams({ tab: "script" })}>
                                             <ScrollText className="size-3.5" />
                                             剧本
@@ -627,7 +622,13 @@ export default function DramaStudioPage() {
                                             成片
                                         </button>
                                     </div>
+                                    <p className="drama-ep-progress">
+                                        <span>{episodeRow.shotCount} 镜</span>
+                                        {episodeRow.durationMs ? <span>{formatDuration(episodeRow.durationMs)}</span> : null}
+                                        <StagePips episode={episodeRow} size="md" />
+                                    </p>
                                     <Button
+                                        className="drama-ep-canvas-action"
                                         size="small"
                                         icon={<Brush className="size-3.5" />}
                                         disabled={!episodeRow.stats.segments}
