@@ -6,9 +6,9 @@ WaveSpeed 图片编辑协议插件（异步任务式）：把 WaveSpeed 平台�
 
 | 端点 ID | 模型 | 说明 |
 | --- | --- | --- |
-| `openai/gpt-image-2.5-sunburst/edit` | GPT Image 2.5 Sunburst | 高质量编辑，支持多图参考（≤16） |
-| `openai/gpt-image-2.5-flare/edit` | GPT Image 2.5 Flare | 快速编辑，支持多图参考（≤16） |
-| `bytedance/seedream-v5.0-pro/edit` | Seedream 5.0 Pro | 编辑与图层分解（≤10 图） |
+| `openai/gpt-image-2.6-sunburst/edit` | GPT Image 2.6 Sunburst | 高质量编辑，支持多图参考（≤16） |
+| `openai/gpt-image-2.6-flare/edit` | GPT Image 2.6 Flare | 快速编辑，支持多图参考（≤16） |
+| `bytedance/seedream-v5.5/edit` | Seedream 5.5 | 编辑与图层分解（≤10 图） |
 | `google/nano-banana-2/edit` | Nano Banana 2 | 编辑（≤10 图） |
 | `google/nano-banana-2-lite/edit` | Nano Banana 2 Lite | 轻量编辑 |
 | `google/nano-banana-pro/edit` | Nano Banana Pro | 编辑 |
@@ -18,7 +18,7 @@ WaveSpeed 图片编辑协议插件（异步任务式）：把 WaveSpeed 平台�
 | 端点 ID | 模型 | 说明 |
 | --- | --- | --- |
 | `bria/remove-background` | BRIA | 去背景 |
-| `bytedance/seedream-v5.0-pro/layer-decomposition` | Seedream 5.0 Pro | 图层拆分 |
+| `bytedance/seedream-v5.5/layer-decomposition` | Seedream 5.5 | 图层拆分 |
 
 ## 使用方式
 

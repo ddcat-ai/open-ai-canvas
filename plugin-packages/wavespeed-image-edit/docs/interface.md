@@ -7,7 +7,7 @@
 - 能力：`image`。
 - 默认 Base URL：`https://api.wavespeed.ai/api/v3`。
 - 鉴权驱动：`bearer`。
-- 创建：`POST /{{model}}`（model 为 WaveSpeed 图片编辑端点，如 `openai/gpt-image-2.5-sunburst/edit`）。
+- 创建：`POST /{{model}}`（model 为 WaveSpeed 图片编辑端点，如 `openai/gpt-image-2.6-sunburst/edit`）。
 - 生命周期：异步任务（create 返回 task id，poll 轮询结果）。
 
 ## 配置字段
@@ -79,7 +79,7 @@ WaveSpeed 异步任务响应结构：
 
 ## 兼容边界
 
-模型字段由所选端点决定：编辑类端点接受 `prompt + images[]`；图层分解端点（`bytedance/seedream-v5.0-pro/layer-decomposition`）接受 `image + prompt`（用 `providerOptions` 传额外字段）；去背景端点（`bria/remove-background`）接受 `image`。宿主通过 `request.images` 统一提供源图，模型字段差异由调用方通过 providerOptions 补充。
+模型字段由所选端点决定：编辑类端点接受 `prompt + images[]`；图层分解端点（`bytedance/seedream-v5.5/layer-decomposition`）接受 `image + prompt`（用 `providerOptions` 传额外字段）；去背景端点（`bria/remove-background`）接受 `image`。宿主通过 `request.images` 统一提供源图，模型字段差异由调用方通过 providerOptions 补充。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -91,7 +91,7 @@ WaveSpeed 异步任务响应结构：
   "apiVersion": "yingce.plugin/v2",
   "id": "wavespeed-image-edit",
   "name": "WaveSpeed Image Edit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "WaveSpeed / 影策",
   "description": "WaveSpeed 图片编辑协议插件：GPT Image 2.5 / Seedream 5.0 Pro / Nano Banana 的 Image to Image 编辑与图层分解、去背景。",
   "permissions": [
@@ -135,7 +135,7 @@ WaveSpeed 异步任务响应结构：
             "type": "string",
             "required": true,
             "mapping": "model",
-            "description": "WaveSpeed 图片编辑模型端点 ID，如 openai/gpt-image-2.5-sunburst/edit、bytedance/seedream-v5.0-pro/edit、google/nano-banana-2/edit。"
+            "description": "WaveSpeed 图片编辑模型端点 ID，如 openai/gpt-image-2.6-sunburst/edit、bytedance/seedream-v5.5/edit、google/nano-banana-2/edit。"
           },
           {
             "name": "prompt",
