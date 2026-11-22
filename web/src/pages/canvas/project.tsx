@@ -10,7 +10,7 @@ import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
 import { createCanvasStateWriter } from "@/lib/canvas/canvas-editor-state";
 import { canCancelGenerationTask } from "@/lib/generation-task-display";
 import { generationErrorMessage } from "@/lib/generation-error";
-import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -710,6 +710,9 @@ function CanvasViewportPage() {
         handleCanvasDoubleClick,
         handleViewportChange,
         handleViewportPreviewChange,
+        beginNodeDragViewport,
+        previewNodeDragViewport,
+        commitNodeDragViewport,
         previewViewport,
         screenToCanvas,
         setZoomScale,
@@ -1294,6 +1297,9 @@ function CanvasViewportPage() {
         selectedNodeIdsRef,
         historyPausedRef,
         screenToCanvas,
+        beginNodeDragViewport,
+        previewNodeDragViewport,
+        commitNodeDragViewport,
         setNodes,
         setSelectedNodeIds,
         setSelectedConnectionId,
@@ -1583,11 +1589,8 @@ function CanvasViewportPage() {
         });
     }, [mentionReferencesByNodeId, setNodes]);
     const dialogNode = dialogNodeId ? nodeById.get(dialogNodeId) || null : null;
-    // dragPreview is published on the same pointer-down frame as isNodeDragging.
-    // Treat either signal as moving so floating editors disappear before the
-    // first preview transform is painted and never affect drag layout.
+    // Hide the node controls for the full drag preview, including edge auto-pan.
     const isCanvasNodeMoving = isNodeDragging || Boolean(dragPreview?.nodeIds.size);
-    const deferDragOverlays = useDeferredValue(isCanvasNodeMoving);
     const dramaAdoptNode = drama.adoptNodeId ? nodeById.get(drama.adoptNodeId) || null : null;
     const comparedImages = comparedImageIds?.map((id) => nodeById.get(id)).filter((node): node is CanvasNodeData => Boolean(node)) || [];
     const selectionImages = nodes.filter((node) => selectedNodeIds.has(node.id) && node.type === CanvasNodeType.Image && Boolean(node.metadata?.content || node.metadata?.storageKey));
@@ -3069,6 +3072,7 @@ function CanvasViewportPage() {
                                         {(gestureNodes, visibleDisplayConnections) => (
                                             <CanvasViewport
                                                 interactive
+                                                wheelMode="scroll"
                                                 containerRef={containerRef}
                                                 viewport={viewport}
                                                 appearance={canvasAppearance}
@@ -3299,13 +3303,13 @@ function CanvasViewportPage() {
                             !(dialogNode.metadata?.workflowKind === "character" && (dialogNode.metadata.characterAssetId || dialogNode.metadata.officialAssetId)) &&
                             !dialogNode.metadata?.previsSceneId &&
                             !selectionBox &&
-                            !deferDragOverlays &&
                             !isCanvasNodeMoving ? (
                                 <CanvasNodePanelOverlay
                                     node={dialogNode}
                                     viewport={viewport}
                                     containerRef={containerRef}
                                     allowOverflow={dialogNode.type !== CanvasNodeType.Config}
+                                    anchorBelow={dialogNode.type === CanvasNodeType.Text}
                                     dragOffset={dragPreview?.nodeIds.has(dialogNode.id) ? { x: dragPreview.x, y: dragPreview.y } : null}
                                     isDragging={isNodeDragging && Boolean(dragPreview?.nodeIds.has(dialogNode.id))}
                                 >
@@ -3376,8 +3380,9 @@ function CanvasViewportPage() {
                                 onRotateImage={(node, direction) => void rotateImageNode(node.id, direction)}
                                 onCreateEditCopy={(node) => duplicateNode(node.id, "linked-copy")}
                                 rotatingImage={rotatingNodeId !== null}
-                                node={isCanvasNodeMoving || deferDragOverlays || nodeImageSettingsOpen || emotionNodeId || angleNodeId ? null : toolbarNode}
+                                node={isCanvasNodeMoving || selectionBox || nodeImageSettingsOpen || emotionNodeId || angleNodeId ? null : toolbarNode}
                                 workspaceMode={workspaceMode}
+                                followNodeOutsideViewport
                                 viewport={viewport}
                                 containerRef={containerRef}
                                 onKeep={keepNodeToolbar}
@@ -3456,6 +3461,8 @@ function CanvasViewportPage() {
                                         scale={viewport.k}
                                         containerRef={containerRef}
                                         onScaleChange={setZoomScale}
+                                        onZoomIn={zoomCanvasIn}
+                                        onZoomOut={zoomCanvasOut}
                                         onFitContent={fitCanvasContent}
                                         onAutoArrange={autoArrangeCanvasNodes}
                                         hideNodeConnections={hideNodeConnections}

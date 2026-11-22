@@ -9,6 +9,8 @@ import "./canvas-zoom-controls.css";
 type CanvasZoomControlsProps = {
     scale: number;
     onScaleChange: (scale: number) => void;
+    onZoomIn?: () => void;
+    onZoomOut?: () => void;
     onFitContent: () => void;
     onAutoArrange?: () => void;
     hideNodeConnections?: boolean;
@@ -24,7 +26,20 @@ const QUICK_ZOOM_LEVELS = [0.25, 0.5, 1, 2] as const;
 const MAIN_TOOLBAR_SHIFT = "--canvas-main-toolbar-shift";
 const MAIN_TOOLBAR_MAX_WIDTH = "--canvas-main-toolbar-max-width";
 
-export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoArrange, hideNodeConnections = false, onHideNodeConnectionsChange, isMiniMapOpen, onToggleMiniMap, onOpenShortcuts, containerRef }: CanvasZoomControlsProps) {
+export function CanvasZoomControls({
+    scale,
+    onScaleChange,
+    onZoomIn,
+    onZoomOut,
+    onFitContent,
+    onAutoArrange,
+    hideNodeConnections = false,
+    onHideNodeConnectionsChange,
+    isMiniMapOpen,
+    onToggleMiniMap,
+    onOpenShortcuts,
+    containerRef,
+}: CanvasZoomControlsProps) {
     const rootRef = useRef<HTMLDivElement>(null);
     const liveScaleRef = useRef(scale);
     const rangeRef = useRef<HTMLInputElement>(null);
@@ -196,11 +211,11 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
                             buttons[next]?.focus();
                         }}
                     >
-                        <button type="button" aria-label="放大画布" onClick={() => commitScale(liveScaleRef.current + 0.1)}>
+                        <button type="button" aria-label="放大画布" onClick={onZoomIn ?? (() => commitScale(liveScaleRef.current + 0.1))}>
                             <Plus />
                             放大<kbd>{modifier}+</kbd>
                         </button>
-                        <button type="button" aria-label="缩小画布" onClick={() => commitScale(liveScaleRef.current - 0.1)}>
+                        <button type="button" aria-label="缩小画布" onClick={onZoomOut ?? (() => commitScale(liveScaleRef.current - 0.1))}>
                             <Minus />
                             缩小<kbd>{modifier}−</kbd>
                         </button>

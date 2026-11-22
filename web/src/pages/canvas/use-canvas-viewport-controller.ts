@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type Dispatch, type MouseEvent, type Se
 
 import { isNodeHiddenByCollapsedFrame } from "@/lib/canvas/canvas-frame";
 import { isHiddenBatchChild } from "@/lib/canvas/canvas-project-domain";
-import { applyCanvasLiveViewport, setCanvasGestureActive } from "@/lib/canvas/canvas-live-viewport";
+import { applyCanvasLiveViewport, setCanvasGestureActive, settleCanvasViewportInput } from "@/lib/canvas/canvas-live-viewport";
 import { getCanvasNodesBounds, viewportAtScale, viewportForBounds, type CanvasViewportSize } from "@/lib/canvas/canvas-viewport";
 import { CanvasNodeType, type CanvasNodeData, type ContextMenuState, type Position, type ViewportTransform } from "@/types/canvas";
 import { useCanvasViewportTransition } from "./use-canvas-viewport-transition";
@@ -87,7 +87,28 @@ export function useCanvasViewportController({
         [containerRef],
     );
 
-    const { cancelViewportTransition, transitionViewportTo } = useCanvasViewportTransition(viewportRef, previewViewport, commitViewport);
+    const { cancelViewportTransition, transitionViewportTo: animateViewportTo } = useCanvasViewportTransition(viewportRef, previewViewport, commitViewport);
+    const nodeDragViewportPreviewedRef = useRef(false);
+    const zoomTargetScaleRef = useRef<number | null>(null);
+
+    const cancelCameraTransition = useCallback(() => {
+        cancelViewportTransition();
+        zoomTargetScaleRef.current = null;
+        if (commitTimerRef.current !== null) {
+            clearTimeout(commitTimerRef.current);
+            commitTimerRef.current = null;
+        }
+    }, [cancelViewportTransition]);
+
+    const transitionViewportTo = useCallback<typeof animateViewportTo>(
+        (target, options) => {
+            if (containerRef.current?.dataset.canvasNodeDragging === "true") return;
+            settleCanvasViewportInput(containerRef.current);
+            cancelCameraTransition();
+            animateViewportTo(target, options);
+        },
+        [animateViewportTo, cancelCameraTransition, containerRef],
+    );
 
     // Agent 镜头跟随：Agent 新建或操作节点后，平滑飞到这些节点并轻闪提示。
     // 同一批 SSE 增量会连续到达，先短暂合并再移动一次；用户刚操作过视口或正在拖拽/输入时不抢镜头。
@@ -281,45 +302,88 @@ export function useCanvasViewportController({
     );
 
     const setZoomScale = useCallback(
-        (scale: number) => {
-            cancelViewportTransition();
+        (scale: number, animate = false) => {
+            if (containerRef.current?.dataset.canvasNodeDragging === "true") return;
+            lastUserViewportInputRef.current = performance.now();
             const next = viewportAtScale(viewportRef.current, size, scale);
-            previewViewport(next);
-            if (commitTimerRef.current) clearTimeout(commitTimerRef.current);
-            commitTimerRef.current = setTimeout(() => commitViewport(viewportRef.current), 120);
+            if (animate) {
+                transitionViewportTo(next, { duration: 150, onComplete: () => (zoomTargetScaleRef.current = null) });
+                if (next !== viewportRef.current) zoomTargetScaleRef.current = next.k;
+            } else {
+                settleCanvasViewportInput(containerRef.current);
+                cancelCameraTransition();
+                previewViewport(next);
+                commitTimerRef.current = setTimeout(() => commitViewport(viewportRef.current), 120);
+            }
             setContextMenu(null);
         },
-        [cancelViewportTransition, commitViewport, previewViewport, setContextMenu, size, viewportRef],
+        [cancelCameraTransition, commitViewport, containerRef, previewViewport, setContextMenu, size, transitionViewportTo, viewportRef],
     );
 
-    const zoomCanvasIn = useCallback(() => setZoomScale(viewportRef.current.k + 0.1), [setZoomScale, viewportRef]);
-    const zoomCanvasOut = useCallback(() => setZoomScale(viewportRef.current.k - 0.1), [setZoomScale, viewportRef]);
+    const zoomCanvasIn = useCallback(() => setZoomScale((zoomTargetScaleRef.current ?? viewportRef.current.k) + 0.1, true), [setZoomScale, viewportRef]);
+    const zoomCanvasOut = useCallback(() => setZoomScale((zoomTargetScaleRef.current ?? viewportRef.current.k) - 0.1, true), [setZoomScale, viewportRef]);
 
-    const zoomToActualSize = useCallback(() => {
-        transitionViewportTo(viewportAtScale(viewportRef.current, size, 1));
-    }, [size, transitionViewportTo, viewportRef]);
+    const zoomToActualSize = useCallback(() => setZoomScale(1, true), [setZoomScale]);
+
+    const beginNodeDragViewport = useCallback(() => {
+        lastUserViewportInputRef.current = performance.now();
+        settleCanvasViewportInput(containerRef.current);
+        cancelCameraTransition();
+        nodeDragViewportPreviewedRef.current = false;
+        commitViewport(viewportRef.current);
+    }, [cancelCameraTransition, commitViewport, containerRef, viewportRef]);
+
+    const previewNodeDragViewport = useCallback(
+        (next: ViewportTransform) => {
+            lastUserViewportInputRef.current = performance.now();
+            nodeDragViewportPreviewedRef.current = true;
+            previewViewport(next);
+        },
+        [previewViewport],
+    );
+
+    const commitNodeDragViewport = useCallback(() => {
+        lastUserViewportInputRef.current = performance.now();
+        settleCanvasViewportInput(containerRef.current);
+        if (!nodeDragViewportPreviewedRef.current) return;
+        nodeDragViewportPreviewedRef.current = false;
+        commitViewport(viewportRef.current);
+    }, [commitViewport, containerRef, viewportRef]);
+
+    const previewMinimapViewport = useCallback(
+        (next: ViewportTransform) => {
+            if (containerRef.current?.dataset.canvasNodeDragging === "true") return;
+            lastUserViewportInputRef.current = performance.now();
+            settleCanvasViewportInput(containerRef.current);
+            cancelCameraTransition();
+            previewViewport(next);
+        },
+        [cancelCameraTransition, containerRef, previewViewport],
+    );
 
     // 这两个入口只由用户的滚轮、拖拽和小地图触发；记录时间供 Agent 镜头跟随避让。
     const handleViewportChange = useCallback(
         (next: ViewportTransform) => {
             lastUserViewportInputRef.current = performance.now();
-            cancelViewportTransition();
+            cancelCameraTransition();
             commitViewport(next);
             setContextMenu(null);
         },
-        [cancelViewportTransition, commitViewport, setContextMenu],
+        [cancelCameraTransition, commitViewport, setContextMenu],
     );
 
     const handleViewportPreviewChange = useCallback(
         (next: ViewportTransform) => {
             lastUserViewportInputRef.current = performance.now();
-            cancelViewportTransition();
+            cancelCameraTransition();
             viewportRef.current = next;
         },
-        [cancelViewportTransition, viewportRef],
+        [cancelCameraTransition, viewportRef],
     );
 
     return {
+        beginNodeDragViewport,
+        commitNodeDragViewport,
         fitCanvasContent,
         fitCanvasSelection,
         focusCanvasImageNode,
@@ -328,7 +392,8 @@ export function useCanvasViewportController({
         handleCanvasDoubleClick,
         handleViewportChange,
         handleViewportPreviewChange,
-        previewViewport,
+        previewNodeDragViewport,
+        previewViewport: previewMinimapViewport,
         screenToCanvas,
         setZoomScale,
         zoomCanvasIn,

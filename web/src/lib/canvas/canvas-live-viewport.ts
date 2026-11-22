@@ -5,6 +5,17 @@ export const CANVAS_GRAPHICS_VIEWPORT_PREVIEW_EVENT = "canvas:graphics-viewport-
 export const CANVAS_SELECTION_PREVIEW_EVENT = "canvas:selection-preview";
 export const CANVAS_NODE_DRAG_PREVIEW_EVENT = "canvas:node-drag-preview";
 const CANVAS_INTERACTION_CHANGE_EVENT = "canvas:interaction-change";
+const CANVAS_SETTLE_VIEWPORT_INPUT_EVENT = "canvas:settle-viewport-input";
+
+/** Settle native wheel input before another gesture or camera command takes over. */
+export function settleCanvasViewportInput(container: HTMLDivElement | null) {
+    container?.dispatchEvent(new Event(CANVAS_SETTLE_VIEWPORT_INPUT_EVENT));
+}
+
+export function subscribeCanvasViewportInputSettle(container: HTMLDivElement, listener: () => void) {
+    container.addEventListener(CANVAS_SETTLE_VIEWPORT_INPUT_EVENT, listener);
+    return () => container.removeEventListener(CANVAS_SETTLE_VIEWPORT_INPUT_EVENT, listener);
+}
 
 export function setCanvasGestureActive(container: HTMLDivElement | null, attribute: "canvasNodeDragging" | "canvasViewportInteracting", active: boolean) {
     if (!container || (container.dataset[attribute] === "true") === active) return;

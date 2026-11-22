@@ -1,7 +1,8 @@
+import { settingsPath } from "@/lib/settings-navigation";
 import { workspacePath } from "@/lib/workspace-routes";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CopyPlus, Focus, FolderKanban, Home, LayoutGrid, Workflow, LoaderCircle, Menu, PanelsLeftBottom, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CopyPlus, Focus, FolderKanban, Home, LayoutGrid, Workflow, LoaderCircle, Menu, PanelsLeftBottom, Pencil, Plus, Redo2, Save, Search, Settings, Share2, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 
@@ -100,7 +101,6 @@ export function CanvasProjectHeading({
                                 onClick: () => onViewChange(view === "canvas" ? "assets" : "canvas"),
                             },
                             { type: "divider" },
-                            { key: "home", icon: <Home className="size-4" />, label: <Link to={workspacePath("/")}>主页</Link> },
                             { key: "projects", icon: <LayoutGrid className="size-4" />, label: <Link to={workspacePath("/canvas")}>画布</Link> },
                             { type: "divider" },
                             { key: "new", icon: <Plus className="size-4" />, label: "新建画布", onClick: onCreateProject },
@@ -115,10 +115,15 @@ export function CanvasProjectHeading({
                         ],
                     }}
                 >
-                    <button type="button" className="canvas-topbar-action grid size-9 place-items-center rounded-full" style={{ color: theme.node.text }} aria-label="打开画布菜单">
+                    <button type="button" className="canvas-topbar-action grid size-9 shrink-0 place-items-center rounded-full" style={{ color: theme.node.text }} aria-label="打开画布菜单">
                         <Menu className="size-5" />
                     </button>
                 </Dropdown>
+            </CanvasTopBarTooltip>
+            <CanvasTopBarTooltip label="主页">
+                <Link to={workspacePath("/")} className="canvas-topbar-action grid size-9 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2" aria-label="主页">
+                    <Home className="size-4" />
+                </Link>
             </CanvasTopBarTooltip>
 
             <div ref={titleRef} className="canvas-topbar-title-block flex min-w-0 flex-auto flex-col items-start overflow-hidden">
@@ -199,7 +204,10 @@ export function CanvasTopBar({ projectHeading, view, onViewChange, onOpenSearch,
 
                 <CanvasViewSwitch view={view} onChange={onViewChange} dockStyle={dockStyle} theme={theme} />
 
-                <div className="canvas-topbar-cluster canvas-topbar-tools-cluster pointer-events-auto col-start-3 row-start-1 flex items-center gap-2 justify-self-end" style={dockStyle}>
+                <div
+                    className="canvas-topbar-cluster canvas-topbar-tools-cluster pointer-events-auto col-start-3 row-start-1 flex flex-wrap items-center justify-end gap-0.5 self-start justify-self-end sm:gap-2 md:flex-nowrap md:self-center"
+                    style={dockStyle}
+                >
                     {/* <CanvasTopBarTooltip label="搜索画布节点">
                         <Button
                             type="text"
@@ -264,6 +272,11 @@ export function CanvasTopBar({ projectHeading, view, onViewChange, onOpenSearch,
                             <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Share2 className="size-4" />} onClick={onShare} aria-label="分享画布" />
                         </CanvasTopBarTooltip>
                     )}
+                    <CanvasTopBarTooltip label="设置">
+                        <Link to={settingsPath()} className="canvas-topbar-action grid size-9 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2" style={{ color: theme.node.text }} aria-label="设置">
+                            <Settings className="size-4" />
+                        </Link>
+                    </CanvasTopBarTooltip>
                 </div>
             </div>
             <CanvasShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

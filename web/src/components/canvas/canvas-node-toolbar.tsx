@@ -30,6 +30,7 @@ import { useCanvasNodeResizeMotion } from "./canvas-node-resize-motion";
 type CanvasNodeToolbarProps = {
     node: CanvasNodeData | null;
     viewport: ViewportTransform;
+    followNodeOutsideViewport?: boolean;
     containerRef: RefObject<HTMLDivElement | null>;
     onKeep: (nodeId: string) => void;
     onLeave: () => void;
@@ -105,6 +106,7 @@ type ToolbarTool = {
 export function CanvasNodeToolbar({
     node,
     viewport,
+    followNodeOutsideViewport = false,
     containerRef,
     onKeep,
     onLeave,
@@ -214,8 +216,9 @@ export function CanvasNodeToolbar({
             const preferredAnchorLeft = Math.min(Math.max(preferredLeft, availableBounds.left + halfToolbar), Math.max(availableBounds.left + halfToolbar, availableBounds.right - halfToolbar));
             const above = nodeTop - 30;
             const preferredAnchorTop = Math.max(availableBounds.top + toolbarHeight, Math.min(above, availableBounds.bottom));
-            // 面板在定位时发布矩形；这里不读取 DOM，可在实时平移和尺寸收敛后继续避让。
-            const { left, top } = avoidCanvasNodePanels({ left: preferredAnchorLeft, top: preferredAnchorTop }, { width: toolbarWidth, height: toolbarHeight }, availableBounds, canvasNodePanelBounds(container));
+            const { left, top } = followNodeOutsideViewport
+                ? { left: preferredLeft, top: above }
+                : avoidCanvasNodePanels({ left: preferredAnchorLeft, top: preferredAnchorTop }, { width: toolbarWidth, height: toolbarHeight }, availableBounds, canvasNodePanelBounds(container));
             if (toolbarRef.current) {
                 toolbarRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`;
                 return;
@@ -271,7 +274,7 @@ export function CanvasNodeToolbar({
             unsubscribeDrag();
             window.removeEventListener("resize", measure);
         };
-    }, [anchor === null, containerRef, layoutLevel, node, resizeMotion, viewport.k, viewport.x, viewport.y]);
+    }, [anchor === null, containerRef, followNodeOutsideViewport, layoutLevel, node, resizeMotion, viewport.k, viewport.x, viewport.y]);
 
     if (!node || !anchor) return null;
 
