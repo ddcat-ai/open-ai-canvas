@@ -1423,39 +1423,8 @@ func (r *Repository) RetryDramaResultJobs(projectID string) error {
 	})
 }
 
-// ReopenDramaSegmentVideoJob 把生成任务已成功、回写失败的段视频作业重新置为运行中，
-// 调度循环会重放同一任务结果；段状态同步改回生成中。返回作业是否仍满足重放条件。
-func (r *Repository) ReopenDramaSegmentVideoJob(jobID, segmentID string) (bool, error) {
-	reopened := false
-	err := r.db.Transaction(func(tx *gorm.DB) error {
-		now := time.Now()
-		result := tx.Model(&model.DramaJob{}).
-			Where("id = ? AND shot_id = ? AND kind = ? AND status = ? AND task_id IN (?)", jobID, segmentID, model.DramaJobSegmentVideo, model.DramaJobFailed, tx.Model(&model.Task{}).Select("id").Where("status = ?", model.TaskStatusSucceeded)).
-			Updates(map[string]any{"status": model.DramaJobRunning, "error": "", "finished_at": nil, "updated_at": now})
-		if result.Error != nil || result.RowsAffected == 0 {
-			return result.Error
-		}
-		segment := tx.Model(&model.DramaSegment{}).Where("id = ? AND video_status = ?", segmentID, model.DramaMediaFailed).Updates(map[string]any{"video_status": model.DramaMediaRunning, "video_error": "", "updated_at": now})
-		if segment.Error != nil {
-			return segment.Error
-		}
-		if segment.RowsAffected == 0 {
-			// 段状态已被并发操作改变（例如用户刚点了重新生成），放弃重放。
-			return errReopenRaced
-		}
-		reopened = true
-		return nil
-	})
-	if errors.Is(err, errReopenRaced) {
-		return false, nil
-	}
-	return reopened, err
-}
-
-var errReopenRaced = errors.New("drama segment changed during reopen")
-
 func (r *Repository) RecentDramaSegmentJobs(projectID, episodeID string) ([]model.DramaJob, error) {
 	var jobs []model.DramaJob
-	err := r.db.Where("project_id = ? AND episode_id = ? AND kind IN ?", projectID, episodeID, []string{model.DramaJobSegmentPrompt, model.DramaJobSegmentVideo}).Order("created_at desc").Find(&jobs).Error
+	err := r.db.Where("project_id = ? AND episode_id = ? AND kind IN ?", projectID, episodeID, []string{model.DramaJobSegmentPrompt, model.DramaJobSegmentVideo}).Order("created_at desc, id desc").Find(&jobs).Error
 	return jobs, err
 }

@@ -870,7 +870,15 @@ func (s *Service) fillDramaSegmentViews(projectID string, p *model.DramaProducti
 			}
 			if job.Kind == model.DramaJobSegmentVideo && view.VideoJob == nil {
 				view.VideoJob = &j
-				view.VideoReprocessable = view.VideoStatus == model.DramaMediaFailed && view.VideoResourceID != "" && dramaVideoJobReplayable(job)
+				if view.VideoResourceID != "" && view.TailFrameResourceID == "" {
+					var payload dramaRevisionPayload
+					if json.Unmarshal([]byte(job.PayloadJSON), &payload) == nil && payload.Revision == view.Revision {
+						repairing := view.VideoStatus == model.DramaMediaFailed && job.Status == model.DramaJobFailed && payload.TailRepair == repository.DramaTailRepairPending
+						extracting := view.VideoStatus == model.DramaMediaRunning && job.Status == model.DramaJobRunning && dramaVideoTaskSucceeded(job)
+						view.VideoTailProcessing = repairing || extracting
+						view.VideoReprocessable = !repairing && view.VideoStatus == model.DramaMediaFailed && dramaVideoJobReplayable(job, payload)
+					}
+				}
 			}
 		}
 	}

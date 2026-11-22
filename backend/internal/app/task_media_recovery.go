@@ -268,8 +268,12 @@ func (s *Service) materializeTaskMedia(ctx context.Context, task *model.Task, co
 			return nil, err
 		}
 		if path := s.mediaTempPath(stagedName); path != "" {
-			if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
-				_ = s.log(task.UserID, task.ID, "warn", "清理作品暂存文件失败", "")
+			retained := index == 0 && checkpoint.Mode == "video" && task.ProjectID != "" && resource.Provider == volcengineTOSProvider &&
+				s.retainDramaTailFile(task, resource, path)
+			if !retained {
+				if removeErr := removeStagingFile(path); removeErr != nil {
+					_ = s.log(task.UserID, task.ID, "warn", "清理作品暂存文件失败", "")
+				}
 			}
 		}
 		url := resourceFileURL(resource.ID)

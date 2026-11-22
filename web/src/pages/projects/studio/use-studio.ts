@@ -31,7 +31,9 @@ export function useDramaEpisode(projectId: string, episodeId: string, active: bo
         refetchInterval: (query) => {
             const detail = query.state.data;
             if (detail?.composeJob?.status === "queued" || detail?.composeJob?.status === "running") return 2_500;
-            if (!active || !detail) return false;
+            if (detail?.segments?.some((segment) => segment.videoTailProcessing)) return 2_500;
+            if (!detail) return false;
+            if (!active) return detail.segments?.some((segment) => segment.videoReprocessable) ? 20_000 : false;
             const writing = detail.segments?.some((segment) => segment.promptStatus === "queued" || segment.promptStatus === "running");
             return detail.jobs.length || writing || detail.episode.stage !== "done" ? 2_500 : false;
         },

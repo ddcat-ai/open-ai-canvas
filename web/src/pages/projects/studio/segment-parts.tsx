@@ -21,6 +21,7 @@ export function videoWaitLabel(wait: string) {
 
 /** 剧情段当前处于哪一步，以及用户下一步该做什么。detail 是需要悬停查看的完整原因。 */
 export function segmentState(segment: DramaSegment): { tone: SegmentTone; label: string; detail?: string } {
+    if (segment.videoTailProcessing) return { tone: "busy", label: "视频已保存，正在提取尾帧" };
     if (segment.promptStatus === "review") return { tone: "blocked", label: "AI 新稿待采用", detail: segment.promptError };
     if (segment.promptStatus === "conflict") return { tone: "blocked", label: "提示词待核对", detail: segment.promptError };
     const writing = segment.promptStatus === "queued" || segment.promptStatus === "running";
@@ -69,7 +70,7 @@ export function SegmentStatus({ segment }: { segment: DramaSegment }) {
 }
 
 export function SegmentVideo({ segment, aspectRatio, className = "", previewResourceId }: { segment: DramaSegment; aspectRatio: string; className?: string; previewResourceId?: string }) {
-    const viewable = segment.videoStatus === "ready" || segment.videoStatus === "stale" || segment.videoStatus === "failed";
+    const viewable = segment.videoTailProcessing || segment.videoStatus === "ready" || segment.videoStatus === "stale" || segment.videoStatus === "failed";
     const resourceId = previewResourceId || (viewable ? segment.videoResourceId : undefined);
     const url = useResourceMediaUrl(resourceId, "playback");
     const state = segmentState(segment);

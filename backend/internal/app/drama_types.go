@@ -620,8 +620,9 @@ type DramaSegmentView struct {
 	VideoSeconds int    `json:"videoSeconds,omitempty"`
 	VideoError   string `json:"videoError,omitempty"`
 	// VideoReprocessable：视频已生成并入库，只是结果回写（如抽尾帧）失败；可重新处理已有视频，不重新生成。
-	VideoReprocessable bool             `json:"videoReprocessable,omitempty"`
-	VideoModel         DramaModelChoice `json:"videoModel"`
+	VideoReprocessable  bool             `json:"videoReprocessable,omitempty"`
+	VideoTailProcessing bool             `json:"videoTailProcessing,omitempty"`
+	VideoModel          DramaModelChoice `json:"videoModel"`
 	// ReferenceMode：auto 按本段镜头自动取参考图；custom 为用户指定的参考图。
 	ReferenceMode      string `json:"referenceMode"`
 	AudioReferenceMode string `json:"audioReferenceMode"`

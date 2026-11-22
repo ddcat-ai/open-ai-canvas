@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -89,9 +90,11 @@ func (s *Service) newMediaTemp(limit int64) (*os.File, error) {
 		return nil, err
 	}
 	var used int64
+	var disposable []os.FileInfo
 	var referenced func(string) bool
 	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), "result-") || !entry.Type().IsRegular() {
+		tailFile := strings.HasPrefix(entry.Name(), dramaTailStagePrefix)
+		if (!strings.HasPrefix(entry.Name(), "result-") && !tailFile) || !entry.Type().IsRegular() {
 			continue
 		}
 		info, err := entry.Info()
@@ -99,6 +102,19 @@ func (s *Service) newMediaTemp(limit int64) (*os.File, error) {
 			return nil, err
 		}
 		age := time.Since(info.ModTime())
+		if tailFile {
+			if age >= dramaTailStageTTL {
+				if err := removeStagingFile(filepath.Join(dir, entry.Name())); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			if !strings.HasPrefix(entry.Name(), dramaTailClaimPrefix) {
+				disposable = append(disposable, info)
+			}
+			used += info.Size()
+			continue
+		}
 		if age > mediaStagingTTL {
 			// 保存未完成的任务可能只剩这一份作品（上游地址已过期），在保留期内不清理。
 			if referenced == nil && age <= mediaStagingRetainedTTL {
@@ -115,6 +131,18 @@ func (s *Service) newMediaTemp(limit int64) (*os.File, error) {
 	}
 	if limit <= 0 || limit > mediaStagingBudget {
 		return nil, errors.New("作品暂存空间不足，请稍后重试保存")
+	}
+	if used > mediaStagingBudget-limit {
+		sort.Slice(disposable, func(i, j int) bool { return disposable[i].ModTime().Before(disposable[j].ModTime()) })
+		for _, entry := range disposable {
+			if err := removeStagingFile(filepath.Join(dir, entry.Name())); err != nil {
+				return nil, err
+			}
+			used -= entry.Size()
+			if used <= mediaStagingBudget-limit {
+				break
+			}
+		}
 	}
 	if used > mediaStagingBudget-limit {
 		return nil, errMediaStagingFull

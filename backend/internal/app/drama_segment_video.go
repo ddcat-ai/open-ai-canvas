@@ -5,21 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gorm.io/gorm"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
+	"gorm.io/gorm"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/production"
 	"yingce/backend/internal/protocol"
+	"yingce/backend/internal/repository"
+	"yingce/backend/internal/storage"
 )
 
 const dramaTailReferenceHeader = "以上一段尾帧作为本段的开场参考。"
@@ -31,7 +33,8 @@ type dramaRevisionPayload struct {
 	// MaxChars 是段提示词正文的字符上限：视频模型提示词上限减去撰写时的参考图说明；0 表示不限。
 	MaxChars int `json:"maxChars,omitempty"`
 	// Condensed 是本次撰写已做的自动精简次数。
-	Condensed int `json:"condensed,omitempty"`
+	Condensed  int    `json:"condensed,omitempty"`
+	TailRepair string `json:"tailRepair,omitempty"`
 }
 
 func encodeDramaRevision(revision int64) string {
@@ -605,7 +608,7 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 		}
 		s, userID, segmentID, revision := r.s, r.project.UserID, segment.ID, payload.Revision
 		s.startDramaTail(resourceID, func() error {
-			tail, err := s.extractDramaTailFrame(userID, resourceID)
+			tail, err := s.extractDramaTailFrame(withTaskExecutionID(context.Background(), task.ID), userID, resourceID)
 			if err != nil {
 				return err
 			}
@@ -634,8 +637,13 @@ func (r *dramaRun) applySegmentVideo(job *model.DramaJob, task *model.Task) erro
 
 // dramaVideoJobReplayable 表示段视频作业的生成任务已成功，只是结果回写（如抽尾帧）失败；
 // 重新处理会重放同一任务结果，不再提交模型。
-func dramaVideoJobReplayable(job model.DramaJob) bool {
-	if job.Kind != model.DramaJobSegmentVideo || job.Status != model.DramaJobFailed || job.TaskID == "" {
+func dramaVideoJobReplayable(job model.DramaJob, payload dramaRevisionPayload) bool {
+	return job.Status == model.DramaJobFailed && job.TaskID != "" &&
+		(payload.TailRepair != "" || dramaVideoTaskSucceeded(job))
+}
+
+func dramaVideoTaskSucceeded(job model.DramaJob) bool {
+	if job.TaskID == "" {
 		return false
 	}
 	var attempts []DramaJobAttempt
@@ -650,7 +658,7 @@ func dramaVideoJobReplayable(job model.DramaJob) bool {
 
 // ReprocessDramaSegmentVideo 重新处理一段已生成、但后处理失败的视频：只重放原任务结果，不重新生成、不重复扣费。
 func (s *Service) ReprocessDramaSegmentVideo(userID, projectID, episodeID string, index int) (map[string]any, error) {
-	project, p, err := s.dramaForUser(userID, projectID)
+	project, _, err := s.dramaForUser(userID, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -684,17 +692,38 @@ func (s *Service) ReprocessDramaSegmentVideo(userID, projectID, episodeID string
 			continue
 		}
 		// 只看最近一次视频作业：更早的结果已被后续生成取代，不能拿来重放。
-		if !dramaVideoJobReplayable(job) {
+		var payload dramaRevisionPayload
+		if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
+			return nil, err
+		}
+		if !dramaVideoJobReplayable(job, payload) {
 			break
 		}
-		reopened, err := s.repo.ReopenDramaSegmentVideoJob(job.ID, segment.ID)
+		task, err := s.repo.Task(job.TaskID)
+		if err != nil {
+			return nil, err
+		}
+		if !dramaTailRepairMatches(*segment, payload, task, project.UserID) {
+			break
+		}
+		if payload.TailRepair == repository.DramaTailRepairPending {
+			s.wakeDramaTailRepairs()
+			return map[string]any{"reprocessing": true}, nil
+		}
+		payload.TailRepair = repository.DramaTailRepairPending
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		reopened, err := s.repo.QueueDramaTailRepair(job, *segment, string(encoded))
 		if err != nil {
 			return nil, err
 		}
 		if !reopened {
 			break
 		}
-		return map[string]any{"reprocessing": true}, s.requestDramaWork(p)
+		s.wakeDramaTailRepairs()
+		return map[string]any{"reprocessing": true}, nil
 	}
 	return nil, BadAuthRequest("找不到可重新处理的视频结果，请重新生成本段视频")
 }
@@ -702,14 +731,14 @@ func (s *Service) ReprocessDramaSegmentVideo(userID, projectID, episodeID string
 // dramaTailDownloadTimeout 是抽尾帧前读取段视频的上限；超时转为可重新处理的失败，而不是一直“生成中”。
 const dramaTailDownloadTimeout = 3 * time.Minute
 
-func (s *Service) extractDramaTailFrame(userID, resourceID string) (string, error) {
+func (s *Service) extractDramaTailFrame(ctx context.Context, userID, resourceID string) (string, error) {
 	if s.dramaTailFrameHook != nil {
 		return s.dramaTailFrameHook(userID, resourceID)
 	}
 	var tail string
-	err := s.withDramaVideoFile(userID, resourceID, func(resource *model.Resource, input string) error {
+	err := s.withDramaVideoFile(ctx, userID, resourceID, func(resource *model.Resource, input string) error {
 		var saveErr error
-		tail, saveErr = s.saveDramaTailFrame(userID, resource, input)
+		tail, saveErr = s.saveDramaTailFrame(ctx, userID, resource, input)
 		return saveErr
 	})
 	return tail, err
@@ -730,8 +759,8 @@ func (s *Service) inspectDramaVideo(userID string, resource *model.Resource) (dr
 		facts.TailResourceID = tail
 		return facts, err
 	}
-	err := s.withDramaVideoFile(userID, resource.ID, func(opened *model.Resource, input string) error {
-		tail, err := s.saveDramaTailFrame(userID, opened, input)
+	err := s.withDramaVideoFile(context.Background(), userID, resource.ID, func(opened *model.Resource, input string) error {
+		tail, err := s.saveDramaTailFrame(context.Background(), userID, opened, input)
 		if err != nil {
 			return err
 		}
@@ -750,22 +779,41 @@ func (s *Service) inspectDramaVideo(userID string, resource *model.Resource) (dr
 }
 
 // withDramaVideoFile 把视频资源下载到临时文件后交给 fn；读取对象存储有超时保护。
-func (s *Service) withDramaVideoFile(userID, resourceID string, fn func(resource *model.Resource, input string) error) error {
-	resource, body, err := s.OpenResource(userID, resourceID)
-	if err != nil {
+func (s *Service) withDramaVideoFile(ctx context.Context, userID, resourceID string, fn func(resource *model.Resource, input string) error) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-	defer body.Close()
-	// 读取对象存储可能卡住：超时后关闭读取流让 io.Copy 返回，避免一段视频阻塞整个调度循环。
-	var stalled atomic.Bool
-	watchdog := time.AfterFunc(dramaTailDownloadTimeout, func() {
-		stalled.Store(true)
-		_ = body.Close()
-	})
-	defer watchdog.Stop()
-	if !strings.HasPrefix(resource.MimeType, "video/") {
-		return errors.New("尾帧来源不是视频")
+	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	if err != nil {
+		return &dramaVideoReadError{cause: err}
 	}
+	if resource.Status != model.ResourceStatusReady || !strings.HasPrefix(resource.MimeType, "video/") {
+		return errors.New("尾帧来源不是已保存的视频")
+	}
+	if input := s.claimDramaTailFile(resource); input != "" {
+		defer s.releaseDramaTailFile(input)
+		return fn(resource, input)
+	}
+	if resource.Provider == "local" {
+		input := filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey))
+		info, err := os.Stat(input)
+		if err != nil {
+			return &dramaVideoReadError{cause: err}
+		}
+		if !info.Mode().IsRegular() || (resource.Size > 0 && info.Size() != resource.Size) {
+			return &dramaVideoReadError{cause: io.ErrUnexpectedEOF}
+		}
+		return fn(resource, input)
+	}
+	readCtx, cancel := context.WithTimeout(ctx, dramaTailDownloadTimeout)
+	defer cancel()
+	stream, err := s.openResourceRangeContext(readCtx, userID, resource, "")
+	if err != nil {
+		return &dramaVideoReadError{cause: err}
+	}
+	defer stream.Body.Close()
+	stop := context.AfterFunc(readCtx, func() { _ = stream.Body.Close() })
+	defer stop()
 	dir, err := os.MkdirTemp("", "yingce-drama-tail-")
 	if err != nil {
 		return err
@@ -776,14 +824,18 @@ func (s *Service) withDramaVideoFile(userID, resourceID string, fn func(resource
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(file, body)
-	watchdog.Stop()
+	var reader io.Reader = stream.Body
+	if resource.Size > 0 {
+		reader = io.LimitReader(reader, resource.Size+1)
+	}
+	written, copyErr := io.Copy(file, reader)
+	stop()
 	closeErr := file.Close()
 	if copyErr != nil {
-		if stalled.Load() {
-			return fmt.Errorf("读取段视频超时（%d 秒），可稍后点“重新处理”", int(dramaTailDownloadTimeout.Seconds()))
-		}
-		return copyErr
+		return &dramaVideoReadError{cause: errors.Join(copyErr, readCtx.Err())}
+	}
+	if resource.Size > 0 && written != resource.Size {
+		return &dramaVideoReadError{cause: io.ErrUnexpectedEOF}
 	}
 	if closeErr != nil {
 		return closeErr
@@ -791,8 +843,31 @@ func (s *Service) withDramaVideoFile(userID, resourceID string, fn func(resource
 	return fn(resource, input)
 }
 
+type dramaVideoReadError struct{ cause error }
+
+func (e *dramaVideoReadError) Error() string {
+	failure := storage.ClassifyError(e.cause)
+	switch failure.StatusCode {
+	case http.StatusForbidden, http.StatusUnauthorized:
+		return "读取已保存视频失败，存储拒绝访问"
+	case http.StatusNotFound:
+		return "读取已保存视频失败，存储中的文件已不存在"
+	case http.StatusPreconditionFailed:
+		return "读取已保存视频失败，下载期间文件发生变化，请重新处理视频"
+	}
+	if errors.Is(e.cause, gorm.ErrRecordNotFound) {
+		return "读取已保存视频失败，素材已不存在"
+	}
+	if failure.Code == "Timeout" {
+		return "读取已保存视频超时，请重新处理视频"
+	}
+	return "读取已保存视频失败，请重新处理视频"
+}
+
+func (e *dramaVideoReadError) Unwrap() error { return e.cause }
+
 // saveDramaTailFrame 用 ffmpeg 取本地视频的最后一帧并保存为图片资源。
-func (s *Service) saveDramaTailFrame(userID string, resource *model.Resource, input string) (string, error) {
+func (s *Service) saveDramaTailFrame(ctx context.Context, userID string, resource *model.Resource, input string) (string, error) {
 	ffmpegBin, err := renderFfmpegBinary()
 	if err != nil {
 		return "", fmt.Errorf("抽取尾帧失败：%w", err)
@@ -803,7 +878,7 @@ func (s *Service) saveDramaTailFrame(userID string, resource *model.Resource, in
 	}
 	defer os.RemoveAll(dir)
 	output := filepath.Join(dir, "tail.png")
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	// Decode every remaining frame and update the same output, so the saved image is the actual final frame.
 	cmd := exec.CommandContext(ctx, ffmpegBin, "-hide_banner", "-loglevel", "error", "-sseof", "-1", "-i", input, "-an", "-update", "1", "-y", output)

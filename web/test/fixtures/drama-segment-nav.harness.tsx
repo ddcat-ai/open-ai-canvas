@@ -183,6 +183,24 @@ function toolbars() {
     return [...document.querySelectorAll('[aria-label="生成设置"]')];
 }
 
+test("提取尾帧期间保留已保存的原片和播放控件", async () => {
+    const current = { ...detail.segments[0], videoStatus: "running" as const, videoTailProcessing: true };
+    await act(async () => {
+        root.render(
+            <App>
+                <QueryClientProvider client={client}>
+                    <Host episodeDetail={{ ...detail, segments: [current] }} />
+                </QueryClientProvider>
+            </App>,
+        );
+    });
+    expect(document.body.textContent).toContain("视频已保存，正在提取尾帧");
+    const player = document.querySelector("video");
+    expect(player?.controls).toBe(true);
+    expect(player?.getAttribute("src")).toContain("video-0");
+    expect(document.body.textContent).not.toContain("视频生成失败");
+});
+
 test("成片页提示缺段与旧版，单击直接提交，仅没有可用段时禁用", async () => {
     const onCompose = mock(() => {});
     const show = (segments: DramaSegment[]) =>

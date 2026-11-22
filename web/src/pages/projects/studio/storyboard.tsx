@@ -42,12 +42,12 @@ const SHOT_PREVIEW = 3;
 
 /** 可以提交视频的段：提示词已就绪且不在生成中。批量操作只提交这些段，其余跳过并说明。 */
 function generatable(segment: DramaSegment) {
-    return promptReady(segment) && !mediaBusy(segment.videoStatus);
+    return promptReady(segment) && !segment.videoTailProcessing && !mediaBusy(segment.videoStatus);
 }
 
 /** 本段已有生成好的视频（含过期或后处理失败的），不论能否直接用于下一段。 */
 function hasVideo(segment: DramaSegment) {
-    return Boolean(segment.videoResourceId) && (segment.videoStatus === "ready" || segment.videoStatus === "stale" || segment.videoStatus === "failed");
+    return Boolean(segment.videoResourceId) && (segment.videoTailProcessing || segment.videoStatus === "ready" || segment.videoStatus === "stale" || segment.videoStatus === "failed");
 }
 
 /** 还没有尾帧缩略图时，用视频本身的开头画面作封面。 */
@@ -108,7 +108,7 @@ type CardProps = {
  */
 const SegmentCard = memo(function SegmentCard({ segment, segmentShots, aspectRatio, castById, isSelected, focused, busy, reprocessing, defaultModelLabel, actions }: CardProps) {
     const state = segmentState(segment);
-    const error = segment.promptStatus === "failed" ? segment.promptError : segment.videoStatus === "failed" ? segment.videoError : "";
+    const error = segment.promptStatus === "failed" ? segment.promptError : segment.videoStatus === "failed" && !segment.videoTailProcessing ? segment.videoError : "";
     const act = () => actions.current;
     return (
         <article
@@ -228,7 +228,17 @@ const SegmentCard = memo(function SegmentCard({ segment, segmentShots, aspectRat
                         title={!promptReady(segment) ? "先撰写或确认本段视频提示词" : hasVideo(segment) ? "重新调用视频模型生成本段，会产生新的费用" : undefined}
                         onClick={() => act().onGenerate([segment.index])}
                     >
-                        {mediaBusy(segment.videoStatus) ? (segment.videoStatus === "queued" && segment.videoWait ? "等待中" : segment.request.firstFramePending ? "等上一段" : "生成中") : hasVideo(segment) ? "重新生成" : "生成"}
+                        {segment.videoTailProcessing
+                            ? "提取尾帧中"
+                            : mediaBusy(segment.videoStatus)
+                              ? segment.videoStatus === "queued" && segment.videoWait
+                                  ? "等待中"
+                                  : segment.request.firstFramePending
+                                    ? "等上一段"
+                                    : "生成中"
+                              : hasVideo(segment)
+                                ? "重新生成"
+                                : "生成"}
                     </Button>
                 </span>
             </footer>

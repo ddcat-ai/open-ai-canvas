@@ -353,6 +353,7 @@ export type DramaSegment = {
     videoError?: string;
     /** 视频已生成，只是后处理（如抽尾帧）失败；可重新处理已有视频，不重新生成。 */
     videoReprocessable?: boolean;
+    videoTailProcessing?: boolean;
     videoModel: DramaModelChoice;
     /** auto 按本段镜头自动取参考图；custom 为手动指定（顺序即参考图编号）。 */
     referenceMode: "auto" | "custom";
