@@ -625,8 +625,8 @@ add({
 const openAIVideoImages = filter(sorted(ref("request.images")), "media", ne(ref("media.role"), "mask"));
 const openAIVideoImageCount = len(openAIVideoImages);
 add({
-  id: "openai-videos", providerId: "newapi", name: "OpenAI Videos / Sora", vendor: "OpenAI", capability: "video", version: "2.1.0",
-  videoReferences: { ...numberedImages("multipart-references"), maxImagesByOperation: { text_to_video: 0, image_to_video: 1, reference_to_video: null } },
+  id: "openai-videos", providerId: "newapi", name: "OpenAI Videos / Sora", vendor: "OpenAI", capability: "video", version: "2.1.1",
+  videoReferences: { ...numberedImages("multipart-references"), dramaTailFrame: "reference-image", maxImagesByOperation: { text_to_video: 0, image_to_video: 1, reference_to_video: null } },
   notes: "标准图生视频以单个 input_reference 文件发送。兼容网关的模型显式启用 reference_to_video 时支持多图，单图沿用 input_reference，多图按顺序发送所有 input_reference[] 文件。参考上限应按上游配置。",
   baseUrl: "https://api.openai.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: false,
   create: {
@@ -654,8 +654,8 @@ const newAPITaskMessage = coalesce(
 );
 
 add({
-  id: "newapi-media-task-v1", version: "2.0.1", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
-  videoReferences: numberedImages("input-media"),
+  id: "newapi-media-task-v1", version: "2.0.2", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
+  videoReferences: { ...numberedImages("input-media"), dramaTailFrame: "reference-image" },
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   create: jsonCreate("/v1/videos", {
     model: ref("request.model"),
