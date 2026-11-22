@@ -38,7 +38,8 @@ export async function switchUserStorageScope(userId?: string | null, expectedSes
 }
 
 let sessionGeneration = 0;
-let catalogRequest: { generation: number; promise: Promise<void> } | undefined;
+let catalogRequest: { generation: number; revision: number; promise: Promise<void> } | undefined;
+let catalogRevision = 0;
 let catalogInitialConfig: typeof defaultConfig | undefined;
 
 function resetModelCatalog() {
@@ -172,16 +173,19 @@ function safeScopedStorageGet(key: string) {
     }
 }
 
-export function refreshSystemChannels(): Promise<void> {
+export function refreshSystemChannels({ invalidate = false }: { invalidate?: boolean } = {}): Promise<void> {
     const generation = sessionGeneration;
     const userId = useUserStore.getState().user?.id || "";
     if (!isCurrentSession(generation, userId)) return Promise.reject(new DOMException("账号已切换，请重新加载", "AbortError"));
-    if (catalogRequest?.generation === generation) return catalogRequest.promise;
+    if (!invalidate && catalogRequest?.generation === generation) return catalogRequest.promise;
+    // 保存前发起的读取可能仍携带旧模型目录；它不能覆盖新结果或状态。
+    const revision = ++catalogRevision;
     useModelCatalogStore.setState({ status: "loading" });
     const promise = (async () => {
         try {
             const catalog = await getModelCatalog();
             if (!isCurrentSession(generation, userId)) throw new DOMException("账号已切换，请重新加载", "AbortError");
+            if (revision !== catalogRevision) return catalogRequest?.promise;
             const channels = modelCatalogChannels(catalog);
             if (catalogInitialConfig && useConfigStore.getState().config === catalogInitialConfig) {
                 // 重试仍可初始化首次配置，但不能覆盖等待期间用户做过的编辑。
@@ -193,13 +197,16 @@ export function refreshSystemChannels(): Promise<void> {
             catalogInitialConfig = undefined;
             useModelCatalogStore.setState({ status: "ready" });
         } catch (error) {
-            if (isCurrentSession(generation, userId)) useModelCatalogStore.setState({ status: "error" });
+            if (isCurrentSession(generation, userId)) {
+                if (revision !== catalogRevision) return catalogRequest?.promise;
+                useModelCatalogStore.setState({ status: "error" });
+            }
             throw error;
         } finally {
-            if (catalogRequest?.generation === generation) catalogRequest = undefined;
+            if (catalogRequest?.revision === revision) catalogRequest = undefined;
         }
     })();
-    catalogRequest = { generation, promise };
+    catalogRequest = { generation, revision, promise };
     return promise;
 }
 

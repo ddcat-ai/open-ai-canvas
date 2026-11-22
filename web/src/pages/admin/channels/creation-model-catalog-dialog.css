@@ -1,0 +1,224 @@
+.admin-creation-catalog-dialog .ant-modal-header {
+    padding-inline-start: var(--space-5);
+}
+
+.admin-creation-catalog-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.admin-creation-catalog-title-icon {
+    display: grid;
+    flex: none;
+    width: var(--admin-control-h);
+    aspect-ratio: 1;
+    place-items: center;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface-2);
+    color: var(--admin-text-secondary);
+}
+
+.admin-creation-catalog-title-icon svg,
+.admin-creation-catalog-modes svg {
+    width: var(--space-4);
+    height: var(--space-4);
+}
+
+.admin-creation-catalog-body {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+}
+
+.admin-creation-catalog-dialog .admin-creation-catalog-modes {
+    padding: var(--space-1);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface-2);
+}
+
+.admin-creation-catalog-modes .ant-segmented-item-label {
+    display: flex;
+    min-height: var(--admin-row-h);
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding-inline: var(--space-1);
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.admin-creation-catalog-modes .ant-segmented-item-icon {
+    display: grid;
+    place-items: center;
+    margin: 0;
+}
+
+.admin-creation-catalog-modes :is(.ant-segmented-item-selected, .ant-segmented-thumb) {
+    background: var(--admin-surface);
+    box-shadow: inset 0 0 0 1px var(--admin-border-strong);
+}
+
+.admin-creation-catalog-modes .ant-segmented-item:not(.ant-segmented-item-selected) .ant-segmented-item-label {
+    color: var(--admin-text-secondary);
+}
+
+.admin-creation-catalog-modes .ant-segmented-item:has(input:focus-visible) {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: -2px;
+}
+
+.admin-creation-catalog-panel {
+    display: grid;
+    min-width: 0;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-canvas);
+}
+
+.admin-creation-catalog-panel h2 {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: var(--fs-body);
+    font-weight: 650;
+}
+
+.admin-creation-catalog-panel p {
+    margin: var(--space-1) 0 0;
+    color: var(--admin-text-secondary);
+    font-size: var(--fs-caption);
+}
+
+.admin-creation-catalog-panel .creation-model-picker.canvas-composer-model-picker {
+    width: 100%;
+    height: auto;
+    min-height: var(--space-10);
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--admin-border-strong);
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    color: var(--admin-text);
+    box-shadow: none;
+    font-size: var(--fs-body);
+    text-align: start;
+}
+
+.admin-creation-catalog-panel .creation-model-picker.canvas-composer-model-picker:is(:hover, [aria-expanded="true"]) {
+    background: var(--admin-surface-2);
+}
+
+.admin-creation-catalog-panel .creation-model-picker.canvas-composer-model-picker:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+.admin-creation-catalog-panel .canvas-model-picker-trigger-icon {
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-2);
+}
+
+.admin-creation-catalog-placeholder {
+    display: flex;
+    min-height: var(--space-10);
+    align-items: center;
+    padding-inline: var(--space-3);
+    border: 1px dashed var(--admin-border-strong);
+    border-radius: var(--admin-radius);
+    color: var(--admin-text-muted);
+    font-size: var(--fs-caption);
+}
+
+.admin-creation-catalog-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid var(--admin-divider);
+    background: var(--admin-canvas);
+    color: var(--admin-text-secondary);
+    font-size: var(--fs-caption);
+}
+
+.admin-creation-catalog-state,
+.admin-creation-catalog-note {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+}
+
+.admin-creation-catalog-state {
+    flex-wrap: wrap;
+}
+
+.admin-creation-catalog-state::before {
+    width: calc(var(--space-1) + var(--space-1) / 2);
+    aspect-ratio: 1;
+    flex: none;
+    border-radius: 50%;
+    background: var(--admin-text-muted);
+    content: "";
+}
+
+.admin-creation-catalog-state[data-state="ready"]::before {
+    background: var(--admin-status-success);
+}
+
+.admin-creation-catalog-state[data-state="error"]::before {
+    background: var(--admin-status-error);
+}
+
+.admin-creation-catalog-note svg {
+    width: calc(var(--space-3) + var(--space-1) / 2);
+    height: calc(var(--space-3) + var(--space-1) / 2);
+    flex: none;
+}
+
+/* The shared picker portals to body, outside the modal's DOM. */
+.admin-creation-catalog-popover {
+    --model-picker-surface: var(--admin-surface, var(--popover));
+    --model-picker-ink: var(--admin-text, var(--foreground));
+    --model-picker-edge: var(--admin-border, var(--border));
+}
+
+.admin-creation-catalog-popover .canvas-model-picker-menu.is-brand-list {
+    width: min(480px, calc(100vw - var(--space-6)));
+}
+
+.admin-creation-catalog-popover .canvas-model-picker-menu.is-model-list {
+    width: min(640px, calc(100vw - var(--space-6)));
+}
+
+@media (max-width: 440px) {
+    .admin-creation-catalog-dialog .ant-modal-header,
+    .admin-creation-catalog-body,
+    .admin-creation-catalog-footer {
+        padding-inline-start: var(--space-3);
+    }
+
+    .admin-creation-catalog-body,
+    .admin-creation-catalog-footer,
+    .admin-creation-catalog-panel {
+        padding-inline-end: var(--space-3);
+    }
+
+    .admin-creation-catalog-panel {
+        padding-inline-start: var(--space-3);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-creation-catalog-modes .ant-segmented-thumb {
+        animation-duration: 0.01ms;
+        transition-duration: 0.01ms;
+    }
+}

@@ -64,6 +64,39 @@ test("并发重试共用一次读取，加载中不写入空列表", async () =>
     expect(useModelCatalogStore.getState().status).toBe("ready");
 });
 
+test("后台保存后强制读取，保存前的迟到结果不能复活旧模型", async () => {
+    const stale = deferred<ModelCatalogResponse>();
+    const fresh = deferred<ModelCatalogResponse>();
+    get.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+    const beforeSave = refreshSystemChannels();
+    const afterSave = refreshSystemChannels({ invalidate: true });
+    expect(afterSave).not.toBe(beforeSave);
+    expect(refreshSystemChannels()).toBe(afterSave);
+    fresh.resolve(catalog("still-enabled"));
+    await afterSave;
+    stale.resolve(catalog("disabled"));
+    await beforeSave;
+    expect(useConfigStore.getState().config.channels.map((item) => item.id)).toEqual(["still-enabled"]);
+    expect(useModelCatalogStore.getState().status).toBe("ready");
+    expect(get).toHaveBeenCalledTimes(2);
+});
+
+test("已失效请求的失败不结束仍在进行的新目录读取", async () => {
+    const stale = Promise.withResolvers<ModelCatalogResponse>();
+    const fresh = deferred<ModelCatalogResponse>();
+    get.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+    const beforeSave = refreshSystemChannels();
+    const afterSave = refreshSystemChannels({ invalidate: true });
+    stale.reject(new Error("offline"));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(refreshSystemChannels()).toBe(afterSave);
+    expect(useModelCatalogStore.getState().status).toBe("loading");
+    fresh.resolve(catalog("new"));
+    await Promise.all([beforeSave, afterSave]);
+    expect(useModelCatalogStore.getState().status).toBe("ready");
+});
+
 test("畸形目录不能清空已有模型，只有成功空目录才进入 ready", async () => {
     await refreshSystemChannels();
     const previous = useConfigStore.getState().config;

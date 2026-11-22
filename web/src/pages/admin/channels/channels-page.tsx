@@ -23,6 +23,7 @@ import "./channels-page.css";
 import { Select } from "@/components/ui/base/select";
 import { listAdminChannelWebsites, deleteAdminChannelWebsite, type ChannelWebsite } from "@/services/api/channel-websites";
 import { ChannelWebsiteDialog } from "./channel-website-dialog";
+import { CreationModelCatalogDialog } from "./creation-model-catalog-dialog";
 import { useChannelKeySort } from "./use-channel-key-sort";
 
 type ChannelFormValues = {
@@ -83,6 +84,7 @@ export default function ChannelsPage() {
     const [saving, setSaving] = useState(false);
     const [duplicatingChannelId, setDuplicatingChannelId] = useState<string | null>(null);
     const [wizardOpen, setWizardOpen] = useState(false);
+    const [creationCatalogOpen, setCreationCatalogOpen] = useState(false);
     const [importVersion, setImportVersion] = useState(0);
     const [transferring, setTransferring] = useState(false);
     const importInputRef = useRef<HTMLInputElement>(null);
@@ -160,13 +162,11 @@ export default function ChannelsPage() {
 
     const syncChannels = async (propagateError = false) => {
         void reloadHealth();
-        await reloadReferences(propagateError);
-        try {
-            await refreshSystemChannels();
-        } catch (error) {
+        const catalogSync = refreshSystemChannels({ invalidate: true }).catch((error) => {
             if (propagateError) throw error;
             message.warning(error instanceof Error ? `后台已保存，但配置同步失败：${error.message}` : "后台已保存，但配置同步失败，请稍后重新打开配置");
-        }
+        });
+        await Promise.all([reloadReferences(propagateError), catalogSync]);
     };
 
     const keySort = useChannelKeySort({
@@ -406,7 +406,8 @@ export default function ChannelsPage() {
     );
 
     return (
-        <AdminPageFrame title="渠道与模型" description="按 API 网站管理多个 Key 分组；每个 Key 的模型、协议、能力和价格独立。">
+        <AdminPageFrame title="渠道与模型" description="按 API 网站管理多个 Key 分组；每个 Key 的模型、协议、能力和价格独立。" actions={<Button onClick={() => setCreationCatalogOpen(true)}>创作端模型预览</Button>}>
+            {creationCatalogOpen ? <CreationModelCatalogDialog onClose={() => setCreationCatalogOpen(false)} /> : null}
             <Segmented
                 className="admin-channel-view-switch"
                 aria-label="渠道与模型视图"
@@ -750,7 +751,7 @@ export default function ChannelsPage() {
                     onClose={() => setWebsiteDialog(null)}
                     onSaved={async (website) => {
                         updateUrl({ website: website.id, channel: "" });
-                        await reload();
+                        await Promise.all([syncChannels(), reload()]);
                     }}
                 />
             )}
