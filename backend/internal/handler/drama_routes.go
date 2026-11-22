@@ -31,7 +31,7 @@ func dramaRoute(svc *service.Service, bodyLimit int64, fn func(c *gin.Context, u
 	}
 }
 
-// streamDramaArchive 在校验通过后才写响应头；写出中断（用户取消、存储读取失败）只记录日志，响应已开始无法再改状态码。
+// 响应头已发出时中断连接，让浏览器把未完成的 ZIP 识别为下载失败。
 func streamDramaArchive(c *gin.Context, svc *service.Service, userID string, archive *service.DramaArchive) {
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": archive.FileName}))
@@ -41,7 +41,10 @@ func streamDramaArchive(c *gin.Context, svc *service.Service, userID string, arc
 	c.Status(http.StatusOK)
 	c.Writer.Flush()
 	if err := svc.WriteDramaArchive(c.Request.Context(), userID, archive, c.Writer); err != nil {
-		slog.Warn("drama archive download interrupted", "error", err)
+		if c.Request.Context().Err() == nil {
+			slog.Warn("drama archive download interrupted", "requestId", c.Writer.Header().Get("X-Request-ID"))
+		}
+		panic(http.ErrAbortHandler)
 	}
 }
 

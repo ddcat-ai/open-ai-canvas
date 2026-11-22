@@ -23,6 +23,10 @@ func PublicDNS(t *testing.T, hosts ...string) {
 
 // DNS maps supplied names to a chosen IPv4 address without opening sockets.
 func DNS(t *testing.T, address [4]byte, hosts ...string) {
+	DNSAddresses(t, [][4]byte{address}, hosts...)
+}
+
+func DNSAddresses(t *testing.T, addresses [][4]byte, hosts ...string) {
 	t.Helper()
 	allowed := make(map[string]bool, len(hosts))
 	for _, host := range hosts {
@@ -51,7 +55,12 @@ func DNS(t *testing.T, address [4]byte, hosts ...string) {
 				if !allowed[strings.ToLower(q.Name.String())] {
 					response.RCode = dnsmessage.RCodeNameError
 				} else if q.Type == dnsmessage.TypeA && q.Class == dnsmessage.ClassINET {
-					response.Answers = []dnsmessage.Resource{{Header: dnsmessage.ResourceHeader{Name: q.Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 60}, Body: &dnsmessage.AResource{A: address}}}
+					for _, address := range addresses {
+						response.Answers = append(response.Answers, dnsmessage.Resource{
+							Header: dnsmessage.ResourceHeader{Name: q.Name, Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET, TTL: 60},
+							Body:   &dnsmessage.AResource{A: address},
+						})
+					}
 				}
 				answer, err := response.Pack()
 				if err != nil {

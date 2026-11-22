@@ -245,7 +245,7 @@ func materializeRenderSources(ctx context.Context, s *Service, userID string, pl
 		}
 		entry, cached := cache[resourceID]
 		if !cached {
-			resource, reader, err := s.OpenResource(userID, resourceID)
+			resource, reader, err := s.openResource(ctx, userID, resourceID)
 			if err != nil || reader == nil {
 				cleanup()
 				return "", nil, fmt.Errorf("无法读取时间线引用的媒体，可能已被删除")

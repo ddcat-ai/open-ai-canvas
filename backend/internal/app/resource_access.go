@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"net/url"
 	"strconv"
@@ -98,6 +99,10 @@ func (s *Service) resolveResourceAccess(resource *model.Resource, options Resour
 }
 
 func (s *Service) PrepareResourceDelivery(userID, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	return s.PrepareResourceDeliveryContext(context.Background(), userID, id, options, rangeHeader)
+}
+
+func (s *Service) PrepareResourceDeliveryContext(ctx context.Context, userID, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	options, err := assets.NormalizeAccessOptions(options, false)
 	if err != nil {
 		return nil, err
@@ -109,10 +114,14 @@ func (s *Service) PrepareResourceDelivery(userID, id string, options ResourceAcc
 	if err != nil {
 		return nil, err
 	}
-	return s.prepareResourceDelivery(userID, resource, options, rangeHeader)
+	return s.prepareResourceDeliveryContext(ctx, userID, resource, options, rangeHeader)
 }
 
 func (s *Service) prepareResourceDelivery(userID string, resource *model.Resource, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	return s.prepareResourceDeliveryContext(context.Background(), userID, resource, options, rangeHeader)
+}
+
+func (s *Service) prepareResourceDeliveryContext(ctx context.Context, userID string, resource *model.Resource, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	if resource == nil {
 		return nil, Forbidden("资源不可访问")
 	}
@@ -133,7 +142,7 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 	if access.ActualVariant == assets.VariantPlayback {
 		delivery.Stream, err = s.OpenResourcePlaybackRange(userID, resource.ID)
 	} else {
-		delivery.Stream, err = s.openResourceRange(userID, resource, rangeHeader)
+		delivery.Stream, err = s.openResourceRangeContext(ctx, userID, resource, rangeHeader)
 	}
 	if err != nil {
 		return nil, err
@@ -196,7 +205,7 @@ func (s *Service) signedResourceAccessURL(resource *model.Resource, variant asse
 	return base.ResolveReference(u).String(), nil
 }
 
-func (s *Service) PreparePublicResourceDelivery(id, expires, signature string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PreparePublicResourceDelivery(ctx context.Context, id, expires, signature string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	options, err := assets.NormalizeAccessOptions(options, false)
 	if err != nil {
 		return nil, err
@@ -213,5 +222,5 @@ func (s *Service) PreparePublicResourceDelivery(id, expires, signature string, o
 	}
 	seconds, _ := strconv.ParseInt(expires, 10, 64)
 	options.ExpiresAt = time.Unix(seconds, 0)
-	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+	return s.prepareResourceDeliveryContext(ctx, resource.UserID, resource, options, rangeHeader)
 }

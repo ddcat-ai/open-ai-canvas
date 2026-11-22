@@ -110,7 +110,10 @@ func RegisterEcommerceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		c.Status(http.StatusOK)
 		c.Writer.Flush()
 		if err := svc.WriteEcommerceDownload(c.Request.Context(), user.ID, files, c.Writer); err != nil {
-			slog.Warn("ecommerce download interrupted", "error", err)
+			if c.Request.Context().Err() == nil {
+				slog.Warn("ecommerce download interrupted", "requestId", c.Writer.Header().Get("X-Request-ID"))
+			}
+			panic(http.ErrAbortHandler)
 		}
 	})
 	r.GET("/admin/ecommerce/categories", func(c *gin.Context) {

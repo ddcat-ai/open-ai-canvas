@@ -786,13 +786,13 @@ func TestHydrateNewAPIChannel1ResourceUsesSignedOSSURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	media := providerMedia{StorageKey: "resource:resource-1", DataURL: "data:image/png;base64,old"}
-	if err := svc.hydrateProviderMedia("user-1", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
+	if err := svc.hydrateProviderMedia(t.Context(), "user-1", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
 		t.Fatalf("hydrateProviderMedia() error = %v", err)
 	}
 	if media.URL != "https://media.example.com/users/user-1/image/reference.png" || media.DataURL != "" {
 		t.Fatalf("media = %#v", media)
 	}
-	if err := svc.hydrateProviderMedia("other-user", &providerMedia{StorageKey: "resource:resource-1"}, providerMediaHydrationPolicy{requireURL: true}); err == nil {
+	if err := svc.hydrateProviderMedia(t.Context(), "other-user", &providerMedia{StorageKey: "resource:resource-1"}, providerMediaHydrationPolicy{requireURL: true}); err == nil {
 		t.Fatal("hydrateProviderMedia() allowed another user's resource")
 	}
 }
@@ -812,7 +812,7 @@ func TestHydrateNewAPIChannel1ResourceUsesSignedLocalURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	media := providerMedia{StorageKey: "resource:resource-local"}
-	if err := svc.hydrateProviderMedia("user-1", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
+	if err := svc.hydrateProviderMedia(t.Context(), "user-1", &media, providerMediaHydrationPolicy{requireURL: true}); err != nil {
 		t.Fatalf("hydrateProviderMedia() error = %v", err)
 	}
 	if !strings.HasPrefix(media.URL, "https://127.0.0.1/api/public/resources/resource-local/file?") || !strings.Contains(media.URL, "signature=") || media.DataURL != "" {
@@ -843,7 +843,7 @@ func TestHydratePreferredURLUsesObjectStorageAndFallsBackLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 	media := providerMedia{StorageKey: "resource:resource-oss", DataURL: "data:image/png;base64,old"}
-	if err := svc.hydrateProviderMedia("user-1", &media, providerMediaHydrationPolicy{preferURL: true}); err != nil {
+	if err := svc.hydrateProviderMedia(t.Context(), "user-1", &media, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 		t.Fatalf("hydrateProviderMedia(prefer object) error = %v", err)
 	}
 	if media.URL != "https://media.example.com/users/user-1/image/prefer.png" || media.DataURL != "" {
@@ -862,7 +862,7 @@ func TestHydratePreferredURLUsesObjectStorageAndFallsBackLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 	localMedia := providerMedia{StorageKey: "resource:resource-local-bytes"}
-	if err := svc.hydrateProviderMedia("user-1", &localMedia, providerMediaHydrationPolicy{preferURL: true}); err != nil {
+	if err := svc.hydrateProviderMedia(t.Context(), "user-1", &localMedia, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 		t.Fatalf("hydrateProviderMedia(prefer local) error = %v", err)
 	}
 	if localMedia.URL != "" || !strings.HasPrefix(localMedia.DataURL, "data:image/png;base64,") {

@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -23,6 +24,7 @@ import (
 	"gorm.io/gorm"
 	"yingce/backend/internal/assets"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/storage"
 )
 
 func (s *Service) UploadResource(userID string, header *multipart.FileHeader, kind string, width int, height int, durationMs int64, uploadIdentity ...string) (*model.Resource, error) {
@@ -240,7 +242,11 @@ func resourceUploadInProgress() *AppError {
 }
 
 func (s *Service) OpenResource(userID string, id string) (*model.Resource, io.ReadCloser, error) {
-	stream, err := s.OpenResourceRange(userID, id, "")
+	return s.openResource(context.Background(), userID, id)
+}
+
+func (s *Service) openResource(ctx context.Context, userID string, id string) (*model.Resource, io.ReadCloser, error) {
+	stream, err := s.OpenResourceRangeContext(ctx, userID, id, "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -248,14 +254,25 @@ func (s *Service) OpenResource(userID string, id string) (*model.Resource, io.Re
 }
 
 func (s *Service) OpenResourceRange(userID string, id string, rangeHeader string) (*ResourceStream, error) {
+	return s.OpenResourceRangeContext(context.Background(), userID, id, rangeHeader)
+}
+
+func (s *Service) OpenResourceRangeContext(ctx context.Context, userID string, id string, rangeHeader string) (*ResourceStream, error) {
 	resource, err := s.repo.ResourceForUser(userID, id)
 	if err != nil {
 		return nil, err
 	}
-	return s.openResourceRange(userID, resource, rangeHeader)
+	return s.openResourceRangeContext(ctx, userID, resource, rangeHeader)
 }
 
 func (s *Service) openResourceRange(userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
+	return s.openResourceRangeContext(context.Background(), userID, resource, rangeHeader)
+}
+
+func (s *Service) openResourceRangeContext(ctx context.Context, userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if resource.Status != model.ResourceStatusReady {
 		return nil, BadAuthRequest("资源尚未上传完成")
 	}
@@ -277,7 +294,8 @@ func (s *Service) openResourceRange(userID string, resource *model.Resource, ran
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
 	setting = s.storageSettingWithRuntimePolicy(setting)
-	stream, err := getOriginOSSObjectRange(setting, resource.ObjectKey, normalizeSingleByteRange(rangeHeader))
+	ctx = storage.WithReadLogIDs(ctx, resource.ID, taskExecutionID(ctx))
+	stream, err := getOriginOSSObjectRange(ctx, setting, resource.ObjectKey, normalizeSingleByteRange(rangeHeader))
 	if err != nil {
 		return nil, err
 	}

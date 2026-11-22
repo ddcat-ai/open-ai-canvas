@@ -22,7 +22,7 @@ func TestOpenAIImageLocalReferencesWithoutPublicURL(t *testing.T) {
 	if policy.requireURL {
 		t.Fatal("local OpenAI image references must not require a public URL")
 	}
-	if err := service.hydrateGenerationMedia("user", &input, policy); err != nil {
+	if err := service.hydrateGenerationMedia(t.Context(), "user", &input, policy); err != nil {
 		t.Fatal(err)
 	}
 	want := "data:image/png;base64," + base64.StdEncoding.EncodeToString(imageBytes)
@@ -41,7 +41,7 @@ func TestOpenAIImageLocalReferencesWithoutPublicURL(t *testing.T) {
 		t.Fatal("image edit request did not retain inline image bytes as a multipart file")
 	}
 	foreign := canvasGenerationInput{ReferenceImages: []providerMedia{{StorageKey: "resource:ref-one"}}}
-	if err := service.hydrateGenerationMedia("other-user", &foreign, policy); err == nil {
+	if err := service.hydrateGenerationMedia(t.Context(), "other-user", &foreign, policy); err == nil {
 		t.Fatal("another user's reference resource was accepted")
 	}
 }

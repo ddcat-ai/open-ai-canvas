@@ -66,7 +66,8 @@ func probeMediaFile(ctx context.Context, path string) (mediaProbeInfo, error) {
 	defer cancel()
 	output, err := hideCommandWindow(exec.CommandContext(ctx, bin,
 		"-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=width,height:stream_side_data=rotation:format=duration:format_tags",
+		// 旧版 ffprobe 不支持按 stream_side_data 单独筛选。读取一条流的元数据兼容两种版本。
+		"-show_streams", "-show_format",
 		"-of", "json", path)).Output()
 	if err != nil {
 		return mediaProbeInfo{}, fmt.Errorf("媒体探测失败：%w", err)
@@ -146,7 +147,7 @@ func (s *Service) probeStoredResourceMedia(ctx context.Context, resource *model.
 	if resource.Provider == "local" {
 		return probeMediaFile(ctx, filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)))
 	}
-	stream, err := s.openResourceRange(resource.UserID, resource, fmt.Sprintf("bytes=0-%d", mediaProbeRemoteHeadBytes-1))
+	stream, err := s.openResourceRangeContext(ctx, resource.UserID, resource, fmt.Sprintf("bytes=0-%d", mediaProbeRemoteHeadBytes-1))
 	if err != nil {
 		return mediaProbeInfo{}, err
 	}

@@ -42,7 +42,7 @@ func (w *taskWorkerCoordinator) processTimelineTranscription(task *model.Task, c
 	}
 	s.logInfo(task.UserID, task.ID, "时间线转写任务开始", "")
 
-	resource, reader, err := s.OpenResource(task.UserID, input.ResourceID)
+	resource, reader, err := s.openResource(withTaskExecutionID(ctx, task.ID), task.UserID, input.ResourceID)
 	if err != nil || reader == nil {
 		return w.failTimelineTask(task, "转写失败", "无法读取待转写媒体，可能已被删除")
 	}

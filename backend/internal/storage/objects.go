@@ -115,11 +115,14 @@ func GetOSSObjectRange(setting Settings, objectKey string, rangeHeader string) (
 	if setting.CDNBaseURL != "" && (setting.Delivery.CDNAuthMode == "" || CDNEnabled(setting)) {
 		return getCDNObjectRange(setting, objectKey, rangeHeader)
 	}
-	return GetOriginObjectRange(setting, objectKey, rangeHeader)
+	return GetOriginObjectRange(context.Background(), setting, objectKey, rangeHeader)
 }
 
-func GetOriginObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+func GetOriginObjectRange(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	setting = NormalizeSettings(setting)
+	if setting.Provider == volcengineTOSProvider {
+		return readTOSObject(ctx, setting, objectKey, rangeHeader)
+	}
 	if usesS3Protocol(setting.Provider) {
 		return GetS3ObjectRange(setting, objectKey, rangeHeader)
 	}

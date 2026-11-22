@@ -175,6 +175,29 @@ func TestTaskTerminalCoordinatorRefundsFailureBeforeProviderRequest(t *testing.T
 	}
 }
 
+func TestTaskTerminalReferenceStorageFailureRefundsOnlyBeforeSubmission(t *testing.T) {
+	for _, uncertain := range []bool{false, true} {
+		task := &model.Task{ID: "task-reference", UserID: "user-1", BillingOrderID: "order-1"}
+		repo := &taskTerminalRepositoryStub{task: task}
+		billing := &taskTerminalBillingStub{}
+		terminal := newTaskTerminalCoordinatorForTest(repo, billing, &taskTerminalReplayStub{}, &taskTerminalLoggerStub{}, &taskTerminalOutputStub{})
+		cause := &referenceStorageReadError{cause: context.DeadlineExceeded}
+		err := terminal.markPreparationFailure(task, "读取参考素材失败", cause, uncertain, "参考素材读取失败，上游请求未发出")
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatal(err)
+		}
+		diagnostic := taskExecutionDiagnostic(task)
+		if uncertain {
+			if diagnostic.SubmissionOutcome != "unknown" || len(billing.uncertain) != 1 || len(billing.refund) != 0 {
+				t.Fatalf("unconfirmed execution was refunded: %+v %+v", diagnostic, billing)
+			}
+		} else if diagnostic.Code != "reference_storage_read_failed" || diagnostic.SubmissionOutcome != "not_submitted" ||
+			len(billing.refund) != 1 || len(billing.uncertain) != 0 {
+			t.Fatalf("reference failure was classified as generation failure: %+v %+v", diagnostic, billing)
+		}
+	}
+}
+
 func TestTaskTerminalCoordinatorLogsUnrecordedProviderFailure(t *testing.T) {
 	task := &model.Task{ID: "task-1", UserID: "user-1", BillingOrderID: "order-1"}
 	coordinator := newTaskTerminalCoordinatorForTest(

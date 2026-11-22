@@ -170,7 +170,7 @@ func TestHydrateProviderMediaKeepsImageUnderModelLimit(t *testing.T) {
 	textModelTestResource(t, s, db, "ref-fits", original)
 	media := providerMedia{StorageKey: "resource:ref-fits", MimeType: "image/png"}
 	// 30 MB 是文本模型默认声明的单张上限：没超过就不该动这张图。
-	if err := s.hydrateProviderMedia("user", &media, providerMediaHydrationPolicy{imageOnly: true, maxBytes: 30 << 20}); err != nil {
+	if err := s.hydrateProviderMedia(t.Context(), "user", &media, providerMediaHydrationPolicy{imageOnly: true, maxBytes: 30 << 20}); err != nil {
 		t.Fatal(err)
 	}
 	if media.DataURL != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(original) {
@@ -187,7 +187,7 @@ func TestHydrateProviderMediaCompressesImageAboveModelLimit(t *testing.T) {
 	textModelTestResource(t, s, db, "ref-big", original)
 	const modelLimit = 800 * 1024
 	media := providerMedia{StorageKey: "resource:ref-big", MimeType: "image/png"}
-	if err := s.hydrateProviderMedia("user", &media, providerMediaHydrationPolicy{imageOnly: true, maxBytes: modelLimit}); err != nil {
+	if err := s.hydrateProviderMedia(t.Context(), "user", &media, providerMediaHydrationPolicy{imageOnly: true, maxBytes: modelLimit}); err != nil {
 		t.Fatal(err)
 	}
 	mimeType, payload, ok := splitCreationDataURL(media.DataURL)
@@ -216,7 +216,7 @@ func TestHydrateGenerationMediaRejectsUnreachableImageWithOriginalMessage(t *tes
 	inspection := cloudAgentImageInspection{Receipt: map[string]any{"nodeId": "cat", "bytes": len(original)}, ImageURL: "resource:ref-tight", Purpose: "看画面"}
 	canonical := canonicalAgentRequest{Messages: []map[string]any{{"role": "user", "content": cloudAgentImageContentParts(inspection)}}}
 	input := canvasGenerationInput{Mode: "text", Prompt: "描述图片", ReferenceImages: []providerMedia{{StorageKey: "resource:ref-tight", MimeType: "image/png"}}, AgentRequests: &agentToolRequests{Canonical: &canonical}, Config: providerConfig{Model: "text-test", InterfaceType: string(model.ChannelInterfaceChatCompletion), APIKey: "test-only", CapabilityConfig: &ModelCapabilityConfig{Text: &TextCapabilityConfig{References: limits}}}}
-	err := s.hydrateGenerationMedia("user", &input, providerMediaHydrationPolicy{})
+	err := s.hydrateGenerationMedia(t.Context(), "user", &input, providerMediaHydrationPolicy{})
 	if err == nil || err.Error() != "参考图片文件超过当前模型大小限制" {
 		t.Fatalf("an unreachable image must keep the original rejection: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestHydrateProviderMediaRejectsImageOnlyWithPreferredObjectURL(t *testing.T
 		t.Fatal(err)
 	}
 	media := providerMedia{StorageKey: "resource:ref-oss", MimeType: "image/png"}
-	err := s.hydrateProviderMedia("user", &media, providerMediaHydrationPolicy{imageOnly: true, preferURL: true, maxBytes: 30 << 20})
+	err := s.hydrateProviderMedia(t.Context(), "user", &media, providerMediaHydrationPolicy{imageOnly: true, preferURL: true, maxBytes: 30 << 20})
 	if !errors.Is(err, errTextModelImageLimitNeedsPixels) {
 		t.Fatalf("imageOnly must not hand the upstream a signed object URL: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestHydrateProviderMediaRejectsImageOnlyWithPreferredObjectURL(t *testing.T
 	}
 	// 去掉 imageOnly（普通生成任务）时仍按原协议优先公网地址，不受这条守卫影响。
 	plain := providerMedia{StorageKey: "resource:ref-oss", MimeType: "image/png"}
-	if err := s.hydrateProviderMedia("user", &plain, providerMediaHydrationPolicy{preferURL: true}); err != nil {
+	if err := s.hydrateProviderMedia(t.Context(), "user", &plain, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 		t.Skipf("本用例夹具未配置对象存储密钥，公网地址分支无法在此验证：%v", err)
 	}
 	if plain.URL == "" || plain.DataURL != "" {
@@ -256,7 +256,7 @@ func TestHydrateGenerationMediaUnlimitedModelKeepsLargeImage(t *testing.T) {
 	original := textModelTestNoisyPNG(t, 900, 700, false)
 	textModelTestResource(t, s, db, "ref-unlimited", original)
 	media := providerMedia{StorageKey: "resource:ref-unlimited", MimeType: "image/png"}
-	if err := s.hydrateProviderMedia("user", &media, providerMediaHydrationPolicy{imageOnly: true, maxBytes: 0}); err != nil {
+	if err := s.hydrateProviderMedia(t.Context(), "user", &media, providerMediaHydrationPolicy{imageOnly: true, maxBytes: 0}); err != nil {
 		t.Fatalf("an unlimited model must not be rejected by the compression hard cap: %v", err)
 	}
 	if media.DataURL != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(original) {

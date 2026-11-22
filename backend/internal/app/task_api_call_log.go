@@ -64,6 +64,8 @@ func (s *Service) ensureFailedProviderAttemptLogged(task model.Task, taskErr err
 	} else if strings.TrimSpace(metadata.ProviderRequestID) != "" {
 		path = "/task/provider-state"
 		errorCode = "provider_state_unlogged"
+	} else if code := referenceReadFailureCode(taskErr); code != "" {
+		errorCode = code
 	}
 	callLog := model.ApiCallLog{
 		UserID:            metadata.UserID,

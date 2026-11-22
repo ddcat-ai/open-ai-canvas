@@ -93,7 +93,13 @@ func (c *taskTerminalCoordinator) markPreparationFailure(task *model.Task, stage
 	if billingUncertain {
 		outcome, retryClass = "unknown", "reconcile_submission"
 	}
-	recordTaskDiagnostic(task, "preparation", "preparation_failed", outcome, retryClass, err)
+	code := "preparation_failed"
+	diagnosticCause := err
+	if referenceCode := referenceReadFailureCode(err); referenceCode != "" && !billingUncertain {
+		code, retryClass = referenceCode, "new_generation_authorization"
+		diagnosticCause = nil
+	}
+	recordTaskDiagnostic(task, "preparation", code, outcome, retryClass, diagnosticCause)
 	if terminalErr := c.markTerminalState(task); terminalErr != nil {
 		return errors.Join(err, terminalErr)
 	}

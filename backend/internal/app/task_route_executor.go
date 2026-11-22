@@ -63,6 +63,9 @@ func (e *taskRouteExecutor) execute(ctx context.Context, task *model.Task, attem
 		if execution.err == nil {
 			break
 		}
+		if referenceReadFailureCode(execution.err) != "" {
+			break
+		}
 		nextAttempt, routeErr := e.port.nextRouteAttemptAfterFailure(task, attempt, execution.err)
 		if routeErr != nil {
 			_ = e.port.log(task.UserID, task.ID, "warn", "备用路由不可用，保留原始失败", routeErr.Error())

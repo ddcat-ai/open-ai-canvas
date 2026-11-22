@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -54,7 +55,7 @@ func TestEcommerceProcessingReadsOwnedOriginBytesWithoutCDNRedirect(t *testing.T
 	originalGet := getOriginOSSObjectRange
 	t.Cleanup(func() { getOriginOSSObjectRange = originalGet })
 	reads := 0
-	getOriginOSSObjectRange = func(actual storage.Settings, key, _ string) (*storage.ObjectStream, error) {
+	getOriginOSSObjectRange = func(_ context.Context, actual storage.Settings, key, _ string) (*storage.ObjectStream, error) {
 		reads++
 		if actual.Endpoint != setting.Endpoint || actual.Bucket != setting.Bucket || key != resource.ObjectKey {
 			t.Fatal("processing did not retain the resource's actual storage identity")

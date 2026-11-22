@@ -76,6 +76,9 @@ func (s *Service) beginTaskRouteAttempt(task *model.Task) (*model.RouteAttempt, 
 			}
 			return nil, routeDispatchUncertainError{"上一次提交结果不明确，为避免重复扣费已停止自动重发"}
 		case "rejected_no_job":
+			if existing.FailureCode == "reference_storage_read_failed" {
+				return nil, &referenceStorageReadError{cause: errors.New("原尝试未读完参考素材")}
+			}
 			if task.LogicalModelID == "" {
 				return nil, errors.New("上游已拒绝本次请求，请检查渠道配置后再试")
 			}
@@ -499,6 +502,9 @@ func (s *Service) finishTaskRouteAttempt(attempt *model.RouteAttempt, task *mode
 		attempt.FailureCode = routeFailureCode(taskErr)
 		if attempt.ProviderRequestID != "" {
 			attempt.DispatchState = "accepted"
+		} else if code := referenceReadFailureCode(taskErr); code != "" {
+			attempt.FailureCode = code
+			attempt.DispatchState = "rejected_no_job"
 		} else if safeRouteRejection(taskErr) {
 			attempt.DispatchState = "rejected_no_job"
 		} else {
