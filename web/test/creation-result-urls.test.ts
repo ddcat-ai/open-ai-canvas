@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { creationResultStorageKeysForMessage } from "@/lib/canvas/canvas-asset-handoff";
 import { creationResultEntries, usableResultUrl } from "@/pages/create/creation-result-urls";
 
 const now = Date.parse("2026-10-21T08:00:00Z");
@@ -44,6 +45,26 @@ describe("快速创作结果展示地址", () => {
 
     test("没有 storageKey 时沿用历史地址", () => {
         expect(creationResultEntries({ ...base, storageKeys: [], storedUrls: ["https://cdn.example/a.png", ""], isVideo: false })).toEqual({ entries: [{ key: "https://cdn.example/a.png", url: "https://cdn.example/a.png" }], resolving: false });
+    });
+});
+
+describe("创作消息结果恢复", () => {
+    test("任务快照缺少结果字段时仍能从已落库素材恢复稳定定位", () => {
+        const assets = [
+            {
+                id: "asset-1",
+                kind: "video",
+                title: "镜头",
+                coverUrl: "",
+                tags: [],
+                createdAt: "",
+                updatedAt: "",
+                metadata: { source: "generation-task", taskId: "task-1", messageId: "message-1", outputIndex: 0 },
+                data: { url: "/api/resources/video-1/file", storageKey: "resource:video-1", width: 0, height: 0, bytes: 1, mimeType: "video/mp4" },
+            },
+        ] as never[];
+
+        expect(creationResultStorageKeysForMessage(assets, { messageId: "message-1", taskIds: ["task-1"] })).toEqual(["resource:video-1"]);
     });
 });
 

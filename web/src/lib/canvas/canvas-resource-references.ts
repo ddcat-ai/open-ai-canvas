@@ -107,6 +107,8 @@ export function canvasNodeMentionToken(nodeId: string) {
 }
 
 export function canvasReferenceDisplayName(reference: CanvasResourceReference) {
+    const displayLabel = reference.displayLabel?.trim();
+    if (displayLabel) return displayLabel;
     const title = reference.title.trim();
     return title && title !== reference.label ? `${title} · ${reference.label}` : reference.label;
 }
@@ -588,6 +590,12 @@ function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
                 kind,
                 label,
                 title: node.title || label,
+                // Keep the stable numbered label for serialization (for example
+                // @图片1), while showing the canvas node's own name in the
+                // inline mention chip and mention picker.  The generated prompt
+                // must continue to use `label` so existing references and
+                // connection rewrites remain backwards compatible.
+                displayLabel: node.title?.trim() || label,
                 previewUrl:
                     node.metadata?.workflowKind === "character"
                         ? node.metadata.characterCoverUrl

@@ -196,6 +196,15 @@ func TestRuntimePolicyDefaultsAndSelfUseModeValidate(t *testing.T) {
 	}
 }
 
+func TestRuntimePolicyRejectsExplicitPoolBelowAccountLimit(t *testing.T) {
+	policy := defaultRuntimePolicy()
+	policy.Resource.AgentHistoryMB = 50000
+	policy.Resource.AgentHistoryGlobalMB = 8192
+	if err := validateRuntimePolicy(policy); err == nil {
+		t.Fatal("explicit pool below account limit was accepted")
+	}
+}
+
 func TestRuntimePolicyRejectsSingleFileAboveAccountCapacity(t *testing.T) {
 	policy := defaultRuntimePolicy()
 	policy.Resource.StoredFileGB = 1

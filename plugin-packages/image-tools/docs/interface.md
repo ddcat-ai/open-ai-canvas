@@ -10,7 +10,7 @@
 ## Layer Decomposition
 
 - Provider: `image-tools-layer-decomposition`
-- Upstream: `POST /bytedance/seedream-v5.0-pro/layer-decomposition`
+- Upstream: `POST /bytedance/seedream-v5.5/layer-decomposition`
 - Input: first image in `images[]`
 - Output: asynchronous image result list
 
@@ -24,7 +24,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "image-tools",
   "name": "Image Tools",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "影策",
   "description": "图片去背景与图层拆分工具协议插件。",
   "permissions": [
@@ -199,7 +199,7 @@
             "type": "string",
             "required": false,
             "mapping": "model",
-            "description": "默认 bytedance/seedream-v5.0-pro/layer-decomposition。"
+            "description": "默认 bytedance/seedream-v5.5/layer-decomposition。"
           },
           {
             "name": "prompt",
@@ -225,7 +225,7 @@
         ],
         "create": {
           "method": "POST",
-          "path": "/bytedance/seedream-v5.0-pro/layer-decomposition",
+          "path": "/bytedance/seedream-v5.5/layer-decomposition",
           "contentType": "application/json",
           "body": {
             "image": {

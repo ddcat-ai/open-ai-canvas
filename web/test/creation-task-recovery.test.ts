@@ -57,6 +57,13 @@ describe("首页创作：页面没跟上 ≠ 生成失败", () => {
         expect(reconcileCreationTaskMessages(runtime, source, [task({ status: "succeeded", creationResultStorageKeys: ["resource:video-1"] })])).toBe(source);
     });
 
+    test("声明式协议缺少结果地址时，后台转存后可以补回同一任务结果", () => {
+        const source = conversations(assistant({ status: "error", errorKind: "task", error: "声明式协议已完成但没有返回结果" }));
+        expect(creationMessageNeedsResultSync(source[0].messages[1])).toBe(true);
+        const next = messageOf(reconcileCreationTaskMessages(runtime, source, [task({ status: "succeeded", creationResultStorageKeys: ["resource:video-1"] })]));
+        expect(next).toMatchObject({ status: "done", resultStorageKeys: ["resource:video-1"] });
+    });
+
     test("阶段和进度没有变化时不产生新对象，避免每次轮询都重写本地记录", () => {
         const source = conversations(assistant({ status: "pending", generationStatus: "running", generationStage: "上游生成中", generationProgress: 40 }));
         expect(reconcileCreationTaskMessages(runtime, source, [task({ stage: "上游生成中", progress: 40 })])).toBe(source);
@@ -94,11 +101,12 @@ describe("首页创作恢复监听范围", () => {
                     { id: "pending", role: "assistant" as const, mode: "video", status: "pending", taskIds: ["task-pending"] },
                     { id: "sync", role: "assistant" as const, mode: "video", status: "error", errorKind: "sync", taskIds: ["task-sync"] },
                     { id: "legacy", role: "assistant" as const, mode: "video", status: "error", taskIds: ["task-legacy"] },
-                    { id: "failed", role: "assistant" as const, mode: "video", status: "error", errorKind: "task", taskIds: ["task-failed"] },
+                    { id: "failed", role: "assistant" as const, mode: "video", status: "error", errorKind: "task", error: "模型服务处理失败", taskIds: ["task-failed"] },
+                    { id: "recoverable", role: "assistant" as const, mode: "video", status: "error", errorKind: "task", error: "声明式协议已完成但没有返回结果", taskIds: ["task-recoverable"] },
                     { id: "done", role: "assistant" as const, mode: "video", status: "done", taskIds: ["task-done"] },
                 ],
             },
         ];
-        expect(pendingCreationTaskIds(stored)).toEqual(["task-pending", "task-sync", "task-legacy"]);
+        expect(pendingCreationTaskIds(stored)).toEqual(["task-pending", "task-sync", "task-legacy", "task-recoverable"]);
     });
 });

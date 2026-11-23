@@ -170,7 +170,10 @@ func selectModelRelease(registry *protocol.Registry, id, digest string, chooseCu
 		if !release.Selectable {
 			continue
 		}
-		if release.SHA256 == digest || digest == "" && release.Current && (chooseCurrent || len(releases) == 1) {
+		// An empty digest means the model follows the instance's current
+		// selectable release. A non-empty digest remains an explicit pin to
+		// that package, including an archived release.
+		if release.SHA256 == digest || digest == "" && release.Current {
 			return release, nil
 		}
 	}

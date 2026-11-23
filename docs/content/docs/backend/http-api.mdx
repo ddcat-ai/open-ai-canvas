@@ -109,7 +109,9 @@ Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工�
 
 安装方式和限制见 [MCP 连接与市场](./agent-mcp)。
 
-检测与调用的限频、并发和存储拒绝使用真实 429 / 403 错误，协调器不可用时拒绝新外部操作。管理员资源策略 `task.agentMaxRunsPerUser` 默认 5，范围 1–64；新安装 `task.agentMaxSessions` 默认 8。`GET/PUT /admin/settings/runtime-policy` 的 `resource.agentHistoryMB` 设置每账号 Agent 历史容量（1–999999 MiB；旧配置缺省为 256 MiB）。用户详情 `storageUsage.agentBytes/agentLimitBytes` 显示用量和策略上限，独立于文件空间及 MCP 的 64 MiB 额度。
+检测与调用的限频、并发和存储拒绝使用真实 429 / 403 错误，协调器不可用时拒绝新外部操作。管理员资源策略 `task.agentMaxRunsPerUser` 默认 5，范围 1–64；新安装 `task.agentMaxSessions` 默认 8。`GET/PUT /admin/settings/runtime-policy` 的 `resource.agentHistoryMB` 设置每账号 Agent 历史容量（1–999999 MiB；旧配置缺省为 256 MiB），`resource.agentHistoryGlobalMB` 设置所有账号热 Agent 历史池上限（默认 8192 MiB）。热池超限时先整理超过一分钟的旧终态，仍不足才拒绝写入。用户详情 `storageUsage.agentBytes/agentLimitBytes` 显示用量和每账号策略上限，独立于文件空间及 MCP 的 64 MiB 额度。
+
+旧站只设置了每账号额度时，升级后全站热历史池取 8192 MiB 和原每账号额度中的较大值。已显式设置全站额度的站点继续使用原值，管理员保存时全站额度必须大于或等于每账号额度。
 
 `DELETE /admin/users/:id/agent-history` 仅限管理员。成功返回 `data.freedBytes`；清理目标账号全部 Agent 历史、扣减账本并记录管理审计。只要存在未结束、待收尾或刚预留的轮次，返回 409 且不删除任何记录。清理不可恢复，不影响已有画布、素材、任务和账务。
 
@@ -612,7 +614,7 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 文本模型额外返回 `textWire`（`chat-completion` / `responses` / `claude-api`），由协议插件的 `create.path` 识别，不看协议 ID；识别不出时省略。浏览器直连系统代理的提示词优化、编辑器助手和美术点评按它选择 `/chat/completions`、`/responses` 或 `/messages`。`GET /plugins/catalog` 的 provider 同样返回 `textWire`，并在插件 `auth.secretField` 指向 Secret Key 时返回 `requiresSecretKey: true`。系统渠道代理只放行内置合同或插件声明的 POST 路径，出站鉴权按插件 `auth` 声明写，详见 [统一插件运行时](/docs/backend/protocol-plugins)。
 
-`GET /plugins/catalog?scope=admin.system-channel` 在 provider 的 `releases[]` 返回已安装的可选发行版，包含 `pluginId`、`version`、`sha256`、`current`、创建与轮询路径，以及该版声明的图片参数、工作流、`videoModes`、`videoOutputs`。管理端保存、测试或导入渠道模型使用 `protocol` 和 `protocolRelease`（完整 SHA-256）。同一渠道可同时绑定多个版本。系统任务创建时由服务端从所选模型解析版本。
+`GET /plugins/catalog?scope=admin.system-channel` 在 provider 的 `releases[]` 返回已安装的可选发行版，包含 `pluginId`、`version`、`sha256`、`current`、创建与轮询路径，以及该版声明的图片参数、工作流、`videoModes`、`videoOutputs`。管理端保存、测试或导入渠道模型使用 `protocol` 和可选的 `protocolRelease`（完整 SHA-256）；未提供版本时按当前启用发行版解析。系统任务创建时由服务端从所选模型解析版本并写入任务绑定，明确填写的旧版摘要保持不变。
 
 渠道模型创建、更新、管理列表、公开目录和会话模型价格信息均使用 `description` 表达模型描述。服务端去除首尾空白后限制为 500 字，允许空字符串清除描述；无管理员权限或超长内容拒绝保存。创作端二级选项常驻展示该字段，不依赖悬浮 Tooltip；未填写的系统模型不按名称生成宣传文案。
 
@@ -787,6 +789,8 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 - `GET /agent/conversations?canvasId=&limit=100&before=` 只读查询当前用户在该画布中参与过的对话，返回 `{ items, nextCursor? }`。每项包含 `id`（现有 `conversationId`）、`canvasId`、`title`、`latestRunId`、`status`、`revision`、`cleanupPending` 和时间；按最新轮 `createdAt`、`id` 倒序。对话换绑画布后，目录摘要仍取整个对话的最新轮次，不能使用旧画布内的最后一轮。画布必须属于当前用户。
 - `GET /agent/conversations/:id/runs?limit=100&after=` 返回 `{ items, nextCursor? }`，按 `createdAt`、`id` 升序恢复同一用户、同一对话的全部轮次，包括跨页面的轮次。两处 `limit` 为 1–100，分页游标直接回传服务端的 `nextCursor`。运行视图增加 `conversationId`、`userPrompt`、`idempotencyKey`，供另一设备恢复用户消息并去重；每轮仍只返回一页事件。首次恢复用 `GET /agent/runs/:id?fromStart=true&sinceSeq=0&eventLimit=500` 从第一条事件开始，再以 `latestSeq` 作为后续 `sinceSeq`，直到追平 `eventCount`；默认不带 `fromStart` 的尾部窗口行为不变。客户端已恢复过某轮时，应把本机从 seq=1 连续的事件前缀与列表尾部窗口合并：合并后追平 `eventCount` 就不再请求，否则从前缀末尾按 `sinceSeq` 增量读取，不能因为尾部窗口不从 1 开始而回到 `sinceSeq=0`。读取接口不创建模型或媒体任务。
 - `GET /agent/conversations/:id` 返回单个对话的目录项（字段同上），只读控制列、不载入事件，`latestRunId`/`status`/`revision`/`cleanupPending` 取该对话全局最新一轮；会话不存在或不属于当前用户返回 404。前端轮询时，已选中但不在当前画布目录里的对话用它判断是否变化，未变化就复用本机快照，不再每轮重读全部轮次。
+- `DELETE /agent/conversations/:id` 删除当前用户这一整段对话的 Agent 历史。只允许删除已结束且已完成收尾的轮次，归档副本、事件、消息、Pi 会话和 Agent 撤销快照一并删除；任务、画布、素材和账务记录保留。活动或待收尾轮次返回 409，跨用户或不存在的对话返回 404。前端确认删除后同时清理本机对话、待确认提交和排队消息。
+- `POST /agent/conversations/:id/compact` 将对话中已结束轮次的热历史压缩为 gzip 冷归档，释放账号 Agent 热账本空间。操作幂等，返回 `data.freedBytes`；归档仍可用于历史读取，归档后的运行不再支持画布撤销。服务端写入达到额度时会优先整理超过一分钟的旧终态轮次，整理失败会如实返回存储错误。
 - 同一对话只允许从最新终态轮次接续。另一设备已经提交后续轮次时，旧父轮新请求返回 409，`reason: agent_conversation_stale_parent`，客户端先同步历史，不能自动重发。该检查与任务创建、积分预留同事务串行，覆盖新子轮尚未保存执行检查点的间隙；原请求的幂等回放仍先执行，画布独占和防重复生成规则保持。
 - `POST /agent/runs/:id/interjections` 向**正在运行**的轮次插入一句话，不新建轮次、不产生新的扣费身份。请求 `{ text, messageId }`，`text` 最多 4000 字符；同一 `messageId` 幂等。插话在下一次模型调用前注入；运行已结束返回 409 `agent_interjection_run_finished`，前端把这条留在本机队列首位作为下一轮发送；运行状态并发写冲突返回 409 `agent_run_state_busy`（可重试）。`DELETE /agent/runs/:id/interjections/:messageId` 撤回尚未送达的插话，已送达或本轮已结束返回 409 `agent_interjection_already_delivered`；服务端记住撤回过的 `messageId`，再次用它插话会按幂等忽略，所以前端把撤回的原文以新 ID 放回队列。步数耗尽或运行失败时发出 `user_interjection_dropped`，不会静默吞掉，也不会自动替用户开新一轮。
 - 请求字段包括 `canvasId`（空字符串为未绑定画布的对话）、`prompt`、受管 `logicalModelId` 或 `channelId` + `channelModelKey`、`permissionMode: "read_only" | "request_approval" | "auto"`、`reasoningMode`、`profileRevision`、`pinnedSkillIds`、`contextScope: [] | ["canvas"]`、`focusNodeIds`（最多 8 个）、`focusNodeOmittedCount`、`budget: { maxCredits, maxGenerationTasks, maxVideoSeconds, maxSteps }` 和 `idempotencyKey`。`pinnedSkillIds` 接受对话固定的技能和消息中 `@[skill:ID]` 点名的技能，合计最多 16 个，均须已安装且启用。其他允许自动使用的技能可按需检索。前端多选超过 8 个节点时保留前 8 个并报告省略数量。未绑定画布时上下文和焦点必须为空。旧字段 `skillIds`、密钥、自定义 URL、客户端历史和未知字段均被拒绝。
@@ -1062,7 +1066,7 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 | 504 | 504 | `timeout` | 超时 |
 | 40301 | 403 | `quota_exceeded` | 账号配额用尽（不自动重试） |
 | 40301 | 403 | `storage_capacity_exceeded` | 账号文件容量不足，上传或媒体生成被拒；前端据此展示“购买空间”入口 |
-| 40301 | 403 | `agent_history_capacity_exceeded` | Agent 历史容量不足；联系管理员调高独立额度或清理历史，不展示文件扩容入口 |
+| 40301 | 403 | `agent_history_capacity_exceeded` | Agent 热历史容量不足（账号额度或平台热池）；清理历史或联系管理员调整 Agent 独立额度，不展示文件扩容入口 |
 | 40302 | 403 | `storage_read_only` | 账号超出文件容量且 7 天宽限期已结束，内容写入被拒；`details` 含 `usedBytes`、`totalBytes`、`readOnlyAt` |
 | 40401 | 404 | `account_not_registered` | 一体表单密码登录时账号不存在且允许注册；`details.accountKind` 为 `username` / `email` |
 | 40901 | 409 | `conflict` | 幂等冲突 |

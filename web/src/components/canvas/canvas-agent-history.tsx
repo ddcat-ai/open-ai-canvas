@@ -47,6 +47,7 @@ export function AgentHistory({
     loading,
     error,
     openingId,
+    deletingId,
     disabledReason,
     onRefresh,
     onCollapse,
@@ -56,10 +57,11 @@ export function AgentHistory({
     onBack: () => void;
     onNew: () => void;
     onOpen: (conversation: CloudAgentConversation) => void;
-    onDelete: (id: string) => void;
+    onDelete: (id: string) => void | Promise<void>;
     loading?: boolean;
     error?: string;
     openingId?: string;
+    deletingId?: string;
     disabledReason?: string;
     onRefresh?: () => void;
     onCollapse?: () => void;
@@ -149,28 +151,26 @@ export function AgentHistory({
                                                 </span>
                                             </span>
                                         </button>
-                                        {!cloud ? (
-                                            <Popconfirm
-                                                title="删除这段本机对话？"
-                                                description="对话和排队消息都会从本机移除。"
-                                                okText="删除"
-                                                cancelText="取消"
-                                                okButtonProps={{ danger: true }}
-                                                onConfirm={() => onDelete(item.id)}
-                                                getPopupContainer={(trigger) => trigger.closest<HTMLElement>(".canvas-agent-panel") || trigger.parentElement!}
-                                            >
-                                                <Button
-                                                    type="text"
-                                                    size="small"
-                                                    shape="circle"
-                                                    disabled={disabled}
-                                                    className="canvas-agent-history-delete"
-                                                    icon={<Trash2 className="size-3.5" />}
-                                                    aria-label={`删除对话 ${item.title}`}
-                                                    title={disabledReason || "删除本机对话"}
-                                                />
-                                            </Popconfirm>
-                                        ) : null}
+                                        <Popconfirm
+                                            title={cloud ? "删除这段云端对话？" : "删除这段本机对话？"}
+                                            description={cloud ? "Agent 历史会从账号中删除，任务、画布和素材不会删除。" : "对话和排队消息都会从本机移除。"}
+                                            okText="删除"
+                                            cancelText="取消"
+                                            okButtonProps={{ danger: true }}
+                                            onConfirm={() => onDelete(item.id)}
+                                            getPopupContainer={(trigger) => trigger.closest<HTMLElement>(".canvas-agent-panel") || trigger.parentElement!}
+                                        >
+                                            <Button
+                                                type="text"
+                                                size="small"
+                                                shape="circle"
+                                                disabled={disabled || Boolean(deletingId && deletingId !== item.id)}
+                                                className="canvas-agent-history-delete"
+                                                icon={deletingId === item.id ? <LoaderCircle className="size-3.5 motion-safe:animate-spin" /> : <Trash2 className="size-3.5" />}
+                                                aria-label={`删除对话 ${item.title}`}
+                                                title={disabledReason || (cloud ? "删除云端对话" : "删除本机对话")}
+                                            />
+                                        </Popconfirm>
                                     </li>
                                 );
                             })}

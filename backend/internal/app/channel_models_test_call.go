@@ -36,7 +36,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "" {
 		return nil, BadAuthRequest("请先在渠道中配置 Base URL 和 API Key")
 	}
-	if _, err := ValidateOutboundURL(channel.BaseURL); err != nil {
+	if _, err := ValidateOutboundURLWithProxy(channel.BaseURL, channel.ProxyURL); err != nil {
 		return nil, err
 	}
 	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)

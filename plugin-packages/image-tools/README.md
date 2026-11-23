@@ -5,7 +5,7 @@
 ## 能力
 
 - `image-tools-remove-background`：`bria/remove-background`
-- `image-tools-layer-decomposition`：`bytedance/seedream-v5.0-pro/layer-decomposition`
+- `image-tools-layer-decomposition`：`bytedance/seedream-v5.5/layer-decomposition`
 
 两个 provider 都接受统一的 `images[]` 源图输入，结果 URL 会由宿主下载并持久化。
 

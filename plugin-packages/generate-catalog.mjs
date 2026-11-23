@@ -654,8 +654,8 @@ const newAPITaskMessage = coalesce(
 );
 
 add({
-  id: "newapi-media-task-v1", version: "2.0.1", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
-  videoReferences: numberedImages("input-media"),
+  id: "newapi-media-task-v1", version: "2.0.2", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
+  videoReferences: { ...numberedImages("input-media"), dramaTailFrame: "reference-image" },
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   create: jsonCreate("/v1/videos", {
     model: ref("request.model"),
@@ -1375,7 +1375,7 @@ for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, request
   ["adobe-firefly", "Adobe Firefly", "Adobe", "image", "https://firefly-api.adobe.io", "/v3/images/generate", null, "versioned Firefly request"],
   ["runway-image", "Runway Image", "Runway", "image", "https://api.dev.runwayml.com", "/v1/text_to_image", "/v1/tasks/{{taskId}}", "async Runway image schema"],
   ["vertex-veo", "Vertex AI Veo", "Google Cloud", "video", "https://{location}-aiplatform.googleapis.com", "/v1/projects/{{request.providerOptions.vertex-veo.project}}/locations/{{request.providerOptions.vertex-veo.location}}/publishers/google/models/{{model}}:predictLongRunning", "/v1/{{taskId}}", "Vertex long-running operation"],
-  ["seedance-videos-compatible", "Seedance Compatible /videos", "Gateway profile", "video", "http://127.0.0.1:3000", "/v1/videos", "/v1/videos/{{taskId}}", "gateway-specific videos JSON", "2.0.1"],
+  ["seedance-videos-compatible", "Seedance Compatible /videos", "Gateway profile", "video", "http://127.0.0.1:3000", "/v1/videos", "/v1/videos/{{taskId}}", "gateway-specific videos JSON", "2.0.2"],
   ["kling-video", "Kling Video", "Kuaishou", "video", "https://api.klingai.com", "/v1/videos/generations", "/v1/videos/generations/{{taskId}}", "text/image/multi-image task"],
   ["runway-video", "Runway Video", "Runway", "video", "https://api.dev.runwayml.com", "/v1/image_to_video", "/v1/tasks/{{taskId}}", "promptImage+promptText+ratio+duration"],
   ["luma-dream-machine", "Luma Dream Machine", "Luma AI", "video", "https://api.lumalabs.ai", "/dream-machine/v1/generations", "/dream-machine/v1/generations/{{taskId}}", "prompt+keyframes"],
@@ -1407,7 +1407,11 @@ for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, request
     notes: `该协议的模型级字段变化快或依赖云资源配置。插件固定线协议入口和统一字段，完整厂商对象通过 providerOptions.${id} 的 parameters/input/extra_body 传入；${requestShape}。云签名型入口在未配置对应鉴权驱动时会明确失败，不会伪装成 Bearer 成功。`,
     create: jsonCreate(createPath, standard, operationExtra),
     poll: pollPath ? { method: "GET", path: pollPath } : undefined,
-    response: pollPath ? asyncResponse(capability) : { status: "succeeded", [capability + "s"]: coalesce(ref("response.data"), ref("response.output"), ref("response.url")), errorPaths: ["error.code", "code"], messagePaths: ["error.message", "message"] }
+    response: pollPath
+      ? asyncResponse(capability, id === "seedance-videos-compatible" ? {
+        videos: coalesce(ref("response.metadata.url"), ref("response.data.metadata.url"), ref("response.video_url"), ref("response.videoUrl"), ref("response.result_url"), ref("response.url"), ref("response.data.video_url"), ref("response.output.url"))
+      } : {})
+      : { status: "succeeded", [capability + "s"]: coalesce(ref("response.data"), ref("response.output"), ref("response.url")), errorPaths: ["error.code", "code"], messagePaths: ["error.message", "message"] }
   });
 }
 

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +20,19 @@ import (
 func (r *Repository) CloudAgentPiSession(userID, runID string) (*model.CloudAgentPiSession, error) {
 	var session model.CloudAgentPiSession
 	err := r.db.First(&session, "run_id = ? AND user_id = ?", runID, userID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		payload, archiveErr := r.cloudAgentHistoryArchive(userID, runID)
+		if archiveErr != nil {
+			if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+				return &session, err
+			}
+			return &session, archiveErr
+		}
+		if payload.Session == nil {
+			return &session, gorm.ErrRecordNotFound
+		}
+		return payload.Session, nil
+	}
 	return &session, err
 }
 
@@ -156,6 +171,22 @@ func (r *Repository) hydrateCloudAgent(run *model.CloudAgentExecution) error {
 	if run.CheckpointVersion < 2 {
 		return nil
 	}
+	if run.HistoryCompacted {
+		payload, err := r.cloudAgentHistoryArchive(run.UserID, run.ID)
+		if err != nil {
+			return err
+		}
+		events := payload.Events
+		if len(events) > CloudAgentJournalWindow {
+			events = events[len(events)-CloudAgentJournalWindow:]
+		}
+		run.Journal = append([]model.CloudAgentEventRecord(nil), events...)
+		run.Transcript = append([]model.CloudAgentMessageRecord(nil), payload.Messages...)
+		if payload.StateJSON != "" {
+			run.StateJSON = payload.StateJSON
+		}
+		return nil
+	}
 	// 只取最近一窗，再翻回升序：与 EventCount 的尾部对齐（不变量见 app 侧解码）。
 	window := []model.CloudAgentEventRecord{}
 	if err := r.db.Where("run_id = ? AND user_id = ?", run.ID, run.UserID).
@@ -181,7 +212,26 @@ func (r *Repository) CloudAgentEventRecords(userID, runID string, afterSeq, limi
 	records := []model.CloudAgentEventRecord{}
 	err := r.db.Where("run_id = ? AND user_id = ? AND sequence > ?", runID, userID, afterSeq).
 		Order("sequence ASC").Limit(limit).Find(&records).Error
-	return records, err
+	if err != nil || len(records) > 0 {
+		return records, err
+	}
+	payload, archiveErr := r.cloudAgentHistoryArchive(userID, runID)
+	if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+		return records, nil
+	}
+	if archiveErr != nil {
+		return nil, archiveErr
+	}
+	for _, event := range payload.Events {
+		if event.Sequence <= afterSeq {
+			continue
+		}
+		records = append(records, event)
+		if len(records) == limit {
+			break
+		}
+	}
+	return records, nil
 }
 
 // CloudAgentEventRecordsBefore 取 seq < beforeSeq 的**最近** limit 条（升序返回），
@@ -196,6 +246,21 @@ func (r *Repository) CloudAgentEventRecordsBefore(userID, runID string, beforeSe
 	if err != nil {
 		return nil, err
 	}
+	if len(records) == 0 {
+		payload, archiveErr := r.cloudAgentHistoryArchive(userID, runID)
+		if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+			return records, nil
+		}
+		if archiveErr != nil {
+			return nil, archiveErr
+		}
+		for index := len(payload.Events) - 1; index >= 0 && len(records) < limit; index-- {
+			event := payload.Events[index]
+			if event.Sequence < beforeSeq {
+				records = append(records, event)
+			}
+		}
+	}
 	for left, right := 0, len(records)-1; left < right; left, right = left+1, right-1 {
 		records[left], records[right] = records[right], records[left]
 	}
@@ -207,7 +272,17 @@ func (r *Repository) CloudAgentEventRecordCount(userID, runID string) (int64, er
 	var count int64
 	err := r.db.Model(&model.CloudAgentEventRecord{}).
 		Where("run_id = ? AND user_id = ?", runID, userID).Count(&count).Error
-	return count, err
+	if err != nil || count > 0 {
+		return count, err
+	}
+	payload, archiveErr := r.cloudAgentHistoryArchive(userID, runID)
+	if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+		return count, nil
+	}
+	if archiveErr != nil {
+		return 0, archiveErr
+	}
+	return int64(len(payload.Events)), nil
 }
 
 func (r *Repository) CloudAgentForActiveTask(userID, taskID string) (*model.CloudAgentExecution, error) {
@@ -288,10 +363,34 @@ func (r *Repository) RecentCloudAgentEventsForUser(userID string, runLimit int) 
 		return nil, nil
 	}
 	var records []model.CloudAgentEventRecord
-	err := r.db.Where("user_id = ? AND run_id IN ?", userID, runIDs).
-		Order("created_at, sequence").
-		Find(&records).Error
-	return records, err
+	for _, runID := range runIDs {
+		var runRecords []model.CloudAgentEventRecord
+		if err := r.db.Where("user_id = ? AND run_id = ?", userID, runID).
+			Order("created_at, sequence").Find(&runRecords).Error; err != nil {
+			return nil, err
+		}
+		if len(runRecords) == 0 {
+			payload, archiveErr := r.cloudAgentHistoryArchive(userID, runID)
+			if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+				continue
+			}
+			if archiveErr != nil {
+				return nil, archiveErr
+			}
+			runRecords = payload.Events
+		}
+		records = append(records, runRecords...)
+	}
+	sort.SliceStable(records, func(left, right int) bool {
+		if records[left].CreatedAt.Equal(records[right].CreatedAt) {
+			if records[left].RunID == records[right].RunID {
+				return records[left].Sequence < records[right].Sequence
+			}
+			return records[left].RunID < records[right].RunID
+		}
+		return records[left].CreatedAt.Before(records[right].CreatedAt)
+	})
+	return records, nil
 }
 
 // Lock before reading: checkpoints, canvas writes and task reservations commit together.
@@ -493,6 +592,20 @@ func (r *Repository) LatestCloudAgentCanvasMutation(userID, runID string) (*mode
 	var mutation model.CloudAgentCanvasMutation
 	err := r.db.Where("user_id = ? AND run_id = ?", userID, runID).
 		Order("created_at DESC, id DESC").First(&mutation).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		payload, archiveErr := r.cloudAgentHistoryArchive(userID, runID)
+		if archiveErr != nil {
+			if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+				return &mutation, err
+			}
+			return &mutation, archiveErr
+		}
+		if len(payload.Mutations) == 0 {
+			return &mutation, err
+		}
+		returnMutation := payload.Mutations[len(payload.Mutations)-1].model()
+		return &returnMutation, nil
+	}
 	return &mutation, err
 }
 

@@ -195,7 +195,7 @@ func cloudAgentMediaBatchNodePrompt(node map[string]any) string {
 	meta, _ := node["metadata"].(map[string]any)
 	if raw, exists := meta["generationSpec"]; exists {
 		if encoded, err := json.Marshal(raw); err == nil {
-			if spec, err := contract.Decode(encoded); err == nil && strings.TrimSpace(spec.Prompt) != "" {
+			if spec, err := contract.DecodeCanvasGenerationSpec(encoded); err == nil && strings.TrimSpace(spec.Prompt) != "" {
 				return strings.TrimSpace(spec.Prompt)
 			}
 		}

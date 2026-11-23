@@ -3184,6 +3184,45 @@ paths:
           description: 会话 ID 无效
         "404":
           description: 会话不存在或不属于当前用户
+    delete:
+      tags: [agent]
+      summary: 删除当前用户的一段 Agent 对话历史
+      description: 删除该 conversationId 下所有已结束轮次的 Agent 历史、事件、消息、Pi 会话和撤销快照，并清理本机可恢复缓存。任务、画布、素材和账务记录保留。活动运行、待收尾运行或未完成的对话返回 409。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, maxLength: 80 }
+      responses:
+        "200":
+          description: "信封 data 为 { deleted: true }"
+        "400":
+          description: 会话 ID 无效
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: 会话不存在或不属于当前用户
+        "409":
+          description: 对话仍在执行或收尾，暂时不能删除
+  /agent/conversations/{id}/compact:
+    post:
+      tags: [agent]
+      summary: 整理当前用户的一段 Agent 对话历史
+      description: 将已结束轮次的热历史压缩为 gzip 冷归档，释放账号 Agent 热账本空间。归档仍可用于历史读取，归档后的运行不再支持画布撤销。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, maxLength: 80 }
+      responses:
+        "200":
+          description: "信封 data 为 { freedBytes: number }"
+        "400":
+          description: 会话 ID 无效
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          description: 会话不存在或不属于当前用户
   /agent/conversations/{id}/runs:
     get:
       tags: [agent]

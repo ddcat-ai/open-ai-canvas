@@ -4,7 +4,7 @@ import test from "node:test";
 import "./node-registry/definitions/index.ts";
 // @ts-expect-error -- Node 原生 TypeScript 测试运行器需要保留扩展名。
 import { canvasNodeHasCommittedContent, writeCanvasNodePrompt } from "./canvas-node-prompt.ts";
-import { canonicalGenerationMetadata } from "./generation-contract";
+import { canonicalGenerationMetadata, readNodeGenerationSpec } from "./generation-contract";
 // @ts-expect-error -- Node 原生 TypeScript 测试运行器需要保留扩展名。
 import { CanvasNodeType, type CanvasNodeData } from "../../types/canvas.ts";
 
@@ -37,6 +37,23 @@ test("媒体节点已有结果时只更新下一版提示词草稿", () => {
         assert.equal(metadata?.status, "success");
         assert.equal(metadata?.generationSpec?.prompt, "下一版提示词");
     }
+});
+
+test("历史节点的部分生成合同回退到当前版本，不阻断画布读取", () => {
+    const current = node(CanvasNodeType.Audio, {
+        generationSpec: { options: { audioMode: "tts" } } as never,
+        composerContent: "历史音频提示词",
+    });
+
+    assert.deepEqual(readNodeGenerationSpec(current), {
+        version: 1,
+        mode: "audio",
+        prompt: "历史音频提示词",
+        options: { audioMode: "tts" },
+        modelSelection: undefined,
+        referenceBindings: [],
+        textInputMode: "append-sources",
+    });
 });
 
 test("空媒体草稿同时初始化提交提示词和编辑提示词", () => {

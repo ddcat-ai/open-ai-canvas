@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/kernel"
@@ -165,6 +166,49 @@ func TestAgentStorageQuotaRollsBackAndAllowsCancellation(t *testing.T) {
 	}
 	if err := repo.SaveCloudAgentPiSession(&model.CloudAgentPiSession{RunID: "independent", UserID: "other", SessionJSONL: "x"}, 0); err != nil {
 		t.Fatalf("quota blocked other user: %v", err)
+	}
+}
+
+func TestAgentStorageGlobalHotPoolRejectsWithoutReclaimableHistory(t *testing.T) {
+	repo, _ := agentLifecycleRepositories(t, "sqlite")
+	if err := repo.db.Create(&model.SystemSetting{Key: model.RuntimePolicySettingKey, ValueJSON: `{"resource":{"agentHistoryMB":1,"agentHistoryGlobalMB":1}}`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.db.Create(&model.AgentStorageUsage{UserID: "full", StoredBytes: model.DefaultAgentHistoryMB << 20, UpdatedAt: time.Now()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.db.Create(&model.AgentStorageUsage{UserID: "writer", StoredBytes: 0, UpdatedAt: time.Now()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	err := repo.SaveCloudAgentPiSession(&model.CloudAgentPiSession{RunID: "writer-run", UserID: "writer", SessionJSONL: "x"}, 0)
+	var appErr *kernel.AppError
+	if !errors.As(err, &appErr) || appErr.Code != kernel.CodeQuotaExceeded {
+		t.Fatalf("global hot pool error = %v", err)
+	}
+	var sessionCount int64
+	if err := repo.db.Model(&model.CloudAgentPiSession{}).Where("user_id = ?", "writer").Count(&sessionCount).Error; err != nil || sessionCount != 0 {
+		t.Fatalf("global rejection committed session count=%d err=%v", sessionCount, err)
+	}
+}
+
+func TestAgentStorageQuotaUsesLegacyAccountLimitOnlyForMissingPool(t *testing.T) {
+	repo, _ := agentLifecycleRepositories(t, "sqlite")
+	for _, test := range []struct {
+		resource string
+		wantMB   int64
+	}{
+		{`{"agentHistoryMB":50000}`, 50000},
+		{`{"agentHistoryMB":256}`, model.DefaultAgentHistoryGlobalMB},
+		{`{"agentHistoryMB":50000,"agentHistoryGlobalMB":70000}`, 70000},
+	} {
+		setting := model.SystemSetting{Key: model.RuntimePolicySettingKey, ValueJSON: `{"resource":` + test.resource + `}`}
+		if err := repo.db.Save(&setting).Error; err != nil {
+			t.Fatal(err)
+		}
+		got, err := repo.agentHistoryGlobalLimitBytes()
+		if err != nil || got != test.wantMB<<20 {
+			t.Fatalf("resource=%s global bytes=%d err=%v", test.resource, got, err)
+		}
 	}
 }
 

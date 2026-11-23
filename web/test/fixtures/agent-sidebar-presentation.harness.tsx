@@ -522,7 +522,7 @@ test("历史按本地日期分组，搜索人类可读的标题和摘要，保�
     expect(host.querySelector('[aria-current="page"]')?.textContent).toContain("留白用 CUT 转场");
     expect(host.textContent).toContain("草稿 · 改用长镜头");
     expect(host.textContent).not.toContain("不显示的推理");
-    expect(host.querySelectorAll(".canvas-agent-history-delete")).toHaveLength(1);
+    expect(host.querySelectorAll(".canvas-agent-history-delete")).toHaveLength(2);
     const search = host.querySelector<HTMLInputElement>('[aria-label="搜索标题或摘要"]')!;
     const filter = async (value: string) =>
         act(async () => {

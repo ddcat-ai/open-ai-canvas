@@ -186,14 +186,6 @@ func (s *Service) downloadTaskMedia(ctx context.Context, config providerConfig, 
 		}
 		recordProviderRequest(logged, started, statusCode, nil, safeErr)
 	}()
-	if _, err = ValidateOutboundURL(url); err != nil {
-		return "", "", err
-	}
-	if sameProviderOrigin(config.BaseURL, url) {
-		applyProviderAuth(req, config)
-		ApplyOutboundHeaders(req, config.Headers)
-	}
-	ApplyDefaultOutboundHeaders(req)
 	// 结果文件可能托管在渠道同域（sameProviderOrigin 时还带渠道鉴权），
 	// 渠道配置了出站代理时下载必须走同一代理，否则配代理渠道的结果无法取回。
 	proxyURL := ""
@@ -205,6 +197,14 @@ func (s *Service) downloadTaskMedia(ctx context.Context, config providerConfig, 
 			proxyURL = ch.ProxyURL
 		}
 	}
+	if _, err = ValidateOutboundURLWithProxy(url, proxyURL); err != nil {
+		return "", "", err
+	}
+	if sameProviderOrigin(config.BaseURL, url) {
+		applyProviderAuth(req, config)
+		ApplyOutboundHeaders(req, config.Headers)
+	}
+	ApplyDefaultOutboundHeaders(req)
 	// 客户端总时限与上下文一致；真正决定何时放弃的是停滞看门狗。
 	response, err := OutboundHTTPClientWithProxy(mediaDownloadMaxDuration, proxyURL).Do(req)
 	if err != nil {

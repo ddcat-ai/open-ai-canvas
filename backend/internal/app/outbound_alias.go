@@ -21,6 +21,11 @@ func ValidateOutboundURL(rawURL string) (*url.URL, error) {
 	return parsed, mapOutboundError(err)
 }
 
+func ValidateOutboundURLWithProxy(rawURL string, proxyURL string) (*url.URL, error) {
+	parsed, err := outbound.ValidateOutboundURLWithProxy(rawURL, proxyURL)
+	return parsed, mapOutboundError(err)
+}
+
 func ValidateCustomRelayURL(rawURL string) (*url.URL, error) {
 	parsed, err := outbound.ValidateCustomRelayURL(rawURL)
 	return parsed, mapOutboundError(err)

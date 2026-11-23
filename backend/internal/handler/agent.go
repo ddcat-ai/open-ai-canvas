@@ -95,6 +95,31 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, page)
 	})
+	r.DELETE("/agent/conversations/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteCloudAgentConversation(user.ID, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"deleted": true})
+	})
+	r.POST("/agent/conversations/:id/compact", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		freed, err := svc.CompactCloudAgentConversation(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"freedBytes": freed})
+	})
 	// Profiles are durable preference data, not an authorization surface. The
 	// service validates scope ownership and the compiler injects the effective
 	// layers only after the code-level policy has been fixed.

@@ -532,10 +532,13 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 | --- | --- | --- |
 | `schema_migrations` | 保存已成功应用的结构版本、名称、校验和与时间 | 已应用版本的校验和发生变化时拒绝启动；数据库版本高于当前二进制支持版本时拒绝旧程序连接 |
 | `cloud_agent_executions` | 保存 Agent 每轮的持久化执行状态、修订号和运行状态 | `(id, user_id)` 归属受服务端校验；状态通过 revision CAS 更新；`state_json` 包含技能快照、工具调用、审批、活动子任务、事件、最近一次语义压缩检查点与"正在压缩"的压缩态，不保存浏览器密钥 |
+| `cloud_agent_history_archives` | 保存已结束 Agent 轮次的 gzip 冷归档 | `(run_id, user_id)` 归属受服务端校验；归档不计入账号热 Agent 历史账本，读取接口按需回退；删除对话时连同归档删除，任务、画布、素材和账务记录不受影响 |
 | `agent_profiles` | 保存用户、项目和画布层的 Agent 常驻偏好、哈希和独立 revision | `(user_id, scope, project_id, canvas_id)` 唯一；归属由 service 校验，写入使用 revision CAS；正文不能授权新能力 |
 | `agent_memory_documents` / `agent_memory_document_revisions` | 用户长期记忆文件及其修订（Schema 76） | 见本页首节；每轮开始时冻结快照，以带来源的 user 数据消息注入，不进 system |
 | `agent_lessons` | 旧版用户经验（Schema 16/58） | Agent 已不再注入、召回或写入；首次打开记忆文件时已批准条目导入为可撤销修订；表与导出、管理员巡查暂留，计划后续移除 |
 | `agent_memory_settings` | 旧版经验的压缩周期、文本模型、最近任务/提案及轮转游标 | 压缩调度已不再启动；手动压缩接口仍按原提案审批合同工作，计划随旧经验一起移除 |
+
+版本 110 `cloud_agent_history_archives` 为终态 Agent 运行增加 gzip 冷归档、压缩标记和归档时间，并回填升级前尚未初始化的 Agent 热历史账本。归档不计入账号热 Agent 历史账本，读取接口按需回退；`resource.agentHistoryGlobalMB` 通过全局存储锁限制所有账号热账本总量，超限先整理旧终态。用户删除对话时删除全部热、冷历史，但保留任务、画布、素材和账务记录。
 
 容器内命令 `migrate-schema up` 应用缺失迁移，`migrate-schema status` 输出当前和期望版本，`migrate-schema verify` 只检查兼容性。`CANVAS_AUTO_MIGRATE=true` 仅用于开发和旧部署兼容；受管生产部署设置为 `false`，并由 Compose 的一次性 `migrate` 服务先完成迁移。后续迁移必须新增版本，不得修改已经发布迁移的实现或校验和。
 

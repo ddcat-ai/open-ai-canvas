@@ -44,6 +44,9 @@ func (s *Service) UndoCloudAgentCanvas(userID, runID, stepID, expectedSnapshotHa
 		}
 		return nil, err
 	}
+	if run.HistoryCompacted {
+		return nil, BadAuthRequest("该 Agent 运行历史已归档，无法执行撤销，请在整理历史前完成撤销")
+	}
 	result := map[string]any{"accepted": false}
 	err = s.repo.MutateCloudAgent(userID, runID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 		mutation, err := repo.LatestCloudAgentCanvasMutation(userID, runID)
