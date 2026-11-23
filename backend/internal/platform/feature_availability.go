@@ -20,6 +20,7 @@ const (
 	FeatureCredits               = "credits"
 	FeatureTeams                 = "teams"
 	FeatureCustomChannels        = "customChannels"
+	FeatureChatGPTPlan           = "chatGPTPlan"
 	FeatureFrontendModels        = "frontendModels"
 	FeaturePluginCenter          = "pluginCenter"
 	FeatureSystemPlugins         = "systemPluginsVisibleToUsers"
@@ -38,6 +39,7 @@ type FeatureAvailability struct {
 	CreditsEnabled               bool `json:"creditsEnabled"`
 	TeamsEnabled                 bool `json:"teamsEnabled"`
 	CustomChannelsEnabled        bool `json:"customChannelsEnabled"`
+	ChatGPTPlanEnabled           bool `json:"chatGPTPlanEnabled"`
 	FrontendModelsEnabled        bool `json:"frontendModelsEnabled"`
 	PluginCenterEnabled          bool `json:"pluginCenterEnabled"`
 	SystemPluginsVisibleToUsers  bool `json:"systemPluginsVisibleToUsers"`
@@ -133,6 +135,8 @@ func (s *Service) FeatureEnabled(feature string) (bool, error) {
 		return value.TeamsEnabled, nil
 	case FeatureCustomChannels:
 		return value.CustomChannelsEnabled, nil
+	case FeatureChatGPTPlan:
+		return value.ChatGPTPlanEnabled, nil
 	case FeatureFrontendModels:
 		return value.FrontendModelsEnabled, nil
 	case FeaturePluginCenter:
@@ -177,6 +181,8 @@ func (s *Service) RequireFeature(feature string) error {
 		return err
 	case FeatureCustomChannels:
 		return kernel.Forbidden("自定义渠道暂未开放")
+	case FeatureChatGPTPlan:
+		return kernel.Forbidden("ChatGPT 个人方案授权暂未开放")
 	case FeatureFrontendModels:
 		return kernel.Forbidden("前台模型目录暂未开放")
 	case FeaturePluginCenter:

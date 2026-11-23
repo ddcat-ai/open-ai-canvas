@@ -16,8 +16,11 @@ func (r *Repository) SaveChannelOrder(channelID string, ids, expected []string) 
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var current []string
 		var target any = &model.ModelChannel{}
-		query := tx.Model(target).Where("scope = ?", model.ChannelScopeSystem)
+		query := tx.Model(target).Where("scope = ? AND api_format <> ?", model.ChannelScopeSystem, model.ChatGPTPlanAPIFormat)
 		if channelID != "" {
+			if _, err := New(tx).AdminSystemChannel(channelID); err != nil {
+				return err
+			}
 			if err := r.lockSystemChannelForModelMutation(tx, channelID); err != nil {
 				return err
 			}

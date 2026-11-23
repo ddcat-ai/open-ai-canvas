@@ -49,6 +49,7 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                             <div role="radiogroup" aria-label={title} className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {models.map((model) => {
                                     const channel = resolveModelChannel(config, model);
+                                    const systemModel = channel.scope === "system" && !channel.personal;
                                     const selected = config[group.modelKey] === model;
                                     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
                                     const directSystemModel = isDirectSystemModel(config, model);
@@ -80,8 +81,8 @@ export function ModelDefaultGrid({ config, onChange }: { config: AiConfig; onCha
                                                         {modelName}
                                                     </span>
                                                     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[var(--fs-tiny)] text-foreground/45">
-                                                        <span className="max-w-full truncate">{channel.scope === "system" ? t("account.settings.models.systemModel") : channel.name || t("account.settings.channels.unnamed")}</span>
-                                                        <span className="model-default-option-scope">{channel.scope === "system" ? t("account.settings.models.scopeSystem") : t("account.settings.models.scopeCustom")}</span>
+                                                        <span className="max-w-full truncate">{systemModel ? t("account.settings.models.systemModel") : channel.name || t("account.settings.channels.unnamed")}</span>
+                                                        <span className="model-default-option-scope">{systemModel ? t("account.settings.models.scopeSystem") : t("account.settings.models.scopeCustom")}</span>
                                                         {creditsEnabled && cost ? (
                                                             <span className="model-default-price">
                                                                 {formatPrice(cost.billingMode === "token" ? cost.outputTokenPriceMicrocredits || 0 : cost.unitPriceMicrocredits)} /

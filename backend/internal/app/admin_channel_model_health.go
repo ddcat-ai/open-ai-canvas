@@ -64,6 +64,9 @@ func (s *Service) AdminAllChannelModels(actor *model.User) ([]AdminChannelModelL
 	}
 	result := make([]AdminChannelModelListItem, 0)
 	for _, channel := range channels {
+		if channel.APIFormat == chatGPTPlanFormat {
+			continue
+		}
 		items, err := s.AdminChannelModels(actor, channel.ID)
 		if err != nil {
 			return nil, err
@@ -108,6 +111,9 @@ func (s *Service) cachedAdminChannelModelHealth(now time.Time) (*AdminChannelMod
 	}
 	channelIDs := make([]string, 0, len(channels))
 	for _, channel := range channels {
+		if channel.APIFormat == chatGPTPlanFormat {
+			continue
+		}
 		channelIDs = append(channelIDs, channel.ID)
 	}
 	logs, err := s.repo.AdminModelHealthLogs(repository.PublicModelAvailabilityFilter{From: now.Add(-7 * 24 * time.Hour), To: now, ChannelIDs: channelIDs}, adminModelHealthLogLimit)

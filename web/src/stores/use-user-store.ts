@@ -38,6 +38,7 @@ export type FeatureAvailability = {
     creditsEnabled: boolean;
     teamsEnabled: boolean;
     customChannelsEnabled: boolean;
+    chatGPTPlanEnabled: boolean;
     frontendModelsEnabled: boolean;
     pluginCenterEnabled: boolean;
     systemPluginsVisibleToUsers: boolean;
@@ -58,6 +59,7 @@ export const defaultFeatureAvailability: FeatureAvailability = {
     creditsEnabled: true,
     teamsEnabled: false,
     customChannelsEnabled: true,
+    chatGPTPlanEnabled: false,
     frontendModelsEnabled: false,
     pluginCenterEnabled: true,
     systemPluginsVisibleToUsers: true,

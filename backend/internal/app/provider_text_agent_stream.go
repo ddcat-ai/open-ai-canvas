@@ -16,6 +16,11 @@ import (
 
 func postStreamingAgent(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, onDelta func(string), onReasoning ...func(string)) (map[string]interface{}, error) {
 	body["stream"] = true
+	if config.APIFormat == chatGPTPlanFormat {
+		if err := prepareChatGPTPlanRequest(body); err != nil {
+			return nil, err
+		}
+	}
 	if protocol == "chat-completion" {
 		if err := ensureChatCompletionStreamUsage(body); err != nil {
 			return nil, err

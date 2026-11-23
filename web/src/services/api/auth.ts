@@ -544,6 +544,7 @@ export function updateAdminFeatureAvailability(
             | "creditsEnabled"
             | "teamsEnabled"
             | "customChannelsEnabled"
+            | "chatGPTPlanEnabled"
             | "frontendModelsEnabled"
             | "pluginCenterEnabled"
             | "systemPluginsVisibleToUsers"

@@ -41,7 +41,7 @@ export function groupModelsForPicker(config: AiConfig, options: string[]): Model
             const key = JSON.stringify(["channel", channel.id]);
             groups.set(key, {
                 key,
-                label: channel.scope === "system" ? "系统模型" : channel.name || "未命名渠道",
+                label: channel.scope === "system" && !channel.personal ? "系统模型" : channel.name || "未命名渠道",
                 icon: modelIcon(config, otherModels[0]),
                 scope: channel.id === PUBLIC_MODEL_CATALOG_ID ? "" : "我的模型",
                 kind: "channel",
