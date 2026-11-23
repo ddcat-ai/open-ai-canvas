@@ -10,8 +10,11 @@ export function resilientPreload(): Plugin {
             const entry = "function preload(baseModule, deps, importerUrl) {";
             const seenCheck = "if (dep in seen) return;";
             const cssLoad = 'if (isCss) return new Promise((res, rej) => {';
-            const cssError = 'link.addEventListener("error", () => rej(/* @__PURE__ */ new Error(`Unable to preload CSS for ${dep}`)));\n\t\t\t});';
-            if ([entry, seenCheck, cssLoad, cssError].some((part) => !code.includes(part))) {
+            const cssError = [
+                'link.addEventListener("load", res);\n\t\t\t\tlink.addEventListener("error", () => rej(/* @__PURE__ */ new Error(`Unable to preload CSS for ${dep}`)));\n\t\t\t});',
+                'link.addEventListener("error", () => rej(/* @__PURE__ */ new Error(`Unable to preload CSS for ${dep}`)));\n\t\t\t});',
+            ].find((part) => code.includes(part));
+            if ([entry, seenCheck, cssLoad].some((part) => !code.includes(part)) || !cssError) {
                 throw new Error("Vite preload helper changed; update the resource preload adapter");
             }
             return {
