@@ -52,6 +52,42 @@ var (
 )
 
 func ValidateOutboundURL(rawURL string) (*url.URL, error) {
+	parsed, err := parseOutboundURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateOutboundHost(parsed.Hostname()); err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
+
+// ValidateOutboundURLWithProxy 保留 URL 和字面 IP 的 SSRF 校验，但把域名解析交给
+// 渠道代理。代理场景下后端本机可能没有目标域名的 DNS，或解析结果是 TUN fake-ip，
+// 这两种情况都不能在请求发出前阻断远端代理解析。
+func ValidateOutboundURLWithProxy(rawURL string, proxyURL string) (*url.URL, error) {
+	if strings.TrimSpace(proxyURL) == "" {
+		return ValidateOutboundURL(rawURL)
+	}
+	if _, err := ValidateProxyURL(proxyURL); err != nil {
+		return nil, err
+	}
+	parsed, err := parseOutboundURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	host := normalizeOutboundHost(parsed.Hostname())
+	allowPrivateHost := allowPrivateUpstreams() || AllowedPrivateUpstreamHost(host)
+	if !allowPrivateHost && (host == "localhost" || strings.HasSuffix(host, ".localhost")) {
+		return nil, BadAuthRequest("不允许访问本机或内网地址")
+	}
+	if ip := net.ParseIP(host); ip != nil && !allowPrivateHost && blockedOutboundIP(ip) {
+		return nil, BadAuthRequest("不允许访问本机、内网或链路本地地址")
+	}
+	return parsed, nil
+}
+
+func parseOutboundURL(rawURL string) (*url.URL, error) {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || parsed.Hostname() == "" {
 		return nil, BadAuthRequest("外部服务地址无效")
@@ -61,9 +97,6 @@ func ValidateOutboundURL(rawURL string) (*url.URL, error) {
 	}
 	if parsed.User != nil {
 		return nil, BadAuthRequest("外部服务地址不允许包含认证信息")
-	}
-	if err := ValidateOutboundHost(parsed.Hostname()); err != nil {
-		return nil, err
 	}
 	return parsed, nil
 }
@@ -153,7 +186,7 @@ func OutboundHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.C
 			if len(via) >= maxOutboundRedirects {
 				return errors.New("外部服务重定向次数过多")
 			}
-			_, err := ValidateOutboundURL(req.URL.String())
+			_, err := ValidateOutboundURLWithProxy(req.URL.String(), proxyURL)
 			return err
 		},
 	}

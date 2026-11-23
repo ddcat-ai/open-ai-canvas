@@ -143,7 +143,7 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 		}
 		target = baseURL + "/models"
 	}
-	if _, err := ValidateOutboundURL(target); err != nil {
+	if _, err := ValidateOutboundURLWithProxy(target, input.ProxyURL); err != nil {
 		return nil, err
 	}
 	ctx = context.WithValue(ctx, providerProxyURLKey{}, input.ProxyURL)

@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -196,6 +198,25 @@ func TestChannelCatalogUsesProxyAndCompletePagination(t *testing.T) {
 	items, err := svc.FetchChannelModels(context.Background(), admin, ChannelModelsRequest{BaseURL: "http://127.0.0.1:1/v1", APIKey: "fixture", ProxyURL: proxy.URL})
 	if err != nil || strings.Join(items, ",") != "a,b" || requests != 2 {
 		t.Fatalf("proxy/pagination: %#v %v %d", items, err, requests)
+	}
+}
+
+func TestChannelCatalogProxyDoesNotRequireLocalTargetDNS(t *testing.T) {
+	previous := net.DefaultResolver
+	net.DefaultResolver = &net.Resolver{PreferGo: true, Dial: func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("target DNS unavailable")
+	}}
+	t.Cleanup(func() { net.DefaultResolver = previous })
+
+	svc, _ := newChannelModelTestService(t)
+	admin := &model.User{ID: "admin", Role: model.UserRoleAdmin}
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"proxied-model"}],"has_more":false}`))
+	}))
+	defer proxy.Close()
+	items, err := svc.FetchChannelModels(context.Background(), admin, ChannelModelsRequest{BaseURL: "http://unresolvable.invalid/v1", APIKey: "fixture", ProxyURL: proxy.URL})
+	if err != nil || strings.Join(items, ",") != "proxied-model" {
+		t.Fatalf("proxy catalog with unavailable local DNS: %#v %v", items, err)
 	}
 }
 

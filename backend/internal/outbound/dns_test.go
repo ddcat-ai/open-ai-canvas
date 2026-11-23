@@ -50,3 +50,18 @@ func TestOutboundDNSCancellationKeepsCancellationSemantics(t *testing.T) {
 		t.Fatalf("cancellation became a DNS failure: %v", err)
 	}
 }
+
+func TestValidateOutboundURLWithProxyDefersTargetDNS(t *testing.T) {
+	previous := net.DefaultResolver
+	net.DefaultResolver = &net.Resolver{PreferGo: true, Dial: func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("target DNS unavailable")
+	}}
+	t.Cleanup(func() { net.DefaultResolver = previous })
+
+	if _, err := ValidateOutboundURLWithProxy("https://unresolvable.invalid/v1", "http://127.0.0.1:8080"); err != nil {
+		t.Fatalf("proxy target should not require local DNS: %v", err)
+	}
+	if _, err := ValidateOutboundURLWithProxy("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080"); err == nil {
+		t.Fatal("proxy target must still reject literal private addresses")
+	}
+}
