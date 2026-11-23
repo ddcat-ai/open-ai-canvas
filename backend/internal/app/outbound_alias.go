@@ -32,11 +32,11 @@ func ValidateProxyURL(rawURL string) (*url.URL, error) {
 }
 
 func OutboundHTTPClient(timeout time.Duration) *http.Client {
-	return outbound.OutboundHTTPClient(timeout)
+	return outbound.ModelMediaHTTPClient(timeout)
 }
 
 func OutboundHTTPClientWithProxy(timeout time.Duration, proxyURL string) *http.Client {
-	return outbound.OutboundHTTPClientWithProxy(timeout, proxyURL)
+	return outbound.ModelMediaHTTPClientWithProxy(timeout, proxyURL)
 }
 
 func ApplyDefaultOutboundHeaders(req *http.Request) {
