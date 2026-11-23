@@ -8,12 +8,26 @@ import (
 const RuntimePolicySettingKey = "runtime_policy"
 
 const (
-	DefaultAgentHistoryMB int64 = 256
-	MaxAgentHistoryMB     int64 = 999_999
+	DefaultAgentHistoryMB       int64 = 256
+	MaxAgentHistoryMB           int64 = 999_999
+	DefaultAgentHistoryGlobalMB int64 = 8_192
+	MaxAgentHistoryGlobalMB     int64 = 16_777_216
 )
 
 type AgentHistoryQuota struct {
-	AgentHistoryMB int64 `json:"agentHistoryMB"`
+	AgentHistoryMB       int64 `json:"agentHistoryMB"`
+	AgentHistoryGlobalMB int64 `json:"agentHistoryGlobalMB,omitempty"`
+}
+
+func (quota AgentHistoryQuota) GlobalLimitBytes() (int64, error) {
+	megabytes := quota.AgentHistoryGlobalMB
+	if megabytes == 0 {
+		megabytes = DefaultAgentHistoryGlobalMB
+	}
+	if megabytes < 1 || megabytes > MaxAgentHistoryGlobalMB {
+		return 0, fmt.Errorf("平台 Agent 热历史容量必须是 1-%d MiB 的整数", MaxAgentHistoryGlobalMB)
+	}
+	return megabytes << 20, nil
 }
 
 func (quota AgentHistoryQuota) LimitBytes() (int64, error) {

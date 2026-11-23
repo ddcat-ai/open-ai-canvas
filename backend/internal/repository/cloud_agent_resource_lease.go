@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"sort"
 	"time"
 
@@ -91,6 +92,22 @@ func uniqueSortedStrings(values []string) []string {
 func (r *Repository) CloudAgentCanvasMutationChain(userID, runID, canvasID string) ([]model.CloudAgentCanvasMutation, error) {
 	var records []model.CloudAgentCanvasMutation
 	err := r.db.Where("user_id = ? AND run_id = ? AND canvas_id = ? AND status IN ?", userID, runID, canvasID, []string{"applied", "not_undoable"}).Order("created_at, id").Find(&records).Error
+	if err != nil || len(records) > 0 {
+		return records, err
+	}
+	payload, archiveErr := r.cloudAgentHistoryArchive(userID, runID)
+	if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+		return records, nil
+	}
+	if archiveErr != nil {
+		return nil, archiveErr
+	}
+	for _, archived := range payload.Mutations {
+		mutation := archived.model()
+		if mutation.CanvasID == canvasID && (mutation.Status == "applied" || mutation.Status == "not_undoable") {
+			records = append(records, mutation)
+		}
+	}
 	return records, err
 }
 
@@ -100,5 +117,27 @@ func (r *Repository) CloudAgentCanvasMutationChain(userID, runID, canvasID strin
 func (r *Repository) LatestCloudAgentCanvasMutationForCanvas(userID, canvasID string) (*model.CloudAgentCanvasMutation, error) {
 	var mutation model.CloudAgentCanvasMutation
 	err := r.db.Where("user_id = ? AND canvas_id = ? AND status IN ?", userID, canvasID, []string{"applied", "not_undoable"}).Order("created_at DESC, id DESC").First(&mutation).Error
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return &mutation, err
+	}
+	var runs []model.CloudAgentExecution
+	if queryErr := r.db.Where("user_id = ? AND history_compacted = ?", userID, true).Order("updated_at DESC, id DESC").Find(&runs).Error; queryErr != nil {
+		return &mutation, queryErr
+	}
+	for _, run := range runs {
+		payload, archiveErr := r.cloudAgentHistoryArchive(userID, run.ID)
+		if cloudAgentHistoryArchiveUnavailable(archiveErr) {
+			continue
+		}
+		if archiveErr != nil {
+			return &mutation, archiveErr
+		}
+		for index := len(payload.Mutations) - 1; index >= 0; index-- {
+			candidate := payload.Mutations[index].model()
+			if candidate.CanvasID == canvasID && (candidate.Status == "applied" || candidate.Status == "not_undoable") {
+				return &candidate, nil
+			}
+		}
+	}
 	return &mutation, err
 }

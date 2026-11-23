@@ -57,9 +57,13 @@ func (r *Repository) ClearIdleAgentHistory(userID string) (int64, error) {
 		WHERE user_id = ? AND operation = 'cloud_agent' AND agent_execution_ready = false`, userID).Error; err != nil {
 		return 0, err
 	}
-	for _, payload := range []any{&model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.CloudAgentPiSession{}, &model.CloudAgentCanvasMutation{}, &model.CloudAgentExecution{}} {
-		if err := r.db.Where("user_id = ?", userID).Delete(payload).Error; err != nil {
-			return 0, err
+	for _, payload := range []any{&model.CloudAgentEventRecord{}, &model.CloudAgentMessageRecord{}, &model.CloudAgentPiSession{}, &model.CloudAgentCanvasMutation{}, &model.CloudAgentHistoryArchive{}, &model.CloudAgentExecution{}} {
+		err := r.db.Where("user_id = ?", userID).Delete(payload).Error
+		if err != nil {
+			_, archive := payload.(*model.CloudAgentHistoryArchive)
+			if !archive || !cloudAgentHistoryArchiveUnavailable(err) {
+				return 0, err
+			}
 		}
 	}
 	return used, r.changeAgentStoredBytes(userID, -used)

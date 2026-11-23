@@ -151,7 +151,7 @@ type PublicRuntimeLimits struct {
 func DefaultRuntimePolicy() RuntimePolicySetting {
 	return RuntimePolicySetting{
 		Resource: RuntimeResourcePolicy{
-			AgentHistoryQuota:       model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB},
+			AgentHistoryQuota:       model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB, AgentHistoryGlobalMB: model.DefaultAgentHistoryGlobalMB},
 			ResourceUploadMB:        50,
 			GeneratedFileMB:         64,
 			DailyUploadMB:           2048,
@@ -213,7 +213,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 func selfUseRuntimePolicy() RuntimePolicySetting {
 	value := DefaultRuntimePolicy()
 	value.Resource = RuntimeResourcePolicy{
-		AgentHistoryQuota: model.AgentHistoryQuota{AgentHistoryMB: model.MaxAgentHistoryMB},
+		AgentHistoryQuota: model.AgentHistoryQuota{AgentHistoryMB: model.MaxAgentHistoryMB, AgentHistoryGlobalMB: model.MaxAgentHistoryGlobalMB},
 		ResourceUploadMB:  maxRuntimeUploadMB, GeneratedFileMB: maxRuntimeUploadMB,
 		DailyUploadMB: maxRuntimeDataMB, StoredFileGB: maxRuntimeStorageGB, StructuredDataMB: maxRuntimeDataMB,
 		TaskDataGB: maxRuntimeStorageGB, AssetCount: maxRuntimeCount, CanvasCount: maxRuntimeCount,
@@ -384,6 +384,14 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	resource := value.Resource
 	if _, err := resource.AgentHistoryQuota.LimitBytes(); err != nil {
 		return kernel.BadAuthRequest(err.Error())
+	}
+	globalHistoryBytes, err := resource.AgentHistoryQuota.GlobalLimitBytes()
+	if err != nil {
+		return kernel.BadAuthRequest(err.Error())
+	}
+	accountHistoryBytes, _ := resource.AgentHistoryQuota.LimitBytes()
+	if globalHistoryBytes < accountHistoryBytes {
+		return kernel.BadAuthRequest("平台 Agent 热历史容量不能小于每账号 Agent 历史容量")
 	}
 	for label, item := range map[string]int64{
 		"普通资源单文件": resource.ResourceUploadMB,

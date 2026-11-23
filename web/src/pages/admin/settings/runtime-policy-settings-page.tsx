@@ -60,6 +60,7 @@ const timeoutFields: PolicyField[] = [
 
 const agentFields: PolicyField[] = [
     { group: "resource", name: "agentHistoryMB", label: "每账号 Agent 历史容量", extra: "包括会话、消息、事件和撤销快照。调低不会删除历史；购买文件空间不改变此上限。", unit: "MiB", max: 999_999 },
+    { group: "resource", name: "agentHistoryGlobalMB", label: "平台 Agent 热历史池", extra: "所有账号热 Agent 历史合计上限。旧终态会优先压缩归档，仍不足时拒绝新的历史写入。", unit: "MiB", max: 16_777_216 },
     {
         group: "task",
         name: "agentStepMaxOutputTokens",

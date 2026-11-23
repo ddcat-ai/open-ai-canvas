@@ -248,6 +248,10 @@ export function listAgentConversationRuns(conversationId: string, options: { aft
     return http.get<{ items: AgentRun[]; nextCursor?: string }>(`/agent/conversations/${encodeURIComponent(conversationId)}/runs`, { signal, params });
 }
 
+export function deleteAgentConversation(conversationId: string) {
+    return http.delete<{ deleted: boolean }>(`/agent/conversations/${encodeURIComponent(conversationId)}`, { timeout: 20_000 });
+}
+
 export function cancelAgentRun(runId: string) {
     return http.post<{ accepted: boolean }>(`/agent/runs/${encodeURIComponent(runId)}/cancel`, undefined, { timeout: 15_000 });
 }
