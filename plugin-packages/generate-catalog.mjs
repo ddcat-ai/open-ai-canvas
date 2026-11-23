@@ -654,8 +654,8 @@ const newAPITaskMessage = coalesce(
 );
 
 add({
-  id: "newapi-media-task-v1", version: "2.0.1", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
-  videoReferences: numberedImages("input-media"),
+  id: "newapi-media-task-v1", version: "2.0.2", providerId: "newapi-channel-1", name: "NewAPI Media Task Channel 1", vendor: "NewAPI", capability: "video",
+  videoReferences: { ...numberedImages("input-media"), dramaTailFrame: "reference-image" },
   baseUrl: "http://127.0.0.1:3000", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   create: jsonCreate("/v1/videos", {
     model: ref("request.model"),

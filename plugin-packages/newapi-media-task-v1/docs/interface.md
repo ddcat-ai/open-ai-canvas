@@ -87,7 +87,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "newapi-media-task-v1",
   "name": "NewAPI Media Task Channel 1",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "author": "NewAPI / 影策",
   "description": "NewAPI Media Task Channel 1 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -128,7 +128,8 @@
         },
         "videoReferences": {
           "layout": "input-media",
-          "token": "参考图{n}"
+          "token": "参考图{n}",
+          "dramaTailFrame": "reference-image"
         },
         "parameters": [
           {
