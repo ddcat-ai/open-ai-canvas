@@ -53,10 +53,14 @@ describe("canvas node timestamps", () => {
         const first = node("first");
         const second = node("second");
         const nodes = [first, second];
-        const next = updateCanvasNodes(nodes, new Map([
-            ["first", (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: 1920 } })],
-            ["second", (current) => ({ ...current, metadata: { ...current.metadata, naturalHeight: 1080 } })],
-        ]), "2026-08-28T03:00:00.000Z");
+        const next = updateCanvasNodes(
+            nodes,
+            new Map([
+                ["first", (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: 1920 } })],
+                ["second", (current) => ({ ...current, metadata: { ...current.metadata, naturalHeight: 1080 } })],
+            ]),
+            "2026-08-28T03:00:00.000Z",
+        );
         expect(next).not.toBe(nodes);
         expect(next[0]).not.toBe(first);
         expect(next[1]).not.toBe(second);
