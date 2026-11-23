@@ -34,6 +34,10 @@ type MentionMenuSection = { key: string; heading?: { label: string; count: numbe
 // 高亮记在当时的查询词和分类下，两者任一变化后自动失效，Enter 回到选第一项。
 type MentionMenuActive = { query: string; category: AssetCategory | null; key: string; source: "keyboard" | "pointer" };
 
+function referenceDisplayLabel(reference: CanvasResourceReference) {
+    return reference.displayLabel || reference.title || reference.label;
+}
+
 function referenceEntry(reference: CanvasResourceReference): MentionMenuEntry {
     return { type: "reference", key: `reference:${reference.id}`, reference };
 }
@@ -344,7 +348,7 @@ function MentionReferenceRow({ reference, active, activeRef, onPointerMove, onSe
             <ReferencePreview reference={reference} />
             <span className="canvas-resource-mention-copy">
                 <span className="canvas-resource-mention-title-row">
-                    <strong title={reference.title}>{reference.displayLabel || reference.label}</strong>
+                    <strong title={reference.title}>{referenceDisplayLabel(reference)}</strong>
                     {reference.assetKindLabel ? (
                         <span className="canvas-resource-mention-kind" data-asset-kind={reference.assetKind}>
                             {reference.assetKindLabel}
@@ -386,7 +390,7 @@ function MentionReferenceCard({ reference, active, activeRef, onPointerMove, onS
             <span className="canvas-resource-mention-card-media">
                 <ReferencePreview reference={reference} />
             </span>
-            <span className="canvas-resource-mention-card-label">{reference.displayLabel || reference.label}</span>
+            <span className="canvas-resource-mention-card-label">{referenceDisplayLabel(reference)}</span>
             {reference.assetKindLabel ? (
                 <span className="canvas-resource-mention-card-kind">
                     <span className="canvas-resource-mention-kind" data-asset-kind={reference.assetKind}>
@@ -485,7 +489,7 @@ function MentionReferenceDetail({ reference, connectedLabel }: { reference: Canv
                 </div>
             )}
             <div className="canvas-resource-mention-detail-caption">
-                <strong>{reference.displayLabel || reference.label}</strong>
+                <strong>{referenceDisplayLabel(reference)}</strong>
                 {description ? <span>{description}</span> : null}
                 <small>
                     {source}
