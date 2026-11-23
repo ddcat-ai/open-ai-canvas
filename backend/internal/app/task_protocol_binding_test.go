@@ -111,6 +111,18 @@ func TestModelReleaseSurvivesUpgradeAndRestart(t *testing.T) {
 	if _, err := selectModelRelease(svc.protocolRegistry(), "other-provider", first.SHA256, false); err == nil {
 		t.Fatal("accepted unrelated provider")
 	}
+	legacySKU := save("follows-current", "", nil)
+	if err := db.Model(&model.ChannelModel{}).Where("id = ?", legacySKU.ID).Update("protocol_release", "").Error; err != nil {
+		t.Fatal(err)
+	}
+	legacyJob := create(legacySKU.ModelKey)
+	var legacyBinding taskProtocolBinding
+	if err := json.Unmarshal([]byte(legacyJob.ProtocolBindingJSON), &legacyBinding); err != nil {
+		t.Fatal(err)
+	}
+	if legacyBinding.Digest != second.SHA256 || legacyBinding.Version != "2.0.0" {
+		t.Fatalf("unversioned model did not bind current release: %+v", legacyBinding)
+	}
 	newSKU := save("flash", second.SHA256, nil)
 	if first.SHA256 != save(oldSKU.ModelKey, "", oldSKU).ProtocolRelease {
 		t.Fatal("ordinary edit upgraded the old model")

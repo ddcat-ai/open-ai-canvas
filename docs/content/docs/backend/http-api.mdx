@@ -612,7 +612,7 @@ CANVAS_BACKEND_DATA_DIR=/明确的数据目录 ./migrate-schema repair-canvas-re
 
 文本模型额外返回 `textWire`（`chat-completion` / `responses` / `claude-api`），由协议插件的 `create.path` 识别，不看协议 ID；识别不出时省略。浏览器直连系统代理的提示词优化、编辑器助手和美术点评按它选择 `/chat/completions`、`/responses` 或 `/messages`。`GET /plugins/catalog` 的 provider 同样返回 `textWire`，并在插件 `auth.secretField` 指向 Secret Key 时返回 `requiresSecretKey: true`。系统渠道代理只放行内置合同或插件声明的 POST 路径，出站鉴权按插件 `auth` 声明写，详见 [统一插件运行时](/docs/backend/protocol-plugins)。
 
-`GET /plugins/catalog?scope=admin.system-channel` 在 provider 的 `releases[]` 返回已安装的可选发行版，包含 `pluginId`、`version`、`sha256`、`current`、创建与轮询路径，以及该版声明的图片参数、工作流、`videoModes`、`videoOutputs`。管理端保存、测试或导入渠道模型使用 `protocol` 和 `protocolRelease`（完整 SHA-256）。同一渠道可同时绑定多个版本。系统任务创建时由服务端从所选模型解析版本。
+`GET /plugins/catalog?scope=admin.system-channel` 在 provider 的 `releases[]` 返回已安装的可选发行版，包含 `pluginId`、`version`、`sha256`、`current`、创建与轮询路径，以及该版声明的图片参数、工作流、`videoModes`、`videoOutputs`。管理端保存、测试或导入渠道模型使用 `protocol` 和可选的 `protocolRelease`（完整 SHA-256）；未提供版本时按当前启用发行版解析。系统任务创建时由服务端从所选模型解析版本并写入任务绑定，明确填写的旧版摘要保持不变。
 
 渠道模型创建、更新、管理列表、公开目录和会话模型价格信息均使用 `description` 表达模型描述。服务端去除首尾空白后限制为 500 字，允许空字符串清除描述；无管理员权限或超长内容拒绝保存。创作端二级选项常驻展示该字段，不依赖悬浮 Tooltip；未填写的系统模型不按名称生成宣传文案。
 
