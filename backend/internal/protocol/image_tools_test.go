@@ -13,7 +13,7 @@ func TestImageToolsProvidersBuildAsyncImageRequests(t *testing.T) {
 		path     string
 	}{
 		{name: "remove background", provider: "image-tools-remove-background", model: "bria/remove-background", path: "/bria/remove-background"},
-		{name: "layer decomposition", provider: "image-tools-layer-decomposition", model: "bytedance/seedream-v5.0-pro/layer-decomposition", path: "/bytedance/seedream-v5.0-pro/layer-decomposition"},
+		{name: "layer decomposition", provider: "image-tools-layer-decomposition", model: "bytedance/seedream-v5.5/layer-decomposition", path: "/bytedance/seedream-v5.5/layer-decomposition"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
