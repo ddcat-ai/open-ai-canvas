@@ -242,7 +242,7 @@ export function SegmentDialog({
                                     </Button>
                                 </div>
                             ) : null}
-                            {segment.videoStatus === "failed" && segment.videoError ? (
+                            {segment.videoStatus === "failed" && segment.videoError && !segment.videoTailProcessing ? (
                                 <div className="drama-sd-error">
                                     <strong>{segment.videoReprocessable ? "视频已生成，后处理失败" : "视频生成失败"}</strong>
                                     <span>{segment.videoError}</span>
@@ -325,18 +325,20 @@ function SegmentToolbar({
     const resolutionFallback = Boolean(changed && videoResolution && chosenOption && !supportedResolution);
     const requirements = dramaSegmentVideoRequirements(segment.request, chosenOption, changed, videoResolution);
     const quoteMissing = creditsEnabled && dramaSegmentQuoteMissing(config, choice, requirements);
-    const running = mediaBusy(segment.videoStatus);
+    const running = segment.videoTailProcessing || mediaBusy(segment.videoStatus);
     const writingNow = segment.promptStatus === "queued" || segment.promptStatus === "running";
     const sent = [segment.request.header, segment.videoPrompt.trim()].filter(Boolean).join("\n\n");
-    const generateLabel = running
-        ? segment.videoStatus === "queued" && segment.videoWait
-            ? videoWaitLabel(segment.videoWait)
-            : segment.request.firstFramePending
-              ? `排队中 · 等第 ${segment.index} 段`
-              : "视频生成中"
-        : segment.videoResourceId && segment.videoStatus !== ""
-          ? "重新生成视频"
-          : "生成本段视频";
+    const generateLabel = segment.videoTailProcessing
+        ? "提取尾帧中"
+        : running
+          ? segment.videoStatus === "queued" && segment.videoWait
+              ? videoWaitLabel(segment.videoWait)
+              : segment.request.firstFramePending
+                ? `排队中 · 等第 ${segment.index} 段`
+                : "视频生成中"
+          : segment.videoResourceId && segment.videoStatus !== ""
+            ? "重新生成视频"
+            : "生成本段视频";
     return (
         <section className="drama-sdx-toolbar" aria-label="生成设置">
             <div className="drama-sdx-toolbar-row">

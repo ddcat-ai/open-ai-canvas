@@ -6,6 +6,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,9 +15,34 @@ import (
 	"time"
 
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/storage"
 )
 
-func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationInput, policy providerMediaHydrationPolicy) error {
+type referenceStorageReadError struct{ cause error }
+
+func (e *referenceStorageReadError) Error() string {
+	switch storage.ClassifyError(e.cause).StatusCode {
+	case http.StatusForbidden, http.StatusUnauthorized:
+		return "读取参考素材失败，存储拒绝访问"
+	case http.StatusNotFound:
+		return "读取参考素材失败，存储中的文件已不存在"
+	case http.StatusPreconditionFailed:
+		return "读取参考素材失败，下载期间文件发生变化，请重新选择参考素材"
+	}
+	return "读取参考素材失败，请稍后重试"
+}
+
+func (e *referenceStorageReadError) Unwrap() error { return e.cause }
+
+func referenceReadFailureCode(err error) string {
+	var readErr *referenceStorageReadError
+	if errors.As(err, &readErr) {
+		return "reference_storage_read_failed"
+	}
+	return ""
+}
+
+func (s *Service) hydrateGenerationMedia(ctx context.Context, userID string, input *canvasGenerationInput, policy providerMediaHydrationPolicy) error {
 	groups := [][]providerMedia{input.ReferenceImages, input.ReferenceVideos, input.ReferenceAudios}
 	for groupIndex, group := range groups {
 		mediaPolicy := policy
@@ -43,18 +69,18 @@ func (s *Service) hydrateGenerationMedia(userID string, input *canvasGenerationI
 			}
 		}
 		for index := range group {
-			if err := s.hydrateProviderMedia(userID, &group[index], mediaPolicy); err != nil {
+			if err := s.hydrateProviderMedia(ctx, userID, &group[index], mediaPolicy); err != nil {
 				return err
 			}
 		}
 	}
 	if input.Mask != nil {
-		return s.hydrateProviderMedia(userID, input.Mask, policy)
+		return s.hydrateProviderMedia(ctx, userID, input.Mask, policy)
 	}
 	return nil
 }
 
-func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
+func (s *Service) hydrateProviderMedia(ctx context.Context, userID string, media *providerMedia, policy providerMediaHydrationPolicy) error {
 	if !strings.HasPrefix(media.StorageKey, "resource:") {
 		if policy.explicitTransport == "url" {
 			value := strings.TrimSpace(media.URL)
@@ -126,9 +152,9 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	if !policy.imageOnly && !policy.forceBase64 && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 		return nil
 	}
-	stream, err := s.openResourceRange(resource.UserID, resource, "")
+	stream, err := s.openResourceRangeContext(ctx, resource.UserID, resource, "")
 	if err != nil {
-		return fmt.Errorf("读取任务参考资源失败：%w", err)
+		return &referenceStorageReadError{cause: err}
 	}
 	body := stream.Body
 	defer body.Close()
@@ -147,7 +173,10 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	}
 	data, err := io.ReadAll(io.LimitReader(body, resourceLimit+1))
 	if err != nil {
-		return err
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+		return &referenceStorageReadError{cause: err}
 	}
 	if int64(len(data)) > resourceLimit {
 		return fmt.Errorf("任务参考资源超过读取上限 %d 字节", resourceLimit)

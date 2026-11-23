@@ -215,7 +215,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 		}
 		// 工作流参数由工作流字段定义校验，普通模型能力配置不能覆盖它们。
 		if resumedProviderRequestID(ctx) == "" {
-			if err := s.hydrateGenerationMedia(userID, &input, providerMediaHydrationPolicy{}); err != nil {
+			if err := s.hydrateGenerationMedia(ctx, userID, &input, providerMediaHydrationPolicy{}); err != nil {
 				return nil, err
 			}
 		}
@@ -265,7 +265,7 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 			return nil, err
 		}
 		mediaPolicy := providerMediaHydrationPolicyFor(ctx, input)
-		if err := s.hydrateGenerationMedia(userID, &input, mediaPolicy); err != nil {
+		if err := s.hydrateGenerationMedia(ctx, userID, &input, mediaPolicy); err != nil {
 			return nil, err
 		}
 		if err := s.prepareArkPrivateAssetReferences(ctx, userID, &input); err != nil {

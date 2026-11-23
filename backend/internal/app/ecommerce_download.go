@@ -3,6 +3,7 @@ package app
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -61,17 +62,24 @@ func (s *Service) WriteEcommerceDownload(ctx context.Context, userID string, fil
 		if err != nil {
 			return err
 		}
-		_, body, err := s.OpenResource(userID, file.ID)
+		_, body, err := s.openResource(ctx, userID, file.ID)
 		if err != nil {
 			return err
 		}
-		_, copyErr := io.Copy(entry, body)
+		var reader io.Reader = body
+		if file.Size > 0 {
+			reader = io.LimitReader(reader, file.Size+1)
+		}
+		written, copyErr := io.Copy(entry, reader)
 		closeErr := body.Close()
 		if copyErr != nil {
 			return copyErr
 		}
 		if closeErr != nil {
 			return closeErr
+		}
+		if file.Size > 0 && written != file.Size {
+			return errors.New("导出资源大小发生变化，请重新检查素材")
 		}
 		if err := archive.Flush(); err != nil {
 			return err

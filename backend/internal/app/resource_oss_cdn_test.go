@@ -101,7 +101,7 @@ func TestBoundS3ResourcesUseCurrentCDNPolicyFromTheirScope(t *testing.T) {
 				})
 			}
 			media := providerMedia{StorageKey: "resource:" + resource.ID}
-			if err := svc.hydrateProviderMedia(actor.ID, &media, providerMediaHydrationPolicy{preferURL: true}); err != nil {
+			if err := svc.hydrateProviderMedia(t.Context(), actor.ID, &media, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 				t.Fatal(err)
 			}
 			if media.URL != req.CDNBaseURL+"/"+resource.ObjectKey || media.DataURL != "" {

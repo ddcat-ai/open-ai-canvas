@@ -263,7 +263,7 @@ func TestCloudAgentVisionHydrationPreservesProtocolImages(t *testing.T) {
 	s, _, pixels := cloudAgentVisionFixture(t)
 	input := cloudAgentVisionInput(t, s, "cat", "hero")
 	original, _ := json.Marshal(input.AgentRequests)
-	if err := s.hydrateGenerationMedia("user", &input, providerMediaHydrationPolicy{preferURL: true}); err != nil {
+	if err := s.hydrateGenerationMedia(t.Context(), "user", &input, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 		t.Fatal(err)
 	}
 	resolved, err := resolveAgentResourcePlaceholders(input, true)
@@ -290,7 +290,7 @@ func TestCloudAgentVisionUsesStoredPixelsInsteadOfSuppliedData(t *testing.T) {
 	s, _, pixels := cloudAgentVisionFixture(t)
 	input := cloudAgentVisionInput(t, s, "cat")
 	input.ReferenceImages[0].DataURL = "data:image/png;base64,bm90IHRoZSBzdG9yZWQgaW1hZ2U="
-	if err := s.hydrateGenerationMedia("user", &input, providerMediaHydrationPolicy{}); err != nil {
+	if err := s.hydrateGenerationMedia(t.Context(), "user", &input, providerMediaHydrationPolicy{}); err != nil {
 		t.Fatal(err)
 	}
 	if input.ReferenceImages[0].DataURL != "data:image/png;base64,"+base64.StdEncoding.EncodeToString(pixels) {
@@ -404,7 +404,7 @@ func TestCloudAgentVisionRejectsInvalidResources(t *testing.T) {
 			if _, err := s.cloudAgentImageReferences("user", state.Request, input.AgentRequests.Canonical); err == nil {
 				t.Fatal("task assembly accepted invalid resource")
 			}
-			if err := s.hydrateGenerationMedia("user", &input, providerMediaHydrationPolicy{}); err == nil {
+			if err := s.hydrateGenerationMedia(t.Context(), "user", &input, providerMediaHydrationPolicy{}); err == nil {
 				t.Fatal("worker accepted resource changed after admission")
 			}
 		})
@@ -673,7 +673,7 @@ func TestCloudAgentVisionRejectsOversizedActualBytes(t *testing.T) {
 	if err := db.Model(&model.Resource{}).Where("id = ?", "ref-one").Update("size", 1).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := s.hydrateGenerationMedia("user", &input, providerMediaHydrationPolicy{}); err == nil {
+	if err := s.hydrateGenerationMedia(t.Context(), "user", &input, providerMediaHydrationPolicy{}); err == nil {
 		t.Fatal("worker trusted metadata instead of bounding actual bytes")
 	}
 }
@@ -684,7 +684,7 @@ func TestCloudAgentVisionRejectsMissingFileAndExternalURL(t *testing.T) {
 	if err := os.Remove(filepath.Join(s.dataDir, "resources", "ref-one.png")); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.hydrateGenerationMedia("user", &input, providerMediaHydrationPolicy{}); err == nil {
+	if err := s.hydrateGenerationMedia(t.Context(), "user", &input, providerMediaHydrationPolicy{}); err == nil {
 		t.Fatal("missing pixels were treated as a successful inspection")
 	}
 	for _, url := range []string{"https://example.invalid/image.png", "http://127.0.0.1/private", "data:image/png;base64,YQ==", "resource:private"} {

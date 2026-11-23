@@ -99,6 +99,9 @@ func isStreamResponse(c *gin.Context) bool {
 // Recovery 替代 gin.Recovery：panic 与堆栈进入统一日志，而不是直接写带颜色码的 stderr。
 func Recovery() gin.HandlerFunc {
 	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, recovered any) {
+		if recovered == http.ErrAbortHandler {
+			panic(http.ErrAbortHandler)
+		}
 		slog.ErrorContext(c.Request.Context(), "http panic recovered",
 			"method", c.Request.Method,
 			"route", c.FullPath(),

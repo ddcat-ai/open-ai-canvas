@@ -86,7 +86,7 @@ func (s *Service) WriteDramaArchive(ctx context.Context, userID string, archive 
 				return err
 			}
 		} else {
-			_, body, err := s.OpenResource(userID, entry.resourceID)
+			_, body, err := s.openResource(ctx, userID, entry.resourceID)
 			if err != nil {
 				return err
 			}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"errors"
 	"hash/crc64"
 	"io"
@@ -8,8 +9,68 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+
+	"yingce/backend/internal/outbound/outboundtest"
 )
+
+func TestVolcengineConnectionTestChecksFullBody(t *testing.T) {
+	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+		t.Setenv(name, "")
+	}
+	const root, host = "tos-s3-cn-beijing.volces.com", "bucket.tos-s3-cn-beijing.volces.com"
+	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", root+","+host)
+	outboundtest.DNS(t, [4]byte{127, 0, 0, 1}, root, host)
+	for _, corrupt := range []bool{false, true} {
+		t.Run(strconv.FormatBool(corrupt), func(t *testing.T) {
+			var stored []byte
+			var mu sync.Mutex
+			var requests []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				defer mu.Unlock()
+				requests = append(requests, r.Method+r.Header.Get("Range"))
+				switch r.Method {
+				case http.MethodPut:
+					stored, _ = io.ReadAll(r.Body)
+					if len(stored) != 2<<20 {
+						t.Errorf("test uploaded %d bytes", len(stored))
+					}
+				case http.MethodGet:
+					if r.Header.Get("Range") == "bytes=0-3" {
+						w.Header().Set("Content-Range", "bytes 0-3/"+strconv.Itoa(len(stored)))
+						w.WriteHeader(http.StatusPartialContent)
+						_, _ = w.Write(stored[:4])
+					} else {
+						payload := bytes.Clone(stored)
+						if corrupt {
+							payload[len(payload)-1] ^= 1
+						}
+						w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+						_, _ = w.Write(payload)
+					}
+				case http.MethodDelete:
+					w.WriteHeader(http.StatusNoContent)
+				}
+			}))
+			defer server.Close()
+			_, port, _ := strings.Cut(server.Listener.Addr().String(), ":")
+			err := verifyOSSConnection(ossSettingValue{
+				Provider: volcengineTOSProvider, Region: "cn-beijing", Bucket: "bucket", Endpoint: "http://" + root + ":" + port,
+				AccessKeyID: "key", AccessKeySecret: "secret",
+			}, ".yingce-tests/full")
+			if corrupt != errors.Is(err, errOSSConnectionReadMismatch) || (!corrupt && err != nil) {
+				t.Fatalf("verifyOSSConnection() = %v, corrupt = %t", err, corrupt)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if strings.Join(requests, ",") != "PUT,GETbytes=0-3,GET,DELETE" {
+				t.Fatalf("storage requests = %v", requests)
+			}
+		})
+	}
+}
 
 func TestTencentCOSConnectionTestUsesStorageEndpointInsteadOfCDN(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")

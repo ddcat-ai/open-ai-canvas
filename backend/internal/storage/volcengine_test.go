@@ -100,7 +100,7 @@ func TestVolcengineTOSUsesVirtualHostedSigV4WithoutSessionToken(t *testing.T) {
 	if err != nil || etag != "etag-value" {
 		t.Fatalf("PutOSSObject() = %q, %v", etag, err)
 	}
-	stream, err := GetOriginObjectRange(setting, "prefix/object.txt", "bytes=0-3")
+	stream, err := GetOriginObjectRange(t.Context(), setting, "prefix/object.txt", "bytes=0-3")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -205,6 +205,11 @@ export async function recordCanvas(source: PrevisCaptureSource, duration: number
         const chunks: Blob[] = [];
         return await new Promise<Blob>((resolve, reject) => {
             let failure: Error | null = null;
+            let startedAt = 0;
+            let encoderStarted = false;
+            let waitingForEncoder = false;
+            let restarted = false;
+            const frameInterval = 1000 / fps;
             const stop = (error?: Error) => {
                 failure ||= error ?? null;
                 window.clearTimeout(timer);
@@ -214,6 +219,10 @@ export async function recordCanvas(source: PrevisCaptureSource, duration: number
             onHidden = () => {
                 if (document.hidden) stop(new Error("录制已中止：请保持世界引擎标签页可见"));
             };
+            activeRecorder.onstart = () => {
+                encoderStarted = true;
+                if (waitingForEncoder) stop();
+            };
             activeRecorder.ondataavailable = (event) => {
                 if (event.data.size) chunks.push(event.data);
             };
@@ -221,29 +230,51 @@ export async function recordCanvas(source: PrevisCaptureSource, duration: number
                 reject(new Error("视频编码失败"));
             };
             activeRecorder.onstop = () => {
+                if (failure) {
+                    reject(failure);
+                    return;
+                }
+                if (waitingForEncoder) {
+                    // 编码启动超过了镜头时长，丢弃预热内容，从首帧重新录制。
+                    restarted = true;
+                    try {
+                        startRecording();
+                    } catch (error) {
+                        reject(error);
+                    }
+                    return;
+                }
                 const blob = new Blob(chunks, { type: activeRecorder.mimeType });
-                if (failure) reject(failure);
-                else if (!blob.size) reject(new Error("录制没有产生视频数据"));
+                if (!blob.size) reject(new Error("录制没有产生视频数据"));
                 else resolve(blob);
             };
-            options.signal?.addEventListener("abort", onAbort, { once: true });
-            document.addEventListener("visibilitychange", onHidden);
-            activeRecorder.start(250);
-            const start = performance.now();
             const tick = () => {
                 try {
-                    const elapsed = (performance.now() - start) / 1000;
+                    const elapsed = (performance.now() - startedAt) / 1000;
                     if (elapsed >= duration) {
-                        stop();
-                        return;
+                        if (encoderStarted || restarted) {
+                            stop();
+                            return;
+                        }
+                        waitingForEncoder = true;
                     }
-                    surface.render(mode, Math.floor(elapsed * fps) / fps);
-                    timer = window.setTimeout(tick, 1000 / fps);
+                    surface.render(mode, waitingForEncoder ? 0 : Math.floor(elapsed * fps) / fps);
+                    timer = window.setTimeout(tick, frameInterval);
                 } catch (error) {
                     stop(error instanceof Error ? error : new Error("录制期间渲染失败"));
                 }
             };
-            timer = window.setTimeout(tick, 1000 / fps);
+            function startRecording() {
+                encoderStarted = false;
+                waitingForEncoder = false;
+                chunks.length = 0;
+                activeRecorder.start(250);
+                startedAt = performance.now();
+                timer = window.setTimeout(tick, frameInterval);
+            }
+            options.signal?.addEventListener("abort", onAbort, { once: true });
+            document.addEventListener("visibilitychange", onHidden);
+            startRecording();
             watchdog = window.setTimeout(
                 () => {
                     stop(new Error("视频编码超时"));

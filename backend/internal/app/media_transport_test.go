@@ -128,7 +128,7 @@ func TestReferenceTransportLocalResourceURLBase64AndOwnership(t *testing.T) {
 	}
 	original := providerMedia{StorageKey: "resource:" + resource.ID, URL: "https://wrong.example.com/stale.png", DataURL: "data:image/png;base64,c3RhbGU="}
 	input := canvasGenerationInput{Mode: "image", Config: providerConfig{mediaTransport: ReferenceMediaTransport{Image: "url"}}, ReferenceImages: []providerMedia{original}}
-	if err = s.hydrateGenerationMedia("synthetic-owner", &input, providerMediaHydrationPolicy{}); err != nil {
+	if err = s.hydrateGenerationMedia(t.Context(), "synthetic-owner", &input, providerMediaHydrationPolicy{}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(input.ReferenceImages[0].URL, "https://canvas.example.com/api/public/resources/") || input.ReferenceImages[0].DataURL != "" {
@@ -136,14 +136,14 @@ func TestReferenceTransportLocalResourceURLBase64AndOwnership(t *testing.T) {
 	}
 	input.Config.mediaTransport.Image = "base64"
 	input.ReferenceImages = []providerMedia{original}
-	if err = s.hydrateGenerationMedia("synthetic-owner", &input, providerMediaHydrationPolicy{preferURL: true}); err != nil {
+	if err = s.hydrateGenerationMedia(t.Context(), "synthetic-owner", &input, providerMediaHydrationPolicy{preferURL: true}); err != nil {
 		t.Fatal(err)
 	}
 	media := input.ReferenceImages[0]
 	if media.URL != "" || media.DataURL != dataURL("image/png", payload) {
 		t.Fatal("Base64 used stale URL or caller-supplied pixels")
 	}
-	if err = s.hydrateProviderMedia("synthetic-other-user", &media, providerMediaHydrationPolicy{forceBase64: true}); err == nil {
+	if err = s.hydrateProviderMedia(t.Context(), "synthetic-other-user", &media, providerMediaHydrationPolicy{forceBase64: true}); err == nil {
 		t.Fatal("resource ownership bypassed")
 	}
 }
@@ -151,7 +151,7 @@ func TestReferenceTransportLocalResourceURLBase64AndOwnership(t *testing.T) {
 func TestReferenceTransportIndependentKindsAndNoPaidFallback(t *testing.T) {
 	s := &Service{}
 	input := canvasGenerationInput{Mode: "video", Config: providerConfig{mediaTransport: ReferenceMediaTransport{Image: "base64", Audio: "base64"}}, ReferenceImages: []providerMedia{{DataURL: testReferenceImageDataURL, URL: "https://example.com/stale"}}, ReferenceAudios: []providerMedia{{DataURL: "data:audio/wav;base64,YQ==", URL: "https://example.com/stale.wav"}}}
-	if err := s.hydrateGenerationMedia("synthetic-user", &input, providerMediaHydrationPolicy{}); err != nil {
+	if err := s.hydrateGenerationMedia(t.Context(), "synthetic-user", &input, providerMediaHydrationPolicy{}); err != nil {
 		t.Fatal(err)
 	}
 	if input.ReferenceImages[0].URL != "" || input.ReferenceAudios[0].URL != "" {

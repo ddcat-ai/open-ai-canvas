@@ -323,6 +323,10 @@ func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot 
 			return leaseErr
 		default:
 		}
+		if referenceReadFailureCode(err) != "" && task.ProviderRequestID == "" && !errors.Is(err, context.Canceled) {
+			uncertain := s.taskBilling().BillingFailureRequiresReview(task.BillingOrderID, task.ID, nil)
+			return terminal.markPreparationFailure(task, "读取参考素材失败", err, uncertain, "参考素材读取失败，上游请求未发出")
+		}
 		decryptedInput, decryptErr := s.decryptTaskInputJSON(task.InputJSON)
 		if decryptErr == nil && s.shouldDeferProviderTask(*task, decryptedInput, err) {
 			stage := "后台仍在生成"

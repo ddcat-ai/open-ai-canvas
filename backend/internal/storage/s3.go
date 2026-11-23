@@ -130,11 +130,8 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 	if err != nil {
 		return nil, err
 	}
-	input := &awss3.GetObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))}
-	if rangeHeader != "" {
-		input.Range = aws.String(rangeHeader)
-	}
-	output, err := client.GetObjectWithContext(context.Background(), input)
+	input := s3ObjectInput(setting, objectKey, rangeHeader)
+	output, err := client.GetObjectWithContext(context.Background(), &input)
 	if err != nil {
 		if requestFailure, ok := err.(awserr.RequestFailure); ok && requestFailure.StatusCode() == http.StatusRequestedRangeNotSatisfiable {
 			return &ObjectStream{Body: io.NopCloser(bytes.NewReader(nil)), StatusCode: http.StatusRequestedRangeNotSatisfiable, AcceptRanges: "bytes"}, nil
@@ -146,6 +143,14 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 		status = http.StatusPartialContent
 	}
 	return &ObjectStream{Body: output.Body, StatusCode: status, ContentLength: aws.Int64Value(output.ContentLength), ContentRange: aws.StringValue(output.ContentRange), AcceptRanges: kernel.FirstNonEmpty(aws.StringValue(output.AcceptRanges), "bytes")}, nil
+}
+
+func s3ObjectInput(setting Settings, objectKey, rangeHeader string) awss3.GetObjectInput {
+	input := awss3.GetObjectInput{Bucket: aws.String(setting.Bucket), Key: aws.String(strings.TrimLeft(objectKey, "/"))}
+	if rangeHeader != "" {
+		input.Range = aws.String(rangeHeader)
+	}
+	return input
 }
 
 func SignedS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {

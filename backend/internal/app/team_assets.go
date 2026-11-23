@@ -227,7 +227,7 @@ func (s *Service) publishTeamAsset(ctx context.Context, actorID, teamID, sourceI
 }
 
 func (s *Service) copyPublishedResource(ctx context.Context, ownerKey string, source *model.Resource) (*model.Resource, error) {
-	_, body, err := s.OpenResource(source.UserID, source.ID)
+	_, body, err := s.openResource(ctx, source.UserID, source.ID)
 	if err != nil {
 		return nil, err
 	}

@@ -889,12 +889,17 @@ async function shotOutputs(cdp, baseUrl) {
         const blob=await handle.recordVideo(.6,12,'depth',{longEdge:320});
         const video=document.createElement('video'),url=URL.createObjectURL(blob);video.muted=true;
         try { await new Promise((resolve,reject)=>{video.onloadeddata=resolve;video.onerror=()=>reject(new Error('recording cannot decode'));video.src=url;});
+            const ended=new Promise((resolve,reject)=>{video.onended=resolve;video.onerror=()=>reject(new Error('recording cannot play to the end'));});
+            await video.play();
+            await ended;
+            const seconds=video.currentTime;
             const abort=new AbortController();const pending=handle.recordVideo(2,12,'beauty',{longEdge:320,signal:abort.signal});abort.abort();
             let cancelled=false;try{await pending;}catch{cancelled=true;}
-            return {bytes:blob.size,width:video.videoWidth,height:video.videoHeight,cancelled};
+            return {bytes:blob.size,width:video.videoWidth,height:video.videoHeight,seconds,cancelled};
         } finally {video.removeAttribute('src');video.load();URL.revokeObjectURL(url);}
     })()`);
     assert(recording.bytes > 0 && recording.width === 180 && recording.height === 320, "G6 recording is decodable at shot dimensions", JSON.stringify(recording));
+    assert(recording.seconds >= 0.4 && recording.seconds <= 0.9, "G6a short recording plays through without encoder warm-up footage", `duration=${recording.seconds}s`);
     assert(recording.cancelled, "G7 recording cancellation rejects and releases session");
     const monitorButton = 'button[title^="投放到第二屏幕"]';
     await cdp.evaluate(`(() => { const open=window.open.bind(window);window.open=(...args)=>{const popup=open(...args);window.__previsPopup=popup;return popup;}; })()`);

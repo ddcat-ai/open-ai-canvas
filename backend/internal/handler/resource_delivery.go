@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"yingce/backend/internal/assets"
@@ -63,6 +65,8 @@ func serveResourceDelivery(c *gin.Context, delivery *service.ResourceDelivery, c
 		return
 	}
 	defer stream.Body.Close()
+	stop := context.AfterFunc(c.Request.Context(), func() { _ = stream.Body.Close() })
+	defer stop()
 	if cacheControl != "" {
 		c.Header("Cache-Control", cacheControl)
 	}
@@ -91,5 +95,12 @@ func serveResourceDelivery(c *gin.Context, delivery *service.ResourceDelivery, c
 		http.ServeContent(c.Writer, c.Request, resource.ID, resource.UpdatedAt, seeker)
 		return
 	}
-	c.DataFromReader(stream.StatusCode, stream.ContentLength, mimeType, stream.Body, nil)
+	c.Header("Content-Type", mimeType)
+	if stream.ContentLength >= 0 {
+		c.Header("Content-Length", strconv.FormatInt(stream.ContentLength, 10))
+	}
+	c.Status(stream.StatusCode)
+	if _, err := io.Copy(c.Writer, stream.Body); err != nil {
+		panic(http.ErrAbortHandler)
+	}
 }

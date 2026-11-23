@@ -76,6 +76,9 @@ func ClassifyError(err error) Failure {
 	if err == nil {
 		return Failure{}
 	}
+	if errors.Is(err, errObjectReadChanged) {
+		return Failure{Code: "ObjectChanged", StatusCode: http.StatusPreconditionFailed}
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return Failure{Code: "Timeout", Transient: true}
 	}

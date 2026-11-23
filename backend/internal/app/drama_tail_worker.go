@@ -23,6 +23,31 @@ type dramaTailWorker struct {
 	failed  map[string]error
 }
 
+func (w *dramaTailWorker) claim(resourceID string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.running[resourceID] || len(w.running) >= dramaTailConcurrency {
+		return false
+	}
+	if w.running == nil {
+		w.running, w.failed = map[string]bool{}, map[string]error{}
+	}
+	w.running[resourceID] = true
+	return true
+}
+
+func (w *dramaTailWorker) finish(resourceID string, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.running, resourceID)
+	if err != nil {
+		if len(w.failed) >= dramaTailFailureLimit {
+			w.failed = map[string]error{}
+		}
+		w.failed[resourceID] = err
+	}
+}
+
 // dramaPendingTail 表示段视频已入库、尾帧仍在后台抽取：作业保持运行，下一轮再看。
 type dramaPendingTail struct{ resourceID string }
 
@@ -32,16 +57,9 @@ func (e *dramaPendingTail) Error() string { return "尾帧抽取中：" + e.reso
 // work 返回的错误暂存到 takeDramaTailFailure 取走为止。返回本次是否启动。
 func (s *Service) startDramaTail(resourceID string, work func() error) bool {
 	w := &s.dramaTails
-	w.mu.Lock()
-	if w.running == nil {
-		w.running, w.failed = map[string]bool{}, map[string]error{}
-	}
-	if w.running[resourceID] || len(w.running) >= dramaTailConcurrency {
-		w.mu.Unlock()
+	if !w.claim(resourceID) {
 		return false
 	}
-	w.running[resourceID] = true
-	w.mu.Unlock()
 	run := s.dramaBackgroundRunner
 	if run == nil {
 		run = s.runWorkerTask
@@ -53,24 +71,14 @@ func (s *Service) startDramaTail(resourceID string, work func() error) bool {
 			workErr, done = work(), true
 			release()
 		}
-		w.mu.Lock()
-		delete(w.running, resourceID)
-		if workErr != nil {
-			if len(w.failed) >= dramaTailFailureLimit {
-				w.failed = map[string]error{}
-			}
-			w.failed[resourceID] = workErr
-		}
-		w.mu.Unlock()
+		w.finish(resourceID, workErr)
 		// 别的实例正在抽同一段时不唤醒，避免调度与租约竞争空转；按常规轮询再看。
 		if done {
 			s.wakeDramaScheduler()
 		}
 	})
 	if !started {
-		w.mu.Lock()
-		delete(w.running, resourceID)
-		w.mu.Unlock()
+		w.finish(resourceID, nil)
 	}
 	return started
 }
