@@ -7,14 +7,10 @@ export function resilientPreload(): Plugin {
         enforce: "post",
         transform(code, id) {
             if (id !== "\0vite/preload-helper.js") return;
-            const entry = "function preload(baseModule, deps, importerUrl) {";
-            const seenCheck = "if (dep in seen) return;";
-            const cssLoad = 'if (isCss) return new Promise((res, rej) => {';
-            const cssError = [
-                'link.addEventListener("load", res);\n\t\t\t\tlink.addEventListener("error", () => rej(/* @__PURE__ */ new Error(`Unable to preload CSS for ${dep}`)));\n\t\t\t});',
-                'link.addEventListener("error", () => rej(/* @__PURE__ */ new Error(`Unable to preload CSS for ${dep}`)));\n\t\t\t});',
-            ].find((part) => code.includes(part));
-            if ([entry, seenCheck, cssLoad].some((part) => !code.includes(part)) || !cssError) {
+            const entry = /function preload\(baseModule, deps, importerUrl\) \{/;
+            const seenCheck = /if \(dep in seen\) return;/;
+            const cssBlock = /if \(isCss\) return new Promise\(\(res, rej\) => \{\s*(?:link\.addEventListener\("load", res\);\s*)?link\.addEventListener\("error", \(\) => rej\([^;\n]*\)\);\s*\}\);/;
+            if ([entry, seenCheck, cssBlock].some((part) => !part.test(code))) {
                 throw new Error("Vite preload helper changed; update the resource preload adapter");
             }
             return {
@@ -30,8 +26,10 @@ export function resilientPreload(): Plugin {
                         )
                         // When two imports need the same CSS, both wait for it. A failed link can be recreated on retry.
                         .replace(seenCheck, "if (dep in seen) return seen[dep] === true ? undefined : seen[dep];")
-                        .replace(cssLoad, "if (isCss) return (seen[dep] = new Promise((res, rej) => {")
-                        .replace(cssError, 'link.addEventListener("error", () => { delete seen[dep]; link.remove(); rej(new PageResourceError(dep, "页面样式加载失败")); });\n\t\t\t}));'),
+                        .replace(
+                            cssBlock,
+                            'if (isCss) return (seen[dep] = new Promise((res, rej) => {\n\t\t\t\tlink.addEventListener("load", res);\n\t\t\t\tlink.addEventListener("error", () => { delete seen[dep]; link.remove(); rej(new PageResourceError(dep, "页面样式加载失败")); });\n\t\t\t}));',
+                        ),
                 map: null,
             };
         },
