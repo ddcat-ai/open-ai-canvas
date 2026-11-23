@@ -98,7 +98,17 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
     const mode = canvasGenerationMode(node.type);
     if (!mode) return undefined;
     const metadata = (node.metadata || {}) as Record<string, unknown>;
-    const stored = metadata.generationSpec ? validateGenerationSpec(metadata.generationSpec) : undefined;
+    const rawStored = metadata.generationSpec && typeof metadata.generationSpec === "object" && !Array.isArray(metadata.generationSpec) ? (metadata.generationSpec as Record<string, unknown>) : undefined;
+    let stored: GenerationSpec | undefined;
+    if (rawStored) {
+        try {
+            stored = validateGenerationSpec(rawStored);
+        } catch {
+            // 历史 Agent 草稿可能只写入 generationSpec.options，或把 version 序列化成文本。
+            // 回退到扁平镜像字段，避免旧节点阻断整个画布，同时继续由最终合同校验约束写入值。
+            stored = undefined;
+        }
+    }
     const options: Record<string, unknown> = { ...stored?.options };
     // generationSpec is the canonical contract once present. Legacy node fields are only
     // read for migration, otherwise a stale compatibility mirror can silently overwrite
@@ -106,8 +116,8 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
     if (!stored) {
         for (const field of GENERATION_OPTION_FIELDS) {
             if (!(field.modes as readonly string[]).includes(mode)) continue;
-            if (!(field.node in metadata)) continue;
-            const value = metadata[field.node];
+            const value = field.node in metadata ? metadata[field.node] : rawStored && typeof rawStored.options === "object" && !Array.isArray(rawStored.options) ? (rawStored.options as Record<string, unknown>)[field.name] : undefined;
+            if (value === undefined && !(field.node in metadata)) continue;
             if (value === undefined || value === null || (value === "" && field.name !== "audioVoice")) delete options[field.name];
             else options[field.name] = optionValue(value, field.kind, field.node);
         }
@@ -122,7 +132,7 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
                   return model ? ({ kind: "channel", channelId: model.channelId, modelKey: model.model } as const) : undefined;
               })()
             : undefined);
-    const prompt = stored?.prompt ?? (typeof metadata.composerContent === "string" ? metadata.composerContent : typeof metadata.prompt === "string" ? metadata.prompt : "");
+    const prompt = stored?.prompt ?? (typeof rawStored?.prompt === "string" ? rawStored.prompt : typeof metadata.composerContent === "string" ? metadata.composerContent : typeof metadata.prompt === "string" ? metadata.prompt : "");
     return validateGenerationSpec({
         version: GENERATION_CONTRACT_VERSION,
         mode,
@@ -130,7 +140,7 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
         options,
         ...(modelSelection ? { modelSelection } : {}),
         referenceBindings: stored?.referenceBindings || [],
-        textInputMode: stored?.textInputMode || (mode === "video" ? "prompt-only" : "append-sources"),
+        textInputMode: stored?.textInputMode || (rawStored?.textInputMode === "prompt-only" || rawStored?.textInputMode === "append-sources" ? rawStored.textInputMode : mode === "video" ? "prompt-only" : "append-sources"),
     });
 }
 
