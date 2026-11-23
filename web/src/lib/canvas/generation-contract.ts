@@ -113,14 +113,17 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
     // generationSpec is the canonical contract once present. Legacy node fields are only
     // read for migration, otherwise a stale compatibility mirror can silently overwrite
     // an explicitly stored false/zero value.
-    if (!stored) {
-        for (const field of GENERATION_OPTION_FIELDS) {
-            if (!(field.modes as readonly string[]).includes(mode)) continue;
-            const value = field.node in metadata ? metadata[field.node] : rawStored && typeof rawStored.options === "object" && !Array.isArray(rawStored.options) ? (rawStored.options as Record<string, unknown>)[field.name] : undefined;
-            if (value === undefined && !(field.node in metadata)) continue;
-            if (value === undefined || value === null || (value === "" && field.name !== "audioVoice")) delete options[field.name];
-            else options[field.name] = optionValue(value, field.kind, field.node);
-        }
+    for (const field of GENERATION_OPTION_FIELDS) {
+        if (!(field.modes as readonly string[]).includes(mode)) continue;
+        // A generationSpec written by an older Agent may be valid but omit a
+        // field that still exists in the flat compatibility mirror (most
+        // notably video duration). Fill only missing canonical values so an
+        // explicit false/zero value in the spec remains authoritative.
+        if (stored && Object.prototype.hasOwnProperty.call(options, field.name)) continue;
+        const value = field.node in metadata ? metadata[field.node] : rawStored && typeof rawStored.options === "object" && !Array.isArray(rawStored.options) ? (rawStored.options as Record<string, unknown>)[field.name] : undefined;
+        if (value === undefined && !(field.node in metadata)) continue;
+        if (value === undefined || value === null || (value === "" && field.name !== "audioVoice")) delete options[field.name];
+        else options[field.name] = optionValue(value, field.kind, field.node);
     }
     const modelSelection =
         stored?.modelSelection ||

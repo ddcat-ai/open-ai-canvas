@@ -137,6 +137,24 @@ func TestCloudAgentMediaPreservesDraftOptionsAgainstModelOverrides(t *testing.T)
 	}
 }
 
+func TestCloudAgentMediaMigratesLegacyDurationFromPartialGenerationContract(t *testing.T) {
+	spec := contract.GenerationSpec{Version: 1, Mode: "video", Prompt: "旧 Agent 视频", Options: contract.Options{}, ReferenceBindings: []contract.ReferenceBinding{}, TextInputMode: "prompt-only"}
+	meta, err := spec.NodeMetadata()
+	if err != nil {
+		t.Fatal(err)
+	}
+	meta["seconds"] = "12"
+	doc := map[string]any{"nodes": []any{map[string]any{"id": "draft", "type": "video", "metadata": meta}}}
+
+	_, options, err := cloudAgentMediaDraftConfiguration(cloudAgentMediaArgs{Mode: "video", NodeID: "draft"}, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.DurationSeconds == nil || *options.DurationSeconds != 12 {
+		t.Fatalf("legacy duration was not restored: %+v", options)
+	}
+}
+
 func TestCloudAgentImageDraftKeepsCanonicalModelAndImageOptions(t *testing.T) {
 	size, resolution, quality := "16:9", "2k", "high"
 	spec := contract.GenerationSpec{Version: 1, Mode: "image", ModelSelection: &contract.ModelSelection{Kind: "logical", LogicalModelID: "user-model"}, Options: contract.Options{Size: &size, ImageResolution: &resolution, Quality: &quality}, TextInputMode: "prompt-only", ReferenceBindings: []contract.ReferenceBinding{}}
