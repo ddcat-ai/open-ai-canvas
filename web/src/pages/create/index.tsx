@@ -11,10 +11,11 @@ import { useTranslation } from "react-i18next";
 import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { PersonalSpaceCreditOverview } from "@/components/layout/team-space-directory";
 import { generationErrorCode, generationErrorMessage } from "@/lib/generation-error";
+import { creationMessageMayHaveExternalVideoResult } from "@/lib/creation-message-recovery";
 import { useGenerationBatchLimit } from "@/lib/generation-batch-limit";
 import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { imageParameterRequest } from "@/lib/image-parameters";
-import { creationResultAssetIds } from "@/lib/canvas/canvas-asset-handoff";
+import { creationResultAssetIds, creationResultStorageKeysForMessage } from "@/lib/canvas/canvas-asset-handoff";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { audioUploadTitleFromFileName } from "@/lib/audio-upload-title";
 import { continueCreationConversationOnCanvas } from "@/services/creation-canvas-conversation";
@@ -566,10 +567,16 @@ export default function CreatePage() {
             const contextual = attachCreationTaskContexts(tasks, conversationsRef.current);
             const persistedTasks = await materializeCreationTaskResults(runtime, contextual, signal);
             if (!active()) return persistedTasks;
-            const attachable = persistedTasks.filter(
-                (task) => task.status === "succeeded" && Boolean(task.clientContext?.conversationId && task.clientContext.messageId) && Boolean(task.creationResultUrls?.length || task.creationResultStorageKeys?.length),
-            );
-            for (const task of attachable) {
+            const assetsAlreadyInLibrary = useAssetStore.getState().assets;
+            const recoveredTasks = persistedTasks.map((task) => {
+                const messageId = task.clientContext?.messageId;
+                if (task.status !== "succeeded" || !messageId || task.creationResultStorageKeys?.length || task.creationResultUrls?.length) return task;
+                const existingStorageKeys = creationResultStorageKeysForMessage(assetsAlreadyInLibrary, { messageId, taskIds: [task.id] });
+                return existingStorageKeys.length ? { ...task, creationResultStorageKeys: existingStorageKeys } : task;
+            });
+            for (const task of recoveredTasks.filter(
+                (candidate) => candidate.status === "succeeded" && Boolean(candidate.clientContext?.conversationId && candidate.clientContext.messageId) && Boolean(candidate.creationResultUrls?.length || candidate.creationResultStorageKeys?.length),
+            )) {
                 const conversationId = task.clientContext!.conversationId!;
                 const messageId = task.clientContext!.messageId!;
                 try {
@@ -603,7 +610,7 @@ export default function CreatePage() {
                     console.warn("创作任务结果挂载失败，将使用已物化结果收敛消息状态", error);
                 }
             }
-            return persistedTasks;
+            return recoveredTasks;
         },
         [updateConversationMessage],
     );
@@ -649,6 +656,20 @@ export default function CreatePage() {
             unsubscribe();
         };
     }, [applyCreationTaskSnapshots, hydrated, recoveryTaskKey, toast]);
+
+    useEffect(() => {
+        const remountRecovery = () => {
+            if (document.visibilityState === "hidden") return;
+            const hasExternallyRecoverableTask = conversationsRef.current.some((conversation) => conversation.messages.some((message) => creationMessageMayHaveExternalVideoResult(message)));
+            if (hasExternallyRecoverableTask) setRecoveryEpoch((value) => value + 1);
+        };
+        window.addEventListener("focus", remountRecovery);
+        document.addEventListener("visibilitychange", remountRecovery);
+        return () => {
+            window.removeEventListener("focus", remountRecovery);
+            document.removeEventListener("visibilitychange", remountRecovery);
+        };
+    }, []);
 
     const beginResultRefresh = (messageId: string) => {
         if (resultRefreshIdsRef.current.has(messageId)) return null;
