@@ -19,11 +19,15 @@ type AgentHistoryQuota struct {
 	AgentHistoryGlobalMB int64 `json:"agentHistoryGlobalMB,omitempty"`
 }
 
-func (quota AgentHistoryQuota) GlobalLimitBytes() (int64, error) {
-	megabytes := quota.AgentHistoryGlobalMB
-	if megabytes == 0 {
-		megabytes = DefaultAgentHistoryGlobalMB
+func (quota AgentHistoryQuota) EffectiveGlobalMB() int64 {
+	if quota.AgentHistoryGlobalMB == 0 {
+		return max(DefaultAgentHistoryGlobalMB, quota.AgentHistoryMB)
 	}
+	return quota.AgentHistoryGlobalMB
+}
+
+func (quota AgentHistoryQuota) GlobalLimitBytes() (int64, error) {
+	megabytes := quota.EffectiveGlobalMB()
 	if megabytes < 1 || megabytes > MaxAgentHistoryGlobalMB {
 		return 0, fmt.Errorf("平台 Agent 热历史容量必须是 1-%d MiB 的整数", MaxAgentHistoryGlobalMB)
 	}

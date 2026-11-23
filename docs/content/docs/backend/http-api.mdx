@@ -111,6 +111,8 @@ Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工�
 
 检测与调用的限频、并发和存储拒绝使用真实 429 / 403 错误，协调器不可用时拒绝新外部操作。管理员资源策略 `task.agentMaxRunsPerUser` 默认 5，范围 1–64；新安装 `task.agentMaxSessions` 默认 8。`GET/PUT /admin/settings/runtime-policy` 的 `resource.agentHistoryMB` 设置每账号 Agent 历史容量（1–999999 MiB；旧配置缺省为 256 MiB），`resource.agentHistoryGlobalMB` 设置所有账号热 Agent 历史池上限（默认 8192 MiB）。热池超限时先整理超过一分钟的旧终态，仍不足才拒绝写入。用户详情 `storageUsage.agentBytes/agentLimitBytes` 显示用量和每账号策略上限，独立于文件空间及 MCP 的 64 MiB 额度。
 
+旧站只设置了每账号额度时，升级后全站热历史池取 8192 MiB 和原每账号额度中的较大值。已显式设置全站额度的站点继续使用原值，管理员保存时全站额度必须大于或等于每账号额度。
+
 `DELETE /admin/users/:id/agent-history` 仅限管理员。成功返回 `data.freedBytes`；清理目标账号全部 Agent 历史、扣减账本并记录管理审计。只要存在未结束、待收尾或刚预留的轮次，返回 409 且不删除任何记录。清理不可恢复，不影响已有画布、素材、任务和账务。
 
 ## 飞书需求与问题日报

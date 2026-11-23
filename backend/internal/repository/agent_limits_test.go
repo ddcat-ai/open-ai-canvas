@@ -191,6 +191,27 @@ func TestAgentStorageGlobalHotPoolRejectsWithoutReclaimableHistory(t *testing.T)
 	}
 }
 
+func TestAgentStorageQuotaUsesLegacyAccountLimitOnlyForMissingPool(t *testing.T) {
+	repo, _ := agentLifecycleRepositories(t, "sqlite")
+	for _, test := range []struct {
+		resource string
+		wantMB   int64
+	}{
+		{`{"agentHistoryMB":50000}`, 50000},
+		{`{"agentHistoryMB":256}`, model.DefaultAgentHistoryGlobalMB},
+		{`{"agentHistoryMB":50000,"agentHistoryGlobalMB":70000}`, 70000},
+	} {
+		setting := model.SystemSetting{Key: model.RuntimePolicySettingKey, ValueJSON: `{"resource":` + test.resource + `}`}
+		if err := repo.db.Save(&setting).Error; err != nil {
+			t.Fatal(err)
+		}
+		got, err := repo.agentHistoryGlobalLimitBytes()
+		if err != nil || got != test.wantMB<<20 {
+			t.Fatalf("resource=%s global bytes=%d err=%v", test.resource, got, err)
+		}
+	}
+}
+
 func TestAgentFailedReservationDoesNotBlockContinuation(t *testing.T) {
 	repo, _ := agentLifecycleRepositories(t, "sqlite")
 	parent := &model.CloudAgentExecution{ID: "parent", UserID: "user", ConversationID: "parent", Status: "completed", Revision: 1, StateJSON: `{}`}

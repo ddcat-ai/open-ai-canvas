@@ -1375,7 +1375,7 @@ for (const [id, name, vendor, capability, baseUrl, createPath, pollPath, request
   ["adobe-firefly", "Adobe Firefly", "Adobe", "image", "https://firefly-api.adobe.io", "/v3/images/generate", null, "versioned Firefly request"],
   ["runway-image", "Runway Image", "Runway", "image", "https://api.dev.runwayml.com", "/v1/text_to_image", "/v1/tasks/{{taskId}}", "async Runway image schema"],
   ["vertex-veo", "Vertex AI Veo", "Google Cloud", "video", "https://{location}-aiplatform.googleapis.com", "/v1/projects/{{request.providerOptions.vertex-veo.project}}/locations/{{request.providerOptions.vertex-veo.location}}/publishers/google/models/{{model}}:predictLongRunning", "/v1/{{taskId}}", "Vertex long-running operation"],
-  ["seedance-videos-compatible", "Seedance Compatible /videos", "Gateway profile", "video", "http://127.0.0.1:3000", "/v1/videos", "/v1/videos/{{taskId}}", "gateway-specific videos JSON", "2.0.1"],
+  ["seedance-videos-compatible", "Seedance Compatible /videos", "Gateway profile", "video", "http://127.0.0.1:3000", "/v1/videos", "/v1/videos/{{taskId}}", "gateway-specific videos JSON", "2.0.2"],
   ["kling-video", "Kling Video", "Kuaishou", "video", "https://api.klingai.com", "/v1/videos/generations", "/v1/videos/generations/{{taskId}}", "text/image/multi-image task"],
   ["runway-video", "Runway Video", "Runway", "video", "https://api.dev.runwayml.com", "/v1/image_to_video", "/v1/tasks/{{taskId}}", "promptImage+promptText+ratio+duration"],
   ["luma-dream-machine", "Luma Dream Machine", "Luma AI", "video", "https://api.lumalabs.ai", "/dream-machine/v1/generations", "/dream-machine/v1/generations/{{taskId}}", "prompt+keyframes"],

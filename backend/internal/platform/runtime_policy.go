@@ -371,9 +371,11 @@ func (s *Service) readRuntimePolicy() (*model.SystemSetting, RuntimePolicySettin
 		return nil, value, validateRuntimePolicy(value)
 	}
 	value := DefaultRuntimePolicy()
+	value.Resource.AgentHistoryGlobalMB = 0
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, RuntimePolicySetting{}, errors.New("资源与请求策略配置格式无效")
 	}
+	value.Resource.AgentHistoryGlobalMB = value.Resource.EffectiveGlobalMB()
 	if err := validateRuntimePolicy(value); err != nil {
 		return nil, RuntimePolicySetting{}, err
 	}

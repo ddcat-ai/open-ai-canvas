@@ -193,31 +193,31 @@ func (r *Repository) enforceGlobalAgentStorageLimit() error {
 }
 
 func (r *Repository) agentHistoryLimitBytes() (int64, error) {
-	policy := struct{ Resource model.AgentHistoryQuota }{Resource: model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB, AgentHistoryGlobalMB: model.DefaultAgentHistoryGlobalMB}}
-	setting, err := r.SystemSettingOptional(model.RuntimePolicySettingKey)
+	quota, err := r.storedAgentHistoryQuota()
 	if err != nil {
 		return 0, err
 	}
-	if setting != nil {
-		if err := json.Unmarshal([]byte(setting.ValueJSON), &policy); err != nil {
-			return 0, fmt.Errorf("读取 Agent 历史额度失败: %w", err)
-		}
-	}
-	return policy.Resource.LimitBytes()
+	return quota.LimitBytes()
 }
 
 func (r *Repository) agentHistoryGlobalLimitBytes() (int64, error) {
-	policy := struct{ Resource model.AgentHistoryQuota }{Resource: model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB, AgentHistoryGlobalMB: model.DefaultAgentHistoryGlobalMB}}
-	setting, err := r.SystemSettingOptional(model.RuntimePolicySettingKey)
+	quota, err := r.storedAgentHistoryQuota()
 	if err != nil {
 		return 0, err
 	}
-	if setting != nil {
-		if err := json.Unmarshal([]byte(setting.ValueJSON), &policy); err != nil {
-			return 0, fmt.Errorf("读取 Agent 历史额度失败: %w", err)
-		}
+	return quota.GlobalLimitBytes()
+}
+
+func (r *Repository) storedAgentHistoryQuota() (model.AgentHistoryQuota, error) {
+	policy := struct{ Resource model.AgentHistoryQuota }{Resource: model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB}}
+	setting, err := r.SystemSettingOptional(model.RuntimePolicySettingKey)
+	if err != nil || setting == nil {
+		return policy.Resource, err
 	}
-	return policy.Resource.GlobalLimitBytes()
+	if err := json.Unmarshal([]byte(setting.ValueJSON), &policy); err != nil {
+		return model.AgentHistoryQuota{}, fmt.Errorf("读取 Agent 历史额度失败: %w", err)
+	}
+	return policy.Resource, nil
 }
 
 // AgentStoredBytes reads the ledger once initialized, including pre-upgrade

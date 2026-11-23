@@ -4734,6 +4734,8 @@ PR #507 核心能力已按主分支实现保留，并补齐小视口尺寸约束
 
 ## 服务升级运行基础
 
+- [ ] 从已登录的旧站升级，使用只含每账号 Agent 历史额度 50000 MiB 的配置。刷新后应直接进入原账号工作区，后台应显示每账号及全站热历史额度均为 50000 MiB。
+- [ ] 使用安装过 Seedance 兼容插件 2.0.1 的测试站升级并再次重启。确认后台显示 2.0.2、启用状态与升级前一致，锁定旧版的模型仍能解析原归档。
 - 完整架构、状态机、Release 清单、备份和回退边界见 `docs/design/dynamic-update.md`。
 - [x] 后端新增权威 BuildInfo、`schema_migrations`、独立 `migrate-schema` 命令、分层健康检查以及可停止 Worker；专项 Go 测试通过。
 - [x] 生产 Compose 在 Backend 前运行一次性迁移服务，并使用 `CANVAS_AUTO_MIGRATE=false` 阻止业务进程隐式修改 Schema；Backend 收到 SIGTERM 后进入 drain、停止领取任务并等待活动任务。
