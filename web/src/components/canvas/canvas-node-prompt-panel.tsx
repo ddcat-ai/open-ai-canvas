@@ -654,6 +654,8 @@ export function CanvasNodePromptPanel({
                         <CanvasVideoSettingsPopover
                             config={config}
                             operation={resolvedRequirements.videoOperation}
+                            placement={expanded ? "topRight" : "topLeft"}
+                            getPopupContainer={expanded ? (trigger) => trigger.closest<HTMLElement>(".ant-modal") ?? document.body : undefined}
                             buttonClassName="canvas-node-composer-settings-trigger [&>span]:min-w-0 [&_.lucide]:!size-3"
                             onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
                         />

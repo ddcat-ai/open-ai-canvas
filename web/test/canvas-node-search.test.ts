@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
+import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, canvasNodeSearchType, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
 import { normalizeCanvasNodeTimestamps, stampCanvasNodeChanges, updateCanvasNodes } from "@/lib/canvas/canvas-node-timestamps";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -83,5 +83,12 @@ describe("canvas node search", () => {
         expect(canvasNodeMaterialSummary(image)).toContain("1920×1080");
         expect(canvasNodeSearchContext(image)).toBe("图片节点");
         expect(canvasNodeSearchTimes(image)).toMatchObject({ createdAt: image.createdAt, updatedAt: image.updatedAt });
+    });
+
+    test("search results expose distinct media types", () => {
+        expect(canvasNodeSearchType(node("image", { type: CanvasNodeType.Image }))).toEqual({ kind: "image", label: "图片" });
+        expect(canvasNodeSearchType(node("video", { type: CanvasNodeType.Video }))).toEqual({ kind: "video", label: "视频" });
+        expect(canvasNodeSearchType(node("audio", { type: CanvasNodeType.Audio }))).toEqual({ kind: "audio", label: "音频" });
+        expect(canvasNodeSearchType(node("text", { type: CanvasNodeType.Text }))).toEqual({ kind: "text", label: "文本" });
     });
 });
