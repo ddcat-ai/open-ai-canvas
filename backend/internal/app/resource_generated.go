@@ -83,9 +83,11 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 				}
 				duration := int64(intValue(item["durationMs"]))
 				if kind == "audio" {
-					// Delivery can succeed with an unmeasurable file. Billing requires an independent measurement.
-					duration, _ = measureAudioReader(bytes.NewReader(data), int64(len(data)))
-					item["durationMs"] = duration
+					// Keep display metadata when measuring fails. Billing verifies the original independently.
+					if measured, err := measureAudioReader(bytes.NewReader(data), int64(len(data))); err == nil && measured > 0 {
+						duration = measured
+						item["durationMs"] = duration
+					}
 				}
 				quotaDay := ""
 				if enforceQuota {

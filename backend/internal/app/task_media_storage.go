@@ -342,7 +342,9 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		if resource.UserID != task.UserID || resource.Size != info.Size() || resource.MimeType != mimeType {
 			return nil, nil, errors.New("恢复文件与原始资源不一致")
 		}
-		resource.DurationMs = durationMs
+		if kind != "audio" || durationMs > 0 {
+			resource.DurationMs = durationMs
+		}
 		if kind == "video" && width > 0 && height > 0 {
 			resource.Width, resource.Height = width, height
 		}

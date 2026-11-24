@@ -59,6 +59,26 @@ func TestResolveAudioOrderFromPersistedOutput(t *testing.T) {
 		t.Fatal("accepted missing duration")
 	}
 	unchanged()
+	const displayDuration = 321
+	unmeasured, err := s.persistGeneratedMediaResult("user", map[string]any{"audio": map[string]any{
+		"dataUrl":    dataURL("audio/wav", []byte("not a decodable WAV")),
+		"durationMs": displayDuration,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unmeasuredAudio := unmeasured["audio"].(map[string]any)
+	unmeasuredResource, err := s.repo.ResourceForUser("user", unmeasuredAudio["resourceId"].(string))
+	if err != nil || intValue(unmeasuredAudio["durationMs"]) != displayDuration || unmeasuredResource.DurationMs != displayDuration {
+		t.Fatalf("preserve display metadata when decoding fails: %+v %v", unmeasuredResource, err)
+	}
+	if err := db.Model(&model.Task{}).Where("id='task'").Update("result_json", mustJSON(unmeasured)).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ResolveBillingOrder(admin, order.ID, req); err == nil {
+		t.Fatal("accepted unverified display duration for billing")
+	}
+	unchanged()
 	wav := filepath.Join(t.TempDir(), "fixture.wav")
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg unavailable")
