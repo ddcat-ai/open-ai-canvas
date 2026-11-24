@@ -145,7 +145,7 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 	if rangeHeader != "" && aws.StringValue(output.ContentRange) != "" {
 		status = http.StatusPartialContent
 	}
-	return &ObjectStream{Body: output.Body, StatusCode: status, ContentLength: aws.Int64Value(output.ContentLength), ContentRange: aws.StringValue(output.ContentRange), AcceptRanges: kernel.FirstNonEmpty(aws.StringValue(output.AcceptRanges), "bytes")}, nil
+	return &ObjectStream{Body: output.Body, ETag: aws.StringValue(output.ETag), StatusCode: status, ContentLength: aws.Int64Value(output.ContentLength), ContentRange: aws.StringValue(output.ContentRange), AcceptRanges: kernel.FirstNonEmpty(aws.StringValue(output.AcceptRanges), "bytes")}, nil
 }
 
 func SignedS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {

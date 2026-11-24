@@ -335,6 +335,47 @@ func (r *Repository) SettleBillingOrder(id string, providerRequestID string) err
 	return r.settleBillingOrder(id, providerRequestID, nil)
 }
 
+// Lock the task before its order, as in retry. Measurement happened outside
+// the transaction, so recheck the delivery, payment and object identities.
+func (r *Repository) SettleReviewedAudio(order *model.BillingOrder, task *model.Task, resource *model.Resource, durationMs int64, audit *model.AdminAuditEvent, note string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		lock := clause.Locking{Strength: "UPDATE"}
+		var original model.Task
+		if err := tx.Clauses(lock).Where("id = ? AND user_id = ? AND billing_order_id = ? AND status = ? AND type = ? AND route_run = ? AND result_json = ?",
+			task.ID, task.UserID, order.ID, model.TaskStatusSucceeded, task.Type, task.RouteRun, task.ResultJSON).First(&original).Error; err != nil {
+			return err
+		}
+		var currentOrder model.BillingOrder
+		if err := tx.Clauses(lock).First(&currentOrder, "id = ?", order.ID).Error; err != nil {
+			return err
+		}
+		if currentOrder.Status != order.Status || !currentOrder.UpdatedAt.Equal(order.UpdatedAt) || currentOrder.TaskID != task.ID || currentOrder.UserID != task.UserID ||
+			currentOrder.BillingAccountID != order.BillingAccountID || currentOrder.TeamID != "" || currentOrder.MembershipID != "" || currentOrder.BillingMode != "per_second" || currentOrder.Capability != "audio" {
+			return ErrBillingStateConflict
+		}
+		var current model.Resource
+		if err := tx.Clauses(lock).First(&current, "id = ? AND user_id = ? AND status = ? AND kind = 'audio'", resource.ID, task.UserID, model.ResourceStatusReady).Error; err != nil {
+			return err
+		}
+		if current.Provider != resource.Provider || current.ObjectKey != resource.ObjectKey || current.StorageSettingID != resource.StorageSettingID || current.Endpoint != resource.Endpoint ||
+			current.Bucket != resource.Bucket || current.ETag != resource.ETag || current.Size != resource.Size || !current.UpdatedAt.Equal(resource.UpdatedAt) {
+			return ErrBillingStateConflict
+		}
+		var payer model.CreditAccount
+		if err := tx.Clauses(lock).First(&payer, "id = ? AND kind = ? AND user_id = ?", order.BillingAccountID, model.CreditAccountPersonal, task.UserID).Error; err != nil {
+			return err
+		}
+		repo := New(tx)
+		if err := repo.SettleBillingOrderWithAudioDuration(order.ID, order.ProviderRequestID, durationMs); err != nil {
+			return err
+		}
+		if err := repo.RecordBillingResolution(order.ID, audit.ActorUserID, note); err != nil {
+			return err
+		}
+		return repo.AppendAdminAudit(audit)
+	})
+}
+
 func (r *Repository) SettleBillingOrderWithAudioDuration(id string, providerRequestID string, durationMs int64) error {
 	return r.settleBillingOrder(id, providerRequestID, &durationMs)
 }
@@ -487,6 +528,9 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 				return err
 			}
 			if billingChargeLimitApplies(order) && actual > order.ChargeLimitMicrocredits {
+				if order.Capability == "audio" {
+					return ErrBillingChargeLimit
+				}
 				return errors.New(mediaLabel + "实际费用超过本次授权上限，需人工核对")
 			}
 			reserved := order.ReservedAmountMicrocredits
@@ -507,6 +551,9 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 				return updated.Error
 			}
 			if updated.RowsAffected != 1 {
+				if order.Capability == "audio" {
+					return ErrInsufficientCredits
+				}
 				return errors.New("预留积分不足以完成" + mediaLabel + "实际结算")
 			}
 			var account model.CreditAccount

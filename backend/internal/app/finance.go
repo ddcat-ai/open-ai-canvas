@@ -414,6 +414,12 @@ func (s *Service) resolveBillingOrder(actor *model.User, id string, action strin
 	}
 	switch action {
 	case "settle":
+		if order.BillingMode == "per_second" && order.Capability == "audio" {
+			if err := s.settleReviewedAudio(actor, order, truncateRunes(note, 500)); err != nil {
+				return nil, err
+			}
+			return s.repo.BillingOrder(id)
+		}
 		err = s.SettleBilling(id, order.ProviderRequestID)
 	case "refund":
 		err = s.RefundBilling(id, note)

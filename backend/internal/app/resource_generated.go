@@ -81,6 +81,12 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 				if kind == "image" && (width <= 0 || height <= 0) {
 					width, height = imageDimensions(data)
 				}
+				duration := int64(intValue(item["durationMs"]))
+				if kind == "audio" {
+					// Delivery can succeed with an unmeasurable file. Billing requires an independent measurement.
+					duration, _ = measureAudioReader(bytes.NewReader(data), int64(len(data)))
+					item["durationMs"] = duration
+				}
 				quotaDay := ""
 				if enforceQuota {
 					quotaDay, err = s.reserveGeneratedResourceQuota(userID, int64(len(data)))
@@ -88,7 +94,7 @@ func (s *Service) persistGeneratedMediaValueMode(userID string, value interface{
 						return nil, err
 					}
 				}
-				resource, _, err := s.storeResource(userID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, int64(len(data)), width, height, int64(intValue(item["durationMs"])), bytes.NewReader(data), nil, false)
+				resource, _, err := s.storeResource(userID, kind, "generated."+extensionFromMimeType(mimeType), mimeType, int64(len(data)), width, height, duration, bytes.NewReader(data), nil, false)
 				if err != nil {
 					if enforceQuota {
 						s.releaseUserUploadQuota(userID, quotaDay, int64(len(data)))
