@@ -27,6 +27,27 @@ def package(extra=None):
 
 
 class ClientTests(unittest.TestCase):
+    def test_bootstrap_installs_latest_without_credentials(self):
+        with tempfile.TemporaryDirectory() as folder:
+            skill = Path(folder) / "skills" / "canvas-admin"
+            data, manifest = package()
+            manifest.update(version="test-version", downloadUrl="/api/admin-assistant/skill/releases/test.zip")
+            with patch.object(client.Client, "request", side_effect=[manifest, data]) as request:
+                self.assertEqual(client.main(["--site", "https://canvas.example.test", "install", "--destination", str(skill)]), 0)
+            self.assertEqual((skill / "SKILL.md").read_text(), "skill")
+            self.assertEqual(request.call_args_list[0].args, (client.API + "/skill/latest",))
+            self.assertTrue(all(call.kwargs["authenticated"] is False for call in request.call_args_list))
+
+    def test_bootstrap_rejects_incompatible_package_and_credential_destination(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {"XDG_CONFIG_HOME": folder}):
+            data, manifest = package()
+            manifest.update(version="test-version", downloadUrl="/package.zip")
+            for destination, api in ((Path(folder) / "skill", 2), (Path(folder), 1)):
+                manifest["apiVersion"] = api
+                with patch.object(client.Client, "request", side_effect=[manifest, data]), self.assertRaises(RuntimeError):
+                    client.main(["--site", "https://canvas.example.test", "install", "--destination", str(destination)])
+                self.assertFalse((destination / "SKILL.md").exists())
+
     def test_update_preserves_credentials_and_other_files(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

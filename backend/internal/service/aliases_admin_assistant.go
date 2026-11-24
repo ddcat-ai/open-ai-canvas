@@ -15,3 +15,4 @@ const AssistantAttachmentLimit = app.AssistantAttachmentLimit
 var AssistantBaseURL = app.AssistantBaseURL
 var AssistantResource = app.AssistantResource
 var AssistantSkillPackage = app.AssistantSkillPackage
+var AssistantSkillInstaller = app.AssistantSkillInstaller

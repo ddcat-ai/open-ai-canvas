@@ -99,6 +99,18 @@ func AssistantResource() (string, error) {
 	return base + AssistantAPIPath + "/mcp", err
 }
 
+func assistantOAuthResource(requested string) (string, error) {
+	resource, err := AssistantResource()
+	if err != nil {
+		return "", err
+	}
+	// Clients without RFC 8707 support are bound to this server's only resource.
+	if requested != "" && requested != resource {
+		return "", BadAuthRequest("resource 不匹配")
+	}
+	return resource, nil
+}
+
 func (s *Service) assistantAdmin(user *model.User) (*model.User, error) {
 	if user == nil {
 		return nil, Unauthorized("请先登录")
@@ -342,18 +354,19 @@ func (s *Service) PreviewAssistantAuthorization(actor *model.User, req Assistant
 	if _, err := s.assistantAdmin(actor); err != nil {
 		return nil, err
 	}
-	client, scopes, err := s.validateAssistantAuthorization(req)
+	client, scopes, err := s.validateAssistantAuthorization(&req)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{"clientId": client.ID, "clientName": client.Name, "redirectUri": req.RedirectURI, "scopes": scopes, "resource": req.Resource}, nil
 }
-func (s *Service) validateAssistantAuthorization(req AssistantOAuthRequest) (*model.AssistantOAuthClient, []string, error) {
-	resource, err := AssistantResource()
+func (s *Service) validateAssistantAuthorization(req *AssistantOAuthRequest) (*model.AssistantOAuthClient, []string, error) {
+	resource, err := assistantOAuthResource(req.Resource)
 	if err != nil {
 		return nil, nil, err
 	}
-	if req.Resource != resource || req.ResponseType != "code" || req.ChallengeMethod != "S256" || !assistantPKCE.MatchString(req.Challenge) || len(req.State) > 2048 {
+	req.Resource = resource
+	if req.ResponseType != "code" || req.ChallengeMethod != "S256" || !assistantPKCE.MatchString(req.Challenge) || len(req.State) > 2048 {
 		return nil, nil, BadAuthRequest("无效的 OAuth 授权参数")
 	}
 	client, err := s.assistantClient(req.ClientID)
@@ -377,7 +390,7 @@ func (s *Service) AuthorizeAssistant(actor *model.User, req AssistantOAuthReques
 	if err != nil {
 		return "", err
 	}
-	_, scopes, err := s.validateAssistantAuthorization(req)
+	_, scopes, err := s.validateAssistantAuthorization(&req)
 	if err != nil {
 		return "", err
 	}
@@ -399,13 +412,11 @@ func (s *Service) AuthorizeAssistant(actor *model.User, req AssistantOAuthReques
 	return callback.String(), nil
 }
 func (s *Service) ExchangeAssistantToken(req AssistantOAuthTokenRequest) (*AssistantOAuthTokenResponse, error) {
-	resource, err := AssistantResource()
+	resource, err := assistantOAuthResource(req.Resource)
 	if err != nil {
 		return nil, err
 	}
-	if req.Resource != resource {
-		return nil, BadAuthRequest("resource 不匹配")
-	}
+	req.Resource = resource
 	if _, err = s.assistantClient(req.ClientID); err != nil {
 		return nil, BadAuthRequest("未知 OAuth 客户端")
 	}

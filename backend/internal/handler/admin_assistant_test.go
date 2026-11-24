@@ -304,6 +304,11 @@ func TestAssistantHTTPMetadataAndSkill(t *testing.T) {
 	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("invalid public manifest")
 	}
+	installer := assistantHTTPRequest(r, "GET", "/api/admin-assistant/skill/install.py", "", "", "", nil)
+	embedded, err := service.AssistantSkillInstaller()
+	if err != nil || installer.Code != 200 || !bytes.Equal(installer.Body.Bytes(), embedded) || installer.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("public installer does not match embedded client")
+	}
 	var manifest struct {
 		Data struct {
 			DownloadURL string `json:"downloadUrl"`

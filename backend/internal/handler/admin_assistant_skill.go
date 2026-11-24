@@ -7,6 +7,15 @@ import (
 )
 
 func registerAssistantSkill(g *gin.RouterGroup) {
+	g.GET("/skill/install.py", func(c *gin.Context) {
+		data, err := service.AssistantSkillInstaller()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Header("Content-Disposition", "attachment; filename=canvas_admin.py")
+		c.Data(http.StatusOK, "text/x-python; charset=utf-8", data)
+	})
 	g.GET("/skill/latest", func(c *gin.Context) {
 		manifest, _, err := service.AssistantSkillPackage()
 		if err != nil {

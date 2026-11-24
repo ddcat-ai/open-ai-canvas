@@ -266,6 +266,8 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     login = sub.add_parser("login")
     login.add_argument("--scope", action="append", default=[])
+    install = sub.add_parser("install")
+    install.add_argument("--destination", type=Path, required=True, help="Full canvas-admin Skill directory")
     for name in ("token", "status", "logout", "version", "update"):
         sub.add_parser(name)
     listing = sub.add_parser("list")
@@ -307,12 +309,15 @@ def main(argv=None):
         client.config.unlink(missing_ok=True)
         print("Local credentials removed. Revoke server access in Agent access if needed.")
         return 0
-    if cmd in ("version", "update"):
+    if cmd in ("version", "update", "install"):
         result = client.request(API + "/skill/latest", authenticated=False)
-        if cmd == "update":
+        if cmd in ("update", "install"):
             data = client.request(result["downloadUrl"], authenticated=False, binary=True)
-            install_archive(data, result, Path(__file__).resolve().parent.parent)
-            print("Skill updated to " + result["version"])
+            destination = args.destination if cmd == "install" else Path(__file__).resolve().parent.parent
+            if destination.resolve() == client.config_dir.resolve() or client.config_dir.resolve().is_relative_to(destination.resolve()):
+                raise RuntimeError("Skill destination must not contain the credential directory")
+            install_archive(data, result, destination)
+            print("Skill installed at " + str(destination.resolve()) + " (version " + result["version"] + ")")
             return 0
     elif cmd == "status":
         result = client.request(API + "/operations")

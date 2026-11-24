@@ -23,7 +23,7 @@ description: 管理员浏览器授权、可撤销 Token、管理操作发现及 
 [{"client_id":"agent-client","client_name":"Agent","redirect_uris":["https://client.example/callback"]}]
 ```
 
-只允许精确登记的 HTTPS 回调或本机回环 HTTP 回调。授权和换取令牌必须携带 `resource=<站点 Origin>/api/admin-assistant/mcp`。OAuth 发现地址为：
+只允许精确登记的 HTTPS 回调或本机回环 HTTP 回调。建议授权和换取令牌携带 `resource=<站点 Origin>/api/admin-assistant/mcp`。兼容未携带 `resource` 的客户端（如 Codex CLI），授权、换取和刷新时省略该参数均固定绑定本站唯一 MCP 资源；授权页和授权码仍使用完整资源地址。显式传入其他资源一律拒绝，不放宽 PKCE、回调、权限或令牌校验。OAuth 发现地址为：
 
 - `/.well-known/oauth-protected-resource/api/admin-assistant/mcp`
 - `/.well-known/oauth-authorization-server/api/admin-assistant/oauth`
@@ -65,6 +65,16 @@ python scripts/canvas_admin.py --site https://canvas.example.com describe AdminS
 python scripts/canvas_admin.py --site https://canvas.example.com version
 python scripts/canvas_admin.py --site https://canvas.example.com update
 ```
+
+后台「Agent 接入 → 连接与下载 → 复制 Agent 安装说明」可复制一段包含当前站点 MCP 地址、latest 清单和安装客户端地址的提示词，交给 Agent 配置。说明不包含凭据，要求复用已有配置、浏览器授权、默认只读及真实连接验证。Codex 可通过 `codex mcp add canvas-admin --url <MCP地址>` 和 `codex mcp login canvas-admin` 配置 OAuth；已有 Bearer 配置的切换由用户决定。
+
+初次安装可从 `GET /api/admin-assistant/skill/install.py` 下载无凭据的同版 Python 客户端（禁止缓存），阅读后执行：
+
+```sh
+python canvas_admin.py --site https://canvas.example.com install --destination /path/to/skills/canvas-admin
+```
+
+客户端要求 Python 3.10+；安装不需要登录，实时查询 latest 并复用更新流程校验兼容性、大小、哈希、路径及符号链接，再写入指定目录。凭据目录不能包含在安装目录内。MCP 和 Python 客户端分别使用自己的 OAuth 凭据；完成安装后按需运行 Skill 的 `login`。复制说明指导 Agent 使用只读握手和发现验证，安装过程中不执行后台写操作，危险操作仍由用户在网页确认。
 
 客户端凭据存放于 Skill 之外的用户配置目录，Unix 权限 0600，Windows 限制当前账号 ACL。无人值守可使用隐藏输入的个人 Token 或 `CANVAS_ADMIN_TOKEN` 环境变量。更新检查 API 兼容性、大小、SHA256、ZIP 路径和符号链接，不覆盖凭据。
 

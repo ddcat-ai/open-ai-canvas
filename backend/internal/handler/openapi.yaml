@@ -195,6 +195,12 @@ paths:
       security: []
       summary: 公开查询当前 Skill 静态发行版，禁止缓存
       responses: {"200": {description: data 包含 name、version、serverVersion、apiVersion、sha256、size 和 downloadUrl}}
+  /admin-assistant/skill/install.py:
+    get:
+      tags: [admin]
+      security: []
+      summary: 下载随服务发布的 Python 标准库安装客户端，无凭据且禁止缓存
+      responses: {"200": {description: text/x-python，与 Skill 包内客户端相同；install --destination 安装并校验最新版 Skill}}
   /admin-assistant/skill/releases/{version}:
     parameters: [{in: path, name: version, required: true, schema: {type: string}, description: 内容版本加 .zip}]
     get:

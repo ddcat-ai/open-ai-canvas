@@ -24,6 +24,10 @@ var assistantSkillData []byte
 var assistantSkillRelease AssistantSkillManifest
 var assistantSkillError error
 
+func AssistantSkillInstaller() ([]byte, error) {
+	return assistantSkillFS.ReadFile("admin_assistant_skill/scripts/canvas_admin.py")
+}
+
 type AssistantSkillManifest struct {
 	Name          string `json:"name"`
 	Version       string `json:"version"`

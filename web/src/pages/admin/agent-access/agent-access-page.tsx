@@ -6,6 +6,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { AdminPageFrame } from "../components/admin-shell";
 import { AdminModal } from "../ui/overlays";
 import { Checkbox } from "../ui/controls";
+import { assistantInstallInstructions } from "./install-instructions";
 import {
     authorizeAssistant,
     confirmAssistantCall,
@@ -99,6 +100,7 @@ export default function AgentAccessPage() {
         });
     }
     const failures = [setup.error, release.error, tokens.error, grants.error, calls.error, focused.error, consent.error].filter(Boolean);
+    const installInstructions = setup.data ? assistantInstallInstructions(setup.data.mcpUrl, setup.data.skillUrl) : "";
     return (
         <AdminPageFrame title={consentMode ? "授权 Agent 客户端" : "Agent 接入"} description="通过 MCP 或 Skill 管理后台，按模块授权并保留调用记录。" scroll>
             <div className="flex flex-col gap-5 p-4 sm:p-5">
@@ -162,6 +164,24 @@ export default function AgentAccessPage() {
                                     </Typography.Text>
                                 </Space>
                             )}
+                            <div className="mt-5 border-t border-border pt-4">
+                                <Button
+                                    disabled={!installInstructions}
+                                    onClick={() =>
+                                        void navigator.clipboard.writeText(installInstructions).then(
+                                            () => message.success("已复制，粘贴给 Agent 即可开始安装"),
+                                            () => message.error("复制失败，请展开安装说明手动复制"),
+                                        )
+                                    }
+                                >
+                                    复制 Agent 安装说明
+                                </Button>
+                                <p className="mt-2 text-sm text-muted-foreground">发送给 Codex 或其他 Agent，自动配置 MCP 并下载校验最新版 Skill。登录授权由你在浏览器完成，说明中不含 Token。</p>
+                                <details className="mt-3">
+                                    <summary className="cursor-pointer text-sm">查看安装说明</summary>
+                                    <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{installInstructions || "正在生成安装说明…"}</pre>
+                                </details>
+                            </div>
                         </section>
                         <section className="rounded-xl border border-border bg-background p-5">
                             <div className="mb-3 flex items-center justify-between gap-3">

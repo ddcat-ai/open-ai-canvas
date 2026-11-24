@@ -418,6 +418,73 @@ func TestAssistantOAuthPKCEAndRefreshReplay(t *testing.T) {
 		t.Fatal("grant survived refresh replay")
 	}
 }
+func TestAssistantOAuthOptionalResource(t *testing.T) {
+	s, _, admin := assistantTestService(t)
+	resource, _ := AssistantResource()
+	for _, authorizeResource := range []string{"", resource} {
+		for _, tokenResource := range []string{"", resource} {
+			t.Run(fmt.Sprintf("authorize=%t/token=%t", authorizeResource != "", tokenResource != ""), func(t *testing.T) {
+				client, err := s.RegisterAssistantClient("optional resource", []string{"http://127.0.0.1:12345/callback"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				verifier := strings.Repeat("r", 64)
+				h := sha256.Sum256([]byte(verifier))
+				req := AssistantOAuthRequest{ClientID: client.ID, RedirectURI: "http://127.0.0.1:12345/callback", ResponseType: "code", Resource: authorizeResource, Challenge: base64.RawURLEncoding.EncodeToString(h[:]), ChallengeMethod: "S256"}
+				preview, err := s.PreviewAssistantAuthorization(admin, req)
+				if err != nil || preview["resource"] != resource {
+					t.Fatalf("consent must show canonical resource: %v %v", preview, err)
+				}
+				bad := req
+				bad.Resource = resource + "/other"
+				if _, err = s.PreviewAssistantAuthorization(admin, bad); err == nil {
+					t.Fatal("explicit wrong resource accepted")
+				}
+				target, err := s.AuthorizeAssistant(admin, req, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				callback, _ := url.Parse(target)
+				code := callback.Query().Get("code")
+				stored, err := s.repo.AssistantCode(assistantHash(code))
+				if err != nil || stored.Resource != resource {
+					t.Fatal("authorization code not bound to canonical resource")
+				}
+				exchange := AssistantOAuthTokenRequest{GrantType: "authorization_code", ClientID: client.ID, Code: code, RedirectURI: req.RedirectURI, Verifier: verifier, Resource: resource + "/other"}
+				if _, err = s.ExchangeAssistantToken(exchange); err == nil {
+					t.Fatal("explicit wrong token resource accepted")
+				}
+				exchange.Resource = tokenResource
+				tokens, err := s.ExchangeAssistantToken(exchange)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p, err := s.AuthenticateAssistant(tokens.AccessToken)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, scope := range p.Scopes {
+					if !strings.HasSuffix(scope, ":read") {
+						t.Fatal("omitted scope granted write access")
+					}
+				}
+				refresh := AssistantOAuthTokenRequest{GrantType: "refresh_token", ClientID: client.ID, RefreshToken: tokens.RefreshToken, Resource: resource + "/other"}
+				if _, err = s.ExchangeAssistantToken(refresh); err == nil {
+					t.Fatal("explicit wrong refresh resource accepted")
+				}
+				refresh.Resource = tokenResource
+				fresh, err := s.ExchangeAssistantToken(refresh)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = s.AuthenticateAssistant(fresh.AccessToken); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+}
+
 func TestAssistantAttachmentIsolationAndRedaction(t *testing.T) {
 	s, db, admin := assistantTestService(t)
 	p, _ := assistantTestToken(t, s, admin, "users:read")
