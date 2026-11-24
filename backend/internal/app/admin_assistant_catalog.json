@@ -1,0 +1,3311 @@
+[
+  {
+    "method": "AdminAPICallLog",
+    "module": "api-logs",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "GET /admin/api-logs/:id"
+    ]
+  },
+  {
+    "method": "AdminAPICallLogs",
+    "module": "api-logs",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/api-logs"
+    ]
+  },
+  {
+    "method": "AdminAPICallLogsCSV",
+    "module": "api-logs-export.csv",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/api-logs-export.csv"
+    ]
+  },
+  {
+    "method": "AdminAdjustCredits",
+    "module": "users",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "userID",
+      "req"
+    ],
+    "routes": [
+      "POST /admin/users/:id/credits/adjust"
+    ]
+  },
+  {
+    "method": "AdminAgentLessons",
+    "module": "agent-lessons",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "status",
+      "userID",
+      "keyword",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/agent-lessons"
+    ]
+  },
+  {
+    "method": "AdminAgentMemoryDocuments",
+    "module": "agent-memory-documents",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "userID",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/agent-memory-documents"
+    ]
+  },
+  {
+    "method": "AdminAllChannelModels",
+    "module": "channel-models",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/channel-models"
+    ]
+  },
+  {
+    "method": "AdminAnalytics",
+    "module": "analytics",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/analytics/models",
+      "GET /admin/analytics/overview",
+      "GET /admin/analytics/users"
+    ]
+  },
+  {
+    "method": "AdminAnalyticsCSV",
+    "module": "analytics",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/analytics/export.csv"
+    ]
+  },
+  {
+    "method": "AdminAnnouncementPage",
+    "module": "announcements",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/announcements"
+    ]
+  },
+  {
+    "method": "AdminAppearance",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/appearance",
+      "PATCH /admin/settings/appearance"
+    ]
+  },
+  {
+    "method": "AdminApproveArkAssets",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "ids"
+    ],
+    "routes": [
+      "POST /admin/ark-portraits/reviews/approve"
+    ]
+  },
+  {
+    "method": "AdminArchiveFeedback",
+    "module": "feedbacks",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "archive"
+    ],
+    "routes": [
+      "POST /admin/feedbacks/:id/archive",
+      "POST /admin/feedbacks/:id/unarchive"
+    ]
+  },
+  {
+    "method": "AdminArkGroup",
+    "module": "ark-portraits",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "GET /admin/ark-portraits/groups/:id"
+    ]
+  },
+  {
+    "method": "AdminArkGroups",
+    "module": "ark-portraits",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/ark-portraits/groups"
+    ]
+  },
+  {
+    "method": "AdminArkPrivateAssetSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/ark-private-assets"
+    ]
+  },
+  {
+    "method": "AdminArkReviewQueue",
+    "module": "ark-portraits",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "status",
+      "page",
+      "pageSize"
+    ],
+    "routes": [
+      "GET /admin/ark-portraits/reviews"
+    ]
+  },
+  {
+    "method": "AdminBannerAnnouncementPage",
+    "module": "banner-announcements",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/banner-announcements"
+    ]
+  },
+  {
+    "method": "AdminBatchQueryFailedVideoTasks",
+    "module": "api-logs",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "logIDs"
+    ],
+    "routes": [
+      "POST /admin/api-logs/recover-batch"
+    ]
+  },
+  {
+    "method": "AdminBillingAutoRefundSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/billing-auto-refund"
+    ]
+  },
+  {
+    "method": "AdminBillingOrderPage",
+    "module": "billing-orders",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/billing-orders"
+    ]
+  },
+  {
+    "method": "AdminChannelCatalogStatus",
+    "module": "channels",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "channelID"
+    ],
+    "routes": [
+      "GET /admin/channels/:id/catalog-status"
+    ]
+  },
+  {
+    "method": "AdminChannelModelHealth",
+    "module": "channel-models",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "channelID"
+    ],
+    "routes": [
+      "GET /admin/channel-models/health"
+    ]
+  },
+  {
+    "method": "AdminChannelModels",
+    "module": "channels",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "channelID"
+    ],
+    "routes": [
+      "GET /admin/channels/:id/models"
+    ]
+  },
+  {
+    "method": "AdminChannelOrder",
+    "module": "channels",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "channelID"
+    ],
+    "routes": []
+  },
+  {
+    "method": "AdminChannelProtocolSuggestion",
+    "module": "channels",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "channelID",
+      "key",
+      "capability"
+    ],
+    "routes": [
+      "GET /admin/channels/:id/protocol-suggestion"
+    ]
+  },
+  {
+    "method": "AdminChannelWebsites",
+    "module": "channel-websites",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/channel-websites"
+    ]
+  },
+  {
+    "method": "AdminCheckUpdate",
+    "module": "system-update",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": [
+      "POST /admin/system-update/check"
+    ]
+  },
+  {
+    "method": "AdminClearAgentHistory",
+    "module": "users",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "userID"
+    ],
+    "routes": [
+      "DELETE /admin/users/:id/agent-history"
+    ]
+  },
+  {
+    "method": "AdminClientFailures",
+    "module": "agent",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "userID",
+      "runID"
+    ],
+    "routes": [
+      "GET /admin/agent/client-failures"
+    ]
+  },
+  {
+    "method": "AdminClosePaymentOrder",
+    "module": "payments",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "POST /admin/payments/orders/:id/close"
+    ]
+  },
+  {
+    "method": "AdminCreateArkGroup",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/ark-portraits/groups"
+    ]
+  },
+  {
+    "method": "AdminCreateArkPortraitAsset",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "groupID",
+      "input"
+    ],
+    "routes": [
+      "POST /admin/ark-portraits/groups/:id/assets"
+    ]
+  },
+  {
+    "method": "AdminCreateArkPortraitSession",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "name",
+      "description",
+      "lang"
+    ],
+    "routes": [
+      "POST /admin/ark-portraits/sessions"
+    ]
+  },
+  {
+    "method": "AdminCreateRedeemBatch",
+    "module": "redeem-batches",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/redeem-batches"
+    ]
+  },
+  {
+    "method": "AdminCreditPolicy",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/credits"
+    ]
+  },
+  {
+    "method": "AdminDeleteAgentLesson",
+    "module": "agent-lessons",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/agent-lessons/:id"
+    ]
+  },
+  {
+    "method": "AdminDeleteArkGroup",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/ark-portraits/groups/:id"
+    ]
+  },
+  {
+    "method": "AdminDeleteArkPortraitAsset",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/ark-portraits/assets/:id"
+    ]
+  },
+  {
+    "method": "AdminDeleteFeedback",
+    "module": "feedbacks",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/feedbacks/:id"
+    ]
+  },
+  {
+    "method": "AdminDeleteSkill",
+    "module": "skills",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/skills/:id"
+    ]
+  },
+  {
+    "method": "AdminDisableRedeemBatch",
+    "module": "redeem-batches",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "batchID"
+    ],
+    "routes": [
+      "POST /admin/redeem-batches/:id/disable"
+    ]
+  },
+  {
+    "method": "AdminDisableRedeemCode",
+    "module": "redeem-batches",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "batchID",
+      "codeID"
+    ],
+    "routes": [
+      "POST /admin/redeem-batches/:id/codes/:codeId/disable"
+    ]
+  },
+  {
+    "method": "AdminDrawingEngineSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/drawing-engine"
+    ]
+  },
+  {
+    "method": "AdminEditSkillPackageFiles",
+    "module": "skills",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PUT /admin/skills/:id/files"
+    ]
+  },
+  {
+    "method": "AdminEmailLogs",
+    "module": "email-logs",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query",
+      "page",
+      "pageSize"
+    ],
+    "routes": [
+      "GET /admin/email-logs"
+    ]
+  },
+  {
+    "method": "AdminEmailSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/email"
+    ]
+  },
+  {
+    "method": "AdminFeatureAvailability",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/features",
+      "PATCH /admin/settings/features"
+    ]
+  },
+  {
+    "method": "AdminGrantUserStorage",
+    "module": "users",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "userID",
+      "request"
+    ],
+    "routes": [
+      "POST /admin/users/:id/storage-grants"
+    ]
+  },
+  {
+    "method": "AdminInspirationFeed",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/inspiration-feed"
+    ]
+  },
+  {
+    "method": "AdminLibTVSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/libtv"
+    ]
+  },
+  {
+    "method": "AdminLinuxDOSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/linuxdo"
+    ]
+  },
+  {
+    "method": "AdminListFeedbacks",
+    "module": "feedbacks",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "filter"
+    ],
+    "routes": [
+      "GET /admin/feedbacks"
+    ]
+  },
+  {
+    "method": "AdminLogicalModels",
+    "module": "logical-models",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/logical-models"
+    ]
+  },
+  {
+    "method": "AdminLoginLog",
+    "module": "login-logs",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "GET /admin/login-logs/:id"
+    ]
+  },
+  {
+    "method": "AdminLoginLogs",
+    "module": "login-logs",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query",
+      "page",
+      "pageSize"
+    ],
+    "routes": [
+      "GET /admin/login-logs"
+    ]
+  },
+  {
+    "method": "AdminModelPricings",
+    "module": "model-pricings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/model-pricings"
+    ]
+  },
+  {
+    "method": "AdminOSSSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/oss"
+    ]
+  },
+  {
+    "method": "AdminOfficialAssetDetail",
+    "module": "official-assets",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "GET /admin/official-assets/:id"
+    ]
+  },
+  {
+    "method": "AdminOfficialAssetRecommendationDetail",
+    "module": "official-asset-recommendations",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "GET /admin/official-asset-recommendations/:id"
+    ]
+  },
+  {
+    "method": "AdminOfficialAssetRecommendationsPage",
+    "module": "official-asset-recommendations",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "status",
+      "page",
+      "size"
+    ],
+    "routes": [
+      "GET /admin/official-asset-recommendations"
+    ]
+  },
+  {
+    "method": "AdminOfficialAssetsPage",
+    "module": "official-assets",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "page",
+      "pageSize",
+      "filter"
+    ],
+    "routes": [
+      "GET /admin/official-assets"
+    ]
+  },
+  {
+    "method": "AdminPaymentOrderPage",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/payments/orders"
+    ]
+  },
+  {
+    "method": "AdminPaymentOrdersCSV",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": []
+  },
+  {
+    "method": "AdminPaymentProviders",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/payments/providers"
+    ]
+  },
+  {
+    "method": "AdminPaymentReconciliationItems",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "runID",
+      "result",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/payments/reconciliations/:id/items"
+    ]
+  },
+  {
+    "method": "AdminPaymentReconciliationItemsCSV",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "runID",
+      "result"
+    ],
+    "routes": []
+  },
+  {
+    "method": "AdminPaymentReconciliationPage",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/payments/reconciliations"
+    ]
+  },
+  {
+    "method": "AdminPaymentReconciliationsCSV",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": []
+  },
+  {
+    "method": "AdminPaymentSettings",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/payments/settings"
+    ]
+  },
+  {
+    "method": "AdminPluginStates",
+    "module": "plugins",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/plugins"
+    ]
+  },
+  {
+    "method": "AdminPoseLibraryItems",
+    "module": "pose-library",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/pose-library/items"
+    ]
+  },
+  {
+    "method": "AdminPromptTemplates",
+    "module": "prompt-templates",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/prompt-templates"
+    ]
+  },
+  {
+    "method": "AdminProviderCatalog",
+    "module": "provider-catalog",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "refresh"
+    ],
+    "routes": [
+      "GET /admin/provider-catalog",
+      "POST /admin/provider-catalog/refresh"
+    ]
+  },
+  {
+    "method": "AdminQueryFailedVideoTask",
+    "module": "api-logs",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "logID",
+      "requestedProviderID"
+    ],
+    "routes": [
+      "POST /admin/api-logs/:id/query-task"
+    ]
+  },
+  {
+    "method": "AdminQueryPaymentOrder",
+    "module": "payments",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "POST /admin/payments/orders/:id/query"
+    ]
+  },
+  {
+    "method": "AdminRecoverTaskMedia",
+    "module": "api-logs",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "logID",
+      "refundedBilling"
+    ],
+    "routes": [
+      "POST /admin/api-logs/:id/recover-media"
+    ]
+  },
+  {
+    "method": "AdminRecoverVideoByURL",
+    "module": "api-logs",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "logID",
+      "rawURL",
+      "providerRequestID"
+    ],
+    "routes": [
+      "POST /admin/api-logs/:id/recover-url"
+    ]
+  },
+  {
+    "method": "AdminRedeemBatchPage",
+    "module": "redeem-batches",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/redeem-batches"
+    ]
+  },
+  {
+    "method": "AdminRedeemCodePage",
+    "module": "redeem-batches",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "batchID",
+      "status",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/redeem-batches/:id/codes"
+    ]
+  },
+  {
+    "method": "AdminReferences",
+    "module": "references",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/references"
+    ]
+  },
+  {
+    "method": "AdminReferralCommissions",
+    "module": "referral",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/referral/commissions"
+    ]
+  },
+  {
+    "method": "AdminReferralSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/referral"
+    ]
+  },
+  {
+    "method": "AdminRegistrationSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/registration"
+    ]
+  },
+  {
+    "method": "AdminRejectArkAssets",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "ids",
+      "reason"
+    ],
+    "routes": [
+      "POST /admin/ark-portraits/reviews/reject"
+    ]
+  },
+  {
+    "method": "AdminResourcePage",
+    "module": "resources",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/resources"
+    ]
+  },
+  {
+    "method": "AdminResponseInterceptionSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/response-interception"
+    ]
+  },
+  {
+    "method": "AdminRevokeUserStorageGrant",
+    "module": "storage-grants",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "grantID",
+      "request"
+    ],
+    "routes": [
+      "POST /admin/storage-grants/:id/revoke"
+    ]
+  },
+  {
+    "method": "AdminRollbackUpdate",
+    "module": "system-update",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "reason"
+    ],
+    "routes": [
+      "POST /admin/system-update/rollback"
+    ]
+  },
+  {
+    "method": "AdminRuntimePolicySetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/runtime-policy"
+    ]
+  },
+  {
+    "method": "AdminSMSChannels",
+    "module": "sms",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/sms/channels"
+    ]
+  },
+  {
+    "method": "AdminSMSRecords",
+    "module": "sms",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "channel",
+      "state",
+      "page",
+      "size"
+    ],
+    "routes": [
+      "GET /admin/sms/records"
+    ]
+  },
+  {
+    "method": "AdminSaveUpdateSources",
+    "module": "system-update",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "sources"
+    ],
+    "routes": [
+      "PUT /admin/system-update/sources"
+    ]
+  },
+  {
+    "method": "AdminSelfUseRuntimePolicy",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/runtime-policy/self-use"
+    ]
+  },
+  {
+    "method": "AdminSetSkillEnabled",
+    "module": "skills",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "enabled"
+    ],
+    "routes": [
+      "PATCH /admin/skills/:id/status"
+    ]
+  },
+  {
+    "method": "AdminSiteTrafficOverview",
+    "module": "traffic",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/traffic/overview"
+    ]
+  },
+  {
+    "method": "AdminSiteTrafficToday",
+    "module": "traffic",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/traffic/today"
+    ]
+  },
+  {
+    "method": "AdminSkillDetail",
+    "module": "skills",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "GET /admin/skills/:id"
+    ]
+  },
+  {
+    "method": "AdminSkillPackageFile",
+    "module": "skills",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "filePath"
+    ],
+    "routes": [
+      "GET /admin/skills/:id/file"
+    ]
+  },
+  {
+    "method": "AdminSkillPackageFiles",
+    "module": "skills",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "GET /admin/skills/:id/files"
+    ]
+  },
+  {
+    "method": "AdminSkillPackageRawFile",
+    "module": "skills",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "filePath"
+    ],
+    "routes": [
+      "GET /admin/skills/:id/file/raw"
+    ]
+  },
+  {
+    "method": "AdminSkills",
+    "module": "skills",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "GET /admin/skills"
+    ]
+  },
+  {
+    "method": "AdminStartUpdate",
+    "module": "system-update",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "targetVersion"
+    ],
+    "routes": [
+      "POST /admin/system-update/start"
+    ]
+  },
+  {
+    "method": "AdminStorageStats",
+    "module": "storage",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/storage/stats"
+    ]
+  },
+  {
+    "method": "AdminSystemChannelPage",
+    "module": "channels",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/channels"
+    ]
+  },
+  {
+    "method": "AdminSystemPerformance",
+    "module": "system-performance",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/system-performance"
+    ]
+  },
+  {
+    "method": "AdminTestUpdateSources",
+    "module": "system-update",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": [
+      "POST /admin/system-update/sources/test"
+    ]
+  },
+  {
+    "method": "AdminTextReplayStats",
+    "module": "text-replay-stats",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/text-replay-stats"
+    ]
+  },
+  {
+    "method": "AdminTopupProducts",
+    "module": "payments",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/payments/products"
+    ]
+  },
+  {
+    "method": "AdminTurnstileSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/turnstile"
+    ]
+  },
+  {
+    "method": "AdminUpdateArkGroup",
+    "module": "ark-portraits",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/ark-portraits/groups/:id"
+    ]
+  },
+  {
+    "method": "AdminUpdateFeedback",
+    "module": "feedbacks",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/feedbacks/:id"
+    ]
+  },
+  {
+    "method": "AdminUpdateSkillInfo",
+    "module": "skills",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PUT /admin/skills/:id"
+    ]
+  },
+  {
+    "method": "AdminUpdateStatus",
+    "module": "system-update",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/system-update"
+    ]
+  },
+  {
+    "method": "AdminUserAuditEvents",
+    "module": "users",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "userID",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/users/:id/audit-events"
+    ]
+  },
+  {
+    "method": "AdminUserDetail",
+    "module": "users",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "userID"
+    ],
+    "routes": [
+      "GET /admin/users/:id/detail"
+    ]
+  },
+  {
+    "method": "AdminUserGroups",
+    "module": "user-groups",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/user-groups"
+    ]
+  },
+  {
+    "method": "AdminUserLedger",
+    "module": "users",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "userID",
+      "entryType",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/users/:id/ledger"
+    ]
+  },
+  {
+    "method": "AdminUserStorage",
+    "module": "users",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "userID"
+    ],
+    "routes": [
+      "GET /admin/users/:id/storage"
+    ]
+  },
+  {
+    "method": "AdminUserTasks",
+    "module": "users",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "userID",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/users/:id/tasks"
+    ]
+  },
+  {
+    "method": "AdminUsers",
+    "module": "users",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "query"
+    ],
+    "routes": [
+      "GET /admin/users"
+    ]
+  },
+  {
+    "method": "AdminVerificationPolicy",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/auth-policy"
+    ]
+  },
+  {
+    "method": "AdminWechatSetting",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/settings/wechat"
+    ]
+  },
+  {
+    "method": "AdminWorkbenchTools",
+    "module": "workbench",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "kind"
+    ],
+    "routes": [
+      "GET /admin/workbench/tools"
+    ]
+  },
+  {
+    "method": "BatchUpdateAdminAllChannelModels",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "requests"
+    ],
+    "routes": [
+      "POST /admin/channel-models/batch-update",
+      "POST /admin/channels/:id/models/batch-update"
+    ]
+  },
+  {
+    "method": "BatchUpdateAdminChannelModels",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "requests"
+    ],
+    "routes": [
+      "POST /admin/channel-models/batch-update",
+      "POST /admin/channels/:id/models/batch-update"
+    ]
+  },
+  {
+    "method": "BulkDisableUsers",
+    "module": "users",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/users/bulk-disable"
+    ]
+  },
+  {
+    "method": "BulkPoseLibraryItems",
+    "module": "pose-library",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/pose-library/bulk"
+    ]
+  },
+  {
+    "method": "ClearAdminRuntimeCache",
+    "module": "system-performance",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "request"
+    ],
+    "routes": [
+      "POST /admin/system-performance/cache/clear"
+    ]
+  },
+  {
+    "method": "CloseAnnouncement",
+    "module": "announcements",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "POST /admin/announcements/:id/close"
+    ]
+  },
+  {
+    "method": "CompleteLibTVOAuth",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/settings/libtv/oauth/complete"
+    ]
+  },
+  {
+    "method": "CompleteLibTVOAuthCallback",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "code",
+      "state",
+      "errorCode",
+      "errorDescription"
+    ],
+    "routes": [
+      "GET /admin/settings/libtv/oauth/callback"
+    ]
+  },
+  {
+    "method": "CreateAdminUser",
+    "module": "users",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/users"
+    ]
+  },
+  {
+    "method": "CreateAnnouncement",
+    "module": "announcements",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/announcements"
+    ]
+  },
+  {
+    "method": "CreateBannerAnnouncement",
+    "module": "banner-announcements",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/banner-announcements"
+    ]
+  },
+  {
+    "method": "CreateOfficialAsset",
+    "module": "official-assets",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/official-assets"
+    ]
+  },
+  {
+    "method": "CreatePoseLibraryItem",
+    "module": "pose-library",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/pose-library/items"
+    ]
+  },
+  {
+    "method": "CreatePromptTemplate",
+    "module": "prompt-templates",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/prompt-templates"
+    ]
+  },
+  {
+    "method": "CreateSystemChannel",
+    "module": "channels",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/channels"
+    ]
+  },
+  {
+    "method": "CreateTopupProduct",
+    "module": "payments",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "request"
+    ],
+    "routes": [
+      "POST /admin/payments/products"
+    ]
+  },
+  {
+    "method": "CreateUserGroup",
+    "module": "user-groups",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/user-groups"
+    ]
+  },
+  {
+    "method": "CreateWorkbenchPreset",
+    "module": "workbench",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/workbench/tools/:id/presets"
+    ]
+  },
+  {
+    "method": "CreateWorkbenchTool",
+    "module": "workbench",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/workbench/tools"
+    ]
+  },
+  {
+    "method": "DeleteAdminChannelModel",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/channels/:id/models/:modelId"
+    ]
+  },
+  {
+    "method": "DeleteAdminChannelModels",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "ids"
+    ],
+    "routes": [
+      "POST /admin/channels/:id/models/batch-delete"
+    ]
+  },
+  {
+    "method": "DeleteAdminChannelWebsite",
+    "module": "channel-websites",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/channel-websites/:id"
+    ]
+  },
+  {
+    "method": "DeleteAdminLogicalModel",
+    "module": "logical-models",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/logical-models/:id"
+    ]
+  },
+  {
+    "method": "DeleteAdminResources",
+    "module": "resources",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/resources/delete"
+    ]
+  },
+  {
+    "method": "DeleteBannerAnnouncement",
+    "module": "banner-announcements",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/banner-announcements/:id"
+    ]
+  },
+  {
+    "method": "DeleteMCPConnection",
+    "module": "mcp",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "admin"
+    ],
+    "routes": []
+  },
+  {
+    "method": "DeleteMCPTemplate",
+    "module": "mcp",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": []
+  },
+  {
+    "method": "DeleteModelPricing",
+    "module": "model-pricings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/model-pricings/:id"
+    ]
+  },
+  {
+    "method": "DeleteOfficialAsset",
+    "module": "official-assets",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/official-assets/:id"
+    ]
+  },
+  {
+    "method": "DeletePoseLibraryItem",
+    "module": "pose-library",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/pose-library/items/:id"
+    ]
+  },
+  {
+    "method": "DeletePromptTemplate",
+    "module": "prompt-templates",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/prompt-templates/:id"
+    ]
+  },
+  {
+    "method": "DeleteSMSChannel",
+    "module": "sms",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/sms/channels/:id"
+    ]
+  },
+  {
+    "method": "DeleteSystemChannel",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/channels/:id"
+    ]
+  },
+  {
+    "method": "DeleteUser",
+    "module": "users",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "userID"
+    ],
+    "routes": [
+      "DELETE /admin/users/:id"
+    ]
+  },
+  {
+    "method": "DeleteUserGroup",
+    "module": "user-groups",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /admin/user-groups/:id"
+    ]
+  },
+  {
+    "method": "DiscardAnnouncementImage",
+    "module": "announcement-images",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "resourceID"
+    ],
+    "routes": [
+      "DELETE /admin/announcement-images/:id"
+    ]
+  },
+  {
+    "method": "DisconnectLibTV",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": [
+      "POST /admin/settings/libtv/oauth/disconnect"
+    ]
+  },
+  {
+    "method": "DuplicateSystemChannel",
+    "module": "channels",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "POST /admin/channels/:id/duplicate"
+    ]
+  },
+  {
+    "method": "EcommerceIndustryCategories",
+    "module": "ecommerce",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "parent",
+      "query",
+      "page",
+      "limit"
+    ],
+    "routes": [
+      "GET /admin/ecommerce/categories"
+    ]
+  },
+  {
+    "method": "EcommerceKnowledgeEntryPage",
+    "module": "ecommerce",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "keyword",
+      "status",
+      "page",
+      "limit"
+    ],
+    "routes": []
+  },
+  {
+    "method": "EcommerceKnowledgeStats",
+    "module": "ecommerce",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /ecommerce/knowledge/stats"
+    ]
+  },
+  {
+    "method": "EcommerceManagedSkills",
+    "module": "ecommerce",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/ecommerce/skills"
+    ]
+  },
+  {
+    "method": "EcommerceOrchestrationSetting",
+    "module": "ecommerce",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": []
+  },
+  {
+    "method": "ExportSystemChannels",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "ids"
+    ],
+    "routes": [
+      "POST /admin/channels/export"
+    ]
+  },
+  {
+    "method": "FeishuFeedbackSettings",
+    "module": "integrations",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/integrations/feishu"
+    ]
+  },
+  {
+    "method": "FetchAdminChannelModels",
+    "module": "channel-models",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID"
+    ],
+    "routes": []
+  },
+  {
+    "method": "ImportAdminChannelModels",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "selected"
+    ],
+    "routes": [
+      "POST /admin/channels/:id/models/import"
+    ]
+  },
+  {
+    "method": "ImportPoseLibrary",
+    "module": "pose-library",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/pose-library/import"
+    ]
+  },
+  {
+    "method": "ImportSystemChannels",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "payload"
+    ],
+    "routes": [
+      "POST /admin/channels/import"
+    ]
+  },
+  {
+    "method": "InstallEcommerceSkillGitHub",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "url",
+      "subdir"
+    ],
+    "routes": [
+      "POST /admin/ecommerce/skills/install/github"
+    ]
+  },
+  {
+    "method": "InstallEcommerceSkillUpload",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "header"
+    ],
+    "routes": [
+      "POST /admin/ecommerce/skills/install"
+    ]
+  },
+  {
+    "method": "InstallPluginForAdmin",
+    "module": "plugins",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "data",
+      "fileName"
+    ],
+    "routes": [
+      "POST /plugins"
+    ]
+  },
+  {
+    "method": "InstallProviderCatalog",
+    "module": "provider-catalog",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "providerID",
+      "req"
+    ],
+    "routes": [
+      "POST /admin/provider-catalog/:id/install"
+    ]
+  },
+  {
+    "method": "MCPCatalog",
+    "module": "mcp",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "admin"
+    ],
+    "routes": []
+  },
+  {
+    "method": "MCPConnections",
+    "module": "mcp",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "admin"
+    ],
+    "routes": []
+  },
+  {
+    "method": "OpenResourceRangeAsAdmin",
+    "module": "resources",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "rangeHeader"
+    ],
+    "routes": []
+  },
+  {
+    "method": "PluginPackage",
+    "module": "plugins",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id"
+    ],
+    "routes": []
+  },
+  {
+    "method": "Plugins",
+    "module": "plugins",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/plugins"
+    ]
+  },
+  {
+    "method": "PrepareAdminAPICallLogMediaDelivery",
+    "module": "api-logs",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "logID",
+      "options",
+      "rangeHeader"
+    ],
+    "routes": [
+      "GET /admin/api-logs/:id/media"
+    ]
+  },
+  {
+    "method": "PrepareAdminAPICallLogReferenceDelivery",
+    "module": "api-logs",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "logID",
+      "referenceID",
+      "rangeHeader"
+    ],
+    "routes": [
+      "GET /admin/api-logs/:id/references/:refId/media"
+    ]
+  },
+  {
+    "method": "PrepareResourceDeliveryAsAdmin",
+    "module": "resources",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "options",
+      "rangeHeader"
+    ],
+    "routes": [
+      "GET /admin/resources/:id/file"
+    ]
+  },
+  {
+    "method": "PrepareUpdateAnnouncementDelivery",
+    "module": "announcements",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "options",
+      "rangeHeader"
+    ],
+    "routes": []
+  },
+  {
+    "method": "PreviewAdminChannelModels",
+    "module": "channel-models",
+    "write": false,
+    "highRisk": false,
+    "parameters": [
+      "channelID"
+    ],
+    "routes": []
+  },
+  {
+    "method": "PublicSystemChannels",
+    "module": "channels",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /channels/system"
+    ]
+  },
+  {
+    "method": "PublishOfficialAsset",
+    "module": "official-assets",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "PATCH /admin/official-assets/:id/publish"
+    ]
+  },
+  {
+    "method": "ReadAdminChannelCatalog",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID"
+    ],
+    "routes": [
+      "POST /admin/channels/:id/models/fetch"
+    ]
+  },
+  {
+    "method": "RenameEcommerceSkill",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "name"
+    ],
+    "routes": [
+      "PATCH /admin/ecommerce/skills/:id/name"
+    ]
+  },
+  {
+    "method": "RepriceAdminAllChannelModels",
+    "module": "channel-models",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "requests"
+    ],
+    "routes": [
+      "POST /admin/channel-models/batch-reprice"
+    ]
+  },
+  {
+    "method": "RepriceAdminChannelModels",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "requests"
+    ],
+    "routes": [
+      "POST /admin/channels/:id/models/batch-reprice"
+    ]
+  },
+  {
+    "method": "ResetAppearance",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": [
+      "DELETE /admin/settings/appearance"
+    ]
+  },
+  {
+    "method": "ResetRuntimePolicySetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": [
+      "DELETE /admin/settings/runtime-policy"
+    ]
+  },
+  {
+    "method": "ResolveBillingOrder",
+    "module": "billing-orders",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "POST /admin/billing-orders/:id/resolve"
+    ]
+  },
+  {
+    "method": "ResolveBillingOrders",
+    "module": "billing-orders",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/billing-orders/batch-resolve"
+    ]
+  },
+  {
+    "method": "ReviewEcommerceKnowledgeEntry",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "status"
+    ],
+    "routes": []
+  },
+  {
+    "method": "ReviewOfficialAssetRecommendation",
+    "module": "official-asset-recommendations",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "action",
+      "note",
+      "metadata"
+    ],
+    "routes": [
+      "PATCH /admin/official-asset-recommendations/:id/review"
+    ]
+  },
+  {
+    "method": "RunFeishuFeedbackDigestNow",
+    "module": "integrations",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": [
+      "POST /admin/integrations/feishu/digest"
+    ]
+  },
+  {
+    "method": "RunPaymentReconciliation",
+    "module": "payments",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "request"
+    ],
+    "routes": [
+      "POST /admin/payments/reconciliations"
+    ]
+  },
+  {
+    "method": "RuntimePolicy",
+    "module": "settings",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "POST /admin/announcement-images",
+      "POST /admin/ark-portraits/groups/:id/assets",
+      "POST /admin/ark-portraits/reviews/approve",
+      "POST /admin/ark-portraits/sessions",
+      "POST /admin/settings/appearance/assets/:slot"
+    ]
+  },
+  {
+    "method": "SaveAdminChannelModel",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/channels/:id/models/:modelId",
+      "POST /admin/channels/:id/models"
+    ]
+  },
+  {
+    "method": "SaveAdminChannelOrder",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "req"
+    ],
+    "routes": []
+  },
+  {
+    "method": "SaveAdminChannelWebsite",
+    "module": "channel-websites",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/channel-websites/:id",
+      "POST /admin/channel-websites"
+    ]
+  },
+  {
+    "method": "SaveAdminLogicalModel",
+    "module": "logical-models",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/logical-models/:id",
+      "POST /admin/logical-models"
+    ]
+  },
+  {
+    "method": "SaveFeishuFeedbackSettings",
+    "module": "integrations",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "input"
+    ],
+    "routes": [
+      "PUT /admin/integrations/feishu"
+    ]
+  },
+  {
+    "method": "SaveMCPConnection",
+    "module": "mcp",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "admin",
+      "input"
+    ],
+    "routes": []
+  },
+  {
+    "method": "SaveMCPTemplate",
+    "module": "mcp",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "input"
+    ],
+    "routes": []
+  },
+  {
+    "method": "SaveModelPricing",
+    "module": "model-pricings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/model-pricings/:id",
+      "POST /admin/model-pricings"
+    ]
+  },
+  {
+    "method": "SaveSMSChannel",
+    "module": "sms",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "POST /admin/sms/channels",
+      "PUT /admin/sms/channels/:id"
+    ]
+  },
+  {
+    "method": "SendTestEmail",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "recipient"
+    ],
+    "routes": [
+      "POST /admin/settings/email/test"
+    ]
+  },
+  {
+    "method": "SetAdminChannelModelEnabled",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "id",
+      "enabled"
+    ],
+    "routes": [
+      "PATCH /admin/channels/:id/models/:modelId/enabled"
+    ]
+  },
+  {
+    "method": "SetEcommerceKnowledgeSourceEnabled",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "enabled"
+    ],
+    "routes": []
+  },
+  {
+    "method": "SetEcommerceManagedSkillEnabled",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "enabled"
+    ],
+    "routes": [
+      "PATCH /admin/ecommerce/skills/:id"
+    ]
+  },
+  {
+    "method": "SetPluginPlatformAvailability",
+    "module": "plugins",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "pluginID",
+      "available"
+    ],
+    "routes": [
+      "PUT /admin/plugins/:id/availability"
+    ]
+  },
+  {
+    "method": "SetWorkbenchPresetEnabled",
+    "module": "workbench",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "enabled"
+    ],
+    "routes": [
+      "POST /admin/workbench/tools/:id/presets/:presetId/publish",
+      "POST /admin/workbench/tools/:id/presets/:presetId/unpublish"
+    ]
+  },
+  {
+    "method": "SetWorkbenchToolEnabled",
+    "module": "workbench",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "enabled"
+    ],
+    "routes": [
+      "POST /admin/workbench/tools/:id/publish",
+      "POST /admin/workbench/tools/:id/unpublish"
+    ]
+  },
+  {
+    "method": "SimulateLogicalModelRoute",
+    "module": "logical-models",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "intent"
+    ],
+    "routes": [
+      "POST /admin/logical-models/:id/simulate"
+    ]
+  },
+  {
+    "method": "StartLibTVOAuth",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/settings/libtv/oauth/start"
+    ]
+  },
+  {
+    "method": "SyncEcommerceKnowledge",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": []
+  },
+  {
+    "method": "SyncInspirationFeed",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [],
+    "routes": [
+      "POST /admin/settings/inspiration-feed/sync"
+    ]
+  },
+  {
+    "method": "SyncPoseLibraryImages",
+    "module": "pose-library",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/pose-library/sync"
+    ]
+  },
+  {
+    "method": "TestAdminChannelModel",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "req"
+    ],
+    "routes": [
+      "POST /admin/channels/:id/models/test"
+    ]
+  },
+  {
+    "method": "TestAdminOSSSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/settings/oss/test"
+    ]
+  },
+  {
+    "method": "TestLibTV",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "projectUUID"
+    ],
+    "routes": [
+      "POST /admin/settings/libtv/test"
+    ]
+  },
+  {
+    "method": "TestMCPConnection",
+    "module": "mcp",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "admin"
+    ],
+    "routes": []
+  },
+  {
+    "method": "TestSMSChannel",
+    "module": "sms",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "purpose",
+      "phone"
+    ],
+    "routes": [
+      "POST /admin/sms/channels/:id/test"
+    ]
+  },
+  {
+    "method": "UninstallPluginForAdmin",
+    "module": "plugins",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "DELETE /plugins/:id"
+    ]
+  },
+  {
+    "method": "UnpublishOfficialAsset",
+    "module": "official-assets",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id"
+    ],
+    "routes": [
+      "PATCH /admin/official-assets/:id/unpublish"
+    ]
+  },
+  {
+    "method": "UpdateAdminAllChannelModelsProtocol",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "ids",
+      "protocolID"
+    ],
+    "routes": [
+      "POST /admin/channel-models/batch-protocol",
+      "POST /admin/channels/:id/models/batch-protocol"
+    ]
+  },
+  {
+    "method": "UpdateAdminAllChannelModelsProtocolGroups",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "groups"
+    ],
+    "routes": [
+      "POST /admin/channel-models/batch-protocol",
+      "POST /admin/channels/:id/models/batch-protocol"
+    ]
+  },
+  {
+    "method": "UpdateAdminChannelModelSort",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "modelID",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/channels/:id/models/:modelId/sort"
+    ]
+  },
+  {
+    "method": "UpdateAdminChannelModelsProtocol",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "ids",
+      "protocolID"
+    ],
+    "routes": [
+      "POST /admin/channel-models/batch-protocol",
+      "POST /admin/channels/:id/models/batch-protocol"
+    ]
+  },
+  {
+    "method": "UpdateAdminChannelModelsProtocolGroups",
+    "module": "channels",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "channelID",
+      "groups"
+    ],
+    "routes": [
+      "POST /admin/channel-models/batch-protocol",
+      "POST /admin/channels/:id/models/batch-protocol"
+    ]
+  },
+  {
+    "method": "UpdateAgentSessionLimit",
+    "module": "system-performance",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "maxSessions"
+    ],
+    "routes": [
+      "PUT /admin/system-performance/agent-limit"
+    ]
+  },
+  {
+    "method": "UpdateAnnouncement",
+    "module": "announcements",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/announcements/:id"
+    ]
+  },
+  {
+    "method": "UpdateAppearance",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "value"
+    ],
+    "routes": [
+      "PATCH /admin/settings/appearance"
+    ]
+  },
+  {
+    "method": "UpdateArkPrivateAssetSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/ark-private-assets"
+    ]
+  },
+  {
+    "method": "UpdateBannerAnnouncement",
+    "module": "banner-announcements",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PUT /admin/banner-announcements/:id"
+    ]
+  },
+  {
+    "method": "UpdateBillingAutoRefundSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/billing-auto-refund"
+    ]
+  },
+  {
+    "method": "UpdateCreditPolicy",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "policy"
+    ],
+    "routes": [
+      "PATCH /admin/settings/credits"
+    ]
+  },
+  {
+    "method": "UpdateDrawingEngineSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "value"
+    ],
+    "routes": [
+      "PATCH /admin/settings/drawing-engine"
+    ]
+  },
+  {
+    "method": "UpdateEcommerceOrchestrationSetting",
+    "module": "ecommerce",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "setting"
+    ],
+    "routes": [
+      "PUT /ecommerce/knowledge/orchestration"
+    ]
+  },
+  {
+    "method": "UpdateEmailSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/email"
+    ]
+  },
+  {
+    "method": "UpdateFeatureAvailability",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "value"
+    ],
+    "routes": [
+      "PATCH /admin/settings/features"
+    ]
+  },
+  {
+    "method": "UpdateInspirationFeedSettings",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "input"
+    ],
+    "routes": [
+      "PATCH /admin/settings/inspiration-feed"
+    ]
+  },
+  {
+    "method": "UpdateLibTVSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/libtv"
+    ]
+  },
+  {
+    "method": "UpdateLinuxDOSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/linuxdo"
+    ]
+  },
+  {
+    "method": "UpdateOSSSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/oss"
+    ]
+  },
+  {
+    "method": "UpdateOfficialAsset",
+    "module": "official-assets",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/official-assets/:id"
+    ]
+  },
+  {
+    "method": "UpdateOfficialAssetSortOrder",
+    "module": "official-assets",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "sortOrder"
+    ],
+    "routes": [
+      "PATCH /admin/official-assets/:id/sort"
+    ]
+  },
+  {
+    "method": "UpdatePaymentProviderConfig",
+    "module": "payments",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "providerID",
+      "request"
+    ],
+    "routes": [
+      "PUT /admin/payments/providers/:id/config"
+    ]
+  },
+  {
+    "method": "UpdatePaymentSettings",
+    "module": "payments",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PUT /admin/payments/settings"
+    ]
+  },
+  {
+    "method": "UpdatePoseLibraryItem",
+    "module": "pose-library",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/pose-library/items/:id"
+    ]
+  },
+  {
+    "method": "UpdatePromptTemplate",
+    "module": "prompt-templates",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/prompt-templates/:id"
+    ]
+  },
+  {
+    "method": "UpdateReferralSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "setting"
+    ],
+    "routes": [
+      "PATCH /admin/settings/referral"
+    ]
+  },
+  {
+    "method": "UpdateRegistrationSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/registration"
+    ]
+  },
+  {
+    "method": "UpdateResponseInterceptionSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "value"
+    ],
+    "routes": [
+      "PATCH /admin/settings/response-interception"
+    ]
+  },
+  {
+    "method": "UpdateRuntimePolicySetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "value"
+    ],
+    "routes": [
+      "PUT /admin/settings/runtime-policy"
+    ]
+  },
+  {
+    "method": "UpdateSkillCuration",
+    "module": "skill-curation",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req",
+      "requestID"
+    ],
+    "routes": [
+      "PUT /admin/skill-curation"
+    ]
+  },
+  {
+    "method": "UpdateSystemChannel",
+    "module": "channels",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/channels/:id"
+    ]
+  },
+  {
+    "method": "UpdateTopupProduct",
+    "module": "payments",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "request"
+    ],
+    "routes": [
+      "PUT /admin/payments/products/:id"
+    ]
+  },
+  {
+    "method": "UpdateTurnstileSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/turnstile"
+    ]
+  },
+  {
+    "method": "UpdateUser",
+    "module": "users",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "userID",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/users/:id"
+    ]
+  },
+  {
+    "method": "UpdateUserGroup",
+    "module": "user-groups",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/user-groups/:id"
+    ]
+  },
+  {
+    "method": "UpdateVerificationPolicy",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "p"
+    ],
+    "routes": [
+      "PUT /admin/settings/auth-policy"
+    ]
+  },
+  {
+    "method": "UpdateWechatSetting",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/settings/wechat"
+    ]
+  },
+  {
+    "method": "UpdateWorkbenchPreset",
+    "module": "workbench",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/workbench/tools/:id/presets/:presetId"
+    ]
+  },
+  {
+    "method": "UpdateWorkbenchTool",
+    "module": "workbench",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/workbench/tools/:id"
+    ]
+  },
+  {
+    "method": "UploadAgentAvatarBundle",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "header"
+    ],
+    "routes": []
+  },
+  {
+    "method": "UploadAnnouncementImage",
+    "module": "announcement-images",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "header"
+    ],
+    "routes": [
+      "POST /admin/announcement-images"
+    ]
+  },
+  {
+    "method": "UploadAppearanceAsset",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "slot",
+      "header"
+    ],
+    "routes": [
+      "POST /admin/settings/appearance/assets/:slot"
+    ]
+  },
+  {
+    "method": "UploadLive2D",
+    "module": "settings",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "header"
+    ],
+    "routes": []
+  },
+  {
+    "method": "VerifyProviderCatalogKey",
+    "module": "provider-catalog",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "providerID",
+      "req"
+    ],
+    "routes": [
+      "POST /admin/provider-catalog/:id/verify"
+    ]
+  }
+]

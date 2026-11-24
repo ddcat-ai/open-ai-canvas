@@ -47,6 +47,220 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /.well-known/oauth-protected-resource/api/admin-assistant/mcp:
+    servers: [{url: /}]
+    get:
+      tags: [auth]
+      security: []
+      summary: 管理 MCP OAuth 受保护资源元数据
+      responses: {"200": {description: resource、authorization_servers、scopes_supported 与 bearer_methods_supported}}
+  /.well-known/oauth-authorization-server/api/admin-assistant/oauth:
+    servers: [{url: /}]
+    get:
+      tags: [auth]
+      security: []
+      summary: 管理 OAuth 授权服务器元数据
+      responses: {"200": {description: issuer、授权与令牌端点、动态注册及 PKCE S256 能力}}
+  /admin-assistant/mcp:
+    post:
+      tags: [admin]
+      summary: 管理 MCP Streamable HTTP 入口
+      description: 仅提供 admin_list_operations、admin_describe_operation、admin_execute_operation；逐请求校验管理员 Token，危险写入需网页确认。
+      security: [{adminAssistantBearer: []}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object}}}}
+      responses:
+        "200": {description: MCP JSON-RPC 响应或事件流}
+        "401": {description: 需要 Bearer Token，WWW-Authenticate 返回资源元数据地址}
+    get:
+      tags: [admin]
+      summary: 管理 MCP HTTP 传输协商
+      security: [{adminAssistantBearer: []}]
+      responses: {"405": {description: 无状态模式不提供独立事件流}}
+  /admin-assistant/setup:
+    get:
+      tags: [admin]
+      summary: 管理接入地址与可授权模块
+      responses: {"200": {description: data 包含 mcpUrl、skillUrl 和 scopes}}
+  /admin-assistant/tokens:
+    get:
+      tags: [admin]
+      summary: 当前管理员个人 Token 列表（不返回密钥）
+      parameters: [{in: query, name: page, schema: {type: integer, minimum: 1, maximum: 10000, default: 1}}]
+      responses: {"200": {description: data.items 为 Token 元数据和 scopes，每页 50 条，data.hasMore 指示下一页}}
+    post:
+      tags: [admin]
+      summary: 创建管理 Token，仅同源 Cookie 会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, maxLength: 120}
+                scopes: {type: array, items: {type: string}, description: 缺省授予模块只读权限}
+                days: {type: integer, minimum: 1, maximum: 365, default: 30}
+      responses: {"200": {description: data.token 仅此一次返回明文，data.credential 为元数据}}
+  /admin-assistant/tokens/{id}:
+    parameters: [{in: path, name: id, required: true, schema: {type: string}}]
+    delete:
+      tags: [admin]
+      summary: 撤销本人 Token，仅同源 Cookie 会话
+      responses: {"200": {description: Token 立即失效}}
+  /admin-assistant/grants:
+    get:
+      tags: [admin]
+      summary: 当前管理员 OAuth 授权列表
+      parameters: [{in: query, name: page, schema: {type: integer, minimum: 1, maximum: 10000, default: 1}}]
+      responses: {"200": {description: data.items 为授权元数据，每页 50 条，data.hasMore 指示下一页，不返回刷新令牌}}
+  /admin-assistant/grants/{id}:
+    parameters: [{in: path, name: id, required: true, schema: {type: string}}]
+    delete:
+      tags: [admin]
+      summary: 撤销本人 OAuth grant，仅同源 Cookie 会话
+      responses: {"200": {description: grant 下全部访问及刷新令牌失效}}
+  /admin-assistant/calls:
+    get:
+      tags: [admin]
+      summary: 本人调用和确认记录
+      parameters: [{in: query, name: page, schema: {type: integer, minimum: 1, default: 1}}]
+      responses: {"200": {description: data.items 每页最多 50 项，不返回原始敏感参数}}
+  /admin-assistant/calls/{id}:
+    parameters: [{in: path, name: id, required: true, schema: {type: string}}]
+    get:
+      tags: [admin]
+      summary: 本人调用详情和脱敏预览
+      responses: {"200": {description: 调用状态、参数指纹、预览、来源及有效期}}
+  /admin-assistant/calls/{id}/confirm:
+    parameters: [{in: path, name: id, required: true, schema: {type: string}}]
+    post:
+      tags: [admin]
+      summary: 网页确认或拒绝危险调用，不能用 Bearer 自行确认
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [approve], properties: {approve: {type: boolean}}}}}}
+      responses: {"200": {description: 仅变更审批状态，客户端需用原参数和幂等键重试执行}, "409": {description: 已处理或过期}}
+  /admin-assistant/operations:
+    get:
+      tags: [admin]
+      summary: 发现 Token 获准的管理操作
+      security: [{adminAssistantBearer: []}]
+      parameters:
+        - {in: query, name: module, schema: {type: string}}
+        - {in: query, name: keyword, schema: {type: string}}
+        - {in: query, name: page, schema: {type: integer, default: 1}}
+      responses: {"200": {description: data.items、total、page 和 pageSize，每页 40 项}}
+  /admin-assistant/operations/{operation}:
+    parameters: [{in: path, name: operation, required: true, schema: {type: string}}]
+    get:
+      tags: [admin]
+      summary: 管理操作 Schema、模块及风险描述
+      security: [{adminAssistantBearer: []}]
+      responses: {"200": {description: data 包含 method、module、write、highRisk、inputSchema 和 routes}}
+  /admin-assistant/operations/{operation}/execute:
+    parameters: [{in: path, name: operation, required: true, schema: {type: string}}]
+    post:
+      tags: [admin]
+      summary: 与 MCP 共用的管理执行服务
+      security: [{adminAssistantBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arguments: {type: object, description: 参数结构由对应操作 describe 返回}
+                idempotencyKey: {type: string, minLength: 8, maxLength: 160, description: 写入必须提供，同一写入始终复用}
+      responses:
+        "200": {description: data.status 为 succeeded、failed、pending_confirmation、rejected、expired 或 unknown；危险调用含 confirmationUrl；unknown 禁止自动换键重试}
+        "409": {description: 幂等键参数不一致或执行状态冲突}
+  /admin-assistant/attachments:
+    post:
+      tags: [admin]
+      summary: 上传绑定 Token 或 OAuth grant 的临时附件
+      security: [{adminAssistantBearer: []}]
+      parameters: [{in: header, name: X-Filename, schema: {type: string}, description: URL 编码的文件名}]
+      requestBody: {required: true, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+      responses: {"200": {description: data 为附件 ID、文件名、大小和到期时间，最大 32 MiB，1 小时有效}}
+  /admin-assistant/attachments/{id}:
+    parameters: [{in: path, name: id, required: true, schema: {type: string}}]
+    get:
+      tags: [admin]
+      summary: 同凭据鉴权下载临时附件
+      security: [{adminAssistantBearer: []}]
+      responses: {"200": {description: 二进制附件}, "404": {description: 不存在、不属于此凭据或已过期}}
+  /admin-assistant/skill/latest:
+    get:
+      tags: [admin]
+      security: []
+      summary: 公开查询当前 Skill 静态发行版，禁止缓存
+      responses: {"200": {description: data 包含 name、version、serverVersion、apiVersion、sha256、size 和 downloadUrl}}
+  /admin-assistant/skill/releases/{version}:
+    parameters: [{in: path, name: version, required: true, schema: {type: string}, description: 内容版本加 .zip}]
+    get:
+      tags: [admin]
+      security: []
+      summary: 下载不可变 Skill ZIP，无凭据
+      responses: {"200": {description: application/zip，immutable 缓存}, "304": {description: ETag 匹配}, "404": {description: 当前服务不提供此版本}}
+  /admin-assistant/oauth/resource-metadata:
+    get:
+      tags: [auth]
+      security: []
+      summary: OAuth 受保护资源元数据
+      responses: {"200": {description: 标准 JSON，包含 resource、authorization_servers 和 scopes_supported}}
+  /admin-assistant/oauth/metadata:
+    get:
+      tags: [auth]
+      security: []
+      summary: OAuth 授权服务元数据
+      responses: {"200": {description: 标准 JSON，支持 code、refresh_token 和 PKCE S256}}
+  /admin-assistant/oauth/register:
+    post:
+      tags: [auth]
+      security: []
+      summary: 限流的公开 OAuth 客户端动态注册
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [client_name, redirect_uris], properties: {client_name: {type: string}, redirect_uris: {type: array, items: {type: string}}, token_endpoint_auth_method: {type: string, enum: [none]}, grant_types: {type: array, items: {type: string}}, response_types: {type: array, items: {type: string}}}}}}}
+      responses: {"201": {description: 标准客户端注册 JSON，client_id 和精确回调}, "400": {description: invalid_client_metadata}}
+  /admin-assistant/oauth/authorize:
+    get:
+      tags: [auth]
+      security: []
+      summary: 跳转 Canvas 登录及网页授权页
+      description: 标准查询参数 client_id、redirect_uri、response_type=code、resource、scope、state、code_challenge、code_challenge_method=S256。
+      responses: {"302": {description: 站点同源授权页面}}
+  /admin-assistant/oauth/consent:
+    get:
+      tags: [auth]
+      summary: 验证授权请求并显示客户端和权限预览
+      description: 查询参数与 authorize 一致，需要管理员 Cookie 会话。
+      responses: {"200": {description: data 为客户端、回调、资源及权限}}
+    post:
+      tags: [auth]
+      summary: 同源 Cookie 管理员确认或拒绝 OAuth 授权
+      requestBody: {required: true, content: {application/json: {schema: {type: object, description: authorize 查询字段加必填布尔 approve}}}}
+      responses: {"200": {description: data.redirectUrl 为精确登记的客户端回调}}
+  /admin-assistant/oauth/token:
+    post:
+      tags: [auth]
+      security: []
+      summary: PKCE 换码或轮换刷新令牌
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id, resource]
+              properties:
+                grant_type: {type: string, enum: [authorization_code, refresh_token]}
+                client_id: {type: string}
+                resource: {type: string}
+                code: {type: string}
+                redirect_uri: {type: string}
+                code_verifier: {type: string}
+                refresh_token: {type: string}
+                scope: {type: string}
+      responses: {"200": {description: 标准 OAuth JSON，access_token、token_type、expires_in、refresh_token 和 scope}, "400": {description: invalid_grant，不泄露内部错误}}
   /teams:
     get:
       tags: [teams]
@@ -5095,6 +5309,10 @@ components:
       schema:
         type: string
   securitySchemes:
+    adminAssistantBearer:
+      type: http
+      scheme: bearer
+      description: Canvas 管理个人 Token 或本服务签发的 OAuth access token
     sessionCookie:
       type: apiKey
       in: cookie

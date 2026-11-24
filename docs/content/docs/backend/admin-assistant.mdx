@@ -1,0 +1,85 @@
+---
+title: 后台管理 MCP 与 Skill
+description: 管理员浏览器授权、可撤销 Token、管理操作发现及 Skill 静态分发
+---
+
+# 后台管理 MCP 与 Skill
+
+后台「系统设置 → Agent 接入」提供远程 MCP 地址、Token、客户端授权、调用记录和 Skill 下载。管理服务与原有「MCP 管理」分别负责入站管理调用和出站 MCP 连接配置。
+
+## 接入与登录
+
+设置 `CANVAS_PUBLIC_BASE_URL` 为站点唯一 Origin，例如 `https://canvas.example.com`。生产要求 HTTPS；开发允许 localhost 或回环 IP 的 HTTP。OAuth 元数据不信任请求 Host，不从 NewAPI access token 直接推导管理员身份。
+
+远程 MCP 地址为 `/api/admin-assistant/mcp`，使用 Streamable HTTP。客户端可选择浏览器授权，复用 Canvas 登录和已经配置的 NewAPI OIDC；也可在后台创建个人 Token，使用 `Authorization: Bearer <token>`。个人 Token 只展示一次，默认只读、30 天有效，可选择 1–365 天及模块权限。
+
+浏览器 OAuth 使用 Authorization Code + PKCE S256，授权码 5 分钟有效且单次使用，access token 最多 1 小时，refresh grant 30 天有效。刷新令牌每次轮换，重放旧刷新令牌会撤销整项授权；并发客户端应各自登录，不共享刷新令牌文件。每次调用重新读取账号、管理员角色及撤销状态。
+
+个人 Token 和 OAuth 授权列表支持 `?page=1` 分页，每页 50 条，返回 `data.items` 和 `data.hasMore`。后台可逐页查看及撤销历史凭据，已撤销记录不会截断较早仍有效的凭据。
+
+公开客户端支持动态注册，默认按来源 IP 限流。也可通过 `CANVAS_ADMIN_ASSISTANT_OAUTH_CLIENTS` 配置预注册客户端：
+
+```json
+[{"client_id":"agent-client","client_name":"Agent","redirect_uris":["https://client.example/callback"]}]
+```
+
+只允许精确登记的 HTTPS 回调或本机回环 HTTP 回调。授权和换取令牌必须携带 `resource=<站点 Origin>/api/admin-assistant/mcp`。OAuth 发现地址为：
+
+- `/.well-known/oauth-protected-resource/api/admin-assistant/mcp`
+- `/.well-known/oauth-authorization-server/api/admin-assistant/oauth`
+
+`nginx.conf` 已为发现路径代理，为 MCP 精确入口关闭缓冲、缓存及 gzip。其他反向代理须配置同样路径，保留 Authorization 和 MCP 协议头。跨域浏览器管理请求不接受宽松 Origin；Token 创建、撤销、授权和危险操作确认要求同源 Cookie 会话，Bearer Token 无法调用这些管理接口。
+
+## 操作发现与执行
+
+MCP 只加载三个工具：
+
+| 工具 | 用途 |
+| --- | --- |
+| `admin_list_operations` | 按模块、关键词发现已授权操作，每页 40 项 |
+| `admin_describe_operation` | 查询操作参数 Schema、业务来源、写入和风险标记 |
+| `admin_execute_operation` | 执行固定操作及参数；写入要求稳定的 `idempotencyKey` |
+
+操作 ID 使用现有业务方法名，如 `AdminUsers`、`CreateSystemChannel`、`UpdateUser`。输入参数名和大小写以 describe 返回的 Schema 为准；业务校验仍由原 service 完成。出站 MCP 的 `admin` 参数由服务器固定为 true，不能由调用方选择。没有任意 URL、HTTP 路径、SQL 或 shell 执行入口。
+
+MCP 执行保留原始 JSON 数字，调账等 int64 参数不会经 float64 舍入；确认指纹及实际执行均使用原值。客户端也应保留整数精度。
+
+注册表覆盖用户、渠道模型、插件、技能、出站 MCP、系统配置、支付运营、任务日志、素材、工作台及系统更新等后台模块。`internal/app/admin_assistant_catalog.json` 是受版本控制的明确白名单。新增后台业务时，从 backend 目录运行 `go run ./cmd/admin-assistant-catalog`，审查差异、风险标记及权限后更新白名单；测试会比对实际管理入口及方法签名。
+
+普通渠道、技能和公告写入可按权限执行。删除、批量修改、财务额度、权限认证、存储凭据、安装插件和系统更新等操作默认需要网页确认；新增写入默认需要确认，确认机制在服务端强制执行。
+
+危险调用返回 `pending_confirmation`、调用 ID 和后台链接。管理员检查操作、参数预览和参数指纹后确认，客户端在 10 分钟内用原幂等键、原参数重试。确认不执行操作，也不能改参数。拒绝、过期、Token 撤销、管理员降权及参数变化均不允许继续执行。
+
+同一凭据的同一幂等键不能重复执行写入；OAuth 刷新前后按同一 grant 绑定。`running` 或 `unknown` 表示正在执行或结果待核实，禁止自动换键重试。业务副作用与调用结果落库不能承诺跨进程崩溃下的 exactly-once；需从调用 ID、业务记录和审计核实。已完成写入的记录保留用于幂等查询。
+
+## Skill 与文件
+
+`GET /api/admin-assistant/skill/latest` 公开返回 JSON 信封，data 包含内容版本、服务版本、API 版本、ZIP 大小、SHA256 和下载地址。latest 禁止缓存；具体 ZIP 按内容哈希版本分发，使用 immutable 缓存。资源嵌入后端，现有 Docker 的 `COPY backend` 自动包含；回滚服务会同时回滚 Skill 内容。
+
+ZIP 内为 `canvas-admin/SKILL.md`、参考文档和 Python 标准库客户端。下载解压到 Agent 的 skills 目录后，使用：
+
+```sh
+python scripts/canvas_admin.py --site https://canvas.example.com login
+python scripts/canvas_admin.py --site https://canvas.example.com list --module channels
+python scripts/canvas_admin.py --site https://canvas.example.com describe AdminSystemChannelPage
+python scripts/canvas_admin.py --site https://canvas.example.com version
+python scripts/canvas_admin.py --site https://canvas.example.com update
+```
+
+客户端凭据存放于 Skill 之外的用户配置目录，Unix 权限 0600，Windows 限制当前账号 ACL。无人值守可使用隐藏输入的个人 Token 或 `CANVAS_ADMIN_TOKEN` 环境变量。更新检查 API 兼容性、大小、SHA256、ZIP 路径和符号链接，不覆盖凭据。
+
+Skill REST 发现与描述路径为 `/api/admin-assistant/operations` 和 `/operations/:operation`；执行为 `POST /operations/:operation/execute`，与 MCP 共用执行服务。上传文件时向 `POST /api/admin-assistant/attachments` 发送原始字节，`X-Filename` 使用 URL 编码；文件参数填写返回的附件 ID。下载为 `GET /attachments/:id`，继续使用 Bearer 认证。
+
+附件绑定个人 Token 或 OAuth grant，单文件上限 32 MiB，每项凭据有效附件总量上限 128 MiB，1 小时到期；上传时及启动/每小时清理过期字节。CSV、技能包和媒体导出同样返回受鉴权附件。JSON 结果上限 2 MiB，大列表应使用分页或缩小查询范围。
+
+## 数据与验证
+
+Schema 110 添加专用认证、授权码、刷新重放、调用记录和临时附件表，并纳入 SQLite→PostgreSQL 迁移清单。PostgreSQL 新表启用 RLS，普通 PostgREST 角色无策略，不可读取管理凭据或记录；后端使用数据库 owner/service role。Token 和授权码只保存哈希，预览及结果中的认证字段脱敏，调用审计保留来源、操作、耗时、结果及关联 ID。
+
+专项验证：`go test ./internal/app ./internal/handler ./internal/database -run 'Assistant|CurrentSchemaVersionMatchesMigrationPlan'`。PostgreSQL 集成测试使用专用测试库的 `CANVAS_TEST_POSTGRES_DSN`，自动创建并清理隔离 schema，禁止填生产 DSN。
+
+设置 `CANVAS_ASSISTANT_TEST_POSTGRES_DSN=postgres://...` 可将 app 管理专项测试切换到 PostgreSQL，同样按用例创建与清理隔离 schema；覆盖令牌生命周期、刷新重放、确认与并发幂等、附件隔离及并发限额。
+
+本轮本地验收使用隔离 SQLite 及 PostgreSQL 14 实例。已通过 SQLite 完整迁移和重复执行、PostgreSQL 专用表迁移、RLS 和幂等唯一约束测试；真实 Go SDK 完成 Streamable HTTP 握手、工具发现、描述、读写和撤销检查。Python 标准库客户端测试覆盖凭据权限、跨源拒绝、刷新轮换、更新保留凭据及 ZIP 路径/哈希校验。
+
+真实前端与后端联调已完成管理员登录、Token 创建与撤销、Skill 的 PKCE 浏览器授权、普通公告写入、危险关闭操作网页确认、原调用幂等重试、附件上传下载，以及 Skill 下载、安装与更新。生产 HTTPS 反向代理、现有 NewAPI OIDC 跳转及多实例压力验收仍列于待测试清单。
