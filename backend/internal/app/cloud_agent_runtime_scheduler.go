@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"gorm.io/gorm"
@@ -38,6 +39,13 @@ func (s *Service) cloudAgentExecutionOutput(task *model.Task, initial cloudAgent
 		out.ConversationID = run.ID
 	}
 	out.Status = run.Status
+	out.ExecutionMode = state.Request.ExecutionMode
+	if state.Request.ExecutionMode == "browser" {
+		out.RuntimeConnection = "disconnected"
+		if state.Browser != nil && state.Browser.LeaseUntil.After(time.Now()) {
+			out.RuntimeConnection = "connected"
+		}
+	}
 	out.Revision, out.CleanupPending, out.FailureMessage = run.Revision, run.CleanupPending, run.FailureMessage
 	out.UpdatedAt = run.UpdatedAt
 	view := CloudAgentRunViewOptions{}
@@ -220,6 +228,10 @@ func (s *Service) advanceCloudAgent(run *model.CloudAgentExecution) (err error) 
 			return s.terminateCloudAgent(run, appErr.Message)
 		}
 		return s.terminateCloudAgent(run, "Agent 运行状态损坏，本轮已停止")
+	}
+	if state.Request.ExecutionMode == "browser" {
+		s.startCloudAgentPi(run.UserID, run.ID)
+		return nil
 	}
 	if err := s.RequireSkillAccess(run.UserID); err != nil {
 		var appErr *AppError

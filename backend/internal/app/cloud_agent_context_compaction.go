@@ -495,6 +495,9 @@ func (s *Service) writeCloudAgentContextCheckpoint(run *model.CloudAgentExecutio
 		// （取消/失败的收尾），只落检查点与事件，绝不把 failed/cancelled 改写成 completed。
 		resume := state.ContextCompaction != nil && state.ContextCompaction.Resume
 		state.ContextCompaction = nil
+		if state.Browser != nil && state.Browser.Pending != nil && state.Browser.Pending.Kind == "compact" {
+			state.Browser.Pending.Settled = true
+		}
 		if resume {
 			state.ContextCompactionCount++
 		} else if !keepTerminal {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 	"yingce/backend/internal/kernel"
@@ -80,15 +81,16 @@ type RuntimeStoragePolicy struct {
 }
 
 type RuntimeTaskPolicy struct {
-	WorkerConcurrency        int `json:"workerConcurrency"`
-	ChannelConcurrency       int `json:"channelConcurrency"`
-	ActiveTaskLimit          int `json:"activeTaskLimit"`
-	ImageTimeoutMinutes      int `json:"imageTimeoutMinutes"`
-	TextTimeoutMinutes       int `json:"textTimeoutMinutes"`
-	AudioTimeoutMinutes      int `json:"audioTimeoutMinutes"`
-	VideoTimeoutMinutes      int `json:"videoTimeoutMinutes"`
-	StoryboardTimeoutMinutes int `json:"storyboardTimeoutMinutes"`
-	DefaultTimeoutMinutes    int `json:"defaultTimeoutMinutes"`
+	BrowserAgentEnabled      bool `json:"browserAgentEnabled"`
+	WorkerConcurrency        int  `json:"workerConcurrency"`
+	ChannelConcurrency       int  `json:"channelConcurrency"`
+	ActiveTaskLimit          int  `json:"activeTaskLimit"`
+	ImageTimeoutMinutes      int  `json:"imageTimeoutMinutes"`
+	TextTimeoutMinutes       int  `json:"textTimeoutMinutes"`
+	AudioTimeoutMinutes      int  `json:"audioTimeoutMinutes"`
+	VideoTimeoutMinutes      int  `json:"videoTimeoutMinutes"`
+	StoryboardTimeoutMinutes int  `json:"storyboardTimeoutMinutes"`
+	DefaultTimeoutMinutes    int  `json:"defaultTimeoutMinutes"`
 	// AgentStepMaxOutputTokens 是画布 Agent 单步模型调用的输出上限（思考 + 正文 + 工具调用参数）。
 	// 0 表示不限制输出，此时单步最坏耗时只由 AgentStepTimeoutSeconds 兜底。
 	AgentStepMaxOutputTokens int `json:"agentStepMaxOutputTokens"`
@@ -172,6 +174,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			ErrorBodyKB:                 1,
 		},
 		Task: RuntimeTaskPolicy{
+			BrowserAgentEnabled:      strings.EqualFold(strings.TrimSpace(os.Getenv("CANVAS_BROWSER_AGENT_ENABLED")), "true"),
 			WorkerConcurrency:        defaultWorkerConcurrencyLimit(),
 			ChannelConcurrency:       defaultChannelConcurrencyLimit(),
 			ActiveTaskLimit:          5,
@@ -221,7 +224,8 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		RecycleBinRetentionDays: 0,
 	}
 	value.Task = RuntimeTaskPolicy{
-		WorkerConcurrency: maxRuntimeConcurrency, ChannelConcurrency: maxRuntimeConcurrency, ActiveTaskLimit: maxRuntimeConcurrency,
+		BrowserAgentEnabled: value.Task.BrowserAgentEnabled,
+		WorkerConcurrency:   maxRuntimeConcurrency, ChannelConcurrency: maxRuntimeConcurrency, ActiveTaskLimit: maxRuntimeConcurrency,
 		ImageTimeoutMinutes: maxRuntimeTimeoutMinutes, TextTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		AudioTimeoutMinutes: maxRuntimeTimeoutMinutes, VideoTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		StoryboardTimeoutMinutes: maxRuntimeTimeoutMinutes, DefaultTimeoutMinutes: maxRuntimeTimeoutMinutes,

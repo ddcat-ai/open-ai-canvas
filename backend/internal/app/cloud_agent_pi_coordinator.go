@@ -250,6 +250,10 @@ func (s *Service) recoverCloudAgentPiRunners() {
 				}
 				continue
 			}
+			if browserState, decodeErr := cloudAgentDecode(&run); decodeErr == nil && browserState.Request.ExecutionMode == "browser" && browserState.Browser != nil && browserState.Browser.Pending != nil {
+				s.startCloudAgentPi(run.UserID, run.ID)
+				continue
+			}
 			// 跳过等待状态
 			if run.Status == "waiting_approval" || run.Status == "waiting_user" {
 				continue
@@ -284,6 +288,17 @@ func (s *Service) runCloudAgentPiSession(ctx context.Context, userID, runID stri
 	}
 	if cloudAgentRunTerminal(run.Status) {
 		return s.finishCloudAgentCleanup(ctx, run)
+	}
+	if state, decodeErr := cloudAgentDecode(run); decodeErr == nil && state.Request.ExecutionMode == "browser" {
+		if err := s.RequireSkillAccess(userID); err != nil {
+			return err
+		}
+		// 决定已落库但收尾尚未执行时，浏览器模式同样由原审批执行器接手。
+		if cloudAgentApprovedCallPending(run, &state, "") {
+			s.startCloudAgentApprovalFollowUp(userID, runID, state.Approval.ID)
+			return nil
+		}
+		return s.runBrowserAgentAcceptedStep(ctx, userID, runID)
 	}
 	task, state, err := s.cloudAgentTask(userID, runID)
 	if err != nil {

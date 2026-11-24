@@ -208,6 +208,9 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if err != nil {
 			return nil, false, err
 		}
+		if err := browserExecutorValid(ctx, &state); err != nil {
+			return nil, false, err
+		}
 		if err := s.RequireSkillAccess(userID); err != nil {
 			return nil, false, err
 		}
@@ -254,8 +257,18 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		if adopt {
 			break
 		}
+		if state.Browser != nil && state.Browser.Pending != nil && state.Browser.Pending.Attempts > cloudAgentModelStepRetries {
+			return nil, false, errors.New("浏览器 Agent 模型步骤重试次数已耗尽")
+		}
 
 		canonical, historyErr := cloudAgentPiCanonicalForModelRequest(messages, state.Canonical)
+		if state.Request.ExecutionMode == "browser" {
+			canonical, historyErr = state.Canonical, nil
+			if state.PiResumePrompt != "" {
+				canonical.Messages = append(append([]map[string]any(nil), canonical.Messages...), map[string]any{"role": "user", "content": state.PiResumePrompt})
+				state.PiResumePrompt = ""
+			}
+		}
 		if historyErr != nil {
 			return nil, false, historyErr
 		}
@@ -283,6 +296,15 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		}
 		if !compactionSummary {
 			cloudAgentAttachRunContext(&canonical, &state)
+			if state.Request.ExecutionMode == "browser" {
+				tokens, estimateErr := cloudAgentRequestEstimatedTokens(&canonical)
+				if estimateErr != nil {
+					return nil, false, estimateErr
+				}
+				if tokens > s.cloudAgentContextBudgetForRequest(state.Request).InputBudgetTokens {
+					return nil, false, errors.New("Agent 上下文超过模型预算，请开始新对话")
+				}
+			}
 			// Pi owns history compaction. Trimming a second transcript here would
 			// discard tool evidence without updating its durable session or cache prefix.
 		}
@@ -672,6 +694,11 @@ func (s *Service) finishCloudAgentPiModelStep(userID, runID, taskID, text string
 			}
 			fresh.ActiveTaskID = ""
 			fresh.ActiveTextDraft = ""
+			if fresh.Request.ExecutionMode == "browser" && len(callBatches) > 0 && fresh.Browser != nil && fresh.Browser.Pending != nil {
+				fresh.Browser.Pending.Settled = true
+				fresh.Browser.FinalAnswer = len(calls) == 0
+				fresh.PiAssistantResponses++
+			}
 			if len(callBatches) > 0 {
 				// 一批全部有效的调用意味着模型回到了正常输出轨道，参数纠偏计数清零。
 				fresh.InvalidArgumentSteps = 0
@@ -738,6 +765,10 @@ func (s *Service) finishCloudAgentPiModelStepWithInvalidCalls(userID, runID, tas
 			fresh.ActiveTaskID = ""
 			fresh.ActiveTextDraft = ""
 			fresh.InvalidArgumentSteps++
+			if fresh.Request.ExecutionMode == "browser" && fresh.Browser != nil && fresh.Browser.Pending != nil {
+				fresh.Browser.Pending.Settled = true
+				fresh.PiAssistantResponses++
+			}
 			if reasoning.Text != "" {
 				fresh.event(runID, "reasoning_message", map[string]any{"messageId": taskID + ":reasoning", "text": truncateRunes(reasoning.Text, 8000)})
 			}

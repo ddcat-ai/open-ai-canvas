@@ -5,6 +5,12 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 浏览器 Agent（Yingce migration 5）
+
+新增 `client_failures`，联合主键 `(user_id,event_id)`，保存 run_id、step_id、固定 code/phase、build_commit、http_status、epoch、occurred_at、created_at、frames_json。按 user_id/run_id/code/created_at 查询，事件正文仅允许受限元数据。每用户最多 2000 条，保留 14 天，启动与每小时清理。请求重传仅确认相同内容的已存事件。
+
+浏览器控制信息使用现有 `cloud_agent_executions.state_json.browser`，包含 owner、epoch、leaseUntil、sequence、finalAnswer、pending；执行模式在 request.executionMode 冻结。模型任务、工具游标、步骤确认与检查点继续使用既有 Revision CAS、事件及回执，无独立浏览器工作流表。服务端 Worker 与 browser 会话可同时存在。
+
 ## 模型请求插件发行版（Schema 109）
 
 `model_protocol_releases` 增加 `channel_models.protocol_release` 及索引，保存模型绑定的请求包 SHA-256。`tasks.protocol_binding_json` 和 `route_attempts.protocol_binding_json` 在新任务入队、路由尝试时记录版本、上游型号、能力与报价修订，以及渠道连接的 HMAC。快照仅在服务端使用。历史记录的新增列保持空值。

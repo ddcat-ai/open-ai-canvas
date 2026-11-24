@@ -25,6 +25,7 @@ const cloudAgentOperation = "cloud_agent"
 // turns reference the previous run, not a mutable in-memory conversation. This
 // reuses transactional billing, worker leases, cancellation and text replay.
 type CloudAgentRequest struct {
+	ExecutionMode string `json:"executionMode,omitempty"`
 	// PageContext 是当前页面冻结的业务对象身份；镜头工具只允许在这份上下文内读写。
 	PageContext     *CloudAgentPageContext `json:"pageContext,omitempty"`
 	ReasoningMode   string                 `json:"reasoningMode,omitempty"`
@@ -104,27 +105,29 @@ type cloudAgentState struct {
 }
 
 type CloudAgentRun struct {
-	PageContext    *CloudAgentPageContext `json:"pageContext,omitempty"`
-	ID             string                 `json:"id"`
-	ConversationID string                 `json:"conversationId"`
-	UserPrompt     string                 `json:"userPrompt"`
-	IdempotencyKey string                 `json:"idempotencyKey"`
-	CanvasID       string                 `json:"canvasId"`
-	ParentID       string                 `json:"parentId,omitempty"`
-	Status         string                 `json:"status"`
-	Revision       int64                  `json:"revision"`
-	CleanupPending bool                   `json:"cleanupPending,omitempty"`
-	FailureMessage string                 `json:"failureMessage,omitempty"`
-	PermissionMode string                 `json:"permissionMode"`
-	Model          string                 `json:"model"`
-	CreatedAt      time.Time              `json:"createdAt"`
-	UpdatedAt      time.Time              `json:"updatedAt"`
-	Events         []CloudAgentEvent      `json:"events,omitempty"`
-	Skills         []cloudAgentSkill      `json:"skills,omitempty"`
-	Approval       *cloudAgentApproval    `json:"approval,omitempty"`
-	SpentCredits   float64                `json:"spentCredits"`
-	Step           int                    `json:"step"`
-	ActiveMessage  map[string]string      `json:"activeMessage,omitempty"`
+	ExecutionMode     string                 `json:"executionMode,omitempty"`
+	RuntimeConnection string                 `json:"runtimeConnection,omitempty"`
+	PageContext       *CloudAgentPageContext `json:"pageContext,omitempty"`
+	ID                string                 `json:"id"`
+	ConversationID    string                 `json:"conversationId"`
+	UserPrompt        string                 `json:"userPrompt"`
+	IdempotencyKey    string                 `json:"idempotencyKey"`
+	CanvasID          string                 `json:"canvasId"`
+	ParentID          string                 `json:"parentId,omitempty"`
+	Status            string                 `json:"status"`
+	Revision          int64                  `json:"revision"`
+	CleanupPending    bool                   `json:"cleanupPending,omitempty"`
+	FailureMessage    string                 `json:"failureMessage,omitempty"`
+	PermissionMode    string                 `json:"permissionMode"`
+	Model             string                 `json:"model"`
+	CreatedAt         time.Time              `json:"createdAt"`
+	UpdatedAt         time.Time              `json:"updatedAt"`
+	Events            []CloudAgentEvent      `json:"events,omitempty"`
+	Skills            []cloudAgentSkill      `json:"skills,omitempty"`
+	Approval          *cloudAgentApproval    `json:"approval,omitempty"`
+	SpentCredits      float64                `json:"spentCredits"`
+	Step              int                    `json:"step"`
+	ActiveMessage     map[string]string      `json:"activeMessage,omitempty"`
 	// 事件已全量落库，运行详情只返回一页，因此必须把"这一页在整条日志里的位置"说清楚：
 	// EventSeqBase 是本次返回的首条事件之前已入库的条数（不变量 events[i].seq ==
 	// eventSeqBase + i + 1），EventCount 是该运行累计事件条数，LatestSeq 可直接当作下次
@@ -147,6 +150,9 @@ type CloudAgentRunViewOptions struct {
 func validateCloudAgentRequest(req *CloudAgentRequest) error {
 	if req == nil {
 		return BadAuthRequest("请求不能为空")
+	}
+	if req.ExecutionMode != "" && req.ExecutionMode != "server" && req.ExecutionMode != "browser" {
+		return BadAuthRequest("Agent 执行模式无效")
 	}
 	// IDs and protocol selectors are identifiers, not free-form text. Keep their
 	// validation in one place so byte/rune and Unicode handling cannot drift.
@@ -286,6 +292,8 @@ func cloudAgentID(userID, key string) string {
 }
 
 func cloudAgentFingerprint(req CloudAgentRequest, parent string) string {
+	// Scheduling is fixed by first admission; toggling policy must not break a lost-ACK replay.
+	req.ExecutionMode = ""
 	data, _ := json.Marshal(struct {
 		Request CloudAgentRequest
 		Parent  string
@@ -457,6 +465,15 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		}
 	}
 	var history []providerTextMessage
+	if req.ExecutionMode == "browser" {
+		policy, policyErr := s.RuntimePolicy()
+		if policyErr != nil {
+			return nil, policyErr
+		}
+		if !policy.Task.BrowserAgentEnabled {
+			return nil, &AppError{Status: 409, Code: 409, Reason: "browser_agent_disabled", Message: "浏览器 Agent 已关闭，请使用服务端执行"}
+		}
+	}
 	var creativeAnchor cloudAgentCreativeAnchor
 	var inheritedPlan []cloudAgentPlanItem
 	inheritedConfirmationRounds := 0

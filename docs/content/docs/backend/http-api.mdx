@@ -5,6 +5,14 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 浏览器 Agent 与客户端失败日志
+
+`GET /agent/capabilities` 增加 `browserAgentEnabled`。`POST /agent/runs` 与续轮请求支持 `executionMode: server|browser`，省略保留服务端路径。浏览器模式默认关闭，可由 `CANVAS_BROWSER_AGENT_ENABLED=true` 或后台「资源与策略 → 画布 Agent」开启；后台保存值优先。关闭时新 browser 请求返回 409 `browser_agent_disabled`，在途会话继续按原模式恢复。
+
+新增本人会话发现 `GET /agent/browser-runs`、状态 `GET /agent/runs/:id/runtime/state`、执行权 `POST .../runtime/claim`、续租 `POST .../runtime/heartbeat`、单步 `POST .../runtime/step`。写请求包含 `protocolVersion:1`、owner、epoch；step 必须带服务端 nextAction 返回的 stepId。所有执行事实、工具参数与模型历史仍由后端校验，旧步骤重传不创建下一步。连接状态独立于审批、待输入等业务状态。
+
+`POST /agent/client-failures` 接受 `{events:[...]}`，仅允许固定错误码、阶段、时间、构建、HTTP 状态和 run/step/epoch；不得传原始错误、提示词、URL 或密钥。每批最多 20 条、64 KiB，返回 `{acceptedEventIds:[...]}`，客户端仅删除已确认事件。启动错误可不带 runId。本人查询 `GET /agent/client-failures?runId=...`，管理员查询 `GET /admin/agent/client-failures?userId=...&runId=...`，均最多 200 条、最近 14 天。字段合同见 OpenAPI。
+
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。

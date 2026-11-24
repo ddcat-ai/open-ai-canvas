@@ -1,4 +1,4 @@
-import { App, Button, Form, InputNumber, Skeleton } from "antd";
+import { App, Button, Form, InputNumber, Skeleton, Switch } from "antd";
 import { AlertTriangle, Database, Gauge, Infinity as InfinityIcon, Network, RefreshCw, RotateCcw, Save, ShieldCheck, TimerReset, Orbit } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
@@ -11,7 +11,7 @@ import { AdminStatTile, AdminStatusBadge, SettingsSectionCard } from "../compone
 
 type PolicyGroup = "resource" | "storage" | "task" | "request";
 type RuntimePolicyDraft = Pick<RuntimePolicySetting, "resource" | "storage" | "task" | "request">;
-type PolicyField = { group: PolicyGroup; name: string; label: string; extra: string; unit: string; min?: number; max: number };
+type PolicyField = { group: PolicyGroup; name: string; label: string; extra: string; unit: string; min?: number; max: number; toggle?: boolean };
 type PolicySectionDefinition = {
     id: string;
     icon: ReactNode;
@@ -59,6 +59,7 @@ const timeoutFields: PolicyField[] = [
 ];
 
 const agentFields: PolicyField[] = [
+    { group: "task", name: "browserAgentEnabled", label: "浏览器 Worker", extra: "开启后，新会话优先使用浏览器编排，减少服务端 Agent 排队；服务端执行保持可用。关闭仅影响新会话，已有浏览器会话仍需打开页面继续。", unit: "", min: 0, max: 1, toggle: true },
     { group: "resource", name: "agentHistoryMB", label: "每账号 Agent 历史容量", extra: "包括会话、消息、事件和撤销快照。调低不会删除历史；购买文件空间不改变此上限。", unit: "MiB", max: 999_999 },
     { group: "resource", name: "agentHistoryGlobalMB", label: "平台 Agent 热历史池", extra: "所有账号热 Agent 历史合计上限。旧终态会优先压缩归档，仍不足时拒绝新的历史写入。", unit: "MiB", max: 16_777_216 },
     {
@@ -541,12 +542,17 @@ function PolicySection({ icon, title, description, fields, status }: PolicySecti
                                 <Form.Item
                                     noStyle
                                     name={[field.group, field.name]}
-                                    rules={[
-                                        { required: true, message: `请填写${field.label}` },
-                                        { type: "number", min, max: field.max, message: `${field.label}必须是 ${min}-${field.max} 的整数` },
-                                    ]}
+                                    valuePropName={field.toggle ? "checked" : "value"}
+                                    rules={
+                                        field.toggle
+                                            ? []
+                                            : [
+                                                  { required: true, message: `请填写${field.label}` },
+                                                  { type: "number", min, max: field.max, message: `${field.label}必须是 ${min}-${field.max} 的整数` },
+                                              ]
+                                    }
                                 >
-                                    <InputNumber id={inputId} min={min} max={field.max} precision={0} aria-label={field.label} />
+                                    {field.toggle ? <Switch id={inputId} aria-label={field.label} /> : <InputNumber id={inputId} min={min} max={field.max} precision={0} aria-label={field.label} />}
                                 </Form.Item>
                                 <span className="admin-runtime-policy-number-unit" aria-hidden="true">
                                     {field.unit}
@@ -579,6 +585,7 @@ function samePolicy(left: RuntimePolicyDraft, right: RuntimePolicyDraft) {
 function parseRuntimePolicySetting(value: RuntimePolicySetting): RuntimePolicySetting {
     if (!value || typeof value !== "object") throw new Error("服务端返回的资源与策略格式无效");
     for (const field of allPolicyFields) {
+        if (field.toggle && typeof (value[field.group] as unknown as Record<string, unknown>)[field.name] !== "boolean") throw new Error(`服务端返回的“${field.label}”无效`);
         const fieldValue = readPolicyValue(value, field);
         const min = field.min ?? 1;
         if (!Number.isInteger(fieldValue) || fieldValue < min || fieldValue > field.max) throw new Error(`服务端返回的“${field.label}”无效`);

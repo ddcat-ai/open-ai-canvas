@@ -12,6 +12,8 @@
 
 ## 设计沉淀
 
+- [Agent 浏览器 Worker 与服务端共存](design/browser-agent-worker.md)：默认关闭的环境变量与后台开关、单步授权、断线续跑和失败日志自动上报；已实现并进行本地联调。
+
 - [短剧拆镜与段间连续性调研](design/short-drama-shot-continuity-research.md)：对照制作台、同类产品和公开 Skill，区分同镜续拍、同场换镜与换场，附真实样片回查方法（调研建议，未实施）。
 
 - [团队空间、积分划拨与素材共享](design/team-workspace-design.md)：自由画布、创作页和素材库在个人与团队之间复用，按空间隔离作品与费用。使用入口见[功能清单](content/docs/overview/features.mdx)。

@@ -3247,6 +3247,108 @@ paths:
           description: 会话 ID、limit 或分页游标无效
         "404":
           description: 会话不存在或不属于当前用户
+  /agent/browser-runs:
+    get:
+      tags: [agent]
+      summary: 发现本人未结束的浏览器 Agent 会话
+      responses:
+        "200": { description: 信封 data 为 runId 数组；关闭开关后仍可恢复旧 browser 会话 }
+  /agent/runs/{id}/runtime/state:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    get:
+      tags: [agent]
+      summary: 读取浏览器 Agent 状态
+      responses:
+        "200": { description: 信封 data 为 BrowserAgentState }
+        "409": { description: 此运行使用服务端模式 }
+  /agent/runs/{id}/runtime/claim:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 原子领取浏览器执行租约
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrowserAgentControl" }
+      responses:
+        "200": { description: 信封 data 为 BrowserAgentState；租约 45 秒，过期接管递增 epoch }
+        "409": { description: 其他 owner 持有有效租约，或协议不兼容（reason=browser_protocol_mismatch） }
+  /agent/runs/{id}/runtime/heartbeat:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 续租未过期的 owner 和 epoch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrowserAgentControl" }
+      responses:
+        "200": { description: 信封 data 为 BrowserAgentState }
+        "409": { description: 执行权或协议版本已失效 }
+  /agent/runs/{id}/runtime/step:
+    parameters:
+      - $ref: "#/components/parameters/AgentRunID"
+    post:
+      tags: [agent]
+      summary: 接受服务端签发的单步动作
+      description: stepId 使用 nextAction 返回值。不接受客户端消息历史、工具参数或执行成功标志；后台独立完成并归档，旧 step 重传不创建新任务。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrowserAgentControl" }
+      responses:
+        "200": { description: 信封 data 为 BrowserAgentState }
+        "409": { description: 阶段已改变、租约失效或版本不兼容 }
+  /agent/client-failures:
+    post:
+      tags: [agent]
+      summary: 持久化当前用户的客户端失败元数据
+      description: 字段白名单，64 KiB，每批 1–20 条，每用户每分钟 12 批；eventId 幂等。禁止任意错误文本、消息正文、完整堆栈和 URL。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items: { $ref: "#/components/schemas/BrowserAgentClientFailure" }
+      responses:
+        "200": { description: data.acceptedEventIds 为已持久化的事件 ID 数组 }
+    get:
+      tags: [agent]
+      summary: 查询本人最近 14 天失败日志（最多 200 条）
+      parameters:
+        - in: query
+          name: runId
+          schema: { type: string }
+      responses:
+        "200": { description: 信封 data 为当前用户事件数组 }
+  /admin/agent/client-failures:
+    get:
+      tags: [agent]
+      summary: 管理员查询客户端失败日志（最多 200 条）
+      parameters:
+        - in: query
+          name: userId
+          schema: { type: string }
+        - in: query
+          name: runId
+          schema: { type: string }
+      responses:
+        "200": { description: 信封 data 为事件数组 }
+        "403": { description: 非管理员 }
   /agent/runs:
     post:
       tags: [agent]
@@ -6336,11 +6438,63 @@ components:
           type: integer
           minimum: 0
           description: 待更新层的数字 revision；首次创建为 0
+    BrowserAgentControl:
+      type: object
+      additionalProperties: false
+      required: [protocolVersion, owner, epoch]
+      properties:
+        protocolVersion: { type: integer, enum: [1] }
+        owner: { type: string, minLength: 1, maxLength: 80 }
+        epoch: { type: integer, format: int64, minimum: 0 }
+        stepId: { type: string, description: step 接口必填，来自服务端 nextAction }
+    BrowserAgentState:
+      type: object
+      properties:
+        runtimeProtocolVersion: { type: integer, enum: [1] }
+        checkpointVersion: { type: integer, enum: [1] }
+        epoch: { type: integer, format: int64 }
+        leaseUntil: { type: string, format: date-time }
+        revision: { type: integer, format: int64 }
+        status: { type: string }
+        runtimeConnection: { type: string, enum: [connected, disconnected] }
+        nextAction:
+          type: object
+          properties:
+            kind: { type: string, enum: [model, tool, compact, settle, wait_task, wait_approval, wait_user, done] }
+            stepId: { type: string }
+    BrowserAgentClientFailure:
+      type: object
+      additionalProperties: false
+      required: [eventId, code, phase, buildCommit, occurredAt, frames]
+      properties:
+        eventId: { type: string, maxLength: 96 }
+        runId: { type: string, maxLength: 80 }
+        stepId: { type: string, maxLength: 160 }
+        code: { type: string, enum: [worker_load_failed, worker_crashed, worker_message_failed, worker_unhandled, runtime_request_failed, runtime_protocol_mismatch] }
+        phase: { type: string, enum: [startup, claim, state, step, heartbeat, worker] }
+        buildCommit: { type: string, pattern: '^(unknown|dev|[a-fA-F0-9]{7,64})$' }
+        epoch: { type: integer, format: int64, minimum: 0 }
+        httpStatus: { type: integer, minimum: 0, maximum: 599 }
+        occurredAt: { type: string, format: date-time }
+        frames:
+          type: array
+          maxItems: 8
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              file: { type: string, maxLength: 164 }
+              line: { type: integer, minimum: 0, maximum: 10000000 }
+              column: { type: integer, minimum: 0, maximum: 10000000 }
     CloudAgentRequest:
       type: object
       additionalProperties: false
       required: [prompt, permissionMode, contextScope, budget, idempotencyKey]
       properties:
+        executionMode:
+          type: string
+          enum: [server, browser]
+          description: 省略时走原服务端路径；browser 必须开启资源与策略开关，否则返回 409 browser_agent_disabled。模式在本轮创建后固定。
         canvasId:
           type: string
           maxLength: 80

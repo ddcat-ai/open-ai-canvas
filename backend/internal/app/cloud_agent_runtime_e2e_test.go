@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -162,12 +163,23 @@ func agentRuntimeDirForTest() (string, error) {
 
 // 端到端：审批模式下写画布 → 等待审批 → 用户批准 → Go 执行一次写入 → 运行时恢复 → 完成。
 func TestCloudAgentRuntimeApprovalWriteRoundTrip(t *testing.T) {
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node is not installed")
+	testCloudAgentApprovalWriteRoundTrip(t, "server")
+}
+
+func TestBrowserAgentApprovalWriteRoundTrip(t *testing.T) {
+	testCloudAgentApprovalWriteRoundTrip(t, "browser")
+}
+
+func testCloudAgentApprovalWriteRoundTrip(t *testing.T, mode string) {
+	if mode == "server" {
+		if _, err := exec.LookPath("node"); err != nil {
+			t.Skip("node is not installed")
+		}
+		if _, err := agentRuntimeDirForTest(); err != nil {
+			t.Skip(err.Error())
+		}
 	}
-	if _, err := agentRuntimeDirForTest(); err != nil {
-		t.Skip(err.Error())
-	}
+	t.Setenv("CANVAS_BROWSER_AGENT_ENABLED", "true")
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	t.Setenv("REDIS_URL", "")
 
@@ -226,9 +238,42 @@ func TestCloudAgentRuntimeApprovalWriteRoundTrip(t *testing.T) {
 
 	req := agentTestRequest()
 	req.PermissionMode = "request_approval"
+	req.ExecutionMode = mode
 	run, err := s.CreateCloudAgentRun("user", req, "")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if mode == "browser" {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			input := BrowserAgentControl{ProtocolVersion: 1, Owner: "approval-test-browser"}
+			for ctx.Err() == nil {
+				view, driveErr := s.ClaimBrowserAgent("user", run.ID, input)
+				if driveErr != nil {
+					t.Errorf("browser claim: %v", driveErr)
+					return
+				}
+				if view.NextAction.Kind == "done" {
+					return
+				}
+				if view.NextAction.StepID != "" {
+					input.Epoch = view.Epoch
+					input.StepID = view.NextAction.StepID
+					if _, driveErr = s.SubmitBrowserAgentStep("user", run.ID, input); driveErr != nil {
+						t.Errorf("browser step: %v", driveErr)
+						return
+					}
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(50 * time.Millisecond):
+				}
+			}
+		}()
+		defer func() { cancel(); <-done }()
 	}
 	waiting := waitCloudAgentStatus(t, s, run.ID, "waiting_approval")
 	if waiting.Approval == nil {

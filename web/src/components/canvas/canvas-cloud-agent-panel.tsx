@@ -634,7 +634,9 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
               : status === "queued"
                 ? "等待启动"
                 : status === "running"
-                  ? "运行中"
+                  ? run?.executionMode === "browser" && run.runtimeConnection === "disconnected"
+                      ? "等待浏览器继续"
+                      : "运行中"
                   : status === "completed"
                     ? "已完成"
                     : status === "failed"
@@ -971,7 +973,14 @@ export const CanvasCloudAgentPanel = memo(function CanvasCloudAgentPanel() {
                 if (!candidate?.run || (decision !== "current" && decision !== "switch")) return;
                 const sameRun = candidate.id === live.activeConversationId && candidate.run.id === live.run?.id;
                 if (sameRun && (candidate.lastEventSeq || 0) < lastSeqRef.current) return;
-                if (sameRun && (candidate.run.revision || 0) <= (live.run?.revision || 0) && candidate.run.status === live.run?.status && Boolean(candidate.run.cleanupPending) === Boolean(live.run?.cleanupPending)) return;
+                if (
+                    sameRun &&
+                    (candidate.run.revision || 0) <= (live.run?.revision || 0) &&
+                    candidate.run.status === live.run?.status &&
+                    candidate.run.runtimeConnection === live.run?.runtimeConnection &&
+                    Boolean(candidate.run.cleanupPending) === Boolean(live.run?.cleanupPending)
+                )
+                    return;
                 // 未知 POST 身份属于原本地对话；切换前必须先读出，不能用目录发现覆盖它。
                 const pending = candidate.id === live.activeConversationId ? null : await loadCloudAgentPendingSubmission(candidate.id, accountScope);
                 if (

@@ -16,8 +16,9 @@ import (
 	"yingce/backend/internal/service"
 )
 
-// Agent orchestration is durable; the browser stream never drives execution.
+// Execution facts are durable; browser runs admit individual steps explicitly.
 func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerBrowserAgentRoutes(r, svc)
 	r.GET("/agent/capabilities", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -30,7 +31,12 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		capabilities := service.CloudAgentCapabilitySetInfo()
-		ok(c, gin.H{"version": 2, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": skillsEnabled, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": tools, "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
+		policy, err := svc.RuntimePolicy()
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"version": 2, "browserAgentEnabled": policy.Task.BrowserAgentEnabled, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": skillsEnabled, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": tools, "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
 	})
 	// Usage is scoped to the authenticated user's own Agent runs.
 	r.GET("/agent/skills/usage", requireSkillAccess(svc), func(c *gin.Context) {
