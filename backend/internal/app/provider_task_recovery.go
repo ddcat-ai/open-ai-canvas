@@ -328,7 +328,9 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 		return nil, BadAuthRequest("该任务不是视频生成任务")
 	}
 
-	s.hydrateTaskProviderRequestID(task)
+	if err := s.hydrateTaskProviderRequestID(task); err != nil {
+		return nil, err
+	}
 	providerRequestID := strings.TrimSpace(task.ProviderRequestID)
 	if providerRequestID == "" {
 		return nil, BadAuthRequest("该任务没有可恢复的上游任务 ID")

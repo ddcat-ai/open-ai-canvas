@@ -93,31 +93,12 @@ func taskSummariesForOutputWithBilling(tasks []model.Task, orders map[string]mod
 	result := make([]TaskSummary, 0, len(tasks))
 	for _, task := range tasks {
 		summary := taskSummaryForOutput(task)
-		if order, ok := orders[task.ID]; ok {
+		if order, ok := orders[task.ID]; ok && order.UserID == task.UserID {
 			summary.Billing = taskBillingSummary(order)
-			if summary.ProviderRequestID == "" {
-				summary.ProviderRequestID = order.ProviderRequestID
-			}
 		}
 		result = append(result, summary)
 	}
 	return result
-}
-
-func taskBillingTaskIDs(tasks []model.Task) []string {
-	ids := make([]string, 0, len(tasks))
-	seen := map[string]struct{}{}
-	for _, task := range tasks {
-		if task.BillingOrderID == "" {
-			continue
-		}
-		if _, ok := seen[task.ID]; ok {
-			continue
-		}
-		seen[task.ID] = struct{}{}
-		ids = append(ids, task.ID)
-	}
-	return ids
 }
 
 func taskSummaryForOutput(task model.Task) TaskSummary {

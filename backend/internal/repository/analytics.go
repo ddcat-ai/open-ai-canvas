@@ -235,43 +235,95 @@ func (r *Repository) APICallLogTasks(ids []string) ([]model.Task, error) {
 	return tasks, err
 }
 
-func (r *Repository) LatestProviderRequestIDForTask(taskID string) (string, error) {
-	var log model.ApiCallLog
-	err := r.db.Select("provider_request_id").
-		Where("task_id = ? AND request_kind = 'create' AND provider_request_id <> ''", taskID).
-		Order("created_at desc").
-		First(&log).Error
-	return strings.TrimSpace(log.ProviderRequestID), err
+// TaskProviderEvidence distinguishes a usable upstream ID from a dispatch that may
+// have reached the provider but cannot be addressed safely.
+type TaskProviderEvidence struct {
+	RequestID         string
+	SubmissionUnknown bool
 }
 
-// LatestProviderRequestIDsForTasks returns the newest upstream request ID per task.
-// Task list queries intentionally select a narrow read model; this bulk lookup
-// hydrates IDs recorded in API logs so the UI can hide cancellation after the
-// upstream request has been accepted even when the task row was not updated yet.
-func (r *Repository) LatestProviderRequestIDsForTasks(taskIDs []string) (map[string]string, error) {
-	result := make(map[string]string, len(taskIDs))
-	if len(taskIDs) == 0 {
-		return result, nil
+// TaskProviderEvidenceForTasks uses the supplied task snapshots. A retry can replace
+// the active order and advance route_run between the task and evidence queries.
+func (r *Repository) TaskProviderEvidenceForTasks(tasks []model.Task) (map[string]TaskProviderEvidence, error) {
+	evidence := make(map[string]TaskProviderEvidence, len(tasks))
+	pending := make(map[string]*model.Task)
+	var runs [][]any
+	for i := range tasks {
+		task := &tasks[i]
+		if task.ProviderRequestID != "" {
+			continue
+		}
+		pending[task.ID] = task
+		runs = append(runs, []any{task.ID, task.RouteRun})
 	}
-	var logs []model.ApiCallLog
-	err := r.db.Select("task_id", "provider_request_id", "created_at").
-		Where("task_id IN ? AND request_kind = 'create' AND provider_request_id <> ''", taskIDs).
-		Order("created_at desc").
-		Find(&logs).Error
+	if len(pending) == 0 {
+		return evidence, nil
+	}
+
+	var attempts []model.RouteAttempt
+	err := r.db.Select("task_id, provider_request_id, dispatch_state").
+		Where("(task_id, route_run) IN ?", runs).
+		Where("dispatch_state IN ?", []string{"accepted", "submission_unknown"}).
+		Order("attempt_number DESC").Find(&attempts).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, attempt := range attempts {
+		if _, found := evidence[attempt.TaskID]; !found {
+			id := strings.TrimSpace(attempt.ProviderRequestID)
+			evidence[attempt.TaskID] = TaskProviderEvidence{RequestID: id, SubmissionUnknown: id == ""}
+		}
+	}
+
+	var logs []taskCreateReceipt
+	err = r.db.Table("api_call_logs AS l").
+		Select("l.task_id, l.user_id, l.billing_order_id, l.provider_request_id, l.created_at, l.status, l.poll_count").
+		Joins("JOIN tasks AS t ON t.id = l.task_id AND t.user_id = l.user_id").
+		Where("(t.id, COALESCE(t.route_run, 0)) IN ?", runs).
+		Where("l.request_kind = 'create' AND (l.billing_order_id = t.billing_order_id OR COALESCE(l.billing_order_id, '') = '')").
+		Where("TRIM(l.provider_request_id) <> '' OR (l.billing_order_id <> '' AND l.status = ?)", model.ApiCallStatusSucceeded).
+		Order("CASE WHEN COALESCE(l.billing_order_id, '') = '' THEN 1 ELSE 0 END, l.created_at DESC, l.id DESC").Find(&logs).Error
 	if err != nil {
 		return nil, err
 	}
 	for _, log := range logs {
-		taskID := strings.TrimSpace(log.TaskID)
-		providerRequestID := strings.TrimSpace(log.ProviderRequestID)
-		if taskID == "" || providerRequestID == "" {
+		if evidence[log.TaskID].RequestID != "" {
 			continue
 		}
-		if _, exists := result[taskID]; !exists {
-			result[taskID] = providerRequestID
+		if receipt := log.evidenceFor(pending[log.TaskID]); receipt.RequestID != "" || receipt.SubmissionUnknown {
+			evidence[log.TaskID] = receipt
 		}
 	}
-	return result, nil
+	return evidence, nil
+}
+
+type taskCreateReceipt struct {
+	TaskID, UserID, BillingOrderID, ProviderRequestID string
+	CreatedAt                                         time.Time
+	Status                                            model.ApiCallStatus
+	PollCount                                         int
+}
+
+func (log taskCreateReceipt) evidenceFor(task *model.Task) TaskProviderEvidence {
+	if log.UserID != task.UserID || (log.BillingOrderID != "" && log.BillingOrderID != task.BillingOrderID) {
+		return TaskProviderEvidence{}
+	}
+	if log.BillingOrderID == "" && task.RouteRun > task.InitialRouteRun() {
+		// An unscoped create written after the retry started might belong to
+		// this run, but its timestamp alone cannot identify the upstream job.
+		couldBeCurrent := task.Status == model.TaskStatusRunning
+		if task.StartedAt != nil {
+			couldBeCurrent = !log.CreatedAt.Before(*task.StartedAt)
+		}
+		return TaskProviderEvidence{SubmissionUnknown: couldBeCurrent}
+	}
+	// A failed create may carry a diagnostic ID. A poll merged into the
+	// create log is positive evidence that this upstream request existed.
+	id := strings.TrimSpace(log.ProviderRequestID)
+	if id == "" || (log.Status != model.ApiCallStatusSucceeded && log.PollCount == 0) {
+		return TaskProviderEvidence{SubmissionUnknown: true}
+	}
+	return TaskProviderEvidence{RequestID: id}
 }
 
 // APICallLogUsageForTask 返回一次任务调用里上游上报的用量。

@@ -163,22 +163,25 @@ func (w *taskLifecycleCoordinator) cancelTaskWithIntent(_ context.Context, userI
 
 	// 先从账单和请求日志补齐上游 ID，再做条件更新。取消与 worker 完成之间
 	// 以数据库终态为准，避免“用户已取消但迟到结果又把任务写成成功”。
-	s.hydrateTaskProviderRequestID(task)
+	if err := s.hydrateTaskProviderRequestID(task); err != nil {
+		return nil, err
+	}
 	// 用户一旦看到任务进入上游提交/生成阶段，即使 request ID 尚未来得及写回，
 	// 也必须按“可能已经产生上游费用”处理。父任务失败和 worker context 属于
 	// 内部协调，仍需继续走下面的上游取消/对账流程，不能被这条 UI 规则截断。
-	if intent.Source == model.TaskCancellationUserRequest && taskUpstreamSubmitted(task) {
+	submitted := taskUpstreamSubmitted(task)
+	if intent.Source == model.TaskCancellationUserRequest && submitted {
 		return nil, BadAuthRequest("第三方请求已提交，任务不可取消")
 	}
-	originalStatus := task.Status
+	unstarted := task.Status == model.TaskStatusQueued && !submitted
 	now := time.Now()
 	if intent.RequestedAt.IsZero() {
 		intent.RequestedAt = now
 	}
 	task.Error = "任务已取消"
-	recordTaskDiagnostic(task, "cancellation", "task_cancelled", taskSubmissionOutcome(task, originalStatus == model.TaskStatusQueued), "reconcile_cancellation", nil)
+	recordTaskDiagnostic(task, "cancellation", "task_cancelled", taskSubmissionOutcome(task, unstarted), "reconcile_cancellation", nil)
 	intent.Diagnostic = *task.Diagnostic
-	cancelled, err := s.repo.CancelTaskIfStatus(userID, id, task.Status, now, intent)
+	cancelled, err := s.repo.CancelTaskIfStatus(task, now, intent)
 	if err != nil {
 		return nil, err
 	}
@@ -229,11 +232,10 @@ func (w *taskLifecycleCoordinator) cancelTaskWithIntent(_ context.Context, userI
 		}
 	} else {
 		var billingErr error
-		if originalStatus == model.TaskStatusQueued {
+		if unstarted {
 			billingErr = s.taskBilling().RefundBilling(task.BillingOrderID, "任务取消且尚未开始执行；来源："+intent.Source)
 		} else {
-			// running 任务可能已经发起上游调用但尚未把 request ID 写回，不能
-			// 直接退款后放任上游继续生成，先冻结为待核对更安全。
+			// 已开始执行或提交结果不明时，保留预扣供对账。
 			billingErr = s.taskBilling().MarkBillingUncertain(task.BillingOrderID, "取消时上游请求 ID 尚未确认，费用待核对；来源："+intent.Source)
 		}
 		if billingErr != nil {

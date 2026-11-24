@@ -17,7 +17,7 @@ func TestCancelTaskCancelsRunningTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Task{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.RouteAttempt{}, &model.ApiCallLog{}); err != nil {
 		t.Fatal(err)
 	}
 	startedAt := time.Now()
@@ -57,7 +57,7 @@ func TestCancelTaskRejectsUserCancellationAfterProviderStageStarts(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := db.AutoMigrate(&model.Task{}); err != nil {
+			if err := db.AutoMigrate(&model.Task{}, &model.RouteAttempt{}, &model.ApiCallLog{}); err != nil {
 				t.Fatal(err)
 			}
 			task := model.Task{ID: "provider-stage-task", UserID: "user-1", Status: model.TaskStatusRunning, Stage: stage}
@@ -78,7 +78,7 @@ func TestCancelTaskRejectsUserCancellationDuringMediaMaterialization(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Task{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.RouteAttempt{}, &model.ApiCallLog{}); err != nil {
 		t.Fatal(err)
 	}
 	task := model.Task{ID: "media-stage-task", UserID: "user-1", Status: model.TaskStatusRunning, Stage: "作品已生成，正在保存", MediaStage: "upload"}
@@ -97,7 +97,7 @@ func TestInternalCancellationStillCoordinatesSubmittedTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Task{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.RouteAttempt{}, &model.ApiCallLog{}); err != nil {
 		t.Fatal(err)
 	}
 	task := model.Task{ID: "submitted-child", UserID: "user-1", Status: model.TaskStatusRunning, Stage: "上游生成中", ProviderRequestID: "provider-request-1"}
@@ -120,7 +120,7 @@ func TestCancelTaskCancelsQueuedTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.Task{}); err != nil {
+	if err := db.AutoMigrate(&model.Task{}, &model.RouteAttempt{}, &model.ApiCallLog{}); err != nil {
 		t.Fatal(err)
 	}
 	task := model.Task{ID: "queued-task", UserID: "user-1", Status: model.TaskStatusQueued, Stage: "等待队列调度"}
@@ -153,7 +153,7 @@ func TestCancelTaskRejectsTaskWithProviderRequestID(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := db.AutoMigrate(&model.Task{}); err != nil {
+			if err := db.AutoMigrate(&model.Task{}, &model.RouteAttempt{}, &model.ApiCallLog{}); err != nil {
 				t.Fatal(err)
 			}
 			task := model.Task{
