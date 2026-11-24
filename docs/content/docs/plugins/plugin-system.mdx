@@ -143,6 +143,27 @@ eagle-asset-connector.yingce-plugin
 
 `input-media-top-prompt` 布局从 `input.media` 读取素材顺序，改写请求顶层的 `prompt`。参考图编号规则由插件声明，宿主按实际出站顺序校验。
 
+### 5.2 图片任务续作协议
+
+异步图片协议可以声明 `imageContinuation`，把已完成任务返回的选图、变体和放大动作映射为统一结构。
+
+```json
+{
+  "imageContinuation": {
+    "create": {
+      "method": "POST",
+      "path": "/jobs/{{taskId}}/actions",
+      "body": { "action": { "$ref": "action.id" } }
+    },
+    "actions": { "$ref": "response.actions" }
+  }
+}
+```
+
+动作映射输出 `id`、`kind` 和可选的 `index`、`variant`。动作类型为 `select`、`variation` 或 `upscale`，放大的变体可取 `subtle` 或 `creative`。宿主在上游显式返回匹配的成功任务 ID 及图片后读取动作。动作 ID 只用于服务端构造子任务请求。
+
+协议层负责解析动作、构造相对路径请求及复用鉴权。画布开放续作前还需要基于当前用户和父任务校验操作权限、保存父子关系、按动作确认有效报价，并将提交写入可恢复的异步队列。
+
 ## 6. 宿主 API 边界
 
 插件不得直接导入页面组件、store 或内部 API 文件。宿主通过版本化 SDK 提供能力。

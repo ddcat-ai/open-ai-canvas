@@ -365,6 +365,17 @@ func ValidateManifest(manifest Manifest) error {
 		if provider.DetachedPolling && provider.Poll == nil {
 			return fmt.Errorf("provider %q detachedPolling requires a poll operation", provider.ID)
 		}
+		if continuation := provider.ImageContinuation; continuation != nil {
+			if !hasCapability(provider.Capabilities, CapabilityImage) || provider.Poll == nil || continuation.Actions == nil {
+				return fmt.Errorf("provider %q imageContinuation requires image generation, polling and an action mapping", provider.ID)
+			}
+			if strings.ToUpper(strings.TrimSpace(continuation.Create.Method)) != http.MethodPost {
+				return fmt.Errorf("provider %q imageContinuation create requires POST", provider.ID)
+			}
+			if err := validateManifestOperation(continuation.Create); err != nil {
+				return fmt.Errorf("provider %q imageContinuation create: %w", provider.ID, err)
+			}
+		}
 		if provider.Upload != nil {
 			if err := validateManifestOperation(provider.Upload.ManifestOperation); err != nil {
 				return fmt.Errorf("provider %q upload operation: %w", provider.ID, err)
@@ -544,6 +555,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Poll = provider.Poll
 	manifest.Cancel = provider.Cancel
 	manifest.ResultOperation = provider.Result
+	manifest.ImageContinuation = provider.ImageContinuation
 	manifest.Response = provider.Response
 	manifest.AgentResponse = provider.AgentResponse
 	manifest.Auth = provider.Auth

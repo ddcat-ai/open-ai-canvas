@@ -167,6 +167,8 @@ type Result struct {
 	Text      string           `json:"text,omitempty"`
 	Reasoning string           `json:"reasoning,omitempty"`
 	Usage     map[string]any   `json:"usage,omitempty"`
+	// 上游动作凭据只用于服务端续作，不能直接序列化到用户结果。
+	ImageActions []ImageAction `json:"-"`
 }
 
 type Parameter struct {
@@ -244,17 +246,18 @@ type Manifest struct {
 	// These fields are the normalized provider projection used by the runtime.
 	// They are never serialized; provider execution is described only under
 	// contributes.providers.
-	Create          ManifestOperation      `json:"-"`
-	Upload          *ManifestUpload        `json:"-"`
-	Agent           *ManifestOperation     `json:"-"`
-	Poll            *ManifestOperation     `json:"-"`
-	Cancel          *ManifestOperation     `json:"-"`
-	ResultOperation *ManifestOperation     `json:"-"`
-	Response        ManifestResponse       `json:"-"`
-	AgentResponse   *ManifestAgentResponse `json:"-"`
-	Auth            ManifestAuth           `json:"-"`
-	Validations     []ManifestValidation   `json:"-"`
-	RequestBindings []ManifestBinding      `json:"-"`
+	Create            ManifestOperation          `json:"-"`
+	Upload            *ManifestUpload            `json:"-"`
+	Agent             *ManifestOperation         `json:"-"`
+	Poll              *ManifestOperation         `json:"-"`
+	Cancel            *ManifestOperation         `json:"-"`
+	ResultOperation   *ManifestOperation         `json:"-"`
+	ImageContinuation *ManifestImageContinuation `json:"-"`
+	Response          ManifestResponse           `json:"-"`
+	AgentResponse     *ManifestAgentResponse     `json:"-"`
+	Auth              ManifestAuth               `json:"-"`
+	Validations       []ManifestValidation       `json:"-"`
+	RequestBindings   []ManifestBinding          `json:"-"`
 }
 
 // Manifest JSON is the public plugin contract. Metadata is an internal
@@ -409,6 +412,7 @@ type ManifestProvider struct {
 	Poll                    *ManifestOperation          `json:"poll,omitempty"`
 	Cancel                  *ManifestOperation          `json:"cancel,omitempty"`
 	Result                  *ManifestOperation          `json:"result,omitempty"`
+	ImageContinuation       *ManifestImageContinuation  `json:"imageContinuation,omitempty"`
 	Response                ManifestResponse            `json:"response"`
 	AgentResponse           *ManifestAgentResponse      `json:"agentResponse,omitempty"`
 }

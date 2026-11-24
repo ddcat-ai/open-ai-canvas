@@ -379,6 +379,7 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	if id == "" {
 		id = firstPathValue(payload, response.TaskIDPaths...)
 	}
+	confirmedTaskID := id
 	if id == "" {
 		id = c.TaskID
 	}
@@ -439,6 +440,11 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	}
 	if status == StatusPending && (result.Text != "" || len(result.Images) > 0 || len(result.Videos) > 0 || len(result.Audios) > 0) {
 		status = StatusSucceeded
+	}
+	if a.manifest.ImageContinuation != nil && NormalizeStatus(statusText) == StatusSucceeded &&
+		status == StatusSucceeded && len(result.Images) > 0 && imageContinuationTaskID.MatchString(confirmedTaskID) &&
+		(c.TaskID == "" || c.TaskID == id) {
+		result.ImageActions = manifestImageActions(a.manifest.ImageContinuation.Actions, env)
 	}
 	// 独立下载接口稍后提供媒体时，保留轮询中的实际时长和清晰度。
 	keepUsageForDownload := a.manifest.ResultOperation != nil && len(result.Usage) > 0
