@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,60 @@ import (
 
 const browserAgentProtocol = 1
 const browserAgentLease = 45 * time.Second
+
+// Preparation can take longer than a heartbeat on a remote database. Only lease
+// renewals may be merged; ownership, executor fences and all business state must
+// still match the snapshot from before preparation.
+func browserAgentOnlyLeaseChanged(before, current *model.CloudAgentExecution) bool {
+	left, right := *before, *current
+	left.Revision, right.Revision = 0, 0
+	left.UpdatedAt, right.UpdatedAt = time.Time{}, time.Time{}
+	left.StateJSON, right.StateJSON = "", ""
+	if !reflect.DeepEqual(left, right) {
+		return false
+	}
+	a, err := cloudAgentDecode(before)
+	if err != nil {
+		return false
+	}
+	b, err := cloudAgentDecode(current)
+	if err != nil || a.Request.ExecutionMode != "browser" || a.Browser == nil || b.Browser == nil {
+		return false
+	}
+	if b.Browser.LeaseUntil.Before(a.Browser.LeaseUntil) {
+		return false
+	}
+	a.Browser.LeaseUntil, b.Browser.LeaseUntil = time.Time{}, time.Time{}
+	if a.Browser.Pending != nil && b.Browser.Pending != nil {
+		if b.Browser.Pending.ExecuteUntil.Before(a.Browser.Pending.ExecuteUntil) {
+			return false
+		}
+		a.Browser.Pending.ExecuteUntil, b.Browser.Pending.ExecuteUntil = time.Time{}, time.Time{}
+	}
+	return reflect.DeepEqual(a, b)
+}
+
+func (s *Service) mutatePreparedCloudAgent(run *model.CloudAgentExecution, state *cloudAgentRuntime, fn func(*model.CloudAgentExecution, *repository.Repository) error) error {
+	if state.Request.ExecutionMode != "browser" {
+		return s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, fn)
+	}
+	return s.repo.MutateCloudAgentChecked(run.UserID, run.ID, func(current *model.CloudAgentExecution) error {
+		if !browserAgentOnlyLeaseChanged(run, current) {
+			return repository.ErrCreationConflict
+		}
+		return nil
+	}, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+		latest, err := cloudAgentDecode(current)
+		if err != nil {
+			return err
+		}
+		state.Browser.LeaseUntil = latest.Browser.LeaseUntil
+		if state.Browser.Pending != nil && latest.Browser.Pending != nil {
+			state.Browser.Pending.ExecuteUntil = latest.Browser.Pending.ExecuteUntil
+		}
+		return fn(current, repo)
+	})
+}
 
 func (s *Service) BrowserAgentRuns(userID string) ([]string, error) {
 	if err := s.RequireSkillAccess(userID); err != nil {

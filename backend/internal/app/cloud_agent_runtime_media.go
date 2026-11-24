@@ -135,7 +135,7 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
-	err = s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+	err = s.mutatePreparedCloudAgent(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 		if media != nil {
 			canvas, err := repo.CanvasProjectForUser(run.UserID, state.Request.CanvasID)
 			if err != nil {

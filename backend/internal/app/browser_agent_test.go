@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -13,6 +14,80 @@ import (
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
+
+func TestBrowserAgentPreparedMutationMergesOnlyLeaseRenewals(t *testing.T) {
+	for _, change := range []string{"renew", "owner", "epoch", "executor", "pending", "attempts", "cancel", "approval", "canonical", "lease_shortened"} {
+		t.Run(change, func(t *testing.T) {
+			s, root, _ := browserTestRoot(t)
+			if err := s.mutateBrowserAgent("user", root.ID, func(_ *model.CloudAgentExecution, state *cloudAgentRuntime) error {
+				state.Browser.Owner = "browser-one"
+				state.Browser.Epoch = 1
+				state.Browser.LeaseUntil = time.Now().Add(time.Minute)
+				state.Browser.Pending = &browserAgentStep{ID: "step", Kind: "model", Executor: "executor-one", ExecuteUntil: time.Now().Add(time.Minute)}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			before, prepared := agentInterjectionState(t, s, root.ID)
+			// Deterministically simulate heartbeat/business writes during preparation.
+			if err := s.mutateBrowserAgent("user", root.ID, func(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
+				state.Browser.LeaseUntil = state.Browser.LeaseUntil.Add(time.Minute)
+				state.Browser.Pending.ExecuteUntil = state.Browser.Pending.ExecuteUntil.Add(time.Minute)
+				switch change {
+				case "owner":
+					state.Browser.Owner = "browser-two"
+				case "epoch":
+					state.Browser.Epoch++
+				case "executor":
+					state.Browser.Pending.Executor = "executor-two"
+				case "pending":
+					state.Browser.Pending.ID = "other-step"
+				case "attempts":
+					state.Browser.Pending.Attempts++
+				case "cancel":
+					run.Status = "cancelled"
+				case "approval":
+					run.Status = "waiting_approval"
+				case "canonical":
+					state.Canonical.Messages = append(state.Canonical.Messages, map[string]any{"role": "user", "content": "new instruction"})
+				case "lease_shortened":
+					state.Browser.LeaseUntil = time.Now()
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			latest, latestState := agentInterjectionState(t, s, root.ID)
+			called := false
+			err := s.mutatePreparedCloudAgent(before, &prepared, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				called = true
+				prepared.event(root.ID, "prepared_write_committed", map[string]any{"text": "test"})
+				return cloudAgentSave(current, &prepared)
+			})
+			if change != "renew" {
+				if !errors.Is(err, repository.ErrCreationConflict) || called {
+					t.Fatalf("incompatible mutation admitted: called=%v err=%v", called, err)
+				}
+				stored, _ := agentInterjectionState(t, s, root.ID)
+				if stored.Revision != latest.Revision {
+					t.Fatal("rejected mutation changed the run")
+				}
+				return
+			}
+			if err != nil || !called {
+				t.Fatalf("heartbeat starved prepared write: %v", err)
+			}
+			stored, result := agentInterjectionState(t, s, root.ID)
+			if stored.Revision != latest.Revision+1 || !result.Browser.LeaseUntil.Equal(latestState.Browser.LeaseUntil) || !result.Browser.Pending.ExecuteUntil.Equal(latestState.Browser.Pending.ExecuteUntil) {
+				t.Fatal("prepared write lost renewed leases")
+			}
+			called = false
+			if err := s.mutatePreparedCloudAgent(before, &prepared, func(*model.CloudAgentExecution, *repository.Repository) error { called = true; return nil }); !errors.Is(err, repository.ErrCreationConflict) || called {
+				t.Fatalf("prepared snapshot was admitted twice: %v", err)
+			}
+		})
+	}
+}
 
 func browserTestRoot(t *testing.T) (*Service, *CloudAgentRun, *gorm.DB) {
 	t.Helper()
