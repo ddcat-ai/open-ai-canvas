@@ -138,9 +138,10 @@ type CloudAgentRun struct {
 // CloudAgentRunViewOptions 是运行详情的读取选项：SinceSeq 只取该序号之后的增量，
 // EventLimit 覆盖默认页大小。零值即默认视图（尾部一窗）。
 type CloudAgentRunViewOptions struct {
-	SinceSeq   int
-	EventLimit int
-	FromStart  bool
+	EventStream bool // A subscribed cursor must never skip unread events.
+	SinceSeq    int
+	EventLimit  int
+	FromStart   bool
 }
 
 func validateCloudAgentRequest(req *CloudAgentRequest) error {
@@ -363,7 +364,7 @@ func (s *Service) CloudAgentRun(userID, id string, options ...CloudAgentRunViewO
 	// runtime blob was compacted or damaged; the output path has a deliberately
 	// read-only, minimal fallback for that case. The ensure path is only for a
 	// legacy root task whose execution row has not been created yet.
-	if _, lookupErr := s.repo.CloudAgent(userID, id); errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+	if _, lookupErr := s.repo.CloudAgentRevision(userID, id); errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		if err := s.ensureCloudAgentExecution(task, state); err != nil {
 			if agentStorageCapacityError(err) {
 				if cleanupErr := s.repo.FailCloudAgentReservation(userID, id, err.Error()); cleanupErr != nil {

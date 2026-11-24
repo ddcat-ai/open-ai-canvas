@@ -168,11 +168,11 @@ func (r *Repository) CloudAgent(userID, id string) (*model.CloudAgentExecution, 
 const CloudAgentJournalWindow = 40
 
 func (r *Repository) hydrateCloudAgent(run *model.CloudAgentExecution) error {
-	if run.CheckpointVersion < 2 {
-		return nil
-	}
 	if run.HistoryCompacted {
 		payload, err := r.cloudAgentHistoryArchive(run.UserID, run.ID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("Agent 运行已归档，但暂时无法读取归档")
+		}
 		if err != nil {
 			return err
 		}
@@ -185,6 +185,9 @@ func (r *Repository) hydrateCloudAgent(run *model.CloudAgentExecution) error {
 		if payload.StateJSON != "" {
 			run.StateJSON = payload.StateJSON
 		}
+		return nil
+	}
+	if run.CheckpointVersion < 2 {
 		return nil
 	}
 	// 只取最近一窗，再翻回升序：与 EventCount 的尾部对齐（不变量见 app 侧解码）。
