@@ -3,6 +3,7 @@ import { OrthographicCamera } from "@react-three/drei";
 import { Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import type { PrevisObject, PrevisScene } from "@/types/previs";
+import { PrevisPropVisual } from "./previs-prop-view";
 
 /**
  * 画布卡片的轻量场景缩略图：固定俯视正交相机，只渲染简化几何体。
@@ -59,6 +60,22 @@ function MiniObject({ object }: { object: PrevisObject }) {
                     <meshBasicMaterial color={color} transparent opacity={0.28} />
                 </mesh>
             </group>
+        );
+    }
+    if (object.kind === "prop" && object.propId) {
+        return (
+            <group position={position} rotation={rotation} scale={scale}>
+                <PrevisPropVisual object={object} selected={false} />
+            </group>
+        );
+    }
+    if (object.kind === "layout" && object.layout) {
+        // 俯视缩略图只表达布景占地，不展开上千个实例。
+        return (
+            <mesh position={[x, -0.03, z]} rotation={[-Math.PI / 2, 0, object.transform.rotation[1]]}>
+                <planeGeometry args={[object.layout.size, object.layout.size]} />
+                <meshBasicMaterial color="#7f8b78" transparent opacity={0.35} />
+            </mesh>
         );
     }
     if (object.primitive === "sphere") {

@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Avatar, Button, Form, Input, Skeleton } from "antd";
-import { BadgeCheck, Crop, ImagePlus, KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
+import { BadgeCheck, BarChart3, Crop, ImagePlus, KeyRound, Mail, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 
 import { UserAvatar } from "@/components/layout/user-avatar";
+import { PersonalSpaceCreditOverview } from "@/components/layout/team-space-directory";
 import { useAuthEntry } from "@/hooks/use-auth-entry";
 import { ImageCropDialog, type ImageCropRect } from "@/components/image-crop-dialog";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -18,6 +19,9 @@ import { applyUserSession } from "@/lib/user-session";
 import { invalidateAuthSessionCache, type LocalUser } from "@/services/api/auth";
 import { changeProfileEmail, changeProfilePassword, profileLinuxDOReauthURL, requestProfileEmailCode, selectDefaultProfileAvatar, uploadProfileAvatar, type UserProfile } from "@/services/api/profile";
 import { ApiError } from "@/services/api/request";
+import { profileWechatURL } from "@/services/api/wechat";
+import { getNotificationSettings, updateNotificationSettings } from "@/services/api/email";
+import { Switch } from "@/components/ui/base/switch";
 import { useUserStore } from "@/stores/use-user-store";
 import { profileAvatarError, profilePasswordError, profileReauthReady, profileSecondsRemaining } from "./profile-validation";
 import "./profile-pane.css";
@@ -56,6 +60,7 @@ export function ProfilePane() {
     const [retryAt, setRetryAt] = useState(0);
     const [now, setNow] = useState(Date.now());
     const oauthResult = searchParams.get("reauth");
+    const bindResult = searchParams.get("bind");
     const [reauthResult] = useState(oauthResult);
     const reauthReady = profileReauthReady(profile?.reauthenticatedUntil, now);
     const identityReady = !!profile?.hasPassword || reauthReady;
@@ -63,11 +68,13 @@ export function ProfilePane() {
     const ticketSeconds = emailTicket ? profileSecondsRemaining(emailTicket.expiresAt, now) : 0;
 
     useEffect(() => {
-        if (!oauthResult) return;
+        if (!oauthResult && !bindResult) return;
+        if (bindResult) message[bindResult === "success" ? "success" : "error"](bindResult === "success" ? t("auth.wechat.bound") : t("auth.wechat.bindFailed"));
         const next = new URLSearchParams(searchParams);
         next.delete("reauth");
+        next.delete("bind");
         setSearchParams(next, { replace: true });
-    }, [oauthResult, searchParams, setSearchParams]);
+    }, [oauthResult, bindResult, message, t, searchParams, setSearchParams]);
 
     useEffect(() => {
         const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -322,13 +329,35 @@ export function ProfilePane() {
                         </div>
                     </section>
 
+                    <PersonalSpaceCreditOverview />
+
+                    {profile.wechatEnabled || profile.wechatBound ? (
+                        <Callout
+                            title={t("auth.wechat.title")}
+                            icon={ShieldCheck}
+                            action={
+                                !profile.wechatBound ? (
+                                    <Button disabled={!!pending || !profile.wechatEnabled} onClick={() => window.location.assign(profileWechatURL("bind"))}>
+                                        {t("auth.wechat.bind")}
+                                    </Button>
+                                ) : undefined
+                            }
+                        >
+                            {profile.wechatBound ? t("auth.wechat.boundHint") : t("auth.wechat.bindHint")}
+                        </Callout>
+                    ) : null}
+
                     {!profile.hasPassword ? (
                         <Callout
                             tone={reauthReady ? "success" : "info"}
                             title={t("account.settings.profile.verifyTitle")}
                             icon={ShieldCheck}
                             action={
-                                profile.linuxdoEnabled ? (
+                                profile.wechatEnabled && profile.wechatBound ? (
+                                    <Button disabled={!!pending} onClick={() => window.location.assign(profileWechatURL("reauth"))}>
+                                        {t("auth.wechat.verify")}
+                                    </Button>
+                                ) : profile.linuxdoEnabled && profile.linuxdoBound ? (
                                     <Button disabled={!!pending} onClick={() => window.location.assign(profileLinuxDOReauthURL())}>
                                         {reauthReady ? t("account.settings.profile.reverify") : t("account.settings.profile.verifyLinuxdo")}
                                     </Button>
@@ -337,8 +366,8 @@ export function ProfilePane() {
                         >
                             {reauthReady
                                 ? t("account.settings.profile.verified", { seconds: profileSecondsRemaining(Date.parse(profile.reauthenticatedUntil!), now) })
-                                : profile.linuxdoEnabled
-                                  ? t("account.settings.profile.verifyHint")
+                                : (profile.wechatEnabled && profile.wechatBound) || (profile.linuxdoEnabled && profile.linuxdoBound)
+                                  ? t("auth.wechat.verifyHint")
                                   : t("account.settings.profile.verifyUnavailable")}
                             {reauthResult === "error" && !reauthReady ? (
                                 <p className="profile-reauth-error" role="alert">
@@ -466,7 +495,7 @@ export function ProfilePane() {
                                             { type: "email", transform: (value: string) => value?.trim(), message: t("account.settings.profile.emailInvalid") },
                                             {
                                                 validator: async (_, value: string = "") => {
-                                                    if (value.trim().toLowerCase() === profile.user.email?.toLowerCase()) throw new Error(t("account.settings.profile.emailSame"));
+                                                    if (profile.user.emailVerifiedAt && value.trim().toLowerCase() === profile.user.email?.toLowerCase()) throw new Error(t("account.settings.profile.emailSame"));
                                                 },
                                             },
                                         ]}
@@ -504,6 +533,8 @@ export function ProfilePane() {
                                 </Form>
                             )}
                         </section>
+
+                        <ConsumptionReportCard />
                     </div>
                 </div>
             ) : null}
@@ -604,5 +635,62 @@ export function ProfilePane() {
                 />
             ) : null}
         </div>
+    );
+}
+
+function ConsumptionReportCard() {
+    const { t } = useTranslation();
+    const { message } = App.useApp();
+    const queryClient = useQueryClient();
+    const userId = useUserStore((state) => state.user?.id);
+    const queryKey = ["notification-settings", userId];
+    const query = useQuery({ queryKey, queryFn: ({ signal }) => getNotificationSettings(signal).then((data) => data.settings), enabled: Boolean(userId) });
+    const [saving, setSaving] = useState(false);
+    const settings = query.data;
+    const enabled = Boolean(settings?.consumptionReportEnabled);
+
+    const toggle = async (next: boolean) => {
+        setSaving(true);
+        try {
+            const result = await updateNotificationSettings({ consumptionReportEnabled: next });
+            queryClient.setQueryData(queryKey, result.settings);
+            message.success(next ? t("account.settings.profile.reportEnabled") : t("account.settings.profile.reportDisabled"));
+        } catch (error) {
+            message.error(errorMessage(error, t("account.settings.profile.reportFailed")));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <section className="profile-security-card" aria-labelledby="profile-report-title">
+            <div className="profile-card-heading">
+                <span className="profile-card-icon">
+                    <BarChart3 className="size-5" />
+                </span>
+                <div>
+                    <h4 id="profile-report-title">{t("account.settings.profile.reportTitle")}</h4>
+                    <p>{t("account.settings.profile.reportHint")}</p>
+                </div>
+            </div>
+            {query.isLoading ? (
+                <Skeleton active paragraph={{ rows: 1 }} title={false} />
+            ) : (
+                <div className="profile-report-row">
+                    <span>{enabled && settings?.email ? t("account.settings.profile.reportOn", { email: settings.email }) : t("account.settings.profile.reportOff")}</span>
+                    <Switch checked={enabled} loading={saving} disabled={saving || (!enabled && !settings?.emailAvailable)} aria-label={t("account.settings.profile.reportToggle")} onChange={(next) => void toggle(next)} />
+                </div>
+            )}
+            {!query.isLoading && !enabled && settings && !settings.emailAvailable ? (
+                <Callout tone="warning" className="profile-feedback">
+                    {t("account.settings.profile.reportUnavailable")}
+                </Callout>
+            ) : null}
+            {query.isError ? (
+                <Callout tone="error" role="alert" className="profile-feedback">
+                    {errorMessage(query.error, t("account.settings.profile.reportFailed"))}
+                </Callout>
+            ) : null}
+        </section>
     );
 }

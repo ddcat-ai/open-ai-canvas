@@ -1,3 +1,4 @@
+import { useSkillLibraryAccess } from "@/lib/skill-access";
 import { ArrowUpRight, Clapperboard, Layers3, Orbit, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
@@ -18,7 +19,8 @@ type AgentWelcomeProps = {
 
 export function AgentWelcome({ appearance, nodeCount, installedSkillCount = null, onChooseSkill, onOpenSkillRecommendations, onDraftPrompt }: AgentWelcomeProps) {
     const { t } = useTranslation();
-    const suggestRecommendations = Boolean(onOpenSkillRecommendations) && installedSkillCount !== null && installedSkillCount < RECOMMEND_SKILLS_BELOW;
+    const canUseSkills = useSkillLibraryAccess();
+    const suggestRecommendations = canUseSkills && Boolean(onOpenSkillRecommendations) && installedSkillCount !== null && installedSkillCount < RECOMMEND_SKILLS_BELOW;
     return (
         <section className="agent-welcome" aria-label={t("canvasA.welcome.label")}>
             <div className="agent-welcome-intro">
@@ -37,14 +39,16 @@ export function AgentWelcome({ appearance, nodeCount, installedSkillCount = null
                         <ArrowUpRight className="agent-welcome-arrow" aria-hidden="true" />
                     </button>
                 ) : null}
-                <button type="button" onClick={onChooseSkill}>
-                    <Orbit aria-hidden="true" />
-                    <span>
-                        <strong>{t("canvasA.welcome.chooseSkillTitle")}</strong>
-                        <small>{t("canvasA.welcome.chooseSkillHint")}</small>
-                    </span>
-                    <ArrowUpRight className="agent-welcome-arrow" aria-hidden="true" />
-                </button>
+                {canUseSkills && (
+                    <button type="button" onClick={onChooseSkill}>
+                        <Orbit aria-hidden="true" />
+                        <span>
+                            <strong>{t("canvasA.welcome.chooseSkillTitle")}</strong>
+                            <small>{t("canvasA.welcome.chooseSkillHint")}</small>
+                        </span>
+                        <ArrowUpRight className="agent-welcome-arrow" aria-hidden="true" />
+                    </button>
+                )}
                 <button type="button" onClick={() => onDraftPrompt("我想创作一段短片，请先和我一起梳理故事方向。先询问我的想法，不要直接生成。")}>
                     <Clapperboard aria-hidden="true" />
                     <span>

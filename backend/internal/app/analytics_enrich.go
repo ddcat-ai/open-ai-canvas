@@ -127,10 +127,13 @@ func (s *Service) enrichAPICallLogPayload(log *model.ApiCallLog, payload map[str
 		}
 		log.CachedTokens = firstInt64(usageMetadata, "cachedContentTokenCount")
 	}
-	if extracted, err := firstJSONString(payload, "task_id", "id", "request_id", "name"); err == nil {
-		log.ProviderRequestID = firstNonEmpty(nestedTaskID, extracted, log.ProviderRequestID)
-	} else {
-		log.ProviderRequestID = firstNonEmpty(nestedTaskID, log.ProviderRequestID)
+	if log.ProviderRequestID == "" && log.RequestKind != "poll" && log.RequestKind != "cancel" {
+		keys := []string{"task_id", "taskId", "id", "name"}
+		if log.Capability == "text" {
+			keys = append(keys, "request_id")
+		}
+		extracted, _ := firstJSONString(payload, keys...)
+		log.ProviderRequestID = firstNonEmpty(nestedTaskID, extracted)
 	}
 	log.ProviderStatus = strings.ToLower(firstNonEmpty(stringField(payload, "status"), log.ProviderStatus))
 	if providerStatus := protocol.NormalizeStatus(log.ProviderStatus); providerStatus == protocol.StatusFailed || providerStatus == protocol.StatusCancelled {

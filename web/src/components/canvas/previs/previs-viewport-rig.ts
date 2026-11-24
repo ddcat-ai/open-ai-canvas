@@ -1,4 +1,4 @@
-// 预演台人物模型的骨骼推断、姿态轨道应用与参考材质。纯 three.js 操作，不涉及 React。
+// 世界引擎人物模型的骨骼推断、姿态轨道应用与参考材质。纯 three.js 操作，不涉及 React。
 
 import { Bone, Box3, Camera, Color, type Material, Mesh, Object3D, OrthographicCamera, PerspectiveCamera, Quaternion, ShaderMaterial, Vector3 } from "three";
 import { disposePrevisMaterials } from "@/lib/canvas/previs/previs-resources";

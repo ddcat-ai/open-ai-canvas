@@ -153,7 +153,7 @@ func TestFinishCloudAgentPiModelStepWithInvalidCalls(t *testing.T) {
 		t.Fatalf("测试前提不成立：应恰好一个无效调用，got %v", invalid)
 	}
 
-	if err := s.finishCloudAgentPiModelStepWithInvalidCalls("user", run.ID, "model-task-1", "我先落大纲", "推理文本", []cloudAgentCall{big, ok}, invalid); err != nil {
+	if err := s.finishCloudAgentPiModelStepWithInvalidCalls("user", run.ID, "model-task-1", "我先落大纲", cloudAgentStepReasoning{Text: "推理文本"}, []cloudAgentCall{big, ok}, invalid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -233,7 +233,7 @@ func TestFinishCloudAgentPiModelStepWithInvalidCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	next := validCall("call_next", "canvas_get_state")
-	if err := s.finishCloudAgentPiModelStep("user", run.ID, "model-task-2", "", "", []cloudAgentCall{next}); err != nil {
+	if err := s.finishCloudAgentPiModelStep("user", run.ID, "model-task-2", "", cloudAgentStepReasoning{}, []cloudAgentCall{next}); err != nil {
 		t.Fatal(err)
 	}
 	if latest, err = s.repo.CloudAgent("user", run.ID); err != nil {

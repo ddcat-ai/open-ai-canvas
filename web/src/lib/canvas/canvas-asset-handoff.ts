@@ -67,9 +67,9 @@ export function uninsertedCanvasAssetHandoffPayloads(nodes: Iterable<{ metadata?
     return payloads.filter((payload) => !payload.assetId || !insertedAssetIds.has(payload.assetId));
 }
 
-export function creationResultAssetIds(assets: Asset[], input: { messageId: string; taskIds: string[]; resultUrls: string[]; resultStorageKeys?: string[] }) {
+function creationResultAssets(assets: Asset[], input: { messageId: string; taskIds: string[] }) {
     const taskOrder = new Map(input.taskIds.map((taskId, index) => [taskId, index]));
-    const candidates = assets
+    return assets
         .filter((asset) => asset.kind === "image" || asset.kind === "video")
         .filter((asset) => asset.metadata?.source === "create-generation" || asset.metadata?.source === "generation-task")
         .filter((asset) => asset.metadata?.messageId === input.messageId || (typeof asset.metadata?.taskId === "string" && taskOrder.has(asset.metadata.taskId)))
@@ -81,6 +81,10 @@ export function creationResultAssetIds(assets: Asset[], input: { messageId: stri
             const rightResult = typeof right.metadata?.outputIndex === "number" ? right.metadata.outputIndex : typeof right.metadata?.resultIndex === "number" ? right.metadata.resultIndex : 0;
             return leftResult - rightResult;
         });
+}
+
+export function creationResultAssetIds(assets: Asset[], input: { messageId: string; taskIds: string[]; resultUrls: string[]; resultStorageKeys?: string[] }) {
+    const candidates = creationResultAssets(assets, input);
     const unused = new Set(candidates.map((asset) => asset.id));
     const stableKeys = input.resultStorageKeys || [];
     const allowOrderedFallback = candidates.length === Math.max(input.resultUrls.length, stableKeys.length);
@@ -95,6 +99,11 @@ export function creationResultAssetIds(assets: Asset[], input: { messageId: stri
         unused.delete(fallback.id);
         return fallback.id;
     }).filter((id): id is string => Boolean(id));
+}
+
+/** 已经写入素材库的结果仍可作为消息恢复依据，即使任务快照暂时没有返回 resultJson。 */
+export function creationResultStorageKeysForMessage(assets: Asset[], input: { messageId: string; taskIds: string[] }) {
+    return creationResultAssets(assets, input).flatMap((asset) => ((asset.kind === "image" || asset.kind === "video") && asset.data.storageKey ? [asset.data.storageKey] : []));
 }
 
 export function creationResultStorageKeys(assets: Asset[], input: { messageId: string; taskIds: string[]; resultUrls: string[]; resultStorageKeys?: string[] }) {

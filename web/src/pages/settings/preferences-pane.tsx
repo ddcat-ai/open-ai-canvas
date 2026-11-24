@@ -1,4 +1,5 @@
-import { Button, InputNumber } from "antd";
+import { Button, InputNumber, Select } from "antd";
+import { lazy, Suspense, useState } from "react";
 import { Moon, Sun, Volume2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -10,6 +11,11 @@ import { playGenerationSuccessSound } from "@/services/notification-sound";
 import { defaultConfig, useConfigStore } from "@/stores/use-config-store";
 import { useNotificationPreferencesStore } from "@/stores/use-notification-preferences-store";
 import { useThemeStore, type ThemeName } from "@/stores/use-theme-store";
+import { useAppearancePreferencesStore, usePersonalAppearancePreferences, type PersonalAppearancePreferences } from "@/stores/use-appearance-preferences-store";
+import { useUserStore } from "@/stores/use-user-store";
+import { registeredThemePacks } from "@/themes/registry";
+
+const PersonalAvatarDialog = lazy(() => import("./personal-avatar-dialog").then((module) => ({ default: module.PersonalAvatarDialog })));
 
 /** 偏好设置：外观与语言、通知、画布生成默认值。前两组只保存在本设备，生成默认值随账号保存。 */
 export function PreferencesPane() {
@@ -22,6 +28,12 @@ export function PreferencesPane() {
     const generationSound = useNotificationPreferencesStore((state) => state.generationSound);
     const setGenerationNotice = useNotificationPreferencesStore((state) => state.setGenerationNotice);
     const setGenerationSound = useNotificationPreferencesStore((state) => state.setGenerationSound);
+    const userId = useUserStore((state) => state.user?.id);
+    const preferences = usePersonalAppearancePreferences();
+    const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+    const updateAppearance = (patch: Partial<PersonalAppearancePreferences>) => {
+        if (userId) useAppearancePreferencesStore.getState().update(userId, patch);
+    };
 
     return (
         <>
@@ -52,6 +64,49 @@ export function PreferencesPane() {
                             />
                         }
                     />
+                    <SettingsRow
+                        label={t("personalAppearance.skin")}
+                        control={
+                            <Select
+                                aria-label={t("personalAppearance.skin")}
+                                className="w-full"
+                                disabled={!userId}
+                                value={preferences.skinId}
+                                onChange={(skinId: string) => updateAppearance({ skinId })}
+                                options={[{ value: "", label: t("personalAppearance.site") }, { value: "classic", label: t("personalAppearance.classic") }, ...registeredThemePacks().map((pack) => ({ value: pack.id, label: pack.name }))]}
+                            />
+                        }
+                        controlClassName="w-[200px]"
+                    />
+                    <SettingsRow
+                        label={t("personalAppearance.avatar")}
+                        control={
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Select
+                                    aria-label={t("personalAppearance.avatar")}
+                                    className="min-w-[160px] flex-1"
+                                    disabled={!userId}
+                                    value={preferences.avatar}
+                                    onChange={(avatar: PersonalAppearancePreferences["avatar"]) => updateAppearance({ avatar })}
+                                    options={[
+                                        { value: "site", label: t("personalAppearance.site") },
+                                        { value: "classic", label: t("personalAppearance.whale") },
+                                        { value: "orb", label: t("personalAppearance.orb") },
+                                        ...(preferences.customAvatar ? [{ value: "custom", label: t("personalAvatar.custom") }] : []),
+                                    ]}
+                                />
+                                <Button disabled={!userId} onClick={() => setAvatarDialogOpen(true)}>
+                                    {t("personalAvatar.upload")}
+                                </Button>
+                            </div>
+                        }
+                        controlClassName="w-full sm:w-[340px]"
+                    />
+                    {avatarDialogOpen && userId ? (
+                        <Suspense fallback={null}>
+                            <PersonalAvatarDialog key={userId} userId={userId} onClose={() => setAvatarDialogOpen(false)} />
+                        </Suspense>
+                    ) : null}
                     <SettingsRow label={t("language.label")} description={t("language.description")} align="top" control={null} className="border-b-0 pb-3" />
                     <LanguageOptionGrid />
                 </section>

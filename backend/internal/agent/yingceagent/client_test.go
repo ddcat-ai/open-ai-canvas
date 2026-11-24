@@ -52,6 +52,7 @@ if (!response.ok) {
 		"YINGCE_AGENT_RUNTIME="+runtimePath,
 		"PORT=0",
 		"MAX_CONCURRENT_SESSIONS=2",
+		"YINGCE_AGENT_TEMP_DIR="+filepath.Join(t.TempDir(), "runs"),
 	)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

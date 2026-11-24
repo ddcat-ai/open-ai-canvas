@@ -11,6 +11,7 @@ import (
 )
 
 func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerChannelModelBatchRoutes(r, svc)
 	r.GET("/wallet", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -68,6 +69,39 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, gin.H{"account": account, "granted": true})
+	})
+
+	r.GET("/admin/settings/turnstile", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		setting, err := svc.AdminTurnstileSetting(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
+	})
+	r.PATCH("/admin/settings/turnstile", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var req service.TurnstileSettingRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		setting, err := svc.UpdateTurnstileSetting(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"setting": setting})
 	})
 
 	r.GET("/admin/settings/linuxdo", func(c *gin.Context) {
@@ -304,12 +338,12 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		// 上游密钥只在 service 内使用；点击拉取时仅返回目录，确认后才写入渠道模型。
-		models, err := svc.PreviewAdminChannelModels(c.Request.Context(), user, c.Param("id"))
+		models, err := svc.ReadAdminChannelCatalog(c.Request.Context(), user, c.Param("id"))
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"models": models})
+		ok(c, models)
 	})
 	r.POST("/admin/channels/:id/models/import", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
@@ -394,6 +428,35 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		updated, err := svc.RepriceAdminChannelModels(user, c.Param("id"), req.Models)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"updated": updated})
+	})
+	r.POST("/admin/channels/:id/models/batch-protocol", func(c *gin.Context) {
+		handleChannelModelBatchProtocol(c, svc)
+	})
+	// 跨渠道批量修改协议：所选模型可来自不同系统渠道，整批提交。
+	r.POST("/admin/channel-models/batch-protocol", func(c *gin.Context) {
+		handleChannelModelBatchProtocol(c, svc)
+	})
+	// 跨渠道统一调价：所选模型可来自不同系统渠道，整批提交。
+	r.POST("/admin/channel-models/batch-reprice", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
+		var req struct {
+			Models []service.ChannelModelRepriceRequest `json:"models" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		updated, err := svc.RepriceAdminAllChannelModels(user, req.Models)
 		if err != nil {
 			failService(c, err)
 			return

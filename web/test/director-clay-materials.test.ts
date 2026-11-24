@@ -5,7 +5,7 @@ import { applyClaySceneMaterials } from "../src/lib/canvas/previs/previs-clay-ma
 
 const geometry = new PlaneGeometry(1, 1);
 
-describe("预演台白膜材质切换", () => {
+describe("世界引擎白膜材质切换", () => {
     test("标准材质 mesh 换成 clay，恢复后还原为原材质", () => {
         const scene = new Scene();
         const original = new MeshStandardMaterial({ color: "#ff0000" });

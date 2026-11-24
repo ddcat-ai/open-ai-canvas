@@ -57,6 +57,9 @@ type CloudAgentSkillCardUsage struct {
 
 // CloudAgentSkillUsage reports how the caller's skills were actually used.
 func (s *Service) CloudAgentSkillUsage(userID string) (*CloudAgentSkillUsage, error) {
+	if err := s.RequireSkillAccess(userID); err != nil {
+		return nil, err
+	}
 	records, err := s.repo.RecentCloudAgentEventsForUser(userID, cloudAgentSkillUsageRunWindow)
 	if err != nil {
 		return nil, err
@@ -103,6 +106,7 @@ func cloudAgentSkillUsageFromEvents(events []CloudAgentEvent) *CloudAgentSkillUs
 				entry(id).RunsEnabled++
 			}
 		case "skill_search":
+			scannedRuns[event.RunID] = true
 			usage.SearchCalls++
 			result, _ := payload["result"].(map[string]any)
 			matches, _ := result["matches"].([]any)
@@ -118,6 +122,7 @@ func cloudAgentSkillUsageFromEvents(events []CloudAgentEvent) *CloudAgentSkillUs
 				entry(id).SearchHits++
 			}
 		case "skill_read_file":
+			scannedRuns[event.RunID] = true
 			id, _ := payload["skillId"].(string)
 			if strings.TrimSpace(id) == "" {
 				continue

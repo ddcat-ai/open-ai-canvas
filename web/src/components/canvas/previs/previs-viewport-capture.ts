@@ -3,6 +3,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { applyClaySceneMaterials } from "@/lib/canvas/previs/previs-clay-materials";
 import { PREVIS_AUTO_ASPECT_FALLBACK, previsAspectValue, resolvePrevisOutputSize } from "@/lib/canvas/previs/previs-optics";
 import { resolvePrevisActiveShot, resolvePrevisViewFraming } from "@/lib/canvas/previs/previs-view-modes";
+import { PREVIS_WORLD_CAMERA_FAR } from "@/lib/canvas/previs/previs-world";
 import type { PrevisRenderMode } from "@/types/previs";
 import type { CaptureContext } from "./previs-viewport";
 
@@ -86,7 +87,8 @@ export function createPrevisShotSurface(source: PrevisCaptureSource, options: Pr
             camera.fov = framing.fov;
             camera.aspect = width / height;
             camera.near = framing.near;
-            camera.far = framing.far;
+            // 世界环境的地面与远山远超镜头默认 500m 远裁剪面。
+            camera.far = data.world ? Math.max(framing.far, PREVIS_WORLD_CAMERA_FAR) : framing.far;
             camera.updateProjectionMatrix();
             camera.updateMatrixWorld(true);
             const previousTarget = gl.getRenderTarget();
@@ -102,8 +104,10 @@ export function createPrevisShotSurface(source: PrevisCaptureSource, options: Pr
             const hidden: Object3D[] = [];
             let restoreClay: (() => void) | undefined;
             try {
+                const controlPass = mode === "depth" || mode === "normal" || mode === "pose";
                 scene.traverse((object) => {
-                    if (object.visible && isPrevisCaptureHelper(object)) {
+                    // 天空、雨雪只属于成片：控制图里会被 overrideMaterial 画成实体遮挡。
+                    if (object.visible && (isPrevisCaptureHelper(object) || (controlPass && object.userData.previsDataPassExclude))) {
                         hidden.push(object);
                         object.visible = false;
                     }
@@ -208,7 +212,7 @@ export async function recordCanvas(source: PrevisCaptureSource, duration: number
             };
             onAbort = () => stop(new Error("录制已取消"));
             onHidden = () => {
-                if (document.hidden) stop(new Error("录制已中止：请保持预演台标签页可见"));
+                if (document.hidden) stop(new Error("录制已中止：请保持世界引擎标签页可见"));
             };
             activeRecorder.ondataavailable = (event) => {
                 if (event.data.size) chunks.push(event.data);

@@ -6,22 +6,69 @@ import (
 	"testing"
 	"time"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/production"
 )
 
 func TestDramaTimelineUsesWholeSegmentAudioAndRejectsMissingMedia(t *testing.T) {
 	segments := []model.DramaSegment{{ID: "a", VideoStatus: "ready", VideoResourceID: "video-a", VideoSeconds: 5}, {ID: "b", VideoStatus: "ready", VideoResourceID: "video-b", VideoSeconds: 10}}
-	timeline, err := buildDramaTimeline(segments, "9:16")
+	timeline, incomplete, err := buildDramaTimeline(segments, "9:16", nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(timeline.Clips) != 2 || timeline.DurationMs != 15000 || timeline.Clips[1].StartMs != 5000 || timeline.Tracks[0].Muted || timeline.Clips[0].Volume != 1 {
+	if incomplete || len(timeline.Clips) != 2 || timeline.DurationMs != 15000 || timeline.Clips[1].StartMs != 5000 || timeline.Tracks[0].Muted || timeline.Clips[0].Volume != 1 {
 		t.Fatalf("timeline: %+v", timeline)
 	}
 	for _, status := range []string{"", "failed", "running", "stale"} {
 		segments[1].VideoStatus = status
-		if _, err := buildDramaTimeline(segments, "9:16"); err == nil {
+		if _, _, err := buildDramaTimeline(segments, "9:16", nil, false); err == nil {
 			t.Fatalf("must reject %q", status)
 		}
+	}
+}
+
+func TestDramaManualTimelineSkipsMissingAndKeepsOldVideosInOrder(t *testing.T) {
+	segments := []model.DramaSegment{
+		{ID: "first", VideoStatus: "ready", VideoResourceID: "new", VideoSeconds: 5},
+		{ID: "middle", VideoStatus: "running"},
+		{ID: "last", VideoStatus: "stale", VideoResourceID: "old", VideoSeconds: 7},
+	}
+	timeline, incomplete, err := buildDramaTimeline(segments, "9:16", map[string]int64{"new": 4820}, true)
+	if err != nil || !incomplete || len(timeline.Clips) != 2 || timeline.DurationMs != 11820 {
+		t.Fatalf("partial timeline: %+v, incomplete=%v err=%v", timeline, incomplete, err)
+	}
+	if timeline.Clips[0].DirectMedia.ID != "new" || timeline.Clips[1].DirectMedia.ID != "old" || timeline.Clips[1].StartMs != 4820 {
+		t.Fatalf("unexpected clips: %+v", timeline.Clips)
+	}
+	if _, _, err := buildDramaTimeline(segments[1:2], "9:16", nil, true); err == nil {
+		t.Fatal("cannot render an empty timeline")
+	}
+}
+
+func TestDramaTimelinePrefersActualSourceDurationOverPlannedSeconds(t *testing.T) {
+	segments := []model.DramaSegment{
+		{ID: "a", VideoStatus: "ready", VideoResourceID: "video-a", VideoSeconds: 10},
+		{ID: "b", VideoStatus: "ready", VideoResourceID: "video-b", VideoSeconds: 10},
+	}
+	// 实测略长于/短于设定秒：成片应按文件时长拼接，而不是裁到 10s。
+	actual := map[string]int64{"video-a": 10420, "video-b": 9580}
+	timeline, _, err := buildDramaTimeline(segments, "9:16", actual, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if timeline.DurationMs != 20000 || timeline.Clips[0].DurationMs != 10420 || timeline.Clips[1].DurationMs != 9580 || timeline.Clips[1].StartMs != 10420 {
+		t.Fatalf("expected actual-duration stitch, got %+v", timeline)
+	}
+	if timeline.Clips[0].SourceDurationMs != 10420 || timeline.Clips[1].SourceDurationMs != 9580 {
+		t.Fatalf("source duration must match clip duration: %+v", timeline.Clips)
+	}
+	// 缺探测时长时回退 video_seconds。
+	partial := map[string]int64{"video-a": 10420}
+	timeline, _, err = buildDramaTimeline(segments, "9:16", partial, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if timeline.DurationMs != 20420 || timeline.Clips[1].DurationMs != 10000 {
+		t.Fatalf("missing probe must fall back to planned seconds: %+v", timeline)
 	}
 }
 
@@ -81,6 +128,83 @@ func TestDramaSegmentEditInvalidatesDescendantsAndRejectsLateResult(t *testing.T
 	}
 }
 
+func TestParallelVideoEditDoesNotCascadeStaleLaterSegments(t *testing.T) {
+	svc, _ := newDramaTestService(t)
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaAuto, Concurrency: 16, Models: fakeDramaModels, VideoContinuity: DramaContinuityParallel}
+	settings.EpisodeSeconds = 60
+	settings.Storyboard.SegmentMode, settings.Storyboard.SegmentSeconds = production.SegmentFixed, 5
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "并行编辑", Start: true, Settings: settings, Chapters: []DramaChapterInput{
+		{Title: "第一章", Text: "甲……"}, {Title: "第二章", Text: "乙……"}, {Title: "第三章", Text: "丙……"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := summary.Project.ID
+	runDramaTicks(t, svc, project, 24)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	episode := summary.Episodes[0].ID
+	rows, err := svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) < 2 || rows[0].VideoStatus != model.DramaMediaReady || rows[1].VideoStatus != model.DramaMediaReady {
+		t.Fatalf("need two ready segments under parallel continuity: %+v", rows)
+	}
+	laterStatus, laterRevision := rows[1].VideoStatus, rows[1].Revision
+	custom := "并行模式只改本段提示词"
+	if err := svc.UpdateDramaSegment("usr-drama", project, episode, rows[0].SegmentIndex, UpdateDramaSegmentRequest{VideoPromptOverride: &custom}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].VideoStatus != model.DramaMediaStale {
+		t.Fatalf("edited segment must go stale: %+v", rows[0])
+	}
+	if rows[1].VideoStatus != laterStatus || rows[1].Revision != laterRevision {
+		t.Fatalf("parallel continuity must not cascade-stale later segments: got %+v want status=%s revision=%d", rows[1], laterStatus, laterRevision)
+	}
+}
+
+func TestParallelVideoRegenerateDoesNotCascadeStaleLaterSegments(t *testing.T) {
+	svc, _ := newDramaTestService(t)
+	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaAuto, Concurrency: 16, Models: fakeDramaModels, VideoContinuity: DramaContinuityParallel}
+	settings.EpisodeSeconds = 60
+	settings.Storyboard.SegmentMode, settings.Storyboard.SegmentSeconds = production.SegmentFixed, 5
+	summary, err := svc.CreateDrama("usr-drama", CreateDramaRequest{Name: "并行重生成", Start: true, Settings: settings, Chapters: []DramaChapterInput{
+		{Title: "第一章", Text: "甲……"}, {Title: "第二章", Text: "乙……"}, {Title: "第三章", Text: "丙……"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := summary.Project.ID
+	runDramaTicks(t, svc, project, 24)
+	summary, _ = svc.DramaSummary("usr-drama", project)
+	episode := summary.Episodes[0].ID
+	rows, err := svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) < 2 || rows[0].VideoStatus != model.DramaMediaReady || rows[1].VideoStatus != model.DramaMediaReady {
+		t.Fatalf("need two ready segments under parallel continuity: %+v", rows)
+	}
+	laterStatus, laterRevision := rows[1].VideoStatus, rows[1].Revision
+	if _, err := svc.GenerateDramaSegments("usr-drama", project, episode, GenerateDramaSegmentsRequest{Segments: []int{rows[0].SegmentIndex}}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = svc.repo.DramaSegments(episode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows[0].VideoStatus != model.DramaMediaQueued {
+		t.Fatalf("regenerated segment must be queued: %+v", rows[0])
+	}
+	if rows[1].VideoStatus != laterStatus || rows[1].Revision != laterRevision {
+		t.Fatalf("parallel regenerate must not cascade-stale later segments: got %+v want status=%s revision=%d", rows[1], laterStatus, laterRevision)
+	}
+}
+
 func TestDramaShotScriptEditAndPromptRewrite(t *testing.T) {
 	svc, fake := newDramaTestService(t)
 	project := createTestDramaWithMedia(t, svc, DramaReviewEvery, DramaMediaManual).Project.ID
@@ -103,7 +227,7 @@ func TestDramaShotScriptEditAndPromptRewrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if detail.Segments[0].PromptStatus != "stale" || detail.Shots[0].Camera != camera {
+	if detail.Segments[0].PromptStatus != model.DramaPromptConflict || detail.Shots[0].Camera != camera {
 		t.Fatalf("shot edit must invalidate prompt: %+v", detail)
 	}
 	if _, err := svc.ApproveDramaEpisode("usr-drama", project, episode); err == nil {
@@ -195,7 +319,7 @@ func TestDramaLatePromptDoesNotOverwriteEditedShot(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows, _ = svc.repo.DramaSegments(episode)
-	if rows[0].VideoPrompt == text || rows[0].PromptStatus != "stale" {
+	if rows[0].VideoPrompt == text || rows[0].PromptStatus != model.DramaMediaReady || !strings.Contains(rows[0].VideoPrompt, dialogue) {
 		t.Fatalf("late prompt overwrote edited script: %+v", rows[0])
 	}
 }
@@ -205,9 +329,8 @@ func TestDramaSettingsRejectUnreadablePromptSkill(t *testing.T) {
 	summary := createTestDrama(t, svc, DramaReviewAuto)
 	settings := summary.Production.Settings
 	settings.PromptSkill = &DramaSkillRef{SkillID: "missing-skill", SkillName: "不存在的技能"}
-	if _, err := svc.UpdateDramaSettings("usr-drama", summary.Project.ID, UpdateDramaSettingsRequest{Settings: &settings}); err == nil || !strings.Contains(err.Error(), "不存在的技能") {
-		t.Fatalf("an unreadable skill must be rejected with its name, got %v", err)
-	}
+	_, err := svc.UpdateDramaSettings("usr-drama", summary.Project.ID, UpdateDramaSettingsRequest{Settings: &settings})
+	assertSkillRuntimeStatus(t, err, 403)
 	settings.PromptSkill = &DramaSkillRef{}
 	if _, err := svc.UpdateDramaSettings("usr-drama", summary.Project.ID, UpdateDramaSettingsRequest{Settings: &settings}); err != nil {
 		t.Fatalf("an empty skill ref clears the selection: %v", err)

@@ -48,6 +48,30 @@ test("video token adjusts only output; per-second adjusts unit price", () => {
     expect(previewModelRepricing([video], 20)[0]!.priceTiers[0]!.unitPriceMicrocredits).toBe(1_200_000);
 });
 
+test("reference video sales participate in markup, manual edits and final validation", () => {
+    for (const billingMode of ["per_second", "token"] as const) {
+        const baseKey = billingMode === "token" ? "outputTokenPriceMicrocredits" : "unitPriceMicrocredits";
+        const referenceKey = billingMode === "token" ? "referenceVideoOutputTokenPriceMicrocredits" : "referenceVideoUnitPriceMicrocredits";
+        const input = {
+            ...item,
+            capability: "video" as const,
+            referenceVideoBilling: true,
+            priceTiers: [{ ...item.priceTiers[0]!, billingMode, [referenceKey]: 2_000_000, costPricing: { ...item.priceTiers[0]!.costPricing!, [referenceKey]: 3_000_000 } }],
+        };
+        const preview = previewModelRepricing([input], 20);
+        expect(preview[0]!.priceTiers[0]![referenceKey]).toBe(3_600_000);
+        const rows = modelRepriceRows(preview);
+        expect(rows).toHaveLength(2);
+        rows[1]!.sale = "4.5";
+        expect(modelRepricePayload([input], rows)[0]!.priceTiers[0]!.prices[referenceKey]).toBe(4_500_000);
+        rows[1]!.sale = "0";
+        expect(() => modelRepricePayload([input], rows)).toThrow("参考视频");
+        rows[0]!.sale = "0";
+        expect(modelRepricePayload([input], rows)[0]!.priceTiers[0]!.prices).toEqual({ [baseKey]: 0, [referenceKey]: 0 });
+        expect(modelRepriceRows([{ ...input, referenceVideoBilling: false }])).toHaveLength(1);
+    }
+});
+
 test("half-up rounding at microcredit precision and disabled tiers stay untouched", () => {
     const tiny = {
         ...item,

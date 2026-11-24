@@ -302,3 +302,254 @@ func TestCloudAgentBuildBoardCreatesGroupedPlaceholdersAndBindings(t *testing.T)
 		t.Fatalf("rebuilding an existing board must be a no-op: %s", summary)
 	}
 }
+
+func TestCloudAgentMediaBatchApprovalEditsRefreshQuoteAndSubmittedTasks(t *testing.T) {
+	for _, overrideDuration := range []bool{false, true} {
+		t.Run(map[bool]string{false: "preserve_item_durations", true: "replace_all_durations"}[overrideDuration], func(t *testing.T) {
+			s, db := agentMediaBatchFixture(t)
+			var alternative model.ChannelModel
+			if err := db.First(&alternative, "id = ?", "video-cm").Error; err != nil {
+				t.Fatal(err)
+			}
+			alternative.ID, alternative.ModelKey, alternative.DisplayName = "video-alternative", "seedance-alternative", "替代视频模型"
+			if err := db.Create(&alternative).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Create(&model.ChannelModelPriceTier{ID: "alternative-tier", ChannelModelID: alternative.ID, SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "per_second", UnitPriceMicrocredits: 2, PriceConfigured: true, Enabled: true}).Error; err != nil {
+				t.Fatal(err)
+			}
+			args := agentMediaBatchArgs("v1", "v2")
+			args["items"].([]map[string]any)[1]["durationSeconds"] = 6
+			args["maxRetriesPerItem"], args["canary"] = 1, true
+			run, state := agentMediaBatchRun(t, s, args, 4)
+			if err := s.advanceCloudAgentTool(run, &state); err != nil {
+				t.Fatal(err)
+			}
+			_, before := agentMediaBatchState(t, s, run.ID)
+			id := before.Approval.ID
+			audio, watermark, seconds := false, false, 8
+			settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: alternative.ModelKey, Size: "9:16", VideoGenerateAudio: &audio, VideoWatermark: &watermark}
+			if overrideDuration {
+				settings.DurationSeconds = &seconds
+			}
+			if err := s.DecideCloudAgentApproval("user", run.ID, id, "approve", "", &settings); err != nil {
+				t.Fatal(err)
+			}
+			_, edited := agentMediaBatchState(t, s, run.ID)
+			if edited.MediaBatch.ModelName != alternative.DisplayName || edited.MediaBatch.Concurrency != 2 || !edited.MediaBatch.Canary || edited.MediaBatch.MaxRetries != 1 || edited.MediaBatch.ID != before.MediaBatch.ID {
+				t.Fatalf("batch identity/settings were lost: %+v", edited.MediaBatch)
+			}
+			var sum int64
+			for index, item := range edited.MediaBatch.Items {
+				wantDuration := []int{12, 6}[index]
+				if overrideDuration {
+					wantDuration = seconds
+				}
+				var stored, previous cloudAgentMediaArgs
+				_ = json.Unmarshal([]byte(item.Arguments), &stored)
+				_ = json.Unmarshal([]byte(before.MediaBatch.Items[index].Arguments), &previous)
+				if stored.ChannelModelKey != alternative.ModelKey || stored.Duration != wantDuration || item.Duration != wantDuration || stored.Prompt != previous.Prompt || creationHash(stored.ReferenceNodeIDs) != creationHash(previous.ReferenceNodeIDs) || item.NodeID != previous.NodeID {
+					t.Fatalf("edited item lost approved intent: %+v", stored)
+				}
+				if item.Amount != int64(wantDuration*2) || item.SpecHash == before.MediaBatch.Items[index].SpecHash || item.ResolvedHash == before.MediaBatch.Items[index].ResolvedHash {
+					t.Fatalf("quote/hashes were not refreshed: %+v", item)
+				}
+				sum += item.Amount
+			}
+			if edited.MediaBatch.CapMicrocredits != sum*2 || !strings.Contains(edited.Approval.Preview.Description, alternative.DisplayName) || edited.Approval.CallHash == before.Approval.CallHash {
+				t.Fatalf("approval preview/cap/hash not refreshed: %+v", edited.Approval)
+			}
+			if err := s.DecideCloudAgentApproval("user", run.ID, id, "approve", "", &settings); err != nil {
+				t.Fatal(err)
+			}
+			changed := settings
+			changed.Size = "16:9"
+			if err := s.DecideCloudAgentApproval("user", run.ID, id, "approve", "", &changed); err == nil {
+				t.Fatal("conflicting approval retry accepted")
+			}
+			var count int64
+			db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
+			if count != 0 {
+				t.Fatal("editing approval submitted a task before the batch executor")
+			}
+			// Submit each approved item directly to verify the persisted contract,
+			// while keeping the canary/concurrency controls unchanged above.
+			policy, err := s.RuntimePolicy()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for index := range edited.MediaBatch.Items {
+				current, latest := agentMediaBatchState(t, s, run.ID)
+				if err := s.submitCloudAgentMediaBatchItem(current, &latest, index, policy); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, submitted := agentMediaBatchState(t, s, run.ID)
+			for index, item := range submitted.MediaBatch.Items {
+				task, err := s.repo.TaskForUser("user", item.taskID())
+				if err != nil {
+					t.Fatalf("task missing: %v; item=%+v", err, item)
+				}
+				var input canvasGenerationInput
+				if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+					t.Fatal(err)
+				}
+				wantDuration := []string{"12", "6"}[index]
+				if overrideDuration {
+					wantDuration = "8"
+				}
+				if input.Config.Model != alternative.ModelKey || input.Config.VideoSeconds != wantDuration || input.Config.VideoGenerateAudio != "false" || input.Config.VideoWatermark != "false" || len(input.ReferenceImages) != 1 {
+					t.Fatalf("task did not retain edited batch settings: %+v", input.Config)
+				}
+			}
+		})
+	}
+}
+
+func TestCloudAgentMediaBatchApprovalInvalidEditsRemainPending(t *testing.T) {
+	s, db := agentMediaBatchFixture(t)
+	run, state := agentMediaBatchRun(t, s, agentMediaBatchArgs("v1", "v2"), 4)
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	_, before := agentMediaBatchState(t, s, run.ID)
+	var beforeOrders int64
+	db.Model(&model.BillingOrder{}).Count(&beforeOrders)
+	settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "seedance-test", Size: "9:16"}
+	negative := -1
+	invalid := []CloudAgentMediaSettings{
+		{ChannelID: "channel", ChannelModelKey: "missing", Size: "9:16"},
+		{LogicalModelID: "mixed", ChannelID: "channel", ChannelModelKey: "seedance-test", Size: "9:16"},
+		{ChannelID: "channel", ChannelModelKey: "seedance-test", Size: "invalid-size"},
+		{ChannelID: "channel", ChannelModelKey: "seedance-test", DurationSeconds: &negative},
+	}
+	for _, edit := range invalid {
+		if err := s.DecideCloudAgentApproval("user", run.ID, before.Approval.ID, "approve", "", &edit); err == nil {
+			t.Fatalf("invalid settings accepted: %+v", edit)
+		}
+	}
+	if err := s.DecideCloudAgentApproval("other", run.ID, before.Approval.ID, "approve", "", &settings); err == nil {
+		t.Fatal("cross-user batch approval accepted")
+	}
+	current, after := agentMediaBatchState(t, s, run.ID)
+	if current.Status != "waiting_approval" || creationHash(after.MediaBatch) != creationHash(before.MediaBatch) || after.Approval.CallHash != before.Approval.CallHash {
+		t.Fatal("invalid edit changed the pending approval")
+	}
+	var count int64
+	db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
+	if count != 0 {
+		t.Fatal("invalid approval created generation tasks")
+	}
+	db.Model(&model.BillingOrder{}).Count(&count)
+	if count != beforeOrders {
+		t.Fatal("invalid approval created billing orders")
+	}
+}
+
+func TestCloudAgentMediaBatchImageApprovalEditsApplyToEveryTask(t *testing.T) {
+	image, _ := cloudAgentNodeCapabilityForType("image")
+	s, db := agentMediaBatchFixture(t,
+		map[string]any{"id": "i1", "type": "image", "title": "图片一", "metadata": image.Metadata("雨夜街道")},
+		map[string]any{"id": "i2", "type": "image", "title": "图片二", "metadata": image.Metadata("屋顶")},
+	)
+	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
+	for _, key := range []string{"grok-image", "grok-image-alternative"} {
+		for _, row := range []any{
+			&model.ChannelModel{ID: key, ChannelID: "channel", ModelKey: key, DisplayName: key, Capability: "image", Protocol: model.ChannelInterfaceGrokImage, CapabilityConfigJSON: mustEncodeModelCapabilityConfig(t, capability), BillingMode: "fixed_request", PriceConfigured: true, Enabled: true},
+			&model.ChannelModelPriceTier{ID: key + "-tier", ChannelModelID: key, SelectorKey: "{}", SelectorJSON: "{}", BillingMode: "fixed_request", UnitPriceMicrocredits: 1, PriceConfigured: true, Enabled: true},
+		} {
+			if err := db.Create(row).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	args := map[string]any{"mode": "image", "channelId": "channel", "channelModelKey": "grok-image", "size": "1:1", "imageResolution": "2k", "items": []map[string]any{{"nodeId": "i1"}, {"nodeId": "i2"}}}
+	run, state := agentMediaBatchRun(t, s, args, 4)
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	_, before := agentMediaBatchState(t, s, run.ID)
+	if before.Approval == nil {
+		t.Fatalf("image batch did not reach approval: %+v", before.Events)
+	}
+	settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "grok-image-alternative", Size: "16:9", ImageResolution: "1k"}
+	invalid := settings
+	seconds := 8
+	invalid.DurationSeconds = &seconds
+	if err := s.DecideCloudAgentApproval("user", run.ID, before.Approval.ID, "approve", "", &invalid); err == nil {
+		t.Fatal("image batch accepted video settings")
+	}
+	if err := s.DecideCloudAgentApproval("user", run.ID, before.Approval.ID, "approve", "", &settings); err != nil {
+		t.Fatal(err)
+	}
+	for step := 0; step < 2; step++ {
+		if _, err := s.stepCloudAgentMediaBatch(context.Background(), "user", run.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, submitted := agentMediaBatchState(t, s, run.ID)
+	for _, item := range submitted.MediaBatch.Items {
+		task, err := s.repo.TaskForUser("user", item.taskID())
+		if err != nil {
+			t.Fatalf("image task missing: %v; item=%+v", err, item)
+		}
+		var input canvasGenerationInput
+		if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+			t.Fatal(err)
+		}
+		if input.Config.Model != settings.ChannelModelKey || input.Config.Size != settings.Size || input.Config.ImageResolution != settings.ImageResolution {
+			t.Fatalf("image task did not retain approved settings: %+v", input.Config)
+		}
+	}
+}
+
+func TestCloudAgentMediaBatchApprovalEditRevalidatesEntireBatch(t *testing.T) {
+	for _, scenario := range []string{"generation_budget", "duration_budget", "credit_budget", "second_item_reference"} {
+		t.Run(scenario, func(t *testing.T) {
+			s, db := agentMediaBatchFixture(t)
+			run, state := agentMediaBatchRun(t, s, agentMediaBatchArgs("v1", "v2"), 4)
+			if err := s.advanceCloudAgentTool(run, &state); err != nil {
+				t.Fatal(err)
+			}
+			run, state = agentMediaBatchState(t, s, run.ID)
+			switch scenario {
+			case "generation_budget":
+				state.Request.Budget.MaxGenerationTasks = 1
+			case "duration_budget":
+				state.Request.Budget.MaxVideoSeconds = 15
+			case "credit_budget":
+				state.Request.Budget.MaxCredits = 15 / float64(CreditScale)
+			case "second_item_reference":
+				if err := db.Model(&model.Resource{}).Where("id = ?", "ref-one").Update("user_id", "other").Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+				return cloudAgentSave(current, &state)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			_, before := agentMediaBatchState(t, s, run.ID)
+			var beforeOrders int64
+			db.Model(&model.BillingOrder{}).Count(&beforeOrders)
+			seconds := 8
+			settings := CloudAgentMediaSettings{ChannelID: "channel", ChannelModelKey: "seedance-test", Size: "9:16", DurationSeconds: &seconds}
+			if err := s.DecideCloudAgentApproval("user", run.ID, before.Approval.ID, "approve", "", &settings); err == nil {
+				t.Fatal("invalid whole-batch admission accepted")
+			}
+			current, after := agentMediaBatchState(t, s, run.ID)
+			if current.Status != "waiting_approval" || creationHash(after.MediaBatch) != creationHash(before.MediaBatch) || after.Approval.CallHash != before.Approval.CallHash {
+				t.Fatal("failed whole-batch admission partially persisted")
+			}
+			var count int64
+			db.Model(&model.BillingOrder{}).Count(&count)
+			if count != beforeOrders {
+				t.Fatal("failed whole-batch admission created billing orders")
+			}
+			db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&count)
+			if count != 0 {
+				t.Fatal("failed whole-batch admission submitted tasks")
+			}
+		})
+	}
+}

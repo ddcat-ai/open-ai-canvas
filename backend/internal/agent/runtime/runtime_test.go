@@ -22,6 +22,7 @@ func fakeRuntime(t *testing.T, script string) {
 		t.Fatal(err)
 	}
 	t.Setenv("CANVAS_PI_RUNTIME_DIR", dir)
+	t.Setenv("YINGCE_AGENT_TEMP_DIR", filepath.Join(t.TempDir(), "runs"))
 }
 
 func TestSetProcessLimitDoesNotStopActiveWork(t *testing.T) {
@@ -41,6 +42,65 @@ func TestSetProcessLimitDoesNotStopActiveWork(t *testing.T) {
 	}
 	release()
 	SetProcessLimit(defaultAgentProcessLimit)
+}
+
+func TestProcessQueueIsBoundedAndCancellationReleasesWaiter(t *testing.T) {
+	t.Setenv("YINGCE_AGENT_MAX_QUEUE", "1")
+	SetProcessLimit(1)
+	t.Cleanup(func() { SetProcessLimit(defaultAgentProcessLimit) })
+	release, err := acquireAgentProcess(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	waited := make(chan error, 1)
+	go func() {
+		permit, err := acquireAgentProcess(ctx)
+		if permit != nil {
+			permit()
+		}
+		waited <- err
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		processGate.mu.Lock()
+		waiting := processGate.waiting
+		processGate.mu.Unlock()
+		if waiting == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("first waiter did not enter the queue")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if permit, err := acquireAgentProcess(context.Background()); err == nil || !strings.Contains(err.Error(), "queue is full") {
+		if permit != nil {
+			permit()
+		}
+		t.Fatalf("full queue accepted another request: %v", err)
+	}
+	cancel()
+	if err := <-waited; err != context.Canceled {
+		t.Fatalf("queued cancellation returned %v", err)
+	}
+	processGate.mu.Lock()
+	waiting := processGate.waiting
+	processGate.mu.Unlock()
+	if waiting != 0 {
+		t.Fatalf("cancelled request leaked a queue slot: %d", waiting)
+	}
+}
+
+func TestProcessDeploymentCapBoundsConfiguredConcurrency(t *testing.T) {
+	t.Setenv("YINGCE_AGENT_SESSION_CAP", "2")
+	t.Setenv("CANVAS_AGENT_MAX_PROCESSES", "30")
+	gate := newAgentProcessGate()
+	if gate.limit != 2 || gate.hardCap != 2 {
+		t.Fatalf("deployment cap was ignored: limit=%d cap=%d", gate.limit, gate.hardCap)
+	}
 }
 
 func noopBridge() Bridge {

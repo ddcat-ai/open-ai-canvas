@@ -27,6 +27,39 @@ func NewServer(manager *Manager, token string) (*Server, error) {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, s.manager.Snapshot()) })
+	mux.HandleFunc("PUT /v1/sources", func(w http.ResponseWriter, r *http.Request) {
+		var sources Sources
+		if err := decodeJSON(r, &sources); err != nil {
+			writeError(w, http.StatusBadRequest, err, nil)
+			return
+		}
+		if err := sources.Validate(); err != nil {
+			writeError(w, http.StatusBadRequest, err, nil)
+			return
+		}
+		status, err := s.manager.SaveSources(sources)
+		if err != nil {
+			code := http.StatusInternalServerError
+			if errors.Is(err, ErrBusy) {
+				code = http.StatusConflict
+			}
+			writeError(w, code, err, status)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	})
+	mux.HandleFunc("POST /v1/sources/test", func(w http.ResponseWriter, _ *http.Request) {
+		status, err := s.manager.TestSources()
+		if err != nil {
+			code := http.StatusInternalServerError
+			if errors.Is(err, ErrBusy) {
+				code = http.StatusConflict
+			}
+			writeError(w, code, err, status)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, status)
+	})
 	mux.HandleFunc("POST /v1/check", func(w http.ResponseWriter, r *http.Request) {
 		status, err := s.manager.Check(r.Context())
 		if err != nil {

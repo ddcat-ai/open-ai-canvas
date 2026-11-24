@@ -4,6 +4,7 @@ import "yingce/backend/internal/app"
 
 type AgentAvatarBundleManifest = app.AgentAvatarBundleManifest
 type AgentAvatarBundleImport = app.AgentAvatarBundleImport
+type Live2DImport = app.Live2DImport
 
 const (
 	WorkbenchKindImage = app.WorkbenchKindImage
@@ -21,10 +22,12 @@ type (
 	EcommerceCreativeDirectionSelection    = app.EcommerceCreativeDirectionSelection
 	EcommerceKnowledgeEvidence             = app.EcommerceKnowledgeEvidence
 	DeleteEcommerceProjectsRequest         = app.DeleteEcommerceProjectsRequest
+	EcommerceRoundImageUpdateRequest       = app.EcommerceRoundImageUpdateRequest
 	BindProjectAssetImageRequest           = app.BindProjectAssetImageRequest
 	PaymentOrderQuery                      = app.PaymentOrderQuery
 	PaymentReconciliationQuery             = app.PaymentReconciliationQuery
 	CloudAgentRequest                      = app.CloudAgentRequest
+	CloudAgentPageContext                  = app.CloudAgentPageContext
 	CloudAgentRunViewOptions               = app.CloudAgentRunViewOptions
 	CloudAgentMediaSettings                = app.CloudAgentMediaSettings
 	CloudAgentCapabilitySet                = app.CloudAgentCapabilitySet
@@ -43,6 +46,8 @@ type (
 	AgentMemoryRevisionRestore             = app.AgentMemoryRevisionRestore
 	AgentMemoryProposalView                = app.AgentMemoryProposalView
 	AgentMemoryRevisionView                = app.AgentMemoryRevisionView
+	APICallGenerationContent               = app.APICallGenerationContent
+	APICallGenerationReference             = app.APICallGenerationReference
 	APICallLogPage                         = app.APICallLogPage
 	APICallLogQuery                        = app.APICallLogQuery
 	AccountFileStorageUsage                = app.AccountFileStorageUsage
@@ -132,6 +137,12 @@ type (
 	ChannelModelCatalogOptions             = app.ChannelModelCatalogOptions
 	ChannelModelPriceTierRequest           = app.ChannelModelPriceTierRequest
 	ChannelModelRequest                    = app.ChannelModelRequest
+	ChannelModelProtocolGroup              = app.ChannelModelProtocolGroup
+	ChannelModelBatchProtocolRequest       = app.ChannelModelBatchProtocolRequest
+	BatchChannelModelUpdate                = app.BatchChannelModelUpdate
+	BatchChannelModelChanges               = app.BatchChannelModelChanges
+	BatchModelCapabilityTemplate           = app.BatchModelCapabilityTemplate
+	BatchModelPricingTemplate              = app.BatchModelPricingTemplate
 	ChannelModelRepriceRequest             = app.ChannelModelRepriceRequest
 	ChannelModelQuoteRequest               = app.ChannelModelQuoteRequest
 	ChannelModelSortRequest                = app.ChannelModelSortRequest
@@ -207,6 +218,9 @@ type (
 	LibTVImportMetadata                    = app.LibTVImportMetadata
 	LibTVImportWarning                     = app.LibTVImportWarning
 	LibTVSettingRequest                    = app.LibTVSettingRequest
+	LibTVConnectStartRequest               = app.LibTVConnectStartRequest
+	LibTVConnectStartResult                = app.LibTVConnectStartResult
+	LibTVConnectCompleteRequest            = app.LibTVConnectCompleteRequest
 	LinkCanvasUnitRequest                  = app.LinkCanvasUnitRequest
 	LinkProjectAssetRequest                = app.LinkProjectAssetRequest
 	LinkShotAssetRequest                   = app.LinkShotAssetRequest
@@ -282,12 +296,14 @@ type (
 	PublicModelChannel                     = app.PublicModelChannel
 	PublicOSSSetting                       = app.PublicOSSSetting
 	PublicRegistrationSetting              = app.PublicRegistrationSetting
+	PublicTurnstileSetting                 = app.PublicTurnstileSetting
 	PublicRuntimeLimits                    = app.PublicRuntimeLimits
 	PublicRuntimePolicySetting             = app.PublicRuntimePolicySetting
 	RedeemBatchPage                        = app.RedeemBatchPage
 	RegisterRequest                        = app.RegisterRequest
 	RegisterTaskOutputRequest              = app.RegisterTaskOutputRequest
 	RegistrationSettingRequest             = app.RegistrationSettingRequest
+	TurnstileSettingRequest                = app.TurnstileSettingRequest
 	ReorderProjectUnitsRequest             = app.ReorderProjectUnitsRequest
 	ReplaceCharacterRepresentationsRequest = app.ReplaceCharacterRepresentationsRequest
 	ReplaceProjectUnitShotInput            = app.ReplaceProjectUnitShotInput
@@ -370,7 +386,6 @@ type (
 	TextReferenceConfig                    = app.TextReferenceConfig
 	TextReplayResult                       = app.TextReplayResult
 	TimelineRenderCreateRequest            = app.TimelineRenderCreateRequest
-	TimelineTranscriptionCreateRequest     = app.TimelineTranscriptionCreateRequest
 	RevokeStorageGrantRequest              = app.RevokeStorageGrantRequest
 	TopupProductRequest                    = app.TopupProductRequest
 	UpdateAnnouncementRequest              = app.UpdateAnnouncementRequest
@@ -407,6 +422,7 @@ type (
 	VideoReferenceConfig                   = app.VideoReferenceConfig
 	VoiceProfileSummary                    = app.VoiceProfileSummary
 	WalletSummary                          = app.WalletSummary
+	WalletHistorySummary                   = app.WalletHistorySummary
 	WorkflowField                          = app.WorkflowField
 )
 

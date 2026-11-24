@@ -4,7 +4,8 @@ import type { CreationMode } from "@/lib/creation-mode";
 import type { CreationReferenceLimits } from "./creation-references";
 import { creationAttachmentFromAsset, creationAttachmentFromAudioAsset, creationAttachmentFromExternalAsset, creationAttachmentFromVideoAsset, type CreationAttachment } from "./creation-assets";
 
-export function creationLibraryDisabledReason(mode: CreationMode, kind: string | undefined, videoLimits?: CreationReferenceLimits) {
+export function creationLibraryDisabledReason(mode: CreationMode, kind: string | undefined, videoLimits?: CreationReferenceLimits, textOnly = false) {
+    if (textOnly) return kind === "text" ? undefined : "当前空间仅支持文本参考";
     if (kind !== "image" && kind !== "video" && kind !== "audio") return translate("create.library.unsupportedKind");
     if (mode === "image") return kind === "image" ? undefined : translate("create.library.imageOnly");
     if (mode !== "video") return undefined;

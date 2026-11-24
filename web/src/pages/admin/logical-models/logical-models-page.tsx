@@ -2,8 +2,9 @@ import { Alert, App, Button, Form, Input, InputNumber, Segmented, Switch, Table,
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import type { FormInstance } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search } from "lucide-react";
+import { Archive, FlaskConical, GitBranch, Layers3, Pencil, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { ModelIconPicker, ModelLogo } from "@/components/model-logo";
@@ -41,6 +42,8 @@ import {
     sanitizeDefaults,
     type CapabilityKind,
 } from "./model-routing-capabilities";
+
+const channelParametersPaths = { image: "/admin/channels?view=models&capability=image", video: "/admin/channels?view=models&capability=video" };
 
 type RouteRuleRow = { channelModelId: string; enabled: boolean; priority: number; weight: number };
 type LogicalModelFormValues = {
@@ -306,9 +309,17 @@ export default function LogicalModelsPage() {
         <AdminPageFrame
             title="前台模型目录"
             actions={
-                <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openModel()}>
-                    新增模型
-                </Button>
+                <>
+                    {(["image", "video"] as const).map((kind) => (
+                        <Link key={kind} to={channelParametersPaths[kind]} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted focus-visible:ring-2">
+                            <SlidersHorizontal className="size-4" />
+                            {kind === "image" ? "渠道图片参数" : "渠道视频参数"}
+                        </Link>
+                    ))}
+                    <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openModel()}>
+                        新增模型
+                    </Button>
+                </>
             }
         >
             <AdminDataTable
@@ -458,6 +469,11 @@ export default function LogicalModelsPage() {
                         children: (
                             <>
                                 <EditorSection title="创作端可选能力">
+                                    {(modelCapability === "image" || modelCapability === "video") && (
+                                        <Link className="text-sm underline underline-offset-2 focus-visible:ring-2" to={channelParametersPaths[modelCapability]} target="_blank" rel="noopener noreferrer">
+                                            {modelCapability === "image" ? "编辑渠道图片参数（新窗口）" : "编辑渠道视频参数（新窗口）"}
+                                        </Link>
+                                    )}
                                     <Form.Item name="capabilitySpec" noStyle>
                                         <CapabilityScopeEditor capability={modelCapability} sourceSpecs={modelSourceSpecs} mode="front" />
                                     </Form.Item>

@@ -74,7 +74,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "doubao-streaming-tts",
   "name": "豆包音频生成",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Volcengine / 影策",
   "description": "豆包音频生成 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -142,6 +142,35 @@
           "path": "/api/v3/tts/create",
           "contentType": "application/json",
           "body": {
+            "audio_mode": {
+              "$if": {
+                "condition": {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$ref": "request.audios"
+                      }
+                    },
+                    0
+                  ]
+                },
+                "then": "unified_edit",
+                "else": {
+                  "$if": {
+                    "condition": {
+                      "$eq": [
+                        {
+                          "$ref": "request.extra.audioMode"
+                        },
+                        "unified_edit"
+                      ]
+                    },
+                    "then": "unified_edit",
+                    "else": "tts"
+                  }
+                }
+              }
+            },
             "model": {
               "$ref": "request.model"
             },

@@ -1,8 +1,8 @@
 import { Euler, Vector3 } from "three";
 
-import { interpolatePrevisTransform } from "@/lib/canvas/previs/previs-scene";
+import { evaluatePrevisCamera, rollPrevisUp } from "@/lib/canvas/previs/previs-camera-moves";
 import { resolvePrevisShotFov } from "@/lib/canvas/previs/previs-optics";
-import type { PrevisCamera, PrevisScene, PrevisShot, PrevisTransform, PrevisVec3 } from "@/types/previs";
+import type { PrevisCamera, PrevisScene, PrevisShot, PrevisVec3 } from "@/types/previs";
 
 /**
  * 视口取景模式（3D / CAM / 五个正交轴向：俯视、正视、背视、左视、右视）。
@@ -153,26 +153,29 @@ export function resolvePrevisEffectiveViewport(input: { mode: PrevisViewMode; fr
  * 返回 null 的情形都必须走 free 回落：3D 模式、空场景、位置/旋转非法、
  * 透视投影不可用（fov/near/far）。绝不把非法值写进 three 相机。
  *
- * position 取 playhead 上插值后的值，所以 CAM 模式下拖时间轴就是在预览成片运镜。
+ * 机位取 playhead 上的求值：transform 关键帧插值，再叠加运镜段（推拉摇移、环绕、跟拍、变焦…），
+ * 所以 CAM 模式下拖时间轴就是在预览成片运镜。截图、录制、第二屏监看都走这里。
  */
 export function resolvePrevisViewFraming(input: { scene: PrevisScene; mode: PrevisViewMode; playhead: number; cameraId?: string | null; viewportAspect?: number }): PrevisViewFraming | null {
     if (!previsViewModeCapabilities(input.mode).framed) return null;
     const camera = (input.cameraId ? input.scene.cameras.find((item) => item.id === input.cameraId) : null) || resolvePrevisActiveCamera(input.scene);
     if (!camera) return null;
     const time = Number.isFinite(input.playhead) ? input.playhead : 0;
-    const transform: PrevisTransform = interpolatePrevisTransform(camera.transform, camera.keyframes, time);
-    if (![...transform.position, ...transform.rotation, ...camera.target].every(Number.isFinite)) return null;
+    const state = evaluatePrevisCamera(input.scene, camera, time);
+    if (![...state.position, ...state.rotation, ...state.target, state.roll].every(Number.isFinite)) return null;
     if (!previsUsablePerspectiveProjection({ fov: camera.fov, near: camera.near, far: camera.far })) return null;
-    const position = transform.position;
-    const raw = new Vector3(camera.target[0] - position[0], camera.target[1] - position[1], camera.target[2] - position[2]);
+    const position = state.position;
+    const raw = new Vector3(state.target[0] - position[0], state.target[1] - position[1], state.target[2] - position[2]);
     const degenerate = raw.lengthSq() <= PREVIS_VIEW_COLLINEAR_EPSILON;
     // 位置与焦点重合时视线为零向量，lookAt 无解：沿摄影机自身 -Z 造一个 1m 外的焦点。
-    const view = degenerate ? new Vector3(0, 0, -1).applyEuler(new Euler(...transform.rotation)) : raw;
-    const target: PrevisVec3 = degenerate ? [position[0] + view.x, position[1] + view.y, position[2] + view.z] : camera.target;
-    // 焦段是光学真源：fov 按镜头画幅从焦段换算，避免 Agent 只改焦段时画面不变。
+    const view = degenerate ? new Vector3(0, 0, -1).applyEuler(new Euler(...state.rotation)) : raw;
+    const target: PrevisVec3 = degenerate ? [position[0] + view.x, position[1] + view.y, position[2] + view.z] : state.target;
+    // 焦段是光学真源：fov 按镜头画幅从焦段换算（变焦运镜改的是焦段），避免 Agent 只改焦段时画面不变。
     // 自适应画幅没有固定比例，按调用方给出的视口宽高比换算。
-    const fov = resolvePrevisShotFov(camera, resolvePrevisActiveShot(input.scene), input.viewportAspect);
-    return { cameraId: camera.id, position, target, up: resolvePrevisViewUp(transform.rotation, view.toArray() as PrevisVec3), fov, near: camera.near, far: camera.far };
+    const fov = resolvePrevisShotFov({ focalLength: state.focalLength, fov: camera.fov }, resolvePrevisActiveShot(input.scene), input.viewportAspect);
+    const viewDirection = view.toArray() as PrevisVec3;
+    const up = rollPrevisUp(resolvePrevisViewUp(state.rotation, viewDirection), viewDirection, state.roll);
+    return { cameraId: camera.id, position, target, up, fov, near: camera.near, far: camera.far };
 }
 
 /**

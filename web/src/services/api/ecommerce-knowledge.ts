@@ -1,4 +1,5 @@
 import { http } from "./request";
+import type { ThinkingRequest } from "@/lib/text-thinking";
 
 export type CommerceKnowledgeSource = {
     id: string;
@@ -44,10 +45,10 @@ export type CommerceKnowledgePage = { entries: CommerceKnowledgeEntry[]; total: 
 export const getCommerceKnowledgeStats = () => http.get<CommerceKnowledgeStats>("/ecommerce/knowledge/stats");
 export type CommerceAgentModelRef = { logicalModelId?: string; channelModelId?: string; channelId?: string; modelKey?: string };
 /** Resolved from the stage models: top-level fields are the planning model, `vision` the recognition and direction model (absent = same as planning). */
-export type CommerceAgentSetting = { logicalModelId: string; channelModelId?: string; channelId?: string; modelKey?: string; vision?: CommerceAgentModelRef };
+export type CommerceAgentSetting = { logicalModelId: string; channelModelId?: string; channelId?: string; modelKey?: string; vision?: CommerceAgentModelRef; thinkingLevel?: ThinkingRequest; visionThinkingLevel?: ThinkingRequest };
 export const getCommerceAgentSetting = () => http.get<CommerceAgentSetting>("/ecommerce/agent-setting");
 export type CommerceOrchestrationModel = { logicalModelId?: string; channelModelId?: string };
-export type CommerceOrchestrationRole = { model: CommerceOrchestrationModel; fallback: CommerceOrchestrationModel; reuse?: string };
+export type CommerceOrchestrationRole = { model: CommerceOrchestrationModel; fallback: CommerceOrchestrationModel; reuse?: string; thinkingLevel?: ThinkingRequest };
 /** vision = 商品识别与视觉方向；director = 整套策划（reuse="marketing" 时沿用旧的营销策划阶段 marketing）。 */
 export type CommerceOrchestrationSetting = { version: 1; enabled: false; vision: CommerceOrchestrationRole; marketing: CommerceOrchestrationRole; director: CommerceOrchestrationRole };
 export const getCommerceOrchestrationSetting = () => http.get<CommerceOrchestrationSetting>("/ecommerce/knowledge/orchestration");

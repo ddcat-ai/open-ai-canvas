@@ -958,3 +958,59 @@
         transition: none;
     }
 }
+
+/* 出彩官方素材来源入口，沿用上游弹窗布局。 */
+.asset-picker-source-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+.asset-picker-source-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.asset-picker-source-tab svg {
+    width: 14px;
+    height: 14px;
+}
+.asset-picker-source-tab em {
+    font-style: normal;
+    font-size: var(--fs-micro);
+}
+.asset-picker-source-tab:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+.asset-picker-source-tab.is-active {
+    background: var(--control-selected-bg);
+    color: var(--control-selected-fg);
+}
+.asset-picker-source-tab:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: -2px;
+}
+.asset-picker-shell[data-asset-picker-surface="dark"] {
+    --text-primary: #f5f5f5;
+    --text-secondary: #a6a6aa;
+    --surface-hover: #25262d;
+    --control-selected-bg: rgba(255, 255, 255, 0.14);
+    --control-selected-fg: #fff;
+    background: #101114;
+}
+.asset-picker-shell[data-asset-picker-surface="light"] {
+    --text-primary: #17191f;
+    --text-secondary: #6e7078;
+    --surface-hover: #eeeeef;
+    --control-selected-bg: rgba(17, 17, 17, 0.09);
+    --control-selected-fg: #171717;
+    background: #fff;
+}

@@ -20,6 +20,28 @@ export const openAIAudioVoiceOptions = [
     { value: "cedar", label: "Cedar" },
 ];
 
+export const miniMaxAudioVoiceOptions = [
+    { value: "male-qn-qingse", label: "青涩青年" },
+    { value: "male-qn-jingying", label: "精英青年" },
+    { value: "male-qn-badao", label: "霸道青年" },
+    { value: "male-qn-daxuesheng", label: "青年大学生" },
+    { value: "female-shaonv", label: "少女" },
+    { value: "female-yujie", label: "御姐" },
+    { value: "female-chengshu", label: "成熟女性" },
+    { value: "female-tianmei", label: "甜美女性" },
+];
+
+export const qwenAudioVoiceOptions = [
+    { value: "longanhuan_v3.1", label: "龙安欢 · 女 · 多语种" },
+    { value: "xunanchuan_v3.1", label: "许南川 · 男 · 多语种" },
+    { value: "anmingyuan_v3.1", label: "安明远 · 男 · 自然旁白" },
+    { value: "yuxiaoyun_v3.1", label: "于小云 · 女 · 亲切自然" },
+    { value: "huozhuoshi_v3.1", label: "霍拙石 · 男 · 清亮旁白" },
+    { value: "longsanshu_v3.1", label: "龙三叔 · 男 · 沉稳有声书" },
+];
+
+export const qwenDefaultAudioVoice = "longanhuan_v3.1";
+
 export const doubaoAudioLanguageOptions = [
     { value: "", label: "自动识别" },
     { value: "zh-cn", label: "中文（普通话）" },
@@ -83,23 +105,51 @@ export const doubaoAudioFormatOptions = [
     { value: "pcm", label: "PCM" },
 ];
 
+export const miniMaxAudioFormatOptions = [
+    { value: "mp3", label: "MP3" },
+    { value: "wav", label: "WAV" },
+    { value: "flac", label: "FLAC" },
+    { value: "pcm", label: "PCM" },
+];
+
+export const qwenAudioFormatOptions = openAIAudioFormatOptions.filter((item) => ["mp3", "wav", "opus"].includes(item.value));
+
 export function isDoubaoAudioConfig(config: AiConfig) {
     return resolveModelRequestConfig(config, config.model || config.audioModel).interfaceType === "doubao-streaming-tts";
 }
 
+export function isMiniMaxSpeechConfig(config: AiConfig) {
+    return resolveModelRequestConfig(config, config.model || config.audioModel).interfaceType === "minimax-speech";
+}
+
+export function isEvoLinkSeedAudioConfig(config: AiConfig) {
+    return resolveModelRequestConfig(config, config.model || config.audioModel).interfaceType === "evolink-seed-audio";
+}
+
+export function isEvoLinkQwenAudioConfig(config: AiConfig) {
+    return resolveModelRequestConfig(config, config.model || config.audioModel).interfaceType === "evolink-qwen-audio-tts";
+}
+
 export function audioVoiceOptionsForConfig(config: AiConfig) {
-    return isDoubaoAudioConfig(config) ? doubaoAudioVoiceOptions : openAIAudioVoiceOptions;
+    return isEvoLinkSeedAudioConfig(config) ? [] : isEvoLinkQwenAudioConfig(config) ? qwenAudioVoiceOptions : isDoubaoAudioConfig(config) ? doubaoAudioVoiceOptions : isMiniMaxSpeechConfig(config) ? miniMaxAudioVoiceOptions : openAIAudioVoiceOptions;
 }
 
 export function audioFormatOptionsForConfig(config: AiConfig) {
-    return isDoubaoAudioConfig(config) ? doubaoAudioFormatOptions : openAIAudioFormatOptions;
+    return isEvoLinkQwenAudioConfig(config) ? qwenAudioFormatOptions : isDoubaoAudioConfig(config) || isEvoLinkSeedAudioConfig(config) ? doubaoAudioFormatOptions : isMiniMaxSpeechConfig(config) ? miniMaxAudioFormatOptions : openAIAudioFormatOptions;
 }
 
 export function normalizeAudioVoiceForConfig(config: AiConfig, value: string) {
+    if (isEvoLinkSeedAudioConfig(config)) return "";
     const options = audioVoiceOptionsForConfig(config);
     const normalized = String(value || "").trim();
     if (isDoubaoAudioConfig(config)) {
         if (!normalized || normalized === "alloy") return "";
+        return normalized;
+    }
+    if (isMiniMaxSpeechConfig(config)) return normalized && normalized !== "alloy" ? normalized : "male-qn-qingse";
+    if (isEvoLinkQwenAudioConfig(config)) {
+        if (!normalized || openAIAudioVoiceOptions.some((item) => item.value === normalized) || miniMaxAudioVoiceOptions.some((item) => item.value === normalized) || doubaoAudioVoiceOptions.some((item) => item.value === normalized))
+            return qwenDefaultAudioVoice;
         return normalized;
     }
     if (options.some((item) => item.value === normalized)) return normalized;
@@ -112,9 +162,19 @@ export function normalizeAudioFormatForConfig(config: AiConfig, value: string) {
 }
 
 export function audioVoiceLabelForConfig(config: AiConfig, value: string) {
+    if (isEvoLinkSeedAudioConfig(config)) return "参考音频 / 提示词";
     const normalized = normalizeAudioVoiceForConfig(config, value);
     const options = audioVoiceOptionsForConfig(config);
     return options.find((item) => item.value === normalized)?.label || normalized;
+}
+
+export function canvasAudioSource(config: AiConfig, referenceLabels: string[]) {
+    const mode = config.audioMode === "tts" || config.audioMode === "unified_edit" ? config.audioMode : referenceLabels.length ? "unified_edit" : "tts";
+    if (mode === "unified_edit" && referenceLabels.length) {
+        return { mode, label: referenceLabels.length === 1 ? `参考音色：${referenceLabels[0]}` : `参考音色：${referenceLabels.length} 段` };
+    }
+    const voice = audioVoiceLabelForConfig(config, config.audioVoice);
+    return { mode, label: voice ? `音色：${voice}` : mode === "tts" ? "文本朗读" : "配音待选音色" };
 }
 
 export function audioFormatLabelForConfig(config: AiConfig, value: string) {

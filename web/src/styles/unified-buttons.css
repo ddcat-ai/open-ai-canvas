@@ -6,14 +6,13 @@
    禁用、加载和键盘焦点。页面不要再为同类按钮重写这些属性。
    ========================================================================= */
 
-/* 鼠标点击后 Chrome 仍可能给按钮 :focus-visible。统一按钮只在键盘导航时显示焦点。 */
 :where(button, .ant-btn):focus:not(:focus-visible),
-:where(button, .ant-btn):focus-visible:not([data-input-modality="keyboard"]) {
+:root[data-pointer-focus] :where(button, .ant-btn):focus-visible {
     outline: none !important;
     box-shadow: none !important;
 }
 
-:where(button, .ant-btn):focus-visible[data-input-modality="keyboard"] {
+:where(button, .ant-btn):focus-visible {
     /* 与全局 :focus-visible 同一套：主色焦点环、宽度与偏移全站一致。 */
     outline: var(--focus-ring-width) solid var(--ring) !important;
     outline-offset: 2px !important;

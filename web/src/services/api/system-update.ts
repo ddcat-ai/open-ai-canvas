@@ -1,22 +1,6 @@
 import { http } from "./request";
 
-export type UpdatePhase =
-    | "idle"
-    | "checking"
-    | "ready"
-    | "no_update"
-    | "preflight"
-    | "backing_up"
-    | "pulling"
-    | "draining"
-    | "migrating"
-    | "switching"
-    | "verifying"
-    | "succeeded"
-    | "rolling_back"
-    | "rolled_back"
-    | "failed"
-    | "manual_intervention";
+export type UpdatePhase = "idle" | "checking" | "ready" | "no_update" | "preflight" | "backing_up" | "pulling" | "draining" | "migrating" | "switching" | "verifying" | "succeeded" | "rolling_back" | "rolled_back" | "failed" | "manual_intervention";
 
 export type SystemUpdateRelease = {
     version: string;
@@ -51,6 +35,7 @@ export type SystemUpdateLog = {
 };
 
 export type SystemUpdateOperation = {
+    sources?: SystemUpdateSources;
     id?: string;
     phase: UpdatePhase;
     fromVersion?: string;
@@ -64,6 +49,8 @@ export type SystemUpdateOperation = {
 };
 
 export type SystemUpdateStatus = {
+    sources?: SystemUpdateSources;
+    sourceProbe?: SystemUpdateSourceProbe;
     supported: boolean;
     connected: boolean;
     repository: string;
@@ -76,6 +63,29 @@ export type SystemUpdateStatus = {
     rollbackVersion?: string;
     operation: SystemUpdateOperation;
 };
+
+export type SystemUpdateSources = {
+    githubSource: "direct" | "gh_proxy";
+    imageSource: "ghcr" | "nju";
+};
+
+export type SystemUpdateSourceProbe = {
+    id: string;
+    status: "running" | "succeeded" | "failed";
+    sources: SystemUpdateSources;
+    targetVersion?: string;
+    checks: SystemUpdateCheck[];
+    startedAt: string;
+    finishedAt?: string;
+};
+
+export function saveSystemUpdateSources(sources: SystemUpdateSources) {
+    return http.put<SystemUpdateStatus>("/admin/system-update/sources", sources);
+}
+
+export function testSystemUpdateSources() {
+    return http.post<SystemUpdateStatus>("/admin/system-update/sources/test");
+}
 
 export function getSystemUpdateStatus(signal?: AbortSignal) {
     return http.get<SystemUpdateStatus>("/admin/system-update", { signal });

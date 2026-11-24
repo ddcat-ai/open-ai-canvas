@@ -15,13 +15,13 @@ Content-Type: multipart/form-data
 
 ## 模型与能力边界
 
-模型名必须是部署服务实际开放的视频模型。插件不把任意 `sora-*` 或 `sd-*` 名称视为可用，也不提供价格表。当前实现支持文生视频和单组参考图输入，不发送参考视频、参考音频、独立音频开关或水印。
+模型名必须是部署服务实际开放的视频模型。标准图生视频接受一张图片。支持多图扩展的兼容网关可在渠道模型上显式启用 `reference_to_video` 并配置张数上限。
 
 ## 参数与字段映射
 
 {{PARAMETERS}}
 
-`duration -> seconds`，发送为十进制字符串；`aspectRatio -> size`，这里应填写上游尺寸而不是只写 `16:9`；`images -> input_reference` multipart 部件。空字段不发送。
+`duration -> seconds`，发送为十进制字符串。`aspectRatio -> size` 应填写上游接受的尺寸。单张图片使用 multipart `input_reference`，多图参考模式按媒体顺序逐个写入 `input_reference[]`。
 
 ## 文生视频示例
 

@@ -5,7 +5,7 @@
 - 插件 ID：`dashscope-wan3-video`。
 - Provider ID：`dashscope-wan3-video`。
 - 能力：`video`。
-- 默认 Base URL：`https://dashscope.aliyuncs.com`。
+- 默认 Base URL：``。
 - 鉴权驱动：`bearer`。
 - 创建：`POST /api/v1/services/aigc/video-generation/video-synthesis`。
 - 查询：`GET /api/v1/tasks/{{taskId}}`。
@@ -43,7 +43,7 @@
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
 | `create.body.input.prompt` | `{"$omitEmpty":{"$ref":"request.prompt"}}` |
-| `create.body.input.media` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.providerOptions.dashscope-wan3-video.media"},{"$map":{"from":{"$sortByOrder":{"$ref":"request.inputs"}},"as":"media","in":{"type":{"$coalesce":[{"$ref":"media.role"},{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"image"]},"then":"reference_image","else":{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"video"]},"then":"reference_video","else":{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"audio"]},"then":"reference_audio","else":{"$ref":"media.kind"}}}}}}}]},"url":{"$ref":"media.value"}}}}]}}` |
+| `create.body.input.media` | `{"$omitEmpty":{"$concatArrays":[{"$map":{"from":{"$sortByOrder":{"$ref":"request.inputs"}},"as":"media","in":{"type":{"$coalesce":[{"$if":{"condition":{"$in":[{"$ref":"media.role"},["subject_reference","style_reference"]]},"then":"reference_image","else":{"$if":{"condition":{"$eq":[{"$ref":"media.role"},"reference_voice"]},"then":"reference_audio","else":{"$ref":"media.role"}}}}},{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"image"]},"then":"reference_image","else":{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"video"]},"then":"reference_video","else":{"$if":{"condition":{"$eq":[{"$ref":"media.kind"},"audio"]},"then":"reference_audio","else":{"$ref":"media.kind"}}}}}}}]},"url":{"$ref":"media.value"}}}},{"$map":{"from":{"$ref":"request.providerOptions.dashscope-wan3-video.media"},"as":"extra","in":{"type":{"$ref":"extra.type"},"url":{"$ref":"extra.url"}}}}]}}` |
 | `create.body.parameters.resolution` | `{"$omitEmpty":{"$upper":{"$ref":"request.resolution"}}}` |
 | `create.body.parameters.ratio` | `{"$omitEmpty":{"$ref":"request.aspectRatio"}}` |
 | `create.body.parameters.duration` | `{"$omitEmpty":{"$ref":"request.duration"}}` |
@@ -52,9 +52,10 @@
 | `create.body.parameters.prompt_extend` | `{"$coalesce":[{"$ref":"request.providerOptions.dashscope-wan3-video.prompt_extend"},true]}` |
 | `create.body.parameters.watermark` | `{"$ref":"request.watermark"}` |
 | `create.headers.X-DashScope-Async` | `"enable"` |
+| `create.originPath` | `true` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/api/v1/tasks/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
+| `poll.originPath` | `true` |
 
 ## Provider 扩展键
 
@@ -69,8 +70,8 @@
 
 | 映射位置 | 上游路径或转换表达式 |
 | --- | --- |
-| `response.taskId` | `{"$coalesce":[{"$ref":"response.output.task_id"},{"$ref":"response.task_id"},{"$ref":"taskId"}]}` |
-| `response.status` | `{"$if":{"condition":{"$eq":[{"$lower":{"$ref":"response.output.task_status"}},"unknown"]},"then":"failed","else":{"$coalesce":[{"$ref":"response.output.task_status"},{"$ref":"response.status"},"pending"]}}}` |
+| `response.taskId` | `{"$ref":"response.output.task_id"}` |
+| `response.status` | `{"$if":{"condition":{"$eq":[{"$lower":{"$ref":"response.output.task_status"}},"unknown"]},"then":"failed","else":{"$ref":"response.output.task_status"}}}` |
 | `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
 | `response.videos` | `{"$ref":"response.output.video_url"}` |
 | `response.errorPaths[0]` | `"code"` |
@@ -86,7 +87,7 @@
 
 ## 兼容边界
 
-该包只代表上述线协议 profile；同一品牌的其他 endpoint、云区域或网关包装必须使用独立插件，不能根据模型名猜测。
+渠道 Base URL 应填写已开通地域的百炼业务空间 Endpoint。关键帧仅限首帧或首尾帧，不能混用全能参考。全能参考支持图、视频、音频组合；可附一个 file 或 link，此时必须开启 prompt_extend。参考视频和音频各自总长不超过 15 秒；输入视频总时长与输出时长之和不超过 30 秒。音频素材与输出声轨开关是不同能力。参考来源：[万相 3.0 视频生成 API](https://help.aliyun.com/zh/model-studio/wan3-video-generation-api-reference)。
 
 <!-- YINGCE_MANIFEST_CONTRACT_START -->
 ## Manifest 完整接口定义
@@ -98,7 +99,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "dashscope-wan3-video",
   "name": "DashScope Wan 3.0 Video",
-  "version": "2.0.1",
+  "version": "2.1.1",
   "author": "Alibaba Cloud / 影策",
   "description": "DashScope Wan 3.0 Video 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -131,11 +132,16 @@
           "creation",
           "agent"
         ],
-        "baseUrl": "https://dashscope.aliyuncs.com",
+        "baseUrl": "",
         "requiresPublicMediaUrls": true,
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "input-media",
+          "token": "参考图{n}",
+          "dramaTailFrame": "reference-image"
         },
         "parameters": [
           {
@@ -235,33 +241,111 @@
           },
           {
             "assert": {
-              "$lte": [
+              "$or": [
                 {
-                  "$len": {
-                    "$filter": {
-                      "from": {
-                        "$sortByOrder": {
-                          "$ref": "request.images"
-                        }
-                      },
-                      "as": "media",
-                      "where": {
-                        "$in": [
-                          {
-                            "$ref": "media.role"
-                          },
-                          [
-                            "first_frame"
-                          ]
-                        ]
-                      }
-                    }
+                  "$trim": {
+                    "$ref": "request.prompt"
                   }
                 },
-                1
+                {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$ref": "request.inputs"
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$gt": [
+                    {
+                      "$len": {
+                        "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                      }
+                    },
+                    0
+                  ]
+                }
               ]
             },
-            "message": "Wan 3.0 Video 最多只能有一个 first_frame"
+            "message": "Wan 3.0 需要提示词或输入素材"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$lower": {
+                    "$ref": "request.resolution"
+                  }
+                },
+                [
+                  "",
+                  "480p",
+                  "720p",
+                  "1080p"
+                ]
+              ]
+            },
+            "message": "Wan 3.0 只支持 480P、720P、1080P"
+          },
+          {
+            "assert": {
+              "$in": [
+                {
+                  "$ref": "request.aspectRatio"
+                },
+                [
+                  "",
+                  "adaptive",
+                  "21:9",
+                  "16:9",
+                  "4:3",
+                  "1:1",
+                  "3:4",
+                  "9:16"
+                ]
+              ]
+            },
+            "message": "Wan 3.0 不支持该画幅比例"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$in": [
+                    {
+                      "$ref": "request.duration"
+                    },
+                    [
+                      0,
+                      -1
+                    ]
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$gte": [
+                        {
+                          "$ref": "request.duration"
+                        },
+                        2
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$ref": "request.duration"
+                        },
+                        30
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "Wan 3.0 输出时长须为 2～30 秒或智能时长 -1"
           },
           {
             "assert": {
@@ -270,19 +354,90 @@
                   "$len": {
                     "$filter": {
                       "from": {
-                        "$sortByOrder": {
-                          "$ref": "request.images"
-                        }
+                        "$ref": "request.inputs"
                       },
                       "as": "media",
                       "where": {
-                        "$in": [
+                        "$eq": [
                           {
-                            "$ref": "media.role"
+                            "$coalesce": [
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "media.kind"
+                                      },
+                                      "image"
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "video"
+                                        ]
+                                      },
+                                      "then": "reference_video",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "audio"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.kind"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
                           },
-                          [
-                            "last_frame"
-                          ]
+                          "first_frame"
                         ]
                       }
                     }
@@ -291,7 +446,1881 @@
                 1
               ]
             },
-            "message": "Wan 3.0 Video 最多只能有一个 last_frame"
+            "message": "Wan 3.0 最多一个首帧"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$coalesce": [
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "media.kind"
+                                      },
+                                      "image"
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "video"
+                                        ]
+                                      },
+                                      "then": "reference_video",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "audio"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.kind"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "last_frame"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$coalesce": [
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "media.kind"
+                                      },
+                                      "image"
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "video"
+                                        ]
+                                      },
+                                      "then": "reference_video",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "audio"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.kind"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "first_frame"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "message": "Wan 3.0 尾帧必须与首帧配对"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$ref": "request.inputs"
+                          },
+                          "as": "media",
+                          "where": {
+                            "$in": [
+                              {
+                                "$coalesce": [
+                                  {
+                                    "$if": {
+                                      "condition": {
+                                        "$in": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          [
+                                            "subject_reference",
+                                            "style_reference"
+                                          ]
+                                        ]
+                                      },
+                                      "then": "reference_image",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.role"
+                                              },
+                                              "reference_voice"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.role"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "image"
+                                        ]
+                                      },
+                                      "then": "reference_image",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "video"
+                                            ]
+                                          },
+                                          "then": "reference_video",
+                                          "else": {
+                                            "$if": {
+                                              "condition": {
+                                                "$eq": [
+                                                  {
+                                                    "$ref": "media.kind"
+                                                  },
+                                                  "audio"
+                                                ]
+                                              },
+                                              "then": "reference_audio",
+                                              "else": {
+                                                "$ref": "media.kind"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              [
+                                "first_frame",
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$filter": {
+                          "from": {
+                            "$ref": "request.inputs"
+                          },
+                          "as": "media",
+                          "where": {
+                            "$in": [
+                              {
+                                "$coalesce": [
+                                  {
+                                    "$if": {
+                                      "condition": {
+                                        "$in": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          [
+                                            "subject_reference",
+                                            "style_reference"
+                                          ]
+                                        ]
+                                      },
+                                      "then": "reference_image",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.role"
+                                              },
+                                              "reference_voice"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.role"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "image"
+                                        ]
+                                      },
+                                      "then": "reference_image",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "video"
+                                            ]
+                                          },
+                                          "then": "reference_video",
+                                          "else": {
+                                            "$if": {
+                                              "condition": {
+                                                "$eq": [
+                                                  {
+                                                    "$ref": "media.kind"
+                                                  },
+                                                  "audio"
+                                                ]
+                                              },
+                                              "then": "reference_audio",
+                                              "else": {
+                                                "$ref": "media.kind"
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              [
+                                "first_frame",
+                                "last_frame"
+                              ]
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$add": [
+                        {
+                          "$len": {
+                            "$ref": "request.inputs"
+                          }
+                        },
+                        {
+                          "$len": {
+                            "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "Wan 3.0 首尾帧不能与全能参考素材混用"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$coalesce": [
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "media.kind"
+                                      },
+                                      "image"
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "video"
+                                        ]
+                                      },
+                                      "then": "reference_video",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "audio"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.kind"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "reference_image"
+                        ]
+                      }
+                    }
+                  }
+                },
+                10
+              ]
+            },
+            "message": "Wan 3.0 reference_image 上限为 10"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$coalesce": [
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "media.kind"
+                                      },
+                                      "image"
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "video"
+                                        ]
+                                      },
+                                      "then": "reference_video",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "audio"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.kind"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "reference_video"
+                        ]
+                      }
+                    }
+                  }
+                },
+                5
+              ]
+            },
+            "message": "Wan 3.0 reference_video 上限为 5"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$eq": [
+                          {
+                            "$coalesce": [
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "media.kind"
+                                      },
+                                      "image"
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "video"
+                                        ]
+                                      },
+                                      "then": "reference_video",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "audio"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.kind"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "reference_audio"
+                        ]
+                      }
+                    }
+                  }
+                },
+                5
+              ]
+            },
+            "message": "Wan 3.0 reference_audio 上限为 5"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$add": [
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "video"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "video"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        1
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "video"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        2
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "video"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        3
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "video"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        4
+                      ]
+                    }
+                  ]
+                },
+                15000
+              ]
+            },
+            "message": "Wan 3.0 video 素材总时长不能超过 15 秒"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$add": [
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "audio"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        0
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "audio"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        1
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "audio"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        2
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "audio"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        3
+                      ]
+                    },
+                    {
+                      "$at": [
+                        {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.inputs"
+                                },
+                                "as": "media",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "media.kind"
+                                    },
+                                    "audio"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "media",
+                            "in": {
+                              "$ref": "media.metadata.durationMs"
+                            }
+                          }
+                        },
+                        4
+                      ]
+                    }
+                  ]
+                },
+                15000
+              ]
+            },
+            "message": "Wan 3.0 audio 素材总时长不能超过 15 秒"
+          },
+          {
+            "assert": {
+              "$lte": [
+                {
+                  "$add": [
+                    {
+                      "$add": [
+                        {
+                          "$at": [
+                            {
+                              "$map": {
+                                "from": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "request.inputs"
+                                    },
+                                    "as": "media",
+                                    "where": {
+                                      "$eq": [
+                                        {
+                                          "$ref": "media.kind"
+                                        },
+                                        "video"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "as": "media",
+                                "in": {
+                                  "$ref": "media.metadata.durationMs"
+                                }
+                              }
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$at": [
+                            {
+                              "$map": {
+                                "from": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "request.inputs"
+                                    },
+                                    "as": "media",
+                                    "where": {
+                                      "$eq": [
+                                        {
+                                          "$ref": "media.kind"
+                                        },
+                                        "video"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "as": "media",
+                                "in": {
+                                  "$ref": "media.metadata.durationMs"
+                                }
+                              }
+                            },
+                            1
+                          ]
+                        },
+                        {
+                          "$at": [
+                            {
+                              "$map": {
+                                "from": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "request.inputs"
+                                    },
+                                    "as": "media",
+                                    "where": {
+                                      "$eq": [
+                                        {
+                                          "$ref": "media.kind"
+                                        },
+                                        "video"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "as": "media",
+                                "in": {
+                                  "$ref": "media.metadata.durationMs"
+                                }
+                              }
+                            },
+                            2
+                          ]
+                        },
+                        {
+                          "$at": [
+                            {
+                              "$map": {
+                                "from": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "request.inputs"
+                                    },
+                                    "as": "media",
+                                    "where": {
+                                      "$eq": [
+                                        {
+                                          "$ref": "media.kind"
+                                        },
+                                        "video"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "as": "media",
+                                "in": {
+                                  "$ref": "media.metadata.durationMs"
+                                }
+                              }
+                            },
+                            3
+                          ]
+                        },
+                        {
+                          "$at": [
+                            {
+                              "$map": {
+                                "from": {
+                                  "$filter": {
+                                    "from": {
+                                      "$ref": "request.inputs"
+                                    },
+                                    "as": "media",
+                                    "where": {
+                                      "$eq": [
+                                        {
+                                          "$ref": "media.kind"
+                                        },
+                                        "video"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "as": "media",
+                                "in": {
+                                  "$ref": "media.metadata.durationMs"
+                                }
+                              }
+                            },
+                            4
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$multiply": [
+                        {
+                          "$ref": "request.duration"
+                        },
+                        1000
+                      ]
+                    }
+                  ]
+                },
+                30000
+              ]
+            },
+            "message": "Wan 3.0 输入视频和输出时长之和不能超过 30 秒"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$ref": "request.inputs"
+                  }
+                },
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$in": [
+                          {
+                            "$coalesce": [
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "$if": {
+                                  "condition": {
+                                    "$eq": [
+                                      {
+                                        "$ref": "media.kind"
+                                      },
+                                      "image"
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.kind"
+                                          },
+                                          "video"
+                                        ]
+                                      },
+                                      "then": "reference_video",
+                                      "else": {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "media.kind"
+                                              },
+                                              "audio"
+                                            ]
+                                          },
+                                          "then": "reference_audio",
+                                          "else": {
+                                            "$ref": "media.kind"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          [
+                            "first_frame",
+                            "last_frame",
+                            "reference_image",
+                            "reference_video",
+                            "reference_audio"
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "message": "Wan 3.0 不支持该输入角色"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "image"
+                            ]
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$coalesce": [
+                                    {
+                                      "$if": {
+                                        "condition": {
+                                          "$in": [
+                                            {
+                                              "$ref": "media.role"
+                                            },
+                                            [
+                                              "subject_reference",
+                                              "style_reference"
+                                            ]
+                                          ]
+                                        },
+                                        "then": "reference_image",
+                                        "else": {
+                                          "$if": {
+                                            "condition": {
+                                              "$eq": [
+                                                {
+                                                  "$ref": "media.role"
+                                                },
+                                                "reference_voice"
+                                              ]
+                                            },
+                                            "then": "reference_audio",
+                                            "else": {
+                                              "$ref": "media.role"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "$if": {
+                                        "condition": {
+                                          "$eq": [
+                                            {
+                                              "$ref": "media.kind"
+                                            },
+                                            "image"
+                                          ]
+                                        },
+                                        "then": "reference_image",
+                                        "else": {
+                                          "$if": {
+                                            "condition": {
+                                              "$eq": [
+                                                {
+                                                  "$ref": "media.kind"
+                                                },
+                                                "video"
+                                              ]
+                                            },
+                                            "then": "reference_video",
+                                            "else": {
+                                              "$if": {
+                                                "condition": {
+                                                  "$eq": [
+                                                    {
+                                                      "$ref": "media.kind"
+                                                    },
+                                                    "audio"
+                                                  ]
+                                                },
+                                                "then": "reference_audio",
+                                                "else": {
+                                                  "$ref": "media.kind"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                [
+                                  "first_frame",
+                                  "last_frame",
+                                  "reference_image"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Wan 3.0 image 素材与所选角色不匹配"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "audio"
+                            ]
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$coalesce": [
+                                    {
+                                      "$if": {
+                                        "condition": {
+                                          "$in": [
+                                            {
+                                              "$ref": "media.role"
+                                            },
+                                            [
+                                              "subject_reference",
+                                              "style_reference"
+                                            ]
+                                          ]
+                                        },
+                                        "then": "reference_image",
+                                        "else": {
+                                          "$if": {
+                                            "condition": {
+                                              "$eq": [
+                                                {
+                                                  "$ref": "media.role"
+                                                },
+                                                "reference_voice"
+                                              ]
+                                            },
+                                            "then": "reference_audio",
+                                            "else": {
+                                              "$ref": "media.role"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "$if": {
+                                        "condition": {
+                                          "$eq": [
+                                            {
+                                              "$ref": "media.kind"
+                                            },
+                                            "image"
+                                          ]
+                                        },
+                                        "then": "reference_image",
+                                        "else": {
+                                          "$if": {
+                                            "condition": {
+                                              "$eq": [
+                                                {
+                                                  "$ref": "media.kind"
+                                                },
+                                                "video"
+                                              ]
+                                            },
+                                            "then": "reference_video",
+                                            "else": {
+                                              "$if": {
+                                                "condition": {
+                                                  "$eq": [
+                                                    {
+                                                      "$ref": "media.kind"
+                                                    },
+                                                    "audio"
+                                                  ]
+                                                },
+                                                "then": "reference_audio",
+                                                "else": {
+                                                  "$ref": "media.kind"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                [
+                                  "reference_audio"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Wan 3.0 audio 素材与所选角色不匹配"
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.inputs"
+                      },
+                      "as": "media",
+                      "where": {
+                        "$and": [
+                          {
+                            "$eq": [
+                              {
+                                "$ref": "media.kind"
+                              },
+                              "video"
+                            ]
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$coalesce": [
+                                    {
+                                      "$if": {
+                                        "condition": {
+                                          "$in": [
+                                            {
+                                              "$ref": "media.role"
+                                            },
+                                            [
+                                              "subject_reference",
+                                              "style_reference"
+                                            ]
+                                          ]
+                                        },
+                                        "then": "reference_image",
+                                        "else": {
+                                          "$if": {
+                                            "condition": {
+                                              "$eq": [
+                                                {
+                                                  "$ref": "media.role"
+                                                },
+                                                "reference_voice"
+                                              ]
+                                            },
+                                            "then": "reference_audio",
+                                            "else": {
+                                              "$ref": "media.role"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "$if": {
+                                        "condition": {
+                                          "$eq": [
+                                            {
+                                              "$ref": "media.kind"
+                                            },
+                                            "image"
+                                          ]
+                                        },
+                                        "then": "reference_image",
+                                        "else": {
+                                          "$if": {
+                                            "condition": {
+                                              "$eq": [
+                                                {
+                                                  "$ref": "media.kind"
+                                                },
+                                                "video"
+                                              ]
+                                            },
+                                            "then": "reference_video",
+                                            "else": {
+                                              "$if": {
+                                                "condition": {
+                                                  "$eq": [
+                                                    {
+                                                      "$ref": "media.kind"
+                                                    },
+                                                    "audio"
+                                                  ]
+                                                },
+                                                "then": "reference_audio",
+                                                "else": {
+                                                  "$ref": "media.kind"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                [
+                                  "reference_video"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Wan 3.0 video 素材与所选角色不匹配"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                    },
+                    null
+                  ]
+                },
+                {
+                  "$and": [
+                    {
+                      "$eq": [
+                        {
+                          "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                        },
+                        {
+                          "$filter": {
+                            "from": {
+                              "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                            },
+                            "as": "extra",
+                            "where": {
+                              "$and": [
+                                {
+                                  "$in": [
+                                    {
+                                      "$ref": "extra.type"
+                                    },
+                                    [
+                                      "file",
+                                      "link"
+                                    ]
+                                  ]
+                                },
+                                {
+                                  "$at": [
+                                    {
+                                      "$split": [
+                                        {
+                                          "$ref": "extra.url"
+                                        },
+                                        "://"
+                                      ]
+                                    },
+                                    1
+                                  ]
+                                },
+                                {
+                                  "$in": [
+                                    {
+                                      "$lower": {
+                                        "$first": {
+                                          "$split": [
+                                            {
+                                              "$ref": "extra.url"
+                                            },
+                                            "://"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "$if": {
+                                        "condition": {
+                                          "$eq": [
+                                            {
+                                              "$ref": "extra.type"
+                                            },
+                                            "file"
+                                          ]
+                                        },
+                                        "then": [
+                                          "http",
+                                          "https",
+                                          "oss"
+                                        ],
+                                        "else": [
+                                          "http",
+                                          "https"
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "$lte": [
+                        {
+                          "$len": {
+                            "$filter": {
+                              "from": {
+                                "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                              },
+                              "as": "extra",
+                              "where": {
+                                "$and": [
+                                  {
+                                    "$in": [
+                                      {
+                                        "$ref": "extra.type"
+                                      },
+                                      [
+                                        "file",
+                                        "link"
+                                      ]
+                                    ]
+                                  },
+                                  {
+                                    "$at": [
+                                      {
+                                        "$split": [
+                                          {
+                                            "$ref": "extra.url"
+                                          },
+                                          "://"
+                                        ]
+                                      },
+                                      1
+                                    ]
+                                  },
+                                  {
+                                    "$in": [
+                                      {
+                                        "$lower": {
+                                          "$first": {
+                                            "$split": [
+                                              {
+                                                "$ref": "extra.url"
+                                              },
+                                              "://"
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "$if": {
+                                          "condition": {
+                                            "$eq": [
+                                              {
+                                                "$ref": "extra.type"
+                                              },
+                                              "file"
+                                            ]
+                                          },
+                                          "then": [
+                                            "http",
+                                            "https",
+                                            "oss"
+                                          ],
+                                          "else": [
+                                            "http",
+                                            "https"
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        1
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "message": "Wan 3.0 媒体扩展仅接受一个文件或网页，图像、视频和音频须使用宿主引用"
+          },
+          {
+            "assert": {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$len": {
+                        "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                      }
+                    },
+                    0
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$coalesce": [
+                        {
+                          "$ref": "request.providerOptions.dashscope-wan3-video.prompt_extend"
+                        },
+                        true
+                      ]
+                    },
+                    true
+                  ]
+                }
+              ]
+            },
+            "message": "Wan 3.0 文件或网页输入必须开启 prompt_extend"
           }
         ],
         "create": {
@@ -310,10 +2339,7 @@
               },
               "media": {
                 "$omitEmpty": {
-                  "$coalesce": [
-                    {
-                      "$ref": "request.providerOptions.dashscope-wan3-video.media"
-                    },
+                  "$concatArrays": [
                     {
                       "$map": {
                         "from": {
@@ -326,7 +2352,36 @@
                           "type": {
                             "$coalesce": [
                               {
-                                "$ref": "media.role"
+                                "$if": {
+                                  "condition": {
+                                    "$in": [
+                                      {
+                                        "$ref": "media.role"
+                                      },
+                                      [
+                                        "subject_reference",
+                                        "style_reference"
+                                      ]
+                                    ]
+                                  },
+                                  "then": "reference_image",
+                                  "else": {
+                                    "$if": {
+                                      "condition": {
+                                        "$eq": [
+                                          {
+                                            "$ref": "media.role"
+                                          },
+                                          "reference_voice"
+                                        ]
+                                      },
+                                      "then": "reference_audio",
+                                      "else": {
+                                        "$ref": "media.role"
+                                      }
+                                    }
+                                  }
+                                }
                               },
                               {
                                 "$if": {
@@ -374,6 +2429,22 @@
                           },
                           "url": {
                             "$ref": "media.value"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "$map": {
+                        "from": {
+                          "$ref": "request.providerOptions.dashscope-wan3-video.media"
+                        },
+                        "as": "extra",
+                        "in": {
+                          "type": {
+                            "$ref": "extra.type"
+                          },
+                          "url": {
+                            "$ref": "extra.url"
                           }
                         }
                       }
@@ -440,17 +2511,7 @@
         },
         "response": {
           "taskId": {
-            "$coalesce": [
-              {
-                "$ref": "response.output.task_id"
-              },
-              {
-                "$ref": "response.task_id"
-              },
-              {
-                "$ref": "taskId"
-              }
-            ]
+            "$ref": "response.output.task_id"
           },
           "status": {
             "$if": {
@@ -466,15 +2527,7 @@
               },
               "then": "failed",
               "else": {
-                "$coalesce": [
-                  {
-                    "$ref": "response.output.task_status"
-                  },
-                  {
-                    "$ref": "response.status"
-                  },
-                  "pending"
-                ]
+                "$ref": "response.output.task_status"
               }
             }
           },

@@ -1,4 +1,4 @@
-import { audioMimeType, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceValue } from "@/lib/audio-generation";
+import { audioMimeType, normalizeAudioFormatForConfig, normalizeAudioFormatValue, normalizeAudioSpeedValue, normalizeAudioVoiceForConfig, normalizeAudioVoiceValue } from "@/lib/audio-generation";
 import { createChannelTransport } from "@/services/api/channel-transport";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { buildApiUrl, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
@@ -17,6 +17,12 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
     const requestConfig = resolveModelRequestConfig(config, config.model || config.audioModel);
     const model = requestConfig.model.trim();
     assertAudioConfig(requestConfig, model);
+    if (requestConfig.interfaceType === "minimax-speech") {
+        return requestMiniMaxSpeech(requestConfig, model, prompt, options);
+    }
+    if (requestConfig.interfaceType === "evolink-seed-audio" || requestConfig.interfaceType === "evolink-qwen-audio-tts") {
+        return requestEvoLinkAudio(requestConfig, model, prompt, requestConfig.interfaceType === "evolink-qwen-audio-tts", options);
+    }
     const format = normalizeAudioFormatValue(config.audioFormat);
     const instructions = config.audioInstructions.trim();
     const payload = {
@@ -37,6 +43,69 @@ export async function requestAudioGeneration(config: AiConfig, prompt: string, o
         return blob.type.startsWith("audio/") ? blob : new Blob([blob], { type: audioMimeType(format) });
     } catch (error) {
         throw new Error(readAxiosError(error, "音频生成失败"));
+    }
+}
+
+async function requestMiniMaxSpeech(config: AiConfig, model: string, text: string, options?: RequestOptions): Promise<Blob> {
+    const format = normalizeAudioFormatForConfig(config, config.audioFormat);
+    const speed = Math.max(0.5, Math.min(2, Number(normalizeAudioSpeedValue(config.audioSpeed))));
+    try {
+        const response = await audioTransport(config).postJson<{ base_resp?: { status_code?: number; status_msg?: string }; data?: { audio?: string } }>(
+            aiApiUrl(config, "/t2a_v2"),
+            {
+                model,
+                text,
+                stream: false,
+                output_format: "hex",
+                voice_setting: { voice_id: normalizeAudioVoiceForConfig(config, config.audioVoice), speed },
+                audio_setting: { format },
+            },
+            options,
+        );
+        if (response.base_resp?.status_code !== 0) throw new Error(response.base_resp?.status_msg || "MiniMax 语音合成失败");
+        const hex = response.data?.audio;
+        if (!hex || hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) throw new Error("MiniMax 未返回有效音频");
+        const bytes = new Uint8Array(hex.length / 2);
+        for (let index = 0; index < bytes.length; index += 1) bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+        return new Blob([bytes], { type: audioMimeType(format) });
+    } catch (error) {
+        throw new Error(readAxiosError(error, "MiniMax 语音合成失败"));
+    }
+}
+
+async function requestEvoLinkAudio(config: AiConfig, model: string, prompt: string, qwenTTS: boolean, options?: RequestOptions): Promise<Blob> {
+    const format = normalizeAudioFormatForConfig(config, config.audioFormat);
+    const speed = Math.max(0.5, Math.min(2, Number(normalizeAudioSpeedValue(config.audioSpeed))));
+    const instructions = config.audioInstructions.trim();
+    const payload = qwenTTS
+        ? {
+              model,
+              prompt,
+              voice: normalizeAudioVoiceForConfig(config, config.audioVoice),
+              response_format: format,
+              speech_rate: speed,
+              sample_rate: 24000,
+              ...(instructions ? { instruction: instructions } : {}),
+          }
+        : { model, prompt, format, speech_rate: speed };
+    try {
+        const created = await audioTransport(config).postJson<Record<string, unknown>>(aiApiUrl(config, "/audios/generations"), payload, options);
+        const taskId = asyncAudioTaskId(created);
+        if (!taskId) throw new Error("EvoLink 未返回任务 ID");
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+            await waitForAudioPoll(options?.signal);
+            const state = await audioTransport(config).get<Record<string, unknown>>(aiApiUrl(config, `/tasks/${encodeURIComponent(taskId)}`), options);
+            if (asyncAudioSucceeded(state)) {
+                if (!asyncAudioResultUrl(state)) throw new Error("EvoLink 已完成任务，但未返回音频地址");
+                return downloadAsyncAudio(config, taskId, state, format, options);
+            }
+            if (["failed", "cancelled", "canceled", "expired", "error"].includes(String(state.status || "").toLowerCase())) {
+                throw new Error(asyncAudioError(state));
+            }
+        }
+        throw new Error(`EvoLink 音频生成超时（任务 ${taskId}）`);
+    } catch (error) {
+        throw new Error(readAxiosError(error, "EvoLink 音频生成失败"));
     }
 }
 
@@ -82,6 +151,18 @@ function asyncAudioResultUrl(payload: Record<string, unknown>): string {
     for (const key of ["audio_url", "audioUrl", "result_url", "resultUrl", "output_url", "outputUrl", "url", "data"]) {
         const value = payload[key];
         if (typeof value === "string" && (/^https?:\/\//i.test(value) || value.startsWith("data:audio/"))) return value;
+    }
+    for (const key of ["result_data", "results"]) {
+        const value = payload[key];
+        if (Array.isArray(value)) {
+            for (const item of value) {
+                if (typeof item === "string" && /^https?:\/\//i.test(item)) return item;
+                if (item && typeof item === "object" && !Array.isArray(item)) {
+                    const nested = asyncAudioResultUrl(item as Record<string, unknown>);
+                    if (nested) return nested;
+                }
+            }
+        }
     }
     for (const key of ["audio", "data", "result", "output"]) {
         const value = payload[key];

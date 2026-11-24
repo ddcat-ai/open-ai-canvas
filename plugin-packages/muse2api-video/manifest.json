@@ -1,0 +1,185 @@
+{
+  "apiVersion": "yingce.plugin/v2",
+  "id": "muse2api-video",
+  "name": "MUSE2API Async Video",
+  "version": "1.0.0",
+  "author": "影策",
+  "description": "适配 MUSE2API 的 JSON 异步视频生成接口。",
+  "permissions": [
+    "generation.run",
+    "media.read"
+  ],
+  "configuration": {
+    "fields": [
+      {
+        "name": "apiKey",
+        "type": "secret",
+        "label": "API Key",
+        "required": true
+      }
+    ]
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "muse2api-video",
+        "label": "MUSE2API 视频生成",
+        "capabilities": [
+          "video"
+        ],
+        "scopes": [
+          "admin.system-channel",
+          "user.custom-channel",
+          "canvas",
+          "creation",
+          "agent"
+        ],
+        "baseUrl": "http://156.225.18.215:18610",
+        "auth": {
+          "type": "bearer",
+          "field": "apiKey"
+        },
+        "parameters": [
+          {
+            "name": "model",
+            "type": "string",
+            "required": true,
+            "mapping": "model",
+            "description": "影策渠道中的模型标识；当前上游请求样例不发送 model 字段。"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": true,
+            "mapping": "prompt",
+            "description": "视频提示词，作为 JSON 顶层 prompt 发送。"
+          },
+          {
+            "name": "duration",
+            "type": "integer",
+            "required": true,
+            "mapping": "duration",
+            "description": "视频时长，整数秒。"
+          },
+          {
+            "name": "aspectRatio",
+            "type": "string",
+            "required": true,
+            "mapping": "size",
+            "description": "画幅比例，例如 16:9；映射到上游 size。"
+          }
+        ],
+        "validations": [
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$ref": "request.duration"
+                },
+                0
+              ]
+            },
+            "message": "MUSE2API 视频时长必须是正整数秒"
+          },
+          {
+            "assert": {
+              "$gt": [
+                {
+                  "$len": {
+                    "$ref": "request.aspectRatio"
+                  }
+                },
+                0
+              ]
+            },
+            "message": "MUSE2API 视频 size 不能为空"
+          }
+        ],
+        "create": {
+          "method": "POST",
+          "path": "/v1/videos",
+          "contentType": "application/json",
+          "body": {
+            "prompt": {
+              "$ref": "request.prompt"
+            },
+            "duration": {
+              "$ref": "request.duration"
+            },
+            "size": {
+              "$ref": "request.aspectRatio"
+            }
+          }
+        },
+        "poll": {
+          "method": "GET",
+          "path": "/v1/videos/{{taskId}}",
+          "contentType": "application/json"
+        },
+        "response": {
+          "taskId": {
+            "$coalesce": [
+              {
+                "$ref": "response.id"
+              },
+              {
+                "$ref": "response.task_id"
+              },
+              {
+                "$ref": "response.data.id"
+              },
+              {
+                "$ref": "taskId"
+              }
+            ]
+          },
+          "status": {
+            "$coalesce": [
+              {
+                "$ref": "response.status"
+              },
+              {
+                "$ref": "response.data.status"
+              },
+              "pending"
+            ]
+          },
+          "message": {
+            "$coalesce": [
+              {
+                "$ref": "response.error.message"
+              },
+              {
+                "$ref": "response.message"
+              },
+              {
+                "$ref": "response.fail_reason"
+              }
+            ]
+          },
+          "videos": {
+            "$coalesce": [
+              {
+                "$ref": "response.result.url"
+              },
+              {
+                "$ref": "response.data.result.url"
+              },
+              {
+                "$ref": "response.video_url"
+              },
+              {
+                "$ref": "response.url"
+              }
+            ]
+          },
+          "errorPaths": [
+            "error.code"
+          ],
+          "resultEphemeral": true
+        }
+      }
+    ]
+  },
+  "documentation": "# MUSE2API Async Video\n\nMUSE2API 视频生成的 JSON 异步任务协议插件。创建任务时发送顶层 `prompt`、整数 `duration` 和 `size`，随后轮询任务并下载结果视频。\n\n完整请求与响应映射见 [docs/interface.md](docs/interface.md)。\n\n---\n\n# MUSE2API 异步视频接口\n\n## 协议身份\n\n- 插件 ID：`muse2api-video`。\n- Provider ID：`muse2api-video`。\n- 能力：`video`。\n- 默认 Base URL：`http://156.225.18.215:18610`。\n- 鉴权：`Authorization: Bearer <API Key>`。\n- 创建：`POST /v1/videos`，JSON。\n- 查询：`GET /v1/videos/{task_id}`，JSON。\n\n## 参数映射\n\n| 影策参数 | 必填 | 上游字段 | 说明 |\n| --- | --- | --- | --- |\n| `model` | 是 | 不发送 | 影策渠道的模型标识；所给上游请求样例没有 `model` 字段。 |\n| `prompt` | 是 | `prompt` | 顶层字符串字段，不放入 `input` 或 `parameters`。 |\n| `duration` | 是 | `duration` | 正整数秒。 |\n| `aspectRatio` | 是 | `size` | 例如 `16:9`。 |\n\n创建请求体示例：\n\n```json\n{\n  \"prompt\": \"一只小猫在草地上走动\",\n  \"duration\": 5,\n  \"size\": \"16:9\"\n}\n```\n\n## 异步任务\n\n创建响应中的 `id` 作为任务 ID；`queued` 映射为等待状态。插件轮询 `GET /v1/videos/{id}`，直到返回终态。成功状态读取 `result.url`，并由宿主下载后持久化。\n\n上游可能返回 `/v1/media/xxx.mp4` 这样的站点根相对地址。宿主会按渠道 Base URL 解析该地址，再下载媒体。\n\n```bash\ncurl -X POST \"$MUSE2API_BASE_URL/v1/videos\" \\\n  -H \"Authorization: Bearer $MUSE2API_KEY\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"prompt\":\"一只小猫在草地上走动\",\"duration\":5,\"size\":\"16:9\"}'\n\ncurl \"$MUSE2API_BASE_URL/v1/videos/task_xxx\" \\\n  -H \"Authorization: Bearer $MUSE2API_KEY\"\n```\n\n默认 Base URL 使用用户提供的 HTTP 地址；若上游同时提供 HTTPS 地址，可在渠道配置中替换为 HTTPS。\n\n<!-- YINGCE_MANIFEST_CONTRACT_START -->\n## Manifest 完整接口定义\n\n以下 JSON 与插件包内实际 `manifest.json` 逐字段一致，覆盖插件身份、权限、配置、鉴权、参数、校验、创建、Agent、查询、取消、结果下载、响应和 Agent 响应映射。`documentation` 字段的值就是当前完整文档；为避免文档在自身内部无限递归，JSON 中仅用等义占位文本表示正文。\n\n```json\n{\n  \"apiVersion\": \"yingce.plugin/v2\",\n  \"id\": \"muse2api-video\",\n  \"name\": \"MUSE2API Async Video\",\n  \"version\": \"1.0.0\",\n  \"author\": \"影策\",\n  \"description\": \"适配 MUSE2API 的 JSON 异步视频生成接口。\",\n  \"permissions\": [\n    \"generation.run\",\n    \"media.read\"\n  ],\n  \"configuration\": {\n    \"fields\": [\n      {\n        \"name\": \"apiKey\",\n        \"type\": \"secret\",\n        \"label\": \"API Key\",\n        \"required\": true\n      }\n    ]\n  },\n  \"contributes\": {\n    \"providers\": [\n      {\n        \"id\": \"muse2api-video\",\n        \"label\": \"MUSE2API 视频生成\",\n        \"capabilities\": [\n          \"video\"\n        ],\n        \"scopes\": [\n          \"admin.system-channel\",\n          \"user.custom-channel\",\n          \"canvas\",\n          \"creation\",\n          \"agent\"\n        ],\n        \"baseUrl\": \"http://156.225.18.215:18610\",\n        \"auth\": {\n          \"type\": \"bearer\",\n          \"field\": \"apiKey\"\n        },\n        \"parameters\": [\n          {\n            \"name\": \"model\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"model\",\n            \"description\": \"影策渠道中的模型标识；当前上游请求样例不发送 model 字段。\"\n          },\n          {\n            \"name\": \"prompt\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"prompt\",\n            \"description\": \"视频提示词，作为 JSON 顶层 prompt 发送。\"\n          },\n          {\n            \"name\": \"duration\",\n            \"type\": \"integer\",\n            \"required\": true,\n            \"mapping\": \"duration\",\n            \"description\": \"视频时长，整数秒。\"\n          },\n          {\n            \"name\": \"aspectRatio\",\n            \"type\": \"string\",\n            \"required\": true,\n            \"mapping\": \"size\",\n            \"description\": \"画幅比例，例如 16:9；映射到上游 size。\"\n          }\n        ],\n        \"validations\": [\n          {\n            \"assert\": {\n              \"$gt\": [\n                {\n                  \"$ref\": \"request.duration\"\n                },\n                0\n              ]\n            },\n            \"message\": \"MUSE2API 视频时长必须是正整数秒\"\n          },\n          {\n            \"assert\": {\n              \"$gt\": [\n                {\n                  \"$len\": {\n                    \"$ref\": \"request.aspectRatio\"\n                  }\n                },\n                0\n              ]\n            },\n            \"message\": \"MUSE2API 视频 size 不能为空\"\n          }\n        ],\n        \"create\": {\n          \"method\": \"POST\",\n          \"path\": \"/v1/videos\",\n          \"contentType\": \"application/json\",\n          \"body\": {\n            \"prompt\": {\n              \"$ref\": \"request.prompt\"\n            },\n            \"duration\": {\n              \"$ref\": \"request.duration\"\n            },\n            \"size\": {\n              \"$ref\": \"request.aspectRatio\"\n            }\n          }\n        },\n        \"poll\": {\n          \"method\": \"GET\",\n          \"path\": \"/v1/videos/{{taskId}}\",\n          \"contentType\": \"application/json\"\n        },\n        \"response\": {\n          \"taskId\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.id\"\n              },\n              {\n                \"$ref\": \"response.task_id\"\n              },\n              {\n                \"$ref\": \"response.data.id\"\n              },\n              {\n                \"$ref\": \"taskId\"\n              }\n            ]\n          },\n          \"status\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.status\"\n              },\n              {\n                \"$ref\": \"response.data.status\"\n              },\n              \"pending\"\n            ]\n          },\n          \"message\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.error.message\"\n              },\n              {\n                \"$ref\": \"response.message\"\n              },\n              {\n                \"$ref\": \"response.fail_reason\"\n              }\n            ]\n          },\n          \"videos\": {\n            \"$coalesce\": [\n              {\n                \"$ref\": \"response.result.url\"\n              },\n              {\n                \"$ref\": \"response.data.result.url\"\n              },\n              {\n                \"$ref\": \"response.video_url\"\n              },\n              {\n                \"$ref\": \"response.url\"\n              }\n            ]\n          },\n          \"errorPaths\": [\n            \"error.code\"\n          ],\n          \"resultEphemeral\": true\n        }\n      }\n    ]\n  },\n  \"documentation\": \"<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>\"\n}\n```\n<!-- YINGCE_MANIFEST_CONTRACT_END -->\n"
+}

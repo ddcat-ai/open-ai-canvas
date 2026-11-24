@@ -1,0 +1,211 @@
+/* 世界引擎「世界」面板与布景检查器。只用世界引擎 --pd-* token。 */
+.pv-world {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pv-world__presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.pv-world__chip {
+    padding: 4px 10px;
+    border: 1px solid var(--pd-b1);
+    border-radius: var(--pd-r-sm);
+    background: var(--pd-s2);
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-sm);
+    transition:
+        background 120ms var(--pd-ease-snap),
+        color 120ms var(--pd-ease-snap),
+        border-color 120ms var(--pd-ease-snap);
+}
+.pv-world__chip:hover {
+    background: var(--pd-s3);
+    color: var(--pd-t0);
+}
+.pv-world__chip.is-active {
+    border-color: var(--pd-a-bd);
+    background: var(--pd-a-bg);
+    color: var(--pd-t0);
+}
+
+.pv-world__weather {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+.pv-world__weather-btn,
+.pv-world__ground {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px 6px;
+    border: 1px solid var(--pd-b0);
+    border-radius: var(--pd-r-md);
+    background: var(--pd-s2);
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-xs);
+    transition:
+        background 120ms var(--pd-ease-snap),
+        border-color 120ms var(--pd-ease-snap),
+        color 120ms var(--pd-ease-snap);
+}
+.pv-world__weather-btn:hover,
+.pv-world__ground:hover {
+    background: var(--pd-s3);
+    color: var(--pd-t0);
+}
+.pv-world__weather-btn.is-active,
+.pv-world__ground.is-active {
+    border-color: var(--pd-a-bd);
+    background: var(--pd-a-bg);
+    color: var(--pd-t0);
+}
+
+.pv-world__grounds {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+}
+.pv-world__ground {
+    padding: 4px 2px 5px;
+}
+.pv-world__ground-swatch {
+    width: 100%;
+    height: 22px;
+    border-radius: var(--pd-r-sm);
+    box-shadow: inset 0 0 0 1px var(--pd-b0);
+}
+
+.pv-world__segmented {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 2px;
+    border: 1px solid var(--pd-b0);
+    border-radius: var(--pd-r-md);
+    background: var(--pd-s0);
+}
+.pv-world__segmented button {
+    padding: 5px 0;
+    border-radius: calc(var(--pd-r-md) - 2px);
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-sm);
+}
+.pv-world__segmented button.is-active {
+    background: var(--pd-s4);
+    color: var(--pd-t0);
+}
+
+.pv-world__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--pd-ts-sm);
+    color: var(--pd-t1);
+}
+.pv-world__row > span:first-child {
+    flex: 0 0 40px;
+}
+.pv-world__row--slider .ant-slider {
+    flex: 1;
+    margin: 0 4px;
+}
+.pv-world__row .pv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.pv-world__seed,
+.pv-world__value {
+    margin-left: auto;
+    color: var(--pd-t2);
+    font-variant-numeric: tabular-nums;
+}
+.pv-world__value {
+    flex: 0 0 44px;
+    text-align: right;
+}
+
+.pv-world__off {
+    align-self: flex-start;
+    color: var(--pd-t2);
+    font-size: var(--pd-ts-sm);
+}
+.pv-world__off:hover {
+    color: var(--pd-t0);
+}
+
+.pv-world-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 28px 12px;
+    text-align: center;
+    color: var(--pd-t1);
+}
+.pv-world-empty__title {
+    color: var(--pd-t0);
+    font-size: var(--pd-ts-lg);
+    font-weight: 600;
+}
+.pv-world-empty__text {
+    margin: 0;
+    font-size: var(--pd-ts-sm);
+    line-height: 1.6;
+}
+
+.pv-inspector-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 12px;
+    padding: 2px;
+    border: 1px solid var(--pd-b0);
+    border-radius: var(--pd-r-md);
+    background: var(--pd-s0);
+}
+.pv-inspector-tabs button {
+    padding: 5px 0;
+    border-radius: calc(var(--pd-r-md) - 2px);
+    color: var(--pd-t1);
+    font-size: var(--pd-ts-sm);
+    font-weight: 600;
+}
+.pv-inspector-tabs button.is-active {
+    background: var(--pd-s4);
+    color: var(--pd-t0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pv-world__chip,
+    .pv-world__weather-btn,
+    .pv-world__ground {
+        transition: none;
+    }
+}
+
+.pv-param-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pv-param-fields .pv-world__row > span:first-child {
+    flex: 0 0 44px;
+}
+.pv-param-fields__number.ant-input-number,
+.pv-param-fields__number.ant-input-number-affix-wrapper {
+    flex: 0 0 72px;
+    width: 72px;
+}
+.pv-param-fields__enum {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: var(--pd-ts-sm);
+    color: var(--pd-t1);
+}

@@ -43,28 +43,52 @@ func cloudAgentMediaDraftConfiguration(a cloudAgentMediaArgs, doc map[string]any
 		return nil, contract.Options{}, err
 	}
 	node := nodes[a.NodeID]
-	if node == nil || (a.Mode != "image" && a.Mode != "video") {
+	if node == nil || (a.Mode != "image" && a.Mode != "video" && a.Mode != "audio") {
 		return nil, contract.Options{}, nil
 	}
 	meta, _ := node["metadata"].(map[string]any)
 	var options contract.Options
 	var selection *contract.ModelSelection
+	legacyContract := false
+	hasStoredContract := false
 	if raw, exists := meta["generationSpec"]; exists {
+		hasStoredContract = true
 		encoded, err := json.Marshal(raw)
 		if err != nil {
 			return nil, options, err
 		}
-		spec, err := contract.Decode(encoded)
-		if err != nil || spec.Mode != a.Mode {
+		spec, err := contract.DecodeCanvasGenerationSpec(encoded)
+		if err == nil && spec.Mode == a.Mode {
+			options, selection = spec.Options, spec.ModelSelection
+		} else if err != nil && strings.HasPrefix(err.Error(), "generationSpec.version:") {
+			legacyContract = true
+		} else {
 			return nil, options, BadAuthRequest("草稿生成配置无效，未提交生成任务")
 		}
-		options, selection = spec.Options, spec.ModelSelection
-	} else {
+	}
+	if !hasStoredContract || legacyContract {
 		config := map[string]any{}
-		for _, key := range []string{"size", "quality", "imageResolution", "imageParameters", "vquality"} {
-			config[key] = meta[key]
+		if raw, ok := meta["generationSpec"].(map[string]any); ok {
+			if storedOptions, ok := raw["options"].(map[string]any); ok {
+				for key, value := range storedOptions {
+					taskKey := map[string]string{"durationSeconds": "videoSeconds", "resolution": "vquality", "generateAudio": "videoGenerateAudio", "watermark": "videoWatermark"}[key]
+					if taskKey == "" {
+						taskKey = key
+					}
+					config[taskKey] = value
+				}
+			}
 		}
-		config["videoSeconds"], config["videoGenerateAudio"], config["videoWatermark"] = meta["seconds"], meta["generateAudio"], meta["watermark"]
+		for _, key := range []string{"size", "quality", "imageResolution", "imageParameters", "vquality"} {
+			if _, exists := config[key]; !exists {
+				config[key] = meta[key]
+			}
+		}
+		for key, value := range map[string]any{"videoSeconds": meta["seconds"], "videoGenerateAudio": meta["generateAudio"], "videoWatermark": meta["watermark"], "audioMode": meta["audioMode"], "audioVoice": meta["audioVoice"], "audioFormat": meta["audioFormat"], "audioSpeed": meta["audioSpeed"], "audioInstructions": meta["audioInstructions"]} {
+			if _, exists := config[key]; !exists {
+				config[key] = value
+			}
+		}
 		options, err = contract.OptionsFromTaskConfig(a.Mode, config)
 		if err != nil {
 			return nil, options, BadAuthRequest("草稿生成配置无效，未提交生成任务")
@@ -106,6 +130,9 @@ func applyCloudAgentMediaDraftOptions(a *cloudAgentMediaArgs, options contract.O
 	}
 	if options.Watermark != nil {
 		a.VideoWatermark = options.Watermark
+	}
+	if options.AudioMode != nil && a.AudioMode == "" {
+		a.AudioMode = *options.AudioMode
 	}
 }
 

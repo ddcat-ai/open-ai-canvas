@@ -4,8 +4,9 @@ import type { InsertAssetPayload } from "@/components/canvas/asset-picker-modal"
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import type { CloudAgentMessagePresentation } from "@/services/cloud-agent-conversations";
 import type { CanvasNodeData } from "@/types/canvas";
+import { agentPageContextKey, type AgentPageContext, type AgentRequestTarget } from "@/lib/agent-page-context";
 
-export type AgentPrefillRequest = CloudAgentMessagePresentation & { id: number; text: string; autoSubmit?: boolean; requiresVision?: boolean };
+export type AgentPrefillRequest = CloudAgentMessagePresentation & { id: number; text: string; autoSubmit?: boolean; requiresVision?: boolean; target?: AgentRequestTarget };
 /** 画布为 Agent 输入框新建的节点，输入框据此显示附件卡片。 */
 export type AgentInsertedNode = { nodeId: string; title: string; kind: "image" | "text" | "video" | "audio"; previewUrl?: string };
 
@@ -44,11 +45,16 @@ type GlobalAgentStore = {
     /** 平台唯一 Agent 面板的开合状态，跨路由保持。 */
     open: boolean;
     canvas: AgentCanvasContext | null;
+    page: { context: AgentPageContext; label: string } | null;
+    prefillRequest: AgentPrefillRequest | null;
     /** 本机 UI 偏好：在画布里是否停靠到右侧，以及停靠宽度。账号切换不影响。 */
     dock: AgentPanelDockPreference;
     openAgent: () => void;
     closeAgent: () => void;
     setCanvas: (canvas: AgentCanvasContext | null) => void;
+    setPage: (page: { context: AgentPageContext; label: string } | null) => void;
+    requestPrefill: (request: Omit<AgentPrefillRequest, "id">) => void;
+    clearPrefill: (id: number) => void;
     setDocked: (docked: boolean) => void;
     setDockWidth: (width: number) => void;
     reset: () => void;
@@ -98,6 +104,7 @@ function stabilizeCanvasContext(previous: AgentCanvasContext | null, next: Agent
 }
 
 let persistDockTimer: ReturnType<typeof setTimeout> | undefined;
+let prefillSequence = 0;
 
 // 拖动调宽时每帧都会更新，合并后再写本地存储。
 function persistDockPreference(dock: AgentPanelDockPreference) {
@@ -115,9 +122,22 @@ function persistDockPreference(dock: AgentPanelDockPreference) {
 export const useGlobalAgentStore = create<GlobalAgentStore>()((set, get) => ({
     open: false,
     canvas: null,
+    page: null,
+    prefillRequest: null,
     dock: readDockPreference(),
     openAgent: () => set({ open: true }),
     closeAgent: () => set({ open: false }),
+    setPage: (page) => set((state) => (state.page?.label === page?.label && agentPageContextKey(state.page?.context) === agentPageContextKey(page?.context) ? state : { page })),
+    requestPrefill: (request) =>
+        set((state) => ({
+            open: true,
+            prefillRequest: {
+                ...request,
+                id: ++prefillSequence,
+                target: request.target || (state.canvas ? { canvasId: state.canvas.canvasId } : { canvasId: "", ...(state.page ? { pageContext: { ...state.page.context } } : {}) }),
+            },
+        })),
+    clearPrefill: (id) => set((state) => (state.prefillRequest?.id === id ? { prefillRequest: null } : state)),
     setCanvas: (canvas) =>
         set((state) => {
             const next = stabilizeCanvasContext(state.canvas, canvas);
@@ -135,5 +155,5 @@ export const useGlobalAgentStore = create<GlobalAgentStore>()((set, get) => ({
         set({ dock });
         persistDockPreference(dock);
     },
-    reset: () => set({ open: false, canvas: null }),
+    reset: () => set({ open: false, canvas: null, page: null, prefillRequest: null }),
 }));

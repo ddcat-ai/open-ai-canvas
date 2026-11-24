@@ -325,7 +325,11 @@ func (s *Service) buildCatalogChannelModel(channel *model.ModelChannel, entry pr
 	if err != nil {
 		return model.ChannelModel{}, nil, err
 	}
-	normalized, err := NormalizeModelCapabilityConfigForModel(entry.Capability, protocolID, entry.ProviderModelKey, capabilityConfig, s.protocolRegistry())
+	release, err := selectModelRelease(s.protocolRegistry(), protocolID, "", true)
+	if err != nil {
+		return model.ChannelModel{}, nil, err
+	}
+	normalized, err := NormalizeModelCapabilityConfigForModel(entry.Capability, protocolID, entry.ProviderModelKey, capabilityConfig, release.Registry)
 	if err != nil {
 		return model.ChannelModel{}, nil, err
 	}
@@ -374,7 +378,7 @@ func (s *Service) buildCatalogChannelModel(channel *model.ModelChannel, entry pr
 	item := model.ChannelModel{
 		ID: modelID, ChannelID: channel.ID, ModelKey: entry.ModelKey, ProviderModelKey: entry.ProviderModelKey,
 		DisplayName: entry.DisplayName, ChannelLabel: entry.ChannelLabel, Tags: tags, Description: entry.Description, Icon: entry.Icon,
-		SortOrder: sortOrder, Capability: entry.Capability, Protocol: protocolType, Enabled: true, PriceVersion: 1,
+		SortOrder: sortOrder, Capability: entry.Capability, Protocol: protocolType, ProtocolRelease: release.SHA256, Enabled: true, PriceVersion: 1,
 		CapabilityConfigJSON: capabilityJSON, CatalogModelKey: entry.ModelKey,
 	}
 	if capabilityJSON != "" {

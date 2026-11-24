@@ -7,6 +7,7 @@ import (
 )
 
 func RegisterCreationRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerCreationHistoryRoutes(r, svc)
 	read := func(action string) gin.HandlerFunc {
 		return func(c *gin.Context) {
 			user, err := currentUser(c, svc)

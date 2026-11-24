@@ -167,6 +167,9 @@ func (s *Service) EnsureSkillPackages() error {
 }
 
 func (s *Service) InstallSkillUpload(userID string, sourceType string, header *multipart.FileHeader, req SkillInstallRequest) (*SkillItem, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	sourceType = strings.ToLower(strings.TrimSpace(sourceType))
 	if sourceType == "" && header != nil {
 		switch strings.ToLower(path.Ext(header.Filename)) {
@@ -207,6 +210,9 @@ func (s *Service) InstallSkillUpload(userID string, sourceType string, header *m
 }
 
 func (s *Service) InstallGitHubSkill(userID string, req SkillGitHubInstallRequest) (*SkillItem, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	spec, err := parseGitHubSkillURL(req.URL, req.Ref, req.Subdir)
 	if err != nil {
 		return nil, err
@@ -223,6 +229,9 @@ func (s *Service) InstallGitHubSkill(userID string, req SkillGitHubInstallReques
 }
 
 func (s *Service) SyncGitHubSkill(userID string, skillID string) (*SkillItem, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	skill, err := s.ownedSkill(userID, skillID)
 	if err != nil {
 		return nil, err
@@ -266,6 +275,12 @@ func (s *Service) syncGitHubSkill(skill *model.Skill) error {
 }
 
 func (s *Service) syncGitHubSkillWithContext(ctx context.Context, skill *model.Skill) error {
+	if skill == nil {
+		return kernel.BadAuthRequest("技能不存在")
+	}
+	if err := s.RequireAdministrator(skill.OwnerID); err != nil {
+		return err
+	}
 	now := time.Now()
 	spec, err := parseGitHubSkillURL(skill.SourceURL, skill.SourceRef, skill.SourceSubdir)
 	if err != nil {
@@ -324,6 +339,9 @@ func (s *Service) updateSingleMarkdownSkill(skill *model.Skill, req SkillMutatio
 }
 
 func (s *Service) createSkillFromArchive(userID string, archive skillPackageArchive, req SkillInstallRequest, sourceType string, sourceURL string, sourceRef string, sourceSubdir string, sourceCommit string, autoUpdate bool) (*SkillItem, error) {
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = archive.Metadata.Name

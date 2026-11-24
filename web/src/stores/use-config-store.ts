@@ -8,6 +8,7 @@ import { modelProtocolCapability, normalizeModelProtocol, type ModelProtocol, ty
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
+import { workspaceTeamId } from "@/lib/workspace-routes";
 import type { CapabilitySpec, PublicChannelModelAvailability, PublicLogicalModelPriceTier } from "@/services/api/logical-models";
 import { type WorkflowFieldMapping, normalizeRunningHubCapability, normalizeRunningHubWorkflowKind, normalizeSavedWorkflowFields, mergeWorkflowFieldMappings, normalizeWorkflowFieldMappings } from "./config-workflow-fields";
 import {
@@ -71,6 +72,8 @@ export type WorkflowGraphPreview = {
 export const PUBLIC_MODEL_CATALOG_ID = "managed";
 
 export type ModelChannel = {
+    websiteId?: string;
+    updatedAt?: string;
     mediaTransport?: import("@/lib/media-transport").ReferenceMediaTransport;
     id: string;
     name: string;
@@ -82,6 +85,8 @@ export type ModelChannel = {
     apiFormat: ApiCallFormat;
     interfaceType?: ChannelInterfaceType;
     models: string[];
+    // 管理端分类包含已停用与未定价模型；不代表前台可调用能力。
+    capabilities?: ModelCapability[];
     // 仅平台目录使用：将已保存的旧 SKU 选择重定向到当前模型家族。
     modelAliases?: Record<string, string>;
     scope?: "system" | "user";
@@ -104,7 +109,7 @@ export type ModelChannel = {
         /** 仅系统渠道：模型目录按插件 create 路径识别的文本请求格式。 */
         textWire?: TextWire;
         pricePolicy?: "channel" | "unified";
-        billingMode: "fixed_request" | "per_second" | "token";
+        billingMode: "fixed_request" | "per_second" | "token" | "image_usage";
         unitPriceMicrocredits: number;
         inputTokenPriceMicrocredits?: number;
         outputTokenPriceMicrocredits?: number;
@@ -118,7 +123,7 @@ export type ModelChannel = {
         defaultOptions?: Record<string, unknown>;
         availability?: PublicChannelModelAvailability;
         available?: boolean;
-        /** 仅视频模型：挂参考视频的请求是否另计费；用户侧据此标注“参考视频另计费 / 不计费”。 */
+        /** 仅视频模型：挂参考视频的请求是否另计费；用于报价与费用明细。 */
         referenceVideoBilling?: boolean;
         /** 系统目录里的渠道模型行 ID 与路由键：后台按行 ID 保存配置，前台据此找回对应的可选模型。 */
         channelModelId?: string;
@@ -141,6 +146,7 @@ export type AiConfig = {
     videoModel: string;
     textModel: string;
     audioModel: string;
+    audioMode?: string;
     audioVoice: string;
     audioFormat: string;
     audioSpeed: string;
@@ -500,7 +506,16 @@ function normalizeSelectedModel(value: string, channels: ModelChannel[], options
 export function useEffectiveConfig() {
     const config = useConfigStore((state) => state.config);
     const customChannelsEnabled = useUserStore((state) => state.features.customChannelsEnabled);
-    return useMemo(() => effectiveConfigForCustomChannels(config, customChannelsEnabled), [config, customChannelsEnabled]);
+    return useMemo(() => {
+        if (!workspaceTeamId) return effectiveConfigForCustomChannels(config, customChannelsEnabled);
+        const channels = config.channels
+            .filter((channel) => channel.scope === "system")
+            .map((channel) => ({
+                ...channel,
+                models: channel.models.filter((name) => channel.modelCosts?.some((cost) => cost.model === name && cost.available !== false && cost.capability === "text" && (cost.billingMode === "fixed_request" || cost.billingMode === "token"))),
+            }));
+        return normalizeConfigSnapshot({ config: { ...config, taskWorkflowProvider: "model", channels } }).config;
+    }, [config, customChannelsEnabled]);
 }
 
 export function effectiveConfigForCustomChannels(config: AiConfig, customChannelsEnabled: boolean): AiConfig {
@@ -617,6 +632,8 @@ export function defaultBaseUrlForChannelInterface(interfaceType?: ChannelInterfa
     if (interfaceType === "volcengine-ark-image" || interfaceType === "volcengine-ark-video") return "https://ark.cn-beijing.volces.com/api/v3";
     if (interfaceType === "volcengine-jimeng-image" || interfaceType === "volcengine-jimeng-video") return "https://visual.volcengineapi.com";
     if (interfaceType === "minimax-video") return "https://api.minimaxi.com";
+    if (interfaceType === "minimax-speech") return "https://api.minimax.cn";
+    if (interfaceType === "evolink-seed-audio" || interfaceType === "evolink-qwen-audio-tts") return "https://api.evolink.ai";
     if (interfaceType === "grok-image" || interfaceType === "newapi" || interfaceType === "newapi-channel-1" || interfaceType === "newapi-channel-2" || interfaceType === "xai-video") return "";
     return OPENAI_BASE_URL;
 }

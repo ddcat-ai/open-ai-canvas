@@ -235,6 +235,8 @@ func doJSON(req *http.Request, target interface{}) error {
 	return nil
 }
 
+type providerProxyURLKey struct{}
+
 func doBinary(req *http.Request) ([]byte, string, error) {
 	return doBinaryWithConsumer(req, nil)
 }
@@ -257,7 +259,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 	cacheManagementRequest := requestKind == "cache-create" || requestKind == "cache-delete"
 	responseLimit := maxProviderResponseBytes
 	channelID := ""
-	channelProxyURL := ""
+	channelProxyURL, _ := req.Context().Value(providerProxyURLKey{}).(string)
 	if metadata, ok := req.Context().Value(providerAnalyticsKey{}).(providerAnalyticsContext); ok && metadata.Service != nil {
 		runtimeService = metadata.Service
 		coordinator = metadata.Service.coordinator
@@ -299,7 +301,7 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 			defer release()
 		}
 	}
-	if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
+	if _, err := ValidateOutboundURLWithProxy(req.URL.String(), channelProxyURL); err != nil {
 		recordProviderRequest(req, startedAt, 0, nil, err)
 		return nil, "", err
 	}
@@ -436,6 +438,9 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		ErrorCode: errorCode, Error: errorText, ConcurrencyLimit: metadata.ConcurrencyLimit, UpstreamURL: req.URL.Scheme + "://" + req.URL.Host + req.URL.Path,
 		ProviderRequestID: metadata.ProviderRequestID, RequestContentType: req.Header.Get("Content-Type"), RequestBody: requestPayloadForLog(req), ResponseBody: SanitizeAPICallPayload(responseBody, ""),
 	}
+	if requestKind == "create" {
+		callLog.GenerationContentJSON = metadata.GenerationContentJSON
+	}
 	channelSlotFailure := false
 	if code, message := ChannelSlotFailureDetails(requestErr); code != "" {
 		channelSlotFailure = true
@@ -453,6 +458,19 @@ func recordProviderRequest(req *http.Request, startedAt time.Time, statusCode in
 		}
 	}
 	metadata.Service.EnrichAPICallLog(&callLog, responseBody)
+	if metadata.ProtocolReceipt != nil && (requestKind == "create" || requestKind == "poll") {
+		if requestKind == "create" {
+			callLog.ProviderRequestID = ""
+		}
+		if requestErr == nil && statusCode >= 200 && statusCode < 300 {
+			if receipt, err := metadata.ProtocolReceipt.decode(responseBody); err == nil {
+				callLog.ProviderStatus = firstNonEmpty(callLog.ProviderStatus, string(receipt.Status))
+				if requestKind == "create" {
+					callLog.ProviderRequestID = receipt.TaskID
+				}
+			}
+		}
+	}
 	callLog.Error = withUserVisibleLogError(requestErr, callLog.Error)
 	if err := metadata.Service.LogAPICall(callLog); err != nil {
 		if !channelSlotFailure && metadata.Billing != nil {

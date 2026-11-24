@@ -1,19 +1,19 @@
 import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 export const koKR: DeepStringRecord<typeof zhCN> = {
-    timelinePreview: {
-        pause: "미리보기 일시정지",
-        play: "미리보기 재생",
-        noClipHere: "이 위치에 동영상 클립이 없습니다",
-        noClip: "동영상 클립 없음",
-        noSubtitle: "여기에는 자막이 없습니다. 자막 클립을 선택하면 아래에서 편집할 수 있습니다",
-    },
     toolbar: {
+        moreTools: "도구 더 보기",
+        settings: "도구 모음 설정",
         appearance: "캔버스 외관",
         appearanceSubtitle: "색상과 그리드",
         mediaInfo: "미디어 정보",
     },
     videoPromptTools: {
+        mode: "동영상 참조 모드",
+        textMode: "텍스트로 생성",
+        allMode: "통합 참조",
+        frameMode: "시작·끝 프레임",
+        swap: "시작·끝 프레임 바꾸기",
         imageCount: "이미지 {{count}}개",
         videoCount: "동영상 {{count}}개",
         audioCount: "오디오 {{count}}개",

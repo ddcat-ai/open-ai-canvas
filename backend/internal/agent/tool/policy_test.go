@@ -38,9 +38,9 @@ func TestRegistryMatchesLegacyClassification(t *testing.T) {
 		want []string
 		pred func(Policy) bool
 	}{
-		{"write", legacyWrite, Policy.Write},
+		{"write", append(append([]string{}, legacyWrite...), MCPCallTool, DramaShotUpdate), Policy.Write},
 		{"cacheable", legacyCacheable, func(p Policy) bool { return p.Cacheable }},
-		{"readOnly", legacyReadOnly, Policy.ReadOnly},
+		{"readOnly", append(append([]string{}, legacyReadOnly...), MemorySearch, MCPListTools, DramaShotRead), Policy.ReadOnly},
 		{"canvasRevision", legacyCanvasRev, func(p Policy) bool { return p.CacheScope == CacheCanvasRevision }},
 		{"offsetDefaults", legacyOffsetNorm, func(p Policy) bool { return len(p.OffsetDefaults) > 0 }},
 		{"media", legacyMedia, Policy.Media},

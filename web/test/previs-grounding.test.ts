@@ -31,6 +31,7 @@ describe("落地规则", () => {
         const grounded = groundPrevisObject(withKeys);
         expect(grounded.transform.position).toEqual([-1.71, 0, -0.62]);
         expect(grounded.keyframes[0].transform.position[1]).toBe(0);
+        // 路径点 Y 是离地高度：地下的点拉回 0，空中的点保留（演员沿路径悬空移动）。
         expect(grounded.keyframes[1].transform.position[1]).toBe(0.8);
         expect(grounded.motionPath!.points.map((point) => point[1])).toEqual([0, 0.5]);
     });

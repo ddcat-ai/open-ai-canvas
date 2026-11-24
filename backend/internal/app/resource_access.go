@@ -39,7 +39,7 @@ func (s *Service) ResourceAccessBatch(userID string, requests []ResourceAccessRe
 		options, err := assets.NormalizeAccessOptions(request.AccessOptions, false)
 		if err == nil {
 			var resource *model.Resource
-			resource, err = s.repo.ResourceForUser(userID, request.ResourceID)
+			resource, err = s.resourceForUserOrOfficial(userID, request.ResourceID)
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				err = NotFound("资源不存在或不可访问")
 			}
@@ -62,6 +62,16 @@ func (s *Service) ResourceAccessBatch(userID string, requests []ResourceAccessRe
 func (s *Service) resolveResourceAccess(resource *model.Resource, options ResourceAccessOptions) (*ResourceAccess, error) {
 	if resource == nil {
 		return nil, NotFound("资源不存在")
+	}
+	if teamID, team := model.TeamIDFromContentKey(resource.UserID); team {
+		if options.Purpose == assets.PurposeProvider {
+			return nil, Forbidden("空间媒体不能生成公开访问地址")
+		}
+		if resource.Status != model.ResourceStatusReady {
+			return nil, assets.AccessError(409, "resource_not_ready", "资源尚未上传完成")
+		}
+		now := time.Now().UTC()
+		return &ResourceAccess{ResourceID: resource.ID, RequestedVariant: options.Variant, ActualVariant: assets.VariantOriginal, Delivery: assets.DeliveryProxy, IssuedAt: now, RefreshAt: now.Add(time.Hour), Revision: resource.ETag, URL: "/api/teams/" + url.PathEscape(teamID) + "/workspace/resources/" + url.PathEscape(resource.ID) + "/file"}, nil
 	}
 	var setting ossSettingValue
 	if resource.Provider != "local" {
@@ -92,7 +102,7 @@ func (s *Service) PrepareResourceDelivery(userID, id string, options ResourceAcc
 	if err != nil {
 		return nil, err
 	}
-	resource, err := s.repo.ResourceForUser(userID, id)
+	resource, err := s.resourceForUserOrOfficial(userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, NotFound("资源不存在或不可访问")
 	}
@@ -103,8 +113,14 @@ func (s *Service) PrepareResourceDelivery(userID, id string, options ResourceAcc
 }
 
 func (s *Service) prepareResourceDelivery(userID string, resource *model.Resource, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
-	if resource == nil || resource.UserID != userID {
+	if resource == nil {
 		return nil, Forbidden("资源不可访问")
+	}
+	if resource.UserID != userID {
+		_, err := s.resourceForUserOrOfficial(userID, resource.ID)
+		if err != nil {
+			return nil, Forbidden("资源不可访问")
+		}
 	}
 	access, err := s.resolveResourceAccess(resource, options)
 	if err != nil {
@@ -124,6 +140,38 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 	}
 	delivery.Resource = delivery.Stream.Resource
 	return delivery, nil
+}
+
+// resourceForUserOrOfficial resolves a personal resource or the single shared
+// resource behind a published official asset. Official references deliberately
+// do not create per-user asset rows.
+func (s *Service) resourceForUserOrOfficial(userID, resourceID string) (*model.Resource, error) {
+	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	if err == nil || !errors.Is(err, gorm.ErrRecordNotFound) {
+		return resource, err
+	}
+	published, checkErr := s.repo.PublishedOfficialResource(resourceID)
+	if checkErr != nil {
+		return nil, checkErr
+	}
+	if published {
+		return s.repo.Resource(resourceID)
+	}
+	official, officialErr := s.repo.OfficialAssetByResourceID(resourceID)
+	if officialErr != nil {
+		return nil, err
+	}
+	allowed := official.Status == model.OfficialAssetStatusPublished
+	if !allowed {
+		allowed, officialErr = s.repo.OfficialAssetImportedByUser(official.ID, userID)
+	}
+	if officialErr == nil && !allowed {
+		allowed, officialErr = s.repo.RetainedOfficialResourceByUser(userID, resourceID)
+	}
+	if officialErr != nil || !allowed {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return s.repo.Resource(resourceID)
 }
 
 func (s *Service) signedResourceAccessURL(resource *model.Resource, variant assets.ResourceVariant, expires time.Time, public bool) (string, error) {
@@ -159,6 +207,9 @@ func (s *Service) PreparePublicResourceDelivery(id, expires, signature string, o
 	resource, err := s.repo.Resource(id)
 	if err != nil {
 		return nil, Forbidden("匿名下载链接无效")
+	}
+	if _, team := model.TeamIDFromContentKey(resource.UserID); team {
+		return nil, Forbidden("空间媒体需要成员身份")
 	}
 	seconds, _ := strconv.ParseInt(expires, 10, 64)
 	options.ExpiresAt = time.Unix(seconds, 0)

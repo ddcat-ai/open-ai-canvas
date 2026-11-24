@@ -124,8 +124,8 @@ describe("large canvas media rendering", () => {
     });
 
     test("reuses a cached full video Blob for poster capture before requesting playback access", () => {
-        expect(canvasVideoPreviewSource).toContain("peekCachedResourceObjectUrl(storageKey)");
-        expect(canvasVideoPreviewSource).toContain("getCachedResourceObjectUrl(storageKey)");
+        expect(canvasVideoPreviewSource).toContain("loadCachedResourceObjectUrl(storageKey)");
+        expect(canvasVideoPreviewSource).toContain("lease?.release()");
     });
 
     test("shows a captured first frame before its OSS poster upload finishes and allows later retries", () => {

@@ -7,16 +7,16 @@ export const MIN_EPISODE_SECONDS = 30;
 export const MAX_EPISODE_SECONDS = 1200;
 
 export const DEFAULT_STORYBOARD: DramaStoryboardSettings = {
-    segmentMode: "auto",
+    segmentMode: "fixed",
     segmentSeconds: 10,
     segmentMinSeconds: 8,
     segmentMaxSeconds: 15,
-    pacing: "fast",
-    dialogue: "standard",
+    pacing: "rapid",
+    dialogue: "dense",
     transition: "auto",
     transitionMs: 150,
-    performance: 5,
-    cameraMotion: 5,
+    performance: 7,
+    cameraMotion: 3,
 };
 
 /** 镜头节奏从快到慢五档的平均镜头长度（秒），与后端 production.pacingRules 一致。 */
@@ -62,7 +62,7 @@ export function normalizeStoryboard(input?: Partial<DramaStoryboardSettings>): D
     const seconds = (raw: number, fallback: number) => clamp(Math.round(raw || fallback), MIN_SEGMENT_SECONDS, MAX_SEGMENT_SECONDS);
     const low = seconds(value.segmentMinSeconds, DEFAULT_STORYBOARD.segmentMinSeconds);
     const high = seconds(value.segmentMaxSeconds, DEFAULT_STORYBOARD.segmentMaxSeconds);
-    const dialogue: DramaDialogue = (["dense", "sparse", "custom"] as DramaDialogue[]).includes(value.dialogue) ? value.dialogue : "standard";
+    const dialogue: DramaDialogue = (["dense", "sparse", "custom", "standard"] as DramaDialogue[]).includes(value.dialogue) ? value.dialogue : DEFAULT_STORYBOARD.dialogue;
     // 自定义参数填了就夹到范围；自定义档缺项按标准档补齐，预设档下未填的保持未填（与后端 Normalized 一致）。
     const param = (key: keyof DialogueRule, round: (n: number) => number) => {
         const raw = Number(value[key]);
@@ -71,11 +71,11 @@ export function normalizeStoryboard(input?: Partial<DramaStoryboardSettings>): D
     };
     const tenth = (n: number) => Math.round(n * 10) / 10;
     return {
-        segmentMode: (["fixed", "range"] as DramaSegmentMode[]).includes(value.segmentMode) ? value.segmentMode : "auto",
+        segmentMode: (["fixed", "range", "auto"] as DramaSegmentMode[]).includes(value.segmentMode) ? value.segmentMode : DEFAULT_STORYBOARD.segmentMode,
         segmentSeconds: seconds(value.segmentSeconds, DEFAULT_STORYBOARD.segmentSeconds),
         segmentMinSeconds: Math.min(low, high),
         segmentMaxSeconds: Math.max(low, high),
-        pacing: PACING_ORDER.includes(value.pacing) ? value.pacing : "fast",
+        pacing: PACING_ORDER.includes(value.pacing) ? value.pacing : DEFAULT_STORYBOARD.pacing,
         dialogue,
         speechRate: param("speechRate", tenth),
         lineSeconds: param("lineSeconds", tenth),

@@ -14,7 +14,7 @@ import {
 } from "@/lib/canvas/previs/previs-onboarding";
 
 /**
- * 预演台首次上手引导浮层。
+ * 世界引擎首次上手引导浮层。
  *
  * 硬约束：
  * - 非阻塞。不是 dialog，没有遮罩，不抢焦点，不做焦点陷阱：引导旁边就是要动手的工作台，

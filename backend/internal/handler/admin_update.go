@@ -1,14 +1,50 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
+	"yingce/backend/internal/hostupdate"
 	"yingce/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 func RegisterAdminUpdateRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r.PUT("/admin/system-update/sources", func(c *gin.Context) {
+		actor, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
+		var sources hostupdate.Sources
+		decoder := json.NewDecoder(c.Request.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&sources); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		status, err := svc.AdminSaveUpdateSources(c.Request.Context(), actor, sources)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, status)
+	})
+	r.POST("/admin/system-update/sources/test", func(c *gin.Context) {
+		actor, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		status, err := svc.AdminTestUpdateSources(c.Request.Context(), actor)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, status)
+	})
 	r.GET("/admin/system-update", func(c *gin.Context) {
 		actor, err := currentUser(c, svc)
 		if err != nil {

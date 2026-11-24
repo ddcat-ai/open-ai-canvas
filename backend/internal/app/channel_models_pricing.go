@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 	protocolcontract "yingce/backend/internal/protocol"
 )
@@ -97,11 +98,15 @@ func (s *Service) syncLogicalModelsFromChannelModel(actor *model.User, channelMo
 	return nil
 }
 
-func supportsTokenBilling(capability string, _ model.ChannelInterfaceType) bool {
-	return capability == "text" || capability == "video"
+func supportsTokenBilling(capability string, protocol model.ChannelInterfaceType) bool {
+	return capability == "text" || capability == "video" || (capability == "audio" && protocol == model.ChannelInterfaceEvoLinkQwenAudioTTS)
 }
 
 func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string) ([]model.ChannelModelPriceTier, error) {
+	return normalizeChannelModelPriceTiersWithIDs(req, capability, protocol, fallbackProviderModelKey, s.repo.NextPrefixedID)
+}
+
+func normalizeChannelModelPriceTiersWithIDs(req ChannelModelRequest, capability string, protocol model.ChannelInterfaceType, fallbackProviderModelKey string, nextID func(string) (string, error)) ([]model.ChannelModelPriceTier, error) {
 	inputs := req.PriceTiers
 	// 兼容旧管理 API：没有 priceTiers 的请求等价于一个默认价格档。
 	if len(inputs) == 0 {
@@ -144,12 +149,13 @@ func (s *Service) normalizeChannelModelPriceTiers(req ChannelModelRequest, capab
 		if rulesErr != nil {
 			return nil, rulesErr
 		}
-		id, idErr := s.repo.NextPrefixedID("PTIER")
+		id, idErr := nextID("PTIER")
 		if idErr != nil {
 			return nil, idErr
 		}
 		enabled := input.Enabled == nil || *input.Enabled
 		result = append(result, model.ChannelModelPriceTier{
+			ImagePricing:                        input.ImagePricing,
 			CostPricing:                         input.CostPricing,
 			ID:                                  id,
 			SelectorKey:                         key,
@@ -387,14 +393,24 @@ func validateChannelModelTierPricing(capability string, protocol model.ChannelIn
 	if err := validateCreditCostPricing(capability, billingMode, input.CostPricing); err != nil {
 		return err
 	}
-	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" {
-		return BadAuthRequest("模型计费方式仅支持按次、按秒或 Token")
+	if billingMode == imagebilling.Mode {
+		if capability != "image" {
+			return BadAuthRequest("图片用量计费仅适用于图片模型")
+		}
+		if err := imagebilling.Validate(input.ImagePricing); err != nil {
+			return BadAuthRequest(err.Error())
+		}
+	} else if input.ImagePricing != nil {
+		return BadAuthRequest("图片用量价格仅用于图片用量计费模式")
+	}
+	if billingMode != "fixed_request" && billingMode != "per_second" && billingMode != "token" && billingMode != imagebilling.Mode {
+		return BadAuthRequest("模型计费方式仅支持按次、按秒、Token 或图片用量")
 	}
 	if billingMode == "per_second" && capability != "video" && capability != "audio" {
 		return BadAuthRequest("只有视频或音频模型可以按秒计费")
 	}
 	if billingMode == "token" && !supportsTokenBilling(capability, protocol) {
-		return BadAuthRequest("Token 计费仅支持文本和视频模型")
+		return BadAuthRequest("Token 计费仅支持文本、视频和 EvoLink Qwen TTS 音频模型")
 	}
 	if input.UnitPriceMicrocredits < 0 || input.InputTokenPriceMicrocredits < 0 || input.OutputTokenPriceMicrocredits < 0 || input.CachedTokenPriceMicrocredits < 0 || input.CacheWriteTokenPriceMicrocredits < 0 ||
 		input.ReferenceVideoUnitPriceMicrocredits < 0 || input.ReferenceVideoOutputTokenPriceMicrocredits < 0 {

@@ -10,6 +10,69 @@ import (
 type Registry struct {
 	mu       sync.RWMutex
 	adapters map[string]Adapter
+	releases map[string][]ProviderRelease
+}
+
+type ProviderRelease struct {
+	PluginID   string             `json:"pluginId"`
+	Version    string             `json:"version"`
+	SHA256     string             `json:"sha256"`
+	Current    bool               `json:"current"`
+	Selectable bool               `json:"-"`
+	Registry   *Registry          `json:"-"`
+	Workflows  []ManifestWorkflow `json:"-"`
+}
+
+func (r *Registry) RegisterRelease(pluginID, version, digest string, current, selectable bool, adapters []Adapter, workflows []ManifestWorkflow) error {
+	isolated, err := NewRegistry(adapters...)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.releases == nil {
+		r.releases = make(map[string][]ProviderRelease)
+	}
+	for _, adapter := range adapters {
+		id := adapter.Metadata().ID
+		for _, existing := range r.releases[id] {
+			if existing.PluginID != pluginID || existing.Version == version {
+				return fmt.Errorf("请求协议 %s 的插件或版本冲突", id)
+			}
+		}
+		r.releases[id] = append(r.releases[id], ProviderRelease{PluginID: pluginID, Version: version, SHA256: digest, Current: current, Selectable: selectable, Registry: isolated, Workflows: workflows})
+	}
+	return nil
+}
+
+func (r *Registry) ReleaseProviderIDs() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ids := make([]string, 0, len(r.releases))
+	for id := range r.releases {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func (r *Registry) Releases(id string) []ProviderRelease {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]ProviderRelease(nil), r.releases[id]...)
+}
+
+func (r *Registry) BoundRelease(id, digest string) (ProviderRelease, error) {
+	for _, release := range r.Releases(id) {
+		if release.SHA256 == digest {
+			adapter, _ := release.Registry.Get(id)
+			if !adapter.Metadata().Enabled {
+				return ProviderRelease{}, fmt.Errorf("请求协议 %s 已停用", id)
+			}
+			return release, nil
+		}
+	}
+	return ProviderRelease{}, fmt.Errorf("请求协议 %s 的已锁定发行包 %s 不可用，请核对原包", id, digest)
 }
 
 func NewRegistry(adapters ...Adapter) (*Registry, error) {

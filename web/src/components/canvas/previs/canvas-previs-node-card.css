@@ -1,4 +1,4 @@
-/* 画布上的预演台节点卡片样式。必须随节点面板加载，不能依赖懒加载的预演台工作台 CSS。 */
+/* 画布上的世界引擎节点卡片样式。必须随节点面板加载，不能依赖懒加载的世界引擎工作台 CSS。 */
 .previs-node-card { display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0; flex-direction: column; gap: 8px; padding: 16px 16px 16px; overflow: hidden; background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.018)); }
 .previs-node-card-header, .previs-node-card-title-row, .previs-node-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .previs-node-card-kicker, .previs-node-card-status, .previs-node-card-footer-action, .previs-node-card-duration { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

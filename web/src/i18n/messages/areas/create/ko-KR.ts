@@ -2,6 +2,29 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const koKR: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        manage: "기록 사본 보기 ({{count}})",
+        backupsTitle: "기록 충돌 사본",
+        backupsDescription: "동시 수정 시 이 기기의 버전을 사본으로 보관합니다. 현재 버전을 유지하거나 사본을 별도 대화로 복원할 수 있습니다. 처리 후에도 원본 사본은 기기에 남아 다운로드할 수 있습니다. 복원 시 콘텐츠 생성이나 크레딧 차감은 없습니다.",
+        keep: "현재 버전 유지",
+        restore: "새 대화로 복원",
+        restored: "새 대화로 복원됨",
+        resolved: "처리됨 · 사본 보관",
+        unresolved: "검토 필요",
+        preview: "메시지 {{count}}개 보기",
+        mediaMessage: "미디어 메시지 (전체 데이터는 다운로드)",
+        restoredTitle: "{{title}} (복원 사본)",
+        restoredNotice: "이 기기에 복원되었으며 동기화를 시도합니다. 위의 상태를 확인하세요. 원래 대화와 사본은 유지됩니다.",
+        keptNotice: "현재 버전을 유지했습니다. 원본 사본은 계속 확인, 복원 및 다운로드할 수 있습니다.",
+        resolveFailed: "처리하지 못했습니다. 사본이 보관되어 있으니 다시 시도하세요.",
+        conflict: "기록 동기화 완료 · 충돌 백업 있음",
+        local: "기기에 저장된 기록",
+        pending: "기록 동기화 대기 중",
+        synced: "기록 동기화 완료",
+        error: "기록 동기화 실패",
+        retry: "다시 시도",
+        backup: "충돌 백업 다운로드",
+    },
     agentEntry: {
         sessionNotReady: "로그인 또는 동기화 세션이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
         canvasRestoring: "캔버스를 복원하는 중입니다. 잠시 후 다시 시도하세요.",

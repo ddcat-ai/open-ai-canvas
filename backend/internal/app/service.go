@@ -35,6 +35,7 @@ type Service struct {
 	registrationMu           sync.Mutex
 	emailCodeMu              sync.Mutex
 	redeemBatchMu            sync.Mutex
+	billingAutoRefund        billingAutoRefundScan
 	storageMu                sync.Mutex
 	storageTestMu            sync.Mutex
 	workerRuntimeMu          sync.Mutex
@@ -134,17 +135,19 @@ type CreateTaskRequest struct {
 	workbenchKind   string
 	// callerHoldsStorageMu 只给已经持有 Service.storageMu 的内部调用设置。
 	// 文件容量检查不能再锁一次，否则审批改参数会自锁。
-	callerHoldsStorageMu bool
-	ProjectID            string         `json:"projectId"`
-	Type                 string         `json:"type"`
-	Operation            string         `json:"operation"`
-	Prompt               string         `json:"prompt"`
-	Provider             string         `json:"provider"`
-	Model                string         `json:"model"`
-	LogicalModelID       string         `json:"logicalModelId"`
-	Input                map[string]any `json:"input"`
-	TraceID              string         `json:"-"`
-	RequestID            string         `json:"-"`
+	callerHoldsStorageMu  bool
+	ProjectID             string         `json:"projectId"`
+	Type                  string         `json:"type"`
+	Operation             string         `json:"operation"`
+	Prompt                string         `json:"prompt"`
+	Provider              string         `json:"provider"`
+	Model                 string         `json:"model"`
+	LogicalModelID        string         `json:"logicalModelId"`
+	MaxChargeMicrocredits *int64         `json:"maxChargeMicrocredits,omitempty"`
+	IdempotencyKey        string         `json:"idempotencyKey,omitempty"`
+	Input                 map[string]any `json:"input"`
+	TraceID               string         `json:"-"`
+	RequestID             string         `json:"-"`
 }
 
 type TaskListOptions struct {
@@ -214,6 +217,8 @@ func (s *Service) StartWorker() {
 	s.startArkPortraitWorker()
 	s.startDramaScheduler()
 	s.startInspirationFeedWorker()
+	s.startConsumptionReportWorker()
+	s.startFeishuFeedbackWorker()
 	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)

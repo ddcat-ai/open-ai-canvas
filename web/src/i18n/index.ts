@@ -10,12 +10,26 @@ import { frFR } from "./messages/fr-FR";
 import { jaJP } from "./messages/ja-JP";
 import { koKR } from "./messages/ko-KR";
 import { zhCN } from "./messages/zh-CN";
+import { personalAppearanceMessages } from "./personal-appearance-messages";
+import { personalAvatarMessages } from "./personal-avatar-messages";
 
 const CORE_CATALOGS: Record<AppLocale, object> = { "zh-CN": zhCN, "en-US": enUS, "fr-FR": frFR, "de-DE": deDE, "ja-JP": jaJP, "ko-KR": koKR };
 
 /** 每种语言 = 公共目录 + 各页面区域目录（区域名作为顶级命名空间）。 */
 function buildResources(): Resource {
-    return Object.fromEntries(SUPPORTED_LOCALES.map(({ code }) => [code, { translation: { ...CORE_CATALOGS[code], ...Object.fromEntries(Object.entries(AREA_CATALOGS).map(([area, catalog]) => [area, catalog[code]])) } }]));
+    return Object.fromEntries(
+        SUPPORTED_LOCALES.map(({ code }) => [
+            code,
+            {
+                translation: {
+                    ...CORE_CATALOGS[code],
+                    personalAppearance: personalAppearanceMessages[code],
+                    personalAvatar: personalAvatarMessages[code],
+                    ...Object.fromEntries(Object.entries(AREA_CATALOGS).map(([area, catalog]) => [area, catalog[code]])),
+                },
+            },
+        ]),
+    );
 }
 
 /**

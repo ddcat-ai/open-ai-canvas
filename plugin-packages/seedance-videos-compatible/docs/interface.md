@@ -44,7 +44,6 @@
 | `create.body` | `{"$merge":[{"model":{"$ref":"request.model"},"prompt":{"$ref":"request.prompt"},"images":{"$omitEmpty":{"$map":{"from":{"$ref":"request.images"},"as":"media","in":{"$ref":"media.value"}}}},"videos":{"$omitEmpty":{"$map":{"from":{"$ref":"request.videos"},"as":"media","in":{"$ref":"media.value"}}}},"audios":{"$omitEmpty":{"$map":{"from":{"$ref":"request.audios"},"as":"media","in":{"$ref":"media.value"}}}},"duration":{"$omitEmpty":{"$ref":"request.duration"}},"aspect_ratio":{"$omitEmpty":{"$ref":"request.aspectRatio"}},"resolution":{"$omitEmpty":{"$ref":"request.resolution"}},"parameters":{"$omitEmpty":{"$ref":"request.providerOptions.seedance-videos-compatible.parameters"}}},{"$coalesce":[{"$ref":"request.providerOptions.seedance-videos-compatible.body"},{"$ref":"request.providerOptions.seedance-videos-compatible.extra_body"},{}]}]}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/videos/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -61,7 +60,7 @@
 | `response.taskId` | `{"$coalesce":[{"$ref":"response.id"},{"$ref":"response.task_id"},{"$ref":"response.taskId"},{"$ref":"response.data.id"},{"$ref":"taskId"}]}` |
 | `response.status` | `{"$coalesce":[{"$ref":"response.status"},{"$ref":"response.state"},{"$ref":"response.data.status"},"pending"]}` |
 | `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
-| `response.videos` | `{"$coalesce":[{"$ref":"response.video_url"},{"$ref":"response.videoUrl"},{"$ref":"response.result_url"},{"$ref":"response.url"},{"$ref":"response.data.video_url"},{"$ref":"response.output.url"}]}` |
+| `response.videos` | `{"$coalesce":[{"$ref":"response.metadata.url"},{"$ref":"response.data.metadata.url"},{"$ref":"response.video_url"},{"$ref":"response.videoUrl"},{"$ref":"response.result_url"},{"$ref":"response.url"},{"$ref":"response.data.video_url"},{"$ref":"response.output.url"}]}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.resultEphemeral` | `true` |
 
@@ -83,7 +82,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "seedance-videos-compatible",
   "name": "Seedance Compatible /videos",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "author": "Gateway profile / 影策",
   "description": "Seedance Compatible /videos 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -121,6 +120,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "images",
+          "token": "参考图{n}"
         },
         "parameters": [
           {
@@ -341,6 +344,12 @@
           },
           "videos": {
             "$coalesce": [
+              {
+                "$ref": "response.metadata.url"
+              },
+              {
+                "$ref": "response.data.metadata.url"
+              },
               {
                 "$ref": "response.video_url"
               },

@@ -9,7 +9,7 @@ test("发布的拆层协议包与源码一致且请求 PNG，不丢失多图输�
     expect(packaged).toEqual(source);
     const provider = packaged.contributes.providers.find((item: { id: string }) => item.id === "image-tools-layer-decomposition");
     expect(provider.create.body.output_format).toBe("png");
-    expect(provider.create.path).toBe("/bytedance/seedream-v5.0-pro/layer-decomposition");
+    expect(provider.create.path).toBe("/bytedance/seedream-v5.5/layer-decomposition");
     expect(provider.response.images).toEqual({ $ref: "response.data.outputs" });
-    expect(packaged.version).toBe("1.0.1");
+    expect(packaged.version).toBe("1.0.2");
 });

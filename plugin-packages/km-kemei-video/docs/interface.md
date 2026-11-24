@@ -55,7 +55,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "km-kemei-video",
   "name": "KM 可美视频",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "KM 可美 / 影策",
   "description": "KM 可美视频 OpenAI 兼容异步视频生成协议插件。",
   "permissions": [
@@ -76,6 +76,10 @@
     "providers": [
       {
         "id": "km-kemei-video",
+        "videoReferences": {
+          "layout": "role-images",
+          "token": "参考图{n}"
+        },
         "label": "KM 可美视频",
         "capabilities": [
           "video"

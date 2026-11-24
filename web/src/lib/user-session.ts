@@ -3,7 +3,7 @@ import { projectImageParameters, imageParametersForSpec } from "./image-paramete
 import { getModelCatalog, type CapabilitySpec, type ModelCatalogResponse, type OptionConstraint, type PublicChannelCatalog, type PublicLogicalModel } from "@/services/api/logical-models";
 import { localForageStorage } from "@/lib/localforage-storage";
 import { appQueryClient } from "@/lib/query-client";
-import { scopedLocalStorage, setActiveUserScope, withUserScopedPersistenceSuppressed } from "@/lib/user-scope";
+import { assertCurrentUserSession, captureUserSession, isUserSessionInvalidated, scopedLocalStorage, setActiveUserScope, withUserScopedPersistenceSuppressed, type UserSessionSnapshot } from "@/lib/user-scope";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore, withCanvasStorePersistenceSuppressed } from "@/stores/canvas/use-canvas-store";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore, withAssetStorePersistenceSuppressed } from "@/stores/use-asset-store";
@@ -20,29 +20,52 @@ import { clearResourceAccessCache } from "@/services/api/resources";
 import { clearResourceBlobCache } from "@/services/resource-blob-cache";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
 import { recordDiagnosticEvent } from "@/services/diagnostics/client-diagnostics";
+import { useModelCatalogStore } from "@/stores/use-model-catalog-store";
 
-export async function switchUserStorageScope(userId?: string | null) {
-    await withGenerationConsumersPaused(async () => {
-        await withRemoteUserDataSyncExclusive(async () => {
+export async function switchUserStorageScope(userId?: string | null, expectedSession = captureUserSession(true), isCurrent = () => true) {
+    return withGenerationConsumersPaused(async () => {
+        return withRemoteUserDataSyncExclusive(async () => {
             await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+            assertCurrentUserSession(expectedSession, true);
+            if (!isCurrent()) return false;
             resetRemoteUserDataSync();
             clearResourceAccessCache();
             clearResourceBlobCache();
-            setActiveUserScope(userId);
+            setActiveUserScope(userId, expectedSession);
+            return true;
         });
     });
 }
 
 let sessionGeneration = 0;
+let catalogRequest: { generation: number; promise: Promise<void> } | undefined;
+let catalogInitialConfig: typeof defaultConfig | undefined;
 
-export async function applyUserSession(payload: AuthSessionPayload) {
+function resetModelCatalog() {
+    catalogRequest = undefined;
+    catalogInitialConfig = undefined;
+    useModelCatalogStore.setState({ status: "idle" });
+}
+
+export function suspendUserSession() {
+    sessionGeneration += 1;
+    resetModelCatalog();
+    useUserStore.getState().setHydrated(false);
+    appQueryClient.clear();
+    resetRemoteUserDataSync();
+    clearResourceAccessCache();
+    clearResourceBlobCache();
+}
+
+export async function applyUserSession(payload: AuthSessionPayload, expectedSession: UserSessionSnapshot = captureUserSession(true)) {
     const generation = ++sessionGeneration;
+    resetModelCatalog();
     const previousUserId = useUserStore.getState().user?.id || "";
     const nextUserId = payload.user?.id || "";
     useUserStore.getState().setHydrated(false);
     // Query key 不携带用户 ID；身份变化时必须取消并清空旧账号请求，避免跨账号复用内存数据。
     if (previousUserId !== nextUserId) appQueryClient.clear();
-    await switchUserStorageScope(payload.user?.id);
+    if (!(await switchUserStorageScope(payload.user?.id, expectedSession, () => isCurrentGeneration(generation)))) return;
     // 切换存储 scope 时 user store 仍保留旧身份；此处只能先检查 generation。
     if (!isCurrentGeneration(generation)) return;
     withCanvasStorePersistenceSuppressed(() =>
@@ -114,29 +137,10 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
         resetRemoteUserDataSync();
     }
 
-    void (async () => {
-        try {
-            const catalog = await getModelCatalog();
-            if (!isCurrentSession(generation, userId)) return;
-            if (!persistedConfig) {
-                // 只有首次配置缺失时才生成能力推荐；已有配置中的空数组代表用户明确清空。
-                const initialSystemConfig = {
-                    ...defaultConfig,
-                    channels: modelCatalogChannels(catalog),
-                    imageModels: undefined,
-                    videoModels: undefined,
-                    textModels: undefined,
-                    audioModels: undefined,
-                };
-                useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
-            } else {
-                useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
-            }
-        } catch (error) {
-            if (isCurrentSession(generation, userId)) console.warn("模型目录后台刷新失败，保留本地配置", error);
-        }
-    })();
     if (isCurrentSession(generation, userId)) {
+        catalogInitialConfig = persistedConfig ? undefined : useConfigStore.getState().config;
+        // 失败状态保留给页面重试，不把网络故障当成空模型目录。
+        void refreshSystemChannels().catch(() => {});
         recordDiagnosticEvent({
             category: "navigation",
             level: "info",
@@ -148,7 +152,7 @@ async function hydrateUserSessionData(payload: AuthSessionPayload, generation: n
 }
 
 function isCurrentSession(generation: number, userId: string) {
-    return generation === sessionGeneration && (useUserStore.getState().user?.id || "") === userId;
+    return !isUserSessionInvalidated() && generation === sessionGeneration && (useUserStore.getState().user?.id || "") === userId;
 }
 
 function isCurrentGeneration(generation: number) {
@@ -168,9 +172,35 @@ function safeScopedStorageGet(key: string) {
     }
 }
 
-export async function refreshSystemChannels() {
-    const catalog = await getModelCatalog();
-    useConfigStore.getState().mergeSystemChannels(modelCatalogChannels(catalog));
+export function refreshSystemChannels(): Promise<void> {
+    const generation = sessionGeneration;
+    const userId = useUserStore.getState().user?.id || "";
+    if (!isCurrentSession(generation, userId)) return Promise.reject(new DOMException("账号已切换，请重新加载", "AbortError"));
+    if (catalogRequest?.generation === generation) return catalogRequest.promise;
+    useModelCatalogStore.setState({ status: "loading" });
+    const promise = (async () => {
+        try {
+            const catalog = await getModelCatalog();
+            if (!isCurrentSession(generation, userId)) throw new DOMException("账号已切换，请重新加载", "AbortError");
+            const channels = modelCatalogChannels(catalog);
+            if (catalogInitialConfig && useConfigStore.getState().config === catalogInitialConfig) {
+                // 重试仍可初始化首次配置，但不能覆盖等待期间用户做过的编辑。
+                const initialSystemConfig = { ...defaultConfig, channels, imageModels: undefined, videoModels: undefined, textModels: undefined, audioModels: undefined };
+                useConfigStore.getState().replaceConfig(normalizeConfigSnapshot({ config: initialSystemConfig }).config);
+            } else {
+                useConfigStore.getState().mergeSystemChannels(channels);
+            }
+            catalogInitialConfig = undefined;
+            useModelCatalogStore.setState({ status: "ready" });
+        } catch (error) {
+            if (isCurrentSession(generation, userId)) useModelCatalogStore.setState({ status: "error" });
+            throw error;
+        } finally {
+            if (catalogRequest?.generation === generation) catalogRequest = undefined;
+        }
+    })();
+    catalogRequest = { generation, promise };
+    return promise;
 }
 
 // 目录仅接受系统渠道模型，避免畸形响应被当成空目录写入配置。
@@ -211,7 +241,8 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     selector: tier.selector || {},
                     resolution: tier.resolution || "*",
                     videoSeconds: tier.videoSeconds || 0,
-                    billingMode: tier.billingMode as "fixed_request" | "per_second" | "token",
+                    billingMode: tier.billingMode as "fixed_request" | "per_second" | "token" | "image_usage",
+                    imagePricing: tier.imagePricing,
                     unitPriceMicrocredits: tier.unitPriceMicrocredits || 0,
                     inputTokenPriceMicrocredits: tier.inputTokenPriceMicrocredits || 0,
                     outputTokenPriceMicrocredits: tier.outputTokenPriceMicrocredits || 0,
@@ -268,7 +299,9 @@ export function projectLogicalCapability(spec: CapabilitySpec, defaults: Record<
         const sizePresets = concreteSizeValues.length ? concreteSizeValues : sizeAllowsCustom ? [...STANDARD_IMAGE_SIZE_VALUES] : [];
         if (sizePresets.length || sizeAllowsCustom || spec.imageSize?.presets?.length) {
             const parameter = spec.imageSize?.parameter === "aspect_ratio" || spec.imageSize?.parameter === "size" ? spec.imageSize.parameter : "size";
-            projected.image.size = { parameter, values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom };
+            const sourceSize = String(spec.imageParameters?.find((field) => field.name === "size")?.default ?? "");
+            const defaultRatio = sourceSize.includes(":") ? sourceSize : spec.imageSize?.presets?.find((preset) => preset.size === sourceSize)?.ratio;
+            projected.image.size = { parameter, values: sizePresets, default: concreteDefault(defaults.size, sizePresets, "1:1"), allowCustom: sizeAllowsCustom, defaultTier: spec.imageSize?.defaultTier, defaultRatio };
             if (spec.imageSize?.presets?.length) projected.image.size = imageSizeConfigWithPresets(projected.image, spec.imageSize.presets);
         }
         applyStringOption(spec.options?.quality, defaults.quality, (values, initial) => {

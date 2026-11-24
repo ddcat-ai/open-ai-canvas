@@ -60,10 +60,8 @@ export function canvasAssetKind(node: CanvasNodeData): CanvasAssetKind | null {
         case CanvasNodeType.Text: {
             if (node.metadata?.workflowKind === "character" || !hasStoredContent(node)) return null;
             const mimeType = node.metadata?.mimeType?.toLowerCase() || "";
-            return mimeType.includes("markdown") || TEXT_MARKDOWN_NAME.test(node.title || "") ? "markdown" : "txt";
+            return node.metadata?.textFormat === "markdown" || mimeType.includes("markdown") || TEXT_MARKDOWN_NAME.test(node.title || "") ? "markdown" : "txt";
         }
-        case CanvasNodeType.Markdown:
-            return node.metadata?.content?.trim() ? "markdown" : null;
         case CanvasNodeType.Image:
             // 拆层得到的单个图层属于图层组，不单独作为资产。
             if (node.metadata?.imageLayer && !node.metadata.batchRootId) return null;

@@ -2,14 +2,12 @@ import { expect, test } from "bun:test";
 import { moduleGroupSource } from "./helpers/module-group-source";
 
 test("滚动条样式按复用边界拆分，并保持全局入口可用", async () => {
-    const [application, globals, shared, creation, creationWorkspace, editor, editorShell] = await Promise.all([
+    const [application, globals, shared, creation, creationWorkspace] = await Promise.all([
         Bun.file(new URL("../src/application.tsx", import.meta.url)).text(),
         Bun.file(new URL("../src/styles/globals.css", import.meta.url)).text(),
         Bun.file(new URL("../src/styles/shared/scrollbars.css", import.meta.url)).text(),
         Bun.file(new URL("../src/pages/create/creation-scrollbars.css", import.meta.url)).text(),
         Promise.resolve(moduleGroupSource("pages/create/creation-workspace.tsx")),
-        Bun.file(new URL("../src/lib/plugins/builtin/editor/editor-shell.css", import.meta.url)).text(),
-        Bun.file(new URL("../src/lib/plugins/builtin/editor/editor-shell.tsx", import.meta.url)).text(),
     ]);
 
     expect(application).toContain('import "./styles/shared/scrollbars.css";');
@@ -27,7 +25,4 @@ test("滚动条样式按复用边界拆分，并保持全局入口可用", async
     expect(shared).toContain(".hover-scrollbar {");
     expect(creation).toContain(".creation-scrollbar {");
     expect(creationWorkspace).toContain('import "./creation-scrollbars.css";');
-    expect(editor).toContain(".director-scroll {");
-    expect(editor).toContain(".editor-slider {");
-    expect(editorShell).toContain('import "./editor-shell.css";');
 });

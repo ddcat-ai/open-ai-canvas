@@ -670,6 +670,11 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         noDescription: "No description",
     },
     dramaAdopt: {
+        look: "Outfit / styling",
+        chooseLook: "Choose an outfit or look",
+        baseLook: "Base look (character)",
+        lookNote: "Adopts to the selected look; other look images stay unchanged.",
+        noLooks: "No extra looks yet. Add and save one in the character settings first.",
         mediaPending: "The media is still generating or uploading. Adopt it once it finishes.",
         mediaNotStored: "This node's media is not stored on the server (for example, an external link), so it can't be adopted. Upload it to the canvas and try again.",
         chooseSegment: "Choose the story segment to replace.",

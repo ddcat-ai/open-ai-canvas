@@ -1,0 +1,1544 @@
+/* ============================================================
+   世界引擎 · 全屏世界视口 + 悬浮面板（浅色）
+   视口铺满整屏，顶部三组胶囊、左侧工具条、右侧属性卡、底部时间轴卡都悬浮在世界上。
+   颜色只用 --pd-* token（浅色值由工作台根节点注入）；窄屏（≤860px）沿用原抽屉布局。
+   ============================================================ */
+
+.previs-desk.is-floating {
+    --pf-gap: 12px;
+    --pf-top: 68px;
+    --pf-toolbar: 64px;
+    --pf-inspector: 336px;
+    --pf-radius: 16px;
+    --pf-glass: rgba(255, 255, 255, 0.82);
+    --pf-blur: saturate(1.6) blur(18px);
+    background: #e9ecef !important;
+}
+
+/* ── 悬浮外壳的共同视觉：半透明白底 + 模糊 + 柔和阴影 ─────────────────── */
+/* 视口工具条（.pv-canvas-dock）内部的 FloatingDock 自带底色与描边，外层不能再套一层玻璃，否则多出一圈白边。 */
+.previs-desk.is-floating .pv-float-group,
+.previs-desk.is-floating .pv-world-toolbar {
+    border: 1px solid var(--pd-b0);
+    background: var(--pf-glass);
+    box-shadow: var(--pd-shadow-floating);
+    backdrop-filter: var(--pf-blur);
+    -webkit-backdrop-filter: var(--pf-blur);
+}
+
+/* ── 顶栏：三组胶囊，悬浮在视口上 ─────────────────────────────────────── */
+.previs-desk.is-floating .previs-desk-header {
+    position: absolute;
+    z-index: 30;
+    top: var(--pf-gap);
+    left: var(--pf-gap);
+    right: var(--pf-gap);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+}
+.previs-desk.is-floating .pv-float-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 44px;
+    padding: 0 6px;
+    border-radius: 14px;
+    pointer-events: auto;
+}
+.previs-desk.is-floating .pv-float-group--center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.previs-desk.is-floating .pv-float-divider,
+.previs-desk.is-floating .previs-desk-divider {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    background: var(--pd-b1);
+}
+.previs-desk.is-floating .previs-desk-icon-button {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .previs-desk-icon-button:hover {
+    background: var(--pd-s3);
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .previs-desk-scene-title {
+    width: 168px;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--pd-t0);
+    font-size: 13px;
+    font-weight: 600;
+}
+.previs-desk.is-floating .previs-desk-scene-title:hover {
+    background: var(--pd-s2);
+}
+.previs-desk.is-floating .previs-desk-scene-title:focus {
+    border-color: var(--pd-b2);
+    background: #fff;
+    outline: none;
+}
+.previs-desk.is-floating .previs-desk-history {
+    display: flex;
+    gap: 2px;
+    border: 0;
+    background: transparent;
+}
+.previs-desk.is-floating .previs-desk-history button {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .previs-desk-history button:hover:not(:disabled) {
+    background: var(--pd-s3);
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .previs-desk-history button:disabled {
+    opacity: 0.35;
+}
+.previs-desk.is-floating .previs-desk-save {
+    padding: 0 6px;
+    color: var(--pd-t2);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+/* 世界状态胶囊：时间 + 天气，点开世界设置。 */
+.pv-world-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: var(--pd-t0);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.pv-world-status:hover {
+    background: var(--pd-s3);
+}
+.previs-desk.is-floating .previs-desk-context-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 220px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--pd-t1);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.previs-desk.is-floating .previs-mode-switch {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--pd-s3);
+}
+.previs-desk.is-floating .previs-mode-switch-button {
+    height: 28px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--pd-t1);
+    font-size: 12px;
+    font-weight: 600;
+}
+.previs-desk.is-floating .previs-mode-switch-button.is-active {
+    background: #fff;
+    color: var(--pd-t0);
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.12);
+}
+
+/* 右组：输出操作。窄一点的屏幕收成图标。 */
+.previs-desk.is-floating .previs-desk-header-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--pd-t1);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.previs-desk.is-floating .previs-desk-header-action:hover:not(:disabled) {
+    background: var(--pd-s3);
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .previs-desk-header-action.is-active {
+    background: var(--pd-a-bg);
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .previs-desk-header-action.is-primary {
+    margin-left: 4px;
+    padding: 0 14px;
+    background: var(--pd-a0);
+    color: var(--pd-a-on);
+    font-weight: 600;
+}
+.previs-desk.is-floating .previs-desk-header-action.is-primary:hover:not(:disabled) {
+    background: #000;
+    color: #fff;
+}
+.previs-desk.is-floating .previs-desk-header-action.is-recording {
+    color: var(--pd-red);
+}
+.previs-desk.is-floating .previs-desk-header-select {
+    width: 92px;
+}
+/* 白膜与深度已在左侧「出片」组，顶栏不再重复。 */
+.previs-desk.is-floating .pv-float-group--right .previs-desk-header-action:has(.lucide-video),
+.previs-desk.is-floating .pv-float-group--right .previs-desk-header-action:has(.lucide-layers) {
+    display: none;
+}
+@media (max-width: 1360px) {
+    .previs-desk.is-floating .pv-float-group--right .previs-desk-header-action:not(.is-primary) {
+        width: 32px;
+        padding: 0;
+        justify-content: center;
+        font-size: 0;
+        gap: 0;
+    }
+    .previs-desk.is-floating .previs-desk-context-summary {
+        display: none;
+    }
+}
+
+/* ── 左侧工具条：搭世界 / 拍戏 / 出片 ───────────────────────────────── */
+.pv-world-toolbar {
+    position: absolute;
+    z-index: 25;
+    top: var(--pf-top);
+    left: var(--pf-gap);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: var(--pf-toolbar);
+    max-height: calc(100% - var(--pf-top) - var(--pf-gap));
+    padding: 8px 6px;
+    border-radius: var(--pf-radius);
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+.pv-world-toolbar__group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--pd-b0);
+}
+.pv-world-toolbar__group + .pv-world-toolbar__group {
+    padding-top: 6px;
+}
+.pv-world-toolbar__group--footer {
+    flex-direction: row;
+    justify-content: center;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+.pv-world-toolbar__title {
+    padding: 2px 0 4px;
+    color: var(--pd-t2);
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.04em;
+}
+.pv-world-toolbar__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 0 6px;
+    border-radius: 11px;
+    color: var(--pd-t1);
+    font-size: 11px;
+    line-height: 1;
+    transition:
+        background 120ms var(--pd-ease-snap),
+        color 120ms var(--pd-ease-snap);
+}
+.pv-world-toolbar__item:hover:not(:disabled) {
+    background: var(--pd-s3);
+    color: var(--pd-t0);
+}
+.pv-world-toolbar__item.is-active {
+    background: var(--pd-a0);
+    color: var(--pd-a-on);
+}
+.pv-world-toolbar__item:disabled {
+    opacity: 0.4;
+}
+.pv-world-toolbar__item.is-compact {
+    width: 26px;
+    padding: 5px 0;
+}
+.pv-world-toolbar__item:focus-visible,
+.pv-world-status:focus-visible {
+    outline: 2px solid var(--pd-a-bd);
+    outline-offset: 1px;
+}
+
+/* ── 视口铺满；面板与时间轴悬浮 ──────────────────────────────────────── */
+@media (min-width: 861px) {
+    .previs-desk.is-floating .pv-layout,
+    .previs-desk.is-floating .pv-layout.is-scene-collapsed,
+    .previs-desk.is-floating .pv-layout.is-inspector-collapsed,
+    .previs-desk.is-floating .pv-layout.is-scene-collapsed.is-inspector-collapsed {
+        position: relative;
+        display: block;
+        flex: 1 1 auto;
+        transition: none;
+    }
+    .previs-desk.is-floating .pv-viewport-area {
+        position: absolute;
+        inset: 0;
+    }
+    .previs-desk.is-floating .pv-panel {
+        position: absolute;
+        z-index: 20;
+        top: var(--pf-top);
+        bottom: var(--pf-gap);
+        border: 1px solid var(--pd-b0);
+        border-radius: var(--pf-radius);
+        background: var(--pf-glass);
+        box-shadow: var(--pd-shadow-floating);
+        backdrop-filter: var(--pf-blur);
+        -webkit-backdrop-filter: var(--pf-blur);
+        transition:
+            opacity 180ms var(--pd-ease),
+            transform 220ms var(--pd-ease);
+    }
+    .previs-desk.is-floating .pv-panel--left {
+        left: calc(var(--pf-gap) * 2 + var(--pf-toolbar));
+        width: 272px;
+        border-right: 1px solid var(--pd-b0);
+    }
+    .previs-desk.is-floating .pv-panel--right {
+        right: var(--pf-gap);
+        width: var(--pf-inspector);
+        padding-bottom: 16px;
+        border-left: 1px solid var(--pd-b0);
+    }
+    .previs-desk.is-floating .pv-layout.is-scene-collapsed > .pv-panel--left {
+        visibility: hidden;
+        opacity: 0;
+        transform: translateX(-12px);
+        pointer-events: none;
+    }
+    .previs-desk.is-floating .pv-layout.is-inspector-collapsed > .pv-panel--right {
+        visibility: hidden;
+        opacity: 0;
+        transform: translateX(12px);
+        pointer-events: none;
+    }
+    .previs-desk.is-floating .pv-panel-header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        border-bottom: 1px solid var(--pd-b0);
+        background: transparent;
+        backdrop-filter: var(--pf-blur);
+        -webkit-backdrop-filter: var(--pf-blur);
+    }
+    .previs-desk.is-floating .pv-inspector-footer {
+        background: transparent;
+    }
+
+    /* 时间轴：底部悬浮卡，避开左侧工具条和右侧属性卡。 */
+    .previs-desk.is-floating .pv-inline-timeline {
+        position: absolute;
+        z-index: 22;
+        left: calc(var(--pf-gap) * 2 + var(--pf-toolbar));
+        right: calc(var(--pf-gap) * 2 + var(--pf-inspector));
+        bottom: var(--pf-gap);
+        height: min(34vh, 320px);
+        min-height: 0;
+        border: 1px solid var(--pd-b0);
+        border-radius: var(--pf-radius);
+        background: var(--pf-glass);
+        box-shadow: var(--pd-shadow-floating);
+        backdrop-filter: var(--pf-blur);
+        -webkit-backdrop-filter: var(--pf-blur);
+    }
+    .previs-desk.is-floating .pv-layout.is-inspector-collapsed ~ .pv-inline-timeline {
+        right: var(--pf-gap);
+    }
+    .previs-desk.is-floating .pv-inline-timeline.is-collapsed {
+        height: 40px;
+    }
+    .previs-desk.is-floating .pv-inline-timeline .previs-sequencer > header {
+        background: transparent;
+    }
+
+    /* 视口内浮层：避开顶栏与工具条；时间轴打开时底部视图坞上移。 */
+    .previs-desk.is-floating .pv-cam-hud {
+        top: var(--pf-top);
+        left: calc(var(--pf-gap) * 2 + var(--pf-toolbar));
+    }
+    .previs-desk.is-floating .pv-onboarding {
+        top: var(--pf-top);
+        right: calc(var(--pf-gap) * 2 + var(--pf-inspector));
+    }
+    .previs-desk.is-floating .pv-layout.is-inspector-collapsed .pv-onboarding {
+        right: var(--pf-gap);
+    }
+    .previs-desk.is-floating .pv-trajectory-guide {
+        top: var(--pf-top);
+    }
+    .previs-desk.is-floating .pv-canvas-dock {
+        bottom: 16px;
+    }
+    .previs-desk.is-floating:has(.pv-inline-timeline:not(.is-collapsed)) .pv-canvas-dock {
+        bottom: calc(min(34vh, 320px) + 24px);
+    }
+    /* 收起的时间轴仍是一条 40px 的底栏（层级比工具条高），工具条必须停在它上面，不能被压住下半截。 */
+    .previs-desk.is-floating:has(.pv-inline-timeline.is-collapsed) .pv-canvas-dock {
+        bottom: calc(var(--pf-gap) + 40px + 10px);
+    }
+    .previs-desk.is-floating .pv-shortcut-panel {
+        left: calc(var(--pf-gap) * 2 + var(--pf-toolbar));
+        right: auto;
+        bottom: var(--pf-gap);
+        border-radius: var(--pf-radius);
+        box-shadow: var(--pd-shadow-floating);
+    }
+}
+
+@media (max-width: 860px) {
+    .previs-desk.is-floating .pv-world-toolbar {
+        top: auto;
+        bottom: 72px;
+        flex-direction: row;
+        width: auto;
+        max-width: calc(100% - 24px);
+        overflow-x: auto;
+    }
+    .previs-desk.is-floating .pv-world-toolbar__group {
+        flex-direction: row;
+        border-bottom: 0;
+        padding: 0;
+    }
+    .previs-desk.is-floating .pv-world-toolbar__title {
+        display: none;
+    }
+    .previs-desk.is-floating .pv-world-toolbar__item {
+        width: 48px;
+    }
+    .previs-desk.is-floating .pv-float-group--center {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .previs-desk.is-floating .pv-panel,
+    .pv-world-toolbar__item {
+        transition: none;
+    }
+}
+
+/* ── 添加弹窗：同样是浅色。弹窗在 body 下渲染，需要自带 token。 ─────────── */
+.previs-add-dialog-root {
+    --ad-bg: #ffffff;
+    --ad-surface: #f4f5f7;
+    --ad-surface-2: #eaecef;
+    --ad-line: rgba(17, 24, 39, 0.08);
+    --ad-line-strong: rgba(17, 24, 39, 0.2);
+    --ad-text: #1d2026;
+    --ad-muted: #5a616c;
+    --ad-faint: #8b919b;
+    --ad-accent: #1d2026;
+    --ad-accent-bg: rgba(29, 32, 38, 0.06);
+    --pd-s0: #eef0f3;
+    --pd-s1: #ffffff;
+    --pd-s2: #f4f5f7;
+    --pd-s3: #eaecef;
+    --pd-s4: #e2e5e9;
+    --pd-b0: rgba(17, 24, 39, 0.07);
+    --pd-b1: rgba(17, 24, 39, 0.13);
+    --pd-b2: rgba(17, 24, 39, 0.24);
+    --pd-t0: #1d2026;
+    --pd-t1: #5a616c;
+    --pd-t2: #8b919b;
+    --pd-a0: #1d2026;
+    --pd-a-bg: rgba(29, 32, 38, 0.06);
+    --pd-a-bd: rgba(29, 32, 38, 0.55);
+    --pd-a-on: #ffffff;
+    --pd-r-sm: 6px;
+    --pd-r-md: 10px;
+    --pd-ts-xs: 10px;
+    --pd-ts-sm: 11px;
+    --pd-ts-lg: 13px;
+    --pd-ease-snap: cubic-bezier(0.4, 0, 0.2, 1);
+}
+.previs-add-dialog-root .ant-modal-container {
+    border-radius: 20px;
+    box-shadow: 0 24px 64px rgba(17, 24, 39, 0.18);
+}
+.previs-add-dialog-root .previs-add-dialog__preview {
+    border-radius: 14px;
+    overflow: hidden;
+}
+.previs-add-dialog-root .previs-add-dialog__preview-label,
+.previs-add-dialog-root .previs-add-dialog__preview-note {
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--ad-muted);
+    box-shadow: 0 1px 3px rgba(17, 24, 39, 0.1);
+    backdrop-filter: blur(8px);
+}
+.previs-add-dialog-root .previs-add-dialog__preview-note--inline {
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+.previs-add-dialog-root .previs-add-dialog__options .pv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--ad-line-strong);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ad-text);
+    font-size: 12px;
+}
+.previs-add-dialog-root .previs-add-dialog__options .pv-btn:hover {
+    background: var(--ad-surface);
+}
+
+/* 视口里的浅色世界：世界引擎按钮在白色面板里统一用这一套。 */
+.previs-desk.is-floating .pv-btn:not(.pv-btn--accent) {
+    border-color: var(--pd-b1);
+    background: #fff;
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .pv-btn.pv-btn--accent {
+    border-color: var(--pd-a0);
+    background: var(--pd-a0);
+    color: var(--pd-a-on);
+}
+
+/* ── 右侧属性卡：内容留白、标题不重复、网格不溢出 ──────────────────────── */
+.previs-desk.is-floating .pv-panel--right {
+    overflow-x: hidden;
+}
+@media (min-width: 861px) {
+    /* 场景设置（世界 / 镜头）由分段标签表达，不再重复一行「世界」标题。 */
+    .previs-desk.is-floating .pv-panel--right.is-scene-settings > .pv-panel-header {
+        display: none;
+    }
+}
+.previs-desk.is-floating .pv-detail-block {
+    padding-top: 0;
+}
+.previs-desk.is-floating .pv-inspector-tabs {
+    margin: 12px 12px 4px;
+    background: var(--pd-s3);
+    border-color: transparent;
+}
+.previs-desk.is-floating .pv-inspector-tabs button.is-active {
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.12);
+}
+.previs-desk.is-floating .pv-world,
+.previs-desk.is-floating .pv-world-empty {
+    padding: 8px 12px 16px;
+}
+.pv-world .previs-inspector-group,
+.pv-world .previs-inspector-group:first-of-type {
+    padding-top: 12px;
+    border-top: 1px solid var(--pd-b0);
+}
+.pv-world > .previs-inspector-group:first-child {
+    padding-top: 4px;
+    border-top: 0;
+}
+.pv-world .previs-inspector-group__title {
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--pd-t0);
+}
+.pv-world .previs-inspector-group__title > :last-child {
+    color: var(--pd-t2);
+    font-weight: 500;
+}
+.pv-world__weather,
+.pv-world__grounds {
+    min-width: 0;
+}
+.pv-world__weather-btn,
+.pv-world__ground {
+    min-width: 0;
+    background: #fff;
+    border-color: var(--pd-b0);
+}
+.pv-world__weather-btn.is-active,
+.pv-world__ground.is-active {
+    border-color: var(--pd-t0);
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--pd-t0);
+}
+.pv-world__ground > span:last-child,
+.pv-world__weather-btn > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pv-world__chip {
+    background: #fff;
+}
+.pv-world__chip.is-active {
+    border-color: var(--pd-t0);
+    background: var(--pd-t0);
+    color: #fff;
+}
+.pv-world .previs-inspector-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--pd-t1);
+    font-size: 12px;
+}
+.pv-world .ant-slider {
+    margin: 6px 4px 2px;
+}
+
+/* ── 时间轴：浅色。序列器在 globals.css 里写死了常暗色，这里按作用域换成浅色。 ── */
+.previs-desk.is-floating {
+    --previs-sequencer-surface: transparent;
+    --previs-sequencer-surface-raised: rgba(243, 244, 246, 0.9);
+    --previs-sequencer-border: rgba(17, 24, 39, 0.08);
+    --previs-sequencer-muted: rgba(17, 24, 39, 0.5);
+    --previs-sequencer-grid: rgba(17, 24, 39, 0.06);
+    --previs-dock-surface: rgba(255, 255, 255, 0.86);
+    --previs-dock-fg: rgba(17, 24, 39, 0.62);
+    --previs-dock-fg-strong: rgba(17, 24, 39, 0.94);
+    --previs-dock-active-surface: rgba(17, 24, 39, 0.08);
+    --previs-control-hover: rgba(17, 24, 39, 0.05);
+}
+.previs-desk.is-floating .previs-sequencer {
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .previs-sequencer [class*="text-white"] {
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .previs-sequencer [class*="bg-white"] {
+    background: var(--pd-b1);
+}
+.previs-desk.is-floating .previs-sequencer-label {
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .previs-sequencer-label.is-indent {
+    color: var(--pd-t2);
+}
+.previs-desk.is-floating .previs-sequencer-label:hover,
+.previs-desk.is-floating .previs-sequencer-row.is-selected > .previs-sequencer-label {
+    background: rgba(17, 24, 39, 0.05);
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .previs-sequencer-ruler-label,
+.previs-desk.is-floating .previs-sequencer-tick {
+    color: var(--pd-t2);
+}
+.previs-desk.is-floating .previs-sequencer-transport,
+.previs-desk.is-floating .previs-sequencer-icon,
+.previs-desk.is-floating .previs-sequencer-tool {
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .previs-sequencer-transport:hover,
+.previs-desk.is-floating .previs-sequencer-icon:hover,
+.previs-desk.is-floating .previs-sequencer-tool:hover,
+.previs-desk.is-floating .previs-sequencer-icon.is-active,
+.previs-desk.is-floating .previs-sequencer-tool.is-active {
+    background: rgba(17, 24, 39, 0.07);
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .previs-sequencer-shot-select {
+    border-color: var(--pd-b1);
+    background: #fff;
+    color: var(--pd-t0);
+}
+/* 关键帧默认色是浅灰，白底上要深色描边才看得见。 */
+.previs-desk.is-floating .previs-sequencer-key {
+    box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.5);
+}
+/* 片段文字的行内色是轨道强调色（浅青、浅蓝），白底上对比不足，统一用正文色，底色与边框保留轨道色。 */
+.previs-desk.is-floating .previs-sequencer-clip {
+    color: var(--pd-t0) !important;
+    font-weight: 500;
+}
+.previs-desk.is-floating .previs-sequencer-resizer::after {
+    background: var(--pd-b2);
+}
+.previs-desk.is-floating .pv-inline-timeline .previs-sequencer > header {
+    border-bottom-color: var(--pd-b0) !important;
+}
+.previs-desk.is-floating .pv-inline-timeline .previs-sequencer-body {
+    background: transparent;
+}
+
+/* ── 右侧面板底部：镜头列表与提示词预览。原样式为深色主题写死，这里按浅色重排。 ── */
+.previs-desk.is-floating .pv-inspector-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 12px;
+    border-top: 1px solid var(--pd-b0);
+}
+.previs-desk.is-floating .pv-shot-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+.previs-desk.is-floating .pv-shot-list__item {
+    flex: 1 1 120px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border-color: var(--pd-b0);
+    border-radius: 10px;
+    background: #fff;
+}
+.previs-desk.is-floating .pv-shot-list__item span {
+    color: var(--pd-t2);
+}
+.previs-desk.is-floating .pv-shot-list__item strong {
+    font-size: 12px;
+}
+.previs-desk.is-floating .pv-shot-list__item.is-active {
+    border-color: var(--pd-t0);
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--pd-t0);
+}
+.previs-desk.is-floating .pv-shot-list__add {
+    display: inline-grid;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 1px dashed var(--pd-b1);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .pv-shot-list__add:hover {
+    border-style: solid;
+    background: #fff;
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .pv-prompt-preview {
+    padding-top: 0;
+    border-top: 0;
+}
+.previs-desk.is-floating .pv-prompt-preview__label {
+    gap: 8px;
+    margin-bottom: 6px;
+    color: var(--pd-t0);
+    font-size: 12px;
+    cursor: pointer;
+    list-style: none;
+}
+.previs-desk.is-floating .pv-prompt-preview__label::-webkit-details-marker {
+    display: none;
+}
+.previs-desk.is-floating .pv-prompt-preview__label .pv-output-dot {
+    margin-right: auto;
+}
+.previs-desk.is-floating .pv-prompt-copy {
+    padding: 2px 8px;
+    border-radius: 6px;
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .pv-prompt-copy:hover {
+    background: var(--pd-s3);
+    color: var(--pd-t0);
+}
+.previs-desk.is-floating .pv-prompt-preview__text {
+    max-height: 140px;
+    padding: 10px;
+    border: 1px solid var(--pd-b0);
+    border-radius: 10px;
+    background: var(--pd-s2);
+    color: var(--pd-t1);
+    font-size: 11.5px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* 面板里的 antd 输入控件：固定浅色，避免应用暗色模式下出现黑色文本框。只作用于世界引擎内部。 */
+.previs-desk.is-floating .ant-input,
+.previs-desk.is-floating .ant-input-outlined,
+.previs-desk.is-floating textarea.ant-input,
+.previs-desk.is-floating .ant-input-number,
+.previs-desk.is-floating .ant-input-number-outlined,
+.previs-desk.is-floating .ant-input-number-affix-wrapper,
+.previs-desk.is-floating .ant-select-selector {
+    border-color: var(--pd-b1) !important;
+    background: #fff !important;
+    color: var(--pd-t0) !important;
+}
+.previs-desk.is-floating .ant-input::placeholder,
+.previs-desk.is-floating textarea.ant-input::placeholder {
+    color: var(--pd-t2) !important;
+}
+.previs-desk.is-floating .ant-input:focus,
+.previs-desk.is-floating .ant-input-focused,
+.previs-desk.is-floating .ant-input-number-focused {
+    border-color: var(--pd-b2) !important;
+    box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.06) !important;
+}
+.previs-desk.is-floating .ant-input-borderless {
+    border-color: transparent !important;
+    background: transparent !important;
+}
+.previs-desk.is-floating .previs-inspector-group__title,
+.previs-desk.is-floating .previs-inspector-note {
+    color: var(--pd-t1);
+}
+.previs-desk.is-floating .previs-inspector-note {
+    line-height: 1.6;
+}
+
+/* ── 底部工具条（PrevisCanvasDock）：白底、图标 + 文字、当前工具实心深色 ─────────── */
+.pv-dock {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 5px;
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow:
+        0 16px 40px rgba(17, 24, 39, 0.16),
+        0 2px 6px rgba(17, 24, 39, 0.08);
+    backdrop-filter: saturate(1.6) blur(18px);
+    -webkit-backdrop-filter: saturate(1.6) blur(18px);
+    color: #1d2026;
+    white-space: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.pv-dock__group {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 12px;
+    background: #f1f2f4;
+}
+.pv-dock__tool {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    /* 图标与文字之间留 4px、上下各约 5px：比 34px 的版本透气，又不到最初 46px 那么大。 */
+    gap: 4px;
+    min-width: 46px;
+    height: 42px;
+    padding: 0 9px;
+    border-radius: 10px;
+    color: #4b5260;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    transition:
+        background 120ms ease,
+        color 120ms ease,
+        box-shadow 120ms ease;
+}
+.pv-dock__tool > svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 1.9;
+}
+.pv-dock__tool:hover {
+    background: #e8eaee;
+    color: #1d2026;
+}
+.pv-dock__tool.is-active {
+    background: #1d2026;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(17, 24, 39, 0.25);
+}
+.pv-dock__tool.is-active.is-accent {
+    background: #ff5a36;
+}
+.pv-dock__tool.is-active.is-soft {
+    background: #e2e5ea;
+    color: #1d2026;
+    box-shadow: none;
+}
+.pv-dock__tool:focus-visible,
+.pv-dock__views button:focus-visible {
+    outline: 2px solid #1d2026;
+    outline-offset: 1px;
+}
+.pv-dock__divider {
+    flex: 0 0 1px;
+    width: 1px;
+    height: 24px;
+    margin: 0 6px;
+    background: rgba(17, 24, 39, 0.1);
+}
+.pv-dock__views {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 12px;
+    background: #f1f2f4;
+}
+.pv-dock__views button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 9px;
+    color: #4b5260;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+}
+.pv-dock__views button:hover {
+    color: #1d2026;
+}
+.pv-dock__views button.is-active {
+    background: #fff;
+    color: #1d2026;
+    box-shadow: 0 1px 3px rgba(17, 24, 39, 0.16);
+}
+.pv-dock__menu {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 10px);
+    z-index: 30;
+    width: 300px;
+    margin-left: -150px;
+    padding: 12px;
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 20px 48px rgba(17, 24, 39, 0.18);
+    color: #1d2026;
+}
+.pv-dock__menu-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.pv-dock__menu-title small {
+    color: #8b919b;
+    font-size: 10px;
+    font-weight: 400;
+}
+.pv-dock__menu-title.is-sub {
+    padding-top: 10px;
+}
+.pv-dock__view-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+.pv-dock__view-grid button {
+    height: 30px;
+    border-radius: 8px;
+    background: #f4f5f7;
+    color: #4b5260;
+    font-size: 11px;
+    font-weight: 600;
+}
+.pv-dock__view-grid button:hover {
+    background: #e8eaee;
+    color: #1d2026;
+}
+.pv-dock__view-grid button.is-active {
+    background: #1d2026;
+    color: #fff;
+}
+.pv-dock__camera-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.pv-dock__camera-list button {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto 14px;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: 8px;
+    color: #1d2026;
+    font-size: 12px;
+    text-align: left;
+}
+.pv-dock__camera-list button:hover {
+    background: #f1f2f4;
+}
+.pv-dock__camera-list button.is-active {
+    background: rgba(29, 32, 38, 0.06);
+}
+.pv-dock__camera-list small {
+    color: #8b919b;
+}
+/* 画幅：工具条入口复用 .pv-aspect-glyph 示意，弹层为 4 列比例卡片。 */
+.pv-dock__tool > .pv-aspect-glyph {
+    width: 16px;
+    height: 16px;
+}
+.pv-dock__menu--aspect {
+    width: 320px;
+    margin-left: -160px;
+}
+.pv-dock__aspect-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+.pv-dock__aspect-grid button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 58px;
+    border-radius: 8px;
+    background: #f4f5f7;
+    color: #4b5260;
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.pv-dock__aspect-grid button:hover {
+    background: #e8eaee;
+    color: #1d2026;
+}
+.pv-dock__aspect-grid button.is-active {
+    background: #1d2026;
+    color: #fff;
+}
+.pv-dock__aspect-grid button:focus-visible {
+    outline: 2px solid #1d2026;
+    outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pv-dock__tool {
+        transition: none;
+    }
+}
+
+/* ── 右键取点菜单与标记点标签 ───────────────────────────────────────────── */
+.pv-point-menu {
+    position: fixed;
+    z-index: calc(var(--z-toast) + 2);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 20px 48px rgba(17, 24, 39, 0.2);
+    color: #1d2026;
+    font-size: 12px;
+}
+.pv-point-menu__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px 8px;
+    border-bottom: 1px solid rgba(17, 24, 39, 0.07);
+    margin-bottom: 4px;
+    color: #ff5a36;
+}
+.pv-point-menu__coord {
+    flex: 1;
+    color: #1d2026;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.pv-point-menu__close {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    color: #8b919b;
+}
+.pv-point-menu__close:hover {
+    background: #f1f2f4;
+    color: #1d2026;
+}
+.pv-point-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    color: #1d2026;
+    text-align: left;
+}
+.pv-point-menu__item:hover {
+    background: #f1f2f4;
+}
+.pv-point-menu__item small {
+    margin-left: auto;
+    color: #8b919b;
+    font-size: 10px;
+}
+.pv-point-menu__item.is-danger {
+    color: #c2410c;
+}
+.pv-point-menu__badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    border-radius: 6px;
+    background: #ff5a36;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+.pv-point-menu__travel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 4px 0;
+    padding: 10px 8px;
+    border-radius: 10px;
+    background: #f6f7f9;
+}
+.pv-point-menu__label {
+    color: #4b5260;
+    font-size: 11px;
+}
+.pv-point-menu__styles {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}
+.pv-point-menu__item:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.pv-point-menu__styles button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    border: 1px solid rgba(17, 24, 39, 0.08);
+    border-radius: 7px;
+    background: #fff;
+    color: #4b5260;
+    font-size: 12px;
+}
+.pv-point-menu__styles button:hover {
+    color: #1d2026;
+}
+.pv-point-menu__styles button.is-active {
+    border-color: #1d2026;
+    background: #1d2026;
+    color: #fff;
+}
+.pv-point-menu__row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #4b5260;
+    font-size: 11px;
+}
+.pv-point-menu__row .ant-input-number,
+.pv-point-menu__row .ant-input-number-affix-wrapper {
+    width: 84px;
+}
+.pv-point-menu__go {
+    margin-left: auto;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: #1d2026;
+    color: #fff;
+    font-weight: 600;
+}
+.pv-point-menu__go:hover {
+    background: #000;
+}
+.pv-point-menu__hint {
+    padding: 6px 8px;
+    color: #8b919b;
+    font-size: 11px;
+    line-height: 1.5;
+}
+.pv-marker-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 7px 3px 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(17, 24, 39, 0.2);
+    color: #4b5260;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.pv-marker-label b {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #ff5a36;
+    color: #fff;
+    font-size: 11px;
+}
+
+/* 视口里的高度读数与参考轨迹标签（离地高度以地面 0 m 为基准）。 */
+.pv-height-label,
+.pv-sketch-label {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(17, 24, 39, 0.82);
+    color: #fff;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.pv-sketch-label {
+    background: #7c5cff;
+}
+
+/* ── 检查器里的 A→B 位移 ─────────────────────────────────────────────── */
+.pv-travel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.pv-travel__row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pv-travel__select {
+    flex: 1;
+    min-width: 0;
+}
+.pv-travel__arrow,
+.pv-travel__hint {
+    color: var(--pd-t2);
+    font-size: 11px;
+}
+.pv-travel__row .ant-input-number,
+.pv-travel__row .ant-input-number-affix-wrapper {
+    width: 84px;
+}
+.pv-travel__row .ant-btn {
+    margin-left: auto;
+}
+.pv-travel__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.pv-travel__list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--pd-s2);
+    color: var(--pd-t1);
+    font-size: 11px;
+}
+.pv-travel__list button {
+    color: var(--pd-t2);
+}
+.pv-travel__list button:hover {
+    color: var(--pd-red);
+}
+
+/* ── 检查器里的路径编辑 ─────────────────────────────────────────────── */
+.pv-path__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.pv-path__transfer .ant-select {
+    width: 100%;
+}
+.pv-path__summary {
+    color: var(--pd-t1);
+    font-size: 12px;
+    font-weight: 500;
+}
+.pv-path__points {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.pv-path__points li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 8px;
+    background: var(--pd-s2);
+}
+.pv-path__point-head,
+.pv-path__point-tail {
+    display: grid;
+    align-items: center;
+    gap: 4px;
+}
+.pv-path__point-head {
+    grid-template-columns: 22px repeat(3, minmax(0, 1fr));
+}
+.pv-path__point-tail {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 24px 24px;
+    padding-left: 26px;
+}
+.pv-path__point-head b {
+    display: inline-grid;
+    place-items: center;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--pd-s3);
+    color: var(--pd-t1);
+    font-size: 11px;
+}
+.pv-path__points .ant-input-number,
+.pv-path__points .ant-input-number-affix-wrapper {
+    width: 100%;
+    min-width: 0;
+}
+.pv-path__point-tail button {
+    display: inline-grid;
+    place-items: center;
+    height: 24px;
+    color: var(--pd-t2);
+}
+.pv-path__point-tail button:hover:not(:disabled) {
+    color: var(--pd-t0);
+}
+.pv-path__point-tail button:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+/* 终点没有段速和停留：「终点」占掉两格，加号和删除仍对齐上面各行。 */
+.pv-path__point-end {
+    grid-column: span 2;
+}
+.pv-camera-move__params.pv-path__timing {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pv-path__start-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+}
+.pv-path__link {
+    color: var(--pd-t0);
+    font-size: 11px;
+    white-space: nowrap;
+}
+.pv-path__link:hover {
+    text-decoration: underline;
+}
+
+/* ── 检查器里的折叠区（途经点、手动关键帧、让人物走这条轨迹…）──────────── */
+.previs-inspector-advanced {
+    border: 1px solid var(--pd-b0);
+    border-radius: 8px;
+    background: var(--pd-s2);
+}
+.previs-inspector-advanced > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    color: var(--pd-t1);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.previs-inspector-advanced > summary::-webkit-details-marker {
+    display: none;
+}
+.previs-inspector-advanced > summary::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 120ms ease;
+}
+.previs-inspector-advanced[open] > summary::before {
+    transform: rotate(45deg);
+}
+.previs-inspector-advanced > summary:hover {
+    color: var(--pd-t0);
+}
+.previs-inspector-advanced > summary:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: -2px;
+    border-radius: 8px;
+}
+.previs-inspector-advanced__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 10px 10px;
+}
+/* 折叠区本身是浅灰底，里面的途经点卡片改白底，层次才分得开。 */
+.previs-inspector-advanced .pv-path__points li {
+    background: #fff;
+}
+
+/* ── 运镜：手法 / 大师手法 / 画路径 三选一 ─────────────────────────────── */
+.pv-motion-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--pd-s3);
+}
+.pv-motion-tabs button {
+    height: 26px;
+    border-radius: 6px;
+    color: var(--pd-t1);
+    font-size: 12px;
+    font-weight: 500;
+}
+.pv-motion-tabs button:hover {
+    color: var(--pd-t0);
+}
+.pv-motion-tabs button[aria-selected="true"] {
+    background: #fff;
+    color: var(--pd-t0);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.12);
+}
+.pv-motion-tabs button:focus-visible {
+    outline: 2px solid var(--pd-a0);
+    outline-offset: -2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    .previs-inspector-advanced > summary::before {
+        transition: none;
+    }
+}
+
+/* ── 时间轴上的运镜段 ─────────────────────────────────────────────────── */
+.previs-sequencer-clip--move {
+    cursor: pointer;
+}
+.previs-sequencer-clip--move.is-layer {
+    top: auto;
+    height: 9px;
+    bottom: 3px;
+    padding: 0;
+    font-size: 0;
+}
+
+/* ── 检查器里的摄影机运镜 ───────────────────────────────────────────── */
+.pv-camera-move__group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.pv-camera-move__group-label {
+    color: var(--pd-t2);
+    font-size: 11px;
+}
+.pv-camera-move .pv-world__chip:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.pv-camera-move__params {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+.pv-camera-move__param {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    color: var(--pd-t2);
+    font-size: 11px;
+}
+.pv-camera-move__param .ant-input-number,
+.pv-camera-move__param .ant-select {
+    width: 100%;
+}
+.pv-travel__list .pv-camera-move__seek {
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--pd-t1);
+    text-align: left;
+}
+.pv-travel__list .pv-camera-move__seek span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pv-travel__list .pv-camera-move__seek:hover {
+    color: var(--pd-t0);
+}

@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Alert, App, Button, InputNumber, Table } from "antd";
 import { AdminModal } from "@/pages/admin/ui/overlays";
-import { repriceAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
+import { repriceAdminAllChannelModels, repriceAdminChannelModels, type ChannelModel } from "@/services/api/wallet";
 import { specificationLabel } from "./channel-model-cost-summary";
 import { formatModelMarkup, formatModelPrice, modelRepricePayload, modelRepriceRows, parseSaleInput, previewModelRepricing, type ModelRepriceRow } from "./channel-model-pricing";
 import { Select } from "@/components/ui/base/select";
 
-export function ChannelModelRepriceDialog({ channelId, channelName, items, onClose, onSaved }: { channelId: string; channelName: string; items: ChannelModel[]; onClose: () => void; onSaved: () => Promise<void> }) {
+type RepriceModel = ChannelModel & { channelName?: string };
+
+/** 不传 channelId 时为跨渠道调价，所选模型可来自不同系统渠道。 */
+export function ChannelModelRepriceDialog({ channelId, channelName, items, onClose, onSaved }: { channelId?: string; channelName?: string; items: RepriceModel[]; onClose: () => void; onSaved: () => Promise<void> }) {
     const { message } = App.useApp();
     const [margin, setMargin] = useState<number | null>(null);
     const [decimalPlaces, setDecimalPlaces] = useState(2);
@@ -45,7 +48,8 @@ export function ChannelModelRepriceDialog({ channelId, channelName, items, onClo
         if (validationError || calculationError || !changed || saving) return;
         setSaving(true);
         try {
-            const result = await repriceAdminChannelModels(channelId, modelRepricePayload(items, rows));
+            const payload = modelRepricePayload(items, rows);
+            const result = channelId ? await repriceAdminChannelModels(channelId, payload) : await repriceAdminAllChannelModels(payload);
             message.success(`已保存 ${result.updated} 个模型的销售价`);
         } catch (cause) {
             message.error(cause instanceof Error ? cause.message : "统一调价失败");
@@ -134,9 +138,9 @@ export function ChannelModelRepriceTable({
     disabled,
     onSaleChange,
 }: {
-    items: ChannelModel[];
+    items: RepriceModel[];
     rows: ModelRepriceRow[];
-    channelName: string;
+    channelName?: string;
     decimalPlaces: number;
     disabled: boolean;
     onSaleChange: (key: string, value: string | null) => void;
@@ -148,7 +152,7 @@ export function ChannelModelRepriceTable({
         byModel.set(row.model.id, group);
     }
     return (
-        <Table<ChannelModel>
+        <Table<RepriceModel>
             className="admin-model-reprice-table"
             rowKey="id"
             dataSource={items}
@@ -163,7 +167,7 @@ export function ChannelModelRepriceTable({
                     width: 220,
                     render: (_, model) => (
                         <div className="admin-model-reprice-identity">
-                            <span>{model.channelLabel || channelName}</span>
+                            <span>{channelName ? model.channelLabel || channelName : [model.channelName, model.channelLabel].filter(Boolean).join(" · ")}</span>
                             <small className="admin-monospace">{model.providerModelKey || model.modelKey}</small>
                         </div>
                     ),

@@ -4,10 +4,11 @@ import { ModelPicker } from "@/components/model-picker";
 import { VideoSettingsPanel } from "@/components/video-settings-panel";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { agentApprovalModel, agentApprovalModelSelection, agentMediaSettings, type AgentVideoApproval } from "@/lib/canvas/agent-media-approval";
-import { modelCapabilityConfigFor, normalizeVideoValue } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { preserveVideoSettings } from "@/lib/media-settings";
 import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import type { AgentMediaSettings } from "@/services/api/agent";
-import { PUBLIC_MODEL_CATALOG_ID, useEffectiveConfig } from "@/stores/use-config-store";
+import { PUBLIC_MODEL_CATALOG_ID, resolveModelRequestConfig, useEffectiveConfig } from "@/stores/use-config-store";
 
 export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabled, onChange }: { initial: AgentVideoApproval; value?: AgentMediaSettings; theme: CanvasTheme; disabled: boolean; onChange: (value: AgentMediaSettings) => void }) {
     const { t } = useTranslation();
@@ -37,7 +38,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
         if (disabled) return;
         const profile = modelCapabilityConfigFor(config, next).video;
         if (!profile) return;
-        const normalized = normalizeVideoValue(profile, { seconds: duration, ratio: settings.size, resolution: settings.quality });
+        const normalized = preserveVideoSettings(profile, { seconds: duration, ratio: settings.size, resolution: settings.quality }, resolveModelRequestConfig(config, next).interfaceType);
         onChange({
             ...agentApprovalModelSelection(config, next),
             size: normalized.ratio,
@@ -72,9 +73,8 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
                 ...(nextSettings.videoArkPrivateAssetUpload === undefined ? {} : { videoArkPrivateAssetUpload: nextSettings.videoArkPrivateAssetUpload }),
             },
         });
-        if (!selected) return;
-        // 兼容模型可能因新规格自动切换；模型字段必须以 selected 为准，不能被旧设置覆盖。
-        onChange({ ...nextSettings, logicalModelId: undefined, channelId: undefined, channelModelKey: undefined, ...agentApprovalModelSelection(config, selected) });
+        // 保留用户选择的模型身份；参数与素材校验不会借用其他 Key 的能力。
+        onChange({ ...nextSettings, logicalModelId: undefined, channelId: undefined, channelModelKey: undefined, ...agentApprovalModelSelection(config, selected || model) });
     };
 
     return (

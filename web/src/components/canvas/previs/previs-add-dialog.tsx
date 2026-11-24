@@ -1,17 +1,22 @@
 import { Canvas, useThree } from "@react-three/fiber";
 import { Grid, OrbitControls } from "@react-three/drei";
-import { ColorPicker, Modal } from "antd";
-import { Box, Camera, FileUp, Lightbulb, UserRound, Users } from "lucide-react";
+import { ColorPicker, Modal, Slider } from "antd";
+import { Box, Building2, Camera, FileUp, Lightbulb, Shuffle, UserRound, Users } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Color, Object3D, type PerspectiveCamera } from "three";
 
-import { PrevisPropThumb } from "./previs-prop-library-panel";
+import { PrevisLayoutVisual, PrevisPropVisual } from "./previs-prop-view";
+import { usePrevisPropThumbnails } from "./previs-prop-thumbnails";
 import { usePrevisActorThumbnails } from "./use-previs-actor-thumbnails";
+import { formatPrevisSize, PREVIS_LAYOUT_TEMPLATES, PREVIS_PROP_CATALOG, PREVIS_PROP_CATEGORIES, resolvePrevisPropSize, type PrevisCatalogProp, type PrevisLayoutTemplateInfo, type PrevisPropCategoryId } from "@/lib/canvas/previs/previs-prop-catalog";
+import { expandPrevisArray, previsArrayDefaultSpacing, PREVIS_ARRAY_PATTERNS, type PrevisArrayPattern, type PrevisArraySpec } from "@/lib/canvas/previs/previs-array";
+import { PrevisPropParamFields } from "./previs-world-panel";
+import { defaultPrevisPropColor } from "@/lib/canvas/previs/previs-prop-geometry";
+import { createPrevisCatalogProp, createPrevisLayoutObject } from "@/lib/canvas/previs/previs-scene";
 import {
     buildPrevisActorFromTemplate,
     buildPrevisCameraFromPreset,
     buildPrevisLightFromPreset,
-    buildPrevisPropObject,
     PREVIS_ACTOR_TEMPLATES,
     PREVIS_CAMERA_PRESETS,
     PREVIS_LIGHT_PRESETS,
@@ -21,9 +26,8 @@ import {
 } from "@/lib/canvas/previs/previs-add-catalog";
 import { buildPrevisMannequin, loadPrevisMannequinTemplate, resolvePrevisMannequinProfile } from "@/lib/canvas/previs/previs-mannequin";
 import { evaluatePrevisActorPose } from "@/lib/canvas/previs/previs-motion";
-import { PREVIS_PROP_LIBRARY, formatPrevisPropSize, type PrevisPropItem } from "@/lib/canvas/previs/previs-prop-library";
 import { previsVerticalFov } from "@/lib/canvas/previs/previs-optics";
-import type { PrevisCamera, PrevisLight, PrevisObject, PrevisPose, PrevisTransform } from "@/types/previs";
+import type { PrevisCamera, PrevisLight, PrevisObject, PrevisPose, PrevisPropParams, PrevisTransform } from "@/types/previs";
 import { poseOptions } from "./previs-inspectors";
 
 /**
@@ -31,23 +35,27 @@ import { poseOptions } from "./previs-inspectors";
  * 预览与写入调用 previs-add-catalog 的同一组 build 函数，保证看到的就是加进去的。
  * 弹窗只在打开时挂载 Canvas（destroyOnHidden），不长期占用第二个 WebGL 上下文。
  */
-export type PrevisAddKind = "actor" | "prop" | "light" | "camera";
+export type PrevisAddKind = "actor" | "prop" | "layout" | "light" | "camera";
 
-export type PrevisAddResult = { kind: "actor"; objects: PrevisObject[] } | { kind: "prop"; objects: PrevisObject[] } | { kind: "light"; light: PrevisLight } | { kind: "camera"; camera: PrevisCamera };
+/** arranged=true 表示对象已按批量排布算好相对位置，工作台整体平移落位，不逐个避让。 */
+export type PrevisAddResult =
+    { kind: "actor"; objects: PrevisObject[] } | { kind: "prop"; objects: PrevisObject[]; arranged?: boolean } | { kind: "layout"; objects: PrevisObject[] } | { kind: "light"; light: PrevisLight } | { kind: "camera"; camera: PrevisCamera };
 
 const TABS: Array<{ kind: PrevisAddKind; label: string; icon: typeof UserRound }> = [
     { kind: "actor", label: "角色", icon: UserRound },
     { kind: "prop", label: "道具", icon: Box },
+    { kind: "layout", label: "搭世界", icon: Building2 },
     { kind: "light", label: "灯光", icon: Lightbulb },
     { kind: "camera", label: "机位", icon: Camera },
 ];
 
 const ACTOR_SWATCHES = ["#2f7de1", "#d84949", "#dfae3f", "#34a276", "#8b5cf6", "#f97316", "#06b6d4", "#8a93a0"];
-const PROP_SWATCHES = ["#8795a5", "#b08968", "#6b7f5e", "#c9ccd1", "#5a6270", "#a35f4c"];
+const PROP_SWATCHES = ["#c0392b", "#2f7de1", "#e85d8a", "#d9a441", "#f1f1ee", "#3f7f5f", "#7a3e33", "#5a6270"];
 
 export function PrevisAddDialog({
     open,
     initialKind,
+    initialPropCategory,
     counts,
     readCurrentView,
     onClose,
@@ -56,6 +64,8 @@ export function PrevisAddDialog({
 }: {
     open: boolean;
     initialKind: PrevisAddKind;
+    /** 从左侧工具条进入时直达某个道具分类（建筑 / 花木 / 组件）。 */
+    initialPropCategory?: PrevisPropCategoryId;
     /** 已有数量，用于命名（演员 3、机位 2…）。 */
     counts: { actors: number; props: number; lights: number; cameras: number };
     readCurrentView: () => PrevisTransform | null;
@@ -68,9 +78,26 @@ export function PrevisAddDialog({
     const [actorColor, setActorColor] = useState(ACTOR_SWATCHES[0]);
     const [actorPose, setActorPose] = useState<PrevisPose>("stand");
     const [crowd, setCrowd] = useState(false);
-    const [prop, setProp] = useState<PrevisPropItem>(PREVIS_PROP_LIBRARY[0].items[0]);
-    const [propCategory, setPropCategory] = useState(PREVIS_PROP_LIBRARY[0].id);
-    const [propColor, setPropColor] = useState(PROP_SWATCHES[0]);
+    const [prop, setPropState] = useState<PrevisCatalogProp>(PREVIS_PROP_CATALOG[0]);
+    const [propCategory, setPropCategory] = useState<PrevisPropCategoryId>(PREVIS_PROP_CATEGORIES[0].id);
+    const [propColor, setPropColor] = useState(defaultPrevisPropColor(PREVIS_PROP_CATALOG[0].id));
+    const [propParams, setPropParams] = useState<PrevisPropParams | undefined>(undefined);
+    const setProp = (item: PrevisCatalogProp) => {
+        setPropState(item);
+        setPropColor(defaultPrevisPropColor(item.id));
+        setPropParams(undefined);
+    };
+    const [arrayCount, setArrayCount] = useState(1);
+    const [arrayPattern, setArrayPattern] = useState<PrevisArrayPattern>("line");
+    const [arraySpacing, setArraySpacing] = useState<number | null>(null);
+    const [arrayVary, setArrayVary] = useState(0.4);
+    const [arraySeed, setArraySeed] = useState(() => Math.floor(Math.random() * 1_000_000));
+    const [layoutTemplate, setLayoutTemplate] = useState<PrevisLayoutTemplateInfo>(PREVIS_LAYOUT_TEMPLATES[0]);
+    const [layoutSize, setLayoutSize] = useState(PREVIS_LAYOUT_TEMPLATES[0].defaultSize);
+    const [layoutDensity, setLayoutDensity] = useState(0.75);
+    const [layoutSeed, setLayoutSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
+    const [layoutCrowd, setLayoutCrowd] = useState(true);
+    const thumbnails = usePrevisPropThumbnails(open && kind === "prop");
     const [lightPreset, setLightPreset] = useState<PrevisLightPreset>(PREVIS_LIGHT_PRESETS[0]);
     const [cameraPreset, setCameraPreset] = useState<PrevisCameraPreset>(PREVIS_CAMERA_PRESETS[1]);
     const [currentView, setCurrentView] = useState<PrevisTransform | null>(null);
@@ -79,13 +106,24 @@ export function PrevisAddDialog({
     useEffect(() => {
         if (!open) return;
         setKind(initialKind);
+        if (initialPropCategory) setPropCategory(initialPropCategory);
         // 打开那一刻的视口角度；「当前视角」机位预览与写入都用这一份。
         setCurrentView(readCurrentView());
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, initialKind]);
+    }, [open, initialKind, initialPropCategory]);
 
     const previewActor = useMemo(() => ({ ...buildPrevisActorFromTemplate(actorTemplate, { index: counts.actors, color: actorColor }), pose: actorPose }), [actorColor, actorPose, actorTemplate, counts.actors]);
-    const previewProp = useMemo(() => buildPrevisPropObject(prop, propColor), [prop, propColor]);
+    const previewProp = useMemo(() => createPrevisCatalogProp({ propId: prop.id, name: prop.name, color: propColor, params: propParams }), [prop, propColor, propParams]);
+    const defaultSpacing = useMemo(() => Math.round(previsArrayDefaultSpacing(previewProp) * 2) / 2, [previewProp]);
+    const arraySpec = useMemo<PrevisArraySpec>(
+        () => ({ pattern: arrayPattern, count: arrayCount, spacing: arraySpacing ?? defaultSpacing, facing: arrayPattern === "ring" ? "center" : "same", vary: arrayVary, seed: arraySeed }),
+        [arrayCount, arrayPattern, arraySeed, arraySpacing, arrayVary, defaultSpacing],
+    );
+    const previewProps = useMemo(() => (arrayCount > 1 ? expandPrevisArray(previewProp, arraySpec, [0, 0, 0]) : [previewProp]), [arrayCount, arraySpec, previewProp]);
+    const previewLayout = useMemo(
+        () => createPrevisLayoutObject({ name: layoutTemplate.name, layout: { template: layoutTemplate.id, seed: layoutSeed, size: layoutSize, density: layoutDensity, crowd: layoutCrowd } }),
+        [layoutCrowd, layoutDensity, layoutSeed, layoutSize, layoutTemplate],
+    );
     const previewLight = useMemo(() => buildPrevisLightFromPreset(lightPreset, counts.lights), [counts.lights, lightPreset]);
     const previewCamera = useMemo(() => buildPrevisCameraFromPreset(cameraPreset, counts.cameras, currentView), [cameraPreset, counts.cameras, currentView]);
 
@@ -100,13 +138,27 @@ export function PrevisAddDialog({
                 });
                 onConfirm({ kind, objects });
             }
-        } else if (kind === "prop") onConfirm({ kind, objects: [previewProp] });
+        } else if (kind === "prop") onConfirm({ kind, objects: previewProps, arranged: previewProps.length > 1 });
+        else if (kind === "layout") onConfirm({ kind, objects: [previewLayout] });
         else if (kind === "light") onConfirm({ kind, light: previewLight });
         else onConfirm({ kind, camera: previewCamera });
     };
 
-    const confirmLabel = kind === "actor" ? (crowd ? "加入 9 个角色" : `加入「${actorTemplate.label}」`) : kind === "prop" ? `加入「${prop.name}」` : kind === "light" ? `加入「${lightPreset.label}」` : `加入「${cameraPreset.label}」机位`;
-    const category = PREVIS_PROP_LIBRARY.find((item) => item.id === propCategory) ?? PREVIS_PROP_LIBRARY[0];
+    const confirmLabel =
+        kind === "actor"
+            ? crowd
+                ? "加入 9 个角色"
+                : `加入「${actorTemplate.label}」`
+            : kind === "prop"
+              ? previewProps.length > 1
+                  ? `加入 ${previewProps.length} 个「${prop.name}」`
+                  : `加入「${prop.name}」`
+              : kind === "layout"
+                ? `搭建「${layoutTemplate.name}」`
+                : kind === "light"
+                  ? `加入「${lightPreset.label}」`
+                  : `加入「${cameraPreset.label}」机位`;
+    const categoryItems = PREVIS_PROP_CATALOG.filter((item) => item.category === propCategory);
 
     return (
         <Modal open={open} onCancel={onClose} footer={null} width={880} title="添加到场景" destroyOnHidden rootClassName="previs-add-dialog-root" centered>
@@ -161,24 +213,111 @@ export function PrevisAddDialog({
                         ) : kind === "prop" ? (
                             <>
                                 <div className="previs-add-dialog__chips">
-                                    {PREVIS_PROP_LIBRARY.map((item) => (
-                                        <button key={item.id} type="button" className={`previs-add-dialog__chip ${propCategory === item.id ? "is-active" : ""}`} onClick={() => setPropCategory(item.id)}>
+                                    {PREVIS_PROP_CATEGORIES.map((item) => (
+                                        <button key={item.id} type="button" aria-pressed={propCategory === item.id} className={`previs-add-dialog__chip ${propCategory === item.id ? "is-active" : ""}`} onClick={() => setPropCategory(item.id)}>
                                             {item.label}
                                         </button>
                                     ))}
                                 </div>
                                 <OptionGrid>
-                                    {category.items.map((item) => (
-                                        <OptionCard key={item.id} active={prop.id === item.id} title={item.name} hint={formatPrevisPropSize(item.size)} thumb={<PrevisPropThumb prop={item} />} onClick={() => setProp(item)} />
+                                    {categoryItems.map((item) => (
+                                        <OptionCard
+                                            key={item.id}
+                                            active={prop.id === item.id}
+                                            title={item.name}
+                                            hint={formatPrevisSize(item.size)}
+                                            thumb={thumbnails?.get(item.id) ? <img className="previs-add-dialog__thumb-img" src={thumbnails.get(item.id)} alt="" draggable={false} /> : <span className="previs-add-dialog__thumb-placeholder" />}
+                                            onClick={() => setProp(item)}
+                                        />
                                     ))}
                                 </OptionGrid>
-                                <OptionSection title="颜色">
-                                    <Swatches colors={PROP_SWATCHES} value={propColor} onChange={setPropColor} />
+                                {prop.params ? (
+                                    <OptionSection title="参数">
+                                        <PrevisPropParamFields propId={prop.id} params={propParams} onChange={setPropParams} />
+                                    </OptionSection>
+                                ) : null}
+                                <OptionSection title={arrayCount > 1 ? `批量摆放 · ${arrayCount} 个` : "批量摆放"}>
+                                    <div className="pv-param-fields">
+                                        <div className="pv-world__row pv-world__row--slider">
+                                            <span>数量</span>
+                                            <Slider min={1} max={30} value={arrayCount} onChange={setArrayCount} />
+                                            <span className="pv-world__value">{arrayCount}</span>
+                                        </div>
+                                        {arrayCount > 1 ? (
+                                            <>
+                                                <div className="pv-world__presets" role="group" aria-label="排布方式">
+                                                    {PREVIS_ARRAY_PATTERNS.map((item) => (
+                                                        <button
+                                                            key={item.value}
+                                                            type="button"
+                                                            aria-pressed={arrayPattern === item.value}
+                                                            className={`pv-world__chip ${arrayPattern === item.value ? "is-active" : ""}`}
+                                                            onClick={() => setArrayPattern(item.value)}
+                                                        >
+                                                            {item.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div className="pv-world__row pv-world__row--slider">
+                                                    <span>间距</span>
+                                                    <Slider min={1} max={Math.max(40, defaultSpacing * 3)} step={0.5} value={arraySpacing ?? defaultSpacing} onChange={setArraySpacing} />
+                                                    <span className="pv-world__value">{arraySpacing ?? defaultSpacing}m</span>
+                                                </div>
+                                                <div className="pv-world__row pv-world__row--slider">
+                                                    <span>错落</span>
+                                                    <Slider min={0} max={1} step={0.05} value={arrayVary} onChange={setArrayVary} />
+                                                    <button type="button" className="pv-btn" aria-label="换一组" title="换一组浮动" onClick={() => setArraySeed(Math.floor(Math.random() * 1_000_000))}>
+                                                        <Shuffle className="size-3.5" />
+                                                    </button>
+                                                </div>
+                                            </>
+                                        ) : null}
+                                    </div>
                                 </OptionSection>
+                                {prop.accent ? (
+                                    <OptionSection title={`颜色 · ${prop.accent}`}>
+                                        <Swatches colors={PROP_SWATCHES} value={propColor} onChange={setPropColor} />
+                                    </OptionSection>
+                                ) : null}
                                 <button type="button" className="previs-add-dialog__link" onClick={onUploadModel}>
                                     <FileUp className="size-3.5" />
                                     上传本地模型（.glb / .gltf）
                                 </button>
+                            </>
+                        ) : kind === "layout" ? (
+                            <>
+                                <OptionGrid>
+                                    {PREVIS_LAYOUT_TEMPLATES.map((template) => (
+                                        <OptionCard
+                                            key={template.id}
+                                            active={layoutTemplate.id === template.id}
+                                            title={template.name}
+                                            hint={template.hint}
+                                            onClick={() => {
+                                                setLayoutTemplate(template);
+                                                setLayoutSize(template.defaultSize);
+                                            }}
+                                        />
+                                    ))}
+                                </OptionGrid>
+                                <OptionSection title={`范围 · ${Math.round(layoutSize)}m 见方`}>
+                                    <Slider min={layoutTemplate.minSize} max={layoutTemplate.maxSize} step={10} value={layoutSize} onChange={setLayoutSize} />
+                                </OptionSection>
+                                <OptionSection title={`密度 · ${Math.round(layoutDensity * 100)}%`}>
+                                    <Slider min={0.2} max={1} step={0.05} value={layoutDensity} onChange={setLayoutDensity} />
+                                </OptionSection>
+                                <div className="previs-add-dialog__row">
+                                    <label className="previs-add-dialog__check">
+                                        <input type="checkbox" checked={layoutCrowd} onChange={(event) => setLayoutCrowd(event.target.checked)} />
+                                        <Users className="size-3.5" />
+                                        街上生成路人
+                                    </label>
+                                    <button type="button" className="pv-btn" onClick={() => setLayoutSeed(Math.floor(Math.random() * 1_000_000))}>
+                                        <Shuffle className="size-3.5" />
+                                        换一版
+                                    </button>
+                                </div>
+                                <div className="previs-add-dialog__preview-note previs-add-dialog__preview-note--inline">布景作为一个整体加入场景中心；建议同时在右侧「世界」开启天空与天气。</div>
                             </>
                         ) : kind === "light" ? (
                             <OptionGrid>
@@ -195,12 +334,19 @@ export function PrevisAddDialog({
                         )}
                     </div>
                     <div className="previs-add-dialog__preview">
-                        <div className="previs-add-dialog__preview-label">{kind === "camera" ? "机位画面预览" : kind === "light" ? "灯光效果预览（参考演员）" : "预览 · 拖动旋转"}</div>
-                        <Canvas shadows dpr={[1, 1.75]} camera={{ position: [2.6, 1.7, 3.4], fov: 40 }} gl={{ antialias: true, preserveDrawingBuffer: false }}>
+                        <div className="previs-add-dialog__preview-label">{kind === "camera" ? "机位画面预览" : kind === "light" ? "灯光效果预览（参考演员）" : kind === "layout" ? "布景鸟瞰 · 拖动旋转、滚轮缩放" : "预览 · 拖动旋转"}</div>
+                        <Canvas key={kind === "layout" ? "layout" : "stage"} shadows dpr={[1, 1.75]} camera={{ position: [2.6, 1.7, 3.4], fov: 40, far: 8000 }} gl={{ antialias: true, preserveDrawingBuffer: false }}>
                             <color attach="background" args={["#d8dde3"]} />
                             <Suspense fallback={null}>
                                 {kind === "actor" ? <ActorPreview actor={previewActor} /> : null}
-                                {kind === "prop" ? <PropPreview object={previewProp} /> : null}
+                                {kind === "prop" ? (
+                                    <PropPreview
+                                        objects={previewProps}
+                                        size={resolvePrevisPropSize(prop.id, propParams) ?? prop.size}
+                                        spread={arrayCount > 1 ? (arraySpacing ?? defaultSpacing) * Math.sqrt(arrayCount) * (arrayPattern === "line" ? Math.sqrt(arrayCount) : 1) : 0}
+                                    />
+                                ) : null}
+                                {kind === "layout" ? <LayoutPreview object={previewLayout} /> : null}
                                 {kind === "light" ? <LightPreview light={previewLight} /> : null}
                                 {kind === "camera" ? <CameraPreview camera={previewCamera} /> : null}
                             </Suspense>
@@ -299,17 +445,17 @@ function Swatches({ colors, value, onChange }: { colors: string[]; value: string
 
 /* ── 预览场景 ────────────────────────────────────────────────────────────── */
 
-function Stage({ children, target = [0, 0.9, 0] as [number, number, number], orbit = true }: { children: React.ReactNode; target?: [number, number, number]; orbit?: boolean }) {
+function Stage({ children, target = [0, 0.9, 0] as [number, number, number], orbit = true, maxDistance = 14 }: { children: React.ReactNode; target?: [number, number, number]; orbit?: boolean; maxDistance?: number }) {
     return (
         <>
             <hemisphereLight args={["#ffffff", "#8a939c", 0.9]} />
             <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-                <circleGeometry args={[8, 48]} />
+                <circleGeometry args={[Math.max(8, maxDistance), 48]} />
                 <meshStandardMaterial color="#c3cad1" roughness={0.95} />
             </mesh>
             <Grid position={[0, 0.002, 0]} args={[16, 16]} cellSize={0.5} sectionSize={2} cellColor="#9aa4ae" sectionColor="#7d8892" fadeDistance={14} infiniteGrid />
             {children}
-            {orbit ? <OrbitControls target={target} enablePan={false} minDistance={1.4} maxDistance={14} maxPolarAngle={Math.PI * 0.49} /> : null}
+            {orbit ? <OrbitControls target={target} enablePan={false} minDistance={1.4} maxDistance={maxDistance} maxPolarAngle={Math.PI * 0.49} /> : null}
         </>
     );
 }
@@ -356,9 +502,36 @@ function ActorPreview({ actor }: { actor: PrevisObject }) {
     );
 }
 
-function PropPreview({ object }: { object: PrevisObject }) {
-    const [w, , d] = object.transform.scale;
-    const span = Math.max(1.2, w, d, object.transform.position[1] * 2);
+/** 布景预览：同一套展开与实例化，鸟瞰相机按布景尺寸取景。 */
+function LayoutPreview({ object }: { object: PrevisObject }) {
+    const size = object.layout?.size ?? 200;
+    return (
+        <>
+            <hemisphereLight args={["#ffffff", "#8a939c", 1.1]} />
+            <directionalLight
+                position={[size * 0.4, size * 0.8, size * 0.3]}
+                intensity={2}
+                castShadow
+                shadow-mapSize={[2048, 2048]}
+                shadow-camera-left={-size / 2}
+                shadow-camera-right={size / 2}
+                shadow-camera-top={size / 2}
+                shadow-camera-bottom={-size / 2}
+                shadow-camera-far={size * 3}
+            />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+                <planeGeometry args={[size * 1.6, size * 1.6]} />
+                <meshStandardMaterial color="#c9ccc4" roughness={0.95} />
+            </mesh>
+            <PrevisLayoutVisual object={object} selected={false} playhead={0} />
+            <FitCamera distance={size * 0.95} />
+            <OrbitControls target={[0, 0, 0]} enablePan={false} minDistance={size * 0.2} maxDistance={size * 2.2} maxPolarAngle={Math.PI * 0.45} />
+        </>
+    );
+}
+
+function PropPreview({ objects, size, spread }: { objects: PrevisObject[]; size: [number, number, number]; spread: number }) {
+    const span = Math.max(1.2, size[0], size[2], size[1] * 0.8, spread);
     // 参考人偶站在道具右侧，比例一眼可见；镜头距离随道具尺寸放大。
     const reference = useMemo(
         () => ({
@@ -370,13 +543,24 @@ function PropPreview({ object }: { object: PrevisObject }) {
         [span],
     );
     return (
-        <Stage target={[span * 0.2, Math.min(1.2, object.transform.position[1] + 0.3), 0]}>
-            <FitCamera distance={Math.max(4, span * 1.6)} />
-            <directionalLight position={[3, 5, 4]} intensity={1.6} castShadow />
-            <mesh position={object.transform.position} scale={object.transform.scale} castShadow receiveShadow>
-                {object.primitive === "sphere" ? <sphereGeometry args={[0.6, 32, 24]} /> : object.primitive === "cylinder" ? <cylinderGeometry args={[0.5, 0.5, 1.2, 32]} /> : <boxGeometry args={[1, 1, 1]} />}
-                <meshStandardMaterial color={object.color} roughness={0.7} />
-            </mesh>
+        <Stage target={[span * 0.2, Math.min(size[1] * 0.45, 30), 0]} maxDistance={Math.max(14, span * 4)}>
+            <FitCamera distance={Math.max(4, span * 1.6, size[1] * 1.4)} />
+            <directionalLight
+                position={[span * 1.5 + 3, span * 2 + 5, span + 4]}
+                intensity={1.8}
+                castShadow
+                shadow-mapSize={[2048, 2048]}
+                shadow-camera-left={-span}
+                shadow-camera-right={span}
+                shadow-camera-top={span}
+                shadow-camera-bottom={-span}
+                shadow-camera-far={span * 8 + 20}
+            />
+            {objects.map((object) => (
+                <group key={object.id} position={object.transform.position} rotation={object.transform.rotation} scale={object.transform.scale}>
+                    <PrevisPropVisual object={object} selected={false} />
+                </group>
+            ))}
             <PreviewMannequin actor={reference} ghost />
         </Stage>
     );

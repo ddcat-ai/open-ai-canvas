@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -70,8 +72,10 @@ func (s *Service) cloudAgentModelList(userID string, intent *ModelRequestIntent)
 // supplied by the model must not replace resource ownership/readiness checks.
 func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*ModelRequestIntent, error) {
 	var a struct {
-		Mode             string   `json:"mode"`
-		ReferenceNodeIDs []string `json:"referenceNodeIds"`
+		Mode               string                        `json:"mode"`
+		AudioMode          string                        `json:"audioMode"`
+		AudioVoiceBindings []cloudAgentAudioVoiceBinding `json:"audioVoiceBindings"`
+		ReferenceNodeIDs   []string                      `json:"referenceNodeIds"`
 	}
 	if err := decodeCloudAgentJSONObject(arguments, &a); err != nil {
 		return nil, BadAuthRequest("模型查询参数无效")
@@ -101,23 +105,36 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 			return nil, BadAuthRequest("参考节点不存在或重复")
 		}
 		seen[id] = true
-		ref, field, err := cloudAgentMediaReference(s.repo, userID, canvas.ProjectID, nodes[id])
+		ref, field, err := cloudAgentMediaReference(s.repo, userID, canvas.ProjectID, nodes[id], a.Mode)
 		if err != nil {
 			return nil, err
 		}
 		list, _ := refs[field].([]any)
 		refs[field] = append(list, ref)
 	}
-	if err := validateCloudAgentMediaReferences(a.Mode, refs); err != nil {
+	if err := validateCloudAgentMediaReferences(a.Mode, refs, a.AudioMode, a.AudioVoiceBindings); err != nil {
 		return nil, err
 	}
 	refs["mode"] = a.Mode
 	operation := cloudAgentMediaOperation(a.Mode, refs)
+	if a.Mode == "audio" && lenAnySlice(refs["referenceAudios"]) > 0 && a.AudioMode != "tts" {
+		operation = "unified_edit"
+	}
 	if a.Mode == "video" {
 		// 查询目录时尚未选择模型；先按真实输入筛选，再按各模型的操作合同匹配。
 		operation = ""
 	}
 	intent := ModelRequestIntentFromTaskInput(refs, "canvas_"+a.Mode, operation)
+	if a.Mode == "audio" {
+		mode := a.AudioMode
+		if mode == "" && lenAnySlice(refs["referenceAudios"]) > 0 {
+			mode = "unified_edit"
+		}
+		if mode == "" {
+			mode = "tts"
+		}
+		intent.Options["audioMode"] = mode
+	}
 	return &intent, nil
 }
 
@@ -128,6 +145,8 @@ type cloudAgentMediaArgs struct {
 	CharacterVersions          map[string]string                   `json:"-"`
 	CharacterLabels            []string                            `json:"-"`
 	Mode                       string                              `json:"mode"`
+	AudioMode                  string                              `json:"audioMode"`
+	AudioVoiceBindings         []cloudAgentAudioVoiceBinding       `json:"audioVoiceBindings"`
 	Prompt                     string                              `json:"prompt"`
 	LogicalModelID             string                              `json:"logicalModelId"`
 	ChannelID                  string                              `json:"channelId"`
@@ -150,6 +169,11 @@ type cloudAgentMediaArgs struct {
 	ReferenceTransientIDs      []string                            `json:"referenceTransientIds"`
 }
 
+type cloudAgentAudioVoiceBinding struct {
+	CharacterNodeID string `json:"characterNodeId"`
+	AudioNodeID     string `json:"audioNodeId"`
+}
+
 type cloudAgentMediaPlan struct {
 	Args                cloudAgentMediaArgs
 	CallID              string
@@ -159,23 +183,102 @@ type cloudAgentMediaPlan struct {
 	Prepared *cloudAgentPreparedMedia `json:"-"`
 }
 
-// A resumed draft's incoming edges must describe the new approved inputs,
-// rather than retaining references removed from the generation request.
-func cloudAgentMediaConnections(edges []map[string]any, a cloudAgentMediaArgs) []map[string]any {
-	incoming := map[string]map[string]any{}
-	result := make([]map[string]any, 0, len(edges))
-	for _, edge := range edges {
-		if stringValue(edge["toNodeId"]) != a.NodeID {
-			result = append(result, edge)
-		} else {
-			incoming[stringValue(edge["fromNodeId"])] = edge
+type cloudAgentStoryboardOutput struct {
+	scriptID string
+	rowID    string
+}
+
+func cloudAgentBoundStoryboardOutputs(doc map[string]any, a cloudAgentMediaArgs) []cloudAgentStoryboardOutput {
+	if a.Mode != "image" && a.Mode != "video" {
+		return nil
+	}
+	var outputs []cloudAgentStoryboardOutput
+	for _, node := range creationMaps(doc["nodes"]) {
+		if node["type"] != "script" {
+			continue
+		}
+		metadata, _ := node["metadata"].(map[string]any)
+		storyboard, _ := metadata["storyboard"].(map[string]any)
+		for _, row := range creationMaps(storyboard["rows"]) {
+			if rowID := stringValue(row["id"]); rowID != "" && row[a.Mode+"NodeId"] == a.NodeID {
+				outputs = append(outputs, cloudAgentStoryboardOutput{stringValue(node["id"]), rowID})
+			}
 		}
 	}
-	for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
-		if edge := incoming[id]; edge != nil {
+	return outputs
+}
+
+func cloudAgentMediaConnections(doc map[string]any, a cloudAgentMediaArgs) []map[string]any {
+	type inputEdge struct {
+		edge     map[string]any
+		position int
+	}
+	edges := creationMaps(doc["connections"])
+	incoming := map[string]inputEdge{}
+	outputs := map[cloudAgentStoryboardOutput]bool{}
+	linked := map[string]bool{}
+	result := make([]map[string]any, 0, len(edges))
+	for position, edge := range edges {
+		if stringValue(edge["toNodeId"]) != a.NodeID {
 			result = append(result, edge)
-			delete(incoming, id)
+			continue
 		}
+		from := stringValue(edge["fromNodeId"])
+		handle := stringValue(edge["fromHandleId"])
+		rowID, rowHandle := strings.CutPrefix(handle, "row:")
+		switch {
+		case rowHandle || edge["relation"] == "storyboard-output":
+			if rowHandle && rowID != "" {
+				edge = maps.Clone(edge)
+				edge["relation"], edge["storyboardRowId"] = "storyboard-output", rowID
+			} else {
+				rowID = stringValue(edge["storyboardRowId"])
+			}
+			outputs[cloudAgentStoryboardOutput{from, rowID}] = true
+		case handle == "storyboard:context" || edge["relation"] == "batch-output":
+		default:
+			incoming[from] = inputEdge{edge, position}
+			continue
+		}
+		linked[from] = true
+		result = append(result, edge)
+	}
+	for _, output := range cloudAgentBoundStoryboardOutputs(doc, a) {
+		if !outputs[output] {
+			result = append(result, map[string]any{"fromNodeId": output.scriptID, "toNodeId": a.NodeID, "fromHandleId": "row:" + output.rowID, "relation": "storyboard-output", "storyboardRowId": output.rowID})
+			outputs[output], linked[output.scriptID] = true, true
+		}
+	}
+	var rowID string
+	if len(outputs) == 1 {
+		for key := range outputs {
+			rowID = key.rowID
+		}
+	}
+	lastPosition := -1
+	for index, from := range append(slices.Clone(a.ReferenceNodeIDs), a.SourceNodeID) {
+		if from == "" || linked[from] {
+			continue
+		}
+		linked[from] = true
+		input := incoming[from]
+		edge := maps.Clone(input.edge)
+		isReference := index < len(a.ReferenceNodeIDs)
+		if edge == nil || (!isReference && edge["relation"] == "storyboard-asset-reference") {
+			edge = map[string]any{"fromNodeId": from, "toNodeId": a.NodeID}
+		}
+		if isReference && rowID != "" && edge["relation"] == nil {
+			edge["relation"], edge["storyboardRowId"] = "storyboard-asset-reference", rowID
+		}
+		if edge["id"] == nil {
+			lastPosition = len(edges)
+		} else if input.position < lastPosition {
+			edge["id"] = "agent-" + newID()
+			lastPosition = len(edges)
+		} else {
+			lastPosition = input.position
+		}
+		result = append(result, edge)
 	}
 	return result
 }
@@ -424,50 +527,32 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 	// canvas_apply_ops. The old implementation only checked that references
 	// existed, which allowed invalid edges (for example frame -> image) to be
 	// smuggled in through generate_media.
-	prospectiveConnections := cloudAgentMediaConnections(creationMaps(doc["connections"]), args)
-	target := existing
-	if target == nil {
-		target = map[string]any{"id": args.NodeID, "type": targetDescriptor.Type}
-	}
-	prospectiveNodes := make([]map[string]any, 0, len(nodes)+1)
-	for _, node := range nodes {
-		prospectiveNodes = append(prospectiveNodes, node)
-	}
+	plannedConnections := cloudAgentMediaConnections(doc, args)
+	prospectiveNodes := creationMaps(doc["nodes"])
 	if existing == nil {
-		prospectiveNodes = append(prospectiveNodes, target)
+		prospectiveNodes = append(prospectiveNodes, map[string]any{"id": args.NodeID, "type": targetDescriptor.Type})
 	}
-	type prospectiveSource struct {
-		id    string
-		field string
+	prospectiveConnections := make([]map[string]any, 0, len(plannedConnections))
+	for _, edge := range plannedConnections {
+		if edge["id"] != nil {
+			prospectiveConnections = append(prospectiveConnections, edge)
+		}
 	}
-	prospectiveSources := make([]prospectiveSource, 0, len(args.ReferenceNodeIDs)+1)
-	for i, id := range args.ReferenceNodeIDs {
-		prospectiveSources = append(prospectiveSources, prospectiveSource{id: id, field: fmt.Sprintf("referenceNodeIds[%d]", i)})
-	}
-	if args.SourceNodeID != "" {
-		prospectiveSources = append(prospectiveSources, prospectiveSource{id: args.SourceNodeID, field: "sourceNodeId"})
-	}
-	prospectiveSeen := map[string]bool{}
-	for _, source := range prospectiveSources {
-		sourceID := source.id
-		if sourceID == "" || prospectiveSeen[sourceID] {
+	for _, edge := range plannedConnections {
+		if edge["id"] != nil {
 			continue
 		}
-		prospectiveSeen[sourceID] = true
-		alreadyConnected := false
-		for _, edge := range prospectiveConnections {
-			if stringValue(edge["fromNodeId"]) == sourceID && stringValue(edge["toNodeId"]) == args.NodeID {
-				alreadyConnected = true
-				break
+		sourceID := stringValue(edge["fromNodeId"])
+		if err := validateCloudAgentConnectionWithHandles(prospectiveNodes, sourceID, args.NodeID, stringValue(edge["fromHandleId"]), stringValue(edge["toHandleId"]), prospectiveConnections); err != nil {
+			field := "nodeId"
+			if index := slices.Index(args.ReferenceNodeIDs, sourceID); index >= 0 {
+				field = fmt.Sprintf("referenceNodeIds[%d]", index)
+			} else if sourceID == args.SourceNodeID {
+				field = "sourceNodeId"
 			}
+			return nil, nil, nil, cloudAgentFieldError(field, "invalid_connection", cloudAgentSafeToolError(err))
 		}
-		if alreadyConnected {
-			continue
-		}
-		if err := validateCloudAgentConnection(prospectiveNodes, sourceID, args.NodeID, prospectiveConnections); err != nil {
-			return nil, nil, nil, cloudAgentFieldError(source.field, "invalid_connection", cloudAgentSafeToolError(err))
-		}
-		prospectiveConnections = append(prospectiveConnections, map[string]any{"fromNodeId": sourceID, "toNodeId": args.NodeID})
+		prospectiveConnections = append(prospectiveConnections, edge)
 	}
 	if args.Prepared != nil {
 		refs, err := cloudAgentPreparedReferences(repo, userID, args.Prepared)
@@ -485,7 +570,7 @@ func cloudAgentMediaDocument(repo *repository.Repository, userID, canvasID strin
 				return nil, nil, nil, cloudAgentFieldError(fmt.Sprintf("referenceNodeIds[%d]", i), "invalid_value", "referenceNodeIds 仅接受受支持的媒体参考节点；文本来源请改用 sourceNodeId")
 			}
 		}
-		ref, payloadField, e := cloudAgentMediaReference(repo, userID, canvas.ProjectID, nodes[id])
+		ref, payloadField, e := cloudAgentMediaReference(repo, userID, canvas.ProjectID, nodes[id], args.Mode)
 		if e != nil {
 			return nil, nil, nil, e
 		}
@@ -615,7 +700,7 @@ func validateCloudAgentMediaBudget(a cloudAgentMediaArgs, state *cloudAgentRunti
 	return nil
 }
 
-func validateCloudAgentMediaReferences(mode string, refs map[string]any) error {
+func validateCloudAgentMediaReferences(mode string, refs map[string]any, audioMode string, bindings []cloudAgentAudioVoiceBinding) error {
 	imageCount := lenAnySlice(refs["referenceImages"])
 	videoCount := lenAnySlice(refs["referenceVideos"])
 	audioCount := lenAnySlice(refs["referenceAudios"])
@@ -625,6 +710,18 @@ func validateCloudAgentMediaReferences(mode string, refs map[string]any) error {
 			return cloudAgentFieldError("referenceNodeIds", "invalid_combination", "图片生成仅支持图片参考资产；请移除视频或音频引用")
 		}
 	case "audio":
+		if audioMode != "" && audioMode != "tts" && audioMode != "unified_edit" {
+			return cloudAgentFieldError("audioMode", "invalid_value", "音频模式仅支持 tts 或 unified_edit")
+		}
+		if audioMode == "tts" && audioCount > 0 {
+			return cloudAgentFieldError("audioMode", "invalid_combination", "文本朗读不使用参考音频；请移除音频引用或改用全能配音，避免参考关系不明确")
+		}
+		if audioMode == "unified_edit" && audioCount == 0 {
+			return cloudAgentFieldError("referenceNodeIds", "required", "全能配音必须连接参考音频；请先选择音频节点")
+		}
+		if audioMode != "unified_edit" && len(bindings) > 0 {
+			return cloudAgentFieldError("audioVoiceBindings", "invalid_combination", "角色音色对应仅在明确的全能配音模式下使用")
+		}
 		if videoCount > 0 {
 			return cloudAgentFieldError("referenceNodeIds", "invalid_combination", "音频生成不能使用参考视频；请移除视频引用")
 		}
@@ -773,6 +870,16 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	}
 	if a.Prepared != nil {
 		a.Prompt = stringValue(a.Prepared.Input["prompt"])
+		if preparedConfig, ok := a.Prepared.Input["config"].(map[string]any); ok && a.AudioMode == "" {
+			a.AudioMode = stringValue(preparedConfig["audioMode"])
+		}
+		if len(a.AudioVoiceBindings) == 0 {
+			if encoded, marshalErr := json.Marshal(a.Prepared.Input["audioVoiceBindings"]); marshalErr == nil {
+				if unmarshalErr := json.Unmarshal(encoded, &a.AudioVoiceBindings); unmarshalErr != nil {
+					return CreateTaskRequest{}, nil, cloudAgentFieldError("audioVoiceBindings", "invalid_value", "已批准的角色音色对应无法恢复，请重新审批")
+				}
+			}
+		}
 	} else {
 		for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
 			if character := characters[id]; character != nil {
@@ -788,6 +895,12 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		if err != nil {
 			return CreateTaskRequest{}, nil, err
 		}
+		if a.Mode == "audio" {
+			a.Prompt, err = compileCloudAgentAudioVoiceBindings(a.Prompt, a.AudioVoiceBindings, refs)
+			if err != nil {
+				return CreateTaskRequest{}, nil, err
+			}
+		}
 	}
 	spec, err := cloudAgentGenerationSpec(a, refs, nil)
 	if err != nil {
@@ -801,6 +914,9 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		config["videoArkPrivateAssetUpload"] = strconv.FormatBool(*a.VideoArkPrivateAssetUpload)
 	}
 	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
+	if a.Mode == "audio" && len(a.AudioVoiceBindings) > 0 {
+		metadata["audioVoiceBindings"] = a.AudioVoiceBindings
+	}
 	// 首尾帧是结构化输入，不能只写进提示词；复用画布提交任务时的字段。
 	if a.VideoStartFrameNodeID != "" {
 		metadata["videoStartFrameNodeId"] = a.VideoStartFrameNodeID
@@ -826,7 +942,7 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 			if voiceKey == "" {
 				continue
 			}
-			if strings.TrimSpace(stringValue(config["audioVoice"])) == "" {
+			if a.AudioMode != "unified_edit" && strings.TrimSpace(stringValue(config["audioVoice"])) == "" {
 				config["audioVoice"] = voiceKey
 			}
 			if strings.TrimSpace(stringValue(config["audioInstructions"])) == "" && strings.TrimSpace(voice.Instructions) != "" {
@@ -838,7 +954,10 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	}
 	input := refs
 	input["mode"], input["prompt"], input["config"] = a.Mode, a.Prompt, config
-	if err := validateCloudAgentMediaReferences(a.Mode, refs); err != nil {
+	if a.Mode == "audio" && len(a.AudioVoiceBindings) > 0 {
+		input["audioVoiceBindings"] = a.AudioVoiceBindings
+	}
+	if err := validateCloudAgentMediaReferences(a.Mode, refs, a.AudioMode, a.AudioVoiceBindings); err != nil {
 		return CreateTaskRequest{}, nil, err
 	}
 	operation, err := s.resolveCloudAgentMediaOperation(a, refs)
@@ -933,9 +1052,6 @@ func saveCloudAgentDocument(repo *repository.Repository, project *model.CanvasPr
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		return err
-	}
-	if len(raw) > 8<<20 {
-		return BadAuthRequest("画布大小超限")
 	}
 	usage, err := repo.UserStorageUsage(project.UserID)
 	if err != nil {
@@ -1077,6 +1193,9 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 	}
 	meta["prompt"] = cloudAgentMediaComposerPrompt(a.Prompt, refs)
 	meta["composerContent"] = meta["prompt"]
+	if a.Mode == "audio" && len(a.AudioVoiceBindings) > 0 {
+		meta["audioVoiceBindings"] = a.AudioVoiceBindings
+	}
 	if task != nil {
 		meta["status"], meta["taskId"], meta["taskStatus"] = "loading", task.ID, "queued"
 		delete(meta, "agentDraftRunId")
@@ -1104,23 +1223,13 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 		nodes = append(nodes, node)
 	}
 	doc["nodes"] = nodes
-	edges := cloudAgentMediaConnections(creationMaps(doc["connections"]), a)
-	seen := map[string]bool{}
+	edges := cloudAgentMediaConnections(doc, a)
 	for _, edge := range edges {
-		if stringValue(edge["toNodeId"]) == a.NodeID {
-			seen[stringValue(edge["fromNodeId"])] = true
+		if edge["id"] == nil {
+			edge["id"] = "agent-" + newID()
 		}
 	}
-	for _, id := range append(append([]string{}, a.ReferenceNodeIDs...), a.SourceNodeID) {
-		if id == "" || seen[id] {
-			continue
-		}
-		seen[id] = true
-		edges = append(edges, map[string]any{"id": "agent-" + newID(), "fromNodeId": id, "toNodeId": a.NodeID})
-	}
-	// Reused drafts may already contain only a subset of the new references.
-	// Reorder after adding missing edges so chip numbers match submitted arrays.
-	doc["connections"] = cloudAgentMediaConnections(edges, a)
+	doc["connections"] = edges
 	if err := saveCloudAgentDocument(repo, canvas, doc, policy); err != nil {
 		return err
 	}

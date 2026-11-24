@@ -84,22 +84,58 @@ func TestImagePollLogMergesIntoCreateLog(t *testing.T) {
 	}
 }
 
+func TestAudioPollLogUpdatesCreateLogToCompleted(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:audio-poll-merge?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.Task{}, &model.ApiCallLog{}, &model.ModelPricing{}); err != nil {
+		t.Fatal(err)
+	}
+	task := model.Task{ID: "audio-task-1", UserID: "user-1", Type: "canvas_audio", Status: model.TaskStatusRunning}
+	if err := db.Create(&task).Error; err != nil {
+		t.Fatal(err)
+	}
+	startedAt := time.Now().Add(-time.Second)
+	root := model.ApiCallLog{
+		ID: "audio-create-1", UserID: task.UserID, TaskID: task.ID, Capability: "audio", RequestKind: "create",
+		ProviderRequestID: "audio-provider-1", ProviderStatus: "processing", Status: model.ApiCallStatusSucceeded, CreatedAt: startedAt,
+	}
+	if err := db.Create(&root).Error; err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{repo: repository.New(db)}
+	for index, status := range []string{"processing", "completed"} {
+		if err := service.LogAPICall(model.ApiCallLog{
+			ID: "audio-poll-" + status, UserID: task.UserID, TaskID: task.ID, Capability: "audio", RequestKind: "poll",
+			ProviderRequestID: "audio-provider-1", ProviderStatus: status, Status: model.ApiCallStatusSucceeded,
+			StatusCode: http.StatusOK, CreatedAt: startedAt.Add(time.Duration(index+1) * time.Second),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var stored model.ApiCallLog
+	if err := db.First(&stored, "id = ?", root.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.PollCount != 2 || stored.ProviderStatus != "completed" || stored.Status != model.ApiCallStatusSucceeded {
+		t.Fatalf("audio create log was not updated: %#v", stored)
+	}
+	var pollCount int64
+	if err := db.Model(&model.ApiCallLog{}).Where("task_id = ? AND request_kind = ?", task.ID, "poll").Count(&pollCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if pollCount != 0 {
+		t.Fatalf("audio poll log count = %d, want merged into create log", pollCount)
+	}
+}
+
 func TestEnsureFailedProviderAttemptLoggedFillsPreflightGapOnce(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:provider-preflight-log?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(
-		&model.SystemSetting{},
-		&model.Asset{},
-		&model.CanvasProject{},
-		&model.Task{},
-		&model.TaskLog{},
-		&model.Result{},
-		&model.ApiCallLog{},
-		&model.TaskTextDelta{},
-		&model.ModelPricing{},
-	); err != nil {
+	if err := db.AutoMigrate(append(storageQuotaTestModels(), &model.ModelPricing{})...); err != nil {
 		t.Fatal(err)
 	}
 	task := model.Task{
@@ -172,7 +208,7 @@ func TestRecordProviderRequestKeepsUserVisibleSpeechAndNetworkErrors(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.ModelPricing{}); err != nil {
+	if err := db.AutoMigrate(append(storageQuotaTestModels(), &model.ModelPricing{})...); err != nil {
 		t.Fatal(err)
 	}
 	service := &Service{repo: repository.New(db)}
@@ -207,7 +243,7 @@ func TestEnsureFailedProviderAttemptLoggedRecordsFailureHiddenBySuccessLog(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasProject{}, &model.Task{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}, &model.ModelPricing{}); err != nil {
+	if err := db.AutoMigrate(append(storageQuotaTestModels(), &model.ModelPricing{})...); err != nil {
 		t.Fatal(err)
 	}
 	success := model.ApiCallLog{ID: "api-log-success", TaskID: "task-1", Status: model.ApiCallStatusSucceeded, RequestKind: "create"}

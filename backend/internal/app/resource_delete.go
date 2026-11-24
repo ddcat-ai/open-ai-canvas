@@ -50,7 +50,15 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	//   - purge=false 是内部普通删除：回收站（archived）素材同样直接删除，其余素材保留引用保护。
 	//   - 无论哪种，被其他素材复用的资源与物理对象都保留，物理删除一律经 Outbox 异步执行。
 	deleteReferencedResources := purge
-	if !purge {
+	_, team := model.TeamIDFromContentKey(userID)
+	if team {
+		for _, asset := range assetRecords {
+			if asset.Status != model.AssetVersionStatusArchived {
+				return BadAuthRequest("请先归档素材，再执行清理")
+			}
+		}
+		deleteReferencedResources = false
+	} else if !purge {
 		if len(assetRecords) != 1 {
 			return BadAuthRequest("普通删除仅支持单个素材")
 		}
@@ -105,7 +113,16 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 			}
 		}
 	}
-	if len(ownedIDs) > 0 {
+	if len(ownedIDs) > 0 || team {
+		retained, retainedErr := s.repo.OfficialRecommendationResourceIDs()
+		if retainedErr != nil {
+			return retainedErr
+		}
+		for _, resourceID := range ownedIDs {
+			if _, exists := retained[resourceID]; exists {
+				return BadAuthRequest("素材正在被官方素材库或待审核推荐引用，暂不能删除")
+			}
+		}
 		var snapshot repository.ResourceReferenceSnapshot
 		var snapshotErr error
 		if deleteReferencedResources {
@@ -117,6 +134,11 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 				dramaReferences, snapshotErr = s.repo.DramaResourceReferences(userID, ownedIDs)
 				snapshot.Direct = append(snapshot.Direct, dramaReferences...)
 			}
+			if snapshotErr == nil {
+				var logReferences []repository.ResourceDirectReference
+				logReferences, snapshotErr = s.repo.APICallLogResourceReferences(userID, ownedIDs)
+				snapshot.Direct = append(snapshot.Direct, logReferences...)
+			}
 		} else {
 			snapshot, snapshotErr = s.repo.ResourceReferenceSnapshotExcludingAssets(userID, assetIDs, ownedIDs)
 		}
@@ -126,6 +148,10 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		sharedAssetResourceIDs := map[string]struct{}{}
 		for _, reference := range snapshot.Direct {
 			if _, exists := ownedIDSet[reference.ResourceID]; exists {
+				if reference.Kind == repository.APICallLogResourceReferenceKind && deleteReferencedResources {
+					sharedAssetResourceIDs[reference.ResourceID] = struct{}{}
+					continue
+				}
 				if reference.Kind == "素材" || reference.Kind == repository.DramaResourceReferenceKind {
 					sharedAssetResourceIDs[reference.ResourceID] = struct{}{}
 					continue
@@ -145,6 +171,18 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 				}
 				if document.Kind == "任务" {
 					document.SecondaryJSON = ""
+				}
+			}
+			if team {
+				for _, raw := range []string{document.PrimaryJSON, document.SecondaryJSON} {
+					found, err := referencesWorkspaceAsset(raw, seen)
+					if err != nil {
+						return fmt.Errorf("%s引用无法解析，已停止清理：%w", document.Kind, err)
+					}
+					if found {
+						usages = append(usages, resourceUsage{Kind: document.Kind, ID: document.ID, Title: document.Title})
+						break
+					}
 				}
 			}
 			referencedIDs := documentReferencedResourceIDs(document.PrimaryJSON, ownedIDSet)
@@ -174,6 +212,9 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 		}
 	}
 	if message := resourceOccupiedMessage(usages); message != "" {
+		if team {
+			return teamError(409, "team_asset_referenced", message)
+		}
 		return BadAuthRequest(message)
 	}
 
@@ -194,6 +235,9 @@ func (s *Service) deleteUserAssetsWithResources(userID string, ids []string, pur
 	// 业务记录和 Outbox 必须在同一事务提交。事务失败时物理文件完全不动；
 	// 提交成功后由幂等 worker 清理，进程退出或对象存储暂时失败都可继续重试。
 	if err := s.repo.DeleteAssetsAndResources(userID, assetIDs, ownedIDs, deletionJobs, deleteReferencedResources); err != nil {
+		if errors.Is(err, repository.ErrOfficialResourceReferenced) {
+			return BadAuthRequest("素材正在被官方素材库或待审核推荐引用，暂不能删除")
+		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return NotFound("素材不存在或无权删除")
 		}
@@ -225,6 +269,15 @@ func resourceDeletionJobs(userID string, physicalObjects map[string]*model.Resou
 			StorageSettingID: resource.StorageSettingID, ObjectKey: resource.ObjectKey,
 			Status: model.ResourceDeletionStatusPending, NextAttemptAt: now,
 		})
+		// 云端播放副本是独立对象；资源记录删除后只能由 outbox 保留其对象键。
+		if resource.Provider != "local" && resource.PlaybackStatus == model.PlaybackStatusReady && resource.PlaybackObjectKey != "" && resource.PlaybackObjectKey != resource.ObjectKey {
+			jobs = append(jobs, model.ResourceDeletionJob{
+				ID: newID(), UserID: userID, ResourceID: resource.ID,
+				Provider: resource.Provider, Endpoint: resource.Endpoint, Bucket: resource.Bucket,
+				StorageSettingID: resource.StorageSettingID, ObjectKey: resource.PlaybackObjectKey,
+				Status: model.ResourceDeletionStatusPending, NextAttemptAt: now,
+			})
+		}
 	}
 	return jobs
 }

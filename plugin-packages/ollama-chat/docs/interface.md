@@ -31,6 +31,15 @@
 | `response_format` | object | 否 | `response_format/text` | 结构化输出配置。 |
 | `stream` | boolean | 否 | `stream` | 流式开关；后台任务当前以最终响应归一。 |
 
+## 原生文本多模态合同（2.0.1）
+
+<!-- 原生 Ollama REST 不接受 OpenAI 内容数组。 -->
+宿主保持 `request.messages` 原合同，并提供只读 `request.textMessages` 和 `request.textInput` 投影。插件保留全部历史消息，逐条发送字符串 `content`（按顺序拼接文本块）及 `images`（按顺序提取内联图片的原始 Base64，不含 Data URL 前缀）。纯图片消息发送空字符串 content；纯文本消息不发送 images。
+
+仅接受文本及合法的内联图片。远程图片 URL、视频、音频、非法 Base64、类型与 MIME 不匹配及未知内容块在构建 HTTP 请求前失败，不静默丢弃历史素材，不额外抓取远程文件。system/user/assistant 角色原样保留，工具对话不属于此创建 profile。options、format、keep_alive、tools、think 和现有鉴权均保持不变。底层 SSRF 策略仍然适用，本插件不放宽本机出站权限。
+
+官方参考：[Ollama Chat API](https://docs.ollama.com/api/chat)。
+
 ## 上游请求模板逐字段清单
 
 下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。
@@ -41,7 +50,7 @@
 | `create.path` | `"/api/chat"` |
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
-| `create.body.messages` | `{"$ref":"request.messages"}` |
+| `create.body.messages` | `{"$map":{"from":{"$ref":"request.textMessages"},"as":"message","in":{"role":{"$ref":"message.role"},"content":{"$ref":"message.text"},"images":{"$omitEmpty":{"$map":{"from":{"$filter":{"from":{"$ref":"message.parts"},"as":"part","where":{"$eq":[{"$ref":"part.type"},"image"]}}},"as":"image","in":{"$ref":"image.data"}}}}}}}` |
 | `create.body.stream` | `false` |
 | `create.body.format` | `{"$omitEmpty":{"$ref":"request.providerOptions.ollama-chat.format"}}` |
 | `create.body.options` | `{"$omitEmpty":{"$ref":"request.providerOptions.ollama-chat.options"}}` |
@@ -89,7 +98,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "ollama-chat",
   "name": "Ollama Chat",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Ollama / 影策",
   "description": "Ollama Chat 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -209,7 +218,46 @@
               "$ref": "request.model"
             },
             "messages": {
-              "$ref": "request.messages"
+              "$map": {
+                "from": {
+                  "$ref": "request.textMessages"
+                },
+                "as": "message",
+                "in": {
+                  "role": {
+                    "$ref": "message.role"
+                  },
+                  "content": {
+                    "$ref": "message.text"
+                  },
+                  "images": {
+                    "$omitEmpty": {
+                      "$map": {
+                        "from": {
+                          "$filter": {
+                            "from": {
+                              "$ref": "message.parts"
+                            },
+                            "as": "part",
+                            "where": {
+                              "$eq": [
+                                {
+                                  "$ref": "part.type"
+                                },
+                                "image"
+                              ]
+                            }
+                          }
+                        },
+                        "as": "image",
+                        "in": {
+                          "$ref": "image.data"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             },
             "stream": false,
             "format": {
@@ -255,7 +303,141 @@
           "messagePaths": [
             "error"
           ]
-        }
+        },
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$ref": "request.textInput.invalidCount"
+                },
+                0
+              ]
+            },
+            "message": "Invalid text multimodal input; check media data and MIME type."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "part.type"
+                            },
+                            [
+                              "text",
+                              "image"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Unsupported media type for this native text profile."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textMessages"
+                      },
+                      "as": "message",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "message.role"
+                            },
+                            [
+                              "system",
+                              "user",
+                              "assistant"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Unsupported message role; use the native Agent path for tool conversations."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$ref": "request.textInput.remoteImageCount"
+                },
+                0
+              ]
+            },
+            "message": "Ollama REST chat requires inline base64 images; remote image URLs are not supported."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$and": [
+                          {
+                            "$ne": [
+                              {
+                                "$ref": "part.type"
+                              },
+                              "text"
+                            ]
+                          },
+                          {
+                            "$ne": [
+                              {
+                                "$first": {
+                                  "$split": [
+                                    {
+                                      "$ref": "part.mimeType"
+                                    },
+                                    "/"
+                                  ]
+                                }
+                              },
+                              {
+                                "$ref": "part.type"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Media MIME type must match the declared image, video or audio content type."
+          }
+        ]
       }
     ]
   }

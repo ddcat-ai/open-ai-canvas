@@ -1,3 +1,4 @@
+import { resolvedMediaConfig } from "@/lib/media-settings";
 import { type GenerationTask } from "@/services/api/task-center";
 import { backendProviderConfig, logicalModelIDForConfig, runBackendGenerationTask, type GenerationTaskDependencies } from "@/services/api/generation-task";
 import { configuredModelMatchesCapability, defaultConfig, normalizeModelOptionValue, normalizeRunningHubCapability, type AiConfig, type WorkflowFieldMapping } from "@/stores/use-config-store";
@@ -8,11 +9,14 @@ import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
 import { normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
+import { currentGenerationBatchLimit } from "@/lib/generation-batch-limit";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import { interruptFileUpload } from "@/lib/canvas/canvas-file-upload";
 import { isCanvasWorkflowProvider, resolveCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
+import { canvasVideoOperation, canvasVideoReferenceMode, usesProjectedVideoReferences } from "./canvas-video-reference-mode";
+import { videoRemakeInputIssue } from "./canvas-video-regeneration";
 import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasNodeType, type CanvasAssistantSession, type CanvasConnection, type CanvasImageGenerationType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasVideoEditOperation } from "@/types/canvas";
 import type { ReferenceImage } from "@/types/image";
@@ -68,7 +72,7 @@ export async function runBackendCanvasGenerationTask(
             referenceAudios,
             mask,
             signal,
-            metadata: { nodeId, ...(mode === "video" && !metadata?.videoEditOperation ? { videoEditOperation: "image_to_video" } : {}), ...metadata },
+            metadata: { nodeId, ...metadata },
             onTaskUpdate: onTaskCreated,
             clientOperationId,
             retryOf,
@@ -239,6 +243,7 @@ export function buildAudioGenerationMetadata(config: AiConfig): CanvasNodeMetada
         ...generationWorkflowMetadata(config),
         model: config.model,
         producedModelCandidate: producedModelCandidateForGeneration(config),
+        audioMode: config.audioMode,
         audioVoice: config.audioVoice,
         audioFormat: config.audioFormat,
         audioSpeed: config.audioSpeed,
@@ -307,7 +312,6 @@ function resolveVideoEditOperation(
         referenceAudios: ReferenceAudio[];
     },
 ): CanvasVideoEditOperation {
-    const storedOperation = node?.metadata?.videoEditOperation;
     const input = {
         textCount: 0,
         imageCount: context?.referenceImages.length || 0,
@@ -315,7 +319,7 @@ function resolveVideoEditOperation(
         audioCount: context?.referenceAudios.length || 0,
         characterCount: 0,
     };
-    return resolveVideoOperation(input, storedOperation) as CanvasVideoEditOperation;
+    return resolveVideoOperation(input, canvasVideoOperation(node, input)) as CanvasVideoEditOperation;
 }
 
 export function buildVideoGenerationMetadata(
@@ -329,11 +333,18 @@ export function buildVideoGenerationMetadata(
 ): CanvasNodeMetadata {
     const metadata = node?.metadata;
     const referenceImageIds = new Set((context?.referenceImages || []).map((image) => image.id));
-    // 工作流视频把已连接媒体交给字段映射处理，不再把历史首尾帧选择当成硬约束。
-    // 工作流视频把已连接媒体交给字段映射处理，不再把历史首尾帧选择当成硬约束。
+    const remakeIssue = videoRemakeInputIssue(
+        metadata,
+        context?.referenceImages.length || 0,
+        (context?.referenceVideos || []).map((video) => video.durationMs ?? 0),
+        config,
+    );
+    if (remakeIssue) throw new Error(remakeIssue);
     const workflowVideo = node?.type === CanvasNodeType.Config && (config?.taskWorkflowProvider === "runninghub" || isCanvasWorkflowProvider(metadata));
-    const startFrame = workflowVideo ? undefined : requireConnectedVideoFrame(metadata?.videoStartFrameNodeId, "首帧", referenceImageIds);
-    const endFrame = workflowVideo ? undefined : requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, "尾帧", referenceImageIds);
+    const videoMode = canvasVideoReferenceMode(node, referenceImageIds.size > 0);
+    const useFrames = !workflowVideo && (videoMode === undefined || videoMode === "frames" || usesProjectedVideoReferences(node));
+    const startFrame = useFrames ? requireConnectedVideoFrame(metadata?.videoStartFrameNodeId, "首帧", referenceImageIds) : undefined;
+    const endFrame = useFrames ? requireConnectedVideoFrame(metadata?.videoEndFrameNodeId, "尾帧", referenceImageIds) : undefined;
     return {
         ...(config ? generationWorkflowMetadata(config) : {}),
         videoEditOperation: resolveVideoEditOperation(node, context),
@@ -398,7 +409,8 @@ export async function hydrateAssistantImages(sessions: CanvasAssistantSession[])
 }
 
 export function getGenerationCount(count: string) {
-    return Math.max(1, Math.min(15, Math.floor(Math.abs(Number(count)) || 1)));
+    // 画布张数是拆单数，上限不超过账号同时任务数。
+    return Math.max(1, Math.min(15, currentGenerationBatchLimit(), Math.floor(Math.abs(Number(count)) || 1)));
 }
 
 export function generationWorkflowMetadata(config: AiConfig): Pick<CanvasNodeMetadata, "workflowProvider" | "runningHubWorkflowId" | "runningHubWorkflowKind"> {
@@ -456,6 +468,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         videoGenerateAudio: node?.metadata?.generateAudio ?? config.videoGenerateAudio ?? defaultConfig.videoGenerateAudio,
         videoWatermark: node?.metadata?.watermark ?? config.videoWatermark ?? defaultConfig.videoWatermark,
         videoArkPrivateAssetUpload: node?.metadata?.arkPrivateAssetUpload ?? config.videoArkPrivateAssetUpload ?? defaultConfig.videoArkPrivateAssetUpload,
+        audioMode: node?.metadata?.audioMode ?? config.audioMode ?? defaultConfig.audioMode,
         audioVoice: node?.metadata?.audioVoice ?? config.audioVoice ?? defaultConfig.audioVoice,
         audioFormat: node?.metadata?.audioFormat ?? config.audioFormat ?? defaultConfig.audioFormat,
         audioSpeed: node?.metadata?.audioSpeed ?? config.audioSpeed ?? defaultConfig.audioSpeed,
@@ -465,8 +478,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         count: String(node?.metadata?.count ?? (mode === "image" ? config.canvasImageCount || config.count || defaultConfig.count : config.count || defaultConfig.count)),
     };
     const imageSize = mode === "image" ? requestedConfig.size : undefined;
-    // 无 requirements 的调用（重试、媒体工具等）也按当前能力与尺寸路由到组内最低价兼容模型，
-    // 避免旧 metadata.model 不支持当前尺寸导致生成时被 normalize 回退。
+    // 当前模型保持用户选择；图片/视频旧参数在共同配置层按目标能力适配。
     const liveOptions = modelRequestOptions(requestedConfig, mode);
     const baseRequirements = requirements?.capability ? { ...requirements, options: { ...liveOptions, ...(requirements.options || {}) } } : { capability: mode, options: liveOptions };
     const model = workflowProvider === "model" ? resolveCompatibleModel(config, preferredModel, imageSize ? { ...baseRequirements, imageSize } : baseRequirements) || preferredModel : preferredModel;
@@ -523,13 +535,13 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
                   )
                 : config.runningHub.workflows,
     };
-    return {
+    const result: AiConfig = {
         ...requestedConfig,
         taskWorkflowProvider: workflowProvider,
         runningHub,
         model,
-        quality: generationDefaults.quality || requestedConfig.quality,
-        imageResolution: generationDefaults.imageResolution || requestedConfig.imageResolution,
+        quality: generationDefaults.quality ?? requestedConfig.quality,
+        imageResolution: generationDefaults.imageResolution ?? requestedConfig.imageResolution,
         imageParameters: generationDefaults.imageParameters ?? requestedConfig.imageParameters,
         size: generationDefaults.size ?? requestedConfig.size,
         transparentBackground: generationDefaults.transparentBackground || (requestedConfig.transparentBackground === "true" ? "true" : "false"),
@@ -540,6 +552,7 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         videoArkPrivateAssetUpload: requestedConfig.videoArkPrivateAssetUpload,
         count: generationDefaults.count || requestedConfig.count,
     };
+    return workflowProvider === "model" ? resolvedMediaConfig(result, mode) : result;
 }
 
 export function resolveCanvasGenerationModel(config: AiConfig, model: string | undefined, mode: CanvasNodeGenerationMode): string {

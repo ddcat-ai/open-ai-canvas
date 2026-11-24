@@ -1,0 +1,31 @@
+.admin-email-test-popover {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: 300px;
+}
+
+.admin-email-test-popover strong {
+    font-size: 14px;
+}
+
+.admin-email-test-popover p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.admin-email-test-result {
+    font-size: 12px;
+    line-height: 18px;
+    word-break: break-word;
+}
+
+.admin-email-test-result.is-ok {
+    color: var(--text-secondary);
+}
+
+.admin-email-test-result.is-error {
+    color: var(--status-error);
+}

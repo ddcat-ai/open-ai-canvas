@@ -41,9 +41,46 @@ type DramaModels struct {
 // 分集规划沿用默认文本模型。
 const (
 	DramaStepBible  = "bible"
+	DramaStepPlan   = "plan"
 	DramaStepScript = "script"
 	DramaStepPrompt = "prompt"
 )
+
+type DramaTextThinking struct {
+	Bible  string `json:"bible,omitempty"`
+	Plan   string `json:"plan,omitempty"`
+	Script string `json:"script,omitempty"`
+	Prompt string `json:"prompt,omitempty"`
+}
+
+func (t DramaTextThinking) levelFor(step string) string {
+	var level string
+	switch step {
+	case DramaStepBible:
+		level = t.Bible
+	case DramaStepPlan:
+		level = t.Plan
+	case DramaStepScript:
+		level = t.Script
+	case DramaStepPrompt:
+		level = t.Prompt
+	}
+	if strings.TrimSpace(level) == "" {
+		return ThinkingIntentAuto
+	}
+	return strings.TrimSpace(level)
+}
+
+func (t DramaTextThinking) validate() error {
+	for step, level := range map[string]string{
+		DramaStepBible: t.Bible, DramaStepPlan: t.Plan, DramaStepScript: t.Script, DramaStepPrompt: t.Prompt,
+	} {
+		if err := ValidateThinkingLevelRequest(level); err != nil {
+			return BadAuthRequest("短剧" + step + "步骤的思考等级无效")
+		}
+	}
+	return nil
+}
 
 // textFor 是文字步骤实际使用的文本模型。
 func (m DramaModels) textFor(step string) DramaModelChoice {
@@ -132,12 +169,13 @@ type DramaSettings struct {
 	// PromptSkill 为空时按内置格式撰写段视频提示词。
 	PromptSkill *DramaSkillRef `json:"promptSkill,omitempty"`
 	// BibleSkill / ScriptSkill 是资产提取与分镜拆分的写作技能，为空按内置规则；输出结构始终由系统固定。
-	BibleSkill  *DramaSkillRef `json:"bibleSkill,omitempty"`
-	ScriptSkill *DramaSkillRef `json:"scriptSkill,omitempty"`
-	ReviewMode  string         `json:"reviewMode"`
-	MediaMode   string         `json:"mediaMode"`
-	Concurrency int            `json:"concurrency"`
-	Models      DramaModels    `json:"models"`
+	BibleSkill   *DramaSkillRef    `json:"bibleSkill,omitempty"`
+	ScriptSkill  *DramaSkillRef    `json:"scriptSkill,omitempty"`
+	ReviewMode   string            `json:"reviewMode"`
+	MediaMode    string            `json:"mediaMode"`
+	Concurrency  int               `json:"concurrency"`
+	Models       DramaModels       `json:"models"`
+	TextThinking DramaTextThinking `json:"textThinking,omitempty"`
 	// ReferenceLimit 是自动取参考图时每段最多随请求发送的张数，0 表示按视频模型上限；手动指定参考图的段只受模型上限约束。
 	ReferenceLimit int `json:"referenceLimit"`
 	// EpisodeMode 是小说的分集方式：chapter 按章节固定分组（每 ChaptersPerEpisode 章一集），auto 由文本模型规划。
@@ -177,7 +215,7 @@ func (s DramaSettings) normalized() DramaSettings {
 	switch s.ReviewMode {
 	case DramaReviewSample, DramaReviewEvery, DramaReviewAuto:
 	default:
-		s.ReviewMode = DramaReviewSample
+		s.ReviewMode = DramaReviewEvery
 	}
 	if s.MediaMode != DramaMediaManual {
 		// 早于该设置创建的作品一直是全自动，保持原行为；新建作品由 CreateDrama 默认 manual。
@@ -260,6 +298,26 @@ type CreateDramaRequest struct {
 	// SelectedChapters 是先加入制作的章节下标（从 0 起，对应 Chapters）；为空表示全部章节。
 	// 没选中的章节原文照常保存为预留章节，不参与资产提取、分集与改编，之后可在制作台加入。
 	SelectedChapters []int `json:"selectedChapters"`
+	// Draft 是 start=false 时随草稿保存的创建页表单，回到创建页时原样回填；开工时不保存。
+	Draft *DramaDraftForm `json:"draft,omitempty"`
+}
+
+// DramaDraftForm 是创建页里设置之外、回填所需的表单内容：导入的原始正文（按当前分集方式重新拆章）和画风 ID。
+type DramaDraftForm struct {
+	SourceText string `json:"sourceText"`
+	StyleID    string `json:"styleId,omitempty"`
+}
+
+// DramaDraftView 是草稿回填创建页所需的全部内容；SelectedChapters 是加入制作的章节下标（从 0 起）。
+type DramaDraftView struct {
+	ProjectID          string         `json:"projectId"`
+	Name               string         `json:"name"`
+	SourceFormat       string         `json:"sourceFormat"`
+	Settings           DramaSettings  `json:"settings"`
+	BudgetMicrocredits int64          `json:"budgetMicrocredits"`
+	SelectedChapters   []int          `json:"selectedChapters"`
+	ChapterCount       int            `json:"chapterCount"`
+	Form               DramaDraftForm `json:"form"`
 }
 
 // ProduceDramaChaptersRequest 把预留的原著章节加入制作：按章节顺序每 ChaptersPerEpisode 章建成一集（不连续的章节不合并），
@@ -321,6 +379,13 @@ type AdoptDramaSegmentVideoRequest struct {
 	ExpectedRevision *int64 `json:"expectedRevision"`
 }
 
+// RestoreDramaSegmentTakeRequest 把本段已有的视频版本设为当前播放版本；不新建版本记录，也不级联后续段。
+type RestoreDramaSegmentTakeRequest struct {
+	TakeID string `json:"takeId"`
+	// ExpectedRevision 是客户端看到的剧情段版本；版本已变时拒绝，避免覆盖刚发生的修改。
+	ExpectedRevision *int64 `json:"expectedRevision"`
+}
+
 // DramaCanvasAssetsRequest 为投送到画布的短剧媒体登记素材记录：画布媒体节点必须由当前用户的素材引用资源。
 type DramaCanvasAssetsRequest struct {
 	Resources []DramaCanvasAssetInput `json:"resources"`
@@ -345,6 +410,8 @@ type DramaTakeView struct {
 	Source     string `json:"source"`
 	Current    bool   `json:"current"`
 	CreatedAt  string `json:"createdAt"`
+	// Model 是产出该版本的任务模型标识（若能关联到任务）；仅用于展示。
+	Model string `json:"model,omitempty"`
 }
 
 // DramaDialogueCheck 是原文台词与镜头台词的逐句核对结果；Missing 是被删掉或改写的原文台词（最多展示 30 句）。
@@ -368,15 +435,17 @@ type DramaProductionView struct {
 	// SpentMicrocredits 是作品已实际扣费的总额：流水线任务加关联画布上的精修任务，按订单结算实收计（退回不计）。
 	// CanvasSpentMicrocredits 是其中画布精修的部分；HeldMicrocredits 是尚未结算订单的冻结额（冻结中）。
 	// 预算按 SpentMicrocredits + HeldMicrocredits 保守判断。
-	SpentMicrocredits       int64  `json:"spentMicrocredits"`
-	CanvasSpentMicrocredits int64  `json:"canvasSpentMicrocredits"`
-	HeldMicrocredits        int64  `json:"heldMicrocredits"`
-	PlanDone                bool   `json:"planDone"`
-	PlanCursor              int    `json:"planCursor"`
-	SampleApproved          bool   `json:"sampleApproved"`
-	AssetsReleased          bool   `json:"assetsReleased"`
-	Logline                 string `json:"logline"`
-	Tone                    string `json:"tone"`
+	SpentMicrocredits       int64 `json:"spentMicrocredits"`
+	CanvasSpentMicrocredits int64 `json:"canvasSpentMicrocredits"`
+	HeldMicrocredits        int64 `json:"heldMicrocredits"`
+	PlanDone                bool  `json:"planDone"`
+	PlanCursor              int   `json:"planCursor"`
+	// HasDraftForm 同 DramaListItem.HasDraftForm。
+	HasDraftForm   bool   `json:"hasDraftForm,omitempty"`
+	SampleApproved bool   `json:"sampleApproved"`
+	AssetsReleased bool   `json:"assetsReleased"`
+	Logline        string `json:"logline"`
+	Tone           string `json:"tone"`
 	// ChapterCount / WordCount 只统计已加入制作的章节；Reserved* 是导入时未选中、尚未加入制作的原著章节。
 	ChapterCount         int `json:"chapterCount"`
 	WordCount            int `json:"wordCount"`
@@ -497,7 +566,10 @@ type DramaSummary struct {
 	Episodes   []DramaEpisodeRow   `json:"episodes"`
 	JobCounts  map[string]int64    `json:"jobCounts"`
 	Inbox      []DramaInboxItem    `json:"inbox"`
-	CastCount  int                 `json:"castCount"`
+	// InboxCount 是待处理条目的真实总数（含未列入列表的失败剧情段）；InboxFailureCount 是其中的失败项总数。
+	InboxCount        int `json:"inboxCount"`
+	InboxFailureCount int `json:"inboxFailureCount"`
+	CastCount         int `json:"castCount"`
 }
 
 type DramaChapterRef struct {
@@ -517,7 +589,8 @@ type DramaEpisodeDetail struct {
 	Chapters []DramaChapterRef  `json:"chapters"`
 	Jobs     []DramaJobView     `json:"jobs"`
 	// ScriptJob 是本集最近一次改编剧本的调度工作，可查看改编提示词与模型返回。
-	ScriptJob *DramaJobView `json:"scriptJob,omitempty"`
+	ScriptJob  *DramaJobView `json:"scriptJob,omitempty"`
+	ComposeJob *DramaJobView `json:"composeJob,omitempty"`
 	// DialogueCheck 只在本集有镜头、且原文章节不与其他集共用时给出（共用时无法判断哪些台词属于本集）。
 	DialogueCheck *DramaDialogueCheck `json:"dialogueCheck,omitempty"`
 }
@@ -536,7 +609,7 @@ type DramaSegmentView struct {
 	VideoPrompt string `json:"videoPrompt"`
 	Generated   string `json:"generated"`
 	Custom      bool   `json:"custom"`
-	// PromptStatus：none 无记录、queued 待撰写、running 撰写中、ready 完成、stale 镜头已改动、failed 失败。
+	// PromptStatus：none 无记录、queued 待撰写、running 撰写中、ready 完成、stale 过期、failed 失败、conflict 待核对、review AI 新稿待采用。
 	PromptStatus string `json:"promptStatus"`
 	PromptError  string `json:"promptError,omitempty"`
 	// VideoStatus：空串待生成、running、ready、stale（提示词或上一段已变）、failed。
@@ -550,7 +623,8 @@ type DramaSegmentView struct {
 	VideoReprocessable bool             `json:"videoReprocessable,omitempty"`
 	VideoModel         DramaModelChoice `json:"videoModel"`
 	// ReferenceMode：auto 按本段镜头自动取参考图；custom 为用户指定的参考图。
-	ReferenceMode string `json:"referenceMode"`
+	ReferenceMode      string `json:"referenceMode"`
+	AudioReferenceMode string `json:"audioReferenceMode"`
 	// Request 是生成本段视频时实际会发送的内容：生成方式、首帧、参考图、秒数与追加在提示词前的参考图说明。
 	Request   DramaSegmentRequest `json:"request"`
 	PromptJob *DramaJobView       `json:"promptJob,omitempty"`
@@ -561,7 +635,7 @@ type DramaSegmentView struct {
 
 // DramaSegmentRequest 是一段视频请求的预演，与提交时同一函数计算。
 type DramaSegmentRequest struct {
-	// Operation：image_to_video（上一段最后一帧作首帧）、reference_to_video（参考图）、text_to_video。
+	// Operation 是实际使用的生成模式。续接使用图生视频或协议声明的参考图模式。
 	Operation       string `json:"operation"`
 	Seconds         int    `json:"seconds"`
 	MaxVideoSeconds int    `json:"maxVideoSeconds"`
@@ -577,8 +651,9 @@ type DramaSegmentRequest struct {
 	// FirstFrame 是上一段视频的最后一帧；第一段为空。FirstFramePending 表示上一段还没生成，生成后才能提交本段。
 	FirstFrameResourceID string                  `json:"firstFrameResourceId,omitempty"`
 	FirstFramePending    bool                    `json:"firstFramePending"`
+	TailFrameAsReference bool                    `json:"tailFrameAsReference,omitempty"`
 	References           []DramaSegmentReference `json:"references"`
-	// ReferenceCapacity 是本段最多随请求发送的参考图张数（已扣除首帧，并受每段上限约束）；ModelMaxImages 是视频模型声明的图片上限。
+	// ReferenceCapacity 扣除首帧并受每段上限约束，ModelMaxImages 是所选模型、工作流和生成方式共同允许的图片上限。
 	ReferenceCapacity int `json:"referenceCapacity"`
 	ModelMaxImages    int `json:"modelMaxImages"`
 	// ReferenceLimited 表示有参考图因“每段最多参考图”设置而未发送（而不是模型上限）。
@@ -589,7 +664,7 @@ type DramaSegmentRequest struct {
 	Warning string `json:"warning,omitempty"`
 	// UnknownReferences 是提示词正文里不属于本段的“参考图N”（编号超出本段参考图数量），存在时不能提交视频。
 	UnknownReferences []string `json:"unknownReferences,omitempty"`
-	// AudioReferences 是本段说话、且指定了声音样本的角色（按开口顺序）；Sent 的作为“参考音频N”随请求发送。
+	// AudioReferences 为按对白自动选择或用户手动指定的角色；Sent 的作为“参考音频N”随请求发送。
 	// ModelMaxAudios 是视频模型声明的参考音频上限，0 表示不支持参考音频。
 	AudioReferences []DramaSegmentAudioReference `json:"audioReferences"`
 	ModelMaxAudios  int                          `json:"modelMaxAudios,omitempty"`
@@ -619,8 +694,11 @@ type UpdateDramaSegmentRequest struct {
 	// VideoPromptOverride 传空串表示恢复模型撰写的版本。
 	VideoPromptOverride *string `json:"videoPromptOverride"`
 	// ReferenceCastIDs 指定本段参考图（顺序即编号，可为空数组表示不发参考图）；AutoReferences=true 恢复按镜头自动取。
-	ReferenceCastIDs *[]string `json:"referenceCastIds"`
-	AutoReferences   bool      `json:"autoReferences"`
+	ReferenceCastIDs    *[]string                    `json:"referenceCastIds"`
+	AutoReferences      bool                         `json:"autoReferences"`
+	ReferenceImages     *[]model.DramaReferenceImage `json:"referenceImages"`
+	AudioCastIDs        *[]string                    `json:"audioCastIds"`
+	AutoAudioReferences bool                         `json:"autoAudioReferences"`
 }
 
 // UpdateDramaShotRequest 修改镜头的剧本内容；镜头只是撰写视频提示词的素材，修改后本段提示词标记过期。
@@ -649,20 +727,60 @@ type SetDramaCastVoiceRequest struct {
 // DramaCastLookRequest 新增或修改一套角色造型：LookName 造型名，Appearance 这套造型的外观，
 // FromChapter / ToChapter 默认适用的原著章节号（从 1 起，0 或 nil 表示该端不限）。
 type DramaCastLookRequest struct {
-	LookName        string `json:"lookName"`
-	Appearance      string `json:"appearance"`
-	FromChapter     *int   `json:"fromChapter"`
-	ToChapter       *int   `json:"toChapter"`
-	RestyleSegments bool   `json:"restyleSegments"`
+	LookName         string  `json:"lookName"`
+	Appearance       string  `json:"appearance"`
+	ImagePrompt      *string `json:"imagePrompt"`
+	ImageStyleID     *string `json:"imageStyleId"`
+	ImageStyleName   *string `json:"imageStyleName"`
+	ImageStylePrompt *string `json:"imageStylePrompt"`
+	FromChapter      *int    `json:"fromChapter"`
+	ToChapter        *int    `json:"toChapter"`
+	RestyleSegments  bool    `json:"restyleSegments"`
 }
 
 type UpdateDramaCastRequest struct {
 	Name              *string   `json:"name"`
 	Aliases           *[]string `json:"aliases"`
 	Appearance        *string   `json:"appearance"`
+	ImagePrompt       *string   `json:"imagePrompt"`
+	ImageStyleID      *string   `json:"imageStyleId"`
+	ImageStyleName    *string   `json:"imageStyleName"`
+	ImageStylePrompt  *string   `json:"imageStylePrompt"`
 	Description       *string   `json:"description"`
 	VoiceInstructions *string   `json:"voiceInstructions"`
 	Locked            *bool     `json:"locked"`
+}
+
+type CreateDramaCastRequest struct {
+	Kind             string `json:"kind"`
+	Name             string `json:"name"`
+	Appearance       string `json:"appearance"`
+	Description      string `json:"description"`
+	ImagePrompt      string `json:"imagePrompt"`
+	ImageStyleID     string `json:"imageStyleId"`
+	ImageStyleName   string `json:"imageStyleName"`
+	ImageStylePrompt string `json:"imageStylePrompt"`
+}
+
+// 只编排当前表单的提示词，不调用模型、不保存，也不嵌入已有自定义提示词。
+type DramaCastImagePromptRequest struct {
+	Appearance       *string `json:"appearance"`
+	ImageStyleID     *string `json:"imageStyleId"`
+	ImageStyleName   *string `json:"imageStyleName"`
+	ImageStylePrompt *string `json:"imageStylePrompt"`
+}
+
+type ImportDramaCastRequest struct {
+	SourceProjectID string   `json:"sourceProjectId"`
+	CastIDs         []string `json:"castIds"`
+	MatchByName     bool     `json:"matchByName"`
+	ReplaceExisting bool     `json:"replaceExisting"`
+}
+
+type ImportDramaCastResult struct {
+	Imported int               `json:"imported"`
+	Skipped  int               `json:"skipped"`
+	Cast     []model.DramaCast `json:"cast"`
 }
 
 type DramaListItem struct {
@@ -681,6 +799,8 @@ type DramaListItem struct {
 	// HeldMicrocredits 是尚未结算订单的冻结额，口径同 DramaProductionView。
 	HeldMicrocredits int64  `json:"heldMicrocredits"`
 	UpdatedAt        string `json:"updatedAt"`
+	// HasDraftForm 表示草稿保存了创建页表单，打开时回到创建页继续编辑。
+	HasDraftForm bool `json:"hasDraftForm,omitempty"`
 }
 
 type DramaModelOption struct {
@@ -690,9 +810,10 @@ type DramaModelOption struct {
 	PriceLabel string           `json:"priceLabel"`
 	// MaxVideoSeconds 仅视频模型：单次最长生成秒数，0 表示未声明。
 	MaxVideoSeconds int `json:"maxVideoSeconds,omitempty"`
+	MaxAudios       int `json:"maxAudios"`
 	// MinReferenceImages 仅视频模型：模型要求的最少参考图数（含首帧），0 表示不强制参考图。
 	MinReferenceImages int `json:"minReferenceImages,omitempty"`
-	// TailFrameChain 仅视频模型：是否支持图生视频，可用于“尾帧续接”；不支持的模型只能并行出片。
+	// TailFrameChain 是模型是否可使用上一段尾帧续接。
 	TailFrameChain bool `json:"tailFrameChain,omitempty"`
 	// VideoRatios 仅视频模型：能准确给出的作品画幅；不含作品画幅的模型不能用于该作品。
 	VideoRatios []string `json:"videoRatios,omitempty"`

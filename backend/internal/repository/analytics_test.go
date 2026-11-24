@@ -239,10 +239,12 @@ func TestLatestProviderRequestIDsForTasksReturnsNewestPerTask(t *testing.T) {
 	}
 	base := time.Now().Add(-time.Hour)
 	for _, log := range []model.ApiCallLog{
-		{ID: "old-task-1", TaskID: "task-1", ProviderRequestID: "provider-old", CreatedAt: base},
-		{ID: "new-task-1", TaskID: "task-1", ProviderRequestID: "provider-new", CreatedAt: base.Add(2 * time.Minute)},
-		{ID: "task-2", TaskID: "task-2", ProviderRequestID: "provider-2", CreatedAt: base.Add(time.Minute)},
-		{ID: "empty", TaskID: "task-3", ProviderRequestID: "", CreatedAt: base.Add(3 * time.Minute)},
+		{ID: "old-task-1", TaskID: "task-1", RequestKind: "create", ProviderRequestID: "provider-old", CreatedAt: base},
+		{ID: "new-task-1", TaskID: "task-1", RequestKind: "create", ProviderRequestID: "provider-new", CreatedAt: base.Add(2 * time.Minute)},
+		{ID: "task-2", TaskID: "task-2", RequestKind: "create", ProviderRequestID: "provider-2", CreatedAt: base.Add(time.Minute)},
+		{ID: "empty", TaskID: "task-3", RequestKind: "create", CreatedAt: base},
+		{ID: "poll", TaskID: "task-1", RequestKind: "poll", ProviderRequestID: "trace", CreatedAt: base.Add(3 * time.Minute)},
+		{ID: "upload", TaskID: "task-3", RequestKind: "upload", ProviderRequestID: "asset", CreatedAt: base.Add(time.Minute)},
 	} {
 		if err := db.Create(&log).Error; err != nil {
 			t.Fatal(err)
@@ -257,5 +259,8 @@ func TestLatestProviderRequestIDsForTasksReturnsNewestPerTask(t *testing.T) {
 	}
 	if _, ok := ids["task-3"]; ok {
 		t.Fatalf("empty provider ID should be omitted: %#v", ids)
+	}
+	if id, err := New(db).LatestProviderRequestIDForTask("task-1"); err != nil || id != ids["task-1"] {
+		t.Fatalf("single recovery ID = %q, err=%v", id, err)
 	}
 }

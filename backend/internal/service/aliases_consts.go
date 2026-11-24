@@ -38,6 +38,7 @@ const (
 	ErrCodeModelRouteUnavailable       = app.ErrCodeModelRouteUnavailable
 	ErrCodeProviderRequestFailed       = app.ErrCodeProviderRequestFailed
 	FeatureCredits                     = app.FeatureCredits
+	FeatureTeams                       = app.FeatureTeams
 	FeatureCustomChannels              = app.FeatureCustomChannels
 	FeatureFrontendModels              = app.FeatureFrontendModels
 	FeatureImageWorkbench              = app.FeatureImageWorkbench

@@ -77,13 +77,24 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		return svc.EstimateDrama(userID, req)
 	}))
-	// 小说正文随创建请求一次提交；600 万字 UTF-8 约 18MB，留出 JSON 转义余量。
-	r.POST("/dramas", dramaRoute(svc, 32<<20, func(c *gin.Context, userID string) (any, error) {
+	// 小说正文随创建请求一次提交；600 万字 UTF-8 约 18MB，留出 JSON 转义余量。保存草稿时还带一份原始正文，上限翻倍。
+	r.POST("/dramas", dramaRoute(svc, 64<<20, func(c *gin.Context, userID string) (any, error) {
 		var req service.CreateDramaRequest
 		if err := bindDramaJSON(c, &req); err != nil {
 			return nil, err
 		}
 		return svc.CreateDrama(userID, req)
+	}))
+	// 草稿：读取创建页表单，或整体替换（start=true 时替换后直接开工）；请求体同创建，另带一份原始正文。
+	r.GET("/dramas/:id/draft", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
+		return svc.DramaDraft(userID, c.Param("id"))
+	}))
+	r.PUT("/dramas/:id/draft", dramaRoute(svc, 64<<20, func(c *gin.Context, userID string) (any, error) {
+		var req service.CreateDramaRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.SaveDramaDraft(userID, c.Param("id"), req)
 	}))
 	r.DELETE("/dramas/:id", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
 		return gin.H{"deleted": true}, svc.DeleteDrama(userID, c.Param("id"))
@@ -185,6 +196,9 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/dramas/:id/episodes/:episodeId/rescript", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
 		return svc.RescriptDramaEpisode(userID, c.Param("id"), c.Param("episodeId"))
 	}))
+	r.POST("/dramas/:id/episodes/:episodeId/compose", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
+		return svc.ComposeDramaEpisode(userID, c.Param("id"), c.Param("episodeId"))
+	}))
 	r.POST("/dramas/:id/episodes/:episodeId/segments/generate", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
 		var req service.GenerateDramaSegmentsRequest
 		if err := bindDramaJSON(c, &req); err != nil {
@@ -229,6 +243,18 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		return svc.AdoptDramaSegmentVideo(userID, c.Param("id"), c.Param("episodeId"), index, req)
 	}))
+	// 把本段历史视频版本设为当前：只换本段当前视频，不新建版本、不级联后续段。
+	r.PUT("/dramas/:id/episodes/:episodeId/segments/:index/current-take", dramaRoute(svc, 4<<10, func(c *gin.Context, userID string) (any, error) {
+		index, err := strconv.Atoi(c.Param("index"))
+		if err != nil || index < 0 {
+			return nil, service.BadAuthRequest("剧情段序号无效")
+		}
+		var req service.RestoreDramaSegmentTakeRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.RestoreDramaSegmentTake(userID, c.Param("id"), c.Param("episodeId"), index, req)
+	}))
 	// 作品的精修画布：返回最近使用的关联画布，没有时由前端新建。
 	r.GET("/dramas/:id/canvas", dramaRoute(svc, 0, func(c *gin.Context, userID string) (any, error) {
 		return svc.DramaCanvas(userID, c.Param("id"))
@@ -261,6 +287,14 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		shot, err := svc.InsertDramaShot(userID, c.Param("id"), c.Param("shotId"), req)
 		return gin.H{"shot": shot}, err
 	}))
+	r.POST("/dramas/:id/episodes/:episodeId/jianying-draft/preview", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.DramaJianyingDraftRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		c.Header("Cache-Control", "private, no-store")
+		return svc.PreviewDramaJianyingDraft(userID, c.Param("id"), c.Param("episodeId"), req)
+	}))
 	// 导出剪映草稿：表单字段 draftRoot 是用户本机的剪映草稿目录，captions=1 时附带台词字幕轨。
 	// 用表单 POST 而不是 GET，避免本机路径进入访问日志与浏览器历史。
 	r.POST("/dramas/:id/episodes/:episodeId/jianying-draft", func(c *gin.Context) {
@@ -270,7 +304,7 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10)
-		archive, err := svc.PrepareDramaJianyingDraft(user.ID, c.Param("id"), c.Param("episodeId"), service.DramaJianyingDraftRequest{DraftRoot: c.PostForm("draftRoot"), Captions: c.PostForm("captions") == "1"})
+		archive, err := svc.PrepareDramaJianyingDraft(user.ID, c.Param("id"), c.Param("episodeId"), service.DramaJianyingDraftRequest{DraftRoot: c.PostForm("draftRoot"), Captions: c.PostForm("captions") == "1", Revision: c.PostForm("revision"), AllowIncomplete: c.PostForm("allowIncomplete") == "1", AllowStale: c.PostForm("allowStale") == "1"})
 		if err != nil {
 			failService(c, err)
 			return
@@ -299,7 +333,30 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		casts, err := svc.DramaCasts(userID, c.Param("id"))
 		return gin.H{"cast": casts}, err
 	}))
-	r.PATCH("/dramas/:id/cast/:castId", dramaRoute(svc, 64<<10, func(c *gin.Context, userID string) (any, error) {
+	r.POST("/dramas/:id/cast", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.CreateDramaCastRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		cast, err := svc.CreateDramaCast(userID, c.Param("id"), req)
+		return gin.H{"cast": cast}, err
+	}))
+	r.POST("/dramas/:id/cast/import", dramaRoute(svc, 64<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.ImportDramaCastRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		return svc.ImportDramaCast(userID, c.Param("id"), req)
+	}))
+	r.POST("/dramas/:id/cast/:castId/image-prompt", dramaRoute(svc, 64<<10, func(c *gin.Context, userID string) (any, error) {
+		var req service.DramaCastImagePromptRequest
+		if err := bindDramaJSON(c, &req); err != nil {
+			return nil, err
+		}
+		prompt, err := svc.PreviewDramaCastImagePrompt(userID, c.Param("id"), c.Param("castId"), req)
+		return gin.H{"imagePrompt": prompt}, err
+	}))
+	r.PATCH("/dramas/:id/cast/:castId", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
 		var req service.UpdateDramaCastRequest
 		if err := bindDramaJSON(c, &req); err != nil {
 			return nil, err
@@ -314,14 +371,14 @@ func registerDramaRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		return svc.SetDramaCastImage(userID, c.Param("id"), c.Param("castId"), req)
 	}))
-	r.POST("/dramas/:id/cast/:castId/looks", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
+	r.POST("/dramas/:id/cast/:castId/looks", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
 		var req service.DramaCastLookRequest
 		if err := bindDramaJSON(c, &req); err != nil {
 			return nil, err
 		}
 		return svc.AddDramaCastLook(userID, c.Param("id"), c.Param("castId"), req)
 	}))
-	r.PATCH("/dramas/:id/looks/:lookId", dramaRoute(svc, 16<<10, func(c *gin.Context, userID string) (any, error) {
+	r.PATCH("/dramas/:id/looks/:lookId", dramaRoute(svc, 128<<10, func(c *gin.Context, userID string) (any, error) {
 		var req service.DramaCastLookRequest
 		if err := bindDramaJSON(c, &req); err != nil {
 			return nil, err

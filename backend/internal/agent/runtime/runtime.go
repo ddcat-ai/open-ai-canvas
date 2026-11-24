@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -9,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -82,15 +84,29 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	if err != nil {
 		return fmt.Errorf("encode Agent runtime request: %w", err)
 	}
+	if len(payload) > requestLimit {
+		return errors.New("agent runtime request exceeds 32 MiB")
+	}
+	directory, err := createRunDirectory()
+	if err != nil {
+		return fmt.Errorf("create Agent runtime directory: %w", err)
+	}
+	defer directory.cleanup()
 	cmd := exec.CommandContext(ctx, "node", "--max-old-space-size="+nodeMemoryMB(), filepath.Join(runtimeDir, "agent-runtime.mjs"))
 	cmd.Dir = runtimeDir
-	cmd.Stdin = strings.NewReader(string(payload))
-	// 环境变量白名单：只传 Node 运行所需的最少变量。HOME 与会话、工作目录
-	// 由运行时自己建的临时隔离目录提供，不使用服务端数据目录。
+	cmd.WaitDelay = 5 * time.Second
+	// 环境变量白名单。父进程创建并回收本轮目录，不使用服务端数据目录。
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
 		"NODE_ENV=production",
 		"PI_OFFLINE=1",
+		"YINGCE_AGENT_RUN_DIR=" + directory.path,
+		"HOME=" + directory.path,
+		"TMPDIR=" + directory.path,
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("open Agent runtime input: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -100,10 +116,24 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start Agent runtime: %w", err)
 	}
+	if err := directory.childStarted(cmd.Process.Pid); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return fmt.Errorf("record Agent runtime owner: %w", err)
+	}
+	inputDone := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(stdin, bytes.NewReader(payload))
+		inputDone <- errors.Join(err, stdin.Close())
+	}()
 	// StdoutPipe 的读取必须在 Wait 之前结束。Wait 会关闭管道，提前调用会把
 	// 正常退出误报为 "file already closed"。
 	lineErr := ReadOutput(stdout)
+	if lineErr != nil {
+		_ = cmd.Process.Kill()
+	}
 	waitErr := cmd.Wait()
+	inputErr := <-inputDone
 	if lineErr != nil {
 		return lineErr
 	}
@@ -112,6 +142,9 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 			return ctx.Err()
 		}
 		return fmt.Errorf("agent runtime exited: %w", waitErr)
+	}
+	if inputErr != nil {
+		return fmt.Errorf("write Agent runtime input: %w", inputErr)
 	}
 	return nil
 }
@@ -147,7 +180,13 @@ func StartBridge(listenAddr, advertiseHost string, bridge Bridge) (*BridgeServer
 	return &BridgeServer{
 		URL:   fmt.Sprintf("http://%s:%d", advertiseHost, tcpAddr.Port),
 		Token: token,
-		Close: func() { _ = server.Shutdown(context.Background()) },
+		Close: func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := server.Shutdown(ctx); err != nil {
+				_ = server.Close()
+			}
+		},
 	}, nil
 }
 
@@ -216,27 +255,39 @@ func RuntimeDir() (string, error) {
 }
 
 const (
-	defaultAgentProcessLimit = 30
+	defaultAgentProcessLimit = 8
 	maxAgentProcessLimit     = 64
 )
 
 type agentProcessGate struct {
-	mu     sync.Mutex
-	limit  int
-	active int
-	wake   chan struct{}
+	mu      sync.Mutex
+	limit   int
+	hardCap int
+	active  int
+	waiting int
+	wake    chan struct{}
 }
 
 var processGate = newAgentProcessGate()
 
 func newAgentProcessGate() *agentProcessGate {
+	hardCap := maxAgentProcessLimit
+	if raw := strings.TrimSpace(os.Getenv("YINGCE_AGENT_SESSION_CAP")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > maxAgentProcessLimit {
+			slog.Warn("invalid Agent session cap; using conservative default", "cap", defaultAgentProcessLimit)
+			hardCap = defaultAgentProcessLimit
+		} else {
+			hardCap = parsed
+		}
+	}
 	limit := defaultAgentProcessLimit
 	if raw := strings.TrimSpace(os.Getenv("CANVAS_AGENT_MAX_PROCESSES")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil {
 			limit = clampAgentProcessLimit(parsed)
 		}
 	}
-	return &agentProcessGate{limit: limit, wake: make(chan struct{})}
+	return &agentProcessGate{limit: min(limit, hardCap), hardCap: hardCap, wake: make(chan struct{})}
 }
 
 func clampAgentProcessLimit(value int) int {
@@ -254,7 +305,7 @@ func clampAgentProcessLimit(value int) int {
 func SetProcessLimit(value int) (active int, limit int) {
 	processGate.mu.Lock()
 	defer processGate.mu.Unlock()
-	processGate.limit = clampAgentProcessLimit(value)
+	processGate.limit = min(clampAgentProcessLimit(value), processGate.hardCap)
 	close(processGate.wake)
 	processGate.wake = make(chan struct{})
 	return processGate.active, processGate.limit
@@ -266,13 +317,39 @@ func ProcessUsage() (active int, limit int) {
 	return processGate.active, processGate.limit
 }
 
+func ProcessHardCap() int {
+	return processGate.hardCap
+}
+
 func acquireAgentProcess(ctx context.Context) (func(), error) {
+	waitSeconds := boundedRuntimeEnvInt("YINGCE_AGENT_QUEUE_TIMEOUT_SECONDS", 60, 600)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(waitSeconds)*time.Second)
+	defer cancel()
+	waiting := false
+	defer func() {
+		if waiting {
+			processGate.mu.Lock()
+			processGate.waiting--
+			processGate.mu.Unlock()
+		}
+	}()
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		processGate.mu.Lock()
 		if processGate.active < processGate.limit {
 			processGate.active++
 			processGate.mu.Unlock()
 			return releaseAgentProcess, nil
+		}
+		if !waiting {
+			if processGate.waiting >= boundedRuntimeEnvInt("YINGCE_AGENT_MAX_QUEUE", 64, 1024) {
+				processGate.mu.Unlock()
+				return nil, errors.New("agent process queue is full")
+			}
+			processGate.waiting++
+			waiting = true
 		}
 		wake := processGate.wake
 		processGate.mu.Unlock()
@@ -282,6 +359,14 @@ func acquireAgentProcess(ctx context.Context) (func(), error) {
 		case <-wake:
 		}
 	}
+}
+
+func boundedRuntimeEnvInt(name string, fallback, maximum int) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(os.Getenv(name)))
+	if err != nil || parsed < 1 {
+		return fallback
+	}
+	return min(parsed, maximum)
 }
 
 func releaseAgentProcess() {

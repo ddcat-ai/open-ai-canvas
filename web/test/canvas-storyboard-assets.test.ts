@@ -3,6 +3,8 @@ import { describe, expect, it } from "bun:test";
 import { buildStoryboardAssetCatalog } from "@/lib/canvas/canvas-storyboard-assets";
 import { reconcileStoryboardTargetConnections, replaceStoryboardRowAssets, storyboardComposerContent, storyboardRowReferenceNodeIds } from "@/lib/canvas/canvas-storyboard-materializer";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type StoryboardRow } from "@/types/canvas";
+import { buildNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
+import { buildNodeMentionReferences, normalizeCanvasNodeMentionTokens } from "@/lib/canvas/canvas-resource-references";
 
 const node = (id: string, type: CanvasNodeType, metadata: CanvasNodeData["metadata"] = {}): CanvasNodeData => ({
     id,
@@ -76,10 +78,10 @@ describe("storyboard target materializer", () => {
     ];
     const connections: CanvasConnection[] = [{ id: "manual-row-input", fromNodeId: "manual", toNodeId: "script", toHandleId: "row:row-1" }];
 
-    it("combines stable bindings and produces position mention tokens", () => {
+    it("combines stable bindings and preserves asset identity until generation", () => {
         const references = storyboardRowReferenceNodeIds(script, row, nodes, connections, true);
         expect(references).toEqual(["project-style", "prop", "character", "manual", "first-frame"]);
-        expect(storyboardComposerContent("快速跟拍", references, nodes)).toBe("参考资产：@图片1 @图片2 @角色3 @视频1 @图片4\n快速跟拍");
+        expect(storyboardComposerContent("快速跟拍", references, nodes)).toBe("参考资产：@[node:project-style] @[node:prop] @[node:character] @[node:manual] @[node:first-frame]\n快速跟拍");
 
         const withDirectManualInput = storyboardRowReferenceNodeIds(script, row, nodes, [...connections, { id: "direct", fromNodeId: "direct-manual", toNodeId: "target" }], false, "target");
         expect(withDirectManualInput).toContain("direct-manual");
@@ -162,11 +164,31 @@ describe("storyboard target materializer", () => {
         const edges = reconcileStoryboardTargetConnections([], owner, shot, output.id, [prop.id]);
         const result = replaceStoryboardRowAssets(initial, edges, owner.id, shot.id, [{ nodeId: added.id, role: "style", priority: 60 }]);
         const changed = result.nodes.find((item) => item.id === output.id)!;
-        expect(changed.metadata?.composerContent).toBe("参考资产：@图片1\n用户修改后的正文，参考。");
+        expect(changed.metadata?.composerContent).toBe("参考资产：@[node:new]\n用户修改后的正文，参考。");
         expect(changed.metadata?.prompt).toBe("已提交原文");
         expect(changed.metadata?.content).toBe("completed-image");
         expect(changed.metadata?.promptTemplateOperation).toBe("storyboard_image");
         expect(changed.metadata?.promptTemplateVariables).toEqual({ prompt: "模板正文" });
         expect(result.connections.some((edge) => edge.fromNodeId === added.id && edge.toNodeId === output.id)).toBe(true);
+    });
+
+    it("compiles same-name assets against actual retained edge order, including mixed character images", () => {
+        const character = node("hero", CanvasNodeType.Text, { workflowKind: "character", characterAssetId: "hero-asset" });
+        const scene = node("scene", CanvasNodeType.Image, { storageKey: "resource:scene", content: "scene" });
+        const prop = node("prop-image", CanvasNodeType.Image, { storageKey: "resource:prop", content: "prop" });
+        character.title = scene.title = prop.title = "同名.png";
+        const output = node("video-output", CanvasNodeType.Video);
+        const all = [script, character, scene, prop, output];
+        const desired = [character.id, scene.id, prop.id];
+        const edges = reconcileStoryboardTargetConnections([{ id: "existing", fromNodeId: scene.id, toNodeId: output.id }], script, row, output.id, desired);
+        const prompt = storyboardComposerContent("角色@[node:hero]站在@[node:scene]中，拿着@[node:prop-image]。", desired, all);
+        const displayed = normalizeCanvasNodeMentionTokens(prompt, buildNodeMentionReferences(output, all, edges));
+        expect(displayed).toContain("参考资产：@角色2 @图片1 @图片3");
+        const context = buildNodeGenerationContext(output.id, all, edges, prompt, [], true);
+        expect(context.referenceImageSlots.map((slot) => slot.nodeId)).toEqual([scene.id, character.id, prop.id]);
+        expect(context.prompt).toContain("参考资产：@图片2 @图片1 @图片3");
+        expect(context.prompt).toContain("角色@图片2站在@图片1中，拿着@图片3。");
+        expect(context.referenceImages.map((image) => image.storageKey)).toEqual(["resource:scene", "resource:prop"]);
+        expect(context.characterReferences[0].nodeId).toBe(character.id);
     });
 });

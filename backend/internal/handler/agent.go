@@ -19,16 +19,21 @@ import (
 // Agent orchestration is durable; the browser stream never drives execution.
 func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/agent/capabilities", func(c *gin.Context) {
-		if _, err := currentUser(c, svc); err != nil {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		skillsEnabled, tools, err := svc.CloudAgentSkillCapabilities(user.ID)
+		if err != nil {
 			failService(c, err)
 			return
 		}
 		capabilities := service.CloudAgentCapabilitySetInfo()
-		ok(c, gin.H{"version": 2, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": true, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": service.CloudAgentSupportedToolNames(), "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
+		ok(c, gin.H{"version": 2, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": skillsEnabled, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": tools, "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
 	})
-	// Skill usage is derived from the caller's own journal receipts, so it stays
-	// read-only and never exposes another user's runs.
-	r.GET("/agent/skills/usage", func(c *gin.Context) {
+	// Usage is scoped to the authenticated user's own Agent runs.
+	r.GET("/agent/skills/usage", requireSkillAccess(svc), func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
 			failService(c, err)
@@ -89,6 +94,31 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		ok(c, page)
+	})
+	r.DELETE("/agent/conversations/:id", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		if err := svc.DeleteCloudAgentConversation(user.ID, c.Param("id")); err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"deleted": true})
+	})
+	r.POST("/agent/conversations/:id/compact", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		freed, err := svc.CompactCloudAgentConversation(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"freedBytes": freed})
 	})
 	// Profiles are durable preference data, not an authorization surface. The
 	// service validates scope ownership and the compiler injects the effective

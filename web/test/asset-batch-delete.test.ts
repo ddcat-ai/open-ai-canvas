@@ -237,6 +237,18 @@ describe("素材批量删除", () => {
         expect(writes.every((item) => item.status === "archived")).toBe(true);
     });
 
+    test("缺失素材连续查询仍报错，不通知依赖素材的画布", async () => {
+        apiClient.defaults.adapter = async (config) => ({ config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { assets: [] }, msg: "ok" } });
+        let notifications = 0;
+        const unsubscribe = useAssetStore.subscribe(() => notifications++);
+        try {
+            for (let attempt = 0; attempt < 2; attempt++) await expect(loadAssetsForUse(["missing"])).rejects.toThrow("部分素材不存在或无权访问");
+            expect(notifications).toBe(0);
+        } finally {
+            unsubscribe();
+        }
+    });
+
     test("服务端绑定图片后强制刷新已验证素材，保留本地标签编辑", async () => {
         const initial = { ...asset("scene"), category: "environment" as const, primaryVersionId: "v1" };
         let remote: Asset = initial;

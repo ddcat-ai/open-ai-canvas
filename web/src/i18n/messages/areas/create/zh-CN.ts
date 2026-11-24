@@ -1,5 +1,28 @@
 /** 创作首页、灵感、图片/视频工作台的界面文案（源语言）。键结构是其他语言文件的约束。 */
 export const zhCN = {
+    historySync: {
+        manage: "查看历史副本（{{count}}）",
+        backupsTitle: "历史冲突副本",
+        backupsDescription: "并发修改时会保留本机版本。可以保留当前版本，或将副本恢复为独立的新对话。处理后原始副本仍保留在本机，可随时下载。恢复只复制历史，不会重新生成或扣费。",
+        keep: "保留当前版本",
+        restore: "恢复为新对话",
+        restored: "已恢复为新对话",
+        resolved: "已处理 · 副本已保留",
+        unresolved: "待处理",
+        preview: "查看 {{count}} 条消息",
+        mediaMessage: "媒体消息（完整数据见下载副本）",
+        restoredTitle: "{{title}}（恢复副本）",
+        restoredNotice: "已在本机恢复为新对话，正在尝试同步；同步结果以上方状态为准。原对话和副本均已保留。",
+        keptNotice: "已保留当前版本，原始副本仍可查看、恢复和下载。",
+        resolveFailed: "处理失败，原始副本已保留，请重试。",
+        conflict: "历史已同步，有冲突副本",
+        local: "仅保存在本机",
+        pending: "历史待同步",
+        synced: "历史已同步",
+        error: "历史同步失败",
+        retry: "重试",
+        backup: "下载冲突副本",
+    },
     agentEntry: {
         sessionNotReady: "登录或同步会话尚未就绪，请稍后重试。",
         canvasRestoring: "画布还在恢复中，请稍后重试。",

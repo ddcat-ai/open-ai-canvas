@@ -8,12 +8,14 @@ import type { CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-p
 import { buildGenerationConfig, isGenerationCanceled, resetGenerationTaskMetadata } from "@/lib/canvas/canvas-project-generation";
 import { canvasReferenceImageDimensions } from "@/lib/canvas/canvas-reference-image-size";
 import { canvasGenerationPromptMetadata, canvasGenerationRequestFingerprint, runCanvasGenerationSubmissionOnce } from "@/lib/canvas/canvas-generation-submission";
+import { canvasVideoOperation } from "@/lib/canvas/canvas-video-reference-mode";
 import { isGenerationTaskCapacityError } from "@/lib/canvas/canvas-generation-batch";
 import { canvasGenerationInputPrompt } from "@/lib/canvas/canvas-generation-input-prompt";
 import { resolveCanvasBatchInputContext } from "@/lib/canvas/canvas-batch-input-snapshot";
 import { buildTextRewritePrompt } from "@/lib/prompts";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationFailureMetadata } from "@/lib/generation-error";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { modelCompatibilityError, modelGroupReferenceLimits, modelPromptLengthError, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import type { Skill } from "@/services/api/skills";
@@ -212,6 +214,12 @@ export function useCanvasGenerationExecutor({
                             throw new Error(promptLengthError);
                         }
                         const generationContext = { ...rawGenerationContext, prompt: effectivePrompt };
+                        if (mode === "video") {
+                            const minReferenceImages = modelCapabilityConfigFor(generationConfig, generationConfig.model).video?.references.minImages ?? 0;
+                            if ((generationContext.referenceImages?.length ?? 0) < minReferenceImages) {
+                                throw new Error(translate("canvasPage.generation.videoRequiresReferenceImages", { count: minReferenceImages }));
+                            }
+                        }
                         if (mode === "audio" && generationContext.characterReferences.length) {
                             if (generationContext.characterReferences.length !== 1) {
                                 throw new Error(translate("canvasPage.generation.voiceOneCharacter"));
@@ -241,7 +249,9 @@ export function useCanvasGenerationExecutor({
                                           parameters: sourceNode?.metadata?.workflowParameters,
                                       }
                                     : undefined,
-                            operation: sourceNode?.metadata?.videoEditOperation,
+                            operation: mode === "video" ? canvasVideoOperation(sourceNode, { ...generationContext, characterCount: generationContext.characterReferences.length }) : undefined,
+                            videoStartFrameNodeId: mode === "video" ? sourceNode?.metadata?.videoStartFrameNodeId : undefined,
+                            videoEndFrameNodeId: mode === "video" ? sourceNode?.metadata?.videoEndFrameNodeId : undefined,
                             audioInstructions: generationConfig.audioInstructions,
                             audioEmotionControlMethod: generationConfig.audioEmotionControlMethod,
                             audioEmotionRandom: generationConfig.audioEmotionRandom,
@@ -439,16 +449,11 @@ function generationModelRequirements(
     config: ReturnType<typeof useEffectiveConfig>,
     includeCharacterMinimum = false,
 ): ModelRequirements {
+    const summary = { textCount: input.textCount, imageCount: input.imageCount, videoCount: input.videoCount, audioCount: input.audioCount, characterCount: includeCharacterMinimum ? input.characterReferences.length : 0 };
     return {
         capability: mode,
-        input: {
-            textCount: input.textCount,
-            imageCount: input.imageCount,
-            videoCount: input.videoCount,
-            audioCount: input.audioCount,
-            characterCount: includeCharacterMinimum ? input.characterReferences.length : 0,
-        },
-        videoOperation: sourceNode?.metadata?.videoEditOperation,
+        input: summary,
+        videoOperation: mode === "video" ? canvasVideoOperation(sourceNode, summary) : undefined,
         videoSeconds: config.videoSeconds,
         options: config.taskWorkflowProvider === "model" ? modelRequestOptions(config, mode) : undefined,
     };

@@ -27,6 +27,21 @@ function createMainContext(canvasTool: "move" | "box-select" = "box-select"): To
 }
 
 describe("canvas toolbar mode switch", () => {
+    test("keeps the same toolbar slots when canvas selection changes", () => {
+        const empty = resolveToolbarEntries("main", createMainContext(), null);
+        const selected = resolveToolbarEntries("main", { ...createMainContext(), selectedCount: 3 }, null);
+        expect(selected.map((entry) => entry.id)).toEqual(empty.map((entry) => entry.id));
+        const idleDelete = empty.find((entry) => entry.id === "tool-delete");
+        const activeDelete = selected.find((entry) => entry.id === "tool-delete");
+        expect(idleDelete && "disabled" in idleDelete && idleDelete.disabled).toBe(true);
+        expect(activeDelete && "disabled" in activeDelete && activeDelete.disabled).toBe(false);
+        const idleMarkup = renderToStaticMarkup(<FloatingDock variant="toolbar" items={empty} />);
+        const selectedMarkup = renderToStaticMarkup(<FloatingDock variant="toolbar" items={selected} />);
+        expect(idleMarkup.match(/<button[^>]*aria-label="删除选中节点"[^>]*>/)?.[0]).toContain("disabled");
+        expect(selectedMarkup.match(/<button[^>]*aria-label="删除 3 个节点"[^>]*>/)?.[0]).not.toContain("disabled");
+        expect(selectedMarkup.match(/<button\b/g)?.length).toBe(idleMarkup.match(/<button\b/g)?.length);
+    });
+
     test.each(["default", "compact"] as const)("renders %s canvas modes as an icon-only segmented switch", (size) => {
         const entries = resolveToolbarEntries("main", createMainContext(), null);
         const modeSwitch = entries.find((entry) => entry.kind === "switch");

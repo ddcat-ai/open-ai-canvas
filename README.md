@@ -13,7 +13,7 @@
   <a href="SECURITY.md">安全策略</a>
 </p>
 
-影策是一个开源的 AI 影视与短剧创作工作台。上传一本小说，流水线会完成改编、拆集、建角色、出分镜，再逐段生成视频并合成成片；需要自由发挥时，可以在无限画布上用节点组织图片、视频、文本和 3D 预演，也可以让 Agent 直接在画布上动手。模型渠道、技能、插件、素材和计费都可以自部署、自管理。
+影策是一个开源的 AI 影视与短剧创作工作台。上传一本小说，流水线会完成改编、拆集、建角色、出分镜，再逐段生成视频并合成成片；需要自由发挥时，可以在无限画布上用节点组织图片、视频、文本和世界引擎场景，也可以让 Agent 直接在画布上动手。模型渠道、技能、插件、素材和计费都可以自部署、自管理。
 
 <p align="center">
   <img src="assets/screenshots/storyboard.jpg" alt="短剧制作：分镜视图，每段显示镜头、台词、参考图和视频生成状态" width="100%">
@@ -28,7 +28,7 @@
 
 ## 下个版本：影策世界引擎（内测中）
 
-在 3D 世界里搭场景、排机位、做动画：天气、布景、建筑、花木和角色直接摆进场景，在地面标记 A、B 点后，用一句话告诉 Agent「将角色从 B 点跑步移动到 A 点」，它会补问细节并生成关键帧。镜头可在时间轴上编排，并导出白模和深度画面作为视频生成的参考。
+在 3D 世界里搭场景、排机位、做动画：天气、布景、建筑、花木和角色直接摆进场景，在地面标记 A、B 点后，用一句话告诉 Agent「将角色从 B 点跑步移动到 A 点」，它会补问细节并生成关键帧。镜头可在时间轴上编排推拉摇移、环绕、跟拍和希区柯克变焦等运镜，也可以让 Agent 按大师手法复现；人物御剑飞行时镜头能一路跟随升空。场景可导出白模和深度画面作为视频生成的参考。
 
 <p align="center">
   <img src="assets/screenshots/3d.png" alt="影策世界引擎：古代集市 3D 场景、A/B 标记点、主摄影机、时间轴与 Agent 对话面板" width="100%">
@@ -40,16 +40,21 @@
 
 | LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
 | --- | --- | --- | --- | --- |
-| <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 本项目 Seedance 模型的天使投资人。 | [artbox.top](https://artbox.top) |
-| <img src="assets/soonstudio.jpg" alt="soonstudio" width="160"> | 商业 | soonstudio | API 一站式网站，自研系统，非 New API；支持手机、短信接码，覆盖国内外几乎所有模型 API 接口，并发高、稳定性强。源于开源，步入 AI 领域，感谢开源。 | [soonstudio.ai](https://soonstudio.ai/) |
-| <img src="assets/fluxion.jpg" alt="Fluxion AI" width="160"> | 商业 | Fluxion AI | 面向个人开发者、技术团队与企业，通过统一 API 接入并管理全球主流 AI 模型，根据不同模型与线路，API 调用成本较官方或基准价格可降低 40%—98%。 | [注册送 $3.88 试用福利](https://fluxionai.space/register?source=github&campaign=yingce&promo=yingce) |
-| <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 一支跨学科的艺术创作团队，持续探索数字与艺术的全新表达形式。 | 暂无 |
-| <img src="assets/metaso.png" alt="秘塔" width="160"> | 企业 | 秘塔 | 提供 MiniMax H3 视频生成 API，支持原生 2K、音画同步和 OpenAI 兼容协议。 | [metaso.cn](https://metaso.cn/minimax-h3/?s=dd) |
-| <img src="assets/fruivision.png" alt="浮瑞万相AI" width="160"> | 企业 | 浮瑞万相AI | 一家专注于AI视听的AI Native公司 | 暂无 |
-| <img src="assets/xmzm.png" alt="喜马抓马" width="160"> | 团队 | 喜马抓马 | 中国AI视听先锋厂牌/AI 视听全链路综合服务平台 | [himadrama.com](https://himadrama.com) |
-| <img src="assets/yuyutech.jpg" alt="羽宇科技" width="160"> | 企业 | 羽宇科技 | 一站式AI应用平台。提供模型算力入口、AI短剧视频制作（Studio）、企业数字员工（Agent）及内容出海（OPC）全栈解决方案。 | 暂无 |
-| <img src="assets/panda.jpg" alt="panda AI" width="160"> | 团队 | panda AI | API接口平台，面向个人开发者、技术团队与企业，稳定提供GPT、Gemini、grok等图片视频模型 | [api.pandatk.com](https://api.pandatk.com) |
+| <img src="assets/artdance.png" alt="ArtDance" width="160"> | 商业 | ArtDance | 影策项目天使投资人 - `关门人·克里斯` | [artbox.top](https://artbox.top) |
+| <img src="assets/metaso.png" alt="秘塔" width="160"> | 企业 | 秘塔 | 提供 MiniMax H3 视频生成 API，支持原生 2K、音画同步和 OpenAI 兼容协议。`影策官方H3模型唯一合作伙伴！` | [metaso.cn](https://metaso.cn/minimax-h3/?s=dd) |
 | <img src="assets/tack2ai.svg" alt="源点动力" width="160"> | 商业 | 源点动力 | 专注 Seedance、Wan 等视频模型 API，以更优惠的价格降低成本。部分模型个人三折，企业二折，做人民用得起的供应商。 | [ai.tack2ai.cn](https://ai.tack2ai.cn) |
+| <img src="assets/panda.jpg" alt="panda AI" width="160"> | 团队 | panda AI | API接口平台，面向个人开发者、技术团队与企业，稳定提供GPT、Gemini、grok等图片视频模型 | [api.pandatk.com](https://api.pandatk.com) |
+| <img src="assets/bbkingBra.jpg" alt="bbkingBra API" width="160"> | 商业 | bbkingBra API | 以稳定算力，承载漫剧每一段故事 | [newapi.bobby707.xyz](https://newapi.bobby707.xyz) |
+| <img src="assets/Yuxi.jpg" alt="Yuxi AI" width="160"> | 商业 | Yuxi AI | 面向个人创作者、漫剧工作室、企业，提供稳定 Seedance 等视频模型 API，做漫剧创作者高性价比的视频供应方。 | [yuxibox.xyz](https://yuxibox.xyz) |
+
+--------
+
+| LOGO | 类型 | 赞助商名称 | 说明 | 网站 |
+| --- | --- | --- | --- | --- |
+| <img src="assets/soonstudio.jpg" alt="soonstudio" width="160"> | 商业 | soonstudio | API 一站式网站，自研系统，非 New API；支持手机、短信接码，覆盖国内外几乎所有模型 API 接口，并发高、稳定性强。源于开源，步入 AI 领域，感谢开源。 | [soonstudio.ai](https://soonstudio.ai/) |
+| <img src="assets/sponsor1.svg" alt="快乐机艺术小组" width="160"> | 团队 | 快乐机艺术小组 | 一支跨学科的艺术创作团队，持续探索数字与艺术的全新表达形式。 | 暂无 |
+| <img src="assets/fruivision.png" alt="浮瑞万相AI" width="160"> | 企业 | 浮瑞万相AI | 一家专注于AI视听的AI Native公司 | 暂无 |
+| <img src="assets/yuyutech.jpg" alt="羽宇科技" width="160"> | 企业 | 羽宇科技 | 一站式AI应用平台。提供模型算力入口、AI短剧视频制作（Studio）、企业数字员工（Agent）及内容出海（OPC）全栈解决方案。 | 暂无 |
 
 ## 产品一览
 
@@ -85,7 +90,7 @@
 
 ### 无限画布
 
-节点、连线、框选、小地图、撤销重做、导入第三方画布和只读分享都已就绪。图片、视频、文本、音频和 3D 预演节点可以互相引用，适合做角色设定、场景概念和镜头实验。
+节点、连线、框选、小地图、撤销重做、导入第三方画布和只读分享都已就绪。图片、视频、文本、音频和世界引擎节点可以互相引用，适合做角色设定、场景概念和镜头实验。
 
 <p align="center">
   <img src="assets/screenshots/canvas.jpg" alt="无限画布：角色三视图节点与连线" width="100%">
@@ -138,7 +143,7 @@
 ### 更多能力
 
 - **时间线剪辑**：片段编排、拆分、修剪、字幕转写和服务端成片导出，支持插件化编辑面板。
-- **3D 预演台**：从画布镜头节点打开，提供摆场、姿态、动画、摄影机与时间轴，可输出构图截图、白模视频和深度图。
+- **世界引擎**：从画布镜头节点打开，提供摆场、姿态、动画、摄影机运镜与时间轴，可输出构图截图、白模视频和深度图。
 - **任务系统**：异步队列、进度与日志、取消和重试，登录后跨设备同步。
 - **存储**：媒体可存放在后端数据目录、阿里云 OSS 或腾讯云 COS。
 - **明暗主题**：工作台支持明暗主题切换。
@@ -416,13 +421,6 @@ cd docs && bun run types:check
   <sub><a href="mailto:309151651@qq.com">309151651@qq.com</a></sub><br>
   <sub><em>没什么大不了</em></sub>
 </td>
-<td align="center" valign="top" width="33%">
-  <img src="assets/user-bensharp.jpg" alt="nancy" width="72" height="72"><br>
-  <strong>nancy</strong><br>
-  <sub>VV：jiahezuiai</sub><br>
-  <sub><a href="mailto:275008147@qq.com">275008147@qq.com</a></sub><br>
-  <sub><em>在哪跌倒，就在哪睡一觉</em></sub>
-</td>
 </tr>
 <tr>
 <td align="center" valign="top" width="33%">
@@ -466,11 +464,18 @@ cd docs && bun run types:check
   <sub><em>千里之行，始于足下。</em></sub>
 </td>
 </tr>
+<tr>
+<td align="center" valign="top" width="33%">
+  <img src="assets/user-aleyn.jpg" alt="Aleyn" width="72" height="72"><br>
+  <strong>Aleyn<br>微信：Aleyn_X</strong><br>
+  <sub><a href="mailto:cslin5277@163.com">cslin5277@163.com</a></sub>
+</td>
+</tr>
 </table>
 
-## 3D 预演台赞助用户
+## 世界引擎赞助用户
 
-感谢以下用户赞助 3D 预演台的开发。
+感谢以下用户赞助世界引擎的开发。
 
 <table>
 <tr>
@@ -487,7 +492,7 @@ cd docs && bun run types:check
 <td align="center" width="20%"><strong>vv</strong><br><sub>2838033228@qq.com</sub></td>
 <td align="center" width="20%"><strong>克里斯</strong><br><sub><a href="https://artbox.top">artbox.top</a></sub></td>
 <td align="center" width="20%"><strong>宇熙</strong><br><sub>53121904@qq.com</sub></td>
-<td align="center" width="20%"><strong>落羽</strong><br><sub>luoyyv66@gmail.com</sub></td>
+<td align="center" width="20%"><strong>落羽</strong><br><sub>luoyv66@gmail.com</sub></td>
 <td align="center" width="20%"><strong>今夕何在</strong><br><sub>809321478@qq.com</sub></td>
 </tr>
 <tr>

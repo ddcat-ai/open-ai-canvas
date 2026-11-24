@@ -45,6 +45,7 @@ func TestSkillCurationHTTP(t *testing.T) {
 		{"user", "GET", "/api/admin/skill-curation", "", 403},
 		{"user", "PUT", "/api/admin/skill-curation", `{"expectedRevision":0,"enabled":true}`, 403},
 		{"user", "GET", "/api/skills/curation", "", 200},
+		{"admin", "GET", "/api/skills/curation", "", 200},
 		{"admin", "PUT", "/api/admin/skill-curation", `{"enabled":true}`, 400},
 		{"admin", "PUT", "/api/admin/skill-curation", `{"expectedRevision":0,"enabled":true,"requestId":"forged"}`, 400},
 		{"admin", "PUT", "/api/admin/skill-curation", `{"expectedRevision":0,"enabled":true} {}`, 400},

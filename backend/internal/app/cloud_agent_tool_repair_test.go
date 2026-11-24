@@ -120,7 +120,8 @@ func TestCloudAgentEmptyCanvasRepairAcrossCheckpoints(t *testing.T) {
 				hash := cloudAgentCanvasHash(doc)
 				bad := `{"snapshotHash":"` + hash + `","ops":[{"id":"note","nodeType":"text"}]}`
 				if scenario == "connection_repaired" {
-					bad = `{"snapshotHash":"` + hash + `","ops":[{"type":"add_node","id":"note","nodeType":"text"},{"type":"add_node","id":"doc","nodeType":"markdown"},{"type":"connect_nodes","id":"edge","fromNodeId":"note","toNodeId":"doc"}]}`
+					// Both node types are valid; text nodes reject incoming connections.
+					bad = `{"snapshotHash":"` + hash + `","ops":[{"type":"add_node","id":"note","nodeType":"text"},{"type":"add_node","id":"doc","nodeType":"text"},{"type":"connect_nodes","id":"edge","fromNodeId":"note","toNodeId":"doc"}]}`
 				}
 				attempts := 3
 				if scenario == "connection_repaired" {

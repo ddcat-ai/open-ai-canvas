@@ -6,7 +6,7 @@ import type { CanvasNodeData } from "../src/types/canvas";
 import "../src/lib/canvas/node-registry/definitions/index";
 import { writeCanvasNodePrompt } from "../src/lib/canvas/canvas-node-prompt";
 import { canonicalGenerationMetadata } from "../src/lib/canvas/generation-contract";
-import { buildImageToolbarTools, getNineGridMenuItems } from "../src/components/canvas/canvas-image-toolbar-tools";
+import { getNineGridMenuItems } from "../src/components/canvas/canvas-image-toolbar-tools";
 import builtinTools from "../../backend/internal/tools/seed/tools.json";
 
 for (const type of ["style", "nine_grid"]) {
@@ -74,28 +74,33 @@ test("nine grid creates idle child using stable source token, not an auto genera
     expect(child.metadata?.content).toBeFalsy();
 });
 
-test("storyboard presets share backend IDs across the grid menu and image toolbar", () => {
+test("every image preset matches the backend seed ID, key and output ratio", () => {
+    const items = getNineGridMenuItems();
+    const seeds = builtinTools.nine_grid.list;
+    expect(items.length).toBe(seeds.length);
+    expect(new Set(items.map((item) => item.toolId)).size).toBe(items.length);
+    for (const item of items) {
+        expect(seeds.find((seed) => seed.id === item.toolId)).toMatchObject({ label_en: item.id, ratio: item.ratio });
+    }
+});
+
+test("the image preset creates a linked draft or replaces only the composer preset", () => {
     const source: CanvasNodeData = { id: "source", type: CanvasNodeType.Image, title: "参考图", position: { x: 0, y: 0 }, width: 320, height: 180, metadata: { content: "/image.png" } };
     const menu = getNineGridMenuItems();
     const brief = "小女孩走到门口，回头看向猫。";
     let prompt = applyToolMention(brief, { id: 79, type: "nine_grid", label: "多机位九宫格" });
-    let draft: CanvasNodeData | undefined;
-    const toolbar = buildImageToolbarTools(source, {
-        onNineGrid: (node, id, label, icon) => {
-            draft = createNineGridNode(node, "draft", id, label, "nine_grid", icon);
-        },
-    } as Parameters<typeof buildImageToolbarTools>[1]);
-
-    for (const key of ["short_storyboard", "blocking_storyboard"]) {
+    for (const [key, section, icon] of [
+        ["short_storyboard", "分镜叙事", "Clapperboard"],
+        ["blocking_storyboard", "分镜叙事", "Route"],
+        ["character_four_view", "设定图", "ContactRound"],
+    ]) {
         const seed = builtinTools.nine_grid.list.find((tool) => tool.label_en === key)!;
         const item = menu.find((tool) => tool.id === key)!;
-        expect(item).toMatchObject({ toolId: seed.id, label: seed.label, section: "分镜宫格" });
-        expect(menu.filter((tool) => tool.toolId === seed.id)).toHaveLength(1);
-        expect(item.toolIconName).toBe(key === "short_storyboard" ? "Clapperboard" : "Route");
-        toolbar.find((tool) => tool.id === key)!.onClick();
-        expect(draft?.metadata?.content).toBeUndefined();
-        expect(parseToolMentionTokens(draft?.metadata?.prompt || "")).toEqual([{ type: "nine_grid", toolId: seed.id, label: seed.label, icon: item.toolIconName }]);
-        expect(draft?.metadata?.prompt).toContain("@[node:source]");
+        expect(item).toMatchObject({ toolId: seed.id, label: seed.label, section, toolIconName: icon });
+        const draft = createNineGridNode(source, "draft", item.toolId, item.label, "nine_grid", item.toolIconName);
+        expect(draft.metadata?.content).toBeUndefined();
+        expect(parseToolMentionTokens(draft.metadata?.prompt || "")).toEqual([{ type: "nine_grid", toolId: seed.id, label: seed.label, icon: item.toolIconName }]);
+        expect(draft.metadata?.prompt).toContain("@[node:source]");
         prompt = applyToolMention(prompt, { id: seed.id, type: "nine_grid", label: seed.label }, item.toolIconName);
         expect(parseToolMentionTokens(prompt)).toHaveLength(1);
         expect(parseToolMentionTokens(prompt)[0].toolId).toBe(seed.id);

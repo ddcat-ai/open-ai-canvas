@@ -296,7 +296,7 @@ async function connectCdp(cdpPort) {
         })()`);
         // 目标必须"站稳"再点：AntD 弹窗/抽屉有约 200ms 入场动画，只要求相邻两次读数相同
         // 会在动画刚开始、坐标还没动的那一拍就下判定，真正派发鼠标事件时控件已经移位 ——
-        // 点击落到遮罩上（mask.closable=false）就完全无效（"留在预演台" 曾这样偶发失败）。
+        // 点击落到遮罩上（mask.closable=false）就完全无效（"留在世界引擎" 曾这样偶发失败）。
         const deadline = Date.now() + 8000;
         let previous = null;
         let hovered = null;
@@ -397,9 +397,11 @@ async function openUnifiedWorkbench(cdp, label) {
 
 /** 使用当前产品流程从预设库加入一个真实道具，不依赖旧版快捷菜单。 */
 async function addProp(cdp, name, label) {
+    if (!(await cdp.click('[aria-label="场景对象列表"]'))) throw new Error(`${label}: 场景对象列表 button not clickable`);
     if (!(await cdp.click('[aria-label="添加到场景"]'))) throw new Error(`${label}: 添加到场景 button not clickable`);
     if (!(await cdp.poll(`!!document.querySelector('.previs-add-dialog [role="tab"]')`, `${label} add dialog`, 10000))) throw new Error(`${label}: add dialog did not open`);
     if (!(await cdp.clickText("道具", '[role="tab"]'))) throw new Error(`${label}: 道具 tab not clickable`);
+    if (!(await cdp.clickText("室内家具"))) throw new Error(`${label}: 室内家具 category not clickable`);
 
     const card = `[...document.querySelectorAll('.previs-add-dialog__card')].find((button) => (button.textContent || '').includes(${JSON.stringify(name)}) && button.getClientRects().length > 0)`;
     if (!(await cdp.poll(`!!(${card})`, `${label} prop card`, 10000))) throw new Error(`${label}: ${name} prop card not visible`);
@@ -434,12 +436,12 @@ async function smokeWorkbench(cdp, baseUrl) {
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.previs-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "A5 real canvas present in viewport shell");
     const defaultLayoutMode = await cdp.evaluate(`document.querySelector('button[data-mode="layout"]')?.getAttribute('aria-pressed')`);
-    assert(defaultLayoutMode === "true", "A5a 统一预演台默认进入布景上下文", `got ${JSON.stringify(defaultLayoutMode)}`);
+    assert(defaultLayoutMode === "true", "A5a 统一世界引擎默认进入布景上下文", `got ${JSON.stringify(defaultLayoutMode)}`);
     await openUnifiedWorkbench(cdp, "A");
 
     // 使用真实产品 dock（FloatingDock）验证提示的 hover 与键盘触发，不能只验证按钮存在。
-    const dockSelector = '[role="toolbar"][aria-label="预演台视口工具"]';
-    assert(await cdp.poll(`!!document.querySelector(${JSON.stringify(dockSelector)})`, "previs dock", 10000), "A5b 预演台视口工具条已渲染");
+    const dockSelector = '[role="toolbar"][aria-label="世界引擎视口工具"]';
+    assert(await cdp.poll(`!!document.querySelector(${JSON.stringify(dockSelector)})`, "previs dock", 10000), "A5b 世界引擎视口工具条已渲染");
     assert(await cdp.evaluate(`!!document.querySelector('${dockSelector} [role="radiogroup"][aria-label="变换模式"] [role="radio"][aria-label="移动 (W)"]')`), "A5b 变换模式切换包含移动 (W)");
     const tooltipButton = `${dockSelector} button[aria-label="适配全部对象 (A)"]`;
     const tooltipMode = await cdp.evaluate(`(() => {
@@ -484,7 +486,7 @@ async function smokeWorkbench(cdp, baseUrl) {
         autoKey: document.querySelector('button[title="自动关键帧"]')?.getAttribute('aria-pressed') ?? null,
     }))()`;
     const layoutGating = await cdp.evaluate(readGating);
-    assert(layoutGating.workbench && layoutGating.layout, "A6 统一预演台布局上下文已就绪", JSON.stringify(layoutGating));
+    assert(layoutGating.workbench && layoutGating.layout, "A6 统一世界引擎布局上下文已就绪", JSON.stringify(layoutGating));
     assert(layoutGating.sequencer === 0, "A6a 摆场模式不显示时间轴", JSON.stringify(layoutGating));
     if (!(await cdp.click('button[data-mode="animate"]'))) throw new Error("A: 动画模式按钮不可点击");
     assert(await cdp.poll(`document.querySelectorAll('.previs-sequencer').length === 1`, "animate sequencer", 10000), "A7 动画模式显示时间轴");
@@ -493,18 +495,18 @@ async function smokeWorkbench(cdp, baseUrl) {
     if (!(await cdp.click('button[data-mode="layout"]'))) throw new Error("A: 摆场模式按钮不可点击");
     assert(await cdp.poll(`document.querySelectorAll('.previs-sequencer').length === 0`, "layout hides sequencer", 10000), "A7b 回到摆场模式隐藏时间轴");
 
-    await addProp(cdp, "单人沙发", "A");
-    const propAppeared = await cdp.poll(`!!document.querySelector('[aria-label="删除 单人沙发"]')`, "prop row", 20000);
+    await addProp(cdp, "沙发", "A");
+    const propAppeared = await cdp.poll(`!!document.querySelector('[aria-label="删除 沙发"]')`, "prop row", 20000);
     assert(propAppeared, "A10 added prop appears in object list");
 
     const undone = await cdp.click('[aria-label="撤销"]');
     if (!undone) throw new Error("A: 撤销 button not clickable");
-    const propGone = await cdp.poll(`!document.querySelector('[aria-label="删除 单人沙发"]')`, "prop removed by undo", 20000);
+    const propGone = await cdp.poll(`!document.querySelector('[aria-label="删除 沙发"]')`, "prop removed by undo", 20000);
     assert(propGone, "A11 Undo removes the added prop");
 
     // 场景结束前必须真实关闭：下一个场景要重新导航，不能靠忽略 beforeunload 绕过未保存态。
-    const closed = await cdp.click('[aria-label="关闭预演台"]');
-    if (!closed) throw new Error("A: 关闭预演台 button not clickable");
+    const closed = await cdp.click('[aria-label="关闭世界引擎"]');
+    if (!closed) throw new Error("A: 关闭世界引擎 button not clickable");
     const shellGone = await cdp.poll(`document.querySelectorAll('.previs-viewport-shell').length === 0`, "workbench closed", 30000);
     assert(shellGone, "A12 workbench closed cleanly before leaving scenario A");
 
@@ -586,8 +588,8 @@ async function missingRetry(cdp, baseUrl) {
     const failedAgain = await cdp.poll(`/个 3D 模型加载失败/.test(document.body.innerText || "")`, "second-round failure", 40000);
     assert(failedAgain, "C5 second-round failure after retry");
 
-    const closed = await cdp.click('[aria-label="关闭预演台"]');
-    if (!closed) throw new Error("C: 关闭预演台 button not clickable");
+    const closed = await cdp.click('[aria-label="关闭世界引擎"]');
+    if (!closed) throw new Error("C: 关闭世界引擎 button not clickable");
     const shellGone = await cdp.poll(`document.querySelectorAll('.previs-viewport-shell').length === 0`, "workbench closed", 20000);
     assert(shellGone, "C6 workbench closed cleanly");
 
@@ -626,6 +628,7 @@ async function deleteWhileLoading(cdp, baseUrl) {
         const opened = await cdp.click('[data-testid="toggle-workbench"]');
         if (!opened) throw new Error("D: toggle-workbench not clickable");
         await openUnifiedWorkbench(cdp, "D");
+        if (!(await cdp.click('[aria-label="场景对象列表"]'))) throw new Error("D: 场景对象列表 button not clickable");
 
         const rowReady = await cdp.poll(`!!document.querySelector('[aria-label="删除 本地模型 repro triangle"]')`, "model row", 30000);
         assert(rowReady, "D1 model row present while load still in flight");
@@ -662,8 +665,8 @@ async function deleteWhileLoading(cdp, baseUrl) {
     assert(!settled.renderFailed && !settled.contextLost, "D5 viewport stayed healthy");
     assert(settled.canvasUsable, "D6 canvas still usable after in-flight delete");
 
-    const closed = await cdp.click('[aria-label="关闭预演台"]');
-    if (!closed) throw new Error("D: 关闭预演台 button not clickable");
+    const closed = await cdp.click('[aria-label="关闭世界引擎"]');
+    if (!closed) throw new Error("D: 关闭世界引擎 button not clickable");
     const shellGone = await cdp.poll(`document.querySelectorAll('.previs-viewport-shell').length === 0`, "workbench closed", 20000);
     assert(shellGone, "D7 workbench closed cleanly");
 
@@ -720,8 +723,8 @@ async function webglLossRestore(cdp, baseUrl) {
     const canvasUsable = await cdp.poll(`(() => { const c = document.querySelector('.previs-viewport-shell canvas'); return !!c && c.clientWidth > 0 && c.clientHeight > 0; })()`, "canvas usable after restore", 20000);
     assert(canvasUsable, "E6 canvas remains usable after restore");
 
-    const closed = await cdp.click('[aria-label="关闭预演台"]');
-    if (!closed) throw new Error("E: 关闭预演台 button not clickable");
+    const closed = await cdp.click('[aria-label="关闭世界引擎"]');
+    if (!closed) throw new Error("E: 关闭世界引擎 button not clickable");
     const shellGone = await cdp.poll(`document.querySelectorAll('.previs-viewport-shell').length === 0`, "workbench closed", 20000);
     assert(shellGone, "E7 workbench closed cleanly");
 
@@ -737,7 +740,7 @@ async function webglLossRestore(cdp, baseUrl) {
 
 /**
  * 场景 F：强制保存失败 → 头部错误态与重试入口 → 关闭走确认保护。
- * 选择「留在预演台」后 workbench 必须仍然存在（onClose 不得被调用）。
+ * 选择「留在世界引擎」后 workbench 必须仍然存在（onClose 不得被调用）。
  */
 async function saveFailureCloseGuard(cdp, baseUrl) {
     console.log("\n=== F. save failure and close guard ===");
@@ -754,17 +757,17 @@ async function saveFailureCloseGuard(cdp, baseUrl) {
     const hasCanvas = await cdp.poll(`(() => { const c = document.querySelector('.previs-viewport-shell canvas'); return !!c && c.clientWidth > 0; })()`, "canvas", 40000);
     assert(hasCanvas, "F2 workbench open with real canvas");
 
-    await addProp(cdp, "单人沙发", "F");
+    await addProp(cdp, "沙发", "F");
 
     const errorState = await cdp.poll(`(document.body.innerText || "").includes('保存失败')`, "save failure header", 40000);
     assert(errorState, "F3 header surfaces 保存失败 after forced flush failure");
     const retryVisible = await cdp.poll(`[...document.querySelectorAll('button')].some((b) => (b.textContent || "").includes('重试保存'))`, "retry save affordance", 20000);
     assert(retryVisible, "F4 actionable 重试保存 affordance present");
 
-    const closeClicked = await cdp.click('[aria-label="关闭预演台"]');
-    if (!closeClicked) throw new Error("F: 关闭预演台 button not clickable");
+    const closeClicked = await cdp.click('[aria-label="关闭世界引擎"]');
+    if (!closeClicked) throw new Error("F: 关闭世界引擎 button not clickable");
 
-    const modalShown = await cdp.poll(`!!document.querySelector('.ant-modal-confirm') && (document.body.innerText || "").includes('留在预演台')`, "close confirm modal", 40000);
+    const modalShown = await cdp.poll(`!!document.querySelector('.ant-modal-confirm') && (document.body.innerText || "").includes('留在世界引擎')`, "close confirm modal", 40000);
     assert(modalShown, "F5 close is guarded by a confirm dialog, not silent exit");
 
     // 坐标点击成功派发不代表按钮收到了点击：CI 的动画/渲染调度可能让坐标落到遮罩。
@@ -773,7 +776,7 @@ async function saveFailureCloseGuard(cdp, baseUrl) {
         const probe = { count: 0 };
         probe.listener = (event) => {
             const button = event.target instanceof Element ? event.target.closest('button') : null;
-            if (event.isTrusted && button?.closest('.ant-modal-confirm') && (button.textContent || '').trim() === '留在预演台') probe.count++;
+            if (event.isTrusted && button?.closest('.ant-modal-confirm') && (button.textContent || '').trim() === '留在世界引擎') probe.count++;
         };
         window.__previsStayClickProbe = probe;
         document.addEventListener('click', probe.listener, true);
@@ -781,11 +784,11 @@ async function saveFailureCloseGuard(cdp, baseUrl) {
     let stayClicked = false;
     try {
         for (let attempt = 0; attempt < 3 && !stayClicked; attempt++) {
-            const dispatched = await cdp.clickText("留在预演台", ".ant-modal-confirm button");
-            if (!dispatched) throw new Error("F: 留在预演台 button not clickable");
+            const dispatched = await cdp.clickText("留在世界引擎", ".ant-modal-confirm button");
+            if (!dispatched) throw new Error("F: 留在世界引擎 button not clickable");
             stayClicked = await cdp.poll(`window.__previsStayClickProbe.count > 0`, "stay button received trusted click", 1500);
         }
-        if (!stayClicked) throw new Error("F: 留在预演台 button did not receive a trusted click");
+        if (!stayClicked) throw new Error("F: 留在世界引擎 button did not receive a trusted click");
     } finally {
         await cdp.evaluate(`(() => {
             document.removeEventListener('click', window.__previsStayClickProbe.listener, true);
@@ -801,11 +804,11 @@ async function saveFailureCloseGuard(cdp, baseUrl) {
         "modal dismissed",
         20000,
     );
-    assert(modalGone, "F6 confirm dialog dismissed after choosing 留在预演台");
+    assert(modalGone, "F6 confirm dialog dismissed after choosing 留在世界引擎");
 
     await sleep(1000);
     const stillOpen = await cdp.evaluate(`document.querySelectorAll('.previs-viewport-shell').length`);
-    assert(stillOpen === 1, "F7 unified workbench remains open after choosing 留在预演台", `shellCount=${stillOpen}`);
+    assert(stillOpen === 1, "F7 unified workbench remains open after choosing 留在世界引擎", `shellCount=${stillOpen}`);
 
     assert(cdp.problems.length === 0, "F8 no browser problems in scenario F", JSON.stringify(cdp.problems));
 }

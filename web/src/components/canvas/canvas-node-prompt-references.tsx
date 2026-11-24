@@ -1,7 +1,8 @@
 // 节点提示词面板的参考素材区：已连接参考的缩略图货架、自动 @ 引用工具与拖拽排序。
 
 import { Image as AntImage, Popover } from "antd";
-import { AtSign, FileText, GripVertical, ImageIcon, Link2, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, X } from "lucide-react";
+import { AtSign, FileText, GripVertical, ImageIcon, Link2, Maximize2, Music2, Pencil, Plus, SlidersHorizontal, UserRound, Video, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
 import { useState } from "react";
 import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
@@ -90,6 +91,7 @@ export function ConnectedReferenceShelf({
     references,
     theme,
     onInsert,
+    onPick,
     onRemove,
     onReorder,
     onReplaceReference,
@@ -99,16 +101,18 @@ export function ConnectedReferenceShelf({
     references: CanvasResourceReference[];
     theme: CanvasTheme;
     onInsert: (reference: CanvasResourceReference) => void;
+    onPick?: () => void;
     onRemove?: (reference: CanvasResourceReference) => void;
     onReorder?: (orderedNodeIds: string[]) => void;
     onReplaceReference?: (oldReference: CanvasResourceReference, sourceNodeId: string) => void;
     onReplaceReferenceFiles?: (oldReference: CanvasResourceReference, files: File[]) => void;
 }) {
+    const { t } = useTranslation();
     const activeReferences = references.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
     const [imagePreview, setImagePreview] = useState<CanvasResourceReference | null>(null);
     const [draggedReferenceId, setDraggedReferenceId] = useState<string | null>(null);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
-    if (!activeReferences.length) return null;
+    if (!activeReferences.length && !onPick) return null;
 
     const moveReference = (sourceId: string, targetId: string) => {
         if (!onReorder || sourceId === targetId) return;
@@ -147,9 +151,6 @@ export function ConnectedReferenceShelf({
                                 data-target-node-id={targetNodeId}
                                 data-dragging={draggedReferenceId === reference.nodeId || undefined}
                                 data-drop-target={isDropTarget ? "true" : undefined}
-                                style={{
-                                    boxShadow: isDropTarget ? "0 0 0 2px #3b82f6, 0 0 16px rgba(59, 130, 246, 0.45)" : undefined,
-                                }}
                                 onDragOver={(event) => {
                                     if (draggedReferenceId) {
                                         if (!onReorder) return;
@@ -243,9 +244,9 @@ export function ConnectedReferenceShelf({
                                         </span>
                                     ) : null}
                                 </button>
-                                <button type="button" className="canvas-node-reference-label" title={`插入 @${reference.label}`} onClick={() => onInsert(reference)}>
+                                <button type="button" className="canvas-node-reference-label" aria-label={`插入 @${reference.label}`} title={`插入 @${reference.label}`} onClick={() => onInsert(reference)}>
                                     <span className="opacity-55">@</span>
-                                    <span className="truncate">{reference.label}</span>
+                                    <span className="truncate">{reference.displayLabel || reference.title || reference.label}</span>
                                 </button>
                                 {onRemove ? (
                                     <button
@@ -266,6 +267,11 @@ export function ConnectedReferenceShelf({
                             </span>
                         );
                     })}
+                    {onPick ? (
+                        <button type="button" className="canvas-node-reference-add" aria-label={t("canvasB.mention.searchLabel")} title={t("canvasB.mention.searchLabel")} onMouseDown={(event) => event.preventDefault()} onClick={onPick}>
+                            <Plus aria-hidden />
+                        </button>
+                    ) : null}
                 </div>
             </div>
             {imagePreview?.previewUrl ? (

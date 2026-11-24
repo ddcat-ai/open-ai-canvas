@@ -47,12 +47,12 @@ export default function LoginLogsPage() {
         setSearchParams(next, { replace });
     };
 
+    const resetFilters = () => update({ keyword: "", event: "", method: "", result: "", ip: "", from: "", to: "", page: 1 });
+
     useEffect(() => {
         const controller = new AbortController();
         setLoading(true);
         setError("");
-        setLogs([]);
-        setTotal(0);
         void listAdminLoginLogs(
             { keyword: debouncedKeyword || undefined, event: event || undefined, method: method || undefined, result: result || undefined, ip: debouncedIP || undefined, from: from || undefined, to: to || undefined, page, pageSize },
             controller.signal,
@@ -64,7 +64,10 @@ export default function LoginLogsPage() {
                 if (page > 1 && data.logs.length === 0) update({ page: 1 }, true);
             })
             .catch((cause) => {
-                if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "读取登录日志失败");
+                if (controller.signal.aborted) return;
+                setLogs([]);
+                setTotal(0);
+                setError(cause instanceof Error ? cause.message : "读取登录日志失败");
             })
             .finally(() => {
                 if (!controller.signal.aborted) setLoading(false);
@@ -156,6 +159,7 @@ export default function LoginLogsPage() {
                 />
             ) : null}
             <AdminDataTable<LoginLog>
+                onReset={resetFilters}
                 toolbar={
                     <div className="admin-login-log-filters">
                         <AdminSearchInput
@@ -194,14 +198,7 @@ export default function LoginLogsPage() {
                             placeholder={["开始时间", "结束时间"]}
                             onChange={(dates) => update({ from: dates?.[0]?.toISOString() || "", to: dates?.[1]?.toISOString() || "", page: 1 })}
                         />
-                        <Button
-                            type="text"
-                            className="admin-login-log-reset"
-                            disabled={!filtered}
-                            title={filtered ? "清除全部筛选条件" : "当前未应用筛选"}
-                            icon={<RotateCcw className="size-3.5" />}
-                            onClick={() => update({ keyword: "", event: "", method: "", result: "", ip: "", from: "", to: "", page: 1 })}
-                        >
+                        <Button type="text" className="admin-login-log-reset" disabled={!filtered} title={filtered ? "清除全部筛选条件" : "当前未应用筛选"} icon={<RotateCcw className="size-3.5" />} onClick={resetFilters}>
                             重置
                         </Button>
                     </div>

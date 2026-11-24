@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"time"
+	"yingce/backend/internal/emailtpl"
 	"yingce/backend/internal/kernel"
 
 	"yingce/backend/internal/model"
@@ -39,17 +40,25 @@ func (s *Service) SendPasswordResetEmailCode(rawEmail string) error {
 	s.emailCodeMu.Lock()
 	defer s.emailCodeMu.Unlock()
 
+	// 以下不发信的分支对外仍返回成功，避免枚举账号；原因写入发送记录，管理员可在后台排查“收不到邮件”。
 	user, err := s.repo.UserByEmail(email)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		s.recordSkippedEmail(EmailPurposePasswordReset, "", email, "该邮箱未绑定任何账号")
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if user.Status != model.UserStatusActive || strings.TrimSpace(user.PasswordHash) == "" {
+	if user.Status != model.UserStatusActive {
+		s.recordSkippedEmail(EmailPurposePasswordReset, user.ID, email, "账号已停用")
+		return nil
+	}
+	if strings.TrimSpace(user.PasswordHash) == "" {
+		s.recordSkippedEmail(EmailPurposePasswordReset, user.ID, email, "账号未设置密码（第三方登录或验证码注册），请用原方式登录后在账号设置中设置密码")
 		return nil
 	}
 	if latest, latestErr := s.repo.LatestEmailVerificationCode(email, passwordResetEmailPurpose); latestErr == nil && time.Since(latest.CreatedAt) < time.Minute {
+		s.recordSkippedEmail(EmailPurposePasswordReset, user.ID, email, "60 秒内已发送过验证码，本次未重复发送")
 		return nil
 	} else if latestErr != nil && !errors.Is(latestErr, gorm.ErrRecordNotFound) {
 		return latestErr
@@ -76,7 +85,11 @@ func (s *Service) SendPasswordResetEmailCode(rawEmail string) error {
 		return err
 	}
 	setting = resolveEmailSender(setting, s.host.BrandName())
-	if err := s.deliverEmail(setting, email, setting.FromName+"密码重置验证码", passwordResetEmailBody(setting.FromName, code)); err != nil {
+	rendered, err := passwordResetEmail(setting.FromName, email, code)
+	if err != nil {
+		return err
+	}
+	if err := s.deliverEmail(setting, EmailDelivery{Purpose: EmailPurposePasswordReset, UserID: user.ID, Recipient: email, Mail: rendered}); err != nil {
 		if cleanupErr := s.repo.DeleteEmailVerificationCode(record.ID); cleanupErr != nil {
 			log.Printf("password reset email cleanup failed: recipient=%s error=%v", maskedEmail(email), cleanupErr)
 		}
@@ -145,8 +158,9 @@ func invalidPasswordResetCode() *AuthError {
 	return kernel.BadAuthRequest("验证码无效或已过期")
 }
 
-func passwordResetEmailBody(brandName string, code string) string {
-	return "你正在重置" + brandName + "账号密码。\n\n验证码：" + code + "\n\n验证码 10 分钟内有效。若非本人操作，请忽略本邮件，并确保邮箱账号安全。"
+func passwordResetEmail(brandName, recipient, code string) (OutgoingMail, error) {
+	return codeMail(emailtpl.CodeEmail{Brand: brandName, Heading: "重置密码", SubjectLabel: "密码重置验证码", Intro: "你正在重置" + brandName + "账号密码。请在找回密码页面输入下方验证码，然后设置新密码。", Code: code, TTLMinutes: 10, Recipient: recipient,
+		SecurityTip: "如果这不是你本人的操作，请忽略本邮件，密码不会被修改；同时建议检查邮箱账号的安全。重置成功后，所有设备上的登录会话都会退出。"})
 }
 
 func maskedEmail(email string) string {

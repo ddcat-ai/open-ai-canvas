@@ -49,7 +49,7 @@ export function InspirationDetailModal({
         <AppModal
             open={Boolean(item)}
             onCancel={onClose}
-            width={880}
+            width="min(1120px, calc(100vw - 32px))"
             title={null}
             footer={null}
             flush
@@ -59,91 +59,93 @@ export function InspirationDetailModal({
             }}
         >
             {item ? (
-                <div className="flex max-h-[76vh] flex-col">
+                <div className="inspiration-detail-layout">
                     <div className="inspiration-detail-cover">
                         <InspirationCover key={item.image} image={item.image} />
                     </div>
 
-                    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <h2 className="text-[var(--fs-heading,16px)] font-semibold leading-6 text-foreground">{item.title}</h2>
-                                {item.description ? <p className="mt-1 text-xs leading-5 text-foreground/58">{item.description}</p> : null}
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                                <Tooltip title={favorite ? "取消收藏" : "收藏"}>
-                                    <button type="button" data-icon-only className="inspiration-icon-button" aria-label={favorite ? "取消收藏灵感" : "收藏灵感"} aria-pressed={favorite} onClick={() => onToggleFavorite(item)}>
-                                        <span aria-hidden="true">
-                                            <Heart className="size-4" fill={favorite ? "currentColor" : "none"} />
-                                        </span>
-                                    </button>
-                                </Tooltip>
-                                <Tooltip title="编辑">
-                                    <button type="button" data-icon-only className="inspiration-icon-button" aria-label="编辑灵感" onClick={() => onEdit(item)}>
-                                        <span aria-hidden="true">
-                                            <Pencil className="size-4" />
-                                        </span>
-                                    </button>
-                                </Tooltip>
-                                <Tooltip title={custom ? "删除" : "从库中隐藏"}>
-                                    <button type="button" data-icon-only className="inspiration-icon-button" aria-label={custom ? "删除灵感" : "隐藏灵感"} onClick={() => onDelete(item)}>
-                                        <span aria-hidden="true">
-                                            <Trash2 className="size-4" />
-                                        </span>
-                                    </button>
-                                </Tooltip>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            {showSources ? (
-                                <MetaRow label="来源">
-                                    {source?.name ?? (item.sourceId && item.sourceId !== "original" ? (source?.label ?? "未标注来源") : "原创")}
-                                    {item.credit ? ` · ${item.credit}` : ""}
-                                </MetaRow>
-                            ) : null}
-                            <MetaRow label="分类">{categoryLabel(item)}</MetaRow>
-                            <MetaRow label="类型">
-                                {modeLabels[item.mode]}
-                                {item.ratio ? ` · ${item.ratio}` : ""}
-                            </MetaRow>
-                            {item.tags?.length ? (
-                                <MetaRow label="标签">
-                                    <span className="flex flex-wrap gap-2">
-                                        {item.tags.map((tag) => (
-                                            <span key={tag} className="inspiration-chip">
-                                                {tag}
+                    <div className="inspiration-detail-panel">
+                        <div className="inspiration-detail-content">
+                            <div className="inspiration-detail-heading">
+                                <div className="min-w-0">
+                                    <h2 className="text-[var(--fs-heading,16px)] font-semibold leading-6 text-foreground">{item.title}</h2>
+                                    {item.description ? <p className="mt-1 text-xs leading-5 text-foreground/58">{item.description}</p> : null}
+                                </div>
+                                <div className="inspiration-detail-actions flex shrink-0 items-center gap-2">
+                                    <Tooltip title={favorite ? "取消收藏" : "收藏"}>
+                                        <button type="button" data-icon-only className="inspiration-icon-button" aria-label={favorite ? "取消收藏灵感" : "收藏灵感"} aria-pressed={favorite} onClick={() => onToggleFavorite(item)}>
+                                            <span aria-hidden="true">
+                                                <Heart className="size-4" fill={favorite ? "currentColor" : "none"} />
                                             </span>
-                                        ))}
-                                    </span>
+                                        </button>
+                                    </Tooltip>
+                                    <Tooltip title="编辑">
+                                        <button type="button" data-icon-only className="inspiration-icon-button" aria-label="编辑灵感" onClick={() => onEdit(item)}>
+                                            <span aria-hidden="true">
+                                                <Pencil className="size-4" />
+                                            </span>
+                                        </button>
+                                    </Tooltip>
+                                    <Tooltip title={custom ? "删除" : "从库中隐藏"}>
+                                        <button type="button" data-icon-only className="inspiration-icon-button" aria-label={custom ? "删除灵感" : "隐藏灵感"} onClick={() => onDelete(item)}>
+                                            <span aria-hidden="true">
+                                                <Trash2 className="size-4" />
+                                            </span>
+                                        </button>
+                                    </Tooltip>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                {showSources ? (
+                                    <MetaRow label="来源">
+                                        {source?.name ?? (item.sourceId && item.sourceId !== "original" ? (source?.label ?? "未标注来源") : "原创")}
+                                        {item.credit ? ` · ${item.credit}` : ""}
+                                    </MetaRow>
+                                ) : null}
+                                <MetaRow label="分类">{categoryLabel(item)}</MetaRow>
+                                <MetaRow label="类型">
+                                    {modeLabels[item.mode]}
+                                    {item.ratio ? ` · ${item.ratio}` : ""}
                                 </MetaRow>
-                            ) : null}
-                            {showSources && item.sourceUrl ? (
-                                <MetaRow label="原页">
-                                    <a className="inline-flex items-center gap-1 text-primary hover:underline" href={item.sourceUrl} target="_blank" rel="noreferrer">
-                                        查看上游内容 <ExternalLink className="size-3" />
-                                    </a>
-                                </MetaRow>
-                            ) : null}
+                                {item.tags?.length ? (
+                                    <MetaRow label="标签">
+                                        <span className="flex flex-wrap gap-2">
+                                            {item.tags.map((tag) => (
+                                                <span key={tag} className="inspiration-chip">
+                                                    {tag}
+                                                </span>
+                                            ))}
+                                        </span>
+                                    </MetaRow>
+                                ) : null}
+                                {showSources && item.sourceUrl ? (
+                                    <MetaRow label="原页">
+                                        <a className="inline-flex items-center gap-1 text-primary hover:underline" href={item.sourceUrl} target="_blank" rel="noreferrer">
+                                            查看上游内容 <ExternalLink className="size-3" />
+                                        </a>
+                                    </MetaRow>
+                                ) : null}
+                            </div>
+
+                            <PromptSection label={item.promptZh ? "提示词 · 中文" : "提示词"} text={item.promptZh || item.prompt} onCopy={onCopy} />
+                            {item.promptZh && item.prompt !== item.promptZh ? <PromptSection label="提示词 · 原文" text={item.prompt} onCopy={onCopy} /> : null}
                         </div>
 
-                        <PromptSection label={item.promptZh ? "提示词 · 中文" : "提示词"} text={item.promptZh || item.prompt} onCopy={onCopy} />
-                        {item.promptZh && item.prompt !== item.promptZh ? <PromptSection label="提示词 · 原文" text={item.prompt} onCopy={onCopy} /> : null}
-                    </div>
-
-                    <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/8 px-5 py-3">
-                        <Button onClick={onClose}>关闭</Button>
-                        <Button
-                            type="primary"
-                            icon={<ArrowUpRight className="size-4" />}
-                            onClick={() => {
-                                setUsingPrompt(true);
-                                onClose();
-                                onUse(item);
-                            }}
-                        >
-                            用这个创意创作
-                        </Button>
+                        <div className="inspiration-detail-footer">
+                            <Button onClick={onClose}>关闭</Button>
+                            <Button
+                                type="primary"
+                                icon={<ArrowUpRight className="size-4" />}
+                                onClick={() => {
+                                    setUsingPrompt(true);
+                                    onClose();
+                                    onUse(item);
+                                }}
+                            >
+                                用这个创意创作
+                            </Button>
+                        </div>
                     </div>
                 </div>
             ) : null}

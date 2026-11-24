@@ -1,4 +1,4 @@
-import { PanelsTopLeft, Eraser, FolderOpen, Hand, MousePointer2, Palette, PersonStanding, Plus, Redo2, Settings2, Trash2, Undo2 } from "lucide-react";
+import { PanelsTopLeft, Eraser, FolderOpen, Hand, MousePointer2, Palette, PersonStanding, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
 
 import { registerToolbarTools, type ToolDefinition } from "@/lib/canvas/tool-registry";
 import type { CanvasToolMode } from "@/types/canvas";
@@ -9,7 +9,7 @@ const canvasModeOptions = [
 ];
 
 export const mainToolbarTools: ToolDefinition[] = [
-    { id: "tool-workspace", toolbar: "main", category: "navigation", label: "工作区", icon: <PanelsTopLeft />, defaultVisible: true, defaultOrder: 65, run: ctx => ctx.handlers.onOpenWorkspace?.() },
+    { id: "tool-workspace", toolbar: "main", category: "navigation", label: "工作区", icon: <PanelsTopLeft />, defaultVisible: true, defaultOrder: 65, run: (ctx) => ctx.handlers.onOpenWorkspace?.() },
     {
         id: "tool-canvas-mode",
         toolbar: "main",
@@ -54,7 +54,7 @@ export const mainToolbarTools: ToolDefinition[] = [
         label: "添加节点",
         icon: <Plus />,
         defaultVisible: true,
-        defaultOrder: 50,
+        defaultOrder: 20,
         expands: true,
         active: (ctx) => ctx.addPanelOpen,
         run: (ctx, event) => ctx.handlers.onToggleAddPanel(event!),
@@ -66,7 +66,7 @@ export const mainToolbarTools: ToolDefinition[] = [
         label: "素材库",
         icon: <FolderOpen />,
         defaultVisible: true,
-        defaultOrder: 60,
+        defaultOrder: 25,
         applicable: (ctx) => !ctx.isProjectLinked,
         run: (ctx) => ctx.handlers.onOpenMyAssets(),
     },
@@ -94,27 +94,15 @@ export const mainToolbarTools: ToolDefinition[] = [
         run: (ctx, event) => ctx.handlers.onToggleAppearancePanel(event!),
     },
     {
-        id: "tool-settings",
-        toolbar: "main",
-        category: "appearance",
-        label: "工具栏设置",
-        icon: <Settings2 />,
-        defaultVisible: true,
-        defaultOrder: 80,
-        expands: true,
-        active: (ctx) => ctx.settingsPanelOpen,
-        run: (ctx) => ctx.handlers.onToggleSettingsPanel(),
-    },
-    {
         id: "tool-delete",
         toolbar: "main",
         category: "danger",
-        label: (ctx) => ctx.selectedCount > 1 ? `删除 ${ctx.selectedCount} 个节点` : "删除选中节点",
+        label: (ctx) => (ctx.selectedCount > 1 ? `删除 ${ctx.selectedCount} 个节点` : "删除选中节点"),
         icon: <Trash2 />,
         defaultVisible: true,
         defaultOrder: 90,
         danger: true,
-        applicable: (ctx) => ctx.selectedCount > 0,
+        disabled: (ctx) => ctx.selectedCount === 0,
         run: (ctx) => ctx.handlers.onDeleteSelected(),
     },
     {

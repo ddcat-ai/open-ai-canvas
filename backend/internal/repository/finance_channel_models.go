@@ -7,6 +7,7 @@ package repository
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +55,18 @@ func (r *Repository) ChannelModelReferences(channelIDs []string) ([]model.Channe
 
 func (r *Repository) CreateDuplicatedSystemChannel(channel *model.ModelChannel, channelModels []model.ChannelModel, priceTiers []model.ChannelModelPriceTier) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if channel.WebsiteID != "" {
+			website, err := New(tx).LockChannelWebsite(channel.WebsiteID)
+			if err != nil {
+				return err
+			}
+			public, _ := model.WebsitePublicHeadersJSON(channel.HeadersJSON)
+			if model.CanonicalWebsiteURL(channel.BaseURL) != model.CanonicalWebsiteURL(website.BaseURL) || channel.APIFormat != website.APIFormat || channel.ProxyURL != website.ProxyURL || public != website.HeadersJSON {
+				return ErrTaskStateConflict
+			}
+		} else if err := New(tx).EnsureChannelWebsite(channel); err != nil {
+			return err
+		}
 		if err := tx.Create(channel).Error; err != nil {
 			return err
 		}
@@ -123,6 +136,20 @@ func (r *Repository) SaveChannelModel(item *model.ChannelModel) error {
 // 让已结算订单的 PriceTierID 仍能回溯到原始配置版本。
 func (r *Repository) SaveChannelModelWithPriceTiers(item *model.ChannelModel, tiers []model.ChannelModelPriceTier) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := New(tx).LockSystemChannelConfiguration([]string{item.ChannelID}); err != nil {
+			return err
+		}
+		var current model.ChannelModel
+		if err := tx.First(&current, "id = ? AND channel_id = ?", item.ID, item.ChannelID).Error; err == nil {
+			if current.PriceVersion+1 != item.PriceVersion || !current.UpdatedAt.Equal(item.UpdatedAt) {
+				return ErrTaskStateConflict
+			}
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		} else if !item.CreatedAt.IsZero() {
+			// A model removed after the editor read it must not be resurrected.
+			return ErrTaskStateConflict
+		}
 		var existing []model.ChannelModelPriceTier
 		if err := tx.Where("channel_model_id = ?", item.ID).Find(&existing).Error; err != nil {
 			return err

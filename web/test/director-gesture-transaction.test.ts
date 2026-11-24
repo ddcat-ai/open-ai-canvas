@@ -95,7 +95,7 @@ describe("previsCameraSyncKey：暂停且无关键帧时不与用户 Orbit 抢�
     });
 });
 
-describe("预演台会话状态：Auto Key 默认关闭", () => {
+describe("世界引擎会话状态：Auto Key 默认关闭", () => {
     test("初始状态与 reset 后都为关闭", () => {
         expect(usePrevisWorkbenchStore.getState().autoKey).toBe(false);
         usePrevisWorkbenchStore.getState().setAutoKey(true);

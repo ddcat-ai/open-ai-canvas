@@ -9,7 +9,7 @@ type CanvasGetStateArgs struct {
 	NodeIDs          []string `json:"nodeIds,omitempty" description:"节点ID数组（勿传单字符串）；与 focusNodeIds 互斥" itemDescription:"待精读的真实节点ID" maxItems:"8"`
 	FocusNodeIDs     []string `json:"focusNodeIds,omitempty" description:"与 depth 读关联子图；未传勿传 depth" itemDescription:"当前节点或当前节点集合的真实ID" maxItems:"8"`
 	Depth            *int     `json:"depth,omitempty" description:"从 focusNodeIds 沿无向连线展开；默认1；未传 focusNodeIds 勿传" minimum:"0" maximum:"3"`
-	IncludeRelated   *bool    `json:"includeRelated,omitempty" description:"仅随 focusNodeIds 使用；true 读连通分量全部上下游，最多256节点；与 depth 互斥"`
+	IncludeRelated   *bool    `json:"includeRelated,omitempty" description:"仅随 focusNodeIds 使用；true 读连通分量，最多256节点；与 depth 互斥"`
 }
 
 type CanvasReadTextArgs struct {

@@ -20,7 +20,7 @@ describe("canvas overview rendering", () => {
     test("wires LOD into both node kinds and the memo comparator", () => {
         const world = readFileSync(new URL("../src/pages/canvas/canvas-project-world-layers.tsx", import.meta.url), "utf8");
         const node = readFileSync(new URL("../src/components/canvas/canvas-node.tsx", import.meta.url), "utf8");
-        expect(world.match(/renderLOD=\{props.nodeRenderLODById/g)).toHaveLength(2);
+        expect(world.match(/renderLOD=\{gestureIds\.has\(node\.id\) \? "preview" : props\.nodeRenderLODById\.get\(node\.id\)/g)).toHaveLength(2);
         expect(node).toContain("previous.renderLOD === next.renderLOD");
         expect(node).not.toContain('|| isSelected || Boolean(dragOffset) ? "full"');
     });

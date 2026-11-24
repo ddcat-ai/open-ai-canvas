@@ -11,7 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -28,6 +30,15 @@ type WalletSummary struct {
 	Page    int                       `json:"page"`
 	Limit   int                       `json:"pageSize"`
 	Policy  PublicCreditPolicy        `json:"policy"`
+}
+
+type WalletHistorySummary struct {
+	Account model.CreditAccount             `json:"account"`
+	Entries []repository.WalletHistoryEntry `json:"entries"`
+	Total   int64                           `json:"total"`
+	Page    int                             `json:"page"`
+	Limit   int                             `json:"pageSize"`
+	Policy  PublicCreditPolicy              `json:"policy"`
 }
 
 type RedeemBatchPage struct {
@@ -114,7 +125,7 @@ type tokenBillingEstimate struct {
 	Err             error
 }
 
-func (s *Service) Wallet(user *model.User, entryType string, page int, limit int) (*WalletSummary, error) {
+func (s *Service) Wallet(user *model.User, entryType string, page int, limit int) (*WalletHistorySummary, error) {
 	if user == nil {
 		return nil, Unauthorized("请先登录")
 	}
@@ -131,7 +142,7 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 	if err != nil {
 		return nil, err
 	}
-	entries, total, err := s.repo.CreditLedger(user.ID, strings.TrimSpace(entryType), limit, (page-1)*limit)
+	entries, total, err := s.repo.WalletHistory(user.ID, strings.TrimSpace(entryType), limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
 	}
@@ -139,12 +150,15 @@ func (s *Service) Wallet(user *model.User, entryType string, page int, limit int
 		if strings.TrimSpace(entries[index].Note) != "" {
 			entries[index].Note = userFacingTaskError(entries[index].Note)
 		}
+		if entries[index].PaymentProviderID != "" {
+			entries[index].PaymentProviderName = s.paymentProviderDisplayName(entries[index].PaymentProviderID)
+		}
 	}
 	policy, err := s.publicCreditPolicy(user.ID)
 	if err != nil {
 		return nil, err
 	}
-	return &WalletSummary{Account: *account, Entries: entries, Total: total, Page: page, Limit: limit, Policy: policy}, nil
+	return &WalletHistorySummary{Account: *account, Entries: entries, Total: total, Page: page, Limit: limit, Policy: policy}, nil
 }
 
 func (s *Service) RedeemCredits(user *model.User, code string, redeemedIP string) (*model.CreditAccount, error) {
@@ -532,6 +546,13 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 	tokenEstimate := estimateTaskBillingTokens(input, capability)
 	amount := int64(0)
 	switch logicalModel.BillingMode {
+	case imagebilling.Mode:
+		intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
+		imageInputs, imageOutputs, imageErr := imageBillingReservation(intent)
+		if imageErr != nil {
+			return nil, imageErr
+		}
+		amount, err = imagebilling.Reserve(logicalModel.ImagePricing, imageInputs, imageOutputs, groupBPS)
 	case "fixed_request":
 		amount, err = creditAmount(logicalModel.UnitPriceMicrocredits, 1, groupBPS)
 	case "per_second":
@@ -579,6 +600,14 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		VideoFormulaTokens:               videoFormulaTokens,
 		Status:                           model.BillingStatusReserved,
 	}
+	if logicalModel.BillingMode == imagebilling.Mode {
+		order.ImagePricing = logicalModel.ImagePricing
+		order.ImageInputImages, order.ImageMaxOutputImages, err = imageBillingReservation(ModelRequestIntentFromTaskInput(input, task.Type, task.Operation))
+		if err != nil {
+			return nil, err
+		}
+		order.Quantity = order.ImageMaxOutputImages
+	}
 	intent := ModelRequestIntentFromTaskInput(input, task.Type, task.Operation)
 	priceTierID, _ := config["priceTierId"].(string)
 	costTier, err := s.channelModelPriceTierForBilling(*channelModel, priceTierID, capability, intent)
@@ -586,6 +615,12 @@ func (s *Service) newLogicalModelBillingOrder(userID string, task *model.Task, i
 		return nil, err
 	}
 	snapshotCreditCost(order, costTier, requestedBillingQuantity(capability, config), tokenEstimate)
+	if order.CostBillingMode == imagebilling.Mode && order.BillingMode != imagebilling.Mode {
+		order.ImageInputImages, order.ImageMaxOutputImages, err = imageBillingReservation(intent)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return order, nil
 }
 
@@ -604,7 +639,15 @@ func (s *Service) ReserveProxyBillingWithBody(userID string, channelID string, m
 	if strings.TrimSpace(idempotencyKey) == "" {
 		idempotencyKey = newID()
 	}
-	order, err := s.newBillingOrder(userID, "", "proxy:"+idempotencyKey, channelID, modelKey, capability, firstNonEmpty(strings.TrimSpace(scene), "system_proxy"), quantity, estimateProxyTokens(requestBody))
+	var intents []ModelRequestIntent
+	if capability == "image" && json.Valid(requestBody) {
+		intent, parseErr := imageProxyIntent(requestBody)
+		if parseErr != nil {
+			return nil, BadAuthRequest("无法解析图片计费请求")
+		}
+		intents = append(intents, intent)
+	}
+	order, err := s.newBillingOrderWithPriceTier(userID, "", "proxy:"+idempotencyKey, channelID, modelKey, capability, firstNonEmpty(strings.TrimSpace(scene), "system_proxy"), quantity, estimateProxyTokens(requestBody), "", intents...)
 	if err != nil {
 		return nil, err
 	}
@@ -658,6 +701,10 @@ func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID stri
 		referenceMillis = references.RecordedMillis
 	}
 	switch tier.BillingMode {
+	case imagebilling.Mode:
+		if capability != "image" || item.Capability != "image" || len(intents) == 0 {
+			return nil, BadAuthRequest("图片用量计费缺少图片请求规格")
+		}
 	case "fixed_request":
 	case "per_second":
 		if (item.Capability != "video" && item.Capability != "audio") || capability != item.Capability {
@@ -722,8 +769,19 @@ func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID stri
 		return nil, err
 	}
 	multiplierBPS := pricing.MultiplierBPS
+	var imagePricing *model.ImagePricing
+	var imageInputs, imageOutputs int64
 	var tokenRules []model.BillingTokenPriceRule
-	if tier.BillingMode == "token" {
+	if tier.BillingMode == imagebilling.Mode {
+		imagePricing, err = imagePricingSnapshot(tier.ImagePricing, pricing)
+		if err == nil {
+			imageInputs, imageOutputs, err = imageBillingReservation(intents[0])
+		}
+		if err == nil {
+			amount, err = imagebilling.Reserve(imagePricing, imageInputs, imageOutputs, multiplierBPS)
+		}
+		quantity = imageOutputs
+	} else if tier.BillingMode == "token" {
 		// 时段在此锁定：pricedAt 的东八区时间决定哪些规则可用，结算只再按真实输入 Token 选档。
 		tokenRules, err = tokenPriceRuleSnapshot(pricing, item.Capability, tier, pricedAt)
 		if err != nil {
@@ -746,6 +804,7 @@ func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID stri
 	}
 	order := &model.BillingOrder{
 		ID: newID(), UserID: userID, IdempotencyKey: idempotencyKey, TaskID: taskID,
+		ImagePricing: imagePricing, ImageInputImages: imageInputs, ImageMaxOutputImages: imageOutputs,
 		ChannelID: channelID, ChannelModelID: item.ID, PriceTierID: tier.ID, PriceTierVersion: tier.PriceVersion, PriceSelectorJSON: tier.SelectorJSON, Model: modelKey, Capability: capability,
 		Scene: truncateRunes(scene, 80), BillingMode: tier.BillingMode, PriceVersion: item.PriceVersion,
 		UnitPriceMicrocredits: prices.Unit, MultiplierBasisPoints: multiplierBPS, Quantity: quantity, AmountMicrocredits: amount,
@@ -762,6 +821,15 @@ func (s *Service) newBillingOrderWithPriceTierAt(pricedAt time.Time, userID stri
 		return nil, err
 	}
 	snapshotCreditCost(order, tier, requestedQuantity, costEstimate)
+	if order.CostBillingMode == imagebilling.Mode && order.BillingMode != imagebilling.Mode {
+		if len(intents) == 0 {
+			return nil, BadAuthRequest("图片用量成本缺少实际请求规格")
+		}
+		order.ImageInputImages, order.ImageMaxOutputImages, err = imageBillingReservation(intents[0])
+		if err != nil {
+			return nil, err
+		}
+	}
 	return order, nil
 }
 
@@ -890,6 +958,13 @@ func estimateTaskBillingTokens(input map[string]any, capability string) tokenBil
 		estimate := estimateArkVideoTokens(input)
 		estimate.ReferenceVideos = referenceVideoUsageFromInput(input)
 		return estimate
+	}
+	if capability == "audio" {
+		// Qwen TTS settles from provider usage. Reserve conservatively from the
+		// spoken text so an audio task does not inherit the text model's fixed
+		// 4096 output-token estimate regardless of its length.
+		chars := int64(utf8.RuneCountInString(stringValue(input["prompt"])))
+		return tokenBillingEstimate{InputTokens: max(1, (chars*6+4)/5), OutputTokens: max(64, chars*6)}
 	}
 	return estimateTaskTokens(input)
 }

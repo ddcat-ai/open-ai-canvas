@@ -106,6 +106,9 @@ func cloudAgentReadCacheKeyForState(repo *repository.Repository, userID string, 
 }
 
 func cloudAgentReadToolCached(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, call.Function.Name, services...); err != nil {
+		return nil, err
+	}
 	if !cloudAgentReadToolReadOnly(call.Function.Name) {
 		return cloudAgentReadTool(repo, userID, state, call, services...)
 	}
@@ -131,6 +134,19 @@ func cloudAgentReadToolCached(repo *repository.Repository, userID string, state 
 				}
 				delete(state.ToolReadResults, key)
 			} else {
+				if agenttool.Of(call.Function.Name).CacheScope == agenttool.CacheSkillVersion {
+					service := cloudAgentToolService(services)
+					if service == nil {
+						return nil, BadAuthRequest("技能服务不可用")
+					}
+					var args agenttool.SkillReadArgs
+					if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
+						return nil, cloudAgentJSONArgumentError(err)
+					}
+					if _, err := service.cloudAgentSkillForRead(userID, state, args.SkillID); err != nil {
+						return nil, err
+					}
+				}
 				if state.ToolReadReplays == nil {
 					state.ToolReadReplays = map[string]int{}
 				}
@@ -196,6 +212,9 @@ func cloudAgentReadToolCached(repo *repository.Repository, userID string, state 
 }
 
 func cloudAgentReadTool(repo *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
+	if err := cloudAgentRequireSkillToolAccess(repo, userID, call.Function.Name, services...); err != nil {
+		return nil, err
+	}
 	binding, known := cloudAgentRegistry().Lookup(call.Function.Name)
 	if !known || binding.Handler.Read == nil {
 		return nil, BadAuthRequest("未知或不可读取的工具")

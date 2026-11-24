@@ -437,7 +437,8 @@ function drawFaceCrop(image: ImageBitmap, box: CanvasFaceBox, imageWidth: number
 }
 
 async function loadImageBitmap(dataUrl: string) {
-    const response = await fetch(dataUrl);
+    // 同识别人脸：避免复用画布图片缓存里不带 CORS 头的响应。
+    const response = await fetch(dataUrl, { cache: "no-store" });
     if (!response.ok) throw new Error("无法读取源图片，请重新上传后再试");
     return createImageBitmap(await response.blob());
 }

@@ -116,6 +116,9 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         expressionNodeDeleted: "표정 편집 노드가 삭제되었습니다",
         emptyVideoEnhance: "동영상 노드가 비어 있어 화질을 개선할 수 없습니다",
         noEnhanceModel: "관리자가 아직 화질 개선 모델을 설정하지 않았습니다",
+        emptyVideoDepth: "동영상 노드가 비어 있어 상대 깊이 동영상을 만들 수 없습니다",
+        noDepthModel: "관리자가 아직 상대 깊이 모델을 설정하지 않았습니다",
+        titleDepth: "{{title}} · 상대 깊이",
         titleEnhance: "{{title}} · 화질 개선 {{resolution}}",
     },
     layerMaterials: {
@@ -186,6 +189,7 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "캐릭터 더빙은 한 번에 캐릭터 카드 하나만 참조할 수 있습니다",
         voiceNotBound: "캐릭터에 사용 가능한 음성이 연결되지 않아 더빙 작업을 만들 수 없습니다",
         submissionInProgress: "이 노드의 생성 요청이 이미 제출 중이거나 실행 중입니다. 다시 클릭하지 마세요",
+        videoRequiresReferenceImages: "이 영상 모델은 참조 이미지가 최소 {{count}}장 필요합니다. 이미지 노드를 연결한 후 생성해 주세요",
     },
     timelineInsert: {
         unsupportedMedia: "이미지와 텍스트 에셋은 아직 타임라인에 바로 넣을 수 없습니다. 먼저 캔버스에 삽입하세요",
@@ -300,6 +304,8 @@ export const koKR: DeepStringRecord<typeof zhCN> = {
         restoreSaveFailed: "결과물 저장 재개 실패",
         enhanceSourceMissing: "원본 동영상 노드가 삭제되었거나 비어 있어 다시 개선할 수 없습니다. 작업을 제출하지 않았습니다",
         enhanceFailed: "화질 개선 실패",
+        depthSourceMissing: "원본 동영상 노드가 삭제되었거나 비어 있습니다. 처리 작업을 제출하지 않았습니다",
+        depthFailed: "상대 깊이 처리 실패",
         notRetryable: "이 노드는 일반 생성 재시도를 사용할 수 없습니다",
         layerProtocolMissing: "원래 레이어 분리 모델에 전용 프로토콜이 설정되지 않아 다시 시도할 수 없습니다",
         promptRejected: "이 프롬프트가 콘텐츠 검토를 통과하지 못했습니다. 수정한 뒤 다시 생성하세요",

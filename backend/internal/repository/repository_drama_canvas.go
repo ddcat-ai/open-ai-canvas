@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"encoding/json"
+	"slices"
 	"time"
 
 	"yingce/backend/internal/model"
@@ -36,6 +38,27 @@ func (r *Repository) TaskProjectIDs(userID string, ids []string) (map[string]str
 	}
 	for _, row := range rows {
 		result[row.ID] = row.ProjectID
+	}
+	return result, nil
+}
+
+// TaskModels 返回用户任务的模型标识（上游 model key），供版本记录展示；找不到的任务不在结果里。
+func (r *Repository) TaskModels(userID string, ids []string) (map[string]string, error) {
+	result := make(map[string]string, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var rows []struct {
+		ID    string
+		Model string
+	}
+	if err := r.db.Model(&model.Task{}).Select("id", "model").Where("user_id = ? AND id IN ?", userID, ids).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.Model != "" {
+			result[row.ID] = row.Model
+		}
 	}
 	return result, nil
 }
@@ -149,15 +172,19 @@ func (r *Repository) dramaResourceReferences(userID string, resourceIDs []string
 	references := []ResourceDirectReference{}
 	projects := r.db.Model(&model.DramaProduction{}).Select("project_id").Where("user_id = ?", userID)
 	var casts []model.DramaCast
-	if err := r.db.Select("id", "name", "image_resource_id").Where("project_id IN (?) AND image_resource_id IN ?", projects, resourceIDs).Find(&casts).Error; err != nil {
+	if err := r.db.Select("id", "name", "image_resource_id", "voice_sample_resource_id").Where("project_id IN (?) AND (image_resource_id IN ? OR voice_sample_resource_id IN ?)", projects, resourceIDs, resourceIDs).Find(&casts).Error; err != nil {
 		return nil, err
 	}
 	for _, cast := range casts {
-		references = append(references, ResourceDirectReference{Kind: DramaResourceReferenceKind, ID: cast.ID, Title: cast.Name, ResourceID: cast.ImageResourceID})
+		for _, resourceID := range []string{cast.ImageResourceID, cast.VoiceSampleResourceID} {
+			if resourceID != "" && slices.Contains(resourceIDs, resourceID) {
+				references = append(references, ResourceDirectReference{Kind: DramaResourceReferenceKind, ID: cast.ID, Title: cast.Name, ResourceID: resourceID})
+			}
+		}
 	}
 	var segments []model.DramaSegment
-	if err := r.db.Select("id", "segment_index", "video_resource_id", "tail_frame_resource_id").
-		Where("project_id IN (?) AND (video_resource_id IN ? OR tail_frame_resource_id IN ?)", projects, resourceIDs, resourceIDs).Find(&segments).Error; err != nil {
+	if err := r.db.Select("id", "segment_index", "video_resource_id", "tail_frame_resource_id", "reference_images_json").
+		Where("project_id IN (?) AND (video_resource_id IN ? OR tail_frame_resource_id IN ? OR (reference_images_json IS NOT NULL AND reference_images_json <> ''))", projects, resourceIDs, resourceIDs).Find(&segments).Error; err != nil {
 		return nil, err
 	}
 	wanted := make(map[string]struct{}, len(resourceIDs))
@@ -165,7 +192,17 @@ func (r *Repository) dramaResourceReferences(userID string, resourceIDs []string
 		wanted[id] = struct{}{}
 	}
 	for _, segment := range segments {
-		for _, id := range []string{segment.VideoResourceID, segment.TailFrameResourceID} {
+		ids := []string{segment.VideoResourceID, segment.TailFrameResourceID}
+		var images []model.DramaReferenceImage
+		if segment.ReferenceImagesJSON != "" {
+			if err := json.Unmarshal([]byte(segment.ReferenceImagesJSON), &images); err != nil {
+				return nil, err
+			}
+		}
+		for _, image := range images {
+			ids = append(ids, image.ResourceID)
+		}
+		for _, id := range ids {
 			if _, ok := wanted[id]; ok && id != "" {
 				references = append(references, ResourceDirectReference{Kind: DramaResourceReferenceKind, ID: segment.ID, Title: "剧情段", ResourceID: id})
 			}

@@ -1,0 +1,254 @@
+.storyboard-shot-production {
+    min-width: 0;
+    color: var(--text-primary);
+}
+
+.storyboard-shot-production-section {
+    min-width: 0;
+    padding-block: var(--space-5);
+}
+
+.storyboard-shot-production-section:first-child {
+    padding-top: 0;
+}
+
+.storyboard-shot-production-section + .storyboard-shot-production-section {
+    border-top: var(--stroke-1) solid var(--workspace-border);
+}
+
+.storyboard-shot-production-heading,
+.storyboard-shot-production-heading h3,
+.storyboard-shot-production-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.storyboard-shot-production-heading {
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+}
+
+.storyboard-shot-production-heading h3 {
+    min-width: 0;
+    margin: 0;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+    line-height: var(--lh-body);
+}
+
+.storyboard-shot-production-heading h3 > span {
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+}
+
+.storyboard-shot-production-heading svg,
+.storyboard-shot-production-actions svg {
+    width: var(--space-4);
+    height: var(--space-4);
+    flex-shrink: 0;
+}
+
+.storyboard-shot-production-heading h3 > svg {
+    color: var(--text-secondary);
+}
+
+.storyboard-shot-production-status {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+}
+
+.storyboard-shot-production-status[data-tone="loading"] {
+    color: var(--status-loading);
+}
+
+.storyboard-shot-production-status[data-tone="success"] {
+    color: var(--status-success);
+}
+
+.storyboard-shot-production-status[data-tone="error"],
+.storyboard-shot-production-error,
+.storyboard-shot-production-reference[data-missing] strong {
+    color: var(--status-error);
+}
+
+.storyboard-shot-production-hint,
+.storyboard-shot-production-error {
+    margin: var(--space-2) 0 0;
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+    overflow-wrap: anywhere;
+}
+
+.storyboard-shot-production-hint {
+    color: var(--text-secondary);
+}
+
+.storyboard-shot-production-actions {
+    flex-wrap: wrap;
+    margin-top: var(--space-3);
+}
+
+.storyboard-shot-production-result {
+    position: relative;
+    display: grid;
+    width: 100%;
+    min-height: var(--space-20);
+    overflow: hidden;
+    place-items: center;
+    padding: 0;
+    border: var(--stroke-1) solid var(--workspace-border);
+    border-radius: var(--r-md);
+    background: var(--workspace-surface);
+    color: var(--text-secondary);
+    cursor: zoom-in;
+}
+
+.storyboard-shot-production-result.is-video {
+    aspect-ratio: 16 / 9;
+    cursor: pointer;
+}
+
+.storyboard-shot-production-result .cached-resource-image-shell,
+.storyboard-shot-production-result img {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-height: 240px;
+    object-fit: contain;
+}
+
+.storyboard-shot-production-result.is-video img {
+    aspect-ratio: 16 / 9;
+}
+
+.storyboard-shot-production-result-fallback {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: center;
+    padding: var(--space-4);
+    font-size: var(--fs-caption);
+}
+
+.storyboard-shot-production-result-fallback svg {
+    width: var(--space-6);
+    height: var(--space-6);
+}
+
+.storyboard-shot-production-play {
+    position: absolute;
+    inset: auto var(--space-3) var(--space-3) auto;
+    display: grid;
+    width: var(--space-8);
+    height: var(--space-8);
+    place-items: center;
+    border-radius: var(--r-full);
+    background: var(--workspace-surface-strong);
+    color: var(--text-primary);
+}
+
+.storyboard-shot-production-play svg {
+    width: var(--space-4);
+    height: var(--space-4);
+}
+
+.storyboard-shot-production-result:focus-visible,
+.storyboard-shot-production-thumbnail:focus-visible {
+    outline: var(--focus-ring-width) solid var(--ring);
+    outline-offset: var(--space-half);
+}
+
+.storyboard-shot-production-references {
+    display: grid;
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.storyboard-shot-production-reference {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+}
+
+.storyboard-shot-production-reference + .storyboard-shot-production-reference {
+    border-top: var(--stroke-1) solid var(--workspace-border);
+}
+
+.storyboard-shot-production-thumbnail {
+    position: relative;
+    display: grid;
+    width: var(--space-12);
+    height: var(--space-12);
+    flex: 0 0 var(--space-12);
+    overflow: hidden;
+    place-items: center;
+    padding: 0;
+    border: var(--stroke-1) solid var(--workspace-border);
+    border-radius: var(--r-md);
+    background: var(--workspace-surface);
+    color: var(--text-tertiary);
+}
+
+button.storyboard-shot-production-thumbnail {
+    cursor: zoom-in;
+}
+
+.storyboard-shot-production-thumbnail > svg {
+    width: var(--space-5);
+    height: var(--space-5);
+}
+
+.storyboard-shot-production-thumbnail > .storyboard-asset-thumbnail {
+    width: 100%;
+    height: 100%;
+}
+
+.storyboard-shot-production-reference-copy {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: var(--space-1);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+    overflow-wrap: anywhere;
+}
+
+.storyboard-shot-production-reference-copy strong {
+    color: var(--text-primary);
+    font-size: var(--fs-ui);
+    font-weight: 500;
+}
+
+.storyboard-shot-production-reference-copy > span {
+    color: var(--text-secondary);
+}
+
+.storyboard-shot-production-reference-copy > .storyboard-shot-production-reference-source {
+    color: var(--text-tertiary);
+}
+
+.storyboard-shot-production-media {
+    display: grid;
+    min-height: var(--space-24);
+    min-width: 0;
+    place-items: center;
+}
+
+.storyboard-shot-production-media img,
+.storyboard-shot-production-media video,
+.storyboard-shot-production-media .cached-resource-image-shell {
+    display: block;
+    max-width: 100%;
+    max-height: 72dvh;
+    object-fit: contain;
+}
+
+.storyboard-shot-production-media audio {
+    width: 100%;
+}

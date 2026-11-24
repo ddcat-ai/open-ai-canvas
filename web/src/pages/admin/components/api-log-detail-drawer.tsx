@@ -6,6 +6,7 @@ import { Activity, Clipboard, HardDriveUpload, Link2, RefreshCw, Save, Video } f
 import { formatCredits } from "@/constant/credits";
 import { getAdminApiLog, queryAdminApiLogTask, recoverAdminApiLogTaskMedia, recoverAdminApiLogVideoByURL, type ApiCallLog } from "@/services/api/auth";
 import { videoRecoveryAvailable } from "../logs/log-view";
+import { ApiLogGenerationContent } from "./api-log-generation-content";
 
 export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: string | null; onClose: () => void; onLogUpdated?: (log: ApiCallLog) => void }) {
     const { message, modal } = App.useApp();
@@ -107,9 +108,7 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
         const charge = refundedBilling === "charge";
         modal.confirm({
             title: charge ? "恢复作品并补扣积分？" : "恢复作品并免除扣费？",
-            content: charge
-                ? `原订单已退回 ${formatCredits(log.billingReservedMicrocredits)} 积分预授权。作品保存成功后会从用户可用余额补扣，余额不足时会变为负数。`
-                : "原订单保持已退回状态，作品保存成功后不再扣费。",
+            content: charge ? `原订单已退回 ${formatCredits(log.billingReservedMicrocredits)} 积分预授权。作品保存成功后会从用户可用余额补扣，余额不足时会变为负数。` : "原订单保持已退回状态，作品保存成功后不再扣费。",
             okText: charge ? "恢复并补扣" : "恢复，不扣费",
             cancelText: "取消",
             onOk: () => runMediaRecovery(refundedBilling),
@@ -128,11 +127,30 @@ export function ApiLogDetailDrawer({ logId, onClose, onLogUpdated }: { logId: st
                 </div>
             </div>
         </div>
-    ) : "请求日志详情";
+    ) : (
+        "请求日志详情"
+    );
 
     return (
         <AdminDrawer title={title} open={Boolean(logId)} onClose={onClose} size="min(1120px, 66vw)" className="api-log-detail-drawer-panel" rootClassName="api-log-detail-drawer">
-            {loading ? <Skeleton active paragraph={{ rows: 10 }} /> : log ? <LogDetail log={log} providerRequestId={providerRequestId} videoURL={videoURL} resultText={resultText} querying={querying} onProviderRequestIdChange={setProviderRequestId} onVideoURLChange={setVideoURL} onQuery={runQuery} onRecoverURL={runURLRecovery} onRecoverMedia={confirmMediaRecovery} /> : <AdminEmpty size="compact" title="没有请求详情" />}
+            {loading ? (
+                <Skeleton active paragraph={{ rows: 10 }} />
+            ) : log ? (
+                <LogDetail
+                    log={log}
+                    providerRequestId={providerRequestId}
+                    videoURL={videoURL}
+                    resultText={resultText}
+                    querying={querying}
+                    onProviderRequestIdChange={setProviderRequestId}
+                    onVideoURLChange={setVideoURL}
+                    onQuery={runQuery}
+                    onRecoverURL={runURLRecovery}
+                    onRecoverMedia={confirmMediaRecovery}
+                />
+            ) : (
+                <AdminEmpty size="compact" title="没有请求详情" />
+            )}
         </AdminDrawer>
     );
 }
@@ -180,7 +198,14 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                     <InfoItem label="供应商任务 ID" value={log.providerRequestId ? <CopyValue value={log.providerRequestId} /> : "未记录"} />
                     <InfoItem label="耗时" value={<span className="tabular-nums">{formatDuration(log.durationMs)}</span>} />
                     <InfoItem label="HTTP 状态" value={log.statusCode || "未记录"} />
-                    <InfoItem label="请求地址" value={<span className="break-all font-mono text-xs">{log.method} {log.path || "未记录"}</span>} />
+                    <InfoItem
+                        label="请求地址"
+                        value={
+                            <span className="break-all font-mono text-xs">
+                                {log.method} {log.path || "未记录"}
+                            </span>
+                        }
+                    />
                     <InfoItem label="上游渠道 URL" value={<span className="break-all font-mono text-xs">{log.upstreamUrl || "未记录"}</span>} />
                 </div>
                 {log.error || log.errorCode ? (
@@ -213,11 +238,17 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                             </div>
                             {refunded ? (
                                 <>
-                                    <Button icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia("waive")}>恢复，不扣费</Button>
-                                    <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia("charge")}>恢复并补扣</Button>
+                                    <Button icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia("waive")}>
+                                        恢复，不扣费
+                                    </Button>
+                                    <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia("charge")}>
+                                        恢复并补扣
+                                    </Button>
                                 </>
                             ) : (
-                                <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia()}>重新保存</Button>
+                                <Button type="primary" icon={<Save className="size-3.5" />} loading={querying} onClick={() => onRecoverMedia()}>
+                                    重新保存
+                                </Button>
                             )}
                         </div>
                         {resultText ? <Alert className="api-log-recovery-result" type={resultText.includes("失败") || resultText.includes("错误") || resultText.includes("请") ? "error" : "success"} showIcon message={resultText} /> : null}
@@ -246,7 +277,9 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                                 <small>默认使用当前记录，可手动覆盖</small>
                             </div>
                             <Input className="api-log-recovery-input" value={providerRequestId} onChange={(event) => onProviderRequestIdChange(event.target.value)} placeholder="输入供应商任务 ID" />
-                            <Button type="primary" icon={<RefreshCw className="size-3.5" />} loading={querying} onClick={onQuery}>查询上游任务</Button>
+                            <Button type="primary" icon={<RefreshCw className="size-3.5" />} loading={querying} onClick={onQuery}>
+                                查询上游任务
+                            </Button>
                         </div>
                         <div className="api-log-recovery-row">
                             <div className="api-log-recovery-label">
@@ -254,12 +287,16 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                                 <small>仅支持公网 HTTP / HTTPS 视频地址</small>
                             </div>
                             <Input className="api-log-recovery-input" prefix={<Link2 className="size-4 text-foreground/35" />} value={videoURL} onChange={(event) => onVideoURLChange(event.target.value)} placeholder="https://example.com/video.mp4" />
-                            <Button icon={<Save className="size-3.5" />} loading={querying} disabled={!videoURL.trim()} onClick={onRecoverURL}>转存并回写</Button>
+                            <Button icon={<Save className="size-3.5" />} loading={querying} disabled={!videoURL.trim()} onClick={onRecoverURL}>
+                                转存并回写
+                            </Button>
                         </div>
                         {resultText ? <Alert className="api-log-recovery-result" type={resultText.includes("失败") || resultText.includes("错误") ? "error" : resultText.includes("生成中") ? "warning" : "success"} showIcon message={resultText} /> : null}
                     </div>
                 </section>
             ) : null}
+
+            {log.capability === "video" ? <ApiLogGenerationContent key={log.id} logId={log.id} content={log.generationContent} /> : null}
 
             <section className="api-log-detail-section api-log-payload-section">
                 <div className="api-log-detail-section-heading">
@@ -269,7 +306,12 @@ function LogDetail({ log, providerRequestId, videoURL, resultText, querying, onP
                     </div>
                     <span className="text-xs text-foreground/45">{log.requestBody || log.responseBody ? "可复制原始内容" : "暂无报文"}</span>
                 </div>
-                <Tabs items={[{ key: "request", label: "请求", children: <PayloadPanel value={log.requestBody} empty="该请求未记录请求报文" /> }, { key: "response", label: "响应", children: <PayloadPanel value={log.responseBody} empty="该请求未记录响应报文" /> }]} />
+                <Tabs
+                    items={[
+                        { key: "request", label: "请求", children: <PayloadPanel value={log.requestBody} empty="该请求未记录请求报文" /> },
+                        { key: "response", label: "响应", children: <PayloadPanel value={log.responseBody} empty="该请求未记录响应报文" /> },
+                    ]}
+                />
             </section>
         </div>
     );
@@ -299,7 +341,8 @@ function PayloadPanel({ value, empty }: { value?: string; empty: string }) {
         <div className="api-log-payload-wrap">
             <div className="api-log-payload-actions">
                 <Typography.Text copyable={{ text: value, tooltips: ["复制报文", "已复制"] }}>
-                    <Clipboard className="mr-1 inline size-3.5" />复制报文
+                    <Clipboard className="mr-1 inline size-3.5" />
+                    复制报文
                 </Typography.Text>
             </div>
             <pre className="api-log-payload">{value}</pre>
@@ -322,7 +365,17 @@ function mediaDeliveryText(log: ApiCallLog) {
 }
 
 function requestKindText(value: ApiCallLog["requestKind"]) {
-    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = { create: "模型生成", poll: "状态查询", download: "结果下载", upload: "上传 OSS", local_save: "保存文件", local_fallback: "本地兜底保存", offload: "同步 OSS", register: "登记素材", repair: "结果修复" };
+    const labels: Partial<Record<ApiCallLog["requestKind"], string>> = {
+        create: "模型生成",
+        poll: "状态查询",
+        download: "结果下载",
+        upload: "上传 OSS",
+        local_save: "保存文件",
+        local_fallback: "本地兜底保存",
+        offload: "同步 OSS",
+        register: "登记素材",
+        repair: "结果修复",
+    };
     return labels[value] || "上游请求";
 }
 

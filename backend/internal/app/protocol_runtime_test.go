@@ -29,6 +29,9 @@ func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	for _, plugin := range plugins {
 		pluginsByID[plugin.Manifest.ID] = plugin
 	}
+	if manifest := pluginsByID["kling-v4-official"].Manifest; manifest.APIVersion != "yingce.plugin/v2" || manifest.Version != "1.2.1" {
+		t.Fatalf("Kling manifest schema=%q release=%q", manifest.APIVersion, manifest.Version)
+	}
 	packages, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.yingce-plugin"))
 	if err != nil {
 		t.Fatal(err)
@@ -137,6 +140,41 @@ func TestPluginRuntimeRefreshesExistingOfficialPackageDocumentation(t *testing.T
 	t.Fatal("refreshed OpenAI Images plugin is missing")
 }
 
+func TestSeedanceUpgradeRetainsInstalledRelease(t *testing.T) {
+	const id = "seedance-videos-compatible"
+	const deployedDigest = "8d61bc8635c3becf7fdd59e38dd763e2ee160a2287f0bded4494135aeb626e4d"
+	for _, test := range []struct{ fixture, digest, status string }{
+		{"seedance-2.0.1", "1d875310d9ccffdbe7272a452761d3f5e268c3719cdff643298cc24146c5ac91", "disabled"},
+		{"seedance-2.0.1-v1.8.7.2", "a95060565059b023c3d0d413bb746bc777f2056b4cc3b7b2a14e953bdcc8baa3", "enabled"},
+	} {
+		t.Run(test.fixture, func(t *testing.T) {
+			dataDir := t.TempDir()
+			t.Setenv("CANVAS_OFFICIAL_PLUGIN_DIR", filepath.Join("testdata", test.fixture))
+			previous, err := newPluginRuntime(dataDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := previous.setEnabled(id, test.status == "enabled"); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("CANVAS_OFFICIAL_PLUGIN_DIR", filepath.Join("..", "..", "..", "plugin-packages"))
+			for range 2 {
+				current, err := newPluginRuntime(dataDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				installed := current.plugins[id]
+				if installed.Status != test.status || installed.Metadata.Version != "2.0.2" || installed.SHA256 != deployedDigest {
+					t.Fatalf("installed %s@%s (%s), status %q", id, installed.Metadata.Version, installed.SHA256, installed.Status)
+				}
+				if _, err := current.verifiedRequestManifest(id, requestPackageVersion{Version: "2.0.1", SHA256: test.digest}, test.status == "enabled"); err != nil {
+					t.Fatalf("resolve original release: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestBundledWorkflowPluginsControlAvailability(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())
 	if err != nil {
@@ -228,12 +266,21 @@ func TestPluginRuntimeIsTheProtocolSourceOfTruth(t *testing.T) {
 		t.Fatal("bare JSON manifest was accepted by the upload runtime")
 	}
 	manifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-runtime","version":"1.0.0","name":"Uploaded Runtime","author":"Test","documentation":"# Uploaded Runtime","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
-	plugin, err := center.install(testPluginPackage(t, manifest), "uploaded-runtime.yingce-plugin")
+	archive := testPluginPackage(t, manifest)
+	plugin, err := center.install(archive, "uploaded-runtime.yingce-plugin")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if plugin.Status != "enabled" || !center.registrySnapshot().IsCapability("uploaded-runtime", protocol.CapabilityVideo) {
 		t.Fatalf("installed plugin was not activated: %#v", plugin)
+	}
+	repeated, err := center.install(archive, "same-package.yingce-plugin")
+	if err != nil || repeated.SHA256 != plugin.SHA256 || !repeated.UpdatedAt.Equal(plugin.UpdatedAt) {
+		t.Fatalf("reinstall changed release: %#v err=%v", repeated, err)
+	}
+	changed := testPluginPackage(t, bytes.ReplaceAll(manifest, []byte("/tasks"), []byte("/other")))
+	if _, err := center.install(changed, "changed-package.yingce-plugin"); err == nil || !strings.Contains(err.Error(), "摘要不同") {
+		t.Fatalf("same version replacement: %v", err)
 	}
 	updatedManifest := []byte(`{"apiVersion":"yingce.plugin/v1","id":"uploaded-runtime","version":"2.0.0","name":"Uploaded Runtime v2","author":"Test","documentation":"# Uploaded Runtime v2","contributes":{"providers":[{"id":"uploaded-runtime","label":"Uploaded Runtime v2","capabilities":["video"],"scopes":["canvas"],"create":{"method":"POST","path":"/tasks","fields":{"prompt":"request.prompt"}},"response":{"statusPaths":["status"]}}]}}`)
 	updated, err := center.install(testPluginPackage(t, updatedManifest), "uploaded-runtime-v2.yingce-plugin")
@@ -888,10 +935,8 @@ func testPluginPackage(t *testing.T, manifest []byte) []byte {
 	return buffer.Bytes()
 }
 
-// DeepSeek 等 V4 系 Anthropic 网关对 /messages 默认开启思考（GitHub 社区案例：
-// NousResearch/hermes-agent#15700），省略 thinking 字段时输出预算会被思考占满、
-// 正文为空。客户端未要求思考时，宿主必须显式下发 thinking: disabled。
-func TestDeclarativeClaudeWireSendsThinkingDisabledWhenNotRequested(t *testing.T) {
+// 未声明能力时显式关闭网关默认思考；已声明能力时遵循模型的档位和默认值。
+func TestDeclarativeClaudeWireThinkingCapabilities(t *testing.T) {
 	allowLoopbackProviderTest(t)
 	var gotBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -919,20 +964,70 @@ func TestDeclarativeClaudeWireSendsThinkingDisabledWhenNotRequested(t *testing.T
 	if !ok {
 		t.Fatal("declarative adapter is unavailable")
 	}
-	input := canvasGenerationInput{Mode: "text", Prompt: "describe", Config: config, StreamText: true}
-	result, err := runProtocolAdapterTaskWithPolicy(ctx, input, adapter, fastVideoPollPolicy())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result["text"] != "正文" {
-		t.Fatalf("text result = %#v", result)
-	}
-	var body map[string]interface{}
-	if err := json.Unmarshal(gotBody, &body); err != nil {
-		t.Fatal(err)
-	}
-	thinking, _ := body["thinking"].(map[string]interface{})
-	if thinking["type"] != "disabled" {
-		t.Fatalf("request thinking = %#v, want explicit disabled (upstream defaults to thinking-on)", body["thinking"])
+	adaptive := mustThinkingPreset(t, "claude-adaptive", protocol.TextWireClaude)
+	adaptiveDefault := *adaptive
+	adaptiveDefault.Default = ThinkingLevelHigh
+	toggle := mustThinkingPreset(t, "thinking-type-toggle", protocol.TextWireClaude)
+	for _, tt := range []struct {
+		name         string
+		capability   *TextThinkingConfig
+		level        string
+		thinkingType string
+		effort       string
+		budget       int
+	}{
+		{name: "legacy default", thinkingType: "disabled"},
+		{name: "legacy auto", level: "auto", thinkingType: "disabled"},
+		{name: "legacy explicit off", level: "off", thinkingType: "disabled"},
+		{name: "legacy on retains budget", level: "high", thinkingType: "enabled", budget: 1024},
+		{name: "adaptive auto without default", capability: adaptive, level: "auto"},
+		{name: "adaptive auto uses model default", capability: &adaptiveDefault, level: "auto", thinkingType: "adaptive", effort: "high"},
+		{name: "adaptive high", capability: adaptive, level: "high", thinkingType: "adaptive", effort: "high"},
+		{name: "adaptive max", capability: adaptive, level: "max", thinkingType: "adaptive", effort: "max"},
+		{name: "adaptive off normalizes to lowest", capability: adaptive, level: "off", thinkingType: "adaptive", effort: "low"},
+		{name: "toggle auto without default", capability: toggle, level: "auto"},
+		{name: "toggle explicit off", capability: toggle, level: "off", thinkingType: "disabled"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			input := canvasGenerationInput{Mode: "text", Prompt: "describe", Config: config, StreamText: true,
+				TextOptions: canvasTextOptions{ThinkingLevel: tt.level}}
+			if tt.capability != nil {
+				input.Config.CapabilityConfig = &ModelCapabilityConfig{Text: &TextCapabilityConfig{Thinking: tt.capability}}
+			}
+			gotBody = nil
+			result, err := runProtocolAdapterTaskWithPolicy(ctx, input, adapter, fastVideoPollPolicy())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result["text"] != "正文" {
+				t.Fatalf("text result = %#v", result)
+			}
+			var body map[string]interface{}
+			if err := json.Unmarshal(gotBody, &body); err != nil {
+				t.Fatal(err)
+			}
+			thinking, _ := body["thinking"].(map[string]interface{})
+			if tt.thinkingType == "" {
+				if _, exists := body["thinking"]; exists {
+					t.Fatalf("model default must omit thinking: %#v", body)
+				}
+			} else if thinking["type"] != tt.thinkingType {
+				t.Fatalf("request thinking = %#v, want type %q", body["thinking"], tt.thinkingType)
+			}
+			if tt.budget == 0 {
+				if _, exists := thinking["budget_tokens"]; exists {
+					t.Fatalf("unexpected thinking budget: %#v", thinking)
+				}
+			} else if intFromAny(thinking["budget_tokens"]) != tt.budget {
+				t.Fatalf("request thinking budget = %#v, want %d", thinking["budget_tokens"], tt.budget)
+			}
+			if tt.effort == "" {
+				if _, exists := body["output_config"]; exists {
+					t.Fatalf("unexpected output_config: %#v", body["output_config"])
+				}
+			} else if output, _ := body["output_config"].(map[string]interface{}); output["effort"] != tt.effort {
+				t.Fatalf("request output_config = %#v, want effort %q", output, tt.effort)
+			}
+		})
 	}
 }

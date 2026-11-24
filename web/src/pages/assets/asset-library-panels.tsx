@@ -11,6 +11,7 @@ import { currentLocale } from "@/i18n";
 import { arkAssetStatusTone, arkCertificationBadgeKey, arkCertificationExpired, formatArkDate, type ArkLibraryProgress } from "@/lib/ark-assets";
 import { cn } from "@/lib/utils";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useThemePack } from "@/themes/use-theme-pack";
 import { assetCategoryLabel } from "@/lib/asset-category";
 import { formatBytes } from "@/lib/image-utils";
 import { audioAverageBitrateKbps, formatAudioSampleRate, imageResolutionTierLabel, isLosslessAudioMimeType, mediaAspectRatioLabel, mediaFormatLabel, RECOMMENDED_MIN_AUDIO_SAMPLE_RATE, videoResolutionTierLabel } from "@/lib/media-spec";
@@ -32,6 +33,7 @@ export function AssetsBatchBar({
     onExport,
     onRestore,
     onArchive,
+    onShareTeam,
     onDelete,
 }: {
     count: number;
@@ -44,6 +46,7 @@ export function AssetsBatchBar({
     onExport: () => void;
     onRestore?: () => void;
     onArchive?: () => void;
+    onShareTeam?: () => void;
     onDelete: () => void;
 }) {
     return (
@@ -69,6 +72,11 @@ export function AssetsBatchBar({
                     </>
                 ) : (
                     <>
+                        {onShareTeam ? (
+                            <Button size="small" disabled={!count || busy} onClick={onShareTeam}>
+                                共享到团队
+                            </Button>
+                        ) : null}
                         <Button size="small" disabled={!count || busy} icon={<Download className="size-3.5" />} onClick={onExport}>
                             导出
                         </Button>
@@ -93,10 +101,12 @@ export const assetsEmptyBannerFrames = [
 
 export function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; onImport: () => void; onGoCanvas: () => void }) {
     const brandName = useAppearanceStore((state) => state.appearance.brandName);
+    // 当前皮肤的主题包带了示意图时用主题包的。
+    const frames = useThemePack()?.copy?.assetsEmptyFrames ?? assetsEmptyBannerFrames;
     return (
         <div className="assets-empty">
             <div className="assets-empty-banner" aria-hidden="true">
-                {assetsEmptyBannerFrames.map((frame, index) => (
+                {frames.map((frame, index) => (
                     <figure key={frame.caption} className={`assets-empty-banner-frame ${index === 1 ? "is-main" : index === 0 ? "is-back" : "is-front"}`}>
                         <img src={frame.src} alt="" loading="lazy" decoding="async" />
                         <span>{frame.caption}</span>

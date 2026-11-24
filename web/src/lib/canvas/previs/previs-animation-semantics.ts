@@ -132,12 +132,6 @@ export function resolvePrevisCameraAlignment(camera: PrevisCamera, transform: Pr
     return { ...camera, keyframes: upsertPrevisKeyframe(camera.keyframes, time, transform) };
 }
 
-/** 生成运镜只更新首尾帧；保留用户手工添加的中间帧、帧 id 与 easing。 */
-export function resolvePrevisCameraMoveKeyframes(keyframes: PrevisKeyframe[], start: PrevisTransform, end: PrevisTransform, duration: number) {
-    const endTime = Number.isFinite(duration) && duration > 0 ? duration : 0;
-    return upsertPrevisKeyframe(upsertPrevisKeyframe(keyframes, 0, start), endTime, end);
-}
-
 /** 播放头按镜头时长循环；非法输入回落 0，长帧也保留越界余量。 */
 export function advancePrevisPlayhead(playhead: number, elapsed: number, duration: number) {
     if (!Number.isFinite(duration) || duration <= 0) return 0;

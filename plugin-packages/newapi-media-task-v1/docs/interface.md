@@ -51,7 +51,6 @@
 | `create.body.parameters.prompt_extend` | `{"$coalesce":[{"$ref":"request.providerOptions.newapi-channel-1.prompt_extend"},false]}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/v1/videos/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
 
 ## Provider 扩展键
 
@@ -88,7 +87,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "newapi-media-task-v1",
   "name": "NewAPI Media Task Channel 1",
-  "version": "2.0.0",
+  "version": "2.0.2",
   "author": "NewAPI / 影策",
   "description": "NewAPI Media Task Channel 1 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -126,6 +125,11 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "input-media",
+          "token": "参考图{n}",
+          "dramaTailFrame": "reference-image"
         },
         "parameters": [
           {

@@ -2,9 +2,9 @@ import { localForageStorageForScope } from "@/lib/localforage-storage";
 import type { PrevisMode } from "@/lib/canvas/previs/previs-modes";
 
 /**
- * 预演台首次上手引导。
+ * 世界引擎首次上手引导。
  *
- * 为什么存在：预演台把模板、四个一级模式、对象操作、保存/导出堆在同一个工作台里，
+ * 为什么存在：世界引擎把模板、四个一级模式、对象操作、保存/导出堆在同一个工作台里，
  * 第一次进来的人没有任何线索该先做什么。引导给出一条确定的最短路径。
  *
  * 硬约束：
@@ -169,7 +169,7 @@ export type PrevisOnboardingStorage = {
  */
 function requireScope(scope: string) {
     const normalized = scope.trim();
-    if (!normalized) throw new Error("缺少预演台引导的用户 scope");
+    if (!normalized) throw new Error("缺少世界引擎引导的用户 scope");
     return normalized;
 }
 

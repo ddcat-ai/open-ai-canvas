@@ -41,7 +41,9 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
     return (
         <div className="flex flex-col" style={vars}>
             <header className="flex h-8 items-center justify-between gap-2 pl-2 pr-1">
-                <h2 className="font-semibold leading-none" style={{ fontSize: "var(--fs-ui)" }}>{t("canvasA.createMenu.title")}</h2>
+                <h2 className="font-semibold leading-none" style={{ fontSize: "var(--fs-ui)" }}>
+                    {t("canvasA.createMenu.title")}
+                </h2>
                 {projectCommands.map((command) => (
                     <button
                         key={command.id}
@@ -58,7 +60,7 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
                 ))}
             </header>
 
-            <div role="group" aria-label={t("canvasA.createMenu.nodesGroup")} className="mt-1 grid grid-cols-4 gap-0.5">
+            <div role="group" aria-label={t("canvasA.createMenu.nodesGroup")} className="mt-2 grid grid-cols-4 gap-1.5">
                 {nodeCommands.map((command) => (
                     <button
                         key={command.id}
@@ -68,15 +70,12 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
                         onMouseDown={(event) => event.stopPropagation()}
                         onClick={command.onClick}
                     >
-                        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[var(--create-chip)] transition-colors group-hover:bg-[var(--create-chip-hover)] [&_svg]:size-[18px] [&_svg]:stroke-[1.75]">
-                            {command.icon}
+                        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-[var(--create-chip)] transition-colors group-hover:bg-[var(--create-chip-hover)] [&_svg]:size-[18px] [&_svg]:stroke-[1.75]">{command.icon}</span>
+                        <span className="block w-full truncate text-center font-medium leading-none" style={{ fontSize: "var(--fs-caption)" }}>
+                            {command.label}
                         </span>
-                        <span className="block w-full truncate text-center font-medium leading-none" style={{ fontSize: "var(--fs-caption)" }}>{command.label}</span>
                         {command.badge ? (
-                            <span
-                                className="absolute right-1 top-1 rounded-[var(--r-xs)] px-1 font-medium leading-4"
-                                style={{ color: theme.node.muted, background: "var(--create-chip)", fontSize: "var(--fs-label)" }}
-                            >
+                            <span className="absolute right-1 top-1 rounded-[var(--r-xs)] px-1 font-medium leading-4" style={{ color: theme.node.muted, background: "var(--create-chip)", fontSize: "var(--fs-label)" }}>
                                 {command.badge}
                             </span>
                         ) : null}
@@ -85,7 +84,7 @@ export function CanvasCreateMenu({ commands }: { commands: CanvasCreateCommand[]
             </div>
 
             {footerCommands.length ? (
-                <div role="group" aria-label={t("canvasA.createMenu.footerGroup")} className="mt-2 grid gap-0.5 rounded-[10px] p-0.5" style={{ background: "var(--create-track)", gridTemplateColumns: `repeat(${footerCommands.length}, minmax(0, 1fr))` }}>
+                <div role="group" aria-label={t("canvasA.createMenu.footerGroup")} className="mt-3 grid gap-1 rounded-[10px] p-1" style={{ background: "var(--create-track)", gridTemplateColumns: `repeat(${footerCommands.length}, minmax(0, 1fr))` }}>
                     {footerCommands.map((command) => (
                         <button
                             key={command.id}

@@ -350,40 +350,28 @@ func (s *Service) ecommerceLiveImageConfig(req ecommerceagent.Request, cfg ecomm
 	if modelKey == "" {
 		modelKey = cfg.ImageModel
 	}
-	configured, err := s.SystemChannel(channelID)
-	if err != nil {
-		return cfg, ecommerceErr("INVALID_INPUT", "出图通道不可用")
-	}
-	if strings.TrimSpace(configured.APIKey) == "" {
-		return cfg, ecommerceErr("INVALID_INPUT", "出图通道缺少服务端密钥")
-	}
-	u, err := url.Parse(strings.TrimSpace(configured.BaseURL))
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
-		return cfg, ecommerceErr("INVALID_INPUT", "出图通道地址无效")
-	}
-	configuredModel, err := s.repo.ChannelModelByKey(channelID, modelKey)
-	if err != nil || !configuredModel.Enabled || configuredModel.Capability != "image" {
-		return cfg, ecommerceErr("INVALID_INPUT", "图像模型未启用")
-	}
-	if configuredModel.Protocol != model.ChannelInterfaceOpenAIImage {
-		return cfg, ecommerceErr("INVALID_INPUT", "电商 Agent 当前只支持 OpenAI Images 编辑协议的图像渠道")
-	}
-	profile, err := normalizedChannelModelCapability(configuredModel, s.protocolRegistry())
-	if err != nil || profile == nil || profile.Image == nil || profile.Image.References.MaxImages < 1 {
-		return cfg, ecommerceErr("INVALID_INPUT", "图像模型未配置商品图编辑能力")
-	}
-	provider, err := s.resolveProviderConfig(providerConfig{ChannelID: channelID, ChannelModelKey: modelKey, Model: modelKey})
+	provider, err := s.resolveProviderConfig(providerConfig{ChannelID: channelID, Model: modelKey}, nil)
 	if err != nil {
 		return cfg, ecommerceErr("INVALID_INPUT", "出图渠道配置不可用")
 	}
-	provider.CapabilityConfig = profile
-	cfg.ImageBaseURL = strings.TrimRight(configured.BaseURL, "/")
-	cfg.ImageKey = configured.APIKey
-	cfg.ImageModel = modelKey
-	cfg.ImageProvider = &provider
-	if configuredModel.ProviderModelKey != "" {
-		cfg.ImageModel = configuredModel.ProviderModelKey
+	if strings.TrimSpace(provider.APIKey) == "" {
+		return cfg, ecommerceErr("INVALID_INPUT", "出图通道缺少服务端密钥")
 	}
+	u, err := url.Parse(strings.TrimSpace(provider.BaseURL))
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return cfg, ecommerceErr("INVALID_INPUT", "出图通道地址无效")
+	}
+	if provider.InterfaceType != string(model.ChannelInterfaceOpenAIImage) {
+		return cfg, ecommerceErr("INVALID_INPUT", "电商 Agent 当前只支持 OpenAI Images 编辑协议的图像渠道")
+	}
+	profile := provider.CapabilityConfig
+	if profile == nil || profile.Image == nil || profile.Image.References.MaxImages < 1 {
+		return cfg, ecommerceErr("INVALID_INPUT", "图像模型未配置商品图编辑能力")
+	}
+	cfg.ImageBaseURL = strings.TrimRight(provider.BaseURL, "/")
+	cfg.ImageKey = provider.APIKey
+	cfg.ImageModel = provider.Model
+	cfg.ImageProvider = &provider
 	return cfg, nil
 }
 

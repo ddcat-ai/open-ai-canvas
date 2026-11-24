@@ -32,6 +32,17 @@
 | `response_format` | object | 否 | `response_format/text` | 结构化输出配置。 |
 | `stream` | boolean | 否 | `stream` | 流式开关；后台任务当前以最终响应归一。 |
 
+## 原生文本多模态合同（2.0.1）
+
+<!-- 规范化投影到 Gemini 原生 contents/parts。 -->
+宿主保持 `request.messages` 原合同，并提供只读 `request.textMessages` 和 `request.textInput` 投影。插件按消息和内容块原顺序构造 `contents[].parts[]`：文本使用 `text`，内联图片/视频/音频使用 `inlineData: { mimeType, data }`（data 为原始 Base64），远程媒体使用 `fileData: { mimeType, fileUri }`。assistant 映射 model，user 保持 user。纯文本、纯媒体、多素材及历史媒体均走同一映射，不把内容数组塞入 text。
+
+system 消息仅允许文本，统一移入一次 `systemInstruction`；显式 instructions 优先，否则保留所有规范化 system 消息的文本顺序。不支持的角色、内容类型、非法 Base64 或 MIME 不匹配在 HTTP 构建前拒绝，不静默降级成纯文本。此创建 profile 不承载工具调用历史。
+
+远程 URI 仅接受 HTTPS，包括 Gemini Files API URI；文件访问权限、公开 URL 可用性和模型的媒体能力由 Google 校验，不代表宿主上传了文件。不接受 gs/file/blob 等 URI。generationConfig、safetySettings、tools、toolConfig、cachedContent、Google API Key 鉴权及原生 Agent 请求体透传保持不变。
+
+官方参考：[Gemini generateContent](https://ai.google.dev/api/generate-content)。
+
 ## 上游请求模板逐字段清单
 
 下表由插件请求模板生成，覆盖 body、query、headers 和 multipart 文件声明中的每个字段。
@@ -41,8 +52,8 @@
 | `create.method` | `"POST"` |
 | `create.path` | `"/v1beta/models/{{model}}:generateContent"` |
 | `create.contentType` | `"application/json"` |
-| `create.body.contents` | `{"$map":{"from":{"$filter":{"from":{"$ref":"request.messages"},"as":"message","where":{"$ne":[{"$ref":"message.role"},"system"]}}},"as":"message","in":{"role":{"$if":{"condition":{"$eq":[{"$ref":"message.role"},"assistant"]},"then":"model","else":"user"}},"parts":[{"text":{"$ref":"message.content"}}]}}}` |
-| `create.body.systemInstruction` | `{"$if":{"condition":{"$ref":"request.instructions"},"then":{"parts":[{"text":{"$ref":"request.instructions"}}]},"else":null}}` |
+| `create.body.contents` | `{"$map":{"from":{"$filter":{"from":{"$ref":"request.textMessages"},"as":"message","where":{"$ne":[{"$ref":"message.role"},"system"]}}},"as":"message","in":{"role":{"$if":{"condition":{"$eq":[{"$ref":"message.role"},"assistant"]},"then":"model","else":"user"}},"parts":{"$map":{"from":{"$ref":"message.parts"},"as":"part","in":{"$if":{"condition":{"$eq":[{"$ref":"part.type"},"text"]},"then":{"text":{"$ref":"part.text"}},"else":{"$if":{"condition":{"$ref":"part.isInline"},"then":{"inlineData":{"mimeType":{"$ref":"part.mimeType"},"data":{"$ref":"part.data"}}},"else":{"fileData":{"mimeType":{"$ref":"part.mimeType"},"fileUri":{"$ref":"part.value"}}}}}}}}}}}}` |
+| `create.body.systemInstruction` | `{"$omitEmpty":{"$if":{"condition":{"$ref":"request.instructions"},"then":{"parts":[{"text":{"$ref":"request.instructions"}}]},"else":{"$if":{"condition":{"$gt":[{"$len":{"$filter":{"from":{"$ref":"request.textMessages"},"as":"message","where":{"$eq":[{"$ref":"message.role"},"system"]}}}},0]},"then":{"parts":{"$map":{"from":{"$filter":{"from":{"$ref":"request.textMessages"},"as":"message","where":{"$eq":[{"$ref":"message.role"},"system"]}}},"as":"system","in":{"text":{"$ref":"system.text"}}}}},"else":null}}}}}` |
 | `create.body.generationConfig` | `{"$omitEmpty":{"$ref":"request.providerOptions.gemini-generate-content.generationConfig"}}` |
 | `create.body.safetySettings` | `{"$omitEmpty":{"$ref":"request.providerOptions.gemini-generate-content.safetySettings"}}` |
 | `create.body.tools` | `{"$omitEmpty":{"$ref":"request.providerOptions.gemini-generate-content.tools"}}` |
@@ -68,7 +79,8 @@
 | 映射位置 | 上游路径或转换表达式 |
 | --- | --- |
 | `response.status` | `"succeeded"` |
-| `response.text` | `{"$map":{"from":{"$ref":"response.candidates.0.content.parts"},"as":"part","in":{"$omitEmpty":{"$ref":"part.text"}}}}` |
+| `response.text` | `{"$map":{"from":{"$filter":{"from":{"$ref":"response.candidates.0.content.parts"},"as":"part","where":{"$ne":[{"$ref":"part.thought"},true]}}},"as":"part","in":{"$omitEmpty":{"$ref":"part.text"}}}}` |
+| `response.reasoning` | `{"$map":{"from":{"$filter":{"from":{"$ref":"response.candidates.0.content.parts"},"as":"part","where":{"$eq":[{"$ref":"part.thought"},true]}}},"as":"part","in":{"$omitEmpty":{"$ref":"part.text"}}}}` |
 | `response.usage` | `{"$ref":"response.usageMetadata"}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.messagePaths[0]` | `"error.message"` |
@@ -98,7 +110,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "google-gemini-generate-content",
   "name": "Google Gemini generateContent",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Google / 影策",
   "description": "Google Gemini generateContent 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -219,7 +231,7 @@
                 "from": {
                   "$filter": {
                     "from": {
-                      "$ref": "request.messages"
+                      "$ref": "request.textMessages"
                     },
                     "as": "message",
                     "where": {
@@ -248,31 +260,133 @@
                       "else": "user"
                     }
                   },
-                  "parts": [
-                    {
-                      "text": {
-                        "$ref": "message.content"
+                  "parts": {
+                    "$map": {
+                      "from": {
+                        "$ref": "message.parts"
+                      },
+                      "as": "part",
+                      "in": {
+                        "$if": {
+                          "condition": {
+                            "$eq": [
+                              {
+                                "$ref": "part.type"
+                              },
+                              "text"
+                            ]
+                          },
+                          "then": {
+                            "text": {
+                              "$ref": "part.text"
+                            }
+                          },
+                          "else": {
+                            "$if": {
+                              "condition": {
+                                "$ref": "part.isInline"
+                              },
+                              "then": {
+                                "inlineData": {
+                                  "mimeType": {
+                                    "$ref": "part.mimeType"
+                                  },
+                                  "data": {
+                                    "$ref": "part.data"
+                                  }
+                                }
+                              },
+                              "else": {
+                                "fileData": {
+                                  "mimeType": {
+                                    "$ref": "part.mimeType"
+                                  },
+                                  "fileUri": {
+                                    "$ref": "part.value"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
                       }
                     }
-                  ]
+                  }
                 }
               }
             },
             "systemInstruction": {
-              "$if": {
-                "condition": {
-                  "$ref": "request.instructions"
-                },
-                "then": {
-                  "parts": [
-                    {
-                      "text": {
-                        "$ref": "request.instructions"
+              "$omitEmpty": {
+                "$if": {
+                  "condition": {
+                    "$ref": "request.instructions"
+                  },
+                  "then": {
+                    "parts": [
+                      {
+                        "text": {
+                          "$ref": "request.instructions"
+                        }
                       }
+                    ]
+                  },
+                  "else": {
+                    "$if": {
+                      "condition": {
+                        "$gt": [
+                          {
+                            "$len": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.textMessages"
+                                },
+                                "as": "message",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "message.role"
+                                    },
+                                    "system"
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      },
+                      "then": {
+                        "parts": {
+                          "$map": {
+                            "from": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "request.textMessages"
+                                },
+                                "as": "message",
+                                "where": {
+                                  "$eq": [
+                                    {
+                                      "$ref": "message.role"
+                                    },
+                                    "system"
+                                  ]
+                                }
+                              }
+                            },
+                            "as": "system",
+                            "in": {
+                              "text": {
+                                "$ref": "system.text"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "else": null
                     }
-                  ]
-                },
-                "else": null
+                  }
+                }
               }
             },
             "generationConfig": {
@@ -315,7 +429,46 @@
           "text": {
             "$map": {
               "from": {
-                "$ref": "response.candidates.0.content.parts"
+                "$filter": {
+                  "from": {
+                    "$ref": "response.candidates.0.content.parts"
+                  },
+                  "as": "part",
+                  "where": {
+                    "$ne": [
+                      {
+                        "$ref": "part.thought"
+                      },
+                      true
+                    ]
+                  }
+                }
+              },
+              "as": "part",
+              "in": {
+                "$omitEmpty": {
+                  "$ref": "part.text"
+                }
+              }
+            }
+          },
+          "reasoning": {
+            "$map": {
+              "from": {
+                "$filter": {
+                  "from": {
+                    "$ref": "response.candidates.0.content.parts"
+                  },
+                  "as": "part",
+                  "where": {
+                    "$eq": [
+                      {
+                        "$ref": "part.thought"
+                      },
+                      true
+                    ]
+                  }
+                }
               },
               "as": "part",
               "in": {
@@ -353,7 +506,275 @@
             "thoughtSignature",
             "thought_signature"
           ]
-        }
+        },
+        "validations": [
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$ref": "request.textInput.invalidCount"
+                },
+                0
+              ]
+            },
+            "message": "Invalid text multimodal input; check media data and MIME type."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "part.type"
+                            },
+                            [
+                              "text",
+                              "image",
+                              "video",
+                              "audio"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Unsupported media type for this native text profile."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textMessages"
+                      },
+                      "as": "message",
+                      "where": {
+                        "$not": {
+                          "$in": [
+                            {
+                              "$ref": "message.role"
+                            },
+                            [
+                              "system",
+                              "user",
+                              "assistant"
+                            ]
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Unsupported message role; use the native Agent path for tool conversations."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$filter": {
+                          "from": {
+                            "$ref": "request.textMessages"
+                          },
+                          "as": "message",
+                          "where": {
+                            "$eq": [
+                              {
+                                "$ref": "message.role"
+                              },
+                              "system"
+                            ]
+                          }
+                        }
+                      },
+                      "as": "system",
+                      "where": {
+                        "$gt": [
+                          {
+                            "$len": {
+                              "$filter": {
+                                "from": {
+                                  "$ref": "system.parts"
+                                },
+                                "as": "part",
+                                "where": {
+                                  "$ne": [
+                                    {
+                                      "$ref": "part.type"
+                                    },
+                                    "text"
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          0
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "System instructions accept text only."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$and": [
+                          {
+                            "$ne": [
+                              {
+                                "$ref": "part.type"
+                              },
+                              "text"
+                            ]
+                          },
+                          {
+                            "$not": {
+                              "$ref": "part.isInline"
+                            }
+                          },
+                          {
+                            "$not": {
+                              "$in": [
+                                {
+                                  "$first": {
+                                    "$split": [
+                                      {
+                                        "$ref": "part.value"
+                                      },
+                                      ":"
+                                    ]
+                                  }
+                                },
+                                [
+                                  "https"
+                                ]
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Unsupported media URI scheme for this native Gemini profile."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$and": [
+                          {
+                            "$ne": [
+                              {
+                                "$ref": "part.type"
+                              },
+                              "text"
+                            ]
+                          },
+                          {
+                            "$not": {
+                              "$ref": "part.mimeType"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Gemini media requires an explicit MIME type; provide media metadata."
+          },
+          {
+            "assert": {
+              "$eq": [
+                {
+                  "$len": {
+                    "$filter": {
+                      "from": {
+                        "$ref": "request.textInput.parts"
+                      },
+                      "as": "part",
+                      "where": {
+                        "$and": [
+                          {
+                            "$ne": [
+                              {
+                                "$ref": "part.type"
+                              },
+                              "text"
+                            ]
+                          },
+                          {
+                            "$ne": [
+                              {
+                                "$first": {
+                                  "$split": [
+                                    {
+                                      "$ref": "part.mimeType"
+                                    },
+                                    "/"
+                                  ]
+                                }
+                              },
+                              {
+                                "$ref": "part.type"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                0
+              ]
+            },
+            "message": "Media MIME type must match the declared image, video or audio content type."
+          }
+        ]
       }
     ]
   }

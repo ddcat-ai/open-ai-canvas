@@ -17,14 +17,28 @@ type CloudAgentExecution struct {
 	Journal           []CloudAgentEventRecord   `gorm:"foreignKey:RunID;references:ID" json:"-"`
 	Transcript        []CloudAgentMessageRecord `gorm:"foreignKey:RunID;references:ID" json:"-"`
 	// Control fields remain writable even when the transcript cannot be decoded or saved.
-	CanvasID       string `gorm:"size:80"`
-	ActiveTaskID   string `gorm:"size:80"`
-	MediaTaskID    string `gorm:"size:80"`
-	CleanupPending bool   `gorm:"not null;default:false;index"`
-	FailureMessage string `gorm:"size:1000"`
-	StateJSON      string `gorm:"type:text"`
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	CanvasID         string `gorm:"size:80"`
+	ActiveTaskID     string `gorm:"size:80"`
+	MediaTaskID      string `gorm:"size:80"`
+	CleanupPending   bool   `gorm:"not null;default:false;index"`
+	HistoryCompacted bool   `gorm:"not null;default:false;index"`
+	CompactedAt      *time.Time
+	FailureMessage   string `gorm:"size:1000"`
+	StateJSON        string `gorm:"type:text"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+// CloudAgentHistoryArchive stores the cold copy of a terminal run. The payload
+// is compressed and deliberately excluded from the hot Agent history quota.
+// It can be removed independently when a user deletes a conversation.
+type CloudAgentHistoryArchive struct {
+	RunID           string `gorm:"primaryKey;size:80"`
+	UserID          string `gorm:"index;size:36;not null"`
+	OriginalBytes   int64  `gorm:"not null;default:0"`
+	CompressedBytes int64  `gorm:"not null;default:0"`
+	PayloadGZIP     []byte `gorm:"not null"`
+	CreatedAt       time.Time
 }
 
 // CloudAgentPiSession stores Pi's native JSONL session independently from the

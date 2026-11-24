@@ -9,9 +9,13 @@ import (
 )
 
 func TestEcommerceSkillPromptUsesInstalledUserSkill(t *testing.T) {
-	svc, _, _, _ := ecommerceCreationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
+	skillAdministratorFixture(t, db, "user")
 	skill, err := svc.CreateSkill("user", SkillMutationRequest{SkillName: "电商构图", Description: "主图方法", Instruction: "# 电商构图\n每张图使用不同视角。", Tag: "others", IsPrivate: true})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.User{}).Where("id = ?", "user").Update("role", model.UserRoleUser).Error; err != nil {
 		t.Fatal(err)
 	}
 	prompt, err := svc.EcommerceSkillPrompt("user", []string{skill.SkillID})
@@ -30,7 +34,11 @@ func TestEcommerceSkillPromptUsesInstalledUserSkill(t *testing.T) {
 }
 
 func TestEcommerceSkillPromptReadsNewlyInstalledPublicSkill(t *testing.T) {
-	svc, _, _, _ := ecommerceCreationTestService(t)
+	svc, db, _, _ := ecommerceCreationTestService(t)
+	skillAdministratorFixture(t, db, "creator")
+	if err := db.Create(&model.User{ID: "buyer", Username: "buyer", Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+		t.Fatal(err)
+	}
 	skill, err := svc.CreateSkill("creator", SkillMutationRequest{
 		SkillName: "电商详情图", Description: "商品细节呈现", Instruction: "# 电商详情图\n先展示商品整体，再用特写解释已确认的卖点。", Tag: "others", IsPrivate: false,
 	})

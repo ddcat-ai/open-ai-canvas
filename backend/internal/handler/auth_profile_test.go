@@ -86,6 +86,28 @@ func TestProfileRoutesRejectAnonymousBeforeMutation(t *testing.T) {
 	}
 }
 
+func TestSessionRestoresUserWithLegacyAgentHistoryQuota(t *testing.T) {
+	router, db, cookie := profileHandlerFixture(t)
+	setting := model.SystemSetting{Key: model.RuntimePolicySettingKey, ValueJSON: `{"resource":{"agentHistoryMB":50000},"task":{"activeTaskLimit":17}}`}
+	if err := db.Create(&setting).Error; err != nil {
+		t.Fatal(err)
+	}
+	response := profileRequest(router, http.MethodGet, "/api/auth/session", "", cookie)
+	var session struct {
+		Code int
+		Data struct {
+			User          struct{ ID string }
+			RuntimeLimits struct{ ActiveTaskLimit int }
+		}
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &session); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || session.Code != 0 || session.Data.User.ID != "profile-user" || session.Data.RuntimeLimits.ActiveTaskLimit != 17 {
+		t.Fatalf("restore session: status=%d payload=%+v", response.Code, session)
+	}
+}
+
 func TestProfilePasswordHTTPRevokesSessionsAndClearsCookie(t *testing.T) {
 	router, db, cookie := profileHandlerFixture(t)
 	wrong := profileRequest(router, "POST", "/api/auth/profile/password", `{"currentPassword":"wrong-password","newPassword":"new-password"}`, cookie)

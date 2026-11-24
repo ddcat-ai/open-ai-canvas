@@ -22,8 +22,9 @@ export function ModelProtocolBrowser({
             label: protocol.label,
             subtitle: protocol.create,
             vendor: protocol.vendor,
-            searchText: protocol.value,
+            searchText: [protocol.value, protocol.version].filter(Boolean).join(" "),
             details: [
+                ...(protocol.version ? [{ label: "当前安装版本", value: protocol.version }] : []),
                 { label: "请求", value: <code>{protocol.create}</code> },
                 { label: "请求体", value: protocol.contentType },
                 { label: "响应", value: protocol.poll ? "异步轮询" : "同步响应" },

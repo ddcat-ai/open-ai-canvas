@@ -3,7 +3,7 @@ import { BufferGeometry, Float32BufferAttribute, Mesh, MeshStandardMaterial, Ski
 
 import { applyActorReferenceMaterial, updateActorReferenceColor } from "../src/components/canvas/previs/previs-viewport-rig";
 
-describe("预演台角色参考材质", () => {
+describe("世界引擎角色参考材质", () => {
     test("自定义着色器应用骨骼蒙皮后的顶点与法线", () => {
         const geometry = new BufferGeometry();
         geometry.setAttribute("position", new Float32BufferAttribute([0, 0, 0], 3));

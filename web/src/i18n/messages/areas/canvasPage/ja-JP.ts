@@ -116,6 +116,9 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         expressionNodeDeleted: "表情編集ノードは削除されました",
         emptyVideoEnhance: "動画ノードが空のため、画質を補正できません",
         noEnhanceModel: "管理者がまだ画質補正モデルを設定していません",
+        emptyVideoDepth: "動画ノードが空のため、相対深度動画を作成できません",
+        noDepthModel: "管理者がまだ相対深度モデルを設定していません",
+        titleDepth: "{{title}} · 相対深度",
         titleEnhance: "{{title}} · 画質補正 {{resolution}}",
     },
     layerMaterials: {
@@ -186,6 +189,7 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "キャラクターボイスで参照できるキャラクターカードは一度に 1 枚だけです",
         voiceNotBound: "キャラクターに利用可能な音声が紐づいていないため、キャラクターボイスのタスクを作成できません",
         submissionInProgress: "このノードの生成リクエストは送信中または実行中です。繰り返しクリックしないでください",
+        videoRequiresReferenceImages: "この動画モデルには参照画像が最低 {{count}} 枚必要です。画像ノードを接続してから生成してください",
     },
     timelineInsert: {
         unsupportedMedia: "画像とテキスト素材はまだタイムラインに直接追加できません。先にキャンバスに挿入してください",
@@ -300,6 +304,8 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         restoreSaveFailed: "作品の保存の再開に失敗しました",
         enhanceSourceMissing: "元の動画ノードが削除されたか空のため、再補正できません。タスクは送信していません",
         enhanceFailed: "画質補正に失敗しました",
+        depthSourceMissing: "元の動画ノードが削除されたか空です。処理タスクは送信していません",
+        depthFailed: "相対深度処理に失敗しました",
         notRetryable: "このノードでは通常の生成再試行を使用できません",
         layerProtocolMissing: "元のレイヤー分割モデルに専用プロトコルが設定されていないため、再試行できません",
         promptRejected: "このプロンプトはコンテンツ審査を通過しませんでした。修正してから再生成してください",

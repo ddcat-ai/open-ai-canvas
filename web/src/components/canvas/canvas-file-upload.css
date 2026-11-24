@@ -45,8 +45,8 @@
     transition: opacity 180ms ease-out;
     position: absolute;
     inset: 0;
-    background: color-mix(in srgb, var(--upload-surface) 24%, transparent);
-    backdrop-filter: blur(20px) saturate(0.8);
+    /* 不用 backdrop-filter：漂移动画层很大，逐帧模糊会让画布缩放平移掉帧；改用更不透明的同色面保持雾面感。 */
+    background: color-mix(in srgb, var(--upload-surface) 55%, transparent);
     pointer-events: none;
 }
 

@@ -29,24 +29,31 @@ func TestToolsVisibilityTokensSeedAndReferences(t *testing.T) {
 		}
 	}
 	list, err := svc.List("alice", tools.ToolListRequest{PageSize: 80})
-	if err != nil || list.TotalCount != 89 || !list.HasMore {
+	if err != nil || list.TotalCount != 90 || !list.HasMore {
 		t.Fatalf("seed/pagination: %+v %v", list, err)
 	}
 	for _, preset := range []struct {
-		id      int64
-		key     string
-		label   string
-		feature string
+		id       int64
+		key      string
+		label    string
+		features []string
 	}{
-		{1000090, "short_storyboard", "故事板", "4–8 sequential shots"},
-		{1000091, "blocking_storyboard", "调度故事板", "top-down blocking diagram"},
+		{1000090, "short_storyboard", "故事板", []string{"4–8 sequential shots"}},
+		{1000091, "blocking_storyboard", "调度故事板", []string{"top-down blocking diagram"}},
+		{1000089, "character_four_view", "角色四视图", []string{"LEFT, about 40%", "the only head anywhere on the sheet", "front, true 90-degree side, back", "from the base of the neck to the soles"}},
+		{85, "character_three_view_generation", "角色三视图生成", []string{"three-view character sheet"}},
 	} {
 		tool, err := svc.Detail("alice", preset.id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if tool.LabelEn != preset.key || tool.Label != preset.label || tool.Type != tools.ToolTypeNineGrid || tool.Ratio != "16:9" || !strings.Contains(tool.Prompt, preset.feature) {
-			t.Fatalf("storyboard preset: %+v", tool)
+		if tool.LabelEn != preset.key || tool.Label != preset.label || tool.Type != tools.ToolTypeNineGrid || tool.Ratio != "16:9" {
+			t.Fatalf("image preset: %+v", tool)
+		}
+		for _, feature := range preset.features {
+			if !strings.Contains(tool.Prompt, feature) {
+				t.Fatalf("%s is missing %q", tool.LabelEn, feature)
+			}
 		}
 		token := fmt.Sprintf("@[tool:nine_grid:%d:label:Clapperboard]", preset.id)
 		brief := "小女孩走到门口，回头看向猫。"

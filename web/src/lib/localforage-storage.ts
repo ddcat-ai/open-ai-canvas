@@ -1,7 +1,7 @@
 import localforage from "localforage";
 import type { StateStorage } from "zustand/middleware";
 
-import { isUserScopedPersistenceSuppressed, scopedStorageKey } from "@/lib/user-scope";
+import { assertCurrentUserSession, captureUserSession, isUserScopedPersistenceSuppressed, scopedStorageKey } from "@/lib/user-scope";
 
 localforage.config({
     name: "yingce",
@@ -20,7 +20,10 @@ export function localForageStorageForScope(scope?: string): StateStorage {
     return {
         getItem: async (name) => {
             if (!browserStorageAvailable()) return null;
-            return (await localforage.getItem<string>(keyFor(name))) || null;
+            const session = captureUserSession(true);
+            const value = await localforage.getItem<string>(scopedStorageKey(name, scope ?? session.scope));
+            assertCurrentUserSession(session, true);
+            return value || null;
         },
         setItem: async (name, value) => {
             if (!browserStorageAvailable()) return;

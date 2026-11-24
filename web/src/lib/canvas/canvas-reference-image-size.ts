@@ -6,7 +6,8 @@ import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { mergedImageCapabilityConfig, resolveModelGenerationDefaults } from "@/lib/model-selection";
 import type { AiConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "@/types/canvas";
-import { getGenerationResourceNodes } from "./canvas-resource-references";
+import { CANVAS_IMAGE_PRESETS } from "./canvas-image-presets";
+import { getGenerationResourceNodes, parseToolMentionTokens } from "./canvas-resource-references";
 
 export type ImageDimensions = { width: number; height: number };
 export type ImageSizeSelection = { size: string; quality?: string; imageResolution?: string };
@@ -45,8 +46,15 @@ export function followsReferenceImageSize(node: CanvasNodeData | undefined) {
 }
 
 export function withReferenceImageSize(config: AiConfig, node: CanvasNodeData, model: string, reference: ImageDimensions | undefined): CanvasNodeData {
-    if (!reference || !followsReferenceImageSize(node)) return node;
+    if (!followsReferenceImageSize(node)) return node;
     const metadata = node.metadata || {};
+    const presetToken = parseToolMentionTokens(metadata.generationSpec?.prompt ?? metadata.composerContent ?? metadata.prompt ?? "").find((tool) => tool.type === "nine_grid");
+    const ratio = presetToken && CANVAS_IMAGE_PRESETS.find((preset) => preset.id === presetToken.toolId)?.ratio;
+    if (ratio && ratio !== "original") {
+        const [width, height] = ratio.split(":").map(Number);
+        reference = { width, height };
+    }
+    if (!reference) return node;
     // 档位沿用不跟随参考图时会生效的值，只替换宽高比。
     const current = resolveModelGenerationDefaults(
         config,

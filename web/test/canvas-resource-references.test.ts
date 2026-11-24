@@ -248,6 +248,7 @@ describe("canvas resource mention slots", () => {
         const [reference] = buildNodeMentionReferences(target, [image, target], [connection(image.id, target.id)]);
 
         expect(reference.label).toBe("图片1");
+        expect(reference.displayLabel).toBe("image-a");
         expect(canvasResourceMentionToken(reference)).toBe("@图片1");
         expect(canvasResourceMentionToken(reference)).not.toContain(image.id);
     });

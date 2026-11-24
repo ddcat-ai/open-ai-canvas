@@ -53,8 +53,8 @@ type githubSkillTreeEntry struct {
 }
 
 func (s *Service) DiscoverGitHubSkills(ctx context.Context, userID string, req SkillGitHubDiscoverRequest) (*SkillGitHubDiscovery, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, kernel.Unauthorized("请先登录")
+	if err := s.RequireAdministrator(userID); err != nil {
+		return nil, err
 	}
 	spec, err := parseGitHubSkillURL(req.URL, req.Ref, req.Subdir)
 	if err != nil {

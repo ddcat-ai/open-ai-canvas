@@ -107,7 +107,7 @@ export function AgentOutboxTray({
             </div>
             <ol className="agent-outbox-list thin-scrollbar" data-canvas-wheel-scroll>
                 {pendingRetry ? (
-                    <li className="agent-outbox-row is-failed" aria-label={t("canvasA.outbox.pendingRow", { preview: pendingPreview })}>
+                    <li className="agent-outbox-row" aria-label={t("canvasA.outbox.pendingRow", { preview: pendingPreview })}>
                         <span className="agent-outbox-index" aria-hidden="true">
                             !
                         </span>

@@ -65,8 +65,10 @@ describe("canvas selection semantics", () => {
         expect(resolveCanvasPointerIntent(pointer)).toBe("select");
         expect(resolveCanvasPointerIntent({ ...pointer, spacePressed: true })).toBe("pan");
         expect(resolveCanvasPointerIntent({ ...pointer, button: 1 })).toBe("pan");
+        expect(resolveCanvasPointerIntent({ ...pointer, button: 2 })).toBe("pan");
         expect(resolveCanvasPointerIntent({ ...pointer, pointerType: "touch" })).toBe("pan");
         expect(resolveCanvasPointerIntent({ ...pointer, background: false })).toBe("ignore");
+        expect(resolveCanvasPointerIntent({ ...pointer, background: false, button: 2 })).toBe("ignore");
         expect(resolveCanvasPointerIntent({ ...pointer, background: false, spacePressed: true })).toBe("pan");
         expect(resolveCanvasPointerIntent({ ...pointer, background: false, button: 1 })).toBe("pan");
         expect(resolveCanvasPointerIntent({ ...pointer, boxSelectEnabled: false })).toBe("pan");

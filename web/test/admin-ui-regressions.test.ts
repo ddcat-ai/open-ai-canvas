@@ -66,7 +66,7 @@ test("model reference limits use compact rows only inside the admin editor", asy
 
 test("model editor presents protocols in a searchable inline radio browser instead of a dropdown", async () => {
     const [source, css] = await Promise.all([Bun.file(new URL("../src/pages/admin/components/channel-model-editor.tsx", import.meta.url)).text(), Bun.file(new URL("../src/styles/admin-ui.css", import.meta.url)).text()]);
-    const protocolSection = sourceSection(compactSource(source), '<Form.Item className="admin-model-protocol-field"', "{protocolError && (");
+    const protocolSection = sourceSection(compactSource(source), '<Form.Item className="admin-model-protocol-field"', "</Form.Item>");
 
     expect(protocolSection).toContain("<ModelProtocolBrowser");
     expect(protocolSection).not.toContain("<Select");
@@ -81,12 +81,12 @@ test("channel model fetch requires explicit selection before import", async () =
     ]);
     const component = compactSource(componentSource);
 
-    expect(apiSource).toContain("http.post<{ models: string[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)");
+    expect(apiSource).toContain("http.post<ChannelCatalogDiff>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)");
     expect(apiSource).toContain("http.post<{ models: string[]; added: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/import`, { models })");
     expect(component).toContain('title="选择要导入的模型"');
     expect(component).toContain("默认勾选已存在的模型，新模型默认不勾选");
     expect(component).toContain("setFetchPreviewOpen(true)");
-    expect(component).toContain("setSelectedFetchModels(selectExistingImportModels(result.models,");
+    expect(component).toMatch(/setSelectedFetchModels\(\s*selectExistingImportModels\(\s*result\.models,/);
     expect(component).toContain("已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型");
     expect(component).toContain("disabled={importing || !visibleFetchModels.length || allVisibleFetchModelsSelected}");
     expect(component).toContain("onClick={() => setSelectedFetchModels((current) => selectVisibleModels(current, visibleFetchModels))}");
@@ -253,13 +253,15 @@ test("task-first settings reveal dependent configuration only after the primary 
     expect(interceptionSource).not.toContain('className="admin-intercept-overview"');
     expect(sourceSection(interceptionSource, "const changeEnabled", "if (loading")).not.toContain("save(");
 
-    expect(thirdPartySource).toContain('title="1. 配置 LibTV 服务端访问凭据"');
+    expect(thirdPartySource).toContain('title="1. 连接 LibTV 账号"');
     expect(thirdPartySource).toContain('title="2. 是否开放用户导入 LibTV 画布"');
-    expect(thirdPartySource).toContain('title="3. 验证已保存的 LibTV 凭据"');
-    expect(thirdPartySource).toContain("{draftHasToken ? (");
-    expect(thirdPartySource).toContain("{setting.hasToken && !clearTokenDraft ? (");
+    expect(thirdPartySource).toContain('title="3. 验证已连接的 LibTV 账号"');
+    expect(thirdPartySource).toContain("{connected ? (");
+    expect(thirdPartySource).toContain("连接 LibTV 账号");
+    expect(thirdPartySource).not.toContain("输入 LibTV Token");
+    expect(thirdPartySource).not.toContain("请先填写 LibTV Token");
     expect(thirdPartySource).not.toContain('className="admin-third-party-overview"');
-    expect(sourceSection(thirdPartySource, "const changeEnabled", "const markTokenForRemoval")).not.toContain("save(");
+    expect(sourceSection(thirdPartySource, "const changeEnabled", "async function save")).not.toContain("save(");
 
     expect(compactSource(cssSource)).toContain(".admin-feature-board { width: 100%; max-width: none; grid-template-columns: minmax(0, 1fr);");
 });

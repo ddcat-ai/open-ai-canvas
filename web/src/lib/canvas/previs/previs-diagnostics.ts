@@ -1,5 +1,5 @@
 /**
- * 预演台诊断领域：稳定白名单 code + 安全结构化字段。
+ * 世界引擎诊断领域：稳定白名单 code + 安全结构化字段。
  * 调用边界只接收受限枚举、布尔、有限数值和 safe-id，不透传业务正文、URL、凭证或错误栈。
  */
 
@@ -18,14 +18,14 @@ export type PrevisDiagnosticCode = (typeof PREVIS_DIAGNOSTIC_CODES)[number];
 const CODE_SET: ReadonlySet<string> = new Set(PREVIS_DIAGNOSTIC_CODES);
 
 const MESSAGES: Record<PrevisDiagnosticCode, string> = {
-    PREVIS_VIEWPORT_RENDER_FAILED: "预演台 3D 视口渲染失败",
-    PREVIS_VIEWPORT_CONTEXT_LOST: "预演台 WebGL 上下文丢失",
-    PREVIS_VIEWPORT_CONTEXT_RESTORED: "预演台 WebGL 上下文已恢复",
-    PREVIS_MODEL_LOAD_FAILED: "预演台 3D 模型加载失败",
-    PREVIS_MODEL_LOAD_RETRY: "预演台 3D 模型重试加载",
-    PREVIS_MODEL_ADOPT_FAILED: "预演台 3D 模型采纳失败",
-    PREVIS_SAVE_FLUSH_FAILED: "预演台场景保存失败",
-    PREVIS_CLOSE_BLOCKED: "预演台关闭被阻止",
+    PREVIS_VIEWPORT_RENDER_FAILED: "世界引擎 3D 视口渲染失败",
+    PREVIS_VIEWPORT_CONTEXT_LOST: "世界引擎 WebGL 上下文丢失",
+    PREVIS_VIEWPORT_CONTEXT_RESTORED: "世界引擎 WebGL 上下文已恢复",
+    PREVIS_MODEL_LOAD_FAILED: "世界引擎 3D 模型加载失败",
+    PREVIS_MODEL_LOAD_RETRY: "世界引擎 3D 模型重试加载",
+    PREVIS_MODEL_ADOPT_FAILED: "世界引擎 3D 模型采纳失败",
+    PREVIS_SAVE_FLUSH_FAILED: "世界引擎场景保存失败",
+    PREVIS_CLOSE_BLOCKED: "世界引擎关闭被阻止",
 };
 
 const LEVELS: Record<PrevisDiagnosticCode, "info" | "warning" | "error"> = {

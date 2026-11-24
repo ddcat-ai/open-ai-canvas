@@ -79,6 +79,12 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 			return nil, err
 		}
 		item := map[string]interface{}{"dataUrl": dataURL(mimeType, data), "mimeType": mimeType}
+		if len(reference.Metadata) > 0 {
+			item["metadata"] = reference.Metadata
+		}
+		if reference.Name != "" {
+			item["name"] = reference.Name
+		}
 		items = append(items, item)
 	}
 	var output map[string]interface{}
@@ -97,7 +103,7 @@ func finishProtocolResult(ctx context.Context, config providerConfig, mode strin
 // attachProtocolUsage 把视频结果的上游 usage（如输出时长、帧率）写入任务结果，
 // 供按实际输出时长结算时在资源未探测到时长时兜底。
 func attachProtocolUsage(output map[string]interface{}, mode string, result *protocol.Result) {
-	if output == nil || result == nil || mode != "video" || len(result.Usage) == 0 {
+	if output == nil || result == nil || (mode != "video" && mode != "image") || len(result.Usage) == 0 {
 		return
 	}
 	output["usage"] = result.Usage
@@ -108,6 +114,9 @@ func attachProtocolUsage(output map[string]interface{}, mode string, result *pro
 // 不会把未知内容伪装成具体图片、视频或音频 MIME。
 func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, request protocol.GenerationRequest, taskID string, result *protocol.Result, pollPolicy videoPollPolicy) (map[string]interface{}, error) {
 	if protocolResultHasOutput(input.Mode, result) {
+		if err := recordProtocolImageUsage(ctx, input, request, result); err != nil {
+			return nil, err
+		}
 		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, result, pollPolicy)
 	}
 	resultAdapter, ok := protocolResultEndpoint(adapter)
@@ -166,6 +175,9 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 				media[index].URL = base.ResolveReference(reference).String()
 			}
 		}
+		if err := recordProtocolImageUsage(ctx, input, request, state.Result); err != nil {
+			return nil, err
+		}
 		return finishProtocolResult(ctx, input.Config, input.Mode, taskID, state.Result, pollPolicy)
 	}
 	if mimeType == "" {
@@ -173,6 +185,9 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 	}
 	reference := protocol.MediaReference{DataURL: dataURL(mimeType, data), MIMEType: mimeType}
 	downloaded := &protocol.Result{}
+	if result != nil {
+		downloaded.Usage = result.Usage
+	}
 	switch input.Mode {
 	case "image":
 		downloaded.Images = []protocol.MediaReference{reference}
@@ -182,6 +197,9 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 		downloaded.Audios = []protocol.MediaReference{reference}
 	default:
 		return nil, fmt.Errorf("声明式协议结果下载不支持生成模式 %s", input.Mode)
+	}
+	if err := recordProtocolImageUsage(ctx, input, request, downloaded); err != nil {
+		return nil, err
 	}
 	return finishProtocolResult(ctx, input.Config, input.Mode, taskID, downloaded, pollPolicy)
 }
@@ -278,8 +296,38 @@ func protocolMediaBytesOnce(ctx context.Context, config providerConfig, referenc
 	if value == "" {
 		return nil, "", errors.New("声明式协议媒体结果地址为空")
 	}
+	value, err := resolveProtocolMediaURL(config.BaseURL, value)
+	if err != nil {
+		return nil, "", err
+	}
 	data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
 	return data, normalizedMediaMimeType(mimeType, data), err
+}
+
+func resolveProtocolMediaURL(baseURL, rawURL string) (string, error) {
+	reference, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return "", fmt.Errorf("解析声明式协议媒体结果地址失败：%w", err)
+	}
+	if reference.IsAbs() {
+		if (reference.Scheme != "http" && reference.Scheme != "https") || reference.Host == "" {
+			return "", errors.New("声明式协议媒体结果地址只支持完整的 HTTP 或 HTTPS URL")
+		}
+		return reference.String(), nil
+	}
+	if reference.Host != "" {
+		return "", errors.New("声明式协议媒体结果地址不能使用 scheme-relative URL")
+	}
+
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || !base.IsAbs() || base.Host == "" || (base.Scheme != "http" && base.Scheme != "https") {
+		return "", errors.New("解析声明式协议媒体结果地址失败：渠道 Base URL 无效")
+	}
+	resolved := base.ResolveReference(reference)
+	if !sameProviderOrigin(baseURL, resolved.String()) {
+		return "", errors.New("声明式协议媒体结果地址超出渠道来源")
+	}
+	return resolved.String(), nil
 }
 
 func retryableProtocolMediaDownload(err error) bool {

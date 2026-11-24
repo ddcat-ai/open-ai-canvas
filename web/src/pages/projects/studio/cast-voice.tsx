@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Select } from "antd";
-import { Mic, Pause, Play, Square, Upload, X } from "lucide-react";
+import { Mic, MicOff, Pause, Play, Square, Upload, X } from "lucide-react";
 
 import { useVoiceRecording } from "@/hooks/use-voice-recording";
 import { clearDramaCastVoice, setDramaCastVoice, type DramaCast } from "@/services/api/drama";
@@ -15,16 +15,29 @@ const AUDIO_ACCEPT = "audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/mp4,audio
 
 /** 试听服务端的声音样本；换样本或卸载时停止播放。 */
 function useSamplePlayer(resourceId: string) {
+    const { message } = App.useApp();
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const requestRef = useRef(0);
     const [playing, setPlaying] = useState(false);
-    useEffect(() => () => audioRef.current?.pause(), []);
     useEffect(() => {
-        audioRef.current?.pause();
         setPlaying(false);
+        return () => {
+            requestRef.current++;
+            const audio = audioRef.current;
+            if (audio) {
+                audio.onended = null;
+                audio.onerror = null;
+                audio.pause();
+                audio.removeAttribute("src");
+                audio.load();
+            }
+            audioRef.current = null;
+        };
     }, [resourceId]);
     const toggle = async () => {
         if (!resourceId) return;
         const audio = audioRef.current || (audioRef.current = new Audio());
+        const version = ++requestRef.current;
         if (playing) {
             audio.pause();
             setPlaying(false);
@@ -32,14 +45,43 @@ function useSamplePlayer(resourceId: string) {
         }
         setPlaying(true);
         try {
-            audio.src = resolveResourceAccessURL((await getResourceAccess(resourceStorageKey(resourceId), "display", "playback")).url);
+            const access = await getResourceAccess(resourceStorageKey(resourceId), "display", "playback");
+            if (version !== requestRef.current) return;
+            audio.src = resolveResourceAccessURL(access.url);
             audio.onended = () => setPlaying(false);
+            audio.onerror = () => {
+                setPlaying(false);
+                message.error("声音样本播放失败，请重试");
+            };
             await audio.play();
-        } catch {
+            if (version !== requestRef.current) audio.pause();
+        } catch (error) {
+            if (version !== requestRef.current) return;
             setPlaying(false);
+            message.error(error instanceof Error ? error.message : "声音样本播放失败");
         }
     };
     return { playing, toggle };
+}
+
+/** 卡片与参考面板共用声音状态和试听入口。 */
+export function CastVoicePreview({ resourceId, name }: { resourceId?: string; name: string }) {
+    const player = useSamplePlayer(resourceId || "");
+    return (
+        <button
+            type="button"
+            className="drama-voice-preview"
+            disabled={!resourceId}
+            aria-label={resourceId ? `${player.playing ? "暂停" : "试听"}${name}的音频` : `${name}未绑定音频`}
+            onClick={(event) => {
+                event.stopPropagation();
+                void player.toggle();
+            }}
+        >
+            {player.playing ? <Pause className="size-3.5" /> : resourceId ? <Play className="size-3.5" /> : <MicOff className="size-3.5" />}
+            {resourceId ? (player.playing ? "暂停试听" : "有音频 · 试听") : "无音频"}
+        </button>
+    );
 }
 
 /**
@@ -56,9 +98,6 @@ export function CastVoiceField({ projectId, cast, restyle, onChanged }: { projec
     const current = profiles.find((profile) => profile.id === cast.voiceProfileId);
     const sampleId = cast.voiceSampleResourceId || "";
     const player = useSamplePlayer(sampleId);
-    // 录音 Hook 到达上限时只停止录制、不交出音频，所以上限由这里在录音仍在进行时主动结束（见下方 effect）。
-    const recorder = useVoiceRecording({ maxDuration: MAX_RECORD_SECONDS * 20 });
-    const finishingRef = useRef(false);
     const done = (result: { affectedSegments: number }, text: string) => {
         message.success(result.affectedSegments ? `${text}；${result.affectedSegments} 个剧情段的视频需重新生成` : text);
         void queryClient.invalidateQueries({ queryKey: VOICE_PROFILES_KEY });
@@ -83,27 +122,16 @@ export function CastVoiceField({ projectId, cast, restyle, onChanged }: { projec
         onError: (error) => message.error(error instanceof Error ? error.message : "清除失败"),
     });
     const busy = bind.isPending || upload.isPending || clear.isPending;
-    const recording = recorder.state !== "idle";
-    const finishRecording = async () => {
-        if (finishingRef.current) return;
-        finishingRef.current = true;
-        try {
-            const blob = await recorder.stop();
-            if (!blob || !blob.size) {
-                message.warning("没有录到声音，请重试");
-                return;
-            }
+    const recorder = useVoiceRecording({
+        maxDuration: MAX_RECORD_SECONDS,
+        onComplete: (blob) => {
             const extension = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm";
             upload.mutate({ file: blob, name: `${cast.name}录音.${extension}` });
-        } finally {
-            finishingRef.current = false;
-        }
-    };
-    useEffect(() => {
-        if (recorder.state === "recording" && recorder.duration >= MAX_RECORD_SECONDS) void finishRecording();
-        // finishRecording 每次渲染都是新函数；只在时长到达上限时触发一次。
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [recorder.duration, recorder.state]);
+        },
+    });
+    useEffect(() => recorder.cancel, [projectId, cast.id, recorder.cancel]);
+    const recording = recorder.state !== "idle";
+    const finishRecording = () => recorder.stop();
     return (
         <div className="drama-voice">
             <div className="drama-voice-current">
@@ -147,7 +175,8 @@ export function CastVoiceField({ projectId, cast, restyle, onChanged }: { projec
                     <Button
                         size="small"
                         icon={<Mic className="size-3.5" />}
-                        disabled={busy}
+                        disabled={busy || recorder.starting}
+                        loading={recorder.starting}
                         onClick={() =>
                             void recorder.start().catch(() => {
                                 message.error("无法使用麦克风，请检查浏览器权限");

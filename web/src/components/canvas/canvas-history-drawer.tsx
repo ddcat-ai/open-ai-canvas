@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-routes";
 import { Drawer, Button, Input, Popconfirm } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useMemo, useState } from "react";
@@ -72,7 +73,7 @@ export function CanvasHistoryDrawer({ open, onClose }: { open: boolean; onClose:
     }, [filter, keyword, timelineItems]);
 
     const openProject = (id: string) => {
-        navigate(`/canvas/${id}`);
+        navigate(workspacePath(`/canvas/${id}`));
         onClose();
     };
 

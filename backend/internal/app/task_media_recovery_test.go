@@ -74,6 +74,10 @@ func TestMediaRecoveryDownloadFailureResumesSameTaskAfterRestart(t *testing.T) {
 	defer server.Close()
 	config := providerConfig{BaseURL: server.URL}
 	task := seedMediaTask(t, db, config)
+	task.Prompt = "雨夜车站，主角回头"
+	if err := db.Model(task).Update("prompt", task.Prompt).Error; err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.WithValue(withProviderAnalytics(context.Background(), s, *task), mediaExecutionTaskKey{}, *task)
 	_, handled, failure := recoverProtocolMedia(ctx, config, "image", []protocol.MediaReference{{URL: server.URL + "/result?token=private-test-token"}})
 	if !handled || failure == nil {
@@ -122,8 +126,18 @@ func TestMediaRecoveryDownloadFailureResumesSameTaskAfterRestart(t *testing.T) {
 	if len(assets) != 1 || !strings.HasPrefix(assets[0].ID, "generation_") {
 		t.Fatalf("assets: %+v", assets)
 	}
+	if assets[0].Title != task.Prompt || !strings.Contains(assets[0].PayloadJSON, task.Prompt) {
+		t.Fatalf("recovery lost asset name: %+v", assets[0])
+	}
+	if err := db.Model(&assets[0]).Update("title", "用户改名").Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := restarted.registerRecoveredMediaAssets(*completed); err != nil {
 		t.Fatal(err)
+	}
+	var renamed model.Asset
+	if err := db.First(&renamed, "id = ?", assets[0].ID).Error; err != nil || renamed.Title != "用户改名" {
+		t.Fatalf("replay overwrote name: %+v err=%v", renamed, err)
 	}
 	var count int64
 	db.Model(&model.Asset{}).Where("user_id = ?", task.UserID).Count(&count)

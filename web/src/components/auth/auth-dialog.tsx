@@ -22,7 +22,7 @@ function currentPath() {
 
 /**
  * 登录弹窗：左侧品牌舞台，右侧与独立登录页相同的登录面板。
- * 渲染在路由之外，导航由 AuthDialogHost 传入的 navigate 完成。
+ * 渲染在根路由布局中，导航由 AuthDialogHost 传入的 navigate 完成。
  */
 export default function AuthDialog({ navigate }: { navigate: (to: string) => void }) {
     const { t } = useTranslation();

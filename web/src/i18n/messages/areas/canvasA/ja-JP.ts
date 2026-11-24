@@ -670,6 +670,11 @@ export const jaJP: DeepStringRecord<typeof zhCN> = {
         noDescription: "スキルの説明はありません",
     },
     dramaAdopt: {
+        look: "衣装・ヘアメイク",
+        chooseLook: "衣装・スタイルを選択",
+        baseLook: "基本スタイル（キャラクター本体）",
+        lookNote: "選択したスタイルに適用します。他のスタイルの画像は変更されません。",
+        noLooks: "追加のスタイルはありません。制作画面のキャラクター設定で追加・保存してください。",
         mediaPending: "メディアはまだ生成中またはアップロード中です。完了してから採用してください。",
         mediaNotStored: "このノードのメディアはサーバーに保存されていない（外部リンクなど）ため採用できません。先にキャンバスへアップロードしてください。",
         chooseSegment: "置き換えるシーンを選択してください。",

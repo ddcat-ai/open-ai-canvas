@@ -1,21 +1,27 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useSkillLibraryAccess } from "@/lib/skill-access";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Button, Checkbox, Input } from "antd";
-import { ArrowLeft, BookMarked, Check, ChevronRight, Cpu, Gauge, LockKeyhole, PlugZap, Search, ShieldCheck, Sparkles, Wrench, Blocks, CirclePlay, X } from "lucide-react";
+import { ArrowLeft, BookMarked, Check, ChevronRight, Cpu, Gauge, LockKeyhole, Search, ShieldCheck, Sparkles, Wrench, Blocks, CirclePlay, X } from "lucide-react";
 
 import { ModelPicker } from "@/components/model-picker";
+import { ThinkingLevelSlider } from "@/components/thinking-level-slider";
+import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { LEGACY_TEXT_THINKING_CONFIG, resolveThinkingLevel, thinkingLevelsFor } from "@/lib/text-thinking";
 import { Switch } from "@/components/ui/base/switch";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import AgentMemoryPane from "@/pages/settings/agent-memory-pane";
 import type { AgentPermissionMode, AgentProfileLayer, AgentProfileScope, AgentProfileView, AgentReasoningMode } from "@/services/api/agent";
 import type { Skill, SkillAgentMode } from "@/services/api/skills";
 import type { AiConfig } from "@/stores/use-config-store";
-import { AgentConnectorsBar } from "./canvas-cloud-agent-connectors";
+
+const MCPManager = lazy(() => import("@/components/mcp/mcp-manager"));
 
 /** 对话固定的技能上限；与技能商店弹窗一致，后端另有含点名在内的 16 个硬上限。 */
 export const AGENT_PINNED_SKILL_LIMIT = 8;
 
 export type AgentContextKey = "canvas" | "resources" | "generation_history" | "skills" | "project";
-type SettingsSection = "home" | "profile" | "memories" | "skills" | "mcp" | "context" | "budget";
+export type SettingsSection = "home" | "profile" | "memories" | "skills" | "mcp" | "context" | "budget";
+export type AgentMCPSettingsTab = "connections" | "market";
 
 type AgentSettingsProps = {
     theme: CanvasTheme;
@@ -45,6 +51,9 @@ type AgentSettingsProps = {
     maxGenerationTasks: string;
     maxVideoSeconds: string;
     onBack: () => void;
+    /** 从 Agent 输入框的连接器入口直接打开指定设置页。 */
+    initialSection?: SettingsSection;
+    initialMcpTab?: AgentMCPSettingsTab;
     /** 设置页也能直接收起 Agent，不必先返回对话。 */
     onCollapse?: () => void;
     onModelChange: (model: string) => void;
@@ -71,18 +80,20 @@ const permissionOptions: Array<{ value: AgentPermissionMode; label: string; shor
 
 const contextOptions: Array<{ value: AgentContextKey; label: string; description: string }> = [{ value: "canvas", label: "画布节点目录", description: "每次请求只带节点 id、类型和标题；正文按页读取，不含媒体或未同步修改" }];
 
-const reasoningOptions: Array<{ value: AgentReasoningMode; label: string; description: string }> = [
-    { value: "off", label: "关闭", description: "直接执行" },
-    { value: "auto", label: "自动", description: "按任务决定" },
-    { value: "deep", label: "深入", description: "复杂任务优先规划" },
-];
-
 export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
-    const [section, setSection] = useState<SettingsSection>("home");
+    const canUseSkills = useSkillLibraryAccess();
+    const [selectedSection, setSection] = useState<SettingsSection>(props.initialSection || "home");
+    const section = !canUseSkills && selectedSection === "skills" ? "home" : selectedSection;
     const [skillTab, setSkillTab] = useState<"installed" | "market">("installed");
+    const [mcpTab, setMcpTab] = useState<AgentMCPSettingsTab>(props.initialMcpTab || "connections");
     const { theme } = props;
     const title = section === "home" ? "Agent 设置" : sectionTitle(section);
     const goHome = () => setSection("home");
+
+    useEffect(() => {
+        if (props.initialSection) setSection(props.initialSection);
+        if (props.initialMcpTab) setMcpTab(props.initialMcpTab);
+    }, [props.initialMcpTab, props.initialSection]);
 
     return (
         <div className="canvas-agent-settings flex min-h-0 min-w-0 flex-1 flex-col" style={{ background: theme.node.panel }}>
@@ -104,7 +115,7 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
             {section === "profile" ? <ProfileWorkspace props={props} theme={theme} /> : null}
             {section === "memories" ? <MemoriesWorkspace /> : null}
             {section === "skills" ? <SkillsWorkspace props={props} theme={theme} tab={skillTab} onTabChange={setSkillTab} /> : null}
-            {section === "mcp" ? <McpWorkspace theme={theme} /> : null}
+            {section === "mcp" ? <McpWorkspace tab={mcpTab} onTabChange={setMcpTab} /> : null}
             {section === "context" ? <ContextWorkspace props={props} theme={theme} /> : null}
             {section === "budget" ? <BudgetWorkspace props={props} theme={theme} /> : null}
         </div>
@@ -112,28 +123,12 @@ export function CanvasCloudAgentSettings(props: AgentSettingsProps) {
 }
 
 function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; theme: CanvasTheme; onOpen: (section: SettingsSection) => void }) {
+    const canUseSkills = useSkillLibraryAccess();
+    const thinking = modelCapabilityConfigFor(props.config, props.selectedModel).text?.thinking || LEGACY_TEXT_THINKING_CONFIG;
     return (
         <div className="canvas-agent-settings-scroll thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
             <section>
-                <SettingLabel label="推理模式" hint="新运行生效" />
-                <div className="grid grid-cols-3 gap-2">
-                    {reasoningOptions.map((option) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            aria-pressed={props.reasoningMode === option.value}
-                            onClick={() => props.onReasoningModeChange(option.value)}
-                            className="rounded-xl p-3 text-left"
-                            style={{ background: props.reasoningMode === option.value ? theme.toolbar.itemHover : theme.node.fill, border: `1px solid ${props.reasoningMode === option.value ? theme.accent.primary : "transparent"}` }}
-                        >
-                            <div className="text-xs font-semibold">{option.label}</div>
-                            <div className="mt-1 text-[var(--fs-label)] opacity-50">{option.description}</div>
-                        </button>
-                    ))}
-                </div>
-                <p className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>
-                    推理只用于目标拆解、缺口判断和下一步工具选择，不会把内部思考过程展示给用户。
-                </p>
+                <ThinkingLevelSlider levels={thinkingLevelsFor(thinking)} value={props.reasoningMode} resolvedLevel={resolveThinkingLevel(thinking, props.reasoningMode)} onChange={props.onReasoningModeChange} />
             </section>
             <section>
                 <SettingLabel label="对话模型" hint="新运行生效" />
@@ -190,8 +185,8 @@ function SettingsHome({ props, theme, onOpen }: { props: AgentSettingsProps; the
                     <SettingRow theme={theme} icon={<Cpu className="size-4" />} title="上下文" summary={props.nodeCount === null ? "未绑定画布" : `${props.nodeCount} 个节点 · ${props.contextScope.length} 个范围`} onClick={() => onOpen("context")} />
                     <SettingRow theme={theme} icon={<BookMarked className="size-4" />} title="长期偏好" summary={profileSummary(props.profileView)} onClick={() => onOpen("profile")} />
                     <SettingRow theme={theme} icon={<BookMarked className="size-4" />} title="个人记忆" summary="Agent 在对话中自己记住和改写，可随时撤销；只属于你" onClick={() => onOpen("memories")} />
-                    <SettingRow theme={theme} icon={<Blocks className="size-4" />} title="Skills · 用户技能库" summary={skillsSummary(props.installedSkills, props.selectedSkillIds)} onClick={() => onOpen("skills")} />
-                    <SettingRow theme={theme} icon={<Wrench className="size-4" />} title="工具与连接" summary="画布、技能参考文件、生成任务；第三方连接即将支持" onClick={() => onOpen("mcp")} />
+                    {canUseSkills && <SettingRow theme={theme} icon={<Blocks className="size-4" />} title="Skills · 用户技能库" summary={skillsSummary(props.installedSkills, props.selectedSkillIds)} onClick={() => onOpen("skills")} />}
+                    <SettingRow theme={theme} icon={<Wrench className="size-4" />} title="工具与连接" summary="个人与平台 MCP、工具授权和连接市场" onClick={() => onOpen("mcp")} />
                     <SettingRow theme={theme} icon={<Gauge className="size-4" />} title="预算" summary={`每轮最多 ${props.maxCredits || "未设置"} 积分 · 固定计价模型`} onClick={() => onOpen("budget")} />
                 </div>
             </section>
@@ -499,35 +494,18 @@ function SkillRow({ skill, theme, pinned, pinDisabled, installed, installedView,
     );
 }
 
-function McpWorkspace({ theme }: { theme: CanvasTheme }) {
+function McpWorkspace({ tab, onTabChange }: { tab: AgentMCPSettingsTab; onTabChange: (tab: AgentMCPSettingsTab) => void }) {
     return (
-        <div className="canvas-agent-settings-scroll thin-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
-            <div className="rounded-xl p-4" style={{ background: theme.node.fill }}>
-                <div className="flex items-center gap-2 text-sm font-medium">
-                    <PlugZap className="size-4 shrink-0" />
-                    服务端内置工具
-                </div>
-                <p className="mt-2 text-xs leading-5" style={{ color: theme.node.muted }}>
-                    按本轮权限开放，实际能力在发送前向后端确认。Skills 提供操作知识，不会提升工具权限。
-                </p>
-            </div>
-            <section>
-                <SettingLabel label="工具范围" />
-                {["已保存画布读取", "技能参考文件（固定版本）", "文本 / Markdown 节点写入", "系统模型媒体生成与任务查询"].map((tool) => (
-                    <div key={tool} className="flex items-center gap-3 py-3 text-xs">
-                        <Wrench className="size-4 shrink-0" style={{ color: theme.node.muted }} />
-                        <span className="flex-1">{tool}</span>
-                        <span style={{ color: theme.node.muted }}>受权限约束</span>
-                    </div>
-                ))}
-            </section>
-            <section>
-                <SettingLabel label="第三方连接" hint="即将支持" />
-                <AgentConnectorsBar />
-            </section>
-            <p className="text-xs leading-5" style={{ color: theme.node.muted }}>
-                自定义 MCP 暂未开放。实际工具权限、密钥和调用配额需由 Agent 后端校验，不能在浏览器中假设已启用。
-            </p>
+        <div className="canvas-agent-settings-scroll flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+            <Suspense
+                fallback={
+                    <p className="text-caption text-muted-foreground" role="status">
+                        正在加载 MCP 设置…
+                    </p>
+                }
+            >
+                <MCPManager initialTab={tab} onTabChange={onTabChange} />
+            </Suspense>
         </div>
     );
 }
@@ -639,7 +617,7 @@ function sectionSubtitle(section: SettingsSection) {
           : section === "skills"
             ? "已安装的技能 Agent 会按任务自动选用"
             : section === "mcp"
-              ? "云端工具与连接状态"
+              ? "安装 MCP、配置参数并授权工具"
               : section === "context"
                 ? "控制 Agent 能读取的范围"
                 : "控制本轮积分与生成消耗";

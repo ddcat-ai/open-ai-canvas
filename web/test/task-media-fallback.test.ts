@@ -55,7 +55,10 @@ describe("task cancellation policy", () => {
         expect(grid).not.toContain("取消任务");
         expect(page).not.toContain("cancelGenerationTask");
         expect(page).not.toContain('runAction(detailTask.id, "cancel")');
-        expect(page).toContain('if (task.status === "queued" || task.status === "running")');
+        // 进行中统计按「非终态」兜底：后端可能出现枚举外的中间态（如 Agent 控制面超时任务），
+        // 白名单匹配会让这些任务不在任何 tab 里，导致总数对不上。
+        expect(page).toContain('if (task.status === "succeeded") succeeded += 1;');
+        expect(page).toContain('task.status !== "succeeded" && task.status !== "failed" && task.status !== "cancelled"');
     });
 
     test("batch stop only applies to items still waiting locally", () => {

@@ -235,7 +235,7 @@ func TestAssetImageBindingCommitsWithTaskSuccessAndLease(t *testing.T) {
 	for _, state := range []string{"running", "cancelled", "lost-lease"} {
 		t.Run(state, func(t *testing.T) {
 			svc, db, projectID, asset := seedProjectVisualAsset(t, model.AssetCategoryEnvironment)
-			if err := db.AutoMigrate(&model.SystemSetting{}, &model.CanvasProject{}, &model.TaskLog{}, &model.Result{}, &model.ApiCallLog{}, &model.TaskTextDelta{}); err != nil {
+			if err := db.AutoMigrate(storageQuotaTestModels()...); err != nil {
 				t.Fatal(err)
 			}
 			input, _ := json.Marshal(map[string]any{"metadata": map[string]any{"operation": "project_asset_image", "projectAssetId": asset.ID, "projectAssetVersionId": asset.PrimaryVersionID}})

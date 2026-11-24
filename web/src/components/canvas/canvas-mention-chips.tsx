@@ -7,8 +7,10 @@ import {
     Camera,
     Clapperboard,
     Clock,
+    ContactRound,
     Contrast,
     FastForward,
+    Film,
     Globe2,
     Grid2x2,
     Grid3x3,
@@ -41,8 +43,10 @@ export const TOOL_ICON_MAP: Record<string, React.ComponentType<{ className?: str
     Camera,
     Clapperboard,
     Clock,
+    ContactRound,
     Contrast,
     FastForward,
+    Film,
     Globe2,
     Grid2x2,
     Grid3x3,
@@ -66,6 +70,24 @@ export function toolIconSvg(iconName: string): string {
 
 function inlineIconSvg(Icon: React.ComponentType<{ className?: string }>): string {
     return renderToStaticMarkup(<Icon className="size-3" />);
+}
+
+function syncInlineMentionPresentation(chip: HTMLElement, reference: CanvasResourceReference) {
+    if (reference.assetKind) chip.dataset.assetKind = reference.assetKind;
+    else delete chip.dataset.assetKind;
+    chip.setAttribute("aria-label", reference.title || reference.displayLabel || reference.label);
+    const label = chip.querySelector(".canvas-resource-inline-label");
+    const displayLabel = reference.displayLabel || reference.title || reference.label;
+    if (label && label.textContent !== displayLabel) label.textContent = displayLabel;
+    let kind = chip.querySelector<HTMLElement>(".canvas-resource-inline-kind");
+    if (reference.assetKindLabel) {
+        if (!kind) {
+            kind = document.createElement("span");
+            kind.className = "canvas-resource-inline-kind";
+            chip.appendChild(kind);
+        }
+        kind.textContent = reference.assetKindLabel;
+    } else kind?.remove();
 }
 
 export function createInlineMentionChip(reference: CanvasResourceReference, token: string) {
@@ -96,8 +118,8 @@ export function createInlineMentionChip(reference: CanvasResourceReference, toke
 
     const label = document.createElement("span");
     label.className = "canvas-resource-inline-label";
-    label.textContent = reference.label;
     chip.appendChild(label);
+    syncInlineMentionPresentation(chip, reference);
 
     return chip;
 }
@@ -207,8 +229,7 @@ export function syncInlineMentionPreviews(editor: HTMLElement, references: Canva
         if (preview && (preview.tagName !== tag || preview.className !== className || preview.getAttribute("src") !== src)) {
             preview.replaceWith(createInlinePreview(reference));
         }
-        const label = chip.querySelector(".canvas-resource-inline-label");
-        if (label && label.textContent !== reference.label) label.textContent = reference.label;
+        syncInlineMentionPresentation(chip, reference);
     });
 }
 

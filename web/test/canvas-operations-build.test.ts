@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildCanvasOperations, repairPendingCanvasMutationRequest } from "@/services/user-data-sync";
+import { canvasContentHash, sameCanvasContent } from "@/lib/canvas/canvas-content";
+import { resourceIdFromStorageKey } from "@/services/api/resources";
+import { buildCanvasOperations, prepareJournalRequestForReplay, repairPendingCanvasMutationRequest } from "@/services/user-data-sync";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 
 function canvas(patch: Partial<CanvasProject> = {}): CanvasProject {
@@ -130,5 +132,109 @@ describe("画布 operations 生成", () => {
         const legacy = JSON.parse(JSON.stringify({ mutationId: "m-2", operations: [{ type: "set_field", field: "timeline", value: { tracks: [] }, beforeValue: undefined }] }));
         const repaired = repairPendingCanvasMutationRequest(legacy, canvas(), canvas());
         expect(repaired.operations).toEqual([{ type: "set_field", field: "timeline", value: { tracks: [] }, beforeValue: null }]);
+    });
+
+    test("服务端缺省可选字段 (undefined) 与本地归一化值 (null / 空数组) 不产生空转 set_field 或哈希不一致", async () => {
+        const remote = canvas({
+            projectId: "",
+            activeChatId: undefined,
+            starterMode: undefined,
+            chatSessions: undefined as unknown as CanvasProject["chatSessions"],
+            previsScenes: undefined,
+            timeline: undefined,
+        });
+        const local = canvas({
+            projectId: undefined,
+            activeChatId: null,
+            starterMode: undefined,
+            chatSessions: [],
+            previsScenes: [],
+            timeline: undefined,
+        });
+        expect(buildCanvasOperations(remote, local)).toEqual([]);
+        expect(sameCanvasContent(remote, local)).toBe(true);
+        expect(await canvasContentHash(remote)).toBe(await canvasContentHash(local));
+
+        const nonEmptyChat = canvas({
+            ...local,
+            chatSessions: [{ id: "chat-1", title: "对话 1", createdAt: "2026-04-01T00:00:00Z", updatedAt: "2026-04-01T00:00:00Z", messages: [] }],
+        });
+        expect(sameCanvasContent(remote, nonEmptyChat)).toBe(false);
+        expect(await canvasContentHash(remote)).not.toBe(await canvasContentHash(nonEmptyChat));
+        expect(buildCanvasOperations(remote, nonEmptyChat)).toEqual([
+            {
+                type: "set_field",
+                field: "chatSessions",
+                value: nonEmptyChat.chatSessions,
+                beforeValue: null,
+            },
+        ]);
+
+        // 已持久化在 journal 中且服务端可能已接受并写入 receipt 的请求，在未知网络结果下首次重放时不得改写原 operations 摘要或 mutationId
+        const committedMixedJournal = {
+            mutationId: "m-committed-replay",
+            operations: [
+                { type: "set_field", field: "title", value: "新标题", beforeValue: "自由画布 1" },
+                { type: "set_field", field: "projectId", value: null, beforeValue: "" },
+                { type: "set_field", field: "activeChatId", value: null, beforeValue: null },
+            ],
+        } as Parameters<typeof repairPendingCanvasMutationRequest>[0];
+        expect(prepareJournalRequestForReplay(committedMixedJournal, remote, local)).toBe(committedMixedJournal);
+        expect(repairPendingCanvasMutationRequest(committedMixedJournal, remote, local).operations).toEqual([
+            { type: "set_field", field: "title", value: "新标题", beforeValue: "自由画布 1" },
+            { type: "set_field", field: "activeChatId", value: null, beforeValue: null },
+        ]);
+
+        // R4-1 反例 1：create_canvas.patch.title="自由画布 1" 后跟同值 set_field(title="自由画布 1")，服务端 operations.go:528 接受该请求，首次重放必须保留原请求
+        const createWithSameTitleSetField = JSON.parse(
+            JSON.stringify({
+                mutationId: "m-create-same-title",
+                operations: [
+                    { type: "create_canvas", id: "canvas", patch: { title: "自由画布 1" } },
+                    { type: "set_field", field: "title", value: "自由画布 1", beforeValue: null },
+                ],
+            }),
+        );
+        expect(prepareJournalRequestForReplay(createWithSameTitleSetField, undefined, canvas())).toBe(createWithSameTitleSetField);
+
+        // R4-1 反例 2：省略 beforeValue 的可选字段 set_field(timeline)，服务端 operations.go:508 按 null 基线兼容接受，首次重放必须保留原请求
+        const optionalTimelineOmittedBefore = JSON.parse(
+            JSON.stringify({
+                mutationId: "m-optional-timeline",
+                operations: [
+                    { type: "set_field", field: "title", value: "新标题", beforeValue: "自由画布 1" },
+                    { type: "set_field", field: "timeline", value: { tracks: [] }, beforeValue: undefined },
+                ],
+            }),
+        );
+        expect(prepareJournalRequestForReplay(optionalTimelineOmittedBefore, remote, local)).toBe(optionalTimelineOmittedBefore);
+
+        // R5-1 反例：create_canvas(title="A") 后按顺序执行 set_field(title: A->B) 与 set_field(title: B->C)，服务端按序推进状态并接受，首次重放必须保留原请求
+        const createWithSequentialTitleUpdates = {
+            mutationId: "m-create-seq-titles",
+            operations: [
+                { type: "create_canvas", id: "canvas", patch: { title: "A" } },
+                { type: "set_field", field: "title", value: "B", beforeValue: "A" },
+                { type: "set_field", field: "title", value: "C", beforeValue: "B" },
+            ],
+        } as Parameters<typeof repairPendingCanvasMutationRequest>[0];
+        expect(prepareJournalRequestForReplay(createWithSequentialTitleUpdates, undefined, canvas({ title: "C" }))).toBe(createWithSequentialTitleUpdates);
+
+        // 反之：非可选字段 (title) 缺失 beforeValue 或空 patch_node 在服务端必然 400 拒绝（无 receipt），首次准备时即执行修复
+        const nonOptionalMissingBefore = JSON.parse(
+            JSON.stringify({
+                mutationId: "m-non-optional-missing",
+                operations: [{ type: "set_field", field: "title", value: "新标题", beforeValue: undefined }],
+            }),
+        );
+        expect(prepareJournalRequestForReplay(nonOptionalMissingBefore, canvas({ title: "旧标题" }), canvas({ title: "新标题" })).operations).toEqual([{ type: "set_field", field: "title", value: "新标题", beforeValue: "旧标题" }]);
+    });
+    test("resourceIdFromStorageKey 同时兼容标准 resource:<id> 前缀与前端防御性 32 位 hex 裸资源 ID", () => {
+        const hexId = "770755fe738dbd8b7cfb467c7350c1ad";
+        expect(resourceIdFromStorageKey(`resource:${hexId}`)).toBe(hexId);
+        expect(resourceIdFromStorageKey(hexId)).toBe(hexId);
+        expect(resourceIdFromStorageKey(hexId.toUpperCase())).toBe(hexId);
+        expect(resourceIdFromStorageKey("image:local-draft-1")).toBe("");
+        expect(resourceIdFromStorageKey("")).toBe("");
     });
 });

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { previsHorizontalFov, previsVerticalFov, resolvePrevisDepthRange, resolvePrevisOutputSize, resolvePrevisSafeFrame, resolvePrevisShotFov } from "../src/lib/canvas/previs/previs-optics";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { PREVIS_ASPECT_RATIOS, previsHorizontalFov, previsVerticalFov, resolvePrevisDepthRange, resolvePrevisOutputSize, resolvePrevisSafeFrame, resolvePrevisShotFov } from "../src/lib/canvas/previs/previs-optics";
 
 describe("镜头光学与输出边界", () => {
     test("36mm 传感器、画幅和焦段共同决定取景，忽略陈旧 fov", () => {
@@ -34,5 +37,16 @@ describe("镜头光学与输出边界", () => {
         expect(resolvePrevisDepthRange({ cameraPositions: [[0, 0, 0]], objectPositions: [[1000, 0, 0]], maxFar: 80 })).toEqual({ near: 78, far: 80 });
         expect(resolvePrevisDepthRange({ cameraPositions: [], objectPositions: [], maxFar: 10 })).toEqual({ near: 0, far: 10 });
         expect(() => resolvePrevisDepthRange({ cameraPositions: [], objectPositions: [], maxFar: NaN })).toThrow();
+    });
+});
+
+describe("画幅与后端一致", () => {
+    test("Agent 可写的画幅与前端画幅选项同序", () => {
+        const source = readFileSync(join(import.meta.dir, "../../backend/internal/app/cloud_agent_previs_mutation.go"), "utf8");
+        const backend = /var cloudAgentPrevisAspectRatios = \[\]string\{([^}]*)\}/
+            .exec(source)?.[1]
+            .match(/"([^"]+)"/g)
+            ?.map((item) => item.slice(1, -1));
+        expect(backend).toEqual(PREVIS_ASPECT_RATIOS.map((item) => item.value));
     });
 });

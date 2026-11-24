@@ -100,6 +100,7 @@ type cloudAgentMemorySnapshot struct {
 	Mode     string `json:"mode,omitempty"`
 	Revision int64  `json:"revision,omitempty"`
 	Text     string `json:"text,omitempty"`
+	WorkText string `json:"workText,omitempty"`
 }
 
 func agentMemoryMode(mode string) string {
@@ -504,7 +505,7 @@ func (s *Service) ensureAgentMemoryDocument(userID string) (*model.AgentMemoryDo
 }
 
 // cloudAgentMemorySnapshotForRun 冻结本轮记忆快照；关闭记忆时既不注入也不暴露写入工具。
-func (s *Service) cloudAgentMemorySnapshotForRun(userID, prompt string) (cloudAgentMemorySnapshot, error) {
+func (s *Service) cloudAgentMemorySnapshotForRun(userID, prompt string, parentRunID ...string) (cloudAgentMemorySnapshot, error) {
 	doc, err := s.ensureAgentMemoryDocument(userID)
 	if err != nil {
 		return cloudAgentMemorySnapshot{}, err
@@ -517,5 +518,17 @@ func (s *Service) cloudAgentMemorySnapshotForRun(userID, prompt string) (cloudAg
 	if err != nil {
 		return cloudAgentMemorySnapshot{}, err
 	}
-	return cloudAgentMemorySnapshot{Mode: mode, Revision: doc.Revision, Text: agentMemorySnapshotText(mode, agentMemoryCapacityOf(doc), entries, agentMemoryNudge(prompt))}, nil
+	excludeRunID := ""
+	if len(parentRunID) > 0 {
+		excludeRunID = parentRunID[0]
+	}
+	work, err := s.agentMemoryRecallWork(userID, excludeRunID, "", agentMemoryRecallSnapshotLimit)
+	if err != nil {
+		return cloudAgentMemorySnapshot{}, err
+	}
+	return cloudAgentMemorySnapshot{
+		Mode: mode, Revision: doc.Revision,
+		Text:     agentMemorySnapshotText(mode, agentMemoryCapacityOf(doc), entries, agentMemoryNudge(prompt)),
+		WorkText: agentMemoryWorkRecallText(work),
+	}, nil
 }

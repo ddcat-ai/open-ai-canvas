@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"yingce/backend/internal/protocol"
 
 	"gorm.io/gorm"
@@ -90,11 +91,24 @@ func saveChannelMediaTransport(repo *repository.Repository, id, actor string, va
 }
 
 // The channel and its transport policy commit together; omitted policy preserves the old value.
-func (s *Service) saveChannelWithMediaTransport(channel *model.ModelChannel, actor string, value *ReferenceMediaTransport, create bool) error {
+func (s *Service) saveChannelWithMediaTransport(channel *model.ModelChannel, actor string, value *ReferenceMediaTransport, create bool, expectedVersion ...time.Time) error {
 	return s.repo.Transaction(func(repo *repository.Repository) error {
 		var err error
+		if channel.WebsiteID != "" {
+			website, lockErr := repo.LockChannelWebsite(channel.WebsiteID)
+			if lockErr != nil {
+				return lockErr
+			}
+			if !channelMatchesWebsite(*channel, *website) {
+				return BadAuthRequest("网站连接已更新，请刷新后重试")
+			}
+		} else if err = repo.EnsureChannelWebsite(channel); err != nil {
+			return err
+		}
 		if create {
 			err = repo.Create(channel)
+		} else if len(expectedVersion) > 0 {
+			err = repo.SaveSystemChannelVersion(channel, expectedVersion[0])
 		} else {
 			err = repo.Save(channel)
 		}

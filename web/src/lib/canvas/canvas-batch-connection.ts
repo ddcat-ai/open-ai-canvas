@@ -102,10 +102,7 @@ export function planBatchConnections({ sourceNodeIds, targetNodeId, targetHandle
 
         const fromHandleId = normalized.fromNodeId === source.id ? undefined : targetHandleId;
         const toHandleId = normalized.toNodeId === targetNodeId ? targetHandleId : undefined;
-        const duplicate = workingConnections.some((connection) => connection.fromNodeId === normalized.fromNodeId
-            && connection.toNodeId === normalized.toNodeId
-            && connection.fromHandleId === fromHandleId
-            && connection.toHandleId === toHandleId);
+        const duplicate = workingConnections.some((connection) => connection.fromNodeId === normalized.fromNodeId && connection.toNodeId === normalized.toNodeId && connection.fromHandleId === fromHandleId && connection.toHandleId === toHandleId);
         if (duplicate) {
             duplicates.push(source.id);
             return;
@@ -144,7 +141,13 @@ const NO_BATCH_CONNECTION = "没有可建立的连接";
  * 批量连接落在连不上的节点上时说明原因。只有分镜脚本、批量创作表没对准端口的两句是新写的，
  * 其余沿用参考格判定和 planBatchConnections 的跳过原因。
  */
-export function batchConnectionRejectReason({ sourceNodeIds, target, nodes, connections, config }: {
+export function batchConnectionRejectReason({
+    sourceNodeIds,
+    target,
+    nodes,
+    connections,
+    config,
+}: {
     sourceNodeIds: string[];
     target: Pick<CanvasConnectionDropTarget, "handleId" | "rejectedNodeId">;
     nodes: CanvasNodeData[];
@@ -159,6 +162,26 @@ export function batchConnectionRejectReason({ sourceNodeIds, target, nodes, conn
     if (rejected?.type === CanvasNodeType.BatchTable && !target.handleId) return "请对准批量创作表左侧的参考图连接点";
     const plan = planBatchConnections({ sourceNodeIds, targetNodeId: rejectedNodeId, targetHandleId: target.handleId, nodes, connections, config });
     return plan.skipped[0]?.reason || NO_BATCH_CONNECTION;
+}
+
+/**
+ * 把当前选择展开成批量连接源：选中的背板用其内部素材代替，背板本身不能作连接源。
+ * 保持选择顺序，背板子节点按画布顺序紧随其后，重复的节点只保留一次。
+ */
+export function expandBatchSourceNodeIds(selectedNodeIds: Iterable<string>, nodes: CanvasNodeData[]) {
+    const result: string[] = [];
+    const seen = new Set<string>();
+    const push = (node: CanvasNodeData | undefined) => {
+        if (!node || seen.has(node.id) || batchSourceRestriction(node)) return;
+        seen.add(node.id);
+        result.push(node.id);
+    };
+    for (const id of selectedNodeIds) {
+        const node = nodes.find((item) => item.id === id);
+        if (node?.type === CanvasNodeType.Frame) nodes.filter((item) => item.parentId === node.id).forEach(push);
+        else push(node);
+    }
+    return result;
 }
 
 export function batchSourceRestriction(node: CanvasNodeData) {

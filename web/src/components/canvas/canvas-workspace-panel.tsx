@@ -1,11 +1,9 @@
-import { Link } from "react-router";
 import { CanvasWorkspaceAssetPanel } from "./canvas-workspace-asset-panel";
 import { CanvasWorkspaceHistoryPanel } from "./canvas-workspace-history-panel";
 import type { InsertAssetPayload } from "./asset-picker-modal";
-import { useDeferredValue, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
-import { Button, Grid } from "antd";
-import { Home, PanelLeftClose, PanelLeftOpen, Layers3, Images, ListChecks, History, X } from "lucide-react";
-import { AppDrawer } from "@/components/ui/product/app-drawer";
+import { useDeferredValue, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { Button } from "antd";
+import { PanelLeftClose, PanelLeftOpen, Layers3, Images, ListChecks, History, X } from "lucide-react";
 import { searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
@@ -19,6 +17,7 @@ import { CanvasWorkspaceTaskPanel } from "./canvas-workspace-task-panel";
 import "./canvas-workspace-panel.css";
 
 export function CanvasWorkspacePanel({
+    heading,
     projectId,
     nodes,
     selectedNodeIds,
@@ -31,6 +30,7 @@ export function CanvasWorkspacePanel({
     onProjectAssets,
     onCancelTask,
 }: {
+    heading: ReactNode;
     projectId: string;
     nodes: CanvasNodeData[];
     selectedNodeIds: Set<string>;
@@ -49,7 +49,12 @@ export function CanvasWorkspacePanel({
     const history = tab === "history";
     const deferredQuery = useDeferredValue(query);
     const config = useEffectiveConfig();
-    const screens = Grid.useBreakpoint();
+    const results = useMemo(() => (open && tab === "nodes" ? searchCanvasNodes(nodes, deferredQuery, nodes.length, config) : []), [open, tab, nodes, deferredQuery, config]);
+    const toggleRef = useRef<HTMLButtonElement>(null);
+    const closePanel = () => {
+        onClose();
+        toggleRef.current?.focus();
+    };
     const markPointer = (event: PointerEvent<HTMLElement>) => {
         event.currentTarget.dataset.inputModality = "pointer";
     };
@@ -58,13 +63,11 @@ export function CanvasWorkspacePanel({
     };
     const tasks = useCanvasWorkspaceTasks(projectId, open && (tab === "tasks" || history));
     const content = (
-        <div className="canvas-workspace-panel relative flex h-full min-h-0 flex-col text-foreground" style={{ "--canvas-workspace-base": theme.node.panel } as CSSProperties} data-canvas-no-zoom data-canvas-wheel-scroll onWheel={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-            <button className="canvas-workspace-close" type="button" aria-label="关闭工作区" onClick={onClose}>
+        <div className="canvas-workspace-panel relative flex h-full min-h-0 flex-col text-foreground" data-canvas-wheel-scroll>
+            <button className="canvas-workspace-close" type="button" aria-label="关闭工作区" onClick={closePanel}>
                 <X className="size-4" />
             </button>
-            {tab === "nodes" && (
-                <CanvasWorkspaceNodeListPanel nodes={nodes} config={config} results={searchCanvasNodes(nodes, deferredQuery, nodes.length, config)} query={query} deferredQuery={deferredQuery} selectedNodeIds={selectedNodeIds} onQueryChange={setQuery} onFocus={onFocus} />
-            )}
+            {tab === "nodes" && <CanvasWorkspaceNodeListPanel nodes={nodes} config={config} results={results} query={query} deferredQuery={deferredQuery} selectedNodeIds={selectedNodeIds} onQueryChange={setQuery} onFocus={onFocus} />}
             {tab === "assets" && <CanvasWorkspaceAssetPanel onInsert={onInsertAssets} onManage={onAssets} onProjectAssets={onProjectAssets} />}
             {(tab === "tasks" || history) && (
                 <>
@@ -95,14 +98,24 @@ export function CanvasWorkspacePanel({
         { id: "history", label: "历史", icon: History },
     ];
     return (
-        <>
-            <div className={`canvas-workspace-shell ${open && screens.lg ? "is-expanded" : ""}`} style={{ ...canvasDockStyle(theme), "--canvas-workspace-base": theme.node.panel, background: undefined } as CSSProperties}>
-                <nav className="canvas-workspace-rail" aria-label="画布左侧菜单" data-canvas-no-zoom onWheel={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                    <Link to="/" className="canvas-workspace-rail-button" aria-label="主页" title="返回主页">
-                        <Home />
-                        <span>主页</span>
-                    </Link>
-                    <span className="canvas-workspace-rail-divider" aria-hidden />
+        <div
+            className={`canvas-workspace-corner${open ? " is-expanded" : ""}`}
+            style={{ ...canvasDockStyle(theme), background: undefined, boxShadow: undefined, "--canvas-workspace-base": theme.node.panel, "--canvas-workspace-outline": theme.toolbar.border } as CSSProperties}
+            data-canvas-no-zoom
+            onWheel={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+        >
+            {heading}
+            <div
+                className="canvas-workspace-shell"
+                onKeyDown={(event) => {
+                    if (open && event.key === "Escape" && !event.defaultPrevented) {
+                        event.stopPropagation();
+                        closePanel();
+                    }
+                }}
+            >
+                <nav className="canvas-workspace-rail" aria-label="画布左侧菜单" data-canvas-wheel-scroll>
                     <div className="canvas-workspace-rail-items">
                         {entries.map(({ id, label, icon: Icon }) => (
                             <button
@@ -126,14 +139,16 @@ export function CanvasWorkspacePanel({
                             </button>
                         ))}
                     </div>
-                    <span className="canvas-workspace-rail-divider is-end" aria-hidden />
+                    <span className="canvas-workspace-rail-divider" aria-hidden />
                     <button
+                        ref={toggleRef}
                         className="canvas-workspace-rail-button canvas-workspace-rail-toggle"
                         type="button"
                         onClick={open ? onClose : onOpen}
                         onPointerDown={markPointer}
                         onKeyDown={markKeyboard}
                         aria-expanded={open}
+                        aria-controls={open ? "canvas-workspace-details" : undefined}
                         aria-label={open ? "折叠面板" : "展开面板"}
                         title={open ? "收起面板，扩大画布" : "展开工作区面板"}
                     >
@@ -141,17 +156,12 @@ export function CanvasWorkspacePanel({
                         <span>{open ? "收起" : "展开"}</span>
                     </button>
                 </nav>
-                {open && screens.lg ? (
-                    <aside className="w-80 shrink-0 min-h-0" aria-label="画布工作区">
+                {open ? (
+                    <aside id="canvas-workspace-details" className="min-h-0 min-w-0 flex-1" aria-label="画布工作区">
                         {content}
                     </aside>
                 ) : null}
             </div>
-            {open && !screens.lg ? (
-                <AppDrawer flush open placement="left" title={null} closable={false} size={320} onClose={onClose}>
-                    {content}
-                </AppDrawer>
-            ) : null}
-        </>
+        </div>
     );
 }

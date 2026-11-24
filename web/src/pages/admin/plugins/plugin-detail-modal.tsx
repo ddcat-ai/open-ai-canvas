@@ -3,7 +3,7 @@ import dayjs from "dayjs";
 import { BadgeCheck, Boxes, KeyRound, Package, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
+import type { PluginManifest } from "@/lib/plugins/plugin-types";
 import type { AdminPluginState, PluginManagement } from "@/services/api/plugins";
 import { getPluginDocumentation, pluginPermissionLabel } from "@/pages/plugins/plugin-documentation";
 import { PluginMarkdown } from "@/pages/plugins/plugin-markdown";
@@ -12,7 +12,7 @@ import { AdminStatusBadge } from "../components/admin-ui";
 import { AdminModal } from "../ui/overlays";
 
 export type AdminPluginDetail = {
-    manifest: PluginManifest | PluginManifestV2;
+    manifest: PluginManifest;
     source: string;
     management: PluginManagement;
     status?: string;
@@ -20,6 +20,7 @@ export type AdminPluginDetail = {
     /** 以下只有后端登记过的插件（上传或后端内置）才有。 */
     fileName?: string;
     sha256?: string;
+    releases?: Array<{ version: string; sha256: string }>;
     installedAt?: string;
     updatedAt?: string;
 };
@@ -116,6 +117,15 @@ function PluginDetail({ plugin, state, typeLabel, icon }: { plugin: AdminPluginD
                                 <Fact label="SHA-256">
                                     <span className="admin-plugin-detail-mono">{plugin.sha256 || "未记录"}</span>
                                 </Fact>
+                                {plugin.releases && plugin.releases.length > 1 && (
+                                    <Fact label="已安装发行版本">
+                                        {plugin.releases.map((release) => (
+                                            <div key={release.sha256} title={release.sha256}>
+                                                v{release.version} · <code>{release.sha256.slice(0, 12)}</code>
+                                            </div>
+                                        ))}
+                                    </Fact>
+                                )}
                             </>
                         ) : (
                             <Fact label="安装包">随平台内置</Fact>
@@ -164,13 +174,13 @@ function configurationLabel(scope: PluginManagement["configurationScope"]) {
     return "无需配置";
 }
 
-function runtimeLabel(manifest: PluginManifest | PluginManifestV2) {
+function runtimeLabel(manifest: PluginManifest) {
     const names: Record<string, string> = { declarative: "声明式", sandbox: "沙箱", worker: "Worker", "trusted-backend": "受信后端" };
     const parts = [manifest.runtime?.backend ? `后端${names[manifest.runtime.backend] || manifest.runtime.backend}` : "", manifest.runtime?.web ? `前端${names[manifest.runtime.web] || manifest.runtime.web}` : ""].filter(Boolean);
     return parts.join(" · ") || "未声明";
 }
 
-function contributionSummary(manifest: PluginManifest | PluginManifestV2): Array<[string, string]> {
+function contributionSummary(manifest: PluginManifest): Array<[string, string]> {
     const contributes = manifest.contributes || {};
     const labels = (items?: Array<{ id: string; label?: string }>) => (items || []).map((item) => item.label || item.id).join("、");
     const rows: Array<[string, string]> = [

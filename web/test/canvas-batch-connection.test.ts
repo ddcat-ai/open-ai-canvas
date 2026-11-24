@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { batchCellSourcesError, batchConnectionRejectReason, buildBatchConnectionCreateRequest, hasBatchConnectionCandidate, planBatchConnections } from "@/lib/canvas/canvas-batch-connection";
+import { batchCellSourcesError, batchConnectionRejectReason, buildBatchConnectionCreateRequest, expandBatchSourceNodeIds, hasBatchConnectionCandidate, planBatchConnections } from "@/lib/canvas/canvas-batch-connection";
 import { batchCellConnectionError, batchCellHandle } from "@/lib/canvas/canvas-batch-references";
 import { createBatchRow } from "@/lib/canvas/canvas-batch-table";
 import { canvasConnectionError } from "@/lib/canvas/canvas-connection-policy";
@@ -13,7 +13,46 @@ const nodes: CanvasNodeData[] = [
     { id: "text-b", type: CanvasNodeType.Text, title: "文本 B", position: { x: 0, y: 220 }, width: 320, height: 180 },
     { id: "image-a", type: CanvasNodeType.Image, title: "图片 A", position: { x: 0, y: 440 }, width: 320, height: 180 },
     { id: "image-b", type: CanvasNodeType.Image, title: "图片 B", position: { x: 0, y: 660 }, width: 320, height: 180 },
-    { id: "script", type: CanvasNodeType.Script, title: "分镜脚本", position: { x: 520, y: 0 }, width: 640, height: 520, metadata: { storyboard: { rows: [{ id: "row-1", shotNumber: 1, durationSeconds: 6, plotDescription: "", dialogue: "", characters: [], narrativeIntent: "", viewerPOV: "", performanceBlocking: "", shotSize: "", emotion: "", lightingAndAtmosphere: "", audioEffects: "", camera: "", motion: "", timeBeats: "", imageGenerationPrompt: "", videoMotionPrompt: "", mustHave: [], optionalDetails: [], continuityOut: "", negativePrompt: "", assetBindings: [], status: "idle" }] } } },
+    {
+        id: "script",
+        type: CanvasNodeType.Script,
+        title: "分镜脚本",
+        position: { x: 520, y: 0 },
+        width: 640,
+        height: 520,
+        metadata: {
+            storyboard: {
+                rows: [
+                    {
+                        id: "row-1",
+                        shotNumber: 1,
+                        durationSeconds: 6,
+                        plotDescription: "",
+                        dialogue: "",
+                        characters: [],
+                        narrativeIntent: "",
+                        viewerPOV: "",
+                        performanceBlocking: "",
+                        shotSize: "",
+                        emotion: "",
+                        lightingAndAtmosphere: "",
+                        audioEffects: "",
+                        camera: "",
+                        motion: "",
+                        timeBeats: "",
+                        imageGenerationPrompt: "",
+                        videoMotionPrompt: "",
+                        mustHave: [],
+                        optionalDetails: [],
+                        continuityOut: "",
+                        negativePrompt: "",
+                        assetBindings: [],
+                        status: "idle",
+                    },
+                ],
+            },
+        },
+    },
     { id: "config", type: CanvasNodeType.Config, title: "图片配置", position: { x: 520, y: 560 }, width: 360, height: 420, metadata: { generationMode: "image" } },
     { id: "frame", type: CanvasNodeType.Frame, title: "背板", position: { x: 0, y: 680 }, width: 500, height: 500 },
     { id: "batch-table", type: CanvasNodeType.BatchTable, title: "批量创作表", position: { x: 1000, y: 0 }, width: 900, height: 520 },
@@ -75,15 +114,17 @@ describe("planBatchConnections", () => {
     it("keeps every legal graph edge when a newly created node exceeds provider reference capacity", () => {
         const constrainedConfig = {
             ...baseConfig,
-            channels: [{
-                id: "grok",
-                name: "Grok",
-                baseUrl: "https://example.com",
-                apiKey: "test-key",
-                apiFormat: "openai" as const,
-                models: ["grok-imagine-image"],
-                modelCosts: [{ model: "grok-imagine-image", capability: "image" as const, billingMode: "fixed_request" as const, unitPriceMicrocredits: 1, protocol: "grok-image" as const }],
-            }],
+            channels: [
+                {
+                    id: "grok",
+                    name: "Grok",
+                    baseUrl: "https://example.com",
+                    apiKey: "test-key",
+                    apiFormat: "openai" as const,
+                    models: ["grok-imagine-image"],
+                    modelCosts: [{ model: "grok-imagine-image", capability: "image" as const, billingMode: "fixed_request" as const, unitPriceMicrocredits: 1, protocol: "grok-image" as const }],
+                },
+            ],
             models: ["grok::grok-imagine-image"],
             imageModels: ["grok::grok-imagine-image"],
             imageModel: "grok::grok-imagine-image",
@@ -183,7 +224,15 @@ describe("hasBatchConnectionCandidate", () => {
 });
 
 // 批量连接连不上时的原因文案。
-const cellTable: CanvasNodeData = { id: "cell-table", type: CanvasNodeType.BatchTable, title: "批量创作表", position: { x: 2000, y: 0 }, width: 1280, height: 560, metadata: { batchTable: { operation: "try_on", concurrency: 10, rows: [{ ...createBatchRow("try_on"), id: "row-1" }] } } };
+const cellTable: CanvasNodeData = {
+    id: "cell-table",
+    type: CanvasNodeType.BatchTable,
+    title: "批量创作表",
+    position: { x: 2000, y: 0 },
+    width: 1280,
+    height: 560,
+    metadata: { batchTable: { operation: "try_on", concurrency: 10, rows: [{ ...createBatchRow("try_on"), id: "row-1" }] } },
+};
 const lockedTable: CanvasNodeData = { ...cellTable, id: "locked-table", metadata: { ...cellTable.metadata, locked: true } };
 const filledImage: CanvasNodeData = { id: "filled-image", type: CanvasNodeType.Image, title: "有图", position: { x: 0, y: 900 }, width: 320, height: 180, metadata: { content: "data:image/png;base64,AAAA" } };
 const cellNodes = [...nodes, cellTable, lockedTable, filledImage];
@@ -221,17 +270,51 @@ describe("batchConnectionRejectReason", () => {
 
     it("always names a reason when a node refused the batch (fixed seeds 1–200)", () => {
         const sourcePool = ["text-a", "text-b", "image-a", "filled-image", "frame"];
-        const targets = [{ rejectedNodeId: "script" }, { rejectedNodeId: "batch-table" }, { rejectedNodeId: cellTable.id, handleId: cellHandle }, { rejectedNodeId: lockedTable.id, handleId: cellHandle }, { rejectedNodeId: "text-a" }, { rejectedNodeId: "config" }];
+        const targets = [
+            { rejectedNodeId: "script" },
+            { rejectedNodeId: "batch-table" },
+            { rejectedNodeId: cellTable.id, handleId: cellHandle },
+            { rejectedNodeId: lockedTable.id, handleId: cellHandle },
+            { rejectedNodeId: "text-a" },
+            { rejectedNodeId: "config" },
+        ];
         for (let seed = 1; seed <= 200; seed += 1) {
             let state = seed;
-            const next = () => ((state = (Math.imul(state, 1103515245) + 12345) >>> 0) / 4294967296);
+            const next = () => (state = (Math.imul(state, 1103515245) + 12345) >>> 0) / 4294967296;
             const sources = sourcePool.filter(() => next() < 0.5);
             const target = targets[Math.floor(next() * targets.length)];
             const result = rejectReason(sources, target);
             const plan = planBatchConnections({ sourceNodeIds: sources, targetNodeId: target.rejectedNodeId, targetHandleId: target.handleId, nodes: cellNodes, connections: [], config: baseConfig });
-            const expected = target.handleId ? batchCellSourcesError(cellNodes, sources, target.rejectedNodeId, target.handleId) || "没有可建立的连接" : target.rejectedNodeId === "script" ? "请对准分镜脚本的某一行" : target.rejectedNodeId === "batch-table" ? "请对准批量创作表左侧的参考图连接点" : plan.skipped[0]?.reason || "没有可建立的连接";
+            const expected = target.handleId
+                ? batchCellSourcesError(cellNodes, sources, target.rejectedNodeId, target.handleId) || "没有可建立的连接"
+                : target.rejectedNodeId === "script"
+                  ? "请对准分镜脚本的某一行"
+                  : target.rejectedNodeId === "batch-table"
+                    ? "请对准批量创作表左侧的参考图连接点"
+                    : plan.skipped[0]?.reason || "没有可建立的连接";
             expect(result, `seed ${seed} ${JSON.stringify({ sources, target })}`).toBe(expected);
             expect(result.length, `seed ${seed}`).toBeGreaterThan(0);
         }
+    });
+});
+
+describe("expandBatchSourceNodeIds", () => {
+    const framed: CanvasNodeData[] = [
+        { id: "board", type: CanvasNodeType.Frame, title: "背板", position: { x: 0, y: 0 }, width: 800, height: 600 },
+        { id: "in-a", type: CanvasNodeType.Image, title: "A", position: { x: 20, y: 60 }, width: 200, height: 200, parentId: "board" },
+        { id: "in-b", type: CanvasNodeType.Image, title: "B", position: { x: 260, y: 60 }, width: 200, height: 200, parentId: "board" },
+        { id: "outside", type: CanvasNodeType.Text, title: "外部", position: { x: 900, y: 0 }, width: 200, height: 120 },
+    ];
+
+    it("uses a selected backdrop's child assets as connection sources", () => {
+        expect(expandBatchSourceNodeIds(["board"], framed)).toEqual(["in-a", "in-b"]);
+    });
+
+    it("keeps selection order and removes duplicates when children are also selected", () => {
+        expect(expandBatchSourceNodeIds(["outside", "in-b", "board"], framed)).toEqual(["outside", "in-b", "in-a"]);
+    });
+
+    it("returns nothing for an empty backdrop", () => {
+        expect(expandBatchSourceNodeIds(["frame"], nodes)).toEqual([]);
     });
 });

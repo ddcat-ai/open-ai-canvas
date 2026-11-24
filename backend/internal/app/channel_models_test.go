@@ -209,7 +209,6 @@ func TestImageTestDefaultsUseModelCapability(t *testing.T) {
 		wantSize    string
 		wantQuality string
 	}{
-		{name: "legacy fallback", wantSize: "1024x1024", wantQuality: "auto"},
 		{
 			name: "fixed 2k model",
 			profile: &ImageCapabilityConfig{

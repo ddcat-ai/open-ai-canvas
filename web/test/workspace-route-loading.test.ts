@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement, Suspense } from "react";
+import { renderToString } from "react-dom/server";
+import { preloadableLazy } from "../src/lib/preloadable-lazy";
 
 function source(path: string) {
     return readFileSync(resolve(import.meta.dir, path), "utf8");
@@ -40,18 +43,22 @@ describe("workspace route loading", () => {
         expect(router).toContain('import { RequireFeature } from "@/components/auth/require-feature";');
         expect(router).not.toContain("const RequireFeature = lazy(");
         expect(router).not.toMatch(/const \w+Page = lazy\(load\w+Page\)/);
-        expect(layout).toContain("preloadWorkspaceNavigationPages()");
+        expect(layout).not.toContain("preloadWorkspaceNavigationPages");
+        expect(source("../src/lib/workspace-route-modules.ts")).not.toContain("preloadWhenIdle");
         expect(html).not.toContain('style="background:#ffffff"');
         expect(html).toContain("html.dark body");
 
-        const { preloadableLazy } = await import("../src/lib/preloadable-lazy");
         function Loaded() {
-            return null;
+            return createElement("div", null, "route ready");
         }
-        const Page = preloadableLazy(async () => ({ default: Loaded }));
-        expect((Page({}) as { type: unknown }).type).not.toBe(Loaded);
+        let calls = 0;
+        const Page = preloadableLazy(async () => {
+            calls += 1;
+            return { default: Loaded };
+        });
         await Page.preload();
-        expect((Page({}) as { type: unknown }).type).toBe(Loaded);
+        expect(renderToString(createElement(Suspense, { fallback: "loading" }, createElement(Page)))).toContain("route ready");
+        expect(calls).toBe(1);
     });
 
     test("keeps the creation page at root and preserves the create compatibility route", () => {
@@ -95,7 +102,7 @@ describe("workspace route loading", () => {
         expect(detail).not.toContain("AppDrawer");
         expect(layout).not.toContain("useCanvasUiStore");
         expect(layout).not.toContain("CanvasDeleteProjectsDialog");
-        expect(canvas).toContain("deleteDialogOpen ? <Suspense");
+        expect(canvas).toMatch(/deleteDialogOpen\s*\?\s*\(?\s*<Suspense/);
     });
 
     test("does not poll wallet balance from permanent workspace chrome", () => {
@@ -140,7 +147,7 @@ describe("workspace wallet entry", () => {
 
         expect(router).toContain('path: "/wallet"');
         expect(router).toContain("element: <RequireAuth>{null}</RequireAuth>");
-        expect(router).not.toContain("WalletPage");
+        expect(router).not.toMatch(/\bWalletPage\b/);
         expect(router).not.toContain("loadWalletPage");
         expect(modules).not.toContain("pages/wallet");
         expect(host).toContain('pathname !== "/wallet"');

@@ -24,6 +24,29 @@ func (s *Service) RequireAdmin(user *model.User) error {
 	return nil
 }
 
+func (s *Service) AdminClearAgentHistory(actor *model.User, userID string) (int64, error) {
+	if err := s.RequireAdmin(actor); err != nil {
+		return 0, err
+	}
+	var freedBytes int64
+	err := s.repo.Transaction(func(tx *repository.Repository) error {
+		var err error
+		freedBytes, err = tx.ClearIdleAgentHistory(userID)
+		if err != nil {
+			return err
+		}
+		event, err := newAdminAuditEvent(actor, "user.agent_history.clear", "user", userID, "清理 Agent 全部历史", map[string]int64{"freedBytes": freedBytes})
+		if err != nil {
+			return err
+		}
+		return tx.AppendAdminAudit(event)
+	})
+	if err != nil {
+		return 0, err
+	}
+	return freedBytes, nil
+}
+
 func (s *Service) AdminUsers(actor *model.User, query AdminListQuery) (*AdminUserPage, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err

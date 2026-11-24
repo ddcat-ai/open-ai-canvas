@@ -1,4 +1,5 @@
-import type { CanvasNodeData } from "@/types/canvas";
+import { getNodeSpec } from "@/constant/canvas";
+import { isBuiltinCanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { canvasPromptSummaryText } from "./canvas-resource-references";
 
 const COPY_SUFFIX = /(_copy\d+|\s+Copy)$/i;
@@ -10,9 +11,12 @@ export function buildGenerationNodeTitle(prompt: string, fallback: string) {
     return canvasPromptSummaryText(prompt).slice(0, TITLE_MAX_LENGTH) || fallback;
 }
 
-/** 用户改过名的节点（metadata.manualTitle）在原位重新生成时沿用该名称；返回 undefined 时使用提示词摘要。 */
 export function manualNodeTitle(node: CanvasNodeData | undefined) {
-    return node?.metadata?.manualTitle && node.title.trim() ? node.title : undefined;
+    if (!node?.title.trim()) return undefined;
+    const metadata = node.metadata;
+    if (metadata?.manualTitle !== undefined) return metadata.manualTitle ? node.title : undefined;
+    if (metadata?.content || metadata?.storageKey || metadata?.taskId || metadata?.copiedFromNodeId || metadata?.versionOfNodeId) return undefined;
+    return isBuiltinCanvasNodeType(node.type) && node.title !== getNodeSpec(node.type).title ? node.title : undefined;
 }
 
 export function buildImageGenerationNodeTitle(prompt: string, sourceNode?: CanvasNodeData, outputIndex?: number, outputCount = 1) {

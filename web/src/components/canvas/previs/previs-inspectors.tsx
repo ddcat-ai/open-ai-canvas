@@ -1,4 +1,4 @@
-// 预演台右侧检查器：物体、灯光、镜头、变换与骨骼旋转字段，以及场景列表的小控件。
+// 世界引擎右侧检查器：物体、灯光、镜头、变换与骨骼旋转字段，以及场景列表的小控件。
 
 import {
     type PrevisAspectRatio,
@@ -22,17 +22,24 @@ import { PREVIS_ASPECT_RATIOS, previsAspectOption, previsHorizontalFov } from "@
 import { Button, ColorPicker, Dropdown, Input, InputNumber, type MenuProps, Slider } from "antd";
 import { Select } from "@/components/ui/base/select";
 import { Switch } from "@/components/ui/base/switch";
-import { Camera, Check, Copy, Focus, Pause, Play, Plus, Route, Trash2, TriangleAlert, Video } from "lucide-react";
+import { Camera, Check, Copy, Focus, Pause, Play, Plus, Route, Trash2, TriangleAlert } from "lucide-react";
 import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Euler, Quaternion } from "three";
 import { releasePrevisFocusAfterPointer } from "@/lib/canvas/previs/previs-shortcuts";
 import { isPrevisStandardActor, PREVIS_MANNEQUIN_HEIGHT } from "@/lib/canvas/previs/previs-mannequin";
+import { previsPrimitiveHalfHeight } from "@/lib/canvas/previs/previs-prop-library";
 import { dropPrevisObjectToGround, isPrevisObjectOnGround } from "@/lib/canvas/previs/previs-grounding";
+import { PrevisLayoutInspectorGroup, PrevisPropVariantGroup } from "./previs-world-panel";
+import { PrevisTravelSection } from "./previs-travel-section";
+import { PrevisCameraMotionList, PrevisCameraMoveSection } from "./previs-camera-move-section";
+import { PrevisPathSection, PrevisSketchPathList } from "./previs-path-section";
+import type { PrevisPathCameraMode } from "@/lib/canvas/previs/previs-path-transfer";
+import { resolvePrevisObjectBox } from "@/lib/canvas/previs/previs-frame-bounds";
 
 /** 演员色板：一行 8 个高区分度颜色，其余颜色用取色器/十六进制输入，避免两行杂乱色块。 */
 const PREVIS_ACTOR_SWATCHES: readonly string[] = ["#2f7de1", "#d84949", "#dfae3f", "#34a276", "#8b5cf6", "#f97316", "#06b6d4", "#8a93a0"];
 import { PREVIS_MOTION_IDS, PREVIS_MOTIONS, previsMotionLabel, previsMotionsOverlap } from "@/lib/canvas/previs/previs-motion";
-import type { PrevisActorMotion, PrevisMotionId } from "@/types/previs";
+import type { PrevisActorMotion, PrevisMarker, PrevisMotionId, PrevisSketchPath } from "@/types/previs";
 
 /**
  * 标准人偶的动作库：点击动作即在当前播放头插入片段；移动步态由走位自动推导，不需要手动添加。
@@ -195,8 +202,18 @@ export function ObjectInspector({
     onClearPath,
     onDuplicate,
     onDelete,
+    markers = [],
+    sketchPaths = [],
+    onDeleteSketchPath,
+    shotDuration = 5,
 }: {
     object: PrevisObject;
+    onDeleteSketchPath?: (id: string) => void;
+    /** 画好的参考轨迹，可以套用到对象上。 */
+    sketchPaths?: PrevisSketchPath[];
+    /** 右键标记的坐标点，供「A → B」位移选择。 */
+    markers?: PrevisMarker[];
+    shotDuration?: number;
     rendered: PrevisTransform;
     playhead: number;
     selectedBone: string | null;
@@ -268,26 +285,60 @@ export function ObjectInspector({
                                     <Button size="small" type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
                                         {pathDrawing ? "取消绘制" : hasPath ? "重新画走位" : "画走位路径"}
                                     </Button>
-                                    {hasPath ? (
+                                    {hasPath && !object.motionPath ? (
                                         <Button size="small" type="text" onClick={onClearPath}>
                                             清除走位
                                         </Button>
                                     ) : null}
                                 </div>
+                                <PrevisPathSection
+                                    owner={object}
+                                    locked
+                                    origin={[rendered.position[0], 0, rendered.position[2]]}
+                                    shotDuration={shotDuration}
+                                    playhead={playhead}
+                                    markers={markers}
+                                    sketchPaths={sketchPaths}
+                                    onDeleteSketchPath={onDeleteSketchPath}
+                                    onUpdate={onUpdate}
+                                />
+                            </GuideStep>
+                            <GuideStep index={2} title="A 点 → B 点" done={Boolean(object.travels?.length)} hint="走、跑、冲刺、跳跃、飞行、御剑、悬浮、闪现：选起点终点和用时，从播放头开始。">
+                                <PrevisTravelSection object={object} markers={markers} playhead={playhead} shotDuration={shotDuration} onUpdate={onUpdate} />
                             </GuideStep>
                             {isPrevisStandardActor(object) ? (
-                                <GuideStep index={2} title="动作" done={motionCount > 0} hint={`先把时间轴上的播放头拖到动作开始的时间（现在是 ${playhead.toFixed(1)}s），再点下面的动作。招手、说话等上半身动作可以边走边做。`}>
+                                <GuideStep index={3} title="动作" done={motionCount > 0} hint={`先把时间轴上的播放头拖到动作开始的时间（现在是 ${playhead.toFixed(1)}s），再点下面的动作。招手、说话等上半身动作可以边走边做。`}>
                                     <ActorMotionSection object={object} playhead={playhead} onUpdate={onUpdate} />
                                 </GuideStep>
                             ) : null}
-                            <GuideStep index={isPrevisStandardActor(object) ? 3 : 2} title="预览" hint="播放整段镜头，看走位和动作是否自然；满意后在顶栏导出白膜视频。">
+                            <GuideStep index={isPrevisStandardActor(object) ? 4 : 3} title="预览" hint="播放整段镜头，看走位和动作是否自然；满意后在顶栏导出白膜视频。">
                                 <Button size="small" block icon={playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />} onClick={onTogglePlay}>
                                     {playing ? "暂停" : "播放预览"}
                                 </Button>
                             </GuideStep>
                         </div>
                     ) : (
-                        <div className="previs-inspector-note">道具动画用关键帧：把播放头拖到某个时间，移动道具后点「记录关键帧」；在另一个时间再摆一次，中间会自动补间。</div>
+                        <>
+                            <InspectorGroup title="路径" hint="可飞行、悬空">
+                                <div className="previs-anim-guide__actions">
+                                    <Button size="small" type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
+                                        {pathDrawing ? "取消绘制" : object.motionPath ? "重新画路径" : "画路径"}
+                                    </Button>
+                                </div>
+                                <PrevisPathSection
+                                    owner={object}
+                                    locked={false}
+                                    origin={rendered.position}
+                                    shotDuration={shotDuration}
+                                    playhead={playhead}
+                                    markers={markers}
+                                    sketchPaths={sketchPaths}
+                                    onDeleteSketchPath={onDeleteSketchPath}
+                                    onUpdate={onUpdate}
+                                />
+                            </InspectorGroup>
+                            <div className="previs-inspector-note">也可以用关键帧：把播放头拖到某个时间，移动道具后点「记录关键帧」；在另一个时间再摆一次，中间会自动补间。</div>
+                        </>
                     )}
                     {motionClips.length ? (
                         <InspectorGroup title="模型自带动作">
@@ -365,12 +416,26 @@ export function ObjectInspector({
 
             {activeTab === "props" ? (
                 <>
+                    {/* 摆场模式没有「动画」页，但视口里仍画着这条路径：删除入口必须在这里。 */}
+                    {!capabilities.timeline && object.motionPath ? (
+                        <InspectorGroup title={isActor ? "走位" : "路径"} hint="切到「动画」调整">
+                            <div className="pv-path__head">
+                                <span className="previs-inspector-note">
+                                    有一条{isActor ? "走位" : "移动"}路径（{object.motionPath.points.length} 个点）
+                                </span>
+                                <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onClearPath}>
+                                    删除路径
+                                </Button>
+                            </div>
+                        </InspectorGroup>
+                    ) : null}
                     <InspectorGroup title="位置" hint={isActor ? "Y 为脚底离地高度" : undefined}>
                         <TransformFields transform={rendered} onChange={onTransformEdit} scaleLabel={isActor ? "比例" : "尺寸"} scaleUnit={isActor ? "×" : "倍"} scaleAxisLabels={isActor ? undefined : ["W", "H", "D"]} />
                         <Button size="small" block disabled={grounded} onClick={() => onTransformEdit(dropPrevisObjectToGround({ ...object, transform: rendered, keyframes: [] }).transform)}>
                             贴地
                         </Button>
                     </InspectorGroup>
+                    {isActor || object.kind === "layout" ? null : <PrevisObjectSizeGroup object={object} rendered={rendered} onTransformEdit={onTransformEdit} />}
                     {isActor ? (
                         <InspectorGroup title="体型">
                             <Field label="角色原型">
@@ -388,8 +453,10 @@ export function ObjectInspector({
                             <ProfileSlider label="头部" min={0.7} max={1.5} value={profile.headRatio} onChange={(headRatio) => updateProfile({ headRatio })} />
                         </InspectorGroup>
                     ) : null}
+                    {object.kind === "layout" ? <PrevisLayoutInspectorGroup object={object} onUpdate={onUpdate} /> : null}
+                    {object.kind === "prop" ? <PrevisPropVariantGroup object={object} onUpdate={onUpdate} /> : null}
                     <InspectorGroup title="外观">
-                        <ColorRow value={object.color} swatches={isActor ? PREVIS_ACTOR_SWATCHES : undefined} label={isActor ? "角色十六进制颜色" : "十六进制颜色"} onChange={(color) => onUpdate({ color })} />
+                        {object.kind === "layout" ? null : <ColorRow value={object.color} swatches={isActor ? PREVIS_ACTOR_SWATCHES : undefined} label={isActor ? "角色十六进制颜色" : "十六进制颜色"} onChange={(color) => onUpdate({ color })} />}
                         <div className="previs-inspector-toggles">
                             <label className="previs-inspector-toggle">
                                 <span>可见</span>
@@ -404,6 +471,41 @@ export function ObjectInspector({
                 </>
             ) : null}
         </Inspector>
+    );
+}
+
+/**
+ * 真实尺寸（米）：按包围盒显示宽、高、深与离地高度。改「高」等比缩放保持物体比例，改「离地」只抬高或放低。
+ */
+function PrevisObjectSizeGroup({ object, rendered, onTransformEdit }: { object: PrevisObject; rendered: PrevisTransform; onTransformEdit: (transform: PrevisTransform) => void }) {
+    const box = resolvePrevisObjectBox({ ...object, transform: rendered });
+    const width = box.max.x - box.min.x;
+    const height = box.max.y - box.min.y;
+    const depth = box.max.z - box.min.z;
+    const base = box.min.y;
+    const setHeight = (value: number | null) => {
+        if (!value || value <= 0 || height <= 1e-6) return;
+        const factor = value / height;
+        // 等比缩放后底面保持原离地高度（中心原点的几何体要同步抬高）。
+        const scaled: PrevisTransform = { ...rendered, scale: rendered.scale.map((axis) => axis * factor) as PrevisVec3 };
+        const nextBase = resolvePrevisObjectBox({ ...object, transform: scaled }).min.y;
+        onTransformEdit({ ...scaled, position: [rendered.position[0], rendered.position[1] + base - nextBase, rendered.position[2]] });
+    };
+    const setBase = (value: number | null) => {
+        if (value === null || !Number.isFinite(value)) return;
+        onTransformEdit({ ...rendered, position: [rendered.position[0], rendered.position[1] + Math.max(0, value) - base, rendered.position[2]] });
+    };
+    return (
+        <InspectorGroup title="尺寸 · 米" hint={`${width.toFixed(2)} × ${height.toFixed(2)} × ${depth.toFixed(2)}`}>
+            <div className="grid grid-cols-2 gap-2">
+                <Field label="高（等比缩放）">
+                    <InputNumber className="w-full" size="small" min={0.01} max={2000} step={0.1} value={Number(height.toFixed(2))} suffix="m" onChange={setHeight} />
+                </Field>
+                <Field label="离地高度">
+                    <InputNumber className="w-full" size="small" min={0} max={2000} step={0.1} value={Number(Math.max(0, base).toFixed(2))} suffix="m" onChange={setBase} />
+                </Field>
+            </div>
+        </InspectorGroup>
     );
 }
 
@@ -479,39 +581,62 @@ export function LightInspector({ light, onUpdate, onDelete }: { light: PrevisLig
 }
 
 const LIGHT_SWATCHES: readonly string[] = ["#ffffff", "#ffe2b8", "#ffc58a", "#9cc7ff", "#c3b5ff", "#ff9b8a"];
+
+type CameraMotionTab = "technique" | "recipe" | "path";
+const CAMERA_MOTION_TABS: Array<{ id: CameraMotionTab; label: string; hint: string }> = [
+    { id: "technique", label: "手法", hint: "推拉摇移、环绕、跟拍等单个手法，从播放头加一段" },
+    { id: "recipe", label: "大师手法", hint: "一键套用整套多段运镜" },
+    { id: "path", label: "画路径", hint: "在视口里画摄影机经过的路线" },
+];
 const FOCAL_PRESETS = [18, 24, 35, 50, 85, 135];
 
 /**
  * 镜头检查器：没选中对象时显示。
  * 画面（机位/景别/画幅/时长）→ 镜头（焦段/光圈）→ 机位（对齐视图/坐标）→ 运镜 → 镜头意图。
- * 运镜生成与关键帧只在动画模式出现；摆场模式只选运镜语义（会写进提示词）。
+ * 运镜时间线（推拉摇移、环绕、跟拍、大师手法）与关键帧只在动画模式出现；摆场模式只选运镜语义（会写进提示词）。
  */
 export function ShotInspector({
     shot,
     camera,
     cameras,
+    scene,
+    playhead,
     capabilities,
     pathDrawing,
     onUpdateShot,
     onUpdateCamera,
     onAddCameraKeyframe,
-    onApplyCameraMove,
     onAlignCameraToView,
     onToggleDrawPath,
+    onSeek,
+    onTransferCameraPath,
+    onDeleteSketchPath,
 }: {
     shot: PrevisShot;
     camera: PrevisCamera | null;
     cameras: PrevisScene["cameras"];
+    scene: Pick<PrevisScene, "objects" | "markers" | "paths">;
+    playhead: number;
     capabilities: PrevisModeCapabilities;
     pathDrawing: boolean;
     onUpdateShot: (patch: Partial<PrevisShot>) => void;
     onUpdateCamera: (patch: Partial<PrevisCamera>) => void;
     onAddCameraKeyframe: () => void;
-    onApplyCameraMove: () => void;
     onAlignCameraToView: () => void;
     onToggleDrawPath: () => void;
+    onSeek: (time: number) => void;
+    onTransferCameraPath?: (input: { actorId: string; keepHeight: boolean; cameraMode: PrevisPathCameraMode }) => void;
+    onDeleteSketchPath?: (id: string) => void;
 }) {
     const setFocal = (focalLength: number) => onUpdateCamera({ focalLength, fov: previsHorizontalFov(focalLength) });
+    const hasCameraPath = Boolean(camera?.motionPath);
+    const [motionTab, setMotionTab] = useState<CameraMotionTab>(() => (hasCameraPath && !camera?.moves?.length ? "path" : "technique"));
+    // 刚画出一条运镜路径（从无到有）时切到「画路径」页，直接看到它的速率、开始时间和途经点。
+    const hadCameraPathRef = useRef(hasCameraPath);
+    useEffect(() => {
+        if (hasCameraPath && !hadCameraPathRef.current) setMotionTab("path");
+        hadCameraPathRef.current = hasCameraPath;
+    }, [hasCameraPath]);
     return (
         <Inspector title={shot.name} onTitleChange={(name) => onUpdateShot({ name })}>
             <InspectorGroup title="画面">
@@ -576,18 +701,46 @@ export function ShotInspector({
                     </InspectorGroup>
                 </>
             ) : null}
-            <InspectorGroup title="运镜" hint={capabilities.timeline ? undefined : "切到「动画」可生成运镜"}>
-                <Select className="w-full" size="small" value={shot.cameraMove} options={cameraMoveOptions} onChange={(cameraMove: PrevisCameraMove) => onUpdateShot({ cameraMove })} />
+            <InspectorGroup title="运镜" hint={capabilities.timeline ? undefined : "切到「动画」编排运镜"}>
+                {/* 已有运镜放在最上面：删除不必翻过下方整块添加区。 */}
+                {camera && !capabilities.timeline && (camera.moves?.length || camera.motionPath) ? <div className="previs-inspector-note">切到「动画」可添加或调整运镜，这里也能直接删除。</div> : null}
+                {camera ? <PrevisCameraMotionList camera={camera} scene={scene} onChange={onUpdateCamera} onSeek={onSeek} /> : null}
+                {(capabilities.timeline && camera) || camera?.moves?.length ? null : <Select className="w-full" size="small" value={shot.cameraMove} options={cameraMoveOptions} onChange={(cameraMove: PrevisCameraMove) => onUpdateShot({ cameraMove })} />}
+                {/* 动画模式的路径编辑区自带参考轨迹列表；摆场模式只在这里列出并删除。 */}
+                {capabilities.timeline && camera ? null : <PrevisSketchPathList paths={scene.paths ?? []} onDelete={onDeleteSketchPath} />}
                 {capabilities.timeline && camera ? (
                     <>
-                        <div className="previs-anim-guide__actions">
-                            <Button size="small" icon={<Video className="size-3.5" />} disabled={shot.cameraMove === "static"} title="根据上面选的运镜生成首尾关键帧" onClick={onApplyCameraMove}>
-                                生成运镜
-                            </Button>
-                            <Button size="small" type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
-                                {pathDrawing ? "取消绘制" : "画运镜路径"}
-                            </Button>
+                        {/* 三种加运镜的方式一次只摊开一种，参数不再上下堆在一起。 */}
+                        <div className="pv-motion-tabs" role="tablist" aria-label="添加运镜的方式">
+                            {CAMERA_MOTION_TABS.map((item) => (
+                                <button key={item.id} type="button" role="tab" aria-selected={motionTab === item.id} title={item.hint} onClick={() => setMotionTab(item.id)}>
+                                    {item.label}
+                                </button>
+                            ))}
                         </div>
+                        {motionTab === "path" ? (
+                            <>
+                                <Button size="small" block type={pathDrawing ? "primary" : "default"} icon={<Route className="size-3.5" />} onClick={onToggleDrawPath}>
+                                    {pathDrawing ? "取消绘制" : camera.motionPath ? "重新画运镜路径" : "在视口里画运镜路径"}
+                                </Button>
+                                <PrevisPathSection
+                                    owner={camera}
+                                    locked={false}
+                                    origin={camera.transform.position}
+                                    shotDuration={shot.duration}
+                                    playhead={playhead}
+                                    markers={scene.markers ?? []}
+                                    sketchPaths={scene.paths ?? []}
+                                    actors={scene.objects.filter((object) => object.kind === "actor" || object.primitive === "character").map((object) => ({ id: object.id, name: object.name }))}
+                                    onUpdate={(patch) => onUpdateCamera(patch)}
+                                    onTransferToActor={onTransferCameraPath}
+                                    onDeleteSketchPath={onDeleteSketchPath}
+                                    showDelete={false}
+                                />
+                            </>
+                        ) : (
+                            <PrevisCameraMoveSection camera={camera} scene={scene} playhead={playhead} shotDuration={shot.duration} view={motionTab} onChange={(moves) => onUpdateCamera({ moves })} />
+                        )}
                         {capabilities.keyframes ? (
                             <details className="previs-inspector-advanced">
                                 <summary>高级：手动关键帧</summary>
@@ -815,8 +968,8 @@ export function SceneRow({ active, icon, label, onClick, onDelete }: { active?: 
             {onDelete ? (
                 <button
                     type="button"
-                    aria-label={`删除${label}`}
-                    title={`删除${label}`}
+                    aria-label={`删除 ${label}`}
+                    title={`删除 ${label}`}
                     className="grid size-6 shrink-0 place-items-center rounded opacity-60 transition hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10"
                     onClick={(event) => {
                         event.stopPropagation();

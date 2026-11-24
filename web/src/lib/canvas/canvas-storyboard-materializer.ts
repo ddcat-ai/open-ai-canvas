@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 
 import { normalizeStoryboardAssetBindings, storyboardAssetRoleForNode } from "@/lib/canvas/canvas-storyboard-assets";
-import { applyCanvasConnectionPromptSync, buildOrderedCanvasResourceReferences, canvasResourceMentionToken } from "@/lib/canvas/canvas-resource-references";
+import { applyCanvasConnectionPromptSync, buildOrderedCanvasResourceReferences, canvasNodeMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { writeCanvasNodePrompt } from "@/lib/canvas/canvas-node-prompt";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type StoryboardAssetBinding, type StoryboardRow } from "@/types/canvas";
@@ -37,7 +37,8 @@ export function storyboardComposerContent(prompt: string, referenceNodeIds: stri
         const node = nodes.find((candidate) => candidate.id === nodeId);
         return node ? [node] : [];
     });
-    const mentions = buildOrderedCanvasResourceReferences(referenceNodes).map(canvasResourceMentionToken);
+    // 既有手工入边可能与资产清单顺序不同；保存节点身份，到真实生成入口再按媒体槽位编译。
+    const mentions = buildOrderedCanvasResourceReferences(referenceNodes).map((reference) => canvasNodeMentionToken(reference.nodeId));
     return mentions.length ? [`参考资产：${mentions.join(" ")}`, prompt.trim()].filter(Boolean).join("\n") : prompt.trim();
 }
 

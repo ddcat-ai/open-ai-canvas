@@ -101,12 +101,13 @@ func TestCloudAgentPiModelRetriesTruncatedToolArguments(t *testing.T) {
 	if !ok {
 		t.Fatalf("first model task textOptions = %#v", firstInput["textOptions"])
 	}
-	if thinking, ok := textOptions["thinking"].(bool); !ok || thinking {
-		t.Fatalf("disabled thinking should be false, got %#v", textOptions["thinking"])
+	if textOptions["thinkingLevel"] != ThinkingLevelOff {
+		t.Fatalf("disabled thinking should be off, got %#v", textOptions["thinkingLevel"])
 	}
 	if err := db.Model(&model.Task{}).Where("id = ?", first).Updates(map[string]any{
-		"status": model.TaskStatusFailed,
-		"error":  "Agent 工具参数不是完整 JSON：invalid character '}' after array element",
+		"status":                    model.TaskStatusFailed,
+		"error":                     "Agent 工具参数不是完整 JSON：invalid character '}' after array element",
+		"execution_diagnostic_json": `{"code":"model_truncated_arguments"}`,
 	}).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -13,6 +13,7 @@ import (
 )
 
 func RegisterAdminSkillRoutes(r *gin.RouterGroup, svc *service.Service) {
+	r = r.Group("", requireSkillAdministration(svc))
 	r.GET("/admin/skills", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

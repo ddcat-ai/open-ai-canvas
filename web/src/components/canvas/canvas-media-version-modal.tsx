@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Button, Popconfirm } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { Check, Copy, ImageOff, LoaderCircle, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import { Check, Copy, ImageOff, LoaderCircle, Maximize2, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import copyToClipboard from "copy-to-clipboard";
 import { useTranslation } from "react-i18next";
 
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
+import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { useVideoPlaybackUrl } from "@/components/canvas/canvas-node-media-content";
+import { CanvasImageComparison } from "./canvas-image-comparison";
 import { Kbd } from "@/components/ui/base/kbd";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -35,14 +37,20 @@ const BLOCK_REASON = {
 
 /** 媒体版本面板：缩略图条悬停即预览，选中后再切换，避免误改节点。 */
 export function CanvasMediaVersionModal({ node, onClose, onAdopt, onDelete, onExtract }: CanvasMediaVersionModalProps) {
+    const [enlarged, setEnlarged] = useState<{ nodeId: string; version: CanvasMediaVersion } | null>(null);
+    const preview = node && enlarged?.nodeId === node.id ? enlarged.version : null;
+    useEffect(() => setEnlarged(null), [node?.id]);
     return (
-        <AppModal flush open={Boolean(node)} centered title={null} closable={false} footer={null} width={940} onCancel={onClose}>
-            {node ? <MediaVersionPanel node={node} onClose={onClose} onAdopt={onAdopt} onDelete={onDelete} onExtract={onExtract} /> : null}
-        </AppModal>
+        <>
+            <AppModal flush open={Boolean(node)} keyboard={!preview} centered title={null} closable={false} footer={null} width={940} onCancel={preview ? undefined : onClose}>
+                {node ? <MediaVersionPanel key={node.id} node={node} onClose={onClose} onAdopt={onAdopt} onDelete={onDelete} onExtract={onExtract} onPreview={(version) => setEnlarged({ nodeId: node.id, version })} /> : null}
+            </AppModal>
+            {preview ? <CanvasImagePreview src={preview.media.content || preview.media.previewContent} storageKey={preview.media.storageKey} alt={`V${preview.number}`} onClose={() => setEnlarged(null)} /> : null}
+        </>
     );
 }
 
-function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit<CanvasMediaVersionModalProps, "node"> & { node: CanvasNodeData }) {
+function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract, onPreview }: Omit<CanvasMediaVersionModalProps, "node"> & { node: CanvasNodeData; onPreview: (version: CanvasMediaVersion) => void }) {
     const { t } = useTranslation();
     const versions = useMemo(() => listMediaVersions(node), [node]);
     const current = useMemo(() => currentMediaVersion(node), [node]);
@@ -146,7 +154,7 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
             </header>
 
             <div className="grid min-h-0 grid-cols-1 gap-5 overflow-y-auto px-6 md:grid-cols-[minmax(0,1fr)_256px]">
-                <VersionStage node={node} version={previewed} current={current} comparing={comparing} />
+                <VersionStage node={node} version={previewed} current={current} comparing={comparing} onPreview={onPreview} />
                 <VersionDetails node={node} version={previewed} current={current} />
             </div>
 
@@ -222,16 +230,16 @@ function MediaVersionPanel({ node, onClose, onAdopt, onDelete, onExtract }: Omit
     );
 }
 
-function VersionStage({ node, version, current, comparing }: { node: CanvasNodeData; version: CanvasMediaVersion; current?: CanvasMediaVersion; comparing: boolean }) {
+function VersionStage({ node, version, current, comparing, onPreview }: { node: CanvasNodeData; version: CanvasMediaVersion; current?: CanvasMediaVersion; comparing: boolean; onPreview: (version: CanvasMediaVersion) => void }) {
     const { t } = useTranslation();
     const isCurrent = version.id === current?.id;
     return (
-        <div className="relative h-[clamp(240px,46vh,400px)] overflow-hidden rounded-[var(--r-xl)] bg-[var(--media-surface)]">
+        <div className="canvas-version-stage relative h-[clamp(240px,46vh,400px)] min-w-0 overflow-hidden rounded-[var(--r-xl)] bg-[var(--media-surface)]">
             {comparing && current ? (
                 <CompareStage node={node} version={version} current={current} />
             ) : (
                 <>
-                    <StageMedia node={node} version={version} />
+                    <StageMedia node={node} version={version} onPreview={node.type === CanvasNodeType.Image ? () => onPreview(version) : undefined} />
                     <StageBadge className="left-3 top-3">
                         {isCurrent ? <Check className="size-3" /> : null}V{version.number}
                         {isCurrent ? t("canvasB.mediaVersion.currentSuffix") : t("canvasB.mediaVersion.previewSuffix")}
@@ -242,22 +250,36 @@ function VersionStage({ node, version, current, comparing }: { node: CanvasNodeD
     );
 }
 
-function StageMedia({ node, version }: { node: CanvasNodeData; version: CanvasMediaVersion }) {
+function StageMedia({ node, version, onPreview }: { node: CanvasNodeData; version: CanvasMediaVersion; onPreview?: () => void }) {
+    const { t } = useTranslation();
     const preview = useMemo(() => mediaVersionPreviewNode(node, version), [node, version]);
     if (node.type === CanvasNodeType.Video) return <StageVideo node={preview} />;
     if (node.type === CanvasNodeType.Audio) return <StageAudio node={preview} />;
     return (
-        <CachedResourceImage
-            key={version.id}
-            storageKey={version.media.storageKey}
-            src={version.media.content || version.media.previewContent}
-            eager
-            alt={`V${version.number}`}
-            draggable={false}
-            className="block size-full select-none object-contain"
-            fallback={<MediaUnavailable />}
-            loadingFallback={<LoaderCircle className="absolute left-1/2 top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 animate-spin text-muted-foreground motion-reduce:animate-none" />}
-        />
+        <div className="canvas-version-image relative size-full min-h-0 min-w-0" onDoubleClick={onPreview}>
+            <CachedResourceImage
+                key={version.id}
+                storageKey={version.media.storageKey}
+                src={version.media.content || version.media.previewContent}
+                eager
+                alt={`V${version.number}`}
+                draggable={false}
+                className="block size-full select-none object-contain"
+                fallback={<MediaUnavailable />}
+                loadingFallback={<LoaderCircle className="absolute left-1/2 top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 animate-spin text-muted-foreground motion-reduce:animate-none" />}
+            />
+            {onPreview ? (
+                <button
+                    type="button"
+                    aria-label={t("canvasB.mention.previewLabel", { label: `V${version.number}` })}
+                    title={t("canvasB.mention.doubleClickZoom")}
+                    onClick={onPreview}
+                    className="absolute bottom-3 right-3 grid size-8 place-items-center rounded-[var(--r-md)] bg-black/55 text-white outline-none hover:bg-black/70 focus-visible:ring-2"
+                >
+                    <Maximize2 className="size-4" />
+                </button>
+            ) : null}
+        </div>
     );
 }
 
@@ -298,59 +320,14 @@ function useResolvedMediaUrl(storageKey: string | undefined, fallback: string) {
 /** 左侧为预览版本、右侧为当前版本，拖动分隔线比较同一位置的差异。 */
 function CompareStage({ node, version, current }: { node: CanvasNodeData; version: CanvasMediaVersion; current: CanvasMediaVersion }) {
     const { t } = useTranslation();
-    const [split, setSplit] = useState(50);
-    const stageRef = useRef<HTMLDivElement>(null);
-    const updateFromPointer = (event: ReactPointerEvent) => {
-        const rect = stageRef.current?.getBoundingClientRect();
-        if (!rect?.width) return;
-        setSplit(Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)));
-    };
     return (
-        <div
-            ref={stageRef}
-            className="relative size-full cursor-ew-resize touch-none select-none"
-            onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                updateFromPointer(event);
-            }}
-            onPointerMove={(event) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) updateFromPointer(event);
-            }}
-        >
-            <div className="absolute inset-0">
-                <StageMedia node={node} version={current} />
-            </div>
-            <div className="absolute inset-0" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}>
-                <StageMedia node={node} version={version} />
-            </div>
-            <div
-                role="slider"
-                tabIndex={0}
-                aria-label={t("canvasB.mediaVersion.compareDivider")}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(split)}
-                className="absolute inset-y-0 z-[1] w-0.5 -translate-x-1/2 bg-[var(--btn-solid-bg)] outline-none focus-visible:ring-2"
-                style={{ left: `${split}%` }}
-                onKeyDown={(event) => {
-                    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setSplit((value) => Math.min(100, Math.max(0, value + (event.key === "ArrowRight" ? 5 : -5))));
-                }}
-            >
-                <span className="absolute left-1/2 top-1/2 grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--btn-solid-bg)] text-[var(--btn-solid-fg)] shadow-[var(--elevation-card)]">
-                    <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                        <path d="M6 4 2 8l4 4M10 4l4 4-4 4" />
-                    </svg>
-                </span>
-            </div>
-            <StageBadge className="bottom-3 left-3">{t("canvasB.mediaVersion.badgePreview", { number: version.number })}</StageBadge>
-            <StageBadge className="bottom-3 right-3">
-                <Check className="size-3" />
-                {t("canvasB.mediaVersion.badgeCurrent", { number: current.number })}
-            </StageBadge>
-        </div>
+        <CanvasImageComparison
+            before={<StageMedia node={node} version={version} />}
+            after={<StageMedia node={node} version={current} />}
+            beforeLabel={t("canvasB.mediaVersion.badgePreview", { number: version.number })}
+            afterLabel={t("canvasB.mediaVersion.badgeCurrent", { number: current.number })}
+            label={t("canvasB.mediaVersion.compareDivider")}
+        />
     );
 }
 
@@ -465,7 +442,7 @@ function VersionThumb({ node, version, selected, current, onHover, onSelect, onA
             onDoubleClick={onAdopt}
         >
             <span
-                className={`relative block h-[72px] w-full overflow-hidden rounded-[var(--r-md)] bg-[var(--media-surface)] ring-offset-2 ring-offset-[var(--card-surface)] transition-shadow duration-[var(--motion-state)] group-focus-visible:ring-2 ${selected ? "ring-2 ring-[var(--foreground)]" : "ring-1 ring-[var(--workspace-border)] group-hover:ring-[var(--workspace-border-strong)]"}`}
+                className={`${node.type === CanvasNodeType.Image ? "canvas-version-image " : ""}relative block h-[72px] w-full overflow-hidden rounded-[var(--r-md)] bg-[var(--media-surface)] ring-offset-2 ring-offset-[var(--card-surface)] transition-shadow duration-[var(--motion-state)] group-focus-visible:ring-2 ${selected ? "ring-2 ring-[var(--foreground)]" : "ring-1 ring-[var(--workspace-border)] group-hover:ring-[var(--workspace-border-strong)]"}`}
             >
                 {node.type === CanvasNodeType.Image ? (
                     <CachedResourceImage
@@ -475,7 +452,7 @@ function VersionThumb({ node, version, selected, current, onHover, onSelect, onA
                         alt=""
                         loading="lazy"
                         draggable={false}
-                        className="block size-full object-cover"
+                        className="block size-full object-contain"
                         fallback={<ThumbFallback />}
                     />
                 ) : node.type === CanvasNodeType.Video ? (

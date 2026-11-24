@@ -1,4 +1,5 @@
 import type { PrevisObject, PrevisVec3 } from "../../../types/previs";
+import { resolvePrevisPropSize } from "@/lib/canvas/previs/previs-prop-catalog";
 
 export type PrevisFootprint = { width: number; depth: number };
 export type PrevisPlacementCandidate = { footprint: PrevisFootprint; position: PrevisVec3 };
@@ -11,8 +12,12 @@ const SAMPLES_PER_RING = 12;
 // 模型导入后被 normalizeModel 缩放到最大边 2，未知尺寸时按此保守占位。
 const MODEL_FOOTPRINT = 2;
 
-function baseFootprint(object: Pick<PrevisObject, "kind" | "primitive">): PrevisFootprint {
+function baseFootprint(object: Pick<PrevisObject, "kind" | "primitive" | "propId" | "params">): PrevisFootprint {
     if (object.kind === "actor" || object.primitive === "character") return { width: 0.8, depth: 0.8 };
+    if (object.kind === "prop") {
+        const size = resolvePrevisPropSize(object.propId, object.params);
+        if (size) return { width: size[0], depth: size[2] };
+    }
     if (object.kind === "model") return { width: MODEL_FOOTPRINT, depth: MODEL_FOOTPRINT };
     if (object.kind === "billboard" || object.primitive === "plane") return { width: 1.6, depth: 0.3 };
     if (object.primitive === "sphere") return { width: 1.2, depth: 1.2 };
@@ -21,7 +26,7 @@ function baseFootprint(object: Pick<PrevisObject, "kind" | "primitive">): Previs
 }
 
 /** XZ 平面占位：只用 scale 的 x/z，取绝对值以容忍负缩放；不参与 Y 判断。 */
-export function previsObjectFootprint(object: Pick<PrevisObject, "kind" | "primitive" | "transform">): PrevisFootprint {
+export function previsObjectFootprint(object: Pick<PrevisObject, "kind" | "primitive" | "transform"> & Partial<Pick<PrevisObject, "propId" | "params">>): PrevisFootprint {
     const base = baseFootprint(object);
     const scaleX = Math.abs(object.transform?.scale?.[0] ?? 1);
     const scaleZ = Math.abs(object.transform?.scale?.[2] ?? 1);
@@ -56,8 +61,14 @@ function candidateOffsets() {
  * 隐藏对象同样占位；ring 采样耗尽时回退到「所有占位最右边界之外」的确定性位置，
  * 该位置在有限 existing 集合下必然不与任何 AABB 相交。
  */
-export function resolvePrevisPlacement(input: { object: Pick<PrevisObject, "kind" | "primitive" | "transform">; existing: Array<Pick<PrevisObject, "kind" | "primitive" | "transform">>; margin?: number }): PrevisVec3 {
-    const { object, existing } = input;
+export function resolvePrevisPlacement(input: {
+    object: Pick<PrevisObject, "kind" | "primitive" | "transform"> & Partial<Pick<PrevisObject, "propId" | "params">>;
+    existing: Array<Pick<PrevisObject, "kind" | "primitive" | "transform"> & Partial<Pick<PrevisObject, "propId" | "params">>>;
+    margin?: number;
+}): PrevisVec3 {
+    const { object } = input;
+    // 整片布景铺满地面，不作为避让障碍；否则在城里加任何东西都会被推到城外。
+    const existing = input.existing.filter((item) => item.kind !== "layout");
     const margin = input.margin ?? PREVIS_PLACEMENT_MARGIN;
     const desired = object.transform?.position ?? [0, 0, 0];
     const safeY = Number.isFinite(desired[1]) ? desired[1] : 0;

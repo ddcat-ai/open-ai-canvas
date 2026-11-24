@@ -165,7 +165,7 @@ func TestRunVideoTaskUsesDeclarativeAgnesJSONProtocol(t *testing.T) {
 	if !ok {
 		t.Fatal("declarative Agnes adapter is missing")
 	}
-	if metadata := adapter.Metadata(); metadata.Version != "2.0.0" || metadata.Execution != "declarative" || !metadata.RequiresPublicMediaURLs {
+	if metadata := adapter.Metadata(); metadata.Version != "2.0.1" || metadata.Execution != "declarative" || !metadata.RequiresPublicMediaURLs {
 		t.Fatalf("Agnes runtime metadata = %#v", metadata)
 	}
 
@@ -542,7 +542,7 @@ func TestCanonicalAgentBodiesPreserveAssistantToolCalls(t *testing.T) {
 		t.Fatalf("responses input = %#v", responseInput)
 	}
 	functionCall, _ := responseInput[2].(map[string]interface{})
-	if functionCall["type"] != "function_call" || functionCall["name"] != "canvas_get_state" || functionCall["id"] != "fc-5" || functionCall["item_reference"] != "fc-5" {
+	if functionCall["type"] != "function_call" || functionCall["name"] != "canvas_get_state" || functionCall["id"] != "fc-5" || functionCall["item_reference"] != nil {
 		t.Fatalf("responses function call = %#v", functionCall)
 	}
 }
@@ -575,7 +575,7 @@ func TestRunAgentToolTaskOmitsToolChoiceBeforeThinkingRequest(t *testing.T) {
 
 			result, err := runAgentToolTask(context.Background(), canvasGenerationInput{
 				Config:        providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model"},
-				TextOptions:   canvasTextOptions{Thinking: true},
+				TextOptions:   canvasTextOptions{ThinkingLevel: "medium"},
 				AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{"messages": []interface{}{}, "tool_choice": forcedChoice}},
 			})
 			server.Close()
@@ -648,7 +648,7 @@ func TestRunDeclarativeAgentTaskOmitsToolChoiceBeforeThinkingRequest(t *testing.
 	}
 	result, err := runAgentToolTask(withProtocolRegistry(context.Background(), registry), canvasGenerationInput{
 		Config:      providerConfig{BaseURL: server.URL, APIKey: "key", Model: "thinking-model", InterfaceType: "chat-completion"},
-		TextOptions: canvasTextOptions{Thinking: true},
+		TextOptions: canvasTextOptions{ThinkingLevel: "medium"},
 		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{
 			"messages": []interface{}{}, "tools": []interface{}{}, "tool_choice": "required",
 		}},
@@ -738,7 +738,7 @@ data: [DONE]
 }
 
 func TestTextThinkingOptionsAndReasoningParsing(t *testing.T) {
-	input := canvasGenerationInput{TextOptions: canvasTextOptions{Thinking: true}}
+	input := canvasGenerationInput{TextOptions: canvasTextOptions{ThinkingLevel: "medium"}}
 	responsesBody := map[string]interface{}{}
 	applyTextThinking(responsesBody, input, "responses")
 	reasoning, _ := responsesBody["reasoning"].(map[string]interface{})
@@ -1319,8 +1319,12 @@ func TestRunGeminiImageTaskUsesInlineDataAndImageConfig(t *testing.T) {
 			t.Errorf("responseModalities = %#v", modalities)
 		}
 		imageConfig, _ := generationConfig["imageConfig"].(map[string]interface{})
-		if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "4K" {
+		if imageConfig["aspectRatio"] != "16:9" || imageConfig["imageSize"] != "1K" {
 			t.Errorf("imageConfig = %#v", imageConfig)
+		}
+		thinkingConfig, _ := generationConfig["thinkingConfig"].(map[string]interface{})
+		if thinkingConfig["thinkingLevel"] != "LOW" {
+			t.Errorf("thinkingConfig = %#v", thinkingConfig)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"inlineData":{"mimeType":"image/png","data":"aGVsbG8="}}]}}]}`))
@@ -1329,7 +1333,7 @@ func TestRunGeminiImageTaskUsesInlineDataAndImageConfig(t *testing.T) {
 
 	result, err := runImageTask(context.Background(), canvasGenerationInput{
 		Prompt:          "edit this image",
-		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image", Size: "16:9", Quality: "high"},
+		Config:          providerConfig{BaseURL: server.URL, APIKey: "test-key", APIFormat: "gemini", Model: "gemini-test", InterfaceType: "gemini-image", Size: "16:9", Quality: "high", ImageResolution: "1K", ImageParameters: map[string]any{"thinkingLevel": "low"}},
 		ReferenceImages: []providerMedia{{DataURL: testGeminiReferenceImageDataURL}},
 	})
 	if err != nil {

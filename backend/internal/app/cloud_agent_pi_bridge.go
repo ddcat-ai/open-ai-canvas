@@ -73,10 +73,16 @@ func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]
 		case "assistant":
 			text := ""
 			calls := []interface{}{}
+			var passback agentReasoningPassback
+			passbackText := ""
 			if parts, ok := message["content"].([]interface{}); ok {
 				for _, value := range parts {
 					part, _ := value.(map[string]interface{})
 					switch stringField(part, "type") {
+					case "thinking":
+						if decoded, ok := decodeAgentReasoningPassback(stringField(part, "thinkingSignature")); ok {
+							passback, passbackText = decoded, stringField(part, "thinking")
+						}
 					case "text":
 						text += stringField(part, "text")
 					case "toolCall":
@@ -99,6 +105,9 @@ func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]
 							"id":       callID,
 							"function": map[string]interface{}{"name": stringField(part, "name"), "arguments": string(arguments)},
 						}
+						if signature := stringField(part, "thoughtSignature"); signature != "" {
+							call["thoughtSignature"] = signature
+						}
 						if itemID != "" {
 							call["item_id"] = itemID
 						}
@@ -115,6 +124,7 @@ func canonicalFromRuntimeMessages(messages []map[string]any, tools []map[string]
 			if len(calls) > 0 {
 				converted["tool_calls"] = calls
 			}
+			canonicalAssistantReasoning(converted, passbackText, passback.Wire, passback.Blocks)
 			canonical.Messages = append(canonical.Messages, converted)
 		case "toolResult", "tool":
 			id, err := strictRuntimeStringAliases(message, "Pi 工具结果 call id", "toolCallId", "tool_call_id", "call_id")
@@ -297,6 +307,9 @@ func runtimeToolCalls(calls []cloudAgentCall) []map[string]any {
 		if call.ItemID != "" {
 			entry["item_id"] = call.ItemID
 		}
+		if call.ThoughtSignature != "" {
+			entry["thoughtSignature"] = call.ThoughtSignature
+		}
 		result = append(result, entry)
 	}
 	return result
@@ -328,6 +341,9 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 	if call.Function.Name == "" {
 		return nil, fmt.Errorf("tool call is missing a name")
 	}
+	if err := cloudAgentRequireSkillToolAccess(s.repo, userID, call.Function.Name, s); err != nil {
+		return nil, err
+	}
 	if err := validateCloudAgentCalls([]cloudAgentCall{call}); err != nil {
 		// 参数校验失败的调用可能已由纠偏提交预写了结构化回执（见
 		// finishCloudAgentPiModelStepWithInvalidCalls）：超限/非法参数进不了执行器，
@@ -336,6 +352,9 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 		// 按历史长度二选一，看到哪份不稳定。优先回放已保存回执，两边保持一致。
 		if run, loadErr := s.repo.CloudAgent(userID, runID); loadErr == nil {
 			if state, decodeErr := cloudAgentDecode(run); decodeErr == nil {
+				if authErr := s.RequireSkillAccess(userID); authErr != nil {
+					return nil, authErr
+				}
 				if content, ok := cloudAgentToolMessage(&state, call.ID); ok {
 					return cloudAgentPiToolResult(call, content), nil
 				}
@@ -354,6 +373,9 @@ func (s *Service) cloudAgentPiTool(ctx context.Context, userID, runID string, pa
 		return nil, err
 	}
 
+	if err := s.RequireSkillAccess(userID); err != nil {
+		return nil, err
+	}
 	allowedTools := make(map[string]bool)
 	for _, tool := range state.Canonical.Tools {
 		if fn, ok := tool["function"].(map[string]interface{}); ok {
@@ -381,6 +403,12 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		}
 		state, err := cloudAgentDecode(run)
 		if err != nil {
+			return nil, err
+		}
+		if err := cloudAgentRequireSkillToolAccess(s.repo, userID, call.Function.Name, s); err != nil {
+			return nil, err
+		}
+		if err := s.RequireSkillAccess(userID); err != nil {
 			return nil, err
 		}
 		// A runtime may retry the same /tool request after the bridge response was
@@ -424,6 +452,9 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		}
 		state, err := cloudAgentDecode(run)
 		if err != nil {
+			return nil, err
+		}
+		if err := s.RequireSkillAccess(userID); err != nil {
 			return nil, err
 		}
 		if run.Status == "waiting_approval" && state.Approval != nil {
@@ -646,12 +677,6 @@ func (s *Service) handlePiSessionSnapshot(userID, runID string, data map[string]
 		}
 		err = s.repo.SaveCloudAgentPiSession(&model.CloudAgentPiSession{RunID: runID, UserID: userID, SessionJSONL: sessionJSONL, UpdatedAt: time.Now()}, expected)
 		if err == nil {
-			if expected == 0 {
-				// OnConflict DoNothing：并发首写时再按 revision 覆盖一次。
-				if saved, readErr := s.repo.CloudAgentPiSession(userID, runID); readErr == nil && saved.SessionJSONL != sessionJSONL {
-					continue
-				}
-			}
 			return map[string]any{"ok": true}, nil
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {

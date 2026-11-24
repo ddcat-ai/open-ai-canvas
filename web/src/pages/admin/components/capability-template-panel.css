@@ -1,0 +1,88 @@
+.admin-capability-template-content {
+    max-height: min(70dvh, calc(100dvh - 180px));
+    overflow: auto;
+    padding: 4px;
+}
+
+.admin-capability-template-content .admin-capability-reference-grid,
+.admin-capability-template-content .admin-capability-protocol-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 12px;
+}
+
+.admin-capability-template-content .admin-capability-reference-grid.is-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-capability-template-content .admin-capability-reference-card,
+.admin-capability-template-content .admin-capability-protocol-card {
+    min-width: 0;
+    border: 1px solid var(--admin-divider);
+    border-radius: 8px;
+    background: var(--admin-layer-1);
+}
+
+.admin-capability-template-content .admin-capability-reference-card-heading,
+.admin-capability-template-content .admin-capability-protocol-card-heading {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.admin-capability-template-content h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.admin-capability-template-content .admin-capability-reference-card-heading p,
+.admin-capability-template-content .admin-capability-protocol-card-heading p {
+    margin: 3px 0 0;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.admin-capability-template-content .admin-capability-reference-fields,
+.admin-capability-template-content .admin-capability-protocol-fields {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+    padding: 12px;
+}
+
+.admin-capability-template-content .admin-capability-number-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 84px;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-capability-template-content .admin-capability-field-label {
+    margin-bottom: 0;
+    font-size: 12px;
+}
+
+.admin-capability-template-content .ant-input-number {
+    width: 100%;
+    min-width: 0;
+}
+
+.admin-capability-template-content .admin-capability-boolean-field {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0 0;
+    border: 0;
+}
+
+@media (max-width: 760px) {
+    .admin-capability-template-content .admin-capability-reference-grid,
+    .admin-capability-template-content .admin-capability-reference-grid.is-two,
+    .admin-capability-template-content .admin-capability-protocol-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

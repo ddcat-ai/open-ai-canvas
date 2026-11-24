@@ -64,6 +64,14 @@ func (r *Repository) CloudAgentConversationExists(userID, conversationID string)
 	return err == nil, err
 }
 
+func (r *Repository) CloudAgentConversationRunIDs(userID, conversationID string) ([]string, error) {
+	var ids []string
+	err := r.db.Model(&model.CloudAgentExecution{}).
+		Where("user_id = ? AND "+cloudAgentConversationIdentity+" = ?", userID, conversationID).
+		Order("created_at ASC, id ASC").Pluck("id", &ids).Error
+	return ids, err
+}
+
 var ErrCloudAgentStaleParent = errors.New("对话已有更新，请同步最新一轮后再发送")
 
 // 同一父轮的接续先取得数据库行锁，再检查最新轮次与未落检查点的预留任务。
@@ -113,6 +121,7 @@ func (r *Repository) requireCurrentCloudAgentParent(task *model.Task) error {
 	// another child, including when the conversation moves to another canvas.
 	var reservations []model.Task
 	if err := r.db.Select("id", "input_json").Where(`user_id = ? AND operation = 'cloud_agent' AND agent_execution_ready = false
+		AND status NOT IN ('succeeded', 'failed', 'cancelled')
 		AND NOT EXISTS (SELECT 1 FROM cloud_agent_executions e WHERE e.id = tasks.id AND e.user_id = tasks.user_id)`, task.UserID).
 		Find(&reservations).Error; err != nil {
 		return err

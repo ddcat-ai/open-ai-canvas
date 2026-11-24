@@ -1,0 +1,531 @@
+{
+  "comment": "前端 PREVIS_CAMERA_RECIPES 与后端 cloudAgentPrevisCameraRecipes 对同一输入的展开结果；两边测试都按它校验。改配方后在 web 目录运行 UPDATE_GOLDEN=1 bun test test/previs-camera-moves.test.ts 重新生成。",
+  "cases": [
+    {
+      "input": {
+        "start": 0,
+        "duration": 6,
+        "subjectId": "hero",
+        "shotDuration": 6
+      },
+      "recipes": {
+        "ots_to_closeup": [
+          {
+            "technique": "follow",
+            "start": 0,
+            "duration": 4.5,
+            "subjectId": "hero",
+            "params": {
+              "side": "shoulder"
+            }
+          },
+          {
+            "technique": "handheld",
+            "start": 0,
+            "duration": 6,
+            "params": {
+              "intensity": 0.35
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 2.4,
+            "duration": 3.6,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "close_up",
+              "lag": 0.1,
+              "blend": 2.1
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 4.68,
+            "duration": 1.32,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "extreme_close_up",
+              "lag": 0.1,
+              "blend": 1.08
+            }
+          }
+        ],
+        "walk_and_talk": [
+          {
+            "technique": "follow",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "medium",
+              "lag": 0.2
+            }
+          },
+          {
+            "technique": "handheld",
+            "start": 0,
+            "duration": 6,
+            "params": {
+              "intensity": 0.3
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 3.6,
+            "duration": 2.4,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "close_up",
+              "lag": 0.2,
+              "blend": 1.8
+            }
+          }
+        ],
+        "hero_reveal": [
+          {
+            "technique": "follow",
+            "start": 0,
+            "duration": 5.1,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "shotSize": "full",
+              "lag": 0.15
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 1.8,
+            "duration": 4.2,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "close_up",
+              "height": 0.9,
+              "lag": 0.15,
+              "blend": 3.3
+            }
+          }
+        ],
+        "vertigo": [
+          {
+            "technique": "dolly_zoom_out",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero"
+          }
+        ],
+        "emotional_push": [
+          {
+            "technique": "push_in",
+            "start": 0,
+            "duration": 6
+          }
+        ],
+        "hero_orbit": [
+          {
+            "technique": "orbit_right",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero",
+            "params": {
+              "angle": 180
+            }
+          }
+        ],
+        "aerial_reveal": [
+          {
+            "technique": "crane_up",
+            "start": 0,
+            "duration": 6,
+            "params": {
+              "height": 12,
+              "distance": 16
+            }
+          }
+        ],
+        "intimate_handheld": [
+          {
+            "technique": "follow",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "distance": 2.2,
+              "lag": 0.12
+            }
+          },
+          {
+            "technique": "handheld",
+            "start": 0,
+            "duration": 6,
+            "params": {
+              "intensity": 1.6
+            }
+          }
+        ],
+        "symmetric_follow": [
+          {
+            "technique": "follow",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "distance": 5,
+              "lag": 0.3
+            }
+          }
+        ],
+        "side_track": [
+          {
+            "technique": "follow",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero",
+            "params": {
+              "side": "left",
+              "distance": 6,
+              "lag": 0.2
+            }
+          }
+        ],
+        "whip_transition": [
+          {
+            "technique": "truck_right",
+            "start": 0,
+            "duration": 6,
+            "params": {
+              "distance": 2.5
+            }
+          },
+          {
+            "technique": "whip_pan_right",
+            "start": 5.5,
+            "duration": 0.5
+          }
+        ],
+        "sword_chase": [
+          {
+            "technique": "follow",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "distance": 6,
+              "lag": 0.35
+            }
+          },
+          {
+            "technique": "orbit_left",
+            "start": 3,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "angle": 120
+            }
+          }
+        ],
+        "spiral_rise": [
+          {
+            "technique": "orbit_left",
+            "start": 0,
+            "duration": 6,
+            "subjectId": "hero",
+            "params": {
+              "angle": 360,
+              "rise": 4
+            }
+          }
+        ],
+        "crash_zoom": [
+          {
+            "technique": "zoom_in",
+            "start": 0,
+            "duration": 0.4,
+            "easing": "linear"
+          }
+        ],
+        "impact_shake": [
+          {
+            "technique": "shake",
+            "start": 0,
+            "duration": 0.6,
+            "params": {
+              "intensity": 1.2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "input": {
+        "start": 1.5,
+        "duration": 3,
+        "subjectId": "hero",
+        "shotDuration": 5
+      },
+      "recipes": {
+        "ots_to_closeup": [
+          {
+            "technique": "follow",
+            "start": 1.5,
+            "duration": 2.25,
+            "subjectId": "hero",
+            "params": {
+              "side": "shoulder"
+            }
+          },
+          {
+            "technique": "handheld",
+            "start": 1.5,
+            "duration": 3,
+            "params": {
+              "intensity": 0.35
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 2.7,
+            "duration": 1.8,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "close_up",
+              "lag": 0.1,
+              "blend": 1.05
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 3.84,
+            "duration": 0.66,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "extreme_close_up",
+              "lag": 0.1,
+              "blend": 0.54
+            }
+          }
+        ],
+        "walk_and_talk": [
+          {
+            "technique": "follow",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "medium",
+              "lag": 0.2
+            }
+          },
+          {
+            "technique": "handheld",
+            "start": 1.5,
+            "duration": 3,
+            "params": {
+              "intensity": 0.3
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 3.3,
+            "duration": 1.2,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "close_up",
+              "lag": 0.2,
+              "blend": 0.9
+            }
+          }
+        ],
+        "hero_reveal": [
+          {
+            "technique": "follow",
+            "start": 1.5,
+            "duration": 2.55,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "shotSize": "full",
+              "lag": 0.15
+            }
+          },
+          {
+            "technique": "follow",
+            "start": 2.4,
+            "duration": 2.1,
+            "subjectId": "hero",
+            "params": {
+              "side": "front",
+              "shotSize": "close_up",
+              "height": 0.9,
+              "lag": 0.15,
+              "blend": 1.65
+            }
+          }
+        ],
+        "vertigo": [
+          {
+            "technique": "dolly_zoom_out",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero"
+          }
+        ],
+        "emotional_push": [
+          {
+            "technique": "push_in",
+            "start": 1.5,
+            "duration": 3
+          }
+        ],
+        "hero_orbit": [
+          {
+            "technique": "orbit_right",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "angle": 180
+            }
+          }
+        ],
+        "aerial_reveal": [
+          {
+            "technique": "crane_up",
+            "start": 1.5,
+            "duration": 3,
+            "params": {
+              "height": 12,
+              "distance": 16
+            }
+          }
+        ],
+        "intimate_handheld": [
+          {
+            "technique": "follow",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "distance": 2.2,
+              "lag": 0.12
+            }
+          },
+          {
+            "technique": "handheld",
+            "start": 1.5,
+            "duration": 3,
+            "params": {
+              "intensity": 1.6
+            }
+          }
+        ],
+        "symmetric_follow": [
+          {
+            "technique": "follow",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "distance": 5,
+              "lag": 0.3
+            }
+          }
+        ],
+        "side_track": [
+          {
+            "technique": "follow",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "side": "left",
+              "distance": 6,
+              "lag": 0.2
+            }
+          }
+        ],
+        "whip_transition": [
+          {
+            "technique": "truck_right",
+            "start": 1.5,
+            "duration": 3,
+            "params": {
+              "distance": 2.5
+            }
+          },
+          {
+            "technique": "whip_pan_right",
+            "start": 4,
+            "duration": 0.5
+          }
+        ],
+        "sword_chase": [
+          {
+            "technique": "follow",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "side": "behind",
+              "distance": 6,
+              "lag": 0.35
+            }
+          },
+          {
+            "technique": "orbit_left",
+            "start": 3,
+            "duration": 1.5,
+            "subjectId": "hero",
+            "params": {
+              "angle": 120
+            }
+          }
+        ],
+        "spiral_rise": [
+          {
+            "technique": "orbit_left",
+            "start": 1.5,
+            "duration": 3,
+            "subjectId": "hero",
+            "params": {
+              "angle": 360,
+              "rise": 4
+            }
+          }
+        ],
+        "crash_zoom": [
+          {
+            "technique": "zoom_in",
+            "start": 1.5,
+            "duration": 0.4,
+            "easing": "linear"
+          }
+        ],
+        "impact_shake": [
+          {
+            "technique": "shake",
+            "start": 1.5,
+            "duration": 0.6,
+            "params": {
+              "intensity": 1.2
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

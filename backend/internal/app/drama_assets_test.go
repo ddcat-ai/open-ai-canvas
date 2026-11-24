@@ -67,6 +67,29 @@ func TestDramaImageSizeKeepsRatioModelsAndRejectsUndeclared(t *testing.T) {
 	}
 }
 
+// 声明为大写档位时，短剧参考图也按声明原值下发，不能把小写档位透传给上游。
+func TestDramaImageResolutionUsesDeclaredCasing(t *testing.T) {
+	spec := CapabilitySpec{Capability: "image", Options: map[string]OptionConstraint{
+		"size":            {Values: []any{"16:9"}},
+		"imageResolution": {Values: []any{"1K", "2K", "4K"}},
+	}}
+	for tier, want := range map[string]string{"2k": "2K", "4K": "4K"} {
+		got := dramaImageRequestForSpec(spec, nil, "16:9", tier)
+		if got.Issue != "" || got.Resolution != want {
+			t.Fatalf("tier %q => %+v, want resolution %q", tier, got, want)
+		}
+		config := map[string]any{}
+		got.apply(config)
+		if config["imageResolution"] != want {
+			t.Fatalf("tier %q applied %#v, want %q", tier, config["imageResolution"], want)
+		}
+	}
+	// 模型默认档位同样按声明原值下发。
+	if got := dramaImageRequestForSpec(spec, map[string]any{"imageResolution": "2K"}, "16:9", ""); got.Resolution != "2K" {
+		t.Fatalf("default tier => %+v, want declared 2K", got)
+	}
+}
+
 func TestDramaAssetSchemesRenderWithoutPlaceholders(t *testing.T) {
 	for _, scheme := range production.AssetSchemes() {
 		assets := production.AssetSettings{Mode: scheme.Mode}.Normalized()
@@ -115,7 +138,7 @@ func TestDramaAssetPromptsEnforceRatio(t *testing.T) {
 		if !strings.Contains(req.Prompt, "最终输出画幅必须为 16:9，横版，宽度大于高度") {
 			t.Fatalf("asset ratio missing from submission: %s", req.Prompt)
 		}
-		for kind, marker := range map[string]string{"character": "角色定妆照", "prop": "道具设定图", "scene": "场景概念设定图"} {
+		for kind, marker := range map[string]string{"character": "角色四格资产参考图", "prop": "道具设定图", "scene": "场景概念设定图"} {
 			if strings.Contains(req.Prompt, marker) {
 				seen[kind] = true
 			}

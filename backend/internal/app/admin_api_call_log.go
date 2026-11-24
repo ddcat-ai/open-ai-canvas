@@ -1,4 +1,4 @@
-// 上游调用日志写入（LogAPICall）与视频任务多次轮询日志的合并。
+// 上游调用日志写入（LogAPICall）与异步媒体任务多次轮询日志的合并。
 
 package app
 
@@ -23,8 +23,9 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	if log.StartedAt.IsZero() {
 		log.StartedAt = log.CreatedAt.Add(-time.Duration(log.DurationMs) * time.Millisecond)
 	}
+	s.captureAPILogGeneration(&log)
 	s.estimateCallCost(&log)
-	if log.BillingOrderID != "" && log.ProviderRequestID != "" {
+	if log.RequestKind == "create" && log.Status == model.ApiCallStatusSucceeded && log.BillingOrderID != "" && log.ProviderRequestID != "" {
 		if err := s.repo.UpdateBillingProviderRequestID(log.BillingOrderID, log.ProviderRequestID); err != nil {
 			// 账单关联是请求日志的辅助状态，不能因为关联更新失败而丢失
 			// 已经发生的上游调用记录。后续由任务/账单对账流程补偿关联。
@@ -33,8 +34,10 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	}
 	if log.TaskID != "" && (log.RequestKind == "create" || log.RequestKind == "poll" || log.RequestKind == "cancel") {
 		stage := log.RequestKind
+		acceptedID := ""
 		var nextPollAt *time.Time
 		if stage == "create" && log.Status == model.ApiCallStatusSucceeded && log.ProviderRequestID != "" {
+			acceptedID = log.ProviderRequestID
 			stage = "accepted"
 			delay := 2 * time.Second
 			if log.Capability == "video" {
@@ -50,7 +53,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 			next := time.Now().Add(delay)
 			nextPollAt = &next
 		}
-		if err := s.repo.UpdateTaskProviderState(log.TaskID, log.ProviderRequestID, stage, nextPollAt); err != nil {
+		if err := s.repo.UpdateTaskProviderState(log.TaskID, acceptedID, stage, nextPollAt); err != nil {
 			// 请求日志本身仍需保留；任务状态可由后续任务收尾或恢复流程
 			// 重建，不能让一次状态写失败掩盖真实的上游调用。
 			stdlog.Printf("provider task state update failed: task_id=%s provider_request_id=%s error=%v", log.TaskID, log.ProviderRequestID, err)
@@ -71,7 +74,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 	if err != nil {
 		return err
 	}
-	incomingBytes := int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL) + len(log.RequestContentType) + len(log.RequestBody) + len(log.ResponseBody))
+	incomingBytes := int64(len(log.Path) + len(log.Model) + len(log.ProviderRequestID) + len(log.ErrorCode) + len(log.Error) + len(log.UpstreamURL) + len(log.RequestContentType) + len(log.RequestBody) + len(log.ResponseBody) + len(log.GenerationContentJSON))
 	if err := validateAPICallLogQuotaWithPolicy(usage, incomingBytes, policy.Resource); err != nil {
 		return err
 	}
@@ -81,7 +84,7 @@ func (s *Service) LogAPICall(log model.ApiCallLog) error {
 func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) {
 	// Delivery is a separate outcome: a failed download must not rewrite a
 	// successful generation request as failed.
-	if (log.Capability != "video" && log.Capability != "image") || log.RequestKind != "poll" {
+	if (log.Capability != "video" && log.Capability != "image" && log.Capability != "audio") || log.RequestKind != "poll" {
 		return false, nil
 	}
 	if log.TaskID == "" && log.ProviderRequestID == "" {
@@ -94,15 +97,7 @@ func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	if log.RequestKind == "poll" {
-		root.PollCount++
-		if log.ResponseBody != "" {
-			root.ResponseBody = log.ResponseBody
-		}
-	}
-	if log.ProviderRequestID != "" {
-		root.ProviderRequestID = log.ProviderRequestID
-	}
+	root.PollCount++
 	if log.ProviderStatus != "" {
 		root.ProviderStatus = log.ProviderStatus
 	}
@@ -134,7 +129,7 @@ func (s *Service) mergeAsyncMediaAPICallLog(log model.ApiCallLog) (bool, error) 
 }
 
 // recordProviderTaskTerminalFailure 把适配器解析出的失败/取消终态写到本次上游任务的 create 根日志。
-// 视频、图片的轮询日志会合并进根日志，音频不合并；两种情况下计费都只看根日志，所以统一改根日志。
+// 异步媒体的轮询日志会合并进根日志；计费只看根日志，所以统一改根日志。
 // 写回失败只记进程日志：根日志保持 succeeded 时账单会进入待核对，不会误退款。
 func recordProviderTaskTerminalFailure(ctx context.Context, failure providerTaskTerminalError) {
 	metadata, ok := ctx.Value(providerAnalyticsKey{}).(providerAnalyticsContext)

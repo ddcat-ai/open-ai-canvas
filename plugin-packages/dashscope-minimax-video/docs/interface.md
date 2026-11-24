@@ -47,9 +47,10 @@
 | `create.body.parameters.duration` | `{"$ref":"request.output.duration"}` |
 | `create.body.parameters.watermark` | `{"$coalesce":[{"$ref":"request.output.watermark"},false]}` |
 | `create.headers.X-DashScope-Async` | `"enable"` |
+| `create.originPath` | `true` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/api/v1/tasks/{{taskId}}"` |
-| `poll.contentType` | `"application/json"` |
+| `poll.originPath` | `true` |
 
 ## Provider 扩展键
 
@@ -94,7 +95,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "dashscope-minimax-video",
   "name": "百炼 MiniMax H3 Video",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Alibaba Cloud / 影策",
   "description": "百炼 MiniMax H3 Video 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -132,6 +133,11 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "input-image-media",
+          "token": "参考图{n}",
+          "dramaTailFrame": "reference-image"
         },
         "parameters": [
           {

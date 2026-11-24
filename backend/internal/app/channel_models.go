@@ -13,6 +13,9 @@ import (
 )
 
 type ChannelModelRequest struct {
+	ExpectedUpdatedAt                time.Time               `json:"expectedUpdatedAt,omitempty"`
+	ExpectedPriceVersion             int64                   `json:"expectedPriceVersion,omitempty"`
+	ProtocolSelectionExplicit        *bool                   `json:"protocolSelectionExplicit,omitempty"`
 	ModelKey                         string                  `json:"modelKey"`
 	ProviderModelKey                 string                  `json:"providerModelKey"`
 	DisplayName                      string                  `json:"displayName"`
@@ -22,6 +25,7 @@ type ChannelModelRequest struct {
 	Icon                             string                  `json:"icon"`
 	Capability                       string                  `json:"capability"`
 	Protocol                         string                  `json:"protocol"`
+	ProtocolRelease                  string                  `json:"protocolRelease,omitempty"`
 	BillingMode                      string                  `json:"billingMode"`
 	UnitPriceMicrocredits            int64                   `json:"unitPriceMicrocredits"`
 	InputTokenPriceMicrocredits      int64                   `json:"inputTokenPriceMicrocredits"`
@@ -43,7 +47,8 @@ const maxAdminChannelModelBatchDeleteCount = 100
 // ChannelModelPriceTierRequest 是系统渠道内某个规格的上游 SKU 与结算价格。
 // Resolution="*"、VideoSeconds=0 分别表示任意分辨率和任意时长。
 type ChannelModelPriceTierRequest struct {
-	CostPricing model.CreditCostPricing `json:"costPricing"`
+	ImagePricing *model.ImagePricing     `json:"imagePricing,omitempty"`
+	CostPricing  model.CreditCostPricing `json:"costPricing"`
 	// Selector 是 SKU 的规范匹配条件。支持 operation、quality、size、vquality、videoSeconds、imageCount、videoGenerateAudio；
 	// operation 可区分文生/图生/视频生，避免同一分辨率下错误复用价格。
 	Selector                         map[string]string `json:"selector"`
@@ -110,22 +115,15 @@ func (s *Service) AdminChannelModels(actor *model.User, channelID string) ([]mod
 	if err != nil {
 		return nil, err
 	}
+	registry := s.protocolRegistry()
 	for index := range items {
-		if strings.TrimSpace(items[index].CapabilityConfigJSON) == "" {
+		normalized, normalizeErr := normalizedChannelModelCapability(&items[index], registry)
+		if normalizeErr != nil {
 			continue
 		}
-		config, decodeErr := DecodeModelCapabilityConfig(items[index].CapabilityConfigJSON)
-		if decodeErr != nil || config == nil {
-			continue
-		}
-		normalized, normalizeErr := NormalizeModelCapabilityConfigForModel(items[index].Capability, string(items[index].Protocol), firstNonEmpty(items[index].ProviderModelKey, items[index].ModelKey), config, s.protocolRegistry())
-		if normalizeErr != nil || normalized == nil {
-			continue
-		}
-		encoded, encodeErr := json.Marshal(normalized)
-		var value map[string]any
-		if encodeErr == nil && json.Unmarshal(encoded, &value) == nil {
-			items[index].CapabilityConfig = value
+		items[index].CapabilityConfig, err = modelCapabilityConfigToMap(normalized)
+		if err != nil {
+			return nil, err
 		}
 	}
 	return items, nil
@@ -167,7 +165,18 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if err != nil {
 		return nil, err
 	}
-	modelKey, providerModelKey, capability, protocol, err := s.normalizeChannelModelContract(channel, req)
+	item := &model.ChannelModel{ChannelID: channelID, Enabled: true, PriceVersion: 1, PriceCurrency: model.PriceCurrencyCredits}
+	if id != "" {
+		item, err = s.repo.ChannelModelByID(channelID, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	release, err := selectEditedModelRelease(s.protocolRegistry(), item, req.Protocol, req.ProtocolRelease)
+	if err != nil {
+		return nil, err
+	}
+	modelKey, providerModelKey, capability, protocol, err := normalizeChannelModelContractWithRegistry(release.Registry, channel, req)
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +195,11 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if conflict != nil && conflict.ID != strings.TrimSpace(id) {
 		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
 	}
+	if id != "" && (req.ExpectedUpdatedAt.IsZero() || !req.ExpectedUpdatedAt.Equal(item.UpdatedAt) || req.ExpectedPriceVersion != item.PriceVersion) {
+		return nil, BadAuthRequest("模型已被修改或缺少编辑版本，请刷新后重新编辑；本次未保存任何修改")
+	}
 	if capability == "text" || capability == "image" || capability == "video" {
-		validated, validateErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
+		validated, validateErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, release.Registry)
 		if validateErr != nil {
 			return nil, validateErr
 		}
@@ -203,19 +215,17 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 			return nil, err
 		}
 	}
-	modelID, err := s.repo.NextPrefixedID("MODEL")
-	if err != nil {
-		return nil, err
-	}
-	item := &model.ChannelModel{ID: modelID, ChannelID: channelID, Enabled: true, PriceVersion: 1, PriceCurrency: model.PriceCurrencyCredits}
 	previousProviderModelKey := ""
+	previousProtocol := model.ChannelInterfaceType("")
 	if id != "" {
-		item, err = s.repo.ChannelModelByID(channelID, id)
+		previousProviderModelKey = strings.TrimPrefix(strings.TrimSpace(item.ProviderModelKey), "models/")
+		previousProtocol = item.Protocol
+		item.PriceVersion++
+	} else {
+		item.ID, err = s.repo.NextPrefixedID("MODEL")
 		if err != nil {
 			return nil, err
 		}
-		previousProviderModelKey = strings.TrimPrefix(strings.TrimSpace(item.ProviderModelKey), "models/")
-		item.PriceVersion++
 	}
 	// 模型级上游键重命名时，与旧值相同的档位键属于“跟随模型默认”的隐式固化，必须级联跟随；
 	// 否则任务请求会继续把旧上游键发给供应商。管理员显式配置的其他上游 SKU 不受影响。
@@ -245,15 +255,11 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	}
 	s.applyChannelModelPriceTierSummary(item, tiers)
 	if capability == "text" || capability == "image" || capability == "video" {
-		capabilityConfig, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
-		if normalizeErr != nil {
-			return nil, normalizeErr
-		}
-		encoded, encodeErr := json.Marshal(capabilityConfig)
+		encoded, encodeErr := json.Marshal(req.CapabilityConfig)
 		if encodeErr != nil {
 			return nil, encodeErr
 		}
-		if item.CapabilityConfigJSON != string(encoded) {
+		if item.CapabilityConfigJSON != string(encoded) || item.ProtocolRelease != release.SHA256 {
 			item.CapabilityVersion++
 		}
 		item.CapabilityConfigJSON = string(encoded)
@@ -261,6 +267,7 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		item.CapabilityConfigJSON = ""
 		item.CapabilityVersion = 0
 	}
+	item.ProtocolRelease = release.SHA256
 	if req.Enabled != nil {
 		item.Enabled = *req.Enabled
 	}
@@ -277,17 +284,40 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 		return nil, err
 	}
 	// 渠道模型及所有价格档必须同时落库，不能出现“能力已开放但规格价格尚未更新”的窗口。
-	if err := s.repo.SaveChannelModelWithPriceTiers(item, tiers); err != nil {
+	if err := s.repo.Transaction(func(repo *repository.Repository) error {
+		if channel.WebsiteID != "" {
+			if _, err := repo.LockChannelWebsite(channel.WebsiteID); err != nil {
+				return err
+			}
+		}
+		if err := repo.LockSystemChannelConfiguration([]string{channel.ID}); err != nil {
+			return err
+		}
+		currentChannel, err := repo.AdminSystemChannel(channel.ID)
+		if err != nil {
+			return err
+		}
+		if currentChannel.WebsiteID != channel.WebsiteID {
+			return BadAuthRequest("Key 分组归属已变化，请刷新后重试")
+		}
+		if err := repo.SaveChannelModelWithPriceTiers(item, tiers); err != nil {
+			return err
+		}
+		item.PriceTiers = tiers
+		if err := repo.SyncChannelModelNames(channel.ID, time.Now()); err != nil {
+			return err
+		}
+		if previousProtocol != item.Protocol && (req.ProtocolSelectionExplicit == nil || *req.ProtocolSelectionExplicit) {
+			return repo.RecordChannelProtocolSelection(channel.WebsiteID, actor.ID, item)
+		}
+		return nil
+	}); err != nil {
+		if errors.Is(err, repository.ErrTaskStateConflict) {
+			return nil, BadAuthRequest("模型已被修改，请刷新后重新编辑；本次未保存任何修改")
+		}
 		return nil, err
 	}
-	item.PriceTiers = tiers
 	s.invalidateRouteCatalog()
-	if err := s.syncChannelModelNames(channel); err != nil {
-		return nil, err
-	}
-	if err := s.syncLogicalModelsFromChannelModel(actor, item); err != nil {
-		return nil, err
-	}
 	return item, nil
 }
 

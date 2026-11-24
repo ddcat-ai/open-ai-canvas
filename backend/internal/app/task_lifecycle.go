@@ -91,7 +91,10 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	if err := s.ensureTaskProjectActive(userID, task.ProjectID); err != nil {
 		return nil, err
 	}
-	task, err = s.repo.RetryTaskWithBilling(userID, task, billingOrder, policy.Task.ActiveTaskLimit)
+	task, err = s.repo.RetryTaskWithBilling(userID, task, billingOrder, policy.Task.ActiveTaskLimit, authorizeRetryBillingRelease)
+	if errors.Is(err, repository.ErrTaskBillingReview) {
+		return nil, BadAuthRequest("上一次调用费用仍在核对中，处理完成前不能重复提交")
+	}
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 	}
@@ -106,6 +109,34 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	}
 	_ = s.log(userID, task.ID, "info", "任务已重新入队", "")
 	return taskForOutput(*task), nil
+}
+
+// 只使用锁定的旧执行证据授权释放；缺少诊断或上游状态不明不能推断为未提交。
+func authorizeRetryBillingRelease(repo *repository.Repository, task *model.Task, order *model.BillingOrder) error {
+	diagnostic := taskExecutionDiagnostic(task)
+	if task.MediaRecoveryJSON != "" || task.ResultJSON != "" || task.TextDraft != "" ||
+		task.ProviderCancelStatus == model.ProviderCancelStatusRequested || task.ProviderCancelStatus == model.ProviderCancelStatusUncertain ||
+		(diagnostic != nil && (diagnostic.Code == "result_persistence_failed" || diagnostic.RetryClass == "recover_result")) {
+		return repository.ErrTaskBillingReview
+	}
+	hasSuccessfulCall, err := repo.BillingOrderHasSuccessfulBillableCall(order.ID)
+	if err != nil {
+		return err
+	}
+	if hasSuccessfulCall {
+		return repository.ErrTaskBillingReview
+	}
+	if diagnostic != nil && !diagnostic.TaskSubmitted && diagnostic.SubmissionOutcome == "not_submitted" && task.ProviderRequestID == "" && order.ProviderRequestID == "" {
+		return nil
+	}
+	terminalFailure, err := repo.BillingOrderHasTerminalFailure(order.ID)
+	if err != nil {
+		return err
+	}
+	if !terminalFailure {
+		return repository.ErrTaskBillingReview
+	}
+	return nil
 }
 
 func (w *taskLifecycleCoordinator) cancelTask(ctx context.Context, userID string, id string) (*model.Task, error) {

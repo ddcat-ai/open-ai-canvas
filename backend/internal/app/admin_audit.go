@@ -93,6 +93,7 @@ func (s *Service) AdminUserDetail(actor *model.User, userID string) (*AdminUserD
 	if err != nil {
 		return nil, err
 	}
+	usage.AgentLimitBytes = policy.Resource.AgentHistoryMB << 20
 	capacity, err := s.computeAccountStorageStatus(user.ID, time.Now(), false)
 	if err != nil {
 		return nil, err

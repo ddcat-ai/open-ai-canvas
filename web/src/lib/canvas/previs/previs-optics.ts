@@ -1,7 +1,7 @@
 import type { PrevisAspectRatio, PrevisCamera, PrevisShot } from "@/types/previs";
 
 /**
- * 预演台镜头光学的唯一真源。
+ * 世界引擎镜头光学的唯一真源。
  *
  * 约定：传感器按 Super35 / 全画幅 36mm 宽度计算水平视角，three PerspectiveCamera 需要的是
  * 竖直 fov，因此按镜头画幅比例把水平视角换算成竖直视角。这样同一焦段在 9:16 竖屏与
@@ -51,6 +51,17 @@ export function previsVerticalFov(focalLength: number, aspect: number): number {
     const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 9 / 16;
     const halfHorizontal = (previsHorizontalFov(focalLength) * Math.PI) / 360;
     return (2 * Math.atan(Math.tan(halfHorizontal) / safeAspect) * 180) / Math.PI;
+}
+
+/**
+ * 景别取景距离：画面短边（横屏是高、竖屏是宽）恰好框住 extent 米时，机位到主体的距离。
+ * 用于跟拍景别；同一景别换焦段或画幅仍框住同样的范围。下限 0.35 米，避免机位钻进人物。
+ */
+export function previsFramingDistance(extent: number, focalLength: number, aspect: number): number {
+    const halfHorizontal = (previsHorizontalFov(focalLength) * Math.PI) / 360;
+    const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
+    const halfShort = safeAspect >= 1 ? Math.tan(halfHorizontal) / safeAspect : Math.tan(halfHorizontal);
+    return Math.max(0.35, (Number.isFinite(extent) && extent > 0 ? extent : 1) / (2 * halfShort));
 }
 
 /** CAM 取景与离线渲染共用：镜头摄影机在给定镜头画幅下的竖直 fov。viewportAspect 只对自适应画幅生效。 */

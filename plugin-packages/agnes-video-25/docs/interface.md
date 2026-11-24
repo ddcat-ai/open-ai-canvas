@@ -55,7 +55,7 @@
 | `create.body.audios` | `{"$if":{"condition":{"$or":[{"$gt":[{"$len":{"$filter":{"from":{"$sortByOrder":{"$ref":"request.images"}},"as":"media","where":{"$in":[{"$ref":"media.role"},["reference_image","subject_reference","style_reference"]]}}}},0]},{"$gt":[{"$len":{"$ref":"request.videos"}},0]},{"$gt":[{"$len":{"$ref":"request.audios"}},0]}]},"then":{"$omitEmpty":{"$map":{"from":{"$sortByOrder":{"$ref":"request.audios"}},"as":"media","in":{"$ref":"media.value"}}}},"else":null}}` |
 | `poll.method` | `"GET"` |
 | `poll.path` | `"/agnesapi"` |
-| `poll.contentType` | `"application/json"` |
+| `poll.originPath` | `true` |
 | `poll.query.video_id` | `{"$ref":"taskId"}` |
 | `poll.query.model_name` | `{"$ref":"request.model"}` |
 
@@ -94,7 +94,7 @@
   "apiVersion": "yingce.plugin/v2",
   "id": "agnes-video-25",
   "name": "Agnes Video 2.5 / 2.5 Flash",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Agnes AI / 影策",
   "description": "Agnes Video 2.5 / 2.5 Flash 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
@@ -132,6 +132,10 @@
         "auth": {
           "type": "bearer",
           "field": "apiKey"
+        },
+        "videoReferences": {
+          "layout": "images",
+          "token": "参考图{n}"
         },
         "parameters": [
           {

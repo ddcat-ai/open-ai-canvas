@@ -889,6 +889,7 @@ func TestCloudAgentPrevisGroundScene(t *testing.T) {
 	if y(keyframes[0]) != 3 || y(keyframes[1]) != 0 {
 		t.Fatalf("actor keyframes: raised kept, underground grounded; got %v %v", y(keyframes[0]), y(keyframes[1]))
 	}
+	// 路径点 Y 是离地高度：地下的点拉回 0，空中的点保留（演员沿路径悬空移动）。
 	points := objects[0]["motionPath"].(map[string]any)["points"].([]any)
 	if numberValue(points[0].([]any)[1], -99) != 0 || numberValue(points[1].([]any)[1], -99) != 2 {
 		t.Fatalf("actor path: underground grounded, raised kept; got %v", points)

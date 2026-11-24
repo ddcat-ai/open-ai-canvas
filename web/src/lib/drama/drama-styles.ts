@@ -1,6 +1,8 @@
-// 短剧风格库：按“爆款题材 × 视觉媒介”组织。每个风格的 prompt 只描述全剧长期稳定的美术基线
-// （媒介、题材场景、色彩光影、服化道、禁用项），具体构图与动作由分镜决定。
-// 只有与题材确实匹配的内置样图才作为封面，其余使用风格主色生成的海报占位，避免误导。
+import { composeDramaStyleId, DEFAULT_DRAMA_STYLE_ID, findComposedDramaStyle, parseDramaStyleId, type DramaStyleComposition, type DramaStyleFormId, type DramaStyleThemeId } from "./style-composition";
+
+export { composeDramaStyleId, DEFAULT_DRAMA_STYLE_ID, DRAMA_STYLE_FORMS, DRAMA_STYLE_THEMES, parseDramaStyleId, type DramaStyleComposition, type DramaStyleFormId, type DramaStyleThemeId } from "./style-composition";
+
+// 自由组合优先；既有风格保留为可选预设。风格只描述长期稳定的美术基线，画幅、构图与动作由作品设置和分镜决定。
 
 export type DramaStyleCategory = "live" | "3d" | "2d" | "art";
 
@@ -14,9 +16,11 @@ export type DramaStyle = {
     cover?: string;
     palette: [string, string, string];
     prompt: string;
+    /** 拆开的美术基线，供详情弹窗分项展示；prompt 由这些字段拼成。 */
+    detail: { medium: string; world: string; look: string; wardrobe: string; forbid: string };
 };
 
-type Spec = Omit<DramaStyle, "prompt"> & { medium?: string; world: string; look: string; wardrobe: string; forbid?: string };
+type Spec = Omit<DramaStyle, "prompt" | "detail"> & { medium?: string; world: string; look: string; wardrobe: string; forbid?: string };
 
 export const DRAMA_STYLE_CATEGORIES: Array<{ key: "all" | "hot" | DramaStyleCategory; label: string }> = [
     { key: "hot", label: "爆款" },
@@ -28,7 +32,7 @@ export const DRAMA_STYLE_CATEGORIES: Array<{ key: "all" | "hot" | DramaStyleCate
 ];
 
 const MEDIUM: Record<DramaStyleCategory, string> = {
-    live: "真人实拍短剧质感，电影级布光，真实皮肤纹理与毛孔，自然景深，竖屏构图主体突出，人物面部清晰可读、表情自然生动",
+    live: "真人实拍短剧质感，电影级布光，真实皮肤纹理与毛孔，自然景深，人物面部清晰可读、表情自然生动",
     "3d": "高品质 3D 动画渲染，建模精致，材质与光照物理可信，角色表情生动",
     "2d": "高品质 2D 动画漫剧，线稿清晰流畅，上色干净，角色五官稳定",
     art: "具有鲜明艺术语言的风格化画面，全剧统一笔触与材质",
@@ -65,6 +69,7 @@ const SPECS: Spec[] = [
         hot: true,
         tags: ["甜宠", "心动", "都市"],
         description: "奶油蜜桃色，柔光逆光，满屏心动。",
+        cover: cover("sweet-romance"),
         palette: ["#fde2e4", "#f7a1b5", "#fff1e6"],
         world: "都市日常：咖啡馆、公寓、街角、游乐园、海边",
         look: "奶油白与蜜桃粉主色，柔和逆光与发丝光、轻微光晕，肤色通透红润",
@@ -149,6 +154,7 @@ const SPECS: Spec[] = [
         hot: true,
         tags: ["宫斗", "权谋", "后宫"],
         description: "金红宫墙与锦缎华服，烛光暖调，庄重华丽。",
+        cover: cover("palace-hanfu"),
         palette: ["#5b1a18", "#a3332b", "#d9a441"],
         world: "古代宫廷：朱红宫墙、琉璃瓦、雕梁画栋的殿内、帷幔与烛台",
         look: "正红、明黄、墨绿主色，暖色烛光与天光混合，构图对称庄重",
@@ -174,6 +180,7 @@ const SPECS: Spec[] = [
         category: "live",
         tags: ["武侠", "江湖", "快意"],
         description: "大漠客栈竹林，刀光剑影的写实武侠。",
+        cover: cover("wuxia-swordsman"),
         palette: ["#2b2116", "#8a6a3f", "#d9c4a0"],
         world: "客栈、竹林、大漠、渡口、山门",
         look: "土黄与墨绿主色，自然光为主、逆光扬尘，打斗用高速与定格",
@@ -210,6 +217,7 @@ const SPECS: Spec[] = [
         category: "live",
         tags: ["八零", "知青", "家庭"],
         description: "七八十年代小城与大院，暖黄怀旧滤色。",
+        cover: cover("era-nostalgia"),
         palette: ["#3f3a2e", "#8a7a52", "#e2c98d"],
         world: "家属大院、筒子楼、供销社、田间与小城街道",
         look: "暖黄偏绿的怀旧色调，柔和自然光，轻微胶片颗粒",
@@ -318,6 +326,7 @@ const SPECS: Spec[] = [
         category: "live",
         tags: ["美食", "小店", "温情"],
         description: "暖橙烟火气，食物特写诱人。",
+        cover: cover("food-healing"),
         palette: ["#3b1d0e", "#ea580c", "#fde7c7"],
         world: "深夜食堂、街边小馆、后厨、菜市场",
         look: "暖橙主色，蒸汽与逆光勾勒食物，微距特写质感诱人",
@@ -329,10 +338,61 @@ const SPECS: Spec[] = [
         category: "live",
         tags: ["乡村", "返乡", "创业"],
         description: "青山绿水与新农村，明亮正向。",
+        cover: cover("rural-life"),
         palette: ["#1f3b2a", "#4ade80", "#fef9c3"],
         world: "山村、梯田、果园、直播间、村委会",
         look: "青绿与明黄主色，晴朗通透的日光，航拍式大远景",
         wardrobe: "当代乡村服装与工作服",
+    },
+    {
+        id: "live-tearjerker",
+        name: "虐恋催泪",
+        category: "live",
+        hot: true,
+        tags: ["虐恋", "追妻", "催泪"],
+        description: "雨夜、医院与离别车站，冷调低饱和，情绪特写。",
+        cover: cover("tearjerker"),
+        palette: ["#1e293b", "#64748b", "#cbd5e1"],
+        world: "雨夜街头、医院走廊、空旷公寓、车站与机场",
+        look: "冷青灰低饱和，窗外雨痕与霓虹虚化，柔和侧光贴近面部，泪光与眼神特写",
+        wardrobe: "素色大衣、衬衫与针织，妆容清淡带憔悴感",
+        forbid: "高饱和明快色调",
+    },
+    {
+        id: "live-neo-chinese",
+        name: "新中式都市",
+        category: "live",
+        tags: ["新中式", "非遗", "国潮"],
+        description: "茶室、园林与现代空间结合，雅致温润。",
+        cover: cover("neo-chinese"),
+        palette: ["#2b2118", "#8a6a4b", "#e9dcc6"],
+        world: "新中式茶室、苏式园林、非遗工坊、现代美术馆",
+        look: "暖木色与米白主调，窗棂斑驳自然光，留白构图，质感温润",
+        wardrobe: "改良旗袍、新中式立领、真丝与棉麻面料",
+    },
+    {
+        id: "live-family",
+        name: "现实家庭",
+        category: "live",
+        tags: ["家庭", "婆媳", "现实"],
+        description: "老小区、菜市场与饭桌，真实生活质感。",
+        palette: ["#3f3f46", "#a8a29e", "#fde68a"],
+        world: "城市老小区、厨房饭桌、菜市场、医院、学校门口",
+        look: "自然写实布光，暖黄室内灯与日光混合，生活杂物丰富，不刻意美化",
+        wardrobe: "日常家居服与通勤装，素颜或淡妆",
+        forbid: "奢华布景、过度精修",
+    },
+    {
+        id: "live-western-fantasy",
+        name: "西幻史诗",
+        category: "live",
+        tags: ["西幻", "王国", "骑士"],
+        description: "古堡、雾林与王座厅，史诗级奇幻实拍。",
+        cover: cover("fantasy-3d"),
+        palette: ["#1c1917", "#57534e", "#d6b97b"],
+        world: "中世纪古堡、王座大厅、迷雾森林、山巅要塞",
+        look: "体积光穿过薄雾，暖金烛光对比冷蓝夜色，史诗广角与人物近景交替",
+        wardrobe: "铠甲、披风、宫廷礼服与皮革装束，细节做旧",
     },
 
     // ===== 3D 动画 =====
@@ -380,6 +440,7 @@ const SPECS: Spec[] = [
         category: "3d",
         tags: ["写实", "史诗", "动作"],
         description: "接近 3A 游戏过场的电影级写实 CG。",
+        cover: cover("cg-realistic"),
         palette: ["#111111", "#3f3f46", "#a1a1aa"],
         medium: "电影级写实 3D CG，接近 3A 游戏过场动画，物理正确的光照与材质，毛发与布料细节丰富",
         world: "根据剧情的写实场景",
@@ -407,6 +468,7 @@ const SPECS: Spec[] = [
         category: "3d",
         tags: ["Q 版", "萌系", "搞笑"],
         description: "二三头身萌系角色，糖果色玩具质感。",
+        cover: cover("chibi-3d"),
         palette: ["#fdf2f8", "#f9a8d4", "#a5f3fc"],
         medium: "3D Q 版萌系风格，角色二至三头身，表情夸张可爱，材质如软胶玩具",
         world: "简洁可爱的场景",
@@ -445,6 +507,7 @@ const SPECS: Spec[] = [
         category: "3d",
         tags: ["萌宠", "拟人", "搞笑"],
         description: "毛茸茸的动物主角，表情丰富。",
+        cover: cover("pet-3d"),
         palette: ["#fef6e4", "#f4a261", "#8ecae6"],
         medium: "3D 动画电影风格，动物角色拟人化，毛发细腻蓬松，表情丰富",
         world: "城市与家居的动物尺度视角",
@@ -463,6 +526,18 @@ const SPECS: Spec[] = [
         world: "机库、废墟城市、太空战场",
         look: "冷钢灰与电光蓝主色，强反射与推进器辉光",
         wardrobe: "驾驶员战斗服与机甲涂装",
+    },
+    {
+        id: "3d-wuxia-game",
+        name: "3D 武侠游戏风",
+        category: "3d",
+        tags: ["武侠", "江湖", "游戏感"],
+        description: "次世代游戏 CG 质感的江湖，衣袂翻飞。",
+        palette: ["#111827", "#7f1d1d", "#f5d0a9"],
+        medium: "次世代武侠游戏 CG 风格 3D 渲染，布料与发丝模拟细腻",
+        world: "竹林、客栈、悬崖古道、山门",
+        look: "水墨远山背景，暖色夕照与冷色月光，刀光剑气特效克制",
+        wardrobe: "飘逸长袍、束发冠、刀剑与斗笠",
     },
 
     // ===== 2D 漫剧 =====
@@ -488,6 +563,7 @@ const SPECS: Spec[] = [
         hot: true,
         tags: ["热血", "奇幻", "异世界"],
         description: "日式 TV 动画赛璐璐，鲜明光影。",
+        cover: cover("isekai-anime"),
         palette: ["#1e1b4b", "#6366f1", "#fda4af"],
         medium: "日式 TV 动画风格，赛璐璐两到三阶硬阴影，角色大眼高光、发丝分组清晰",
         world: "精细手绘动画背景",
@@ -552,6 +628,7 @@ const SPECS: Spec[] = [
         category: "2d",
         tags: ["少女", "恋爱", "梦幻"],
         description: "梦幻粉紫、闪光花瓣与大眼细线条。",
+        cover: cover("shoujo-romance"),
         palette: ["#fdf4ff", "#e879f9", "#c4b5fd"],
         medium: "少女漫画动画风格，大眼睛带多层星光高光，线条细腻纤长",
         world: "校园、城堡、花园",
@@ -579,6 +656,7 @@ const SPECS: Spec[] = [
         category: "2d",
         tags: ["奇幻", "史诗", "原画"],
         description: "游戏原画厚涂，笔触与体积感强。",
+        cover: cover("painterly-epic"),
         palette: ["#1c1917", "#9a3412", "#fcd34d"],
         medium: "游戏原画级厚涂插画风格，厚重笔触与色块，体积感与光影塑造强",
         world: "史诗奇幻场景",
@@ -605,6 +683,7 @@ const SPECS: Spec[] = [
         category: "2d",
         tags: ["赛博", "未来", "机甲"],
         description: "霓虹撞色的未来都市动画，强发光。",
+        cover: cover("cyber-anime"),
         palette: ["#0f0524", "#db2777", "#06b6d4"],
         medium: "赛博朋克动画风格，日式动画线稿配霓虹撞色上色",
         world: "雨夜都市与全息界面",
@@ -623,6 +702,44 @@ const SPECS: Spec[] = [
         world: "简化的城市与室内场景",
         look: "明快的有限调色板，轻微投影",
         wardrobe: "简化的现代服装",
+    },
+    {
+        id: "2d-fantasy-adventure",
+        name: "奇幻冒险漫",
+        category: "2d",
+        tags: ["奇幻", "龙", "冒险"],
+        description: "巨龙、浮空岛与魔法，宏大明亮的冒险动画。",
+        cover: cover("fantasy-adventure"),
+        palette: ["#0c4a6e", "#f59e0b", "#fef3c7"],
+        world: "浮空岛、龙巢、魔法学院、异世界王都",
+        look: "高饱和天空蓝与金色阳光，云层与光束层次丰富，大场面纵深",
+        wardrobe: "冒险者皮甲、法袍、骑士铠甲",
+    },
+    {
+        id: "2d-watercolor",
+        name: "水彩治愈",
+        category: "2d",
+        tags: ["水彩", "治愈", "文艺"],
+        description: "透明水彩晕染，柔和留白，适合温情故事。",
+        cover: cover("watercolor"),
+        palette: ["#e0f2fe", "#93c5fd", "#fbcfe8"],
+        medium: "手绘水彩动画风格，透明晕染与纸张纹理，线稿轻柔",
+        world: "小镇街道、花园、海边、阁楼书房",
+        look: "淡雅粉蓝主调，边缘自然渗化，大面积留白",
+        wardrobe: "简洁柔软的日常服装",
+        forbid: "厚重浓郁色块、强烈阴影",
+    },
+    {
+        id: "2d-chibi",
+        name: "Q 版搞笑漫",
+        category: "2d",
+        tags: ["Q 版", "沙雕", "搞笑"],
+        description: "大头小身，夸张表情与漫符，节奏轻快。",
+        palette: ["#fff7ed", "#fb923c", "#38bdf8"],
+        medium: "2D Q 版搞笑动画风格，2-3 头身比例，粗描边，夸张表情与漫画符号",
+        world: "简化的校园、办公室与家中场景",
+        look: "明快高饱和平涂，轻阴影，背景简洁突出角色",
+        wardrobe: "简化的标志性服装与配色",
     },
 
     // ===== 艺术风格 =====
@@ -671,6 +788,7 @@ const SPECS: Spec[] = [
         category: "art",
         tags: ["复古", "悬疑", "文艺"],
         description: "高反差黑白摄影，光影切割与颗粒。",
+        cover: cover("film-noir"),
         palette: ["#000000", "#525252", "#e5e5e5"],
         medium: "黑白电影风格，高反差单色影像，明显胶片颗粒",
         world: "街巷、室内与雨夜",
@@ -684,6 +802,7 @@ const SPECS: Spec[] = [
         category: "art",
         tags: ["文艺", "怀旧", "爱情"],
         description: "柯达暖调色彩，颗粒与漏光。",
+        cover: cover("retro-film"),
         palette: ["#3b2f2f", "#c2410c", "#fcd9a8"],
         medium: "复古胶片摄影风格，真人质感，柔和高光滚降",
         world: "街头、海边、旧居",
@@ -757,6 +876,47 @@ const SPECS: Spec[] = [
         forbid: "平滑抗锯齿、写实照片",
     },
     {
+        id: "art-ukiyoe",
+        name: "浮世绘",
+        category: "art",
+        tags: ["日式", "古典", "版画"],
+        description: "木版画线条与平面色块，传统日式构图。",
+        cover: cover("ukiyo-e"),
+        palette: ["#1e3a5f", "#c2410c", "#f5e6c8"],
+        medium: "日本浮世绘木版画风格，粗细变化的轮廓线，平面色块与纸张肌理",
+        world: "江户街巷、海浪、山景、町屋",
+        look: "靛蓝、朱红与米黄的传统配色，平面化透视",
+        wardrobe: "和服、浴衣与传统发髻",
+        forbid: "写实光影、3D 渲染感",
+    },
+    {
+        id: "art-woodcut",
+        name: "黑白版画",
+        category: "art",
+        tags: ["版画", "粗粝", "寓言"],
+        description: "刻刀线条与强黑白对比，适合寓言与暗黑故事。",
+        cover: cover("woodcut-print"),
+        palette: ["#0a0a0a", "#525252", "#f5f5f4"],
+        medium: "木刻 / 麻胶版画风格，刻刀线条与排线明暗，强烈黑白对比",
+        world: "荒野、村庄、城镇与象征性场景",
+        look: "以黑白为主，可点缀单一强调色",
+        wardrobe: "简化造型，轮廓清晰",
+        forbid: "渐变柔光、照片质感",
+    },
+    {
+        id: "art-guochao-landscape",
+        name: "青绿山水",
+        category: "art",
+        tags: ["国风", "山水", "仙境"],
+        description: "青绿重彩山水，云雾缭绕，适合仙侠与神话。",
+        palette: ["#134e4a", "#5eead4", "#fef3c7"],
+        medium: "中国青绿山水画风格，石青石绿重彩，工整勾勒与渲染",
+        world: "仙山、云海、瀑布、亭台楼阁",
+        look: "青绿与金色点缀，层叠远山与云雾，散点透视",
+        wardrobe: "宽袍广袖、飘带与古风发饰",
+        forbid: "现代元素、写实照片质感",
+    },
+    {
         id: "art-tech",
         name: "未来科技",
         category: "art",
@@ -774,16 +934,50 @@ const SPECS: Spec[] = [
 
 function compile(spec: Spec): DramaStyle {
     const { medium, world, look, wardrobe, forbid, ...style } = spec;
-    const prompt = [medium || MEDIUM[spec.category], `题材场景：${world}`, `色彩光影：${look}`, `服化道：${wardrobe}`, `禁止：${FORBID[spec.category]}${forbid ? `、${forbid}` : ""}`].join("。");
-    return { ...style, prompt };
+    const detail = { medium: medium || MEDIUM[spec.category], world, look, wardrobe, forbid: `${FORBID[spec.category]}${forbid ? `、${forbid}` : ""}` };
+    const prompt = [detail.medium, `题材场景：${world}`, `色彩光影：${look}`, `服化道：${wardrobe}`, `禁止：${detail.forbid}`].join("。");
+    return { ...style, prompt, detail };
 }
 
 export const DRAMA_STYLES: DramaStyle[] = SPECS.map(compile);
 
-export const DEFAULT_DRAMA_STYLE_ID = "live-ceo";
+export function findDramaStyle(id: string): DramaStyle | undefined {
+    return findComposedDramaStyle(id) || DRAMA_STYLES.find((style) => style.id === id);
+}
 
-export function findDramaStyle(id: string) {
-    return DRAMA_STYLES.find((style) => style.id === id);
+const PRESET_THEME_GROUPS: Array<{ themeId: DramaStyleThemeId; ids: string[] }> = [
+    {
+        themeId: "urban",
+        ids: ["live-ceo", "live-heiress", "live-rebirth", "live-warlord", "live-doctor", "live-workplace", "live-family", "live-neo-chinese", "live-food", "3d-pixar", "3d-pet", "2d-webtoon", "2d-manhua", "2d-comic", "2d-flat", "2d-chibi"],
+    },
+    { themeId: "romance", ids: ["live-sweet", "live-flash", "live-baby", "live-tearjerker", "2d-ancient-sweet", "2d-shoujo"] },
+    { themeId: "xuanhuan", ids: ["live-xianxia", "3d-guoman", "3d-xuanhuan", "3d-myth", "2d-guofeng", "art-papercut", "art-guochao-landscape"] },
+    { themeId: "apocalypse", ids: ["live-apocalypse"] },
+    { themeId: "palace", ids: ["live-palace", "art-gongbi", "art-oil"] },
+    { themeId: "wuxia", ids: ["live-wuxia", "3d-wuxia-game", "art-ink"] },
+    { themeId: "campus", ids: ["live-campus", "3d-toon"] },
+    { themeId: "suspense", ids: ["live-suspense", "live-horror", "art-noir"] },
+    { themeId: "scifi", ids: ["live-cyber", "live-scifi", "3d-mecha", "2d-cyber-anime", "art-tech"] },
+    { themeId: "rural", ids: ["live-farm", "live-rural", "2d-healing"] },
+    { themeId: "historical", ids: ["live-republic", "live-era", "live-hk", "art-film", "art-wes", "art-ukiyoe"] },
+    { themeId: "fantasy", ids: ["live-western-fantasy", "2d-anime", "2d-painterly", "2d-dark", "2d-fantasy-adventure", "art-dream", "art-storybook"] },
+];
+const presetThemes = new Map(PRESET_THEME_GROUPS.flatMap(({ themeId, ids }) => ids.map((id) => [id, themeId] as const)));
+const CATEGORY_FORM: Record<DramaStyleCategory, DramaStyleFormId> = { live: "realistic", "3d": "3d", "2d": "2d", art: "semi-realistic" };
+
+/** 预设只提供开始自由组合时的轴选项；未操作时仍保留原预设的完整提示词。 */
+export function getDramaStyleComposition(id: string): DramaStyleComposition | undefined {
+    const composition = parseDramaStyleId(id);
+    if (composition) return composition;
+    const preset = DRAMA_STYLES.find((style) => style.id === id);
+    if (!preset) return undefined;
+    const photographic = ["art-noir", "art-film", "art-wes"].includes(id);
+    return { formId: photographic ? "realistic" : CATEGORY_FORM[preset.category], themeId: presetThemes.get(id) || "story" };
+}
+
+export function updateDramaStyleComposition(id: string, patch: Partial<DramaStyleComposition>): string {
+    const current = getDramaStyleComposition(id) || parseDramaStyleId(DEFAULT_DRAMA_STYLE_ID)!;
+    return composeDramaStyleId(patch.formId ?? current.formId, patch.themeId ?? current.themeId);
 }
 
 export function styleCoverBackground(style: Pick<DramaStyle, "cover" | "palette">) {

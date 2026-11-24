@@ -1,6 +1,34 @@
 import { AnimatePresence } from "motion/react";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, AtSign, Check, ChevronRight, CircleCheckBig, Clapperboard, Clipboard, CloudUpload, Copy, Download, FolderOpen, FolderPlus, History, Image as ImageIcon, Layers3, LayoutTemplate, Link2, Maximize2, PanelTop, Pencil, Plus, Redo2, Tags, Trash2, Undo2, Upload, UserRound } from "lucide-react";
+import {
+    ArrowLeft,
+    AtSign,
+    Check,
+    ChevronRight,
+    CircleCheckBig,
+    Clapperboard,
+    Clipboard,
+    CloudUpload,
+    Copy,
+    Download,
+    FolderOpen,
+    FolderPlus,
+    History,
+    Image as ImageIcon,
+    Layers3,
+    LayoutTemplate,
+    Link2,
+    Maximize2,
+    PanelTop,
+    Pencil,
+    Plus,
+    Redo2,
+    Tags,
+    Trash2,
+    Undo2,
+    Upload,
+    UserRound,
+} from "lucide-react";
 
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
 import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS } from "@/lib/asset-category";
@@ -14,7 +42,8 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { resolveAddNodeMenuCommands, type AddNodeMenuContext } from "@/lib/canvas/tool-registry";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { usePluginStore } from "@/stores/use-plugin-store";
-import { CanvasNodeType, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasFrameColor, type CanvasNodeData, type CanvasNodeTypeId, type CanvasWorkspaceMode, type ContextMenuState, type Position } from "@/types/canvas";
+import "./canvas-context-menu.css";
 
 type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["assetCategory"]>;
 
@@ -56,6 +85,7 @@ type CanvasNodeContextMenuProps = {
     onUploadToArkPrivateAsset: () => void;
     onSetAssetCategory: (category: CanvasAssetCategory) => void;
     onToggleFrame: () => void;
+    onSetFrameColor: (color?: CanvasFrameColor) => void;
     onSpreadSelection?: () => void;
     onCopySelection?: () => void;
     onDeleteSelection?: () => void;
@@ -105,6 +135,7 @@ export function CanvasNodeContextMenu({
     onUploadToArkPrivateAsset,
     onSetAssetCategory,
     onToggleFrame,
+    onSetFrameColor,
     onSpreadSelection,
     onCopySelection,
     onDeleteSelection,
@@ -117,6 +148,7 @@ export function CanvasNodeContextMenu({
     const theme = canvasThemes[useActiveTheme()];
     const [addOpen, setAddOpen] = useState(false);
     const [categoryOpen, setCategoryOpen] = useState(false);
+    const [frameColorOpen, setFrameColorOpen] = useState(false);
 
     useEffect(() => {
         const close = (event: PointerEvent) => {
@@ -126,8 +158,10 @@ export function CanvasNodeContextMenu({
         };
         const closeOnEscape = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
-            if (categoryOpen) setCategoryOpen(false);
-            else onClose();
+            if (categoryOpen || frameColorOpen) {
+                setCategoryOpen(false);
+                setFrameColorOpen(false);
+            } else onClose();
         };
         window.addEventListener("pointerdown", close);
         window.addEventListener("keydown", closeOnEscape);
@@ -135,11 +169,12 @@ export function CanvasNodeContextMenu({
             window.removeEventListener("pointerdown", close);
             window.removeEventListener("keydown", closeOnEscape);
         };
-    }, [categoryOpen, onClose]);
+    }, [categoryOpen, frameColorOpen, onClose]);
 
     useEffect(() => {
         setAddOpen(menu.type === "canvas" && Boolean(menu.createOpen));
         setCategoryOpen(false);
+        setFrameColorOpen(false);
     }, [menu]);
 
     const runAction = (action: () => void) => {
@@ -166,13 +201,11 @@ export function CanvasNodeContextMenu({
     const versionCount = listMediaVersions(node).length;
     const versionCurrent = currentMediaVersion(node);
     const canOpenVersions = Boolean(onOpenVersions && hasMediaVersionHistory(node));
-    const versionDetail = canOpenVersions
-        ? versionCurrent ? `当前 V${versionCurrent.number} · ${formatRelativeTime(versionCurrent.createdAt)}` : "当前内容未在历史中，可切回旧版本"
-        : "重新生成或替换后保留旧版本";
+    const versionDetail = canOpenVersions ? (versionCurrent ? `当前 V${versionCurrent.number} · ${formatRelativeTime(versionCurrent.createdAt)}` : "当前内容未在历史中，可切回旧版本") : "重新生成或替换后保留旧版本";
     const versionMenuButton = onOpenVersions ? (
         <MenuButton icon={<History />} label="版本历史" badge={versionCount > 1 ? String(versionCount) : undefined} detail={versionDetail} disabled={!canOpenVersions} onClick={() => runAction(onOpenVersions)} />
     ) : null;
-    const position = getContextMenuPosition(menu, hasMultiSelection);
+    const position = getContextMenuPosition(menu);
     const skippedDownloadCount = Math.max(0, selectedCount - downloadableSelectionCount);
     const downloadSelectionButton = hasMultiSelection ? (
         <MenuButton
@@ -192,24 +225,49 @@ export function CanvasNodeContextMenu({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-                className="aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[224px] max-h-[calc(100vh-56px)] origin-top-left flex-col overflow-hidden rounded-[var(--r-lg)] border p-1.5 backdrop-blur-2xl backdrop-saturate-150"
-                style={{ left: position.left, top: position.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text, "--menu-hover": theme.toolbar.itemHover, "--tw-ring-color": theme.node.muted } as CSSProperties}
+                className="canvas-context-panel aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[224px] origin-top-left flex-col overflow-hidden rounded-[var(--r-lg)] border p-2 backdrop-blur-2xl backdrop-saturate-150"
+                style={
+                    {
+                        left: position.left,
+                        "--canvas-context-anchor-y": `${position.top}px`,
+                        background: theme.spatial.elevated,
+                        borderColor: theme.toolbar.border,
+                        color: theme.node.text,
+                        "--menu-hover": theme.toolbar.itemHover,
+                        "--tw-ring-color": theme.node.muted,
+                    } as CSSProperties
+                }
                 onContextMenu={(event) => event.preventDefault()}
                 onPointerDown={(event) => event.stopPropagation()}
             >
-                <div className="thin-scrollbar min-h-0 overflow-y-auto">
-                    {menu.type === "node" && isMedia && categoryOpen ? (
+                <div className="thin-scrollbar flex min-h-0 flex-col gap-1.5 overflow-y-auto overscroll-contain [&>*]:shrink-0">
+                    {menu.type === "node" && isFrame && frameColorOpen ? (
+                        <>
+                            <MenuHeader title="设置背板颜色" description={node?.title} onBack={() => setFrameColorOpen(false)} />
+                            <MenuSection label="颜色" />
+                            <div className="grid grid-cols-4 gap-2 px-2 pb-2">
+                                {FRAME_COLOR_OPTIONS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        className="grid size-8 place-items-center rounded-full border transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                                        style={{ background: option.swatch, borderColor: theme.toolbar.border, color: "white", outlineColor: theme.frame.activeStroke }}
+                                        aria-label={option.label}
+                                        title={option.label}
+                                        onClick={() => runAction(() => onSetFrameColor(option.value))}
+                                    >
+                                        {node?.metadata?.frame?.color === option.value ? <Check className="size-4" /> : null}
+                                    </button>
+                                ))}
+                            </div>
+                            <MenuButton icon={<PanelTop />} label="恢复默认颜色" onClick={() => runAction(() => onSetFrameColor(undefined))} />
+                        </>
+                    ) : menu.type === "node" && isMedia && categoryOpen ? (
                         <>
                             <MenuHeader title="设置资产分类" description={node?.title || nodeTypeLabel(node)} onBack={() => setCategoryOpen(false)} />
                             <MenuSection label="项目用途" />
                             {assetCategoryOptions.map((option) => (
-                                <MenuButton
-                                    key={option.value}
-                                    icon={assetCategory === option.value ? <Check /> : <Tags />}
-                                    label={option.label}
-                                    active={assetCategory === option.value}
-                                    onClick={() => runAction(() => onSetAssetCategory(option.value))}
-                                />
+                                <MenuButton key={option.value} icon={assetCategory === option.value ? <Check /> : <Tags />} label={option.label} active={assetCategory === option.value} onClick={() => runAction(() => onSetAssetCategory(option.value))} />
                             ))}
                         </>
                     ) : menu.type === "canvas" ? (
@@ -221,7 +279,7 @@ export function CanvasNodeContextMenu({
                                     <MenuDivider />
                                 </>
                             ) : null}
-                            <MenuButton icon={<Plus className="size-4" />} label="添加节点" chevron active={addOpen} onClick={() => setAddOpen((value) => !value)} />
+                            <MenuButton icon={<Plus className="size-4" />} label="添加节点" expanded={addOpen} onClick={() => setAddOpen((value) => !value)} />
                             <MenuButton icon={<Upload className="size-4" />} label="上传到这里" onClick={() => runAction(onUpload)} />
                             {!isProjectLinked ? <MenuButton icon={<FolderOpen className="size-4" />} label="从素材库插入" onClick={() => runAction(onOpenAssets)} /> : null}
                             <MenuDivider />
@@ -277,7 +335,18 @@ export function CanvasNodeContextMenu({
                                 <>
                                     <MenuHeader title={node?.title || nodeTypeLabel(node)} />
                                     <MenuSection label="节点操作" />
-                                    {isFrame ? <MenuButton icon={isFolder ? <FolderOpen /> : <PanelTop />} label={node?.metadata?.frame?.collapsed ? `展开${isFolder ? "文件夹" : "背板"}` : `折叠${isFolder ? "文件夹" : "背板"}`} onClick={() => runAction(onToggleFrame)} /> : <MenuButton icon={<FolderPlus />} label="保存到我的素材" disabled={!canSaveAsset} onClick={() => runAction(onSaveAsset)} />}
+                                    {isFrame ? (
+                                        <>
+                                            <MenuButton
+                                                icon={isFolder ? <FolderOpen /> : <PanelTop />}
+                                                label={node?.metadata?.frame?.collapsed ? `展开${isFolder ? "文件夹" : "背板"}` : `折叠${isFolder ? "文件夹" : "背板"}`}
+                                                onClick={() => runAction(onToggleFrame)}
+                                            />
+                                            {!isFolder ? <MenuButton icon={<PanelTop />} label="设置背板颜色" chevron onClick={() => setFrameColorOpen(true)} /> : null}
+                                        </>
+                                    ) : (
+                                        <MenuButton icon={<FolderPlus />} label="保存到我的素材" disabled={!canSaveAsset} onClick={() => runAction(onSaveAsset)} />
+                                    )}
                                     {isText ? <MenuButton icon={<Maximize2 />} label="放大编辑" onClick={() => runAction(onEditText)} /> : null}
                                     {isDrawing ? <MenuButton icon={<Pencil />} label="打开绘图" onClick={() => runAction(onOpenDrawing)} /> : null}
                                     {isAudio ? versionMenuButton : null}
@@ -324,7 +393,31 @@ export function CanvasNodeContextMenu({
     );
 }
 
-function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, onAddNode, onAddFolder, onChooseStyle, onOpenPrevis, onUpload, onOpenAssets, onOpenProjectCharacters, onOpenPoseLibrary }: { parentPosition: { left: number; top: number }; workspaceMode: CanvasWorkspaceMode; isProjectLinked: boolean; onAddNode: (type: CanvasNodeTypeId) => void; onAddFolder: () => void; onChooseStyle: () => void; onOpenPrevis: () => void; onUpload: () => void; onOpenAssets: () => void; onOpenProjectCharacters: () => void; onOpenPoseLibrary?: () => void }) {
+function AddNodeContextMenu({
+    parentPosition,
+    workspaceMode,
+    isProjectLinked,
+    onAddNode,
+    onAddFolder,
+    onChooseStyle,
+    onOpenPrevis,
+    onUpload,
+    onOpenAssets,
+    onOpenProjectCharacters,
+    onOpenPoseLibrary,
+}: {
+    parentPosition: { left: number; top: number };
+    workspaceMode: CanvasWorkspaceMode;
+    isProjectLinked: boolean;
+    onAddNode: (type: CanvasNodeTypeId) => void;
+    onAddFolder: () => void;
+    onChooseStyle: () => void;
+    onOpenPrevis: () => void;
+    onUpload: () => void;
+    onOpenAssets: () => void;
+    onOpenProjectCharacters: () => void;
+    onOpenPoseLibrary?: () => void;
+}) {
     const theme = canvasThemes[useActiveTheme()];
     const installations = usePluginStore((state) => state.installations);
     const pluginStates = usePluginStore((state) => state.pluginStates);
@@ -368,8 +461,9 @@ function AddNodeContextMenu({ parentPosition, workspaceMode, isProjectLinked, on
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: aceternityMotion.duration.instant, ease: aceternityMotion.easing.enter }}
-            className="aceternity-floating-panel fixed z-[var(--z-popover)] w-[360px] origin-top overflow-hidden rounded-[var(--r-lg)] border p-1.5 backdrop-blur-2xl backdrop-saturate-150"
-            style={{ left, top: parentPosition.top, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text }}
+            className="canvas-context-panel aceternity-floating-panel fixed z-[var(--z-popover)] flex w-[360px] max-w-[calc(100vw-24px)] origin-top flex-col overflow-hidden rounded-[var(--r-lg)] border p-2 backdrop-blur-2xl backdrop-saturate-150"
+            contentClassName="thin-scrollbar relative z-[1] min-h-0 overflow-y-auto overscroll-contain"
+            style={{ left, "--canvas-context-anchor-y": `${parentPosition.top}px`, background: theme.spatial.elevated, borderColor: theme.toolbar.border, color: theme.node.text } as CSSProperties}
             onContextMenu={(event) => event.preventDefault()}
             onPointerDown={(event) => event.stopPropagation()}
         >
@@ -382,58 +476,122 @@ function MenuHeader({ title, description, onBack }: { title: string; description
     const theme = canvasThemes[useActiveTheme()];
     return (
         <div className="mb-1 flex items-center gap-1.5 px-2 pb-1.5 pt-1.5">
-            {onBack ? <button type="button" onClick={onBack} className="grid size-6 shrink-0 place-items-center rounded-[var(--r-md)] outline-none transition-colors hover:bg-[var(--menu-hover)] focus-visible:ring-2" aria-label="返回媒体操作"><ArrowLeft className="size-3.5" /></button> : null}
+            {onBack ? (
+                <button type="button" onClick={onBack} className="grid size-6 shrink-0 place-items-center rounded-[var(--r-md)] outline-none transition-colors hover:bg-[var(--menu-hover)] focus-visible:ring-2" aria-label="返回媒体操作">
+                    <ArrowLeft className="size-3.5" />
+                </button>
+            ) : null}
             <span className="min-w-0">
-                <span className="block truncate font-semibold leading-5" style={{ fontSize: "var(--fs-ui)" }}>{title}</span>
-                {description && description !== title ? <span className="block truncate leading-4" style={{ color: theme.node.muted, fontSize: "var(--fs-label)" }}>{description}</span> : null}
+                <span className="block truncate font-semibold leading-5" style={{ fontSize: "var(--fs-ui)" }}>
+                    {title}
+                </span>
+                {description && description !== title ? (
+                    <span className="block truncate leading-4" style={{ color: theme.node.muted, fontSize: "var(--fs-label)" }}>
+                        {description}
+                    </span>
+                ) : null}
             </span>
         </div>
     );
 }
 
+const FRAME_COLOR_OPTIONS: Array<{ value: CanvasFrameColor; label: string; swatch: string }> = [
+    { value: "blue", label: "蓝色", swatch: "#5b8def" },
+    { value: "green", label: "绿色", swatch: "#56a978" },
+    { value: "violet", label: "紫色", swatch: "#9b68d0" },
+    { value: "amber", label: "琥珀色", swatch: "#d99a36" },
+    { value: "rose", label: "玫瑰色", swatch: "#d96976" },
+    { value: "teal", label: "青色", swatch: "#42a6a0" },
+    { value: "slate", label: "灰色", swatch: "#7c8492" },
+];
+
 function MenuSection({ label }: { label: string }) {
     const theme = canvasThemes[useActiveTheme()];
-    return <div className="px-2 pb-1 pt-1.5 font-medium leading-4" style={{ color: theme.node.faint, fontSize: "var(--fs-label)" }}>{label}</div>;
+    return (
+        <div className="px-2 pb-1 pt-1.5 font-medium leading-4" style={{ color: theme.node.faint, fontSize: "var(--fs-label)" }}>
+            {label}
+        </div>
+    );
 }
 
-function MenuButton({ icon, label, detail, shortcut, badge, chevron = false, active = false, disabled = false, danger = false, onClick }: { icon: ReactNode; label: string; detail?: string; shortcut?: string; badge?: string; chevron?: boolean; active?: boolean; disabled?: boolean; danger?: boolean; onClick?: () => void }) {
+function MenuButton({
+    icon,
+    label,
+    detail,
+    shortcut,
+    badge,
+    chevron = false,
+    expanded,
+    active = false,
+    disabled = false,
+    danger = false,
+    onClick,
+}: {
+    icon: ReactNode;
+    label: string;
+    detail?: string;
+    shortcut?: string;
+    badge?: string;
+    chevron?: boolean;
+    expanded?: boolean;
+    active?: boolean;
+    disabled?: boolean;
+    danger?: boolean;
+    onClick?: () => void;
+}) {
     const theme = canvasThemes[useActiveTheme()];
     const color = danger ? theme.accent.danger : theme.node.text;
     // 菜单项默认无边无底：图标裸放、hover 只提亮表面，危险项改用淡红底。
     return (
         <button
             type="button"
-            className={`canvas-menu-item group flex w-full items-center gap-2.5 rounded-[var(--r-md)] px-2 text-left outline-none enabled:hover:bg-[var(--menu-item-hover)] focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40 ${detail ? "min-h-11 py-1.5" : "h-8"}`}
+            className={`canvas-menu-item group flex w-full items-center gap-2.5 rounded-[var(--r-md)] px-2.5 text-left outline-none enabled:hover:bg-[var(--menu-item-hover)] focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-40 ${detail ? "min-h-11 py-1.5" : "h-9"}`}
             style={{ color, background: active ? theme.toolbar.activeBg : undefined, "--menu-item-hover": danger ? `${theme.accent.danger}1a` : "var(--menu-hover)" } as CSSProperties}
             disabled={disabled}
+            aria-expanded={expanded}
             onClick={onClick}
         >
             <span className={`canvas-menu-item-icon grid size-4 shrink-0 place-items-center [&_svg]:size-4 [&_svg]:stroke-[1.75] ${detail ? "self-start mt-0.5" : ""} ${danger || active ? "" : "opacity-60 group-hover:opacity-100"}`}>{icon}</span>
             <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5 font-medium leading-5" style={{ fontSize: "var(--fs-ui)" }}>
                     <span className="truncate">{label}</span>
-                    {badge ? <span className="rounded-[var(--r-xs)] px-1 font-medium leading-4 tabular-nums" style={{ background: "var(--menu-hover)", color: theme.node.muted, fontSize: "var(--fs-label)" }}>{badge}</span> : null}
+                    {badge ? (
+                        <span className="rounded-[var(--r-xs)] px-1 font-medium leading-4 tabular-nums" style={{ background: "var(--menu-hover)", color: theme.node.muted, fontSize: "var(--fs-label)" }}>
+                            {badge}
+                        </span>
+                    ) : null}
                 </span>
-                {detail ? <span className="block truncate leading-4" style={{ color: theme.node.muted, fontSize: "var(--fs-label)" }}>{detail}</span> : null}
+                {detail ? (
+                    <span className="block truncate leading-4" style={{ color: theme.node.muted, fontSize: "var(--fs-label)" }}>
+                        {detail}
+                    </span>
+                ) : null}
             </span>
-            {shortcut ? <kbd className="shrink-0 font-sans tracking-[.04em] tabular-nums" style={{ color: theme.node.faint, fontSize: "var(--fs-label)" }}>{shortcut}</kbd> : null}
-            {chevron ? <ChevronRight className="size-3.5 shrink-0" style={{ color: theme.node.faint }} /> : null}
+            {shortcut ? (
+                <kbd className="shrink-0 font-sans tracking-[.04em] tabular-nums" style={{ color: theme.node.faint, fontSize: "var(--fs-label)" }}>
+                    {shortcut}
+                </kbd>
+            ) : null}
+            {chevron || expanded !== undefined ? (
+                <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-[var(--r-sm)]" style={{ color: expanded ? theme.node.text : theme.node.faint, background: expanded ? theme.toolbar.activeBg : undefined }}>
+                    <ChevronRight className="size-3.5" />
+                </span>
+            ) : null}
         </button>
     );
 }
 
 function MenuDivider() {
     const theme = canvasThemes[useActiveTheme()];
-    return <div role="separator" className="mx-2 my-1.5 h-px" style={{ background: theme.toolbar.border, opacity: 0.7 }} />;
+    return <div role="separator" className="mx-2 my-1 h-px" style={{ background: theme.toolbar.border, opacity: 0.7 }} />;
 }
 
-function getContextMenuPosition(menu: ContextMenuState, hasMultiSelection = false) {
+function getContextMenuPosition(menu: ContextMenuState) {
     if (typeof window === "undefined") return { left: menu.x, top: menu.y };
     const width = 224;
-    const estimatedHeight = menu.type === "node" ? Math.min(hasMultiSelection ? 290 : 360, window.innerHeight - 72) : menu.type === "canvas" ? (hasMultiSelection ? 350 : 250) : 84;
     return {
         left: clamp(menu.x, 12, Math.max(12, window.innerWidth - width - 12)),
-        top: clamp(menu.y, 68, Math.max(68, window.innerHeight - estimatedHeight - 12)),
+        top: menu.y,
     };
 }
 

@@ -136,6 +136,10 @@ func (r *Repository) ChangeProfileEmail(expected *model.User, session *model.Aut
 }
 
 func (r *Repository) ReauthenticateLinuxDOSession(expected *model.User, session *model.AuthSession, subject string, now time.Time) error {
+	return r.ReauthenticateOAuthSession(expected, session, "linuxdo", subject, now)
+}
+
+func (r *Repository) ReauthenticateOAuthSession(expected *model.User, session *model.AuthSession, provider, subject string, now time.Time) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := lockProfileUser(tx, expected.ID); err != nil {
 			return err
@@ -144,7 +148,7 @@ func (r *Repository) ReauthenticateLinuxDOSession(expected *model.User, session 
 			return err
 		}
 		var count int64
-		if err := tx.Model(&model.UserIdentity{}).Where("provider = ? AND subject = ? AND user_id = ?", "linuxdo", subject, expected.ID).Count(&count).Error; err != nil {
+		if err := tx.Model(&model.UserIdentity{}).Where("provider = ? AND subject = ? AND user_id = ?", provider, subject, expected.ID).Count(&count).Error; err != nil {
 			return err
 		}
 		if count != 1 {
@@ -160,6 +164,31 @@ func (r *Repository) ReauthenticateLinuxDOSession(expected *model.User, session 
 		return nil
 	})
 }
+
+// 锁定账号及会话后绑定，禁止替换已有身份或抢占其他账号的身份。
+func (r *Repository) BindOAuthIdentity(expected *model.User, session *model.AuthSession, identity *model.UserIdentity) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if identity.UserID != expected.ID {
+			return ErrProfileAuthorization
+		}
+		if err := lockProfileUser(tx, expected.ID); err != nil {
+			return err
+		}
+		if err := profileAuthorization(tx, expected, session, time.Now(), false); err != nil {
+			return err
+		}
+		var count int64
+		if err := tx.Model(&model.UserIdentity{}).Where("provider = ? AND (user_id = ? OR subject = ?)", identity.Provider, expected.ID, identity.Subject).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			return ErrOAuthIdentityBound
+		}
+		return tx.Create(identity).Error
+	})
+}
+
+var ErrOAuthIdentityBound = errors.New("该登录身份或当前账号已完成绑定")
 
 func (r *Repository) LinuxDOReauthenticationState(stateHash string) (bool, error) {
 	var state model.OAuthState

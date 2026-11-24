@@ -1,3 +1,4 @@
+import { workspacePath } from "@/lib/workspace-routes";
 import { useTranslation } from "react-i18next";
 import { useMemo, useRef, useState } from "react";
 import { App } from "antd";
@@ -9,10 +10,10 @@ import { ProjectPreview } from "@/components/canvas/canvas-project-card";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { loadCanvasProjectPage } from "@/lib/workspace-route-modules";
 import { listRemoteCanvasProjectsPage, type CanvasLibrarySummary } from "@/services/api/user-data";
-import { createCanvasProjectWithRemoteSync } from "@/services/user-data-sync";
-import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { canvasDraftNavigationState, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { RelativeTime } from "@/components/ui/product/relative-time";
+import { trackSiteTrafficAction } from "@/services/site-traffic";
 
 const RECENT_COUNT = 4;
 
@@ -43,7 +44,7 @@ export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () 
     );
     const loading = !sessionHydrated || !canvasHydrated || Boolean(userId && recentQuery.isPending);
     const preload = () => {
-        void loadCanvasProjectPage();
+        void loadCanvasProjectPage().catch(() => undefined);
     };
     const createCanvas = async () => {
         if (!userId) {
@@ -51,15 +52,14 @@ export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () 
             return;
         }
         if (!canvasHydrated || creatingRef.current) return;
+        trackSiteTrafficAction("new_canvas");
         const scope = getActiveUserScope();
         creatingRef.current = true;
         setCreating(true);
         try {
-            const { id, syncError } = await createCanvasProjectWithRemoteSync(t("create.recent.untitledCanvas"));
-            await flushCanvasStorePersistence();
+            const id = useCanvasStore.getState().createDraftProject(t("create.recent.untitledCanvas"));
             if (getActiveUserScope() !== scope || useUserStore.getState().user?.id !== userId) return;
-            if (syncError) message.warning(t("create.recent.syncPending"));
-            navigate(`/canvas/${id}`);
+            navigate(workspacePath(`/canvas/${id}`), { state: canvasDraftNavigationState(id) });
         } catch (error) {
             if (getActiveUserScope() === scope) message.error(error instanceof Error ? error.message : t("create.recent.createFailed"));
         } finally {
@@ -75,7 +75,7 @@ export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () 
                     <Clock3 aria-hidden="true" />
                     {t("create.recent.title")}
                 </h2>
-                <Link to="/canvas" className="creation-section-link">
+                <Link to={workspacePath("/canvas")} className="creation-section-link">
                     {t("create.recent.viewAll")}
                     <ArrowUpRight aria-hidden="true" />
                 </Link>
@@ -107,7 +107,7 @@ export function CreationRecentCanvases({ onRequireLogin }: { onRequireLogin: () 
                 ) : recentProjects.length ? (
                     recentProjects.map((project) => (
                         <div className="creation-canvas-strip-item" role="listitem" key={project.id}>
-                            <Link to={`/canvas/${project.id}`} className="creation-canvas-tile" onPointerEnter={preload} onFocus={preload} title={project.title}>
+                            <Link to={workspacePath(`/canvas/${project.id}`)} className="creation-canvas-tile" onPointerEnter={preload} onFocus={preload} title={project.title}>
                                 <span className="creation-canvas-thumbnail" aria-hidden="true">
                                     <ProjectPreview project={{ id: project.id, nodes: project.previewNodes }} preferLatestImage />
                                 </span>

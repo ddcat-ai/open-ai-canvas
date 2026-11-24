@@ -3,7 +3,8 @@ import { App, Button, Form, Input } from "antd";
 import { Switch } from "@/components/ui/base/switch";
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { AppModal } from "@/components/ui/product/app-modal";
-import { LayoutGrid, List, Plus, Search } from "lucide-react";
+import { LayoutGrid, List, Plus } from "lucide-react";
+import { ListSearchInput } from "@/components/ui/base/list-search-input";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router";
@@ -129,7 +130,9 @@ export default function TasksPage() {
             tasks
                 .filter((task) => {
                     if (statusFilter === "all") return true;
-                    if (statusFilter === "active") return task.status === "queued" || task.status === "running";
+                    // 非终态一律视作进行中：后端可能出现枚举之外的中间态（如 Agent 控制面超时任务），
+                    // 按白名单匹配会让这些任务既不在任何 tab 里、总数也对不上。
+                    if (statusFilter === "active") return task.status !== "succeeded" && task.status !== "failed" && task.status !== "cancelled";
                     if (statusFilter === "failed") return task.status === "failed" || task.status === "cancelled";
                     if (statusFilter === "succeeded") return task.status === "succeeded";
                     return false;
@@ -156,9 +159,10 @@ export default function TasksPage() {
                 const created = new Date(task.createdAt);
                 if (!Number.isNaN(created.getTime()) && created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth() && created.getDate() === now.getDate()) today += 1;
             }
-            if (task.status === "queued" || task.status === "running") active += 1;
-            else if (task.status === "succeeded") succeeded += 1;
+            // 与筛选保持一致：非终态（含未知中间态）都计入「进行中」，保证各 tab 之和等于总数。
+            if (task.status === "succeeded") succeeded += 1;
             else if (task.status === "failed" || task.status === "cancelled") failed += 1;
+            else active += 1;
         }
         return { total: tasks.length, today, active, succeeded, failed };
     }, [tasks]);
@@ -468,16 +472,15 @@ export default function TasksPage() {
                         </div>
                     </div>
                     <CollectionToolbar active={filtersActive} onReset={resetFilters}>
-                        <Input
+                        <ListSearchInput
                             id="task-search"
                             name="taskSearch"
-                            allowClear
                             className="app-list-search task-center-search"
-                            prefix={<Search className="size-4 text-foreground/40" />}
+                            aria-label={t("library.tasks.page.searchPlaceholder")}
                             value={keyword}
                             placeholder={t("library.tasks.page.searchPlaceholder")}
-                            onChange={(event) => {
-                                setKeyword(event.target.value);
+                            onValueChange={(value) => {
+                                setKeyword(value);
                                 setPage(1);
                             }}
                         />

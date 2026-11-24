@@ -1,0 +1,236 @@
+{
+    "version": 1,
+    "image": {
+        "parameters": [
+            {
+                "name": "size",
+                "label": "图片尺寸",
+                "type": "string",
+                "description": "仅配置该模型支持的像素尺寸；auto 时不发送。",
+                "values": ["auto", "1:1", "4:3", "3:4", "16:9", "9:16", "21:9"],
+                "default": "1:1",
+                "pricing": true,
+                "binding": "aspectRatio",
+                "encoding": "pixels"
+            },
+            {
+                "name": "imageResolution",
+                "label": "分辨率",
+                "type": "string",
+                "description": "按渠道配置的比例预设换算 size；上游只发送像素尺寸。",
+                "values": ["auto", "1k", "2k", "4k"],
+                "default": "1k",
+                "pricing": true,
+                "binding": "resolution"
+            },
+            {
+                "name": "quality",
+                "label": "图片质量",
+                "type": "string",
+                "description": "仅在模型支持时启用并填写可选值。",
+                "pricing": true,
+                "binding": "quality",
+                "enabled": false
+            },
+            {
+                "name": "count",
+                "label": "生成数量",
+                "type": "integer",
+                "min": 1,
+                "max": 1,
+                "step": 1,
+                "default": 1,
+                "pricing": true,
+                "binding": "imageCount"
+            },
+            {
+                "name": "responseFormat",
+                "label": "响应格式",
+                "type": "string",
+                "description": "仅在模型支持时启用，未指定则跟随上游。",
+                "values": ["url", "b64_json"],
+                "binding": "providerOptions.change2pro-image.response_format",
+                "enabled": false
+            },
+            {
+                "name": "seed",
+                "label": "随机种子",
+                "type": "integer",
+                "binding": "providerOptions.gemini-image.seed",
+                "enabled": false
+            },
+            {
+                "name": "temperature",
+                "label": "随机程度",
+                "type": "number",
+                "min": 0,
+                "max": 2,
+                "binding": "providerOptions.gemini-image.temperature",
+                "enabled": false
+            }
+        ],
+        "references": {
+            "promptMaxChars": 32000,
+            "maxImages": 16,
+            "maxImageBytes": 31457280,
+            "maskSupported": false
+        },
+        "size": {
+            "parameter": "aspect_ratio",
+            "values": ["auto", "1:1", "4:3", "3:4", "16:9", "9:16", "21:9"],
+            "default": "1:1",
+            "allowCustom": false,
+            "presets": [
+                {
+                    "tier": "1k",
+                    "ratio": "1:1",
+                    "size": "1024x1024",
+                    "width": 1024,
+                    "height": 1024
+                },
+                {
+                    "tier": "1k",
+                    "ratio": "4:3",
+                    "size": "1360x1024",
+                    "width": 1360,
+                    "height": 1024
+                },
+                {
+                    "tier": "1k",
+                    "ratio": "3:4",
+                    "size": "1024x1360",
+                    "width": 1024,
+                    "height": 1360
+                },
+                {
+                    "tier": "1k",
+                    "ratio": "16:9",
+                    "size": "1824x1024",
+                    "width": 1824,
+                    "height": 1024
+                },
+                {
+                    "tier": "1k",
+                    "ratio": "9:16",
+                    "size": "1024x1824",
+                    "width": 1024,
+                    "height": 1824
+                },
+                {
+                    "tier": "1k",
+                    "ratio": "21:9",
+                    "size": "2048x878",
+                    "width": 2048,
+                    "height": 878
+                },
+                {
+                    "tier": "2k",
+                    "ratio": "1:1",
+                    "size": "2048x2048",
+                    "width": 2048,
+                    "height": 2048
+                },
+                {
+                    "tier": "2k",
+                    "ratio": "4:3",
+                    "size": "2304x1728",
+                    "width": 2304,
+                    "height": 1728
+                },
+                {
+                    "tier": "2k",
+                    "ratio": "3:4",
+                    "size": "1728x2304",
+                    "width": 1728,
+                    "height": 2304
+                },
+                {
+                    "tier": "2k",
+                    "ratio": "16:9",
+                    "size": "2752x1536",
+                    "width": 2752,
+                    "height": 1536
+                },
+                {
+                    "tier": "2k",
+                    "ratio": "9:16",
+                    "size": "1536x2752",
+                    "width": 1536,
+                    "height": 2752
+                },
+                {
+                    "tier": "2k",
+                    "ratio": "21:9",
+                    "size": "3136x1344",
+                    "width": 3136,
+                    "height": 1344
+                },
+                {
+                    "tier": "4k",
+                    "ratio": "1:1",
+                    "size": "2880x2880",
+                    "width": 2880,
+                    "height": 2880
+                },
+                {
+                    "tier": "4k",
+                    "ratio": "4:3",
+                    "size": "3264x2448",
+                    "width": 3264,
+                    "height": 2448
+                },
+                {
+                    "tier": "4k",
+                    "ratio": "3:4",
+                    "size": "2448x3264",
+                    "width": 2448,
+                    "height": 3264
+                },
+                {
+                    "tier": "4k",
+                    "ratio": "16:9",
+                    "size": "3840x2160",
+                    "width": 3840,
+                    "height": 2160
+                },
+                {
+                    "tier": "4k",
+                    "ratio": "9:16",
+                    "size": "2160x3840",
+                    "width": 2160,
+                    "height": 3840
+                },
+                {
+                    "tier": "4k",
+                    "ratio": "21:9",
+                    "size": "3808x1632",
+                    "width": 3808,
+                    "height": 1632
+                }
+            ],
+            "defaultTier": "1k"
+        },
+        "resolution": {
+            "supported": true,
+            "values": ["auto", "1k", "2k", "4k"],
+            "default": "1k"
+        },
+        "quality": {
+            "supported": false,
+            "values": [],
+            "default": "auto"
+        },
+        "transparentBackground": {
+            "supported": false,
+            "default": false
+        },
+        "responseFormat": {
+            "supported": false,
+            "default": "auto"
+        },
+        "outputFormat": {
+            "supported": false
+        },
+        "maxOutputs": 1
+    }
+}

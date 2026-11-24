@@ -36,7 +36,6 @@
     font-size: var(--fs-caption);
 }
 
-/* 与 .canvas-node-composer-header-action.is-labeled 同尺寸（28px / 14px 图标 / 11px 文字）。 */
 .canvas-node-tool-controls-inline .canvas-node-fixed-chip {
     display: inline-flex;
     align-items: center;
@@ -46,7 +45,7 @@
     max-width: 7rem;
     padding: 0 var(--space-2);
     border-radius: var(--r-md);
-    font-size: var(--fs-label);
+    font-size: var(--fs-ui);
     font-weight: 500;
     line-height: 1;
 }
@@ -55,77 +54,101 @@
     height: var(--space-4);
     flex-shrink: 0;
 }
-.canvas-workspace-shell,
-.canvas-workspace-panel {
-    --canvas-workspace-material: color-mix(in srgb, var(--canvas-workspace-base, var(--background)) 72%, transparent);
-    --canvas-workspace-sheen: transparent;
-}
 .canvas-main-with-workspace {
-    --canvas-workspace-inset: var(--space-16);
+    --canvas-workspace-edge: var(--space-2);
+    --canvas-workspace-left: max(var(--canvas-workspace-edge), env(safe-area-inset-left));
+    --canvas-workspace-rail-width: calc(var(--space-16) - var(--space-2));
+    --canvas-workspace-open-width: calc(var(--canvas-workspace-rail-width) + 20rem);
+    --canvas-workspace-inset: calc(var(--canvas-workspace-left) + var(--canvas-workspace-rail-width));
 }
 @media (min-width: 992px) {
     .canvas-main-with-workspace.canvas-workspace-expanded {
-        --canvas-workspace-inset: calc(var(--space-16) + 320px);
+        --canvas-workspace-inset: calc(var(--canvas-workspace-left) + var(--canvas-workspace-open-width));
     }
     .canvas-main-with-workspace > .canvas-project-sidebar {
         margin-left: var(--space-16);
     }
-    .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-topbar {
-        left: 0;
-    }
-    .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-workspace-zoom-controls {
+    .canvas-main-with-workspace[data-project-sidebar] .canvas-workspace-zoom-controls {
         left: var(--canvas-inset-x);
     }
-    .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-asset-view-layer {
+    .canvas-main-with-workspace[data-project-sidebar] .canvas-asset-view-layer {
         left: 0;
     }
 }
 .canvas-main-with-workspace .canvas-editor-shell {
     z-index: 0;
 }
-.canvas-main-with-workspace .canvas-editor-shell:has([data-canvas-previs-workbench]) {
+.canvas-main-with-workspace .canvas-editor-shell[data-previs-open] {
     z-index: var(--z-toast);
-}
-.canvas-main-with-workspace .canvas-topbar {
-    left: var(--canvas-workspace-inset);
 }
 .canvas-main-with-workspace .canvas-workspace-zoom-controls {
     left: calc(var(--canvas-workspace-inset) + var(--canvas-inset-x));
 }
-/* 资产视图与顶栏同样让出左侧工作区轨道，轨道里的节点、素材库和任务仍可使用。 */
 .canvas-main-with-workspace .canvas-asset-view-layer {
     left: var(--canvas-workspace-inset);
 }
-.canvas-workspace-shell {
+.canvas-workspace-corner {
+    --canvas-workspace-material: color-mix(in srgb, var(--canvas-workspace-base) 86%, transparent);
     position: absolute;
     z-index: 2;
-    inset-block: 0;
-    left: 0;
+    inset: max(var(--canvas-workspace-edge), env(safe-area-inset-top)) max(var(--canvas-workspace-edge), env(safe-area-inset-right)) max(var(--canvas-workspace-edge), env(safe-area-inset-bottom)) var(--canvas-workspace-left);
     display: flex;
-    flex-shrink: 0;
-    min-height: 0;
-    margin: var(--space-2) 0 var(--space-2) var(--space-2);
-    overflow: hidden;
-    border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
-    border-radius: var(--r-2xl);
+    flex-direction: column;
+    align-items: flex-start;
+    pointer-events: none;
+    container-type: inline-size;
+}
+.canvas-workspace-corner:not(.is-expanded) {
+    row-gap: var(--space-2);
+}
+.canvas-workspace-corner > .canvas-topbar-project-cluster,
+.canvas-workspace-shell {
+    pointer-events: auto;
     background: var(--canvas-workspace-material);
-    box-shadow:
-        0 1px 2px color-mix(in srgb, color-mix(in srgb, black 16%, transparent) 50%, transparent),
-        0 10px 28px color-mix(in srgb, black 16%, transparent);
-    contain: layout paint;
+    border: var(--stroke-1) solid var(--canvas-workspace-outline);
+    border-radius: var(--r-2xl);
     -webkit-backdrop-filter: blur(22px) saturate(140%);
     backdrop-filter: blur(22px) saturate(140%);
 }
-/* 未展开工作区时左侧菜单按内容收缩为浮动竖条，不再占满整列遮挡画布。 */
-.canvas-workspace-shell:not(.is-expanded) {
-    bottom: auto;
-    max-height: calc(100% - var(--space-4));
+.canvas-workspace-corner > .canvas-topbar-project-cluster {
+    position: relative;
+    flex: none;
+    max-width: min(360px, calc(50% - var(--space-2)));
+    padding-inline-start: calc((var(--canvas-workspace-rail-width) - 2.25rem) / 2 - var(--stroke-1));
 }
-.canvas-workspace-panel {
-    background: linear-gradient(145deg, var(--canvas-workspace-sheen), transparent 55%), var(--canvas-workspace-material);
+.canvas-workspace-shell {
+    display: flex;
+    width: var(--canvas-workspace-rail-width);
+    min-height: 0;
+    overflow: hidden;
+    contain: layout paint;
 }
-.canvas-workspace-shell .canvas-workspace-panel {
-    background: transparent;
+.canvas-workspace-corner.is-expanded > .canvas-topbar-project-cluster {
+    width: var(--canvas-workspace-open-width);
+    max-width: calc(50% - var(--space-2));
+    border-bottom: 0;
+    border-radius: var(--r-2xl) var(--r-2xl) 0 0;
+}
+.canvas-workspace-corner.is-expanded > .canvas-workspace-shell {
+    flex: 1;
+    width: min(100%, var(--canvas-workspace-open-width));
+    border-top: 0;
+    border-radius: 0 0 var(--r-2xl) var(--r-2xl);
+}
+@container (max-width: 48rem) {
+    .canvas-workspace-corner.is-expanded > .canvas-workspace-shell {
+        border-top-right-radius: var(--r-2xl);
+        margin-bottom: var(--canvas-topbar-offset);
+    }
+    .canvas-workspace-corner.is-expanded > .canvas-workspace-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0 calc(-1 * var(--stroke-1)) auto calc(50cqi - var(--space-2) - var(--stroke-1));
+        height: var(--r-2xl);
+        border-top: var(--stroke-1) solid var(--canvas-workspace-outline);
+        border-top-right-radius: inherit;
+        pointer-events: none;
+    }
 }
 .canvas-workspace-panel > :is(header, .border-b) {
     border-bottom: 0 !important;
@@ -159,7 +182,7 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    width: calc(var(--space-16) - var(--space-2));
+    width: calc(var(--canvas-workspace-rail-width) - 2 * var(--stroke-1));
     min-height: 0;
     padding: var(--space-2) var(--space-2);
     gap: var(--space-1);
@@ -208,11 +231,8 @@
     margin: var(--space-1) auto;
     background: color-mix(in srgb, currentColor 12%, transparent);
 }
-.canvas-workspace-rail-divider.is-end {
+.canvas-workspace-corner.is-expanded .canvas-workspace-rail-divider {
     margin-top: auto;
-}
-.canvas-workspace-shell:not(.is-expanded) .canvas-workspace-rail-divider.is-end {
-    margin-top: var(--space-1);
 }
 .canvas-workspace-rail .canvas-workspace-rail-button > span {
     display: block;

@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { App, Button } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
-import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, BookOpen, BookOpenText, CheckCircle2, Clapperboard, PanelRightClose, PanelRightOpen, Pencil, PenLine, Quote, ScanSearch, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, BookOpen, BookOpenText, CheckCircle2, Clapperboard, MessageCircle, PanelRightClose, PanelRightOpen, Pencil, PenLine, Quote, ScanSearch, Trash2 } from "lucide-react";
 
 import { averageShotSeconds, normalizeStoryboard, PACING_LABEL, TRANSITION_LABEL } from "@/lib/drama/storyboard";
 import { getDramaChapter, type DramaDialogueCheck, type DramaEpisodeDetail, type DramaShot, type DramaShotPatch, type DramaStoryboardSettings } from "@/services/api/drama";
 
 import { formatCount, SOURCE_FORMAT_LABEL, sourceFormatOf } from "../drama-shared";
 import { SourceEditModal } from "./episode-source";
+import { ChapterRenameButton } from "./chapter-rename-button";
 import { JobDetailModal } from "./job-detail";
 import { ShotEditor } from "./segment-dialog";
 import type { EpisodeEmpty } from "./storyboard";
@@ -53,6 +54,7 @@ export function ScriptView({
     onPatchShot,
     onInsertShot,
     onDeleteShot,
+    onDiscussShot,
     onSourceSaved,
     empty,
 }: {
@@ -66,6 +68,7 @@ export function ScriptView({
     onPatchShot: (shot: DramaShot, patch: DramaShotPatch) => void;
     onInsertShot: (shot: DramaShot, position: "before" | "after") => void;
     onDeleteShot: (shot: DramaShot) => void;
+    onDiscussShot: (shot: DramaShot) => void;
     /** 原文已保存；rescript=true 时需要按新原文重新改编。 */
     onSourceSaved: (rescript: boolean) => void;
     empty: EpisodeEmpty;
@@ -209,6 +212,9 @@ export function ScriptView({
                                                         <Button size="small" icon={<ArrowDownToLine className="size-3.5" />} disabled={busy} onClick={() => onInsertShot(shot, "after")}>
                                                             在后面插入镜头
                                                         </Button>
+                                                        <Button size="small" type="text" icon={<MessageCircle className="size-3.5" />} disabled={busy} onClick={() => onDiscussShot(shot)}>
+                                                            与小影讨论
+                                                        </Button>
                                                         <span className="flex-1" />
                                                         <Tooltip title={(segmentSizes.get(shot.segmentIndex) || 0) <= 1 ? "这是本剧情段唯一的镜头，删除会改变分段；可以改写内容或重新改编本集" : ""}>
                                                             <Button size="small" danger type="text" icon={<Trash2 className="size-3.5" />} disabled={busy || (segmentSizes.get(shot.segmentIndex) || 0) <= 1} onClick={() => confirmDelete(shot)}>
@@ -304,7 +310,8 @@ function DialogueCheckNotice({ check, busy, onRescript }: { check: DramaDialogue
 
 function SourcePane({ projectId, chapters, quote, onEdit }: { projectId: string; chapters: DramaEpisodeDetail["chapters"]; quote: string; onEdit: (chapterId: string) => void }) {
     const [chapterId, setChapterId] = useState(chapters[0]?.id || "");
-    const activeId = chapters.some((chapter) => chapter.id === chapterId) ? chapterId : chapters[0]?.id || "";
+    const activeChapter = chapters.find((chapter) => chapter.id === chapterId) || chapters[0];
+    const activeId = activeChapter?.id || "";
     const query = useQuery({ queryKey: ["drama", projectId, "chapter", activeId], queryFn: ({ signal }) => getDramaChapter(projectId, activeId, signal), enabled: Boolean(activeId), staleTime: 300_000 });
     const text = query.data?.chapter.sourceText || "";
     const hit = text && quote ? locateQuote(text, quote) : -1;
@@ -333,10 +340,13 @@ function SourcePane({ projectId, chapters, quote, onEdit }: { projectId: string;
                         <BookOpen className="size-3.5" />
                         原文对照
                     </span>
-                    {activeId ? (
-                        <Button size="small" type="text" icon={<Pencil className="size-3.5" />} onClick={() => onEdit(activeId)}>
-                            编辑原文
-                        </Button>
+                    {activeChapter ? (
+                        <div className="flex items-center gap-1">
+                            <ChapterRenameButton key={activeChapter.id} projectId={projectId} chapter={activeChapter} />
+                            <Button size="small" type="text" icon={<Pencil className="size-3.5" />} onClick={() => onEdit(activeId)}>
+                                编辑原文
+                            </Button>
+                        </div>
                     ) : null}
                 </div>
                 <div className="drama-source-tabs thin-scrollbar" role="tablist" aria-label="原文章节">

@@ -5,6 +5,7 @@ import { imageToDataUrl } from "@/services/image-storage";
 import type { ReferenceImage } from "@/types/image";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
 import { imageResponseFormatFor, modelCapabilityConfigFor, normalizeImageValue } from "@/lib/model-capabilities";
+import { assertMediaSettings, resolvedMediaConfig } from "@/lib/media-settings";
 import { buildGeminiImageGenerationConfig, parseGeminiImageDataUrl, type GeminiImageGenerationConfig } from "@/lib/gemini-image";
 import { isVolcengineArkImageProtocol } from "@/lib/model-protocols";
 import { aiApiUrl, aiHeaders, imageChannelTransport, postChannelJSON, postGeminiJSON, postVolcengineArkImage } from "@/services/api/image-transport";
@@ -56,8 +57,19 @@ async function requestGeminiImagesOnce(config: AiConfig, prompt: string, referen
     return parseGeminiImagePayload(response);
 }
 
+function extractThinkingLevel(config: AiConfig): string | undefined {
+    try {
+        const parsed = JSON.parse(config.imageParameters || "{}");
+        if (typeof parsed.thinkingLevel === "string") return parsed.thinkingLevel;
+        if (typeof parsed.thinking_level === "string") return parsed.thinking_level;
+    } catch {}
+    return (config as { thinkingLevel?: string }).thinkingLevel;
+}
+
 export async function requestGeneration(config: AiConfig, prompt: string, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
+    assertMediaSettings(config, "image", selectedModel);
+    config = resolvedMediaConfig(config, "image", selectedModel);
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, []);
@@ -65,7 +77,7 @@ export async function requestGeneration(config: AiConfig, prompt: string, option
     const n = Number(normalizedImage.count);
     if (requestConfig.interfaceType === "gemini-image") {
         try {
-            return await requestGeminiImages(requestConfig, prompt, [], n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality), options);
+            return await requestGeminiImages(requestConfig, prompt, [], n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality, extractThinkingLevel(config), normalizedImage.imageResolution), options);
         } catch (error) {
             throw new Error(readAxiosError(error, "请求失败"));
         }
@@ -135,6 +147,8 @@ async function grokImageInputURL(image: ReferenceImage) {
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage, options?: RequestOptions) {
     const selectedModel = config.model || config.imageModel;
+    assertMediaSettings(config, "image", selectedModel);
+    config = resolvedMediaConfig(config, "image", selectedModel);
     const requestConfig = resolveModelRequestConfig(config, selectedModel);
     const imageProfile = modelCapabilityConfigFor(config, selectedModel).image!;
     validateImageCapability(imageProfile, references, mask);
@@ -144,7 +158,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
     if (requestConfig.interfaceType === "gemini-image") {
         if (mask) throw new Error("Gemini 调用格式暂不支持蒙版编辑");
         try {
-            return await requestGeminiImages(requestConfig, requestPrompt, references, n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality), options);
+            return await requestGeminiImages(requestConfig, requestPrompt, references, n, buildGeminiImageGenerationConfig(normalizedImage.size, normalizedImage.quality, extractThinkingLevel(config), normalizedImage.imageResolution), options);
         } catch (error) {
             throw new Error(readAxiosError(error, "请求失败"));
         }

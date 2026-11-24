@@ -21,22 +21,24 @@ const (
 	CodeIdempotencyConflict    = 40901
 	CodeCanvasResourcesMissing = 40902
 	CodeRateLimited            = 42901
+	CodeAccountNotRegistered   = 40401
 )
 
 // ErrorReason 是稳定机器可读原因，前端应判断 reason 而不是解析 msg。
 type ErrorReason string
 
 const (
-	ReasonInvalidArgument        ErrorReason = "invalid_argument"
-	ReasonUnauthorized           ErrorReason = "unauthorized"
-	ReasonForbidden              ErrorReason = "forbidden"
-	ReasonNotFound               ErrorReason = "not_found"
-	ReasonConflict               ErrorReason = "conflict"
-	ReasonProjectNameConflict    ErrorReason = "project_name_conflict"
-	ReasonSkillVersionConflict   ErrorReason = "skill_version_conflict"
-	ReasonCanvasResourcesMissing ErrorReason = "canvas_history_resources_missing"
-	ReasonFailedPrecondition     ErrorReason = "failed_precondition"
-	ReasonQuotaExceeded          ErrorReason = "quota_exceeded"
+	ReasonInvalidArgument              ErrorReason = "invalid_argument"
+	ReasonUnauthorized                 ErrorReason = "unauthorized"
+	ReasonForbidden                    ErrorReason = "forbidden"
+	ReasonNotFound                     ErrorReason = "not_found"
+	ReasonConflict                     ErrorReason = "conflict"
+	ReasonProjectNameConflict          ErrorReason = "project_name_conflict"
+	ReasonSkillVersionConflict         ErrorReason = "skill_version_conflict"
+	ReasonCanvasResourcesMissing       ErrorReason = "canvas_history_resources_missing"
+	ReasonFailedPrecondition           ErrorReason = "failed_precondition"
+	ReasonQuotaExceeded                ErrorReason = "quota_exceeded"
+	ReasonAgentHistoryCapacityExceeded ErrorReason = "agent_history_capacity_exceeded"
 	// 账号文件容量不足：前端据此展示扩容入口，与每日上传量等其它额度区分。
 	ReasonStorageCapacityExceeded ErrorReason = "storage_capacity_exceeded"
 	// 账号超出文件容量且宽限期已过：只允许读取、删除和购买扩容。
@@ -53,12 +55,14 @@ const (
 	ReasonAgentInterjectionDelivered ErrorReason = "agent_interjection_already_delivered"
 	// Agent 运行状态被并发写入，多次重读重试仍冲突；可稍后原样重试。
 	ReasonAgentRunStateBusy ErrorReason = "agent_run_state_busy"
-	ReasonRateLimited       ErrorReason = "rate_limited"
-	ReasonUnavailable       ErrorReason = "unavailable"
-	ReasonTimeout           ErrorReason = "timeout"
-	ReasonInternal          ErrorReason = "internal"
-	ReasonBadGateway        ErrorReason = "bad_gateway"
-	ReasonUpstreamDNSFailed ErrorReason = "upstream_dns_failed"
+	// 密码登录且客户端声明可自动注册时，账号不存在：客户端在原表单补齐注册信息后调用注册接口。
+	ReasonAccountNotRegistered ErrorReason = "account_not_registered"
+	ReasonRateLimited          ErrorReason = "rate_limited"
+	ReasonUnavailable          ErrorReason = "unavailable"
+	ReasonTimeout              ErrorReason = "timeout"
+	ReasonInternal             ErrorReason = "internal"
+	ReasonBadGateway           ErrorReason = "bad_gateway"
+	ReasonUpstreamDNSFailed    ErrorReason = "upstream_dns_failed"
 )
 
 func ReasonForStatus(status int) ErrorReason {

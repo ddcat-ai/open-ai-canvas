@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { buildNodeGenerationContext } from "../src/components/canvas/canvas-node-generation";
 import { attachNodeToStoryboardRow, createCanvasNode, createStoryboardRow, storyboardRowVideoPrompt, syncStoryboardVideoNode } from "../src/lib/canvas/canvas-project-domain";
+import { reconcileStoryboardTargetConnections } from "../src/lib/canvas/canvas-storyboard-materializer";
 import { nodeGenerationPrompt, synchronizeGenerationSpec } from "../src/lib/canvas/generation-contract";
 import { CanvasNodeType } from "../src/types/canvas";
 
@@ -67,12 +68,21 @@ describe("storyboard row video prompt assembly", () => {
             fromHandleId: "row:shot-5",
         });
         const updatedVideo = nextNodes.find((item) => item.id === existingVideo.id)!;
-        const expectedComposer = ["参考资产：@图片1", "固定高机位俯拍大桥，画面从黄昏过渡到暴雨夜", "台词/旁白：旁白：时间向前推进了一百年。", "音效：汽笛声渐变为暴雨声"].join("\n");
+        const expectedComposer = ["参考资产：@[node:era-frame]", "固定高机位俯拍大桥，画面从黄昏过渡到暴雨夜", "台词/旁白：旁白：时间向前推进了一百年。", "音效：汽笛声渐变为暴雨声"].join("\n");
 
         expect(updatedVideo.title).toBe("镜头 5 · 视频");
         expect(updatedVideo.metadata?.composerContent).toBe(expectedComposer);
         expect(nodeGenerationPrompt(updatedVideo)).toBe(expectedComposer);
         expect(updatedVideo.metadata?.generationSpec?.options.durationSeconds).toBe(8);
+
+        // 草稿保留资产身份，生成时再按实际连线槽位编译图片编号，台词和音效不丢失。
+        const updatedScript = nextNodes.find((item) => item.id === script.id)!;
+        const connections = reconcileStoryboardTargetConnections([], updatedScript, row, updatedVideo.id, [eraFrame.id]);
+        const context = buildNodeGenerationContext(updatedVideo.id, nextNodes, connections, nodeGenerationPrompt(updatedVideo), [], true);
+        expect(context.prompt).toBe(expectedComposer.replace("@[node:era-frame]", "@图片1"));
+        expect(context.referenceImageSlots.map((slot) => slot.nodeId)).toEqual([eraFrame.id]);
+        expect(context.referenceImages).toHaveLength(1);
+        expect(context.referenceImages[0].dataUrl).toBe("data:image/png;base64,AA==");
     });
 
     test("syncStoryboardVideoNode preserves committed prompt snapshot when updating an existing generated video", () => {

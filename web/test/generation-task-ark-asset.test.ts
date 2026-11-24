@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { buildNodeConfig, videoConfigPatch } from "../src/components/canvas/canvas-node-prompt-config";
+import { applyNodeConfigPatch } from "../src/lib/canvas/canvas-project-domain";
+import { buildGenerationConfig } from "../src/lib/canvas/canvas-project-generation";
 import { prepareBackendGenerationTask } from "../src/services/api/generation-task";
 import { createModelChannel, defaultConfig, encodeChannelModel } from "../src/stores/use-config-store";
+import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 
 function agentPlanImageConfig() {
     const channel = createModelChannel({
@@ -11,13 +15,15 @@ function agentPlanImageConfig() {
         apiKey: "test-key",
         interfaceType: "volcengine-ark-agent-plan-image",
         models: ["doubao-seedream-4-0-250828"],
-        modelCosts: [{
-            model: "doubao-seedream-4-0-250828",
-            capability: "image",
-            protocol: "volcengine-ark-agent-plan-image",
-            billingMode: "fixed_request",
-            unitPriceMicrocredits: 1,
-        }],
+        modelCosts: [
+            {
+                model: "doubao-seedream-4-0-250828",
+                capability: "image",
+                protocol: "volcengine-ark-agent-plan-image",
+                billingMode: "fixed_request",
+                unitPriceMicrocredits: 1,
+            },
+        ],
     });
     const model = encodeChannelModel(channel.id, "doubao-seedream-4-0-250828");
     return { ...defaultConfig, channels: [channel], model, baseUrl: channel.baseUrl, interfaceType: channel.interfaceType };
@@ -31,33 +37,57 @@ function agentPlanVideoConfig() {
         apiKey: "test-key",
         interfaceType: "volcengine-ark-agent-plan-video",
         models: ["doubao-seedance-1-5-pro-251215"],
-        modelCosts: [{
-            model: "doubao-seedance-1-5-pro-251215",
-            capability: "video",
-            protocol: "volcengine-ark-agent-plan-video",
-            billingMode: "token",
-            inputPricePerMillion: 1,
-            outputPricePerMillion: 1,
-        }],
+        modelCosts: [
+            {
+                model: "doubao-seedance-1-5-pro-251215",
+                capability: "video",
+                protocol: "volcengine-ark-agent-plan-video",
+                billingMode: "token",
+                inputPricePerMillion: 1,
+                outputPricePerMillion: 1,
+            },
+        ],
     });
     const model = encodeChannelModel(channel.id, "doubao-seedance-1-5-pro-251215");
     return { ...defaultConfig, channels: [channel], model, videoModel: model, baseUrl: channel.baseUrl, interfaceType: channel.interfaceType };
 }
 
 describe("generation-task ark asset references", () => {
+    test.each([
+        ["false", "true"],
+        ["true", "false"],
+    ])("canvas video panel and task both use the saved sync value %s", async (nodeValue, globalValue) => {
+        const config = { ...agentPlanVideoConfig(), videoArkPrivateAssetUpload: globalValue };
+        const node: CanvasNodeData = { id: "video-1", type: CanvasNodeType.Video, title: "视频", position: { x: 0, y: 0 }, width: 320, height: 180 };
+        const requirements = { capability: "video" } as const;
+        expect(buildNodeConfig(config, node, "video", requirements).videoArkPrivateAssetUpload).toBe(globalValue);
+
+        const edited = applyNodeConfigPatch(node, videoConfigPatch("videoArkPrivateAssetUpload", nodeValue));
+        expect(buildNodeConfig(config, edited, "video", requirements).videoArkPrivateAssetUpload).toBe(nodeValue);
+
+        const task = await prepareBackendGenerationTask({
+            mode: "video",
+            prompt: "animate this",
+            config: buildGenerationConfig(config, edited, "video", requirements),
+        });
+        expect(task.input).toMatchObject({ config: { videoArkPrivateAssetUpload: nodeValue } });
+    });
+
     test("agent plan Seedream image mode does not rewrite references to asset://", async () => {
         const input = await prepareBackendGenerationTask({
             mode: "image",
             prompt: "edit this",
             config: agentPlanImageConfig(),
-            referenceImages: [{
-                id: "ref-1",
-                name: "ref.png",
-                type: "image/png",
-                url: "https://cdn.example.com/ref.png",
-                storageKey: "resource:res-1",
-                arkAssetId: "asset-already-synced",
-            }],
+            referenceImages: [
+                {
+                    id: "ref-1",
+                    name: "ref.png",
+                    type: "image/png",
+                    url: "https://cdn.example.com/ref.png",
+                    storageKey: "resource:res-1",
+                    arkAssetId: "asset-already-synced",
+                },
+            ],
         });
         const images = (input.input as { referenceImages?: Array<{ url?: string; storageKey?: string }> }).referenceImages || [];
         expect(images).toHaveLength(1);
@@ -70,17 +100,21 @@ describe("generation-task ark asset references", () => {
             mode: "video",
             prompt: "animate this",
             config: agentPlanVideoConfig(),
-            referenceImages: [{
-                id: "ref-1",
-                name: "ref.png",
-                type: "image/png",
-                url: "https://cdn.example.com/ref.png",
-                storageKey: "resource:res-1",
-                arkAssetId: "asset-already-synced",
-            }],
+            referenceImages: [
+                {
+                    id: "ref-1",
+                    name: "ref.png",
+                    type: "image/png",
+                    url: "https://cdn.example.com/ref.png",
+                    storageKey: "resource:res-1",
+                    arkAssetId: "asset-already-synced",
+                },
+            ],
         });
-        const images = (input.input as { referenceImages?: Array<{ url?: string }> }).referenceImages || [];
+        const images = (input.input as { referenceImages?: Array<{ url?: string; sourceResourceId?: string; storageKey?: string }> }).referenceImages || [];
         expect(images).toHaveLength(1);
         expect(images[0]?.url).toBe("asset://asset-already-synced");
+        expect(images[0]?.sourceResourceId).toBe("res-1");
+        expect(images[0]?.storageKey).toBeUndefined();
     });
 });

@@ -447,13 +447,12 @@
 .assets-storage-usage-action {
     flex-shrink: 0;
     border: 0;
-    border-radius: 8px;
-    background: var(--user-accent-soft, color-mix(in srgb, var(--foreground) 7%, transparent));
-    padding: 2px 8px;
-    color: var(--user-accent, var(--foreground));
+    background: transparent;
+    padding: var(--space-1) 0;
+    color: var(--user-ink-muted);
     font: inherit;
-    font-size: 12px;
-    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: var(--space-half);
     cursor: pointer;
 }
 

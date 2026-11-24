@@ -1,16 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Euler, Vector3 } from "three";
 
-import {
-    advancePrevisPlayhead,
-    applyPrevisTransformDelta,
-    previsTransformDelta,
-    resolvePrevisCameraAlignment,
-    resolvePrevisCameraMoveKeyframes,
-    resolvePrevisKeyframeRecord,
-    resolvePrevisObjectTransformEdit,
-    snapPrevisTime,
-} from "../src/lib/canvas/previs/previs-animation-semantics";
+import { advancePrevisPlayhead, applyPrevisTransformDelta, previsTransformDelta, resolvePrevisCameraAlignment, resolvePrevisKeyframeRecord, resolvePrevisObjectTransformEdit, snapPrevisTime } from "../src/lib/canvas/previs/previs-animation-semantics";
 import { createPrevisCamera, previsTransformPathLength, finitePrevisTransformKeyframes, interpolatePrevisTransform } from "../src/lib/canvas/previs/previs-scene";
 import type { PrevisKeyframe, PrevisTransform } from "../src/types/previs";
 
@@ -51,23 +42,6 @@ describe("摄影机对齐当前视图", () => {
         expect(interpolatePrevisTransform(next.transform, next.keyframes, 1)).toEqual(aligned);
         expect(next.keyframes.find((item) => item.id === "start")).toEqual(camera.keyframes[0]);
         expect(next.keyframes.find((item) => item.id === "end")).toEqual(camera.keyframes[1]);
-    });
-});
-
-describe("生成摄影机运镜首尾帧", () => {
-    test("保留手工中间帧、已有 id 与 easing，只更新首尾 transform", () => {
-        const existing: PrevisKeyframe[] = [{ ...keyframe("start", 0, transform([9, 0, 0])), easing: "step" }, { ...keyframe("manual", 1, transform([4, 2, 0])), easing: "smooth" }, keyframe("end", 2, transform([8, 0, 0]))];
-        const next = resolvePrevisCameraMoveKeyframes(existing, transform([0, 0, 0]), transform([2, 0, 0]), 2);
-        expect(next.map((item) => item.id)).toEqual(["start", "manual", "end"]);
-        expect(next[0].transform.position).toEqual([0, 0, 0]);
-        expect(next[1]).toEqual(existing[1]);
-        expect(next[2].transform.position).toEqual([2, 0, 0]);
-        expect(next[0].easing).toBe("step");
-    });
-
-    test("空轨道生成两枚有序首尾帧", () => {
-        const next = resolvePrevisCameraMoveKeyframes([], transform([0, 0, 0]), transform([0, 0, -2]), 3);
-        expect(next.map((item) => item.time)).toEqual([0, 3]);
     });
 });
 

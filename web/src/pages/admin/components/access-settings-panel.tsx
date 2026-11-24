@@ -1,6 +1,6 @@
 import { App, Button, Form, Input, Skeleton } from "antd";
 import { Switch } from "@/pages/admin/ui/controls";
-import { AlertTriangle, AppWindow, BadgeCheck, Check, ChevronDown, FileText, Globe2, KeyRound, LockKeyhole, PanelsTopLeft, RefreshCw, RotateCcw, Save, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
+import { AlertTriangle, AppWindow, BadgeCheck, Check, ChevronDown, FileText, Globe2, KeyRound, LockKeyhole, Mail, MailCheck, PanelsTopLeft, RefreshCw, RotateCcw, Save, ShieldCheck, UserPlus, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "react-router";
 
@@ -11,6 +11,8 @@ import type { AuthLoginMode } from "@/services/api/auth";
 import { useAuthSettingsStore } from "@/stores/use-auth-settings-store";
 import { AdminStatusBadge, configuredSecretText, SettingsSectionCard } from "./admin-ui";
 import { Select } from "@/components/ui/base/select";
+import { getAdminWechatSetting, type WechatSetting } from "@/services/api/wechat";
+import { WechatSettingsSection } from "./wechat-settings-section";
 
 const LOGIN_MODES: Array<{ mode: AuthLoginMode; label: string; description: string; short: string }> = [
     { mode: "modal", label: "弹窗登录（默认）", description: "在当前页面弹出登录框，登录后留在原页面继续操作；直达 /login 的链接也会改为弹窗。", short: "左侧品牌介绍 + 右侧登录表单" },
@@ -41,6 +43,9 @@ export default function AccessSettingsPanel() {
     const { message, modal } = App.useApp();
     const brandName = useAppearanceStore((state) => state.appearance.brandName) || "平台";
     const [linuxdo, setLinuxdo] = useState<LinuxDOSetting | null>(null);
+    const [wechat, setWechat] = useState<WechatSetting | null>(null);
+    const [wechatDirty, setWechatDirty] = useState(false);
+    const [wechatSaving, setWechatSaving] = useState(false);
     const [registration, setRegistration] = useState<RegistrationSetting | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +53,7 @@ export default function AccessSettingsPanel() {
     const [savingRegistration, setSavingRegistration] = useState(false);
     const [savingAgreement, setSavingAgreement] = useState(false);
     const [savingLoginMode, setSavingLoginMode] = useState(false);
+    const [savingEmailPolicy, setSavingEmailPolicy] = useState<"" | "emailRequired" | "emailVerificationRequired">("");
     const [dirty, setDirty] = useState(false);
     const [draftLinuxDOEnabled, setDraftLinuxDOEnabled] = useState(false);
     const [agreementTitle, setAgreementTitle] = useState("");
@@ -67,9 +73,10 @@ export default function AccessSettingsPanel() {
             else setRefreshing(true);
             setLoadError("");
             try {
-                const [linuxdoData, registrationData] = await Promise.all([getAdminLinuxDOSetting(), getAdminRegistrationSetting()]);
+                const [linuxdoData, registrationData, wechatData] = await Promise.all([getAdminLinuxDOSetting(), getAdminRegistrationSetting(), getAdminWechatSetting()]);
                 if (requestVersion !== requestVersionRef.current) return;
                 setLinuxdo(linuxdoData.setting);
+                setWechat(wechatData.setting);
                 setRegistration(registrationData.setting);
                 setAgreementTitle(registrationData.setting.agreementTitle || "");
                 setAgreementContent(registrationData.setting.agreementContent || "");
@@ -105,7 +112,7 @@ export default function AccessSettingsPanel() {
         setDraftLinuxDOEnabled(linuxdo.enabled);
     }, [form, linuxdo, loading, registration]);
 
-    const unsaved = (dirty && !savingLinuxDO) || (agreementDirty && !savingAgreement);
+    const unsaved = (dirty && !savingLinuxDO) || (agreementDirty && !savingAgreement) || wechatDirty || wechatSaving;
     const blocker = useBlocker(unsaved);
 
     // 条款编辑区下方的字数与段落提示：与注册页的分段规则保持一致（按空行分段），
@@ -192,7 +199,8 @@ export default function AccessSettingsPanel() {
     };
 
     const requestRefresh = () => {
-        if (!dirty && !agreementDirty) {
+        if (wechatSaving) return;
+        if (!dirty && !agreementDirty && !wechatDirty) {
             void load(false, true);
             return;
         }
@@ -224,6 +232,22 @@ export default function AccessSettingsPanel() {
     const requestRegistrationChange = (enabled: boolean) => {
         if (!registration || enabled === registration.enabled || savingRegistration) return;
         void toggleRegistration(enabled).catch(() => undefined);
+    };
+
+    // 邮箱要求与注册开关同属 registration 配置：只提交本次切换的字段，其余由服务端保留。
+    const changeEmailPolicy = async (field: "emailRequired" | "emailVerificationRequired", value: boolean) => {
+        if (!registration || savingEmailPolicy) return;
+        setSavingEmailPolicy(field);
+        try {
+            const data = await updateAdminRegistrationSetting({ enabled: registration.enabled, [field]: value });
+            setRegistration(data.setting);
+            void useAuthSettingsStore.getState().load({ maxAgeMs: 0 });
+            message.success(field === "emailRequired" ? (value ? "注册时必须填写邮箱" : "注册时邮箱改为选填") : value ? "注册需先通过验证码" : "注册不再要求验证码");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "更新邮箱要求失败");
+        } finally {
+            setSavingEmailPolicy("");
+        }
     };
 
     // 打开方式与注册开关同属 registration 配置：只提交 enabled 与 loginMode，协议正文由服务端保留。
@@ -301,7 +325,7 @@ export default function AccessSettingsPanel() {
         );
     }
 
-    if (!linuxdo || !registration) {
+    if (!linuxdo || !registration || !wechat) {
         return (
             <div className="admin-settings-stack admin-access-settings">
                 <div className="admin-access-load-error" role="alert">
@@ -322,14 +346,18 @@ export default function AccessSettingsPanel() {
 
     return (
         <div className="admin-settings-stack admin-access-settings">
-            <div className={cn("admin-access-command-bar", dirty && "is-dirty")}>
+            <div className={cn("admin-access-command-bar", (dirty || wechatDirty) && "is-dirty")}>
                 <div className="admin-access-command-copy" aria-live="polite">
                     <span className="admin-access-command-icon">
                         <ShieldCheck className="size-4" aria-hidden="true" />
                     </span>
                     <div>
-                        <strong>{dirty ? "Linux.do 有未保存的调整" : "登录与注册设置"}</strong>
-                        <p>{dirty ? "完成接入信息后保存生效。" : `新用户注册${registration.enabled ? "已开放" : "已关闭"} · Linux.do ${linuxdo.enabled ? "已启用" : "未启用"} · ${(registration.loginMode ?? "modal") === "page" ? "独立页面登录" : "弹窗登录"}`}</p>
+                        <strong>{dirty || wechatDirty ? "登录方式有未保存的调整" : "登录与注册设置"}</strong>
+                        <p>
+                            {dirty || wechatDirty
+                                ? "完成接入信息后保存生效。"
+                                : `新用户注册${registration.enabled ? "已开放" : "已关闭"} · Linux.do ${linuxdo.enabled ? "已启用" : "未启用"} · 微信 ${wechat.enabled ? "已启用" : "未启用"} · ${(registration.loginMode ?? "modal") === "page" ? "独立页面登录" : "弹窗登录"}`}
+                        </p>
                     </div>
                 </div>
                 <div className="admin-access-command-actions">
@@ -338,7 +366,7 @@ export default function AccessSettingsPanel() {
                             撤销调整
                         </Button>
                     ) : null}
-                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={savingLinuxDO || savingRegistration || savingLoginMode} onClick={requestRefresh}>
+                    <Button icon={<RefreshCw className="size-4" />} loading={refreshing} disabled={savingLinuxDO || savingRegistration || savingLoginMode || wechatSaving} onClick={requestRefresh}>
                         刷新状态
                     </Button>
                 </div>
@@ -368,10 +396,48 @@ export default function AccessSettingsPanel() {
                                 <strong>允许创建新账号</strong>
                                 <AdminStatusBadge label="切换即保存" tone="info" />
                             </div>
-                            <p>关闭后，本地注册和未绑定账号的 Linux.do 首次登录都会被拒绝；已有账号及已绑定身份仍可继续登录。</p>
+                            <p>关闭后，本地注册和未绑定账号的第三方首次登录都会被拒绝；已有账号及已绑定身份仍可继续登录。</p>
                             <span>{formatSettingTime(registration.updatedAt, "当前来自部署环境默认值")}</span>
                         </div>
                         <Switch checked={registration.enabled} loading={savingRegistration} disabled={loading || refreshing || savingLinuxDO} onChange={requestRegistrationChange} aria-label="允许创建新账号，切换后立即生效" />
+                    </div>
+                    <div className="admin-access-registration-policy">
+                        <span className="admin-access-policy-icon">
+                            <Mail className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="admin-access-policy-copy">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <strong>注册必须填写邮箱</strong>
+                                <AdminStatusBadge label="切换即保存" tone="info" />
+                            </div>
+                            <p>关闭时邮箱选填，用户可只用用户名注册，之后在账号设置中绑定邮箱。用邮箱作账号登录时始终会保存邮箱。</p>
+                        </div>
+                        <Switch
+                            checked={Boolean(registration.emailRequired)}
+                            loading={savingEmailPolicy === "emailRequired"}
+                            disabled={loading || refreshing || Boolean(savingEmailPolicy)}
+                            onChange={(value) => void changeEmailPolicy("emailRequired", value)}
+                            aria-label="注册必须填写邮箱，切换后立即生效"
+                        />
+                    </div>
+                    <div className="admin-access-registration-policy">
+                        <span className="admin-access-policy-icon">
+                            <MailCheck className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="admin-access-policy-copy">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <strong>注册必须通过验证码</strong>
+                                <AdminStatusBadge label="切换即保存" tone="info" />
+                            </div>
+                            <p>开启时按登录注册策略验证邮箱或手机号（需先配置邮件服务）。关闭后填写的邮箱标记为“未验证”，不能用于邮箱验证码登录，用户可在账号设置中验证。注意：未验证邮箱同样会占用该地址，真实邮箱主人无法再用它注册。</p>
+                        </div>
+                        <Switch
+                            checked={registration.emailVerificationRequired !== false}
+                            loading={savingEmailPolicy === "emailVerificationRequired"}
+                            disabled={loading || refreshing || Boolean(savingEmailPolicy)}
+                            onChange={(value) => void changeEmailPolicy("emailVerificationRequired", value)}
+                            aria-label="注册必须通过验证码，切换后立即生效"
+                        />
                     </div>
                 </SettingsSectionCard>
             </div>
@@ -510,11 +576,13 @@ export default function AccessSettingsPanel() {
                 </SettingsSectionCard>
             </div>
 
+            <WechatSettingsSection setting={wechat} refreshing={refreshing || savingLinuxDO} onSaved={setWechat} onDirtyChange={setWechatDirty} onSavingChange={setWechatSaving} onRefresh={requestRefresh} />
+
             <div id="admin-access-agreement" className="admin-settings-anchor">
                 <SettingsSectionCard
                     className="admin-access-section admin-access-agreement-section"
                     icon={<FileText className="size-4" aria-hidden="true" />}
-                    title="3. 服务协议名称与条款"
+                    title="4. 服务协议名称与条款"
                     description="注册页勾选框与弹窗展示的内容。协议名称留空时自动跟随品牌名生成，条款留空时注册页给出待补充提示。"
                     status={<AdminStatusBadge label={agreementDirty ? "待保存" : agreementContent.trim() ? "已自定义" : "待补充"} tone={agreementDirty ? "warning" : agreementContent.trim() ? "success" : "neutral"} />}
                     footer={
@@ -537,11 +605,7 @@ export default function AccessSettingsPanel() {
                     }
                 >
                     <Form layout="vertical" requiredMark={false} disabled={loading || refreshing || savingAgreement}>
-                        <Form.Item
-                            label="协议名称"
-                            extra={`留空时自动跟随品牌名生成，即《${brandName}服务协议》。此处只需填名称本身，书名号由注册页补充。`}
-                            className="admin-access-agreement-title-field"
-                        >
+                        <Form.Item label="协议名称" extra={`留空时自动跟随品牌名生成，即《${brandName}服务协议》。此处只需填名称本身，书名号由注册页补充。`} className="admin-access-agreement-title-field">
                             <Input
                                 value={agreementTitle}
                                 maxLength={60}
@@ -552,11 +616,7 @@ export default function AccessSettingsPanel() {
                                 }}
                             />
                         </Form.Item>
-                        <Form.Item
-                            label="协议条款内容"
-                            extra="支持多段落文本，按空行分段展示；留空时注册页弹窗显示“服务协议内容待补充”。"
-                            className="admin-access-agreement-content-field"
-                        >
+                        <Form.Item label="协议条款内容" extra="支持多段落文本，按空行分段展示；留空时注册页弹窗显示“服务协议内容待补充”。" className="admin-access-agreement-content-field">
                             <Input.TextArea
                                 value={agreementContent}
                                 maxLength={20000}
@@ -574,9 +634,7 @@ export default function AccessSettingsPanel() {
                                 <span>没有准备条款时，可先填入通用模板再按需修改。</span>
                             </div>
                             <div className="admin-access-agreement-template-actions">
-                                <span className="admin-access-agreement-metric">
-                                    {agreementContent.trim() ? `${agreementParagraphsCount} 段 · ${agreementContent.length} 字` : "尚未填写条款"}
-                                </span>
+                                <span className="admin-access-agreement-metric">{agreementContent.trim() ? `${agreementParagraphsCount} 段 · ${agreementContent.length} 字` : "尚未填写条款"}</span>
                                 <Button
                                     size="small"
                                     disabled={savingAgreement || loading || refreshing}
@@ -611,7 +669,7 @@ export default function AccessSettingsPanel() {
                 <SettingsSectionCard
                     className="admin-access-section admin-access-login-mode-section"
                     icon={<AppWindow className="size-4" aria-hidden="true" />}
-                    title="4. 登录与注册的打开方式"
+                    title="5. 登录与注册的打开方式"
                     description="决定用户点击「登录」或访问需要登录的页面时，登录与注册界面以弹窗还是独立页面呈现。"
                     status={<AdminStatusBadge label="切换即保存" tone="info" />}
                 >

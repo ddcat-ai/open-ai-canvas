@@ -29,7 +29,7 @@
 }
 [data-admin-root] .ecommerce-stage-models > ol > li {
     display: grid;
-    grid-template-columns: 26px minmax(150px, 1fr) minmax(220px, 3fr) minmax(200px, 2fr);
+    grid-template-columns: 26px minmax(150px, 1fr) minmax(220px, 3fr) minmax(200px, 2fr) minmax(150px, 1.5fr);
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
@@ -71,7 +71,7 @@
     color: var(--admin-text-muted);
     font-size: 12px;
 }
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
     [data-admin-root] .ecommerce-stage-models > ol > li {
         grid-template-columns: 26px minmax(0, 1fr);
     }

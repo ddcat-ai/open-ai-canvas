@@ -8,15 +8,39 @@ import (
 // EcommerceProject stores versioned ecommerce drafts and execution snapshots.
 // Existing historical rows remain readable; new workflows do not rewrite them.
 type EcommerceProject struct {
-	ID        string    `json:"id" gorm:"primaryKey;size:36"`
-	UserID    string    `json:"userId" gorm:"size:36;not null;index:idx_ecommerce_owner_updated,priority:1"`
-	Name      string    `json:"name" gorm:"size:160;not null"`
-	Status    string    `json:"status" gorm:"size:32;not null"`
-	DraftJSON string    `json:"draftJson" gorm:"type:text;not null"`
-	PlanJSON  string    `json:"planJson" gorm:"type:text;not null"`
-	Revision  int64     `json:"revision" gorm:"not null;default:1"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt" gorm:"index:idx_ecommerce_owner_updated,priority:2"`
+	ID        string `json:"id" gorm:"primaryKey;size:36"`
+	UserID    string `json:"userId" gorm:"size:36;not null;index:idx_ecommerce_owner_updated,priority:1"`
+	Name      string `json:"name" gorm:"size:160;not null"`
+	Status    string `json:"status" gorm:"size:32;not null"`
+	DraftJSON string `json:"draftJson" gorm:"type:text;not null"`
+	PlanJSON  string `json:"planJson" gorm:"type:text;not null"`
+	// ActiveRoundID separates the bounded active plan from archived rounds. It is
+	// empty on projects created before rounds existed until their first save.
+	ActiveRoundID string    `json:"activeRoundId,omitempty" gorm:"size:64;index"`
+	Revision      int64     `json:"revision" gorm:"not null;default:1"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt" gorm:"index:idx_ecommerce_owner_updated,priority:2"`
+	// Response-only fields. They are never persisted on the project row.
+	RoundCount   int64    `json:"roundCount,omitempty" gorm:"-"`
+	CoverTaskIDs []string `json:"coverTaskIds,omitempty" gorm:"-"`
+}
+
+// EcommerceRound is one immutable archived planning round. The whole round is
+// written once when the user starts the next round; history edits only touch a
+// single image with an optimistic version. Images keep their original task and
+// resource references, so archiving never creates or re-bills tasks.
+type EcommerceRound struct {
+	ID         string    `json:"id" gorm:"primaryKey;size:64"`
+	UserID     string    `json:"userId" gorm:"size:36;not null;index:idx_ecommerce_round_list,priority:1"`
+	ProjectID  string    `json:"projectId" gorm:"size:36;not null;uniqueIndex:idx_ecommerce_round_ordinal,priority:1;uniqueIndex:idx_ecommerce_round_dedup,priority:1;index:idx_ecommerce_round_list,priority:2"`
+	Ordinal    int       `json:"ordinal" gorm:"not null;uniqueIndex:idx_ecommerce_round_ordinal,priority:2;index:idx_ecommerce_round_list,priority:3"`
+	DedupKey   string    `json:"-" gorm:"size:64;not null;uniqueIndex:idx_ecommerce_round_dedup,priority:2"`
+	DraftJSON  string    `json:"-" gorm:"type:text;not null"`
+	PlanJSON   string    `json:"-" gorm:"type:text;not null"`
+	ImageCount int       `json:"imageCount" gorm:"not null"`
+	Version    int64     `json:"version" gorm:"not null;default:1"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // EcommerceKnowledgeSource tracks an auditable upstream knowledge source.
@@ -118,6 +142,9 @@ type EcommercePlanTask struct {
 	SkuID                string                    `json:"skuId,omitempty"`
 	TaskID               string                    `json:"taskId,omitempty"`
 	ReferenceScreen      *EcommerceReferenceScreen `json:"referenceScreen,omitempty"`
+	// RoundID is attached only when serving archived rounds, so the client can
+	// address a history edit without re-reading the whole project.
+	RoundID string `json:"roundId,omitempty" gorm:"-"`
 }
 
 type EcommerceReferenceScreen struct {

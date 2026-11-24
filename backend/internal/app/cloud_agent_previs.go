@@ -4,8 +4,28 @@ import (
 	"fmt"
 	"strings"
 
+	"yingce/backend/internal/prompts"
 	"yingce/backend/internal/repository"
 )
+
+func cloudAgentPrevisManualTopicIDs() string {
+	topics := prompts.PrevisManualTopics()
+	ids := make([]string, 0, len(topics))
+	for _, topic := range topics {
+		ids = append(ids, topic.ID)
+	}
+	return strings.Join(ids, "、")
+}
+
+// cloudAgentPrevisManualGuide 是说明书目录：主题 → 什么时候读。
+func cloudAgentPrevisManualGuide() map[string]string {
+	topics := prompts.PrevisManualTopics()
+	guide := make(map[string]string, len(topics))
+	for _, topic := range topics {
+		guide[topic.ID] = topic.Title + "：" + topic.When
+	}
+	return guide
+}
 
 // Previs Agent tools deliberately expose a projection rather than the raw
 // PrevisScene payload. The browser owns model URLs and storage references;
@@ -16,9 +36,23 @@ func cloudAgentPrevisSceneRead(repo *repository.Repository, userID, canvasID str
 		ShotID            string   `json:"shotId"`
 		ObjectIDs         []string `json:"objectIds"`
 		IncludeTransforms bool     `json:"includeTransforms"` // Return exact position/rotation/fov for spatial planning
+		Manual            string   `json:"manual"`
 	}
 	if err := decodeCloudAgentJSONObject(call.Function.Arguments, &args); err != nil {
 		return nil, cloudAgentJSONArgumentError(err)
+	}
+	if manual := strings.TrimSpace(args.Manual); manual != "" {
+		// 说明书是静态工具参考资料，不读画布，也不需要 sceneId。
+		topic, content, ok := prompts.PrevisManual(manual)
+		if !ok {
+			return nil, cloudAgentFieldError("manual", "unknown_topic", "说明书主题不存在，可选："+cloudAgentPrevisManualTopicIDs())
+		}
+		return map[string]any{
+			"topic":   topic.ID,
+			"title":   topic.Title,
+			"content": content,
+			"topics":  prompts.PrevisManualTopics(),
+		}, nil
 	}
 	if args.SceneID != "" {
 		if err := validateCloudAgentID(args.SceneID, "导演场景 ID", 80); err != nil {
@@ -67,7 +101,8 @@ func cloudAgentPrevisSceneRead(repo *repository.Repository, userID, canvasID str
 			"canvasSnapshotHash": cloudAgentCanvasHash(doc),
 			"scenes":             items,
 			"count":              len(items),
-			"guidance":           "先用返回的 sceneId 读取一个场景，再使用 shotId 进行布局或预演。创建场景时把 canvasSnapshotHash 原样传回。",
+			"manual":             cloudAgentPrevisManualGuide(),
+			"guidance":           "第一次操作世界引擎先用 manual=rules 读行为规范，再按任务读 manual 里对应主题。先用返回的 sceneId 读取一个场景，再使用 shotId 进行布局或预演。创建场景时把 canvasSnapshotHash 原样传回。",
 		}, nil
 	}
 
@@ -88,16 +123,22 @@ func cloudAgentPrevisSceneRead(repo *repository.Repository, userID, canvasID str
 	if args.IncludeTransforms {
 		// Augment with full spatial data for layout planning: object positions, camera transforms, FOV
 		projection["spatialLayout"] = cloudAgentPrevisSpatialLayout(scene)
-		projection["coordinateGuide"] = "坐标系: Y轴向上，单位为米，地面Y=0。人物高约1.8m。position=[X,Y,Z]，rotation=[绕X,绕Y,绕Z弧度]。演员原点在脚底，Y=脚底离地高度：站上桌面/台阶/屋顶时设为台面高度，低于0会被拉回地面；box/sphere/cylinder原点在中心。target是摄影机焦点坐标。"
+		projection["coordinateGuide"] = "坐标系: Y轴向上，单位为米，地面 Y=0。人物高约1.8m。演员原点在脚底，Y=脚底离地高度；box/sphere/cylinder原点在中心，底面低于地面时会被拉回。position=[X,Y,Z]，rotation=[绕X,绕Y,绕Z弧度]。target是摄影机焦点坐标。路径点与参考轨迹的 Y 是离地高度。"
 	}
-	return map[string]any{
+	result := map[string]any{
 		"canvasId":           canvasID,
 		"scene":              projection,
 		"snapshotHash":       creationHash(scene),
 		"canvasSnapshotHash": cloudAgentCanvasHash(doc),
 		"revision":           canvas.Revision,
-		"guidance":           "安全摘要。修改用 previs_apply_patch；预演用 previs_preview；布局规划用 includeTransforms=true 获取精确坐标。snapshotHash 只代表该场景。",
-	}, nil
+		"catalog":            cloudAgentPrevisCatalogGuide(),
+		"guidance":           "安全摘要。修改用 previs_apply_patch；预演用 previs_preview；布局规划用 includeTransforms=true 获取精确坐标。设计运镜前读 manual=shots。snapshotHash 只代表该场景。",
+	}
+	if reviews := cloudAgentPrevisShotReviews(scene); len(reviews) > 0 {
+		result["review"] = reviews
+		result["reviewGuide"] = cloudAgentPrevisReviewGuide
+	}
+	return result, nil
 }
 
 // previsMapSafe safely casts a value to map[string]any, returning an empty map on failure.
@@ -134,6 +175,7 @@ func cloudAgentPrevisSpatialLayout(scene map[string]any) map[string]any {
 			"keyframeCount": len(creationMaps(obj["keyframes"])),
 			"hasMotionPath": obj["motionPath"] != nil,
 		}
+		cloudAgentPrevisProjectCatalogFields(entry, obj)
 		if motions := creationMaps(obj["motions"]); len(motions) > 0 {
 			projected := make([]map[string]any, 0, len(motions))
 			for _, motion := range motions {
@@ -202,13 +244,13 @@ func cloudAgentPrevisPreview(repo *repository.Repository, userID, canvasID strin
 		return nil, err
 	}
 	if args.Output != "" && args.Output != "clay_video" {
-		return nil, BadAuthRequest("导演预演 output 目前只支持 clay_video")
+		return nil, BadAuthRequest("世界引擎预演 output 目前只支持 clay_video")
 	}
 	if args.Duration != nil && (*args.Duration < 0.1 || *args.Duration > 60) {
-		return nil, BadAuthRequest("导演预演 duration 必须在0.1到60秒之间")
+		return nil, BadAuthRequest("世界引擎预演 duration 必须在0.1到60秒之间")
 	}
 	if args.FPS != nil && (*args.FPS < 1 || *args.FPS > 60) {
-		return nil, BadAuthRequest("导演预演 fps 必须在1到60之间")
+		return nil, BadAuthRequest("世界引擎预演 fps 必须在1到60之间")
 	}
 	canvas, err := repo.CanvasProjectForUser(userID, canvasID)
 	if err != nil {
@@ -250,8 +292,16 @@ func cloudAgentPrevisPreview(repo *repository.Repository, userID, canvasID strin
 		"output":           "clay_video",
 		"snapshotHash":     creationHash(scene),
 		"execution":        "browser_previs_viewport",
-		"text":             "已请求预演台在浏览器视口录制白模预演；录制完成后会回写为画布视频节点。",
+		"text":             "已请求世界引擎在浏览器视口录制白模预演；录制完成后会回写为画布视频节点。",
 	}, nil
+}
+
+// cloudAgentPrevisShotAspectRatio 返回镜头画幅；未设置时与前端一致按 9:16 竖屏。
+func cloudAgentPrevisShotAspectRatio(shot map[string]any) string {
+	if aspect := stringValue(shot["aspectRatio"]); aspect != "" {
+		return aspect
+	}
+	return "9:16"
 }
 
 func findPrevisScene(scenes []map[string]any, id string) (map[string]any, bool) {
@@ -279,13 +329,14 @@ func projectPrevisScene(scene map[string]any, shotID string, objectIDs map[strin
 			continue
 		}
 		shots = append(shots, map[string]any{
-			"id":         stringValue(shot["id"]),
-			"name":       truncateRunes(stringValue(shot["name"]), 160),
-			"cameraId":   stringValue(shot["cameraId"]),
-			"duration":   numberValue(shot["duration"], 5),
-			"fps":        int(numberValue(shot["fps"], 24)),
-			"shotSize":   stringValue(shot["shotSize"]),
-			"cameraMove": stringValue(shot["cameraMove"]),
+			"id":          stringValue(shot["id"]),
+			"name":        truncateRunes(stringValue(shot["name"]), 160),
+			"cameraId":    stringValue(shot["cameraId"]),
+			"duration":    numberValue(shot["duration"], 5),
+			"fps":         int(numberValue(shot["fps"], 24)),
+			"shotSize":    stringValue(shot["shotSize"]),
+			"aspectRatio": cloudAgentPrevisShotAspectRatio(shot),
+			"cameraMove":  stringValue(shot["cameraMove"]),
 		})
 	}
 	objects := make([]map[string]any, 0)
@@ -294,7 +345,7 @@ func projectPrevisScene(scene map[string]any, shotID string, objectIDs map[strin
 		if len(objectIDs) > 0 && !objectIDs[id] {
 			continue
 		}
-		objects = append(objects, map[string]any{
+		entry := map[string]any{
 			"id":        id,
 			"name":      truncateRunes(stringValue(object["name"]), 160),
 			"kind":      stringValue(object["kind"]),
@@ -303,19 +354,31 @@ func projectPrevisScene(scene map[string]any, shotID string, objectIDs map[strin
 			"pose":      stringValue(object["pose"]),
 			"visible":   boolValue(object["visible"], true),
 			"transform": projectPrevisTransform(object["transform"]),
-		})
+		}
+		cloudAgentPrevisProjectCatalogFields(entry, object)
+		objects = append(objects, entry)
 	}
 	cameras := make([]map[string]any, 0)
 	for _, camera := range creationMaps(scene["cameras"]) {
-		cameras = append(cameras, map[string]any{
+		entry := map[string]any{
 			"id":          stringValue(camera["id"]),
 			"name":        truncateRunes(stringValue(camera["name"]), 160),
 			"focalLength": numberValue(camera["focalLength"], 50),
 			"transform":   projectPrevisTransform(camera["transform"]),
 			"target":      projectPrevisVec3(camera["target"]),
-		})
+		}
+		if count := len(creationMaps(camera["keyframes"])); count > 0 {
+			entry["keyframeCount"] = count
+		}
+		if moves := cloudAgentPrevisProjectCameraMoves(camera); len(moves) > 0 {
+			entry["moves"] = moves
+		}
+		if path := cloudAgentPrevisProjectMotionPath(camera); path != nil {
+			entry["motionPath"] = path
+		}
+		cameras = append(cameras, entry)
 	}
-	return map[string]any{
+	projection := map[string]any{
 		"id":           stringValue(scene["id"]),
 		"title":        truncateRunes(stringValue(scene["title"]), 160),
 		"activeShotId": stringValue(scene["activeShotId"]),
@@ -323,6 +386,35 @@ func projectPrevisScene(scene map[string]any, shotID string, objectIDs map[strin
 		"objects":      objects,
 		"cameras":      cameras,
 		"lightCount":   len(creationMaps(scene["lights"])),
+	}
+	if markers := cloudAgentPrevisProjectMarkers(scene); len(markers) > 0 {
+		projection["markers"] = markers
+	}
+	if paths := cloudAgentPrevisProjectSketchPaths(scene); len(paths) > 0 {
+		projection["paths"] = paths
+	}
+	if world, ok := scene["world"].(map[string]any); ok {
+		projection["world"] = map[string]any{"timeOfDay": numberValue(world["timeOfDay"], 10), "weather": stringValue(world["weather"]), "ground": stringValue(world["ground"]), "groundSize": int(numberValue(world["groundSize"], 1000)), "horizon": boolValue(world["horizon"], true)}
+	}
+	return projection
+}
+
+// cloudAgentPrevisProjectCatalogFields 只投影目录 ID 与布景参数，不含任何 URL。
+func cloudAgentPrevisProjectCatalogFields(entry map[string]any, object map[string]any) {
+	if travels := cloudAgentPrevisProjectTravels(object); len(travels) > 0 {
+		entry["travels"] = travels
+	}
+	if path := cloudAgentPrevisProjectMotionPath(object); path != nil {
+		entry["motionPath"] = path
+	}
+	switch stringValue(object["kind"]) {
+	case "prop":
+		entry["propId"] = stringValue(object["propId"])
+		entry["variant"] = int(numberValue(object["variant"], 0))
+	case "layout":
+		if layout, ok := object["layout"].(map[string]any); ok {
+			entry["layout"] = map[string]any{"template": stringValue(layout["template"]), "seed": int(numberValue(layout["seed"], 0)), "size": numberValue(layout["size"], 0), "density": numberValue(layout["density"], 0.75), "crowd": boolValue(layout["crowd"], true)}
+		}
 	}
 }
 

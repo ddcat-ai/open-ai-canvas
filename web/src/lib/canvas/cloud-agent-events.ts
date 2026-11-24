@@ -385,7 +385,7 @@ export function applyAgentEvent(
                 id: event.eventId,
                 role: "tool",
                 title: "previs_preview",
-                text: text || "已请求预演台生成白模预演",
+                text: text || "已请求世界引擎生成白模预演",
                 detail: { ...payload, eventType: event.type },
             }),
         );

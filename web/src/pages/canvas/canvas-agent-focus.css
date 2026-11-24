@@ -35,23 +35,18 @@
     }
 }
 
-/* Agent 新建节点入场：按创建顺序错开淡入、轻微放大上浮。
-   只动 opacity 与独立的 scale/translate 属性，不覆盖节点定位用的 transform。 */
+/* 节点外层的 transform/translate 由定位和拖拽独占。
+   入场只短暂提亮，不延迟隐藏节点，也不在结束后保留动画层。 */
 [data-node-id][data-agent-enter="true"] {
-    animation: canvas-agent-node-enter 420ms var(--motion-ease-out, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
-    animation-delay: var(--agent-enter-delay, 0ms);
+    animation: canvas-agent-node-enter 200ms var(--motion-ease-out, ease-out);
 }
 
 @keyframes canvas-agent-node-enter {
     from {
-        opacity: 0;
-        scale: 0.92;
-        translate: 0 12px;
+        opacity: 0.65;
     }
     to {
         opacity: 1;
-        scale: 1;
-        translate: 0 0;
     }
 }
 
@@ -102,41 +97,4 @@
     border: 1.5px solid color-mix(in srgb, var(--canvas-frame-tint) 60%, transparent);
     background: color-mix(in srgb, var(--canvas-frame-tint) 8%, transparent);
     pointer-events: none;
-}
-
-/* 画布规模 HUD：缩放控件旁的节点/连线计数与镜头跟随开关。 */
-.canvas-agent-hud {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-8, 8px);
-    height: 32px;
-    padding: 0 var(--space-8, 8px) 0 var(--space-12, 12px);
-    border: 1px solid;
-    border-radius: var(--dock-radius, 999px);
-    font-size: var(--fs-label, 12px);
-    font-variant-numeric: tabular-nums;
-    backdrop-filter: blur(16px);
-    pointer-events: auto;
-    white-space: nowrap;
-}
-
-.canvas-agent-hud-follow {
-    display: inline-grid;
-    place-items: center;
-    width: 24px;
-    height: 24px;
-    border: 0;
-    border-radius: var(--r-sm, 6px);
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-}
-
-.canvas-agent-hud-follow:hover {
-    background: color-mix(in srgb, currentColor 10%, transparent);
-}
-
-.canvas-agent-hud-follow:focus-visible {
-    outline: 2px solid var(--ring, currentColor);
-    outline-offset: 1px;
 }

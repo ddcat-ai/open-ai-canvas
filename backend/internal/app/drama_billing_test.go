@@ -121,3 +121,19 @@ func mustDramaProduction(t *testing.T, svc *Service, project string) *model.Dram
 	}
 	return p
 }
+
+func TestDramaDirectTextTaskRespectsProjectBudget(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	project := createTestDrama(t, svc, DramaReviewAuto).Project.ID
+	if err := svc.repo.UpdateDramaProduction(project, map[string]any{"budget_microcredits": 100}); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ensureTaskProjectActive("usr-drama", project); err != nil {
+		t.Fatal(err)
+	}
+	seedDramaBillingOrder(t, fake.db, project, "prompt-rewrite-held", model.BillingOrder{AmountMicrocredits: 100, Status: model.BillingStatusRunning})
+	var appErr *AppError
+	if err := svc.ensureTaskProjectActive("usr-drama", project); !errors.As(err, &appErr) || appErr.Reason != ReasonDramaBudget {
+		t.Fatalf("direct task must honor budget: %v", err)
+	}
+}

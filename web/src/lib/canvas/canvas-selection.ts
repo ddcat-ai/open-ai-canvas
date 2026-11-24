@@ -25,6 +25,7 @@ export type CanvasPointerIntent = "ignore" | "pan" | "select";
  */
 export function resolveCanvasPointerIntent(input: CanvasPointerIntentInput): CanvasPointerIntent {
     if (input.pointerType === "touch") return input.background ? "pan" : "ignore";
+    if (input.button === 2) return input.background ? "pan" : "ignore";
     if (input.button === 1) return "pan";
     if (input.button !== 0) return "ignore";
     if (input.spacePressed) return "pan";
@@ -46,14 +47,16 @@ export function createCanvasSelectionSpatialIndexCache(): CanvasSelectionSpatial
         get(nodes) {
             if (source === nodes) return index;
             const nodeById = new Map(nodes.map((node) => [node.id, node]));
-            const hiddenBatchChildIds = new Set(nodes.flatMap((node) => {
-                const rootId = node.metadata?.batchRootId;
-                const root = rootId ? nodeById.get(rootId) : undefined;
-                return root && !root.metadata?.imageBatchExpanded ? [node.id] : [];
-            }));
-            index = buildCanvasSpatialIndex(nodes
-                .filter((node) => !hiddenBatchChildIds.has(node.id) && !(node.parentId && nodeById.get(node.parentId)?.metadata?.frame?.collapsed))
-                .map((node) => ({ id: node.id, bounds: canvasNodeBounds(node), value: node })));
+            const hiddenBatchChildIds = new Set(
+                nodes.flatMap((node) => {
+                    const rootId = node.metadata?.batchRootId;
+                    const root = rootId ? nodeById.get(rootId) : undefined;
+                    return root && !root.metadata?.imageBatchExpanded ? [node.id] : [];
+                }),
+            );
+            index = buildCanvasSpatialIndex(
+                nodes.filter((node) => !hiddenBatchChildIds.has(node.id) && !(node.parentId && nodeById.get(node.parentId)?.metadata?.frame?.collapsed)).map((node) => ({ id: node.id, bounds: canvasNodeBounds(node), value: node })),
+            );
             source = nodes;
             return index;
         },
@@ -82,15 +85,9 @@ export function createCanvasSelectionBounds(startWorldX: number, startWorldY: nu
 
 export function canvasSelectionHitsBounds(selectionBounds: CanvasSpatialBounds, nodeBounds: CanvasSpatialBounds, hitMode: CanvasSelectionHitMode): boolean {
     if (hitMode === "contain") {
-        return nodeBounds.left >= selectionBounds.left
-            && nodeBounds.top >= selectionBounds.top
-            && nodeBounds.right <= selectionBounds.right
-            && nodeBounds.bottom <= selectionBounds.bottom;
+        return nodeBounds.left >= selectionBounds.left && nodeBounds.top >= selectionBounds.top && nodeBounds.right <= selectionBounds.right && nodeBounds.bottom <= selectionBounds.bottom;
     }
-    return nodeBounds.right > selectionBounds.left
-        && nodeBounds.left < selectionBounds.right
-        && nodeBounds.bottom > selectionBounds.top
-        && nodeBounds.top < selectionBounds.bottom;
+    return nodeBounds.right > selectionBounds.left && nodeBounds.left < selectionBounds.right && nodeBounds.bottom > selectionBounds.top && nodeBounds.top < selectionBounds.bottom;
 }
 
 export function applyCanvasSelectionStrategy(initialSelection: Iterable<string>, hitNodeIds: Iterable<string>, strategy: CanvasSelectionStrategy): Set<string> {
@@ -140,10 +137,7 @@ export type SelectedNodeBounds = {
     count: number;
 };
 
-export function selectedNodesWorldBounds(
-    nodes: Array<{ id: string; position: { x: number; y: number }; width: number; height: number }>,
-    preview?: { x: number; y: number; nodeIds: ReadonlySet<string> } | null,
-): SelectedNodeBounds | null {
+export function selectedNodesWorldBounds(nodes: Array<{ id: string; position: { x: number; y: number }; width: number; height: number }>, preview?: { x: number; y: number; nodeIds: ReadonlySet<string> } | null): SelectedNodeBounds | null {
     if (nodes.length < 2) return null;
     const left = Math.min(...nodes.map((node) => node.position.x + (preview?.nodeIds.has(node.id) ? preview.x : 0)));
     const top = Math.min(...nodes.map((node) => node.position.y + (preview?.nodeIds.has(node.id) ? preview.y : 0)));

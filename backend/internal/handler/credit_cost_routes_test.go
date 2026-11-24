@@ -178,5 +178,43 @@ func TestChannelCostHTTPAuthorizationAndPublicProjection(t *testing.T) {
 		if strings.Contains(w.Body.String(), "costPricing") || strings.Contains(w.Body.String(), "123456") {
 			t.Fatalf("public cost leaked: %s", w.Body.String())
 		}
+		guest := call("", method, path, payload)
+		if method == http.MethodGet {
+			if guest.Code != http.StatusOK || !strings.Contains(guest.Body.String(), `"modelKey":"text-model"`) {
+				t.Fatalf("guest catalog: %d %s", guest.Code, guest.Body.String())
+			}
+			for _, field := range []string{"costPricing", "123456", "apiKey", "baseUrl"} {
+				if strings.Contains(guest.Body.String(), field) {
+					t.Fatalf("guest catalog leaked %s", field)
+				}
+			}
+		} else if guest.Code != http.StatusUnauthorized {
+			t.Fatalf("guest %s must require login: %d", path, guest.Code)
+		}
+	}
+	if stale := call("expired-session", http.MethodGet, "/api/model-catalog", nil); stale.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid session must not become guest: %d", stale.Code)
+	}
+	guestRequest := httptest.NewRequest(http.MethodGet, "/api/model-catalog", nil)
+	guestRequest.Header.Set("X-Canvas-Expected-User", "guest")
+	guestResponse := httptest.NewRecorder()
+	router.ServeHTTP(guestResponse, guestRequest)
+	if guestResponse.Code != http.StatusOK || !strings.Contains(guestResponse.Body.String(), `"modelKey":"text-model"`) {
+		t.Fatalf("guest expected identity should read catalog: %d %s", guestResponse.Code, guestResponse.Body.String())
+	}
+	staleGuestRequest := httptest.NewRequest(http.MethodGet, "/api/model-catalog", nil)
+	staleGuestRequest.AddCookie(&http.Cookie{Name: service.SessionCookieName, Value: "expired-session.test-token"})
+	staleGuestRequest.Header.Set("X-Canvas-Expected-User", "guest")
+	staleGuestResponse := httptest.NewRecorder()
+	router.ServeHTTP(staleGuestResponse, staleGuestRequest)
+	if staleGuestResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid session with guest expected identity must not become guest: %d %s", staleGuestResponse.Code, staleGuestResponse.Body.String())
+	}
+	r := httptest.NewRequest(http.MethodGet, "/api/model-catalog", nil)
+	r.Header.Set("X-Canvas-Expected-User", "user")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("missing expected session must not become guest: %d", w.Code)
 	}
 }

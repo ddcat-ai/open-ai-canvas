@@ -32,12 +32,15 @@ func TestCloudAgentReliabilitySchedulerHeadOfLine500(t *testing.T) {
 	now := time.Now().Add(-time.Hour)
 	var tailID, tailUser string
 	profile := cloudAgentProfileSnapshot{Revision: agentProfileRevision(nil), Hash: agentProfileHash("")}
-	_, policy, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, nil, "", profile)
+	_, policy, err := compileCloudAgentPolicies(agentTestRequest(), defaultCanvasAppearance().AgentName, "", profile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 500; i++ {
 		user := fmt.Sprintf("audit-user-%03d", i)
+		if err := db.Create(&model.User{ID: user, Username: user, Role: model.UserRoleUser, Status: model.UserStatusActive}).Error; err != nil {
+			t.Fatal(err)
+		}
 		req := agentTestRequest()
 		req.IdempotencyKey = fmt.Sprintf("audit-key-%03d", i)
 		id := cloudAgentID(user, req.IdempotencyKey)

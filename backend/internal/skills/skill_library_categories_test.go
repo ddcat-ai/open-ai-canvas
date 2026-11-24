@@ -15,9 +15,10 @@ import (
 
 func TestSkillLibraryCategoriesVisibilityAssignmentAndDelete(t *testing.T) {
 	svc, db := newSkillLibraryCategoryTestService(t)
-	user := &model.User{ID: "user-1", Role: model.UserRoleUser}
-	otherUser := &model.User{ID: "user-2", Role: model.UserRoleUser}
-	admin := &model.User{ID: "admin-1", Role: model.UserRoleAdmin}
+	user := createSkillTestUser(t, db, "user-1", model.UserRoleUser, model.UserStatusActive)
+	otherUser := createSkillTestUser(t, db, "user-2", model.UserRoleUser, model.UserStatusActive)
+	admin := createSkillTestUser(t, db, "admin-1", model.UserRoleAdmin, model.UserStatusActive)
+	member := createSkillTestUser(t, db, "member", model.UserRoleUser, model.UserStatusActive)
 
 	personal, err := svc.CreateSkillLibraryCategory(user, SkillLibraryCategoryMutationRequest{Name: "  Writer\tRoom  "})
 	if err != nil {
@@ -36,7 +37,7 @@ func TestSkillLibraryCategoriesVisibilityAssignmentAndDelete(t *testing.T) {
 	if _, err := svc.CreateSkillLibraryCategory(otherUser, SkillLibraryCategoryMutationRequest{Name: "writer room"}); err != nil {
 		t.Fatalf("another user's personal category with the same name should be allowed: %v", err)
 	}
-	if _, err := svc.CreateSkillLibraryCategory(user, SkillLibraryCategoryMutationRequest{Name: "Shared", Scope: "platform"}); appErrorStatus(err) != 403 {
+	if _, err := svc.CreateSkillLibraryCategory(member, SkillLibraryCategoryMutationRequest{Name: "Shared", Scope: "platform"}); appErrorStatus(err) != 403 {
 		t.Fatalf("non-admin platform category error = %v, want 403", err)
 	}
 	platform, err := svc.CreateSkillLibraryCategory(admin, SkillLibraryCategoryMutationRequest{Name: "Shared", Scope: "platform"})
@@ -157,7 +158,7 @@ func TestSkillLibraryCategoriesVisibilityAssignmentAndDelete(t *testing.T) {
 	if skillCount != 4 {
 		t.Fatalf("skill count after category deletion = %d, want 4", skillCount)
 	}
-	if err := svc.DeleteSkillLibraryCategory(user, platform.ID); appErrorStatus(err) != 403 {
+	if err := svc.DeleteSkillLibraryCategory(member, platform.ID); appErrorStatus(err) != 403 {
 		t.Fatalf("non-admin platform category deletion error = %v, want 403", err)
 	}
 	if err := svc.DeleteSkillLibraryCategory(admin, platform.ID); err != nil {

@@ -1,6 +1,7 @@
 export type GeminiImageGenerationConfig = {
     responseModalities: ["TEXT", "IMAGE"];
     imageConfig?: { aspectRatio?: string; imageSize?: "1K" | "2K" | "4K" };
+    thinkingConfig?: { thinkingLevel?: "LOW" | "MEDIUM" | "HIGH" | "MINIMAL" };
 };
 
 export type GeminiInlineImage = {
@@ -29,12 +30,20 @@ export function parseGeminiImageDataUrl(dataUrl: string): GeminiInlineImage {
     return { mimeType, data };
 }
 
-export function buildGeminiImageGenerationConfig(size?: string, quality?: string): GeminiImageGenerationConfig {
+export function buildGeminiImageGenerationConfig(size?: string, quality?: string, thinkingLevel?: string, imageResolution?: string): GeminiImageGenerationConfig {
     const imageConfig: NonNullable<GeminiImageGenerationConfig["imageConfig"]> = {};
     const normalizedSize = size?.trim();
     const normalizedQuality = quality?.trim().toLowerCase();
     if (normalizedSize && normalizedSize !== "auto" && /^\d+:\d+$/.test(normalizedSize)) imageConfig.aspectRatio = normalizedSize;
-    const imageSize = GEMINI_IMAGE_SIZES[normalizedQuality || ""];
+    const resolution = imageResolution?.trim().toLowerCase();
+    const imageSize = GEMINI_IMAGE_SIZES[resolution && resolution !== "auto" ? resolution : normalizedQuality || ""];
     if (imageSize) imageConfig.imageSize = imageSize;
-    return { responseModalities: ["TEXT", "IMAGE"], ...(Object.keys(imageConfig).length ? { imageConfig } : {}) };
+    const normalizedThinking = thinkingLevel?.trim().toLowerCase();
+    const thinking =
+        normalizedThinking === "low" ? "LOW" : normalizedThinking === "medium" || normalizedThinking === "med" ? "MEDIUM" : normalizedThinking === "minimal" || normalizedThinking === "min" ? "MINIMAL" : normalizedThinking === "high" ? "HIGH" : undefined;
+    return {
+        responseModalities: ["TEXT", "IMAGE"],
+        ...(Object.keys(imageConfig).length ? { imageConfig } : {}),
+        ...(thinking ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
+    };
 }

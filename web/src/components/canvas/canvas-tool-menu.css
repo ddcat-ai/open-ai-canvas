@@ -1,0 +1,187 @@
+.canvas-tool-menu {
+    --tool-menu-columns: 3;
+    --tool-menu-tile: color-mix(in srgb, var(--popover-foreground) 7%, var(--popover));
+    display: flex;
+    flex-direction: column;
+    width: min(calc(14rem * var(--tool-menu-columns) + 2rem), calc(100vw - 24px));
+    max-height: calc(100dvh - 26px);
+    overflow: hidden;
+    border: var(--stroke-1) solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: var(--elevation-overlay);
+}
+
+.canvas-tool-menu[data-columns="2"] {
+    --tool-menu-columns: 2;
+}
+.canvas-tool-menu[data-columns="1"] {
+    --tool-menu-columns: 1;
+}
+
+.canvas-tool-menu .ant-dropdown-menu {
+    display: grid;
+    grid-template-columns: repeat(var(--tool-menu-columns), minmax(0, 1fr));
+    align-items: start;
+    gap: var(--space-3);
+    min-height: 0;
+    max-height: min(26rem, 65dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-3);
+}
+
+@layer utilities {
+    .canvas-tool-menu .ant-dropdown-menu {
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+}
+
+.canvas-tool-menu .ant-dropdown-menu-item-group-title {
+    padding: var(--space-1) var(--space-2) var(--space-2);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+
+.canvas-tool-menu .ant-dropdown-menu-item-group-list {
+    margin: 0;
+}
+.canvas-tool-menu[data-spread-group] .ant-dropdown-menu-item-group {
+    grid-column: 1 / -1;
+}
+.canvas-tool-menu[data-spread-group] .ant-dropdown-menu-item-group-list {
+    display: grid;
+    grid-template-columns: repeat(var(--tool-menu-columns), minmax(0, 1fr));
+    column-gap: var(--space-3);
+}
+.canvas-tool-menu .ant-dropdown-menu-item-group-list .ant-dropdown-menu-item {
+    padding: var(--space-1) var(--space-2);
+}
+
+.canvas-tool-menu-option {
+    display: flex;
+    min-height: 36px;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-body);
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.canvas-tool-menu-icon {
+    display: grid;
+    flex: 0 0 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: var(--tool-menu-tile);
+    color: var(--text-secondary);
+}
+.canvas-tool-menu-icon svg {
+    width: 17px;
+    height: 17px;
+    stroke-width: 1.75;
+}
+.canvas-tool-menu-icon.is-featured {
+    background: color-mix(in oklab, var(--color-violet-500) 72%, var(--color-neutral-500));
+    color: var(--color-white);
+}
+.canvas-tool-menu .ant-dropdown-menu-item-danger .canvas-tool-menu-option {
+    color: var(--destructive);
+}
+.canvas-tool-menu .ant-dropdown-menu-item-danger:is(:hover, .ant-dropdown-menu-item-active) {
+    background: color-mix(in srgb, var(--destructive) 9%, var(--popover));
+}
+.canvas-tool-menu .ant-dropdown-menu-item-disabled .canvas-tool-menu-option {
+    opacity: var(--button-disabled-opacity);
+}
+.canvas-tool-menu .ant-dropdown-menu-item-danger .canvas-tool-menu-icon,
+.canvas-tool-menu .ant-dropdown-menu-item-disabled .canvas-tool-menu-icon {
+    background: color-mix(in srgb, currentColor 9%, transparent);
+    color: inherit;
+}
+.canvas-tool-menu .ant-dropdown-menu-item[aria-checked="true"],
+.canvas-tool-menu .ant-dropdown-menu-item[aria-expanded="true"] {
+    background: var(--control-selected-bg);
+}
+.canvas-tool-menu .ant-dropdown-menu-item:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+}
+.canvas-tool-menu-check {
+    flex: 0 0 14px;
+    height: 14px;
+    margin-inline-start: auto;
+}
+
+.canvas-tool-menu-detail {
+    display: flex;
+    flex-shrink: 0;
+    min-height: 42px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-5);
+    border-top: var(--stroke-1) solid var(--border);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: 1.4;
+}
+.canvas-image-preset-ratio {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-1);
+    font-variant-numeric: tabular-nums;
+}
+.canvas-image-preset-ratio svg {
+    width: 14px;
+    height: 14px;
+}
+
+@media (min-width: 640px) {
+    .canvas-image-preset-menu .ant-dropdown-menu {
+        grid-template-areas: "story camera sheets" "story time sheets";
+        row-gap: var(--space-1);
+    }
+    .canvas-preset-sectionStoryboard {
+        grid-area: story;
+    }
+    .canvas-preset-sectionCoverage {
+        grid-area: camera;
+    }
+    .canvas-preset-sectionProjection {
+        grid-area: time;
+    }
+    .canvas-preset-sectionSheets {
+        grid-area: sheets;
+    }
+}
+
+@media (max-width: 639px) {
+    .canvas-tool-menu[data-columns="3"] {
+        --tool-menu-columns: 2;
+    }
+    .canvas-image-preset-menu {
+        width: min(22rem, calc(100vw - 24px));
+    }
+    .canvas-image-preset-menu .ant-dropdown-menu {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .canvas-tool-menu-detail {
+        min-height: 52px;
+    }
+}
+
+@media (max-width: 349px) {
+    .canvas-tool-menu[data-columns] {
+        --tool-menu-columns: 1;
+    }
+}

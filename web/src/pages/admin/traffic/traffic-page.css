@@ -1,0 +1,1213 @@
+.admin-traffic-page {
+    /* 仅本页映射上游明暗主题，不依赖系统性能页的专属配色。 */
+    --admin-perf-panel-surface: var(--admin-surface-2);
+    --admin-perf-panel-hover: var(--admin-row-hover);
+    --admin-perf-accent-indigo: var(--admin-status-info);
+    --admin-perf-accent-cyan: var(--admin-chart-secondary);
+    --admin-perf-accent-emerald: var(--admin-status-success);
+    --admin-perf-accent-violet: var(--admin-chart-primary);
+    --admin-perf-accent-amber: var(--admin-chart-warning);
+    --admin-perf-grid-line: var(--admin-divider);
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: calc(var(--admin-space) * 1.75);
+    color: var(--admin-text);
+}
+
+.admin-page-frame-scrollable:has(> .admin-traffic-page),
+.admin-traffic-page :is(.admin-table-scroll, .ant-table-content, .admin-traffic-heatmap-scroll) {
+    scrollbar-width: none;
+}
+
+.admin-page-frame-scrollable:has(> .admin-traffic-page)::-webkit-scrollbar,
+.admin-traffic-page :is(.admin-table-scroll, .ant-table-content, .admin-traffic-heatmap-scroll)::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-traffic-page :is(.admin-traffic-toolbar, .admin-traffic-source-toolbar) {
+    margin: 0;
+}
+
+/* 顶部一体化时间控制舱 */
+.admin-traffic-page .admin-traffic-control-deck {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: calc(var(--admin-space) * 1.25);
+    padding: calc(var(--admin-space) * 1.75) calc(var(--admin-space) * 2);
+    border: 0;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    box-shadow: none;
+}
+
+.admin-traffic-page :is(.admin-traffic-dates, .admin-traffic-date-inputs, .admin-traffic-custom-label, .admin-traffic-toggle-group, .admin-traffic-toolbar-actions) {
+    display: flex;
+    align-items: center;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-page .admin-traffic-toolbar-actions {
+    flex-wrap: wrap;
+}
+
+.admin-traffic-page .admin-traffic-live-toggle {
+    display: inline-flex;
+    min-height: var(--admin-control-h);
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+    padding: calc(var(--admin-space) / 2) calc(var(--admin-space) * 1.35);
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: var(--admin-perf-panel-surface);
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion);
+}
+
+.admin-traffic-page .admin-traffic-live-toggle:hover:not(:disabled) {
+    background: var(--admin-perf-panel-hover);
+    color: var(--admin-text);
+}
+
+.admin-traffic-page .admin-traffic-live-toggle[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-emerald) 14%, var(--admin-surface));
+    color: var(--admin-perf-accent-emerald);
+}
+
+.admin-traffic-page .admin-traffic-live-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.admin-traffic-page .admin-traffic-live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--admin-text-placeholder);
+    transition:
+        background-color var(--admin-motion),
+        transform var(--admin-motion);
+}
+
+.admin-traffic-page .admin-traffic-live-dot[data-active="true"] {
+    background: var(--admin-perf-accent-emerald);
+    animation: admin-traffic-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes admin-traffic-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.35);
+        opacity: 0.55;
+    }
+}
+
+.admin-traffic-page .admin-traffic-dates {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: var(--admin-space);
+    padding: calc(var(--admin-space) / 2) var(--admin-space);
+    border-radius: var(--admin-radius);
+    background: var(--admin-perf-panel-surface);
+}
+
+.admin-traffic-page .admin-traffic-date-inputs {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: calc(var(--admin-space) * 0.75);
+}
+
+.admin-traffic-page .admin-traffic-custom-label {
+    padding-inline-start: calc(var(--admin-space) / 2);
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-traffic-page .admin-traffic-custom-label svg {
+    color: var(--admin-perf-accent-indigo);
+}
+
+.admin-traffic-page .admin-traffic-date-separator {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.admin-traffic-page .admin-traffic-dates input[type="date"] {
+    width: calc(var(--admin-space) * 18.5);
+    max-width: 100%;
+    height: var(--admin-control-h);
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface);
+    color-scheme: light;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    box-shadow: none;
+}
+
+.admin-traffic-page .admin-traffic-toggle-group {
+    flex-wrap: wrap;
+    gap: calc(var(--admin-space) / 2);
+    border-radius: var(--admin-radius);
+    background: var(--admin-perf-panel-surface);
+    padding: calc(var(--admin-space) / 2);
+}
+
+.admin-traffic-page .admin-traffic-toggle-group button {
+    display: inline-flex;
+    min-height: var(--admin-control-h);
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--admin-space) * 0.75);
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: transparent;
+    padding: calc(var(--admin-space) / 2) calc(var(--admin-space) * 1.5);
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion),
+        transform var(--admin-motion);
+}
+
+.admin-traffic-page .admin-traffic-toggle-group button:hover {
+    background: var(--admin-perf-panel-hover);
+    color: var(--admin-text);
+}
+
+.admin-traffic-page .admin-traffic-toggle-group button[aria-pressed="true"] {
+    background: var(--admin-accent);
+    color: var(--admin-accent-fg);
+}
+
+.admin-traffic-page .admin-traffic-refresh-btn svg {
+    transition: transform 180ms ease;
+}
+
+.admin-traffic-page .admin-traffic-refresh-btn:hover:not(:disabled) svg {
+    transform: rotate(45deg);
+}
+
+.admin-traffic-page :is(.admin-traffic-toggle-group button, .admin-traffic-live-toggle, .admin-traffic-legend-btn, .admin-traffic-methodology summary):focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+}
+
+.admin-traffic-page :is(.admin-traffic-toggle-group button, .admin-traffic-live-toggle, .admin-traffic-legend-btn, .admin-traffic-methodology summary):focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+/* 顶部状态胶囊条 */
+.admin-traffic-page :is(.admin-traffic-range-note, .admin-traffic-status) {
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-page .admin-traffic-range-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-page .admin-traffic-note-chips {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-page .admin-traffic-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+    padding: calc(var(--admin-space) * 0.5) calc(var(--admin-space) * 1.25);
+    border-radius: 999px;
+    background: var(--admin-perf-panel-surface);
+    color: var(--admin-text-secondary);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 550;
+}
+
+.admin-traffic-page .admin-traffic-meta-pill[data-tone="primary"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-indigo) 10%, var(--admin-surface));
+    color: var(--admin-text);
+}
+
+.admin-traffic-page .admin-traffic-meta-pill[data-tone="warning"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-amber) 14%, var(--admin-surface));
+    color: var(--admin-perf-accent-amber);
+    font-weight: 600;
+}
+
+.admin-traffic-page .admin-traffic-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--admin-perf-accent-emerald);
+}
+
+.admin-traffic-page .admin-traffic-status {
+    display: flex;
+    align-items: center;
+    gap: var(--admin-space);
+    padding: calc(var(--admin-space) * 1.25) calc(var(--admin-space) * 2);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    color: var(--admin-text-secondary);
+}
+
+.admin-traffic-page .admin-traffic-status svg {
+    color: var(--admin-perf-accent-indigo);
+    flex: 0 0 auto;
+}
+
+/* 四项 Bento KPI 遥测卡片 */
+.admin-traffic-page .admin-traffic-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: calc(var(--admin-space) * 1.5);
+}
+
+.admin-traffic-page :is(.admin-stat-tile, .admin-traffic-trend, .admin-traffic-ranking, .admin-traffic-methodology, .admin-traffic-insight) {
+    min-width: 0;
+    border: 0;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    box-shadow: none;
+}
+
+.admin-traffic-page .admin-traffic-kpi-card {
+    --kpi-accent: var(--admin-perf-accent-indigo);
+    display: flex;
+    flex-direction: column;
+    min-height: calc(var(--admin-space) * 16);
+    padding: calc(var(--admin-space) * 2) calc(var(--admin-space) * 2.25);
+    transition:
+        transform 180ms ease,
+        background-color 180ms ease;
+}
+
+.admin-traffic-page .admin-traffic-kpi-card[data-accent="indigo"] {
+    --kpi-accent: var(--admin-perf-accent-indigo);
+}
+
+.admin-traffic-page .admin-traffic-kpi-card[data-accent="cyan"] {
+    --kpi-accent: var(--admin-perf-accent-cyan);
+}
+
+.admin-traffic-page .admin-traffic-kpi-card[data-accent="emerald"] {
+    --kpi-accent: var(--admin-perf-accent-emerald);
+}
+
+.admin-traffic-page .admin-traffic-kpi-card[data-accent="violet"] {
+    --kpi-accent: var(--admin-perf-accent-violet);
+}
+
+.admin-traffic-page .admin-traffic-kpi-card:hover {
+    transform: translateY(-2px);
+    background: var(--admin-perf-panel-hover);
+}
+
+.admin-traffic-page .admin-traffic-kpi-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-page .admin-traffic-kpi-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-page .admin-traffic-kpi-icon {
+    display: grid;
+    width: calc(var(--admin-space) * 3.75);
+    height: calc(var(--admin-space) * 3.75);
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--admin-radius);
+    background: color-mix(in srgb, var(--kpi-accent) 12%, var(--admin-surface));
+    color: var(--kpi-accent);
+    transition:
+        transform 180ms ease,
+        background-color 180ms ease;
+}
+
+.admin-traffic-page .admin-traffic-kpi-card:hover .admin-traffic-kpi-icon {
+    transform: scale(1.06);
+    background: color-mix(in srgb, var(--kpi-accent) 18%, var(--admin-surface));
+}
+
+.admin-traffic-page .admin-traffic-kpi-heading .admin-stat-tile-label {
+    color: var(--admin-text-secondary);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-traffic-page .admin-traffic-kpi-pill {
+    flex: 0 0 auto;
+    padding: 2px calc(var(--admin-space) * 1.1);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--kpi-accent) 10%, var(--admin-surface));
+    color: var(--kpi-accent);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.admin-traffic-page .admin-traffic-kpi-card .admin-stat-tile-value {
+    margin-top: calc(var(--admin-space) * 1.5);
+    color: var(--admin-text);
+    font-size: 28px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-page .admin-traffic-kpi-footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--admin-space);
+    margin-top: auto;
+    padding-top: calc(var(--admin-space) * 1.25);
+}
+
+.admin-traffic-page .admin-traffic-comparison {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--admin-space) * 0.75);
+    color: var(--admin-text-secondary);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-traffic-page .admin-traffic-insights {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--admin-space) * 1.5);
+}
+
+.admin-traffic-page .admin-traffic-insight {
+    padding: calc(var(--admin-space) * 1.5) calc(var(--admin-space) * 2);
+    overflow-wrap: anywhere;
+}
+
+.admin-traffic-page .admin-traffic-insight h2 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.admin-traffic-page .admin-traffic-insight-value {
+    display: block;
+    margin-top: var(--admin-space);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-traffic-page :is(.admin-traffic-insight p, .admin-traffic-insight .admin-traffic-title-row > span, .admin-traffic-daily > p) {
+    margin: var(--admin-space) 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.admin-traffic-page .admin-traffic-daily-date {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-page .admin-traffic-kpi-footer .admin-stat-tile-detail {
+    color: var(--admin-text-muted);
+    font-size: 11.5px;
+}
+
+/* 面板公共头部 */
+.admin-traffic-page .admin-traffic-heading {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--admin-space) * 1.5);
+    padding: calc(var(--admin-space) * 2) calc(var(--admin-space) * 2.25) calc(var(--admin-space) * 1.5);
+}
+
+.admin-traffic-page .admin-traffic-heading-main {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    gap: calc(var(--admin-space) * 1.25);
+}
+
+.admin-traffic-page .admin-traffic-section-icon {
+    --sec-accent: var(--admin-perf-accent-indigo);
+    display: grid;
+    width: calc(var(--admin-space) * 4);
+    height: calc(var(--admin-space) * 4);
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--admin-radius);
+    background: color-mix(in srgb, var(--sec-accent) 12%, var(--admin-surface));
+    color: var(--sec-accent);
+}
+
+.admin-traffic-page .admin-traffic-section-icon[data-accent="cyan"] {
+    --sec-accent: var(--admin-perf-accent-cyan);
+}
+
+.admin-traffic-page .admin-traffic-section-icon[data-accent="violet"] {
+    --sec-accent: var(--admin-perf-accent-violet);
+}
+
+.admin-traffic-page .admin-traffic-section-icon[data-accent="amber"] {
+    --sec-accent: var(--admin-perf-accent-amber);
+}
+
+.admin-traffic-page .admin-traffic-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--admin-space);
+}
+
+.admin-traffic-page .admin-traffic-heading h2 {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 14.5px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.admin-traffic-page .admin-traffic-section-pill {
+    padding: 2px calc(var(--admin-space) * 1.1);
+    border-radius: 999px;
+    background: var(--admin-perf-panel-surface);
+    color: var(--admin-text-secondary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* 趋势悬停实时联动胶囊 */
+.admin-traffic-page .admin-traffic-spotlight-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.6);
+    padding: 2px calc(var(--admin-space) * 1.25);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--admin-perf-accent-indigo) 10%, var(--admin-surface));
+    color: var(--admin-text-secondary);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 550;
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion);
+}
+
+.admin-traffic-page .admin-traffic-spotlight-pill[data-hovered="true"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-indigo) 18%, var(--admin-surface));
+    color: var(--admin-text);
+}
+
+.admin-traffic-page .admin-traffic-spotlight-pill strong {
+    color: var(--admin-text);
+    font-weight: 700;
+}
+
+.admin-traffic-page .admin-traffic-spotlight-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--admin-perf-accent-indigo);
+}
+
+.admin-traffic-page .admin-traffic-heading p {
+    margin: calc(var(--admin-space) * 0.4) 0 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* 趋势主面板与可交互图例 */
+.admin-traffic-page .admin-traffic-trend-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--admin-space) * 1.25);
+}
+
+.admin-traffic-page .admin-traffic-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.5);
+    padding: calc(var(--admin-space) * 0.5);
+    border-radius: 999px;
+    background: var(--admin-perf-panel-surface);
+}
+
+.admin-traffic-page .admin-traffic-legend-btn {
+    --legend-color: var(--admin-perf-accent-indigo);
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+    padding: calc(var(--admin-space) * 0.4) calc(var(--admin-space) * 1.15);
+    border: 0;
+    border-radius: 999px;
+    background: var(--admin-surface);
+    color: var(--admin-text-secondary);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background-color var(--admin-motion),
+        color var(--admin-motion),
+        opacity var(--admin-motion),
+        transform var(--admin-motion);
+}
+
+.admin-traffic-page .admin-traffic-legend-btn[data-static="true"] {
+    cursor: default;
+}
+
+.admin-traffic-page .admin-traffic-legend-btn:hover:not([data-static="true"]) {
+    background: var(--admin-perf-panel-hover);
+    color: var(--admin-text);
+    transform: translateY(-1px);
+}
+
+.admin-traffic-page .admin-traffic-legend-btn[data-muted="true"] {
+    background: transparent;
+    color: var(--admin-text-placeholder);
+    opacity: 0.65;
+    text-decoration: line-through;
+}
+
+.admin-traffic-page .admin-traffic-legend-btn[data-series="uv"] {
+    --legend-color: var(--admin-perf-accent-cyan);
+}
+
+.admin-traffic-page .admin-traffic-legend-btn[data-series="visits"] {
+    --legend-color: var(--admin-perf-accent-amber);
+}
+
+.admin-traffic-page .admin-traffic-legend-btn[data-series="actions"] {
+    --legend-color: var(--admin-perf-accent-violet);
+}
+
+.admin-traffic-page .admin-traffic-legend-btn i {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--legend-color);
+}
+
+.admin-traffic-page .admin-traffic-chart {
+    width: 100%;
+    height: calc(var(--admin-space) * 35);
+    min-width: 0;
+    padding: 0 calc(var(--admin-space) * 2) calc(var(--admin-space) * 1.75);
+}
+
+.admin-traffic-page .admin-traffic-chart .admin-empty {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border-radius: var(--admin-radius);
+    background: var(--admin-perf-panel-surface);
+}
+
+/* 自定义结构化动态 Tooltip */
+.admin-traffic-page .admin-traffic-tooltip {
+    min-width: calc(var(--admin-space) * 24);
+    padding: calc(var(--admin-space) * 1.25) calc(var(--admin-space) * 1.5);
+    border: 0;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-perf-panel-surface);
+    color: var(--admin-text);
+    box-shadow: none;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-space);
+    margin-bottom: calc(var(--admin-space) * 0.85);
+}
+
+.admin-traffic-page .admin-traffic-tooltip-date {
+    color: var(--admin-text);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-tag {
+    padding: 1px calc(var(--admin-space) * 0.75);
+    border-radius: 999px;
+    background: var(--admin-surface);
+    color: var(--admin-text-muted);
+    font-size: 10.5px;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-rows {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--admin-space) * 0.65);
+}
+
+.admin-traffic-page .admin-traffic-tooltip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--admin-space) * 2);
+    font-size: 12px;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-name {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+    color: var(--admin-text-secondary);
+}
+
+.admin-traffic-page .admin-traffic-tooltip-name i {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-values {
+    display: inline-flex;
+    align-items: baseline;
+    gap: calc(var(--admin-space) * 0.65);
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-values strong {
+    color: var(--admin-text);
+    font-weight: 700;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-values em {
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.admin-traffic-page .admin-traffic-tooltip-values em[data-delta="up"] {
+    color: var(--admin-perf-accent-emerald);
+}
+
+.admin-traffic-page .admin-traffic-tooltip-values em[data-delta="down"] {
+    color: var(--admin-perf-accent-amber);
+}
+
+/* 双排行面板：自适应高度，消除死高截断与大片空白 */
+.admin-traffic-page .admin-traffic-rankings {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: calc(var(--admin-space) * 1.75);
+}
+
+.admin-traffic-page .admin-traffic-ranking {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.admin-traffic-page .admin-traffic-ranking .admin-traffic-heading {
+    flex: 0 0 auto;
+}
+
+.admin-traffic-page .admin-traffic-table-wrap {
+    flex: 1 1 auto;
+    padding: 0 calc(var(--admin-space) * 1.5) calc(var(--admin-space) * 1.5);
+}
+
+.admin-traffic-page .admin-traffic-source-toolbar {
+    padding: 0;
+}
+
+.admin-traffic-page .admin-traffic-source {
+    width: calc(var(--admin-space) * 23);
+    max-width: 100%;
+}
+
+/* 排行表内联徽章与占比进度条 */
+.admin-traffic-page .admin-traffic-rank-entity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: calc(var(--admin-space) * 1.1);
+}
+
+.admin-traffic-page .admin-traffic-rank-badge {
+    display: inline-grid;
+    width: calc(var(--admin-space) * 2.5);
+    height: calc(var(--admin-space) * 2.5);
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-perf-panel-surface);
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.admin-traffic-page .admin-traffic-rank-badge[data-top="1"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-indigo) 16%, var(--admin-surface));
+    color: var(--admin-perf-accent-indigo);
+}
+
+.admin-traffic-page .admin-traffic-rank-badge[data-top="2"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-cyan) 16%, var(--admin-surface));
+    color: var(--admin-perf-accent-cyan);
+}
+
+.admin-traffic-page .admin-traffic-rank-badge[data-top="3"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-emerald) 16%, var(--admin-surface));
+    color: var(--admin-perf-accent-emerald);
+}
+
+.admin-traffic-page .admin-traffic-rank-name {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--admin-text);
+    font-weight: 550;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-traffic-page .admin-traffic-source-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px calc(var(--admin-space) * 1.1);
+    border-radius: 999px;
+    background: var(--admin-perf-panel-surface);
+    color: var(--admin-text-secondary);
+    font-size: 11.5px;
+    font-weight: 550;
+}
+
+.admin-traffic-page .admin-traffic-metric-cell {
+    --bar-accent: var(--admin-perf-accent-cyan);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--admin-space) * 0.5);
+}
+
+.admin-traffic-page .admin-traffic-metric-cell[data-accent="violet"] {
+    --bar-accent: var(--admin-perf-accent-violet);
+}
+
+.admin-traffic-page .admin-traffic-metric-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: calc(var(--admin-space) * 0.75);
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-traffic-page .admin-traffic-metric-row strong {
+    color: var(--admin-text);
+    font-weight: 650;
+}
+
+.admin-traffic-page .admin-traffic-metric-row span {
+    min-width: calc(var(--admin-space) * 4);
+    color: var(--admin-text-muted);
+    font-size: 11px;
+}
+
+.admin-traffic-page .admin-traffic-metric-bar {
+    width: 100%;
+    height: calc(var(--admin-space) * 0.6);
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--admin-perf-panel-surface);
+}
+
+.admin-traffic-page .admin-traffic-metric-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--bar-accent);
+}
+
+.admin-traffic-page .admin-traffic-num {
+    color: var(--admin-text-secondary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 550;
+}
+
+/* 本页分析扩展只消费隔离后台 token，不影响工作台或共享壳。 */
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-heatmap, .admin-traffic-depth) {
+    min-width: 0;
+    border: 0;
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    box-shadow: none;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-export-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-space);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-page-engagement {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--admin-space) / 2);
+    font-variant-numeric: tabular-nums;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-page-engagement span {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-depth {
+    padding: calc(var(--admin-space) * 1.5) calc(var(--admin-space) * 2);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-depth h2 {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 13px;
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-depth p, .admin-traffic-depth .admin-traffic-title-row > span, .admin-traffic-depth-labels, .admin-traffic-heatmap-tip, .admin-traffic-heatmap-legend) {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-depth-bar {
+    display: flex;
+    height: var(--admin-space);
+    overflow: hidden;
+    margin-top: calc(var(--admin-space) * 1.5);
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-perf-panel-surface);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-depth-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--admin-space) calc(var(--admin-space) * 2);
+    margin: var(--admin-space) 0;
+    padding: 0;
+    list-style: none;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-depth-labels li {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-depth-labels i {
+    width: var(--admin-space);
+    height: var(--admin-space);
+    border-radius: var(--admin-radius-sm);
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-depth-bar > span, .admin-traffic-depth-labels i) {
+    background: var(--admin-perf-accent-indigo);
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-depth-bar > [data-bucket="2-3"], .admin-traffic-depth-labels [data-bucket="2-3"] i) {
+    background: var(--admin-perf-accent-cyan);
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-depth-bar > [data-bucket="4+"], .admin-traffic-depth-labels [data-bucket="4+"] i) {
+    background: var(--admin-perf-accent-emerald);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: var(--admin-space) calc(var(--admin-space) * 2);
+    overscroll-behavior-inline: contain;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-grid {
+    display: grid;
+    min-width: calc(var(--admin-space) * 96);
+    grid-template-columns: calc(var(--admin-space) * 5) repeat(24, minmax(calc(var(--admin-space) * 3), 1fr));
+    gap: calc(var(--admin-space) / 2);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-axis {
+    display: grid;
+    align-items: center;
+    text-align: center;
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-cell {
+    height: calc(var(--admin-space) * 3);
+    border: 0;
+    border-radius: var(--admin-radius-sm);
+    color: var(--admin-text-secondary);
+    font-size: 11px;
+    cursor: help;
+    transition: background-color var(--admin-motion);
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-heatmap-cell, .admin-traffic-heatmap-legend i) {
+    background: var(--admin-perf-panel-surface);
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-heatmap-cell, .admin-traffic-heatmap-legend i)[data-level="1"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-cyan) 20%, var(--admin-surface));
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-heatmap-cell, .admin-traffic-heatmap-legend i)[data-level="2"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-cyan) 40%, var(--admin-surface));
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-heatmap-cell, .admin-traffic-heatmap-legend i)[data-level="3"] {
+    background: color-mix(in srgb, var(--admin-perf-accent-cyan) 65%, var(--admin-surface));
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-heatmap-cell, .admin-traffic-heatmap-legend i)[data-level="4"] {
+    background: var(--admin-perf-accent-cyan);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-cell[data-history="outside_range"] {
+    background: transparent;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-cell[data-partial="true"] {
+    outline: 1px dashed var(--admin-perf-accent-amber);
+    outline-offset: -1px;
+}
+
+[data-admin-root] .admin-traffic-page :is(.admin-traffic-heatmap-cell, .admin-traffic-heatmap-scroll):focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 2px;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-cell:focus:not(:focus-visible) {
+    box-shadow: none;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-legend i {
+    width: calc(var(--admin-space) * 1.5);
+    height: calc(var(--admin-space) * 1.5);
+    border-radius: var(--admin-radius-sm);
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-heatmap-tip {
+    min-height: calc(var(--admin-space) * 6);
+    margin: 0;
+    padding: var(--admin-space) calc(var(--admin-space) * 2);
+    overflow-wrap: anywhere;
+}
+
+[data-admin-root] .admin-traffic-page .admin-traffic-toggle-group button:disabled {
+    color: var(--admin-text-placeholder);
+    background: transparent;
+    cursor: not-allowed;
+}
+
+/* 底部统计口径折叠面板 */
+.admin-traffic-page .admin-traffic-methodology {
+    padding: calc(var(--admin-space) * 1.5) calc(var(--admin-space) * 2.25);
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+.admin-traffic-page .admin-traffic-methodology summary {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--admin-space);
+    list-style: none;
+    cursor: pointer;
+}
+
+.admin-traffic-page .admin-traffic-methodology summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-traffic-page .admin-traffic-methodology-title {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--admin-space) * 1.25);
+    color: var(--admin-text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.admin-traffic-page .admin-traffic-methodology-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--admin-space) * 0.75);
+    color: var(--admin-text-muted);
+    font-size: 11.5px;
+}
+
+.admin-traffic-page .admin-traffic-methodology-chevron {
+    transition: transform var(--admin-motion);
+}
+
+.admin-traffic-page .admin-traffic-methodology[open] .admin-traffic-methodology-chevron {
+    transform: rotate(180deg);
+}
+
+.admin-traffic-page .admin-traffic-methodology-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--admin-space) * 1.25);
+    margin: calc(var(--admin-space) * 1.5) 0 calc(var(--admin-space) * 0.5);
+    padding: 0;
+    list-style: none;
+}
+
+.admin-traffic-page .admin-traffic-methodology-grid li {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--admin-space) * 0.5);
+    padding: calc(var(--admin-space) * 1.5);
+    border-radius: var(--admin-radius);
+    background: var(--admin-perf-panel-surface);
+}
+
+.admin-traffic-page .admin-traffic-methodology-grid li strong {
+    color: var(--admin-text);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.admin-traffic-page .admin-traffic-methodology-grid li span {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+}
+
+.dark .admin-traffic-page .admin-traffic-dates input[type="date"] {
+    color-scheme: dark;
+}
+
+@media (min-width: 1280px) {
+    .admin-traffic-page .admin-traffic-rankings {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .admin-traffic-page .admin-traffic-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-traffic-page .admin-traffic-methodology-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .admin-traffic-page .admin-traffic-insights {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .admin-traffic-page .admin-traffic-dates {
+        width: 100%;
+    }
+
+    .admin-traffic-page .admin-traffic-custom-label {
+        flex-basis: 100%;
+    }
+
+    .admin-traffic-page .admin-traffic-date-inputs {
+        width: 100%;
+    }
+
+    .admin-traffic-page .admin-traffic-dates input[type="date"] {
+        width: 100%;
+        min-width: 0;
+        flex: 1 1 calc(50% - var(--admin-space));
+    }
+
+    .admin-traffic-page .admin-traffic-date-separator {
+        display: none;
+    }
+
+    .admin-traffic-page .admin-traffic-dates > .ant-btn {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-traffic-page
+        :is(
+            .admin-stat-tile,
+            .admin-traffic-kpi-icon,
+            .admin-traffic-toggle-group button,
+            .admin-traffic-live-toggle,
+            .admin-traffic-live-dot,
+            .admin-traffic-legend-btn,
+            .admin-traffic-spotlight-pill,
+            .admin-traffic-refresh-btn svg,
+            .admin-traffic-methodology-chevron,
+            .admin-traffic-heatmap-cell
+        ) {
+        transition: none;
+        animation: none;
+    }
+}

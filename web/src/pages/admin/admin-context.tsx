@@ -6,7 +6,7 @@ import { getAdminReferences, type AdminReferenceData, type LocalUser } from "@/s
 type AdminContextValue = {
     references: AdminReferenceData;
     referencesLoading: boolean;
-    reloadReferences: () => Promise<void>;
+    reloadReferences: (propagateError?: boolean) => Promise<void>;
     updateUserReference: (user: LocalUser) => void;
 };
 
@@ -18,16 +18,20 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const [references, setReferences] = useState<AdminReferenceData>(emptyReferences);
     const [referencesLoading, setReferencesLoading] = useState(true);
 
-    const reloadReferences = useCallback(async () => {
-        setReferencesLoading(true);
-        try {
-            setReferences(await getAdminReferences());
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取后台基础数据失败");
-        } finally {
-            setReferencesLoading(false);
-        }
-    }, [message]);
+    const reloadReferences = useCallback(
+        async (propagateError = false) => {
+            setReferencesLoading(true);
+            try {
+                setReferences(await getAdminReferences());
+            } catch (error) {
+                if (propagateError) throw error;
+                message.error(error instanceof Error ? error.message : "读取后台基础数据失败");
+            } finally {
+                setReferencesLoading(false);
+            }
+        },
+        [message],
+    );
 
     useEffect(() => {
         void reloadReferences();
@@ -36,7 +40,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const updateUserReference = useCallback((user: LocalUser) => {
         setReferences((current) => ({
             ...current,
-            users: current.users.map((item) => item.id === user.id ? { id: user.id, username: user.username, displayName: user.displayName } : item),
+            users: current.users.map((item) => (item.id === user.id ? { id: user.id, username: user.username, displayName: user.displayName } : item)),
         }));
     }, []);
 

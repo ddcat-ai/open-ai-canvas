@@ -2,6 +2,30 @@ import type { DeepStringRecord } from "../../zh-CN";
 import type { zhCN } from "./zh-CN";
 
 export const deDE: DeepStringRecord<typeof zhCN> = {
+    historySync: {
+        manage: "Verlaufskopien ansehen ({{count}})",
+        backupsTitle: "Konfliktkopien des Verlaufs",
+        backupsDescription:
+            "Bei gleichzeitigen Änderungen bleibt eine Kopie dieses Geräts erhalten. Behalte die aktuelle Version oder stelle eine Kopie als separates Gespräch wieder her. Originalkopien bleiben auf diesem Gerät verfügbar und herunterladbar. Die Wiederherstellung erzeugt keine Inhalte und kostet kein Guthaben.",
+        keep: "Aktuelle Version behalten",
+        restore: "Als neues Gespräch wiederherstellen",
+        restored: "Als neues Gespräch wiederhergestellt",
+        resolved: "Erledigt · Kopie behalten",
+        unresolved: "Zu prüfen",
+        preview: "{{count}} Nachrichten ansehen",
+        mediaMessage: "Mediennachricht (vollständige Daten im Download)",
+        restoredTitle: "{{title}} (wiederhergestellte Kopie)",
+        restoredNotice: "Auf diesem Gerät wiederhergestellt; Synchronisierung wird versucht. Beachte den Status oben. Originalgespräch und Kopie bleiben erhalten.",
+        keptNotice: "Aktuelle Version behalten. Die Originalkopie kann weiterhin angesehen, wiederhergestellt und heruntergeladen werden.",
+        resolveFailed: "Bearbeitung fehlgeschlagen. Die Kopie bleibt erhalten. Bitte erneut versuchen.",
+        conflict: "Verlauf synchronisiert; Konfliktkopie verfügbar",
+        local: "Verlauf auf diesem Gerät gespeichert",
+        pending: "Verlaufssynchronisierung ausstehend",
+        synced: "Verlauf synchronisiert",
+        error: "Verlaufssynchronisierung fehlgeschlagen",
+        retry: "Erneut versuchen",
+        backup: "Konfliktkopie herunterladen",
+    },
     agentEntry: {
         sessionNotReady: "Die Anmelde- oder Synchronisierungssitzung ist noch nicht bereit. Versuche es gleich noch einmal.",
         canvasRestoring: "Die Leinwand wird noch wiederhergestellt. Versuche es gleich noch einmal.",

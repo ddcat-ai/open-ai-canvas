@@ -2,13 +2,14 @@ import { Input, InputNumber, Switch } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { ImageSizePresetsEditor } from "./image-size-presets-editor";
 import { ImageSizePicker } from "./image-size-picker";
-import { IMAGE_RESOLUTIONS, imageSingleSizeTier, imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
+import { protocolImageSizePresets } from "@/lib/protocol-image-presets";
+import { imageSingleSizeTier, imageSizeConfigWithPresets, imageSizePresets } from "@/lib/image-size-presets";
 import { Select } from "@/components/ui/base/select";
-import { imageHostControls, imageParameterAccepts, imageParameterRequest, parseImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter, type ImageParameterValue } from "@/lib/image-parameters";
+import { commonImageParameter, imageHostControls, imageParameterAccepts, parseImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter, type ImageParameterValue } from "@/lib/image-parameters";
 import type { ImageCapabilityConfig } from "@/lib/model-capabilities";
-import type { AiConfig } from "@/stores/use-config-store";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Plus, Star } from "lucide-react";
+import { preserveImageSettings, type ImageSettings } from "@/lib/media-settings";
 
 export function ImageParameterInput({
     field,
@@ -45,7 +46,21 @@ export function ImageParameterInput({
                             return (
                                 <button type="button" key={`${typeof option}:${option}`} disabled={disabled} aria-pressed={value === option} onClick={() => onChange(option)}>
                                     {width > 0 && height > 0 ? <span aria-hidden="true" className="image-size-ratio-icon" style={{ width: 24 * Math.min(1, width / height), height: 24 * Math.min(1, height / width) }} /> : null}
-                                    <span>{typeof option === "boolean" ? (option ? "开启" : "关闭") : String(option)}</span>
+                                    <span>
+                                        {option === "auto"
+                                            ? field.name === "size"
+                                                ? "自动尺寸"
+                                                : field.name === "quality"
+                                                  ? "自动质量"
+                                                  : "自动"
+                                            : typeof option === "boolean"
+                                              ? option
+                                                  ? "开启"
+                                                  : "关闭"
+                                              : field.name === "imageResolution"
+                                                ? String(option).toUpperCase()
+                                                : String(option)}
+                                    </span>
                                 </button>
                             );
                         })}
@@ -122,16 +137,30 @@ export function ImageParameterFields({
     showSize = true,
     showQuality = true,
     showTransparent = true,
+    countLimit,
 }: {
     profile: ImageCapabilityConfig;
-    config: AiConfig;
+    config: ImageSettings;
     onChange: (key: "size" | "quality" | "imageResolution" | "transparentBackground" | "count" | "imageParameters", value: string) => void;
     showCount?: boolean;
     showSize?: boolean;
     showQuality?: boolean;
     showTransparent?: boolean;
+    /** 画布与创作页的张数是拆单数，传值时按账号同时任务数取上限，不再受单模型 maxOutputs 限制。 */
+    countLimit?: number;
 }) {
-    const values = imageParameterRequest(profile, config) || {};
+    const preserved = preserveImageSettings(profile, config);
+    const values = {
+        ...parseImageParameters(preserved.imageParameters),
+        ...Object.fromEntries(
+            (profile.parameters || [])
+                .filter((field) => imageHostControls.has(field.name))
+                .map((field) => {
+                    const raw = preserved[field.name as keyof typeof preserved];
+                    return [field.name, field.type === "boolean" ? raw === "true" : field.type === "number" || field.type === "integer" ? Number(raw) : raw];
+                }),
+        ),
+    };
     const sizeField = profile.parameters?.find((p) => p.name === "size");
     const usesSizePresets = profile.resolution.supported || profile.size.parameter === "size" || sizeField?.encoding === "pixels" || profile.parameters?.some((p) => p.name === "imageResolution");
     const groupedSize = showSize && profile.size.parameter !== "none" && usesSizePresets && imageSizePresets(profile).length > 0;
@@ -139,7 +168,7 @@ export function ImageParameterFields({
         (p) =>
             p.enabled !== false &&
             (!groupedSize || (p.name !== "size" && p.name !== "imageResolution")) &&
-            (p.name !== "count" || (showCount && (p.max ?? 1) > 1)) &&
+            (p.name !== "count" || (showCount && (countLimit === undefined ? (p.max ?? 1) > 1 : countLimit > 1))) &&
             (p.name !== "size" || showSize) &&
             (p.name !== "quality" || showQuality) &&
             (p.name !== "transparentBackground" || showTransparent),
@@ -160,8 +189,9 @@ export function ImageParameterFields({
             ) : null}
             {fields.map((field) => {
                 if (field.name === "count") {
-                    const max = Number(field.max ?? profile.maxOutputs ?? 15);
-                    const countVal = Number(values.count ?? config.count ?? 1);
+                    const max = countLimit === undefined ? Number(field.max ?? profile.maxOutputs ?? 15) : Math.min(15, countLimit);
+                    // 传了 countLimit 时 config.count 才是拆单数，参数里的 count 固定为每单 1 张。
+                    const countVal = countLimit === undefined ? Number(values.count ?? config.count ?? 1) : Math.max(1, Math.min(max, Math.floor(Number(config.count ?? 1)) || 1));
                     return (
                         <div className="space-y-2" key="count">
                             <div className="text-xs font-medium">生成张数</div>
@@ -170,26 +200,19 @@ export function ImageParameterFields({
                                     <button
                                         key={val}
                                         type="button"
+                                        aria-pressed={countVal === val}
                                         onClick={() => onChange("count", String(val))}
                                         className={cn(
                                             "flex h-8 items-center justify-center rounded-full text-xs font-medium transition-colors duration-150 select-none",
-                                            countVal === val
-                                                ? "bg-primary/20 text-primary border border-primary/40 font-semibold"
-                                                : "bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border border-border/40",
+                                            countVal === val ? "bg-primary/20 text-primary border border-primary/40 font-semibold" : "bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border border-border/40",
                                         )}
                                     >
                                         {val}
                                     </button>
                                 ))}
-                                {max >= 4 ? (
-                                    <ImageCountStepper
-                                        value={countVal}
-                                        max={max}
-                                        onChange={(next) => onChange("count", String(next))}
-                                    />
-                                ) : null}
+                                {max >= 4 ? <ImageCountStepper value={countVal} max={max} onChange={(next) => onChange("count", String(next))} /> : null}
                             </div>
-                            {field.description ? <p className="text-xs leading-relaxed text-foreground/55">{field.description}</p> : null}
+                            {field.description && countLimit === undefined ? <p className="text-xs leading-relaxed text-foreground/55">{field.description}</p> : null}
                         </div>
                     );
                 }
@@ -220,85 +243,120 @@ export function ImageParameterFields({
     );
 }
 
+export function ImageParameterChoices({ field, definition, suggestions, disabled, update }: { field: ImageParameter; definition: ImageParameter; suggestions: ImageParameterValue[]; disabled?: boolean; update: (patch: Partial<ImageParameter>) => void }) {
+    const [draft, setDraft] = useState("");
+    const values = field.values ?? [];
+    const choices = [...new Set([...suggestions, ...values])];
+    const resolution = field.name === "imageResolution";
+    const custom = field.type === "string" && !definition.values?.length;
+    const entries = draft
+        .split(/[,，]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    const additions = [...new Set(entries.map((item) => (resolution && /^\d+(?:\.\d+)?k$/i.test(item) ? item.toLowerCase() : item)))].filter((item) => !values.includes(item));
+    const canAdd = additions.length > 0 && additions.every((value) => imageParameterAccepts(definition, value));
+    const changeValues = (next: ImageParameterValue[]) => {
+        const keepDefault = field.default !== undefined && (next.includes(field.default) || (!next.length && custom && !resolution && !field.required));
+        update({ values: next, default: keepDefault ? field.default : next[0] });
+    };
+    const add = () => {
+        if (!canAdd) return;
+        changeValues([...values, ...additions]);
+        setDraft("");
+    };
+    return (
+        <div className="min-w-0 space-y-2">
+            <div role="group" aria-label={resolution ? "分辨率快捷选择" : `${field.label}支持值`} className="flex flex-wrap gap-1.5">
+                {choices.map((value) => {
+                    const selected = values.includes(value);
+                    const isDefault = field.default === value;
+                    const label = value === "auto" ? "自动" : resolution && /^\d+(?:\.\d+)?k$/i.test(String(value)) ? String(value).toUpperCase() : typeof value === "boolean" ? (value ? "开启" : "关闭") : String(value);
+                    return (
+                        <span key={`${typeof value}:${value}`} className={`inline-flex max-w-full items-center rounded-md border ${selected ? "border-foreground/25 bg-muted/40" : "border-border"}`}>
+                            <button
+                                type="button"
+                                disabled={disabled}
+                                aria-pressed={selected}
+                                aria-label={`${field.label}支持 ${label}`}
+                                className="flex min-h-8 min-w-0 items-center gap-1 px-2 text-sm focus-visible:ring-2"
+                                onClick={() => changeValues(selected ? values.filter((item) => item !== value) : [...values, value])}
+                            >
+                                {selected ? <Check size={13} /> : <Plus size={13} />}
+                                <span className="break-all">{label}</span>
+                            </button>
+                            {selected && (
+                                <button
+                                    type="button"
+                                    disabled={disabled}
+                                    aria-label={`设${field.label} ${label} 为默认`}
+                                    title={`设 ${label} 为默认`}
+                                    aria-pressed={isDefault}
+                                    className="shrink-0 p-1.5 focus-visible:ring-2"
+                                    onClick={() => update({ default: value })}
+                                >
+                                    <Star size={13} className={isDefault ? "fill-current text-[var(--control-selected-fg)]" : "text-muted-foreground"} />
+                                </button>
+                            )}
+                        </span>
+                    );
+                })}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                {custom && (
+                    <>
+                        <Input
+                            size="small"
+                            className="max-w-36"
+                            aria-label={`新增${field.label}支持值`}
+                            placeholder="自定义值，回车添加"
+                            value={draft}
+                            disabled={disabled}
+                            onChange={(event) => setDraft(event.target.value)}
+                            onPressEnter={(event) => {
+                                event.preventDefault();
+                                if (!event.nativeEvent.isComposing) add();
+                            }}
+                        />
+                        <button type="button" className="rounded p-1 focus-visible:ring-2" aria-label={`添加${field.label}支持值`} disabled={disabled || !canAdd} onClick={add}>
+                            <Plus size={15} />
+                        </button>
+                    </>
+                )}
+                {!field.required && values.length > 0 && (
+                    <button type="button" className="rounded px-1 py-1 text-xs text-muted-foreground hover:underline focus-visible:ring-2" aria-pressed={field.default === undefined} disabled={disabled} onClick={() => update({ default: undefined })}>
+                        跟随模型默认
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function ImageParameterSchemaEditor({ definitions, parameters, disabled, onChange }: { definitions: ImageParameter[]; parameters: ImageParameter[]; disabled?: boolean; onChange: (parameters: ImageParameter[]) => void }) {
     const update = (name: string, patch: Partial<ImageParameter>) => onChange(parameters.map((p) => (p.name === name ? { ...p, ...patch } : p)));
     if (!parameters.length) return null;
     return (
         <div className="space-y-3">
-            <p className="text-xs leading-relaxed text-foreground/55">选择此模型支持的参数和范围。生成界面同步显示启用项，标记“可计价”的参数可用于规格价格。</p>
             {parameters.map((field) => {
-                const definition = definitions.find((p) => p.name === field.name) || field;
-                const isResolution = field.name === "imageResolution" && field.type === "string";
-                const baseTiers = ["1k", "1.5k", "2k", "4k"];
-                const resolutionChoices = isResolution ? (definition.values?.length ? [...new Set([...definition.values.map(String), "1.5k"])] : baseTiers.filter((tier) => imageParameterAccepts(definition, tier))) : [];
-                const quickResolutionChoices = isResolution ? (resolutionChoices.length ? resolutionChoices : baseTiers) : [];
-                const updateValues = (items: string[]) => {
-                    const values = [
-                        ...new Set(
-                            items.map((item) => {
-                                const declared = definition.values?.find((v) => String(v) === item);
-                                if (declared !== undefined) return declared;
-                                return isResolution && !definition.values?.length && /^\d+(?:\.\d+)?k$/i.test(item.trim()) ? item.trim().toLowerCase() : item;
-                            }),
-                        ),
-                    ];
-                    const next = { ...field, values };
-                    update(field.name, { values, default: isResolution && !values.length ? undefined : imageParameterAccepts(next, field.default) ? field.default : values[0] });
-                };
+                const declared = definitions.find((p) => p.name === field.name) || field;
+                const common = commonImageParameter(field.name);
+                const definition = common ? { ...common, required: declared.required } : declared;
+                const offersChoices = field.type === "string" || Boolean(definition.values?.length || field.values?.length);
+                const suggestions = declared.values?.length ? declared.values : field.name === "imageResolution" ? ["1k", "1.5k", "2k", "4k"] : [];
                 return (
-                    <section key={field.name} className="rounded-lg border border-border p-4 space-y-3">
+                    <section key={field.name} aria-label={field.label} className="min-w-0 space-y-2 border-b border-border pb-4">
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <span className="text-sm font-medium">{field.label}</span>
+                                <code className="ml-2 text-xs text-muted-foreground">{field.name}</code>
                                 {definition.pricing ? <span className="ml-2 text-xs text-foreground/50">可计价</span> : null}
                             </div>
                             <Switch aria-label={`启用${field.label}`} checked={field.enabled !== false} disabled={disabled || definition.required} onChange={(enabled) => update(field.name, { enabled })} />
                         </div>
                         {field.description ? <p className="text-xs text-foreground/55">{field.description}</p> : null}
                         {field.enabled !== false ? (
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                {definition.values?.length || field.type === "string" ? (
-                                    <div className="space-y-2 text-xs">
-                                        <label className="block space-y-2">
-                                            <span>支持值{!definition.values?.length ? "（留空允许自由输入）" : ""}</span>
-                                            <Select
-                                                className="w-full"
-                                                ariaLabel={`${field.label}支持值`}
-                                                mode={definition.values?.length ? "multiple" : "tags"}
-                                                disabled={disabled}
-                                                value={(field.values || []).map(String)}
-                                                options={(isResolution ? resolutionChoices : definition.values || []).map((v) => ({
-                                                    label: isResolution && IMAGE_RESOLUTIONS.includes(String(v).toLowerCase()) ? String(v).toUpperCase() : String(v),
-                                                    value: String(v),
-                                                }))}
-                                                tokenSeparators={[",", "，"]}
-                                                placeholder={isResolution ? "输入后按回车，或点击下方档位" : undefined}
-                                                onChange={updateValues}
-                                            />
-                                        </label>
-                                        {quickResolutionChoices.length ? (
-                                            <div className="image-size-presets-editor">
-                                                <div className="image-size-default-options" role="group" aria-label="分辨率快捷选择">
-                                                    {quickResolutionChoices.map((tier) => {
-                                                        const selected = (field.values || []).includes(tier);
-                                                        return (
-                                                            <button
-                                                                type="button"
-                                                                key={String(tier)}
-                                                                disabled={disabled}
-                                                                aria-pressed={selected}
-                                                                onClick={() => updateValues((selected ? (field.values || []).filter((value) => value !== tier) : [...(field.values || []), tier]).map(String))}
-                                                            >
-                                                                {String(tier).toUpperCase()}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                                <p className="image-size-hint">点选模型支持的档位，再次点击可移除。{!definition.values?.length ? "其他档位可在上方输入后按回车添加。" : ""}</p>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                ) : null}
+                            <div className="grid min-w-0 gap-3">
+                                {offersChoices && <ImageParameterChoices field={field} definition={definition} suggestions={suggestions} disabled={disabled} update={(patch) => update(field.name, patch)} />}
                                 {(field.type === "number" || field.type === "integer") && !definition.values?.length ? (
                                     <div className="grid grid-cols-2 gap-2">
                                         <label className="space-y-2 text-xs">
@@ -327,10 +385,12 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
                                         </label>
                                     </div>
                                 ) : null}
-                                <div className="space-y-2 text-xs">
-                                    <span>默认值</span>
-                                    <ImageParameterInput field={field} value={field.default} disabled={disabled} onChange={(value) => update(field.name, { default: value })} />
-                                </div>
+                                {!field.values?.length && (
+                                    <div className="space-y-2 text-xs">
+                                        <span>默认值</span>
+                                        <ImageParameterInput field={definition.values?.length ? { ...field, values: definition.values } : field} value={field.default} disabled={disabled} onChange={(value) => update(field.name, { default: value })} />
+                                    </div>
+                                )}
                             </div>
                         ) : null}
                     </section>
@@ -340,20 +400,34 @@ export function ImageParameterSchemaEditor({ definitions, parameters, disabled, 
     );
 }
 
-export function ImageParameterSizeEditor({ profile, definition, disabled, onChange }: { profile: ImageCapabilityConfig; definition: ImageParameter; disabled?: boolean; onChange: (profile: ImageCapabilityConfig) => void }) {
+export function ImageParameterSizeEditor({
+    profile,
+    definition: declared,
+    disabled,
+    onChange,
+    protocol,
+}: {
+    profile: ImageCapabilityConfig;
+    definition: ImageParameter;
+    disabled?: boolean;
+    onChange: (profile: ImageCapabilityConfig) => void;
+    protocol?: string;
+}) {
+    const definition = { ...commonImageParameter("size")!, encoding: declared.encoding, required: declared.required };
     const [draft, setDraft] = useState("");
     const [error, setError] = useState("");
     const field = profile.parameters!.find((p) => p.name === "size")!;
     const pixelSize = field.encoding === "pixels";
     const grouped = profile.resolution.supported;
     const singleTier = imageSingleSizeTier(profile);
-    const tiers = grouped ? profile.resolution.values : [singleTier ?? ""];
+    const tiers = grouped ? profile.resolution.values.filter((tier) => tier !== "auto") : [singleTier ?? ""];
     const updateField = (patch: Partial<ImageParameter>) =>
         onChange(
             updateImageParameterSchema(
                 profile,
                 profile.parameters!.map((p) => (p.name === "size" ? { ...p, ...patch } : p)),
                 [definition],
+                protocol,
             ),
         );
     const updateSize = (size: ImageCapabilityConfig["size"]) => {
@@ -363,7 +437,7 @@ export function ImageParameterSizeEditor({ profile, definition, disabled, onChan
             onChange(updateImageParameterSize(profile, { ...merged, default: size.default, defaultTier: singleTier }));
         } else onChange(updateImageParameterSize(profile, size));
     };
-    const ratios = [...new Set([...(definition.values || []), ...profile.size.values].map(String))];
+    const ratios = [...new Set([...(declared.values || []), ...profile.size.values].map(String))];
     const toggle = (ratio: string) => {
         const values = profile.size.values.includes(ratio) ? profile.size.values.filter((v) => v !== ratio) : [...profile.size.values, ratio];
         updateField({ values, default: values.includes(profile.size.default) ? profile.size.default : values[0] });
@@ -382,11 +456,10 @@ export function ImageParameterSizeEditor({ profile, definition, disabled, onChan
     const activePresets = imageSizePresets(profile);
     const editorProfile = !grouped && pixelSize && activePresets.length ? { ...profile, size: imageSizeConfigWithPresets(profile, activePresets) } : profile;
     return (
-        <section className="admin-capability-parameter-card admin-image-size-card space-y-3 rounded-lg border border-border p-4">
+        <section className="min-w-0 space-y-3 border-b border-border pb-4">
             <div className="flex items-center justify-between gap-3">
                 <div>
                     <h3 className="text-sm font-medium">尺寸参数</h3>
-                    <p className="text-xs text-foreground/55">{grouped ? "按分辨率配置可用画幅，直接点选或输入比例" : "直接点选支持的比例"}</p>
                 </div>
                 <Switch aria-label={`启用${field.label}`} disabled={disabled || definition.required} checked={field.enabled !== false} onChange={(enabled) => updateField({ enabled })} />
             </div>
@@ -405,9 +478,22 @@ export function ImageParameterSizeEditor({ profile, definition, disabled, onChan
                         profile={editorProfile}
                         tiers={tiers}
                         grouped={grouped}
-                        ratios={definition.values?.filter((v) => String(v).includes(":")).map(String)}
+                        ratios={
+                            definition.values?.length
+                                ? [
+                                      ...new Set([
+                                          ...definition.values.filter((v) => String(v).includes(":")).map(String),
+                                          ...protocolImageSizePresets(protocol)
+                                              .filter((p) => imageParameterAccepts(definition, p.size))
+                                              .map((p) => p.ratio),
+                                      ]),
+                                  ]
+                                : undefined
+                        }
+                        defaultPresets={protocolImageSizePresets(protocol)}
                         allowCustomRatio={!definition.values?.length}
                         disabled={disabled}
+                        onClearDefault={!definition.required ? () => updateField({ default: undefined }) : undefined}
                         onChange={updateSize}
                     />
                 ) : (
@@ -433,8 +519,13 @@ export function ImageParameterSizeEditor({ profile, definition, disabled, onChan
                         <div className="image-size-defaults">
                             <strong>默认输出</strong>
                             <div className="image-size-default-options" role="group" aria-label="默认输出">
+                                {!definition.required && (
+                                    <button type="button" disabled={disabled} aria-pressed={field.default === undefined} onClick={() => updateField({ default: undefined })}>
+                                        跟随模型默认
+                                    </button>
+                                )}
                                 {profile.size.values.map((value) => (
-                                    <button type="button" key={value} disabled={disabled} aria-pressed={value === profile.size.default} onClick={() => updateField({ default: value })}>
+                                    <button type="button" key={value} disabled={disabled} aria-pressed={value === field.default} onClick={() => updateField({ default: value })}>
                                         {value}
                                     </button>
                                 ))}
@@ -486,15 +577,7 @@ export function ImagePixelMappingEditor({ profile, disabled, onChange }: { profi
     );
 }
 
-function ImageCountStepper({
-    value,
-    max,
-    onChange,
-}: {
-    value: number;
-    max: number;
-    onChange: (value: number) => void;
-}) {
+function ImageCountStepper({ value, max, onChange }: { value: number; max: number; onChange: (value: number) => void }) {
     const isSelected = value >= 4;
     const [draftValue, setDraftValue] = useState(() => (value >= 4 ? String(value) : "4"));
 
@@ -511,7 +594,7 @@ function ImageCountStepper({
 
     const handleStepUp = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+        const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
         const next = Math.min(max, base + 1);
         setDraftValue(String(next));
         onChange(next);
@@ -519,7 +602,7 @@ function ImageCountStepper({
 
     const handleStepDown = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+        const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
         const next = Math.max(1, base - 1);
         setDraftValue(String(next));
         onChange(next);
@@ -540,13 +623,13 @@ function ImageCountStepper({
             e.currentTarget.blur();
         } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+            const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
             const next = Math.min(max, base + 1);
             setDraftValue(String(next));
             onChange(next);
         } else if (e.key === "ArrowDown") {
             e.preventDefault();
-            const base = value >= 4 ? value : (parseInt(draftValue, 10) || 4);
+            const base = value >= 4 ? value : parseInt(draftValue, 10) || 4;
             const next = Math.max(1, base - 1);
             setDraftValue(String(next));
             onChange(next);
@@ -557,9 +640,7 @@ function ImageCountStepper({
         <div
             className={cn(
                 "group relative flex h-8 items-center overflow-hidden rounded-full border text-xs transition-colors cursor-pointer select-none",
-                isSelected
-                    ? "bg-primary/20 text-primary border-primary/40 font-semibold"
-                    : "bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border-border/40",
+                isSelected ? "bg-primary/20 text-primary border-primary/40 font-semibold" : "bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border-border/40",
             )}
             onClick={handleSelectThis}
         >
@@ -579,9 +660,7 @@ function ImageCountStepper({
                 }}
                 className="w-full min-w-0 flex-1 bg-transparent pl-2 pr-0.5 text-center font-medium text-xs outline-none text-foreground"
             />
-            <div
-                className="flex flex-col h-full w-4.5 shrink-0 border-l justify-center items-center divide-y border-border/60"
-            >
+            <div className="flex flex-col h-full w-4.5 shrink-0 border-l justify-center items-center divide-y border-border/60">
                 <button
                     type="button"
                     tabIndex={-1}

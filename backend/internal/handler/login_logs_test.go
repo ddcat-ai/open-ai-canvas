@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -71,6 +72,55 @@ func TestLoginLogsForgedAndExpiredLogoutDoNotRevokeOrLog(t *testing.T) {
 	db.Model(&model.LoginLog{}).Count(&count)
 	if count != 0 {
 		t.Fatal("expired session logged as active logout")
+	}
+}
+
+func TestLogoutExpectedUserDoesNotRevokeAnotherAccount(t *testing.T) {
+	router, db, cookie := profileHandlerFixture(t)
+	call := func(value, expected string, status int) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+		if value != "" {
+			req.AddCookie(&http.Cookie{Name: service.SessionCookieName, Value: value})
+		}
+		req.Header.Set("X-Canvas-Expected-User", expected)
+		out := httptest.NewRecorder()
+		router.ServeHTTP(out, req)
+		if out.Code != status {
+			t.Fatalf("logout status = %d, want %d", out.Code, status)
+		}
+		return out
+	}
+	if out := call(cookie, "previous-account", http.StatusForbidden); len(out.Result().Cookies()) != 0 {
+		t.Fatal("rejected stale-account logout cleared the current account cookie")
+	}
+	call("profile-session.forged-token", "previous-account", http.StatusOK)
+	call("", "previous-account", http.StatusOK)
+	var count int64
+	if err := db.Model(&model.AuthSession{}).Where("id = ?", "profile-session").Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("stale or forged logout changed the active session: count=%d err=%v", count, err)
+	}
+	if out := profileRequest(router, http.MethodGet, "/api/auth/profile", "", cookie); out.Code != http.StatusOK {
+		t.Fatalf("active session stopped working: %d", out.Code)
+	}
+	call(cookie, "profile-user", http.StatusOK)
+	call(cookie, "profile-user", http.StatusOK)
+	if err := db.Model(&model.AuthSession{}).Where("id = ?", "profile-session").Count(&count).Error; err != nil || count != 0 {
+		t.Fatalf("owner logout did not revoke the session: count=%d err=%v", count, err)
+	}
+}
+
+func TestCurrentUserForgedTokenDoesNotDeleteValidSession(t *testing.T) {
+	router, db, cookie := profileHandlerFixture(t)
+	if out := profileRequest(router, http.MethodGet, "/api/auth/profile", "", "profile-session.forged-token"); out.Code != http.StatusUnauthorized {
+		t.Fatalf("forged token status = %d, want 401", out.Code)
+	}
+	var count int64
+	if err := db.Model(&model.AuthSession{}).Where("id = ?", "profile-session").Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("forged token deleted a valid session: count=%d err=%v", count, err)
+	}
+	if out := profileRequest(router, http.MethodGet, "/api/auth/profile", "", cookie); out.Code != http.StatusOK {
+		t.Fatalf("valid token rejected after forged attempt: %d", out.Code)
 	}
 }
 

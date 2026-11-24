@@ -116,6 +116,9 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         expressionNodeDeleted: "The expression edit node was deleted",
         emptyVideoEnhance: "The video node is empty, so it can't be enhanced",
         noEnhanceModel: "No video enhancement model has been configured by an admin yet",
+        emptyVideoDepth: "The video node is empty, so a relative depth video can't be created",
+        noDepthModel: "No relative depth model has been configured by an admin yet",
+        titleDepth: "{{title}} · Relative depth",
         titleEnhance: "{{title}} · Enhanced {{resolution}}",
     },
     layerMaterials: {
@@ -186,6 +189,7 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         voiceOneCharacter: "Character voiceover can reference only one character card at a time",
         voiceNotBound: "This character has no voice bound, so a voiceover task can't be created",
         submissionInProgress: "A generation request for this node is already being submitted or running. Please don't click again",
+        videoRequiresReferenceImages: "This video model requires at least {{count}} reference image(s). Connect an image node (or upload reference material) before generating",
     },
     timelineInsert: {
         unsupportedMedia: "Image and text assets can't go on the timeline directly yet. Insert them into the canvas first",
@@ -300,6 +304,8 @@ export const enUS: DeepStringRecord<typeof zhCN> = {
         restoreSaveFailed: "Failed to resume saving the result",
         enhanceSourceMissing: "The source video node was deleted or is empty, so it can't be enhanced again. No task was submitted",
         enhanceFailed: "Video enhancement failed",
+        depthSourceMissing: "The source video node was deleted or is empty. No processing task was submitted",
+        depthFailed: "Relative depth processing failed",
         notRetryable: "This node can't use the standard generation retry",
         layerProtocolMissing: "The original layer model has no dedicated layer protocol configured, so it can't be retried",
         promptRejected: "This prompt didn't pass content moderation. Edit it before regenerating",

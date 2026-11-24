@@ -58,6 +58,9 @@ func TestEcommerceAgentVisionFailureFallsBackWithoutCaching(t *testing.T) {
 	defer upstream.Close()
 	channel := model.ModelChannel{ID: "vision-fallback-channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Vision fallback", BaseURL: upstream.URL + "/v1", APIKey: "fixture-key", APIFormat: "openai"}
 	selected := model.ChannelModel{ID: "vision-fallback-model", ChannelID: channel.ID, ModelKey: "vision-fixture", ProviderModelKey: "vision-fixture", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, Enabled: true, PriceConfigured: true}
+	profile := DefaultModelCapabilityConfigForModel(string(selected.Protocol), selected.ModelKey)
+	profile.Text.References.MaxImages = 1
+	selected.CapabilityConfigJSON = mustEncodeModelCapabilityConfig(t, profile)
 	if err := db.Create(&channel).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +114,9 @@ func TestEcommerceAgentLiveTextUsesAdminChannelWithoutEnvKey(t *testing.T) {
 	defer upstream.Close()
 	channel := model.ModelChannel{ID: "agent-text-channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "Agent text", BaseURL: upstream.URL + "/v1", APIKey: "fixture-key", APIFormat: "openai"}
 	selected := model.ChannelModel{ID: "agent-text-model", ChannelID: channel.ID, ModelKey: "gpt-4o-mini", ProviderModelKey: "gpt-4o-mini", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, Enabled: true, PriceConfigured: true}
+	profile := DefaultModelCapabilityConfigForModel(string(selected.Protocol), selected.ModelKey)
+	profile.Text.References.MaxImages = 1
+	selected.CapabilityConfigJSON = mustEncodeModelCapabilityConfig(t, profile)
 	if err := db.Create(&channel).Error; err != nil {
 		t.Fatal(err)
 	}

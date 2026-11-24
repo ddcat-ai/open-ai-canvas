@@ -66,7 +66,7 @@ export default function PrevisReproLab() {
     return (
         <div className="min-h-dvh overflow-y-auto p-5" style={{ background: "var(--bg)", color: "var(--fg)" }}>
             <header className="mb-4 flex flex-wrap items-center gap-3">
-                <h1 className="text-lg font-semibold">预演台 P0 复现台</h1>
+                <h1 className="text-lg font-semibold">世界引擎 P0 复现台</h1>
                 <StatusBadge tone={previsReproSceneIsOffline(scene) ? "error" : "success"} data-testid="offline-tag" label={previsReproSceneIsOffline(scene) ? "fixture 无网络资产" : "已注入模型资产"} />
                 <span className="text-[var(--fs-tiny)] opacity-70" data-testid="object-count">
                     对象数 {scene.objects.length}
@@ -81,7 +81,7 @@ export default function PrevisReproLab() {
                     <span className="text-[var(--fs-tiny)] opacity-70">强制保存失败</span>
                     <Switch checked={forceSaveFailure} onChange={setForceSaveFailure} data-testid="force-save-failure" />
                     <Button size="small" data-testid="toggle-workbench" onClick={() => setWorkbenchOpen((open) => !open)}>
-                        {workbenchOpen ? "关闭预演台" : "打开预演台"}
+                        {workbenchOpen ? "关闭世界引擎" : "打开世界引擎"}
                     </Button>
                     <Button size="small" data-testid="refresh-events" onClick={refreshEvents}>
                         刷新事件
@@ -97,7 +97,19 @@ export default function PrevisReproLab() {
             <ReproMatrix />
 
             {workbenchOpen ? (
-                <CanvasPrevisWorkbench canvasId="previs-repro-lab" open scene={scene} imageNodes={[]} onboardingScope="previs-repro-lab" onClose={() => setWorkbenchOpen(false)} onChange={onChange} onApply={onApply} onDeleteImageNode={() => undefined} onFlush={onFlush} />
+                <CanvasPrevisWorkbench
+                    canvasId="previs-repro-lab"
+                    open
+                    scene={scene}
+                    imageNodes={[]}
+                    onboardingScope="previs-repro-lab"
+                    onClose={() => setWorkbenchOpen(false)}
+                    onChange={onChange}
+                    onApply={onApply}
+                    onAddToCanvas={onApply}
+                    onDeleteImageNode={() => undefined}
+                    onFlush={onFlush}
+                />
             ) : null}
         </div>
     );
@@ -105,7 +117,7 @@ export default function PrevisReproLab() {
 
 type PrevisEventRow = { id: string; timestamp: string; level: string; code: string; message: string };
 
-/** 只显示预演台自己的稳定码事件，避免整条诊断流噪声淹没复现现场。 */
+/** 只显示世界引擎自己的稳定码事件，避免整条诊断流噪声淹没复现现场。 */
 function readPrevisEvents(): PrevisEventRow[] {
     return getClientDiagnosticEvents()
         .filter((event) => (event.code || "").startsWith("PREVIS_"))
@@ -178,7 +190,7 @@ function DiagnosticEventList({ events }: { events: PrevisEventRow[] }) {
                     ]}
                 />
             ) : (
-                <p className="text-[var(--fs-tiny)] opacity-55">暂无预演台事件。触发下方矩阵中的失败场景后点击「刷新事件」。</p>
+                <p className="text-[var(--fs-tiny)] opacity-55">暂无世界引擎事件。触发下方矩阵中的失败场景后点击「刷新事件」。</p>
             )}
         </section>
     );

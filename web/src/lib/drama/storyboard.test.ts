@@ -23,7 +23,7 @@ test("storyboard rules mirror the backend", () => {
     assert.equal(lineTarget(fast, 300), 100);
     assert.deepEqual(segmentLimits(fast, 15), { mode: "fixed", min: 10, max: 10 });
     assert.deepEqual(segmentLimits(normalizeStoryboard({ segmentMode: "fixed", segmentSeconds: 30 }), 15), { mode: "fixed", min: 15, max: 15 });
-    assert.deepEqual(segmentLimits(normalizeStoryboard({}), 15), { mode: "auto", min: 0, max: 15 });
+    assert.deepEqual(segmentLimits(normalizeStoryboard({}), 15), { mode: "fixed", min: 10, max: 10 });
     const range = normalizeStoryboard({ segmentMode: "range", segmentMinSeconds: 20, segmentMaxSeconds: 8 });
     assert.deepEqual([range.segmentMinSeconds, range.segmentMaxSeconds], [8, 20]);
     assert.deepEqual(segmentLimits(range, 15), { mode: "range", min: 8, max: 15 });

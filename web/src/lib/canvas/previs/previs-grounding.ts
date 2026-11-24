@@ -46,7 +46,7 @@ export function groundPrevisObject(object: PrevisObject): PrevisObject {
         keyframesChanged = true;
         return { ...keyframe, transform: grounded };
     });
-    // 走位路径点就是演员脚底位置，下限同样是地面；道具路径保持原样。
+    // 演员走位路径点是脚底位置，下限同样是地面；道具路径保持原样，演员悬空高度保留。
     const groundPath = isPrevisUprightObject(object) && object.motionPath;
     const pathChanged = Boolean(groundPath && groundPath.points.some((point) => clampAboveFloor(point[1], PREVIS_GROUND_Y) !== point[1]));
     if (transform === object.transform && !keyframesChanged && !pathChanged) return object;

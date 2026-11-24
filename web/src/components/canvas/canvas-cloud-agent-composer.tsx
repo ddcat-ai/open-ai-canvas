@@ -31,7 +31,7 @@ import {
 import { canvasThemes } from "@/lib/canvas-theme";
 import { type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import { agentModifierShortcut, agentTextLength, type AgentComposerSubmitMode } from "@/lib/canvas/agent-outbox";
+import { AGENT_FOCUS_NODE_LIMIT, agentModifierShortcut, agentTextLength, type AgentComposerSubmitMode } from "@/lib/canvas/agent-outbox";
 import { AGENT_LONG_TEXT_CHARS } from "@/lib/canvas/agent-composer-attachments";
 import { canvasNodeMentionToken } from "@/lib/canvas/canvas-resource-references";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
@@ -227,6 +227,7 @@ export function AgentChatComposer({
     onRemoveAttachment,
     onRetryAttachment,
     addMenu,
+    canvasSelection,
     contextBar,
     charLimit,
     blockReason,
@@ -269,7 +270,9 @@ export function AgentChatComposer({
     onRetryAttachment?: (id: string) => void;
     /** 最左侧「+」菜单的其他入口；disabledReason 有值时菜单只显示原因（例如不在画布里）。 */
     addMenu?: { disabledReason?: string | null; onPickAssets?: () => void; selectionCount?: number; onReferenceSelection?: () => void };
-    /** 输入卡片顶部的一行上下文：选区、看图提示、长文本转换。 */
+    /** 画布选区独占固定一行，避免选中和取消选中时挤动输入框及对话区。 */
+    canvasSelection?: { count: number; excluded: boolean; onToggle: () => void };
+    /** 输入卡片顶部的其他上下文：页面、看图提示、长文本转换。 */
     contextBar?: ReactNode;
     /** 超过上限的 80% 时显示字数；超出后不能发送。 */
     charLimit?: number;
@@ -322,7 +325,6 @@ export function AgentChatComposer({
     const canSubmit = !disabled && !submitDisabled && !blockedReason && !(sending && submitMode === "send") && Boolean(prompt.trim() || attachments.length);
     const canPrimary = canSubmit && !primaryDisabled;
     const modifierEnter = agentModifierShortcut("Enter");
-    const wrapped = Boolean(footer || tray);
     const reducedMotion = useReducedMotion();
     const submitState = submitMode === "send" && sending ? "sending" : submitMode;
     const submitLabel = submitMode === "save" ? "保存" : submitMode === "queue" ? "排队" : sending ? "发送中" : "发送";
@@ -380,7 +382,7 @@ export function AgentChatComposer({
     const handlePromptChange = (value: string) => {
         onPromptChange(value);
         const match = /(^|\s)[/、]([^\s/、]*)$/.exec(value);
-        if (match && availableSlashSkills.length) {
+        if (match) {
             const next = { start: match.index + match[1].length, query: match[2] };
             setSlash((current) => (current && current.start === next.start && current.query === next.query ? current : next));
             setSlashIndex(0);
@@ -459,8 +461,8 @@ export function AgentChatComposer({
 
     return (
         <div className="agent-composer-wrap min-w-0 shrink-0" onWheelCapture={(event) => event.stopPropagation()}>
-            {/* 有队列条或底部附加内容时，外壳托住它们与输入卡片，形成一张整卡。 */}
-            <div className="agent-composer-shell relative" data-has-footer={wrapped ? "" : undefined}>
+            {/* 队列托盘由外壳承载；连接器并入输入卡，保持单一表面。 */}
+            <div className="agent-composer-shell relative" data-has-footer={tray ? "" : undefined}>
                 <AnimatePresence initial={false}>
                     {tray ? (
                         <motion.div
@@ -500,6 +502,36 @@ export function AgentChatComposer({
                     >
                         <span />
                     </button>
+                    {canvasSelection ? (
+                        <div className="agent-composer-canvas-selection">
+                            <AgentContextChip
+                                tone={!canvasSelection.count || canvasSelection.excluded ? "off" : "default"}
+                                title="发送时会把选中的节点作为重点交给 Agent"
+                                icon={<SquareDashedMousePointer className="size-3.5 shrink-0" aria-hidden="true" />}
+                                actions={
+                                    canvasSelection.count > 0 ? (
+                                        <button
+                                            type="button"
+                                            className="agent-context-chip-action"
+                                            aria-pressed={canvasSelection.excluded}
+                                            aria-label={canvasSelection.excluded ? "这条消息带上选中的节点" : "这条消息不带选中的节点"}
+                                            onClick={canvasSelection.onToggle}
+                                        >
+                                            {canvasSelection.excluded ? "带上" : <X className="size-3" aria-hidden="true" />}
+                                        </button>
+                                    ) : null
+                                }
+                            >
+                                {!canvasSelection.count
+                                    ? "未选中节点"
+                                    : canvasSelection.excluded
+                                      ? `这条不带选中的 ${canvasSelection.count} 个节点`
+                                      : canvasSelection.count > AGENT_FOCUS_NODE_LIMIT
+                                        ? `已选 ${canvasSelection.count} 个节点，前 ${AGENT_FOCUS_NODE_LIMIT} 个作为重点`
+                                        : `已选 ${canvasSelection.count} 个节点`}
+                            </AgentContextChip>
+                        </div>
+                    ) : null}
                     {contextBar ? <div className="agent-composer-context">{contextBar}</div> : null}
                     {attachments.length ? (
                         <div className="agent-attachments thin-scrollbar" role="list" aria-label={`附件 ${attachments.length} 个`}>
@@ -590,7 +622,7 @@ export function AgentChatComposer({
                                     onEscape();
                                 }}
                                 onContentSizeChange={handlePromptContentSizeChange}
-                                className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:opacity-45"
+                                className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none"
                                 containerClassName="min-h-[60px] h-full"
                                 style={{ color: theme.node.text }}
                                 placeholder={placeholder}
@@ -621,6 +653,11 @@ export function AgentChatComposer({
                             </div>
                         ) : null}
                     </div>
+                    {showCount ? (
+                        <div className={`agent-composer-count${overLimit ? " is-over" : ""}`} title={overLimit ? (blockedReason ?? undefined) : `单条消息最多 ${charLimit!.toLocaleString()} 字`}>
+                            {textLength.toLocaleString()} / {charLimit!.toLocaleString()}
+                        </div>
+                    ) : null}
                     <div className="agent-composer-toolbar mt-2">
                         <div className="agent-composer-controls flex min-w-0 items-center gap-1">
                             {onAddFiles ? (
@@ -647,36 +684,30 @@ export function AgentChatComposer({
                             {left}
                         </div>
                         <div className="agent-composer-submit flex items-center gap-2">
-                            {showCount ? (
-                                <span className={`agent-composer-count${overLimit ? " is-over" : ""}`} title={overLimit ? (blockedReason ?? undefined) : `单条消息最多 ${charLimit!.toLocaleString()} 字`}>
-                                    {textLength.toLocaleString()} / {charLimit!.toLocaleString()}
-                                </span>
-                            ) : null}
                             {submitAccessory}
-                            <span className="agent-composer-stop-slot">
-                                <AnimatePresence initial={false}>
-                                    {canStop ? (
-                                        <motion.button
-                                            key="stop"
-                                            type="button"
-                                            disabled={stopping}
-                                            aria-label="停止本轮"
-                                            title={stopping ? "正在停止本轮" : "停止本轮（输入框里连按两次 Esc 也可以）：Agent 不再继续操作；已提交的生成任务会继续完成"}
-                                            onClick={() => void onStop?.()}
-                                            data-icon-only
-                                            className="agent-composer-stop grid size-7 shrink-0 place-items-center rounded-full p-0 disabled:cursor-not-allowed"
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            transition={{ duration: reducedMotion ? 0 : 0.15 }}
-                                        >
-                                            {stopping ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <Square className="size-3" fill="currentColor" aria-hidden="true" />}
-                                        </motion.button>
-                                    ) : null}
-                                </AnimatePresence>
-                            </span>
+                            <AnimatePresence initial={false}>
+                                {canStop ? (
+                                    <motion.button
+                                        key="stop"
+                                        type="button"
+                                        disabled={stopping}
+                                        aria-label="停止本轮"
+                                        title={stopping ? "正在停止本轮" : "停止本轮（输入框里连按两次 Esc 也可以）：Agent 不再继续操作；已提交的生成任务会继续完成"}
+                                        onClick={() => void onStop?.()}
+                                        data-icon-only
+                                        className="agent-composer-stop grid size-7 shrink-0 place-items-center rounded-full p-0 disabled:cursor-not-allowed"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: reducedMotion ? 0 : 0.15 }}
+                                    >
+                                        {stopping ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <Square className="size-3" fill="currentColor" aria-hidden="true" />}
+                                    </motion.button>
+                                ) : null}
+                            </AnimatePresence>
                             <button
                                 type="button"
+                                data-submit-mode={submitMode}
                                 disabled={!canPrimary}
                                 aria-label={submitMode === "save" ? "保存修改" : submitLabel}
                                 aria-busy={submitState === "sending"}
@@ -697,16 +728,16 @@ export function AgentChatComposer({
                                         ) : submitMode === "queue" ? (
                                             <ListPlus className="size-3.5" />
                                         ) : (
-                                            <ArrowUp className="size-3.5" />
+                                            <ArrowUp className="size-4" />
                                         )}
-                                        <span>{submitMode === "save" ? "保存" : submitMode === "queue" ? "排队" : "发送"}</span>
+                                        {submitMode !== "send" ? <span>{submitLabel}</span> : null}
                                     </motion.span>
                                 </AnimatePresence>
                             </button>
                         </div>
                     </div>
+                    {footer}
                 </div>
-                {footer}
             </div>
             {previewAttachment ? <AgentImagePreview attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} /> : null}
         </div>

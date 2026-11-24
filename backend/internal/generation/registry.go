@@ -70,8 +70,10 @@ func OfficialDeclarativeVideoInterface(interfaceType string) (string, bool) {
 		return "NewAPI 媒体任务", true
 	case string(model.ChannelInterfaceXAIVideo):
 		return "xAI", true
-	case string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo):
+	case string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo), "volcengine-ark-seedance-25":
 		return "火山方舟", true
+	case "wenew-h3-video":
+		return "WeNew H3", true
 	case string(model.ChannelInterfaceVolcengineJiMengVideo):
 		return "即梦", true
 	case string(model.ChannelInterfaceNewAPIVideo):
@@ -104,6 +106,12 @@ func OfficialDeclarativeAudioInterface(interfaceType string) (string, bool) {
 	switch strings.TrimSpace(interfaceType) {
 	case string(model.ChannelInterfaceOpenAIAudio):
 		return "OpenAI Audio", true
+	case string(model.ChannelInterfaceMiniMaxSpeech):
+		return "MiniMax Speech", true
+	case string(model.ChannelInterfaceEvoLinkSeedAudio):
+		return "EvoLink 豆包 Seed Audio", true
+	case string(model.ChannelInterfaceEvoLinkQwenAudioTTS):
+		return "EvoLink Qwen Audio 3.1 TTS Flash", true
 	case string(model.ChannelInterfaceDoubaoStreamingTTS):
 		return "豆包流式语音", true
 	case string(model.ChannelInterfaceAsyncAudio):

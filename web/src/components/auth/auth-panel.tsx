@@ -1,13 +1,15 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 
 import { useAuthSettings } from "@/hooks/use-auth-entry";
 import type { AuthView } from "@/lib/auth-entry";
 import { cn } from "@/lib/utils";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { useThemePack } from "@/themes/use-theme-pack";
 import { AuthLoginForm } from "./auth-login-form";
 import { AuthRecoveryForm } from "./auth-recovery-form";
-import { AuthRegisterForm } from "./auth-register-form";
+import { WechatRegistrationForm } from "./wechat-registration-form";
 import "./auth-panel.css";
 
 export type AuthPanelProps = {
@@ -19,13 +21,17 @@ export type AuthPanelProps = {
     variant: "page" | "dialog";
 };
 
-/** 登录、注册、找回密码的共用面板。导航方式由外层决定：独立页面改路由，弹窗只切换视图。 */
+/** 登录注册一体表单与找回密码的共用面板。导航方式由外层决定：独立页面改路由，弹窗只切换视图。 */
 export function AuthPanel({ view, onViewChange, next, onAuthenticated, variant }: AuthPanelProps) {
     const { t } = useTranslation();
     const titleId = useId();
     const brand = useAppearanceStore((state) => state.appearance.brandName) || t("auth.register.platform");
     const { settings, failed, reload } = useAuthSettings();
-    const title = view === "login" ? t("auth.panel.loginTitle", { brand }) : view === "register" ? t("auth.panel.registerTitle", { brand }) : t("auth.panel.recoveryTitle");
+    const [params] = useSearchParams();
+    const wechatRegistration = params.get("wechat_register") === "1";
+    // 登录与注册是同一个表单；/register 仍保留给推广链接，打开的也是一体表单。
+    const themeLoginTitle = useThemePack()?.copy?.loginTitle;
+    const title = wechatRegistration ? t("auth.wechat.completeTitle", { defaultValue: "完成微信注册" }) : view === "recovery" ? t("auth.panel.recoveryTitle") : themeLoginTitle || t("auth.panel.loginTitle", { brand });
     const formProps = { settings, next, onAuthenticated, onViewChange };
 
     return (
@@ -37,10 +43,10 @@ export function AuthPanel({ view, onViewChange, next, onAuthenticated, variant }
                 {view === "recovery" ? <p className="auth-panel-description">{t("auth.panel.recoveryDescription")}</p> : null}
             </header>
             <div key={view} className="auth-panel-body">
-                {view === "login" ? (
-                    <AuthLoginForm {...formProps} />
-                ) : view === "register" ? (
-                    <AuthRegisterForm {...formProps} settingsFailed={failed} onReloadSettings={() => void reload()} />
+                {wechatRegistration ? (
+                    <WechatRegistrationForm settings={settings} settingsFailed={failed} onReloadSettings={() => void reload()} next={next} />
+                ) : view !== "recovery" ? (
+                    <AuthLoginForm {...formProps} settingsFailed={failed} onReloadSettings={() => void reload()} />
                 ) : (
                     <AuthRecoveryForm settings={settings} onViewChange={onViewChange} />
                 )}

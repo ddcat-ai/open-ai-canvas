@@ -33,6 +33,7 @@ func TestChannelModelDirectoryDefaultsAndCustomNames(t *testing.T) {
 		t.Fatalf("default second-level label = %q, %v", public.ChannelLabel, err)
 	}
 	request.DisplayName, request.ChannelLabel = "product", "自定义渠道"
+	request.ExpectedUpdatedAt, request.ExpectedPriceVersion = saved.UpdatedAt, saved.PriceVersion
 	saved, err = svc.SaveAdminChannelModel(admin, channel.ID, saved.ID, request)
 	if err != nil || saved.DisplayName != "product" || saved.ChannelLabel != "自定义渠道" {
 		t.Fatalf("custom names = %#v, %v", saved, err)
@@ -41,6 +42,7 @@ func TestChannelModelDirectoryDefaultsAndCustomNames(t *testing.T) {
 	request.DisplayName = "未分类"
 	request.ProviderModelKey = strings.Repeat("a", 100)
 	request.ChannelLabel = request.ProviderModelKey
+	request.ExpectedUpdatedAt, request.ExpectedPriceVersion = saved.UpdatedAt, saved.PriceVersion
 	saved, err = svc.SaveAdminChannelModel(admin, channel.ID, saved.ID, request)
 	if err != nil {
 		t.Fatal(err)

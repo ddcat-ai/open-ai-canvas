@@ -1,0 +1,505 @@
+.canvas-script-editor-modal {
+    max-width: 100vw;
+    padding-bottom: 0;
+}
+.canvas-script-editor-modal.is-fullscreen {
+    top: 0;
+    max-width: 100vw;
+    margin: 0;
+}
+.canvas-script-editor-modal.is-fullscreen .ant-modal-container {
+    border-radius: 0;
+}
+.canvas-script-editor {
+    display: flex;
+    height: min(960px, 88dvh);
+    min-height: 0;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--workspace-page);
+    color: var(--text-primary);
+    font-size: var(--fs-ui);
+}
+.canvas-script-editor[data-fullscreen="true"] {
+    height: 100dvh;
+}
+.canvas-script-editor-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    border-bottom: var(--stroke-1) solid var(--workspace-border);
+}
+.canvas-script-editor-title,
+.canvas-script-editor-window-actions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--space-3);
+}
+.canvas-script-editor-title > svg {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+}
+.canvas-script-editor-title > div {
+    min-width: 0;
+}
+.canvas-script-editor-header h2 {
+    overflow: hidden;
+    margin: 0;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    line-height: var(--lh-heading);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.canvas-script-editor-header p {
+    margin: var(--space-1) 0 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.canvas-script-editor-window-actions {
+    flex-shrink: 0;
+    gap: var(--space-1);
+}
+.canvas-script-editor-readonly {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.canvas-script-editor-workspace {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    grid-template-columns: minmax(0, 1fr) clamp(380px, 32vw, 480px);
+}
+.canvas-script-editor-overview,
+.canvas-script-editor-detail {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    flex-direction: column;
+}
+.canvas-script-editor-toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-6) var(--space-3);
+}
+.canvas-script-editor-search {
+    width: 280px;
+    min-width: 100px;
+    margin-right: auto;
+}
+.canvas-script-editor-overview-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-1) var(--space-6) var(--space-3);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.canvas-script-editor-columns {
+    display: flex;
+    width: min(480px, calc(100vw - 48px));
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+    font-size: var(--fs-ui);
+}
+.canvas-script-editor-columns > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.canvas-script-editor-columns .script-column-picker {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    padding-block: var(--space-2);
+}
+.canvas-script-editor-table-area {
+    min-height: 0;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    padding: 0 var(--space-4);
+}
+.canvas-script-editor-table .ant-table {
+    background: transparent;
+}
+.canvas-script-editor-table .ant-table-thead > tr > th {
+    height: 44px;
+    padding: var(--space-3) var(--space-2);
+    color: var(--text-secondary);
+    background: var(--workspace-page);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.canvas-script-editor-table .ant-table-thead > tr > th::before {
+    display: none;
+}
+.canvas-script-editor-table .ant-table-tbody > tr > td {
+    padding: var(--space-4) var(--space-2);
+    vertical-align: top;
+    border-color: var(--workspace-border);
+}
+.canvas-script-editor-table .ant-table-body {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+.canvas-script-editor-table .canvas-script-editor-row > td {
+    background: var(--workspace-page);
+}
+.canvas-script-editor-table .canvas-script-editor-row:hover > td {
+    background: var(--library-surface-hover);
+}
+.canvas-script-editor-table .canvas-script-editor-row.is-editing > td,
+.canvas-script-editor-table .canvas-script-editor-row.is-editing:hover > td {
+    background: var(--control-selected-bg);
+}
+.canvas-script-editor-table .canvas-script-editor-row.is-editing > .ant-table-cell-fix-start {
+    background: linear-gradient(var(--control-selected-bg), var(--control-selected-bg)), var(--workspace-page);
+}
+.canvas-script-editor-table .ant-table-row-selected:not(.is-editing) > td {
+    background: var(--workspace-page);
+}
+.canvas-script-editor-table input[type="checkbox"]:not(:checked) + span:not([data-indeterminate="true"]) > svg {
+    visibility: hidden;
+}
+.canvas-script-editor-shot,
+.canvas-script-editor-cell-button {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.canvas-script-editor-shot:focus-visible,
+.canvas-script-editor-cell-button:focus-visible {
+    outline: var(--focus-ring-width) solid var(--control-selected-border);
+    outline-offset: var(--space-1);
+}
+.canvas-script-editor-shot > span {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+.canvas-script-editor-shot strong {
+    font-size: var(--fs-heading);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.canvas-script-editor-shot svg {
+    color: var(--text-tertiary);
+}
+.canvas-script-editor-shot small,
+.canvas-script-editor-cell-audio {
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+    line-height: 1.5;
+}
+.canvas-script-editor-cell-copy {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: var(--fs-ui);
+    line-height: 1.8;
+}
+.canvas-script-editor-cell-copy.is-empty {
+    color: var(--text-tertiary);
+}
+.canvas-script-editor-cell-dialogue {
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: var(--lh-body);
+}
+.canvas-script-editor-frame {
+    position: relative;
+    display: block;
+    width: 88px;
+    height: 50px;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--library-surface);
+}
+.canvas-script-editor-asset-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-2);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.canvas-script-editor-asset-summary > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.canvas-script-editor-asset-summary > [data-role="character"] {
+    color: color-mix(in srgb, var(--status-loading) 78%, var(--text-primary));
+}
+.canvas-script-editor-asset-summary > [data-role="environment"] {
+    color: color-mix(in srgb, var(--status-success) 78%, var(--text-primary));
+}
+.canvas-script-editor-asset-summary > [data-role="prop"],
+.canvas-script-editor-asset-summary > [data-role="weapon"] {
+    color: color-mix(in srgb, var(--status-warning) 75%, var(--text-primary));
+}
+.canvas-script-editor-asset-summary small {
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+}
+.canvas-script-editor-detail {
+    border-left: var(--stroke-1) solid var(--workspace-border);
+    background: var(--library-surface);
+}
+.canvas-script-editor-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-5) var(--space-6) var(--space-4);
+}
+.canvas-script-editor-detail-header > div > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.canvas-script-editor-detail-header h3 {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    margin: var(--space-1) 0 0;
+    font-size: var(--fs-heading);
+    font-weight: 600;
+}
+.canvas-script-editor-detail-header h3 small {
+    color: var(--text-tertiary);
+    font-size: var(--fs-caption);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+.canvas-script-editor-detail-header nav {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--space-1);
+}
+.canvas-script-editor-back.ant-btn {
+    display: none;
+}
+.canvas-script-editor-tabs {
+    flex-shrink: 0;
+    margin: 0 var(--space-6) var(--space-4);
+}
+.canvas-script-editor-detail-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 var(--space-6) var(--space-6);
+    scrollbar-gutter: stable;
+}
+.canvas-script-editor-shot-settings,
+.canvas-script-editor-field-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+}
+.canvas-script-editor-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-bottom: var(--space-5);
+}
+.canvas-script-editor-field > span:first-child {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.canvas-script-editor-field textarea {
+    font-size: var(--fs-ui);
+    line-height: 1.8;
+}
+.canvas-script-editor-field .ant-input-number {
+    width: 100%;
+}
+.canvas-script-editor-advanced {
+    padding-top: var(--space-4);
+    border-top: var(--stroke-1) solid var(--workspace-border);
+}
+.canvas-script-editor-advanced summary {
+    margin-bottom: var(--space-4);
+    cursor: pointer;
+    font-weight: 500;
+}
+.canvas-script-editor-detail-note,
+.canvas-script-editor-filter-notice {
+    margin: 0 0 var(--space-5);
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.canvas-script-editor-detail-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-5);
+    border-top: var(--stroke-1) solid var(--workspace-border);
+}
+.canvas-script-editor-detail-footer > .ant-btn:first-child {
+    margin-right: auto;
+}
+.canvas-script-editor-bulk {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-6);
+    border-top: var(--stroke-1) solid var(--workspace-border);
+    background: var(--library-surface);
+}
+.canvas-script-editor-bulk-scope,
+.canvas-script-editor-bulk-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+.canvas-script-editor-bulk-scope > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.canvas-script-editor-bulk-scope > .ant-btn:first-of-type {
+    margin-left: auto;
+}
+.canvas-script-editor-bulk-actions > :first-child {
+    margin-right: auto;
+}
+.canvas-script-editor-bulk p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: var(--lh-body);
+}
+.canvas-script-editor-footer {
+    display: flex;
+    min-height: var(--space-8);
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-1) var(--space-6);
+    border-top: var(--stroke-1) solid var(--workspace-border);
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+}
+.canvas-script-editor-escape-hint {
+    margin-left: auto;
+    white-space: nowrap;
+}
+.canvas-script-editor-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-12) var(--space-6);
+    color: var(--text-secondary);
+    font-size: var(--fs-ui);
+    line-height: var(--lh-body);
+    text-align: center;
+}
+.canvas-script-compact-row:focus-within {
+    background: var(--control-selected-bg);
+}
+@media (max-width: 1099px) {
+    .canvas-script-editor-workspace {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .canvas-script-editor-detail {
+        display: none;
+        border-left: 0;
+    }
+    .canvas-script-editor[data-mobile-detail="true"] .canvas-script-editor-overview {
+        display: none;
+    }
+    .canvas-script-editor[data-mobile-detail="true"] .canvas-script-editor-detail {
+        display: flex;
+    }
+    .canvas-script-editor-back.ant-btn {
+        display: inline-flex;
+        margin-right: auto;
+    }
+    .canvas-script-editor-detail-header > div > span {
+        display: none;
+    }
+    .canvas-script-editor-detail-header {
+        justify-content: flex-end;
+    }
+}
+@media (max-width: 639px) {
+    .canvas-script-editor-header,
+    .canvas-script-editor-toolbar,
+    .canvas-script-editor-overview-meta,
+    .canvas-script-editor-detail-header,
+    .canvas-script-editor-detail-footer,
+    .canvas-script-editor-bulk,
+    .canvas-script-editor-footer {
+        padding-inline: var(--space-3);
+    }
+    .canvas-script-editor-title {
+        gap: var(--space-2);
+    }
+    .canvas-script-editor-title > svg,
+    .canvas-script-editor-columns-trigger.ant-btn,
+    .canvas-script-editor-escape-hint {
+        display: none;
+    }
+    .canvas-script-editor-toolbar > .ant-btn {
+        flex-shrink: 0;
+    }
+    .canvas-script-editor-table-area {
+        padding-inline: var(--space-1);
+    }
+    .canvas-script-editor-tabs {
+        margin-inline: var(--space-3);
+    }
+    .canvas-script-editor-detail-scroll {
+        padding-inline: var(--space-4);
+    }
+    .canvas-script-editor-detail-header h3 {
+        gap: var(--space-2);
+    }
+    .canvas-script-editor-bulk-actions > :first-child {
+        width: 100%;
+    }
+    .canvas-script-editor-bulk-actions > .ant-btn {
+        flex: 1;
+    }
+    .canvas-script-editor-footer {
+        overflow: hidden;
+    }
+    .canvas-script-editor-footer > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}

@@ -7,7 +7,14 @@ import (
 
 func cloudAgentToolHandlers() map[string]cloudAgentToolHandler {
 	return map[string]cloudAgentToolHandler{
-		agenttool.AgentProfileRead:       {Read: cloudAgentHandleAgentProfileRead},
+		agenttool.AgentProfileRead: {Read: cloudAgentHandleAgentProfileRead},
+		agenttool.MemorySearch:     {Read: cloudAgentHandleMemorySearch},
+		agenttool.MCPListTools:     {Read: cloudAgentHandleMCPListTools},
+		// MCP is a write-policy tool whose network work must happen outside the
+		// checkpoint transaction. Read is the outside-transaction executor; the
+		// non-nil Write adapter keeps the registry's write/preview contract
+		// explicit, while advanceCloudAgentTool routes OutsideTransaction first.
+		agenttool.MCPCallTool:            {Read: cloudAgentHandleMCPCall, Write: cloudAgentMCPWriteAdapter, Preview: cloudAgentPreviewMCPCall},
 		agenttool.PlanUpdate:             {Read: cloudAgentHandlePlanUpdate},
 		agenttool.AskUser:                {Read: cloudAgentHandleAskUser},
 		agenttool.PrevisSceneRead:        {Read: cloudAgentHandlePrevisSceneRead},
@@ -43,7 +50,13 @@ func cloudAgentToolHandlers() map[string]cloudAgentToolHandler {
 		agenttool.CanvasPreflight:        {Read: cloudAgentHandleCanvasPreflight},
 		agenttool.DramaGetContext:        {Read: cloudAgentHandleDramaGetContext},
 		agenttool.DramaAdoptCanvasMedia:  {Write: applyCloudAgentDramaAdopt, Preview: cloudAgentPreviewDramaAdopt},
+		agenttool.DramaShotRead:          {Read: cloudAgentHandleDramaShotRead},
+		agenttool.DramaShotUpdate:        {PageWrite: applyCloudAgentDramaShotUpdate, PagePreview: cloudAgentPreviewDramaShotUpdate},
 	}
+}
+
+func cloudAgentMCPWriteAdapter(_ *repository.Repository, _ string, _ string, _ cloudAgentCall, _ RuntimePolicySetting, _ ...cloudAgentMutationRecorder) (any, error) {
+	return nil, BadAuthRequest("MCP 外部调用必须在检查点事务外执行")
 }
 
 func cloudAgentPreviewCanvas(repo *repository.Repository, userID, canvasID string, call cloudAgentCall) (cloudAgentApprovalPreview, error) {

@@ -37,6 +37,7 @@ type CanvasProjectWorldLayersProps = {
     nodeById: Map<string, CanvasNodeData>;
     /** 视口内与缓冲区候选节点；屏外部分由本层分帧挂载。 */
     candidateNodes: CanvasNodeData[];
+    gestureNodes: CanvasNodeData[];
     immediateRenderNodeIds: Set<string>;
     renderViewBounds: CanvasSpatialBounds;
     nodeRenderLODById: Map<string, CanvasNodeRenderLOD>;
@@ -98,23 +99,40 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
     useEffect(() => {
         if (activeMediaNodeId && !props.nodeById.has(activeMediaNodeId)) setActiveMediaNodeId(null);
     }, [activeMediaNodeId, props.nodeById]);
-    const visibleNodes = useCanvasProgressiveNodeMount(props.candidateNodes, props.immediateRenderNodeIds, props.renderViewBounds);
-    const orderedVisibleNodes = useMemo(() => [
-        ...visibleNodes.filter(isFrameNode),
-        ...sortCanvasNodesByStackOrder(visibleNodes.filter((node) => !isFrameNode(node)), props.nodeStackOrder),
-    ], [props.nodeStackOrder, visibleNodes]);
+    const mountedNodes = useCanvasProgressiveNodeMount(props.candidateNodes, props.immediateRenderNodeIds, props.renderViewBounds);
+    const gestureIds = useMemo(() => new Set(props.gestureNodes.map((node) => node.id)), [props.gestureNodes]);
+    const visibleNodes = useMemo(() => {
+        if (!props.gestureNodes.length) return mountedNodes;
+        const mountedIds = new Set(mountedNodes.map((node) => node.id));
+        return [...mountedNodes, ...props.gestureNodes.filter((node) => !mountedIds.has(node.id))];
+    }, [mountedNodes, props.gestureNodes]);
+    const orderedVisibleNodes = useMemo(
+        () => [
+            ...visibleNodes.filter(isFrameNode),
+            ...sortCanvasNodesByStackOrder(
+                visibleNodes.filter((node) => !isFrameNode(node)),
+                props.nodeStackOrder,
+            ),
+        ],
+        [props.nodeStackOrder, visibleNodes],
+    );
     const batchPreviewsRef = useRef(new Map<string, CanvasNodeData[]>());
     const batchPreviews = useMemo(() => {
         const previous = batchPreviewsRef.current;
-        const next = new Map(visibleNodes.filter((node) => node.metadata?.isBatchRoot).map((node): [string, CanvasNodeData[]] => {
-            const children = (node.metadata?.batchChildIds || []).filter((id) => id !== node.metadata?.primaryImageId)
-                .map((id) => props.nodeById.get(id))
-                .filter((child): child is CanvasNodeData => Boolean(child && child.metadata?.batchRootId === node.id))
-                .slice(0, 5);
-            // 子图对象未变时沿用旧数组，避免挂载/视口变化让所有批次封面重渲染。
-            const current = previous.get(node.id);
-            return [node.id, current && current.length === children.length && children.every((child, index) => child === current[index]) ? current : children];
-        }));
+        const next = new Map(
+            visibleNodes
+                .filter((node) => node.metadata?.isBatchRoot)
+                .map((node): [string, CanvasNodeData[]] => {
+                    const children = (node.metadata?.batchChildIds || [])
+                        .filter((id) => id !== node.metadata?.primaryImageId)
+                        .map((id) => props.nodeById.get(id))
+                        .filter((child): child is CanvasNodeData => Boolean(child && child.metadata?.batchRootId === node.id))
+                        .slice(0, 5);
+                    // 子图对象未变时沿用旧数组，避免挂载/视口变化让所有批次封面重渲染。
+                    const current = previous.get(node.id);
+                    return [node.id, current && current.length === children.length && children.every((child, index) => child === current[index]) ? current : children];
+                }),
+        );
         batchPreviewsRef.current = next;
         return next;
     }, [visibleNodes, props.nodeById]);
@@ -157,7 +175,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                     <CanvasFrameNode
                         key={node.id}
                         data={node}
-                        renderLOD={props.nodeRenderLODById.get(node.id) || "full"}
+                        renderLOD={gestureIds.has(node.id) ? "preview" : props.nodeRenderLODById.get(node.id) || "full"}
                         dragOffset={props.dragPreview?.nodeIds.has(node.id) ? props.dragPreview : undefined}
                         childNodes={framePreviewNodes(node)}
                         scale={viewportScale}
@@ -175,7 +193,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                     <CanvasNode
                         key={node.id}
                         data={node}
-                        renderLOD={props.nodeRenderLODById.get(node.id) || "full"}
+                        renderLOD={gestureIds.has(node.id) ? "preview" : props.nodeRenderLODById.get(node.id) || "full"}
                         dragOffset={props.dragPreview?.nodeIds.has(node.id) ? props.dragPreview : undefined}
                         scale={viewportScale}
                         isSelected={props.selectedNodeIds.has(node.id)}
@@ -238,12 +256,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                     }}
                 >
                     {props.batchSourceNodeIds.length > 0 ? (
-                        <BatchConnectionHandle
-                            scale={viewportScale}
-                            count={props.batchSourceNodeIds.length}
-                            active={Boolean(props.batchConnectionPreview)}
-                            onPointerDown={(event) => props.onStartBatchConnection(event, props.batchSourceNodeIds)}
-                        />
+                        <BatchConnectionHandle scale={viewportScale} count={props.batchSourceNodeIds.length} active={Boolean(props.batchConnectionPreview)} onPointerDown={(event) => props.onStartBatchConnection(event, props.batchSourceNodeIds)} />
                     ) : null}
                 </div>
             ) : null}
@@ -260,16 +273,38 @@ const BatchConnectionTails = memo(function BatchConnectionTails(props: CanvasPro
         items.push(item);
         groups.set(item.to.id, items);
     }
-    return <>{Array.from(groups, ([tableId, items]) => {
-        const node = props.nodeById.get(tableId);
-        if (!node) return null;
-        const top = node.position.y + BATCH_TABLE_HEADER_HEIGHT + BATCH_COLUMN_HEADER_HEIGHT;
-        const height = Math.max(0, node.height - BATCH_TABLE_HEADER_HEIGHT - BATCH_COLUMN_HEADER_HEIGHT);
-        const scroll = props.batchScrollById?.[tableId];
-        return <svg key={tableId} data-batch-cell-connections={tableId} className="pointer-events-none absolute overflow-hidden" viewBox={`${node.position.x} ${top} ${node.width} ${height}`} style={{ left: node.position.x, top, width: node.width, height, zIndex: "var(--z-node-active)" }}>
-            {items.map((item) => <BatchConnectionTail key={item.connection.id} item={item} top={top} scroll={scroll} fromScrollTop={props.scriptScrollTopById[item.from.id] || 0} fromBatchScroll={props.batchScrollById?.[item.from.id]} active={props.selectedConnectionId === item.connection.id || props.relatedConnectionIds.has(item.connection.id)} />)}
-        </svg>;
-    })}</>;
+    return (
+        <>
+            {Array.from(groups, ([tableId, items]) => {
+                const node = props.nodeById.get(tableId);
+                if (!node) return null;
+                const top = node.position.y + BATCH_TABLE_HEADER_HEIGHT + BATCH_COLUMN_HEADER_HEIGHT;
+                const height = Math.max(0, node.height - BATCH_TABLE_HEADER_HEIGHT - BATCH_COLUMN_HEADER_HEIGHT);
+                const scroll = props.batchScrollById?.[tableId];
+                return (
+                    <svg
+                        key={tableId}
+                        data-batch-cell-connections={tableId}
+                        className="pointer-events-none absolute overflow-hidden"
+                        viewBox={`${node.position.x} ${top} ${node.width} ${height}`}
+                        style={{ left: node.position.x, top, width: node.width, height, zIndex: "var(--z-node-active)" }}
+                    >
+                        {items.map((item) => (
+                            <BatchConnectionTail
+                                key={item.connection.id}
+                                item={item}
+                                top={top}
+                                scroll={scroll}
+                                fromScrollTop={props.scriptScrollTopById[item.from.id] || 0}
+                                fromBatchScroll={props.batchScrollById?.[item.from.id]}
+                                active={props.selectedConnectionId === item.connection.id || props.relatedConnectionIds.has(item.connection.id)}
+                            />
+                        ))}
+                    </svg>
+                );
+            })}
+        </>
+    );
 });
 
 function BatchConnectionTail({ item, top, scroll, fromScrollTop, fromBatchScroll, active }: { item: CanvasDisplayConnection; top: number; scroll?: BatchScroll; fromScrollTop: number; fromBatchScroll?: BatchScroll; active: boolean }) {
@@ -280,12 +315,18 @@ function BatchConnectionTail({ item, top, scroll, fromScrollTop, fromBatchScroll
     const cell = batchCellAnchor(to, item.connection.toHandleId, scroll);
     if (!cell) return null;
     const path = canvasConnectionPath(item.connection, from, to, fromScrollTop, 0, fromBatchScroll, scroll);
-    return <g>
-        <path d={path.pathD} fill="none" stroke={theme.connection.stroke} strokeWidth={CANVAS_CONNECTION_STROKE_WIDTH} strokeOpacity={0.8} vectorEffect="non-scaling-stroke" />
-        {active ? <CanvasConnectionBeam pathD={path.pathD} color={theme.connection.beam} /> : null}
-        <circle cx={cell.x} cy={cell.y} r={3} fill={theme.connection.beam} fillOpacity={active ? 1 : 0.65} />
-        {active && cell.clipped ? <text x={cell.x + 8} y={cell.y <= top + 8 ? cell.y + 15 : cell.y - 8} fill="var(--foreground)" fontSize={12}>{t("canvasPage.worldLayers.scrollToView", { label: cell.label })}</text> : null}
-    </g>;
+    return (
+        <g>
+            <path d={path.pathD} fill="none" stroke={theme.connection.stroke} strokeWidth={CANVAS_CONNECTION_STROKE_WIDTH} strokeOpacity={0.8} vectorEffect="non-scaling-stroke" />
+            {active ? <CanvasConnectionBeam pathD={path.pathD} color={theme.connection.beam} /> : null}
+            <circle cx={cell.x} cy={cell.y} r={3} fill={theme.connection.beam} fillOpacity={active ? 1 : 0.65} />
+            {active && cell.clipped ? (
+                <text x={cell.x + 8} y={cell.y <= top + 8 ? cell.y + 15 : cell.y - 8} fill="var(--foreground)" fontSize={12}>
+                    {t("canvasPage.worldLayers.scrollToView", { label: cell.label })}
+                </text>
+            ) : null}
+        </g>
+    );
 }
 
 function BatchConnectionHandle({ scale, count, active, onPointerDown }: { scale: number; count: number; active: boolean; onPointerDown: (event: ReactPointerEvent) => void }) {

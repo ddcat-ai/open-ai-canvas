@@ -19,6 +19,9 @@ import (
 )
 
 func runImageTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if err := validateSeedream55Input(input); err != nil {
+		return nil, err
+	}
 	if input.Config.InterfaceType == string(model.ChannelInterfaceOpenAIImage) {
 		if err := validateOpenAIImageInput(input); err != nil {
 			return nil, err
@@ -170,6 +173,7 @@ func runGeminiImageTask(ctx context.Context, input canvasGenerationInput) (map[s
 		GenerationConfig: geminiImageGenerationConfig{
 			ResponseModalities: []string{"TEXT", "IMAGE"},
 			ImageConfig:        geminiImageConfigFor(input.Config),
+			ThinkingConfig:     geminiThinkingConfigFor(input.Config),
 		},
 	}
 	if systemPrompt := strings.TrimSpace(input.Config.SystemPrompt); systemPrompt != "" {
@@ -193,18 +197,49 @@ func geminiImageConfigFor(config providerConfig) *geminiImageConfig {
 	if size != "" && size != "auto" && strings.Count(size, ":") == 1 {
 		imageConfig.AspectRatio = size
 	}
-	switch strings.ToLower(strings.TrimSpace(config.Quality)) {
-	case "low", "1k":
+	res := strings.ToLower(strings.TrimSpace(config.ImageResolution))
+	if res == "" || res == "auto" {
+		res = strings.ToLower(strings.TrimSpace(config.Quality))
+	}
+	switch res {
+	case "1k", "low":
 		imageConfig.ImageSize = "1K"
-	case "medium", "2k":
+	case "2k", "medium":
 		imageConfig.ImageSize = "2K"
-	case "high", "4k":
+	case "4k", "high":
 		imageConfig.ImageSize = "4K"
 	}
 	if imageConfig.AspectRatio == "" && imageConfig.ImageSize == "" {
 		return nil
 	}
 	return imageConfig
+}
+
+func geminiThinkingConfigFor(config providerConfig) *geminiThinkingConfig {
+	if config.ImageParameters == nil {
+		return nil
+	}
+	var level string
+	if raw, ok := config.ImageParameters["thinkingLevel"]; ok && strings.TrimSpace(fmt.Sprint(raw)) != "" {
+		level = fmt.Sprint(raw)
+	} else if raw, ok := config.ImageParameters["thinking_level"]; ok && strings.TrimSpace(fmt.Sprint(raw)) != "" {
+		level = fmt.Sprint(raw)
+	}
+	if level == "" {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "low":
+		return &geminiThinkingConfig{ThinkingLevel: "LOW"}
+	case "medium", "med":
+		return &geminiThinkingConfig{ThinkingLevel: "MEDIUM"}
+	case "minimal", "min":
+		return &geminiThinkingConfig{ThinkingLevel: "MINIMAL"}
+	case "high":
+		return &geminiThinkingConfig{ThinkingLevel: "HIGH"}
+	default:
+		return nil
+	}
 }
 
 func geminiImageBytes(media providerMedia) ([]byte, string, error) {
@@ -470,7 +505,7 @@ func volcengineArkImageBody(input canvasGenerationInput) (map[string]interface{}
 		"watermark":       false,
 	}
 	if key, value := imageSizeParameter(input.ImageCapability, input.Config.Size); value != "" {
-		if key == "size" {
+		if key == "size" && input.Config.Model != seedream55Model {
 			value = normalizeVolcengineArkImageSize(value)
 		}
 		body[key] = value

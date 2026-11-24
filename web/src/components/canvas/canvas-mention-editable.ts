@@ -7,6 +7,13 @@ import type { EditableSelection, MentionTextPart } from "./canvas-resource-menti
 import { createInlineMentionChip } from "./canvas-mention-chips";
 
 const NAME_MENTION_BOUNDARY = /\s|[,.!?;:，。！？；：、)\]}】）]/u;
+// contentEditable 无法在首个 contentEditable=false 节点前稳定放置光标。
+// 零宽锚点只存在于编辑器 DOM，序列化和偏移计算会把它们忽略。
+const CARET_ANCHOR = "\u200B";
+
+function editableText(text: string) {
+    return text.split(CARET_ANCHOR).join("");
+}
 
 /**
  * 令牌在 end 处结束是否成立：
@@ -57,7 +64,7 @@ export function splitMentionText(value: string, references: CanvasResourceRefere
 }
 
 export function renderEditableParts(editor: HTMLElement, parts: MentionTextPart[]) {
-    const nodes = parts.map((part) => (part.type === "mention" ? createInlineMentionChip(part.reference, part.token) : document.createTextNode(part.text)));
+    const nodes = parts.flatMap((part) => (part.type === "mention" ? [document.createTextNode(CARET_ANCHOR), createInlineMentionChip(part.reference, part.token), document.createTextNode(CARET_ANCHOR)] : [document.createTextNode(part.text)]));
     editor.replaceChildren(...nodes);
 }
 
@@ -87,7 +94,7 @@ function editableLeaves(root: Node) {
             return;
         }
         if (node.nodeType === Node.TEXT_NODE) {
-            const text = node.textContent || "";
+            const text = editableText(node.textContent || "");
             leaves.push({ node, text, offset });
             offset += text.length;
             return;
@@ -168,7 +175,7 @@ export function editableMentionTokenEndingAt(root: HTMLElement, offset: number) 
 }
 
 export function serializeEditableValue(root: HTMLElement) {
-    return serializeNodeList(root.childNodes).replace(/\u00a0/g, " ");
+    return editableText(serializeNodeList(root.childNodes)).replace(/\u00a0/g, " ");
 }
 
 export function serializeNodeList(nodes: NodeListOf<ChildNode> | ChildNode[]) {
@@ -180,7 +187,7 @@ export function serializeNodeList(nodes: NodeListOf<ChildNode> | ChildNode[]) {
 }
 
 export function serializeNode(node: ChildNode): string {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent || "";
+    if (node.nodeType === Node.TEXT_NODE) return editableText(node.textContent || "");
     if (!(node instanceof HTMLElement)) return "";
     const token = node.dataset.mentionToken;
     if (token) return token;
@@ -219,7 +226,7 @@ export function getEditableSelection(root: HTMLElement | null): EditableSelectio
 
 export function offsetForPoint(root: Node, target: Node, targetOffset: number): number {
     if (root === target) {
-        if (root.nodeType === Node.TEXT_NODE) return targetOffset;
+        if (root.nodeType === Node.TEXT_NODE) return editableText((root.textContent || "").slice(0, targetOffset)).length;
         return Array.from(root.childNodes)
             .slice(0, targetOffset)
             .reduce((offset, node) => offset + plainTextLength(node), 0);
@@ -258,6 +265,7 @@ export function pointForOffset(root: Node, offset: number): { node: Node; offset
             remaining -= length;
             continue;
         }
+        if (child.nodeType === Node.TEXT_NODE && editableText(child.textContent || "").length === 0 && child.textContent?.includes(CARET_ANCHOR)) return { node: child, offset: child.textContent.length };
         if (isMentionElement(child)) return { node: root, offset: remaining <= length / 2 ? index : index + 1 };
         return pointForOffset(child, remaining);
     }
@@ -265,7 +273,7 @@ export function pointForOffset(root: Node, offset: number): { node: Node; offset
 }
 
 export function plainTextLength(node: Node): number {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent?.length || 0;
+    if (node.nodeType === Node.TEXT_NODE) return editableText(node.textContent || "").length;
     if (node instanceof HTMLElement) {
         const token = node.dataset.mentionToken;
         if (token) return token.length;

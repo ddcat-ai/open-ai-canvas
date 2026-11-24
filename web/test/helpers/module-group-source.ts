@@ -14,7 +14,7 @@ export const SPLIT_MODULE_GROUPS: Record<string, readonly string[]> = {
     "components/canvas/canvas-resource-mention-textarea.tsx": ["components/canvas/canvas-mention-chips.tsx", "components/canvas/canvas-mention-editable.ts", "components/canvas/canvas-mention-menu.tsx"],
     "components/canvas/canvas-node-content.tsx": ["components/canvas/canvas-node-media-content.tsx", "components/canvas/canvas-node-status-content.tsx"],
     "components/canvas/canvas-node-prompt-panel.tsx": ["components/canvas/canvas-node-prompt-config.ts", "components/canvas/canvas-node-prompt-references.tsx", "components/canvas/canvas-node-prompt-resize.tsx"],
-    "components/canvas/canvas-script-node.tsx": ["components/canvas/canvas-script-node-parts.tsx"],
+    "components/canvas/canvas-script-node.tsx": ["components/canvas/canvas-script-node-parts.tsx", "components/canvas/canvas-script-editor.tsx", "components/canvas/canvas-script-editor-model.ts", "components/canvas/canvas-script-editor-production.tsx"],
     "lib/art-critique/pipeline.ts": ["lib/art-critique/pipeline-messages.ts", "lib/art-critique/pipeline-parse.ts"],
     "lib/model-capabilities.ts": ["lib/model-capabilities-workflow.ts"],
     "pages/admin/components/admin-announcements-panel.tsx": ["pages/admin/components/admin-announcement-editor.tsx", "pages/admin/components/admin-announcement-results.ts"],

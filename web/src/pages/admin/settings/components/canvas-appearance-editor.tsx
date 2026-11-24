@@ -3,7 +3,7 @@ import { Alert, App, Button, Form, Input, InputNumber, Radio, Select } from "ant
 import { ExternalLink, Upload } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Live2DAvatar } from "@/components/canvas/live2d-avatar";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { AgentOrb } from "@/components/ui/agent-orb";
 import {
     AGENT_AVATAR_STATES,
     DEFAULT_AGENT_AVATAR_CLIP_STATES,
@@ -31,12 +31,12 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
     const [bundleLoading, setBundleLoading] = useState(false);
     const [bundleError, setBundleError] = useState("");
     const [selectedAvatarState, setSelectedAvatarState] = useState<AgentAvatarState>("idle");
-    const url = value.live2dResourceId ? live2DModelURL(value.live2dResourceId, value.live2dEntry, true) : "";
+    const url = value.live2dResourceId ? live2DModelURL(value.live2dResourceId, value.live2dEntry, "admin") : "";
     const bundleID = value.avatarBundleResourceId;
-    const bundleManifestURL = bundleID ? agentAvatarBundleFileURL(bundleID, "avatar.json", true) : "/doll/avatar.json";
+    const bundleManifestURL = bundleID ? agentAvatarBundleFileURL(bundleID, "avatar.json", "admin") : "/doll/avatar.json";
     const previewClip = bundleManifest ? agentAvatarClipForState(value, selectedAvatarState, bundleManifest) : "";
     const previewFile = bundleManifest?.clips[previewClip] || "";
-    const previewBundleURL = previewFile ? (bundleID ? agentAvatarBundleFileURL(bundleID, previewFile, true) : `/doll/${encodeURIComponent(previewFile)}`) : "";
+    const previewBundleURL = previewFile ? (bundleID ? agentAvatarBundleFileURL(bundleID, previewFile, "admin") : `/doll/${encodeURIComponent(previewFile)}`) : "";
     const change = (patch: Partial<CanvasAppearance>) => onChange({ ...value, ...patch });
     useEffect(() => {
         if (value.avatarType !== "bundle") return;
@@ -280,7 +280,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             width={Math.round(value.avatarHeight * 0.75)}
                             height={value.avatarHeight}
                             reducedMotion={reducedMotion}
-                            fallback={<FluidOrb size={60} color="#7164f6" />}
+                            fallback={<AgentOrb size={60} color="#7164f6" />}
                             // 预览期间由预览框独占 Live2D 渲染，悬浮入口临时显示默认球。
                             renderPriority={1}
                             onReady={() => {
@@ -303,7 +303,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             <AgentAvatarVideo src={previewBundleURL} loop={!["completed", "failed"].includes(selectedAvatarState)} />
                         </div>
                     ) : (
-                        <FluidOrb size={60} color="#7164f6" />
+                        <AgentOrb size={60} color="#7164f6" />
                     )}
                     <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
                     <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>

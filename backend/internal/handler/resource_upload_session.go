@@ -131,13 +131,13 @@ func dropChunkSession(id string) {
 // RegisterChunkedUploadRoutes 注册本地媒体分片上传三条接口（POST 开始 / PUT 上传片 / POST 合并）。
 func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.POST("/resources/uploads", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		policy, available := loadRuntimePolicy(c, svc)
-		if !available || !enforceRateLimit(c, "resources-upload:"+user.ID, policy.Request.ResourceUploadPerMinute, time.Minute) {
+		if !available || !enforceRateLimit(c, "resources-upload:"+ownerKey, policy.Request.ResourceUploadPerMinute, time.Minute) {
 			return
 		}
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, chunkUploadBodyCapJSON)
@@ -164,11 +164,11 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		removeExpiredChunkSessions()
 		id, createdAt := newUploadSessionID(), time.Now()
-		if err := svc.ReserveChunkUploadSession(user.ID, id, req.Size, createdAt.Add(chunkUploadTTL), chunkUploadMaxPerUser); err != nil {
+		if err := svc.ReserveChunkUploadSession(ownerKey, id, req.Size, createdAt.Add(chunkUploadTTL), chunkUploadMaxPerUser); err != nil {
 			failService(c, err)
 			return
 		}
-		release := func() error { return svc.ReleaseChunkUploadSession(user.ID, id) }
+		release := func() error { return svc.ReleaseChunkUploadSession(ownerKey, id) }
 		dir, err := os.MkdirTemp("", "canvas-chunk-upload-*")
 		if err != nil {
 			if releaseErr := release(); releaseErr != nil {
@@ -180,7 +180,7 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 		session := &chunkedUploadSession{
 			ID:             id,
 			release:        release,
-			UserID:         user.ID,
+			UserID:         ownerKey,
 			FileName:       req.FileName,
 			Kind:           req.Kind,
 			Size:           req.Size,
@@ -199,13 +199,13 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 	})
 
 	r.PUT("/resources/uploads/:id/chunks/:index", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		session := takeChunkSession(c.Param("id"))
-		if session == nil || session.UserID != user.ID {
+		if session == nil || session.UserID != ownerKey {
 			fail(c, http.StatusNotFound, fmt.Errorf("上传会话不存在或已过期，请重新导入"))
 			return
 		}
@@ -251,14 +251,14 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 	})
 
 	r.POST("/resources/uploads/:id/complete", func(c *gin.Context) {
-		user, err := currentUser(c, svc)
+		ownerKey, err := currentContentKey(c, svc)
 		if err != nil {
 			failService(c, err)
 			return
 		}
 		id := c.Param("id")
 		session := takeChunkSession(id)
-		if session == nil || session.UserID != user.ID {
+		if session == nil || session.UserID != ownerKey {
 			fail(c, http.StatusNotFound, fmt.Errorf("上传会话不存在或已过期，请重新导入"))
 			return
 		}
@@ -310,7 +310,7 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		defer fh.Close()
-		resource, svcErr := svc.UploadReservedResourceFile(user.ID, session.ID, session.FileName, session.Size, session.Kind, session.Width, session.Height, session.DurationMs, fh, session.IdempotencyKey)
+		resource, svcErr := svc.UploadReservedResourceFile(ownerKey, session.ID, session.FileName, session.Size, session.Kind, session.Width, session.Height, session.DurationMs, fh, session.IdempotencyKey)
 		// 无论成败都结束会话：失败时前端会整传重试，不需要保留残片。
 		dropChunkSession(id)
 		if svcErr != nil {

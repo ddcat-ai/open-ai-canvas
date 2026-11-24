@@ -47,6 +47,7 @@ type TaskSummary struct {
 
 type TaskClientContext struct {
 	NodeID           string `json:"nodeId,omitempty"`
+	AssetTitle       string `json:"assetTitle,omitempty"`
 	ConversationID   string `json:"conversationId,omitempty"`
 	MessageID        string `json:"messageId,omitempty"`
 	BatchID          string `json:"batchId,omitempty"`
@@ -157,12 +158,13 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 	}
 }
 
-// 列表只暴露页面恢复所需的非敏感关联 ID，不下发完整任务输入或其他 metadata。
+// 列表只暴露页面恢复所需的关联 ID 和素材显示名，不下发完整任务输入或其他 metadata。
 func taskClientContext(raw string) *TaskClientContext {
 	var input struct {
 		Metadata struct {
 			Source          string `json:"source"`
 			NodeID          string `json:"nodeId"`
+			AssetTitle      string `json:"assetTitle"`
 			ConversationID  string `json:"conversationId"`
 			MessageID       string `json:"messageId"`
 			BatchIndex      int    `json:"batchIndex"`
@@ -186,7 +188,8 @@ func taskClientContext(raw string) *TaskClientContext {
 		return nil
 	}
 	metadata := input.Metadata
-	context := &TaskClientContext{NodeID: metadata.NodeID}
+	title := []rune(strings.TrimSpace(metadata.AssetTitle))
+	context := &TaskClientContext{NodeID: metadata.NodeID, AssetTitle: string(title[:min(len(title), 200)])}
 	if metadata.Source == "create-page" && metadata.ConversationID != "" && metadata.MessageID != "" {
 		context.ConversationID = metadata.ConversationID
 		context.MessageID = metadata.MessageID
@@ -215,7 +218,7 @@ func taskClientContext(raw string) *TaskClientContext {
 		chapterOperation = "storyboard"
 	}
 	if chapterOperation == "" || metadata.DomainProjectID == "" || metadata.ChapterID == "" {
-		if context.NodeID == "" {
+		if context.NodeID == "" && context.AssetTitle == "" {
 			return nil
 		}
 		return context

@@ -48,17 +48,3 @@ func TestBuiltinJiMengVideoContractRequiresSecretKey(t *testing.T) {
 		t.Fatalf("builtin JiMeng video with both keys error = %v", err)
 	}
 }
-
-func TestVideoTestSecondsFollowsDeclaredDefault(t *testing.T) {
-	if got := videoTestSeconds(nil); got != 6 {
-		t.Fatalf("videoTestSeconds(nil) = %d, want 6", got)
-	}
-	novita := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceNovitaVideo), "").Video
-	if got := videoTestSeconds(novita); got != 5 {
-		t.Fatalf("enum 5/10 profile test seconds = %d, want 5", got)
-	}
-	veo := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGeminiVeo), "").Video
-	if got := videoTestSeconds(veo); got != veo.Duration.Default {
-		t.Fatalf("veo test seconds = %d, want declared default %d", got, veo.Duration.Default)
-	}
-}

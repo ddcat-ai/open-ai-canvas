@@ -9,7 +9,7 @@ import { buildAudioGenerationMetadata, buildVideoGenerationMetadata, generationR
 import { canvasGenerationPromptMetadata } from "@/lib/canvas/canvas-generation-submission";
 import { mediaVersionFieldsBeforeReplace } from "@/lib/canvas/canvas-media-versions";
 import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
-import { isDoubaoAudioConfig } from "@/lib/audio-generation";
+import { isDoubaoAudioConfig, isEvoLinkSeedAudioConfig } from "@/lib/audio-generation";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
@@ -20,6 +20,7 @@ const NODE_STATUS_SUCCESS = "success" as const;
 export async function executeVideoGeneration({
     nodeId,
     sourceNode,
+    canvasNodes,
     prompt,
     effectivePrompt,
     generationConfig,
@@ -47,7 +48,7 @@ export async function executeVideoGeneration({
     const parent = sourceNode?.position || { x: 0, y: 0 };
     const videoGenerationMetadata = buildVideoGenerationMetadata(sourceNode, generationContext, generationConfig);
     // 原位重新生成沿用用户起的名称（命名标记随旧 metadata 一起保留）；新建的结果节点仍按提示词命名。
-    const keptVideoTitle = reuseSourceNode ? manualNodeTitle(sourceNode) : undefined;
+    const keptVideoTitle = reuseSourceNode ? manualNodeTitle(canvasNodes.find((node) => node.id === nodeId)) : undefined;
     const videoNode: CanvasNodeData = {
         id: videoId,
         type: CanvasNodeType.Video,
@@ -58,6 +59,7 @@ export async function executeVideoGeneration({
         metadata: {
             // 就地重生成不能继承旧任务的计时字段；媒体内容与提示词不在清理范围内。
             ...resetGenerationTaskMetadata(reuseSourceNode ? sourceNode?.metadata : undefined, NODE_STATUS_LOADING),
+            manualTitle: Boolean(keptVideoTitle),
             ...(reuseSourceNode ? mediaVersionFieldsBeforeReplace(sourceNode) : {}),
             taskCreatedAt: new Date().toISOString(),
             ...canvasGenerationPromptMetadata(prompt, effectivePrompt),
@@ -75,6 +77,9 @@ export async function executeVideoGeneration({
             watermark: generationConfig.videoWatermark,
             references: generationReferenceUrls(generationContext),
             ...videoGenerationMetadata,
+            videoReferenceMode:
+                sourceNode?.metadata?.videoReferenceMode ??
+                (sourceNode?.type === CanvasNodeType.Video && videoGenerationMetadata.videoEditOperation === "reference_to_video" && !videoGenerationMetadata.videoStartFrameNodeId && !videoGenerationMetadata.videoEndFrameNodeId ? "all" : undefined),
             ...styleMetadata,
             ...skillMetadata,
         },
@@ -90,7 +95,16 @@ export async function executeVideoGeneration({
         return [
             ...current.map((node) => {
                 if ((node.metadata?.versionOfNodeId || node.id) !== rootId) return node;
-                return { ...node, metadata: { ...node.metadata, versionOfNodeId: rootId, versionLabel: node.metadata?.versionLabel || "A", versionPrimary: node.metadata?.versionPrimary || (!hasPrimaryVersion && node.id === sourceNode.id), status: node.id === nodeId ? NODE_STATUS_SUCCESS : node.metadata?.status } };
+                return {
+                    ...node,
+                    metadata: {
+                        ...node.metadata,
+                        versionOfNodeId: rootId,
+                        versionLabel: node.metadata?.versionLabel || "A",
+                        versionPrimary: node.metadata?.versionPrimary || (!hasPrimaryVersion && node.id === sourceNode.id),
+                        status: node.id === nodeId ? NODE_STATUS_SUCCESS : node.metadata?.status,
+                    },
+                };
             }),
             { ...videoNode, metadata: { ...videoNode.metadata, versionOfNodeId: rootId, versionLabel: nextLabel, versionPrimary: false } },
         ];
@@ -118,6 +132,7 @@ export async function executeVideoGeneration({
                 referenceAudios: generationContext.referenceAudios,
                 signal: controller.signal,
                 metadata: {
+                    assetTitle: videoNode.title,
                     sourceNodeId: nodeId,
                     ...taskContext,
                     resolvedCharacterVersions: generationContext.resolvedCharacterVersions,
@@ -142,6 +157,7 @@ export async function executeVideoGeneration({
 export async function executeAudioGeneration({
     nodeId,
     sourceNode,
+    canvasNodes,
     prompt,
     effectivePrompt,
     generationConfig,
@@ -165,7 +181,7 @@ export async function executeAudioGeneration({
     const isExistingAudioNode = sourceNode?.type === CanvasNodeType.Audio && Boolean(sourceNode.metadata?.content);
     const audioId = reuseSourceNode ? nodeId : nanoid();
     const parent = sourceNode?.position || { x: 0, y: 0 };
-    const keptAudioTitle = reuseSourceNode ? manualNodeTitle(sourceNode) : undefined;
+    const keptAudioTitle = reuseSourceNode ? manualNodeTitle(canvasNodes.find((node) => node.id === nodeId)) : undefined;
     const audioNode: CanvasNodeData = {
         id: audioId,
         type: CanvasNodeType.Audio,
@@ -175,8 +191,7 @@ export async function executeAudioGeneration({
         height: reuseSourceNode ? sourceNode!.height : spec.height,
         metadata: {
             ...(reuseSourceNode && isExistingAudioNode ? { ...resetGenerationTaskMetadata(sourceNode?.metadata, NODE_STATUS_LOADING), ...mediaVersionFieldsBeforeReplace(sourceNode) } : {}),
-            // 空音频节点原位生成会重建 metadata，命名标记要跟着保留，下次重新生成仍沿用名称。
-            ...(keptAudioTitle ? { manualTitle: true } : {}),
+            manualTitle: Boolean(keptAudioTitle),
             ...canvasGenerationPromptMetadata(prompt, effectivePrompt),
             status: NODE_STATUS_LOADING,
             ...buildAudioGenerationMetadata(generationConfig),
@@ -202,7 +217,15 @@ export async function executeAudioGeneration({
                 referenceImages: generationContext.referenceImages,
                 referenceAudios: generationContext.referenceAudios,
                 signal: controller.signal,
-                metadata: { sourceNodeId: nodeId, ...taskContext, resolvedCharacterVersions: generationContext.resolvedCharacterVersions, resolvedCharacterVoiceKey: generationContext.resolvedCharacterVoices[0]?.voiceKey, ...skillMetadata },
+                metadata: {
+                    assetTitle: audioNode.title,
+                    sourceNodeId: nodeId,
+                    ...taskContext,
+                    ...(sourceNode?.metadata?.audioVoiceBindings?.length ? { audioVoiceBindings: sourceNode.metadata.audioVoiceBindings } : {}),
+                    resolvedCharacterVersions: generationContext.resolvedCharacterVersions,
+                    resolvedCharacterVoiceKey: generationContext.resolvedCharacterVoices[0]?.voiceKey,
+                    ...skillMetadata,
+                },
             },
             {
                 bindTask: (task) => bindGenerationTask(audioId, task),
@@ -215,9 +238,20 @@ export async function executeAudioGeneration({
 }
 
 function doubaoAudioPrompt(config: CanvasGenerationExecution["generationConfig"], prompt: string, audioCount: number, imageCount: number) {
+    if (isEvoLinkSeedAudioConfig(config)) {
+        if (audioCount <= 0) return prompt;
+        const next = prompt.replace(/@(音频|Audio|audio)(\d+)/g, "@audio$2");
+        const missing = Array.from({ length: audioCount }, (_, index) => `@audio${index + 1}`).filter((marker) => !next.includes(marker));
+        return missing.length ? `${missing.join(" ")} ${next}` : next;
+    }
+    if (config.audioMode === "tts") return prompt;
     if (!isDoubaoAudioConfig(config)) return prompt;
     // 参考图片模式的 text_prompt 只保留要合成的文本，图片走 references。
-    if (imageCount > 0) return prompt.replace(/@(图片|音频|视频|绘图|角色|文本)\d+/g, " ").replace(/[ \t]{2,}/g, " ").trim();
+    if (imageCount > 0)
+        return prompt
+            .replace(/@(图片|音频|视频|绘图|角色|文本)\d+/g, " ")
+            .replace(/[ \t]{2,}/g, " ")
+            .trim();
     if (audioCount <= 0) return prompt;
     // 官方参考音频用 @Audio1、@Audio2，和 references 的顺序一致。画布里的 @音频N 只是编辑器槽位。
     const next = prompt.replace(/@音频(\d+)/g, "@Audio$1");

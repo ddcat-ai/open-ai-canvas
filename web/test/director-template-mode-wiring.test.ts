@@ -13,7 +13,6 @@ const dock = readFileSync(resolve(import.meta.dir, "../src/components/canvas/pre
 const viewport = moduleGroupSource("components/canvas/previs/previs-viewport.tsx");
 const hook = readFileSync(resolve(import.meta.dir, "../src/pages/canvas/use-canvas-previs.ts"), "utf8");
 const project = moduleGroupSource("pages/canvas/project.tsx");
-const modal = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-template-modal.tsx"), "utf8");
 const store = readFileSync(resolve(import.meta.dir, "../src/stores/canvas/use-previs-workbench-store.ts"), "utf8");
 const styles = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
 
@@ -25,7 +24,7 @@ function slice(source: string, from: string, to: string) {
     return source.slice(start, end);
 }
 
-describe("新建场景必须显式选模板", () => {
+describe("新建场景的模板参数显式传入", () => {
     test("createPrevisShot 第一个参数是 templateId，没有默认值", () => {
         // 归一化空白：Prettier 会把长 useCallback 拆行，断言只关心签名本身。
         expect(hook.replace(/\s+/g, " ")).toContain("const createPrevisShot = useCallback( (templateId: PrevisTemplateId, position?: Position) => {");
@@ -39,23 +38,17 @@ describe("新建场景必须显式选模板", () => {
         expect(hook).not.toContain("createPrevisScene(");
     });
 
-    test("两个新建入口都先开模板选择，而不是直接建场景", () => {
-        expect(project).toContain("onOpenPrevis={() => setPrevisTemplateRequest({})}");
-        expect(project).toContain("onOpenPrevis={(position) => setPrevisTemplateRequest({ position })}");
-        expect(project).not.toContain("onOpenPrevis={() => createPrevisShot()}");
+    test("画布新建入口直接建空白场景，不弹模板选择、不塞默认演员", () => {
+        expect(project).toContain('onOpenPrevis: () => createPrevisShot("empty")');
+        expect(project).toContain('onOpenPrevis={() => createPrevisShot("empty")}');
+        expect(project).toContain('onOpenPrevis={(position) => createPrevisShot("empty", position)}');
+        expect(project).not.toContain("setPrevisTemplateRequest");
+        expect(project).not.toContain("CanvasPrevisTemplateModal");
         expect(project).not.toContain("onOpenPrevis={createPrevisShot}");
     });
 
-    test("选中模板后带着 position 建场景", () => {
-        const element = slice(project, "<CanvasPrevisTemplateModal", "/>");
-        expect(element).toContain("open={Boolean(previsTemplateRequest)}");
-        expect(element).toContain("onSelect={(templateId) => createPrevisShot(templateId, previsTemplateRequest?.position)}");
-    });
-
-    test("模板弹窗把 5 个模板全列出来，没有「默认」快捷项", () => {
-        expect(modal).toContain("PREVIS_TEMPLATES.map");
-        expect(modal).toContain("onSelect(template.id)");
-        expect(modal).not.toContain("默认模板");
+    test("新建的空白场景默认开启世界环境", () => {
+        expect(hook).toContain("world: { ...PREVIS_DEFAULT_WORLD }");
     });
 });
 
@@ -94,8 +87,10 @@ describe("模式接线", () => {
 
     test("动画模式把 Transform 轨迹接入视口，隐藏演员和零长度轨迹不显示", () => {
         expect(workbench).toContain("showMotionPaths\n");
-        expect(viewport).toContain('object.visible && (object.kind === "actor" || object.primitive === "character")');
+        // 只有关键帧的演员画关键帧轨迹；有路径（motionPath）的对象改画可编辑途经点（含高度）。
+        expect(viewport).toContain('object.visible && !object.motionPath && (object.kind === "actor" || object.primitive === "character")');
         expect(viewport).toContain("previsTransformPathLength(object.keyframes) > 0.001");
+        expect(viewport).toContain("object.visible && object.motionPath && object.motionPath.points.length > 1");
         expect(viewport).toContain("<Line points={points}");
         expect(viewport).toContain("interpolatePrevisTransform(sorted[0].transform, sorted, playhead).position");
     });
@@ -156,15 +151,19 @@ describe("模式接线", () => {
         expect(workbench).toContain(") : selectedLight ? (");
     });
 
-    test("运镜生成只更新首尾帧并提示到动画模式继续编辑，不清空手工关键帧", () => {
-        expect(workbench).toContain("resolvePrevisCameraMoveKeyframes(item.keyframes");
-        expect(workbench).toContain("已更新运镜首尾关键帧，可在动画模式继续编辑");
-        expect(workbench).not.toContain("keyframes: [{ id: nanoid(), time: 0, transform: start }");
+    test("运镜写成摄影机运镜段，不再按世界坐标轴生成首尾关键帧，深度范围按运镜后的机位采样", () => {
+        const inspectors = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/previs-inspectors.tsx"), "utf8");
+        expect(inspectors).toContain("<PrevisCameraMoveSection");
+        expect(inspectors).toContain("onChange={(moves) => onUpdateCamera({ moves })}");
+        expect(workbench).not.toContain("cameraMoveTransform");
+        expect(workbench).not.toContain("resolvePrevisCameraMoveKeyframes");
+        expect(workbench).toContain("evaluatePrevisCamera(current, camera, ratio * activeShot.duration)");
     });
 
     test("小屏通过 dock 开合属性检查器，姿态与骨骼入口仍可达", () => {
         const workbenchCss = readFileSync(resolve(import.meta.dir, "../src/components/canvas/previs/canvas-previs-workbench.css"), "utf8");
-        expect(workbench).toContain('className={`pv-panel pv-panel--right thin-scrollbar ${inspectorOpen ? "is-open" : ""}`}');
+        // 右侧面板仍由 inspectorOpen 切换 is-open；允许追加其他状态类（如 is-scene-settings）。
+        expect(workbench).toMatch(/className=\{`pv-panel pv-panel--right thin-scrollbar \$\{inspectorOpen \? "is-open" : ""\}[^`]*`\}/);
         expect(workbench).toMatch(/onToggleInspector=\{\(\) =>\s*\(?\s*compactLayout\s*\?\s*setInspectorOpen\(\(value\) => !value\)\s*:\s*setInspectorDocked\(\(value\) => !value\)\s*\)?\s*\}/);
         expect(workbenchCss).toMatch(/\.pv-panel--right\.is-open\s*\{\s*transform:\s*translateX\(0\);\s*\}/);
         expect(workbench).not.toContain("border-l max-lg:hidden");
@@ -182,16 +181,17 @@ describe("模式接线", () => {
 
     test("切模式不重建会话：初始化 effect 的依赖里没有 mode", () => {
         const initEffect = slice(workbench, "// 会话初始化只认 scene id", "// 打开会话时检查合法本地恢复候选");
-        // 依赖里出现 mode 就意味着换视图会 resetWorkbench + 清空 history。
-        expect(initEffect).toContain("}, [open, resetWorkbench, scene, writeDraft]);");
-        expect(initEffect).not.toContain("mode");
+        // 入口 initialMode 可初始化新会话；用户切换的 mode 不得重新初始化会话。
+        expect(initEffect).toContain("if (!shouldReinitializePrevisSession");
+        expect(initEffect).not.toMatch(/\},\s*\[[^\]]*\bmode\b[^\]]*\]/);
+        expect(initEffect.indexOf("if (!shouldReinitializePrevisSession")).toBeLessThan(initEffect.indexOf("resetWorkbench()"));
     });
 
     test("draft/history/save 的生命周期 effect 一律不依赖 mode", () => {
         const recovery = slice(workbench, "// 打开会话时检查合法本地恢复候选", "const activeShot =");
         const pageHide = slice(workbench, "// 离开页面：", "// 卸载兜底：");
         const unmount = slice(workbench, "// 卸载兜底：", "const undo =");
-        const shortcuts = slice(workbench, "// 预演台是全屏浮层", "/** 对象 transform 编辑的唯一入口");
+        const shortcuts = slice(workbench, "// 世界引擎是全屏浮层", "/** 对象 transform 编辑的唯一入口");
         // 锁住各自的依赖数组，同时允许格式器换行和尾逗号。
         expect(recovery).toMatch(/\},\s*\[message,\s*modal,\s*open,\s*scene,\s*writeDraft\],?\s*\);/);
         expect(pageHide).toMatch(/\},\s*\[mirrorDraft,\s*stagedTransaction\],?\s*\);/);
@@ -200,7 +200,7 @@ describe("模式接线", () => {
     });
 });
 
-describe("异步预演台输出使用最新权威状态", () => {
+describe("异步世界引擎输出使用最新权威状态", () => {
     test("上传后重新核验节点与场景，并把预览引用合入最新 scene", () => {
         expect(hook).toContain("const sourceNodeAtStart = nodesRef.current.find");
         expect(hook).toContain("const outputProjectId = projectId;");
@@ -243,7 +243,7 @@ describe("模式控件可发现、可键盘、小屏可达", () => {
     test("有可见文字标签与 hint title，不是纯图标", () => {
         expect(nav).toContain("{item.label}");
         expect(nav).toContain("title={item.hint}");
-        expect(nav).toContain('aria-label="预演台模式"');
+        expect(nav).toContain('aria-label="世界引擎模式"');
     });
 
     test("带 data-mode 测试锚点：E2E 不靠中文文案定位模式按钮", () => {

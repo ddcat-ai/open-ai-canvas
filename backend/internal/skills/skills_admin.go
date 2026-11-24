@@ -58,23 +58,13 @@ type AdminSkillPackageEditResult struct {
 	Changed bool                   `json:"changed"`
 }
 
-func requireSkillAdmin(actor *model.User) error {
-	if actor == nil {
-		return kernel.Unauthorized("请先登录")
-	}
-	if actor.Role != model.UserRoleAdmin {
-		return kernel.Forbidden("需要管理员权限")
-	}
-	return nil
-}
-
 func isBuiltinSkill(skill *model.Skill) bool {
 	return skill.SourceType == "builtin" || skill.Source == 3
 }
 
 // adminSkill 读取任意状态、任意可见性的技能，只给管理员入口使用。
 func (s *Service) adminSkill(actor *model.User, id string) (*model.Skill, error) {
-	if err := requireSkillAdmin(actor); err != nil {
+	if err := s.requireSkillAdmin(actor); err != nil {
 		return nil, err
 	}
 	id = strings.TrimSpace(id)
@@ -89,6 +79,9 @@ func (s *Service) adminSkill(actor *model.User, id string) (*model.Skill, error)
 }
 
 func (s *Service) adminSkillItems(actor *model.User, rows []model.Skill) ([]AdminSkillItem, error) {
+	if err := s.requireSkillAdmin(actor); err != nil {
+		return nil, err
+	}
 	items, err := s.skillItems(actor.ID, rows, false)
 	if err != nil {
 		return nil, err
@@ -105,7 +98,7 @@ func (s *Service) adminSkillItems(actor *model.User, rows []model.Skill) ([]Admi
 }
 
 func (s *Service) adminSkillItem(actor *model.User, id string) (*AdminSkillItem, error) {
-	skill, err := s.repo.SkillAnyStatus(id)
+	skill, err := s.adminSkill(actor, id)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +110,7 @@ func (s *Service) adminSkillItem(actor *model.User, id string) (*AdminSkillItem,
 }
 
 func (s *Service) AdminSkills(actor *model.User, req AdminSkillListRequest) (*AdminSkillList, error) {
-	if err := requireSkillAdmin(actor); err != nil {
+	if err := s.requireSkillAdmin(actor); err != nil {
 		return nil, err
 	}
 	if req.Page <= 0 {

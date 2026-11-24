@@ -6299,6 +6299,7 @@
 .admin-email-delivery-section,
 .admin-access-registration-section,
 .admin-access-linuxdo-section,
+.admin-access-wechat-section,
 .admin-access-agreement-section,
 .admin-intercept-policy-section,
 .admin-third-party-credential-section {
@@ -6309,20 +6310,39 @@
 .admin-email-delivery-section > .admin-settings-section-summary,
 .admin-access-registration-section > .admin-settings-section-summary,
 .admin-access-linuxdo-section > .admin-settings-section-summary,
+.admin-access-wechat-section > .admin-settings-section-summary,
 .admin-access-agreement-section > .admin-settings-section-summary,
 .admin-intercept-policy-section > .admin-settings-section-summary,
 .admin-third-party-credential-section > .admin-settings-section-summary {
     background: color-mix(in srgb, var(--foreground) 3%, var(--admin-layer-1));
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section)
+:is(
+        .admin-storage-mode-section,
+        .admin-email-delivery-section,
+        .admin-access-registration-section,
+        .admin-access-linuxdo-section,
+        .admin-access-wechat-section,
+        .admin-access-agreement-section,
+        .admin-intercept-policy-section,
+        .admin-third-party-credential-section
+    )
     > .admin-settings-section-summary
     h2 {
     font-size: 16px;
     letter-spacing: -0.01em;
 }
 
-:is(.admin-storage-mode-section, .admin-email-delivery-section, .admin-access-registration-section, .admin-access-linuxdo-section, .admin-access-agreement-section, .admin-intercept-policy-section, .admin-third-party-credential-section)
+:is(
+        .admin-storage-mode-section,
+        .admin-email-delivery-section,
+        .admin-access-registration-section,
+        .admin-access-linuxdo-section,
+        .admin-access-wechat-section,
+        .admin-access-agreement-section,
+        .admin-intercept-policy-section,
+        .admin-third-party-credential-section
+    )
     > .admin-settings-section-summary
     p {
     max-width: 760px;
@@ -9702,42 +9722,37 @@
     box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 7%, transparent);
 }
 
-.admin-model-editor-footer-actions {
+.admin-model-editor-modal .admin-model-editor-footer {
     display: flex;
+    flex: none;
     align-items: center;
-    justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: var(--space-2) var(--space-4);
 }
 
 .admin-model-editor-footer-primary {
     display: flex;
     min-width: 0;
+    margin-inline-start: auto;
+    align-items: center;
+    justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-1);
 }
 
 .admin-model-editor-footer-status {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    text-align: left;
-}
-
-.admin-model-editor-footer-status > div {
-    display: grid;
-    gap: 2px;
-}
-
-.admin-model-editor-footer-status strong {
+    gap: var(--space-2);
     color: var(--admin-text-primary);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--fs-body);
+    font-weight: 500;
 }
 
 .admin-model-editor-footer-status small {
     color: var(--admin-text-muted);
-    font-size: 12px;
+    font-size: var(--fs-caption);
+    font-weight: 400;
 }
 
 :root:not(.dark) .admin-model-editor-drawer .ant-drawer-header,
@@ -9816,14 +9831,6 @@
     font-weight: 500;
 }
 
-:root:not(.dark) .admin-model-editor-footer-actions {
-    border-color: rgba(17, 17, 17, 0.15);
-    background: #ffffff;
-    box-shadow:
-        0 1px 2px color-mix(in srgb, rgb(17 17 17 / 0.08) 50%, transparent),
-        0 6px 20px rgb(17 17 17 / 0.08);
-}
-
 :root:not(.dark) .admin-price-tier-mode-control .ant-segmented-item-selected,
 :root:not(.dark) .admin-price-tier-billing-mode .ant-segmented-item-selected {
     background: #ececec;
@@ -9836,10 +9843,6 @@
     }
     .admin-model-editor-tab-content {
         padding: 12px 16px;
-    }
-    .admin-model-editor-footer-primary {
-        width: 100%;
-        justify-content: flex-end;
     }
     .admin-model-editor-modal .admin-capability-reference-grid {
         grid-template-columns: minmax(0, 1fr);

@@ -43,6 +43,7 @@ type Options struct {
 	GenerateAudio         *bool   `json:"generateAudio,omitempty" node:"generateAudio" task:"videoGenerateAudio" modes:"video"`
 	Watermark             *bool   `json:"watermark,omitempty" node:"watermark" task:"videoWatermark" modes:"video"`
 	AudioVoice            *string `json:"audioVoice,omitempty" node:"audioVoice" task:"audioVoice" modes:"audio"`
+	AudioMode             *string `json:"audioMode,omitempty" node:"audioMode" task:"audioMode" modes:"audio"`
 	AudioFormat           *string `json:"audioFormat,omitempty" node:"audioFormat" task:"audioFormat" modes:"audio"`
 	AudioSpeed            *string `json:"audioSpeed,omitempty" node:"audioSpeed" task:"audioSpeed" modes:"audio"`
 	AudioLanguage         *string `json:"audioLanguage,omitempty" node:"audioLanguage" task:"audioLanguage" modes:"audio"`
@@ -186,6 +187,24 @@ func Decode(data []byte) (GenerationSpec, error) {
 	return spec, spec.Validate()
 }
 
+// DecodeCanvasGenerationSpec accepts the string form written by older canvas
+// clients, while keeping the execution contract strict for every other field.
+func DecodeCanvasGenerationSpec(data []byte) (GenerationSpec, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return Decode(data)
+	}
+	if version, ok := raw["version"].(string); ok {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(version)); err == nil {
+			raw["version"] = parsed
+			if normalized, err := json.Marshal(raw); err == nil {
+				return Decode(normalized)
+			}
+		}
+	}
+	return Decode(data)
+}
+
 // OptionsFromTaskConfig only copies public fields declared above. Credentials and
 // provider routing fields cannot be admitted by adding a task config key.
 func OptionsFromTaskConfig(mode string, config map[string]any) (Options, error) {
@@ -303,11 +322,12 @@ func NodeGenerationProjection(metadata map[string]any) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		spec, err := Decode(encoded)
-		if err != nil {
+		spec, err := DecodeCanvasGenerationSpec(encoded)
+		if err == nil {
+			result["generationSpec"] = spec
+		} else if !strings.HasPrefix(err.Error(), "generationSpec.version:") {
 			return nil, err
 		}
-		result["generationSpec"] = spec
 	}
 	known := map[string]struct{}{
 		"generationSpec": {}, "prompt": {}, "composerContent": {}, "model": {},

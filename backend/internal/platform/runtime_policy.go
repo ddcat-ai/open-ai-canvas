@@ -12,7 +12,7 @@ import (
 	"yingce/backend/internal/model"
 )
 
-const runtimePolicySettingKey = "runtime_policy"
+const runtimePolicySettingKey = model.RuntimePolicySettingKey
 
 const (
 	maxRuntimeUploadMB        int64 = 999
@@ -38,7 +38,7 @@ const (
 	DefaultRuntimeAgentStepTimeout      = 0
 	MinRuntimeAgentSessions             = 1
 	MaxRuntimeAgentSessions             = 64
-	DefaultRuntimeAgentSessions         = 30
+	DefaultRuntimeAgentSessions         = 8
 )
 
 // agentStepMaxOutputTokensDefault 读取部署级覆盖并按同一套范围夹取；环境变量无法表达"不限制"（0），
@@ -57,6 +57,7 @@ func agentStepTimeoutSecondsDefault() int {
 }
 
 type RuntimeResourcePolicy struct {
+	model.AgentHistoryQuota
 	ResourceUploadMB        int64 `json:"resourceUploadMB"`
 	GeneratedFileMB         int64 `json:"generatedFileMB"`
 	DailyUploadMB           int64 `json:"dailyUploadMB"`
@@ -95,6 +96,8 @@ type RuntimeTaskPolicy struct {
 	AgentStepTimeoutSeconds int `json:"agentStepTimeoutSeconds"`
 	// AgentMaxSessions 是同时进行中的画布 Agent 轮次上限。审批等待不占用名额。
 	AgentMaxSessions int `json:"agentMaxSessions"`
+	// AgentMaxRunsPerUser also bounds queued and approval-waiting root runs.
+	AgentMaxRunsPerUser int `json:"agentMaxRunsPerUser"`
 }
 
 type RuntimeRequestPolicy struct {
@@ -148,6 +151,7 @@ type PublicRuntimeLimits struct {
 func DefaultRuntimePolicy() RuntimePolicySetting {
 	return RuntimePolicySetting{
 		Resource: RuntimeResourcePolicy{
+			AgentHistoryQuota:       model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB, AgentHistoryGlobalMB: model.DefaultAgentHistoryGlobalMB},
 			ResourceUploadMB:        50,
 			GeneratedFileMB:         64,
 			DailyUploadMB:           2048,
@@ -180,6 +184,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			AgentStepMaxOutputTokens: agentStepMaxOutputTokensDefault(),
 			AgentStepTimeoutSeconds:  agentStepTimeoutSecondsDefault(),
 			AgentMaxSessions:         DefaultRuntimeAgentSessions,
+			AgentMaxRunsPerUser:      5,
 		},
 		Request: RuntimeRequestPolicy{
 			TaskCreatePerMinute:        30,
@@ -208,7 +213,8 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 func selfUseRuntimePolicy() RuntimePolicySetting {
 	value := DefaultRuntimePolicy()
 	value.Resource = RuntimeResourcePolicy{
-		ResourceUploadMB: maxRuntimeUploadMB, GeneratedFileMB: maxRuntimeUploadMB,
+		AgentHistoryQuota: model.AgentHistoryQuota{AgentHistoryMB: model.MaxAgentHistoryMB, AgentHistoryGlobalMB: model.MaxAgentHistoryGlobalMB},
+		ResourceUploadMB:  maxRuntimeUploadMB, GeneratedFileMB: maxRuntimeUploadMB,
 		DailyUploadMB: maxRuntimeDataMB, StoredFileGB: maxRuntimeStorageGB, StructuredDataMB: maxRuntimeDataMB,
 		TaskDataGB: maxRuntimeStorageGB, AssetCount: maxRuntimeCount, CanvasCount: maxRuntimeCount,
 		TaskCount: maxRuntimeCount, APICallLogCount: maxRuntimeCount,
@@ -220,7 +226,8 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		AudioTimeoutMinutes: maxRuntimeTimeoutMinutes, VideoTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		StoryboardTimeoutMinutes: maxRuntimeTimeoutMinutes, DefaultTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		AgentStepMaxOutputTokens: MaxRuntimeAgentStepOutputTokens, AgentStepTimeoutSeconds: MaxRuntimeAgentStepTimeoutSeconds,
-		AgentMaxSessions: MaxRuntimeAgentSessions,
+		AgentMaxSessions:    MaxRuntimeAgentSessions,
+		AgentMaxRunsPerUser: MaxRuntimeAgentSessions,
 	}
 	value.Request = RuntimeRequestPolicy{
 		TaskCreatePerMinute:     maxRuntimeRate,
@@ -364,9 +371,11 @@ func (s *Service) readRuntimePolicy() (*model.SystemSetting, RuntimePolicySettin
 		return nil, value, validateRuntimePolicy(value)
 	}
 	value := DefaultRuntimePolicy()
+	value.Resource.AgentHistoryGlobalMB = 0
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, RuntimePolicySetting{}, errors.New("资源与请求策略配置格式无效")
 	}
+	value.Resource.AgentHistoryGlobalMB = value.Resource.EffectiveGlobalMB()
 	if err := validateRuntimePolicy(value); err != nil {
 		return nil, RuntimePolicySetting{}, err
 	}
@@ -375,6 +384,17 @@ func (s *Service) readRuntimePolicy() (*model.SystemSetting, RuntimePolicySettin
 
 func validateRuntimePolicy(value RuntimePolicySetting) error {
 	resource := value.Resource
+	if _, err := resource.AgentHistoryQuota.LimitBytes(); err != nil {
+		return kernel.BadAuthRequest(err.Error())
+	}
+	globalHistoryBytes, err := resource.AgentHistoryQuota.GlobalLimitBytes()
+	if err != nil {
+		return kernel.BadAuthRequest(err.Error())
+	}
+	accountHistoryBytes, _ := resource.AgentHistoryQuota.LimitBytes()
+	if globalHistoryBytes < accountHistoryBytes {
+		return kernel.BadAuthRequest("平台 Agent 热历史容量不能小于每账号 Agent 历史容量")
+	}
 	for label, item := range map[string]int64{
 		"普通资源单文件": resource.ResourceUploadMB,
 		"单个生成资源":  resource.GeneratedFileMB,
@@ -448,6 +468,9 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	}
 	if task.AgentMaxSessions < MinRuntimeAgentSessions || task.AgentMaxSessions > MaxRuntimeAgentSessions {
 		return kernel.BadAuthRequest(fmt.Sprintf("Agent 同时对话上限必须是 %d-%d 的整数", MinRuntimeAgentSessions, MaxRuntimeAgentSessions))
+	}
+	if task.AgentMaxRunsPerUser < 1 || task.AgentMaxRunsPerUser > MaxRuntimeAgentSessions {
+		return kernel.BadAuthRequest("每用户进行中的 Agent 对话数量必须在 1 到 64 之间")
 	}
 	request := value.Request
 	for label, item := range map[string]int{

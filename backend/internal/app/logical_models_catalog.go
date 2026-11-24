@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 )
 
@@ -75,6 +76,19 @@ func (s *Service) groupLogicalModel(policy CreditPolicy, access *userGroupAccess
 					skip = true
 					break
 				}
+				if tiers[index].ImagePricing != nil {
+					converted, err := imagebilling.MapPrices(tiers[index].ImagePricing, func(price int64) (int64, error) {
+						value, err := pricing.convertPrice(price)
+						if err != nil {
+							return 0, err
+						}
+						return effectiveCatalogPrice(value, pricing.MultiplierBPS), nil
+					})
+					if err != nil {
+						return cached, false, err
+					}
+					tiers[index].ImagePricing = converted
+				}
 				tiers[index].UnitPriceMicrocredits = effectiveCatalogPrice(prices.Unit, pricing.MultiplierBPS)
 				tiers[index].InputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Input, pricing.MultiplierBPS)
 				tiers[index].OutputTokenPriceMicrocredits = effectiveCatalogPrice(prices.Output, pricing.MultiplierBPS)
@@ -99,6 +113,13 @@ func (s *Service) groupLogicalModel(policy CreditPolicy, access *userGroupAccess
 			return cached, false, err
 		}
 		item := cached.Model
+		if item.ImagePricing != nil {
+			converted, err := imagebilling.MapPrices(item.ImagePricing, func(price int64) (int64, error) { return effectiveCatalogPrice(price, pricing.MultiplierBPS), nil })
+			if err != nil {
+				return cached, false, err
+			}
+			item.ImagePricing = converted
+		}
 		item.UnitPriceMicrocredits = effectiveCatalogPrice(item.UnitPriceMicrocredits, pricing.MultiplierBPS)
 		item.InputPriceMicrocredits = effectiveCatalogPrice(item.InputPriceMicrocredits, pricing.MultiplierBPS)
 		item.OutputPriceMicrocredits = effectiveCatalogPrice(item.OutputPriceMicrocredits, pricing.MultiplierBPS)
@@ -129,7 +150,8 @@ func publicLogicalModel(cached cachedLogicalModel, available bool) PublicLogical
 	pricingMode, displayPrice, priceLabel := computeModelPriceDisplay(item, priceTiers)
 
 	return PublicLogicalModel{
-		ID: item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon,
+		ImagePricing: item.ImagePricing,
+		ID:           item.ID, Code: item.Code, Name: item.Name, Icon: item.Icon,
 		Description: item.Description, Capability: item.Capability, SortOrder: item.SortOrder,
 		PricePolicy: item.PricePolicy, PricingMode: pricingMode, DisplayPrice: displayPrice,
 		PriceLabel: priceLabel, BillingMode: item.BillingMode,
@@ -170,11 +192,18 @@ func publicLogicalModelPriceTiers(cached cachedLogicalModel) []PublicLogicalMode
 				continue
 			}
 			key := fmt.Sprintf("%s:%s:%d:%d:%d:%d:%d", selectorKey, tier.BillingMode, tier.UnitPriceMicrocredits, tier.InputTokenPriceMicrocredits, tier.OutputTokenPriceMicrocredits, tier.CachedTokenPriceMicrocredits, tier.CacheWriteTokenPriceMicrocredits)
+			if tier.ImagePricing != nil {
+				raw, err := json.Marshal(tier.ImagePricing)
+				if err != nil {
+					continue
+				}
+				key += ":" + string(raw)
+			}
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
-			result = append(result, PublicLogicalModelPriceTier{Selector: selector, Resolution: normalizeChannelModelTierResolution(tier.Resolution), VideoSeconds: tier.VideoSeconds, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits})
+			result = append(result, PublicLogicalModelPriceTier{ImagePricing: tier.ImagePricing, Selector: selector, Resolution: normalizeChannelModelTierResolution(tier.Resolution), VideoSeconds: tier.VideoSeconds, BillingMode: tier.BillingMode, UnitPriceMicrocredits: tier.UnitPriceMicrocredits, InputTokenPriceMicrocredits: tier.InputTokenPriceMicrocredits, OutputTokenPriceMicrocredits: tier.OutputTokenPriceMicrocredits, CachedTokenPriceMicrocredits: tier.CachedTokenPriceMicrocredits, CacheWriteTokenPriceMicrocredits: tier.CacheWriteTokenPriceMicrocredits})
 		}
 	}
 	return result

@@ -117,7 +117,7 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
             const result = await closePaymentOrder(order.id);
             setOrder(result.order);
             if (result.order.status === "credited") await settle(result.order);
-            else message.success(t("account.payment.orderClosed"));
+            else if (result.order.status === "closed") message.success(t("account.payment.orderClosed"));
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("account.payment.closeFailed"));
         } finally {
@@ -174,13 +174,18 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
                             <span>{t("account.payment.scanHint")}</span>
                         </>
                     ) : null}
+                    {order.status === "pending" && order.checkout.mode === "redirect" && order.checkout.url ? (
+                        <Button type="primary" href={order.checkout.url}>
+                            {t("account.payment.continuePayment")}
+                        </Button>
+                    ) : null}
                     <PaymentStatus order={order} now={clock} />
                 </div>
             ) : null}
         </AppModal>
     );
 
-    return { creating, start, showOrder, resetIdempotency, dialog };
+    return { order, creating, start, showOrder, resetIdempotency, dialog };
 }
 
 function PaymentStatus({ order, now }: { order: PaymentOrder; now: number }) {
@@ -188,6 +193,7 @@ function PaymentStatus({ order, now }: { order: PaymentOrder; now: number }) {
     if (order.status === "credited") return <div className="workspace-wallet-payment-status is-success">{grantedText(order)}</div>;
     if (order.status === "closed") return <div className="workspace-wallet-payment-status">{notGrantedText(order)}</div>;
     if (order.status === "create_failed") return <div className="workspace-wallet-payment-status is-error">{t("account.payment.createCheckoutFailed")}</div>;
+    if (order.status === "closing" || order.status === "created") return <div className="workspace-wallet-payment-status">{t(`account.payment.status.${order.status}`)}</div>;
     const remaining = Math.max(0, Math.floor((new Date(order.expiresAt).getTime() - now) / 1000));
     const hours = Math.floor(remaining / 3600);
     const minutes = Math.floor((remaining % 3600) / 60);
@@ -196,7 +202,7 @@ function PaymentStatus({ order, now }: { order: PaymentOrder; now: number }) {
 }
 
 function paymentFooter(order: PaymentOrder | null, loading: boolean, close: () => void, cancel: () => Promise<void>, query: () => Promise<void>, retry: () => Promise<void>) {
-    if (order?.status === "pending")
+    if (order && ["created", "pending", "closing"].includes(order.status))
         return [
             <Button key="cancel" danger disabled={loading} onClick={() => void cancel()}>
                 {translate("account.payment.closeOrder")}
@@ -207,8 +213,8 @@ function paymentFooter(order: PaymentOrder | null, loading: boolean, close: () =
         ];
     if (order?.status === "create_failed")
         return [
-            <Button key="close" onClick={close}>
-                {translate("account.payment.later")}
+            <Button key="cancel" danger disabled={loading} onClick={() => void cancel()}>
+                {translate("account.payment.closeOrder")}
             </Button>,
             <Button key="retry" type="primary" loading={loading} onClick={() => void retry()}>
                 {translate("account.payment.regenerate")}

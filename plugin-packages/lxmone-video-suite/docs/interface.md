@@ -107,7 +107,7 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
   "apiVersion": "yingce.plugin/v2",
   "id": "lxmone-video-suite",
   "name": "万有引力视频套件",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Yingce / 万有引力",
   "description": "万有引力（lxmone.xyz）视频协议套件：Wan 3.0（现有渠道与 S 渠道）、Seedance 2 / 2.5、SD 2.0 / 2.5 / Mini、Grok Imagine、MiniMax H3（Max 与 A-E 独立工作流）。",
   "permissions": [
@@ -128,6 +128,10 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
     "providers": [
       {
         "id": "lxmone-wan-videos",
+        "videoReferences": {
+          "layout": "role-reference-images",
+          "token": "参考图{n}"
+        },
         "label": "万有引力 Wan 3.0 视频（现有渠道）",
         "description": "wan3.0-video / wan3.0-video-prime：POST /v1/videos，顶层 reference_images、reference_videos、reference_audios。",
         "capabilities": [
@@ -409,6 +413,10 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
       },
       {
         "id": "lxmone-wan-channel-s",
+        "videoReferences": {
+          "layout": "input-media",
+          "token": "参考图{n}"
+        },
         "label": "万有引力 Wan 3.0 视频（S 渠道）",
         "description": "wan3.0-video-s / wan3.0-video-prime-s：POST /v1/videos，原生 input.media 与 parameters。",
         "capabilities": [
@@ -703,6 +711,10 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
       },
       {
         "id": "lxmone-seedance-videos",
+        "videoReferences": {
+          "layout": "reference-images",
+          "token": "参考图{n}"
+        },
         "label": "万有引力 Seedance 视频",
         "description": "seedance-2-pro/fast/mini、seedance-2.5-pro、seedance2.0-a~f、seedance2.5-a。",
         "capabilities": [
@@ -973,6 +985,10 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
       },
       {
         "id": "lxmone-h3-max-videos",
+        "videoReferences": {
+          "layout": "reference-images",
+          "token": "参考图{n}"
+        },
         "label": "万有引力 MiniMax H3 Max 视频",
         "description": "minimax-h3-max：POST /v1/videos，seconds、resolution 与 reference_images、reference_videos、reference_audios 扁平 URL 数组。",
         "capabilities": [
@@ -1243,6 +1259,10 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
       },
       {
         "id": "lxmone-sd-videos",
+        "videoReferences": {
+          "layout": "images",
+          "token": "参考图{n}"
+        },
         "label": "万有引力 SD 视频",
         "description": "sd-2.0-a/b/c、sd-2.5-a、sd-2.5：POST /v1/videos，duration 与 images、videos、audio 数组。",
         "capabilities": [
@@ -1800,6 +1820,10 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
       },
       {
         "id": "lxmone-grok-videos",
+        "videoReferences": {
+          "layout": "image-or-reference-images",
+          "token": "参考图{n}"
+        },
         "label": "万有引力 Grok Imagine 视频",
         "description": "grok-imagine-video / 1.5 / 1.5S：POST /v1/videos/generations，duration、image、reference_images。",
         "capabilities": [
@@ -2098,6 +2122,10 @@ HTTP 失败、业务错误码或状态进入 `failed` 时，任务以失败结�
       },
       {
         "id": "lxmone-h3-workflow",
+        "videoReferences": {
+          "layout": "input-reference",
+          "token": "参考图{n}"
+        },
         "label": "万有引力 MiniMax H3 工作流",
         "description": "minimax-h3-a~e：POST /v1/videos/generations，input_reference、first_frame、last_frame、audio。",
         "capabilities": [

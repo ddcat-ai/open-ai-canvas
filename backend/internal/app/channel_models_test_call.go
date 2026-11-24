@@ -21,19 +21,22 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if err != nil {
 		return nil, err
 	}
-	modelKey, providerModelKey, capability, protocol, err := s.normalizeChannelModelContract(channel, req)
+	release, err := selectModelRelease(s.protocolRegistry(), req.Protocol, req.ProtocolRelease, true)
 	if err != nil {
 		return nil, err
 	}
-	if capability == "text" || capability == "image" || capability == "video" {
-		if _, err := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry()); err != nil {
-			return nil, err
-		}
+	modelKey, providerModelKey, capability, protocol, err := normalizeChannelModelContractWithRegistry(release.Registry, channel, req)
+	if err != nil {
+		return nil, err
+	}
+	profile, err := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, release.Registry)
+	if err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "" {
 		return nil, BadAuthRequest("请先在渠道中配置 Base URL 和 API Key")
 	}
-	if _, err := ValidateOutboundURL(channel.BaseURL); err != nil {
+	if _, err := ValidateOutboundURLWithProxy(channel.BaseURL, channel.ProxyURL); err != nil {
 		return nil, err
 	}
 	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
@@ -47,30 +50,6 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		"video": "A static gray circle on a white background.",
 		"audio": "Model test.",
 	}[capability]
-	imageSize, imageQuality := "", ""
-	var imageProfile *ImageCapabilityConfig
-	videoRatio, videoResolution := videoTestDefaults(nil)
-	var videoProfile *VideoCapabilityConfig
-	switch capability {
-	case "image":
-		profile, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
-		if normalizeErr != nil {
-			return nil, normalizeErr
-		}
-		imageProfile = profile.Image
-		imageSize, imageQuality = imageTestDefaults(imageProfile)
-	case "video":
-		// 视频测试必须带上模型能力画像：声明式协议只按画像里的枚举回填分辨率名（如 480 -> 480p），
-		// 没有画像时会把裸数字发给上游，火山方舟等供应商会直接拒绝。
-		profile, normalizeErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, s.protocolRegistry())
-		if normalizeErr != nil {
-			return nil, normalizeErr
-		}
-		videoProfile = profile.Video
-		videoRatio, videoResolution = videoTestDefaults(videoProfile)
-	}
-	videoSecondsValue := videoTestSeconds(videoProfile)
-	videoSeconds := strconv.Itoa(videoSecondsValue)
 	input := canvasGenerationInput{
 		Mode:   capability,
 		Prompt: prompt,
@@ -84,11 +63,8 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 			Headers:            headers,
 			Model:              providerModelKey,
 			ChannelModelKey:    modelKey,
-			Size:               map[string]string{"image": imageSize, "video": videoRatio}[capability],
-			Quality:            imageQuality,
+			CapabilityConfig:   profile,
 			Count:              "1",
-			VideoSeconds:       videoSeconds,
-			VQuality:           videoResolution,
 			VideoGenerateAudio: "false",
 			VideoWatermark:     "false",
 			AudioVoice:         "alloy",
@@ -97,8 +73,12 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		},
 		Metadata: map[string]interface{}{},
 	}
-	if capability == "image" {
+	var videoSeconds int
+	switch capability {
+	case "image":
+		imageProfile := profile.Image
 		input.ImageCapability = imageProfile
+		input.Config.Size, input.Config.Quality = imageTestDefaults(imageProfile)
 		if imageProfile.Parameters != nil {
 			input.Config.ImageParameters = imageParameterDefaults(imageProfile.Parameters)
 		}
@@ -108,9 +88,11 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 		if err := applyImageParameterValues(&input.Config, imageProfile); err != nil {
 			return nil, err
 		}
-	}
-	if capability == "video" {
-		input.VideoCapability = videoProfile
+	case "video":
+		input.VideoCapability = profile.Video
+		input.Config.Size, input.Config.VQuality = profile.Video.DefaultRatio, profile.Video.DefaultResolution
+		videoSeconds = profile.Video.Duration.Default
+		input.Config.VideoSeconds = strconv.Itoa(videoSeconds)
 	}
 
 	// 测试复用真实生成协议、运行时并发和熔断策略，但不创建用户任务或计费订单。
@@ -118,9 +100,9 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	defer cancel()
 	testCtx = context.WithValue(testCtx, providerAnalyticsKey{}, providerAnalyticsContext{
 		Service: s, Billing: s.taskBilling(), UserID: actor.ID, ChannelID: channel.ID, Capability: capability,
-		Operation: "admin_model_test", Model: modelKey, VideoSeconds: videoSecondsValue, ProxyURL: channel.ProxyURL,
+		Operation: "admin_model_test", Model: modelKey, VideoSeconds: videoSeconds, ProxyURL: channel.ProxyURL,
 	})
-	testCtx = withProtocolRegistry(testCtx, s.protocolRegistry())
+	testCtx = withProtocolRegistry(testCtx, release.Registry)
 	startedAt := time.Now()
 	switch capability {
 	case "text":
@@ -142,42 +124,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	return &AdminChannelModelTestResult{DurationMs: time.Since(startedAt).Milliseconds()}, nil
 }
 
-// 模型测试必须使用当前模型声明的默认参数，避免固定分辨率 SKU 被通用 1K 测试值误伤。
-// videoTestDefaults 从模型能力画像取测试用的比例和分辨率；画像缺失时回退到最通用的 16:9 / 720。
-func videoTestDefaults(profile *VideoCapabilityConfig) (string, string) {
-	if profile == nil {
-		return "16:9", "720"
-	}
-	ratio := strings.TrimSpace(profile.DefaultRatio)
-	if ratio == "" && len(profile.Ratios) > 0 {
-		ratio = strings.TrimSpace(profile.Ratios[0])
-	}
-	if ratio == "" {
-		ratio = "16:9"
-	}
-	resolution := strings.TrimSpace(profile.DefaultResolution)
-	if resolution == "" && len(profile.Resolutions) > 0 {
-		resolution = strings.TrimSpace(profile.Resolutions[0])
-	}
-	if resolution == "" {
-		resolution = "720"
-	}
-	return ratio, resolution
-}
-
-// videoTestSeconds 取模型能力声明的默认时长（保存时已校验它属于时长范围或固定档位），
-// 避免固定 6 秒落在 5/10 秒这类档位之外造成测试假失败；画像缺失时才用 6 秒。
-func videoTestSeconds(profile *VideoCapabilityConfig) int {
-	if profile != nil && profile.Duration.Default > 0 {
-		return profile.Duration.Default
-	}
-	return 6
-}
-
 func imageTestDefaults(profile *ImageCapabilityConfig) (string, string) {
-	if profile == nil {
-		return "1024x1024", "auto"
-	}
 	size := ""
 	if profile.Size.Parameter != "none" {
 		size = strings.TrimSpace(profile.Size.Default)

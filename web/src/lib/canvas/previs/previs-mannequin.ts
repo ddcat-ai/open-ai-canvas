@@ -312,6 +312,7 @@ export function buildPrevisMannequin(input: { template: Object3D; archetype?: Pr
     const parentInverse = new Quaternion();
     const contactPoint = new Vector3();
     let lift = 0;
+    let worldLift = 0;
 
     const sync = () => {
         for (const bone of PREVIS_MANNEQUIN_BONES) {
@@ -344,7 +345,8 @@ export function buildPrevisMannequin(input: { template: Object3D; archetype?: Pr
             contact.marker.getWorldPosition(contactPoint).applyMatrix4(toRoot);
             lowest = Math.min(lowest, contactPoint.y - contact.radius * profile.height);
         }
-        root.position.y = (Number.isFinite(lowest) ? -lowest : 0) + lift * profile.height;
+        // lift 是动作片段的跳跃高度（随身高缩放），worldLift 是飞行与路径高度（米）。
+        root.position.y = (Number.isFinite(lowest) ? -lowest : 0) + lift * profile.height + worldLift;
         root.updateMatrixWorld(true);
     };
 
@@ -360,6 +362,7 @@ export function buildPrevisMannequin(input: { template: Object3D; archetype?: Pr
                 if (rotation && rotation.every(Number.isFinite)) bones[name].quaternion.fromArray(rotation).normalize();
             }
             lift = Math.max(0, pose.lift);
+            worldLift = Number.isFinite(pose.worldLift) ? Math.max(0, pose.worldLift) : 0;
             sync();
         },
         setColor(color, selected) {

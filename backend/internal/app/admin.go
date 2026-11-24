@@ -93,6 +93,9 @@ type AdminReferenceData struct {
 }
 
 type ChannelRequest struct {
+	ExpectedUpdatedAt    time.Time                `json:"expectedUpdatedAt,omitempty"`
+	WebsiteID            string                   `json:"websiteId"`
+	APIFormat            *string                  `json:"apiFormat"`
 	MediaTransport       *ReferenceMediaTransport `json:"mediaTransport"`
 	Name                 string                   `json:"name"`
 	SortOrder            *int                     `json:"sortOrder"`
@@ -111,6 +114,7 @@ type ChannelRequest struct {
 }
 
 type PublicModelChannel struct {
+	WebsiteID        string                    `json:"websiteId,omitempty"`
 	MediaTransport   *ReferenceMediaTransport  `json:"mediaTransport,omitempty"`
 	ID               string                    `json:"id"`
 	UserID           string                    `json:"userId"`
@@ -125,6 +129,7 @@ type PublicModelChannel struct {
 	ProxyURL         string                    `json:"proxyUrl"`
 	Models           []string                  `json:"models"`
 	ModelCosts       []PublicChannelModelPrice `json:"modelCosts"`
+	Capabilities     []string                  `json:"capabilities,omitempty"`
 	Headers          []OutboundHeader          `json:"headers,omitempty"`
 	HasAPIKey        bool                      `json:"hasApiKey"`
 	HasSecretKey     bool                      `json:"hasSecretKey"`
@@ -169,7 +174,7 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 	}
 	// 启用/停用或只修改价格、模型等配置时，不应要求上游域名当前可解析。
 	// 只有 Base URL 实际变化时才做出站地址校验。
-	connectionChanged := strings.TrimRight(baseURL, "/") != strings.TrimRight(channel.BaseURL, "/")
+	connectionChanged := model.CanonicalWebsiteURL(baseURL) != model.CanonicalWebsiteURL(channel.BaseURL)
 	if connectionChanged {
 		if _, err := ValidateOutboundURL(baseURL); err != nil {
 			return channel, err
@@ -188,7 +193,7 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 		}
 		channel.SortOrder = *req.SortOrder
 	}
-	channel.BaseURL = strings.TrimRight(baseURL, "/")
+	channel.BaseURL = baseURL
 	if req.APIKey != "" {
 		channel.APIKey = req.APIKey
 	}
@@ -196,7 +201,15 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 		channel.SecretKey = req.SecretKey
 	}
 	// 系统渠道只保存地址与凭证；实际协议和鉴权方式由所选模型决定。
-	channel.APIFormat = "openai"
+	if req.APIFormat != nil {
+		format := strings.ToLower(strings.TrimSpace(*req.APIFormat))
+		if format != "openai" && format != "gemini" {
+			return channel, BadAuthRequest("目录格式只支持 OpenAI 或 Gemini")
+		}
+		channel.APIFormat = format
+	} else if channel.APIFormat == "" {
+		channel.APIFormat = "openai"
+	}
 	if req.UseGlobalConcurrency != nil && *req.UseGlobalConcurrency {
 		channel.ConcurrencyLimit = 0
 	} else if req.ConcurrencyLimit != nil {
@@ -245,6 +258,17 @@ func mergeChannelRequest(req ChannelRequest, channel model.ModelChannel) Channel
 func publicChannel(channel model.ModelChannel, admin bool, channelModels []model.ChannelModel) PublicModelChannel {
 	models := make([]string, 0, len(channelModels))
 	modelCosts := make([]PublicChannelModelPrice, 0, len(channelModels))
+	var capabilities []string
+	if admin {
+		for _, capability := range []string{"text", "video", "image", "audio"} {
+			for _, item := range channelModels {
+				if item.Capability == capability {
+					capabilities = append(capabilities, capability)
+					break
+				}
+			}
+		}
+	}
 	for _, item := range channelModels {
 		if !item.Enabled {
 			continue
@@ -282,6 +306,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		proxyURL = channel.ProxyURL
 	}
 	return PublicModelChannel{
+		WebsiteID:        channel.WebsiteID,
 		ID:               channel.ID,
 		UserID:           channel.UserID,
 		Scope:            channel.Scope,
@@ -295,6 +320,7 @@ func publicChannel(channel model.ModelChannel, admin bool, channelModels []model
 		ProxyURL:         proxyURL,
 		Models:           models,
 		ModelCosts:       modelCosts,
+		Capabilities:     capabilities,
 		Headers:          headers,
 		HasAPIKey:        strings.TrimSpace(channel.APIKey) != "",
 		HasSecretKey:     strings.TrimSpace(channel.SecretKey) != "",

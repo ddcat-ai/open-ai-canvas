@@ -131,19 +131,22 @@ func (b *cloudAgentMediaBatch) nextPending() int {
 }
 
 type cloudAgentMediaBatchArgs struct {
-	Mode               string `json:"mode"`
-	LogicalModelID     string `json:"logicalModelId"`
-	ChannelID          string `json:"channelId"`
-	ChannelModelKey    string `json:"channelModelKey"`
-	Size               string `json:"size"`
-	Quality            string `json:"quality"`
-	ImageResolution    string `json:"imageResolution"`
-	Duration           int    `json:"durationSeconds"`
-	VideoGenerateAudio *bool  `json:"videoGenerateAudio"`
-	Concurrency        int    `json:"concurrency"`
-	Canary             bool   `json:"canary"`
-	MaxRetries         *int   `json:"maxRetriesPerItem"`
-	Items              []struct {
+	Mode                       string `json:"mode"`
+	LogicalModelID             string `json:"logicalModelId"`
+	ChannelID                  string `json:"channelId"`
+	ChannelModelKey            string `json:"channelModelKey"`
+	Size                       string `json:"size"`
+	Quality                    string `json:"quality"`
+	ImageResolution            string `json:"imageResolution"`
+	Duration                   int    `json:"durationSeconds"`
+	VideoGenerateAudio         *bool  `json:"videoGenerateAudio"`
+	ImageParameters            string `json:"imageParameters,omitempty"`
+	VideoWatermark             *bool  `json:"videoWatermark,omitempty"`
+	VideoArkPrivateAssetUpload *bool  `json:"videoArkPrivateAssetUpload,omitempty"`
+	Concurrency                int    `json:"concurrency"`
+	Canary                     bool   `json:"canary"`
+	MaxRetries                 *int   `json:"maxRetriesPerItem"`
+	Items                      []struct {
 		NodeID   string `json:"nodeId"`
 		Prompt   string `json:"prompt"`
 		Duration int    `json:"durationSeconds"`
@@ -192,7 +195,7 @@ func cloudAgentMediaBatchNodePrompt(node map[string]any) string {
 	meta, _ := node["metadata"].(map[string]any)
 	if raw, exists := meta["generationSpec"]; exists {
 		if encoded, err := json.Marshal(raw); err == nil {
-			if spec, err := contract.Decode(encoded); err == nil && strings.TrimSpace(spec.Prompt) != "" {
+			if spec, err := contract.DecodeCanvasGenerationSpec(encoded); err == nil && strings.TrimSpace(spec.Prompt) != "" {
 				return strings.TrimSpace(spec.Prompt)
 			}
 		}
@@ -233,7 +236,7 @@ func cloudAgentMediaBatchItemArgs(doc map[string]any, args cloudAgentMediaBatchA
 	}
 	a := cloudAgentMediaArgs{
 		Mode: args.Mode, Prompt: prompt, LogicalModelID: args.LogicalModelID, ChannelID: args.ChannelID, ChannelModelKey: args.ChannelModelKey,
-		Size: args.Size, Quality: args.Quality, ImageResolution: args.ImageResolution, NodeID: item.NodeID,
+		Size: args.Size, Quality: args.Quality, ImageResolution: args.ImageResolution, ImageParameters: args.ImageParameters, NodeID: item.NodeID,
 		Title: strings.TrimSpace(stringValue(node["title"])), ReferenceNodeIDs: []string{},
 	}
 	if a.Title == "" {
@@ -245,6 +248,8 @@ func cloudAgentMediaBatchItemArgs(doc map[string]any, args cloudAgentMediaBatchA
 			a.Duration = item.Duration
 		}
 		a.VideoGenerateAudio = args.VideoGenerateAudio
+		a.VideoWatermark = args.VideoWatermark
+		a.VideoArkPrivateAssetUpload = args.VideoArkPrivateAssetUpload
 	}
 	seen := map[string]bool{}
 	for _, edge := range creationMaps(doc["connections"]) {
@@ -756,17 +761,29 @@ func (s *Service) stepCloudAgentMediaBatch(ctx context.Context, userID, runID st
 		}
 		task, err := s.repo.TaskForUser(userID, item.taskID())
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, s.settleCloudAgentMediaBatchItem(run, &state, index, nil)
+			err = s.settleCloudAgentMediaBatchItem(run, &state, index, nil)
+			if agentStorageCapacityError(err) && cloudAgentRunTerminal(run.Status) {
+				return s.finishCloudAgentMediaBatchAtCapacity(ctx, run)
+			}
+			return false, err
 		}
 		if err != nil {
 			return false, err
 		}
 		if cloudAgentTaskTerminal(task.Status) {
-			return false, s.settleCloudAgentMediaBatchItem(run, &state, index, task)
+			err = s.settleCloudAgentMediaBatchItem(run, &state, index, task)
+			if agentStorageCapacityError(err) && cloudAgentRunTerminal(run.Status) {
+				return s.finishCloudAgentMediaBatchAtCapacity(ctx, run)
+			}
+			return false, err
 		}
 	}
 	if cloudAgentRunTerminal(run.Status) {
-		return s.closeCloudAgentMediaBatchAfterStop(ctx, run, &state)
+		done, err := s.closeCloudAgentMediaBatchAfterStop(ctx, run, &state)
+		if agentStorageCapacityError(err) {
+			return s.finishCloudAgentMediaBatchAtCapacity(ctx, run)
+		}
+		return done, err
 	}
 	if !batch.active() {
 		return batch.inFlight() == 0, nil
@@ -807,6 +824,9 @@ func (s *Service) markCloudAgentMediaBatchItemFailed(run *model.CloudAgentExecut
 }
 
 func (s *Service) submitCloudAgentMediaBatchItem(run *model.CloudAgentExecution, state *cloudAgentRuntime, index int, policy RuntimePolicySetting) error {
+	if err := s.RequireSkillAccess(run.UserID); err != nil {
+		return err
+	}
 	batch := state.MediaBatch
 	item := batch.Items[index]
 	budget := state.Request.Budget
@@ -846,7 +866,12 @@ func (s *Service) submitCloudAgentMediaBatchItem(run *model.CloudAgentExecution,
 	if err != nil {
 		return err
 	}
-	req, plan, err := s.prepareCloudAgentMedia(run, cloudAgentMediaBatchProbeState(state), call)
+	probe := cloudAgentMediaBatchProbeState(state)
+	// Stored item arguments already contain the user-approved model and specs.
+	// Do not inherit the pre-approval draft configuration again at submission.
+	// The empty approval disables inheritance without reusing a single-item quote.
+	probe.Approval = &cloudAgentApproval{}
+	req, plan, err := s.prepareCloudAgentMedia(run, probe, call)
 	if err != nil {
 		return s.markCloudAgentMediaBatchItemFailed(run, state, index, "提交前校验未通过："+cloudAgentSafeToolError(err))
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -72,6 +73,26 @@ func generationMediaAssetID(taskID string, index int) string {
 	return "generation_" + hex.EncodeToString(sum[:])
 }
 
+func generationMediaAssetTitle(task model.Task, kind string, index, count int) string {
+	title := ""
+	if context := taskClientContext(task.InputJSON); context != nil {
+		title = context.AssetTitle
+	}
+	if title == "" {
+		title = strings.Join(strings.Fields(task.Prompt), " ")
+		if runes := []rune(title); len(runes) > 48 {
+			title = string(runes[:48]) + "…"
+		}
+	}
+	if title == "" {
+		title = map[string]string{"text": "生成文本", "image": "生成图片", "video": "生成视频", "audio": "生成音频"}[kind] + " · " + task.ID[:min(len(task.ID), 8)]
+	}
+	if count > 1 {
+		title += fmt.Sprintf(" · %d", index+1)
+	}
+	return title
+}
+
 // Uses the same effect key and ID as browser materialization, so reconnecting
 // the canvas cannot create a second asset for a server-delivered output.
 func (s *Service) registerRecoveredMediaAssets(task model.Task) error {
@@ -125,7 +146,7 @@ func (s *Service) registerRecoveredMediaAssets(task model.Task) error {
 		} else {
 			data["url"] = url
 		}
-		title := map[string]string{"image": "生成图片", "video": "生成视频", "audio": "生成音频"}[checkpoint.Mode]
+		title := generationMediaAssetTitle(task, checkpoint.Mode, index, len(checkpoint.Items))
 		metadata := map[string]any{"source": "generation-task", "generationEffectKey": effectKey, "taskId": task.ID, "outputIndex": index}
 		if projectID != "" {
 			metadata["projectIds"] = []string{projectID}

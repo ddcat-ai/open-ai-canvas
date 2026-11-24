@@ -1,4 +1,5 @@
 import { translate } from "@/i18n";
+import { audioUploadTitleFromFileName } from "@/lib/audio-upload-title";
 import type { UploadedFile } from "@/services/file-storage";
 import type { UploadedImage } from "@/services/image-storage";
 import { canvasVideoAssetPreviewUrl } from "@/lib/canvas/canvas-media-preview";
@@ -132,7 +133,7 @@ export function creationAttachmentFromVideo(file: File, uploaded: UploadedFile):
 export function creationAttachmentFromAudio(file: File, uploaded: UploadedFile): CreationAttachment {
     return {
         id: `upload:${file.name}:${uploaded.storageKey}`,
-        name: file.name,
+        name: audioUploadTitleFromFileName(file.name),
         type: uploaded.mimeType || file.type || "audio/mpeg",
         url: uploaded.url,
         storageKey: uploaded.storageKey,

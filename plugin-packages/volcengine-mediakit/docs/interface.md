@@ -1,6 +1,8 @@
-# Volcengine AI MediaKit 接口字段
+# 火山 MediaKit 视频画质增强工具接口字段
 
-## 画质增强（大模型版）
+这是视频处理协议，不是视频生成模型。它接收已有视频并输出增强后的视频，Provider 类型为 `processing`。
+
+## 视频画质增强
 
 - Provider ID：`volcengine-mediakit-enhance-video`，`kind: processing`，能力 `video`。
 - 默认 Base URL：`https://mediakit.cn-beijing.volces.com`。
@@ -37,10 +39,10 @@
 {
   "apiVersion": "yingce.plugin/v2",
   "id": "volcengine-mediakit",
-  "name": "Volcengine AI MediaKit",
-  "version": "1.0.0",
+  "name": "火山 MediaKit 视频画质增强工具",
+  "version": "1.0.1",
   "author": "Volcengine / 影策",
-  "description": "火山引擎 AI MediaKit 媒体处理工具协议插件，当前提供画质增强（大模型版）。",
+  "description": "火山 MediaKit 视频处理工具，用于画质增强，不是视频生成模型；支持 720p、1080p、2K、4K 目标分辨率。",
   "permissions": [
     "generation.run",
     "media.read"
@@ -60,7 +62,7 @@
     "providers": [
       {
         "id": "volcengine-mediakit-enhance-video",
-        "label": "火山 MediaKit 画质增强（大模型版）",
+        "label": "火山 MediaKit 视频画质增强工具",
         "kind": "processing",
         "capabilities": [
           "video"
