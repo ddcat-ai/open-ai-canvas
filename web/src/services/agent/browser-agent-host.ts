@@ -1,4 +1,5 @@
 import { assertCurrentUserSession, captureUserSession } from "@/lib/user-scope";
+import { createClientUUID } from "@/lib/client-id";
 import { listBrowserAgentRuns, requestBrowserAgentStep } from "@/services/api/browser-agent";
 import { recordBrowserAgentFailure } from "@/services/diagnostics/browser-agent-failures";
 import type { BrowserAgentFailureCode, BrowserAgentWorkerMessage } from "./browser-agent-protocol";
@@ -10,7 +11,7 @@ export function startBrowserAgentHost() {
         return () => {};
     }
     const controller = new AbortController();
-    const owner = `browser-${crypto.randomUUID()}`;
+    const owner = `browser-${createClientUUID()}`;
     const active = new Set<string>();
     let worker: Worker | undefined;
     let stopped = false;

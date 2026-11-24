@@ -11,6 +11,8 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 ## 可选浏览器 Agent
 
+部署另支持 `CANVAS_AGENT_BROWSER_ONLY=true`：仅允许浏览器编排，管理页锁定浏览器开关，不启动 Node Agent 容器，安装与在线更新均保留此模式。Go 后端任务 Worker 仍处理模型和工具。详见 [仅浏览器 Agent 部署](/docs/overview/browser-agent-deployment)。
+
 后台「资源与策略 → 画布 Agent」可启用浏览器 Worker，与原服务端 Worker 共存；默认关闭，部署默认值由 `CANVAS_BROWSER_AGENT_ENABLED` 设置。开启后新会话优先由浏览器编排，模型、工具权限、审批和计费继续受后端管理。页面刷新可恢复，关闭全部页面后暂停后续编排，已提交任务独立归档。客户端运行失败自动上报受限元数据，可通过本人或管理员日志接口查询。
 
 ## 图片节点创作预设

@@ -16,10 +16,13 @@ import (
 	"gorm.io/gorm"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 	"yingce/backend/internal/repository"
 )
 
 const cloudAgentOperation = "cloud_agent"
+
+func (s *Service) BrowserAgentOnly() bool { return platform.BrowserAgentOnly() }
 
 // A run is one immutable, durable model turn backed by a normal task. Subsequent
 // turns reference the previous run, not a mutable in-memory conversation. This
@@ -410,6 +413,9 @@ func (s *Service) CloudAgentRunIfChanged(userID, id string, revision int64, opti
 func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, parentID string) (*CloudAgentRun, error) {
 	if err := s.RequireSkillAccess(userID); err != nil {
 		return nil, err
+	}
+	if s.BrowserAgentOnly() && req.ExecutionMode != "browser" {
+		return nil, &AppError{Status: 409, Code: 409, Reason: "server_agent_disabled", Message: "当前部署仅支持浏览器 Worker，请使用支持 Worker 的浏览器并刷新页面"}
 	}
 	if err := validateCloudAgentRequest(&req); err != nil {
 		return nil, err

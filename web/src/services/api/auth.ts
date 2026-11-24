@@ -453,6 +453,7 @@ export type RuntimeRequestPolicy = {
 };
 
 export type RuntimePolicySetting = {
+    browserAgentOnly: boolean;
     resource: RuntimeResourcePolicy;
     storage: RuntimeStoragePolicy;
     task: RuntimeTaskPolicy;

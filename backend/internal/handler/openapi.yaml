@@ -2387,7 +2387,7 @@ paths:
       description: 有效登录用户的 skills 为 true，tools 包含技能读取、检索与推荐工具；实际运行仍按当前用户的技能库、偏好与权限裁剪，技能管理不属于 Agent 工具权限。
       responses:
         "200":
-          description: 信封 data 包含 version、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
+          description: 信封 data 包含 version、browserAgentEnabled、browserAgentOnly、permissionModes、contextScopes、skills、writeTools、billing、maxHistoryPairs、maxSteps、maxHistoryBytes、capabilitySetVersion、capabilitySetHash、nodeTypes、tools；browserAgentOnly 为 true 时仅允许浏览器编排；maxHistoryPairs 为跨轮保留的用户对话轮数，maxSteps 为 0 表示无固定模型调用上限，历史仍受 maxHistoryBytes 限制
   /agent/skills/usage:
     get:
       tags: [agent]
@@ -3368,7 +3368,7 @@ paths:
         "403":
           description: Agent 历史额度不足时 code=40301、reason=agent_history_capacity_exceeded；购买文件空间不会增加此额度
         "409":
-          description: 幂等键已用于不同请求，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；未创建任务或预留积分，不自动重试。
+          description: 幂等键已用于不同请求，或画布已有另一轮 Agent 占用。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；仅浏览器部署拒绝服务端模式时 reason 为 server_agent_disabled。未创建任务或预留积分，不自动重试。
   /agent/runs/{id}:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -3414,7 +3414,7 @@ paths:
         "200":
           description: 信封 data.run（新的 ID）
         "409":
-          description: 父轮仍在执行、幂等键冲突，或画布已有另一轮 Agent 占用。旧父轮已有后续轮次时 reason 为 agent_conversation_stale_parent，客户端应同步最新历史，不能自动重发。原请求幂等回放优先于旧父轮检查。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；不自动重试。
+          description: 父轮仍在执行、幂等键冲突，或画布已有另一轮 Agent 占用。旧父轮已有后续轮次时 reason 为 agent_conversation_stale_parent，客户端应同步最新历史，不能自动重发。原请求幂等回放优先于旧父轮检查。占用拒绝的 reason 为 canvas_agent_busy，details 包含 canvasId 和 agent（runId、status、cleanupPending），用于立即更新占用状态；仅浏览器部署拒绝服务端模式时 reason 为 server_agent_disabled。不自动重试。
   /agent/runs/{id}/interjections:
     parameters:
       - $ref: "#/components/parameters/AgentRunID"
@@ -6494,7 +6494,7 @@ components:
         executionMode:
           type: string
           enum: [server, browser]
-          description: 省略时走原服务端路径；browser 必须开启资源与策略开关，否则返回 409 browser_agent_disabled。模式在本轮创建后固定。
+          description: 默认共存部署省略时走服务端路径；browser 必须开启资源与策略开关，否则返回 409 browser_agent_disabled。仅浏览器部署强制启用 browser，server 或省略模式均返回 409 server_agent_disabled。模式在本轮创建后固定。
         canvasId:
           type: string
           maxLength: 80

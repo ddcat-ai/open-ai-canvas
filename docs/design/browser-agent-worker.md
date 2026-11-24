@@ -14,6 +14,8 @@
 
 ## 运行协议
 
+部署可通过 `CANVAS_AGENT_BROWSER_ONLY=true` 限定为仅浏览器编排，受管安装叠加 `docker-compose.browser-only.yml` 并停用 Node Agent 容器；能力接口返回 `browserAgentOnly`，后端拒绝新的服务端执行请求，也禁止启动远程或嵌入式 Node。该限制优先于后台保存的浏览器开关。安装、切换、在线更新及回退说明见 [仅浏览器 Agent 部署](../content/docs/overview/browser-agent-deployment.mdx)。
+
 首版采用原生、带类型的 Dedicated Worker，未加入 Pi SDK。后端已有 canonical history、工具游标和回执，继续作为执行事实的唯一来源，避免浏览器与 SDK 再维护一份消息历史。
 
 Worker 根据服务端 `nextAction` 请求单步。主线程复用登录态 `http`、账号 scope、超时和取消；不接触系统渠道密钥。生命周期属于整个已登录应用，关闭 Agent 面板不会停止 Worker。
@@ -48,4 +50,4 @@ Worker 根据服务端 `nextAction` 请求单步。主线程复用登录态 `htt
 
 专项测试覆盖租约接管、旧 epoch、版本错误、用户归属、审批/输入门禁、取消、开关与模式并存、真实任务队列和工具批次、丢 ACK 重放、日志幂等/隐私/保留与部分 ACK。
 
-浏览器联调使用真实应用页面、Dedicated Worker、Go 后端和 SQLite，模型上游使用本地模拟服务；另外验证原 Node 服务端运行链路。生产 PostgreSQL/Redis、多实例故障、移动端后台冻结和真实供应商并发压测需在相应环境验证。该功能不会自动迁移在途会话，也不会卸载服务端 Agent 的部署组件。
+浏览器联调使用真实应用页面、Dedicated Worker、Go 后端和 SQLite，模型上游使用本地模拟服务；另外验证原 Node 服务端运行链路。生产 PostgreSQL/Redis、多实例故障、移动端后台冻结和真实供应商并发压测需在相应环境验证。该功能不会自动迁移在途会话；仅浏览器部署可停用服务端 Node Agent 组件，仍需 Go 后端任务 Worker。

@@ -112,7 +112,7 @@ export type SystemPerformance = {
 export type SystemPerformanceAgent = {
     id: string;
     name: string;
-    mode: "remote" | "embedded";
+    mode: "remote" | "embedded" | "browser";
     endpoint: string;
     healthy: boolean;
     active: number;

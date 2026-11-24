@@ -209,6 +209,11 @@ func TestBrowserAgentFeatureSwitchAndCoexistence(t *testing.T) {
 }
 
 func TestBrowserAgentDurableToolRoundTripAndLostAck(t *testing.T) {
+	testBrowserAgentDurableToolRoundTripAndLostAck(t)
+}
+
+func testBrowserAgentDurableToolRoundTripAndLostAck(t *testing.T) {
+	t.Helper()
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	s, root, db := browserTestRoot(t)
 	var calls atomic.Int32

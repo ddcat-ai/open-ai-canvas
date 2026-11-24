@@ -1,4 +1,5 @@
 import { assertCurrentUserSession, captureUserSession } from "@/lib/user-scope";
+import { createClientUUID } from "@/lib/client-id";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import { http } from "@/services/api/request";
 import type { BrowserAgentFailure } from "@/services/agent/browser-agent-protocol";
@@ -42,7 +43,7 @@ export function startBrowserAgentFailureUpload() {
         if (stopped) return;
         const commit = String(import.meta.env.VITE_BUILD_COMMIT || "unknown");
         const event: BrowserAgentFailureEvent = {
-            eventId: `event-${crypto.randomUUID()}`,
+            eventId: `event-${createClientUUID()}`,
             runId: failure.runId,
             stepId: failure.stepId,
             code: failure.code,

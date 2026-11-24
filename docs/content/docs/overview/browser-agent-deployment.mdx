@@ -1,0 +1,45 @@
+---
+title: 仅浏览器 Agent 部署
+description: 停用 Node Agent 容器，由浏览器 Worker 编排，保留 Go 后端任务执行
+---
+
+# 仅浏览器 Agent 部署
+
+受管部署支持两种方式：默认保留浏览器和服务端 Agent 共存；设置 `CANVAS_AGENT_BROWSER_ONLY=true` 后，仅允许浏览器 Worker 编排，不需要启动 `yingce-agent` 容器。Go 后端、PostgreSQL、Redis 和迁移服务仍运行，模型调用、工具权限、审批、计费及媒体生成任务仍由后端处理。
+
+## 安装
+
+使用包含此功能的官方 Release，并将 `CANVAS_IMAGE_TAG` 与 `REPOSITORY_REF` 固定到同一个 Release。运行 `scripts/install-server-image.sh` 时传入 `CANVAS_AGENT_BROWSER_ONLY=true`。脚本将该值写入部署 `.env`，下载同版本的 `docker-compose.deploy.yml` 和 `docker-compose.browser-only.yml`，跳过 Agent 镜像拉取和摘要检查，并安装同版本的 Host Updater。
+
+后台保存的浏览器开关不会覆盖部署限制。仅浏览器模式强制启用浏览器 Agent，管理页锁定开关；默认共存部署仍通过 `CANVAS_BROWSER_AGENT_ENABLED` 和后台开关决定是否优先使用浏览器。
+
+## 已有受管部署切换
+
+先结束或取消进行中的服务端 Agent 对话，再使用同一 Release 的安装脚本并传入 `CANVAS_AGENT_BROWSER_ONLY=true`。脚本保留已有数据库及部署参数，停止并移除旧 `yingce-agent` 容器。切换前的服务端会话不能自动转成浏览器会话；遗漏的活动服务端运行在恢复时明确失败，不启动嵌入式 Node。
+
+手工管理时，在部署 `.env` 设置：
+
+```dotenv
+CANVAS_AGENT_BROWSER_ONLY=true
+```
+
+将同版本的 `docker-compose.browser-only.yml` 放在部署目录，所有启动和维护命令都叠加该文件：
+
+```bash
+docker compose --env-file .env -f docker-compose.deploy.yml rm --stop --force yingce-agent
+docker compose --env-file .env -f docker-compose.deploy.yml -f docker-compose.browser-only.yml up -d --remove-orphans --wait --wait-timeout 600
+```
+
+不要启用 `server-agent` profile。叠加文件将 Node 服务放入该 profile，并移除后端对其健康检查的依赖；默认服务列表只有 `postgres`、`redis`、`migrate`、`backend` 和 `web`。使用支持 `!reset` 合并标签的 Docker Compose 2.24.4 或更新版本。
+
+## 在线更新和恢复
+
+Host Updater 从部署 `.env` 读取 `CANVAS_AGENT_BROWSER_ONLY`，更新、迁移、启动和恢复时自动叠加安装目录中的 `docker-compose.browser-only.yml`，不拉取、检查或启动 Node Agent 镜像。缺少叠加文件时更新失败，不静默回到服务端 Agent。叠加文件是部署配置，更新时保留；回退依据备份的 `.env` 决定运行模式。
+
+恢复共存方式时，把 `.env` 中该值改为 `false`，重新运行同版本安装脚本，或按默认 Compose 拉取、校验并启动 Agent 镜像。后台浏览器开关重新按保存值生效。
+
+## 浏览器运行边界
+
+新会话必须使用支持 Dedicated Worker 的浏览器。能力接口返回 `browserAgentOnly: true`；不支持 Worker 时前端明确提示，后端对 `server` 或省略执行模式的请求返回 409、`reason: server_agent_disabled`。不会退回远程 Agent 或嵌入式 Node。
+
+关闭所有页面、设备休眠或浏览器冻结会暂停后续编排；重新打开页面可发现并恢复浏览器会话。已接受的单步和已提交的生成任务继续由 Go 后端执行及归档。此模式不能替代后端任务 Worker，也不能让模型生成脱离服务器运行。

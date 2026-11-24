@@ -72,7 +72,16 @@ func (m *Manager) runSourceProbe(sources Sources) {
 	m.recordProbeCheck(2, "存在 "+asset+" 的 SHA-256；完整二进制将在更新前下载并校验", err)
 
 	images := sources.images(m.config.Repository, release.Version)
+	values, envErr := readEnvFile(m.envPath())
 	for i, image := range []string{images.backend, images.web, images.agent} {
+		if i == 2 && envErr == nil && strings.EqualFold(strings.TrimSpace(values["CANVAS_AGENT_BROWSER_ONLY"]), "true") {
+			m.recordProbeCheck(i+3, "仅浏览器 Worker 部署，无需 Agent 镜像", nil)
+			continue
+		}
+		if envErr != nil {
+			m.recordProbeCheck(i+3, "", envErr)
+			continue
+		}
 		err = m.probeImage(image)
 		m.recordProbeCheck(i+3, image+" · linux/"+runtime.GOARCH, err)
 	}

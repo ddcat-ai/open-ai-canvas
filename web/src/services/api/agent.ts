@@ -176,6 +176,9 @@ async function submitAgentRequest(path: string, input: CreateAgentRunInput) {
     const body = JSON.parse(JSON.stringify(input)) as CreateAgentRunInput;
     const capabilities = body.executionMode ? null : await getAgentCapabilities();
     assertCurrentUserSession(session);
+    if (capabilities?.browserAgentOnly && typeof Worker === "undefined") {
+        throw new Error("当前部署仅支持浏览器 Worker，请使用支持 Worker 的浏览器");
+    }
     body.executionMode ??= capabilities?.browserAgentEnabled && typeof Worker !== "undefined" ? "browser" : "server";
     for (let attempt = 0; ; attempt++) {
         assertCurrentUserSession(session);
@@ -220,6 +223,7 @@ export function getAgentCapabilities() {
     return http.get<{
         version: number;
         browserAgentEnabled?: boolean;
+        browserAgentOnly: boolean;
         permissionModes: AgentPermissionMode[];
         contextScopes: string[];
         skills: boolean;

@@ -133,10 +133,11 @@ type RuntimePolicySetting struct {
 
 type PublicRuntimePolicySetting struct {
 	RuntimePolicySetting
-	Configured bool      `json:"configured"`
-	UpdatedBy  string    `json:"updatedBy"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	BrowserAgentOnly bool      `json:"browserAgentOnly"`
+	Configured       bool      `json:"configured"`
+	UpdatedBy        string    `json:"updatedBy"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 type PublicRuntimeLimits struct {
@@ -146,11 +147,22 @@ type PublicRuntimeLimits struct {
 	RecycleBinRetentionDays int   `json:"recycleBinRetentionDays"`
 }
 
+// BrowserAgentOnly is a deployment constraint, independent of saved admin policy.
+func BrowserAgentOnly() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("CANVAS_AGENT_BROWSER_ONLY")), "true")
+}
+
 // DefaultRuntimePolicy returns the effective baseline policy, including
-// deployment-level environment overrides. It is exported so composition-root
-// compatibility code and domain tests do not need to reach into platform's
-// private implementation.
+// deployment-level environment overrides.
 func DefaultRuntimePolicy() RuntimePolicySetting {
+	value := defaultRuntimePolicy()
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = true
+	}
+	return value
+}
+
+func defaultRuntimePolicy() RuntimePolicySetting {
 	return RuntimePolicySetting{
 		Resource: RuntimeResourcePolicy{
 			AgentHistoryQuota:       model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB, AgentHistoryGlobalMB: model.DefaultAgentHistoryGlobalMB},
@@ -313,12 +325,19 @@ func (s *Service) UpdateRuntimePolicySetting(actor *model.User, value RuntimePol
 	if err := s.requireAdmin(actor); err != nil {
 		return nil, err
 	}
+	if BrowserAgentOnly() && !value.Task.BrowserAgentEnabled {
+		return nil, kernel.NewAppError(409, "当前部署仅使用浏览器 Worker，不能关闭浏览器 Agent")
+	}
 	if err := validateRuntimePolicy(value); err != nil {
 		return nil, err
 	}
-	current, before, err := s.readRuntimePolicy()
+	current, before, err := s.readStoredRuntimePolicy()
 	if err != nil {
 		return nil, err
+	}
+	// The locked deployment switch must not overwrite the coexistence preference.
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = before.Task.BrowserAgentEnabled
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -366,15 +385,23 @@ func (s *Service) ResetRuntimePolicySetting(actor *model.User) (*PublicRuntimePo
 }
 
 func (s *Service) readRuntimePolicy() (*model.SystemSetting, RuntimePolicySetting, error) {
+	setting, value, err := s.readStoredRuntimePolicy()
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = true
+	}
+	return setting, value, err
+}
+
+func (s *Service) readStoredRuntimePolicy() (*model.SystemSetting, RuntimePolicySetting, error) {
 	setting, err := s.repo.SystemSettingOptional(runtimePolicySettingKey)
 	if err != nil {
 		return nil, RuntimePolicySetting{}, err
 	}
 	if setting == nil {
-		value := DefaultRuntimePolicy()
+		value := defaultRuntimePolicy()
 		return nil, value, validateRuntimePolicy(value)
 	}
-	value := DefaultRuntimePolicy()
+	value := defaultRuntimePolicy()
 	value.Resource.AgentHistoryGlobalMB = 0
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, RuntimePolicySetting{}, errors.New("资源与请求策略配置格式无效")
@@ -516,7 +543,10 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 func ValidateRuntimePolicy(value RuntimePolicySetting) error { return validateRuntimePolicy(value) }
 
 func publicRuntimePolicy(setting *model.SystemSetting, value RuntimePolicySetting) *PublicRuntimePolicySetting {
-	result := &PublicRuntimePolicySetting{RuntimePolicySetting: value, Configured: setting != nil}
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = true
+	}
+	result := &PublicRuntimePolicySetting{RuntimePolicySetting: value, Configured: setting != nil, BrowserAgentOnly: BrowserAgentOnly()}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy
 		result.CreatedAt = setting.CreatedAt

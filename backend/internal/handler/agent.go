@@ -36,7 +36,7 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"version": 2, "browserAgentEnabled": policy.Task.BrowserAgentEnabled, "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": skillsEnabled, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": tools, "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
+		ok(c, gin.H{"version": 2, "browserAgentEnabled": policy.Task.BrowserAgentEnabled, "browserAgentOnly": svc.BrowserAgentOnly(), "permissionModes": []string{"read_only", "request_approval", "auto"}, "contextScopes": []string{"canvas"}, "skills": skillsEnabled, "writeTools": true, "billing": "fixed_request", "maxHistoryPairs": 10, "maxHistoryBytes": 64000, "maxSteps": 0, "tools": tools, "capabilitySetVersion": capabilities.Version, "capabilitySetHash": capabilities.Hash, "nodeTypes": capabilities.Nodes})
 	})
 	// Usage is scoped to the authenticated user's own Agent runs.
 	r.GET("/agent/skills/usage", requireSkillAccess(svc), func(c *gin.Context) {

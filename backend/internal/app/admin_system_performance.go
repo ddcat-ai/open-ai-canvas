@@ -209,6 +209,9 @@ func (s *Service) UpdateAgentSessionLimit(ctx context.Context, actor *model.User
 }
 
 func (s *Service) applyAgentSessionLimit(ctx context.Context, maxSessions int) error {
+	if s.BrowserAgentOnly() {
+		return nil
+	}
 	agentruntime.SetProcessLimit(maxSessions)
 	endpoint := strings.TrimSpace(os.Getenv("YINGCE_AGENT_URL"))
 	if endpoint == "" {
@@ -221,6 +224,9 @@ func (s *Service) collectAgentServices(ctx context.Context) []SystemPerformanceA
 	configured := platform.DefaultRuntimeAgentSessions
 	if policy, err := s.RuntimePolicy(); err == nil && policy.Task.AgentMaxSessions > 0 {
 		configured = policy.Task.AgentMaxSessions
+	}
+	if s.BrowserAgentOnly() {
+		return []SystemPerformanceAgent{{ID: "browser", Name: "画布 Agent", Mode: "browser", Endpoint: "浏览器 Worker", Healthy: true, ConfiguredLimit: configured, StatusMessage: "仅浏览器编排；服务端 Node Agent 已停用，模型和工具仍由 Go 后端执行。"}}
 	}
 	endpoint := strings.TrimSpace(os.Getenv("YINGCE_AGENT_URL"))
 	if endpoint == "" {

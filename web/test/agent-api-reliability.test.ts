@@ -229,6 +229,28 @@ describe("Agent SSE recovery", () => {
 
 describe("Agent admission replay and durable pending records", () => {
     const input: CreateAgentRunInput = { canvasId: "canvas", prompt: "generate", model: "original", idempotencyKey: "stable-key-123" };
+    it("browser-only deployments reject unsupported browsers without submitting a server run", async () => {
+        const nativeWorker = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+        const modes: string[] = [];
+        transport.http.get = async () => ({ browserAgentEnabled: true, browserAgentOnly: true });
+        transport.http.post = async (_path: string, body: CreateAgentRunInput) => {
+            modes.push(body.executionMode!);
+            return { run: { id: "accepted" } };
+        };
+        try {
+            Object.defineProperty(globalThis, "Worker", { configurable: true, value: undefined });
+            await expect(api.createAgentRun(input)).rejects.toThrow("当前部署仅支持浏览器 Worker");
+            await expect(api.sendAgentMessage("parent", input)).rejects.toThrow("当前部署仅支持浏览器 Worker");
+            expect(modes).toEqual([]);
+            Object.defineProperty(globalThis, "Worker", { configurable: true, value: class {} });
+            await api.createAgentRun(input);
+            await api.sendAgentMessage("parent", input);
+            expect(modes).toEqual(["browser", "browser"]);
+        } finally {
+            if (nativeWorker) Object.defineProperty(globalThis, "Worker", nativeWorker);
+            else Reflect.deleteProperty(globalThis, "Worker");
+        }
+    });
     it("selects browser only when enabled and supported, keeping explicit server requests", async () => {
         const nativeWorker = Object.getOwnPropertyDescriptor(globalThis, "Worker");
         const modes: string[] = [];
