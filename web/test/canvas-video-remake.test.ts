@@ -10,7 +10,7 @@ import { prepareBackendGenerationTask } from "@/services/api/generation-task";
 import { createModelChannel, defaultConfig, encodeChannelModel } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata } from "@/types/canvas";
 
-const seedance = "seedance-2.0";
+const seedance = "doubao-seedance-2-0-260128";
 const channel = createModelChannel({
     id: "remake",
     name: "视频参考",

@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { listVideoReferenceModels, validateVideoSegmentBatch, videoReferenceOperationError, videoReferenceRegenerationError, videoReferenceSegmentError } from "../src/lib/canvas/canvas-video-regeneration";
+import { listVideoReferenceModels, validateVideoSegmentBatch, videoReferenceOperationError, videoReferenceRegenerationError, videoReferenceSegmentError, videoRemakeInputIssue } from "../src/lib/canvas/canvas-video-regeneration";
 import { defaultModelCapabilityConfig } from "../src/lib/model-capabilities";
 import { defaultConfig, type AiConfig, type ModelChannel } from "../src/stores/use-config-store";
 
-function supportedVideoConfig(overrides: { model?: string; maxVideos?: number; maxVideoDurationSeconds?: number; operations?: string[]; baseUrl?: string } = {}): AiConfig {
+function supportedVideoConfig(overrides: { model?: string; maxVideos?: number; maxTotalVideoDurationSeconds?: number; operations?: string[]; baseUrl?: string } = {}): AiConfig {
     const model = overrides.model || "seedance-1.0-pro";
     const capability = defaultModelCapabilityConfig("newapi-channel-2", model);
     if (capability.video) {
         capability.video.references.maxVideos = overrides.maxVideos ?? 3;
-        capability.video.references.maxVideoDurationSeconds = overrides.maxVideoDurationSeconds ?? 15;
+        capability.video.references.maxTotalVideoDurationSeconds = overrides.maxTotalVideoDurationSeconds ?? 15;
         capability.video.operations = overrides.operations ?? ["text_to_video", "image_to_video", "extend"];
     }
     const channel: ModelChannel = {
@@ -94,8 +94,8 @@ describe("listVideoReferenceModels", () => {
 
 describe("videoReferenceSegmentError", () => {
     test("片段超过模型参考视频上限时返回提示", () => {
-        const config = supportedVideoConfig({ maxVideoDurationSeconds: 15 });
-        expect(videoReferenceSegmentError(config, 16000)).toContain("不能超过当前模型参考视频上限（15 秒）");
+        const config = supportedVideoConfig({ maxTotalVideoDurationSeconds: 15 });
+        expect(videoReferenceSegmentError(config, 16000)).toContain("参考视频总时长不能超过 15 秒");
     });
 
     test("Seedance 单段少于 2 秒时返回提示", () => {
@@ -123,6 +123,14 @@ describe("validateVideoSegmentBatch", () => {
     });
 
     test("片段超过模型时长上限时返回片段错误", () => {
-        expect(validateVideoSegmentBatch(supportedVideoConfig({ maxVideoDurationSeconds: 15 }), [{ startMs: 0, endMs: 16000 }], "extend")).toContain("不能超过当前模型参考视频上限");
+        expect(validateVideoSegmentBatch(supportedVideoConfig({ maxTotalVideoDurationSeconds: 15 }), [{ startMs: 0, endMs: 16000 }], "extend")).toContain("参考视频总时长不能超过 15 秒");
     });
+});
+
+test("同一复刻请求按全部动作参考的段数与总时长校验", () => {
+    const config = supportedVideoConfig({ maxVideos: 2, maxTotalVideoDurationSeconds: 15 });
+    const metadata = { videoRemake: true, videoReferenceMode: "all" as const };
+    expect(videoRemakeInputIssue(metadata, 1, [7000, 8000], config)).toBe("");
+    expect(videoRemakeInputIssue(metadata, 1, [8064, 8064], config)).toContain("参考视频总时长不能超过 15 秒");
+    expect(videoRemakeInputIssue(metadata, 1, [3000, 3000, 3000], config)).toBe("参考视频最多支持 2 段");
 });

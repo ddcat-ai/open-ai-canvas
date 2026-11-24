@@ -83,6 +83,132 @@ func TestValidateVideoTaskRejectsPromptAboveCapabilityLimit(t *testing.T) {
 	}
 }
 
+func TestValidateTaskCapabilityChecksReferenceVideoCountAndTotalDuration(t *testing.T) {
+	const protocol = "newapi-channel-2"
+	const modelName = "custom-video"
+	profile := DefaultModelCapabilityConfigForModel(protocol, modelName)
+	profile.Video.References.MaxVideos = 2
+	totalLimit, unlimited, invalid := 15, 0, -1
+	for _, tc := range []struct {
+		name      string
+		maxTotal  *int
+		durations []int64
+		wantError string
+	}{
+		{"equal to limit", &totalLimit, []int64{7000, 8000}, ""},
+		{"one millisecond over total", &totalLimit, []int64{7500, 7501}, "参考视频总时长不能超过 15 秒"},
+		{"single clip at total limit", &totalLimit, []int64{15000}, ""},
+		{"single clip over total limit", &totalLimit, []int64{16021}, "参考视频总时长不能超过 15 秒"},
+		{"too many clips under the total limit", &totalLimit, []int64{3000, 3000, 3000}, "参考视频最多支持 2 段"},
+		{"explicitly disabled", &unlimited, []int64{8064, 8064}, ""},
+		{"no total limit configured", nil, []int64{8064, 8064}, ""},
+		{"negative total limit", &invalid, []int64{7000, 8000}, "参考视频总时长上限无效"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			profile.Video.References.MaxTotalVideoDuration = tc.maxTotal
+			videos := make([]providerMedia, 0, len(tc.durations))
+			for _, duration := range tc.durations {
+				videos = append(videos, providerMedia{DurationMs: duration})
+			}
+			input := map[string]any{
+				"mode": "video", "prompt": "combine the clips",
+				"config":          map[string]any{"interfaceType": protocol, "model": modelName, "videoSeconds": "6", "capabilityConfig": profile},
+				"referenceVideos": videos,
+			}
+			err := (&Service{}).ValidateTaskCapability(input)
+			if tc.wantError == "" {
+				if err != nil {
+					t.Fatalf("ValidateTaskCapability() error = %v", err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tc.wantError {
+				t.Fatalf("ValidateTaskCapability() error = %v, want %q", err, tc.wantError)
+			}
+			if tc.maxTotal != &invalid {
+				wantIssue := "unsupported_value"
+				if len(tc.durations) > profile.Video.References.MaxVideos {
+					wantIssue = "item_count"
+				}
+				var capabilityErr *modelCapabilityArgumentError
+				if !errors.As(err, &capabilityErr) || capabilityErr.Field != "referenceNodeIds" || capabilityErr.Issue != wantIssue {
+					t.Fatalf("unexpected capability error: %#v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateTaskCapabilityChecksReferenceAudioCountAndTotalDuration(t *testing.T) {
+	const protocol = "newapi-channel-2"
+	const modelName = "custom-video"
+	profile := DefaultModelCapabilityConfigForModel(protocol, modelName)
+	profile.Video.References.MaxAudios = 2
+	profile.Video.References.MaxTotalAudioDuration = ptr(15)
+	profile.Video.References.MaxTotalVideoDuration = ptr(15)
+	for _, tc := range []struct {
+		name      string
+		durations []int64
+		wantError string
+	}{
+		{"at total", []int64{7000, 8000}, ""},
+		{"one millisecond over total", []int64{7500, 7501}, "参考音频总时长不能超过 15 秒"},
+		{"too many under total", []int64{3000, 3000, 3000}, "参考音频最多支持 2 段"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			audios := make([]providerMedia, 0, len(tc.durations))
+			for _, duration := range tc.durations {
+				audios = append(audios, providerMedia{DurationMs: duration})
+			}
+			input := map[string]any{
+				"mode": "video", "prompt": "combine the references",
+				"config":          map[string]any{"interfaceType": protocol, "model": modelName, "videoSeconds": "6", "capabilityConfig": profile},
+				"referenceVideos": []providerMedia{{DurationMs: 15000}},
+				"referenceAudios": audios,
+			}
+			err := (&Service{}).ValidateTaskCapability(input)
+			if tc.wantError == "" {
+				if err != nil {
+					t.Fatalf("ValidateTaskCapability() error = %v", err)
+				}
+			} else if err == nil || err.Error() != tc.wantError {
+				t.Fatalf("ValidateTaskCapability() error = %v, want %q", err, tc.wantError)
+			}
+		})
+	}
+}
+
+func TestNormalizeVideoCapabilityInheritsTotalReferenceDurationsFromPreset(t *testing.T) {
+	for _, tc := range []struct {
+		protocol     string
+		model        string
+		seconds      int
+		audioSeconds int
+	}{
+		{"dashscope-wan3-video", "wan3.0-video", 15, 15},
+		{"volcengine-ark-video", "doubao-seedance-2-0-mini-260615", 15, 15},
+		{"volcengine-ark-seedance-25", "doubao-seedance-2-5-260628", 30, 30},
+		{"kling-v4-official", "kling-4.0-flash", 20, 0},
+	} {
+		t.Run(tc.model, func(t *testing.T) {
+			profile := DefaultModelCapabilityConfigForModel(tc.protocol, tc.model)
+			profile.Video.References.MaxTotalVideoDuration = nil
+			profile.Video.References.MaxTotalAudioDuration = nil
+			normalized, err := NormalizeModelCapabilityConfigForModel("video", tc.protocol, tc.model, profile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if limit := normalized.Video.References.MaxTotalVideoDuration; limit == nil || *limit != tc.seconds {
+				t.Fatalf("total reference video duration = %v, want %d seconds", limit, tc.seconds)
+			}
+			limit := normalized.Video.References.MaxTotalAudioDuration
+			if tc.audioSeconds == 0 && limit != nil || tc.audioSeconds > 0 && (limit == nil || *limit != tc.audioSeconds) {
+				t.Fatalf("total reference audio duration = %v, want %d seconds or nil for zero", limit, tc.audioSeconds)
+			}
+		})
+	}
+}
+
 // 视频提示词由输入框文本、连线内容和技能上下文合成，默认上限必须留出足够余量，
 // 否则画布工作流会连同线内容一起被拦在本地。这里锁定默认值与边界行为。
 func TestDefaultVideoPromptMaxCharsAllowsComposedCanvasPrompt(t *testing.T) {

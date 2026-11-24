@@ -256,6 +256,8 @@ Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工�
 
 图片的 `role=first_frame/last_frame` 表示帧约束；`reference` 或未指定角色表示普通参考，不能静默改成首帧。模式、素材数量和参数共同参与模型能力校验及价格档选择；不支持的组合在创建任务和计费前拒绝。执行输入的 `metadata.videoEditOperation` 与任务操作保持一致，并保留帧素材标识。浏览器自定义渠道的工作台任务使用同一模式规则，其他入口沿用各自的意图解析。
 
+后台渠道模型可分别设置参考视频（`video.references.maxVideos`、`video.references.maxTotalVideoDurationSeconds`）和参考音频（`video.references.maxAudios`、`video.references.maxTotalAudioDurationSeconds`）的最多段数与合计时长上限。每次请求对视频和音频各自累加已知毫秒数，超过对应的段数或合计时长上限返回 400。省略合计上限时沿用该模型的官方预设，显式设置 `0` 表示不设合计上限。旧配置的单段时长需要通过新的合计时长字段重新设置。
+
 ## 工作台批量生成的批次标识
 
 一次生成多张图片或多条视频时，页面把请求拆成多个任务（视频每条一个任务，图片按模型单次张数拆分），逐个调用 `POST /api/workbench/tasks`，每个请求带上同一个批次：

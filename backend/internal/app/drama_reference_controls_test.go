@@ -81,7 +81,7 @@ func TestDramaReferenceRemapUsesCastIDsAndRejectsUnknownTokens(t *testing.T) {
 func TestDramaSegmentReferenceControls(t *testing.T) {
 	svc, fake := newDramaTestService(t)
 	video := dramaVideoFixture()
-	video.References.MaxAudios, video.References.MaxAudioDuration = 1, 15
+	video.References.MaxAudios, video.References.MaxTotalAudioDuration = 1, ptr(15)
 	setDramaVideoCapability(t, svc, fake, video)
 	summary := createTestDrama(t, svc, DramaReviewSample)
 	project := summary.Project.ID
