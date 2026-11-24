@@ -847,6 +847,10 @@ func (c *pluginRuntime) paymentRegistrySnapshot() *payment.Registry {
 func (c *pluginRuntime) install(data []byte, fileName string) (PluginView, error) {
 	c.mutationMu.Lock()
 	defer c.mutationMu.Unlock()
+	return c.installLocked(data, fileName)
+}
+
+func (c *pluginRuntime) installLocked(data []byte, fileName string) (PluginView, error) {
 	if len(data) == 0 || len(data) > protocol.PluginPackageMaxBytes {
 		return PluginView{}, fmt.Errorf("plugin package must be between 1 and %d bytes", protocol.PluginPackageMaxBytes)
 	}
