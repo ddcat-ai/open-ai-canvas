@@ -35,7 +35,7 @@ func skillAuthorizationFixture(t *testing.T) (*gin.Engine, *gorm.DB, string) {
 	if err := db.AutoMigrate(&model.User{}, &model.UserIdentity{}, &model.AuthSession{},
 		&model.Skill{}, &model.SkillVersion{}, &model.SkillFile{}, &model.UserSkillState{}, &model.SkillLibraryCategory{},
 		&model.SkillCurationSetting{}, &model.SkillCurationRoot{}, &model.SkillCurationCategory{}, &model.SkillCurationRootAssignment{}, &model.SkillCurationAssignment{},
-		&model.CloudAgentExecution{}); err != nil {
+		&model.CloudAgentExecution{}, &model.SystemSetting{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Create(&model.SkillCurationSetting{ID: 1}).Error; err != nil {
