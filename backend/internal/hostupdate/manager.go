@@ -418,34 +418,7 @@ func (m *Manager) failWithRollback(cause error, targetVersion string, backup Bac
 }
 
 func (m *Manager) runRollback(targetVersion string, backup Backup, automatic bool) {
-	var failures []error
-	if err := m.compose(m.composePath(), targetVersion, 5*time.Minute, nil, "stop", "web", "backend"); err != nil {
-		failures = append(failures, err)
-	}
-	if _, err := os.Stat(m.previousComposePath()); err == nil {
-		if err := replaceFile(m.previousComposePath(), m.composePath(), 0o600); err != nil {
-			failures = append(failures, fmt.Errorf("恢复旧 Compose 配置：%w", err))
-		}
-	}
-	if _, err := os.Stat(m.previousEnvPath()); err == nil {
-		if err := replaceFile(m.previousEnvPath(), m.envPath(), 0o600); err != nil {
-			failures = append(failures, fmt.Errorf("恢复旧部署环境：%w", err))
-		}
-	}
-	if err := m.restoreDatabase(backup); err != nil {
-		failures = append(failures, err)
-	}
-	started := true
-	if err := m.compose(m.composePath(), targetVersion, m.config.StepTimeout, nil, "up", "-d", "--pull", "never", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
-		started = false
-		failures = append(failures, err)
-	}
-	if started {
-		if err := m.verifyHealthy(targetVersion); err != nil {
-			failures = append(failures, err)
-		}
-	}
-	rollbackErr := errors.Join(failures...)
+	rollbackErr := m.restorePreviousVersion(targetVersion, backup)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := time.Now().UTC()
@@ -461,6 +434,29 @@ func (m *Manager) runRollback(targetVersion string, backup Backup, automatic boo
 		m.appendLogLocked(PhaseRolledBack, fmt.Sprintf("已恢复到 %s", targetVersion))
 	}
 	_ = m.saveStateLocked()
+}
+
+func (m *Manager) restorePreviousVersion(targetVersion string, backup Backup) error {
+	// 只有前置恢复全部成功，才允许旧服务接触恢复后的数据库。
+	if err := m.compose(m.composePath(), targetVersion, 5*time.Minute, nil, "stop", "web", "backend", "yingce-agent"); err != nil {
+		return fmt.Errorf("停止待回退服务：%w", err)
+	}
+	if err := replaceFile(m.previousComposePath(), m.composePath(), 0o600); err != nil {
+		return fmt.Errorf("恢复旧 Compose 配置：%w", err)
+	}
+	if err := replaceFile(m.previousEnvPath(), m.envPath(), 0o600); err != nil {
+		return fmt.Errorf("恢复旧部署环境：%w", err)
+	}
+	if err := m.compose(m.composePath(), targetVersion, 2*time.Minute, nil, "config", "--quiet"); err != nil {
+		return fmt.Errorf("校验旧 Compose 配置：%w", err)
+	}
+	if err := m.restoreDatabase(backup); err != nil {
+		return err
+	}
+	if err := m.compose(m.composePath(), targetVersion, m.config.StepTimeout, nil, "up", "-d", "--pull", "never", "--remove-orphans", "--wait", "--wait-timeout", "600"); err != nil {
+		return err
+	}
+	return m.verifyHealthy(targetVersion)
 }
 
 func (m *Manager) snapshotLocked() Status {
