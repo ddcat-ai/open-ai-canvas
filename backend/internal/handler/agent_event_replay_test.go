@@ -193,6 +193,7 @@ func TestAgentEventReplay(t *testing.T) {
 			if mode == "initial-tail" {
 				next = total - repository.CloudAgentJournalWindow + 1
 			}
+			pendingSnapshots, finalSnapshots := 0, 0
 			for _, line := range strings.Split(body, "\n") {
 				if strings.HasPrefix(line, "id: ") {
 					if line != fmt.Sprintf("id: %d", next) {
@@ -200,9 +201,22 @@ func TestAgentEventReplay(t *testing.T) {
 					}
 					next++
 				}
-				if strings.HasPrefix(line, "data: ") && strings.Contains(line, `"status":"completed"`) && (next != end+1 || strings.Contains(line, `"cleanupPending":true`)) {
-					t.Fatalf("terminal snapshot after event %d of %d", next-1, end)
+				if strings.HasPrefix(line, "data: ") && strings.Contains(line, `"status":"completed"`) {
+					if strings.Contains(line, `"cleanupPending":true`) {
+						pendingSnapshots++
+						if mode != "cleanup-pending" || next != total+1 {
+							t.Fatalf("cleanup snapshot after event %d, expected %d", next-1, total)
+						}
+					} else {
+						finalSnapshots++
+						if next != end+1 {
+							t.Fatalf("final snapshot after event %d of %d", next-1, end)
+						}
+					}
 				}
+			}
+			if finalSnapshots != 1 || (mode == "cleanup-pending" && pendingSnapshots != 1) {
+				t.Fatalf("snapshots: cleanup=%d final=%d", pendingSnapshots, finalSnapshots)
 			}
 			if rec.Code != 200 || next != end+1 || !strings.Contains(body, `"status":"completed"`) || ctx.Err() != nil {
 				t.Fatalf("status %d, received through %d", rec.Code, next-1)

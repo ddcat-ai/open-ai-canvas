@@ -450,10 +450,8 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 				snapshot := *run
 				snapshot.Events = nil // Events were sent once above, never in every snapshot too.
 				terminal := run.Status == "completed" || run.Status == "failed" || run.Status == "cancelled" || run.Status == "rejected"
-				if !terminal || !run.CleanupPending {
-					writeAgentSSE(c, "run_snapshot", 0, &snapshot)
-					lastWrite = time.Now()
-				}
+				writeAgentSSE(c, "run_snapshot", 0, &snapshot)
+				lastWrite = time.Now()
 				revision = run.Revision
 				if terminal && !run.CleanupPending {
 					return
