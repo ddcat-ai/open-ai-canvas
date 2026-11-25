@@ -12,6 +12,8 @@
 
 ## 设计沉淀
 
+- [角色卡梳妆台功能规格](design/character-dressing-table-spec.md)：六类参考资产、个人分类入口、官方配置与姿势库复用、统一图片任务、命名保存角色形象及验收边界（提案，未实施）。
+
 - [短剧拆镜与段间连续性调研](design/short-drama-shot-continuity-research.md)：对照制作台、同类产品和公开 Skill，区分同镜续拍、同场换镜与换场，附真实样片回查方法（调研建议，未实施）。
 
 - [团队空间、积分划拨与素材共享](design/team-workspace-design.md)：自由画布、创作页和素材库在个人与团队之间复用，按空间隔离作品与费用。使用入口见[功能清单](content/docs/overview/features.mdx)。
