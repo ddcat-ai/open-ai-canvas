@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 画布保存的存储协调
+
+- `canvas/user_data.go` 的增量操作与整份画布保存通过 `canvasHost.WithCanvasStorageLock` 进入 `app/canvas_storage_lock.go`。同一内容归属键（个人账号或团队空间）共享配额，保存串行；不同归属键的画布保存可以并行。
+- 画布保存持有 `Service.storageMu` 读侧；既有素材写入、任务落库、资源删除和后台清理仍持写侧，保留它们与画布引用、配额检查的互斥。数据库事务、画布行锁、revision CAS 与 mutation 回执保持原样。
+- 该协调范围是单个 Service 实例；不提供跨实例配额原子性的新增保证。SQLite 仍受自身单写入者限制，PostgreSQL 可以并行处理独立画布事务。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。
