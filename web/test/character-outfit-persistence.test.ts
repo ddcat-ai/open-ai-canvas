@@ -54,3 +54,14 @@ test("明确选用新形象时更新发起节点的固定版本，其他固定�
     expect(result[0].metadata?.characterCoverUrl).toContain("new-image");
     expect(result[1]).toBe(second);
 });
+
+test("手动替换已生成形象的图片后清除旧来源，新增生成形象仍保留来源", () => {
+    const source = { taskId: "task-1" };
+    const definition = { outfits: [{ id: "generated", name: "生成形象", resourceId: "old-image", source }] };
+    const replaced = parseCharacterOutfits(definition).map((item) => ({ ...item, resourceId: "manual-image" }));
+    const next = buildCharacterOutfitPersistence(definition, [...replaced, { id: "new", name: "新生成", resourceId: "new-image", source }]);
+    const saved = parseCharacterOutfits(next.definition);
+    expect(saved[0].resourceId).toBe("manual-image");
+    expect(saved[0].source).toBeUndefined();
+    expect(saved[1].source).toEqual(source);
+});

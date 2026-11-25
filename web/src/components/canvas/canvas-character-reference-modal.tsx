@@ -14,6 +14,7 @@ import { fetchOfficialAssetReference } from "@/services/api/official-assets";
 import { CharacterStudioOutfitManager } from "@/components/canvas/character-outfit-bar";
 import { buildCharacterOutfitPersistence, parseCharacterOutfits, resolveActiveCharacterOutfit, type CharacterOutfit } from "@/components/canvas/character-outfits";
 import { createClientUUID } from "@/lib/client-id";
+import { ApiError } from "@/services/api/request";
 import { CharacterDressingPanel } from "./character-dressing-panel";
 
 type Tab = "profile" | "visual" | "voice" | "dressing";
@@ -190,6 +191,8 @@ function CharacterStudio({
             onUpdated?.(next, targetOutfitId);
             message.success(success);
         } catch (error) {
+            // 明确的版本冲突表示本次未写入，刷新后应允许用新版本重新提交。
+            if (error instanceof ApiError && error.reason === "character_version_conflict") pendingSave.current = null;
             void detailQuery.refetch();
             message.error(error instanceof Error ? error.message : t("canvasA.characterStudio.saveFailed"));
         } finally {

@@ -190,7 +190,12 @@ export function CharacterDressingPanel({
                     );
                 })}
             </div>
-            <Button onClick={() => setPoseOpen(true)}>从姿势库选择动作与视角</Button>
+            <div className="flex flex-wrap gap-2">
+                <Button onClick={() => setPoseOpen(true)}>从姿势库选择动作与视角</Button>
+                <Button href={workspacePath("/assets")} target="_blank" rel="noopener noreferrer">
+                    前往素材库整理分类
+                </Button>
+            </div>
             {preview ? <CanvasImagePreview storageKey={resourceStorageKey(preview.resourceId)} alt={preview.title} onClose={() => setPreview(null)} /> : null}
             <CanvasPoseLibraryModal
                 open={poseOpen}

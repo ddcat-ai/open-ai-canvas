@@ -71,3 +71,18 @@ test("命名保存经角色 API 写回，保留旧形象与来源，重复保存
     expect((await saveCharacterDressing(task, "output", "新形象", "v1")).outfitId).toBe(first.outfitId);
     expect(writes).toBe(1);
 });
+
+test("旧生成形象手动换图后再次保存任务结果，保留两项不同形象", async () => {
+    const definition = { outfits: [{ id: "output", name: "手动换图", resourceId: "manual-image" }] };
+    apiClient.defaults.adapter = async (config) => {
+        let next = definition;
+        if (config.method === "put") {
+            expect(JSON.parse(config.data).operationId).toBe("dressing:task1:output-1");
+            next = JSON.parse(config.data).definition;
+            expect(next.outfits.map((item) => item.id)).toEqual(["output", "output-1"]);
+            expect(next.outfits.map((item) => item.resourceId)).toEqual(["manual-image", "output"]);
+        }
+        return { config, headers: {}, status: 200, statusText: "OK", data: { code: 0, data: { asset: { id: "person", title: "人物" }, character: { versionId: "v1", definition: next, representations: [] } } } };
+    };
+    expect((await saveCharacterDressing(task, "output", "重新保存原结果", "v1")).outfitId).toBe("output-1");
+});

@@ -94,7 +94,14 @@ export function buildCharacterOutfitPersistence(
     representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>;
     activeOutfit: CharacterOutfit;
 } {
-    const normalized = outfits.filter((item) => item.resourceId.trim());
+    const previousOutfits = parseCharacterOutfits(definition);
+    const normalized = outfits
+        .filter((item) => item.resourceId.trim())
+        .map((item) => {
+            const previous = previousOutfits.find((entry) => entry.id === item.id);
+            // 手动换图后旧任务不再是这张图的来源；重命名及新增生成形象仍保留来源。
+            return previous && previous.resourceId !== item.resourceId ? { ...item, source: undefined } : item;
+        });
     const active = (activeOutfitId ? normalized.find((item) => item.id === activeOutfitId) : undefined) || normalized[0];
     const nextDefinition: Record<string, unknown> = {
         ...definition,

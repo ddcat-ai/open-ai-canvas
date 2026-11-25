@@ -149,10 +149,12 @@ export async function saveCharacterDressing(task: GenerationTask, resourceId: st
     const outfits = parseCharacterOutfits(detail.character.definition, detail.character.representations);
     const alreadySaved = outfits.find((item) => item.source?.taskId === task.id && item.resourceId === resourceId);
     if (alreadySaved) return { detail, outfitId: alreadySaved.id };
-    const outfitId = resourceId;
+    // 原结果的形象可能已被手动换图，保留该形象并为再次保存的结果分配未占用标识。
+    let outfitId = resourceId;
+    for (let suffix = 1; outfits.some((item) => item.id === outfitId); suffix++) outfitId = `${resourceId}-${suffix}`;
     const clothing = snapshot.references?.find((item) => item.category === "clothing")?.title;
     const next: CharacterOutfit = { id: outfitId, name: name.trim(), resourceId, ...(clothing ? { clothing } : {}), source: { taskId: task.id, resourceId, snapshot } };
     const payload = buildCharacterOutfitPersistence(detail.character.definition, [...outfits, next], outfitId, detail.character.representations);
-    const saved = await replaceCharacterRepresentations(detail.asset.id, payload.representations, payload.definition, { expectedVersionId, operationId: `dressing:${task.id}:${resourceId}` });
+    const saved = await replaceCharacterRepresentations(detail.asset.id, payload.representations, payload.definition, { expectedVersionId, operationId: `dressing:${task.id}:${outfitId}` });
     return { detail: saved, outfitId };
 }
