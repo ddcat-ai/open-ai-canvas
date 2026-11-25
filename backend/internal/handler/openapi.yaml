@@ -4808,6 +4808,10 @@ paths:
     get:
       tags: [tasks]
       summary: 当前空间的生成任务
+      parameters:
+        - { in: query, name: characterAssetId, schema: { type: string }, description: 按梳妆台角色筛选，先筛选再分页 }
+        - { in: query, name: before, schema: { type: string }, description: 当前空间上一页末尾任务 ID，读取更早记录 }
+        - { in: query, name: pageSize, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
       responses: { '200': { $ref: '#/components/responses/Envelope' } }
     post:
       tags: [tasks]

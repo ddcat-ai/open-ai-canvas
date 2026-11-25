@@ -11,6 +11,8 @@ description: 信封、错误码与 OpenAPI
 
 ## 角色形象保存
 
+`GET /tasks?characterAssetId=:assetId&pageSize=40&before=:taskId` 按当前内容空间筛选梳妆台角色任务，先筛选再分页；`before` 可省略，传入本页最后一项的 ID 加载更早任务，排序为创建时间及 ID 倒序。列表只返回摘要，具体输入快照和结果继续通过已授权的任务详情读取。角色已删除不影响其任务记录的按空间访问权限。
+
 `PUT /characters/:assetId/representations` 在原有 `representations`、`definition` 外支持成对传入 `expectedVersionId` 和 `operationId`。角色工作室按加载到的版本提交，服务端原子比较版本，冲突返回 HTTP 409、`reason=character_version_conflict`，图片结果应保留供重试。相同用户、角色和操作标识的相同请求重放返回角色当前详情，不新增版本；同一标识用于不同内容返回 409 `idempotency_conflict`。幂等成功检查先于版本冲突检查。普通角色版本更新也使用事务内版本比较，防止覆盖并发修改。
 
 ## 团队空间

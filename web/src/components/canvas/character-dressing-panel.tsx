@@ -1,13 +1,26 @@
 import { App, Button, Input } from "antd";
 import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { ModelPicker } from "@/components/model-picker";
 import { CanvasImageSettingsPopover } from "@/components/canvas/canvas-image-settings-popover";
 import { WorkspaceErrorState } from "@/components/layout/workspace-state";
 import { createClientUUID } from "@/lib/client-id";
 import { defaultImageParamsForModel } from "@/lib/model-selection";
-import { DRESSING_CATEGORIES, dressingAssetReference, dressingImages, saveCharacterDressing, submitCharacterDressing, uploadDressingAsset, type DressingCategory, type DressingAssetReference } from "@/services/character-dressing";
+import {
+    DRESSING_CATEGORIES,
+    dressingAssetReference,
+    dressingImages,
+    listCharacterDressingTasks,
+    saveCharacterDressing,
+    submitCharacterDressing,
+    uploadDressingAsset,
+    type DressingCategory,
+    type DressingAssetReference,
+} from "@/services/character-dressing";
+import { getActiveUserScope } from "@/lib/user-scope";
+import { taskBillingLabel } from "@/lib/generation-task-billing";
+import { canCancelGenerationTask, statusLabel } from "@/lib/generation-task-display";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { AssetLibraryPickerModal, remoteAssetToPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -44,21 +57,30 @@ export function CharacterDressingPanel({
     const [name, setName] = useState("");
     const [selectedResource, setSelectedResource] = useState("");
     const operation = useRef<{ key: string; id: string } | null>(null);
+    const scope = getActiveUserScope();
+    const historyQuery = useInfiniteQuery({
+        queryKey: ["character-dressing-history", scope, detail.asset.id],
+        initialPageParam: undefined as string | undefined,
+        queryFn: ({ pageParam, signal }) => listCharacterDressingTasks(detail.asset.id, pageParam, signal),
+        getNextPageParam: (page) => (page.length === 40 ? page.at(-1)?.id : undefined),
+    });
+    const history = historyQuery.data?.pages.flat() || [];
+    const selectedTask = submitted || history[0];
     const [references, setReferences] = useState<Partial<Record<DressingCategory, DressingAssetReference>>>({});
     const [pickerCategory, setPickerCategory] = useState<DressingCategory | null>(null);
     const [poseOpen, setPoseOpen] = useState(false);
     const assets = useAssetStore((state) => state.assets);
     const pickerItems = assets.filter((asset) => asset.kind === "image" && asset.status !== "archived").map((asset) => remoteAssetToPickerItem(asset, undefined, true));
     const taskQuery = useQuery({
-        queryKey: ["character-dressing-task", userId, submitted?.id],
-        queryFn: () => queryGenerationTask(submitted!.id),
-        enabled: Boolean(submitted),
+        queryKey: ["character-dressing-task", scope, userId, selectedTask?.id],
+        queryFn: ({ signal }) => queryGenerationTask(selectedTask!.id, { signal }),
+        enabled: Boolean(selectedTask),
         refetchInterval: (query) => {
-            const task = query.state.data || submitted;
+            const task = query.state.data || selectedTask;
             return task && (task.status === "queued" || task.status === "running" || (task.status === "succeeded" && task.resultState && task.resultState !== "READY" && task.resultState !== "FAILED_PERMANENT")) ? 2000 : false;
         },
     });
-    const task = taskQuery.data || submitted;
+    const task = taskQuery.data || selectedTask;
     const active = task?.status === "queued" || task?.status === "running";
     const images = task ? dressingImages(task) : [];
     const image = images.find((item) => item.resourceId === selectedResource) || images[0];
@@ -71,6 +93,7 @@ export function CharacterDressingPanel({
             if (operation.current?.key !== key) operation.current = { key, id: createClientUUID() };
             const created = await submitCharacterDressing({ detail, outfit, nodeId, prompt, config, operationId: operation.current.id, references: Object.values(references).filter((item): item is DressingAssetReference => Boolean(item)) });
             setSubmitted(created);
+            void historyQuery.refetch();
             setSelectedResource("");
             setName("");
             operation.current = null;
@@ -88,6 +111,7 @@ export function CharacterDressingPanel({
             const saved = await saveCharacterDressing(task, image.resourceId, name, detail.character.versionId);
             onSaved(saved.detail, saved.outfitId);
             message.success("已保存为角色形象");
+            void historyQuery.refetch();
         } catch (error) {
             setError(error instanceof Error ? error.message : "保存失败，生成结果已保留");
             onRefresh();
@@ -206,14 +230,53 @@ export function CharacterDressingPanel({
                     生成新形象
                 </Button>
             </div>
-            {error || taskQuery.error ? <WorkspaceErrorState compact title="操作未完成" description={error || String(taskQuery.error)} /> : null}
+            {error || taskQuery.error || historyQuery.error ? (
+                <WorkspaceErrorState
+                    compact
+                    title="操作未完成"
+                    description={error || String(taskQuery.error || historyQuery.error)}
+                    onRetry={() => {
+                        void taskQuery.refetch();
+                        void historyQuery.refetch();
+                    }}
+                />
+            ) : null}
+            {history.length ? (
+                <details className="rounded-lg border border-border p-3">
+                    <summary className="cursor-pointer text-sm">历史生成（关闭或刷新后可继续保存）</summary>
+                    <div className="mt-2 space-y-1">
+                        {history.map((item) => (
+                            <Button
+                                key={item.id}
+                                type="text"
+                                block
+                                aria-pressed={task?.id === item.id}
+                                onClick={() => {
+                                    setSubmitted(item);
+                                    setSelectedResource("");
+                                    setName("");
+                                    setError("");
+                                }}
+                            >
+                                {new Date(item.createdAt).toLocaleString()} · {statusLabel[item.status] || item.status}
+                            </Button>
+                        ))}
+                        {historyQuery.hasNextPage ? (
+                            <Button loading={historyQuery.isFetchingNextPage} onClick={() => void historyQuery.fetchNextPage()}>
+                                加载更早记录
+                            </Button>
+                        ) : null}
+                    </div>
+                </details>
+            ) : null}
             {task ? (
                 <section className="space-y-3 rounded-lg border border-border p-4" aria-live="polite">
+                    {task.billing ? <p className="text-xs text-foreground/60">{taskBillingLabel(task.billing)}</p> : null}
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-sm">
                             {active ? `正在生成 ${task.progress || 0}%` : task.status === "failed" ? task.error || "生成失败" : task.status === "cancelled" ? "任务已取消" : images.length ? "生成完成，请选择图片并命名保存" : "结果处理中，请稍候"}
                         </span>
-                        {active ? (
+                        {canCancelGenerationTask(task) ? (
                             <Button
                                 size="small"
                                 onClick={() =>

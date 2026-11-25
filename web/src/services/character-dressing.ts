@@ -12,6 +12,12 @@ import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { uploadImage } from "@/services/image-storage";
 import { upsertRemoteAsset } from "@/services/api/user-data";
 import { loadAssetsForUse } from "@/services/user-data-sync";
+import { http } from "@/services/api/request";
+
+export function listCharacterDressingTasks(characterAssetId: string, before?: string, signal?: AbortSignal) {
+    if (!characterAssetId.trim()) throw new Error("角色尚未保存");
+    return http.get<GenerationTask[]>("/tasks", { params: { characterAssetId, before, pageSize: 40 }, signal });
+}
 
 export const DRESSING_CATEGORIES = ["clothing", "expression", "pose", "accessory", "hairstyle", "facial_features"] as const;
 export type DressingCategory = (typeof DRESSING_CATEGORIES)[number];
