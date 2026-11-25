@@ -42,8 +42,8 @@ export default function AdminPluginsPage() {
         setLoading(true);
         try {
             const result = await fetchAdminPlugins();
-            setPlugins(result.plugins);
-            setStates(result.states);
+            setPlugins(Array.isArray(result.plugins) ? result.plugins : []);
+            setStates(result.states || {});
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取插件管理数据失败");
         } finally {

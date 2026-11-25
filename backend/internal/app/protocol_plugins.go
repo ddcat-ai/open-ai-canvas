@@ -998,10 +998,22 @@ func pluginManifestView(raw []byte, metadata protocol.Metadata, source string) P
 	if manifest.Metadata.ID == "" {
 		manifest.Metadata = metadata
 	}
+	permissions := manifest.Permissions
+	if permissions == nil {
+		permissions = []string{}
+	}
+	for index := range manifest.Contributes.Providers {
+		if manifest.Contributes.Providers[index].Capabilities == nil {
+			manifest.Contributes.Providers[index].Capabilities = []protocol.Capability{}
+		}
+		if manifest.Contributes.Providers[index].Scopes == nil {
+			manifest.Contributes.Providers[index].Scopes = []protocol.Surface{}
+		}
+	}
 	return PluginManifestView{
 		ID: metadata.ID, Name: metadata.Name, Version: metadata.Version, APIVersion: manifest.APIVersion, Entry: manifest.Entry, Surfaces: manifest.Surfaces,
 		Description: metadata.Description, Documentation: metadata.Documentation, Author: metadata.Vendor,
-		Permissions: manifest.Permissions, Trusted: isBuiltInPluginSource(source), Runtime: manifest.Runtime,
+		Permissions: permissions, Trusted: isBuiltInPluginSource(source), Runtime: manifest.Runtime,
 		Configuration: manifest.Configuration, Contributes: manifest.Contributes,
 	}
 }

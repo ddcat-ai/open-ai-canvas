@@ -1,6 +1,8 @@
 package app
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"yingce/backend/internal/model"
@@ -94,5 +96,30 @@ func TestArtCritiqueIsUserToggleableApplication(t *testing.T) {
 	policy := pluginManagement(PluginAIArtCritique, "bundled")
 	if policy.Origin != PluginOriginOfficial || policy.Kind != PluginKindApplication || policy.ActivationScope != PluginScopeUser || policy.ConfigurationScope != PluginConfigurationNone {
 		t.Fatalf("AI art critique policy = %#v", policy)
+	}
+}
+
+func TestPluginManifestViewSerializesMissingPermissionsAsEmptyArray(t *testing.T) {
+	raw := []byte(`{
+		"apiVersion":"yingce.plugin/v2",
+		"id":"custom-sample-video",
+		"name":"自定义请求协议",
+		"version":"1.0.0",
+		"contributes":{"providers":[{"id":"custom-sample-video","label":"自定义请求协议","create":{"method":"POST","path":"/v1/tasks"},"response":{}}]}
+	}`)
+	view := pluginManifestView(raw, protocol.Metadata{ID: "custom-sample-video", Name: "自定义请求协议", Version: "1.0.0"}, PluginOriginUploaded)
+	if view.Permissions == nil || len(view.Permissions) != 0 {
+		t.Fatalf("permissions = %#v, want empty non-nil slice", view.Permissions)
+	}
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := string(encoded)
+	if !strings.Contains(payload, `"permissions":[]`) {
+		t.Fatalf("serialized manifest missing empty permissions array: %s", payload)
+	}
+	if !strings.Contains(payload, `"capabilities":[]`) || !strings.Contains(payload, `"scopes":[]`) {
+		t.Fatalf("serialized provider missing empty capability/scope arrays: %s", payload)
 	}
 }

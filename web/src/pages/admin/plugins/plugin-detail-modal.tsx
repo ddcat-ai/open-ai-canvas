@@ -47,6 +47,7 @@ export function AdminPluginDetailModal({ plugin, state, typeLabel, icon, onClose
 
 function PluginDetail({ plugin, state, typeLabel, icon }: { plugin: AdminPluginDetail; state?: AdminPluginState; typeLabel: string; icon?: ReactNode }) {
     const { manifest, management } = plugin;
+    const permissions = Array.isArray(manifest.permissions) ? manifest.permissions : [];
     const available = state?.platformAvailable ?? plugin.status === "enabled";
     const contributions = contributionSummary(manifest);
     const hasPackage = Boolean(plugin.fileName || plugin.sha256 || plugin.installedAt);
@@ -81,9 +82,9 @@ function PluginDetail({ plugin, state, typeLabel, icon }: { plugin: AdminPluginD
                         <Fact label="配置方式">{configurationLabel(management.configurationScope)}</Fact>
                     </FactGroup>
                     <FactGroup icon={<KeyRound />} title="权限">
-                        {manifest.permissions.length ? (
+                        {permissions.length ? (
                             <div className="admin-plugin-detail-chips">
-                                {manifest.permissions.map((permission) => (
+                                {permissions.map((permission) => (
                                     <span key={permission} title={permission}>
                                         {pluginPermissionLabel(permission)}
                                     </span>

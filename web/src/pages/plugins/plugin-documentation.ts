@@ -9,6 +9,7 @@ const permissionLabels: Record<string, string> = {
     "asset.upload": "上传素材",
     "generation.run": "调用生成",
     "ai.text": "调用已配置的文本/视觉理解模型",
+    "media.read": "读取输入媒体",
     "external.open": "打开外部详情",
 };
 
@@ -19,7 +20,7 @@ export function pluginPermissionLabel(permission: string) {
 export function getPluginDocumentation(manifest: PluginManifest) {
     if (manifest.documentation?.trim()) return manifest.documentation.trim();
 
-    const capabilities = manifest.permissions.map(pluginPermissionLabel);
+    const capabilities = (manifest.permissions || []).map(pluginPermissionLabel);
     return [
         `# ${manifest.name}`,
         "",
@@ -31,6 +32,6 @@ export function getPluginDocumentation(manifest: PluginManifest) {
         `- 版本：${manifest.version}`,
         `- 能力：${capabilities.join("、") || "未声明"}`,
         "",
-        manifest.contributes.providers?.length ? "> 此插件没有提供接入文档。请联系插件作者补充 `documentation`，不要仅凭清单字段推测上游接口。" : "> 该插件当前没有单独的使用文档。",
+        manifest.contributes?.providers?.length ? "> 此插件没有提供接入文档。请联系插件作者补充 `documentation`，不要仅凭清单字段推测上游接口。" : "> 该插件当前没有单独的使用文档。",
     ].join("\n");
 }

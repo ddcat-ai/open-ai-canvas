@@ -106,8 +106,8 @@ export default function PluginsPage() {
         setBackendPluginsLoading(true);
         try {
             const result = await fetchPlugins();
-            setBackendPlugins(result.plugins);
-            setPluginStates(result.states);
+            setBackendPlugins(Array.isArray(result.plugins) ? result.plugins : []);
+            setPluginStates(result.states || {});
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取插件中心失败");
             setBackendPlugins([]);
@@ -142,7 +142,7 @@ export default function PluginsPage() {
     const filteredPlugins = useMemo(() => {
         return registeredPlugins.filter((plugin) => {
             const state = pluginStates[plugin.manifest.id];
-            const isApplicationPlugin = backendPluginById.get(plugin.manifest.id)?.management.kind === "application" || isOfficialApplicationPluginId(plugin.manifest.id);
+            const isApplicationPlugin = backendPluginById.get(plugin.manifest.id)?.management?.kind === "application" || isOfficialApplicationPluginId(plugin.manifest.id);
             if (user?.role !== "admin" && !features.systemPluginsVisibleToUsers && !isApplicationPlugin) return false;
             const installation = installations.find((item) => item.manifest.id === plugin.manifest.id);
             const enabled = state?.effectiveEnabled ?? Boolean(installation?.enabled);
@@ -411,15 +411,15 @@ export default function PluginsPage() {
                                                                         {(plugin.manifest.surfaces || []).map((surface) => (
                                                                             <span key={surface}>{surfaceLabels[surface] ?? surface}</span>
                                                                         ))}
-                                                                        {(plugin.manifest.contributes.providers || []).flatMap((provider) =>
-                                                                            provider.capabilities.map((capability) => (
+                                                                        {(plugin.manifest.contributes?.providers || []).flatMap((provider) =>
+                                                                            (provider.capabilities || []).map((capability) => (
                                                                                 <span key={`${provider.id}-${capability}`} title={`Provider：${provider.label}（${provider.id}）`}>
                                                                                     {provider.kind === "processing" ? "处理工具" : "生成协议"} · {provider.kind === "processing" ? `${capabilityLabel(capability)}处理` : `${capabilityLabel(capability)}生成`}
                                                                                 </span>
                                                                             )),
                                                                         )}
-                                                                        {plugin.manifest.contributes.providers?.some((provider) => provider.poll) ? <span>异步轮询</span> : null}
-                                                                        <span>{plugin.manifest.permissions.length} 项能力</span>
+                                                                        {plugin.manifest.contributes?.providers?.some((provider) => provider.poll) ? <span>异步轮询</span> : null}
+                                                                        <span>{(plugin.manifest.permissions || []).length} 项能力</span>
                                                                     </div>
                                                                 </button>
 
@@ -598,7 +598,7 @@ export default function PluginsPage() {
                                         </div>
                                         <div>
                                             <span>插件能力</span>
-                                            {settingsPlugin.manifest.permissions.map((permission) => permissionLabels[permission] ?? permission).join("、")}
+                                            {(settingsPlugin.manifest.permissions || []).map((permission) => permissionLabels[permission] ?? permission).join("、") || "未声明"}
                                         </div>
                                     </div>
                                 </div>
@@ -619,7 +619,14 @@ function formatPluginDate(value?: string) {
 }
 
 function toRegisteredPlugin(plugin: BackendPlugin): RegisteredPlugin {
-    return { manifest: plugin.manifest, source: plugin.source };
+    return {
+        manifest: {
+            ...plugin.manifest,
+            permissions: Array.isArray(plugin.manifest?.permissions) ? plugin.manifest.permissions : [],
+            contributes: plugin.manifest?.contributes || {},
+        },
+        source: plugin.source,
+    };
 }
 
 function pluginSourceLabel(plugin: RegisteredPlugin, state?: PluginState) {
@@ -630,7 +637,7 @@ function pluginSourceLabel(plugin: RegisteredPlugin, state?: PluginState) {
 }
 
 function contributionKindsFor(manifest: PluginManifest): string[] {
-    const contributions = manifest.contributes;
+    const contributions = manifest.contributes || {};
     const kinds: string[] = [];
     if (contributions.providers?.length) kinds.push("provider");
     if (contributions.paymentProviders?.length) kinds.push("payment-provider");
@@ -646,12 +653,12 @@ function contributionKindsFor(manifest: PluginManifest): string[] {
 }
 
 function providerCapabilitiesFor(manifest: PluginManifest) {
-    return [...new Set((manifest.contributes.providers || []).flatMap((provider) => provider.capabilities))];
+    return [...new Set((manifest.contributes?.providers || []).flatMap((provider) => provider.capabilities || []))];
 }
 
 function pluginMatchesCategory(manifest: PluginManifest, category: string) {
     const providerCapabilities = providerCapabilitiesFor(manifest);
-    const isPaymentProtocol = Boolean(manifest.contributes.paymentProviders?.length);
+    const isPaymentProtocol = Boolean(manifest.contributes?.paymentProviders?.length);
     if (category === "payment") return isPaymentProtocol;
     if (category === "other") return !isPaymentProtocol && providerCapabilities.length === 0;
     return providerCapabilities.includes(category as "text" | "image" | "video" | "audio");
