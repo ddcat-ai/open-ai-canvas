@@ -1,11 +1,40 @@
 import { afterEach, expect, test } from "bun:test";
 import { apiClient } from "../src/services/api/request";
-import { dressingImages, dressingSnapshot, saveCharacterDressing } from "../src/services/character-dressing";
+import { buildCharacterDressingInput, dressingImages, dressingSnapshot, saveCharacterDressing } from "../src/services/character-dressing";
+import { defaultConfig, createModelChannel, encodeChannelModel } from "../src/stores/use-config-store";
+import type { ProjectCharacterDetail } from "../src/services/api/projects";
 import type { GenerationTask } from "../src/services/api/task-center";
 
 const originalAdapter = apiClient.defaults.adapter;
 afterEach(() => {
     apiClient.defaults.adapter = originalAdapter;
+});
+
+test("六槽图序按用途固定，同图去重后仍保留全部用途，包含基础图的超限被拒绝", () => {
+    const channel = createModelChannel({ id: "image-channel", name: "图片", interfaceType: "volcengine-ark-image", models: ["doubao-seedream-4-0-250828"] });
+    const model = encodeChannelModel(channel.id, "doubao-seedream-4-0-250828");
+    const config = { ...defaultConfig, channels: [channel], model, imageModel: model };
+    const detail = { asset: { id: "person", title: "人物" }, character: { versionId: "v1", definition: {} } } as ProjectCharacterDetail;
+    const input = buildCharacterDressingInput({
+        detail,
+        outfit: { id: "base", name: "默认", resourceId: "base" },
+        nodeId: "node",
+        prompt: "",
+        config,
+        references: [
+            { category: "pose", resourceId: "shared", title: "站立" },
+            { category: "clothing", resourceId: "shared", title: "红衣" },
+        ],
+    });
+    expect(input.referenceImages.map((image) => image.storageKey)).toEqual(["resource:base", "resource:shared"]);
+    expect(input.prompt).toContain("衣服：使用参考图2");
+    expect(input.prompt).toContain("姿势：使用参考图2");
+    expect(input.prompt.indexOf("衣服：")).toBeLessThan(input.prompt.indexOf("姿势："));
+    const singleChannel = createModelChannel({ id: "single", name: "文生图", interfaceType: "openai-images", models: ["grok-imagine-image"] });
+    const singleModel = encodeChannelModel(singleChannel.id, "grok-imagine-image");
+    expect(() =>
+        buildCharacterDressingInput({ detail, outfit: { id: "base", name: "默认", resourceId: "base" }, nodeId: "node", prompt: "换衣", config: { ...defaultConfig, channels: [singleChannel], model: singleModel, imageModel: singleModel } }),
+    ).toThrow();
 });
 const task = {
     id: "task1",
