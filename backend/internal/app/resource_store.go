@@ -281,7 +281,7 @@ func (s *Service) openResourceRange(userID string, resource *model.Resource, ran
 	if err != nil {
 		return nil, err
 	}
-	return &ResourceStream{Resource: resource, Body: stream.Body, StatusCode: stream.StatusCode, ContentLength: stream.ContentLength, ContentRange: stream.ContentRange, AcceptRanges: stream.AcceptRanges}, nil
+	return &ResourceStream{Resource: resource, Body: stream.Body, ETag: stream.ETag, StatusCode: stream.StatusCode, ContentLength: stream.ContentLength, ContentRange: stream.ContentRange, AcceptRanges: stream.AcceptRanges}, nil
 }
 
 func (s *Service) storeResource(userID string, kind string, fileName string, mimeType string, size int64, width int, height int, durationMs int64, body io.Reader, uploadKey *string, forceLocal bool, reservationIDs ...string) (*model.Resource, bool, error) {

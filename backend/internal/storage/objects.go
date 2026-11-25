@@ -101,6 +101,7 @@ func putAliyunOSSObject(ctx context.Context, setting Settings, objectKey string,
 type ObjectStream struct {
 	Body          io.ReadCloser
 	StatusCode    int
+	ETag          string
 	ContentLength int64
 	ContentRange  string
 	AcceptRanges  string
@@ -162,7 +163,7 @@ func getCDNObjectRange(setting Settings, objectKey string, rangeHeader string) (
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return nil, fmt.Errorf("CDN 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
-	return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
+	return &ObjectStream{Body: resp.Body, ETag: resp.Header.Get("ETag"), StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
 
 func GetAliyunOSSObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
@@ -183,7 +184,7 @@ func GetAliyunOSSObjectRange(setting Settings, objectKey string, rangeHeader str
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return nil, fmt.Errorf("OSS 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
-	return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
+	return &ObjectStream{Body: resp.Body, ETag: resp.Header.Get("ETag"), StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
 
 func SignedOSSObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
@@ -411,7 +412,7 @@ func GetCOSObjectRange(setting Settings, objectKey string, rangeHeader string) (
 		}
 		return nil, fmt.Errorf("COS 读取失败：%w", err)
 	}
-	return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
+	return &ObjectStream{Body: resp.Body, ETag: resp.Header.Get("ETag"), StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
 
 func GetQiniuObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
@@ -437,7 +438,7 @@ func GetQiniuObjectRange(setting Settings, objectKey string, rangeHeader string)
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit(setting)))
 		return nil, fmt.Errorf("七牛云 Kodo 读取失败：%s %s", resp.Status, strings.TrimSpace(string(detail)))
 	}
-	return &ObjectStream{Body: resp.Body, StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
+	return &ObjectStream{Body: resp.Body, ETag: resp.Header.Get("ETag"), StatusCode: resp.StatusCode, ContentLength: resp.ContentLength, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
 }
 
 func SignedCOSObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
