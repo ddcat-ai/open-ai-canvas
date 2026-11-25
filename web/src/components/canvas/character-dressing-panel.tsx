@@ -11,8 +11,6 @@ import { DRESSING_CATEGORIES, dressingAssetReference, dressingImages, saveCharac
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { AssetLibraryPickerModal, remoteAssetToPickerItem } from "@/components/assets/asset-library-picker-modal";
 import { useAssetStore } from "@/stores/use-asset-store";
-import { loadAssetsForUse } from "@/services/user-data-sync";
-import { importOfficialAssetToLibrary } from "@/services/api/official-assets";
 import { cancelGenerationTask, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { resourceStorageKey } from "@/services/api/resources";
 import type { ProjectCharacterDetail } from "@/services/api/projects";
@@ -157,6 +155,7 @@ export function CharacterDressingPanel({
                     open
                     items={pickerItems}
                     remoteLibrary
+                    officialSelectionMode="import-to-library"
                     remoteKind="image"
                     acceptRemoteItems
                     mediaKinds={["image"]}
@@ -178,16 +177,9 @@ export function CharacterDressingPanel({
                     }}
                     onConfirm={async (ids, picked) => {
                         const item = picked?.find((entry) => entry.id === ids[0]) || pickerItems.find((entry) => entry.id === ids[0]);
-                        let asset = item?.asset;
-                        let officialAssetId: string | undefined;
-                        if (item?.officialAsset) {
-                            const result = await importOfficialAssetToLibrary(item.officialAsset.id);
-                            officialAssetId = item.officialAsset.id;
-                            await loadAssetsForUse([result.asset.id], { refresh: true });
-                            asset = useAssetStore.getState().assets.find((entry) => entry.id === result.asset.id);
-                        }
+                        const asset = item?.asset;
                         if (!asset) throw new Error("素材尚未就绪，请重新选择");
-                        const reference = { ...dressingAssetReference(asset, pickerCategory), ...(officialAssetId ? { officialAssetId } : {}) };
+                        const reference = dressingAssetReference(asset, pickerCategory);
                         setReferences((current) => ({ ...current, [pickerCategory]: reference }));
                         setPickerCategory(null);
                     }}

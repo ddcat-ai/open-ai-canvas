@@ -19,7 +19,7 @@ import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import { flushAssetStorePersistence, useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { listProjectAssetsPage, type ProjectAsset } from "@/services/api/projects";
 import { deleteAssetsWithRemoteSync, loadAssetLibraryPage, loadAssetsForUse, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
-import { fetchOfficialAssets, importOfficialAssetToProject, type OfficialAsset } from "@/services/api/official-assets";
+import { fetchOfficialAssets, importOfficialAssetToProject, importOfficialAssetToLibrary, type OfficialAsset } from "@/services/api/official-assets";
 
 import "./asset-library-picker-modal.css";
 
@@ -132,6 +132,8 @@ function useAssetPickerSurfaceTone(open: boolean): AssetPickerSurfaceTone {
 }
 
 type Props = {
+    /** 生图参考需要用户自己的资源；普通画布插入仍保留直接引用模式。 */
+    officialSelectionMode?: "reference" | "import-to-library";
     remoteLibrary?: boolean;
     /** 按项目分页读取图片，复用服务端搜索与分类，不加载全项目媒体。 */
     projectId?: string;
@@ -181,6 +183,7 @@ type Props = {
 };
 
 export function AssetLibraryPickerModal({
+    officialSelectionMode = "reference",
     remoteLibrary = false,
     projectId,
     remoteKind,
@@ -445,7 +448,7 @@ export function AssetLibraryPickerModal({
         setImportingOfficialId(item.id);
         setError("");
         try {
-            if (!projectId) {
+            if (!projectId && officialSelectionMode === "reference") {
                 const pickerItem = officialAssetToPickerItem(item);
                 setImportedPickerItems((current) => [...current.filter((entry) => entry.officialAsset?.id !== item.id), pickerItem]);
                 setImportedOfficialIds((current) => new Set(current).add(item.id));
@@ -453,7 +456,7 @@ export function AssetLibraryPickerModal({
                 message.success("已选择官方素材，将直接引用到画布");
                 return;
             }
-            const result = await importOfficialAssetToProject(item.id, projectId);
+            const result = projectId ? await importOfficialAssetToProject(item.id, projectId) : await importOfficialAssetToLibrary(item.id);
             await loadAssetsForUse([result.asset.id], { refresh: true });
             const asset = useAssetStore.getState().assets.find((entry) => entry.id === result.asset.id);
             if (!asset) throw new Error("官方素材已导入，但本地素材记录尚未可用");

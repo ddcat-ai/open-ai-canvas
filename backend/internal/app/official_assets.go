@@ -239,8 +239,15 @@ func validateOfficialAssetTags(tags []string) ([]string, error) {
 	return normalized, nil
 }
 
-func validateOfficialAssetCategory(value string, mediaType string) model.AssetCategory {
-	return model.NormalizeAssetCategory(model.AssetCategory(strings.TrimSpace(value)), mediaType)
+func validateOfficialAssetCategory(value string, mediaType string) (model.AssetCategory, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value != "" && value != "wardrobe" && value != "weapon" && value != "style" && !model.IsValidAssetCategory(model.AssetCategory(value)) {
+		return "", BadAuthRequest("官方素材分类无效")
+	}
+	if value == string(model.AssetCategoryArk) {
+		return "", BadAuthRequest("方舟认证分类不能手动设置")
+	}
+	return model.NormalizeAssetCategory(model.AssetCategory(value), mediaType), nil
 }
 
 // validateOfficialAssetPageFilter 校验分页筛选入参；
@@ -641,11 +648,15 @@ func (s *Service) CreateOfficialAsset(actor *model.User, req CreateOfficialAsset
 		return OfficialAssetDetail{}, err
 	}
 	now := time.Now().UTC()
+	category, err := validateOfficialAssetCategory(req.Category, strings.TrimSpace(req.MediaType))
+	if err != nil {
+		return OfficialAssetDetail{}, err
+	}
 	asset := &model.OfficialAsset{
 		ID: newID(), ResourceID: strings.TrimSpace(req.ResourceID),
 		Title: strings.TrimSpace(req.Title), Description: strings.TrimSpace(req.Description),
 		MediaType: strings.TrimSpace(req.MediaType),
-		Category:  validateOfficialAssetCategory(req.Category, strings.TrimSpace(req.MediaType)),
+		Category:  category,
 		TagsJSON:  tagsJSON, SourceName: strings.TrimSpace(req.SourceName),
 		SourceURL: strings.TrimSpace(req.SourceURL), LicenseNote: strings.TrimSpace(req.LicenseNote),
 		UsageNote: strings.TrimSpace(req.UsageNote), Status: model.OfficialAssetStatusDraft,
@@ -703,7 +714,11 @@ func (s *Service) UpdateOfficialAsset(actor *model.User, id string, req UpdateOf
 		fields["description"] = strings.TrimSpace(*req.Description)
 	}
 	if req.Category != nil {
-		fields["category"] = validateOfficialAssetCategory(*req.Category, mediaType)
+		category, err := validateOfficialAssetCategory(*req.Category, mediaType)
+		if err != nil {
+			return OfficialAssetDetail{}, err
+		}
+		fields["category"] = category
 	}
 	if req.TagsSet {
 		tags, err := validateOfficialAssetTags(req.Tags)

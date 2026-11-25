@@ -103,7 +103,8 @@ export function dressingAssetReference(asset: Asset, category: DressingCategory)
     if (asset.kind !== "image" || asset.status === "archived") throw new Error("请选择可用图片素材");
     const resourceId = resourceIdFromStorageKey(asset.data.storageKey);
     if (!resourceId) throw new Error("素材尚未保存为可访问资源，请先在素材库重新上传");
-    return { category, title: asset.title, resourceId, assetId: asset.id };
+    const officialAssetId = (asset.data as { officialAssetId?: string }).officialAssetId;
+    return { category, title: asset.title, resourceId, assetId: asset.id, ...(officialAssetId ? { officialAssetId } : {}) };
 }
 
 export async function uploadDressingAsset(file: File, category: DressingCategory) {
