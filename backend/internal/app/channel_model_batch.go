@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/protocol"
 	"yingce/backend/internal/repository"
 )
 
@@ -169,7 +170,7 @@ func (c BatchChannelModelChanges) fields() []string {
 	for _, field := range []struct {
 		name string
 		set  bool
-	}{{"capability", c.Capability != nil}, {"protocol", c.Protocol != nil}, {"displayName", c.DisplayName != nil}, {"description", c.Description != nil}, {"enabled", c.Enabled != nil}, {"pricingEnabled", c.PricingEnabled != nil}, {"capabilityTemplate", c.CapabilityTemplate != nil}, {"pricingTemplate", c.PricingTemplate != nil}} {
+	}{{"capability", c.Capability != nil}, {"protocol", c.Protocol != nil}, {"protocolRelease", c.ProtocolRelease != nil}, {"displayName", c.DisplayName != nil}, {"description", c.Description != nil}, {"enabled", c.Enabled != nil}, {"pricingEnabled", c.PricingEnabled != nil}, {"capabilityTemplate", c.CapabilityTemplate != nil}, {"pricingTemplate", c.PricingTemplate != nil}} {
 		if field.set {
 			result = append(result, field.name)
 		}
@@ -286,7 +287,7 @@ func (s *Service) prepareBatchModelUpdate(repo *repository.Repository, channel *
 }
 
 func (c BatchChannelModelChanges) requiresModelContract() bool {
-	return c.Capability != nil || c.Protocol != nil || c.CapabilityTemplate != nil || c.PricingTemplate != nil ||
+	return c.Capability != nil || c.Protocol != nil || c.ProtocolRelease != nil || c.CapabilityTemplate != nil || c.PricingTemplate != nil ||
 		(c.Enabled != nil && *c.Enabled) || (c.PricingEnabled != nil && *c.PricingEnabled)
 }
 
@@ -315,7 +316,16 @@ func (s *Service) prepareBatchModelContract(channel *model.ModelChannel, before 
 			return nil, "", BadAuthRequest("能力模板不能为空")
 		}
 	}
-	release, err := selectEditedModelRelease(s.protocolRegistry(), &before, protocolID, "")
+	var release protocol.ProviderRelease
+	var err error
+	if changes.ProtocolRelease != nil {
+		if protocolID == "" {
+			return nil, "", BadAuthRequest("请选择有效的模型请求协议")
+		}
+		release, err = selectModelRelease(s.protocolRegistry(), protocolID, strings.TrimSpace(*changes.ProtocolRelease), true)
+	} else {
+		release, err = selectEditedModelRelease(s.protocolRegistry(), &before, protocolID, "")
+	}
 	if err != nil {
 		return nil, "", err
 	}
@@ -341,7 +351,7 @@ func (s *Service) prepareBatchModelContract(channel *model.ModelChannel, before 
 		}
 	}
 	after.Capability, after.Protocol = capability, protocol
-	if changes.Capability != nil || changes.Protocol != nil || changes.CapabilityTemplate != nil {
+	if changes.Capability != nil || changes.Protocol != nil || changes.ProtocolRelease != nil || changes.CapabilityTemplate != nil {
 		encoded, err := json.Marshal(config)
 		if err != nil {
 			return nil, "", err

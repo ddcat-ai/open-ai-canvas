@@ -46,6 +46,9 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 		"GET /api/resources":                                                false,
 		"GET /api/skills/presets":                                           false,
 		"GET /api/agent/skills/usage":                                       false,
+		"GET /api/admin/request-protocols":                                  false,
+		"POST /api/admin/request-protocols":                                 false,
+		"POST /api/admin/request-protocols/check":                           false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

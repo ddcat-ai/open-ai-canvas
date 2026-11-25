@@ -543,6 +543,8 @@ export type BatchChannelModelChanges = {
     /** 仅初始化未设置类型的模型；已有类型不能跨类型修改。 */
     capability?: Exclude<ChannelModel["capability"], "">;
     protocol?: string;
+    /** 目标插件发行版 SHA-256 摘要；传空串切换到当前发行版，省略沿用原行为。 */
+    protocolRelease?: string;
     displayName?: string;
     description?: string;
     enabled?: boolean;

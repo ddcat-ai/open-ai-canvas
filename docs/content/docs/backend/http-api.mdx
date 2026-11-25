@@ -167,8 +167,11 @@ Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工�
 | `GET /api/admin/channels/:id/protocol-suggestion` | 查询参数 `providerModelKey/capability`；返回 `protocol?`、`source`（`selection/history/conflict/none/invalid`）、`candidates`、`reason?`、`selectedAt?`。建议不等于明确选择 |
 | `POST /api/admin/channels/:id/models/batch-update`、`POST /api/admin/channel-models/batch-update` | `{models:[{modelId,priceVersion,capabilityVersion,updatedAt,changes}]}`，分别限定单 Key 或允许跨 Key；返回 `data.updated` |
 | `POST /api/admin/channels/:id/models/batch-protocol`、`POST /api/admin/channel-models/batch-protocol` | 支持 `{groups:[{modelIds,protocol}]}`，按模型原类型分组设置协议 |
+| `GET /api/admin/request-protocols` | 返回 `data.protocols[]`，按插件注册表列出声明式请求协议、归档发行版 `releases[]`（含 `version/sha256/current/manifest/bindings`）及渠道模型绑定 |
+| `POST /api/admin/request-protocols/check` | `{manifest,request,response,phase,taskId?}`；使用生产声明式适配器离线构造请求并解析示例响应，不访问上游或创建任务，返回 `data={create,poll?,download?,parsed?,warnings}` |
+| `POST /api/admin/request-protocols` | `{id,expectedSha256?,check}`；校验通过后按稳定 `id`/`providerId` 递增 SemVer 主版本号并打包为 `.yingce-plugin` 归档发行版，摘要冲突返回 409，返回 `data.protocol` |
 
-`changes` 可包含 `capability`（仅初始化未设置类型的模型）、`protocol`、`displayName`、`description`、`enabled`、`pricingEnabled`、`capabilityTemplate`、`pricingTemplate`。省略字段保持原值，不接受以 `null` 隐式清空或设置为零。`capabilityTemplate` 只需 `{capabilityConfig}`，不能用模板内容隐式切换协议；`pricingTemplate` 为 `{priceCurrency,referenceVideoBilling,priceTiers}`，金额和开关按价格档合同明确提供。
+`changes` 可包含 `capability`（仅初始化未设置类型的模型）、`protocol`、`protocolRelease`（指定目标插件发行版 SHA-256，传空串切换到当前发行版，省略沿用原行为）、`displayName`、`description`、`enabled`、`pricingEnabled`、`capabilityTemplate`、`pricingTemplate`。省略字段保持原值，不接受以 `null` 隐式清空或设置为零。`capabilityTemplate` 只需 `{capabilityConfig}`，不能用模板内容隐式切换协议；`pricingTemplate` 为 `{priceCurrency,referenceVideoBilling,priceTiers}`，金额和开关按价格档合同明确提供。
 
 `pricingEnabled` 对所选模型全部价格档的「可供用户使用」生效，不修改金额、成本或免费状态。整个批次先组合并校验最终配置，检查模型时间戳及能力 / 价格版本，再在一个事务内写入；任一项失效或类型冲突则整批零写入，返回 HTTP 400、`reason=invalid_argument`。接口拒绝未知字段及多余 JSON 对象，批量请求体上限为 2 MiB。客户端收到成功后刷新失败时，应刷新列表而非重发修改。
 

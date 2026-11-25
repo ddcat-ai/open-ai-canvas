@@ -3,8 +3,9 @@ import { Switch } from "@/pages/admin/ui/controls";
 import { AlipayCircleFilled, WechatFilled } from "@ant-design/icons";
 import { ZHIFUFM_LOGO_SRC } from "@/components/payment-brand-icons";
 import type { ColumnsType } from "antd/es/table";
-import { CloudUpload, FileText, PlugZap, RefreshCw, Search, Trash2, UsersRound } from "lucide-react";
+import { CloudUpload, FileText, PlugZap, RefreshCw, Search, SlidersHorizontal, Trash2, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import "@/lib/plugins/builtin";
@@ -23,6 +24,7 @@ import { AdminPluginDetailModal, type AdminPluginDetail } from "./plugin-detail-
 type AdminPluginItem = AdminPluginDetail;
 
 export default function AdminPluginsPage() {
+    const navigate = useNavigate();
     const { message, modal } = App.useApp();
     const [plugins, setPlugins] = useState<BackendPlugin[]>([]);
     const [states, setStates] = useState<Record<string, AdminPluginState>>({});
@@ -40,8 +42,8 @@ export default function AdminPluginsPage() {
         setLoading(true);
         try {
             const result = await fetchAdminPlugins();
-            setPlugins(result.plugins);
-            setStates(result.states);
+            setPlugins(Array.isArray(result.plugins) ? result.plugins : []);
+            setStates(result.states || {});
         } catch (error) {
             message.error(error instanceof Error ? error.message : "读取插件管理数据失败");
         } finally {
@@ -245,6 +247,9 @@ export default function AdminPluginsPage() {
             description="管理平台级可用性、自定义插件安装与用户启用范围"
             actions={
                 <>
+                    <Button icon={<SlidersHorizontal className="size-4" />} onClick={() => navigate("/admin/request-protocols")}>
+                        请求协议工作台
+                    </Button>
                     <Button icon={<RefreshCw className="size-4" />} loading={loading} onClick={() => void reload()}>
                         刷新
                     </Button>
