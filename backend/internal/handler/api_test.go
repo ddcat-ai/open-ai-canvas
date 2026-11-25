@@ -17,6 +17,11 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 	RegisterCanvasAPI(router.Group("/api"), &service.Service{})
 
 	wanted := map[string]bool{
+		"POST /api/agent/quote":                                             false,
+		"POST /api/agent/analyze":                                           false,
+		"POST /api/agent/recommend":                                         false,
+		"POST /api/agent/generate":                                          false,
+		"POST /api/agent/generate/stream":                                   false,
 		"GET /api/openapi.yaml":                                             false,
 		"GET /api/auth/settings":                                            false,
 		"POST /api/auth/login":                                              false,
