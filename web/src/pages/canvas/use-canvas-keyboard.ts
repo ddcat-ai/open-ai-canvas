@@ -116,7 +116,9 @@ export function useCanvasKeyboard({
                 if (!event.repeat) void saveCanvasProject({ requireRemote: false });
                 return;
             }
-            if (isModifierShortcut && !event.altKey && key === "f") {
+            // Ctrl/Cmd+F is the normal shortcut; Ctrl/Cmd+F5 is also accepted
+            // for canvas users whose browser or desktop maps search to F5.
+            if (isModifierShortcut && !event.altKey && (key === "f" || event.code === "F5")) {
                 if (target?.closest(".ant-modal-wrap, .ant-dropdown, .ant-popover")) return;
                 event.preventDefault();
                 event.stopPropagation();

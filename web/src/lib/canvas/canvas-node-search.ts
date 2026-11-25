@@ -38,6 +38,20 @@ export function canvasNodeMaterialSummary(node: CanvasNodeData, config?: AiConfi
     return details.slice(0, 3).join(" · ");
 }
 
+export type CanvasNodeSearchKind = "image" | "video" | "audio" | "text" | "drawing" | "layout" | "workflow" | "other";
+
+/** Stable type metadata used by search results and other node lists. */
+export function canvasNodeSearchType(node: CanvasNodeData): { kind: CanvasNodeSearchKind; label: string } {
+    if (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Panorama || node.type === CanvasNodeType.ColorGrade) return { kind: "image", label: "图片" };
+    if (node.type === CanvasNodeType.Video) return { kind: "video", label: "视频" };
+    if (node.type === CanvasNodeType.Audio) return { kind: "audio", label: "音频" };
+    if (node.type === CanvasNodeType.Text || node.type === CanvasNodeType.Script || node.type === CanvasNodeType.Skill) return { kind: "text", label: "文本" };
+    if (node.type === CanvasNodeType.Drawing) return { kind: "drawing", label: "绘图" };
+    if (node.type === CanvasNodeType.Frame || node.type === CanvasNodeType.BatchTable) return { kind: "layout", label: "画布" };
+    if (node.type === CanvasNodeType.Config || node.type === CanvasNodeType.MediaConversion) return { kind: "workflow", label: "工作流" };
+    return { kind: "other", label: getNodeListLabel(node.type) };
+}
+
 export function canvasNodeSearchTimes(node: CanvasNodeData) {
     const createdAt = canvasNodeCreatedAt(node);
     const updatedAt = canvasNodeUpdatedAt(node);

@@ -1,10 +1,10 @@
-import { memo, useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { Input, Modal } from "antd";
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Input, Modal, type InputRef } from "antd";
 import { AudioLines, BookOpenText, Clock3, FileText, Image, Pencil, Search, Video } from "lucide-react";
 
 import { CanvasVideoPreviewImage } from "@/components/canvas/canvas-video-preview-image";
 import { WorkspaceState } from "@/components/layout/workspace-state";
-import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
+import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, canvasNodeSearchType, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
 import { useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { getNodeListLabel } from "@/lib/canvas/node-registry";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
@@ -14,11 +14,24 @@ const RESULT_LIST_ID = "canvas-node-search-results";
 export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open: boolean; nodes: CanvasNodeData[]; onClose: () => void; onFocus: (nodeId: string) => void }) {
     const [query, setQuery] = useState("");
     const [activeIndex, setActiveIndex] = useState(0);
+    const searchInputRef = useRef<InputRef>(null);
     const config = useEffectiveConfig();
     const results = useMemo(() => searchCanvasNodes(nodes, query, 80, config), [config, nodes, query]);
 
     useEffect(() => setActiveIndex(0), [query, open]);
     useEffect(() => setActiveIndex((current) => Math.min(current, Math.max(0, results.length - 1))), [results.length]);
+    useEffect(() => {
+        if (!open) return;
+        // Ant Design restores focus to the modal wrapper after its entrance
+        // animation. Re-focus on the actual input after that handoff so the
+        // Ctrl/Cmd+F search flow is ready for typing immediately.
+        const frame = requestAnimationFrame(() => searchInputRef.current?.focus({ preventScroll: true }));
+        const timer = window.setTimeout(() => searchInputRef.current?.focus({ preventScroll: true }), 0);
+        return () => {
+            cancelAnimationFrame(frame);
+            window.clearTimeout(timer);
+        };
+    }, [open]);
 
     const focusNode = (node: CanvasNodeData | undefined) => {
         if (!node) return;
@@ -54,6 +67,7 @@ export function CanvasNodeSearchModal({ open, nodes, onClose, onFocus }: { open:
             centered
         >
             <Input
+                ref={searchInputRef}
                 autoFocus
                 allowClear
                 value={query}
@@ -84,6 +98,7 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, conf
     const times = canvasNodeSearchTimes(node);
     const materialSummary = canvasNodeMaterialSummary(node, config);
     const context = canvasNodeSearchContext(node);
+    const nodeType = canvasNodeSearchType(node);
     return (
         <button
             id={`canvas-node-search-result-${node.id}`}
@@ -104,6 +119,7 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, conf
             <CanvasNodeSearchThumbnail node={node} />
             <span className="min-w-0 self-center">
                 <span className="flex min-w-0 items-center gap-2">
+                    <NodeTypeBadge kind={nodeType.kind} label={nodeType.label} />
                     <span className="min-w-0 truncate text-[var(--fs-ui)] font-medium leading-5 text-foreground" title={node.title}>
                         {node.title || getNodeListLabel(node.type)}
                     </span>
@@ -145,6 +161,26 @@ const CanvasNodeSearchResult = memo(function CanvasNodeSearchResult({ node, conf
         </button>
     );
 });
+
+function NodeTypeBadge({ kind, label }: { kind: ReturnType<typeof canvasNodeSearchType>["kind"]; label: string }) {
+    const appearance = {
+        image: { Icon: Image, className: "bg-sky-500/12 text-sky-700 dark:text-sky-300" },
+        video: { Icon: Video, className: "bg-violet-500/12 text-violet-700 dark:text-violet-300" },
+        audio: { Icon: AudioLines, className: "bg-amber-500/14 text-amber-700 dark:text-amber-300" },
+        text: { Icon: FileText, className: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" },
+        drawing: { Icon: Pencil, className: "bg-rose-500/12 text-rose-700 dark:text-rose-300" },
+        layout: { Icon: BookOpenText, className: "bg-cyan-500/12 text-cyan-700 dark:text-cyan-300" },
+        workflow: { Icon: Video, className: "bg-fuchsia-500/12 text-fuchsia-700 dark:text-fuchsia-300" },
+        other: { Icon: FileText, className: "bg-foreground/[0.07] text-foreground/60" },
+    }[kind];
+    const Icon = appearance.Icon;
+    return (
+        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[var(--fs-micro)] font-semibold leading-4 ${appearance.className}`}>
+            <Icon className="size-3" aria-hidden="true" />
+            {label}
+        </span>
+    );
+}
 
 function CanvasNodeSearchThumbnail({ node }: { node: CanvasNodeData }) {
     const [failed, setFailed] = useState(false);

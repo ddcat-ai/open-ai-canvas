@@ -56,6 +56,15 @@ test("历史节点的部分生成合同回退到当前版本，不阻断画布�
     });
 });
 
+test("旧 Agent 合同缺少视频时长时从兼容字段恢复", () => {
+    const current = node(CanvasNodeType.Video, {
+        generationSpec: { version: 1, mode: "video", prompt: "旧 Agent 视频", options: {}, referenceBindings: [], textInputMode: "prompt-only" },
+        seconds: "12",
+    });
+
+    assert.equal(readNodeGenerationSpec(current)?.options.durationSeconds, 12);
+});
+
 test("空媒体草稿同时初始化提交提示词和编辑提示词", () => {
     const current = node(CanvasNodeType.Video, { status: "idle" });
 

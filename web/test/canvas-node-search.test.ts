@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
+import { canvasNodeMaterialSummary, canvasNodeSearchContext, canvasNodeSearchTimes, canvasNodeSearchType, searchCanvasNodes } from "@/lib/canvas/canvas-node-search";
 import { normalizeCanvasNodeTimestamps, stampCanvasNodeChanges, updateCanvasNodes } from "@/lib/canvas/canvas-node-timestamps";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -53,10 +53,14 @@ describe("canvas node timestamps", () => {
         const first = node("first");
         const second = node("second");
         const nodes = [first, second];
-        const next = updateCanvasNodes(nodes, new Map([
-            ["first", (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: 1920 } })],
-            ["second", (current) => ({ ...current, metadata: { ...current.metadata, naturalHeight: 1080 } })],
-        ]), "2026-08-28T03:00:00.000Z");
+        const next = updateCanvasNodes(
+            nodes,
+            new Map([
+                ["first", (current) => ({ ...current, metadata: { ...current.metadata, naturalWidth: 1920 } })],
+                ["second", (current) => ({ ...current, metadata: { ...current.metadata, naturalHeight: 1080 } })],
+            ]),
+            "2026-08-28T03:00:00.000Z",
+        );
         expect(next).not.toBe(nodes);
         expect(next[0]).not.toBe(first);
         expect(next[1]).not.toBe(second);
@@ -83,5 +87,12 @@ describe("canvas node search", () => {
         expect(canvasNodeMaterialSummary(image)).toContain("1920×1080");
         expect(canvasNodeSearchContext(image)).toBe("图片节点");
         expect(canvasNodeSearchTimes(image)).toMatchObject({ createdAt: image.createdAt, updatedAt: image.updatedAt });
+    });
+
+    test("search results expose distinct media types", () => {
+        expect(canvasNodeSearchType(node("image", { type: CanvasNodeType.Image }))).toEqual({ kind: "image", label: "图片" });
+        expect(canvasNodeSearchType(node("video", { type: CanvasNodeType.Video }))).toEqual({ kind: "video", label: "视频" });
+        expect(canvasNodeSearchType(node("audio", { type: CanvasNodeType.Audio }))).toEqual({ kind: "audio", label: "音频" });
+        expect(canvasNodeSearchType(node("text", { type: CanvasNodeType.Text }))).toEqual({ kind: "text", label: "文本" });
     });
 });
