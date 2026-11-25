@@ -70,6 +70,13 @@ func (h canvasHost) WithStorageLock(fn func() error) error {
 	return fn()
 }
 
+func (h canvasHost) WithCanvasStorageLock(ownerKey string, fn func() error) error {
+	if h.svc == nil {
+		return h.WithStorageLock(fn)
+	}
+	return h.svc.withCanvasStorageLock(ownerKey, fn)
+}
+
 func (h canvasHost) CanvasQuotaCheck(userID string) (func(*repository.Repository, bool, int64) error, error) {
 	if h.svc == nil {
 		return func(*repository.Repository, bool, int64) error { return nil }, nil

@@ -13,6 +13,7 @@ type Host interface {
 	OpenResourceRange(userID string, resource *model.Resource, rangeHeader string) (*assets.ResourceStream, error)
 	PrepareResourceDelivery(userID string, resource *model.Resource, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error)
 	WithStorageLock(fn func() error) error
+	WithCanvasStorageLock(ownerKey string, fn func() error) error
 	StructuredQuota(userID, kind string, creating bool, deltaBytes int64) error
 	CanvasQuotaCheck(userID string) (func(*repository.Repository, bool, int64) error, error)
 	StructuredReplacementQuota(userID, kind string, count int, bytes int64) error
@@ -36,6 +37,9 @@ func (nopHost) WithStorageLock(fn func() error) error {
 		return nil
 	}
 	return fn()
+}
+func (h nopHost) WithCanvasStorageLock(_ string, fn func() error) error {
+	return h.WithStorageLock(fn)
 }
 func (nopHost) CanvasQuotaCheck(string) (func(*repository.Repository, bool, int64) error, error) {
 	return func(*repository.Repository, bool, int64) error { return nil }, nil

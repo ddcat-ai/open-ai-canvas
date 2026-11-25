@@ -289,7 +289,7 @@ func (s *Service) ApplyUserCanvasOperations(userID, canvasID string, req CanvasO
 	}
 	digest := CanvasOperationsDigest(req)
 	var result UserDataSummary
-	err = s.host.WithStorageLock(func() error {
+	err = s.host.WithCanvasStorageLock(userID, func() error {
 		return s.repo.Transaction(func(tx *repository.Repository) error {
 			tx = tx.WithCanvasEditProofs(req.EditProofs)
 			if err := tx.LockCanvasMutation(userID, canvasID); err != nil {
@@ -466,7 +466,7 @@ func (s *Service) upsertUserCanvasProjectWithHistory(userID string, raw json.Raw
 	}
 	raw = json.RawMessage(project.PayloadJSON)
 	var audit CanvasSaveAudit
-	err = s.host.WithStorageLock(func() error {
+	err = s.host.WithCanvasStorageLock(userID, func() error {
 		if err := s.ValidateCanvasMediaAssets(userID, raw); err != nil {
 			return err
 		}
