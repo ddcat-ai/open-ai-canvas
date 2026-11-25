@@ -261,12 +261,12 @@ test("视频能力模板：引用卡片独立滚动区与数量、大小、时�
         for (const [label, value] of [
             ["最大图片引用", "1"],
             ["单张图片上限 MB", "10"],
-            ["最大视频引用", "2"],
+            ["参考视频最多段数", "2"],
             ["单个视频上限 MB", "25"],
-            ["单个视频最长秒数", "8"],
-            ["最大音频引用", "1"],
+            ["参考视频总时长上限", "8"],
+            ["参考音频最多段数", "1"],
             ["单个音频上限 MB", "12"],
-            ["单个音频最长秒数", "9"],
+            ["参考音频总时长上限", "9"],
         ]) {
             const field = [...content.querySelectorAll("label.admin-capability-number-field")].find((node) => node.textContent?.includes(label))!;
             expect(field).toBeTruthy();
@@ -276,7 +276,7 @@ test("视频能力模板：引用卡片独立滚动区与数量、大小、时�
         }
         await click("保存");
         const saved = readCapabilityTemplates("template-test")[0].config.capabilityConfig!.video!.references;
-        expect(saved).toMatchObject({ maxImages: 1, maxImageBytes: 10 * 1024 * 1024, maxVideos: 2, maxVideoBytes: 25 * 1024 * 1024, maxVideoDurationSeconds: 8, maxAudios: 1, maxAudioBytes: 12 * 1024 * 1024, maxAudioDurationSeconds: 9 });
+        expect(saved).toMatchObject({ maxImages: 1, maxImageBytes: 10 * 1024 * 1024, maxVideos: 2, maxVideoBytes: 25 * 1024 * 1024, maxTotalVideoDurationSeconds: 8, maxAudios: 1, maxAudioBytes: 12 * 1024 * 1024, maxTotalAudioDurationSeconds: 9 });
         await click("应用能力模板");
         expect(fixture.form.getFieldValue(["capabilityConfig", "video", "references"])).toEqual(saved);
         expect(fixture.form.getFieldValue("protocol")).toBe("agnes-video");

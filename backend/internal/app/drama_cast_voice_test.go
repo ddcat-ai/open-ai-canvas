@@ -13,7 +13,7 @@ import (
 func TestDramaCastVoiceTravelsWithSpeakingSegments(t *testing.T) {
 	svc, fake := newDramaTestService(t)
 	video := dramaVideoFixture()
-	video.References.MaxAudios, video.References.MaxAudioDuration = 3, 15
+	video.References.MaxAudios, video.References.MaxTotalAudioDuration = 3, ptr(15)
 	setDramaVideoCapability(t, svc, fake, video)
 	settings := DramaSettings{ReviewMode: DramaReviewAuto, MediaMode: DramaMediaManual, Concurrency: 16, Models: fakeDramaModels, VideoContinuity: DramaContinuityParallel, EpisodeMode: DramaEpisodeModeChapter, ChaptersPerEpisode: 1}
 	settings.EpisodeSeconds = 60
@@ -128,5 +128,26 @@ func TestDramaCastVoiceSkippedWithReason(t *testing.T) {
 	request = DramaSegmentRequest{Operation: "reference_to_video"}
 	if _, err := svc.dramaSegmentAudioReferences(&request, dramaVideoProfile{}, speakers, casts, true, ""); err != nil || !strings.Contains(request.AudioReferences[0].Note, "不支持参考音频") {
 		t.Fatalf("models without audio references explain why: %+v %v", request.AudioReferences, err)
+	}
+}
+
+func TestDramaCastVoiceUsesSharedAudioDurationLimit(t *testing.T) {
+	svc, fake := newDramaTestService(t)
+	casts := map[string]model.DramaCast{}
+	for id, duration := range map[string]int64{"first": 8000, "over-limit": 8000, "fits": 7000} {
+		resourceID := fake.resource("usr-drama", "audio", "audio/wav")
+		if err := fake.db.Model(&model.Resource{}).Where("id = ?", resourceID).Update("duration_ms", duration).Error; err != nil {
+			t.Fatal(err)
+		}
+		casts[id] = model.DramaCast{ID: id, Kind: "character", Name: id, VoiceSampleResourceID: resourceID}
+	}
+	request := DramaSegmentRequest{Operation: "reference_to_video"}
+	media, err := svc.dramaSegmentAudioReferences(&request, dramaVideoProfile{MaxAudios: 3, MaxTotalAudioDuration: ptr(15)}, nil, casts, true, `["first","over-limit","fits"]`)
+	if err != nil || len(media) != 2 || len(request.AudioReferences) != 3 {
+		t.Fatalf("expected two audio inputs from three candidates: %+v, %+v, %v", media, request.AudioReferences, err)
+	}
+	refs := request.AudioReferences
+	if !refs[0].Sent || refs[1].Sent || !strings.Contains(refs[1].Note, "总时长超过 15 秒") || !refs[2].Sent || refs[2].Label != "参考音频2" {
+		t.Fatalf("expected 8 + 7s to fit and the second 8s to be skipped with a reason: %+v", refs)
 	}
 }

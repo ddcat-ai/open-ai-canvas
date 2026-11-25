@@ -2,7 +2,7 @@
   {
     "provider": "dashscope-wan3-video", "models": ["", "wan3.0-video", "wan3.0-video-prime"],
     "video": {
-      "references": {"promptMaxChars":20000,"minImages":0,"maxImages":10,"maxImageBytes":20000000,"maxVideos":5,"maxVideoBytes":100000000,"maxVideoDurationSeconds":15,"maxAudios":5,"maxAudioBytes":15000000,"maxAudioDurationSeconds":15},
+      "references": {"promptMaxChars":20000,"minImages":0,"maxImages":10,"maxImageBytes":20000000,"maxVideos":5,"maxVideoBytes":100000000,"maxTotalVideoDurationSeconds":15,"maxAudios":5,"maxAudioBytes":15000000,"maxTotalAudioDurationSeconds":15},
       "duration":{"selection":"range","min":2,"max":30,"step":1,"default":5},
       "ratios":["adaptive","21:9","16:9","4:3","1:1","3:4","9:16"],"defaultRatio":"adaptive",
       "resolutions":["480p","720p","1080p"],"defaultResolution":"1080p",
@@ -13,7 +13,7 @@
   {
     "provider": "volcengine-ark-video", "models": ["doubao-seedance-2-0-260128"],
     "video": {
-      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":9,"maxImageBytes":31457280,"maxVideos":3,"maxVideoBytes":209715200,"maxVideoDurationSeconds":15,"maxAudios":3,"maxAudioBytes":15728640,"maxAudioDurationSeconds":15},
+      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":9,"maxImageBytes":31457280,"maxVideos":3,"maxVideoBytes":209715200,"maxTotalVideoDurationSeconds":15,"maxAudios":3,"maxAudioBytes":15728640,"maxTotalAudioDurationSeconds":15},
       "duration":{"selection":"range","min":4,"max":15,"step":1,"default":5},
       "ratios":["adaptive","21:9","16:9","4:3","1:1","3:4","9:16"],"defaultRatio":"adaptive",
       "resolutions":["480p","720p","1080p"],"defaultResolution":"720p",
@@ -24,7 +24,7 @@
   {
     "provider": "volcengine-ark-video", "models": ["doubao-seedance-2-0-fast-260128", "doubao-seedance-2-0-mini-260615"],
     "video": {
-      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":9,"maxImageBytes":31457280,"maxVideos":3,"maxVideoBytes":209715200,"maxVideoDurationSeconds":15,"maxAudios":3,"maxAudioBytes":15728640,"maxAudioDurationSeconds":15},
+      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":9,"maxImageBytes":31457280,"maxVideos":3,"maxVideoBytes":209715200,"maxTotalVideoDurationSeconds":15,"maxAudios":3,"maxAudioBytes":15728640,"maxTotalAudioDurationSeconds":15},
       "duration":{"selection":"range","min":4,"max":15,"step":1,"default":5},
       "ratios":["adaptive","21:9","16:9","4:3","1:1","3:4","9:16"],"defaultRatio":"adaptive",
       "resolutions":["480p","720p"],"defaultResolution":"720p",
@@ -35,7 +35,7 @@
   {
     "provider": "volcengine-ark-seedance-25", "models": ["", "doubao-seedance-2-5-260628"],
     "video": {
-      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":30,"maxImageBytes":31457280,"maxVideos":10,"maxVideoBytes":209715200,"maxVideoDurationSeconds":30,"maxAudios":10,"maxAudioBytes":15728640,"maxAudioDurationSeconds":30},
+      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":30,"maxImageBytes":31457280,"maxVideos":10,"maxVideoBytes":209715200,"maxTotalVideoDurationSeconds":30,"maxAudios":10,"maxAudioBytes":15728640,"maxTotalAudioDurationSeconds":30},
       "duration":{"selection":"range","min":4,"max":30,"step":1,"default":5},
       "ratios":["adaptive","21:9","16:9","4:3","1:1","3:4","9:16"],"defaultRatio":"adaptive",
       "resolutions":["480p","720p","1080p"],"defaultResolution":"720p",
@@ -46,7 +46,7 @@
   {
     "provider": "volcengine-ark-seedance-25", "models": ["doubao-seedance-2-5-flash-261115"],
     "video": {
-      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":10,"maxImageBytes":31457280,"maxVideos":5,"maxVideoBytes":209715200,"maxVideoDurationSeconds":30,"maxAudios":5,"maxAudioBytes":15728640,"maxAudioDurationSeconds":30},
+      "references":{"promptMaxChars":8000,"minImages":0,"maxImages":10,"maxImageBytes":31457280,"maxVideos":5,"maxVideoBytes":209715200,"maxTotalVideoDurationSeconds":30,"maxAudios":5,"maxAudioBytes":15728640,"maxTotalAudioDurationSeconds":30},
       "duration":{"selection":"range","min":4,"max":30,"step":1,"default":5},
       "ratios":["adaptive","21:9","16:9","4:3","1:1","3:4","9:16"],"defaultRatio":"adaptive",
       "resolutions":["480p","720p"],"defaultResolution":"720p",
@@ -57,7 +57,7 @@
   {
     "provider": "kling-v4-official", "models": ["kling-4.0"],
     "video": {
-      "references":{"promptMaxChars":26000,"minImages":0,"maxImages":10,"maxImageBytes":30000000,"maxVideos":5,"maxVideoBytes":300000000,"maxVideoDurationSeconds":30,"maxAudios":0,"maxAudioBytes":0,"maxAudioDurationSeconds":0},
+      "references":{"promptMaxChars":26000,"minImages":0,"maxImages":10,"maxImageBytes":30000000,"maxVideos":5,"maxVideoBytes":300000000,"maxTotalVideoDurationSeconds":30,"maxAudios":0,"maxAudioBytes":0},
       "duration":{"selection":"range","min":3,"max":30,"step":1,"default":10},
       "ratios":["16:9","9:16","1:1","4:3","3:4","21:9","adaptive"],"defaultRatio":"16:9",
       "resolutions":["720p","1080p"],"defaultResolution":"1080p",
@@ -68,7 +68,7 @@
   {
     "provider": "kling-v4-official", "models": ["kling-4.0-flash"],
     "video": {
-      "references":{"promptMaxChars":26000,"minImages":0,"maxImages":10,"maxImageBytes":30000000,"maxVideos":5,"maxVideoBytes":300000000,"maxVideoDurationSeconds":20,"maxAudios":0,"maxAudioBytes":0,"maxAudioDurationSeconds":0},
+      "references":{"promptMaxChars":26000,"minImages":0,"maxImages":10,"maxImageBytes":30000000,"maxVideos":5,"maxVideoBytes":300000000,"maxTotalVideoDurationSeconds":20,"maxAudios":0,"maxAudioBytes":0},
       "duration":{"selection":"range","min":3,"max":20,"step":1,"default":10},
       "ratios":["16:9","9:16","1:1","4:3","3:4","21:9","adaptive"],"defaultRatio":"16:9",
       "resolutions":["720p"],"defaultResolution":"720p",
