@@ -11,7 +11,7 @@ import { estimatePaymentCharge, type PaymentOption } from "@/lib/payment-options
 import { cn } from "@/lib/utils";
 import { formatPaymentAmount, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import type { AccountFileStorageUsage } from "@/services/api/resources";
-import { storageGrantActive, type UserStorageGrant } from "@/services/api/storage-grants";
+import { storageGrantActive, storageGrantSourceLabel, type UserStorageGrant } from "@/services/api/storage-grants";
 
 import "./workspace-wallet-topup.css";
 
@@ -140,7 +140,7 @@ function StorageSummary({ usage, grants, onCleanAssets }: { usage?: AccountFileS
             {activeGrants.length ? (
                 <ul className="wallet-topup-grants" aria-label={t("account.wallet.topup.activeGrants")}>
                     {activeGrants.slice(0, 4).map((grant) => (
-                        <li key={grant.id} title={grant.productName || (grant.source === "admin" ? t("account.wallet.topup.grantAdmin") : t("account.wallet.topup.grantDefault"))}>
+                        <li key={grant.id} title={grant.note || (grant.source === "admin" ? t("account.wallet.topup.grantAdmin") : storageGrantSourceLabel(grant))}>
                             +{formatStorageCapacity(grant.bytes)} · {grant.expiresAt ? t("account.wallet.topup.expiresAt", { date: formatStorageDate(grant.expiresAt) }) : t("account.wallet.topup.permanent")}
                         </li>
                     ))}

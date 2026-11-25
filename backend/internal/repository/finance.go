@@ -14,6 +14,7 @@ import (
 var (
 	ErrInsufficientCredits     = errors.New("积分不足，请先充值")
 	ErrRedeemCodeInvalid       = errors.New("兑换码无效或已使用")
+	ErrRedeemCreditsDisabled   = errors.New("积分功能未启用")
 	ErrActiveTaskLimit         = errors.New("同时进行的任务数已达上限，请等待已有任务完成")
 	ErrTaskNotRetryable        = errors.New("该任务当前状态不支持重试")
 	ErrTaskBillingReview       = errors.New("上一次调用费用仍需核对")

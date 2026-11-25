@@ -7,6 +7,7 @@ type UserStorageGrantSource string
 const (
 	UserStorageGrantSourcePayment UserStorageGrantSource = "payment"
 	UserStorageGrantSourceAdmin   UserStorageGrantSource = "admin"
+	UserStorageGrantSourceRedeem  UserStorageGrantSource = "redeem"
 )
 
 // UserStorageGrant 是一笔独立的账号文件容量扩容。有效容量 = 全局基础容量 + 未撤销且未过期记录之和；

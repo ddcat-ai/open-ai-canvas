@@ -189,7 +189,7 @@ func TestWalletHistoryIncomeSources(t *testing.T) {
 	if err := db.Create(&model.RedeemCode{ID: "redeem", CodeHash: "redeem-hash", AmountMicrocredits: 500, Status: model.RedeemCodeUnused}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.RedeemCode("member", "redeem-hash", ""); err != nil {
+	if _, err := repo.RedeemCode("member", "redeem-hash", "", true); err != nil {
 		t.Fatal(err)
 	}
 	for _, amount := range []int64{100, -40} {

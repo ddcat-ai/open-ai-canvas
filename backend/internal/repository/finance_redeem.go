@@ -72,7 +72,7 @@ func (r *Repository) AdminRedeemBatches(keyword string, validity string, limit i
 	query := r.db.Model(&model.RedeemBatch{})
 	if value := strings.TrimSpace(keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
-		query = query.Where("lower(note) LIKE ? OR CAST(amount_microcredits AS TEXT) LIKE ? OR CAST(count AS TEXT) LIKE ?", pattern, pattern, pattern)
+		query = query.Where("lower(note) LIKE ? OR lower(kind) LIKE ? OR CAST(amount_microcredits AS TEXT) LIKE ? OR CAST(storage_bytes / 1073741824 AS TEXT) LIKE ? OR CAST(count AS TEXT) LIKE ?", pattern, pattern, pattern, pattern, pattern)
 	}
 	if validity == "active" {
 		query = query.Where("expires_at IS NULL OR expires_at > ?", time.Now())
@@ -83,7 +83,7 @@ func (r *Repository) AdminRedeemBatches(keyword string, validity string, limit i
 		return nil, 0, err
 	}
 	now := time.Now()
-	listQuery := query.Select(`redeem_batches.id, redeem_batches.amount_microcredits, redeem_batches.count,
+	listQuery := query.Select(`redeem_batches.id, redeem_batches.kind, redeem_batches.amount_microcredits, redeem_batches.storage_bytes, redeem_batches.storage_duration_days, redeem_batches.count,
 		redeem_batches.note, redeem_batches.created_by, redeem_batches.expires_at, redeem_batches.created_at,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND (rc.expires_at IS NULL OR rc.expires_at > ?)) AS available_count,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'redeemed') AS redeemed_count,
@@ -133,8 +133,15 @@ func (r *Repository) AdminRedeemCodes(batchID string, status string, limit int, 
 	return items, total, err
 }
 
-func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP string) (*model.CreditAccount, error) {
-	var account model.CreditAccount
+type RedeemCodeOutcome struct {
+	Kind               string                  `json:"kind"`
+	Account            *model.CreditAccount    `json:"account"`
+	StorageGrant       *model.UserStorageGrant `json:"storageGrant,omitempty"`
+	AmountMicrocredits int64                   `json:"amountMicrocredits,omitempty"`
+}
+
+func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP string, allowCredits bool) (*RedeemCodeOutcome, error) {
+	var outcome RedeemCodeOutcome
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var code model.RedeemCode
 		if err := tx.First(&code, "code_hash = ?", codeHash).Error; err != nil {
@@ -144,6 +151,26 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 			return err
 		}
 		now := time.Now()
+		if code.Status != model.RedeemCodeUnused || (code.ExpiresAt != nil && !code.ExpiresAt.After(now)) {
+			return ErrRedeemCodeInvalid
+		}
+		kind := model.RedeemBatchKindCredits
+		var batch model.RedeemBatch
+		if code.BatchID != "" {
+			if err := tx.Select("id, kind, storage_bytes, storage_duration_days, note, created_by").First(&batch, "id = ?", code.BatchID).Error; err != nil {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+			} else if normalizedKind := strings.ToLower(strings.TrimSpace(batch.Kind)); normalizedKind != "" {
+				kind = normalizedKind
+			}
+		}
+		if kind == model.RedeemBatchKindCredits && !allowCredits {
+			return ErrRedeemCreditsDisabled
+		}
+		if kind == model.RedeemBatchKindStorage && batch.StorageBytes <= 0 {
+			return ErrRedeemCodeInvalid
+		}
 		query := tx.Model(&model.RedeemCode{}).Where("id = ? AND status = ?", code.ID, model.RedeemCodeUnused)
 		if code.ExpiresAt != nil {
 			query = query.Where("expires_at > ?", now)
@@ -155,9 +182,47 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 		if updated.RowsAffected != 1 {
 			return ErrRedeemCodeInvalid
 		}
-		account = model.CreditAccount{UserID: userID}
+		account := model.CreditAccount{UserID: userID}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
 			return err
+		}
+		if kind == model.RedeemBatchKindStorage {
+			if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
+				return err
+			}
+			refKey := "redeem:" + code.ID
+			var expiresAt *time.Time
+			if batch.StorageDurationDays > 0 {
+				exp := now.Add(time.Duration(batch.StorageDurationDays) * 24 * time.Hour)
+				expiresAt = &exp
+			}
+			note := strings.TrimSpace(batch.Note)
+			if note == "" {
+				note = "卡密兑换存储空间"
+			}
+			grant := model.UserStorageGrant{
+				ID:           newRepositoryID(),
+				UserID:       userID,
+				Source:       model.UserStorageGrantSourceRedeem,
+				ProductName:  "卡密兑换扩容",
+				Bytes:        batch.StorageBytes,
+				DurationDays: batch.StorageDurationDays,
+				StartsAt:     now,
+				ExpiresAt:    expiresAt,
+				ReferenceKey: &refKey,
+				Note:         note,
+				CreatedBy:    batch.CreatedBy,
+				CreatedAt:    now,
+			}
+			if err := tx.Create(&grant).Error; err != nil {
+				return err
+			}
+			outcome = RedeemCodeOutcome{
+				Kind:         model.RedeemBatchKindStorage,
+				Account:      &account,
+				StorageGrant: &grant,
+			}
+			return nil
 		}
 		if err := tx.Model(&model.CreditAccount{}).Where("user_id = ?", userID).Updates(map[string]any{
 			"available_microcredits": gorm.Expr("available_microcredits + ?", code.AmountMicrocredits),
@@ -169,7 +234,7 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 		if err := tx.First(&account, "user_id = ?", userID).Error; err != nil {
 			return err
 		}
-		return tx.Create(&model.CreditLedgerEntry{
+		if err := tx.Create(&model.CreditLedgerEntry{
 			ID:                         newRepositoryID(),
 			UserID:                     userID,
 			Type:                       model.CreditLedgerRedeem,
@@ -179,7 +244,15 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 			RedeemCodeID:               code.ID,
 			Note:                       "兑换码充值",
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+		outcome = RedeemCodeOutcome{
+			Kind:               model.RedeemBatchKindCredits,
+			Account:            &account,
+			AmountMicrocredits: code.AmountMicrocredits,
+		}
+		return nil
 	})
-	return &account, err
+	return &outcome, err
 }

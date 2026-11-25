@@ -46,12 +46,17 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		account, err := svc.RedeemCredits(user, req.Code, c.ClientIP())
+		result, err := svc.RedeemCredits(user, req.Code, c.ClientIP())
 		if err != nil {
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"account": account})
+		ok(c, gin.H{
+			"kind":               result.Kind,
+			"account":            result.Account,
+			"storageGrant":       result.StorageGrant,
+			"amountMicrocredits": result.AmountMicrocredits,
+		})
 	})
 	r.POST("/wallet/checkin", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

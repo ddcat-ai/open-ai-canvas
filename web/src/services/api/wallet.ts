@@ -1,6 +1,9 @@
 import { http } from "@/services/api/request";
 import type { ModelTag } from "@/lib/model-tags";
 import type { AuthLoginMode } from "@/services/api/auth";
+import type { UserStorageGrant } from "@/services/api/storage-grants";
+
+export type RedeemBatchKind = "credits" | "storage";
 
 export type CreditAccount = {
     userId: string;
@@ -256,7 +259,10 @@ export type EmailSetting = {
 
 export type RedeemBatch = {
     id: string;
+    kind?: RedeemBatchKind;
     amountMicrocredits: number;
+    storageBytes?: number;
+    storageDurationDays?: number;
     count: number;
     note?: string;
     createdBy: string;
@@ -339,8 +345,15 @@ export function getWallet(page = 1, pageSize = 30, type: WalletHistoryType = "al
     return http.get<WalletSummary>("/wallet", { params: { type, page, pageSize } });
 }
 
+export type RedeemCodeResponse = {
+    kind?: RedeemBatchKind;
+    account: CreditAccount;
+    storageGrant?: UserStorageGrant;
+    amountMicrocredits?: number;
+};
+
 export function redeemCredits(code: string) {
-    return http.post<{ account: CreditAccount }>("/wallet/redeem", { code });
+    return http.post<RedeemCodeResponse>("/wallet/redeem", { code });
 }
 
 export function checkinCredits() {
@@ -582,7 +595,7 @@ export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
     return http.get<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
 }
 
-export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; expiresAt?: string }) {
+export function createAdminRedeemBatch(input: { kind?: RedeemBatchKind; amountMicrocredits?: number; storageBytes?: number; storageDurationDays?: number; count: number; note?: string; expiresAt?: string }) {
     return http.post<{ batch: RedeemBatch; codes: string[] }>("/admin/redeem-batches", input, { timeout: 30_000 });
 }
 

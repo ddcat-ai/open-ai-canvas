@@ -4,7 +4,7 @@ import type { AccountFileStorageUsage } from "@/services/api/resources";
 export type UserStorageGrant = {
     id: string;
     userId: string;
-    source: "payment" | "admin" | string;
+    source: "payment" | "admin" | "redeem" | string;
     paymentOrderId?: string;
     productId?: string;
     productName?: string;
@@ -20,6 +20,12 @@ export type UserStorageGrant = {
     createdBy?: string;
     createdAt: string;
 };
+
+export function storageGrantSourceLabel(grant: Pick<UserStorageGrant, "source" | "productName">) {
+    if (grant.source === "redeem") return "卡密兑换";
+    if (grant.source === "admin") return "管理员赠送";
+    return grant.productName || "在线购买";
+}
 
 export type AdminUserStorage = {
     usage: AccountFileStorageUsage;

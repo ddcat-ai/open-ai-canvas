@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 110
+const CurrentSchemaVersion int64 = 111
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -398,6 +398,22 @@ var schemaMigrations = []migration{
 		}
 		return reconcileAgentStorageUsage(tx)
 	}},
+	{version: 111, name: "redeem_batch_storage_grants", checksum: "sha256:redeem-batch-storage-grants-v111-20261126", apply: migrateRedeemBatchStorageGrants},
+}
+
+func migrateRedeemBatchStorageGrants(tx *gorm.DB) error {
+	if !tx.Migrator().HasTable(&model.RedeemBatch{}) {
+		return tx.AutoMigrate(&model.RedeemBatch{})
+	}
+	for _, field := range []string{"Kind", "StorageBytes", "StorageDurationDays"} {
+		if tx.Migrator().HasColumn(&model.RedeemBatch{}, field) {
+			continue
+		}
+		if err := tx.Migrator().AddColumn(&model.RedeemBatch{}, field); err != nil {
+			return err
+		}
+	}
+	return tx.Model(&model.RedeemBatch{}).Where("kind = '' OR kind IS NULL").Update("kind", model.RedeemBatchKindCredits).Error
 }
 
 func migrateAPILogGenerationContent(tx *gorm.DB) error {
