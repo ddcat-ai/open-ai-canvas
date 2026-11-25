@@ -13,6 +13,7 @@ import type { CanvasNodeData } from "@/types/canvas";
 import { fetchOfficialAssetReference } from "@/services/api/official-assets";
 import { CharacterStudioOutfitManager } from "@/components/canvas/character-outfit-bar";
 import { buildCharacterOutfitPersistence, parseCharacterOutfits, resolveActiveCharacterOutfit, type CharacterOutfit } from "@/components/canvas/character-outfits";
+import { createClientUUID } from "@/lib/client-id";
 
 type Tab = "profile" | "visual" | "voice";
 type FieldKey = "role" | "aliases" | "appearance" | "physique" | "clothing" | "personality" | "props" | "consistencyPrompt" | "multiViewPrompt" | "voiceLanguage" | "voiceAge" | "voiceTimbre";
@@ -147,6 +148,7 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
     const [tab, setTab] = useState<Tab>("profile");
     const [busyKey, setBusyKey] = useState("");
     const [addingNewOutfit, setAddingNewOutfit] = useState(false);
+    const pendingSave = useRef<{ key: string; operationId: string; expectedVersionId: string } | null>(null);
     // 服务端数据到达或保存成功后，用新基线覆盖草稿。
     useEffect(() => setDrafts(baseline), [baseline]);
     const dirty = (Object.keys(baseline) as Array<keyof Drafts>).some((key) => baseline[key].trim() !== drafts[key].trim());
@@ -169,15 +171,20 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
             onUpdated?.(next, targetOutfitId);
             message.success(success);
         } catch (error) {
+            void detailQuery.refetch();
             message.error(error instanceof Error ? error.message : t("canvasA.characterStudio.saveFailed"));
         } finally {
             setBusyKey("");
         }
     };
     const saveOutfits = (nextOutfits: CharacterOutfit[], nextActiveId: string, busyId = "outfit") => {
-        const payload = buildCharacterOutfitPersistence(definition, nextOutfits, nextActiveId);
+        if (!detail) return;
+        const payload = buildCharacterOutfitPersistence(definition, nextOutfits, nextActiveId, detail.character.representations);
+        const key = JSON.stringify(payload);
+        if (pendingSave.current?.key !== key) pendingSave.current = { key, operationId: createClientUUID(), expectedVersionId: detail.character.versionId };
+        const mutation = pendingSave.current;
         setAddingNewOutfit(false);
-        return commit(busyId, () => replaceCharacterRepresentations(assetId, payload.representations, payload.definition), t("canvasA.characterStudio.visualUpdated"), nextActiveId);
+        return commit(busyId, () => replaceCharacterRepresentations(assetId, payload.representations, payload.definition, mutation), t("canvasA.characterStudio.visualUpdated"), nextActiveId);
     };
     const bindImage = (resourceId: string) => {
         const imageTitle = canvasTitles.get(resourceId)?.trim();
@@ -204,9 +211,10 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
                         addingNewOutfit || !outfits.length
                             ? [...outfits, { id: newOutfitId, name: cleanName || (outfits.length === 0 ? "默认造型" : `造型 ${outfits.length + 1}`), resourceId: resource.id }]
                             : outfits.map((item) => (item.id === (activeOutfit?.id || outfits[0].id) ? { ...item, resourceId: resource.id } : item));
-                    const payload = buildCharacterOutfitPersistence(definition, nextOutfits, targetOutfitId);
+                    if (!detail) throw new Error("角色详情尚未加载");
+                    const payload = buildCharacterOutfitPersistence(definition, nextOutfits, targetOutfitId, detail.character.representations);
                     setAddingNewOutfit(false);
-                    return replaceCharacterRepresentations(assetId, payload.representations, payload.definition);
+                    return replaceCharacterRepresentations(assetId, payload.representations, payload.definition, { expectedVersionId: detail.character.versionId, operationId: createClientUUID() });
                 }
                 return bindCharacterVoice(assetId, { sampleResourceId: resource.id, voiceName: file.name.replace(/\.[^.]+$/, "") });
             },

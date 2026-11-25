@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -44,8 +46,10 @@ type CharacterRepresentationInput struct {
 }
 
 type ReplaceCharacterRepresentationsRequest struct {
-	Representations []CharacterRepresentationInput `json:"representations"`
-	Definition      map[string]any                 `json:"definition,omitempty"`
+	ExpectedVersionID string                         `json:"expectedVersionId,omitempty"`
+	OperationID       string                         `json:"operationId,omitempty"`
+	Representations   []CharacterRepresentationInput `json:"representations"`
+	Definition        map[string]any                 `json:"definition,omitempty"`
 }
 
 type BindCharacterVoiceRequest struct {
@@ -56,10 +60,11 @@ type BindCharacterVoiceRequest struct {
 }
 
 type CharacterRepresentationSummary struct {
-	ID         string `json:"id"`
-	ResourceID string `json:"resourceId"`
-	MediaType  string `json:"mediaType"`
-	Role       string `json:"role"`
+	ID         string         `json:"id"`
+	ResourceID string         `json:"resourceId"`
+	MediaType  string         `json:"mediaType"`
+	Role       string         `json:"role"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
 type VoiceProfileSummary struct {
@@ -248,6 +253,9 @@ func (s *Service) ReplaceCharacterRepresentations(userID string, assetID string,
 	asset, err := s.repo.UserCharacterAsset(userID, strings.TrimSpace(assetID))
 	if err != nil {
 		return CharacterAssetSummary{}, err
+	}
+	if req.OperationID != "" || req.ExpectedVersionID != "" {
+		return s.replaceCharacterRepresentationsMutation(userID, asset, req)
 	}
 	var definitionJSON string
 	if req.Definition != nil {
@@ -617,7 +625,10 @@ func (s *Service) createNextCharacterVersion(projectID string, asset *model.Asse
 	if err != nil {
 		return model.AssetVersion{}, err
 	}
-	if err := s.repo.SaveCharacterVersion(projectID, &nextAsset, &next, representations, voice); err != nil {
+	if err := s.repo.SaveCharacterVersion(projectID, &nextAsset, &next, representations, voice, asset.PrimaryVersionID); err != nil {
+		if errors.Is(err, repository.ErrCharacterVersionConflict) {
+			return model.AssetVersion{}, &kernel.AppError{Status: 409, Code: 409, Reason: "character_version_conflict", Message: err.Error()}
+		}
 		return model.AssetVersion{}, err
 	}
 	*asset = nextAsset
@@ -727,7 +738,9 @@ func (s *Service) characterCardVersion(userID string, version *model.AssetVersio
 	representations := make([]CharacterRepresentationSummary, 0, len(stored))
 	roles := make(map[string]bool, len(stored))
 	for _, representation := range stored {
-		representations = append(representations, CharacterRepresentationSummary{ID: representation.ID, ResourceID: representation.ResourceID, MediaType: representation.MediaType, Role: representation.Role})
+		var metadata map[string]any
+		_ = json.Unmarshal([]byte(representation.MetadataJSON), &metadata)
+		representations = append(representations, CharacterRepresentationSummary{ID: representation.ID, ResourceID: representation.ResourceID, MediaType: representation.MediaType, Role: representation.Role, Metadata: metadata})
 		roles[representation.Role] = true
 	}
 	visualStatus := "missing"

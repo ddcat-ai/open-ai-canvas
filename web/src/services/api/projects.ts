@@ -84,6 +84,7 @@ export type ProjectAssetFolder = {
 };
 
 export type CharacterRepresentation = {
+    metadata?: Record<string, unknown>;
     id: string;
     resourceId: string;
     mediaType: string;
@@ -564,8 +565,13 @@ export function updateCharacter(assetId: string, input: { name: string; definiti
     return http.patch<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}`, input);
 }
 
-export function replaceCharacterRepresentations(assetId: string, representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>, definition?: Record<string, unknown>) {
-    return http.put<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}/representations`, { representations, ...(definition ? { definition } : {}) });
+export function replaceCharacterRepresentations(
+    assetId: string,
+    representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>,
+    definition?: Record<string, unknown>,
+    mutation?: { expectedVersionId: string; operationId: string },
+) {
+    return http.put<ProjectCharacterDetail>(`/characters/${encodeURIComponent(assetId)}/representations`, { representations, ...(definition ? { definition } : {}), ...mutation });
 }
 
 export function bindCharacterVoice(assetId: string, input: { sampleResourceId?: string; voiceName?: string; instructions?: string }) {

@@ -13,6 +13,7 @@ export type CharacterOutfit = {
     name: string;
     resourceId: string;
     clothing?: string;
+    source?: Record<string, unknown>;
 };
 
 export function parseCharacterOutfits(definition?: Record<string, unknown>, representations?: Array<{ role: string; resourceId: string }>, fallbackResourceId?: string): CharacterOutfit[] {
@@ -29,7 +30,8 @@ export function parseCharacterOutfits(definition?: Record<string, unknown>, repr
         seenIds.add(rawId);
         const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : `造型 ${parsed.length + 1}`;
         const clothing = typeof record.clothing === "string" && record.clothing.trim() ? record.clothing.trim() : undefined;
-        parsed.push({ id: rawId, name, resourceId, ...(clothing ? { clothing } : {}) });
+        const source = record.source && typeof record.source === "object" && !Array.isArray(record.source) ? (record.source as Record<string, unknown>) : undefined;
+        parsed.push({ id: rawId, name, resourceId, ...(clothing ? { clothing } : {}), ...(source ? { source } : {}) });
     });
     if (parsed.length) return parsed;
     const primaryId =
@@ -86,6 +88,7 @@ export function buildCharacterOutfitPersistence(
     definition: Record<string, unknown>,
     outfits: CharacterOutfit[],
     activeOutfitId?: string,
+    existingRepresentations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }> = [],
 ): {
     definition: Record<string, unknown>;
     representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>;
@@ -96,6 +99,7 @@ export function buildCharacterOutfitPersistence(
     const nextDefinition: Record<string, unknown> = {
         ...definition,
         outfits: normalized.map((item) => ({
+            ...item,
             id: item.id,
             name: item.name.trim() || "默认造型",
             resourceId: item.resourceId.trim(),
@@ -122,6 +126,11 @@ export function buildCharacterOutfitPersistence(
             });
         }
     });
+    existingRepresentations
+        .filter((item) => item.role !== "primary" && item.role !== "turnaround_sheet" && !item.role.startsWith("outfit:"))
+        .forEach((item) => {
+            if (!representations.some((entry) => entry.role === item.role)) representations.push(item);
+        });
     return { definition: nextDefinition, representations, activeOutfit: active };
 }
 

@@ -9,6 +9,10 @@ description: 信封、错误码与 OpenAPI
 
 个人素材的写入和筛选支持 `character`、`environment`、`prop`、`material`、`other`，以及梳妆参考 `clothing`（衣服）、`expression`（表情）、`pose`（姿势）、`accessory`（配饰）、`hairstyle`（发型）、`facial_features`（五官）。旧 `wardrobe` 输入规范为 `clothing`；已保存为 `prop` 的素材不自动重分类。`ark` 分类继续由方舟认证结果管理，不允许手动设置。未知分类写入返回 400，实体与同步 JSON 使用相同的规范分类。
 
+## 角色形象保存
+
+`PUT /characters/:assetId/representations` 在原有 `representations`、`definition` 外支持成对传入 `expectedVersionId` 和 `operationId`。角色工作室按加载到的版本提交，服务端原子比较版本，冲突返回 HTTP 409、`reason=character_version_conflict`，图片结果应保留供重试。相同用户、角色和操作标识的相同请求重放返回角色当前详情，不新增版本；同一标识用于不同内容返回 409 `idempotency_conflict`。幂等成功检查先于版本冲突检查。普通角色版本更新也使用事务内版本比较，防止覆盖并发修改。
+
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。
