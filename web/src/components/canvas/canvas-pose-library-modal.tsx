@@ -8,7 +8,7 @@ import { WorkspaceErrorState, WorkspaceNoResultsState, WorkspaceState } from "@/
 import { SegmentedControl } from "@/components/ui/base/segmented-control";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { copyPoseLibraryItems, listPoseLibrary, poseLibraryFileUrl, POSE_LIBRARY_MAX_USE, type PoseLibraryFacet, type PoseLibraryItem, type PoseLibraryPose } from "@/services/api/pose-library";
+import { copyPoseLibraryItems, listPoseLibrary, poseLibraryFileUrl, POSE_LIBRARY_MAX_USE, type PoseLibraryFacet, type PoseLibraryItem, type PoseLibraryPose, type PoseLibraryUseResult } from "@/services/api/pose-library";
 import { resourceFileUrl, resourceStorageKey } from "@/services/api/resources";
 import { useUserStore } from "@/stores/use-user-store";
 
@@ -24,9 +24,12 @@ type Picked = { item: PoseLibraryItem; pose: PoseLibraryPose };
  * 姿势库：浏览站点导入的姿势参考图，多选后复制成当前用户的资源并插入画布。
  * 图片来自本站数据目录，弹窗不访问任何第三方站点，也不展示素材来源。
  */
-export function CanvasPoseLibraryModal({ open, onClose, onInsert }: { open: boolean; onClose: () => void; onInsert: (payloads: InsertAssetPayload[]) => Promise<unknown> }) {
+type PoseLibraryModalProps = { open: boolean; onClose: () => void } & ({ onInsert: (payloads: InsertAssetPayload[]) => Promise<unknown>; onPick?: never } | { onPick: (copy: PoseLibraryUseResult) => Promise<unknown>; onInsert?: never });
+
+export function CanvasPoseLibraryModal({ open, onClose, onInsert, onPick }: PoseLibraryModalProps) {
     const { message } = App.useApp();
     const isAdmin = useUserStore((state) => state.user?.role === "admin");
+    const maxSelection = onPick ? 1 : POSE_LIBRARY_MAX_USE;
     const userId = useUserStore((state) => state.user?.id);
     const [keyword, setKeyword] = useState("");
     const [system, setSystem] = useState(ALL);
@@ -97,7 +100,10 @@ export function CanvasPoseLibraryModal({ open, onClose, onInsert }: { open: bool
         setPicked((current) => {
             const next = new Map(current);
             if (next.has(item.id)) next.delete(item.id);
-            else if (next.size >= POSE_LIBRARY_MAX_USE) {
+            else if (onPick) {
+                next.clear();
+                next.set(item.id, { item, pose });
+            } else if (next.size >= POSE_LIBRARY_MAX_USE) {
                 message.warning(`一次最多选择 ${POSE_LIBRARY_MAX_USE} 张姿势图`);
                 return current;
             } else next.set(item.id, { item, pose });
@@ -113,6 +119,14 @@ export function CanvasPoseLibraryModal({ open, onClose, onInsert }: { open: bool
         try {
             // 先由后端把原图复制成当前用户的资源，画布节点和生成任务只引用自己的资源。
             const copies = await copyPoseLibraryItems(selection.map(({ item }) => item.id));
+            if (onPick) {
+                if (!copies[0]) throw new Error("姿势图尚未复制完成");
+                await onPick(copies[0]);
+                setPicked(new Map());
+                onClose();
+                setInserting(false);
+                return;
+            }
             payloads = copies.map((copy) => ({
                 kind: "image",
                 dataUrl: resourceFileUrl(copy.resource.id),
@@ -129,7 +143,7 @@ export function CanvasPoseLibraryModal({ open, onClose, onInsert }: { open: bool
             return;
         }
         try {
-            await onInsert(payloads);
+            await onInsert!(payloads);
             setPicked(new Map());
             onClose();
         } catch {
@@ -198,7 +212,7 @@ export function CanvasPoseLibraryModal({ open, onClose, onInsert }: { open: bool
                         </span>
                         <div className="min-w-0">
                             <h2 className="pose-header-title">姿势库</h2>
-                            <p className="pose-header-subtitle">挑选动作参考图插入画布，连到生图节点后人物会照着这个姿势生成</p>
+                            <p className="pose-header-subtitle">{onPick ? "选择一个姿势及视角，作为当前人物的动作参考" : "挑选动作参考图插入画布，连到生图节点后人物会照着这个姿势生成"}</p>
                         </div>
                         {libraryEmpty ? null : (
                             <Input
@@ -264,11 +278,11 @@ export function CanvasPoseLibraryModal({ open, onClose, onInsert }: { open: bool
                                     </button>
                                 ))
                             ) : (
-                                <span className="pose-dock-hint">点击卡片选择姿势，可以切换视角多选，一次最多 {POSE_LIBRARY_MAX_USE} 张</span>
+                                <span className="pose-dock-hint">{onPick ? "选择一张姿势图，可切换视角" : `点击卡片选择姿势，可以切换视角多选，一次最多 ${POSE_LIBRARY_MAX_USE} 张`}</span>
                             )}
                         </div>
                         <span className="pose-dock-count">
-                            已选 <strong>{selection.length}</strong> / {POSE_LIBRARY_MAX_USE}
+                            已选 <strong>{selection.length}</strong> / {maxSelection}
                         </span>
                         {selection.length ? (
                             <Button type="text" disabled={inserting} onClick={() => setPicked(new Map())}>
@@ -276,7 +290,7 @@ export function CanvasPoseLibraryModal({ open, onClose, onInsert }: { open: bool
                             </Button>
                         ) : null}
                         <Button type="primary" loading={inserting} disabled={!selection.length} onClick={() => void insert()}>
-                            插入画布
+                            {onPick ? "选用姿势" : "插入画布"}
                         </Button>
                     </footer>
                 </div>

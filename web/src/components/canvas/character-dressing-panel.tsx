@@ -17,6 +17,7 @@ import type { ProjectCharacterDetail } from "@/services/api/projects";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CharacterOutfit } from "./character-outfits";
+import { CanvasPoseLibraryModal } from "./canvas-pose-library-modal";
 
 export function CharacterDressingPanel({
     detail,
@@ -45,6 +46,7 @@ export function CharacterDressingPanel({
     const operation = useRef<{ key: string; id: string } | null>(null);
     const [references, setReferences] = useState<Partial<Record<DressingCategory, DressingAssetReference>>>({});
     const [pickerCategory, setPickerCategory] = useState<DressingCategory | null>(null);
+    const [poseOpen, setPoseOpen] = useState(false);
     const assets = useAssetStore((state) => state.assets);
     const pickerItems = assets.filter((asset) => asset.kind === "image" && asset.status !== "archived").map((asset) => remoteAssetToPickerItem(asset, undefined, true));
     const taskQuery = useQuery({
@@ -149,6 +151,14 @@ export function CharacterDressingPanel({
                     );
                 })}
             </div>
+            <Button onClick={() => setPoseOpen(true)}>从姿势库选择动作与视角</Button>
+            <CanvasPoseLibraryModal
+                open={poseOpen}
+                onClose={() => setPoseOpen(false)}
+                onPick={async (copy) => {
+                    setReferences((current) => ({ ...current, pose: { category: "pose", resourceId: copy.resource.id, title: `${copy.name} · ${copy.angle}`, poseItemId: copy.itemId, angle: copy.angle } }));
+                }}
+            />
             {pickerCategory ? (
                 <AssetLibraryPickerModal
                     key={pickerCategory}
