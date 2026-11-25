@@ -551,11 +551,14 @@ func (m *Manager) restoreDatabase(backup Backup) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), m.config.StepTimeout)
 	defer cancel()
-	args := []string{"compose", "--env-file", m.envPath(), "-f", m.composePath(), "exec", "-T", "postgres", "pg_restore", "-U", postgresUser, "-d", postgresDB, "--no-owner", "--no-privileges"}
+	args := []string{"compose", "--project-name", composeProjectName(m.config.InstallDir), "--env-file", m.envPath(), "-f", m.composePath(), "exec", "-T", "postgres", "pg_restore", "-U", postgresUser, "-d", postgresDB, "--no-owner", "--no-privileges"}
 	var stderr bytes.Buffer
 	command := execCommandWithInput{runner: m.runner, input: reader}
 	if err := command.Run(ctx, "docker", args, []string{"CANVAS_IMAGE_TAG=" + strings.TrimPrefix(backup.Version, "v")}, io.Discard, &stderr); err != nil {
-		return fmt.Errorf("恢复 PostgreSQL：%s", strings.TrimSpace(stderr.String()))
+		if detail := strings.TrimSpace(stderr.String()); detail != "" {
+			return fmt.Errorf("恢复 PostgreSQL：%s：%w", detail, err)
+		}
+		return fmt.Errorf("恢复 PostgreSQL：%w", err)
 	}
 	return nil
 }
