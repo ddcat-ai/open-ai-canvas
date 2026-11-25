@@ -18,7 +18,10 @@ func canvasStorageTestService(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(&model.SystemSetting{}, &model.Asset{}, &model.CanvasEditLease{}, &model.CanvasMutationReceipt{}); err != nil {
 		t.Fatal(err)
 	}
-	return &Service{repo: repository.New(db)}, db
+	svc := &Service{repo: repository.New(db)}
+	// 生产构造会提前初始化领域服务；测试也在启动并发请求前完成初始化。
+	svc.platformDomain()
+	return svc, db
 }
 
 func TestCanvasStorageSavesCoordinateByContentOwner(t *testing.T) {
