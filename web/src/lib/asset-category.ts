@@ -1,4 +1,4 @@
-export const ASSET_CATEGORIES = ["character", "environment", "prop", "material", "other", "ark"] as const;
+export const ASSET_CATEGORIES = ["character", "environment", "prop", "material", "clothing", "expression", "pose", "accessory", "hairstyle", "facial_features", "other", "ark"] as const;
 
 export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
 
@@ -7,6 +7,12 @@ export const ASSET_CATEGORY_LABELS: Record<AssetCategory, string> = {
     environment: "场景",
     prop: "道具",
     material: "素材",
+    clothing: "衣服",
+    expression: "表情",
+    pose: "姿势",
+    accessory: "配饰",
+    hairstyle: "发型",
+    facial_features: "五官",
     other: "其他",
     ark: "方舟认证",
 };
@@ -24,9 +30,8 @@ export const ASSET_CATEGORY_OPTIONS = ASSET_CATEGORIES.map((value) => ({
 export const ASSET_ASSIGNABLE_CATEGORY_OPTIONS = ASSET_CATEGORY_OPTIONS.filter((option) => option.value !== ARK_ASSET_CATEGORY);
 
 const LEGACY_ASSET_CATEGORY_MAP: Record<string, AssetCategory> = {
-    wardrobe: "prop",
+    wardrobe: "clothing",
     weapon: "prop",
-    accessory: "prop",
     style: "material",
 };
 

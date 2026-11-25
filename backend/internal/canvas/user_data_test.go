@@ -62,7 +62,7 @@ func TestAssetFromJSONNormalizesLegacyAndUnclassifiedMediaCategories(t *testing.
 		category string
 		want     model.AssetCategory
 	}{
-		{name: "legacy accessory", kind: "image", category: "accessory", want: model.AssetCategoryProp},
+		{name: "accessory", kind: "image", category: "accessory", want: model.AssetCategoryAccessory},
 		{name: "legacy style", kind: "image", category: "style", want: model.AssetCategoryMaterial},
 		{name: "unclassified video", kind: "video", want: model.AssetCategoryMaterial},
 		{name: "unclassified entity", kind: "entity", want: model.AssetCategoryCharacter},

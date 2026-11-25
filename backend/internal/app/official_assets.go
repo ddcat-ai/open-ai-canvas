@@ -257,9 +257,7 @@ func validateOfficialAssetPageFilter(filter OfficialAssetPageFilter, admin bool)
 		return out, BadAuthRequest("官方素材类型只支持图片或视频")
 	}
 	if out.Category != "" {
-		switch model.AssetCategory(out.Category) {
-		case model.AssetCategoryCharacter, model.AssetCategoryEnvironment, model.AssetCategoryProp, model.AssetCategoryMaterial, model.AssetCategoryOther:
-		default:
+		if !model.IsValidAssetCategory(model.AssetCategory(out.Category)) || out.Category == string(model.AssetCategoryArk) {
 			return out, BadAuthRequest("官方素材分类无效")
 		}
 	}

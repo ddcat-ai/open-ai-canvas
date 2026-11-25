@@ -30,6 +30,12 @@ export const assetCategoryIcons: Record<AssetCategory, LucideIcon> = {
     material: Layers,
     other: Shapes,
     ark: ShieldCheck,
+    clothing: Package,
+    expression: UserRound,
+    pose: UserRound,
+    accessory: Shapes,
+    hairstyle: UserRound,
+    facial_features: UserRound,
 };
 
 /**

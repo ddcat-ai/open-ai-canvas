@@ -13,7 +13,7 @@ import { AssetLibraryCard } from "@/components/assets/asset-library-card";
 import { CachedResourceImage } from "@/components/cached-resource-image";
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { cn } from "@/lib/utils";
-import { assetCategoryLabel } from "@/lib/asset-category";
+import { assetCategoryLabel, type AssetCategory } from "@/lib/asset-category";
 import { translate } from "@/i18n";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import { flushAssetStorePersistence, useAssetStore, type Asset } from "@/stores/use-asset-store";
@@ -253,7 +253,7 @@ export function AssetLibraryPickerModal({
                     pageSize: officialPageSize,
                     q: remoteKeyword || undefined,
                     mediaType: mediaKind === "all" ? undefined : (mediaKind as "image" | "video" | "audio" | "entity"),
-                    category: category === "all" || category === "archived" ? undefined : (category as "character" | "environment" | "prop" | "material" | "other"),
+                    category: category === "all" || category === "archived" ? undefined : (category as AssetCategory),
                 },
                 signal,
             ),

@@ -1,12 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import { assetCategoryLabel, defaultAssetCategoryForKind, normalizeAssetCategory } from "@/lib/asset-category";
+import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS, assetCategoryLabel, defaultAssetCategoryForKind, normalizeAssetCategory, parseAssetCategory } from "@/lib/asset-category";
 
 describe("asset category contract", () => {
-    test("旧服饰、武器和配饰统一迁移为道具", () => {
-        expect(normalizeAssetCategory("wardrobe")).toBe("prop");
+    test("服饰与配饰保留独立分类，旧武器仍归入道具", () => {
+        expect(normalizeAssetCategory("wardrobe")).toBe("clothing");
         expect(normalizeAssetCategory("weapon")).toBe("prop");
-        expect(normalizeAssetCategory("accessory")).toBe("prop");
+        expect(normalizeAssetCategory("accessory")).toBe("accessory");
+    });
+
+    test("六类梳妆素材可以手动分类并往返解析", () => {
+        for (const category of ["clothing", "expression", "pose", "accessory", "hairstyle", "facial_features"]) {
+            expect(parseAssetCategory(category)).toBe(category);
+            expect(ASSET_ASSIGNABLE_CATEGORY_OPTIONS.some((option) => option.value === category)).toBe(true);
+        }
+        expect(() => parseAssetCategory("invalid")).toThrow();
     });
 
     test("旧画风迁移为素材，未知值归入其他", () => {

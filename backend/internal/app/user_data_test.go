@@ -63,7 +63,13 @@ func TestAssetFromJSONNormalizesLegacyAndUnclassifiedMediaCategories(t *testing.
 		category string
 		want     model.AssetCategory
 	}{
-		{name: "legacy accessory", kind: "image", category: "accessory", want: model.AssetCategoryProp},
+		{name: "accessory", kind: "image", category: "accessory", want: model.AssetCategory("accessory")},
+		{name: "legacy wardrobe", kind: "image", category: "wardrobe", want: model.AssetCategory("clothing")},
+		{name: "clothing", kind: "image", category: "clothing", want: model.AssetCategory("clothing")},
+		{name: "expression", kind: "image", category: "expression", want: model.AssetCategory("expression")},
+		{name: "pose", kind: "image", category: "pose", want: model.AssetCategory("pose")},
+		{name: "hairstyle", kind: "image", category: "hairstyle", want: model.AssetCategory("hairstyle")},
+		{name: "facial_features", kind: "image", category: "facial_features", want: model.AssetCategory("facial_features")},
 		{name: "legacy style", kind: "image", category: "style", want: model.AssetCategoryMaterial},
 		{name: "unclassified video", kind: "video", want: model.AssetCategoryMaterial},
 		{name: "unclassified entity", kind: "entity", want: model.AssetCategoryCharacter},
@@ -80,6 +86,10 @@ func TestAssetFromJSONNormalizesLegacyAndUnclassifiedMediaCategories(t *testing.
 			}
 			if asset.Category != test.want {
 				t.Fatalf("category = %q, want %q", asset.Category, test.want)
+			}
+			var stored map[string]any
+			if err := json.Unmarshal([]byte(asset.PayloadJSON), &stored); err != nil || stored["category"] != string(test.want) {
+				t.Fatalf("stored category = %v, error=%v", stored["category"], err)
 			}
 		})
 	}
