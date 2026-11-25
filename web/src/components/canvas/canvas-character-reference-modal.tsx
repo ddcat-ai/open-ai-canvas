@@ -14,8 +14,9 @@ import { fetchOfficialAssetReference } from "@/services/api/official-assets";
 import { CharacterStudioOutfitManager } from "@/components/canvas/character-outfit-bar";
 import { buildCharacterOutfitPersistence, parseCharacterOutfits, resolveActiveCharacterOutfit, type CharacterOutfit } from "@/components/canvas/character-outfits";
 import { createClientUUID } from "@/lib/client-id";
+import { CharacterDressingPanel } from "./character-dressing-panel";
 
-type Tab = "profile" | "visual" | "voice";
+type Tab = "profile" | "visual" | "voice" | "dressing";
 type FieldKey = "role" | "aliases" | "appearance" | "physique" | "clothing" | "personality" | "props" | "consistencyPrompt" | "multiViewPrompt" | "voiceLanguage" | "voiceAge" | "voiceTimbre";
 type Drafts = Record<FieldKey | "name", string>;
 
@@ -48,12 +49,14 @@ export function CanvasCharacterReferenceModal({
     open,
     onClose,
     onUpdated,
+    initialTab = "profile",
 }: {
     node: CanvasNodeData | null;
     canvasNodes?: CanvasNodeData[];
     open: boolean;
     onClose: () => void;
     onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void;
+    initialTab?: Tab;
 }) {
     // 资源 ID → 画布节点名：用户在画布上重命名过的图片/音频，选择时按新名字显示并作为声音名保存。
     const canvasTitles = useMemo<CanvasMediaTitles>(() => {
@@ -70,7 +73,7 @@ export function CanvasCharacterReferenceModal({
             {node?.metadata?.sharedCharacter ? (
                 <SharedCharacterStudio node={node} />
             ) : node?.metadata?.characterAssetId ? (
-                <CharacterStudio key={node.id} node={node} assetId={node.metadata.characterAssetId} canvasTitles={canvasTitles} onUpdated={onUpdated} />
+                <CharacterStudio key={node.id} node={node} assetId={node.metadata.characterAssetId} canvasTitles={canvasTitles} onUpdated={onUpdated} initialTab={initialTab} />
             ) : node?.metadata?.officialAssetId ? (
                 <OfficialCharacterStudio key={node.id} node={node} />
             ) : null}
@@ -124,7 +127,19 @@ function OfficialCharacterStudio({ node }: { node: CanvasNodeData }) {
     );
 }
 
-function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: CanvasNodeData; assetId: string; canvasTitles: CanvasMediaTitles; onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void }) {
+function CharacterStudio({
+    node,
+    assetId,
+    canvasTitles,
+    onUpdated,
+    initialTab,
+}: {
+    node: CanvasNodeData;
+    assetId: string;
+    canvasTitles: CanvasMediaTitles;
+    onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void;
+    initialTab: Tab;
+}) {
     const { t } = useTranslation();
     const { message } = App.useApp();
     const queryClient = useQueryClient();
@@ -145,7 +160,7 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
     const definitionKey = JSON.stringify(effectiveDefinition);
     const baseline = useMemo(() => draftsFrom(name, JSON.parse(definitionKey) as Record<string, unknown>), [name, definitionKey]);
     const [drafts, setDrafts] = useState<Drafts>(baseline);
-    const [tab, setTab] = useState<Tab>("profile");
+    const [tab, setTab] = useState<Tab>(initialTab);
     const [busyKey, setBusyKey] = useState("");
     const [addingNewOutfit, setAddingNewOutfit] = useState(false);
     const pendingSave = useRef<{ key: string; operationId: string; expectedVersionId: string } | null>(null);
@@ -249,6 +264,22 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
             <section className="flex min-h-0 flex-col">
                 <CharacterTabs value={tab} onChange={setTab} />
                 <div id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-8 pt-6">
+                    {detail ? (
+                        <div hidden={tab !== "dressing"}>
+                            <CharacterDressingPanel
+                                detail={detail}
+                                outfit={activeOutfit}
+                                nodeId={node.id}
+                                onRefresh={() => void detailQuery.refetch()}
+                                onSaved={(next, outfitId) => {
+                                    queryClient.setQueryData(["character-studio", assetId], next);
+                                    void queryClient.invalidateQueries({ queryKey: ["characters"] });
+                                    setSelectedOutfitId(outfitId);
+                                    onUpdated?.(next, outfitId);
+                                }}
+                            />
+                        </div>
+                    ) : null}
                     {tab === "profile" ? <ProfileForm drafts={drafts} onChange={(key, value) => setDrafts((current) => ({ ...current, [key]: value }))} /> : null}
                     {tab === "visual" ? (
                         <div>
@@ -324,6 +355,7 @@ const TABS: Array<{ value: Tab; labelKey: string; icon: ReactNode }> = [
     { value: "profile", labelKey: "canvasA.characterStudio.tabProfile", icon: <IdCard /> },
     { value: "visual", labelKey: "canvasA.characterStudio.tabVisual", icon: <ImageIcon /> },
     { value: "voice", labelKey: "canvasA.characterStudio.tabVoice", icon: <AudioLines /> },
+    { value: "dressing", labelKey: "梳妆台", icon: <ImageIcon /> },
 ];
 
 /** 右侧主导航：等分整行、带图标和下划线指示，比分段控件更醒目；支持左右方向键切换。 */
@@ -339,7 +371,7 @@ function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) =
         refs.current[next]?.focus();
     };
     return (
-        <div role="tablist" aria-label={t("canvasA.characterStudio.tabsLabel")} onKeyDown={onKeyDown} className="grid shrink-0 grid-cols-3 border-b border-border pl-3 pr-14 pt-3">
+        <div role="tablist" aria-label={t("canvasA.characterStudio.tabsLabel")} onKeyDown={onKeyDown} className="grid shrink-0 grid-cols-4 border-b border-border pl-3 pr-14 pt-3">
             {TABS.map((item, index) => {
                 const active = item.value === value;
                 return (

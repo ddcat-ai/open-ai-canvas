@@ -51,6 +51,7 @@ import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asse
 import { CanvasCharacterLibraryModal } from "@/components/canvas/canvas-character-library-modal";
 import { CanvasPoseLibraryModal } from "@/components/canvas/canvas-pose-library-modal";
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
+import { applySelectedOutfitToCanvasNode, parseCharacterOutfits } from "@/components/canvas/character-outfits";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
@@ -314,6 +315,7 @@ function CanvasViewportPage() {
     const [dialogNodeId, setDialogNodeId] = useState<string | null>(null);
     const [textEditorNodeId, setTextEditorNodeId] = useState<string | null>(null);
     const [characterReferenceNodeId, setCharacterReferenceNodeId] = useState<string | null>(null);
+    const [characterReferenceInitialTab, setCharacterReferenceInitialTab] = useState<"profile" | "dressing">("profile");
     const [characterLibraryOpen, setCharacterLibraryOpen] = useState(false);
     const [characterLibraryPosition, setCharacterLibraryPosition] = useState<Position | undefined>();
     const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null);
@@ -1226,6 +1228,7 @@ function CanvasViewportPage() {
                 setDialogNodeId(null);
             } else if (node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId)) {
                 setDialogNodeId(null);
+                setCharacterReferenceInitialTab("profile");
                 setCharacterReferenceNodeId(node.id);
             } else if (node.type === CanvasNodeType.Text) {
                 setDialogNodeId(node.id);
@@ -1618,6 +1621,7 @@ function CanvasViewportPage() {
         setDialogNodeId(null);
         setToolbarNodeId(null);
         if (node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId)) {
+            setCharacterReferenceInitialTab("profile");
             setCharacterReferenceNodeId(node.id);
             return;
         }
@@ -2389,7 +2393,15 @@ function CanvasViewportPage() {
     const renderCanvasNodeContent = useCallback(
         (contentNode: CanvasNodeData) => {
             if (contentNode.metadata?.workflowKind === "character" && (contentNode.metadata.characterAssetId || contentNode.metadata.officialAssetId)) {
-                return <CanvasCharacterReferenceNodeContent node={contentNode} />;
+                return (
+                    <CanvasCharacterReferenceNodeContent
+                        node={contentNode}
+                        onOpenDressing={() => {
+                            setCharacterReferenceInitialTab("dressing");
+                            setCharacterReferenceNodeId(contentNode.id);
+                        }}
+                    />
+                );
             }
             if (contentNode.metadata?.workflowKind === "styleboard" && !contentNode.metadata.content) {
                 return <CanvasStylePlaceholderNodeContent onChoose={() => setStylePickerOpen(true)} />;
@@ -3601,7 +3613,19 @@ function CanvasViewportPage() {
                                 canvasNodes={nodes}
                                 open={Boolean(characterReferenceNode)}
                                 onClose={() => setCharacterReferenceNodeId(null)}
-                                onUpdated={(detail) => setNodes((current) => refreshCanvasCharacterReferenceNodes(current, [{ ...detail.asset, character: detail.character }]))}
+                                initialTab={characterReferenceInitialTab}
+                                onUpdated={(detail, outfitId) =>
+                                    setNodes((current) =>
+                                        refreshCanvasCharacterReferenceNodes(current, [{ ...detail.asset, character: detail.character }]).map((item) =>
+                                            item.id === characterReferenceNodeId && outfitId
+                                                ? (() => {
+                                                      const outfit = parseCharacterOutfits(detail.character.definition, detail.character.representations).find((entry) => entry.id === outfitId);
+                                                      return outfit ? applySelectedOutfitToCanvasNode(item, outfit) : item;
+                                                  })()
+                                                : item,
+                                        ),
+                                    )
+                                }
                             />
 
                             {textEditorNode ? (
