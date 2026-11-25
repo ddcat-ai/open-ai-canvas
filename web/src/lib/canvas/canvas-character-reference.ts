@@ -34,7 +34,8 @@ export function refreshCanvasCharacterReferenceNodes(nodes: CanvasNodeData[], as
         const metadata = node.metadata;
         const assetId = metadata?.workflowKind === "character" ? metadata.characterAssetId : "";
         const asset = assetId ? characters.get(assetId) : undefined;
-        if (!metadata || !asset?.character || metadata.characterVersionPolicy === "pinned") return node;
+        const explicitlySelected = targetNodeOutfit?.nodeId === node.id && Boolean(targetNodeOutfit.outfitId);
+        if (!metadata || !asset?.character || (metadata.characterVersionPolicy === "pinned" && !explicitlySelected)) return node;
         const card = asset.character;
         const cover = card.representations.find((item) => item.role === "turnaround_sheet") || card.representations.find((item) => item.role === "primary") || card.representations.find((item) => item.role === "front");
         const aliases = Array.isArray(card.definition.aliases) ? card.definition.aliases.filter((value): value is string => typeof value === "string") : [];

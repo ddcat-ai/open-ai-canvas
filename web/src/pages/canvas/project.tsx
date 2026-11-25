@@ -51,7 +51,6 @@ import { CanvasProjectAssetModal } from "@/components/canvas/canvas-project-asse
 import { CanvasCharacterLibraryModal } from "@/components/canvas/canvas-character-library-modal";
 import { CanvasPoseLibraryModal } from "@/components/canvas/canvas-pose-library-modal";
 import { CanvasCharacterReferenceNodeContent } from "@/components/canvas/canvas-character-reference-node";
-import { applySelectedOutfitToCanvasNode, parseCharacterOutfits } from "@/components/canvas/character-outfits";
 import { CanvasCharacterReferenceModal } from "@/components/canvas/canvas-character-reference-modal";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
@@ -3614,18 +3613,7 @@ function CanvasViewportPage() {
                                 open={Boolean(characterReferenceNode)}
                                 onClose={() => setCharacterReferenceNodeId(null)}
                                 initialTab={characterReferenceInitialTab}
-                                onUpdated={(detail, outfitId) =>
-                                    setNodes((current) =>
-                                        refreshCanvasCharacterReferenceNodes(current, [{ ...detail.asset, character: detail.character }]).map((item) =>
-                                            item.id === characterReferenceNodeId && outfitId
-                                                ? (() => {
-                                                      const outfit = parseCharacterOutfits(detail.character.definition, detail.character.representations).find((entry) => entry.id === outfitId);
-                                                      return outfit ? applySelectedOutfitToCanvasNode(item, outfit) : item;
-                                                  })()
-                                                : item,
-                                        ),
-                                    )
-                                }
+                                onUpdated={(detail, outfitId) => setNodes((current) => refreshCanvasCharacterReferenceNodes(current, [{ ...detail.asset, character: detail.character }], { nodeId: characterReferenceNodeId || undefined, outfitId }))}
                             />
 
                             {textEditorNode ? (

@@ -49,6 +49,9 @@ func (s *Service) replaceCharacterRepresentationsMutation(userID string, asset *
 	if asset.PrimaryVersionID != req.ExpectedVersionID {
 		return CharacterAssetSummary{}, characterVersionConflict()
 	}
+	if err := s.validateCharacterDressingSources(userID, asset.ID, req.Definition); err != nil {
+		return CharacterAssetSummary{}, err
+	}
 	definition, err := normalizedCharacterDefinition(req.Definition)
 	if err != nil {
 		return CharacterAssetSummary{}, err

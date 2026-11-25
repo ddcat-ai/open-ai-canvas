@@ -10,8 +10,7 @@ import type { ReferenceImage } from "@/types/image";
 import type { Asset } from "@/stores/use-asset-store";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { uploadImage } from "@/services/image-storage";
-import { upsertRemoteAsset } from "@/services/api/user-data";
-import { loadAssetsForUse } from "@/services/user-data-sync";
+import { getRemoteAsset, upsertRemoteAsset } from "@/services/api/user-data";
 import { http } from "@/services/api/request";
 
 export function listCharacterDressingTasks(characterAssetId: string, before?: string, signal?: AbortSignal) {
@@ -47,7 +46,14 @@ export function dressingSnapshot(task: GenerationTask): DressingSnapshot | undef
 
 export function dressingImages(task: GenerationTask): Array<{ resourceId: string; width?: number; height?: number }> {
     if (task.status !== "succeeded" || !task.resultJson || (task.resultState && task.resultState !== "READY")) return [];
-    return (parseBackendGenerationResult(task).images || []).flatMap((image) => {
+    let images;
+    try {
+        images = parseBackendGenerationResult(task).images;
+    } catch {
+        return [];
+    }
+    if (!Array.isArray(images)) return [];
+    return images.flatMap((image) => {
         const resourceId = resourceIdFromStorageKey(image.storageKey);
         return resourceId ? [{ resourceId, width: image.width, height: image.height }] : [];
     });
@@ -131,14 +137,14 @@ export async function uploadDressingAsset(file: File, category: DressingCategory
         updatedAt: now,
     };
     await upsertRemoteAsset(asset);
-    await loadAssetsForUse([asset.id], { refresh: true });
-    return asset;
+    return (await getRemoteAsset(asset.id)).asset;
 }
 
 export async function saveCharacterDressing(task: GenerationTask, resourceId: string, name: string, expectedVersionId: string) {
     const snapshot = dressingSnapshot(task);
     if (!snapshot || !dressingImages(task).some((image) => image.resourceId === resourceId)) throw new Error("生成结果尚未就绪或不属于本次任务");
     if (!name.trim()) throw new Error("请为新形象命名");
+    if (Array.from(name.trim()).length > 32) throw new Error("形象名称最多 32 个字符");
     const detail = await getCharacter(snapshot.characterAssetId);
     const outfits = parseCharacterOutfits(detail.character.definition, detail.character.representations);
     const alreadySaved = outfits.find((item) => item.source?.taskId === task.id && item.resourceId === resourceId);

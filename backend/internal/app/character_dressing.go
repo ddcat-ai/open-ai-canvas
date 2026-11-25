@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"yingce/backend/internal/model"
 )
@@ -12,6 +13,15 @@ func (s *Service) validateCharacterDressingSources(userID, assetID string, defin
 	outfits, _ := definition["outfits"].([]any)
 	for _, raw := range outfits {
 		outfit, _ := raw.(map[string]any)
+		name, _ := outfit["name"].(string)
+		if strings.TrimSpace(name) == "" || utf8.RuneCountInString(strings.TrimSpace(name)) > 32 {
+			return BadAuthRequest("形象名称不能为空且最多 32 个字符")
+		}
+		resourceID, _ := outfit["resourceId"].(string)
+		resource, err := s.repo.ResourceForUser(userID, resourceID)
+		if err != nil || resource == nil || resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
+			return BadAuthRequest("角色形象资源不可用")
+		}
 		source, _ := outfit["source"].(map[string]any)
 		taskID, _ := source["taskId"].(string)
 		if taskID == "" {
@@ -32,7 +42,6 @@ func (s *Service) validateCharacterDressingSources(userID, assetID string, defin
 		if json.Unmarshal([]byte(task.InputJSON), &input) != nil || input.Metadata.Source != "character-dressing-table" || input.Metadata.Dressing.CharacterAssetID != assetID || task.Status != model.TaskStatusSucceeded {
 			return BadAuthRequest("形象来源与当前角色不匹配，或任务尚未完成")
 		}
-		resourceID, _ := outfit["resourceId"].(string)
 		var result struct {
 			Images []struct {
 				StorageKey string `json:"storageKey"`

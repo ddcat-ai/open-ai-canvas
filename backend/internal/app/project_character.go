@@ -255,10 +255,10 @@ func (s *Service) ReplaceCharacterRepresentations(userID string, assetID string,
 		return CharacterAssetSummary{}, err
 	}
 	if req.OperationID != "" || req.ExpectedVersionID != "" {
-		if err := s.validateCharacterDressingSources(userID, asset.ID, req.Definition); err != nil {
-			return CharacterAssetSummary{}, err
-		}
 		return s.replaceCharacterRepresentationsMutation(userID, asset, req)
+	}
+	if err := s.validateCharacterDressingSources(userID, asset.ID, req.Definition); err != nil {
+		return CharacterAssetSummary{}, err
 	}
 	var definitionJSON string
 	if req.Definition != nil {

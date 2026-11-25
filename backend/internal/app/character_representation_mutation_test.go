@@ -31,6 +31,11 @@ func TestCharacterRepresentationMutationRetryAndConflict(t *testing.T) {
 	if err != nil || retried.Character.VersionID != saved.Character.VersionID {
 		t.Fatalf("retry created another version: %#v, %v", retried, err)
 	}
+	changed := req
+	changed.Definition = map[string]any{"outfits": []any{map[string]any{"id": "new-look", "name": "不同请求", "resourceId": "new-image"}}}
+	if _, err := svc.ReplaceCharacterRepresentations("user", initial.Asset.ID, changed); err == nil {
+		t.Fatal("reused operation accepted different content")
+	}
 	req.OperationID = "save-look-2"
 	if _, err = svc.ReplaceCharacterRepresentations("user", initial.Asset.ID, req); err == nil {
 		t.Fatal("stale version accepted")
@@ -62,5 +67,11 @@ func TestCharacterDressingSourceRequiresMatchingTaskOutput(t *testing.T) {
 	}
 	if _, err := svc.ReplaceCharacterRepresentations("user", character.Asset.ID, req); err != nil {
 		t.Fatal(err)
+	}
+	if err := db.Delete(&model.Task{}, "id = ?", "source-task").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReplaceCharacterRepresentations("user", character.Asset.ID, req); err != nil {
+		t.Fatalf("persisted receipt must survive source cleanup: %v", err)
 	}
 }

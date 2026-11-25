@@ -18,6 +18,7 @@ import { translate } from "@/i18n";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import { flushAssetStorePersistence, useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { listProjectAssetsPage, type ProjectAsset } from "@/services/api/projects";
+import { getRemoteAsset } from "@/services/api/user-data";
 import { deleteAssetsWithRemoteSync, loadAssetLibraryPage, loadAssetsForUse, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { fetchOfficialAssets, importOfficialAssetToProject, importOfficialAssetToLibrary, type OfficialAsset } from "@/services/api/official-assets";
 
@@ -47,6 +48,7 @@ const DEFAULT_MEDIA_KINDS: AssetPickerMediaKind[] = ["image", "video", "audio"];
 const PICKER_SKELETON_CARDS = 8;
 
 export type AssetLibraryPickerItem = {
+    originOfficialAssetId?: string;
     id: string;
     title: string;
     category: string;
@@ -132,6 +134,8 @@ function useAssetPickerSurfaceTone(open: boolean): AssetPickerSurfaceTone {
 }
 
 type Props = {
+    /** 业务槽位限定分类时，来源切换和分页加载不能放宽该筛选。 */
+    fixedCategory?: AssetCategory;
     /** 生图参考需要用户自己的资源；普通画布插入仍保留直接引用模式。 */
     officialSelectionMode?: "reference" | "import-to-library";
     remoteLibrary?: boolean;
@@ -183,6 +187,7 @@ type Props = {
 };
 
 export function AssetLibraryPickerModal({
+    fixedCategory,
     officialSelectionMode = "reference",
     remoteLibrary = false,
     projectId,
@@ -217,7 +222,8 @@ export function AssetLibraryPickerModal({
 }: Props) {
     const { message } = App.useApp();
     const { t } = useTranslation();
-    const [category, setCategory] = useState(initialCategory);
+    const [selectedCategory, setCategory] = useState(initialCategory);
+    const category = fixedCategory || selectedCategory;
     const [mediaKind, setMediaKind] = useState<AssetPickerMediaKind | "all">("all");
     const [folderId, setFolderId] = useState(initialFolderId);
     const [source, setSource] = useState<"local" | "plugin" | "official">("local");
@@ -457,11 +463,18 @@ export function AssetLibraryPickerModal({
                 return;
             }
             const result = projectId ? await importOfficialAssetToProject(item.id, projectId) : await importOfficialAssetToLibrary(item.id);
-            await loadAssetsForUse([result.asset.id], { refresh: true });
-            const asset = useAssetStore.getState().assets.find((entry) => entry.id === result.asset.id);
+            let asset: Asset | undefined;
+            if (!projectId && officialSelectionMode === "import-to-library") {
+                // 导入返回后直接读取权威资产，不依赖后台同步器是否已经初始化或缓存是否命中。
+                asset = (await getRemoteAsset(result.asset.id)).asset;
+            } else {
+                await loadAssetsForUse([result.asset.id], { refresh: true });
+                asset = useAssetStore.getState().assets.find((entry) => entry.id === result.asset.id);
+            }
             if (!asset) throw new Error("官方素材已导入，但本地素材记录尚未可用");
             const pickerItem: AssetLibraryPickerItem = {
                 id: asset.id,
+                originOfficialAssetId: item.id,
                 title: asset.title,
                 category: asset.category || item.category,
                 kindLabel: item.mediaType === "video" ? "视频" : "图片",
@@ -469,6 +482,7 @@ export function AssetLibraryPickerModal({
                 description: asset.note || item.description,
                 searchText: item.tags.join(" "),
             };
+            pickedRemoteRef.current.set(pickerItem.id, pickerItem);
             setImportedPickerItems((current) => [...current.filter((entry) => entry.id !== pickerItem.id), pickerItem]);
             setImportedOfficialIds((current) => new Set(current).add(item.id));
             setSelected((current) => new Set(multiple ? [...current, pickerItem.id] : [pickerItem.id]));
@@ -661,7 +675,7 @@ export function AssetLibraryPickerModal({
                                 <button type="button" role="tab" aria-selected={source === "local"} className={cn("asset-picker-source-tab", source === "local" && "is-active")} onClick={() => selectSource("local")}>
                                     <HardDrive aria-hidden="true" />
                                     <span>{t("library.picker.sourceLocal")}</span>
-                                    <em>{localItems.filter((item) => !item.archived).length}</em>
+                                    <em>{remoteLibrary && source === "local" ? (remoteQuery.data?.total ?? localItems.filter((item) => !item.archived).length) : localItems.filter((item) => !item.archived).length}</em>
                                 </button>
                                 <button type="button" role="tab" aria-selected={source === "official"} className={cn("asset-picker-source-tab", source === "official" && "is-active")} onClick={() => selectSource("official")}>
                                     <LibraryBig aria-hidden="true" />
@@ -725,13 +739,15 @@ export function AssetLibraryPickerModal({
                         {showCategories ? (
                             <>
                                 <span className="asset-picker-nav-label">{t("library.picker.category")}</span>
-                                {normalCategories.map((value) => (
-                                    <button key={value} type="button" className={cn("assets-filter-item", category === value && "is-active")} aria-pressed={category === value} onClick={() => setCategory(value)}>
-                                        <span className="assets-filter-item-label">{categoryLabels[value] || (value === "all" ? t("library.picker.allAssets") : t("library.picker.other"))}</span>
-                                        {!projectId ? <span className="assets-filter-count">{countFor(value)}</span> : null}
-                                    </button>
-                                ))}
-                                {!projectId && (archivedCount > 0 || remoteEnabled) ? (
+                                {normalCategories
+                                    .filter((value) => !fixedCategory || value === fixedCategory)
+                                    .map((value) => (
+                                        <button key={value} type="button" className={cn("assets-filter-item", category === value && "is-active")} aria-pressed={category === value} onClick={() => setCategory(value)}>
+                                            <span className="assets-filter-item-label">{categoryLabels[value] || (value === "all" ? t("library.picker.allAssets") : t("library.picker.other"))}</span>
+                                            {!projectId ? <span className="assets-filter-count">{countFor(value)}</span> : null}
+                                        </button>
+                                    ))}
+                                {!fixedCategory && !projectId && (archivedCount > 0 || remoteEnabled) ? (
                                     <div className="asset-picker-recycle">
                                         <button type="button" className={cn("assets-filter-item", category === "archived" && "is-active")} aria-pressed={category === "archived"} onClick={() => setCategory("archived")}>
                                             <span className="assets-filter-item-label flex items-center gap-2">

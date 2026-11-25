@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
 import { buildCharacterOutfitPersistence, parseCharacterOutfits, resolveLockedNodeOutfitId } from "../src/components/canvas/character-outfits";
+import { refreshCanvasCharacterReferenceNodes } from "../src/lib/canvas/canvas-character-reference";
+import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
+import type { ProjectAsset } from "../src/services/api/projects";
 
 test("形象重命名后保留来源与其他图像表达，其他节点继续锁定原造型", () => {
     const source = { taskId: "task-1", prompt: "换成红衣" };
@@ -15,4 +18,39 @@ test("形象重命名后保留来源与其他图像表达，其他节点继续�
     expect(parseCharacterOutfits(next.definition)[0].source).toEqual(source);
     expect(next.representations).toContainEqual({ role: "front", resourceId: "front-image", metadata: { preserved: true } });
     expect(resolveLockedNodeOutfitId("old", undefined, definition, next.definition)).toBe("old");
+});
+
+test("明确选用新形象时更新发起节点的固定版本，其他固定节点不变", () => {
+    const first: CanvasNodeData = {
+        id: "first",
+        type: CanvasNodeType.Text,
+        title: "人物",
+        position: { x: 0, y: 0 },
+        width: 200,
+        height: 300,
+        metadata: { workflowKind: "character", characterAssetId: "person", characterVersionId: "v1", characterVersionPolicy: "pinned", selectedOutfitId: "old" },
+    };
+    const second = { ...first, id: "second" };
+    const asset = {
+        id: "person",
+        title: "人物",
+        category: "character",
+        character: {
+            versionId: "v2",
+            definition: {
+                outfits: [
+                    { id: "old", name: "旧形象", resourceId: "old-image" },
+                    { id: "new", name: "新形象", resourceId: "new-image" },
+                ],
+            },
+            representations: [],
+            visualStatus: "ready",
+            voiceStatus: "missing",
+        },
+    } as unknown as ProjectAsset;
+    const result = refreshCanvasCharacterReferenceNodes([first, second], [asset], { nodeId: "first", outfitId: "new" });
+    expect(result[0].metadata?.characterVersionId).toBe("v2");
+    expect(result[0].metadata?.selectedOutfitId).toBe("new");
+    expect(result[0].metadata?.characterCoverUrl).toContain("new-image");
+    expect(result[1]).toBe(second);
 });

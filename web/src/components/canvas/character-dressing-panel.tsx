@@ -20,17 +20,19 @@ import {
 } from "@/services/character-dressing";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { taskBillingLabel } from "@/lib/generation-task-billing";
+import { workspacePath } from "@/lib/workspace-routes";
 import { canCancelGenerationTask, statusLabel } from "@/lib/generation-task-display";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
 import { AssetLibraryPickerModal, remoteAssetToPickerItem } from "@/components/assets/asset-library-picker-modal";
-import { useAssetStore } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { cancelGenerationTask, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { resourceStorageKey } from "@/services/api/resources";
 import type { ProjectCharacterDetail } from "@/services/api/projects";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
-import type { CharacterOutfit } from "./character-outfits";
+import { parseCharacterOutfits, type CharacterOutfit } from "./character-outfits";
 import { CanvasPoseLibraryModal } from "./canvas-pose-library-modal";
+import { CanvasImagePreview } from "./canvas-image-preview";
 
 export function CharacterDressingPanel({
     detail,
@@ -69,21 +71,26 @@ export function CharacterDressingPanel({
     const [references, setReferences] = useState<Partial<Record<DressingCategory, DressingAssetReference>>>({});
     const [pickerCategory, setPickerCategory] = useState<DressingCategory | null>(null);
     const [poseOpen, setPoseOpen] = useState(false);
+    const [preview, setPreview] = useState<{ resourceId: string; title: string } | null>(null);
     const assets = useAssetStore((state) => state.assets);
-    const pickerItems = assets.filter((asset) => asset.kind === "image" && asset.status !== "archived").map((asset) => remoteAssetToPickerItem(asset, undefined, true));
+    const [uploadedAssets, setUploadedAssets] = useState<Asset[]>([]);
+    const pickerItems = [...assets, ...uploadedAssets.filter((item) => !assets.some((asset) => asset.id === item.id))]
+        .filter((asset) => asset.kind === "image" && asset.status !== "archived")
+        .map((asset) => remoteAssetToPickerItem(asset, undefined, true));
     const taskQuery = useQuery({
         queryKey: ["character-dressing-task", scope, userId, selectedTask?.id],
         queryFn: ({ signal }) => queryGenerationTask(selectedTask!.id, { signal }),
         enabled: Boolean(selectedTask),
         refetchInterval: (query) => {
             const task = query.state.data || selectedTask;
-            return task && (task.status === "queued" || task.status === "running" || (task.status === "succeeded" && task.resultState && task.resultState !== "READY" && task.resultState !== "FAILED_PERMANENT")) ? 2000 : false;
+            return task && (task.status === "queued" || task.status === "running" || (task.status === "succeeded" && task.resultState && ["NOT_AVAILABLE", "PENDING_MATERIALIZATION", "MATERIALIZING"].includes(task.resultState))) ? 2000 : false;
         },
     });
     const task = taskQuery.data || selectedTask;
     const active = task?.status === "queued" || task?.status === "running";
     const images = task ? dressingImages(task) : [];
     const image = images.find((item) => item.resourceId === selectedResource) || images[0];
+    const savedOutfit = task && image ? parseCharacterOutfits(detail.character.definition, detail.character.representations).find((item) => item.resourceId === image.resourceId && item.source?.taskId === task.id) : undefined;
     const generate = async () => {
         if (!outfit || working || active) return;
         setWorking(true);
@@ -140,20 +147,25 @@ export function CharacterDressingPanel({
                             <div className="flex items-center justify-between gap-2">
                                 <span className="text-sm font-medium">{ASSET_CATEGORY_LABELS[category]}</span>
                                 {reference ? (
-                                    <Button
-                                        type="text"
-                                        size="small"
-                                        aria-label={`清除${ASSET_CATEGORY_LABELS[category]}`}
-                                        onClick={() =>
-                                            setReferences((current) => {
-                                                const next = { ...current };
-                                                delete next[category];
-                                                return next;
-                                            })
-                                        }
-                                    >
-                                        清除
-                                    </Button>
+                                    <span className="flex items-center gap-1">
+                                        <Button type="text" size="small" aria-label={`预览${ASSET_CATEGORY_LABELS[category]}`} onClick={() => setPreview({ resourceId: reference.resourceId, title: reference.title })}>
+                                            预览
+                                        </Button>
+                                        <Button
+                                            type="text"
+                                            size="small"
+                                            aria-label={`清除${ASSET_CATEGORY_LABELS[category]}`}
+                                            onClick={() =>
+                                                setReferences((current) => {
+                                                    const next = { ...current };
+                                                    delete next[category];
+                                                    return next;
+                                                })
+                                            }
+                                        >
+                                            清除
+                                        </Button>
+                                    </span>
                                 ) : null}
                             </div>
                             <button
@@ -165,7 +177,10 @@ export function CharacterDressingPanel({
                                 {reference ? (
                                     <>
                                         <CachedResourceImage storageKey={resourceStorageKey(reference.resourceId)} alt={reference.title} className="size-14 rounded object-contain" />
-                                        <span className="min-w-0 truncate text-xs">{reference.title}</span>
+                                        <span className="min-w-0 truncate text-xs">
+                                            {reference.title}
+                                            <span className="block text-foreground/50">{reference.poseItemId ? "姿势库" : reference.officialAssetId ? "官方素材" : "我的素材"}</span>
+                                        </span>
                                     </>
                                 ) : (
                                     <span className="text-xs text-foreground/50">选择参考图片（选填）</span>
@@ -176,6 +191,7 @@ export function CharacterDressingPanel({
                 })}
             </div>
             <Button onClick={() => setPoseOpen(true)}>从姿势库选择动作与视角</Button>
+            {preview ? <CanvasImagePreview storageKey={resourceStorageKey(preview.resourceId)} alt={preview.title} onClose={() => setPreview(null)} /> : null}
             <CanvasPoseLibraryModal
                 open={poseOpen}
                 onClose={() => setPoseOpen(false)}
@@ -195,6 +211,7 @@ export function CharacterDressingPanel({
                     mediaKinds={["image"]}
                     categoryLabels={ASSET_CATEGORY_LABELS}
                     initialCategory={pickerCategory}
+                    fixedCategory={pickerCategory}
                     multiple={false}
                     title={`选择${ASSET_CATEGORY_LABELS[pickerCategory]}参考`}
                     emptyTitle="还没有此类参考图"
@@ -206,6 +223,7 @@ export function CharacterDressingPanel({
                         description: "上传后归入当前业务分类",
                         onUpload: async (files) => {
                             const asset = await uploadDressingAsset(files[0], pickerCategory);
+                            setUploadedAssets((current) => [...current, asset]);
                             return [asset.id];
                         },
                     }}
@@ -213,7 +231,7 @@ export function CharacterDressingPanel({
                         const item = picked?.find((entry) => entry.id === ids[0]) || pickerItems.find((entry) => entry.id === ids[0]);
                         const asset = item?.asset;
                         if (!asset) throw new Error("素材尚未就绪，请重新选择");
-                        const reference = dressingAssetReference(asset, pickerCategory);
+                        const reference = { ...dressingAssetReference(asset, pickerCategory), ...(item?.originOfficialAssetId ? { officialAssetId: item.originOfficialAssetId } : {}) };
                         setReferences((current) => ({ ...current, [pickerCategory]: reference }));
                         setPickerCategory(null);
                     }}
@@ -274,7 +292,17 @@ export function CharacterDressingPanel({
                     {task.billing ? <p className="text-xs text-foreground/60">{taskBillingLabel(task.billing)}</p> : null}
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-sm">
-                            {active ? `正在生成 ${task.progress || 0}%` : task.status === "failed" ? task.error || "生成失败" : task.status === "cancelled" ? "任务已取消" : images.length ? "生成完成，请选择图片并命名保存" : "结果处理中，请稍候"}
+                            {active
+                                ? `正在生成 ${task.progress || 0}%`
+                                : task.status === "failed"
+                                  ? task.error || "生成失败"
+                                  : task.status === "cancelled"
+                                    ? "任务已取消"
+                                    : images.length
+                                      ? "生成完成，请选择图片并命名保存"
+                                      : task.resultState?.startsWith("FAILED")
+                                        ? "结果保存失败，可前往任务中心查看并恢复"
+                                        : "结果处理中，请稍候"}
                         </span>
                         {canCancelGenerationTask(task) ? (
                             <Button
@@ -289,6 +317,7 @@ export function CharacterDressingPanel({
                             </Button>
                         ) : null}
                     </div>
+                    {task.canRecoverMedia || task.resultState?.startsWith("FAILED") ? <Button href={workspacePath("/tasks")}>前往任务中心恢复结果</Button> : null}
                     {images.length ? (
                         <>
                             <div className="grid grid-cols-2 gap-2">
@@ -304,9 +333,12 @@ export function CharacterDressingPanel({
                                     </button>
                                 ))}
                             </div>
-                            <Input aria-label="新形象名称" value={name} maxLength={100} onChange={(event) => setName(event.target.value)} placeholder="为新形象命名" />
-                            <Button loading={saving} disabled={!name.trim()} onClick={() => void save()}>
-                                保存为角色形象
+                            <Button type="text" onClick={() => image && setPreview({ resourceId: image.resourceId, title: savedOutfit?.name || "生成形象" })}>
+                                放大查看所选结果
+                            </Button>
+                            <Input aria-label="新形象名称" value={savedOutfit?.name || name} disabled={Boolean(savedOutfit)} maxLength={32} onChange={(event) => setName(event.target.value)} placeholder="为新形象命名" />
+                            <Button loading={saving} disabled={Boolean(savedOutfit) || !name.trim()} onClick={() => void save()}>
+                                {savedOutfit ? "已保存到形象库" : "保存为角色形象"}
                             </Button>
                         </>
                     ) : null}

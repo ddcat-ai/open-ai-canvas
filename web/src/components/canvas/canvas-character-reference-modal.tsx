@@ -161,6 +161,10 @@ function CharacterStudio({
     const baseline = useMemo(() => draftsFrom(name, JSON.parse(definitionKey) as Record<string, unknown>), [name, definitionKey]);
     const [drafts, setDrafts] = useState<Drafts>(baseline);
     const [tab, setTab] = useState<Tab>(initialTab);
+    const tabPanelRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (tabPanelRef.current) tabPanelRef.current.scrollTop = 0;
+    }, [tab]);
     const [busyKey, setBusyKey] = useState("");
     const [addingNewOutfit, setAddingNewOutfit] = useState(false);
     const pendingSave = useRef<{ key: string; operationId: string; expectedVersionId: string } | null>(null);
@@ -263,7 +267,7 @@ function CharacterStudio({
             <CharacterStage name={drafts.name.trim() || name} role={drafts.role.trim()} cover={cover} hasCover={Boolean(coverResourceId)} voiceName={voiceName} voiceSampleId={voiceSampleId} version={detail?.character.version} />
             <section className="flex min-h-0 flex-col">
                 <CharacterTabs value={tab} onChange={setTab} />
-                <div id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-8 pt-6">
+                <div ref={tabPanelRef} id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-8 pt-6">
                     {detail ? (
                         <div hidden={tab !== "dressing"}>
                             <CharacterDressingPanel
