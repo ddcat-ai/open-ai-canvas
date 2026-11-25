@@ -405,7 +405,7 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 			fail(c, 400, err)
 			return
 		}
-		options := service.CloudAgentRunViewOptions{SinceSeq: int(after)}
+		options := service.CloudAgentRunViewOptions{SinceSeq: int(after), EventStream: true, FromStart: c.GetHeader("Last-Event-ID") != ""}
 		run, err := svc.CloudAgentRun(user.ID, c.Param("id"), options)
 		if err != nil {
 			failService(c, err)
@@ -425,22 +425,39 @@ func RegisterAgentRoutes(r *gin.RouterGroup, svc *service.Service) {
 				return
 			}
 			if run != nil {
+				if c.Request.Context().Err() != nil {
+					return
+				}
 				for _, event := range run.Events {
 					if int64(event.Seq) > after {
 						writeAgentSSE(c, "agent_event", int64(event.Seq), event)
 						after = int64(event.Seq)
 					}
 				}
+				options.SinceSeq, options.FromStart = int(after), true
+				if after < int64(run.EventCount) {
+					run, err = svc.CloudAgentRun(user.ID, c.Param("id"), options)
+					continue
+				}
+				// A cleanup or new revision can commit while the page is in flight.
+				newer, readErr := svc.CloudAgentRunIfChanged(user.ID, c.Param("id"), run.Revision, options)
+				if readErr != nil || newer != nil {
+					run, err = newer, readErr
+					continue
+				}
 				// Snapshots are state observations, not replayable Agent events; they
 				// intentionally have no SSE id and therefore never advance the cursor.
 				snapshot := *run
 				snapshot.Events = nil // Events were sent once above, never in every snapshot too.
+				terminal := run.Status == "completed" || run.Status == "failed" || run.Status == "cancelled" || run.Status == "rejected"
 				writeAgentSSE(c, "run_snapshot", 0, &snapshot)
-				revision, lastWrite = run.Revision, time.Now()
-				if !run.CleanupPending && (run.Status == "completed" || run.Status == "failed" || run.Status == "cancelled" || run.Status == "rejected") {
+				lastWrite = time.Now()
+				revision = run.Revision
+				if terminal && !run.CleanupPending {
 					return
 				}
-			} else if time.Since(lastWrite) >= 15*time.Second {
+			}
+			if time.Since(lastWrite) >= 15*time.Second {
 				_, _ = fmt.Fprint(c.Writer, ": heartbeat\n\n")
 				c.Writer.Flush()
 				lastWrite = time.Now()

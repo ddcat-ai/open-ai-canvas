@@ -127,7 +127,7 @@ describe("Agent SSE recovery", () => {
         globalThis.fetch = (async (url, init) => {
             const cursor = new URL(String(url)).searchParams.get("after")!;
             cursors.push(cursor);
-            expect((init?.headers as Record<string, string>)["Last-Event-ID"]).toBe(cursor);
+            expect((init?.headers as Record<string, string>)["Last-Event-ID"]).toBe(cursors.length === 1 ? undefined : cursor);
             if (cursors.length === 2) throw new TypeError("connection reset");
             return stream(cursors.length === 1 ? event(1) + snapshot("running") : event(1) + event(2) + snapshot("completed"));
         }) as typeof fetch;
@@ -135,6 +135,17 @@ describe("Agent SSE recovery", () => {
         expect(await result.done).toBeUndefined();
         expect(cursors).toEqual(["0", "1", "1"]);
         expect(result.events.filter((e) => e.seq > 0).map((e) => e.seq)).toEqual([1, 2]);
+    });
+
+    it("reconnects from zero after EOF on an empty live run", async () => {
+        const headers: Array<string | undefined> = [];
+        globalThis.fetch = (async (_url, init) => {
+            headers.push((init?.headers as Record<string, string>)["Last-Event-ID"]);
+            return stream(headers.length === 1 ? snapshot("running") : event(1) + snapshot("completed"));
+        }) as typeof fetch;
+        const result = observe();
+        expect(await result.done).toBeUndefined();
+        expect(headers).toEqual([undefined, "0"]);
     });
 
     it("waits for durable cleanup after a terminal status", async () => {

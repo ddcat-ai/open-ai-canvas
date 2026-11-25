@@ -106,6 +106,80 @@ func (s *Service) cloudAgentRunEventsForView(userID string, run *model.CloudAgen
 	return append(events, tail...)
 }
 
+// SSE opens on the normal tail window. Once subscribed, even a cursor of
+// zero means "send the next event". Only read through this execution revision.
+func (s *Service) cloudAgentReplayPage(run *model.CloudAgentExecution, state *cloudAgentRuntime, view CloudAgentRunViewOptions, stateErr error) ([]CloudAgentEvent, int, error) {
+	watermark := run.EventCount
+	after := view.SinceSeq
+	if run.CheckpointVersion < 2 {
+		// Before the journal, the checkpoint itself held the events. An older
+		// policy can fail runtime validation while its retained suffix is intact.
+		events := state.Events
+		if stateErr != nil {
+			var checkpoint struct {
+				Events []CloudAgentEvent `json:"events"`
+			}
+			if err := json.Unmarshal([]byte(run.StateJSON), &checkpoint); err != nil || len(checkpoint.Events) == 0 {
+				return nil, 0, NewAppError(409, "旧版 Agent 检查点受损，无法核实事件记录")
+			}
+			events = checkpoint.Events
+		}
+		if len(events) == 0 && watermark == 0 {
+			return events, 0, nil
+		}
+		if len(events) == 0 {
+			return nil, 0, fmt.Errorf("Agent 事件记录不完整")
+		}
+		base := events[0].Seq - 1
+		for i, event := range events {
+			if base < 0 || event.Seq != base+i+1 || event.RunID != run.ID || event.EventID == "" {
+				return nil, 0, fmt.Errorf("旧版 Agent 事件序号不连续")
+			}
+		}
+		end := events[len(events)-1].Seq
+		if end < watermark {
+			return nil, 0, fmt.Errorf("旧版 Agent 事件记录不完整")
+		}
+		if after == 0 && !view.FromStart && stateErr == nil {
+			after = max(base, end-cloudAgentRunEventPageLimit)
+		}
+		if after < base {
+			e := NewAppError(410, fmt.Sprintf("历史事件已截断，可从第 %d 条恢复", base+1))
+			e.Details = map[string]any{"earliestSeq": base + 1, "eventCount": end}
+			return nil, 0, e
+		}
+		start := min(after-base, len(events))
+		return events[start:min(start+cloudAgentRunEventDeltaLimit, len(events))], end, nil
+	}
+	if after == 0 && !view.FromStart && stateErr == nil {
+		return state.Events, watermark, nil
+	}
+	count := min(watermark-after, cloudAgentRunEventDeltaLimit)
+	if count <= 0 {
+		return nil, watermark, nil
+	}
+	// Compaction atomically moves all journal rows into the archive. The
+	// repository reads either location, including a move since the snapshot.
+	rows, err := s.repo.CloudAgentEventRecords(run.UserID, run.ID, after, count)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(rows) != count {
+		return nil, 0, fmt.Errorf("Agent 事件页未完整读取")
+	}
+	events := make([]CloudAgentEvent, len(rows))
+	for i, row := range rows {
+		event := &events[i]
+		if err := json.Unmarshal([]byte(row.EventJSON), event); err != nil {
+			return nil, 0, err
+		}
+		if row.Sequence != after+i+1 || event.Seq != row.Sequence || event.RunID != run.ID || event.EventID != fmt.Sprintf("%s:%d", run.ID, row.Sequence) {
+			return nil, 0, fmt.Errorf("Agent 事件身份或序号不连续")
+		}
+	}
+	return events, watermark, nil
+}
+
 // cloudAgentEventFromRecord 把事件行解析成对外契约结构。
 func cloudAgentEventFromRecord(row model.CloudAgentEventRecord) CloudAgentEvent {
 	var event CloudAgentEvent
