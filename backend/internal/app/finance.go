@@ -82,6 +82,8 @@ type CreateRedeemBatchRequest struct {
 	AmountMicrocredits int64      `json:"amountMicrocredits"`
 	Count              int        `json:"count"`
 	Note               string     `json:"note"`
+	OnePerUser         bool       `json:"onePerUser"`
+	AllowedCapability  string     `json:"allowedCapability"`
 	ExpiresAt          *time.Time `json:"expiresAt"`
 }
 
@@ -176,6 +178,9 @@ func (s *Service) RedeemCredits(user *model.User, code string, redeemedIP string
 	if errors.Is(err, repository.ErrRedeemCodeInvalid) {
 		return nil, BadAuthRequest("兑换码无效或已使用")
 	}
+	if errors.Is(err, repository.ErrRedeemBatchAlreadyRedeemed) {
+		return nil, BadAuthRequest("该批次兑换码每个账号限兑换一次，你已兑换过")
+	}
 	return account, err
 }
 
@@ -192,7 +197,11 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	if req.ExpiresAt != nil && !req.ExpiresAt.After(time.Now()) {
 		return nil, BadAuthRequest("兑换码过期时间必须晚于当前时间")
 	}
-	batch := model.RedeemBatch{ID: newID(), AmountMicrocredits: req.AmountMicrocredits, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
+	allowedCapability, capErr := normalizeRedeemAllowedCapability(req.AllowedCapability)
+	if capErr != nil {
+		return nil, capErr
+	}
+	batch := model.RedeemBatch{ID: newID(), AmountMicrocredits: req.AmountMicrocredits, Count: req.Count, Note: truncateRunes(strings.TrimSpace(req.Note), 500), OnePerUser: req.OnePerUser, AllowedCapability: allowedCapability, CreatedBy: actor.ID, ExpiresAt: req.ExpiresAt}
 	codes := make([]string, 0, req.Count)
 	items := make([]model.RedeemCode, 0, req.Count)
 	for range req.Count {
@@ -220,10 +229,23 @@ func (s *Service) AdminCreateRedeemBatch(actor *model.User, req CreateRedeemBatc
 	if err := s.repo.CreateRedeemBatch(&batch, items); err != nil {
 		return nil, err
 	}
-	if err := s.appendAdminAudit(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "amountMicrocredits": batch.AmountMicrocredits}); err != nil {
+	if err := s.appendAdminAudit(actor, "redeem_batch.create", "redeem_batch", batch.ID, "创建兑换码批次", map[string]any{"count": batch.Count, "amountMicrocredits": batch.AmountMicrocredits, "onePerUser": batch.OnePerUser, "allowedCapability": batch.AllowedCapability}); err != nil {
 		return nil, err
 	}
 	return &CreateRedeemBatchResult{Batch: batch, Codes: codes}, nil
+}
+
+func normalizeRedeemAllowedCapability(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "all":
+		return model.RedeemCapabilityAll, nil
+	case model.RedeemCapabilityImage:
+		return model.RedeemCapabilityImage, nil
+	case model.RedeemCapabilityVideo:
+		return model.RedeemCapabilityVideo, nil
+	default:
+		return "", BadAuthRequest("兑换码限制能力仅支持无限制、图片或视频")
+	}
 }
 
 func (s *Service) AdminRedeemCodePage(actor *model.User, batchID string, status string, page int, limit int) (*AdminRedeemCodePage, error) {
@@ -658,6 +680,10 @@ func (s *Service) ReserveProxyBillingWithBody(userID string, channelID string, m
 		return nil, err
 	}
 	if err := s.repo.ReserveBillingOrder(order); err != nil {
+		var poolErr *repository.InsufficientPoolCreditsError
+		if errors.As(err, &poolErr) {
+			return nil, BadAuthRequest(poolErr.Error())
+		}
 		if errors.Is(err, repository.ErrInsufficientCredits) {
 			return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 		}

@@ -15,14 +15,21 @@ export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () =>
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const referralAvailable = useUserStore((state) => state.referralAvailable);
-    const { availableMicrocredits, refreshing, refresh } = useWalletBalance(user?.id, creditsEnabled);
+    const { availableMicrocredits, account, refreshing, refresh } = useWalletBalance(user?.id, creditsEnabled);
     const { handleLogout, loggingOut } = useWorkspaceLogout();
     const { t } = useTranslation();
     if (!user) return null;
     const name = user.displayName || user.username;
     const accountLabel = user.email || `@${user.username}`;
-    const balance = availableMicrocredits === null ? null : (availableMicrocredits / 1_000_000).toLocaleString(currentLocale(), { maximumFractionDigits: 2 });
+    const formatCompact = (value: number) => (value / 1_000_000).toLocaleString(currentLocale(), { maximumFractionDigits: 2 });
+    const balance = availableMicrocredits === null ? null : formatCompact(availableMicrocredits);
     const loadingBalance = balance === null && refreshing;
+    const poolParts: string[] = [];
+    if (account && ((account.imageAvailableMicrocredits || 0) > 0 || (account.videoAvailableMicrocredits || 0) > 0)) {
+        poolParts.push(`通用 ${formatCompact(account.availableMicrocredits)}`);
+        if ((account.imageAvailableMicrocredits || 0) > 0) poolParts.push(`图片 ${formatCompact(account.imageAvailableMicrocredits || 0)}`);
+        if ((account.videoAvailableMicrocredits || 0) > 0) poolParts.push(`视频 ${formatCompact(account.videoAvailableMicrocredits || 0)}`);
+    }
 
     return (
         <section className="workspace-account-card" aria-label={t("shell.account.region")}>
@@ -49,7 +56,7 @@ export function WorkspaceAccountCard({ onWallet, onNavigate }: { onWallet: () =>
                         </span>
                         <span className="workspace-account-card-copy">
                             <strong className="workspace-account-card-balance">{balance ?? "—"}</strong>
-                            <span className="workspace-account-card-meta">{balance === null ? t("shell.account.refreshBalance") : t("shell.account.topup")}</span>
+                            <span className="workspace-account-card-meta">{balance === null ? t("shell.account.refreshBalance") : poolParts.length ? poolParts.join(" · ") : t("shell.account.topup")}</span>
                         </span>
                         {balance === null ? <RefreshCw aria-hidden className={refreshing ? "motion-safe:animate-spin" : undefined} /> : <ChevronRight aria-hidden />}
                     </button>

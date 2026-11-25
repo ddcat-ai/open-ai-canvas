@@ -329,31 +329,9 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 				reserved = order.AmountMicrocredits
 			}
 			delta := replacement.AmountMicrocredits - reserved
-			accountUpdates := map[string]any{"version": gorm.Expr("version + 1"), "updated_at": now}
-			accountQuery := billingAccountQuery(tx, order)
-			if delta > 0 {
-				accountQuery = accountQuery.Where("available_microcredits >= ?", delta)
-				accountUpdates["available_microcredits"] = gorm.Expr("available_microcredits - ?", delta)
-				accountUpdates["reserved_microcredits"] = gorm.Expr("reserved_microcredits + ?", delta)
-			} else if delta < 0 {
-				release := -delta
-				accountQuery = accountQuery.Where("reserved_microcredits >= ?", release)
-				accountUpdates["available_microcredits"] = gorm.Expr("available_microcredits + ?", release)
-				accountUpdates["reserved_microcredits"] = gorm.Expr("reserved_microcredits - ?", release)
-			}
 			if delta != 0 {
-				accountUpdated := accountQuery.Updates(accountUpdates)
-				if accountUpdated.Error != nil {
-					return accountUpdated.Error
-				}
-				if accountUpdated.RowsAffected != 1 {
-					if delta > 0 {
-						return ErrInsufficientCredits
-					}
-					return errors.New("reserved credit balance is inconsistent")
-				}
-				var account model.CreditAccount
-				if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
+				account, resDelta, newRes, err := adjustOrderReservation(tx, order, reserved, replacement.AmountMicrocredits)
+				if err != nil {
 					return err
 				}
 				entryType := model.CreditLedgerReserve
@@ -363,13 +341,15 @@ func (r *Repository) SwitchTaskLogicalRoute(taskID string, expectedRouteID strin
 				if err := tx.Create(&model.CreditLedgerEntry{
 					ID: newRepositoryID(), UserID: order.UserID, Type: entryType,
 					AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID,
-					AvailableDeltaMicrocredits: -delta, ReservedDeltaMicrocredits: delta,
+					AvailableDeltaMicrocredits: -resDelta.General, ReservedDeltaMicrocredits: resDelta.General,
 					AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
 					BillingOrderID: order.ID, Model: order.Model, ChannelID: channelID, Scene: order.Scene,
 					Note: "备用供应线路价格调整",
 				}).Error; err != nil {
 					return err
 				}
+				updates["image_reserved_microcredits"] = newRes.Image
+				updates["video_reserved_microcredits"] = newRes.Video
 			}
 			updates["billing_mode"] = replacement.BillingMode
 			imagePricing, err := json.Marshal(replacement.ImagePricing)

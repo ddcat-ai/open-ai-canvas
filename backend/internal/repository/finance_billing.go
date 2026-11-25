@@ -42,21 +42,8 @@ func reserveBillingOrder(tx *gorm.DB, order *model.BillingOrder) error {
 			return err
 		}
 	}
-	updated := billingAccountQuery(tx, *order).
-		Where("available_microcredits >= ? AND reserved_microcredits <= ?", order.AmountMicrocredits, int64(1<<63-1)-order.AmountMicrocredits).
-		Updates(map[string]any{
-			"available_microcredits": gorm.Expr("available_microcredits - ?", order.AmountMicrocredits),
-			"reserved_microcredits":  gorm.Expr("reserved_microcredits + ?", order.AmountMicrocredits),
-			"version":                gorm.Expr("version + 1"),
-			"updated_at":             time.Now(),
-		})
-	if updated.Error != nil {
-		return updated.Error
-	}
-	if updated.RowsAffected != 1 {
-		return ErrInsufficientCredits
-	}
-	if err := billingAccountQuery(tx, *order).First(&account).Error; err != nil {
+	updatedAccount, alloc, err := reserveAccountForOrder(tx, order)
+	if err != nil {
 		return err
 	}
 	if err := tx.Create(order).Error; err != nil {
@@ -67,10 +54,10 @@ func reserveBillingOrder(tx *gorm.DB, order *model.BillingOrder) error {
 		UserID:    order.UserID,
 		AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID,
 		Type:                       model.CreditLedgerReserve,
-		AvailableDeltaMicrocredits: -order.AmountMicrocredits,
-		ReservedDeltaMicrocredits:  order.AmountMicrocredits,
-		AvailableAfterMicrocredits: account.AvailableMicrocredits,
-		ReservedAfterMicrocredits:  account.ReservedMicrocredits,
+		AvailableDeltaMicrocredits: -alloc.General,
+		ReservedDeltaMicrocredits:  alloc.General,
+		AvailableAfterMicrocredits: updatedAccount.AvailableMicrocredits,
+		ReservedAfterMicrocredits:  updatedAccount.ReservedMicrocredits,
 		BillingOrderID:             order.ID,
 		Model:                      order.Model,
 		ChannelID:                  order.ChannelID,
@@ -441,28 +428,17 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			observedActual = actual
 			observedUncappedActual = uncappedActual
 			observedActualAvailable = true
-			refund := max(reserved-actual, int64(0))
-			supplement := max(actual-reserved, int64(0))
-			updated := billingAccountQuery(tx, order).
-				Where("reserved_microcredits >= ?", reserved).
-				Updates(map[string]any{
-					"available_microcredits": gorm.Expr("available_microcredits + ?", refund-supplement),
-					"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", reserved),
-					"version":                gorm.Expr("version + 1"), "updated_at": time.Now(),
-				})
-			if updated.Error != nil {
-				return updated.Error
-			}
-			if updated.RowsAffected != 1 {
-				return errors.New("reserved credit balance is inconsistent")
-			}
-			var account model.CreditAccount
-			if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
+			settlement, err := settleOrderPools(tx, order, reserved, actual, true, "reserved credit balance is inconsistent", "reserved credit balance is inconsistent")
+			if err != nil {
 				return err
 			}
+			account := settlement.Account
+			refund := settlement.TotalRefund
+			supplement := settlement.TotalSupplemnt
 			now := time.Now()
 			updates := map[string]any{"status": model.BillingStatusSettled, "settled_at": &now, "updated_at": now,
 				"actual_amount_microcredits": actual, "uncapped_amount_microcredits": uncappedActual, "refunded_amount_microcredits": refund,
+				"image_actual_microcredits": settlement.Actual.Image, "video_actual_microcredits": settlement.Actual.Video,
 				"input_tokens": usage.InputTokens, "output_tokens": usage.OutputTokens, "cached_tokens": usage.CachedTokens, "cache_write_tokens": usage.CacheWriteTokens,
 				"usage_available": usageSource == billingUsageSourceProvider, "usage_source": usageSource, "token_price_rule": priceRule}
 			if providerRequestID != "" {
@@ -488,14 +464,14 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 				consumeNote = strings.TrimSpace("按提交时的视频 Token 公式快照结算；" + consumeNote)
 			}
 			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID, Type: model.CreditLedgerConsume,
-				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -supplement, ReservedDeltaMicrocredits: -reserved,
+				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -settlement.Supplement.General, ReservedDeltaMicrocredits: -settlement.OrderReserved.General,
 				AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
 				BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: joinLedgerNotes(consumeNote, referenceVideoLedgerNote(order))}).Error; err != nil {
 				return err
 			}
 			if refund > 0 {
 				if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID, Type: model.CreditLedgerRefund,
-					AmountMicrocredits: refund, AvailableDeltaMicrocredits: refund,
+					AmountMicrocredits: refund, AvailableDeltaMicrocredits: settlement.Refund.General,
 					AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
 					BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "Token 预授权差额退回"}).Error; err != nil {
 					return err
@@ -537,35 +513,22 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			if reserved <= 0 {
 				reserved = order.AmountMicrocredits
 			}
-			refund = max(reserved-actual, int64(0))
-			supplement = max(actual-reserved, int64(0))
-			updated := billingAccountQuery(tx, order).
-				Where("reserved_microcredits >= ? AND available_microcredits >= ?", reserved, supplement).
-				Updates(map[string]any{
-					"available_microcredits": gorm.Expr("available_microcredits + ?", refund-supplement),
-					"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", reserved),
-					"version":                gorm.Expr("version + 1"),
-					"updated_at":             time.Now(),
-				})
-			if updated.Error != nil {
-				return updated.Error
-			}
-			if updated.RowsAffected != 1 {
-				if order.Capability == "audio" {
+			settlement, err := settleOrderPools(tx, order, reserved, actual, false, "reserved credit balance is inconsistent", "预留积分不足以完成"+mediaLabel+"实际结算")
+			if err != nil {
+				if order.Capability == "audio" && (errors.Is(err, errPoolSupplementInsufficient) || errors.Is(err, errPoolReservedInconsistent)) {
 					return ErrInsufficientCredits
 				}
-				return errors.New("预留积分不足以完成" + mediaLabel + "实际结算")
-			}
-			var account model.CreditAccount
-			if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
 				return err
 			}
+			account := settlement.Account
+			refund = settlement.TotalRefund
+			supplement = settlement.TotalSupplemnt
 			now := time.Now()
 			costQuantity := order.CostQuantity
 			if order.CostBillingMode == "per_second" {
 				costQuantity = quantity
 			}
-			orderUpdates := map[string]any{"status": model.BillingStatusSettled, "quantity": quantity, "actual_amount_microcredits": actual, "uncapped_amount_microcredits": actual, "refunded_amount_microcredits": refund, "cost_quantity": costQuantity, "settled_at": &now, "updated_at": now}
+			orderUpdates := map[string]any{"status": model.BillingStatusSettled, "quantity": quantity, "actual_amount_microcredits": actual, "uncapped_amount_microcredits": actual, "refunded_amount_microcredits": refund, "image_actual_microcredits": settlement.Actual.Image, "video_actual_microcredits": settlement.Actual.Video, "cost_quantity": costQuantity, "settled_at": &now, "updated_at": now}
 			if providerRequestID != "" {
 				orderUpdates["provider_request_id"] = providerRequestID
 			}
@@ -578,14 +541,14 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			}
 			note = joinLedgerNotes(note, referenceVideoLedgerNote(order))
 			if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID, Type: model.CreditLedgerConsume,
-				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -supplement, ReservedDeltaMicrocredits: -reserved,
+				AmountMicrocredits: -actual, AvailableDeltaMicrocredits: -settlement.Supplement.General, ReservedDeltaMicrocredits: -settlement.OrderReserved.General,
 				AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
 				BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: note}).Error; err != nil {
 				return err
 			}
 			if refund > 0 {
 				if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID, Type: model.CreditLedgerRefund,
-					AmountMicrocredits: refund, AvailableDeltaMicrocredits: refund,
+					AmountMicrocredits: refund, AvailableDeltaMicrocredits: settlement.Refund.General,
 					AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits,
 					BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: mediaLabel + "实际时长短于预授权，差额退回"}).Error; err != nil {
 					return err
@@ -593,25 +556,13 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			}
 			return nil
 		}
-		updated := billingAccountQuery(tx, order).
-			Where("reserved_microcredits >= ?", order.AmountMicrocredits).
-			Updates(map[string]any{
-				"reserved_microcredits": gorm.Expr("reserved_microcredits - ?", order.AmountMicrocredits),
-				"version":               gorm.Expr("version + 1"),
-				"updated_at":            time.Now(),
-			})
-		if updated.Error != nil {
-			return updated.Error
-		}
-		if updated.RowsAffected != 1 {
-			return errors.New("reserved credit balance is inconsistent")
-		}
-		var account model.CreditAccount
-		if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
+		settlement, err := settleOrderPools(tx, order, order.AmountMicrocredits, order.AmountMicrocredits, false, "reserved credit balance is inconsistent", "reserved credit balance is inconsistent")
+		if err != nil {
 			return err
 		}
+		account := settlement.Account
 		now := time.Now()
-		orderUpdates := map[string]any{"status": model.BillingStatusSettled, "actual_amount_microcredits": order.AmountMicrocredits, "uncapped_amount_microcredits": order.AmountMicrocredits, "settled_at": &now, "updated_at": now}
+		orderUpdates := map[string]any{"status": model.BillingStatusSettled, "actual_amount_microcredits": order.AmountMicrocredits, "uncapped_amount_microcredits": order.AmountMicrocredits, "image_actual_microcredits": settlement.Actual.Image, "video_actual_microcredits": settlement.Actual.Video, "settled_at": &now, "updated_at": now}
 		if providerRequestID != "" {
 			orderUpdates["provider_request_id"] = providerRequestID
 		}
@@ -624,7 +575,7 @@ func (r *Repository) settleBillingOrder(id string, providerRequestID string, aud
 			AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID,
 			Type:                       model.CreditLedgerConsume,
 			AmountMicrocredits:         -order.AmountMicrocredits,
-			ReservedDeltaMicrocredits:  -order.AmountMicrocredits,
+			ReservedDeltaMicrocredits:  -settlement.OrderReserved.General,
 			AvailableAfterMicrocredits: account.AvailableMicrocredits,
 			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 			BillingOrderID:             order.ID,
@@ -739,22 +690,8 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			return errors.New("invalid restored billing amount")
 		}
 
-		updated := tx.Model(&model.CreditAccount{}).
-			Where("user_id = ?", order.UserID).
-			Updates(map[string]any{
-				"available_microcredits": gorm.Expr("available_microcredits - ?", actual),
-				"version":                gorm.Expr("version + 1"),
-				"updated_at":             time.Now(),
-			})
-		if updated.Error != nil {
-			return updated.Error
-		}
-		if updated.RowsAffected != 1 {
-			return errors.New("credit account does not exist")
-		}
-
-		var account model.CreditAccount
-		if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+		account, taken, err := chargeRestoredOrderPools(tx, order, actual)
+		if err != nil {
 			return err
 		}
 		now := time.Now()
@@ -763,6 +700,8 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			"actual_amount_microcredits":   actual,
 			"uncapped_amount_microcredits": uncappedActual,
 			"refunded_amount_microcredits": max(order.AmountMicrocredits-actual, int64(0)),
+			"image_actual_microcredits":    taken.Image,
+			"video_actual_microcredits":    taken.Video,
 			"refunded_at":                  nil,
 			"settled_at":                   &now,
 			"error":                        "",
@@ -802,7 +741,7 @@ func (r *Repository) RestoreRefundedBillingOrder(id string, providerRequestID st
 			UserID:                     order.UserID,
 			Type:                       model.CreditLedgerConsume,
 			AmountMicrocredits:         -actual,
-			AvailableDeltaMicrocredits: -actual,
+			AvailableDeltaMicrocredits: -taken.General,
 			AvailableAfterMicrocredits: account.AvailableMicrocredits,
 			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 			BillingOrderID:             order.ID,
@@ -906,26 +845,13 @@ func refundBillingOrder(tx *gorm.DB, order model.BillingOrder, errorText string)
 	if order.Status == model.BillingStatusSettled {
 		return errors.New("settled billing order requires a manual refund")
 	}
-	updated := billingAccountQuery(tx, order).
-		Where("reserved_microcredits >= ?", order.AmountMicrocredits).
-		Updates(map[string]any{
-			"available_microcredits": gorm.Expr("available_microcredits + ?", order.AmountMicrocredits),
-			"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", order.AmountMicrocredits),
-			"version":                gorm.Expr("version + 1"),
-			"updated_at":             time.Now(),
-		})
-	if updated.Error != nil {
-		return updated.Error
-	}
-	if updated.RowsAffected != 1 {
-		return errors.New("reserved credit balance is inconsistent")
-	}
-	var account model.CreditAccount
-	if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
+	account, released, err := refundReservedOrderPools(tx, order)
+	if err != nil {
 		return err
 	}
 	now := time.Now()
-	updates := map[string]any{"status": model.BillingStatusRefunded, "error": errorText, "refunded_amount_microcredits": order.AmountMicrocredits, "refunded_at": &now, "updated_at": now}
+	refundTotal := released.total()
+	updates := map[string]any{"status": model.BillingStatusRefunded, "error": errorText, "refunded_amount_microcredits": refundTotal, "refunded_at": &now, "updated_at": now}
 	if err := updateBillingOrderState(tx, order, updates); err != nil {
 		return err
 	}
@@ -934,9 +860,9 @@ func refundBillingOrder(tx *gorm.DB, order model.BillingOrder, errorText string)
 		UserID:    order.UserID,
 		AccountID: order.BillingAccountID, TeamID: order.TeamID, MembershipID: order.MembershipID,
 		Type:                       model.CreditLedgerRefund,
-		AmountMicrocredits:         order.AmountMicrocredits,
-		AvailableDeltaMicrocredits: order.AmountMicrocredits,
-		ReservedDeltaMicrocredits:  -order.AmountMicrocredits,
+		AmountMicrocredits:         refundTotal,
+		AvailableDeltaMicrocredits: released.General,
+		ReservedDeltaMicrocredits:  -released.General,
 		AvailableAfterMicrocredits: account.AvailableMicrocredits,
 		ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 		BillingOrderID:             order.ID,

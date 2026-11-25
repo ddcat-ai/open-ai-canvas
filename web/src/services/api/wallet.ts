@@ -2,14 +2,30 @@ import { http } from "@/services/api/request";
 import type { ModelTag } from "@/lib/model-tags";
 import type { AuthLoginMode } from "@/services/api/auth";
 
+export type RedeemAllowedCapability = "" | "image" | "video";
+
 export type CreditAccount = {
     userId: string;
     availableMicrocredits: number;
     reservedMicrocredits: number;
+    imageAvailableMicrocredits?: number;
+    imageReservedMicrocredits?: number;
+    videoAvailableMicrocredits?: number;
+    videoReservedMicrocredits?: number;
     version: number;
     createdAt: string;
     updatedAt: string;
 };
+
+export function totalAvailableMicrocredits(account?: Pick<CreditAccount, "availableMicrocredits" | "imageAvailableMicrocredits" | "videoAvailableMicrocredits"> | null): number {
+    if (!account) return 0;
+    return (account.availableMicrocredits || 0) + (account.imageAvailableMicrocredits || 0) + (account.videoAvailableMicrocredits || 0);
+}
+
+export function totalReservedMicrocredits(account?: Pick<CreditAccount, "reservedMicrocredits" | "imageReservedMicrocredits" | "videoReservedMicrocredits"> | null): number {
+    if (!account) return 0;
+    return (account.reservedMicrocredits || 0) + (account.imageReservedMicrocredits || 0) + (account.videoReservedMicrocredits || 0);
+}
 
 export type CreditLedgerEntry = {
     id: string;
@@ -254,11 +270,24 @@ export type EmailSetting = {
     updatedAt?: string;
 };
 
+export function redeemCapabilityLabel(capability?: RedeemAllowedCapability | string): string {
+    switch (capability) {
+        case "image":
+            return "仅限图片";
+        case "video":
+            return "仅限视频";
+        default:
+            return "无限制";
+    }
+}
+
 export type RedeemBatch = {
     id: string;
     amountMicrocredits: number;
     count: number;
     note?: string;
+    onePerUser?: boolean;
+    allowedCapability?: RedeemAllowedCapability;
     createdBy: string;
     expiresAt?: string;
     createdAt: string;
@@ -582,7 +611,7 @@ export function listAdminRedeemBatches(params: AdminFinanceListParams = {}) {
     return http.get<{ batches: RedeemBatch[]; total: number; page: number; pageSize: number }>("/admin/redeem-batches", { params });
 }
 
-export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; expiresAt?: string }) {
+export function createAdminRedeemBatch(input: { amountMicrocredits: number; count: number; note?: string; onePerUser?: boolean; allowedCapability?: RedeemAllowedCapability; expiresAt?: string }) {
     return http.post<{ batch: RedeemBatch; codes: string[] }>("/admin/redeem-batches", input, { timeout: 30_000 });
 }
 
