@@ -431,8 +431,8 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 	if storage.TransferTimeoutSeconds < 10 || storage.TransferTimeoutSeconds > 3_600 {
 		return kernel.BadAuthRequest("对象存储传输超时必须是 10-3600 秒的整数")
 	}
-	if storage.AccessURLTTLSeconds < 60 || storage.AccessURLTTLSeconds > 86_400 {
-		return kernel.BadAuthRequest("对象存储访问地址有效期必须是 60-86400 秒的整数")
+	if storage.AccessURLTTLSeconds < 60 || storage.AccessURLTTLSeconds > 2_592_000 {
+		return kernel.BadAuthRequest("对象存储访问地址有效期必须是 60-2592000 秒的整数")
 	}
 	if storage.ProviderAccessURLTTLSeconds < 300 || storage.ProviderAccessURLTTLSeconds > 86_400 {
 		return kernel.BadAuthRequest("模型输入资源地址有效期必须是 300-86400 秒的整数")
