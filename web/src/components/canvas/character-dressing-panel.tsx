@@ -1,4 +1,4 @@
-import { App, Button, Input } from "antd";
+import { App, Button, Dropdown, Input } from "antd";
 import { useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { CachedResourceImage } from "@/components/cached-resource-image";
@@ -142,6 +142,26 @@ export function CharacterDressingPanel({
             <div className="grid grid-cols-2 gap-2">
                 {DRESSING_CATEGORIES.map((category) => {
                     const reference = references[category];
+                    const referencePicker = (
+                        <button
+                            type="button"
+                            className="flex min-h-16 w-full items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)]"
+                            onClick={category === "pose" ? undefined : () => setPickerCategory(category)}
+                            aria-label={`选择${ASSET_CATEGORY_LABELS[category]}`}
+                        >
+                            {reference ? (
+                                <>
+                                    <CachedResourceImage storageKey={resourceStorageKey(reference.resourceId)} alt={reference.title} className="size-14 rounded object-contain" />
+                                    <span className="min-w-0 truncate text-xs">
+                                        {reference.title}
+                                        <span className="block text-foreground/50">{reference.poseItemId ? "姿势库" : reference.officialAssetId ? "官方素材" : "我的素材"}</span>
+                                    </span>
+                                </>
+                            ) : (
+                                <span className="text-xs text-foreground/50">{category === "pose" ? "选择姿势来源（选填）" : "选择参考图片（选填）"}</span>
+                            )}
+                        </button>
+                    );
                     return (
                         <div key={category} className="space-y-2 rounded-lg border border-border p-3">
                             <div className="flex items-center justify-between gap-2">
@@ -168,30 +188,28 @@ export function CharacterDressingPanel({
                                     </span>
                                 ) : null}
                             </div>
-                            <button
-                                type="button"
-                                className="flex min-h-16 w-full items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)]"
-                                onClick={() => setPickerCategory(category)}
-                                aria-label={`选择${ASSET_CATEGORY_LABELS[category]}`}
-                            >
-                                {reference ? (
-                                    <>
-                                        <CachedResourceImage storageKey={resourceStorageKey(reference.resourceId)} alt={reference.title} className="size-14 rounded object-contain" />
-                                        <span className="min-w-0 truncate text-xs">
-                                            {reference.title}
-                                            <span className="block text-foreground/50">{reference.poseItemId ? "姿势库" : reference.officialAssetId ? "官方素材" : "我的素材"}</span>
-                                        </span>
-                                    </>
-                                ) : (
-                                    <span className="text-xs text-foreground/50">选择参考图片（选填）</span>
-                                )}
-                            </button>
+                            {category === "pose" ? (
+                                <Dropdown
+                                    trigger={["click"]}
+                                    menu={{
+                                        "aria-label": "选择姿势来源",
+                                        items: [
+                                            { key: "assets", label: "从素材库选择" },
+                                            { key: "poses", label: "从姿势库选择动作与视角" },
+                                        ],
+                                        onClick: ({ key }) => (key === "poses" ? setPoseOpen(true) : setPickerCategory("pose")),
+                                    }}
+                                >
+                                    {referencePicker}
+                                </Dropdown>
+                            ) : (
+                                referencePicker
+                            )}
                         </div>
                     );
                 })}
             </div>
             <div className="flex flex-wrap gap-2">
-                <Button onClick={() => setPoseOpen(true)}>从姿势库选择动作与视角</Button>
                 <Button href={workspacePath("/assets")} target="_blank" rel="noopener noreferrer">
                     前往素材库整理分类
                 </Button>
