@@ -1,6 +1,6 @@
 import { Modal } from "antd";
 import { Switch } from "@/components/ui/base/switch";
-import { GripVertical, RotateCcw, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, RotateCcw, X } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
@@ -65,12 +65,14 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
             if (ai !== bi) return ai - bi;
             return a.defaultOrder - b.defaultOrder;
         });
-        setItems(sorted.map((tool) => ({
-            id: tool.id,
-            label: resolveLabel(tool, settingsMockContext),
-            icon: resolveIcon(tool, settingsMockContext),
-            visible: !hiddenSet.has(tool.id),
-        })));
+        setItems(
+            sorted.map((tool) => ({
+                id: tool.id,
+                label: resolveLabel(tool, settingsMockContext),
+                icon: resolveIcon(tool, settingsMockContext),
+                visible: !hiddenSet.has(tool.id),
+            })),
+        );
     }, [open, toolbar]);
 
     const handleDragStart = (id: string) => {
@@ -105,7 +107,7 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
 
     const handleToggleVisible = (id: string, visible: boolean) => {
         setItems((prev) => {
-            const next = prev.map((item) => item.id === id ? { ...item, visible } : item);
+            const next = prev.map((item) => (item.id === id ? { ...item, visible } : item));
             persistCurrent(next);
             return next;
         });
@@ -115,12 +117,14 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
         const defaults = defaultToolbarPrefs(toolbarId);
         const tools = getToolbarTools(toolbarId);
         const hiddenSet = new Set(defaults.hidden);
-        setItems(tools.map((tool) => ({
-            id: tool.id,
-            label: resolveLabel(tool, settingsMockContext),
-            icon: resolveIcon(tool, settingsMockContext),
-            visible: !hiddenSet.has(tool.id),
-        })));
+        setItems(
+            tools.map((tool) => ({
+                id: tool.id,
+                label: resolveLabel(tool, settingsMockContext),
+                icon: resolveIcon(tool, settingsMockContext),
+                visible: !hiddenSet.has(tool.id),
+            })),
+        );
         persistToolbarPrefs(toolbarId, defaults);
     };
 
@@ -150,7 +154,9 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
             <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5">
                 <div className="min-w-0">
                     <h2 className="text-[var(--fs-heading)] font-semibold leading-none">工具栏设置</h2>
-                    <p className="mt-2 text-[var(--fs-caption)] leading-none" style={{ color: theme.node.muted }}>拖动调整顺序，关闭不常用入口</p>
+                    <p className="mt-2 text-[var(--fs-caption)] leading-none" style={{ color: theme.node.muted }}>
+                        拖动调整顺序，关闭不常用入口
+                    </p>
                 </div>
                 <button
                     type="button"
@@ -163,7 +169,9 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
                 </button>
             </div>
             <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-1">
-                <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>已显示 {visibleCount}/{items.length}</span>
+                <span className="text-[var(--fs-tiny)] font-medium" style={{ color: theme.node.muted }}>
+                    已显示 {visibleCount}/{items.length}
+                </span>
                 <button
                     type="button"
                     onClick={handleReset}
@@ -194,7 +202,35 @@ export function ToolbarSettingsModal({ open, onClose, toolbar }: ToolbarSettings
     );
 }
 
-function ToolbarSettingsItem({ item, reducedMotion, theme, dragging, onToggleVisible, onDragStart, onDragEnter, onDragEnd }: { item: SettingsItem; reducedMotion: boolean; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; dragging: boolean; onToggleVisible: (id: string, visible: boolean) => void; onDragStart: (id: string) => void; onDragEnter: (id: string) => void; onDragEnd: () => void }) {
+export function ToolbarSettingsItem({
+    item,
+    reducedMotion,
+    theme,
+    dragging,
+    onToggleVisible,
+    onDragStart,
+    onDragEnter,
+    onDragEnd,
+    onMove,
+    toggleLabel,
+    reorderable = true,
+    canMoveBackward = true,
+    canMoveForward = true,
+}: {
+    item: SettingsItem;
+    reducedMotion: boolean;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    dragging: boolean;
+    onToggleVisible: (id: string, visible: boolean) => void;
+    onDragStart: (id: string) => void;
+    onDragEnter: (id: string) => void;
+    onDragEnd: () => void;
+    onMove?: (direction: -1 | 1) => void;
+    toggleLabel?: string;
+    reorderable?: boolean;
+    canMoveBackward?: boolean;
+    canMoveForward?: boolean;
+}) {
     return (
         <motion.div
             layout={!reducedMotion}
@@ -207,25 +243,64 @@ function ToolbarSettingsItem({ item, reducedMotion, theme, dragging, onToggleVis
             <div className="flex items-center justify-between gap-2">
                 <button
                     type="button"
-                    draggable
-                    className="grid size-6 touch-none cursor-grab place-items-center rounded-[var(--r-sm)] outline-none opacity-35 transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 active:cursor-grabbing"
+                    draggable={reorderable}
+                    disabled={!reorderable}
+                    className="grid size-6 touch-none cursor-grab place-items-center rounded-[var(--r-sm)] outline-none opacity-35 transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 active:cursor-grabbing disabled:cursor-default disabled:opacity-15"
                     style={{ color: theme.node.muted, outlineColor: theme.accent.primary }}
                     onDragStart={(event) => {
                         event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", item.id);
                         onDragStart(item.id);
                     }}
                     onDragEnd={onDragEnd}
+                    onKeyDown={(event) => {
+                        if (onMove && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+                            event.preventDefault();
+                            const direction = event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
+                            if (direction === -1 ? canMoveBackward : canMoveForward) onMove(direction);
+                        }
+                    }}
                     aria-label={`拖动调整${item.label}顺序`}
                 >
                     <GripVertical className="size-4" />
                 </button>
-                <Switch size="sm" checked={item.visible} onChange={(checked) => onToggleVisible(item.id, checked)} aria-label={`${item.visible ? "隐藏" : "显示"}${item.label}`} />
+                <Switch size="sm" checked={item.visible} onChange={(checked) => onToggleVisible(item.id, checked)} aria-label={toggleLabel ?? `${item.visible ? "隐藏" : "显示"}${item.label}`} />
             </div>
             <div className="canvas-toolbar-settings-card-content mt-auto flex min-w-0 flex-col items-center gap-1">
-                <span className="grid size-8 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
-                    <span className="grid size-4 place-items-center [&_svg]:size-4">{item.icon}</span>
+                <div className="flex w-full items-center justify-center gap-1">
+                    {onMove ? (
+                        <button
+                            type="button"
+                            aria-label={`前移${item.label}`}
+                            title="前移"
+                            disabled={!canMoveBackward}
+                            onClick={() => onMove(-1)}
+                            className="grid size-6 shrink-0 place-items-center rounded-[var(--r-sm)] outline-none hover:bg-surface-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-default disabled:opacity-20"
+                            style={{ color: theme.node.muted, outlineColor: theme.accent.primary }}
+                        >
+                            <ChevronLeft className="size-3.5" />
+                        </button>
+                    ) : null}
+                    <span className="grid size-8 shrink-0 place-items-center rounded-[var(--r-md)]" style={{ background: theme.toolbar.itemHover, color: theme.node.muted }}>
+                        <span className="grid size-4 place-items-center [&_svg]:size-4">{item.icon}</span>
+                    </span>
+                    {onMove ? (
+                        <button
+                            type="button"
+                            aria-label={`后移${item.label}`}
+                            title="后移"
+                            disabled={!canMoveForward}
+                            onClick={() => onMove(1)}
+                            className="grid size-6 shrink-0 place-items-center rounded-[var(--r-sm)] outline-none hover:bg-surface-active focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 disabled:cursor-default disabled:opacity-20"
+                            style={{ color: theme.node.muted, outlineColor: theme.accent.primary }}
+                        >
+                            <ChevronRight className="size-3.5" />
+                        </button>
+                    ) : null}
+                </div>
+                <span className="max-w-full whitespace-nowrap text-[var(--fs-caption)] font-medium leading-5" title={item.label}>
+                    {item.label}
                 </span>
-                <span className="max-w-full whitespace-nowrap text-[var(--fs-caption)] font-medium leading-5" title={item.label}>{item.label}</span>
             </div>
         </motion.div>
     );

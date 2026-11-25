@@ -5,6 +5,18 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 节点工具栏个人配置（Schema 112）
+
+版本 112 `node_toolbar_preferences` 新增 `user_node_toolbar_preferences`，加入统一模型清单及跨数据库迁移范围。
+
+| 列 | 用途与边界 |
+| --- | --- |
+| `user_id`、`node_type` | 组合主键。用户由登录会话确定；节点类型仅支持 `image`、`video`、`audio`、`text`，各类型分别保存。 |
+| `pinned_entry_ids_json` | 固定入口标识的有序 JSON 数组，最多 256 项。具体工具沿用已有标识；分类菜单使用 `menu:adjust`、`menu:camera`、`menu:sheet`、`menu:process`。空数组表示全部取消固定，无记录表示沿用默认布局。 |
+| `created_at`、`updated_at` | 首次保存及最近保存时间。 |
+
+恢复默认删除当前用户、当前节点类型的记录。保存一个类型不会覆盖其他类型或其他用户的配置；入口配置不改变工具执行条件。
+
 ## 兑换码单账号限兑与能力池（Schema 111）
 
 版本 111 `redeem_batch_limits_and_capability_pools` 为 `redeem_batches` 增加非空布尔列 `one_per_user`（默认 `false`）和 `allowed_capability`（默认 `''` 无限制，可选 `'image'` / `'video'`），为 `redeem_codes` 增加复合索引 `idx_redeem_codes_batch_status_user`（`batch_id`、`status`、`redeemed_by`）。开启单账号限兑后同一用户在同一批次下仅能成功核销 1 个兑换码；历史批次默认保持不限次数。

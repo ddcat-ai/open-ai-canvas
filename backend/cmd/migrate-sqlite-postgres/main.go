@@ -392,6 +392,7 @@ func migrations() []tableMigration {
 		migrateTable[model.EmailVerificationCode]("email_verification_codes"),
 		migrateTable[model.EmailLog]("email_logs"),
 		migrateTable[model.UserNotificationSetting]("user_notification_settings"),
+		migrateTable[model.UserNodeToolbarPreference]("user_node_toolbar_preferences"),
 		migrateTable[model.AuthVerification]("auth_verifications"),
 		migrateTable[model.NotificationQuota]("notification_quota"),
 		migrateTable[model.SMSChannel]("sms_channels"),

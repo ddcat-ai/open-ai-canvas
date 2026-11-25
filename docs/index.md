@@ -16,6 +16,8 @@
 
 - [团队空间、积分划拨与素材共享](design/team-workspace-design.md)：自由画布、创作页和素材库在个人与团队之间复用，按空间隔离作品与费用。使用入口见[功能清单](content/docs/overview/features.mdx)。
 
+- [节点工具栏个人配置](content/docs/canvas/node-toolbar-preferences.mdx)：按用户、按节点类型配置具体工具和分类菜单的固定入口，跨画布和设备共用。
+
 - [资源访问与 OSS/CDN 分发架构重构](design/resource-delivery-architecture.md)：资源身份、场景授权与分发策略分离，统一访问合同、全入口迁移、旧实现退场及流量/安全验收门槛（核心代码已实施，待真实 OSS/CDN 链路验收）。
 
 - [短信渠道插件与登录注册策略](design/sms-channels-and-auth-policy.md)：阿里云/腾讯云官方 SDK 候选基线、多渠道与模板路由、发送记录、验证码安全、短信和邮箱登录注册组合及分阶段验收（核心代码已实施，待真实 OSS/CDN 链路验收）。
@@ -70,6 +72,7 @@ ADR-0001～0007 的站内手工剪辑方案已随产品减负退场，保留为�
 - [ADR-0007：AI 编辑交互](adr/0007-ai-editing-interaction.md)：对话式剪辑作为预设插件——AI 输出受约束命令 JSON（schema 校验 fail-closed），与手势命令同队列同撤销栈；≤3 条直接执行、批量改动 diff 预览待确认。
  - [ADR-0008：自研 UI 组件层与 AntD 替换](adr/0008-ui-component-layer-antd-replacement.md)：`components/ui` 重建为自研组件层（Celadon UI），吸收 dbx 契约形态（族目录+barrel）与 BoardUI 设计深度（语义状态矩阵/复合排版/RAC 原语/动效纪律/agentic 产品块），分阶段替换 AntD（依赖面 180 文件/41 导入）最终脱离；试点画布工具条/节点徽章，唯一实施计划见 [plans/ui-kit-rollout-plan.mdx](plans/ui-kit-rollout-plan.mdx)，活规范见 [plans/ui-design-system.mdx](plans/ui-design-system.mdx)。
 - [ADR-0009：媒体产出模型与选用模型分开记录](adr/0009-produced-model-separate-from-selection.md)：生成成功时冻结产出模型，选用模型继续随下拉变化；角标按当前目录解析展示名。
+- [ADR-0056：节点工具栏配置跟随账号保存](adr/0056-node-toolbar-preferences-account-storage.md)：四类节点按用户和节点类型保存固定入口及顺序，支持跨浏览器和设备沿用配置。
 
 ## 本地协作文档（不随仓库分发）
 
