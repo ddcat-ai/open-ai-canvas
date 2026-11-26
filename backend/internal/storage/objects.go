@@ -212,11 +212,15 @@ func SignedOriginObjectURL(setting Settings, objectKey string, expiresAt time.Ti
 // 不再每次都从对象存储重新下载。对象键带随机 ID、内容不可变，因此同时让对象存储按签名
 // 剩余有效期回写 Cache-Control，浏览器在有效期内连条件请求都不必发出。
 func SignedOriginObjectDisplayURL(setting Settings, objectKey string, signedAt time.Time, expiresAt time.Time) (string, error) {
+	return signedOriginObjectURL(setting, objectKey, displayObjectURLSigning(signedAt, expiresAt))
+}
+
+func displayObjectURLSigning(signedAt, expiresAt time.Time) objectURLSigning {
 	signing := objectURLSigning{SignedAt: signedAt, ExpiresAt: expiresAt}
 	if seconds := int64(expiresAt.Sub(signingTime(signedAt)) / time.Second); seconds > 0 {
 		signing.CacheControl = "private, max-age=" + strconv.FormatInt(seconds, 10) + ", immutable"
 	}
-	return signedOriginObjectURL(setting, objectKey, signing)
+	return signing
 }
 
 // objectURLSigning 描述一次预签名 GET 的可变部分。
@@ -226,6 +230,7 @@ type objectURLSigning struct {
 	ExpiresAt          time.Time
 	ContentDisposition string
 	CacheControl       string
+	ImageProcess       string
 }
 
 func signingTime(signedAt time.Time) time.Time {
@@ -325,8 +330,8 @@ func signedAliyunOSSObjectURL(setting Settings, objectKey string, signing object
 	expires := strconv.FormatInt(expiresAt.UTC().Unix(), 10)
 	canonicalResource := "/" + setting.Bucket + "/" + objectKey
 	query := baseURL.Query()
-	// V1 签名要求 response-* 覆盖参数按字典序写入 CanonicalizedResource，且值不做转义。
-	overrides := make([]string, 0, 2)
+	// V1 签名要求 response-* 与处理参数按字典序写入 CanonicalizedResource，且值不做转义。
+	overrides := make([]string, 0, 3)
 	if signing.CacheControl != "" {
 		query.Set("response-cache-control", signing.CacheControl)
 		overrides = append(overrides, "response-cache-control="+signing.CacheControl)
@@ -334,6 +339,10 @@ func signedAliyunOSSObjectURL(setting Settings, objectKey string, signing object
 	if signing.ContentDisposition != "" {
 		query.Set("response-content-disposition", signing.ContentDisposition)
 		overrides = append(overrides, "response-content-disposition="+signing.ContentDisposition)
+	}
+	if signing.ImageProcess != "" {
+		query.Set("x-oss-process", signing.ImageProcess)
+		overrides = append(overrides, "x-oss-process="+signing.ImageProcess)
 	}
 	if len(overrides) > 0 {
 		canonicalResource += "?" + strings.Join(overrides, "&")

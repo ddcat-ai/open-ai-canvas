@@ -24,7 +24,7 @@ import { fitImageMaterialNodeSize, fitImageNodeSize, fitVideoNodeToSource } from
 import { getActiveUserScope } from "@/lib/user-scope";
 import { isCanvasImageActive, prepareCanvasImage, subscribeCanvasImageActivity } from "@/services/canvas-image-loader";
 import { useCachedResourceUrl } from "@/hooks/use-cached-resource-url";
-import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL } from "@/services/api/resources";
+import { getResourceAccess, refreshResource, resourceIdFromStorageKey, resolveResourceAccessURL, type ResourceAccessVariant } from "@/services/api/resources";
 import type { CanvasNodeContentProps } from "./canvas-node-content";
 import { ErrorContent, LoadingContent } from "./canvas-node-status-content";
 
@@ -506,6 +506,8 @@ export function EmptyMediaContent({ icon, label, color }: { icon: ReactNode; lab
     );
 }
 
+type CanvasImageSourceSize = { width?: number; height?: number; actualVariant?: ResourceAccessVariant };
+
 export function ImageContent({
     renderLOD = "full",
     node,
@@ -521,7 +523,7 @@ export function ImageContent({
     const imageContainerRef = useRef<HTMLDivElement>(null);
     const nearViewport = useNearViewport(imageContainerRef, renderLOD !== "shell");
     const resourceVariant = renderLOD === "full" && (node.metadata?.imageLayer || node.metadata?.imageLayerGroup) ? "original" : "thumbnail";
-    const { url, loading, failed: accessFailed, originalWidth, originalHeight } = useNodeResourceUrl(node, nearViewport, resourceVariant);
+    const { url, loading, failed: accessFailed, originalWidth, originalHeight, actualVariant } = useNodeResourceUrl(node, nearViewport, resourceVariant);
     const importedFromLibTV = node.metadata?.importSource?.provider === "libtv";
     const { updateMediaNode } = useCanvasNodeActions();
     const measuredSizeRef = useRef<{ width: number; height: number } | null>(null);
@@ -536,11 +538,12 @@ export function ImageContent({
      * 存过 naturalWidth 的旧节点永远得不到修正（第一版就是这么写的，所以没生效）。
      * 手动拉过（manualSize）或自由比例（freeResize）的节点只补记尺寸、不动宽高。
      */
-    const fitToImage = (element: HTMLImageElement, sourceSize?: { width?: number; height?: number }) => {
+    const fitToImage = (element: HTMLImageElement, sourceSize?: CanvasImageSourceSize) => {
         // LibTV 已提供原图尺寸和节点尺寸；960px 缩略图不能反向覆盖这些数据。
         if (importedFromLibTV) return;
-        const naturalWidth = sourceSize?.width || element.naturalWidth;
-        const naturalHeight = sourceSize?.height || element.naturalHeight;
+        const thumbnail = (sourceSize?.actualVariant || actualVariant) === "thumbnail";
+        const naturalWidth = sourceSize?.width || (thumbnail ? node.metadata?.naturalWidth : element.naturalWidth);
+        const naturalHeight = sourceSize?.height || (thumbnail ? node.metadata?.naturalHeight : element.naturalHeight);
         if (!naturalWidth || !naturalHeight) return;
         if (measuredSizeRef.current?.width === naturalWidth && measuredSizeRef.current.height === naturalHeight) return;
         measuredSizeRef.current = { width: naturalWidth, height: naturalHeight };
@@ -578,8 +581,9 @@ export function ImageContent({
                     identity={`${getActiveUserScope()}:${node.id}:${node.metadata?.storageKey || node.metadata?.content || "empty"}`}
                     src={url}
                     storageKey={node.metadata?.storageKey}
+                    variant={resourceVariant}
                     fallbackSrc={node.metadata?.content || ""}
-                    originalSize={{ width: originalWidth, height: originalHeight }}
+                    originalSize={{ width: originalWidth, height: originalHeight, actualVariant }}
                     alt={node.title}
                     fitToImage={fitToImage}
                     className={`pointer-events-none block h-full w-full select-none ${node.metadata?.freeResize ? "object-fill" : "object-contain"}`}
@@ -609,6 +613,7 @@ export function RetainedCanvasImage({
     identity,
     src,
     storageKey,
+    variant = "original",
     fallbackSrc,
     originalSize,
     alt,
@@ -621,10 +626,11 @@ export function RetainedCanvasImage({
     identity: string;
     src: string;
     storageKey?: string;
+    variant?: "original" | "thumbnail";
     fallbackSrc: string;
-    originalSize: { width?: number; height?: number };
+    originalSize: CanvasImageSourceSize;
     alt?: string;
-    fitToImage: (image: HTMLImageElement, size?: { width?: number; height?: number }) => void;
+    fitToImage: (image: HTMLImageElement, size?: CanvasImageSourceSize) => void;
     className: string;
     loading: boolean;
     /** 访问地址换取失败且没有回退地址。 */
@@ -644,8 +650,8 @@ export function RetainedCanvasImage({
     displayedRef.current = displayed;
     const originalWidth = originalSize.width;
     const originalHeight = originalSize.height;
-    const currentRef = useRef({ identity, src, storageKey, fallbackSrc, originalSize, fitToImage });
-    currentRef.current = { identity, src, storageKey, fallbackSrc, originalSize, fitToImage };
+    const currentRef = useRef({ identity, src, storageKey, variant, fallbackSrc, originalSize, fitToImage });
+    currentRef.current = { identity, src, storageKey, variant, fallbackSrc, originalSize, fitToImage };
     const currentDisplayedSrc = displayed?.identity === identity ? displayed.src : "";
     const retryCount = retry.identity === identity ? retry.count : 0;
 
@@ -663,9 +669,9 @@ export function RetainedCanvasImage({
         setFailedIdentity((current) => (current === identity ? "" : current));
         // 大图在慢网络下可能要几十秒，超过阈值后在骨架上提示仍在加载，避免像是卡死。
         const slowTimer = window.setTimeout(() => setSlowIdentity(identity), IMAGE_SLOW_HINT_MS);
-        const isCurrent = () => !controller.signal.aborted && currentRef.current.identity === identity && currentRef.current.src === target.src;
+        const isCurrent = () => !controller.signal.aborted && currentRef.current.identity === identity && currentRef.current.src === target.src && currentRef.current.variant === target.variant;
         const isAbort = (error: unknown) => controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError");
-        const show = (image: HTMLImageElement, url: string, size: { width?: number; height?: number }) => {
+        const show = (image: HTMLImageElement, url: string, size: CanvasImageSourceSize) => {
             currentRef.current.fitToImage(image, size);
             setDisplayed({ identity, src: url });
         };
@@ -690,13 +696,12 @@ export function RetainedCanvasImage({
                     if (isCurrent()) show(candidate, target.src, target.originalSize);
                     return;
                 }
-                // 失败最常见的原因是缓存的签名地址过期或被 CDN 拒绝：强制重新签发原图地址再试一次，
-                // 即使新地址与旧地址相同也重试（失败的解码不会被缓存）。
-                const access = await getResourceAccess(resourceKey, "display", "original", "", { forceRefresh: true });
-                const originalURL = resolveResourceAccessURL(access.url);
-                if (!originalURL) throw new Error("资源访问地址为空");
-                const original = await attempt(originalURL);
-                if (isCurrent()) show(original, originalURL, { width: access.originalWidth, height: access.originalHeight });
+                // 续签保持相同档位，避免小图失败后隐式下载并解码原图。
+                const access = await getResourceAccess(resourceKey, "display", target.variant, "", { forceRefresh: true });
+                const refreshedURL = resolveResourceAccessURL(access.url);
+                if (!refreshedURL) throw new Error("资源访问地址为空");
+                const refreshed = await attempt(refreshedURL);
+                if (isCurrent()) show(refreshed, refreshedURL, { width: access.originalWidth, height: access.originalHeight, actualVariant: access.actualVariant });
             } catch (error) {
                 if (isAbort(error) || !isCurrent()) return;
                 // 已显示过同一资源时保留旧画面；首次加载失败才进入可重试的失败态。
@@ -714,7 +719,7 @@ export function RetainedCanvasImage({
             window.clearTimeout(slowTimer);
             controller.abort();
         };
-    }, [identity, originalHeight, originalWidth, retryCount, src, storageKey]);
+    }, [identity, originalHeight, originalWidth, retryCount, src, storageKey, variant]);
 
     const failed = !currentDisplayedSrc && !preparing && (failedIdentity === identity || (accessFailed && !loading));
     const surfaceStyle = { "--canvas-gen-ink": theme.node.text, "--canvas-gen-surface": theme.node.fill, "--canvas-image-muted": theme.node.muted } as CSSProperties;
@@ -790,13 +795,16 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
     // resources; otherwise DOM virtualization does not reduce image work.
     const isLazyVisual = node.type === CanvasNodeType.Image;
     const isHttpUrl = Boolean(fallback && !fallback.startsWith("data:"));
-    // 上传后的有界缓存可直接借用；节点卸载再释放租约，不会被磁盘/LRU 淘汰撤销正在显示的地址。
-    // 只用于图片：音视频播放仍走播放副本合同。
-    const sessionBlobUrl = useCachedResourceUrl(isRemoteResource && isLazyVisual ? storageKey : undefined, eager);
+    // 原图缓存只供原图档位借用，不能抢在缩略图请求前触发原图解码。
+    const sessionBlobUrl = useCachedResourceUrl(isRemoteResource && isLazyVisual && variant === "original" ? storageKey : undefined, eager);
     const initialUrl = sessionBlobUrl || (eager && !isRemoteResource && isLazyVisual && isHttpUrl ? fallback : isRemoteResource || isLazyVisual ? "" : fallback);
     const scope = getActiveUserScope();
-    const identity = `${scope}:${node.id}:${storageKey || fallback}`;
-    const [resolved, setResolved] = useState<{ identity: string; url: string; loading: boolean; failed?: boolean; originalWidth?: number; originalHeight?: number }>(() => ({ identity, url: initialUrl, loading: !initialUrl && isRemoteResource && eager }));
+    const identity = `${scope}:${node.id}:${storageKey || fallback}:${variant}`;
+    const [resolved, setResolved] = useState<{ identity: string; url: string; loading: boolean; failed?: boolean; originalWidth?: number; originalHeight?: number; actualVariant?: ResourceAccessVariant }>(() => ({
+        identity,
+        url: initialUrl,
+        loading: !initialUrl && isRemoteResource && eager,
+    }));
     const current = resolved.identity === identity ? resolved : { identity, url: initialUrl, loading: !initialUrl && isRemoteResource && eager };
 
     useEffect(() => {
@@ -817,11 +825,12 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
         setResolved({ identity, url: "", loading: true });
         void getResourceAccess(storageKey, "display", variant)
             .then((access) => {
-                if (!cancelled) setResolved({ identity, url: resolveResourceAccessURL(access.url), loading: false, originalWidth: access.originalWidth, originalHeight: access.originalHeight });
+                if (!cancelled) setResolved({ identity, url: resolveResourceAccessURL(access.url), loading: false, originalWidth: access.originalWidth, originalHeight: access.originalHeight, actualVariant: access.actualVariant });
             })
             .catch(() => {
-                // 没有可用的回退地址时标记失败，节点显示「加载失败 + 重新加载」，而不是一块无提示的空白。
-                if (!cancelled) setResolved({ identity, url: fallback, loading: false, failed: !fallback });
+                // 受管小图失败时保留重试入口，不绕过访问合同加载节点上的原图。
+                const fallbackUrl = variant === "thumbnail" ? "" : fallback;
+                if (!cancelled) setResolved({ identity, url: fallbackUrl, loading: false, failed: !fallbackUrl });
             });
         return () => {
             cancelled = true;
@@ -829,7 +838,14 @@ export function useNodeResourceUrl(node: CanvasNodeData, eager: boolean, variant
     }, [eager, fallback, identity, isLazyVisual, isRemoteResource, storageKey, variant, sessionBlobUrl]);
 
     const isThumbnail = variant === "thumbnail";
-    return { url: current.url, loading: current.loading, failed: Boolean(current.failed), originalWidth: isThumbnail ? current.originalWidth : undefined, originalHeight: isThumbnail ? current.originalHeight : undefined };
+    return {
+        url: current.url,
+        loading: current.loading,
+        failed: Boolean(current.failed),
+        originalWidth: isThumbnail ? current.originalWidth : undefined,
+        originalHeight: isThumbnail ? current.originalHeight : undefined,
+        actualVariant: current.actualVariant,
+    };
 }
 
 export function useNearViewport(ref: RefObject<Element | null>, enabled = true) {
