@@ -460,8 +460,16 @@ function MentionReferenceDetail({ reference, connectedLabel }: { reference: Canv
     const imageUrl = reference.kind === "skill" || reference.kind === "text" ? "" : reference.previewUrl || "";
     const videoUrl = !imageUrl && reference.kind === "video" ? reference.mediaUrl || "" : "";
     const Icon = referenceFallbackIcon(reference);
+    const displayName = referenceDisplayLabel(reference);
     const source = reference.assetId ? `${t("canvasB.mention.assetLibrary")} · ${ASSET_CATEGORY_LABELS[reference.category || "other"]}` : reference.kind === "skill" ? t("canvasB.mention.skillLibrary") : connectedLabel;
-    const description = reference.kind === "skill" ? reference.skill?.description || reference.text || t("canvasB.mention.workflowSkill") : reference.title && reference.title !== reference.label ? reference.title : "";
+    const description =
+        reference.kind === "skill"
+            ? reference.skill?.description || reference.text || t("canvasB.mention.workflowSkill")
+            : reference.title && reference.title !== displayName
+              ? reference.title
+              : reference.label && reference.label !== displayName
+                ? reference.label
+                : "";
     return (
         <>
             {reference.kind === "text" && reference.text ? (
@@ -489,7 +497,7 @@ function MentionReferenceDetail({ reference, connectedLabel }: { reference: Canv
                 </div>
             )}
             <div className="canvas-resource-mention-detail-caption">
-                <strong>{referenceDisplayLabel(reference)}</strong>
+                <strong>{displayName}</strong>
                 {description ? <span>{description}</span> : null}
                 <small>
                     {source}

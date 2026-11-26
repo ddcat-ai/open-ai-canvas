@@ -4,6 +4,7 @@ import { ImageParameterFields } from "@/components/image-parameter-fields";
 import { imageResolutionUsesQuality, imageSizePresets } from "@/lib/image-size-presets";
 import { createPortal } from "react-dom";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { Button, Popover } from "antd";
 import { useWorkspaceTopBarMount } from "@/components/layout/workspace-top-bar-extension";
 import { Tooltip } from "@/components/ui/base/tooltip";
@@ -219,6 +220,7 @@ function clampCreationPromptHeight(height: number) {
 }
 
 export function CreationComposer(props: ComposerProps) {
+    const { t } = useTranslation();
     const [referenceDragOver, setReferenceDragOver] = useState(false);
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewStorageKey, setPreviewStorageKey] = useState<string | undefined>(undefined);
@@ -448,6 +450,7 @@ export function CreationComposer(props: ComposerProps) {
                             value={props.prompt}
                             references={props.references}
                             mentionMenuWidth={400}
+                            mentionMenuLabels={{ connected: t("create.references.currentTitle") }}
                             sendOnEnter
                             onFocus={props.onPromptFocus}
                             onChange={props.setPrompt}

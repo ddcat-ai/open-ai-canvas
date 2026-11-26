@@ -75,11 +75,7 @@ export function replaceCreationAttachmentReference(prompt: string, attachments: 
 
     const remainingAttachments = attachments.filter((attachment) => attachment.id !== targetAttachmentId && attachment.id !== replacement.id);
     const insertionIndex = Math.min(targetIndex, remainingAttachments.length);
-    const nextAttachments = [
-        ...remainingAttachments.slice(0, insertionIndex),
-        replacement,
-        ...remainingAttachments.slice(insertionIndex),
-    ];
+    const nextAttachments = [...remainingAttachments.slice(0, insertionIndex), replacement, ...remainingAttachments.slice(insertionIndex)];
     const replacementReference = buildCreationMentionReferences([], nextAttachments).find((reference) => reference.attachmentId === replacement.id);
     if (!replacementReference) throw new Error(translate("create.references.replacementInvalid"));
 
@@ -118,13 +114,17 @@ export function expandCreationPrompt(prompt: string, references: CreationReferen
 
 function attachmentReference(attachment: CreationAttachment, index: number): CreationReference {
     const kind = creationAttachmentKind(attachment);
-    const label = kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "file" ? "文件" : "图片";
+    const prefix = kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "file" ? "文件" : "图片";
+    const label = `${prefix}${index + 1}`;
+    const name = attachment.name?.trim();
     return {
         id: `upload:${attachment.id}`,
         nodeId: `upload:${attachment.id}`,
         kind: kind === "file" ? "text" : kind,
-        label: `${label}${index + 1}`,
-        title: translate("create.references.currentTitle"),
+        label,
+        title: name || label,
+        // 保留编号 label 用于提示词展开与兼容替换，展示层优先显示附件名称。
+        displayLabel: name || label,
         previewUrl: attachment.previewUrl || ("dataUrl" in attachment ? attachment.dataUrl : attachment.url),
         storageKey: attachment.storageKey,
         active: true,
